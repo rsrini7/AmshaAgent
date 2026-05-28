@@ -1966,80 +1966,22 @@ Get-ChildItem $out | Format-Table Name, @{L='Size';E={'{0:N0} KB' -f ($_.Length/
 # =============================================================================
 # DOCKER COMPOSE TASKS
 # =============================================================================
+# Tasks are defined as .ps1 scripts in .mise/tasks/compose/ for cross-platform compatibility
+# - up.ps1          - Start full stack (ArcClaw + Ollama + OTel + Jaeger + Phoenix + Prometheus)
+# - down.ps1        - Stop stack (data volumes preserved)
+# - down-clean.ps1  - Stop stack and DELETE all data volumes (irreversible)
+# - logs.ps1        - Follow live arcclaw container logs
+# - restart.ps1     - Restart only the arcclaw service
+
+# =============================================================================
+# OBSERVABILITY TASKS
+# =============================================================================
 # Tasks are defined as .ps1 scripts in .mise/tasks/obs/ for cross-platform compatibility
 # - up.ps1       - Start observability stack (OTel + Jaeger + Phoenix + Prometheus)
 # - jaeger.ps1   - Start only Jaeger + OTel collector
 # - phoenix.ps1  - Start only Phoenix + OTel collector
 # - down.ps1     - Stop observability stack
 # - status.ps1   - Check observability services status
-
-[tasks."compose:up"]
-description = "Start full stack: ArcClaw native + Ollama + OTel + Jaeger + Phoenix + Prometheus"
-dir = "{{config_root}}"
-shell = "pwsh -NonInteractive -Command"
-quiet = true
-run = """
-$ErrorActionPreference = 'Stop'
-$suffix = if ($IsWindows) { '-runner.exe' } else { '-runner' }
-$runner = "arcclaw-app/target/arcclaw-app-1.0.0-SNAPSHOT$suffix"
-if (-not (Test-Path $runner)) {
-    Write-Host "❌  Native binary not found. Run: mise run build:native-local (or build:native-linux for Linux)"; exit 1
-}
-podman compose up -d
-Write-Host ''
-Write-Host '✅  Stack started:'
-Write-Host '    ArcClaw REST  -> http://localhost:8080'
-Write-Host '    Jaeger UI     -> http://localhost:16686'
-Write-Host '    Phoenix UI    -> http://localhost:6006'
-Write-Host '    Prometheus    -> http://localhost:9090'
-Write-Host '    Ollama        -> http://localhost:11434'
-"""
-
-[tasks."compose:down"]
-description = "Stop the observability stack (data volumes are preserved)"
-dir = "{{config_root}}"
-shell = "pwsh -NonInteractive -Command"
-quiet = true
-run = """
-$ErrorActionPreference = 'Stop'
-podman compose down
-Write-Host '✅  Stack stopped. Data volumes preserved.'
-"""
-
-[tasks."compose:down-clean"]
-description = "Stop the stack and DELETE all data volumes (irreversible - prompts for confirmation)"
-dir = "{{config_root}}"
-shell = "pwsh -NonInteractive -Command"
-quiet = true
-run = """
-$ErrorActionPreference = 'Stop'
-Write-Host '⚠️   WARNING: This will permanently delete all data volumes.'
-$confirm = Read-Host 'Type YES to confirm'
-if ($confirm -eq 'YES') {
-    podman compose down -v
-    Write-Host '✅  Stack and volumes removed.'
-} else {
-    Write-Host 'Aborted.'
-    exit 1
-}
-"""
-
-[tasks."compose:logs"]
-description = "Follow live arcclaw container logs (Ctrl+C to stop)"
-dir = "{{config_root}}"
-shell = "pwsh -NonInteractive -Command"
-run = "podman compose logs -f arcclaw"
-
-[tasks."compose:restart"]
-description = "Restart only the arcclaw service (observability stack stays up)"
-dir = "{{config_root}}"
-shell = "pwsh -NonInteractive -Command"
-quiet = true
-run = """
-$ErrorActionPreference = 'Stop'
-podman compose restart arcclaw
-Write-Host '✅  arcclaw service restarted.'
-"""
 
 # =============================================================================
 # PODMAN TASKS
