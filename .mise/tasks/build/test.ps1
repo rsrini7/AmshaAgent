@@ -30,6 +30,12 @@ if (Test-Path '.env') {
 }
 
     try {
+        # Phase 0: Format code (Spotless + FQN replacement)
+        python3 ./fix_fqns.py
+        & $mvnw spotless:apply --no-transfer-progress -q
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        Write-Host '✅  Code formatted (Spotless + FQN replacement).'
+
         $env:MAVEN_OPTS = "$mOpts -Xmx${jitGB}g -Xms${jitGB}g"
         & $mvnw clean verify -am "-Dquarkus.test.profile=test"
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

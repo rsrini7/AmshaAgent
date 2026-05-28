@@ -165,7 +165,8 @@ class ApproveReflexTest {
         cp.setAgentRole(AgentRoleEnum.COORDINATOR.toScopedName());
 
         when(checkpointApprovalService.approveAll(anyString(), anyString())).thenReturn(cp);
-        when(statefulAgentStore.findLatestAwaitingApprovalBySessionContaining(anyString())).thenReturn(Optional.of(cp));
+        when(statefulAgentStore.findLatestAwaitingApprovalBySessionContaining(anyString()))
+                .thenReturn(Optional.of(cp));
         when(statefulAgentStore.findLatestAwaitingApproval("cron-123")).thenReturn(Optional.of(cp));
         when(statefulAgentStore.claimForResume(anyString(), anyString())).thenReturn(true);
         when(cronStore.findById("123")).thenReturn(Optional.of(cron));
@@ -243,7 +244,8 @@ class ApproveReflexTest {
         // Fix: Use specific IDs to avoid misidentifying cron ID as session ID
         when(statefulAgentStore.findLatestAwaitingApproval("session-1")).thenReturn(Optional.of(cp));
         when(statefulAgentStore.findLatestAwaitingApproval("cron-123")).thenReturn(Optional.empty());
-        when(statefulAgentStore.findLatestAwaitingApprovalBySessionContaining(anyString())).thenReturn(Optional.of(cp));
+        when(statefulAgentStore.findLatestAwaitingApprovalBySessionContaining(anyString()))
+                .thenReturn(Optional.of(cp));
 
         // MOCK THE GUARD TO FAIL (Someone else is already resuming)
         when(statefulAgentStore.claimForResume(anyString(), anyString())).thenReturn(false);

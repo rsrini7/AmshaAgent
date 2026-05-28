@@ -158,7 +158,8 @@ class DenyReflexTest {
         cp.setAgentRole(AgentRoleEnum.COORDINATOR.toScopedName());
 
         when(checkpointApprovalService.denyAll(anyString(), anyString())).thenReturn(cp);
-        when(statefulAgentStore.findLatestAwaitingApprovalBySessionContaining(anyString())).thenReturn(Optional.of(cp));
+        when(statefulAgentStore.findLatestAwaitingApprovalBySessionContaining(anyString()))
+                .thenReturn(Optional.of(cp));
         when(statefulAgentStore.findLatestAwaitingApproval("cron-123")).thenReturn(Optional.of(cp));
         when(statefulAgentStore.claimForResume(anyString(), anyString())).thenReturn(true);
         when(cronStore.findById("123")).thenReturn(Optional.of(cron));
@@ -261,7 +262,8 @@ class DenyReflexTest {
         AgentCheckpoint cp = new AgentCheckpointRecord();
         cp.setSessionId("session-1");
         cp.setStatus(CheckpointStatus.AWAITING_APPROVAL);
-        when(statefulAgentStore.findLatestAwaitingApprovalBySessionContaining(anyString())).thenReturn(Optional.of(cp));
+        when(statefulAgentStore.findLatestAwaitingApprovalBySessionContaining(anyString()))
+                .thenReturn(Optional.of(cp));
 
         when(checkpointApprovalService.denyAll(anyString(), anyString())).thenReturn(cp);
 

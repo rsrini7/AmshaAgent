@@ -67,22 +67,38 @@ public class FsLockManager implements AdvisoryLockPort {
         } catch (IOException _) {
             return false;
         }
-        try (RandomAccessFile raf = new RandomAccessFile(lockFile.toFile(), "rw")) {
-            FileChannel channel = raf.getChannel();
-            try {
-                FileLock fileLock = channel.tryLock();
-                if (fileLock != null) {
-                    raf.writeBytes(Instant.now().plusSeconds(timeoutSeconds).toString());
-                    raf.getFD().sync();
-                    heldLocks.put(lockKey, new LockHolder(raf, channel, fileLock));
-                    return true;
-                }
-                return false;
-            } catch (OverlappingFileLockException e) {
-                return false;
-            }
+        RandomAccessFile raf;
+        try {
+            raf = new RandomAccessFile(lockFile.toFile(), "rw");
         } catch (IOException _) {
             return false;
+        }
+        FileChannel channel = raf.getChannel();
+        try {
+            FileLock fileLock = channel.tryLock();
+            if (fileLock == null) {
+                closeQuietly(raf);
+                return false;
+            }
+            raf.writeBytes(Instant.now().plusSeconds(timeoutSeconds).toString());
+            raf.getFD().sync();
+            // raf intentionally NOT closed — held by LockHolder until unlock()
+            heldLocks.put(lockKey, new LockHolder(raf, channel, fileLock));
+            return true;
+        } catch (OverlappingFileLockException _) {
+            closeQuietly(raf);
+            return false;
+        } catch (IOException _) {
+            closeQuietly(raf);
+            return false;
+        }
+    }
+
+    private static void closeQuietly(RandomAccessFile raf) {
+        try {
+            raf.close();
+        } catch (IOException _) {
+            // best-effort cleanup
         }
     }
 
