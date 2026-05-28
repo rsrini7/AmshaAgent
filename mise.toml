@@ -102,33 +102,11 @@ Write-Host '✅  All .mise/*.ps1 and .sh files are now executable.'
 # =============================================================================
 # JDK MANAGEMENT
 # =============================================================================
-
-[tasks."jdk:graalvm"]
-description = "Switch active JDK to GraalVM Community 25.0.2 (for native builds)"
-dir = "{{config_root}}"
-run = [
-  "mise use --path mise.toml java@graalvm-community-25.0.2",
-  "java -version"
-]
-
-[tasks."jdk:temurin"]
-description = "Switch active JDK back to Temurin 25 (default - dev, build, jar tasks)"
-dir = "{{config_root}}"
-run = ["mise use --path mise.toml java@temurin-25", "java -version"]
-
-[tasks."jdk:install"]
-description = "Install both JDKs (temurin-25 + graalvm-community-25.0.2) - safe to re-run"
-dir = "{{config_root}}"
-run = [
-  "mise install",
-  "mise install java@graalvm-community-25.0.2 --quiet",
-  "mise ls java",
-]
-
-[tasks."jdk:status"]
-description = "Show which JDK is currently active and list all installed JDKs"
-dir = "{{config_root}}"
-run = ["java -version", "mise ls java"]
+# Tasks are defined as .ps1 scripts in .mise/tasks/jdk/ for cross-platform compatibility
+# - graalvm.ps1  - Switch active JDK to GraalVM Community 25.0.2 (native builds)
+# - temurin.ps1  - Switch active JDK back to Temurin 25 (default)
+# - install.ps1  - Install both JDKs (temurin-25 + graalvm-community-25.0.2)
+# - status.ps1   - Show which JDK is currently active and list all installed
 
 # =============================================================================
 # BUILD TASKS
