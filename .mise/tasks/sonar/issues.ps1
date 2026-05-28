@@ -1,4 +1,5 @@
 #!/usr/bin/env pwsh
+#MISE description = "Fetch SonarQube issues in LLM-friendly format"
 # Fetches SonarQube issues in LLM-friendly format.
 # Usage: mise run sonar:issues                          # all BLOCKER + CRITICAL
 #        mise run sonar:issues -- -severity BLOCKER     # BLOCKER only

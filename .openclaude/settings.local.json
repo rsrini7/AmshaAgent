@@ -54,7 +54,10 @@
       "Bash(xargs kill:*)",
       "Bash(./mvnw test-compile:*)",
       "Bash(find . -path *)",
-      "Bash(source .env)"
+      "Bash(source .env)",
+      "Bash(head:*)",
+      "Bash(tail:*)",
+      "Bash(chmod:*)"
     ]
   }
 }

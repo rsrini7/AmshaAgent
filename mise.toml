@@ -81,7 +81,10 @@ run = [
 depends = ["setup:chmod-tasks", "setup:wsl-crlf"]
 alias = "s"
 
-# setup:profile, setup:env-check, setup:wsl-crlf → .mise/tasks/setup/*.ps1
+# Tasks are defined as .ps1 scripts in .mise/tasks/setup/ for cross-platform compatibility
+# - profile.ps1      - Write mise activate + completion to shell profile
+# - env-check.ps1    - Validate .env keys and placeholders
+# - wsl-crlf.ps1     - Fix CRLF line endings in WSL2/Linux
 # setup:chmod-tasks is inline — chicken-and-egg: the +x granter can't need +x itself
 
 [tasks."setup:chmod-tasks"]
@@ -2134,147 +2137,27 @@ Write-Host '✅  arcclaw service restarted.'
 # =============================================================================
 # PODMAN TASKS
 # =============================================================================
-
-[tasks."podman:init"]
-description = "macOS: initialise and start Podman machine (6 GB RAM, 4 CPUs, 40 GB disk)"
-dir = "{{config_root}}"
-shell = "pwsh -NonInteractive -Command"
-quiet = true
-run = """
-$ErrorActionPreference = 'Stop'
-if ($IsWindows) {
-    Write-Host 'ℹ️   podman:init is macOS-only. On Windows use Podman Desktop or Docker Desktop.'
-    exit 0
-}
-podman machine init --memory 6144 --cpus 4 --disk-size 40
-podman machine start
-Write-Host '✅  Podman machine initialised and running.'
-"""
-
-[tasks."podman:start"]
-description = "macOS: start the Podman machine"
-dir = "{{config_root}}"
-shell = "pwsh -NonInteractive -Command"
-quiet = true
-run = """
-$ErrorActionPreference = 'Stop'
-if ($IsWindows) { Write-Host 'ℹ️   podman:start is macOS-only.'; exit 0 }
-podman machine start
-
-# ── Memory sanity check ─────────────────────────────────────────────────────
-$vmMemMB = [int]((podman machine inspect podman-machine-default 2>&1 | Select-String '"Memory":\\s*(\\d+)').Matches[0].Groups[1].Value)
-if ($vmMemMB -lt 4096) {
-    Write-Host "⚠️   Podman VM has only ${vmMemMB} MB RAM. Native builds need ≥4 GB (6 GB recommended)."
-    Write-Host '    Fix: podman machine stop; podman machine set podman-machine-default --memory 6144; podman machine start'
-} else {
-    Write-Host "✅  Podman machine started (${vmMemMB} MB RAM)."
-}
-"""
-
-[tasks."podman:stop"]
-description = "macOS: stop the Podman machine"
-dir = "{{config_root}}"
-shell = "pwsh -NonInteractive -Command"
-quiet = true
-run = """
-$ErrorActionPreference = 'Stop'
-if ($IsWindows) { Write-Host 'ℹ️   podman:stop is macOS-only.'; exit 0 }
-podman machine stop
-Write-Host '✅  Podman machine stopped.'
-"""
-
-[tasks."podman:socket"]
-description = "WSL2/Linux: enable Podman user socket via systemd (run once per WSL2 instance)"
-dir = "{{config_root}}"
-shell = "pwsh -NonInteractive -Command"
-quiet = true
-run = """
-$ErrorActionPreference = 'Stop'
-if ($IsWindows) {
-    Write-Host 'ℹ️   podman:socket is WSL2/Linux-only. On Windows, Podman Desktop manages the socket.'
-    exit 0
-}
-systemctl --user enable --now podman.socket
-$uid  = & id -u
-$sock = "/run/user/$uid/podman/podman.sock"
-ls -l $sock
-Write-Host ''
-Write-Host '✅  Podman socket active.'
-Write-Host "    Add to ~/.bashrc or ~/.zshrc:"
-Write-Host "    export DOCKER_HOST=`"unix://$sock`""
-"""
-
-[tasks."podman:status"]
-description = "Print Podman version, running containers, and tool-runner image status"
-dir = "{{config_root}}"
-shell = "pwsh -NonInteractive -Command"
-quiet = true
-run = """
-Write-Host '-- Podman version ───────────────────────────────'
-$pv = podman --version 2>&1; if ($LASTEXITCODE -eq 0) { Write-Host "  $pv" } else { Write-Host '  podman not found' }
-Write-Host '-- Running containers ───────────────────────────'
-$ps = podman ps 2>&1; if ($LASTEXITCODE -eq 0) { Write-Host $ps } else { Write-Host '  (podman not running)' }
-Write-Host '-- arcclaw-tool-runner image ────────────────────'
-$img = (podman images 2>&1) | Select-String 'arcclaw-tool-runner'
-if ($img) { Write-Host "  $img" } else { Write-Host '  Image not found -- run: mise run sandbox:build' }
-Write-Host '-- DOCKER_HOST ──────────────────────────────────'
-Write-Host "  $($env:DOCKER_HOST ?? '(not set)')"
-"""
-
-[tasks."podman:sandbox-build"]
-description = "Build the arcclaw-tool-runner Podman image for the sandbox environment"
-dir = "{{config_root}}"
-shell = "pwsh -NonInteractive -Command"
-quiet = true
-run = """
-$ErrorActionPreference = 'Stop'
-if (-not (Get-Command podman -ErrorAction SilentlyContinue)) {
-    Write-Host '❌  podman is not installed or not in PATH.'
-    exit 1
-}
-$dockerfile = './sandbox/Dockerfile.toolrunner'
-if (-not (Test-Path $dockerfile)) {
-    Write-Host "❌  Dockerfile not found at $dockerfile"
-    exit 1
-}
-Write-Host '▶   Building arcclaw-tool-runner image via Podman...'
-podman build --no-cache -t arcclaw-tool-runner -f $dockerfile .
-if ($LASTEXITCODE -ne 0) {
-    Write-Host "❌  Podman build failed (exit $LASTEXITCODE)"
-    exit $LASTEXITCODE
-}
-Write-Host ''
-Write-Host '✅  Build complete. Verifying image in local registry:'
-podman images | Select-String 'arcclaw-tool-runner'
-"""
-
-[tasks."podman:sandbox-check"]
-description = "Verify the arcclaw-tool-runner sandbox image exists"
-dir = "{{config_root}}"
-shell = "pwsh -NonInteractive -Command"
-quiet = true
-run = """
-$ErrorActionPreference = 'Stop'
-$img = (podman images 2>&1) | Select-String 'arcclaw-tool-runner'
-if ($img) {
-    Write-Host '✅  arcclaw-tool-runner image is present.'
-    Write-Host "  $img"
-} else {
-    Write-Host '❌  Image not found. Run: mise run sandbox:build'
-    exit 1
-}
-"""
+# Tasks are defined as .ps1 scripts in .mise/tasks/podman/ for cross-platform compatibility
+# - init.ps1           - Initialise and start Podman machine (macOS)
+# - start.ps1          - Start the Podman machine (macOS)
+# - stop.ps1           - Stop the Podman machine (macOS)
+# - socket.ps1         - Enable Podman user socket (WSL2/Linux)
+# - status.ps1         - Print Podman version, containers, and image status
+# - sandbox-build.ps1  - Build the arcclaw-tool-runner image
+# - sandbox-check.ps1  - Verify the sandbox image exists
 
 # =============================================================================
 # SONARQUBE
 # =============================================================================
-# Tasks are defined as .ps1 scripts in .mise/tasks/ directory for cross-platform compatibility
-# - sonar-start.ps1      - Start SonarQube container
-# - sonar-stop.ps1       - Stop SonarQube container  
-# - sonar-logs.ps1       - View container logs
-# - sonar-status.ps1     - Check container status
-# - sonar-scan.ps1       - Run SonarQube analysis
-# - sonar-scan-clean.ps1 - Build + run SonarQube analysis
+# Tasks are defined as .ps1 scripts in .mise/tasks/sonar/ for cross-platform compatibility
+# - start.ps1        - Start SonarQube container
+# - stop.ps1         - Stop SonarQube container
+# - logs.ps1         - View container logs
+# - status.ps1       - Check container status
+# - scan.ps1         - Run SonarQube analysis
+# - scan-clean.ps1   - Build + run SonarQube analysis
+# - token-setup.ps1  - SonarQube token setup guide
+# - issues.ps1       - Fetch SonarQube issues in LLM-friendly format
 
 # =============================================================================
 # DATABASE HELPERS
