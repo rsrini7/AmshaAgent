@@ -52,7 +52,9 @@ public class AgentOtelContext implements AgentObserver {
         Span span = builder.startSpan();
         rootSpans.put(sessionId, span);
         // §OTel Fix: Spans must be made current to be visible to child builders
-        rootScopes.put(sessionId, span.makeCurrent());
+        @SuppressWarnings("MustBeClosedChecker") // Scope stored in rootScopes, closed in endSessionSpan()
+        Scope scope = span.makeCurrent();
+        rootScopes.put(sessionId, scope);
         return span;
     }
 

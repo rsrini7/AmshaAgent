@@ -221,7 +221,9 @@ public class AgentStateMachineRunner {
                             stateContext.iteration(),
                             context.agentRole()
                     );
-                    iterScope = iterSpan.makeCurrent();
+                    @SuppressWarnings("MustBeClosedChecker") // Scope stored in iterScope, closed in finally block
+                    Scope scope = iterSpan.makeCurrent();
+                    iterScope = scope;
                 }
 
                 RunnerState nextState;

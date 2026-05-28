@@ -80,7 +80,7 @@ public class WebSocketSessionStore {
     public void closeAll() {
         platformToSession.values().forEach(conn -> {
             try {
-                conn.close();
+                var _ = conn.close();
             } catch (Exception e) {
                 log.debugf("Failed to close WebSocket connection: %s", LogUtil.rootMessage(e));
             }

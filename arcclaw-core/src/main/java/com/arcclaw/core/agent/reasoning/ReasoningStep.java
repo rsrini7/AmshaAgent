@@ -2,6 +2,8 @@ package com.arcclaw.core.agent.reasoning;
 
 import java.util.Map;
 
+import jakarta.annotation.Nullable;
+
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
@@ -38,7 +40,37 @@ public sealed interface ReasoningStep permits
     String observation();
     int inputTokens();
     int outputTokens();
-    Boolean success();
+
+    /**
+     * Whether this step succeeded.
+     *
+     * <p><b>ARCHITECTURAL WARNING — Heterogeneous Nullability:</b>
+     * This method returns a nullable {@link Boolean} wrapper, not a primitive.
+     * Permitted subtypes have different nullability guarantees:
+     * <ul>
+     *   <li>{@link ToolCallStep} — nullable (null when created via {@code fastPath()} or {@code pending()})</li>
+     *   <li>{@link ObservationStep} — nullable</li>
+     *   <li>{@link FinishStep} — always {@code true}</li>
+     *   <li>{@link ParallelStep} — nullable (null until batch completes; set via {@code withObservation()})</li>
+     * </ul>
+     *
+     * <p>Every consumer MUST null-guard this value. Use:
+     * <pre>{@code
+     *   // Safe — handles null
+     *   if (Boolean.TRUE.equals(step.success())) { ... }
+     *
+     *   // Safe — explicit null check
+     *   if (step.success() != null && step.success()) { ... }
+     *
+     *   // UNSAFE — NPE when success() returns null
+     *   if (step.success()) { ... }  // DO NOT DO THIS
+     * }</pre>
+     *
+     * @return {@code true} if succeeded, {@code false} if failed, {@code null} if unknown/not-yet-set
+     * @see <a href="https://errorprone.info/bugpattern/NullableOptional">Error Prone: NullableOptional</a>
+     */
+    @Nullable Boolean success();
+
     String errorCode();
     String traceId();
     String rootCauseClass();

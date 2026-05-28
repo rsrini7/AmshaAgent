@@ -92,6 +92,24 @@ Welcome! This document outlines the critical invariants, conventions, and archit
   Reference: [PromptAdminResource.java](./arcclaw-app/src/main/java/com/arcclaw/app/api/PromptAdminResource.java).
 * **Pattern**: Returns `Response.status(FORBIDDEN).entity("...").build()` when `!isInternal()` for mutations. Reads (GET) remain unprotected.
 
+### 1.5 Heterogeneous Nullability in Sealed Interfaces
+
+* **Rule**: If a sealed interface method returns a nullable wrapper type (`Boolean`, `Integer`, `Optional`, etc.), the Javadoc **MUST** declare `@nullable` and document which permitted subtypes return null. Every consumer **MUST** null-guard the value — never auto-unbox.
+* **Reason**: When permitted records implement the same method with different nullability guarantees (e.g., `FinishStep.success()` always returns `true`, `ParallelStep.success()` returns `null`), any consumer that auto-unboxes without a null check gets an NPE on specific execution paths. This is a known anti-pattern called **Heterogeneous Nullability**.
+* **Pattern**:
+  ```java
+  // SAFE — handles null
+  if (Boolean.TRUE.equals(step.success())) { ... }
+
+  // SAFE — explicit null check
+  if (step.success() != null && step.success()) { ... }
+
+  // UNSAFE — NPE when success() returns null
+  if (step.success()) { ... }  // DO NOT DO THIS
+  ```
+* **Enforcement**: ArchUnit test `ReasoningStepSuccessNullSafetyTest` scans all call sites and rejects raw auto-unboxing of `ReasoningStep.success()`.
+* **Reference**: `ReasoningStep.java` sealed interface, `AgentTraceEnricher.onStepComplete()` NPE fix (2026-05-28).
+
 ---
 
 ## 2. Key Framework Components

@@ -7,6 +7,7 @@
 * **No hardcoded channel types**: Use `ChannelType.CLI.id()` instead of `"cli"`, `ChannelType.TELEGRAM` instead of `"telegram"`.
 * **Use LogUtil**: Always `LogUtil.rootMessage(e)` or `LogUtil.trimmedStack(e)`, never raw `e.getMessage()`.
 * **Transaction-Free Zone**: No LLM calls, network requests, or tool execution inside `@Transactional`.
+* **Null-safe sealed interface access**: If a sealed interface method returns a nullable wrapper (`Boolean`, `Integer`), always use `Boolean.TRUE.equals(x)` or `!= null` guard. Never auto-unbox. See AGENTS.md §1.5.
 * **Import alignment**: After editing Java files, run `python3 ./fix_fqns.py`.
 
 ## 2. Checkstyle Limits

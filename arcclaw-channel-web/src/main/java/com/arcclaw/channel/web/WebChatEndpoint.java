@@ -148,11 +148,11 @@ public class WebChatEndpoint {
                         setupAuthenticatedSession(conn, platformId, arcclawSessionId);
                     } else {
                         conn.sendTextAndAwait("{\"type\":\"error\",\"text\":\"Invalid or expired token\"}");
-                        conn.close();
+                        var _ = conn.close();
                     }
                 } else {
                     conn.sendTextAndAwait("{\"type\":\"error\",\"text\":\"Authentication required\"}");
-                    conn.close();
+                    var _ = conn.close();
                 }
                 return;
             }

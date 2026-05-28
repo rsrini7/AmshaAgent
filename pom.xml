@@ -42,6 +42,7 @@
     <langchain4j.version>1.0.0-beta1</langchain4j.version>
     <bouncycastle.version>1.78.1</bouncycastle.version>
     <archunit.version>1.4.1</archunit.version>
+    <errorprone.version>2.49.0</errorprone.version>
     <camel.quarkus.version>3.27.3</camel.quarkus.version>
     <quarkus-jdbi.version>1.9.0</quarkus-jdbi.version>
     <quarkus-mcp.version>1.10.3</quarkus-mcp.version>
@@ -297,7 +298,17 @@
           <configuration>
             <compilerArgs>
               <arg>-parameters</arg>
+              <arg>-XDcompilePolicy=byfile</arg>
+              <arg>-Xplugin:ErrorProne</arg>
+              <arg>--should-stop=ifError=FLOW</arg>
             </compilerArgs>
+            <annotationProcessorPaths>
+              <path>
+                <groupId>com.google.errorprone</groupId>
+                <artifactId>error_prone_core</artifactId>
+                <version>${errorprone.version}</version>
+              </path>
+            </annotationProcessorPaths>
           </configuration>
         </plugin>
         <plugin>
