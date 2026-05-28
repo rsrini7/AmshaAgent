@@ -6,17 +6,36 @@
                              https://pmd.sourceforge.io/ruleset_2_0_0.xsd">
 
     <description>Enforces maximum boundaries for class and method structures on JDK 25.
-    NcssCount measures non-commenting source statements for method (80) and type (500).
-    Note: ExcessiveLength was removed in PMD 7.x. NcssCount's typeReportLevel=500
-    serves as the file length gate (a 500-line file will have ~450+ NCSS lines).</description>
+    NcssCount measures non-commenting source statements for methods (80 NCSS).
+    ExcessiveClassLength is a custom XPath rule enforcing 500 total lines per class.</description>
 
     <exclude-pattern>.*/module-info\.java</exclude-pattern>
 
-    <!-- Method length: max 80 NCSS lines. Type length: max 500 NCSS lines. -->
+    <!-- Method length: max 80 NCSS lines. classReportLevel disabled (handled by ExcessiveClassLength). -->
     <rule ref="category/java/design.xml/NcssCount">
         <properties>
-            <property name="typeReportLevel" value="500"/>
+            <property name="classReportLevel" value="10000"/>
             <property name="methodReportLevel" value="80"/>
+        </properties>
+    </rule>
+
+    <!-- Total class length: max 500 lines (including blanks, comments).
+         Uses ClassBody span since ClassDeclaration only covers the declaration line in PMD 7.x. -->
+    <rule name="ExcessiveClassLength"
+          language="java"
+          message="Class {0} exceeds 500 lines. Split into smaller classes."
+          class="net.sourceforge.pmd.lang.rule.xpath.XPathRule">
+        <description>Enforces a maximum of 500 total lines per class (including blank lines and comments).
+        Uses ClassBody/@EndLine - ClassBody/@BeginLine to measure the full class span.</description>
+        <priority>2</priority>
+        <properties>
+            <property name="xpath">
+                <value>
+<![CDATA[
+//ClassDeclaration[ClassBody/@EndLine - ClassBody/@BeginLine > 500]
+]]>
+                </value>
+            </property>
         </properties>
     </rule>
 

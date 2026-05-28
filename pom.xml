@@ -352,20 +352,20 @@
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-pmd-plugin</artifactId>
+        <configuration>
+          <failOnViolation>true</failOnViolation>
+          <printFailingErrors>true</printFailingErrors>
+          <includeTests>false</includeTests>
+          <javaLanguageVersion>25</javaLanguageVersion>
+          <rulesets>
+            <ruleset>${maven.multiModuleProjectDirectory}/src/main/resources/rulesets/java/arcclaw-rules.xml</ruleset>
+          </rulesets>
+        </configuration>
         <executions>
           <execution>
             <id>complexity-gate</id>
             <phase>verify</phase>
             <goals><goal>check</goal></goals>
-            <configuration>
-              <failOnViolation>false</failOnViolation>
-              <printFailingErrors>true</printFailingErrors>
-              <includeTests>false</includeTests>
-              <javaLanguageVersion>25</javaLanguageVersion>
-              <rulesets>
-                <ruleset>${project.basedir}/src/main/resources/rulesets/java/arcclaw-rules.xml</ruleset>
-              </rulesets>
-            </configuration>
           </execution>
         </executions>
       </plugin>
