@@ -81,12 +81,6 @@ run = [
 depends = ["setup:chmod-tasks", "setup:wsl-crlf"]
 alias = "s"
 
-# Tasks are defined as .ps1 scripts in .mise/tasks/setup/ for cross-platform compatibility
-# - profile.ps1      - Write mise activate + completion to shell profile
-# - env-check.ps1    - Validate .env keys and placeholders
-# - wsl-crlf.ps1     - Fix CRLF line endings in WSL2/Linux
-# setup:chmod-tasks is inline — chicken-and-egg: the +x granter can't need +x itself
-
 [tasks."setup:chmod-tasks"]
 description = "chmod +x all .ps1 and .sh files under .mise/"
 dir = "{{config_root}}"
@@ -98,6 +92,78 @@ Get-ChildItem -Path '.mise/' -Recurse -Include '*.ps1','*.sh' | ForEach-Object {
 }
 Write-Host '✅  All .mise/*.ps1 and .sh files are now executable.'
 """
+
+[tasks."env:recover"]
+description = "Internal: Auto-recover stranded .env files from aborted builds"
+dir = "{{config_root}}"
+shell = "pwsh -NonInteractive -Command"
+quiet = true
+run = """
+$ErrorActionPreference = 'Stop'
+if (Test-Path '.env.build-backup') {
+    if (Test-Path '.env') { Remove-Item '.env' -Force }
+    Rename-Item '.env.build-backup' '.env'
+    Write-Host '⚠️  Recovered stranded .env.build-backup from a previously aborted build.'
+}
+"""
+
+[tasks."test:summary"]
+description = "Summarize surefire XML test report counts"
+dir = "{{config_root}}"
+quiet = true
+shell = "bash -c"
+run = """
+rg -u -g "**/target/surefire-reports/TEST-*.xml" "<testsuite" | awk -F' ' '{
+    for(i=1; i<=NF; i++) {
+        if($i ~ /tests=/)    { split($i, a, "\\x22"); t += a[2] }
+        if($i ~ /errors=/)   { split($i, a, "\\x22"); e += a[2] }
+        if($i ~ /failures=/) { split($i, a, "\\x22"); f += a[2] }
+        if($i ~ /skipped=/)  { split($i, a, "\\x22"); s += a[2] }
+    }
+}
+END { printf "Total: %d | Failures: %d | Errors: %d | Skipped: %d\\n", t, f, e, s }'
+"""
+
+
+# =============================================================================
+# INFO / HELP
+# =============================================================================
+
+[tasks.info]
+description = "Print runtime info: Java, Maven, Podman, Docker versions and key env vars"
+dir = "{{config_root}}"
+shell = "pwsh -NonInteractive -Command"
+quiet = true
+run = """
+Write-Host '-- Java ─────────────────────────────────────────'
+java -version 2>&1 | ForEach-Object { Write-Host "  $_" }
+Write-Host '-- Maven wrapper ────────────────────────────────'
+$mvnw = if ($IsWindows) { '.\\mvnw.cmd' } else { './mvnw' }
+if (Test-Path $mvnw) {
+    & $mvnw --version 2>&1 | ForEach-Object { Write-Host "  $_" }
+} else {
+    Write-Host '  mvnw not found'
+}
+Write-Host '-- Podman ───────────────────────────────────────'
+$pv = podman --version 2>&1; if ($LASTEXITCODE -eq 0) { Write-Host "  $pv" } else { Write-Host '  podman not installed' }
+Write-Host '-- Docker CLI ───────────────────────────────────'
+$dv = docker --version 2>&1; if ($LASTEXITCODE -eq 0) { Write-Host "  $dv" } else { Write-Host '  docker CLI not installed' }
+Write-Host '-- DOCKER_HOST ──────────────────────────────────'
+Write-Host "  $($env:DOCKER_HOST ?? '(not set)')"
+Write-Host '-- ARCCLAW_VEC_EXT ──────────────────────────────'
+Write-Host "  $($env:ARCCLAW_VEC_EXT ?? '(not set)')"
+"""
+
+[tasks.help]
+description = "List all available mise tasks with descriptions"
+dir = "{{config_root}}"
+run = ["mise tasks"]
+
+# Tasks are defined as .ps1 scripts in .mise/tasks/setup/ for cross-platform compatibility
+# - profile.ps1      - Write mise activate + completion to shell profile
+# - env-check.ps1    - Validate .env keys and placeholders
+# - wsl-crlf.ps1     - Fix CRLF line endings in WSL2/Linux
+# setup:chmod-tasks is inline — chicken-and-egg: the +x granter can't need +x itself
 
 # =============================================================================
 # JDK MANAGEMENT
@@ -130,23 +196,6 @@ Write-Host '✅  All .mise/*.ps1 and .sh files are now executable.'
 # - build/fs.ps1               - Clean install with filesystem backend
 # - build/clean.ps1            - Clean Maven build artifacts
 
-[tasks."test:summary"]
-description = "Summarize surefire XML test report counts"
-dir = "{{config_root}}"
-quiet = true
-shell = "bash -c"
-run = """
-rg -u -g "**/target/surefire-reports/TEST-*.xml" "<testsuite" | awk -F' ' '{
-    for(i=1; i<=NF; i++) {
-        if($i ~ /tests=/)    { split($i, a, "\\x22"); t += a[2] }
-        if($i ~ /errors=/)   { split($i, a, "\\x22"); e += a[2] }
-        if($i ~ /failures=/) { split($i, a, "\\x22"); f += a[2] }
-        if($i ~ /skipped=/)  { split($i, a, "\\x22"); s += a[2] }
-    }
-}
-END { printf "Total: %d | Failures: %d | Errors: %d | Skipped: %d\\n", t, f, e, s }'
-"""
-
 # =============================================================================
 # DEV MODE TASKS  (hot reload - Temurin 25, no Podman)
 # =============================================================================
@@ -175,18 +224,7 @@ END { printf "Total: %d | Failures: %d | Errors: %d | Skipped: %d\\n", t, f, e, 
 # - jar/fs/chat.ps1         - Filesystem interactive REPL
 # - jar/fs/ask.ps1          - Filesystem one-shot
 
-[tasks."mcp:playwright"]
-description = "Start the official Playwright MCP Server (requires Node.js 20+)"
-dir = "{{config_root}}"
-shell = "pwsh -NonInteractive -Command"
-quiet = true
-run = """
-Write-Host '▶   Starting Playwright MCP Server on stdio...'
-Write-Host '    (Keep this terminal open — the server runs in the foreground)'
-Write-Host '    Then in another terminal: mise run jar:serve -Darcclaw.tools.playwright.mcp-enabled=true'
-Write-Host ''
-PLAYWRIGHT_MCP_HEADLESS=1 npx @playwright/mcp
-"""
+# utils:mcp-playwright - Start the official Playwright MCP Server
 
 # =============================================================================
 # NATIVE BINARY TASKS
@@ -205,174 +243,7 @@ PLAYWRIGHT_MCP_HEADLESS=1 npx @playwright/mcp
 # - dist/all.ps1      (.mise/tasks/dist/)      - Assemble dist/ folder: all 3 backend variants
 # - dist/pack.ps1     (.mise/tasks/dist/)      - Create OS-specific release archives from dist/
 
-[tasks."env:recover"]
-description = "Internal: Auto-recover stranded .env files from aborted builds"
-dir = "{{config_root}}"
-shell = "pwsh -NonInteractive -Command"
-quiet = true
-run = """
-$ErrorActionPreference = 'Stop'
-if (Test-Path '.env.build-backup') {
-    if (Test-Path '.env') { Remove-Item '.env' -Force }
-    Rename-Item '.env.build-backup' '.env'
-    Write-Host '⚠️  Recovered stranded .env.build-backup from a previously aborted build.'
-}
-"""
-
-[tasks."7z:source"]
-description = "Generate source archive (7z). Usage: ARCCLAW_7Z_PASS=secret mise run 7z:source"
-dir = "{{config_root}}"
-shell = "pwsh -NonInteractive -Command"
-quiet = true
-run = '''
-$ErrorActionPreference = 'Stop'
-
-$argPass = $env:ARCCLAW_7Z_PASS
-if ([string]::IsNullOrWhiteSpace($argPass)) {
-    Write-Host "❌ ERROR: No password provided!" -ForegroundColor Red
-    Write-Host "Usage: ARCCLAW_7Z_PASS=secret mise run 7z:source"
-    exit 1
-}
-
-# ── Auto-install 7z if not found ──────────────────────────────────────────────
-$has7z = if ($IsMacOS)      { (Get-Command '7zz' -ErrorAction SilentlyContinue) -or
-                               (Get-Command '7z'  -ErrorAction SilentlyContinue) }
-         elseif ($IsWindows) { (Get-Command '7z'  -ErrorAction SilentlyContinue) -or
-                               (Test-Path "C:\Program Files\7-Zip\7z.exe") -or
-                               (Test-Path "C:\Program Files (x86)\7-Zip\7z.exe") }
-         else                { Get-Command '7z' -ErrorAction SilentlyContinue }
-
-if (-not $has7z) {
-    Write-Host '📦  7z not found — installing...'
-    if ($IsMacOS) {
-        if (Get-Command brew -ErrorAction SilentlyContinue) { brew install sevenzip }
-        else { Write-Host '❌  brew not found. Install Homebrew: https://brew.sh'; exit 1 }
-    } elseif ($IsWindows) {
-        if (Get-Command winget -ErrorAction SilentlyContinue) {
-            winget install --id 7zip.7zip -e --silent
-            $env:PATH += ";C:\Program Files\7-Zip"
-        } else { Write-Host '❌  winget not found. Install 7-Zip: https://www.7-zip.org'; exit 1 }
-    } else {
-        if      (Get-Command apt-get -ErrorAction SilentlyContinue) { sudo apt-get install -y p7zip-full }
-        elseif  (Get-Command dnf     -ErrorAction SilentlyContinue) { sudo dnf install -y p7zip p7zip-plugins }
-        else    { Write-Host '❌  No known package manager. Install p7zip manually.'; exit 1 }
-    }
-    Write-Host '✅  7z installed.'
-}
-
-# ── Resolve 7z binary ─────────────────────────────────────────────────────────
-$zipPath = if ($IsWindows) {
-    $p = (Get-Command '7z' -ErrorAction SilentlyContinue)?.Source
-    if ($p) { $p } else {
-        @("C:\Program Files\7-Zip\7z.exe","C:\Program Files (x86)\7-Zip\7z.exe") |
-            Where-Object { Test-Path $_ } | Select-Object -First 1
-    }
-} elseif ($IsMacOS) {
-    @('7zz','7z') | ForEach-Object { (Get-Command $_ -ErrorAction SilentlyContinue)?.Source } |
-        Where-Object { $_ } | Select-Object -First 1
-} else {
-    (Get-Command '7z' -ErrorAction SilentlyContinue)?.Source
-}
-if (-not $zipPath) {
-    Write-Host '❌  7z binary not found in PATH after install. Open a new shell and retry.'
-    exit 1
-}
-
-$out = 'arcclaw-source.7z'
-
-# ── Exclusion lists ───────────────────────────────────────────────────────────
-$script:root = (Get-Location).Path
-
-$script:excludeDirs = @(
-    'target', 'dist', '.vscode', '.idea', 'out', '.quarkus', 'quarkus-app',
-    'workspaces', 'data', 'lib', 'node_modules', 'node', 'npm',
-    '.playwright-browsers', 'MyPrompts', 'docs', 'docs-main', 'docs-test',
-    'Ideas-Pending', 'ProjectWorkflowDocs', 'bruno-collections',
-    'rest-http', 'backups', '.git'
-)
-
-$script:excludeExts = @(
-    '.md', '.jar', '.exe', '.dll', '.zip', '.7z', '.class', '.log'
-)
-
-$script:excludeFiles = @(
-    '.gitignore', '.gitattributes', 'build.env',
-    'arcclaw-source.zip', 'arcclaw-source.7z', '.env'
-)
-
-$script:excludeRelPaths = @(
-    'arcclaw-app/src/main/resources/META-INF/resources',
-    'arcclaw-app/src/main/resources/native',
-    '.playwright-driver',
-    '.mvn',
-    'scratch'
-)
-
-$script:includeFiles = @(
-    'Architecture_Invariants.md',
-    'Flyway-Migration.md'
-)
-
-$script:includeRelPaths = @(
-    'docs-test/arcclaw_rg_cheatsheet.md'
-)
-
-function ShouldExclude($item, $relPath) {
-    if (-not $item.PSIsContainer) {
-        if ($script:includeFiles -contains $item.Name) { return $false }
-    }
-    foreach ($rp in $script:includeRelPaths) {
-        if ($relPath -eq $rp) { return $false }
-        if ($item.PSIsContainer -and $rp.StartsWith("$relPath/")) { return $false }
-    }
-    foreach ($rp in $script:excludeRelPaths) {
-        if ($relPath -eq $rp -or $relPath.StartsWith("$rp/")) { return $true }
-    }
-    foreach ($seg in $relPath.Split('/')) {
-        if ($script:excludeDirs -contains $seg) { return $true }
-    }
-    if (-not $item.PSIsContainer) {
-        if ($script:excludeFiles -contains $item.Name)      { return $true }
-        if ($script:excludeExts  -contains $item.Extension) { return $true }
-    }
-    return $false
-}
-
-function CopyFiltered($sourceDir, $destDir) {
-    Get-ChildItem -Path $sourceDir | ForEach-Object {
-        $relPath = $_.FullName.Substring($script:root.Length).TrimStart('\\/').Replace('\','/')
-        if (ShouldExclude $_ $relPath) { Write-Verbose "  skip: $relPath"; return }
-        if ($_.PSIsContainer) {
-            $dest = Join-Path $destDir $_.Name
-            New-Item -ItemType Directory -Path $dest -Force | Out-Null
-            CopyFiltered $_.FullName $dest
-        } else {
-            if (-not (Test-Path $destDir)) { New-Item -ItemType Directory -Path $destDir -Force | Out-Null }
-            Copy-Item $_.FullName (Join-Path $destDir $_.Name) -Force
-        }
-    }
-}
-
-$stage = Join-Path ([System.IO.Path]::GetTempPath()) ([System.Guid]::NewGuid().ToString())
-New-Item -ItemType Directory $stage | Out-Null
-
-try {
-    Write-Host "📂  Staging files from: $($script:root)"
-    CopyFiltered $script:root $stage
-
-    if (Test-Path $out) { Remove-Item $out -Force }
-    Write-Host "📦  Creating encrypted archive: $out"
-    & $zipPath a "$out" "$stage/*" "-p$argPass" -mhe=on -mx=5 | Out-Null
-    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-
-    if (Test-Path $out) {
-        Write-Host "✅  Archive created: $out" -ForegroundColor Green
-        Get-Item $out | Format-Table Name, @{L='Size';E={'{0:N0} KB' -f ($_.Length/1KB)}} -AutoSize
-    } else { exit 1 }
-} finally {
-    if (Test-Path $stage) { Remove-Item $stage -Recurse -Force }
-}
-'''
+# utils:7z-source - Generate encrypted source archive (7z)
 
 # =============================================================================
 # DOCKER COMPOSE TASKS
@@ -430,40 +301,6 @@ try {
 # - pg/stop.ps1             - Stop and remove PostgreSQL container
 # - pg/status.ps1           - Check PostgreSQL container health
 # - pg/reset.ps1            - Drop and recreate the arcclaw database (wipes all data)
-
-# =============================================================================
-# INFO / HELP
-# =============================================================================
-
-[tasks.info]
-description = "Print runtime info: Java, Maven, Podman, Docker versions and key env vars"
-dir = "{{config_root}}"
-shell = "pwsh -NonInteractive -Command"
-quiet = true
-run = """
-Write-Host '-- Java ─────────────────────────────────────────'
-java -version 2>&1 | ForEach-Object { Write-Host "  $_" }
-Write-Host '-- Maven wrapper ────────────────────────────────'
-$mvnw = if ($IsWindows) { '.\\mvnw.cmd' } else { './mvnw' }
-if (Test-Path $mvnw) {
-    & $mvnw --version 2>&1 | ForEach-Object { Write-Host "  $_" }
-} else {
-    Write-Host '  mvnw not found'
-}
-Write-Host '-- Podman ───────────────────────────────────────'
-$pv = podman --version 2>&1; if ($LASTEXITCODE -eq 0) { Write-Host "  $pv" } else { Write-Host '  podman not installed' }
-Write-Host '-- Docker CLI ───────────────────────────────────'
-$dv = docker --version 2>&1; if ($LASTEXITCODE -eq 0) { Write-Host "  $dv" } else { Write-Host '  docker CLI not installed' }
-Write-Host '-- DOCKER_HOST ──────────────────────────────────'
-Write-Host "  $($env:DOCKER_HOST ?? '(not set)')"
-Write-Host '-- ARCCLAW_VEC_EXT ──────────────────────────────'
-Write-Host "  $($env:ARCCLAW_VEC_EXT ?? '(not set)')"
-"""
-
-[tasks.help]
-description = "List all available mise tasks with descriptions"
-dir = "{{config_root}}"
-run = ["mise tasks"]
 
 # =============================================================================
 # PERSISTENCE BACKEND TASKS
