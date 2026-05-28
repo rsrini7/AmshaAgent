@@ -62,7 +62,8 @@
       "Bash(source .env)",
       "Bash(head:*)",
       "Bash(tail:*)",
-      "Bash(chmod:*)"
+      "Bash(chmod:*)",
+      "Bash(./mvnw spotless:apply -q)"
     ]
   }
 }

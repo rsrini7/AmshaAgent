@@ -21,12 +21,34 @@ class CheckpointDtoHelperTest {
     private static CheckpointDto sample() {
         Instant now = Instant.now();
         return new CheckpointDto(
-                1L, "session-1", "coder", IN_PROGRESS, "SUPERVISED",
-                "{}", "tg", "TELEGRAM", "build a calculator",
-                null, null, null, "sandbox_exec", "{}", "{}",
-                null, 50, 3, 1000, "system", "{}",
-                "ERR", "trace-1", "NullPointerException",
-                null, 0, now, now);
+                1L,
+                "session-1",
+                "coder",
+                IN_PROGRESS,
+                "SUPERVISED",
+                "{}",
+                "tg",
+                "TELEGRAM",
+                "build a calculator",
+                null,
+                null,
+                null,
+                "sandbox_exec",
+                "{}",
+                "{}",
+                null,
+                50,
+                3,
+                1000,
+                "system",
+                "{}",
+                "ERR",
+                "trace-1",
+                "NullPointerException",
+                null,
+                0,
+                now,
+                now);
     }
 
     @Test
@@ -68,7 +90,8 @@ class CheckpointDtoHelperTest {
     void withFailure_setsFailedAtAndReason() {
         CheckpointDto cp = sample();
         Instant failedAt = Instant.now();
-        CheckpointDto result = CheckpointDtoHelper.withFailure(cp, FAILED, failedAt, "OOM", "E001", "tr-1", "OutOfMemoryError");
+        CheckpointDto result =
+                CheckpointDtoHelper.withFailure(cp, FAILED, failedAt, "OOM", "E001", "tr-1", "OutOfMemoryError");
 
         assertEquals(FAILED, result.status());
         assertEquals(failedAt, result.failedAt());
@@ -108,7 +131,8 @@ class CheckpointDtoHelperTest {
 
     @Test
     void create_setsMinimalFields() {
-        CheckpointDto result = CheckpointDtoHelper.create("sess", "coder", IN_PROGRESS, "SUPERVISED", "{}", "goal", 5, "{}");
+        CheckpointDto result =
+                CheckpointDtoHelper.create("sess", "coder", IN_PROGRESS, "SUPERVISED", "{}", "goal", 5, "{}");
 
         assertNull(result.id());
         assertEquals("sess", result.sessionId());
