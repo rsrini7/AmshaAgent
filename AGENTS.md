@@ -8,6 +8,12 @@ Welcome! This document outlines the critical invariants, conventions, and archit
   ```bash
   python3 ./fix_fqns.py
   ```
+* **SonarQube Quality Gate**: Before committing, check for BLOCKER/CRITICAL issues:
+  ```bash
+  mise run sonar:issues                          # all BLOCKER + CRITICAL
+  mise run sonar:issues -- -severity BLOCKER     # BLOCKER only
+  mise run sonar:issues -component arcclaw-core  # one module
+  ```
 
 ## 1. Critical Architectural Invariants
 

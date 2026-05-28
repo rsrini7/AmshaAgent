@@ -10,6 +10,7 @@
 * **Null-safe sealed interface access**: If a sealed interface method returns a nullable wrapper (`Boolean`, `Integer`), always use `Boolean.TRUE.equals(x)` or `!= null` guard. Never auto-unbox. See AGENTS.md §1.5.
 * **JDK 25 GA features only**: Use finalized features — `var _` for discarded values, pattern matching `switch`, sealed interfaces, `instanceof` pattern matching, text blocks. Do NOT use preview features (structured concurrency, stream gatherers, module imports, value classes). See AGENTS.md §1.6.
 * **Import alignment**: After editing Java files, run `python3 ./fix_fqns.py`.
+* **SonarQube check**: Before committing, run `mise run sonar:issues` to find BLOCKER/CRITICAL issues. Fix BLOCKERs before committing.
 
 ## 2. Checkstyle Limits
 * **File**: max 500 lines per Java source file
