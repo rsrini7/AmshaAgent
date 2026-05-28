@@ -23,8 +23,19 @@ if ($LASTEXITCODE -ne 0) {
     podman network create arcclaw-net 2>&1 | Out-Null
 }
 
-# Start the container (single line to avoid parsing issues)
-podman run -d --name sonarqube -p 9000:9000 -e SONAR_ES_BOOTSTRAP_CHECKS_DISABLE=true -v sonarqube_data:/opt/sonarqube/data -v sonarqube_extensions:/opt/sonarqube/extensions -v sonarqube_logs:/opt/sonarqube/logs --network arcclaw-net sonarqube:latest
+# Start the container
+$runArgs = @(
+    'run', '-d',
+    '--name', 'sonarqube',
+    '-p', '9000:9000',
+    '-e', 'SONAR_ES_BOOTSTRAP_CHECKS_DISABLE=true',
+    '-v', 'sonarqube_data:/opt/sonarqube/data',
+    '-v', 'sonarqube_extensions:/opt/sonarqube/extensions',
+    '-v', 'sonarqube_logs:/opt/sonarqube/logs',
+    '--network', 'arcclaw-net',
+    'sonarqube:latest'
+)
+& podman $runArgs
 
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 

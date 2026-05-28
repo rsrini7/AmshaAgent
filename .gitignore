@@ -73,3 +73,6 @@ arcclaw-source.7z
 tool-contracts.json
 results*.json
 autotest/logs/
+
+
+.scannerwork/
