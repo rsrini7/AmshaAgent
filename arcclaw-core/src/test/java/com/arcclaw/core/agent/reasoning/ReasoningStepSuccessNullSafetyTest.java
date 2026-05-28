@@ -62,6 +62,30 @@ class ReasoningStepSuccessNullSafetyTest {
      * each is in the verified-safe allowlist. New callers must be reviewed for
      * null-safety and added to {@link #VERIFIED_SAFE_CLASSES}.
      */
+    /**
+     * Verifies that {@link ReasoningStep#success()} is annotated {@code @Nullable}.
+     * This is the compile-time contract that all consumers must honor.
+     */
+    @Test
+    void success_methodMustBeAnnotatedNullable() {
+        var classes = new ClassFileImporter()
+                .withImportOption(ImportOption.Predefined.DO_NOT_INCLUDE_TESTS)
+                .importPackages("com.arcclaw.core");
+
+        var step = classes.get(ReasoningStep.class.getName());
+        var successMethod = step.getMethods().stream()
+                .filter(m -> m.getName().equals("success"))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("ReasoningStep.success() method not found"));
+
+        boolean hasNullable = successMethod.getAnnotations().stream()
+                .anyMatch(a -> a.getType().getName().contains("Nullable"));
+
+        assertTrue(hasNullable,
+                "ReasoningStep.success() must be annotated @Nullable. "
+                + "See AGENTS.md §1.5 — Heterogeneous Nullability in Sealed Interfaces.");
+    }
+
     @Test
     void allReasoningStepSuccessCallers_areVerifiedNullSafe() {
         var classes = new ClassFileImporter()

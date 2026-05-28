@@ -292,6 +292,10 @@
             </execution>
           </executions>
         </plugin>
+        <!-- Error Prone: compile-time static analysis (catches NPE auto-unboxing, unchecked
+             return values, format string bugs, resource leaks). Requires javac internals
+             exports in .mvn/jvm.config — do NOT remove those exports without testing.
+             should-stop=ifError=FLOW is REQUIRED by Error Prone (default INIT causes build failure). -->
         <plugin>
           <artifactId>maven-compiler-plugin</artifactId>
           <version>3.15.0</version>
