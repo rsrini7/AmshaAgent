@@ -1584,6 +1584,10 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 # =============================================================================
 # DIST - assemble a ready-to-run distribution folder
 # =============================================================================
+# Tasks are defined as .ps1 scripts for cross-platform compatibility
+# - dist.ps1          (.mise/tasks/dist/)      - Assemble dist/ folder: native exe (SQLite only)
+# - dist/all.ps1      (.mise/tasks/dist/)      - Assemble dist/ folder: all 3 backend variants
+# - dist/pack.ps1     (.mise/tasks/dist/)      - Create OS-specific release archives from dist/
 
 [tasks."env:recover"]
 description = "Internal: Auto-recover stranded .env files from aborted builds"
@@ -1598,118 +1602,6 @@ if (Test-Path '.env.build-backup') {
     Write-Host '⚠️  Recovered stranded .env.build-backup from a previously aborted build.'
 }
 """
-
-[tasks.dist]
-depends = ["dev:kill"]
-description = "Assemble dist/ folder: native exe (SQLite only)"
-dir = "{{config_root}}"
-shell = "pwsh -NonInteractive -Command"
-quiet = true
-run = """
-$ErrorActionPreference = 'Stop'
-$suffix  = if ($IsWindows) { '-runner.exe' } else { '-runner' }
-$runnerSrc = "arcclaw-app-1.0.0-SNAPSHOT$suffix"
-$src     = "arcclaw-app/target/$runnerSrc"
-$distExe = if ($IsWindows) { "arcclaw-sqlite.exe" } else { "arcclaw-sqlite" }
-$distDir = 'dist'
-
-if (-not (Test-Path $src)) {
-    Write-Host "❌  Native binary not found at $src - run: mise run build:native-local"
-    exit 1
-}
-
-if (-not (Test-Path $distDir)) { New-Item -ItemType Directory -Path $distDir -Force | Out-Null }
-
-# --- Cleanup dist/ ephemeral data to ensure a clean package ---
-if (Test-Path "$distDir/.playwright-browsers") { 
-    Write-Host "ℹ️   Removing .playwright-browsers from $distDir for clean distribution..."
-    Remove-Item -Recurse -Force "$distDir/.playwright-browsers" 
-}
-if (Test-Path "$distDir/.playwright-driver") { Remove-Item -Recurse -Force "$distDir/.playwright-driver" }
-if (Test-Path "$distDir/data") { Write-Host "ℹ️   Removing existing data/ from $distDir"; Remove-Item -Recurse -Force "$distDir/data" }
-# Clean up old runner files
-if (Test-Path "$distDir/arcclaw-runner$suffix") { Remove-Item "$distDir/arcclaw-runner$suffix" -Force }
-if (Test-Path "$distDir/arcclaw$suffix") { Remove-Item "$distDir/arcclaw$suffix" -Force }
-
-Copy-Item $src "$distDir/$distExe"
-
-# Create .env to prevent project root .env from being loaded at runtime
-if (-not (Test-Path "$distDir/.env")) {
-    Set-Content -Path "$distDir/.env" -Value "# ArcClaw SQLite backend configuration." -NoNewline
-}
-
-Write-Host ''
-Write-Host "✅  dist assembled - binary is self-contained."
-Write-Host "Run directly (no run.sh needed):"
-Write-Host "  Linux/macOS : ./$distExe serve"
-Write-Host "  Windows     : .\\$distExe serve"
-Write-Host "On first run with no .env present, .env.example is auto-extracted."
-Write-Host ''
-Write-Host '-- Binaries in dist/ ----------------------------------------------------'
-if (Test-Path 'dist/arcclaw-sqlite')     { Write-Host '  OK  arcclaw-sqlite   (Linux/macOS)' } else { Write-Host '  -   arcclaw-sqlite   (Linux/macOS) -- not built yet' }
-if (Test-Path 'dist/arcclaw-sqlite.exe') { Write-Host '  OK  arcclaw-sqlite.exe (Windows)'     } else { Write-Host '  -   arcclaw-sqlite.exe (Windows)     -- not built yet' }
-Write-Host '-------------------------------------------------------------------------'
-Write-Host '    Build the missing platform binary and re-run: mise run dist'
-"""
-
-[tasks."dist:all"]
-depends = ["dev:kill"]
-description = "Assemble dist/ folder: all 3 backend variants (arcclaw-sqlite, arcclaw-pg, arcclaw-fs)"
-dir = "{{config_root}}"
-shell = "pwsh -NonInteractive -Command"
-quiet = true
-run = """
-$ErrorActionPreference = 'Stop'
-$suffix  = if ($IsWindows) { '-runner.exe' } else { '-runner' }
-$src     = "arcclaw-app/target/arcclaw-app-1.0.0-SNAPSHOT$suffix"
-$distDir = 'dist'
-
-if (-not (Test-Path $src)) {
-    Write-Host "❌  Native binary not found at $src - run: mise run build:native-local-all"
-    exit 1
-}
-
-if (-not (Test-Path $distDir)) { New-Item -ItemType Directory -Path $distDir -Force | Out-Null }
-
-# --- Cleanup dist/ ephemeral data to ensure a clean package ---
-if (Test-Path "$distDir/.playwright-browsers") { 
-    Write-Host "ℹ️   Removing .playwright-browsers from $distDir for clean distribution..."
-    Remove-Item -Recurse -Force "$distDir/.playwright-browsers" 
-}
-if (Test-Path "$distDir/.playwright-driver") { Remove-Item -Recurse -Force "$distDir/.playwright-driver" }
-if (Test-Path "$distDir/data") { Write-Host "ℹ️   Removing existing data/ from $distDir"; Remove-Item -Recurse -Force "$distDir/data" }
-# Clean up old runner files
-if (Test-Path "$distDir/arcclaw-runner$suffix") { Remove-Item "$distDir/arcclaw-runner$suffix" -Force }
-if (Test-Path "$distDir/arcclaw-pg-runner$suffix") { Remove-Item "$distDir/arcclaw-pg-runner$suffix" -Force }
-if (Test-Path "$distDir/arcclaw-fs-runner$suffix") { Remove-Item "$distDir/arcclaw-fs-runner$suffix" -Force }
-if (Test-Path "$distDir/arcclaw$suffix") { Remove-Item "$distDir/arcclaw$suffix" -Force }
-
-# Copy all 3 backend variants
-$backends = @('arcclaw-sqlite', 'arcclaw-pg', 'arcclaw-fs')
-foreach ($backend in $backends) {
-    $backendSuffix = if ($IsWindows) { "$backend.exe" } else { $backend }
-    $backendSrc = "arcclaw-app/target/arcclaw-app-1.0.0-SNAPSHOT$suffix"
-    Copy-Item $backendSrc "$distDir/$backendSuffix" -Force
-    Write-Host "✅  Copied $backendSuffix"
-}
-
-# Create .env.fs for the filesystem backend (activates %filesystem profile at runtime)
-$envFs = @"
-# Environment overrides for arcclaw-fs binary.
-# Source this before running:  source .env.fs && ./arcclaw-fs serve
-QUARKUS_PROFILE=prod,filesystem
-"@
-Set-Content -Path "$distDir/.env.fs" -Value $envFs -NoNewline
-Write-Host "✅  Created .env.fs (source before running arcclaw-fs)"
-
-Write-Host ''
-Write-Host "✅  dist assembled - all 3 backend variants ready."
-Write-Host "Run dist:pack to create release archives."
-Write-Host ''
-Write-Host '-- Binaries in dist/ ----------------------------------------------------'
-Get-ChildItem $distDir -File | Where-Object { $_.Name -like 'arcclaw*' } | Format-Table Name, @{L='Size';E={'{0:N2} MB' -f ($_.Length/1MB)}} -AutoSize
-"""
-
 
 [tasks."7z:source"]
 description = "Generate source archive (7z). Usage: ARCCLAW_7Z_PASS=secret mise run 7z:source"
@@ -1865,103 +1757,6 @@ try {
     if (Test-Path $stage) { Remove-Item $stage -Recurse -Force }
 }
 '''
-
-[tasks."dist:pack"]
-description = "Create OS-specific release archives from dist/ for GitHub releases (3 archives × 3 backends each)"
-dir = "{{config_root}}"
-shell = "pwsh -NonInteractive -Command"
-quiet = true
-run = """
-$ErrorActionPreference = 'Stop'
-$version = '1.0.0'
-$out     = 'dist/release'
-New-Item -ItemType Directory -Force $out | Out-Null
-$packed = 0
-
-# Windows
-$winBinaries = @('arcclaw-sqlite.exe', 'arcclaw-pg.exe', 'arcclaw-fs.exe')
-$winFound = @()
-foreach ($bin in $winBinaries) {
-    if (Test-Path "dist/$bin") { $winFound += $bin }
-}
-if ($winFound.Count -gt 0) {
-    $stage = Join-Path ([System.IO.Path]::GetTempPath()) ([System.Guid]::NewGuid())
-    New-Item -ItemType Directory $stage | Out-Null
-    foreach ($bin in $winFound) { Copy-Item "dist/$bin" "$stage/$bin" }
-    $archive = "$out/arcclaw-$version-windows-x64.zip"
-    Compress-Archive -Path "$stage/*" -DestinationPath $archive -Force
-    Remove-Item $stage -Recurse -Force
-    Write-Host "✅  $archive ($($winFound.Count) binaries)"
-    $packed++
-} else {
-    Write-Host "⚠️   No Windows binaries found in dist/ - run mise run build:native-local-all first"
-}
-
-# Linux
-# use ReadAllText/WriteAllText to preserve LF line endings in run.sh
-$linuxBinaries = @('arcclaw-sqlite', 'arcclaw-pg', 'arcclaw-fs')
-$linuxFound = @()
-foreach ($bin in $linuxBinaries) {
-    if (Test-Path "dist/$bin") { $linuxFound += $bin }
-}
-if ($linuxFound.Count -gt 0) {
-    $stage = Join-Path ([System.IO.Path]::GetTempPath()) ([System.Guid]::NewGuid())
-    New-Item -ItemType Directory $stage | Out-Null
-    foreach ($bin in $linuxFound) { Copy-Item "dist/$bin" "$stage/$bin" }
-    $archive = "$out/arcclaw-$version-linux-x64.tar.gz"
-    if (Get-Command tar -ErrorAction SilentlyContinue) {
-        tar -czf $archive -C $stage .
-        Write-Host "✅  $archive ($($linuxFound.Count) binaries)"
-        $packed++
-    } else { Write-Host "⚠️   tar not found -- skipping Linux archive. Run from WSL2." }
-    Remove-Item $stage -Recurse -Force
-} else {
-    Write-Host "⚠️   No Linux binaries found in dist/ - run mise run build:native-local-all first"
-}
-
-# macOS
-$macosBinaries = @('arcclaw-sqlite', 'arcclaw-pg', 'arcclaw-fs')
-$macosFound = @()
-foreach ($bin in $macosBinaries) {
-    if (Test-Path "dist/$bin") { $macosFound += $bin }
-}
-if ($macosFound.Count -gt 0) {
-    $stage = Join-Path ([System.IO.Path]::GetTempPath()) ([System.Guid]::NewGuid())
-    New-Item -ItemType Directory $stage | Out-Null
-    foreach ($bin in $macosFound) { Copy-Item "dist/$bin" "$stage/$bin" }
-    $archive = "$out/arcclaw-$version-macos-aarch64.tar.gz"
-    if (Get-Command tar -ErrorAction SilentlyContinue) {
-        tar -czf $archive -C $stage .
-        Write-Host "✅  $archive ($($macosFound.Count) binaries)"
-        $packed++
-    } else { Write-Host "⚠️   tar not found -- skipping macOS archive. Run from WSL2." }
-    Remove-Item $stage -Recurse -Force
-} else {
-    Write-Host "⚠️   No macOS binaries found in dist/ - run mise run build:native-local-all first"
-}
-
-if ($packed -eq 0) {
-    Write-Host '❌  No binaries found in dist/ - run mise run build:native-local-all first'; exit 1
-}
-Write-Host ''
-Write-Host "-- Release archives in $out/ --"
-Get-ChildItem $out | Format-Table Name, @{L='Size';E={'{0:N0} KB' -f ($_.Length/1KB)}}, @{L='Binaries';E={
-    $ext = $_.Extension
-    $archive = $_.FullName
-    $tempDir = Join-Path ([System.IO.Path]::GetTempPath()) ([System.Guid]::NewGuid())
-    try {
-        if ($ext -eq '.zip') {
-            Add-Type -AssemblyName System.IO.Compression.FileSystem
-            [System.IO.Compression.ZipFile]::ExtractToDirectory($archive, $tempDir)
-        } else {
-            tar -xzf $archive -C $tempDir
-        }
-        (Get-ChildItem $tempDir -File).Count
-    } finally {
-        if (Test-Path $tempDir) { Remove-Item $tempDir -Recurse -Force }
-    }
-}} -AutoSize
-"""
 
 # =============================================================================
 # DOCKER COMPOSE TASKS
