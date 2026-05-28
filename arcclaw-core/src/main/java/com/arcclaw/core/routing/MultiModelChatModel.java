@@ -136,49 +136,43 @@ public class MultiModelChatModel implements ChatModel {
 
     private void classifyAndHandle(String label, ModelHealth h, Throwable t) {
         LlmProviderException classified = LlmExceptionClassifier.classify(t);
-        if (classified instanceof LlmRateLimitException) {
-            String msg = classified.getMessage();
-            if (msg != null && msg.toLowerCase().contains("per day")) {
-                h.disablePermanently();
-                log.errorf("MultiModel: [%s] %s permanently disabled (daily quota exhausted): %s",
-                        providerName, label, msg);
-            } else if (msg != null && msg.toLowerCase().contains("request too large")) {
-                h.markTpmBlocked();
-                log.infof("MultiModel: [%s] %s request too large for TPM, skipping. %s",
-                        providerName, label, msg);
-            } else {
-                h.recordRateLimit(1, cooldownMaxSeconds);
-                log.infof("MultiModel: [%s] %s rate-limited, trying next key. %s",
-                        providerName, label, msg);
-            }
-        } else if (classified instanceof LlmAuthenticationException) {
+        switch (classified) {
+            case LlmRateLimitException r   -> handleRateLimit(label, h, r);
+            case LlmAuthenticationException a -> { h.disablePermanently(); log.errorf("MultiModel: [%s] %s permanently disabled (auth error): %s", providerName, label, a.getMessage()); }
+            case LlmServiceUnavailableException u -> handleServiceUnavailable(label, h, u);
+            case LlmContentFilterException c -> throw c;
+            default                        -> { h.recordUnknownFailure(cooldownBaseSeconds, cooldownMaxSeconds); log.warnf("MultiModel: [%s] %s unclassified error, cooling down %ds. %s", providerName, label, h.cooldownRemainingMs() / 1000, classified.getMessage()); }
+        }
+    }
+
+    private void handleRateLimit(String label, ModelHealth h, LlmRateLimitException e) {
+        String msg = e.getMessage();
+        if (msg != null && msg.toLowerCase().contains("per day")) {
             h.disablePermanently();
-            log.errorf("MultiModel: [%s] %s permanently disabled (auth error): %s",
-                    providerName, label, classified.getMessage());
-        } else if (classified instanceof LlmServiceUnavailableException) {
-            String msg = classified.getMessage();
-            // Fast-fail: tool_use_failed is a provider-specific error (Groq rejects plain text).
-            // Retrying with the same provider will always fail — disable immediately.
-            if (msg != null && (msg.contains("tool_use_failed") || msg.contains("failed_generation"))) {
-                h.disablePermanently();
-                log.errorf("MultiModel: [%s] %s permanently disabled (tool_use_failed - provider rejected response): %s",
-                        providerName, label, msg);
-            } else {
-                h.recordTransientFailure(cooldownTransientSeconds, cooldownBaseSeconds, cooldownMaxSeconds);
-                if (h.isPermanentlyDisabled()) {
-                    log.errorf("MultiModel: [%s] %s permanently disabled after %d consecutive transient errors: %s",
-                            providerName, label, MAX_CONSECUTIVE_FAILURES, msg);
-                } else {
-                    log.warnf("MultiModel: [%s] %s transient error, cooling down %ds. %s",
-                            providerName, label, h.cooldownRemainingMs() / 1000, msg);
-                }
-            }
-        } else if (classified instanceof LlmContentFilterException) {
-            throw classified;
+            log.errorf("MultiModel: [%s] %s permanently disabled (daily quota exhausted): %s", providerName, label, msg);
+        } else if (msg != null && msg.toLowerCase().contains("request too large")) {
+            h.markTpmBlocked();
+            log.infof("MultiModel: [%s] %s request too large for TPM, skipping. %s", providerName, label, msg);
         } else {
-            h.recordUnknownFailure(cooldownBaseSeconds, cooldownMaxSeconds);
-            log.warnf("MultiModel: [%s] %s unclassified error, cooling down %ds. %s",
-                    providerName, label, h.cooldownRemainingMs() / 1000, classified.getMessage());
+            h.recordRateLimit(1, cooldownMaxSeconds);
+            log.infof("MultiModel: [%s] %s rate-limited, trying next key. %s", providerName, label, msg);
+        }
+    }
+
+    private void handleServiceUnavailable(String label, ModelHealth h, LlmServiceUnavailableException e) {
+        String msg = e.getMessage();
+        if (msg != null && (msg.contains("tool_use_failed") || msg.contains("failed_generation"))) {
+            h.disablePermanently();
+            log.errorf("MultiModel: [%s] %s permanently disabled (tool_use_failed - provider rejected response): %s", providerName, label, msg);
+        } else {
+            h.recordTransientFailure(cooldownTransientSeconds, cooldownBaseSeconds, cooldownMaxSeconds);
+            if (h.isPermanentlyDisabled()) {
+                log.errorf("MultiModel: [%s] %s permanently disabled after %d consecutive transient errors: %s",
+                        providerName, label, MAX_CONSECUTIVE_FAILURES, msg);
+            } else {
+                log.warnf("MultiModel: [%s] %s transient error, cooling down %ds. %s",
+                        providerName, label, h.cooldownRemainingMs() / 1000, msg);
+            }
         }
     }
 

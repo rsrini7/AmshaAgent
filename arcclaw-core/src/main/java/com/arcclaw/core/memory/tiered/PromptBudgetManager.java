@@ -46,10 +46,7 @@ public class PromptBudgetManager {
      * @return budget-enforced sections with truncation flags
      */
     public BudgetEnforcedSections enforce(String coreMemory, String compactionSummary, String archivalContext) {
-        boolean coreTruncated = false;
-        boolean summaryTruncated = false;
-        boolean archivalTruncated = false;
-
+        boolean[] truncated = {false, false, false};
         String core = coreMemory;
         String summary = compactionSummary;
         String archival = archivalContext;
@@ -57,60 +54,28 @@ public class PromptBudgetManager {
         // Pass 1: Individual caps
         int coreCharBudget = calculateCharBudget(config.maxCoreMemoryTokens());
         int summaryCharBudget = calculateCharBudget(config.maxCompactionSummaryTokens());
+        if (core != null && core.length() > coreCharBudget) { core = truncateSafely(core, coreCharBudget); truncated[0] = true; }
+        if (summary != null && summary.length() > summaryCharBudget) { summary = truncateSafely(summary, summaryCharBudget); truncated[1] = true; }
 
-        if (core != null && core.length() > coreCharBudget) {
-            core = truncateSafely(core, coreCharBudget);
-            coreTruncated = true;
-        }
-        if (summary != null && summary.length() > summaryCharBudget) {
-            summary = truncateSafely(summary, summaryCharBudget);
-            summaryTruncated = true;
-        }
-
-        // Pass 2: Total cap with hierarchical trimming
+        // Pass 2: Total cap with hierarchical trimming (archival → summary → core)
         int totalCharBudget = calculateCharBudget(config.totalNonConversationTokens());
-        int currentTotal = len(core) + len(summary) + len(archival);
-
-        if (currentTotal > totalCharBudget) {
-            int excess = currentTotal - totalCharBudget;
-
-            // Drop in priority order: archival first, summary second, core last
-            // Use actual removed length (truncateSafely may break at word boundary)
-            if (archival != null && excess > 0) {
-                int targetLen = Math.max(0, archival.length() - excess);
-                String trimmed = truncateSafely(archival, targetLen);
-                int actualRemoved = archival.length() - trimmed.length();
-                if (actualRemoved > 0) {
-                    archival = trimmed;
-                    excess -= actualRemoved;
-                    archivalTruncated = true;
-                }
-            }
-            if (summary != null && excess > 0) {
-                int minKeep = Math.min(100, summary.length());
-                int targetLen = Math.max(minKeep, summary.length() - excess);
-                String trimmed = truncateSafely(summary, targetLen);
-                int actualRemoved = summary.length() - trimmed.length();
-                if (actualRemoved > 0) {
-                    summary = trimmed;
-                    excess -= actualRemoved;
-                    summaryTruncated = true;
-                }
-            }
-            if (core != null && excess > 0) {
-                int minKeep = Math.min(100, core.length());
-                int targetLen = Math.max(minKeep, core.length() - excess);
-                String trimmed = truncateSafely(core, targetLen);
-                int actualRemoved = core.length() - trimmed.length();
-                if (actualRemoved > 0) {
-                    core = trimmed;
-                    excess -= actualRemoved;
-                    coreTruncated = true;
-                }
-            }
+        int[] excess = {len(core) + len(summary) + len(archival) - totalCharBudget};
+        if (excess[0] > 0) {
+            archival = trimSection(archival, 0, excess, truncated, 2);
+            summary = trimSection(summary, 100, excess, truncated, 1);
+            core = trimSection(core, 100, excess, truncated, 0);
         }
 
-        return new BudgetEnforcedSections(core, summary, archival, coreTruncated, summaryTruncated, archivalTruncated);
+        return new BudgetEnforcedSections(core, summary, archival, truncated[0], truncated[1], truncated[2]);
+    }
+
+    private String trimSection(String text, int minKeep, int[] excess, boolean[] truncated, int idx) {
+        if (text == null || excess[0] <= 0) return text;
+        int targetLen = Math.max(minKeep, text.length() - excess[0]);
+        String trimmed = truncateSafely(text, targetLen);
+        int actualRemoved = text.length() - trimmed.length();
+        if (actualRemoved > 0) { excess[0] -= actualRemoved; truncated[idx] = true; }
+        return trimmed;
     }
 
     /**

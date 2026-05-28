@@ -33,49 +33,56 @@ public class StartupSecurityValidator {
     Optional<List<String>> allowedUsers;
 
     void onStart(@Observes StartupEvent ev) {
-        // Enforce a minimum DNS caching TTL to prevent DNS Rebinding/SSRF TOCTOU exploits on outbound HTTP requests
+        enforceDnsTtl();
+        if ("dev".equals(profile) || "test".equals(profile)) return;
+        validatePepper();
+        validateHmacKey();
+        validateAllowlist();
+    }
+
+    private void enforceDnsTtl() {
         String existingTtl = Security.getProperty("networkaddress.cache.ttl");
         if (existingTtl == null || "0".equals(existingTtl) || existingTtl.isBlank()) {
             Security.setProperty("networkaddress.cache.ttl", "30");
         }
+    }
 
-        if (!"dev".equals(profile) && !"test".equals(profile)) {
-            // 1. pepper check -> throws IllegalStateException
-            if (pepper.startsWith("dev-pepper")) {
-                throw new IllegalStateException(
-                        "[SECURITY] arcclaw.vault.pepper is using the dev default. " +
-                                "Set ARCCLAW_VAULT_PEPPER in your .env before running in prod.");
-            }
-            // 2. HMAC key check in Vault
-            if (!vault.systemKeyExists(VaultConstants.AUDIT_HMAC_KEY_NAME)) {
-                throw new IllegalStateException(
-                        "FATAL: " + VaultConstants.AUDIT_HMAC_KEY_NAME + " is not present in SecretVault. " +
-                                "Provision this key before deploying to production.");
-            }
+    private void validatePepper() {
+        if (pepper.startsWith("dev-pepper")) {
+            throw new IllegalStateException(
+                    "[SECURITY] arcclaw.vault.pepper is using the dev default. " +
+                            "Set ARCCLAW_VAULT_PEPPER in your .env before running in prod.");
+        }
+    }
 
-            boolean hasUserIds = allowedUserIds.isPresent()
-                    && !allowedUserIds.get().isEmpty();
-            boolean hasUsernames = allowedUsers.isPresent()
-                    && allowedUsers.get().stream().anyMatch(s -> s != null && !s.isBlank());
+    private void validateHmacKey() {
+        if (!vault.systemKeyExists(VaultConstants.AUDIT_HMAC_KEY_NAME)) {
+            throw new IllegalStateException(
+                    "FATAL: " + VaultConstants.AUDIT_HMAC_KEY_NAME + " is not present in SecretVault. " +
+                            "Provision this key before deploying to production.");
+        }
+    }
 
-            // 3. allowlist presence -> throws IllegalStateException if both lists empty
-            if (!hasUserIds && !hasUsernames) {
-                throw new IllegalStateException(
-                        "[SECURITY] Both arcclaw.channel.telegram.allowed-user-ids and " +
-                                "arcclaw.channel.telegram.allowed-users are empty in " + profile + " profile. " +
-                                "Open access is strictly forbidden. " +
-                                "Configure at least one allowlist before deploying.");
-            }
+    private void validateAllowlist() {
+        boolean hasUserIds = allowedUserIds.isPresent() && !allowedUserIds.get().isEmpty();
+        boolean hasUsernames = allowedUsers.isPresent()
+                && allowedUsers.get().stream().anyMatch(s -> s != null && !s.isBlank());
 
-            // Phase 48: String-username-only allowlist is forbidden in non-dev/non-test
-            if (!hasUserIds && hasUsernames) {
-                throw new DeploymentException(
-                        "SECURITY: arcclaw.channel.telegram.allowed-user-ids (numeric) is " +
-                                "not configured, but arcclaw.channel.telegram.allowed-users " +
-                                "(string username list) is. String username allowlists are a " +
-                                "username-hijack vector and are forbidden in profile '" + profile +
-                                "'. Migrate to numeric Telegram user IDs before deploying.");
-            }
+        if (!hasUserIds && !hasUsernames) {
+            throw new IllegalStateException(
+                    "[SECURITY] Both arcclaw.channel.telegram.allowed-user-ids and " +
+                            "arcclaw.channel.telegram.allowed-users are empty in " + profile + " profile. " +
+                            "Open access is strictly forbidden. " +
+                            "Configure at least one allowlist before deploying.");
+        }
+
+        if (!hasUserIds && hasUsernames) {
+            throw new DeploymentException(
+                    "SECURITY: arcclaw.channel.telegram.allowed-user-ids (numeric) is " +
+                            "not configured, but arcclaw.channel.telegram.allowed-users " +
+                            "(string username list) is. String username allowlists are a " +
+                            "username-hijack vector and are forbidden in profile '" + profile +
+                            "'. Migrate to numeric Telegram user IDs before deploying.");
         }
     }
 }

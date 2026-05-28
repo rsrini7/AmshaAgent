@@ -1,6 +1,7 @@
 package com.arcclaw.core.agent.loop;
 
 import java.util.Set;
+import java.util.function.Supplier;
 
 import com.arcclaw.core.agent.role.AgentRoleEnum;
 
@@ -55,85 +56,64 @@ final class EscalationPatterns {
      * Determines escalation targets for new personas (Ganesha, Kartikeya, Lakshmi, Durga, Kali, Parvati).
      */
     static String determineNewPersonaEscalation(String sourceRole, String goalLower) {
-        // Ganesha (Optimizer) escalations
-        if (AgentRoleEnum.OPTIMIZER.toScopedName().equals(sourceRole)) {
-            if (containsAny(goalLower, "implement", "write code", "generate code", "create the")) {
-                return AgentRoleEnum.CODER.toScopedName();
-            }
-            if (containsAny(goalLower, "research", "find information", "look up", "documentation")) {
-                return AgentRoleEnum.RESEARCHER.toScopedName();
-            }
-            if (containsAny(goalLower, "fix bug", "debug", "error", "exception")) {
-                return AgentRoleEnum.DEBUGGER.toScopedName();
-            }
-            // Kartikeya (brother) - security issue found in logic
-            if (containsAny(goalLower, "security", "vulnerability", "injection", "malicious")) {
-                return AgentRoleEnum.SENTINEL.toScopedName();
-            }
-        }
+        String result;
+        result = escalateIfRole(sourceRole, AgentRoleEnum.OPTIMIZER, () -> escalateFromOptimizer(goalLower));
+        if (result != null) return result;
+        result = escalateIfRole(sourceRole, AgentRoleEnum.SENTINEL, () -> escalateFromSentinel(goalLower));
+        if (result != null) return result;
+        result = escalateIfRole(sourceRole, AgentRoleEnum.HEALER, () -> escalateFromHealer(goalLower));
+        if (result != null) return result;
+        result = escalateIfRole(sourceRole, AgentRoleEnum.PROTECTOR, () -> escalateFromProtector(goalLower));
+        if (result != null) return result;
+        result = escalateIfRole(sourceRole, AgentRoleEnum.PURIFIER, () -> escalateFromPurifier(goalLower));
+        if (result != null) return result;
+        result = escalateIfRole(sourceRole, AgentRoleEnum.NURTURER, () -> escalateFromNurturer(goalLower));
+        return result;
+    }
 
-        // Kartikeya (Sentinel) escalations
-        if (AgentRoleEnum.SENTINEL.toScopedName().equals(sourceRole)) {
-            if (containsAny(goalLower, "fix", "patch", "remediate", "implement")) {
-                return AgentRoleEnum.DEBUGGER.toScopedName();
-            }
-            if (containsAny(goalLower, "research", "vulnerability", "cve", "security advisory")) {
-                return AgentRoleEnum.RESEARCHER.toScopedName();
-            }
-            // Ganesha (brother) - complex logic in security analysis
-            if (containsAny(goalLower, "algorithm", "recursive", "complex logic", "obstacle")) {
-                return AgentRoleEnum.OPTIMIZER.toScopedName();
-            }
-        }
+    private static String escalateIfRole(String sourceRole, AgentRoleEnum role,
+            Supplier<String> escalation) {
+        return role.toScopedName().equals(sourceRole) ? escalation.get() : null;
+    }
 
-        // Lakshmi (Healer) escalations
-        if (AgentRoleEnum.HEALER.toScopedName().equals(sourceRole)) {
-            if (containsAny(goalLower, "fix", "patch", "implement", "code change")) {
-                return AgentRoleEnum.DEBUGGER.toScopedName();
-            }
-            if (containsAny(goalLower, "research", "documentation", "best practice")) {
-                return AgentRoleEnum.RESEARCHER.toScopedName();
-            }
-            // Vishnu (husband) - budget/cost coordination
-            if (containsAny(goalLower, "budget", "cost", "allocation", "governance")) {
-                return AgentRoleEnum.COORDINATOR.toScopedName();
-            }
-        }
+    private static String escalateFromOptimizer(String goal) {
+        if (containsAny(goal, "implement", "write code", "generate code", "create the")) return AgentRoleEnum.CODER.toScopedName();
+        if (containsAny(goal, "research", "find information", "look up", "documentation")) return AgentRoleEnum.RESEARCHER.toScopedName();
+        if (containsAny(goal, "fix bug", "debug", "error", "exception")) return AgentRoleEnum.DEBUGGER.toScopedName();
+        if (containsAny(goal, "security", "vulnerability", "injection", "malicious")) return AgentRoleEnum.SENTINEL.toScopedName();
+        return null;
+    }
 
-        // Durga (Protector) escalations
-        if (AgentRoleEnum.PROTECTOR.toScopedName().equals(sourceRole)) {
-            if (containsAny(goalLower, "fix", "patch", "implement", "enforce")) {
-                return AgentRoleEnum.DEBUGGER.toScopedName();
-            }
-            if (containsAny(goalLower, "research", "policy", "compliance", "regulation")) {
-                return AgentRoleEnum.RESEARCHER.toScopedName();
-            }
-        }
+    private static String escalateFromSentinel(String goal) {
+        if (containsAny(goal, "fix", "patch", "remediate", "implement")) return AgentRoleEnum.DEBUGGER.toScopedName();
+        if (containsAny(goal, "research", "vulnerability", "cve", "security advisory")) return AgentRoleEnum.RESEARCHER.toScopedName();
+        if (containsAny(goal, "algorithm", "recursive", "complex logic", "obstacle")) return AgentRoleEnum.OPTIMIZER.toScopedName();
+        return null;
+    }
 
-        // Kali (Purifier) escalations
-        if (AgentRoleEnum.PURIFIER.toScopedName().equals(sourceRole)) {
-            if (containsAny(goalLower, "fix", "patch", "implement", "code change")) {
-                return AgentRoleEnum.DEBUGGER.toScopedName();
-            }
-            if (containsAny(goalLower, "research", "documentation", "best practice")) {
-                return AgentRoleEnum.RESEARCHER.toScopedName();
-            }
-        }
+    private static String escalateFromHealer(String goal) {
+        if (containsAny(goal, "fix", "patch", "implement", "code change")) return AgentRoleEnum.DEBUGGER.toScopedName();
+        if (containsAny(goal, "research", "documentation", "best practice")) return AgentRoleEnum.RESEARCHER.toScopedName();
+        if (containsAny(goal, "budget", "cost", "allocation", "governance")) return AgentRoleEnum.COORDINATOR.toScopedName();
+        return null;
+    }
 
-        // Parvati (Nurturer) escalations
-        if (AgentRoleEnum.NURTURER.toScopedName().equals(sourceRole)) {
-            if (containsAny(goalLower, "fix", "bug", "error", "broken")) {
-                return AgentRoleEnum.DEBUGGER.toScopedName();
-            }
-            if (containsAny(goalLower, "research", "documentation", "information")) {
-                return AgentRoleEnum.RESEARCHER.toScopedName();
-            }
-            // Shiva (husband) - technical issues requiring debugging
-            if (containsAny(goalLower, "debug", "stack trace", "exception", "crash")) {
-                return AgentRoleEnum.DEBUGGER.toScopedName();
-            }
-        }
+    private static String escalateFromProtector(String goal) {
+        if (containsAny(goal, "fix", "patch", "implement", "enforce")) return AgentRoleEnum.DEBUGGER.toScopedName();
+        if (containsAny(goal, "research", "policy", "compliance", "regulation")) return AgentRoleEnum.RESEARCHER.toScopedName();
+        return null;
+    }
 
+    private static String escalateFromPurifier(String goal) {
+        if (containsAny(goal, "fix", "patch", "implement", "code change")) return AgentRoleEnum.DEBUGGER.toScopedName();
+        if (containsAny(goal, "research", "documentation", "best practice")) return AgentRoleEnum.RESEARCHER.toScopedName();
+        return null;
+    }
+
+    private static String escalateFromNurturer(String goal) {
+        if (containsAny(goal, "fix", "bug", "error", "broken")) return AgentRoleEnum.DEBUGGER.toScopedName();
+        if (containsAny(goal, "research", "documentation", "information")) return AgentRoleEnum.RESEARCHER.toScopedName();
+        if (containsAny(goal, "debug", "stack trace", "exception", "crash")) return AgentRoleEnum.DEBUGGER.toScopedName();
         return null;
     }
 

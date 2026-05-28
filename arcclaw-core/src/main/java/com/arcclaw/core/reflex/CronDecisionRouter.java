@@ -36,39 +36,13 @@ public class CronDecisionRouter {
             return null;
         }
 
-        String resolvedSessionId = cronId;
-        String segment = cronId;
-        if (cronId.startsWith(AgentSentinels.CRON_SESSION_PREFIX)) {
-            segment = cronId.substring(AgentSentinels.CRON_SESSION_PREFIX.length());
-        }
-        if (segment.length() >= 36) {
-            segment = segment.substring(0, 36);
-        }
-        Optional<AgentCheckpoint> segmentMatch = statefulAgentStore.findLatestAwaitingApprovalBySessionContaining(segment);
-        if (segmentMatch.isPresent()) {
-            resolvedSessionId = segmentMatch.get().getSessionId();
-        }
-
+        String resolvedSessionId = resolveSessionId(cronId);
 
         AgentCheckpoint pendingCheckpoint = ctx.applyDecisionToAll().apply(resolvedSessionId, ctx.reason);
         String cronSessionId = pendingCheckpoint.getSessionId();
         String cronRole = pendingCheckpoint.getAgentRole();
 
-        String resolvedJobId = cronId;
-        if (cronId.startsWith(AgentSentinels.CRON_SESSION_PREFIX)) {
-            String suffix = cronId.substring(AgentSentinels.CRON_SESSION_PREFIX.length());
-            if (suffix.length() >= 36) resolvedJobId = suffix.substring(0, 36);
-        }
-
-        AgentCron cron = cronStore.findById(resolvedJobId).map(AgentCronRecord::fromDto).orElse(null);
-        if (cron == null && cronSessionId.startsWith(AgentSentinels.CRON_SESSION_PREFIX)) {
-            String sub = cronSessionId.substring(AgentSentinels.CRON_SESSION_PREFIX.length());
-            if (sub.length() >= 36) {
-                resolvedJobId = sub.substring(0, 36);
-                cron = cronStore.findById(resolvedJobId).map(AgentCronRecord::fromDto).orElse(null);
-            }
-        }
-
+        AgentCron cron = resolveCronJob(cronId, cronSessionId);
         if (cron == null) return "❌ Cron task not found.";
 
         if (!statefulAgentStore.claimForResume(cronSessionId, cronRole)) {
@@ -107,6 +81,36 @@ public class CronDecisionRouter {
     private boolean isTerminalResult(AgentResult result) {
         return result instanceof AgentResult.Finished || result instanceof AgentResult.StructuredFinished
             || result instanceof AgentResult.Failed || result instanceof AgentResult.LoopExceeded;
+    }
+
+    private String resolveSessionId(String cronId) {
+        String segment = cronId;
+        if (cronId.startsWith(AgentSentinels.CRON_SESSION_PREFIX)) {
+            segment = cronId.substring(AgentSentinels.CRON_SESSION_PREFIX.length());
+        }
+        if (segment.length() >= 36) {
+            segment = segment.substring(0, 36);
+        }
+        Optional<AgentCheckpoint> match = statefulAgentStore.findLatestAwaitingApprovalBySessionContaining(segment);
+        return match.map(AgentCheckpoint::getSessionId).orElse(cronId);
+    }
+
+    private AgentCron resolveCronJob(String cronId, String cronSessionId) {
+        String jobId = extractJobId(cronId);
+        AgentCron cron = cronStore.findById(jobId).map(AgentCronRecord::fromDto).orElse(null);
+        if (cron == null && cronSessionId.startsWith(AgentSentinels.CRON_SESSION_PREFIX)) {
+            jobId = extractJobId(cronSessionId);
+            cron = cronStore.findById(jobId).map(AgentCronRecord::fromDto).orElse(null);
+        }
+        return cron;
+    }
+
+    private static String extractJobId(String id) {
+        String segment = id;
+        if (id.startsWith(AgentSentinels.CRON_SESSION_PREFIX)) {
+            segment = id.substring(AgentSentinels.CRON_SESSION_PREFIX.length());
+        }
+        return segment.length() >= 36 ? segment.substring(0, 36) : segment;
     }
 
     public record CronContext(

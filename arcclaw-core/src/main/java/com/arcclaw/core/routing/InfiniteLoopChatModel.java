@@ -183,56 +183,59 @@ public class InfiniteLoopChatModel implements ChatModel {
 
     private void classifyAndHandle(String slotName, SlotHealth h, Throwable t) {
         LlmProviderException classified = LlmExceptionClassifier.classify(t);
-        if (classified instanceof LlmRateLimitException) {
-            String rateMsg = classified.getMessage();
-            if (rateMsg != null && rateMsg.toLowerCase().contains("per day")) {
-                h.disablePermanently();
-                log.errorf("InfiniteLoop: Slot [%s] permanently disabled (daily quota exhausted): %s",
-                        slotName, rateMsg);
-            } else {
-                h.recordRateLimit(1, cooldownMaxSeconds);
-                log.infof("InfiniteLoop: Slot [%s] rate-limited, trying next slot. %s", slotName, rateMsg);
-            }
-        } else if (classified instanceof LlmAuthenticationException) {
+        switch (classified) {
+            case LlmRateLimitException r   -> handleRateLimit(slotName, h, r);
+            case LlmAuthenticationException a -> { h.disablePermanently(); log.errorf("InfiniteLoop: Slot [%s] permanently disabled (auth error): %s", slotName, a.getMessage()); }
+            case LlmServiceUnavailableException u -> handleServiceUnavailable(slotName, h, u);
+            case LlmContentFilterException c -> throw c;
+            default                        -> handleUnknownError(slotName, h, classified);
+        }
+    }
+
+    private void handleRateLimit(String slotName, SlotHealth h, LlmRateLimitException e) {
+        String msg = e.getMessage();
+        if (msg != null && msg.toLowerCase().contains("per day")) {
             h.disablePermanently();
-            log.errorf("InfiniteLoop: Slot [%s] permanently disabled (auth error): %s",
-                    slotName, classified.getMessage());
-        } else if (classified instanceof LlmServiceUnavailableException) {
-            String msg = classified.getMessage();
-            if (msg != null && (msg.contains("tool_use_failed") || msg.contains("failed_generation"))) {
-                h.disablePermanently();
-                log.errorf("InfiniteLoop: Slot [%s] permanently disabled (tool_use_failed): %s", slotName, msg);
-            } else {
-                h.recordTransientFailure(cooldownTransientSeconds, cooldownBaseSeconds, cooldownMaxSeconds);
-                if (h.isPermanentlyDisabled()) {
-                    log.errorf("InfiniteLoop: Slot [%s] permanently disabled after %d consecutive transient errors: %s",
-                            slotName, MAX_CONSECUTIVE_TRANSIENT_FAILURES, msg);
-                } else {
-                    log.warnf("InfiniteLoop: Slot [%s] transient error, cooling down %ds. %s",
-                            slotName, h.cooldownRemainingMs() / 1000, msg);
-                }
-            }
-        } else if (classified instanceof LlmContentFilterException) {
-            throw classified;
+            log.errorf("InfiniteLoop: Slot [%s] permanently disabled (daily quota exhausted): %s", slotName, msg);
         } else {
-            String msg = classified.getMessage();
-            // Connection refused / timeout are transient — server may restart.
-            // Don't permanently disable, just cooldown.
-            if (msg != null && (msg.contains("Connection refused") || msg.contains("connect timed out")
-                    || msg.contains("timeout") || msg.contains("ECONNREFUSED"))) {
-                h.recordTransientFailure(cooldownTransientSeconds, cooldownBaseSeconds, cooldownMaxSeconds);
-                if (h.isPermanentlyDisabled()) {
-                    log.errorf("InfiniteLoop: Slot [%s] permanently disabled after %d consecutive connection failures: %s",
-                            slotName, MAX_CONSECUTIVE_TRANSIENT_FAILURES, msg);
-                } else {
-                    log.warnf("InfiniteLoop: Slot [%s] connection error, cooling down %ds. %s",
-                            slotName, h.cooldownRemainingMs() / 1000, msg);
-                }
+            h.recordRateLimit(1, cooldownMaxSeconds);
+            log.infof("InfiniteLoop: Slot [%s] rate-limited, trying next slot. %s", slotName, msg);
+        }
+    }
+
+    private void handleServiceUnavailable(String slotName, SlotHealth h, LlmServiceUnavailableException e) {
+        String msg = e.getMessage();
+        if (msg != null && (msg.contains("tool_use_failed") || msg.contains("failed_generation"))) {
+            h.disablePermanently();
+            log.errorf("InfiniteLoop: Slot [%s] permanently disabled (tool_use_failed): %s", slotName, msg);
+        } else {
+            h.recordTransientFailure(cooldownTransientSeconds, cooldownBaseSeconds, cooldownMaxSeconds);
+            if (h.isPermanentlyDisabled()) {
+                log.errorf("InfiniteLoop: Slot [%s] permanently disabled after %d consecutive transient errors: %s",
+                        slotName, MAX_CONSECUTIVE_TRANSIENT_FAILURES, msg);
             } else {
-                h.recordUnknownFailure(cooldownBaseSeconds, cooldownMaxSeconds);
-                log.warnf("InfiniteLoop: Slot [%s] unclassified error, cooling down %ds. %s",
+                log.warnf("InfiniteLoop: Slot [%s] transient error, cooling down %ds. %s",
                         slotName, h.cooldownRemainingMs() / 1000, msg);
             }
+        }
+    }
+
+    private void handleUnknownError(String slotName, SlotHealth h, LlmProviderException e) {
+        String msg = e.getMessage();
+        if (msg != null && (msg.contains("Connection refused") || msg.contains("connect timed out")
+                || msg.contains("timeout") || msg.contains("ECONNREFUSED"))) {
+            h.recordTransientFailure(cooldownTransientSeconds, cooldownBaseSeconds, cooldownMaxSeconds);
+            if (h.isPermanentlyDisabled()) {
+                log.errorf("InfiniteLoop: Slot [%s] permanently disabled after %d consecutive connection failures: %s",
+                        slotName, MAX_CONSECUTIVE_TRANSIENT_FAILURES, msg);
+            } else {
+                log.warnf("InfiniteLoop: Slot [%s] connection error, cooling down %ds. %s",
+                        slotName, h.cooldownRemainingMs() / 1000, msg);
+            }
+        } else {
+            h.recordUnknownFailure(cooldownBaseSeconds, cooldownMaxSeconds);
+            log.warnf("InfiniteLoop: Slot [%s] unclassified error, cooling down %ds. %s",
+                    slotName, h.cooldownRemainingMs() / 1000, msg);
         }
     }
 

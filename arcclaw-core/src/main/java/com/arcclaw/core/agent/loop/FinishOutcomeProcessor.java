@@ -137,77 +137,75 @@ public class FinishOutcomeProcessor {
     }
 
     public FinishActionHandler.FinishOutcome checkHallucination(String sessionId, List<ReasoningStep> history, ReasoningStep step, String answer) {
-        if (answer != null) {
-            boolean hasScheduleClaim = answer.contains(AgentSentinels.SCHEDULE_SUCCESS_MESSAGE)
-                    || HALLUCINATED_SCHEDULE_CLAIM.matcher(answer).find();
+        if (answer == null) return null;
 
-            if (hasScheduleClaim) {
-                boolean isNegative = answer.toLowerCase().contains("not scheduled")
-                        || answer.toLowerCase().contains("cannot schedule")
-                        || answer.toLowerCase().contains("can't schedule")
-                        || answer.toLowerCase().contains("failed to schedule")
-                        || answer.toLowerCase().contains("unable to schedule");
+        FinishActionHandler.FinishOutcome result;
+        result = checkHallucinatedSchedule(sessionId, history, step, answer);
+        if (result != null) return result;
+        result = checkHallucinatedStorage(sessionId, history, step, answer);
+        if (result != null) return result;
+        result = checkKnowledgeDisclaimer(sessionId, history, step, answer);
+        return result;
+    }
 
-                if (!isNegative) {
-                    boolean actuallyScheduled = historyContainsSuccessfulSchedule(history);
-                    if (!actuallyScheduled) {
-                        log.warnf("FINISH-HANDLER: Hallucinated scheduling success detected for session %s. " +
-                                  "No 'schedule_task' call found in history. Answer: %s", sessionId, answer);
+    private FinishActionHandler.FinishOutcome checkHallucinatedSchedule(String sessionId,
+            List<ReasoningStep> history, ReasoningStep step, String answer) {
+        boolean hasScheduleClaim = answer.contains(AgentSentinels.SCHEDULE_SUCCESS_MESSAGE)
+                || HALLUCINATED_SCHEDULE_CLAIM.matcher(answer).find();
+        if (!hasScheduleClaim) return null;
 
-                        ReasoningStep cleanStep = step.withObservation("Detected hallucinated scheduling success in FINISH answer");
-                        String hint;
-                        if (answer.contains(AgentSentinels.SCHEDULE_SUCCESS_MESSAGE)) {
-                            hint = "System: STOP. You claimed '" + AgentSentinels.SCHEDULE_SUCCESS_MESSAGE +
-                                "' but you did NOT call the schedule_task tool. You must invoke the schedule_task tool with " +
-                                "the correct cron expression and goal BEFORE calling FINISH.";
-                        } else {
-                            hint = "System: STOP. You claimed to have scheduled/set a reminder but you did NOT call " +
-                                "the schedule_task tool. You must invoke the schedule_task tool with " +
-                                "the correct cron expression and goal BEFORE calling FINISH.";
-                        }
+        boolean isNegative = answer.toLowerCase().contains("not scheduled")
+                || answer.toLowerCase().contains("cannot schedule")
+                || answer.toLowerCase().contains("can't schedule")
+                || answer.toLowerCase().contains("failed to schedule")
+                || answer.toLowerCase().contains("unable to schedule");
+        if (isNegative) return null;
+        if (historyContainsSuccessfulSchedule(history)) return null;
 
-                        return new FinishActionHandler.FinishOutcome.Correction(cleanStep, hint);
-                    }
-                }
-            }
-        }
+        log.warnf("FINISH-HANDLER: Hallucinated scheduling success detected for session %s. " +
+                  "No 'schedule_task' call found in history. Answer: %s", sessionId, answer);
+        ReasoningStep cleanStep = step.withObservation("Detected hallucinated scheduling success in FINISH answer");
+        String hint = answer.contains(AgentSentinels.SCHEDULE_SUCCESS_MESSAGE)
+            ? "System: STOP. You claimed '" + AgentSentinels.SCHEDULE_SUCCESS_MESSAGE +
+              "' but you did NOT call the schedule_task tool. You must invoke the schedule_task tool with " +
+              "the correct cron expression and goal BEFORE calling FINISH."
+            : "System: STOP. You claimed to have scheduled/set a reminder but you did NOT call " +
+              "the schedule_task tool. You must invoke the schedule_task tool with " +
+              "the correct cron expression and goal BEFORE calling FINISH.";
+        return new FinishActionHandler.FinishOutcome.Correction(cleanStep, hint);
+    }
 
-        // Detect hallucinated memory storage claims
-        if (answer != null && HALLUCINATED_STORAGE_CLAIM.matcher(answer).find()) {
-            boolean actuallyStored = historyContainsIngestDocument(history);
-            if (!actuallyStored) {
-                log.warnf("FINISH-HANDLER: Hallucinated memory storage claim detected for session %s. " +
-                          "No 'ingest_document' call found in history.", sessionId);
+    private FinishActionHandler.FinishOutcome checkHallucinatedStorage(String sessionId,
+            List<ReasoningStep> history, ReasoningStep step, String answer) {
+        if (!HALLUCINATED_STORAGE_CLAIM.matcher(answer).find()) return null;
+        if (historyContainsIngestDocument(history)) return null;
 
-                ReasoningStep cleanStep = step.withObservation("Detected hallucinated memory storage claim in FINISH answer");
-                String hint = "System: STOP. You claimed to have stored/remembered user information but you did NOT call " +
-                    "the ingest_document tool. You CANNOT store information without calling ingest_document. " +
-                    "Either: (1) Call ingest_document NOW with the information, or (2) Answer honestly that " +
-                    "you have NOT stored anything. NEVER claim a tool action you did not perform.";
+        log.warnf("FINISH-HANDLER: Hallucinated memory storage claim detected for session %s. " +
+                  "No 'ingest_document' call found in history.", sessionId);
+        ReasoningStep cleanStep = step.withObservation("Detected hallucinated memory storage claim in FINISH answer");
+        String hint = "System: STOP. You claimed to have stored/remembered user information but you did NOT call " +
+            "the ingest_document tool. You CANNOT store information without calling ingest_document. " +
+            "Either: (1) Call ingest_document NOW with the information, or (2) Answer honestly that " +
+            "you have NOT stored anything. NEVER claim a tool action you did not perform.";
+        return new FinishActionHandler.FinishOutcome.Correction(cleanStep, hint);
+    }
 
-                return new FinishActionHandler.FinishOutcome.Correction(cleanStep, hint);
-            }
-        }
+    private FinishActionHandler.FinishOutcome checkKnowledgeDisclaimer(String sessionId,
+            List<ReasoningStep> history, ReasoningStep step, String answer) {
+        if (!KNOWLEDGE_DISCLAIMER.matcher(answer).find()) return null;
+        String memoryResult = findMemorySearchResult(history);
+        if (memoryResult == null) return null;
 
-        // Detect memory search synthesis failure: tool returned results but LLM disclaims knowledge
-        if (answer != null && KNOWLEDGE_DISCLAIMER.matcher(answer).find()) {
-            String memoryResult = findMemorySearchResult(history);
-            if (memoryResult != null) {
-                log.warnf("FINISH-HANDLER: Memory search synthesis failure detected for session %s. " +
-                          "Memory search returned results but answer disclaims knowledge.", sessionId);
-
-                ReasoningStep cleanStep = step.withObservation("Detected memory search synthesis failure");
-                String hint = "System: STOP. You just searched your memory and found information about this user. " +
-                    "Your memory search tool returned these results:\n---\n" +
-                    memoryResult + "\n---\n" +
-                    "You MUST synthesize these results into a natural, conversational answer. " +
-                    "Do NOT say 'I don't have information' when your memory search just returned it. " +
-                    "Read the tool results above and answer the user directly.";
-
-                return new FinishActionHandler.FinishOutcome.Correction(cleanStep, hint);
-            }
-        }
-        return null;
+        log.warnf("FINISH-HANDLER: Memory search synthesis failure detected for session %s. " +
+                  "Memory search returned results but answer disclaims knowledge.", sessionId);
+        ReasoningStep cleanStep = step.withObservation("Detected memory search synthesis failure");
+        String hint = "System: STOP. You just searched your memory and found information about this user. " +
+            "Your memory search tool returned these results:\n---\n" +
+            memoryResult + "\n---\n" +
+            "You MUST synthesize these results into a natural, conversational answer. " +
+            "Do NOT say 'I don't have information' when your memory search just returned it. " +
+            "Read the tool results above and answer the user directly.";
+        return new FinishActionHandler.FinishOutcome.Correction(cleanStep, hint);
     }
 
     public FinishActionHandler.FinishOutcome applyCodePolicy(String sessionId, String agentRole, List<ReasoningStep> history, String answer, ReasoningStep step) {

@@ -1,6 +1,7 @@
 package com.arcclaw.core.reflex;
 
 import java.util.List;
+import java.util.Map;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -13,6 +14,26 @@ import com.arcclaw.core.pipeline.MessageContext;
 @ApplicationScoped
 @ReflexPriority(500)
 public class ListReflexesReflex implements AgentReflex {
+
+    private record ReflexDescriptor(String trigger, String purpose) {}
+
+    private static final Map<Class<?>, ReflexDescriptor> DESCRIPTORS = Map.ofEntries(
+        Map.entry(ListCronsReflex.class,        new ReflexDescriptor("`/crons`",                     "List scheduled jobs")),
+        Map.entry(DeleteCronReflex.class,       new ReflexDescriptor("`/delete-cron`",               "Delete a scheduled job")),
+        Map.entry(StatusReflex.class,           new ReflexDescriptor("`/status`",                    "Show agent status")),
+        Map.entry(HistoryReflex.class,          new ReflexDescriptor("`/history`",                   "Show recent chat history")),
+        Map.entry(ResetReflex.class,            new ReflexDescriptor("`/reset` `/resethard`",        "Reset session")),
+        Map.entry(HaltReflex.class,             new ReflexDescriptor("`/halt`",                      "Stop current task")),
+        Map.entry(RetryReflex.class,            new ReflexDescriptor("`/retry`",                     "Retry last action")),
+        Map.entry(ApproveReflex.class,          new ReflexDescriptor("`/approve`",                   "Approve pending action")),
+        Map.entry(DenyReflex.class,             new ReflexDescriptor("`/deny`",                      "Deny pending action")),
+        Map.entry(StoreReflex.class,            new ReflexDescriptor("`/store`",                     "Store key-value pair")),
+        Map.entry(VaultStoreReflex.class,       new ReflexDescriptor("`/vault`",                     "Store encrypted secret")),
+        Map.entry(ListReflexesReflex.class,     new ReflexDescriptor("`/reflex` `/commands` `/help`", "List all commands")),
+        Map.entry(PromptInjectionReflex.class,  new ReflexDescriptor("(auto)",                       "Block prompt injection")),
+        Map.entry(PiiScanReflex.class,          new ReflexDescriptor("(auto)",                       "Scan/redact PII")),
+        Map.entry(IdentityExtractionReflex.class, new ReflexDescriptor("(auto)",                     "Extract user identity"))
+    );
 
     @Inject
     ReflexRegistry reflexRegistry;
@@ -36,56 +57,21 @@ public class ListReflexesReflex implements AgentReflex {
         sb.append("|---------|--------|\n");
 
         for (AgentReflex reflex : reflexes) {
-            String trigger = resolveTrigger(reflex);
-            String purpose = resolvePurpose(reflex);
-
-            sb.append(String.format("| %s | %s |\n", trigger, purpose));
+            ReflexDescriptor desc = resolveDescriptor(reflex);
+            sb.append(String.format("| %s | %s |\n", desc.trigger(), desc.purpose()));
         }
 
         return ReflexResult.respond(sb.toString(), context);
     }
 
-    private String resolveTrigger(AgentReflex reflex) {
-        if (reflex instanceof ListCronsReflex) return "`/crons`";
-        if (reflex instanceof DeleteCronReflex) return "`/delete-cron`";
-        if (reflex instanceof StatusReflex) return "`/status`";
-        if (reflex instanceof HistoryReflex) return "`/history`";
-        if (reflex instanceof ResetReflex) return "`/reset` `/resethard`";
-        if (reflex instanceof HaltReflex) return "`/halt`";
-        if (reflex instanceof RetryReflex) return "`/retry`";
-        if (reflex instanceof ApproveReflex) return "`/approve`";
-        if (reflex instanceof DenyReflex) return "`/deny`";
-        if (reflex instanceof StoreReflex) return "`/store`";
-        if (reflex instanceof VaultStoreReflex) return "`/vault`";
-        if (reflex instanceof ListReflexesReflex) return "`/reflex` `/commands` `/help`";
-        if (reflex instanceof PromptInjectionReflex) return "(auto)";
-        if (reflex instanceof PiiScanReflex) return "(auto)";
-        if (reflex instanceof IdentityExtractionReflex) return "(auto)";
-        String simpleName = reflex.getClass().getSimpleName();
-        if (simpleName.equals("SkillReflex")) return "`/skills`";
-        if (simpleName.equals("McpReflex")) return "`/mcp`";
-        return "—";
-    }
+    private ReflexDescriptor resolveDescriptor(AgentReflex reflex) {
+        ReflexDescriptor desc = DESCRIPTORS.get(reflex.getClass());
+        if (desc != null) return desc;
 
-    private String resolvePurpose(AgentReflex reflex) {
-        if (reflex instanceof ListCronsReflex) return "List scheduled jobs";
-        if (reflex instanceof DeleteCronReflex) return "Delete a scheduled job";
-        if (reflex instanceof StatusReflex) return "Show agent status";
-        if (reflex instanceof HistoryReflex) return "Show recent chat history";
-        if (reflex instanceof ResetReflex) return "Reset session";
-        if (reflex instanceof HaltReflex) return "Stop current task";
-        if (reflex instanceof RetryReflex) return "Retry last action";
-        if (reflex instanceof ApproveReflex) return "Approve pending action";
-        if (reflex instanceof DenyReflex) return "Deny pending action";
-        if (reflex instanceof StoreReflex) return "Store key-value pair";
-        if (reflex instanceof VaultStoreReflex) return "Store encrypted secret";
-        if (reflex instanceof ListReflexesReflex) return "List all commands";
-        if (reflex instanceof PromptInjectionReflex) return "Block prompt injection";
-        if (reflex instanceof PiiScanReflex) return "Scan/redact PII";
-        if (reflex instanceof IdentityExtractionReflex) return "Extract user identity";
+        // Handle cross-module reflexes loaded from different classloaders
         String simpleName = reflex.getClass().getSimpleName();
-        if (simpleName.equals("SkillReflex")) return "List available skills";
-        if (simpleName.equals("McpReflex")) return "Show MCP server status";
-        return "—";
+        if (simpleName.equals("SkillReflex")) return new ReflexDescriptor("`/skills`", "List available skills");
+        if (simpleName.equals("McpReflex"))   return new ReflexDescriptor("`/mcp`",    "Show MCP server status");
+        return new ReflexDescriptor("\u2014", "\u2014");
     }
 }

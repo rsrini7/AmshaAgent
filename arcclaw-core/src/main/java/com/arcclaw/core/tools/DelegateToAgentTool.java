@@ -114,7 +114,6 @@ public class DelegateToAgentTool implements AgentTool {
 
         String agentName = stripSurroundingQuotes(String.valueOf(agentObj));
         String goal = String.valueOf(goalObj);
-        String normalized = agentName.trim().toLowerCase();
 
         int depth = outerSessionId.split(Pattern.quote(AgentSentinels.DELEGATE_SESSION_SENTINEL)).length - 1;
         if (depth >= maxDelegationDepth) {
@@ -124,31 +123,15 @@ public class DelegateToAgentTool implements AgentTool {
                 "You cannot delegate further to prevent infinite loops.", maxDelegationDepth));
         }
 
-        if (isSelfDelegation(normalized, currentRoleName)) {
-            log.infof("[REDIRECT] %s tried to delegate to itself — auto-redirecting to coordinator", currentRoleName);
-            normalized = AgentRoleEnum.COORDINATOR.id();
-            agentName = normalized;
-            // If after redirect it's still a self-delegation (current role was already coordinator),
-            // tell the LLM to proceed directly rather than looping
-            if (isSelfDelegation(normalized, currentRoleName)) {
-                return ToolResponse.success(
-                    "You tried to delegate a task to yourself. Proceed with your own tools directly.");
-            }
+        String normalized;
+        try {
+            normalized = normalizeAgent(agentName, goal, currentRoleName, delegatableList);
+        } catch (IllegalArgumentException e) {
+            return ToolResponse.failure(400, e.getMessage());
         }
-
-        if (isCoderDelegatingToResearcher(normalized, currentRoleName)) {
-            log.infof("[CODE-FIRST] %s delegating research to %s — allowing for context gathering", currentRoleName, normalized);
-        }
-
-        if (isCombinedGoalToResearcher(normalized, currentRoleName, goal)) {
-            log.infof("[REDIRECT] %s → %s blocked (combined goal), auto-redirecting to brahma", currentRoleName, normalized);
-            normalized = AgentRoleEnum.CODER.id();
-            agentName = normalized;
-        }
-
-        if (!AgentRoleEnum.isKnownRole(agentName)) {
-            return ToolResponse.failure(400, delegationUnknownAgent(agentName, delegatableList));
-        }
+        if (normalized == null) return ToolResponse.success(
+                "You tried to delegate a task to yourself. Proceed with your own tools directly.");
+        agentName = normalized;
 
         AgentRoleEnum targetRole = AgentRoleEnum.fromString(agentName);
 
@@ -280,6 +263,36 @@ public class DelegateToAgentTool implements AgentTool {
             return s.substring(1, s.length() - 1).trim();
         }
         return s;
+    }
+
+    /**
+     * Validates and normalizes the target agent name. Returns null if self-delegation
+     * after redirect (caller should tell LLM to proceed directly).
+     */
+    private String normalizeAgent(String agentName, String goal, String currentRoleName, String delegatableList) {
+        String normalized = agentName.trim().toLowerCase();
+
+        if (isSelfDelegation(normalized, currentRoleName)) {
+            log.infof("[REDIRECT] %s tried to delegate to itself — auto-redirecting to coordinator", currentRoleName);
+            normalized = AgentRoleEnum.COORDINATOR.id();
+            agentName = normalized;
+            if (isSelfDelegation(normalized, currentRoleName)) return null;
+        }
+
+        if (isCoderDelegatingToResearcher(normalized, currentRoleName)) {
+            log.infof("[CODE-FIRST] %s delegating research to %s — allowing for context gathering", currentRoleName, normalized);
+        }
+
+        if (isCombinedGoalToResearcher(normalized, currentRoleName, goal)) {
+            log.infof("[REDIRECT] %s → %s blocked (combined goal), auto-redirecting to brahma", currentRoleName, normalized);
+            normalized = AgentRoleEnum.CODER.id();
+            agentName = normalized;
+        }
+
+        if (!AgentRoleEnum.isKnownRole(agentName)) {
+            throw new IllegalArgumentException(delegationUnknownAgent(agentName, delegatableList));
+        }
+        return normalized;
     }
 
     private boolean isSelfDelegation(String normalized, String currentRoleName) {
