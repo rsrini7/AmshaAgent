@@ -1642,11 +1642,11 @@ This section summarizes the five architecture decisions added in v2.1 and their 
 
 ---
 
-**Document Version:** 2.7-implemented
-**Previous Version:** 2.6-implemented
-**Key Changes:** Phase 7 implementation (Controlled Write Paths) + architect review fixes (CAS atomic append, approval gate enforcement, node-local governance docs)
+**Document Version:** 2.8-implemented
+**Previous Version:** 2.7-implemented
+**Key Changes:** Post-Phase-7 cleanup: deprecated MemorySearchTool removed, MEMORY_SEARCH enum removed, all references migrated to RECALL_MEMORY_SEARCH + ARCHIVAL_MEMORY_SEARCH, MCP server exposes both tools, prompts updated with tool selection guidance, TODO(Phase-7) userId resolution fixed
 **Next Step:** Phase 8 — Self-Evolve Trace Capture (EvolutionEvent, ConversationBuffer, SelfEvolveService)
-**Review Status:** Phases 0-7 complete, 1,022 core tests passing, all review fixes applied
+**Review Status:** Phases 0-7 complete, post-phase cleanup done, all tests passing
 
 ---
 
@@ -1667,7 +1667,26 @@ This section summarizes the five architecture decisions added in v2.1 and their 
 | **Phase 6** | ✅ COMPLETE | 2026-05-26 | 2 new files, 4 modified | `archival_memory_search` tool, `ArchivalContextCache`, hybrid BM25+vector activation, `[RELEVANT KNOWLEDGE]` prompt injection |
 | **Phase 7** | ✅ COMPLETE | 2026-05-26 | 5 new files, 4 modified | 4 write tools, `MemoryWriteGovernance`, CAS atomic append, approval gating, `MEMORY_WRITE_MUTATED` audit |
 
-### A.2 Phase 2: Critical Fixes Applied
+### A.2 Post-Phase-7 Cleanup (2026-05-28)
+
+Pre-Phase-8 cleanup to remove deprecated `memory_search` artifacts and ensure `archival_memory_search` is fully wired.
+
+| Change | Files | Rationale |
+|---|---|---|
+| **Deleted `MemorySearchTool.java`** | `arcclaw-core/.../tools/MemorySearchTool.java` | Deprecated since Phase 3; replaced by `RecallMemorySearchTool` + `ArchivalMemorySearchTool` |
+| **Removed `MEMORY_SEARCH` enum** | `ToolCapability.java` | No live tool backing it; `fromToolName("memory_search")` returns null |
+| **Updated `FinishOutcomeProcessor`** | `FinishOutcomeProcessor.java` | Synthesis detection now checks both `RECALL_MEMORY_SEARCH` and `ARCHIVAL_MEMORY_SEARCH` |
+| **Updated `ReasoningStepParser`** | `ReasoningStepParser.java` | Garbled query fix applies to both new tools |
+| **Updated `ToolInvocationGuard`** | `ToolInvocationGuard.java` | BACKGROUND autonomy exemption includes both memory tools |
+| **MCP: added `archivalMemorySearch()`** | `McpToolsBean.java` | External MCP clients can now call `archival_memory_search` |
+| **MCP: updated allowlist default** | `McpToolAllowlist.java` | Default: `github,recall_memory_search,archival_memory_search` |
+| **Updated `PromptInstructionLibrary`** | `PromptInstructionLibrary.java` | MEMORY TOOL SELECTION section + compact rules guide LLM to use correct tool |
+| **Updated prompt templates** | `role-coordinator.txt`, `role-researcher.txt`, `researcher.txt` | Both tools documented with usage guidance |
+| **Fixed TODO(Phase-7)** | `ChatHistoryAssembler.java` | `WorkspaceContext.getUserIdOrUnknown()` replaces hardcoded `"default"` |
+| **Updated 10 test files** | Various test classes | `MEMORY_SEARCH` → `RECALL_MEMORY_SEARCH` |
+| **Updated docs** | `README.md`, `FAQ.md`, `TELEGRAM_TESTING.md`, `PROJECT-WORKFLOW.md` | Tool tables, MCP flows, role lists all include both memory tools |
+
+### A.3 Phase 2: Critical Fixes Applied
 
 | Issue | Resolution | Files Modified |
 |---|---|---|

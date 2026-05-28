@@ -11,13 +11,13 @@
 ### coder       → Brahma      → sandbox_exec, check_list, add_mcp_server, garuda
 ### debugger    → Shiva       → github, sandbox_exec, check_list, add_mcp_server, garuda
 ### architect   → Brihaspati  → github, recall_memory_search, archival_memory_search, garuda
-### synthesizer → Dattatreya  → github, schedule_task, manage_schedule, recall_memory_search, ingest_document, brave_web_search, serper_web_search, garuda
+### synthesizer → Dattatreya  → github, schedule_task, manage_schedule, recall_memory_search, archival_memory_search, ingest_document, brave_web_search, serper_web_search, garuda
 ### optimizer   → Ganesha     → github, sandbox_exec, garuda
 ### sentinel    → Kartikeya   → github, sandbox_exec, garuda
 ### healer      → Lakshmi     → github, recall_memory_search, archival_memory_search, garuda
 ### protector   → Durga       → github, recall_memory_search, archival_memory_search, garuda
-### purifier    → Kali        → github, recall_memory_search, garuda
-### nurturer    → Parvati     → github, recall_memory_search, garuda
+### purifier    → Kali        → github, recall_memory_search, archival_memory_search, garuda
+### nurturer    → Parvati     → github, recall_memory_search, archival_memory_search, garuda
 ###
 ### IMPORTANT - coder vs debugger tool schema:
 ###   coder:   sandbox_exec + check_list + add_mcp_server + garuda (no github, no network)

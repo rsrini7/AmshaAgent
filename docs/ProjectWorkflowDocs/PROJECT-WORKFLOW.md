@@ -418,7 +418,8 @@ On resume after batch approval:
 | `smart_web_fetch` | `SmartWebFetchTool` | Fetches and extracts content from URLs with SSRF protection |
 | `sandbox_exec` | `SandboxExecTool` | Code execution; Podman container when `SANDBOX_STRATEGY=podman` |
 | `github` | `GithubTool` | GitHub API; `GithubToolGuardInterceptor` enforces HITL |
-| `recall_memory_search` | `RecallMemorySearchTool` | Searches RAG session KB + global KB |
+| `recall_memory_search` | `RecallMemorySearchTool` | Exact search across conversation history (FTS5). Session-scoped by default |
+| `archival_memory_search` | `ArchivalMemorySearchTool` | Hybrid BM25 + vector search of long-term semantic knowledge (patterns, facts, preferences) |
 | `ingest_document` | `IngestDocumentTool` | Embeds text into vec0 + `rag_chunk`; always requires approval |
 | `schedule_task` | `ScheduleTaskTool` | Creates a new cron job |
 | `manage_schedule` | `ManageScheduleTool` | Lists / updates / deletes cron jobs |

@@ -459,7 +459,7 @@ Dynamic MCP tools: none connected
 
 **Expect (after connecting a server):**
 ```
-Dynamic MCP tools (2): github [self, HTTP_SSE], recall_memory_search [self, HTTP_SSE]
+Dynamic MCP tools (3): github [self, HTTP_SSE], recall_memory_search [self, HTTP_SSE], archival_memory_search [self, HTTP_SSE]
 ```
 
 ---

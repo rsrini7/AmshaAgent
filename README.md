@@ -1056,7 +1056,7 @@ ArcClaw implements the **Model Context Protocol (MCP)** in both directions.
 
 ArcClaw exposes internal tools to external MCP clients over JSON-RPC via HTTP Server-Sent Events (HTTP-SSE):
 
-- **Exposed tools by default**: `github`, `recall_memory_search`
+- **Exposed tools by default**: `github`, `recall_memory_search`, `archival_memory_search`
 - **Protocol endpoint**: `/mcp` (HTTP-SSE streaming)
 - **Protocol version**: `2024-11-05`
 - **Session management**: `Mcp-Session-Id` header for stateful sessions
@@ -1064,8 +1064,9 @@ ArcClaw exposes internal tools to external MCP clients over JSON-RPC via HTTP Se
 ```
 MCP-1  POST /mcp  initialize        → 200 + Mcp-Session-Id header
 MCP-2  POST /mcp  initialized       → 202 handshake complete
-MCP-3  POST /mcp  tools/list        → tools array (github, recall_memory_search)
+MCP-3  POST /mcp  tools/list        → tools array (github, recall_memory_search, archival_memory_search)
 MCP-4  POST /mcp  tools/call (recall_memory_search) → content block + MCP_TOOL_INVOKED audit
+MCP-4b POST /mcp  tools/call (archival_memory_search) → content block + MCP_TOOL_INVOKED audit
 MCP-5  POST /mcp  tools/call (github)        → content (or error if GH_TOKEN missing)
 ```
 
@@ -1097,8 +1098,8 @@ Send `/mcp` in any channel to see the current MCP state (zero LLM tokens):
 
 ```
 🔌 MCP Status
-Exposed internal tools (2): github, recall_memory_search
-Dynamic MCP tools (2): github [self, HTTP_SSE], recall_memory_search [self, HTTP_SSE]
+Exposed internal tools (3): github, recall_memory_search, archival_memory_search
+Dynamic MCP tools (3): github [self, HTTP_SSE], recall_memory_search [self, HTTP_SSE], archival_memory_search [self, HTTP_SSE]
 ```
 
 ---

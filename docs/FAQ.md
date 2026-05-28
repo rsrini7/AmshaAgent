@@ -315,7 +315,7 @@ The `ToolObservationSanitizer` also runs both `PromptInjectionReflex.sanitize()`
 
 ```
 🔌 MCP Status
-Exposed internal tools (2): github, recall_memory_search
+Exposed internal tools (3): github, recall_memory_search, archival_memory_search
 Dynamic MCP tools: none connected
 ```
 
@@ -394,14 +394,14 @@ This reloads both classpath built-in skills and database-tier skills without res
 
 MCP is an open protocol for LLM tool interoperability over JSON-RPC. ArcClaw implements it in both directions:
 
-- **Inbound MCP server**: External MCP clients (e.g. Claude Desktop, other agents) can connect to ArcClaw's `/mcp` endpoint and call its `github` and `recall_memory_search` tools via JSON-RPC over HTTP-SSE.
+- **Inbound MCP server**: External MCP clients (e.g. Claude Desktop, other agents) can connect to ArcClaw's `/mcp` endpoint and call its `github`, `recall_memory_search`, and `archival_memory_search` tools via JSON-RPC over HTTP-SSE.
 - **Outbound MCP client**: ArcClaw can connect to any external MCP server (`POST /api/v1/mcp/connect`). The connected server's tools are registered as `ExternalMcpToolAdapter` instances, becoming natively available to agent roles in the tool schema.
 
 ---
 
 ### Q: Which internal tools does ArcClaw expose as an MCP server?
 
-By default, `github` and `recall_memory_search` are exposed. The `McpToolAllowlist` configuration controls this allowlist. Disallowed tool names return a JSON-RPC error with a descriptive message rather than executing.
+By default, `github`, `recall_memory_search`, and `archival_memory_search` are exposed. The `McpToolAllowlist` configuration controls this allowlist. Disallowed tool names return a JSON-RPC error with a descriptive message rather than executing.
 
 ---
 
@@ -410,7 +410,7 @@ By default, `github` and `recall_memory_search` are exposed. The `McpToolAllowli
 ```
 1. POST /mcp  {"method":"initialize"}      → 200, Mcp-Session-Id in response header
 2. POST /mcp  {"method":"initialized"}     → 202, handshake complete
-3. POST /mcp  {"method":"tools/list"}      → tools array (github, recall_memory_search)
+3. POST /mcp  {"method":"tools/list"}      → tools array (github, recall_memory_search, archival_memory_search)
 4. POST /mcp  {"method":"tools/call",...}  → content block + MCP_TOOL_INVOKED audit event
 ```
 

@@ -27,4 +27,11 @@ public class McpToolsBean {
         McpToolRequest req = new McpToolRequest(ToolCapability.RECALL_MEMORY_SEARCH.toolName(), params, requestOpt.isResolvable() ? requestOpt.get() : null);
         return bridge.executeTool(req);
     }
+
+    @Tool(name = "archival_memory_search", description = "Semantic search across long-term knowledge (patterns, facts, preferences, project context)")
+    public String archivalMemorySearch(String query) {
+        String params = "{\"query\": \"" + query.replace("\"", "\\\"") + "\"}";
+        McpToolRequest req = new McpToolRequest(ToolCapability.ARCHIVAL_MEMORY_SEARCH.toolName(), params, requestOpt.isResolvable() ? requestOpt.get() : null);
+        return bridge.executeTool(req);
+    }
 }

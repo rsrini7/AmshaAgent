@@ -59,7 +59,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # @name mcpToolList
 # Expect 200:
 # {
-#   "exposedInternalTools": [{"name":"github",...},{"name":"recall_memory_search",...}],
+#   "exposedInternalTools": [{"name":"github",...},{"name":"recall_memory_search",...},{"name":"archival_memory_search",...}],
 #   "registeredDynamicTools": []   ← empty until FLOW D self-connect runs
 # }
 GET {{adminBase}}/mcp/tools
