@@ -18,7 +18,8 @@ public class IntentClassificationService {
 
 
     private static final Pattern CONTINUITY_PATTERN = Pattern.compile(
-        "(?i)^\\s*(try\\s+again|retry|do\\s+it\\s+again|once\\s+more|redo|go\\s+ahead|proceed|continue)(\\s+.*)?$"
+        "(?i)^\\s*(try\\s+again|retry|do\\s+it\\s+again|once\\s+more|redo|go\\s+ahead|proceed|continue" +
+        "|execute|run\\s+it|now\\s+execute|do\\s+it|run\\s+that|execute\\s+it|run\\s+this)(\\s+.*)?$"
     );
 
     private static final Pattern TOOL_VERB_PATTERN = Pattern.compile(

@@ -130,6 +130,12 @@ public class CompactionService {
         markers: <rag_memory>, </rag_memory>, ## Retrieved Context, <context>, </context>.
         Output raw prose only - no XML tags, no markdown headers, no delimiters.
 
+        CRITICAL: Do NOT preserve references to tasks that were scheduled, dispatched,
+        or delegated in the conversation (e.g. "scheduled a task to...", "delegated to
+        agent...", "will run after X minutes..."). These are transient intents that have
+        been dispatched — they are NOT durable facts. Including them causes the LLM to
+        confuse old dispatched tasks with current user requests. Omit them entirely.
+
         --- CONVERSATION TO SUMMARIZE ---
         %s
         %s
