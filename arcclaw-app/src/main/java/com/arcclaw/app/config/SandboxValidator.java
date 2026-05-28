@@ -32,7 +32,10 @@ public class SandboxValidator {
     private static boolean canRun(String... cmd) {
         try {
             return new ProcessBuilder(cmd).start().waitFor(2, TimeUnit.SECONDS);
-        } catch (Exception e) {
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return false;
+        } catch (Exception _) {
             return false;
         }
     }

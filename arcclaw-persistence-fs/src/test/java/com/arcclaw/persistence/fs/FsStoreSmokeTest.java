@@ -19,6 +19,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+@SuppressWarnings("java:S5443") // Test-only: temp dirs in test are acceptable
 class FsStoreSmokeTest {
 
     private Path tempDir;

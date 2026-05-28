@@ -55,7 +55,9 @@ class ReasoningStepSuccessNullSafetyTest {
             // Passes step.success() to constructor (null-safe — DTO accepts null Boolean)
             "com.arcclaw.core.state.CheckpointSerializer",
             // Uses Boolean.TRUE.equals() — null-safe (fixed 2026-05-28)
-            "com.arcclaw.core.observability.AgentTraceEnricher");
+            "com.arcclaw.core.observability.AgentTraceEnricher",
+            // Uses Boolean.TRUE.equals() — null-safe
+            "com.arcclaw.core.agent.loop.HallucinationDetector");
 
     /**
      * Enumerates all classes that call {@code ReasoningStep.success()} and verifies

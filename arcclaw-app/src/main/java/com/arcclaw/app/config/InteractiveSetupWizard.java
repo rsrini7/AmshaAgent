@@ -237,9 +237,11 @@ public class InteractiveSetupWizard {
         return key.startsWith("TELEGRAM_") || key.startsWith("ARCCLAW_TELEGRAM_");
     }
 
+    private static final SecureRandom RNG = new SecureRandom();
+
     private static String generateRandomValue() {
         byte[] bytes = new byte[32];
-        new SecureRandom().nextBytes(bytes);
+        RNG.nextBytes(bytes);
         return Base64.getEncoder().encodeToString(bytes);
     }
 

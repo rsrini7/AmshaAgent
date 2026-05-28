@@ -97,8 +97,8 @@ public class TmpfsSecretTransport implements SecretTransport {
         } catch (UnsupportedOperationException | IllegalArgumentException e) {
             // Graceful degradation for Dev/Windows/macOS
             envFile = Files.createTempFile(actualMountPath, "secrets-" + sessionId + "-", ".env");
-            envFile.toFile().setReadable(true, true);
-            envFile.toFile().setWritable(true, true);
+            var _ = envFile.toFile().setReadable(true, true);
+            var _ = envFile.toFile().setWritable(true, true);
         }
 
         // 3. Size buffer exactly to eliminate dynamically resizing re-allocations
@@ -165,11 +165,13 @@ public class TmpfsSecretTransport implements SecretTransport {
     }
 
     public static void sweepStaleTmpFilesStatic() {
-        // Sweep /dev/shm (legacy location) and SECRET_DIR (current runtime location)
-        sweepStaleTmpFilesStatic(Path.of("/dev/shm"));
+        // Sweep SECRET_DIR (current runtime location). If it differs from java.io.tmpdir,
+        // also sweep the system temp as a fallback for legacy installs.
         Path secretDir = Path.of(getSecretDir());
-        if (!secretDir.equals(Path.of("/dev/shm"))) {
-            sweepStaleTmpFilesStatic(secretDir);
+        sweepStaleTmpFilesStatic(secretDir);
+        Path tmpDir = Path.of(System.getProperty("java.io.tmpdir"));
+        if (!secretDir.equals(tmpDir)) {
+            sweepStaleTmpFilesStatic(tmpDir);
         }
     }
 

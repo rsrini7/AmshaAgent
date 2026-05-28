@@ -43,6 +43,8 @@ import io.quarkus.runtime.StartupEvent;
 @ApplicationScoped
 public class DevSecretSeeder {
 
+    private static final SecureRandom RNG = new SecureRandom();
+
     @Inject
     Logger log;
 
@@ -113,7 +115,7 @@ public class DevSecretSeeder {
         String keyName = VaultConstants.AUDIT_HMAC_KEY_NAME;
         if (!secretVault.systemKeyExists(keyName)) {
             byte[] hmacKeyBytes = new byte[32];
-            new SecureRandom().nextBytes(hmacKeyBytes);
+            RNG.nextBytes(hmacKeyBytes);
             try {
                 secretVault.storeSystemKey(keyName, hmacKeyBytes);
                 log.infof("DevSecretSeeder: seeded %s (ephemeral, dev/test only)", keyName);

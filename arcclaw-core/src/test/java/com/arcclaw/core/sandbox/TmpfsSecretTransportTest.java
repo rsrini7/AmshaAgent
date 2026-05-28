@@ -12,6 +12,7 @@ import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+@SuppressWarnings("java:S5443") // Test-only: temp dirs in test are acceptable
 public class TmpfsSecretTransportTest {
 
     @Test
