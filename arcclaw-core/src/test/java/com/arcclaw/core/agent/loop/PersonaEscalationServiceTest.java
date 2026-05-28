@@ -138,8 +138,14 @@ class PersonaEscalationServiceTest {
     }
 
     @Test
-    void determineEscalationTarget_noMatch_returnsNull() {
-        String target = service.determineEscalationTarget("coder", "simple syntax error", null);
+    void determineEscalationTarget_sandboxCodeError_escalatesToDebugger() {
+        String target = service.determineEscalationTarget("coder", "simple syntax error in line 5", null);
+        assertEquals("debugger", target);
+    }
+
+    @Test
+    void determineEscalationTarget_nonSandboxError_returnsNull() {
+        String target = service.determineEscalationTarget("coordinator", "rate limit exceeded", null);
         assertNull(target);
     }
 

@@ -22,6 +22,14 @@ final class EscalationPatterns {
             "module not found", "dependency not found"
     );
 
+    static final Set<String> SANDBOX_FAILURE_PATTERNS = Set.of(
+            "can't find", "cannot find main", "no main method", "compilation error",
+            "compile error", "syntax error", "runtime error", "exception in thread",
+            "classnotfoundexception", "nosuchmethoderror", "noclassdeffounderror",
+            "error: could not find", "error: main method", "build failed",
+            "exit code", "non-zero exit", "segmentation fault", "core dumped"
+    );
+
     static final Set<String> ARCHITECTURE_PATTERNS = Set.of(
             "architecture", "design pattern", "trade-off", "tradeoff",
             "which approach", "which pattern", "best practice",

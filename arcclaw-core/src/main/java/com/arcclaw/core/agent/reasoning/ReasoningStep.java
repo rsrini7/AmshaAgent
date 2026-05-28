@@ -122,10 +122,10 @@ public sealed interface ReasoningStep permits
         String observation,
         int inputTokens,
         int outputTokens,
+        Boolean success,
         @JsonProperty(defaultValue = "false") boolean isTruncationRecovery
     ) implements ReasoningStep {
         @Override public String action() { return PARALLEL_SENTINEL_DUNDER; }
-        @Override public Boolean success() { return null; }
         @Override public String errorCode() { return null; }
         @Override public String traceId() { return null; }
         @Override public String rootCauseClass() { return null; }
@@ -139,7 +139,7 @@ public sealed interface ReasoningStep permits
     }
 
     static ReasoningStep parallelBatch(String thought, Map<String, Object> batchPayload, int inputTokens, int outputTokens) {
-        return new ParallelStep(thought, batchPayload, null, inputTokens, outputTokens, false);
+        return new ParallelStep(thought, batchPayload, null, inputTokens, outputTokens, null, false);
     }
 
     static ReasoningStep pending(String thought, String action, Map<String, Object> actionInput) {
@@ -174,7 +174,7 @@ public sealed interface ReasoningStep permits
 
     static ReasoningStep of(String thought, String action, Map<String, Object> actionInput, String observation, int inputTk, int outputTk, Boolean success, String errorCode, String traceId, String rootCauseClass) {
         if (FINISH.equals(action)) return new FinishStep(thought, actionInput, inputTk, outputTk, false);
-        if (PARALLEL_SENTINEL_DUNDER.equals(action)) return new ParallelStep(thought, actionInput, observation, inputTk, outputTk, false);
+        if (PARALLEL_SENTINEL_DUNDER.equals(action)) return new ParallelStep(thought, actionInput, observation, inputTk, outputTk, success, false);
         if (OBSERVE.equals(action)) return new ObservationStep(thought, observation, inputTk, outputTk, success, errorCode, traceId, rootCauseClass, false);
         return new ToolCallStep(thought, action, actionInput, observation, inputTk, outputTk, success, errorCode, traceId, rootCauseClass, false, false);
     }
@@ -190,7 +190,7 @@ public sealed interface ReasoningStep permits
             case ToolCallStep s -> new ToolCallStep(s.thought, s.action, s.actionInput, observation, s.inputTokens, s.outputTokens, success, s.errorCode, s.traceId, s.rootCauseClass, s.isFastPath, s.isTruncationRecovery);
             case ObservationStep s -> new ObservationStep(s.thought, observation, s.inputTokens, s.outputTokens, success, s.errorCode, s.traceId, s.rootCauseClass, s.isTruncationRecovery);
             case FinishStep s -> s;
-            case ParallelStep s -> new ParallelStep(s.thought, s.actionInput, observation, s.inputTokens, s.outputTokens, s.isTruncationRecovery);
+            case ParallelStep s -> new ParallelStep(s.thought, s.actionInput, observation, s.inputTokens, s.outputTokens, success, s.isTruncationRecovery);
         };
     }
 
@@ -199,7 +199,7 @@ public sealed interface ReasoningStep permits
             case ToolCallStep s -> new ToolCallStep(s.thought, s.action, s.actionInput, observation, s.inputTokens, s.outputTokens, success, errorCode, traceId, rootCauseClass, s.isFastPath, s.isTruncationRecovery);
             case ObservationStep s -> new ObservationStep(s.thought, observation, s.inputTokens, s.outputTokens, success, errorCode, traceId, rootCauseClass, s.isTruncationRecovery);
             case FinishStep s -> s;
-            case ParallelStep s -> new ParallelStep(s.thought, s.actionInput, observation, s.inputTokens, s.outputTokens, s.isTruncationRecovery);
+            case ParallelStep s -> new ParallelStep(s.thought, s.actionInput, observation, s.inputTokens, s.outputTokens, success, s.isTruncationRecovery);
         };
     }
 
@@ -208,7 +208,7 @@ public sealed interface ReasoningStep permits
             case ToolCallStep s -> new ToolCallStep(s.thought, s.action, s.actionInput, s.observation, s.inputTokens, s.outputTokens, s.success, s.errorCode, s.traceId, s.rootCauseClass, s.isFastPath, truncationRecovery);
             case ObservationStep s -> new ObservationStep(s.thought, s.observation, s.inputTokens, s.outputTokens, s.success, s.errorCode, s.traceId, s.rootCauseClass, truncationRecovery);
             case FinishStep s -> new FinishStep(s.thought, s.actionInput, s.inputTokens, s.outputTokens, truncationRecovery);
-            case ParallelStep s -> new ParallelStep(s.thought, s.actionInput, s.observation, s.inputTokens, s.outputTokens, truncationRecovery);
+            case ParallelStep s -> new ParallelStep(s.thought, s.actionInput, s.observation, s.inputTokens, s.outputTokens, s.success, truncationRecovery);
         };
     }
 }

@@ -25,7 +25,9 @@ public class AgentTraceEnricher implements AgentObserver {
         Span root = otelContext.getRootSpan(sessionId);
         if (root == null || !root.isRecording()) return;
 
-        root.setAttribute("arcclaw.last.step.success", step.success());
+        if (step.success() != null) {
+            root.setAttribute("arcclaw.last.step.success", Boolean.TRUE.equals(step.success()));
+        }
     }
 
     @Override

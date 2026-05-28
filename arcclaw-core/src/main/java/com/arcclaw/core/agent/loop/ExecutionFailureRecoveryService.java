@@ -111,9 +111,6 @@ public class ExecutionFailureRecoveryService {
         if (!autoHealEnabled) {
             return false;
         }
-        if (!AgentRoleEnum.CODER.toScopedName().equals(agentRole)) {
-            return false;
-        }
         if (!ToolCapability.SANDBOX_EXEC.toolName().equals(toolName)) {
             return false;
         }

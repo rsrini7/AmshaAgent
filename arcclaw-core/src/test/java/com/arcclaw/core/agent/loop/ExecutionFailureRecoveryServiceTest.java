@@ -36,11 +36,11 @@ class ExecutionFailureRecoveryServiceTest {
     }
 
     @Test
-    void shouldAttemptRecovery_disabled_forNonCoderRole() {
+    void shouldAttemptRecovery_enabled_forAllRoles_sandboxExec() {
         ToolResponse response = ToolResponse.failure(1, "syntax error");
-        assertFalse(service.shouldAttemptRecovery("coordinator", ToolCapability.SANDBOX_EXEC.toolName(), response));
-        assertFalse(service.shouldAttemptRecovery("researcher", ToolCapability.SANDBOX_EXEC.toolName(), response));
-        assertFalse(service.shouldAttemptRecovery("debugger", ToolCapability.SANDBOX_EXEC.toolName(), response));
+        assertTrue(service.shouldAttemptRecovery("coordinator", ToolCapability.SANDBOX_EXEC.toolName(), response));
+        assertTrue(service.shouldAttemptRecovery("researcher", ToolCapability.SANDBOX_EXEC.toolName(), response));
+        assertTrue(service.shouldAttemptRecovery("debugger", ToolCapability.SANDBOX_EXEC.toolName(), response));
     }
 
     @Test

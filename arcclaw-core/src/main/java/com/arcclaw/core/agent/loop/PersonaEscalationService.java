@@ -159,6 +159,9 @@ public class PersonaEscalationService {
 
         // Brahma escalations
         if (AgentRoleEnum.CODER.toScopedName().equals(sourceRole)) {
+            if (matchesAny(errorLower, goalLower, EscalationPatterns.SANDBOX_FAILURE_PATTERNS)) {
+                return AgentRoleEnum.DEBUGGER.toScopedName();
+            }
             if (matchesAny(errorLower, goalLower, EscalationPatterns.UNKNOWN_API_PATTERNS)) {
                 return AgentRoleEnum.RESEARCHER.toScopedName();
             }
@@ -208,7 +211,32 @@ public class PersonaEscalationService {
             return newPersonaTarget;
         }
 
+        // Sandbox compilation/runtime errors → escalate to Shiva (debugger) for code fix
+        if (errorLower != null && matchesSandboxCodeError(errorLower)) {
+            return AgentRoleEnum.DEBUGGER.toScopedName();
+        }
+
         return null;
+    }
+
+    /**
+     * Returns true if the error output indicates a sandbox code error that Shiva can fix.
+     * Covers compilation errors, missing methods, syntax errors, and runtime exceptions.
+     */
+    private static boolean matchesSandboxCodeError(String errorLower) {
+        return errorLower.contains("can't find")
+                || errorLower.contains("cannot find")
+                || errorLower.contains("compilation error")
+                || errorLower.contains("compile error")
+                || errorLower.contains("syntax error")
+                || errorLower.contains("classnotfound")
+                || errorLower.contains("nosuchmethod")
+                || errorLower.contains("nullpointerexception")
+                || errorLower.contains("arrayindexoutofbounds")
+                || errorLower.contains("classcastexception")
+                || errorLower.contains("illegalargument")
+                || errorLower.contains("error:") && errorLower.contains(".java")
+                || errorLower.contains("exception in thread");
     }
 
     /**
