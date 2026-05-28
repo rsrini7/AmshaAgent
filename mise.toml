@@ -1988,83 +1988,12 @@ Get-ChildItem $out | Format-Table Name, @{L='Size';E={'{0:N0} KB' -f ($_.Length/
 # =============================================================================
 # DOCKER COMPOSE TASKS
 # =============================================================================
-
-[tasks."obs:up"]
-description = "Start observability stack: OTel + Jaeger + Phoenix + Prometheus via compose"
-dir = "{{config_root}}"
-shell = "pwsh -Command"
-quiet = false
-run = """
-$ErrorActionPreference = 'Stop'
-# Podman machine check: try a simple command; if it fails, ask user before starting
-$test = podman ps --noheading 2>&1
-if ($LASTEXITCODE -ne 0) {
-    Write-Host '⚠️   Podman is not running.'
-    $confirm = Read-Host 'Start Podman machine now? [Y/n]'
-    if ($confirm -eq '' -or $confirm -eq 'y' -or $confirm -eq 'Y') {
-        $startResult = podman machine start 2>&1
-        if ($LASTEXITCODE -ne 0) {
-            if ($startResult -match 'already running') {
-                Write-Host '⚠️   Podman machine reported "already running" but connection failed — forcing restart...'
-                podman machine stop 2>&1 | Out-Null; Start-Sleep -Seconds 2
-                podman machine start 2>&1
-                if ($LASTEXITCODE -ne 0) { Write-Host '❌  Podman machine failed to restart'; exit 1 }
-            } else {
-                Write-Host '❌  Podman machine failed to start'; exit 1
-            }
-        }
-        Start-Sleep -Seconds 3
-    } else {
-        Write-Host '❌  Podman is required for the observability stack.'
-        exit 1
-    }
-}
-podman compose up -d otel-collector jaeger phoenix prometheus
-if ($LASTEXITCODE -ne 0) { Write-Host '❌  Failed to start observability stack'; exit 1 }
-Write-Host '✅  Observability stack started:'
-Write-Host '    Jaeger UI  -> http://localhost:16686'
-Write-Host '    Phoenix UI -> http://localhost:6006'
-Write-Host '    Prometheus -> http://localhost:9090'
-"""
-
-[tasks."obs:jaeger"]
-description = "Start only Jaeger + OTel collector"
-dir = "{{config_root}}"
-shell = "pwsh -NonInteractive -Command"
-quiet = true
-run = """
-podman compose up -d jaeger otel-collector
-Write-Host '✅  Jaeger + OTel collector started. UI: http://localhost:16686'
-"""
-
-[tasks."obs:phoenix"]
-description = "Start only Phoenix + OTel collector (span routing via collector)"
-dir = "{{config_root}}"
-shell = "pwsh -NonInteractive -Command"
-quiet = true
-run = """
-podman compose up -d phoenix otel-collector
-Write-Host '✅  Phoenix + OTel collector started. UI: http://localhost:6006'
-"""
-
-[tasks."obs:down"]
-description = "Stop observability stack: OTel + Jaeger + Phoenix + Prometheus"
-dir = "{{config_root}}"
-shell = "pwsh -NonInteractive -Command"
-quiet = true
-run = """
-podman compose down otel-collector jaeger phoenix prometheus
-Write-Host '✅  Observability stack stopped.'
-"""
-
-[tasks."obs:status"]
-description = "Check observability services status"
-dir = "{{config_root}}"
-shell = "pwsh -NonInteractive -Command"
-quiet = true
-run = """
-podman compose ps otel-collector jaeger phoenix prometheus 2>&1
-"""
+# Tasks are defined as .ps1 scripts in .mise/tasks/obs/ for cross-platform compatibility
+# - up.ps1       - Start observability stack (OTel + Jaeger + Phoenix + Prometheus)
+# - jaeger.ps1   - Start only Jaeger + OTel collector
+# - phoenix.ps1  - Start only Phoenix + OTel collector
+# - down.ps1     - Stop observability stack
+# - status.ps1   - Check observability services status
 
 [tasks."compose:up"]
 description = "Start full stack: ArcClaw native + Ollama + OTel + Jaeger + Phoenix + Prometheus"
