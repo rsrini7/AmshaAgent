@@ -29,6 +29,7 @@ powershell = "7.5"
 node = "22"
 gh = "latest"
 go = "1.26"
+sonar-scanner-cli = "latest"
 
 [env]
 _.file = ".env"
@@ -2415,6 +2416,59 @@ if ($img) {
     Write-Host '❌  Image not found. Run: mise run sandbox:build'
     exit 1
 }
+"""
+
+# =============================================================================
+# SONARQUBE
+# =============================================================================
+# Tasks are defined as .ps1 scripts in .mise/tasks/ directory for cross-platform compatibility
+# - sonar-start.ps1   - Start SonarQube container
+# - sonar-stop.ps1    - Stop SonarQube container  
+# - sonar-logs.ps1    - View container logs
+# - sonar-status.ps1  - Check container status
+
+[tasks."sonar:scan"]
+description = "Run SonarQube analysis (requires sonar:start first)"
+dir = "{{config_root}}"
+shell = "pwsh -NonInteractive -Command"
+quiet = true
+run = """
+$ErrorActionPreference = 'Stop'
+Write-Host '▶   Running SonarQube analysis...'
+sonar-scanner `
+  -Dsonar.projectKey=arcclaw `
+  -Dsonar.sources=. `
+  -Dsonar.host.url=http://localhost:9000 `
+  -Dsonar.login=admin `
+  -Dsonar.password=admin `
+  -Dsonar.java.binaries=arcclaw-app/target/classes `
+  -Dsonar.exclusions='**/target/**,**/node_modules/**,arcclaw-ui/**'
+if ($LASTEXITCODE -ne 0) {
+  Write-Host '⚠️   Analysis completed with warnings or errors.'
+} else {
+  Write-Host '✅  Analysis complete. View results at: http://localhost:9000'
+}
+"""
+
+[tasks."sonar:scan-clean"]
+description = "Build + SonarQube analysis (fresh compile)"
+dir = "{{config_root}}"
+depends = ["build-app"]
+shell = "pwsh -NonInteractive -Command"
+quiet = true
+run = """
+$ErrorActionPreference = 'Stop'
+Write-Host '▶   Running SonarQube analysis (clean build)...'
+sonar-scanner `
+  -Dsonar.projectKey=arcclaw `
+  -Dsonar.sources=. `
+  -Dsonar.host.url=http://localhost:9000 `
+  -Dsonar.login=admin `
+  -Dsonar.password=admin `
+  -Dsonar.java.binaries=arcclaw-app/target/classes `
+  -Dsonar.exclusions='**/target/**,**/node_modules/**,arcclaw-ui/**'
+Write-Host ''
+Write-Host '✅  Analysis complete. View results at: http://localhost:9000'
 """
 
 # =============================================================================

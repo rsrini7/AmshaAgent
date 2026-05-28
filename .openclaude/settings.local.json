@@ -52,7 +52,8 @@
       "Bash(./mvnw clean:*)",
       "Bash(echo:*)",
       "Bash(xargs kill:*)",
-      "Bash(./mvnw test-compile:*)"
+      "Bash(./mvnw test-compile:*)",
+      "Bash(find . -path *)"
     ]
   }
 }
