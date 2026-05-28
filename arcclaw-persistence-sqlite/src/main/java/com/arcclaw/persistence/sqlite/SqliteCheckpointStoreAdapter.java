@@ -117,7 +117,6 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
                     var dao = handle.attach(CheckpointJdbiDao.class);
                     Optional<CheckpointDto> existing = dao.findAnyBySessionAndRole(sessionId, agentRole);
                     boolean created = existing.isEmpty();
-                    Instant now = Instant.now();
                     String status = existing.map(CheckpointDto::status).orElse("IN_PROGRESS");
                     // Preserve AWAITING_APPROVAL / RESUMING if already set
                     if (!"AWAITING_APPROVAL".equals(status) && !"RESUMING".equals(status)) {
@@ -157,7 +156,6 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
                 50,
                 () -> jdbi.inTransaction(handle -> {
                     var dao = handle.attach(CheckpointJdbiDao.class);
-                    Instant now = Instant.now();
                     CheckpointDto existing =
                             dao.findAnyBySessionAndRole(sessionId, agentRole).orElse(null);
                     String autonomy = existing != null ? existing.autonomyLevel() : null;

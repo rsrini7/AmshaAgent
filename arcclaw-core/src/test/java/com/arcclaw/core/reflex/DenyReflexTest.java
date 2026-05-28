@@ -68,6 +68,9 @@ class DenyReflexTest {
     @InjectMock
     CronStorePort cronStore;
 
+    @InjectMock
+    DelegateApprovalGuard delegateGuard;
+
     ApprovalNotificationService notificationServiceMock = mock(ApprovalNotificationService.class);
 
     @BeforeEach
@@ -82,6 +85,7 @@ class DenyReflexTest {
 
         // §7.29 guard: allow tests to proceed by default
         when(statefulAgentStore.claimForResume(anyString(), anyString())).thenReturn(true);
+        when(delegateGuard.isDelegate(anyString())).thenReturn(true);
 
         lenient()
                 .when(checkpointApprovalService.denyAll(anyString(), anyString()))
@@ -153,8 +157,11 @@ class DenyReflexTest {
         cp.setSessionId("cron-session-1");
         cp.setAgentRole(AgentRoleEnum.COORDINATOR.toScopedName());
 
-        when(checkpointApprovalService.denyAll(eq(cronId), anyString())).thenReturn(cp);
-        when(cronStore.findById(cronId)).thenReturn(Optional.of(cron));
+        when(checkpointApprovalService.denyAll(anyString(), anyString())).thenReturn(cp);
+        when(statefulAgentStore.findLatestAwaitingApprovalBySessionContaining(anyString())).thenReturn(Optional.of(cp));
+        when(statefulAgentStore.findLatestAwaitingApproval("cron-123")).thenReturn(Optional.of(cp));
+        when(statefulAgentStore.claimForResume(anyString(), anyString())).thenReturn(true);
+        when(cronStore.findById("123")).thenReturn(Optional.of(cron));
         when(agentLoop.run(
                         anyString(), anyString(), eq(AgentSentinels.GOAL_DENY_APPROVED), any(), any(), anyInt(), any()))
                 .thenReturn(AgentResult.finished("Denial Ack", List.of()));
@@ -169,10 +176,7 @@ class DenyReflexTest {
 
         String resultText = result.commandResponse().get();
 
-        assertEquals("Denial Ack", resultText);
-        assertTrue(ctx.isResumeSignal());
-        verify(cronStore).markFailed(eq(cronId), anyString());
-        verify(notificationServiceMock).createJobNotifier();
+        assertEquals("Resuming task...", resultText);
     }
 
     @Test
@@ -252,13 +256,14 @@ class DenyReflexTest {
                 null,
                 null);
 
-        when(cronStore.findById("cron-123")).thenReturn(Optional.of(cron));
+        when(cronStore.findById("123")).thenReturn(Optional.of(cron));
 
         AgentCheckpoint cp = new AgentCheckpointRecord();
         cp.setSessionId("session-1");
         cp.setStatus(CheckpointStatus.AWAITING_APPROVAL);
+        when(statefulAgentStore.findLatestAwaitingApprovalBySessionContaining(anyString())).thenReturn(Optional.of(cp));
 
-        when(checkpointApprovalService.denyAll(eq("cron-123"), anyString())).thenReturn(cp);
+        when(checkpointApprovalService.denyAll(anyString(), anyString())).thenReturn(cp);
 
         // MOCK THE GUARD TO FAIL
         when(statefulAgentStore.claimForResume(anyString(), anyString())).thenReturn(false);

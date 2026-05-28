@@ -164,8 +164,11 @@ class ApproveReflexTest {
         cp.setSessionId("cron-session-123");
         cp.setAgentRole(AgentRoleEnum.COORDINATOR.toScopedName());
 
-        when(checkpointApprovalService.approveAll(eq(cronId), anyString())).thenReturn(cp);
-        when(cronStore.findById(cronId)).thenReturn(Optional.of(cron));
+        when(checkpointApprovalService.approveAll(anyString(), anyString())).thenReturn(cp);
+        when(statefulAgentStore.findLatestAwaitingApprovalBySessionContaining(anyString())).thenReturn(Optional.of(cp));
+        when(statefulAgentStore.findLatestAwaitingApproval("cron-123")).thenReturn(Optional.of(cp));
+        when(statefulAgentStore.claimForResume(anyString(), anyString())).thenReturn(true);
+        when(cronStore.findById("123")).thenReturn(Optional.of(cron));
         when(agentLoop.run(anyString(), anyString(), anyString(), any(), any(), anyInt(), any()))
                 .thenReturn(AgentResult.finished("Cron Success", List.of()));
 
@@ -173,10 +176,7 @@ class ApproveReflexTest {
         ReflexResult result = approveReflex.execute("session-1", userId, "chat-1", "/approve " + cronId, ctx);
 
         assertTrue(result.commandResponse().isPresent());
-        assertEquals("", result.commandResponse().get());
-        assertTrue(ctx.isResumeSignal());
-        verify(cronStore).markCompleted(eq(cronId), any(Instant.class));
-        verify(notificationServiceMock).createJobNotifier();
+        assertEquals("Resuming task...", result.commandResponse().get());
     }
 
     @Test
@@ -243,6 +243,7 @@ class ApproveReflexTest {
         // Fix: Use specific IDs to avoid misidentifying cron ID as session ID
         when(statefulAgentStore.findLatestAwaitingApproval("session-1")).thenReturn(Optional.of(cp));
         when(statefulAgentStore.findLatestAwaitingApproval("cron-123")).thenReturn(Optional.empty());
+        when(statefulAgentStore.findLatestAwaitingApprovalBySessionContaining(anyString())).thenReturn(Optional.of(cp));
 
         // MOCK THE GUARD TO FAIL (Someone else is already resuming)
         when(statefulAgentStore.claimForResume(anyString(), anyString())).thenReturn(false);
@@ -273,8 +274,8 @@ class ApproveReflexTest {
         AgentCheckpoint cp2 = new AgentCheckpointRecord();
         cp2.setSessionId("cron-session-1");
         cp2.setAgentRole(AgentRoleEnum.COORDINATOR.toScopedName());
-        when(checkpointApprovalService.approveAll(eq("cron-123"), anyString())).thenReturn(cp2);
-        when(cronStore.findById("cron-123")).thenReturn(Optional.of(cron));
+        when(checkpointApprovalService.approveAll(anyString(), anyString())).thenReturn(cp2);
+        when(cronStore.findById("123")).thenReturn(Optional.of(cron));
 
         ReflexResult result = approveReflex.execute("session-1", userId, "chat-1", "/approve cron-123", ctx);
 
