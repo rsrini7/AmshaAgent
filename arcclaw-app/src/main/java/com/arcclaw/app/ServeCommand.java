@@ -1,11 +1,13 @@
 package com.arcclaw.app;
 
+import picocli.CommandLine.Command;
+
 import jakarta.inject.Inject;
 
-import io.quarkus.runtime.Quarkus;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
-import picocli.CommandLine.Command;
+
+import io.quarkus.runtime.Quarkus;
 
 /**
  * Daemon / REST API mode - starts Quarkus HTTP server and blocks until

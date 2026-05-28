@@ -7,11 +7,13 @@ import jakarta.inject.Inject;
 import jakarta.interceptor.Interceptor;
 
 import com.arcclaw.persistence.api.AuditSchemaPort;
+
+import org.jboss.logging.Logger;
+import org.jdbi.v3.core.Jdbi;
+
 import io.quarkus.arc.Unremovable;
 import io.quarkus.arc.properties.IfBuildProperty;
 import io.quarkus.runtime.StartupEvent;
-import org.jboss.logging.Logger;
-import org.jdbi.v3.core.Jdbi;
 
 /**
  * Enforces WORM (Write-Once-Read-Many) compliance at the database level using PostgreSQL triggers.
@@ -59,7 +61,7 @@ public class PostgresAuditSchemaEnforcer implements AuditSchemaPort {
                             BEFORE UPDATE ON audit_event
                             FOR EACH ROW EXECUTE FUNCTION prevent_audit_modification();
                         END IF;
-                        
+
                         IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'trg_prevent_audit_delete') THEN
                             CREATE TRIGGER trg_prevent_audit_delete
                             BEFORE DELETE ON audit_event
@@ -74,18 +76,15 @@ public class PostgresAuditSchemaEnforcer implements AuditSchemaPort {
         }
     }
 
-    public void onStart(
-        @Observes @Priority(Interceptor.Priority.APPLICATION + 100)
-        StartupEvent event) {
-        
+    public void onStart(@Observes @Priority(Interceptor.Priority.APPLICATION + 100) StartupEvent event) {
+
         try {
             // Verify if we are running on Postgres
             String dbProduct = jdbi.withHandle(handle ->
-                handle.createQuery("SELECT version()").mapTo(String.class).one()
-            );
+                    handle.createQuery("SELECT version()").mapTo(String.class).one());
             if (dbProduct != null && dbProduct.toLowerCase().contains("postgres")) {
                 enforceWormConstraints();
-                
+
                 // Add indexes
                 jdbi.useHandle(handle -> {
                     handle.execute("CREATE INDEX IF NOT EXISTS idx_audit_session_pg ON audit_event (sessionId)");

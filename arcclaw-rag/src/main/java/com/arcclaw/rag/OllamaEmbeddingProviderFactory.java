@@ -1,9 +1,10 @@
 package com.arcclaw.rag;
 
-import jakarta.enterprise.context.ApplicationScoped;
-
 import dev.langchain4j.model.embedding.EmbeddingModel;
 import dev.langchain4j.model.ollama.OllamaEmbeddingModel;
+
+import jakarta.enterprise.context.ApplicationScoped;
+
 import org.jboss.logging.Logger;
 
 /**
@@ -11,7 +12,7 @@ import org.jboss.logging.Logger;
  */
 @ApplicationScoped
 public class OllamaEmbeddingProviderFactory implements EmbeddingProviderFactory {
-    
+
     private static final Logger log = Logger.getLogger(OllamaEmbeddingProviderFactory.class);
 
     @Override
@@ -23,9 +24,9 @@ public class OllamaEmbeddingProviderFactory implements EmbeddingProviderFactory 
     public EmbeddingModel create(EmbeddingModelConfig config) {
         log.infof("Creating local Ollama embedding model: %s url=%s", config.modelName(), config.baseUrl());
         return OllamaEmbeddingModel.builder()
-            .baseUrl(config.baseUrl())
-            .modelName(config.modelName())
-            .timeout(config.timeout())
-            .build();
+                .baseUrl(config.baseUrl())
+                .modelName(config.modelName())
+                .timeout(config.timeout())
+                .build();
     }
 }

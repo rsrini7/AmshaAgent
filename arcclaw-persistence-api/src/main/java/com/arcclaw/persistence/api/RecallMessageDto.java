@@ -12,18 +12,17 @@ import java.time.Instant;
  * @param metadataJson optional extensible metadata — serialized JSON string (nullable)
  */
 public record RecallMessageDto(
-    String messageId,
-    String sessionId,
-    String userId,
-    int turnNumber,
-    String contentHash,
-    String role,
-    String messageType,
-    String content,
-    String toolName,
-    String toolCallId,
-    boolean hasCode,
-    boolean hasError,
-    Instant createdAt,
-    String metadataJson
-) {}
+        String messageId,
+        String sessionId,
+        String userId,
+        int turnNumber,
+        String contentHash,
+        String role,
+        String messageType,
+        String content,
+        String toolName,
+        String toolCallId,
+        boolean hasCode,
+        boolean hasError,
+        Instant createdAt,
+        String metadataJson) {}

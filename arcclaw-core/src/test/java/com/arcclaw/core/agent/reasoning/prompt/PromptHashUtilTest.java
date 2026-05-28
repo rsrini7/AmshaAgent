@@ -38,6 +38,7 @@ class PromptHashUtilTest {
 
     @Test
     void parseHash_extractsSha256() {
-        assertEquals("abc123def456", PromptHashUtil.parseHash("{\"source\":\"classpath\",\"sha256\":\"abc123def456\"}"));
+        assertEquals(
+                "abc123def456", PromptHashUtil.parseHash("{\"source\":\"classpath\",\"sha256\":\"abc123def456\"}"));
     }
 }

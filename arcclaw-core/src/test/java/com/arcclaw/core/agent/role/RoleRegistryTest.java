@@ -19,15 +19,7 @@ class RoleRegistryTest {
     @Test
     void testDynamicRoleRegistrationAndRetrieval() {
         RoleDefinition def = new RoleDefinition(
-                "skill:reviewer",
-                "Reviewer",
-                "Reviews code",
-                5,
-                false,
-                false,
-                Set.of(ToolCapability.GITHUB),
-                Set.of()
-        );
+                "skill:reviewer", "Reviewer", "Reviews code", 5, false, false, Set.of(ToolCapability.GITHUB), Set.of());
 
         registry.registerDynamic("reviewer", def);
 
@@ -45,8 +37,7 @@ class RoleRegistryTest {
                 false,
                 false,
                 Set.of(ToolCapability.GITHUB, ToolCapability.RECALL_MEMORY_SEARCH),
-                Set.of()
-        );
+                Set.of());
         registry.registerDynamic("reviewer", def);
 
         Set<String> tools = registry.permittedToolsForDynamic("skill:reviewer");

@@ -1,7 +1,5 @@
 package com.arcclaw.app.api;
 
-import java.util.List;
-
 import jakarta.inject.Inject;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.DELETE;
@@ -14,6 +12,8 @@ import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.core.SecurityContext;
+
+import java.util.List;
 
 import com.arcclaw.core.api.dto.ArcClawErrorResponse;
 import com.arcclaw.core.memory.tiered.CoreMemoryService;
@@ -42,10 +42,11 @@ public class CoreMemoryAdminResource {
     @Path("/{blockKey}")
     public Response getBlock(@PathParam("blockKey") String blockKey) {
         String userId = resolveUserId();
-        return coreMemoryService.get(userId, blockKey)
-            .map(Response::ok)
-            .orElse(Response.status(Response.Status.NOT_FOUND))
-            .build();
+        return coreMemoryService
+                .get(userId, blockKey)
+                .map(Response::ok)
+                .orElse(Response.status(Response.Status.NOT_FOUND))
+                .build();
     }
 
     @PUT
@@ -53,8 +54,8 @@ public class CoreMemoryAdminResource {
     public Response upsertBlock(@PathParam("blockKey") String blockKey, CoreMemoryUpdateRequest req) {
         if (!isInternal()) {
             return Response.status(Response.Status.FORBIDDEN)
-                .entity(new ArcClawErrorResponse("Only internal API keys can modify core memory"))
-                .build();
+                    .entity(new ArcClawErrorResponse("Only internal API keys can modify core memory"))
+                    .build();
         }
         String userId = resolveUserId();
         try {
@@ -62,17 +63,17 @@ public class CoreMemoryAdminResource {
             return Response.ok().build();
         } catch (IllegalArgumentException e) {
             return Response.status(Response.Status.BAD_REQUEST)
-                .entity(new ArcClawErrorResponse("invalid_block_key", e.getMessage()))
-                .build();
+                    .entity(new ArcClawErrorResponse("invalid_block_key", e.getMessage()))
+                    .build();
         } catch (IllegalStateException e) {
             if (e.getMessage() != null && e.getMessage().contains("limit reached")) {
                 return Response.status(429)
-                    .entity(new ArcClawErrorResponse("block_limit_exceeded", e.getMessage()))
-                    .build();
+                        .entity(new ArcClawErrorResponse("block_limit_exceeded", e.getMessage()))
+                        .build();
             }
             return Response.status(Response.Status.CONFLICT)
-                .entity(new ArcClawErrorResponse("version_conflict", e.getMessage()))
-                .build();
+                    .entity(new ArcClawErrorResponse("version_conflict", e.getMessage()))
+                    .build();
         }
     }
 
@@ -81,8 +82,8 @@ public class CoreMemoryAdminResource {
     public Response deleteBlock(@PathParam("blockKey") String blockKey) {
         if (!isInternal()) {
             return Response.status(Response.Status.FORBIDDEN)
-                .entity(new ArcClawErrorResponse("Only internal API keys can delete core memory"))
-                .build();
+                    .entity(new ArcClawErrorResponse("Only internal API keys can delete core memory"))
+                    .build();
         }
         String userId = resolveUserId();
         coreMemoryService.delete(userId, blockKey);

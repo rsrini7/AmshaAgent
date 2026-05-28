@@ -1,14 +1,17 @@
 package com.arcclaw.core.tools.memory;
 
+import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
+import dev.langchain4j.model.embedding.EmbeddingModel;
+
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.inject.Instance;
+import jakarta.inject.Inject;
+
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
-
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.enterprise.inject.Instance;
-import jakarta.inject.Inject;
 
 import com.arcclaw.core.agent.reasoning.ArchivalContextCache;
 import com.arcclaw.core.agent.role.ToolCapability;
@@ -24,8 +27,7 @@ import com.arcclaw.core.util.Fts5QueryUtil;
 import com.arcclaw.persistence.api.ArchivalChunkDto;
 import com.arcclaw.persistence.api.ArchivalMemoryStorePort;
 import com.arcclaw.persistence.api.ArchivalSearchQuery;
-import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
-import dev.langchain4j.model.embedding.EmbeddingModel;
+
 import org.jboss.logging.Logger;
 
 /**
@@ -43,12 +45,11 @@ import org.jboss.logging.Logger;
  */
 @ApplicationScoped
 @ToolMetadata(
-    capabilityId = "archival_memory_search",
-    description = "Searches long-term archival knowledge for patterns, facts, preferences, and code snippets. " +
-                  "Use this when you need to recall previously stored knowledge (e.g., 'what patterns have we used', " +
-                  "'project conventions', 'user preferences'). Returns typed chunks with confidence scores.",
-    defaultRoles = {"architect", "coordinator", "researcher", "synthesizer", "coder"}
-)
+        capabilityId = "archival_memory_search",
+        description = "Searches long-term archival knowledge for patterns, facts, preferences, and code snippets. "
+                + "Use this when you need to recall previously stored knowledge (e.g., 'what patterns have we used', "
+                + "'project conventions', 'user preferences'). Returns typed chunks with confidence scores.",
+        defaultRoles = {"architect", "coordinator", "researcher", "synthesizer", "coder"})
 public class ArchivalMemorySearchTool implements AgentTool {
 
     private static final Logger log = Logger.getLogger(ArchivalMemorySearchTool.class);
@@ -78,14 +79,13 @@ public class ArchivalMemorySearchTool implements AgentTool {
     @Override
     public JsonObjectSchema parametersSchema() {
         return JsonObjectSchema.builder()
-            .addStringProperty("query",
-                "Keywords or semantic text to search for in archival knowledge")
-            .addIntegerProperty("limit",
-                "Max results to return (default from config, typically 3-8)")
-            .addStringProperty("chunk_types",
-                "Comma-separated chunk type filter: CODE, DOC, PATTERN, FACT, PREFERENCE, DIRECTIVE")
-            .required("query")
-            .build();
+                .addStringProperty("query", "Keywords or semantic text to search for in archival knowledge")
+                .addIntegerProperty("limit", "Max results to return (default from config, typically 3-8)")
+                .addStringProperty(
+                        "chunk_types",
+                        "Comma-separated chunk type filter: CODE, DOC, PATTERN, FACT, PREFERENCE, DIRECTIVE")
+                .required("query")
+                .build();
     }
 
     @Override
@@ -127,8 +127,11 @@ public class ArchivalMemorySearchTool implements AgentTool {
             float[] queryEmbedding = null;
             if (embeddingModelInstance != null && !embeddingModelInstance.isUnsatisfied()) {
                 try {
-                    queryEmbedding = embeddingModelInstance.get()
-                        .embed(rawQuery).content().vector();
+                    queryEmbedding = embeddingModelInstance
+                            .get()
+                            .embed(rawQuery)
+                            .content()
+                            .vector();
                 } catch (Exception e) {
                     log.debugf("Query embedding failed (BM25-only fallback): %s", e.getMessage());
                 }
@@ -136,22 +139,21 @@ public class ArchivalMemorySearchTool implements AgentTool {
 
             // 5. Build and execute search query
             ArchivalSearchQuery searchQuery = new ArchivalSearchQuery(
-                userId, safeQuery, limit, chunkTypes,
-                queryEmbedding != null, true, queryEmbedding);
+                    userId, safeQuery, limit, chunkTypes, queryEmbedding != null, true, queryEmbedding);
 
             List<ArchivalChunkDto> results = archivalStore.search(searchQuery);
 
             // 6. Filter by confidence threshold
             double minConfidence = tieredConfig.archival().confidenceThreshold();
             results = results.stream()
-                .filter(c -> c.confidence() >= minConfidence)
-                .collect(Collectors.toList());
+                    .filter(c -> c.confidence() >= minConfidence)
+                    .collect(Collectors.toList());
 
             // 7. Batch increment access count for LRU (single SQL statement)
             if (!results.isEmpty()) {
                 try {
-                    List<String> resultIds = results.stream()
-                        .map(ArchivalChunkDto::chunkId).toList();
+                    List<String> resultIds =
+                            results.stream().map(ArchivalChunkDto::chunkId).toList();
                     archivalStore.incrementAccessCounts(resultIds);
                 } catch (Exception e) {
                     log.debugf("Failed to batch increment access counts: %s", e.getMessage());
@@ -177,7 +179,8 @@ public class ArchivalMemorySearchTool implements AgentTool {
         if (raw instanceof String s) {
             try {
                 return Math.max(1, Math.min(Integer.parseInt(s.trim()), 50));
-            } catch (NumberFormatException ignored) { }
+            } catch (NumberFormatException ignored) {
+            }
         }
         return defaultLimit;
     }
@@ -185,9 +188,9 @@ public class ArchivalMemorySearchTool implements AgentTool {
     private Set<String> parseChunkTypes(String raw) {
         if (raw == null || raw.isBlank()) return Set.of();
         return Arrays.stream(raw.split(","))
-            .map(String::trim)
-            .filter(s -> !s.isBlank())
-            .collect(Collectors.toSet());
+                .map(String::trim)
+                .filter(s -> !s.isBlank())
+                .collect(Collectors.toSet());
     }
 
     /**

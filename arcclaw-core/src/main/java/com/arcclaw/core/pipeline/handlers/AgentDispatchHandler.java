@@ -1,11 +1,11 @@
 package com.arcclaw.core.pipeline.handlers;
 
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+
 import java.util.List;
 import java.util.concurrent.Callable;
 import java.util.regex.Pattern;
-
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
 
 import com.arcclaw.channel.api.ApprovalPrompt;
 import com.arcclaw.channel.api.ChannelPlugin;
@@ -30,6 +30,7 @@ import com.arcclaw.core.skill.SkillRegistry;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.util.AgentResultFormatter;
 import com.arcclaw.core.util.TimeContextInjector;
+
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
@@ -80,10 +81,10 @@ public class AgentDispatchHandler implements MessageHandler {
     @Override
     public HandleResult handle(MessageContext context) {
         SessionContext session = context.getSessionContext()
-            .orElseThrow(() -> new IllegalStateException(
-                "AgentDispatchHandler requires SessionContext to be populated " +
-                "by SessionResolutionHandler (priority 40) first. " +
-                "Check handler priority ordering."));
+                .orElseThrow(
+                        () -> new IllegalStateException("AgentDispatchHandler requires SessionContext to be populated "
+                                + "by SessionResolutionHandler (priority 40) first. "
+                                + "Check handler priority ordering."));
 
         String sessionId = session.sessionId();
         String role = context.getAgentRole().orElse(AgentRoleEnum.COORDINATOR.toScopedName());
@@ -114,33 +115,40 @@ public class AgentDispatchHandler implements MessageHandler {
         if (piiSanitizer != null) {
             goal = piiSanitizer.sanitize(goal);
         }
-        
-        String rawMessageText = context.getMessage() != null ? context.getMessage().text() : "";
+
+        String rawMessageText =
+                context.getMessage() != null ? context.getMessage().text() : "";
         boolean isContinuity = intentClassifier.isContinuityCommand(rawMessageText)
                 || intentClassifier.isFollowUpHeuristic(rawMessageText);
 
         String restoredGoal = null;
         if (isContinuity) {
-            restoredGoal = agentStore.findLatestNonArchivedCheckpoint(sessionId)
+            restoredGoal = agentStore
+                    .findLatestNonArchivedCheckpoint(sessionId)
                     .map(AgentCheckpoint::getOriginalGoal)
-                    .filter(g -> g != null && !g.isBlank() && !intentClassifier.isContinuityCommand(g)) 
+                    .filter(g -> g != null && !g.isBlank() && !intentClassifier.isContinuityCommand(g))
                     .orElse(null);
 
             if (restoredGoal != null && !restoredGoal.isBlank()) {
-                log.infof("[AgentDispatch] Continuity detected for session %s - restoring original goal: %s", 
+                log.infof(
+                        "[AgentDispatch] Continuity detected for session %s - restoring original goal: %s",
                         sessionId, restoredGoal);
                 goal = normalizeGoal(restoredGoal);
                 TimeContextInjector.inject(context, goal, defaultTimezone);
             } else {
-                log.warnf("[AgentDispatch] Continuity detected for session %s but no suitable original goal found in history.", sessionId);
+                log.warnf(
+                        "[AgentDispatch] Continuity detected for session %s but no suitable original goal found in history.",
+                        sessionId);
             }
         }
 
         String logSafeRawGoal = piiSanitizer != null ? piiSanitizer.sanitize(rawGoal) : rawGoal;
         String logSafeRawMessage = piiSanitizer != null ? piiSanitizer.sanitize(rawMessageText) : rawMessageText;
-        String logSafeRestoredGoal = piiSanitizer != null && restoredGoal != null ? piiSanitizer.sanitize(restoredGoal) : restoredGoal;
+        String logSafeRestoredGoal =
+                piiSanitizer != null && restoredGoal != null ? piiSanitizer.sanitize(restoredGoal) : restoredGoal;
 
-        log.infof("[AgentDispatch] Goal Resolution: rawGoal='%s' rawMessage='%s' isContinuity=%b restoredGoal='%s' finalGoal='%s'",
+        log.infof(
+                "[AgentDispatch] Goal Resolution: rawGoal='%s' rawMessage='%s' isContinuity=%b restoredGoal='%s' finalGoal='%s'",
                 logSafeRawGoal, logSafeRawMessage, isContinuity, logSafeRestoredGoal, goal);
 
         return goal;
@@ -150,10 +158,12 @@ public class AgentDispatchHandler implements MessageHandler {
         int maxIterations = DEFAULT_MAX_ITERATIONS;
         if (AgentRoleEnum.isSkillRole(role)) {
             String skillName = AgentRoleEnum.skillName(role);
-            maxIterations = skillRegistry.findByName(skillName)
+            maxIterations = skillRegistry
+                    .findByName(skillName)
                     .map(entry -> entry.definition().maxIterations())
                     .orElse(DEFAULT_MAX_ITERATIONS);
-            log.infof("Dispatching message for session %s to skill '%s' (maxIterations=%d)",
+            log.infof(
+                    "Dispatching message for session %s to skill '%s' (maxIterations=%d)",
                     sessionId, skillName, maxIterations);
         } else {
             log.infof("Dispatching message for session %s to agent %s", sessionId, role);
@@ -170,35 +180,42 @@ public class AgentDispatchHandler implements MessageHandler {
         return chatId != null ? chatId : "unknown";
     }
 
-    private AgentResult runAgent(MessageContext context, SessionContext session, String sessionId, String role, String goal, int maxIterations, String chatId) throws Exception {
+    private AgentResult runAgent(
+            MessageContext context,
+            SessionContext session,
+            String sessionId,
+            String role,
+            String goal,
+            int maxIterations,
+            String chatId)
+            throws Exception {
         if (!agentStore.markResuming(sessionId)) {
-            log.warnf("[AgentDispatch] session %s is already busy processing another turn. Rejecting new goal.", sessionId);
-            channelPluginRegistry.find(context.getChannelType())
-                .map(ChannelPlugin::sender)
-                .ifPresent(s -> s.sendRaw(context.getUser(), "⚠️ I'm currently processing another request. Your message was not queued - please resend it once I finish."));
+            log.warnf(
+                    "[AgentDispatch] session %s is already busy processing another turn. Rejecting new goal.",
+                    sessionId);
+            channelPluginRegistry
+                    .find(context.getChannelType())
+                    .map(ChannelPlugin::sender)
+                    .ifPresent(
+                            s -> s.sendRaw(
+                                    context.getUser(),
+                                    "⚠️ I'm currently processing another request. Your message was not queued - please resend it once I finish."));
             throw new RuntimeException("Busy session");
         }
 
         try {
             String channel = context.getChannelType().name();
-            Callable<AgentResult> op = () -> agentLoop.run(
-                    sessionId,
-                    role,
-                    goal,
-                    reasoningEngine,
-                    maxIterations,
-                    context
-                );
+            Callable<AgentResult> op =
+                    () -> agentLoop.run(sessionId, role, goal, reasoningEngine, maxIterations, context);
             return WorkspaceContext.<AgentResult>run(
-                sessionId,
-                context.getUser() != null ? context.getUser().platformId() : "unknown",
-                chatId,
-                session.autonomyLevel(),
-                role,
-                channel,
-                context.getUser() != null ? context.getUser().platformId() : null,
-                op
-            );
+                    sessionId,
+                    context.getUser() != null ? context.getUser().platformId() : "unknown",
+                    chatId,
+                    session.autonomyLevel(),
+                    role,
+                    channel,
+                    context.getUser() != null ? context.getUser().platformId() : null,
+                    op);
         } finally {
             agentStore.clearResuming(sessionId);
         }
@@ -210,34 +227,39 @@ public class AgentDispatchHandler implements MessageHandler {
         }
         log.errorf("[AgentDispatch] Error processing command '%s': %s", goal, LogUtil.rootMessage(e));
         log.debug("Full agent dispatch failure stack trace:", e);
-        
-        channelPluginRegistry.find(context.getChannelType())
-            .map(ChannelPlugin::sender)
-            .ifPresentOrElse(
-                s -> s.sendRaw(context.getUser(), "❌ An internal error occurred. Please try again."),
-                () -> log.warnf("AgentDispatchHandler: no ChannelPlugin for type %s - error reply dropped", context.getChannelType())
-            );
+
+        channelPluginRegistry
+                .find(context.getChannelType())
+                .map(ChannelPlugin::sender)
+                .ifPresentOrElse(
+                        s -> s.sendRaw(context.getUser(), "❌ An internal error occurred. Please try again."),
+                        () -> log.warnf(
+                                "AgentDispatchHandler: no ChannelPlugin for type %s - error reply dropped",
+                                context.getChannelType()));
         return HandleResult.STOP;
     }
 
     private void formatAndSendReply(MessageContext context, AgentResult result, String sessionId) {
-        channelPluginRegistry.find(context.getChannelType())
-            .map(ChannelPlugin::sender)
-            .ifPresentOrElse(
-                s -> {
-                    if (result instanceof AgentResult.AwaitingApproval aa) {
-                        String text = AgentResultFormatter.formatBasic(result);
-                        s.send(context.getUser(), List.of(
-                            new ContentNode.Text(text),
-                            new ApprovalPrompt(aa.toolName(), aa.paramsJson(), sessionId)
-                        ));
-                    } else {
-                        String output = AgentResultFormatter.format(result);
-                        s.sendRaw(context.getUser(), output);
-                    }
-                },
-                () -> log.warnf("AgentDispatchHandler: no ChannelPlugin for type %s - result reply dropped", context.getChannelType())
-            );
+        channelPluginRegistry
+                .find(context.getChannelType())
+                .map(ChannelPlugin::sender)
+                .ifPresentOrElse(
+                        s -> {
+                            if (result instanceof AgentResult.AwaitingApproval aa) {
+                                String text = AgentResultFormatter.formatBasic(result);
+                                s.send(
+                                        context.getUser(),
+                                        List.of(
+                                                new ContentNode.Text(text),
+                                                new ApprovalPrompt(aa.toolName(), aa.paramsJson(), sessionId)));
+                            } else {
+                                String output = AgentResultFormatter.format(result);
+                                s.sendRaw(context.getUser(), output);
+                            }
+                        },
+                        () -> log.warnf(
+                                "AgentDispatchHandler: no ChannelPlugin for type %s - result reply dropped",
+                                context.getChannelType()));
     }
 
     static String normalizeGoal(String goal) {

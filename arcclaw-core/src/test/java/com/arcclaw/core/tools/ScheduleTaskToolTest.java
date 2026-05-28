@@ -11,9 +11,9 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
-import java.util.Map;
-
 import jakarta.enterprise.event.Event;
+
+import java.util.Map;
 
 import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.audit.AuditService;
@@ -23,12 +23,14 @@ import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.security.ToolOperation;
 import com.arcclaw.persistence.api.AgentCronDto;
 import com.arcclaw.persistence.api.CronStorePort;
+
 import org.junit.jupiter.api.Test;
 
 class ScheduleTaskToolTest {
 
     private final CronStorePort cronStore = mock(CronStorePort.class);
     private final AuditService auditService = mock(AuditService.class);
+
     @SuppressWarnings("unchecked")
     private final Event<CronTaskScheduled> cronScheduledEvent = mock(Event.class);
 
@@ -57,12 +59,20 @@ class ScheduleTaskToolTest {
         ScheduleTaskTool tool = createTool();
 
         ToolExecutionContext ctx = new ToolExecutionContext(
-                "test-session-id", "test-user", "test-chat", "coordinator",
-                AutonomyLevel.SUPERVISED, "trace", "TELEGRAM", "platform1", "raw goal", "0 9 * * 1", null, "UTC");
+                "test-session-id",
+                "test-user",
+                "test-chat",
+                "coordinator",
+                AutonomyLevel.SUPERVISED,
+                "trace",
+                "TELEGRAM",
+                "platform1",
+                "raw goal",
+                "0 9 * * 1",
+                null,
+                "UTC");
 
-        ToolResponse result = tool.execute(ctx, Map.of(
-                "goal", "Send weekly status report to the team via Telegram"
-        ));
+        ToolResponse result = tool.execute(ctx, Map.of("goal", "Send weekly status report to the team via Telegram"));
 
         assertTrue(result.success(), "Valid cron should schedule successfully: " + result.output());
         assertTrue(result.output().contains(AgentSentinels.SCHEDULE_SUCCESS_MESSAGE));
@@ -70,10 +80,13 @@ class ScheduleTaskToolTest {
         assertTrue(result.output().contains("Next fire:"));
 
         verify(cronStore).save(any(AgentCronDto.class));
-        verify(auditService).record(
-                eq("test-session-id"), eq("test-user"), eq("coordinator"),
-                eq(SecurityEventType.CRONCREATED), anyString()
-        );
+        verify(auditService)
+                .record(
+                        eq("test-session-id"),
+                        eq("test-user"),
+                        eq("coordinator"),
+                        eq(SecurityEventType.CRONCREATED),
+                        anyString());
     }
 
     @Test
@@ -81,12 +94,20 @@ class ScheduleTaskToolTest {
         ScheduleTaskTool tool = createTool();
 
         ToolExecutionContext ctx = new ToolExecutionContext(
-                "test-session-id", "test-user", "test-chat", "coordinator",
-                AutonomyLevel.SUPERVISED, "trace", "TELEGRAM", "platform1", "raw goal", null, null, null);
+                "test-session-id",
+                "test-user",
+                "test-chat",
+                "coordinator",
+                AutonomyLevel.SUPERVISED,
+                "trace",
+                "TELEGRAM",
+                "platform1",
+                "raw goal",
+                null,
+                null,
+                null);
 
-        ToolResponse result = tool.execute(ctx, Map.of(
-                "goal", "Send status report"
-        ));
+        ToolResponse result = tool.execute(ctx, Map.of("goal", "Send status report"));
 
         assertFalse(result.success());
         assertEquals(400, result.exitCode());
@@ -100,12 +121,20 @@ class ScheduleTaskToolTest {
         ScheduleTaskTool tool = createTool();
 
         ToolExecutionContext ctx = new ToolExecutionContext(
-                "test-session-id", "test-user", "test-chat", "coordinator",
-                AutonomyLevel.SUPERVISED, "trace", "TELEGRAM", "platform1", "raw goal", "0 9 * * 1", null, "UTC");
+                "test-session-id",
+                "test-user",
+                "test-chat",
+                "coordinator",
+                AutonomyLevel.SUPERVISED,
+                "trace",
+                "TELEGRAM",
+                "platform1",
+                "raw goal",
+                "0 9 * * 1",
+                null,
+                "UTC");
 
-        ToolResponse result = tool.execute(ctx, Map.of(
-                "goal", "Deploy this to production"
-        ));
+        ToolResponse result = tool.execute(ctx, Map.of("goal", "Deploy this to production"));
 
         assertFalse(result.success(), "Naked pronoun 'this' should be rejected");
         assertEquals(422, result.exitCode());
@@ -119,12 +148,20 @@ class ScheduleTaskToolTest {
         ScheduleTaskTool tool = createTool();
 
         ToolExecutionContext ctx = new ToolExecutionContext(
-                "test-session-id", "", "test-chat", "coordinator",
-                AutonomyLevel.SUPERVISED, "trace", "TELEGRAM", "platform1", "raw goal", "0 9 * * 1", null, "UTC");
+                "test-session-id",
+                "",
+                "test-chat",
+                "coordinator",
+                AutonomyLevel.SUPERVISED,
+                "trace",
+                "TELEGRAM",
+                "platform1",
+                "raw goal",
+                "0 9 * * 1",
+                null,
+                "UTC");
 
-        ToolResponse result = tool.execute(ctx, Map.of(
-                "goal", "Send report"
-        ));
+        ToolResponse result = tool.execute(ctx, Map.of("goal", "Send report"));
 
         assertFalse(result.success());
         assertEquals(403, result.exitCode());
@@ -144,13 +181,20 @@ class ScheduleTaskToolTest {
         ScheduleTaskTool tool = createTool();
 
         ToolExecutionContext ctx = new ToolExecutionContext(
-                "test-session-id", "test-user", "test-chat", "coordinator",
-                AutonomyLevel.SUPERVISED, "trace", "TELEGRAM", "platform1", "raw goal", "30 14 15 3 *", null, "UTC");
+                "test-session-id",
+                "test-user",
+                "test-chat",
+                "coordinator",
+                AutonomyLevel.SUPERVISED,
+                "trace",
+                "TELEGRAM",
+                "platform1",
+                "raw goal",
+                "30 14 15 3 *",
+                null,
+                "UTC");
 
-        tool.execute(ctx, Map.of(
-                "goal", "Send one-time reminder to check deployment status",
-                "runOnce", true
-        ));
+        tool.execute(ctx, Map.of("goal", "Send one-time reminder to check deployment status", "runOnce", true));
 
         verify(cronStore).save(argThat(dto -> {
             AgentCronDto e = (AgentCronDto) dto;

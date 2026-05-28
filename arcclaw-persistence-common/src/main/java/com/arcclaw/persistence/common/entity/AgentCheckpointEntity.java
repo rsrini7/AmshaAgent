@@ -1,11 +1,5 @@
 package com.arcclaw.persistence.common.entity;
 
-import java.time.Instant;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.List;
-import java.util.Optional;
-
 import jakarta.annotation.Nullable;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -20,6 +14,12 @@ import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import jakarta.persistence.Version;
 
+import java.time.Instant;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
+import java.util.Optional;
+
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.domain.model.AgentCheckpoint;
@@ -28,9 +28,12 @@ import com.arcclaw.core.state.CheckpointStatus;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 
 @Entity(name = "AgentCheckpoint")
-@Table(name = "agent_checkpoint", uniqueConstraints = @UniqueConstraint(name = "uq_checkpoint_session_role", columnNames = {
-        "session_id",
-        "agent_role" }))
+@Table(
+        name = "agent_checkpoint",
+        uniqueConstraints =
+                @UniqueConstraint(
+                        name = "uq_checkpoint_session_role",
+                        columnNames = {"session_id", "agent_role"}))
 public class AgentCheckpointEntity implements AgentCheckpoint {
 
     @Id
@@ -209,12 +212,22 @@ public class AgentCheckpointEntity implements AgentCheckpoint {
     }
 
     @Override
-    public String getChannelPlatformId() { return channelPlatformId; }
-    public void setChannelPlatformId(String channelPlatformId) { this.channelPlatformId = channelPlatformId; }
+    public String getChannelPlatformId() {
+        return channelPlatformId;
+    }
+
+    public void setChannelPlatformId(String channelPlatformId) {
+        this.channelPlatformId = channelPlatformId;
+    }
 
     @Override
-    public String getChannelType() { return channelType; }
-    public void setChannelType(String channelType) { this.channelType = channelType; }
+    public String getChannelType() {
+        return channelType;
+    }
+
+    public void setChannelType(String channelType) {
+        this.channelType = channelType;
+    }
 
     @Override
     public String getOriginalGoal() {
@@ -222,9 +235,8 @@ public class AgentCheckpointEntity implements AgentCheckpoint {
     }
 
     public void setOriginalGoal(String originalGoal) {
-        this.originalGoal = (originalGoal != null && originalGoal.length() > 2048)
-            ? originalGoal.substring(0, 2048)
-            : originalGoal;
+        this.originalGoal =
+                (originalGoal != null && originalGoal.length() > 2048) ? originalGoal.substring(0, 2048) : originalGoal;
     }
 
     @Override
@@ -305,24 +317,49 @@ public class AgentCheckpointEntity implements AgentCheckpoint {
     }
 
     @Override
-    public Integer getMaxIterations() { return maxIterations; }
-    public void setMaxIterations(Integer maxIterations) { this.maxIterations = maxIterations; }
+    public Integer getMaxIterations() {
+        return maxIterations;
+    }
+
+    public void setMaxIterations(Integer maxIterations) {
+        this.maxIterations = maxIterations;
+    }
 
     @Override
-    public int getIterationsUsed() { return iterationsUsed; }
-    public void setIterationsUsed(int iterationsUsed) { this.iterationsUsed = iterationsUsed; }
+    public int getIterationsUsed() {
+        return iterationsUsed;
+    }
+
+    public void setIterationsUsed(int iterationsUsed) {
+        this.iterationsUsed = iterationsUsed;
+    }
 
     @Override
-    public Integer getRetryAfterMs() { return retryAfterMs; }
-    public void setRetryAfterMs(Integer retryAfterMs) { this.retryAfterMs = retryAfterMs; }
+    public Integer getRetryAfterMs() {
+        return retryAfterMs;
+    }
+
+    public void setRetryAfterMs(Integer retryAfterMs) {
+        this.retryAfterMs = retryAfterMs;
+    }
 
     @Override
-    public String getSystemNote() { return systemNote; }
-    public void setSystemNote(String systemNote) { this.systemNote = systemNote; }
+    public String getSystemNote() {
+        return systemNote;
+    }
+
+    public void setSystemNote(String systemNote) {
+        this.systemNote = systemNote;
+    }
 
     @Override
-    public String getContextDataJson() { return contextDataJson; }
-    public void setContextDataJson(String contextDataJson) { this.contextDataJson = contextDataJson; }
+    public String getContextDataJson() {
+        return contextDataJson;
+    }
+
+    public void setContextDataJson(String contextDataJson) {
+        this.contextDataJson = contextDataJson;
+    }
 
     public void setUpdatedAt(Instant updatedAt) {
         this.updatedAt = updatedAt;
@@ -334,28 +371,58 @@ public class AgentCheckpointEntity implements AgentCheckpoint {
     }
 
     @Override
-    public String getPreExecutedResults() { return preExecutedResults; }
-    public void setPreExecutedResults(String v) { this.preExecutedResults = v; }
+    public String getPreExecutedResults() {
+        return preExecutedResults;
+    }
+
+    public void setPreExecutedResults(String v) {
+        this.preExecutedResults = v;
+    }
 
     @Override
-    public String getErrorCode() { return errorCode; }
-    public void setErrorCode(String errorCode) { this.errorCode = errorCode; }
+    public String getErrorCode() {
+        return errorCode;
+    }
+
+    public void setErrorCode(String errorCode) {
+        this.errorCode = errorCode;
+    }
 
     @Override
-    public String getTraceId() { return traceId; }
-    public void setTraceId(String traceId) { this.traceId = traceId; }
+    public String getTraceId() {
+        return traceId;
+    }
+
+    public void setTraceId(String traceId) {
+        this.traceId = traceId;
+    }
 
     @Override
-    public String getRootCauseClass() { return rootCauseClass; }
-    public void setRootCauseClass(String rootCauseClass) { this.rootCauseClass = rootCauseClass; }
+    public String getRootCauseClass() {
+        return rootCauseClass;
+    }
+
+    public void setRootCauseClass(String rootCauseClass) {
+        this.rootCauseClass = rootCauseClass;
+    }
 
     @Override
-    public Long getParentCheckpointId() { return parentCheckpointId; }
-    public void setParentCheckpointId(Long parentCheckpointId) { this.parentCheckpointId = parentCheckpointId; }
+    public Long getParentCheckpointId() {
+        return parentCheckpointId;
+    }
+
+    public void setParentCheckpointId(Long parentCheckpointId) {
+        this.parentCheckpointId = parentCheckpointId;
+    }
 
     @Override
-    public int getDepth() { return depth; }
-    public void setDepth(int depth) { this.depth = depth; }
+    public int getDepth() {
+        return depth;
+    }
+
+    public void setDepth(int depth) {
+        this.depth = depth;
+    }
 
     @Override
     public boolean hasPreExecutedResults() {
@@ -382,8 +449,7 @@ public class AgentCheckpointEntity implements AgentCheckpoint {
 
     @Override
     public boolean isParallelBatch() {
-        return pendingToolName != null
-            && pendingToolName.startsWith(ReasoningStep.PARALLEL_SENTINEL_PIPE_PREFIX);
+        return pendingToolName != null && pendingToolName.startsWith(ReasoningStep.PARALLEL_SENTINEL_PIPE_PREFIX);
     }
 
     @Override
@@ -399,9 +465,9 @@ public class AgentCheckpointEntity implements AgentCheckpoint {
 
         if (isParallelBatch()) {
             return parallelToolNames().stream()
-                .map(ToolCapability::fromToolName)
-                .flatMap(Optional::stream)
-                .anyMatch(ToolCapability::isBrowserBacked);
+                    .map(ToolCapability::fromToolName)
+                    .flatMap(Optional::stream)
+                    .anyMatch(ToolCapability::isBrowserBacked);
         }
 
         return ToolCapability.fromToolName(pendingToolName)

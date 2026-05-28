@@ -1,14 +1,15 @@
 package com.arcclaw.core.agent.persona;
 
-import java.util.Collections;
-
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Any;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
+import java.util.Collections;
+
 import com.arcclaw.core.agent.loop.AgentExecutionContext;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
+
 import org.jboss.logging.Logger;
 
 /**
@@ -47,9 +48,10 @@ public class AgentPersonaRegistry {
             }
         }
 
-        log.warnf("[AgentPersonaRegistry] No Agent bean registered for role '%s'. " +
-                "Returning coordinator persona as fallback. " +
-                "To fix: create a @ApplicationScoped class implementing Agent with role() = '%s'.",
+        log.warnf(
+                "[AgentPersonaRegistry] No Agent bean registered for role '%s'. "
+                        + "Returning coordinator persona as fallback. "
+                        + "To fix: create a @ApplicationScoped class implementing Agent with role() = '%s'.",
                 role.toScopedName(), role.toScopedName());
 
         // Fallback: coordinator prompt if role not found
@@ -62,4 +64,3 @@ public class AgentPersonaRegistry {
         return "You are ArcClaw, an AI agent. Be helpful and concise.";
     }
 }
-

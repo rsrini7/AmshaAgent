@@ -44,7 +44,7 @@ public class DotenvConfigSourceProvider implements ConfigSourceProvider {
         try {
             for (String line : Files.readAllLines(envPath)) {
                 line = line.trim();
-                
+
                 // 1. Ignore full-line comments and empty lines
                 if (line.isEmpty() || line.startsWith("#")) {
                     continue;
@@ -60,8 +60,8 @@ public class DotenvConfigSourceProvider implements ConfigSourceProvider {
                     String value = stripInlineComments(rawValue);
 
                     // 4. Remove surrounding quotes if the user added them
-                    if ((value.startsWith("\"") && value.endsWith("\"")) ||
-                        (value.startsWith("'") && value.endsWith("'"))) {
+                    if ((value.startsWith("\"") && value.endsWith("\""))
+                            || (value.startsWith("'") && value.endsWith("'"))) {
                         if (value.length() >= 2) {
                             value = value.substring(1, value.length() - 1);
                         }
@@ -83,7 +83,8 @@ public class DotenvConfigSourceProvider implements ConfigSourceProvider {
             String command = ProcessHandle.current().info().command().orElse("");
             if (!command.isEmpty()) {
                 try {
-                    Path binaryDir = Path.of(command).toAbsolutePath().normalize().getParent();
+                    Path binaryDir =
+                            Path.of(command).toAbsolutePath().normalize().getParent();
                     if (binaryDir != null && Files.exists(binaryDir)) {
                         return binaryDir.resolve(".env");
                     }

@@ -56,9 +56,5 @@ public final class VaultConstants {
      * A set of all system-level keys that can be set via the vault tool / reflex.
      */
     public static final Set<String> KNOWN_TOOL_SECRET_NAMES = Set.of(
-        "ARCCLAW_TOOLS_GITHUB_TOKEN",
-        "ARCCLAW_TOOLS_SERPER_API_KEY",
-        "ARCCLAW_TOOLS_BRAVE_API_KEY",
-        LLM_API_KEY
-    );
+            "ARCCLAW_TOOLS_GITHUB_TOKEN", "ARCCLAW_TOOLS_SERPER_API_KEY", "ARCCLAW_TOOLS_BRAVE_API_KEY", LLM_API_KEY);
 }

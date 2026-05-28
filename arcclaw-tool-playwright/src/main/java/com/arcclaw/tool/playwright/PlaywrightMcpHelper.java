@@ -1,19 +1,20 @@
 package com.arcclaw.tool.playwright;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.spi.Bean;
 import jakarta.enterprise.inject.spi.BeanManager;
 import jakarta.inject.Inject;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
 import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.core.tools.ToolExecutionContext;
 import com.arcclaw.core.tools.ToolResponse;
 import com.fasterxml.jackson.databind.ObjectMapper;
+
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
@@ -61,8 +62,8 @@ public class PlaywrightMcpHelper {
                 log.infof("[MCP] Found bean by class name: %s", className);
                 try {
                     Bean<Object> typed = (Bean<Object>) bean;
-                    Object ref = beanManager.getReference(typed, typed.getBeanClass(),
-                            beanManager.createCreationalContext(typed));
+                    Object ref = beanManager.getReference(
+                            typed, typed.getBeanClass(), beanManager.createCreationalContext(typed));
                     ref.getClass().getMethod("connectStdio", String.class, String.class, List.class, Map.class);
                     mcpService = ref;
                     log.infof("[MCP] Resolved McpClientService via BeanManager: %s", className);
@@ -89,11 +90,10 @@ public class PlaywrightMcpHelper {
         }
         log.infof("[MCP] Connecting to Playwright MCP Server: %s %s", mcpCommand, parseArgs(mcpArgsRaw));
         try {
-            var method = service.getClass().getMethod("connectStdio",
-                    String.class, String.class, List.class, Map.class);
-            Map<String, String> env = mcpCommand.contains("npx") && mcpHeadless
-                    ? Map.of("PLAYWRIGHT_MCP_HEADLESS", "1")
-                    : Map.of();
+            var method =
+                    service.getClass().getMethod("connectStdio", String.class, String.class, List.class, Map.class);
+            Map<String, String> env =
+                    mcpCommand.contains("npx") && mcpHeadless ? Map.of("PLAYWRIGHT_MCP_HEADLESS", "1") : Map.of();
             method.invoke(service, MCP_SERVER_NAME, mcpCommand, parseArgs(mcpArgsRaw), env);
             connected = true;
             log.info("[MCP] Playwright MCP Server connected successfully");
@@ -153,7 +153,10 @@ public class PlaywrightMcpHelper {
             if (c == '"' || c == '\'') {
                 inQuote = !inQuote;
             } else if (c == ' ' && !inQuote) {
-                if (!cur.isEmpty()) { args.add(cur.toString()); cur = new StringBuilder(); }
+                if (!cur.isEmpty()) {
+                    args.add(cur.toString());
+                    cur = new StringBuilder();
+                }
             } else {
                 cur.append(c);
             }

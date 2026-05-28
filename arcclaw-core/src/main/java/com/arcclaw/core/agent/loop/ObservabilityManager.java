@@ -10,9 +10,11 @@ import com.arcclaw.core.observability.AgentObserver;
 import com.arcclaw.core.observability.AgentOtelContext;
 import com.arcclaw.core.util.AgentErrorMessageUtil;
 import com.arcclaw.core.util.ClassUtils;
+
+import org.jboss.logging.Logger;
+
 import io.opentelemetry.api.trace.Span;
 import io.opentelemetry.context.Context;
-import org.jboss.logging.Logger;
 
 /**
  * Manages OpenTelemetry span lifecycle and {@link AgentObserver} callbacks
@@ -107,7 +109,8 @@ public class ObservabilityManager {
         try {
             otelContext.endSessionSpan(sessionId);
         } catch (Exception e) {
-            log.warnf("ObservabilityManager.endSession: failed to end OTel span for session %s: %s",
+            log.warnf(
+                    "ObservabilityManager.endSession: failed to end OTel span for session %s: %s",
                     sessionId, AgentErrorMessageUtil.safeMessage(e));
         }
     }
@@ -156,18 +159,15 @@ public class ObservabilityManager {
      * @param result     final {@link AgentResult}; {@code null} if the loop
      *                   terminated before producing a result
      */
-    public void notifyLoopComplete(String sessionId,
-                                   String userId,
-                                   String agentRole,
-                                   String goalHash,
-                                   AgentResult result) {
+    public void notifyLoopComplete(
+            String sessionId, String userId, String agentRole, String goalHash, AgentResult result) {
         observers.forEach(o -> {
             try {
                 o.onLoopComplete(sessionId, userId, agentRole, goalHash, result);
             } catch (Exception e) {
-                log.warnf("ObservabilityManager: observer %s threw on onLoopComplete for session %s: %s",
-                        ClassUtils.getCleanName(o), sessionId,
-                        AgentErrorMessageUtil.safeMessage(e));
+                log.warnf(
+                        "ObservabilityManager: observer %s threw on onLoopComplete for session %s: %s",
+                        ClassUtils.getCleanName(o), sessionId, AgentErrorMessageUtil.safeMessage(e));
             }
         });
     }
@@ -183,16 +183,14 @@ public class ObservabilityManager {
      * @param step      the completed {@link ReasoningStep} with observation
      *                  already set
      */
-    public void notifyStepComplete(String sessionId,
-                                   String agentRole,
-                                   ReasoningStep step) {
+    public void notifyStepComplete(String sessionId, String agentRole, ReasoningStep step) {
         observers.forEach(o -> {
             try {
                 o.onStepComplete(sessionId, agentRole, step);
             } catch (Exception e) {
-                log.warnf("ObservabilityManager: observer %s threw on onStepComplete for session %s: %s",
-                        ClassUtils.getCleanName(o), sessionId,
-                        AgentErrorMessageUtil.safeMessage(e));
+                log.warnf(
+                        "ObservabilityManager: observer %s threw on onStepComplete for session %s: %s",
+                        ClassUtils.getCleanName(o), sessionId, AgentErrorMessageUtil.safeMessage(e));
             }
         });
     }

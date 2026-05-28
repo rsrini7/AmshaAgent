@@ -1,11 +1,5 @@
 package com.arcclaw.persistence.sqlite;
 
-import java.io.File;
-import java.nio.file.Path;
-import java.sql.Connection;
-import java.sql.SQLException;
-import java.sql.Statement;
-
 import javax.sql.DataSource;
 
 import jakarta.annotation.Priority;
@@ -13,11 +7,18 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
 import jakarta.inject.Inject;
 
+import java.io.File;
+import java.nio.file.Path;
+import java.sql.Connection;
+import java.sql.SQLException;
+import java.sql.Statement;
+
+import org.eclipse.microprofile.config.inject.ConfigProperty;
+import org.jboss.logging.Logger;
+
 import io.quarkus.arc.Unremovable;
 import io.quarkus.arc.properties.IfBuildProperty;
 import io.quarkus.runtime.StartupEvent;
-import org.eclipse.microprofile.config.inject.ConfigProperty;
-import org.jboss.logging.Logger;
 
 /**
  * Ensures SQLite WAL mode is enabled for concurrent read/write and
@@ -34,7 +35,8 @@ public class SqliteWalConfigurer {
 
     private static final Logger log = Logger.getLogger(SqliteWalConfigurer.class);
 
-    @Inject DataSource dataSource;
+    @Inject
+    DataSource dataSource;
 
     @ConfigProperty(name = "quarkus.datasource.jdbc.url", defaultValue = "jdbc:sqlite:./data/arcclaw-meta.db")
     String jdbcUrl;
@@ -45,11 +47,11 @@ public class SqliteWalConfigurer {
     @Priority(10)
     void onStartup(@Observes @Priority(10) StartupEvent event) {
         log.info("SQLite: Configuring WAL mode and FTS cross-database ATTACH...");
-        
+
         File ftsDb = ftsDbPath();
 
         try (Connection conn = dataSource.getConnection();
-             Statement stmt = conn.createStatement()) {
+                Statement stmt = conn.createStatement()) {
 
             // 1. Enable WAL mode
             stmt.execute("PRAGMA journal_mode=WAL;");
@@ -62,8 +64,8 @@ public class SqliteWalConfigurer {
                 ftsDb.getParentFile().mkdirs();
             }
 
-            String attachSql = String.format("ATTACH DATABASE '%s' AS fts;", 
-                    ftsDb.getAbsolutePath().replace("\\", "/"));
+            String attachSql = String.format(
+                    "ATTACH DATABASE '%s' AS fts;", ftsDb.getAbsolutePath().replace("\\", "/"));
             try {
                 stmt.execute(attachSql);
                 log.infof("SQLite: FTS database attached from %s", ftsDb.getAbsolutePath());

@@ -4,10 +4,10 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import jakarta.inject.Inject;
+
 import java.util.List;
 import java.util.Map;
-
-import jakarta.inject.Inject;
 
 import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
@@ -15,11 +15,13 @@ import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.domain.model.AgentCheckpoint;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
-import io.quarkus.test.InjectMock;
-import io.quarkus.test.junit.QuarkusTest;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+
+import io.quarkus.test.InjectMock;
+import io.quarkus.test.junit.QuarkusTest;
 
 /**
  * Integration tests for the stateful agent store - checkpoint persistence,
@@ -57,10 +59,20 @@ class StatefulAgentStoreTest {
         String session = SESSION + "-" + System.nanoTime();
         WorkspaceScopeHolder.run(session, () -> {
             var steps = List.of(
-                    ReasoningStep.of("Analyzing the repo", ToolCapability.GITHUB.toolName(),
-                            Map.of("repo", "test/repo"), "Repository has 10 files", 0, 0),
-                    ReasoningStep.of("Done analyzing", ReasoningStep.FINISH,
-                            Map.of("answer", "Analysis complete"), "Task completed.", 0, 0));
+                    ReasoningStep.of(
+                            "Analyzing the repo",
+                            ToolCapability.GITHUB.toolName(),
+                            Map.of("repo", "test/repo"),
+                            "Repository has 10 files",
+                            0,
+                            0),
+                    ReasoningStep.of(
+                            "Done analyzing",
+                            ReasoningStep.FINISH,
+                            Map.of("answer", "Analysis complete"),
+                            "Task completed.",
+                            0,
+                            0));
 
             // Save
             var checkpoint = store.save(session, ROLE, steps, "Analyzing the repo");
@@ -79,11 +91,13 @@ class StatefulAgentStoreTest {
 
             // Deserialize
             var deserializedSteps = store.deserializeSteps(loaded.get());
-            System.out.println("DEBUG: step class: " + deserializedSteps.get(1).getClass().getName());
+            System.out.println(
+                    "DEBUG: step class: " + deserializedSteps.get(1).getClass().getName());
             System.out.println("DEBUG: step action: " + deserializedSteps.get(1).action());
             assertEquals(2, deserializedSteps.size());
             assertEquals("Analyzing the repo", deserializedSteps.get(0).thought());
-            assertEquals(ToolCapability.GITHUB.toolName(), deserializedSteps.get(0).action());
+            assertEquals(
+                    ToolCapability.GITHUB.toolName(), deserializedSteps.get(0).action());
             assertEquals("Repository has 10 files", deserializedSteps.get(0).observation());
             assertEquals(ReasoningStep.FINISH, deserializedSteps.get(1).action());
         });
@@ -96,9 +110,13 @@ class StatefulAgentStoreTest {
     void testMarkFailed() {
         String sessionFail = SESSION + "-fail";
         WorkspaceScopeHolder.run(sessionFail, () -> {
-            var steps = List.of(
-                    ReasoningStep.of("Trying something", ToolCapability.GITHUB.toolName(),
-                            Map.of("repo", "fail/repo"), "Error occurred", 0, 0));
+            var steps = List.of(ReasoningStep.of(
+                    "Trying something",
+                    ToolCapability.GITHUB.toolName(),
+                    Map.of("repo", "fail/repo"),
+                    "Error occurred",
+                    0,
+                    0));
 
             var checkpoint = store.save(sessionFail, ROLE, steps, "Trying something");
             store.markFailed(checkpoint.getId(), "LLM API timeout");
@@ -118,9 +136,8 @@ class StatefulAgentStoreTest {
     void testMarkCompleted() {
         String sessionComplete = SESSION + "-complete";
         WorkspaceScopeHolder.run(sessionComplete, () -> {
-            var steps = List.of(
-                    ReasoningStep.of("All done", ReasoningStep.FINISH,
-                            Map.of("answer", "42"), "Task completed.", 0, 0));
+            var steps = List.of(ReasoningStep.of(
+                    "All done", ReasoningStep.FINISH, Map.of("answer", "42"), "Task completed.", 0, 0));
 
             var checkpoint = store.save(sessionComplete, ROLE, steps, "All done");
             store.markCompleted(checkpoint.getId());
@@ -140,8 +157,7 @@ class StatefulAgentStoreTest {
     void testUpsertBehavior() {
         String sessionUpsert = SESSION + "-upsert";
         WorkspaceScopeHolder.run(sessionUpsert, () -> {
-            var steps1 = List.of(
-                    ReasoningStep.of("Step 1", ToolCapability.GITHUB.toolName(), Map.of(), "obs1", 0, 0));
+            var steps1 = List.of(ReasoningStep.of("Step 1", ToolCapability.GITHUB.toolName(), Map.of(), "obs1", 0, 0));
             var steps2 = List.of(
                     ReasoningStep.of("Step 1", ToolCapability.GITHUB.toolName(), Map.of(), "obs1", 0, 0),
                     ReasoningStep.of("Step 2", ToolCapability.GITHUB.toolName(), Map.of(), "obs2", 0, 0));
@@ -164,28 +180,22 @@ class StatefulAgentStoreTest {
             String cronId = "12345";
 
             // 1) Old AWAITING_APPROVAL
-            var steps1 = List.of(
-                    ReasoningStep.of("Thinking 1", ToolCapability.GITHUB.toolName(),
-                            Map.of("repo", "old"), "obs", 0, 0)
-            );
+            var steps1 = List.of(ReasoningStep.of(
+                    "Thinking 1", ToolCapability.GITHUB.toolName(), Map.of("repo", "old"), "obs", 0, 0));
             var cp1 = store.save(AgentSentinels.CRON_SESSION_PREFIX + cronId + "-old", role, steps1, "Cron Goal");
             cp1.setStatus(CheckpointStatus.AWAITING_APPROVAL);
             store.save(cp1);
 
             // 2) Newer AWAITING_APPROVAL
-            var steps2 = List.of(
-                    ReasoningStep.of("Thinking 2", ToolCapability.GITHUB.toolName(),
-                            Map.of("repo", "new"), "obs", 0, 0)
-            );
+            var steps2 = List.of(ReasoningStep.of(
+                    "Thinking 2", ToolCapability.GITHUB.toolName(), Map.of("repo", "new"), "obs", 0, 0));
             var cp2 = store.save(AgentSentinels.CRON_SESSION_PREFIX + cronId + "-new", role, steps2, "Cron Goal");
             cp2.setStatus(CheckpointStatus.AWAITING_APPROVAL);
             store.save(cp2);
 
             // 3) COMPLETED (should be ignored)
             var steps3 = List.of(
-                    ReasoningStep.of("Done", ReasoningStep.FINISH,
-                            Map.of("answer", "42"), "Task completed.", 0, 0)
-            );
+                    ReasoningStep.of("Done", ReasoningStep.FINISH, Map.of("answer", "42"), "Task completed.", 0, 0));
             var cp3 = store.save(AgentSentinels.CRON_SESSION_PREFIX + cronId + "-completed", role, steps3, "Cron Goal");
             cp3.setStatus(CheckpointStatus.COMPLETED);
             store.save(cp3);
@@ -196,8 +206,10 @@ class StatefulAgentStoreTest {
             // Then: we get the newest AWAITING_APPROVAL checkpoint (cp2)
             assertTrue(found.isPresent(), "Expected an awaiting-approval checkpoint");
             AgentCheckpoint checkpoint = found.get();
-            assertEquals(AgentSentinels.CRON_SESSION_PREFIX + cronId + "-new", checkpoint.getSessionId(),
-                        "Should return the latest AWAITING_APPROVAL cron session");
+            assertEquals(
+                    AgentSentinels.CRON_SESSION_PREFIX + cronId + "-new",
+                    checkpoint.getSessionId(),
+                    "Should return the latest AWAITING_APPROVAL cron session");
             assertEquals(CheckpointStatus.AWAITING_APPROVAL, checkpoint.getStatus());
             assertEquals(role, checkpoint.getAgentRole());
         });
@@ -227,7 +239,7 @@ class StatefulAgentStoreTest {
             // Load via loadSteps
             var loadedSteps = store.loadSteps(cp.getId());
             assertEquals(2, loadedSteps.size());
-            
+
             assertEquals("Step A", loadedSteps.get(0).thought());
             assertEquals("cmd1", loadedSteps.get(0).action());
             assertEquals("v", loadedSteps.get(0).actionInput().get("p"));
@@ -240,5 +252,4 @@ class StatefulAgentStoreTest {
             assertEquals("42", loadedSteps.get(1).actionInput().get("ans"));
         });
     }
-
 }

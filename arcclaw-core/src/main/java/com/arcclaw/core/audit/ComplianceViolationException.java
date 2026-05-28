@@ -16,8 +16,11 @@ public class ComplianceViolationException extends ArcClawException {
     private final SecurityEventType eventType;
 
     public ComplianceViolationException(String sessionId, SecurityEventType eventType, Throwable cause) {
-        super(String.format("[COMPLIANCE-VIOLATION] Mandatory audit write failed for session=%s eventType=%s",
-                sessionId, eventType), cause);
+        super(
+                String.format(
+                        "[COMPLIANCE-VIOLATION] Mandatory audit write failed for session=%s eventType=%s",
+                        sessionId, eventType),
+                cause);
         this.sessionId = sessionId;
         this.eventType = eventType;
     }

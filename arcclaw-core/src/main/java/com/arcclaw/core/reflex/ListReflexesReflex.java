@@ -1,10 +1,10 @@
 package com.arcclaw.core.reflex;
 
-import java.util.List;
-import java.util.Map;
-
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
+
+import java.util.List;
+import java.util.Map;
 
 import com.arcclaw.core.pipeline.MessageContext;
 
@@ -18,22 +18,23 @@ public class ListReflexesReflex implements AgentReflex {
     private record ReflexDescriptor(String trigger, String purpose) {}
 
     private static final Map<Class<?>, ReflexDescriptor> DESCRIPTORS = Map.ofEntries(
-        Map.entry(ListCronsReflex.class,        new ReflexDescriptor("`/crons`",                     "List scheduled jobs")),
-        Map.entry(DeleteCronReflex.class,       new ReflexDescriptor("`/delete-cron`",               "Delete a scheduled job")),
-        Map.entry(StatusReflex.class,           new ReflexDescriptor("`/status`",                    "Show agent status")),
-        Map.entry(HistoryReflex.class,          new ReflexDescriptor("`/history`",                   "Show recent chat history")),
-        Map.entry(ResetReflex.class,            new ReflexDescriptor("`/reset` `/resethard`",        "Reset session")),
-        Map.entry(HaltReflex.class,             new ReflexDescriptor("`/halt`",                      "Stop current task")),
-        Map.entry(RetryReflex.class,            new ReflexDescriptor("`/retry`",                     "Retry last action")),
-        Map.entry(ApproveReflex.class,          new ReflexDescriptor("`/approve`",                   "Approve pending action")),
-        Map.entry(DenyReflex.class,             new ReflexDescriptor("`/deny`",                      "Deny pending action")),
-        Map.entry(StoreReflex.class,            new ReflexDescriptor("`/store`",                     "Store key-value pair")),
-        Map.entry(VaultStoreReflex.class,       new ReflexDescriptor("`/vault`",                     "Store encrypted secret")),
-        Map.entry(ListReflexesReflex.class,     new ReflexDescriptor("`/reflex` `/commands` `/help`", "List all commands")),
-        Map.entry(PromptInjectionReflex.class,  new ReflexDescriptor("(auto)",                       "Block prompt injection")),
-        Map.entry(PiiScanReflex.class,          new ReflexDescriptor("(auto)",                       "Scan/redact PII")),
-        Map.entry(IdentityExtractionReflex.class, new ReflexDescriptor("(auto)",                     "Extract user identity"))
-    );
+            Map.entry(ListCronsReflex.class, new ReflexDescriptor("`/crons`", "List scheduled jobs")),
+            Map.entry(DeleteCronReflex.class, new ReflexDescriptor("`/delete-cron`", "Delete a scheduled job")),
+            Map.entry(StatusReflex.class, new ReflexDescriptor("`/status`", "Show agent status")),
+            Map.entry(HistoryReflex.class, new ReflexDescriptor("`/history`", "Show recent chat history")),
+            Map.entry(ResetReflex.class, new ReflexDescriptor("`/reset` `/resethard`", "Reset session")),
+            Map.entry(HaltReflex.class, new ReflexDescriptor("`/halt`", "Stop current task")),
+            Map.entry(RetryReflex.class, new ReflexDescriptor("`/retry`", "Retry last action")),
+            Map.entry(ApproveReflex.class, new ReflexDescriptor("`/approve`", "Approve pending action")),
+            Map.entry(DenyReflex.class, new ReflexDescriptor("`/deny`", "Deny pending action")),
+            Map.entry(StoreReflex.class, new ReflexDescriptor("`/store`", "Store key-value pair")),
+            Map.entry(VaultStoreReflex.class, new ReflexDescriptor("`/vault`", "Store encrypted secret")),
+            Map.entry(
+                    ListReflexesReflex.class,
+                    new ReflexDescriptor("`/reflex` `/commands` `/help`", "List all commands")),
+            Map.entry(PromptInjectionReflex.class, new ReflexDescriptor("(auto)", "Block prompt injection")),
+            Map.entry(PiiScanReflex.class, new ReflexDescriptor("(auto)", "Scan/redact PII")),
+            Map.entry(IdentityExtractionReflex.class, new ReflexDescriptor("(auto)", "Extract user identity")));
 
     @Inject
     ReflexRegistry reflexRegistry;
@@ -46,8 +47,7 @@ public class ListReflexesReflex implements AgentReflex {
     }
 
     @Override
-    public ReflexResult execute(String sessionId, String userId, String chatId,
-                                String input, MessageContext context) {
+    public ReflexResult execute(String sessionId, String userId, String chatId, String input, MessageContext context) {
 
         List<AgentReflex> reflexes = reflexRegistry.getSortedReflexes();
 
@@ -71,7 +71,7 @@ public class ListReflexesReflex implements AgentReflex {
         // Handle cross-module reflexes loaded from different classloaders
         String simpleName = reflex.getClass().getSimpleName();
         if (simpleName.equals("SkillReflex")) return new ReflexDescriptor("`/skills`", "List available skills");
-        if (simpleName.equals("McpReflex"))   return new ReflexDescriptor("`/mcp`",    "Show MCP server status");
+        if (simpleName.equals("McpReflex")) return new ReflexDescriptor("`/mcp`", "Show MCP server status");
         return new ReflexDescriptor("\u2014", "\u2014");
     }
 }

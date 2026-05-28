@@ -10,6 +10,7 @@ import com.arcclaw.core.domain.model.AgentCheckpointRecord;
 import com.arcclaw.core.domain.model.CheckpointRecord;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.persistence.api.CheckpointDto;
+
 import org.junit.jupiter.api.Test;
 
 class CheckpointMapperTest {
@@ -40,7 +41,7 @@ class CheckpointMapperTest {
         entity.setCompletedAt(Instant.now().plusSeconds(2));
 
         CheckpointDto dto = CheckpointMapper.toDto(entity);
-        
+
         assertEquals(entity.getId(), dto.id());
         assertEquals(entity.getSessionId(), dto.sessionId());
         assertEquals(entity.getAgentRole(), dto.agentRole());
@@ -121,11 +122,34 @@ class CheckpointMapperTest {
     @Test
     void testFromDto_nullTimestampsSafe() {
         CheckpointDto dto = new CheckpointDto(
-            null, "s1", "coord", "AWAITING_APPROVAL", "FULL", "[]",
-            "u123", "telegram", "goal", null, null, null,
-            "tool", "{}", "{}", null, 5, 0, null, "note", null,
-            "ERR", "trace", "java.lang.RuntimeException", null, 0, null, null
-        );
+                null,
+                "s1",
+                "coord",
+                "AWAITING_APPROVAL",
+                "FULL",
+                "[]",
+                "u123",
+                "telegram",
+                "goal",
+                null,
+                null,
+                null,
+                "tool",
+                "{}",
+                "{}",
+                null,
+                5,
+                0,
+                null,
+                "note",
+                null,
+                "ERR",
+                "trace",
+                "java.lang.RuntimeException",
+                null,
+                0,
+                null,
+                null);
 
         AgentCheckpoint record = CheckpointRecord.fromDto(dto);
         assertEquals("s1", record.getSessionId());

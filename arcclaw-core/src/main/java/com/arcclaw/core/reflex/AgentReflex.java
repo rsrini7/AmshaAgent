@@ -55,4 +55,3 @@ public interface AgentReflex {
         return false;
     }
 }
-

@@ -6,6 +6,7 @@ import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 
 import com.arcclaw.core.pipeline.MessageContext;
+
 import org.jboss.logging.Logger;
 
 /**
@@ -39,33 +40,31 @@ public class TimeContextInjector {
         // 1. Try to resolve a specific instant (e.g. "at 9 AM")
         ZonedDateTime targetUtc = CronTimeResolver.resolveTargetTime(input, nowUtc, userZone);
         if (targetUtc != null) {
-            context.setData("SUGGESTED_CRON", String.format("%d %d * * *",
-                    targetUtc.getMinute(), targetUtc.getHour()));
+            context.setData("SUGGESTED_CRON", String.format("%d %d * * *", targetUtc.getMinute(), targetUtc.getHour()));
             context.setData("TARGET_UTC_MINUTE", targetUtc.getMinute());
             context.setData("TARGET_UTC_HOUR", targetUtc.getHour());
-            context.setData("SUGGESTED_NEXT_FIRE_TIME",
-                    targetUtc.toInstant().toString());
-            
+            context.setData("SUGGESTED_NEXT_FIRE_TIME", targetUtc.toInstant().toString());
+
             // For older code paths that expect these keys
             context.setData("resolvedRunAt", targetUtc.toInstant().toString());
             context.setData("resolvedRunAtInstant", targetUtc.toInstant());
 
-            context.setData("CURRENT_LOCAL_TIME",
-                    ZonedDateTime.now(userZone).format(DateTimeFormatter.ofPattern("HH:mm z")));
-            
+            context.setData(
+                    "CURRENT_LOCAL_TIME", ZonedDateTime.now(userZone).format(DateTimeFormatter.ofPattern("HH:mm z")));
+
             // FIX: Mark the cron as pre-resolved to UTC so ScheduleTaskTool
             // does not double-convert when the LLM also passes a timezone.
             context.setData("SUGGESTED_CRON_SOURCE", "UTC");
 
-            log.infof("[TimeContextInjector] Instant resolved: UTC %02d:%02d for input '%s'",
+            log.infof(
+                    "[TimeContextInjector] Instant resolved: UTC %02d:%02d for input '%s'",
                     targetUtc.getHour(), targetUtc.getMinute(), input);
         } else {
             // 2. Fallback: Check for recurring patterns ("every X minutes/hours")
             String recurringCron = CronTimeResolver.resolveRecurringCron(input);
             if (recurringCron != null) {
                 context.setData("SUGGESTED_CRON", recurringCron);
-                log.infof("[TimeContextInjector] Recurring cron resolved: '%s' for input '%s'",
-                        recurringCron, input);
+                log.infof("[TimeContextInjector] Recurring cron resolved: '%s' for input '%s'", recurringCron, input);
             }
         }
     }

@@ -1,11 +1,11 @@
 package com.arcclaw.core.agent.loop;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
+
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.core.agent.AgentSentinels;
@@ -17,6 +17,7 @@ import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.tools.ToolResponse;
 import com.fasterxml.jackson.databind.ObjectMapper;
+
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
@@ -56,15 +57,19 @@ public class ExecutionFailureRecoveryService {
     private static final Logger log = Logger.getLogger(ExecutionFailureRecoveryService.class);
 
     // Code block extraction patterns: ```lang\n...\n``` or ```\n...\n```
-    private static final Pattern CODE_BLOCK_PATTERN = Pattern.compile(
-            "```(?:\\w+)?\\s*\\n([\\s\\S]*?)```", Pattern.MULTILINE);
+    private static final Pattern CODE_BLOCK_PATTERN =
+            Pattern.compile("```(?:\\w+)?\\s*\\n([\\s\\S]*?)```", Pattern.MULTILINE);
 
-    private static final Pattern SINGLE_LINE_CODE_PATTERN = Pattern.compile(
-            "`([^`]+)`");
+    private static final Pattern SINGLE_LINE_CODE_PATTERN = Pattern.compile("`([^`]+)`");
 
-    @Inject ReasoningEngine reasoningEngine;
-    @Inject Instance<AgentLoop> agentLoop;
-    @Inject ObjectMapper objectMapper;
+    @Inject
+    ReasoningEngine reasoningEngine;
+
+    @Inject
+    Instance<AgentLoop> agentLoop;
+
+    @Inject
+    ObjectMapper objectMapper;
 
     @ConfigProperty(name = "arcclaw.agent.auto-heal.enabled", defaultValue = "true")
     boolean autoHealEnabled;
@@ -79,6 +84,7 @@ public class ExecutionFailureRecoveryService {
         public static RecoveryResult success(String fixedCode, int attemptsUsed) {
             return new RecoveryResult(fixedCode, attemptsUsed, true, null);
         }
+
         public static RecoveryResult failure(String error) {
             return new RecoveryResult(null, 0, false, error);
         }
@@ -87,21 +93,22 @@ public class ExecutionFailureRecoveryService {
     // Filesystem/environment errors that Shiva cannot fix (cross-platform: Linux, macOS, Windows)
     private static final Pattern NON_CODE_ERRORS = Pattern.compile(
             // Linux / POSIX
-            "File name too long|ENAMETOOLONG|" +
-            "Permission denied|EACCES|Operation not permitted|EPERM|" +
-            "No space left on device|ENOSPC|Read-only file system|EROFS|" +
-            "Connection refused|ECONNREFUSED|" +
-            "Cannot allocate memory|ENOMEM|Too many open files|EMFILE|ENFILE|" +
-            "No such file or directory|ENOENT|" +
-            // macOS specific
-            "Operation not supported|" +
-            // Windows
-            "The filename or extension is too long|" +
-            "Access is denied|Access denied|" +
-            "There is not enough space on the disk|" +
-            "The system cannot find the path specified|" +
-            "The file is being used by another process|" +
-            "The directory is not empty",
+            "File name too long|ENAMETOOLONG|" + "Permission denied|EACCES|Operation not permitted|EPERM|"
+                    + "No space left on device|ENOSPC|Read-only file system|EROFS|"
+                    + "Connection refused|ECONNREFUSED|"
+                    + "Cannot allocate memory|ENOMEM|Too many open files|EMFILE|ENFILE|"
+                    + "No such file or directory|ENOENT|"
+                    +
+                    // macOS specific
+                    "Operation not supported|"
+                    +
+                    // Windows
+                    "The filename or extension is too long|"
+                    + "Access is denied|Access denied|"
+                    + "There is not enough space on the disk|"
+                    + "The system cannot find the path specified|"
+                    + "The file is being used by another process|"
+                    + "The directory is not empty",
             Pattern.CASE_INSENSITIVE);
 
     /**
@@ -140,57 +147,110 @@ public class ExecutionFailureRecoveryService {
      * @param channelPlatformId optional channel platform ID
      * @return RecoveryResult with fixed code or failure info
      */
-    public RecoveryResult attemptRecovery(String outerSessionId, String userId, String chatId,
-                                          String originalCode, String language, String errorOutput,
-                                          String channelType, String channelPlatformId) {
-        return attemptRecovery(outerSessionId, userId, chatId, originalCode, language, errorOutput,
-                channelType, channelPlatformId, null);
+    public RecoveryResult attemptRecovery(
+            String outerSessionId,
+            String userId,
+            String chatId,
+            String originalCode,
+            String language,
+            String errorOutput,
+            String channelType,
+            String channelPlatformId) {
+        return attemptRecovery(
+                outerSessionId,
+                userId,
+                chatId,
+                originalCode,
+                language,
+                errorOutput,
+                channelType,
+                channelPlatformId,
+                null);
     }
 
     /**
      * Attempts to recover from a sandbox execution failure by delegating to Shiva (debugger).
      * Accepts the goal context to provide Shiva with more information.
      */
-    public RecoveryResult attemptRecovery(String outerSessionId, String userId, String chatId,
-                                          String originalCode, String language, String errorOutput,
-                                          String channelType, String channelPlatformId, String originalGoal) {
-        return attemptRecovery(outerSessionId, userId, chatId, originalCode, language, errorOutput,
-                channelType, channelPlatformId, originalGoal, maxAutoHealAttempts);
+    public RecoveryResult attemptRecovery(
+            String outerSessionId,
+            String userId,
+            String chatId,
+            String originalCode,
+            String language,
+            String errorOutput,
+            String channelType,
+            String channelPlatformId,
+            String originalGoal) {
+        return attemptRecovery(
+                outerSessionId,
+                userId,
+                chatId,
+                originalCode,
+                language,
+                errorOutput,
+                channelType,
+                channelPlatformId,
+                originalGoal,
+                maxAutoHealAttempts);
     }
 
-    RecoveryResult attemptRecovery(String outerSessionId, String userId, String chatId,
-                                    String originalCode, String language, String errorOutput,
-                                    String channelType, String channelPlatformId,
-                                    String originalGoal, int maxAttempts) {
-        log.infof("[AutoHeal] Starting recovery for session %s, language=%s, maxAttempts=%d",
+    RecoveryResult attemptRecovery(
+            String outerSessionId,
+            String userId,
+            String chatId,
+            String originalCode,
+            String language,
+            String errorOutput,
+            String channelType,
+            String channelPlatformId,
+            String originalGoal,
+            int maxAttempts) {
+        log.infof(
+                "[AutoHeal] Starting recovery for session %s, language=%s, maxAttempts=%d",
                 outerSessionId, language, maxAttempts);
 
         String previousCode = originalCode;
         String accumulatedErrors = errorOutput;
 
         for (int attempt = 1; attempt <= maxAttempts; attempt++) {
-            RecoveryResult result = singleHealAttempt(outerSessionId, userId, chatId,
-                    previousCode, language, accumulatedErrors, channelType, channelPlatformId, attempt);
+            RecoveryResult result = singleHealAttempt(
+                    outerSessionId,
+                    userId,
+                    chatId,
+                    previousCode,
+                    language,
+                    accumulatedErrors,
+                    channelType,
+                    channelPlatformId,
+                    attempt);
 
             if (result.success()) {
-                log.infof("[AutoHeal] Recovery succeeded on attempt %d for session %s",
-                        attempt, outerSessionId);
+                log.infof("[AutoHeal] Recovery succeeded on attempt %d for session %s", attempt, outerSessionId);
                 return result;
             }
 
-            accumulatedErrors += "\n\n--- Previous fix attempt " + attempt + " also failed ---\n" + result.errorIfFailed();
+            accumulatedErrors +=
+                    "\n\n--- Previous fix attempt " + attempt + " also failed ---\n" + result.errorIfFailed();
             previousCode = extractCodeFromResponse(result.errorIfFailed());
         }
 
-        log.warnf("[AutoHeal] All %d recovery attempts failed for session %s",
-                maxAttempts, outerSessionId);
+        log.warnf("[AutoHeal] All %d recovery attempts failed for session %s", maxAttempts, outerSessionId);
         return RecoveryResult.failure(accumulatedErrors);
     }
 
-    private RecoveryResult singleHealAttempt(String outerSessionId, String userId, String chatId,
-                                              String currentCode, String language, String errorOutput,
-                                              String channelType, String channelPlatformId, int attempt) {
-        String innerSessionId = outerSessionId + AgentSentinels.HEAL_SESSION_SENTINEL + "shiva:" + System.currentTimeMillis() + ":a" + attempt;
+    private RecoveryResult singleHealAttempt(
+            String outerSessionId,
+            String userId,
+            String chatId,
+            String currentCode,
+            String language,
+            String errorOutput,
+            String channelType,
+            String channelPlatformId,
+            int attempt) {
+        String innerSessionId = outerSessionId + AgentSentinels.HEAL_SESSION_SENTINEL + "shiva:"
+                + System.currentTimeMillis() + ":a" + attempt;
 
         String goal = buildHealGoal(currentCode, language, errorOutput, attempt);
 
@@ -200,11 +260,21 @@ public class ExecutionFailureRecoveryService {
         try {
             int maxIterations = AgentRoleEnum.DEBUGGER.definition().maxIterations();
             result = WorkspaceContext.run(
-                    innerSessionId, userId, chatId, AutonomyLevel.FULL,
+                    innerSessionId,
+                    userId,
+                    chatId,
+                    AutonomyLevel.FULL,
                     AgentRoleEnum.DEBUGGER.toScopedName(),
-                    channelType, channelPlatformId,
-                    () -> agentLoop.get().run(innerSessionId, AgentRoleEnum.DEBUGGER.toScopedName(),
-                            goal, reasoningEngine, maxIterations));
+                    channelType,
+                    channelPlatformId,
+                    () -> agentLoop
+                            .get()
+                            .run(
+                                    innerSessionId,
+                                    AgentRoleEnum.DEBUGGER.toScopedName(),
+                                    goal,
+                                    reasoningEngine,
+                                    maxIterations));
         } catch (Exception e) {
             log.errorf("[AutoHeal] Shiva delegation failed: %s", LogUtil.rootMessage(e));
             return RecoveryResult.failure("Debug delegation failed: " + e.getMessage());
@@ -224,22 +294,29 @@ public class ExecutionFailureRecoveryService {
 
     String buildHealGoal(String currentCode, String language, String errorOutput, int attempt) {
         StringBuilder goal = new StringBuilder();
-        goal.append("AUTO-HEAL MODE (attempt ").append(attempt).append("): ")
-            .append("The following ").append(language).append(" code failed to execute.\n\n")
-            .append("## ERROR OUTPUT:\n```\n")
-            .append(truncate(errorOutput, 4000))
-            .append("\n```\n\n")
-            .append("## ORIGINAL CODE:\n```").append(language).append("\n")
-            .append(currentCode)
-            .append("\n```\n\n")
-            .append("## YOUR TASK:\n")
-            .append("1. Analyze the error and identify the root cause\n")
-            .append("2. Fix the code to resolve the error\n")
-            .append("3. Return ONLY the corrected complete code in a single code block\n")
-            .append("4. Do NOT include explanations, markdown text, or multiple code blocks\n")
-            .append("5. The code block MUST be complete and ready to execute\n\n")
-            .append("CRITICAL: Your entire response must be exactly one code block containing the fixed ")
-            .append(language).append(" code. Nothing else.");
+        goal.append("AUTO-HEAL MODE (attempt ")
+                .append(attempt)
+                .append("): ")
+                .append("The following ")
+                .append(language)
+                .append(" code failed to execute.\n\n")
+                .append("## ERROR OUTPUT:\n```\n")
+                .append(truncate(errorOutput, 4000))
+                .append("\n```\n\n")
+                .append("## ORIGINAL CODE:\n```")
+                .append(language)
+                .append("\n")
+                .append(currentCode)
+                .append("\n```\n\n")
+                .append("## YOUR TASK:\n")
+                .append("1. Analyze the error and identify the root cause\n")
+                .append("2. Fix the code to resolve the error\n")
+                .append("3. Return ONLY the corrected complete code in a single code block\n")
+                .append("4. Do NOT include explanations, markdown text, or multiple code blocks\n")
+                .append("5. The code block MUST be complete and ready to execute\n\n")
+                .append("CRITICAL: Your entire response must be exactly one code block containing the fixed ")
+                .append(language)
+                .append(" code. Nothing else.");
         return goal.toString();
     }
 
@@ -271,10 +348,14 @@ public class ExecutionFailureRecoveryService {
         // conversational phrases
         String trimmed = response.trim();
         String lower = trimmed.toLowerCase();
-        if (!lower.contains("here is") && !lower.contains("here's")
-                && !lower.contains("i've") && !lower.contains("i have")
-                && !lower.contains("the fix") && !lower.contains("the issue")
-                && !lower.contains("the error") && !lower.contains("the problem")
+        if (!lower.contains("here is")
+                && !lower.contains("here's")
+                && !lower.contains("i've")
+                && !lower.contains("i have")
+                && !lower.contains("the fix")
+                && !lower.contains("the issue")
+                && !lower.contains("the error")
+                && !lower.contains("the problem")
                 && trimmed.length() < 5000) {
             return trimmed;
         }

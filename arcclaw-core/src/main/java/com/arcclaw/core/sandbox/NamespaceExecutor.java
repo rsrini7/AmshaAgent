@@ -1,13 +1,13 @@
 package com.arcclaw.core.sandbox;
 
+import jakarta.enterprise.context.ApplicationScoped;
+
 import java.io.File;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
-
-import jakarta.enterprise.context.ApplicationScoped;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
@@ -29,8 +29,14 @@ public class NamespaceExecutor {
         ProcessBuilder pb;
         if (isLinux) {
             var fullCmd = new ArrayList<>(List.of(
-                    "unshare", "--pid", "--fork", "--mount", "--net", "--map-root-user",
-                    "chroot", workspaceRoot.toAbsolutePath().toString()));
+                    "unshare",
+                    "--pid",
+                    "--fork",
+                    "--mount",
+                    "--net",
+                    "--map-root-user",
+                    "chroot",
+                    workspaceRoot.toAbsolutePath().toString()));
             fullCmd.addAll(command);
             pb = new ProcessBuilder(fullCmd);
         } else {
@@ -44,10 +50,10 @@ public class NamespaceExecutor {
         }
         pb.redirectErrorStream(true);
         var process = pb.start();
-        
+
         // Drain stdout BEFORE waitFor() to capture buffered output correctly
         var output = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
-        
+
         boolean finished = process.waitFor(timeoutSeconds, TimeUnit.SECONDS);
         if (!finished) {
             process.destroyForcibly();

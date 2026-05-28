@@ -30,7 +30,6 @@ class CronStatusTest {
 
     @Test
     void testFromStorageValueUnknownThrows() {
-        assertThrows(IllegalArgumentException.class, () -> 
-            CronStatus.fromStorageValue("UNKNOWN"));
+        assertThrows(IllegalArgumentException.class, () -> CronStatus.fromStorageValue("UNKNOWN"));
     }
 }

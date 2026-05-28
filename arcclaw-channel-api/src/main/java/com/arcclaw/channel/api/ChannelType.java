@@ -20,12 +20,12 @@ public final class ChannelType {
     private static final ConcurrentMap<String, ChannelType> REGISTRY = new ConcurrentHashMap<>();
 
     // ── Built-in types ──────────────────────────────────────────────────────
-    public static final ChannelType TELEGRAM  = register("telegram");
-    public static final ChannelType DISCORD   = register("discord");
-    public static final ChannelType SLACK     = register("slack");
+    public static final ChannelType TELEGRAM = register("telegram");
+    public static final ChannelType DISCORD = register("discord");
+    public static final ChannelType SLACK = register("slack");
     public static final ChannelType WEBSOCKET = register("websocket");
-    public static final ChannelType REST_API  = register("rest_api");
-    public static final ChannelType CLI       = register("cli");
+    public static final ChannelType REST_API = register("rest_api");
+    public static final ChannelType CLI = register("cli");
 
     // Backward-compat alias — maps the legacy "restapi" id to the REST_API constant
     // so old session rows (channel_type = 'restapi') still resolve via fromString().
@@ -86,8 +86,8 @@ public final class ChannelType {
      */
     @JsonCreator
     public static ChannelType fromJson(String id) {
-        return fromString(id).orElseThrow(() ->
-            new IllegalArgumentException("Unknown ChannelType in JSON payload: " + id));
+        return fromString(id)
+                .orElseThrow(() -> new IllegalArgumentException("Unknown ChannelType in JSON payload: " + id));
     }
 
     /** The lowercase identifier (e.g. "telegram"). Serialised as-is via Jackson. */

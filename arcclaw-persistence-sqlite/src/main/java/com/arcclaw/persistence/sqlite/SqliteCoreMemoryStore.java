@@ -1,20 +1,22 @@
 package com.arcclaw.persistence.sqlite;
 
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
 
 import com.arcclaw.core.memory.tiered.TieredBackend;
 import com.arcclaw.persistence.api.CoreMemoryBlockDto;
 import com.arcclaw.persistence.api.CoreMemoryStorePort;
 import com.arcclaw.persistence.api.VersionConflictException;
 import com.arcclaw.persistence.sqlite.jdbi.CoreMemoryJdbiDao;
-import io.quarkus.arc.properties.IfBuildProperty;
+
 import org.jdbi.v3.core.Jdbi;
+
+import io.quarkus.arc.properties.IfBuildProperty;
 
 @ApplicationScoped
 @TieredBackend("sqlite")
@@ -48,8 +50,8 @@ public class SqliteCoreMemoryStore implements CoreMemoryStorePort {
         });
 
         if (rows == 0) {
-            Optional<CoreMemoryBlockDto> existing = jdbi.withExtension(CoreMemoryJdbiDao.class,
-                dao -> dao.findByKey(userId, blockKey));
+            Optional<CoreMemoryBlockDto> existing =
+                    jdbi.withExtension(CoreMemoryJdbiDao.class, dao -> dao.findByKey(userId, blockKey));
 
             int actualVersion = existing.map(CoreMemoryBlockDto::version).orElse(-1);
             throw new VersionConflictException(blockKey, expectedVersion, actualVersion);
@@ -58,13 +60,11 @@ public class SqliteCoreMemoryStore implements CoreMemoryStorePort {
 
     @Override
     public void delete(String userId, String blockKey) {
-        jdbi.useExtension(CoreMemoryJdbiDao.class,
-            dao -> dao.delete(userId, blockKey));
+        jdbi.useExtension(CoreMemoryJdbiDao.class, dao -> dao.delete(userId, blockKey));
     }
 
     @Override
     public Optional<CoreMemoryBlockDto> get(String userId, String blockKey) {
-        return jdbi.withExtension(CoreMemoryJdbiDao.class,
-            dao -> dao.findByKey(userId, blockKey));
+        return jdbi.withExtension(CoreMemoryJdbiDao.class, dao -> dao.findByKey(userId, blockKey));
     }
 }

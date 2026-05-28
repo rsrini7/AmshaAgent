@@ -1,8 +1,8 @@
 package com.arcclaw.core.security;
 
-import java.util.concurrent.locks.ReentrantLock;
-
 import jakarta.annotation.PreDestroy;
+
+import java.util.concurrent.locks.ReentrantLock;
 
 import com.arcclaw.core.scope.WorkspaceScoped;
 
@@ -58,4 +58,3 @@ public class VaultKeyCache {
         }
     }
 }
-

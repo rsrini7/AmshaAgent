@@ -28,7 +28,10 @@ class LuceneIndexManagerTest {
         if (tempDir != null) {
             try (var walk = Files.walk(tempDir)) {
                 walk.sorted(Comparator.reverseOrder()).forEach(p -> {
-                    try { Files.deleteIfExists(p); } catch (IOException _) { }
+                    try {
+                        Files.deleteIfExists(p);
+                    } catch (IOException _) {
+                    }
                 });
             }
         }

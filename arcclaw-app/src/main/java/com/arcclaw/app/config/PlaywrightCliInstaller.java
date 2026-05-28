@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 import com.arcclaw.common.util.LogUtil;
+
 import org.jboss.logging.Logger;
 
 /**
@@ -41,8 +42,8 @@ public class PlaywrightCliInstaller {
     public static void ensureBrowsersInstalled() {
         if (!isPlaywrightCliAvailable()) return;
 
-        String skipInstall = System.getProperty("ARCCLAW_TOOLS_PLAYWRIGHT_SKIP_INSTALL",
-                System.getenv("ARCCLAW_TOOLS_PLAYWRIGHT_SKIP_INSTALL"));
+        String skipInstall = System.getProperty(
+                "ARCCLAW_TOOLS_PLAYWRIGHT_SKIP_INSTALL", System.getenv("ARCCLAW_TOOLS_PLAYWRIGHT_SKIP_INSTALL"));
         if ("true".equalsIgnoreCase(skipInstall)) {
             log.info("Playwright browser install skipped (ARCCLAW_TOOLS_PLAYWRIGHT_SKIP_INSTALL=true)");
             return;
@@ -136,7 +137,8 @@ public class PlaywrightCliInstaller {
                 System.err.println("  ✗ npm install failed (exit " + exit + "):");
                 System.err.println("    " + output.trim());
                 System.err.println();
-                System.err.println("  Install manually: npm install -g @playwright/cli && playwright-cli install-browser chromium");
+                System.err.println(
+                        "  Install manually: npm install -g @playwright/cli && playwright-cli install-browser chromium");
             }
         } catch (Exception e) {
             System.err.println("  ✗ Failed to install @playwright/cli: " + e.getMessage());

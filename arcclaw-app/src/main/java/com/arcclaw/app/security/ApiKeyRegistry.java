@@ -1,5 +1,11 @@
 package com.arcclaw.app.security;
 
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
+
+import jakarta.annotation.PostConstruct;
+import jakarta.enterprise.context.ApplicationScoped;
+
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Collections;
@@ -8,19 +14,15 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 
-import javax.crypto.Mac;
-import javax.crypto.spec.SecretKeySpec;
-
-import jakarta.annotation.PostConstruct;
-import jakarta.enterprise.context.ApplicationScoped;
-
 import com.arcclaw.core.security.CryptoConstants;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
+
+import org.eclipse.microprofile.config.inject.ConfigProperty;
+
 import io.github.bucket4j.Bandwidth;
 import io.github.bucket4j.Bucket;
 import io.quarkus.runtime.Startup;
-import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 @Startup
 @ApplicationScoped
@@ -39,14 +41,14 @@ public class ApiKeyRegistry {
     int mutationPerMinute;
 
     private final Cache<String, Bucket> rateLimiter = Caffeine.newBuilder()
-                                                        .maximumSize(10_000)
-                                                        .expireAfterAccess(1, TimeUnit.HOURS)
-                                                        .build();
+            .maximumSize(10_000)
+            .expireAfterAccess(1, TimeUnit.HOURS)
+            .build();
 
     private final Cache<String, Bucket> mutationRateLimiter = Caffeine.newBuilder()
-                                                        .maximumSize(10_000)
-                                                        .expireAfterAccess(1, TimeUnit.HOURS)
-                                                        .build();
+            .maximumSize(10_000)
+            .expireAfterAccess(1, TimeUnit.HOURS)
+            .build();
 
     private Map<String, String> hmacToKeyName;
 
@@ -58,7 +60,7 @@ public class ApiKeyRegistry {
                 reverse.put(toHex(hmac(entry.getValue())), entry.getKey());
             }
         }
-        this.hmacToKeyName  = Collections.unmodifiableMap(reverse);
+        this.hmacToKeyName = Collections.unmodifiableMap(reverse);
     }
 
     public void register(String keyName, String rawKey) {
@@ -78,8 +80,7 @@ public class ApiKeyRegistry {
     private byte[] hmac(String value) {
         try {
             Mac mac = Mac.getInstance(CryptoConstants.HMAC_SHA256);
-            mac.init(new SecretKeySpec(
-                hmacSecret.getBytes(StandardCharsets.UTF_8), CryptoConstants.HMAC_SHA256));
+            mac.init(new SecretKeySpec(hmacSecret.getBytes(StandardCharsets.UTF_8), CryptoConstants.HMAC_SHA256));
             return mac.doFinal(value.getBytes(StandardCharsets.UTF_8));
         } catch (Exception e) {
             throw new IllegalStateException("HMAC init failed", e);
@@ -119,12 +120,14 @@ public class ApiKeyRegistry {
 
     public boolean isAllowed(String key) {
         if (key == null) return false;
-        Bucket bucket = rateLimiter.get(key, k -> Bucket.builder()
-                .addLimit(Bandwidth.builder()
-                        .capacity(requestsPerMinute)
-                        .refillIntervally(requestsPerMinute, Duration.ofMinutes(1))
-                        .build())
-                .build());
+        Bucket bucket = rateLimiter.get(
+                key,
+                k -> Bucket.builder()
+                        .addLimit(Bandwidth.builder()
+                                .capacity(requestsPerMinute)
+                                .refillIntervally(requestsPerMinute, Duration.ofMinutes(1))
+                                .build())
+                        .build());
         return bucket.tryConsume(1);
     }
 
@@ -134,12 +137,14 @@ public class ApiKeyRegistry {
      */
     public boolean isMutationAllowed(String key) {
         if (key == null) return false;
-        Bucket bucket = mutationRateLimiter.get(key, k -> Bucket.builder()
-                .addLimit(Bandwidth.builder()
-                        .capacity(mutationPerMinute)
-                        .refillIntervally(mutationPerMinute, Duration.ofMinutes(1))
-                        .build())
-                .build());
+        Bucket bucket = mutationRateLimiter.get(
+                key,
+                k -> Bucket.builder()
+                        .addLimit(Bandwidth.builder()
+                                .capacity(mutationPerMinute)
+                                .refillIntervally(mutationPerMinute, Duration.ofMinutes(1))
+                                .build())
+                        .build());
         return bucket.tryConsume(1);
     }
 }

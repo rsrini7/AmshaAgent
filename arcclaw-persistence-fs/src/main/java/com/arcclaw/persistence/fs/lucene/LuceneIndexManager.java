@@ -86,8 +86,9 @@ public class LuceneIndexManager implements Closeable {
 
             writer.addDocument(doc);
             writer.commit();
-            LOG.debugf("Indexed document %s (len=%d, hasVector=%s)", id,
-                content != null ? content.length() : 0, embedding != null);
+            LOG.debugf(
+                    "Indexed document %s (len=%d, hasVector=%s)",
+                    id, content != null ? content.length() : 0, embedding != null);
         } catch (IOException e) {
             throw new UncheckedIOException("Failed to index document " + id, e);
         }
@@ -191,19 +192,25 @@ public class LuceneIndexManager implements Closeable {
                 int rank = i + 1;
                 double contribution = 1.0 / (RRF_K + rank);
                 rrfScores.merge(r.id(), contribution, Double::sum);
-                resultById.merge(r.id(), r, (existing, incoming) ->
-                    (existing.content() == null || existing.content().isBlank()) ? incoming : existing);
+                resultById.merge(
+                        r.id(),
+                        r,
+                        (existing, incoming) -> (existing.content() == null
+                                        || existing.content().isBlank())
+                                ? incoming
+                                : existing);
             }
         }
 
         return rrfScores.entrySet().stream()
-            .sorted(Map.Entry.<String, Double>comparingByValue().reversed())
-            .limit(topN)
-            .map(e -> {
-                ScoredResult orig = resultById.get(e.getKey());
-                return new ScoredResult(orig.id(), orig.content(), e.getValue().floatValue());
-            })
-            .toList();
+                .sorted(Map.Entry.<String, Double>comparingByValue().reversed())
+                .limit(topN)
+                .map(e -> {
+                    ScoredResult orig = resultById.get(e.getKey());
+                    return new ScoredResult(
+                            orig.id(), orig.content(), e.getValue().floatValue());
+                })
+                .toList();
     }
 
     public record ScoredResult(String id, String content, float score) {}

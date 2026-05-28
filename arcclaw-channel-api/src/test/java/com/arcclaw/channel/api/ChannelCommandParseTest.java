@@ -94,8 +94,8 @@ class ChannelCommandParseTest {
     @Test
     void parseCaseInsensitive() {
         assertInstanceOf(ChannelCommand.Approve.class, ChannelCommand.parse("/APPROVE"));
-        assertInstanceOf(ChannelCommand.Deny.class,    ChannelCommand.parse("/DENY"));
-        assertInstanceOf(ChannelCommand.Halt.class,    ChannelCommand.parse("/Halt"));
+        assertInstanceOf(ChannelCommand.Deny.class, ChannelCommand.parse("/DENY"));
+        assertInstanceOf(ChannelCommand.Halt.class, ChannelCommand.parse("/Halt"));
     }
 
     // ------------------------------------------------------------------
@@ -162,8 +162,7 @@ class ChannelCommandParseTest {
     void doubleSpaceCronDeleteExtractsCronId() {
         var cmd = ChannelCommand.parse("/cron  delete  abc-123");
         assertInstanceOf(ChannelCommand.DeleteCron.class, cmd);
-        assertEquals(Optional.of("abc-123"),
-            ((ChannelCommand.DeleteCron) cmd).cronId());
+        assertEquals(Optional.of("abc-123"), ((ChannelCommand.DeleteCron) cmd).cronId());
     }
 
     @Test
@@ -188,7 +187,7 @@ class ChannelCommandParseTest {
         ChannelCommand.Approve a = (ChannelCommand.Approve) cmd;
         assertEquals(Optional.of("b2ada049-88e1-474d-9589-783a82190d46"), a.targetId());
         // Parser only captures the first argument as targetSessionId, github is in 'rest' of arg
-        assertTrue(a.toolName().isEmpty()); 
+        assertTrue(a.toolName().isEmpty());
     }
 
     @Test

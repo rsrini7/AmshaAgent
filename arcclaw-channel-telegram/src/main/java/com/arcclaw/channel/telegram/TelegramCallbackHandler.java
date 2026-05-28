@@ -1,5 +1,9 @@
 package com.arcclaw.channel.telegram;
 
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.context.control.ActivateRequestContext;
+import jakarta.inject.Inject;
+
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -7,10 +11,6 @@ import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
-
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.enterprise.context.control.ActivateRequestContext;
-import jakarta.inject.Inject;
 
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ChannelUser;
@@ -20,21 +20,22 @@ import com.arcclaw.channel.api.hitl.ApprovalOutcome;
 import com.arcclaw.channel.api.hitl.ApprovalResult;
 import com.arcclaw.common.util.LogUtil;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.quarkus.arc.Unremovable;
+
 import org.apache.camel.Exchange;
 import org.apache.camel.component.telegram.model.IncomingCallbackQuery;
 import org.apache.camel.component.telegram.model.InlineKeyboardMarkup;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
+import io.quarkus.arc.Unremovable;
+
 @ApplicationScoped
 @Unremovable
 public class TelegramCallbackHandler {
 
     private static final Logger log = Logger.getLogger(TelegramCallbackHandler.class);
-    private final HttpClient httpClient = HttpClient.newBuilder()
-            .connectTimeout(Duration.ofSeconds(10))
-            .build();
+    private final HttpClient httpClient =
+            HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build();
 
     @Inject
     TelegramChannelSender sender;
@@ -62,7 +63,8 @@ public class TelegramCallbackHandler {
 
         log.infof("TELEGRAM-CALLBACK: %s from user=%s chat=%s msg=%d", data, userId, chatId, messageId);
 
-        BatchHitlKeyboardBuilder.BatchCallbackEvent event = BatchHitlKeyboardBuilder.parseCallback(data).orElse(null);
+        BatchHitlKeyboardBuilder.BatchCallbackEvent event =
+                BatchHitlKeyboardBuilder.parseCallback(data).orElse(null);
         if (event == null) {
             return;
         }
@@ -93,9 +95,14 @@ public class TelegramCallbackHandler {
             sessionId = resolveSessionId(sessionId, userId);
 
             ApprovalResult result = approvalGateway.decide(sessionId, toolName, decision, "Telegram Callback");
-            log.infof("ApprovalResult: session=%s tool=%s outcome=%s remaining=%d pending=%s user=%s",
-                    sessionId, toolName, result.outcome(), result.remainingPendingTools(),
-                    result.pendingToolNames(), userId);
+            log.infof(
+                    "ApprovalResult: session=%s tool=%s outcome=%s remaining=%d pending=%s user=%s",
+                    sessionId,
+                    toolName,
+                    result.outcome(),
+                    result.remainingPendingTools(),
+                    result.pendingToolNames(),
+                    userId);
 
             String popupText = null;
             switch (result.outcome()) {
@@ -121,12 +128,12 @@ public class TelegramCallbackHandler {
                 // §7.27: edit in-place to show remaining tools
                 String originalText = query.getMessage().getText();
                 InlineKeyboardMarkup nextKeyboard =
-                    BatchHitlKeyboardBuilder.buildKeyboard(sessionId, result.pendingToolNames());
+                        BatchHitlKeyboardBuilder.buildKeyboard(sessionId, result.pendingToolNames());
                 sender.editMessage(chatId, messageId, originalText, nextKeyboard);
             } else if (result.outcome() != ApprovalOutcome.ALREADY_DECIDED && result.remainingPendingTools() == 0) {
                 String doneText = result.outcome() == ApprovalOutcome.APPROVED
-                    ? "✅ Approved: " + toolName
-                    : "❌ Rejected: " + toolName;
+                        ? "✅ Approved: " + toolName
+                        : "❌ Rejected: " + toolName;
                 sender.editMessage(chatId, messageId, doneText, null);
             }
 
@@ -168,20 +175,20 @@ public class TelegramCallbackHandler {
             }
             String body = objectMapper.writeValueAsString(payload);
 
-            httpClient.sendAsync(
-                HttpRequest.newBuilder()
-                    .uri(URI.create(
-                        "https://api.telegram.org/bot" + botToken + "/answerCallbackQuery"))
-                    .timeout(Duration.ofSeconds(5))
-                    .header("Content-Type", "application/json")
-                    .POST(HttpRequest.BodyPublishers.ofString(body))
-                    .build(),
-                HttpResponse.BodyHandlers.discarding())
-            .exceptionally(ex -> {
-                log.warnf("Failed to answer Telegram callback %s: %s",
-                    callbackQueryId, LogUtil.rootMessage(ex));
-                return null;
-            });
+            httpClient
+                    .sendAsync(
+                            HttpRequest.newBuilder()
+                                    .uri(URI.create("https://api.telegram.org/bot" + botToken + "/answerCallbackQuery"))
+                                    .timeout(Duration.ofSeconds(5))
+                                    .header("Content-Type", "application/json")
+                                    .POST(HttpRequest.BodyPublishers.ofString(body))
+                                    .build(),
+                            HttpResponse.BodyHandlers.discarding())
+                    .exceptionally(ex -> {
+                        log.warnf(
+                                "Failed to answer Telegram callback %s: %s", callbackQueryId, LogUtil.rootMessage(ex));
+                        return null;
+                    });
         } catch (Exception e) {
             log.warnf("Failed to serialize Telegram callback answer: %s", LogUtil.rootMessage(e));
         }

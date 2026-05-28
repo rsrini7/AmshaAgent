@@ -1,5 +1,7 @@
 package com.arcclaw.core.tools;
 
+import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
+
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.List;
@@ -7,7 +9,6 @@ import java.util.Map;
 
 import com.arcclaw.core.security.RequiresSecret;
 import com.arcclaw.core.security.ToolOperation;
-import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
 
 /**
  * Contract for all ArcClaw agent tools.
@@ -92,13 +93,15 @@ public interface AgentTool {
     }
 
     default List<String> sandboxCommand(Map<String, Object> params) {
-        throw new UnsupportedOperationException("Tool " + name() + " requires ToolExecutionContext. Use sandboxCommand(ctx, params).");
+        throw new UnsupportedOperationException(
+                "Tool " + name() + " requires ToolExecutionContext. Use sandboxCommand(ctx, params).");
     }
 
     ToolResponse execute(ToolExecutionContext ctx, Map<String, Object> params);
 
     default ToolResponse execute(Map<String, Object> params) {
-        throw new UnsupportedOperationException("Tool " + name() + " requires ToolExecutionContext. Use execute(ctx, params).");
+        throw new UnsupportedOperationException(
+                "Tool " + name() + " requires ToolExecutionContext. Use execute(ctx, params).");
     }
 
     default JsonObjectSchema parametersSchema() {

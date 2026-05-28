@@ -5,11 +5,13 @@ import java.util.HashMap;
 import java.util.Map;
 
 import com.github.dockerjava.api.DockerClient;
-import io.quarkus.test.common.QuarkusTestResourceLifecycleManager;
-import io.zonky.test.db.postgres.embedded.EmbeddedPostgres;
+
 import org.testcontainers.DockerClientFactory;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.containers.wait.strategy.Wait;
+
+import io.quarkus.test.common.QuarkusTestResourceLifecycleManager;
+import io.zonky.test.db.postgres.embedded.EmbeddedPostgres;
 
 @SuppressWarnings("resource")
 public class PostgresTestResource implements QuarkusTestResourceLifecycleManager {
@@ -23,10 +25,10 @@ public class PostgresTestResource implements QuarkusTestResourceLifecycleManager
 
         if (isDockerAvailable()) {
             postgres = new PostgreSQLContainer<>("postgres:16-alpine")
-                .withDatabaseName("test")
-                .withUsername("test")
-                .withPassword("test")
-                .waitingFor(Wait.forListeningPort());
+                    .withDatabaseName("test")
+                    .withUsername("test")
+                    .withPassword("test")
+                    .waitingFor(Wait.forListeningPort());
 
             postgres.start();
 

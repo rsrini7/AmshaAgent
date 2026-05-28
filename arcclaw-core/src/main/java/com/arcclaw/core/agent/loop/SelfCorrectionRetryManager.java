@@ -40,7 +40,6 @@ public class SelfCorrectionRetryManager implements CorrectionStrategy {
      */
     static final int MAX_SCHEMA_CORRECTION_RETRIES = 4;
 
-
     @Override
     public boolean withinBudget(int currentRetryCount) {
         return currentRetryCount < MAX_SCHEMA_CORRECTION_RETRIES;
@@ -58,5 +57,4 @@ public class SelfCorrectionRetryManager implements CorrectionStrategy {
                 + ". Please respond with a fully valid, schema-compliant JSON output. "
                 + "Do not include any prose or markdown - only the JSON object.";
     }
-
 }

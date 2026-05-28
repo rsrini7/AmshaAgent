@@ -1,16 +1,18 @@
 package com.arcclaw.persistence.sqlite;
 
-import java.util.Optional;
-
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
+
+import java.util.Optional;
 
 import com.arcclaw.persistence.api.SecretDto;
 import com.arcclaw.persistence.api.SecretStorePort;
 import com.arcclaw.persistence.sqlite.jdbi.SecretJdbiDao;
+
+import org.jdbi.v3.core.Jdbi;
+
 import io.quarkus.arc.Unremovable;
 import io.quarkus.arc.properties.IfBuildProperty;
-import org.jdbi.v3.core.Jdbi;
 
 @ApplicationScoped
 @Unremovable
@@ -30,14 +32,17 @@ public class SqliteSecretStoreAdapter implements SecretStorePort {
 
     @Override
     public void save(SecretDto dto) {
-        jdbi.useExtension(SecretJdbiDao.class,
-            dao -> dao.save(dto.sessionId(), dto.keyName(), dto.encryptionKeyVersion(), dto.ciphertext(), dto.nonce()));
+        jdbi.useExtension(
+                SecretJdbiDao.class,
+                dao -> dao.save(
+                        dto.sessionId(), dto.keyName(), dto.encryptionKeyVersion(), dto.ciphertext(), dto.nonce()));
     }
 
     @Override
     public Optional<SecretDto> find(String sessionId, String keyName) {
         return jdbi.withExtension(SecretJdbiDao.class, dao -> dao.find(sessionId, keyName))
-            .map(row -> new SecretDto(row.sessionId(), row.keyName(), row.encryptionKeyVersion(), row.ciphertext(), row.nonce()));
+                .map(row -> new SecretDto(
+                        row.sessionId(), row.keyName(), row.encryptionKeyVersion(), row.ciphertext(), row.nonce()));
     }
 
     @Override

@@ -2,10 +2,10 @@ package com.arcclaw.core.reflex;
 
 import static org.mockito.Mockito.verify;
 
+import jakarta.inject.Inject;
+
 import java.time.Instant;
 import java.util.stream.Collectors;
-
-import jakarta.inject.Inject;
 
 import com.arcclaw.channel.api.ChannelMessage;
 import com.arcclaw.channel.api.ChannelType;
@@ -13,12 +13,14 @@ import com.arcclaw.channel.api.ChannelUser;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.persistence.api.MemoryEntryDto;
 import com.arcclaw.persistence.api.MemoryRetrievalPort;
-import io.quarkus.test.InjectMock;
-import io.quarkus.test.junit.QuarkusTest;
+
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
+
+import io.quarkus.test.InjectMock;
+import io.quarkus.test.junit.QuarkusTest;
 
 @QuarkusTest
 public class IdentityExtractionReflexTest {
@@ -49,16 +51,16 @@ public class IdentityExtractionReflexTest {
     void testExecute_Extraction() {
         String input = "Hello, my name is Alice";
         MessageContext context = createContext(input);
-        
+
         ReflexResult result = reflex.execute("session1", "user1", "chat1", input, context);
-        
+
         // It should forward to the LLM (no command response)
         Assertions.assertTrue(result.commandResponse().isEmpty());
-        
+
         // Verify MemoryPort got called (with timeout since it's async)
         ArgumentCaptor<MemoryEntryDto> captor = ArgumentCaptor.forClass(MemoryEntryDto.class);
         verify(memoryPort, Mockito.timeout(5000)).index(captor.capture());
-        
+
         MemoryEntryDto captured = captor.getValue();
         Assertions.assertEquals("The user's name is Alice.", captured.text());
         Assertions.assertEquals("user_name", captured.metadata().get("label"));

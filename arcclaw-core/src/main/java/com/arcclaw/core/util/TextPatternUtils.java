@@ -36,7 +36,7 @@ public class TextPatternUtils {
                 || lower.contains("execute again")
                 || lower.contains("share generated")
                 || lower.contains("just do it");
-                }
+    }
     /**
      * Extracts a normalized language name if mentioned in the goal.
      * Uses word boundaries to avoid false positives (e.g. "government" matching "go").
@@ -44,7 +44,7 @@ public class TextPatternUtils {
     public String goalMentionsLanguage(String goal) {
         if (goal == null) return null;
         String lower = " " + goal.toLowerCase().replaceAll("[^a-z0-9]", " ") + " ";
-        
+
         if (lower.contains(" java ")) return "java";
         if (lower.contains(" python ") || lower.contains(" py ")) return "python";
         if (lower.contains(" go ") || lower.contains(" golang ") || lower.contains(" go lang ")) return "go";
@@ -74,13 +74,12 @@ public class TextPatternUtils {
     public boolean looksLikeJson(String text) {
         if (text == null) return false;
         String trimmed = text.strip();
-        
+
         // Only flag single-block JSON - multi-line prose ending with } is valid.
         // 20 lines covers all realistic tool-call JSON echoes.
         long lineCount = trimmed.lines().count();
         if (lineCount > jsonSalvageMaxLines) return false;
 
-        return (trimmed.startsWith("{") && trimmed.endsWith("}"))
-                || (trimmed.startsWith("[") && trimmed.endsWith("]"));
+        return (trimmed.startsWith("{") && trimmed.endsWith("}")) || (trimmed.startsWith("[") && trimmed.endsWith("]"));
     }
 }

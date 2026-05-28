@@ -9,13 +9,7 @@ import com.fasterxml.jackson.annotation.JsonInclude;
  * Renamed to ArcClawErrorResponse to avoid naming conflicts (§QW-11).
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
-public record ArcClawErrorResponse(
-    String code,
-    String error,
-    String detail,
-    String path,
-    Instant timestamp
-) {
+public record ArcClawErrorResponse(String code, String error, String detail, String path, Instant timestamp) {
     public ArcClawErrorResponse(String error) {
         this(null, error, null, null, Instant.now());
     }

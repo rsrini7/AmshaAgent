@@ -8,7 +8,7 @@ public class MandatoryConfigValidator {
     public static void validateMandatoryConfig() {
         String mainKey = System.getProperty("ARCCLAW_LLM_API_KEY", System.getenv("ARCCLAW_LLM_API_KEY"));
         String provider = System.getProperty("ARCCLAW_LLM_PROVIDER", System.getenv("ARCCLAW_LLM_PROVIDER"));
-        
+
         if (!"ollama".equalsIgnoreCase(provider)) {
             validateKey("ARCCLAW_LLM_API_KEY", mainKey, "LLM provider: " + provider);
         }

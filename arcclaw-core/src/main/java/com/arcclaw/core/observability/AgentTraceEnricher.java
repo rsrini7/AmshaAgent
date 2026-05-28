@@ -5,8 +5,10 @@ import jakarta.inject.Inject;
 
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.agent.result.AgentResult;
-import io.opentelemetry.api.trace.Span;
+
 import org.jboss.logging.Logger;
+
+import io.opentelemetry.api.trace.Span;
 
 @ApplicationScoped
 public class AgentTraceEnricher implements AgentObserver {
@@ -17,8 +19,7 @@ public class AgentTraceEnricher implements AgentObserver {
     AgentOtelContext otelContext;
 
     @Override
-    public void recordLlmCall(String sessionId, int inputTokens, int outputTokens) {
-    }
+    public void recordLlmCall(String sessionId, int inputTokens, int outputTokens) {}
 
     @Override
     public void onStepComplete(String sessionId, String role, ReasoningStep step) {

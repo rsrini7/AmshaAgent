@@ -1,5 +1,10 @@
 package com.arcclaw.core.agent.reasoning.prompt;
 
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.event.Observes;
+import jakarta.enterprise.inject.Instance;
+import jakarta.inject.Inject;
+
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
@@ -10,17 +15,14 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.enterprise.event.Observes;
-import jakarta.enterprise.inject.Instance;
-import jakarta.inject.Inject;
-
 import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.persistence.api.PromptDto;
 import com.arcclaw.persistence.api.PromptStorePort;
-import io.quarkus.runtime.StartupEvent;
+
 import org.jboss.logging.Logger;
+
+import io.quarkus.runtime.StartupEvent;
 
 @ApplicationScoped
 public class PromptRegistry {
@@ -146,7 +148,11 @@ public class PromptRegistry {
         }
     }
 
-    private enum SyncResult { SEEDED, UPDATED, SKIPPED }
+    private enum SyncResult {
+        SEEDED,
+        UPDATED,
+        SKIPPED
+    }
 
     private SyncResult syncEntry(String roleId, String sectionKey, String classpath) {
         String content = readClasspath(classpath);
@@ -164,14 +170,16 @@ public class PromptRegistry {
 
         if (existing.isEmpty()) {
             store().save(new PromptDto(
-                UUID.randomUUID().toString(),
-                roleId, sectionKey, content,
-                PromptConstants.DEFAULT_VERSION,
-                PromptConstants.STATUS_ACTIVE,
-                PromptConstants.DEFAULT_ROLLOUT,
-                metadata,
-                Instant.now(), Instant.now()
-            ));
+                    UUID.randomUUID().toString(),
+                    roleId,
+                    sectionKey,
+                    content,
+                    PromptConstants.DEFAULT_VERSION,
+                    PromptConstants.STATUS_ACTIVE,
+                    PromptConstants.DEFAULT_ROLLOUT,
+                    metadata,
+                    Instant.now(),
+                    Instant.now()));
             classpathCache.put(key(roleId, sectionKey), content);
             return SyncResult.SEEDED;
         }
@@ -190,17 +198,20 @@ public class PromptRegistry {
 
         int newVersion = dto.version() + 1;
         store().save(new PromptDto(
-            dto.id(),
-            dto.roleId(), dto.sectionKey(), content,
-            newVersion,
-            PromptConstants.STATUS_ACTIVE,
-            PromptConstants.DEFAULT_ROLLOUT,
-            metadata,
-            dto.createdAt(), Instant.now()
-        ));
+                dto.id(),
+                dto.roleId(),
+                dto.sectionKey(),
+                content,
+                newVersion,
+                PromptConstants.STATUS_ACTIVE,
+                PromptConstants.DEFAULT_ROLLOUT,
+                metadata,
+                dto.createdAt(),
+                Instant.now()));
         classpathCache.put(key(roleId, sectionKey), content);
-        log.infof("Drift detected in %s/%s (v%d->v%d): classpath content changed",
-            roleId, sectionKey, dto.version(), newVersion);
+        log.infof(
+                "Drift detected in %s/%s (v%d->v%d): classpath content changed",
+                roleId, sectionKey, dto.version(), newVersion);
         return SyncResult.UPDATED;
     }
 
@@ -224,9 +235,8 @@ public class PromptRegistry {
 
     private record ClasspathEntry(String roleId, String sectionKey, String classpath) {}
 
-    private static final List<String> ALL_ROLE_IDS = AgentRoleEnum.values().stream()
-        .map(AgentRoleEnum::id)
-        .toList();
+    private static final List<String> ALL_ROLE_IDS =
+            AgentRoleEnum.values().stream().map(AgentRoleEnum::id).toList();
 
     private static final List<ClasspathEntry> ALL_PERSONA_ENTRIES;
     private static final List<ClasspathEntry> ALL_ROLE_TEMPLATE_ENTRIES;
@@ -234,26 +244,35 @@ public class PromptRegistry {
 
     static {
         ALL_PERSONA_ENTRIES = ALL_ROLE_IDS.stream()
-            .map(r -> new ClasspathEntry(r, PromptConstants.KEY_PERSONA_IDENTITY,
-                "templates/personas/" + r + ".txt"))
-            .toList();
+                .map(r ->
+                        new ClasspathEntry(r, PromptConstants.KEY_PERSONA_IDENTITY, "templates/personas/" + r + ".txt"))
+                .toList();
 
         ALL_ROLE_TEMPLATE_ENTRIES = ALL_ROLE_IDS.stream()
-            .map(r -> new ClasspathEntry(r, PromptConstants.KEY_ROLE_TEMPLATE,
-                "templates/prompts/role-" + r + ".txt"))
-            .toList();
+                .map(r -> new ClasspathEntry(
+                        r, PromptConstants.KEY_ROLE_TEMPLATE, "templates/prompts/role-" + r + ".txt"))
+                .toList();
 
         ALL_SHARED_ENTRIES = List.of(
-            new ClasspathEntry(PromptConstants.ROLE_CORE, PromptConstants.KEY_DELEGATE_RULES,
-                "templates/prompts/delegate-to-agent-rules.txt"),
-            new ClasspathEntry(PromptConstants.ROLE_CORE, PromptConstants.KEY_GITHUB_RULES,
-                "templates/prompts/github-tool-rules.txt"),
-            new ClasspathEntry(PromptConstants.ROLE_CORE, PromptConstants.KEY_SANDBOX_RULES,
-                "templates/prompts/sandbox-exec-rules.txt"),
-            new ClasspathEntry(PromptConstants.ROLE_CORE, PromptConstants.KEY_SAFETY_RULES,
-                "templates/prompts/safety-rules.txt"),
-            new ClasspathEntry(PromptConstants.ROLE_CORE, PromptConstants.KEY_COMPACTION_SUMMARY,
-                "templates/prompts/compaction-summary.txt")
-        );
+                new ClasspathEntry(
+                        PromptConstants.ROLE_CORE,
+                        PromptConstants.KEY_DELEGATE_RULES,
+                        "templates/prompts/delegate-to-agent-rules.txt"),
+                new ClasspathEntry(
+                        PromptConstants.ROLE_CORE,
+                        PromptConstants.KEY_GITHUB_RULES,
+                        "templates/prompts/github-tool-rules.txt"),
+                new ClasspathEntry(
+                        PromptConstants.ROLE_CORE,
+                        PromptConstants.KEY_SANDBOX_RULES,
+                        "templates/prompts/sandbox-exec-rules.txt"),
+                new ClasspathEntry(
+                        PromptConstants.ROLE_CORE,
+                        PromptConstants.KEY_SAFETY_RULES,
+                        "templates/prompts/safety-rules.txt"),
+                new ClasspathEntry(
+                        PromptConstants.ROLE_CORE,
+                        PromptConstants.KEY_COMPACTION_SUMMARY,
+                        "templates/prompts/compaction-summary.txt"));
     }
 }

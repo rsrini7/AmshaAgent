@@ -14,17 +14,15 @@ class SchedulingRoutingProviderNegationTest {
     void is_negation_flagged_by_shouldSkip() {
         SchedulingRoutingProvider provider = new SchedulingRoutingProvider();
         String negatedInput = "please do NOT schedule this reminder";
-        
+
         // This is the primary B4 defense §4.11
-        assertTrue(provider.shouldSkip(negatedInput), 
-            "Explicit negation must be detected by shouldSkip()");
-        
+        assertTrue(provider.shouldSkip(negatedInput), "Explicit negation must be detected by shouldSkip()");
+
         // Fast-path triggers themselves should NOT match either
         List<Pattern> triggers = provider.fastPathTriggers();
-        boolean anyMatch = triggers.stream()
-            .anyMatch(p -> p.matcher(negatedInput).find());
-        assertFalse(anyMatch,
-            "Negation 'do NOT schedule' must not trigger fast-path patterns");
+        boolean anyMatch =
+                triggers.stream().anyMatch(p -> p.matcher(negatedInput).find());
+        assertFalse(anyMatch, "Negation 'do NOT schedule' must not trigger fast-path patterns");
     }
 
     @Test
@@ -44,10 +42,8 @@ class SchedulingRoutingProviderNegationTest {
 
         for (String input : positiveInputs) {
             assertFalse(provider.shouldSkip(input), "Legitimate input should NOT be skipped: " + input);
-            boolean anyMatch = triggers.stream()
-                .anyMatch(p -> p.matcher(input).find());
-            assertTrue(anyMatch,
-                "Legitimate scheduling input must trigger fast-path: " + input);
+            boolean anyMatch = triggers.stream().anyMatch(p -> p.matcher(input).find());
+            assertTrue(anyMatch, "Legitimate scheduling input must trigger fast-path: " + input);
         }
     }
 
@@ -59,13 +55,13 @@ class SchedulingRoutingProviderNegationTest {
         // "schedule" alone is removed from the guard pattern to prevent broad matches
         // Input: "please schedule this for tomorrow"
         // should match "tomorrow" but not "schedule"
-        
+
         boolean matchesTomorrow = triggers.stream()
-            .anyMatch(p -> p.matcher("please schedule this for tomorrow").find());
+                .anyMatch(p -> p.matcher("please schedule this for tomorrow").find());
         assertTrue(matchesTomorrow, "'tomorrow' must still trigger fast-path");
 
         boolean matchesJustSchedule = triggers.stream()
-            .anyMatch(p -> p.matcher("please schedule this").find());
+                .anyMatch(p -> p.matcher("please schedule this").find());
         assertFalse(matchesJustSchedule, "'schedule' without time signal should NOT trigger fast-path");
     }
 }

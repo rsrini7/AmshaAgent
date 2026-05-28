@@ -1,6 +1,6 @@
 package com.arcclaw.core.routing;
 
-import java.time.Duration;
+import dev.langchain4j.model.chat.ChatModel;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.context.Dependent;
@@ -8,12 +8,15 @@ import jakarta.enterprise.inject.Default;
 import jakarta.enterprise.inject.Produces;
 import jakarta.inject.Inject;
 
+import java.time.Duration;
+
 import com.arcclaw.core.agent.reasoning.StructuredOutputMode;
-import dev.langchain4j.model.chat.ChatModel;
-import io.quarkus.arc.Unremovable;
-import io.smallrye.common.annotation.Identifier;
+
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
+
+import io.quarkus.arc.Unremovable;
+import io.smallrye.common.annotation.Identifier;
 
 /**
  * Produces the {@code compaction} {@link ChatModel} bean.
@@ -29,12 +32,10 @@ public class CompactionModelProducer {
     @ConfigProperty(name = "arcclaw.memory.compaction.provider", defaultValue = "groq")
     String provider;
 
-    @ConfigProperty(name = "arcclaw.memory.compaction.base-url",
-                    defaultValue = "https://api.groq.com/openai/v1")
+    @ConfigProperty(name = "arcclaw.memory.compaction.base-url", defaultValue = "https://api.groq.com/openai/v1")
     String compactionBaseUrl;
 
-    @ConfigProperty(name = "arcclaw.memory.compaction.api-key",
-                    defaultValue = "not-configured")
+    @ConfigProperty(name = "arcclaw.memory.compaction.api-key", defaultValue = "not-configured")
     String compactionApiKey;
 
     @ConfigProperty(name = "arcclaw.memory.compaction.model", defaultValue = "llama-3.1-8b-instant")
@@ -63,12 +64,21 @@ public class CompactionModelProducer {
     @ApplicationScoped
     public ChatModel compactionModel() {
         String cleanProvider = clean(provider);
-        log.infof("CompactionModelProducer compaction provider=%s model=%s mode=%s", 
-                  cleanProvider, modelId, structuredOutputMode);
+        log.infof(
+                "CompactionModelProducer compaction provider=%s model=%s mode=%s",
+                cleanProvider, modelId, structuredOutputMode);
         return modelFactory.createModel(
-            cleanProvider, compactionBaseUrl, compactionApiKey,
-            modelId, compactionMaxTokens, Duration.ofSeconds(10),
-            maxRetries, ollamaBaseUrl, ollamaModelId, structuredOutputMode, true);
+                cleanProvider,
+                compactionBaseUrl,
+                compactionApiKey,
+                modelId,
+                compactionMaxTokens,
+                Duration.ofSeconds(10),
+                maxRetries,
+                ollamaBaseUrl,
+                ollamaModelId,
+                structuredOutputMode,
+                true);
     }
 
     private String clean(String v) {

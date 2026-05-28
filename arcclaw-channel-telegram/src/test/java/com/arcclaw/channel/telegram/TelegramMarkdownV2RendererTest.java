@@ -8,6 +8,7 @@ import java.util.List;
 import com.arcclaw.channel.api.ApprovalPrompt;
 import com.arcclaw.channel.api.ContentNode;
 import com.arcclaw.channel.api.ReplyNode;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -137,8 +138,7 @@ class TelegramMarkdownV2RendererTest {
 
     // All 18 special characters must be escaped with a backslash prefix.
     @ParameterizedTest
-    @ValueSource(chars = {'_','*','[',']','(',')',
-        '~','`','>','#','+','-','=','|','{','}','.','!'})
+    @ValueSource(chars = {'_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!'})
     void escapesSingleSpecialChar(char specialChar) {
         String input = String.valueOf(specialChar);
         String result = renderer.esc(input);

@@ -7,13 +7,15 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import jakarta.inject.Inject;
 
-import io.quarkus.test.junit.QuarkusTest;
 import org.junit.jupiter.api.Test;
+
+import io.quarkus.test.junit.QuarkusTest;
 
 @QuarkusTest
 class GovernanceStrategyTest {
 
-    @Inject GovernanceStrategy governanceLayer; // Must inject via interface
+    @Inject
+    GovernanceStrategy governanceLayer; // Must inject via interface
 
     @Test
     void interfaceIsInjectableInsteadOfConcreteClass() {
@@ -24,9 +26,9 @@ class GovernanceStrategyTest {
     @Test
     void recordLlmCallThrowsBudgetExceededWhenLimitHit() {
         // Force exceed by recording massive token counts
-        assertThrows(BudgetExceededException.class, () ->
-            governanceLayer.recordLlmCall("test-session-999", 10_000_000, 10_000_000)
-        );
+        assertThrows(
+                BudgetExceededException.class,
+                () -> governanceLayer.recordLlmCall("test-session-999", 10_000_000, 10_000_000));
         governanceLayer.clearSession("test-session-999");
     }
 

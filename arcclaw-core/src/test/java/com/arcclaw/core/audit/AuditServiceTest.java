@@ -7,6 +7,7 @@ import java.util.List;
 
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.persistence.api.AuditEventStorePort;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -22,7 +23,7 @@ class AuditServiceTest {
     @Mock
     ComplianceAuditService complianceAuditService;
 
-    @Mock 
+    @Mock
     AuditEventStorePort auditStore;
 
     AuditService auditService;
@@ -45,7 +46,7 @@ class AuditServiceTest {
         auditService.recordLoopCompletion("ses", "u", "r", "hash", result, 10, 20, cost);
         verify(telemetryAuditService).recordLoopCompletion("ses", "u", "r", "hash", result, 10, 20, cost);
     }
-    
+
     @Test
     void testRecordMandatoryDelegates() {
         auditService.recordMandatory("ses-1", "u1", "role", SecurityEventType.TOOL_INVOKED, "detail");

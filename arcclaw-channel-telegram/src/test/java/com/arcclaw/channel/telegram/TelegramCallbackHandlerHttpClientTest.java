@@ -14,6 +14,7 @@ import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -45,7 +46,7 @@ class TelegramCallbackHandlerHttpClientTest {
     void bugA3_singletonInstance_multipleFieldCallsUseSameObject() throws Exception {
         Field field = TelegramCallbackHandler.class.getDeclaredField("httpClient");
         field.setAccessible(true);
-        
+
         // Assert initial state is not null
         HttpClient client1 = (HttpClient) field.get(handler);
         assertNotNull(client1, "httpClient MUST be initialized");
@@ -58,34 +59,31 @@ class TelegramCallbackHandlerHttpClientTest {
     void bugA3_answerCallback_appliesFiveSecondTimeout() throws Exception {
         // 1. Setup mock HttpClient
         HttpClient mockClient = Mockito.mock(HttpClient.class);
-        
+
         // 2. Overwrite the instance httpClient field
         Field field = TelegramCallbackHandler.class.getDeclaredField("httpClient");
         field.setAccessible(true);
-        
+
         // mock the method to return a valid CompletableFuture instead of null
-        Mockito.when(mockClient.sendAsync(any(), any()))
-            .thenReturn(CompletableFuture.completedFuture(null));
-        
+        Mockito.when(mockClient.sendAsync(any(), any())).thenReturn(CompletableFuture.completedFuture(null));
+
         HttpClient originalClient = (HttpClient) field.get(handler);
         try {
             field.set(handler, mockClient);
-            
+
             // 3. Invoke answerCallback
             Method method = TelegramCallbackHandler.class.getDeclaredMethod("answerCallback", String.class);
             method.setAccessible(true);
             method.invoke(handler, "test-cb-id");
 
             // 4. Capture the HttpRequest
-            ArgumentCaptor<HttpRequest> requestCaptor = 
-                ArgumentCaptor.forClass(HttpRequest.class);
+            ArgumentCaptor<HttpRequest> requestCaptor = ArgumentCaptor.forClass(HttpRequest.class);
             verify(mockClient).sendAsync(requestCaptor.capture(), any());
 
             HttpRequest captured = requestCaptor.getValue();
             assertTrue(captured.timeout().isPresent(), "Request MUST have a timeout configured");
             Assertions.assertEquals(
-                Duration.ofSeconds(5), captured.timeout().get(),
-                "Timeout MUST be exactly 5 seconds (§C3)");
+                    Duration.ofSeconds(5), captured.timeout().get(), "Timeout MUST be exactly 5 seconds (§C3)");
 
         } finally {
             // Restore original client to avoid collateral damage to other tests

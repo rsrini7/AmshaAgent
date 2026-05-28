@@ -12,6 +12,7 @@ import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.tools.ToolResponse;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -85,7 +86,8 @@ class ToolResultProcessorTest {
     @Test
     void evaluateCircuitBreaker_WhenFailureUnderThreshold_ReturnsProceedWithFailures() {
         ReasoningStep step = ReasoningStep.pending("", "test_tool", Map.of());
-        StepDecision decision = processor.evaluateCircuitBreaker(step, ToolResponse.failure(1, "err"), 1, "sid", List.of());
+        StepDecision decision =
+                processor.evaluateCircuitBreaker(step, ToolResponse.failure(1, "err"), 1, "sid", List.of());
         assertEquals(DecisionType.PROCEED, decision.type());
         assertEquals(2, decision.consecutiveFailures());
     }
@@ -93,7 +95,8 @@ class ToolResultProcessorTest {
     @Test
     void evaluateCircuitBreaker_WhenFailuresReachThreshold_TripsCircuitBreaker() {
         ReasoningStep step = ReasoningStep.pending("", "test_tool", Map.of());
-        StepDecision decision = processor.evaluateCircuitBreaker(step, ToolResponse.failure(1, "err"), 2, "sid", List.of());
+        StepDecision decision =
+                processor.evaluateCircuitBreaker(step, ToolResponse.failure(1, "err"), 2, "sid", List.of());
         assertEquals(DecisionType.TERMINAL, decision.type());
         assertTrue(decision.result() instanceof AgentResult.Finished);
     }
@@ -101,9 +104,20 @@ class ToolResultProcessorTest {
     // ── resolveOutcome routing ──────────────────────────────────
 
     private AgentExecutionContext ctx() {
-        return new AgentExecutionContext("sess-1", "user-1", "chat-1", "coordinator",
-                "do something", AutonomyLevel.FULL,
-                null, 5, 0, null, null, null, null);
+        return new AgentExecutionContext(
+                "sess-1",
+                "user-1",
+                "chat-1",
+                "coordinator",
+                "do something",
+                AutonomyLevel.FULL,
+                null,
+                5,
+                0,
+                null,
+                null,
+                null,
+                null);
     }
 
     @Test
@@ -124,7 +138,8 @@ class ToolResultProcessorTest {
         var res = ToolResponse.success("task created");
         var obs = processor.buildObservation(res);
 
-        StepDecision decision = processor.resolveOutcome(ctx, ToolCapability.SCHEDULE_TASK.toolName(), Map.of(), res, obs, step, List.of(), 0);
+        StepDecision decision = processor.resolveOutcome(
+                ctx, ToolCapability.SCHEDULE_TASK.toolName(), Map.of(), res, obs, step, List.of(), 0);
         assertEquals(DecisionType.TERMINAL, decision.type());
         verify(writer).saveAnswer("sess-1", "✅ task created");
     }
@@ -136,7 +151,15 @@ class ToolResultProcessorTest {
         var res = ToolResponse.success("deleted");
         var obs = processor.buildObservation(res);
 
-        StepDecision decision = processor.resolveOutcome(ctx, ToolCapability.MANAGE_SCHEDULE.toolName(), Map.of("action", "delete"), res, obs, step, List.of(), 0);
+        StepDecision decision = processor.resolveOutcome(
+                ctx,
+                ToolCapability.MANAGE_SCHEDULE.toolName(),
+                Map.of("action", "delete"),
+                res,
+                obs,
+                step,
+                List.of(),
+                0);
         assertEquals(DecisionType.TERMINAL, decision.type());
         verify(writer).saveAnswer("sess-1", "✅ deleted");
     }
@@ -148,7 +171,8 @@ class ToolResultProcessorTest {
         var res = ToolResponse.success("list output");
         var obs = processor.buildObservation(res);
 
-        StepDecision decision = processor.resolveOutcome(ctx, ToolCapability.MANAGE_SCHEDULE.toolName(), Map.of("action", "list"), res, obs, step, List.of(), 0);
+        StepDecision decision = processor.resolveOutcome(
+                ctx, ToolCapability.MANAGE_SCHEDULE.toolName(), Map.of("action", "list"), res, obs, step, List.of(), 0);
         assertEquals(DecisionType.TERMINAL, decision.type());
         verify(writer).saveAnswer("sess-1", "list output");
     }
@@ -160,7 +184,8 @@ class ToolResultProcessorTest {
         var res = ToolResponse.success("task delegated");
         var obs = processor.buildObservation(res);
 
-        StepDecision decision = processor.resolveOutcome(ctx, ToolCapability.DELEGATE_TO_AGENT.toolName(), Map.of(), res, obs, step, List.of(), 0);
+        StepDecision decision = processor.resolveOutcome(
+                ctx, ToolCapability.DELEGATE_TO_AGENT.toolName(), Map.of(), res, obs, step, List.of(), 0);
         assertEquals(DecisionType.PROCEED, decision.type());
     }
 
@@ -171,7 +196,8 @@ class ToolResultProcessorTest {
         var res = ToolResponse.failure(1, "GitHub integration is not available");
         var obs = processor.buildObservation(res);
 
-        StepDecision decision = processor.resolveOutcome(ctx, ToolCapability.GITHUB.toolName(), Map.of(), res, obs, step, List.of(), 0);
+        StepDecision decision =
+                processor.resolveOutcome(ctx, ToolCapability.GITHUB.toolName(), Map.of(), res, obs, step, List.of(), 0);
         assertEquals(DecisionType.TERMINAL, decision.type());
     }
 
@@ -182,7 +208,15 @@ class ToolResultProcessorTest {
         var res = ToolResponse.failure(1, "timeout");
         var obs = processor.buildObservation(res);
 
-        StepDecision decision = processor.resolveOutcome(ctx, ToolCapability.BROWSER_NAVIGATE.toolName(), Map.of("url", "https://example.com"), res, obs, step, new ArrayList<>(), 0);
+        StepDecision decision = processor.resolveOutcome(
+                ctx,
+                ToolCapability.BROWSER_NAVIGATE.toolName(),
+                Map.of("url", "https://example.com"),
+                res,
+                obs,
+                step,
+                new ArrayList<>(),
+                0);
         assertEquals(DecisionType.CONTINUE, decision.type());
         assertNotNull(decision.transientError());
         assertTrue(decision.transientError().contains(ToolCapability.WEB_SEARCH_SERPER.toolName()));
@@ -195,7 +229,8 @@ class ToolResultProcessorTest {
         var res = ToolResponse.failure(1, "timeout");
         var obs = processor.buildObservation(res);
 
-        StepDecision decision = processor.resolveOutcome(ctx, ToolCapability.BROWSER_NAVIGATE.toolName(), Map.of(), res, obs, step, List.of(), 0);
+        StepDecision decision = processor.resolveOutcome(
+                ctx, ToolCapability.BROWSER_NAVIGATE.toolName(), Map.of(), res, obs, step, List.of(), 0);
         assertEquals(1, decision.consecutiveFailures());
     }
 }

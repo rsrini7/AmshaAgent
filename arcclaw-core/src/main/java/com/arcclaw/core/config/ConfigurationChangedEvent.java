@@ -13,11 +13,7 @@ import java.util.Map;
  * @param source      the API endpoint or component that triggered the change
  * @param timestamp   when the change occurred
  */
-public record ConfigurationChangedEvent(
-    Map<String, String> changedKeys,
-    String source,
-    Instant timestamp
-) {
+public record ConfigurationChangedEvent(Map<String, String> changedKeys, String source, Instant timestamp) {
     public ConfigurationChangedEvent {
         if (changedKeys == null || changedKeys.isEmpty()) {
             throw new IllegalArgumentException("changedKeys must not be null or empty");

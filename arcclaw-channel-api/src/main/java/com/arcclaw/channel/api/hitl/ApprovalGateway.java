@@ -6,8 +6,7 @@ package com.arcclaw.channel.api.hitl;
  * §9.1
  */
 public interface ApprovalGateway {
-    ApprovalResult decide(String sessionId, String toolName,
-                          ApprovalDecision decision, String reason);
+    ApprovalResult decide(String sessionId, String toolName, ApprovalDecision decision, String reason);
 
     /**
      * Resolves a potentially truncated session ID prefix to the full session ID.

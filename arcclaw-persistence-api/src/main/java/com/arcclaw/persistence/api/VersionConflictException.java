@@ -15,8 +15,8 @@ public class VersionConflictException extends RuntimeException {
 
     public VersionConflictException(String blockKey, int expectedVersion, int actualVersion) {
         super(String.format(
-            "Version conflict for Core Memory block '%s': expected %d, actual %d",
-            blockKey, expectedVersion, actualVersion));
+                "Version conflict for Core Memory block '%s': expected %d, actual %d",
+                blockKey, expectedVersion, actualVersion));
         this.blockKey = blockKey;
         this.expectedVersion = expectedVersion;
         this.actualVersion = actualVersion;

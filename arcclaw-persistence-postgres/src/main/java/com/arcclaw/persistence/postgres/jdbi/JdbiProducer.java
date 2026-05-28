@@ -1,19 +1,18 @@
 package com.arcclaw.persistence.postgres.jdbi;
 
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.inject.Produces;
+import jakarta.inject.Inject;
+
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Types;
 import java.util.Map;
 
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.enterprise.inject.Produces;
-import jakarta.inject.Inject;
-
 import com.arcclaw.common.util.LogUtil;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.agroal.api.AgroalDataSource;
-import io.quarkus.arc.properties.IfBuildProperty;
+
 import org.jboss.logging.Logger;
 import org.jdbi.v3.core.Jdbi;
 import org.jdbi.v3.core.argument.AbstractArgumentFactory;
@@ -22,6 +21,9 @@ import org.jdbi.v3.core.config.ConfigRegistry;
 import org.jdbi.v3.core.mapper.ColumnMapper;
 import org.jdbi.v3.core.statement.StatementContext;
 import org.jdbi.v3.sqlobject.SqlObjectPlugin;
+
+import io.agroal.api.AgroalDataSource;
+import io.quarkus.arc.properties.IfBuildProperty;
 
 @ApplicationScoped
 @IfBuildProperty(name = "arcclaw.persistence.backend", stringValue = "postgres")
@@ -37,9 +39,9 @@ public class JdbiProducer {
     @ApplicationScoped
     public Jdbi jdbi() {
         return Jdbi.create(dataSource)
-            .installPlugin(new SqlObjectPlugin())
-            .registerArgument(new JsonArgumentFactory(objectMapper))
-            .registerColumnMapper(new JsonColumnMapper(objectMapper));
+                .installPlugin(new SqlObjectPlugin())
+                .registerArgument(new JsonArgumentFactory(objectMapper))
+                .registerColumnMapper(new JsonColumnMapper(objectMapper));
     }
 
     static class JsonArgumentFactory extends AbstractArgumentFactory<Map<String, Object>> {

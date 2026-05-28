@@ -14,6 +14,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import com.arcclaw.common.util.LogUtil;
+
 import org.jboss.logging.Logger;
 
 /**
@@ -26,9 +27,11 @@ public class EnvConfigInitializer {
     private static final Pattern ENV_PATTERN = Pattern.compile("^\\s*([A-Za-z_][A-Za-z0-9_.]*?)\\s*=\\s*(.*?)\\s*$");
 
     private static final Set<String> BASE64_KEYS = Set.of(
-        "ARCCLAW_VAULT_PEPPER", "ARCCLAW_AUDIT_HMAC_KEY",
-        "ARCCLAW_API_KEYS_INTERNAL", "ARCCLAW_API_KEYS_CI", "ARCCLAW_API_KEYS_ADMIN"
-    );
+            "ARCCLAW_VAULT_PEPPER",
+            "ARCCLAW_AUDIT_HMAC_KEY",
+            "ARCCLAW_API_KEYS_INTERNAL",
+            "ARCCLAW_API_KEYS_CI",
+            "ARCCLAW_API_KEYS_ADMIN");
 
     public static void loadDotEnv(Path dir) {
         Path envFile = dir.resolve(".env");
@@ -79,14 +82,15 @@ public class EnvConfigInitializer {
             }
             if (!valid) {
                 try {
-                    String generated = Base64.getEncoder().encodeToString(
-                        SecureRandom.getInstanceStrong().generateSeed(32));
+                    String generated = Base64.getEncoder()
+                            .encodeToString(SecureRandom.getInstanceStrong().generateSeed(32));
                     System.err.println("[ArcClaw] ⚠️  " + key + " invalid Base64 - regenerating.");
                     patchEnvFile(envFile, key, generated, PatchMode.UPDATE);
                     System.setProperty(key, generated);
                     anyFixed = true;
                 } catch (Exception e) {
-                    System.err.println("[ArcClaw] ❌ Failed to generate security key for " + key + ": " + e.getMessage());
+                    System.err.println(
+                            "[ArcClaw] ❌ Failed to generate security key for " + key + ": " + e.getMessage());
                 }
             }
         }
@@ -112,7 +116,11 @@ public class EnvConfigInitializer {
         }
     }
 
-    public enum PatchMode { INIT, UPDATE, FORCE }
+    public enum PatchMode {
+        INIT,
+        UPDATE,
+        FORCE
+    }
 
     public static void patchEnvFile(Path envFile, String key, String value, PatchMode mode) {
         try {
@@ -123,21 +131,25 @@ public class EnvConfigInitializer {
             String content = Files.readString(envFile);
             Pattern pattern = Pattern.compile("(?m)^" + Pattern.quote(key) + "=.*$");
             Matcher matcher = pattern.matcher(content);
-            
+
             if (matcher.find()) {
                 String currentLine = matcher.group();
                 String newLine = key + "=" + value;
-                
-                boolean needsPatch = switch (mode) {
-                    case FORCE  -> true;
-                    case UPDATE -> !currentLine.equals(newLine);
-                    case INIT   -> {
-                        String currentValue = currentLine.substring(key.length() + 1).trim();
-                        yield currentValue.isEmpty() || currentValue.contains("xxxx") || 
-                              currentValue.contains("<") || currentValue.contains("changeme") ||
-                              currentValue.contains("ABCdef");
-                    }
-                };
+
+                boolean needsPatch =
+                        switch (mode) {
+                            case FORCE -> true;
+                            case UPDATE -> !currentLine.equals(newLine);
+                            case INIT -> {
+                                String currentValue =
+                                        currentLine.substring(key.length() + 1).trim();
+                                yield currentValue.isEmpty()
+                                        || currentValue.contains("xxxx")
+                                        || currentValue.contains("<")
+                                        || currentValue.contains("changeme")
+                                        || currentValue.contains("ABCdef");
+                            }
+                        };
 
                 if (needsPatch) {
                     content = pattern.matcher(content).replaceAll(Matcher.quoteReplacement(newLine));
@@ -145,7 +157,8 @@ public class EnvConfigInitializer {
                 }
             } else {
                 String separator = content.endsWith(System.lineSeparator()) ? "" : System.lineSeparator();
-                Files.writeString(envFile, separator + key + "=" + value + System.lineSeparator(), StandardOpenOption.APPEND);
+                Files.writeString(
+                        envFile, separator + key + "=" + value + System.lineSeparator(), StandardOpenOption.APPEND);
             }
         } catch (IOException e) {
             log.warnf("[ArcClaw] Could not update .env: %s", LogUtil.rootMessage(e));

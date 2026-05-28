@@ -2,12 +2,15 @@ package com.arcclaw.core.tools;
 
 import static com.arcclaw.core.message.UserMessages.NO_SCHEDULE_FOUND;
 
-import java.util.List;
-import java.util.Map;
-import java.util.stream.Collectors;
+import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
+import dev.langchain4j.model.chat.request.json.JsonStringSchema;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
+
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.agent.role.ToolCapability;
@@ -19,8 +22,6 @@ import com.arcclaw.core.domain.model.AgentCronRecord;
 import com.arcclaw.core.message.UserMessages;
 import com.arcclaw.core.security.ToolOperation;
 import com.arcclaw.persistence.api.CronStorePort;
-import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
-import dev.langchain4j.model.chat.request.json.JsonStringSchema;
 
 /**
  * Agent tool for listing and deleting scheduled cron tasks.
@@ -30,10 +31,9 @@ import dev.langchain4j.model.chat.request.json.JsonStringSchema;
  */
 @ApplicationScoped
 @ToolMetadata(
-    capabilityId = "manage_schedule",
-    description = "Manage (list/delete) existing scheduled tasks",
-    defaultRoles = {"coordinator", "synthesizer"}
-)
+        capabilityId = "manage_schedule",
+        description = "Manage (list/delete) existing scheduled tasks",
+        defaultRoles = {"coordinator", "synthesizer"})
 public class ManageScheduleTool implements AgentTool {
 
     @Inject
@@ -49,13 +49,12 @@ public class ManageScheduleTool implements AgentTool {
 
     @Override
     public String description() {
-        return "List or delete scheduled autonomous tasks. " +
-                "Parameters: " +
-                "1. 'action' - 'list' to show all your scheduled tasks, " +
-                    "'delete' to remove a specific task. " +
-                "2. 'cronId' - Required when action is 'delete'. " +
-                    "Obtain the cronId first by calling with action='list'. " +
-                "Returns a formatted list of tasks with their IDs, cron expressions, and next fire times.";
+        return "List or delete scheduled autonomous tasks. " + "Parameters: "
+                + "1. 'action' - 'list' to show all your scheduled tasks, "
+                + "'delete' to remove a specific task. "
+                + "2. 'cronId' - Required when action is 'delete'. "
+                + "Obtain the cronId first by calling with action='list'. "
+                + "Returns a formatted list of tasks with their IDs, cron expressions, and next fire times.";
     }
 
     @Override
@@ -71,12 +70,16 @@ public class ManageScheduleTool implements AgentTool {
     @Override
     public JsonObjectSchema parametersSchema() {
         return JsonObjectSchema.builder()
-                .addProperty("action", JsonStringSchema.builder()
-                        .description("Action to perform: 'list' or 'delete'")
-                        .build())
-                .addProperty("cronId", JsonStringSchema.builder()
-                        .description("ID of the cron job to delete (required for delete action)")
-                        .build())
+                .addProperty(
+                        "action",
+                        JsonStringSchema.builder()
+                                .description("Action to perform: 'list' or 'delete'")
+                                .build())
+                .addProperty(
+                        "cronId",
+                        JsonStringSchema.builder()
+                                .description("ID of the cron job to delete (required for delete action)")
+                                .build())
                 .required("action")
                 .build();
     }
@@ -88,7 +91,7 @@ public class ManageScheduleTool implements AgentTool {
 
         try {
             // Step 1 - Extract and validate tenant context - NS2: Fail fast
-            userId    = ctx.userId();
+            userId = ctx.userId();
             sessionId = ctx.sessionId();
         } catch (IllegalStateException e) {
             // NS2 backward compatibility: convert missing context into 403 ToolResponse
@@ -97,48 +100,47 @@ public class ManageScheduleTool implements AgentTool {
             }
             throw e;
         }
- 
+
         String action = (String) params.get("action");
         if (action == null || action.isBlank()) {
             return ToolResponse.failure(400, "action is required (list or delete).");
         }
- 
-            return switch (action.trim().toLowerCase()) {
-                case "list" -> {
-                    List<AgentCron> jobs = cronStore.findByUserId(userId).stream()
-                            .map(AgentCronRecord::fromDto)
-                            .collect(Collectors.toList());
-                    if (jobs.isEmpty()) {
-                        yield ToolResponse.success(NO_SCHEDULE_FOUND);
-                    }
-                    String listing = jobs.stream()
-                            .map(AgentCron::toDisplayString)
-                            .collect(Collectors.joining("\n\n---\n\n"));
-                    yield ToolResponse.success(listing);
+
+        return switch (action.trim().toLowerCase()) {
+            case "list" -> {
+                List<AgentCron> jobs = cronStore.findByUserId(userId).stream()
+                        .map(AgentCronRecord::fromDto)
+                        .collect(Collectors.toList());
+                if (jobs.isEmpty()) {
+                    yield ToolResponse.success(NO_SCHEDULE_FOUND);
                 }
-                case "delete" -> {
-                    String cronId = (String) params.get("cronId");
-                    if (cronId == null || cronId.isBlank()) {
-                        yield ToolResponse.failure(400, "cronId is required for delete action.");
-                    }
- 
-                    int deleted = cronStore.deleteByIdAndUserId(cronId, userId); // ← capture result
- 
-                    if (deleted == 0) {
-                        yield ToolResponse.failure(404,
-                            UserMessages.cronNotFound(cronId));
-                    }
- 
-                    auditService.record(sessionId, userId,           // ← only audit on actual deletion
-                            AgentRoleEnum.COORDINATOR.toScopedName(),
-                            SecurityEventType.CRONDELETED,
-                            "cronId=" + cronId);
- 
-                    yield ToolResponse.success(UserMessages.cronDeleted(cronId));
+                String listing =
+                        jobs.stream().map(AgentCron::toDisplayString).collect(Collectors.joining("\n\n---\n\n"));
+                yield ToolResponse.success(listing);
+            }
+            case "delete" -> {
+                String cronId = (String) params.get("cronId");
+                if (cronId == null || cronId.isBlank()) {
+                    yield ToolResponse.failure(400, "cronId is required for delete action.");
                 }
- 
-            default -> ToolResponse.failure(400,
-                    "Unknown action: " + action + ". Use 'list' or 'delete'.");
+
+                int deleted = cronStore.deleteByIdAndUserId(cronId, userId); // ← capture result
+
+                if (deleted == 0) {
+                    yield ToolResponse.failure(404, UserMessages.cronNotFound(cronId));
+                }
+
+                auditService.record(
+                        sessionId,
+                        userId, // ← only audit on actual deletion
+                        AgentRoleEnum.COORDINATOR.toScopedName(),
+                        SecurityEventType.CRONDELETED,
+                        "cronId=" + cronId);
+
+                yield ToolResponse.success(UserMessages.cronDeleted(cronId));
+            }
+
+            default -> ToolResponse.failure(400, "Unknown action: " + action + ". Use 'list' or 'delete'.");
         };
     }
 }

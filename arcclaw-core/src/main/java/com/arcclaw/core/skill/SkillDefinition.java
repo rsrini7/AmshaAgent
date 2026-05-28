@@ -26,7 +26,7 @@ import java.util.UUID;
  * ---
  * You are a meticulous code reviewer...
  * </pre>
- * 
+ *
  * @param id The unique identifier of the skill (auto-generated UUID if null).
  * @param name The canonical name of the skill.
  * @param description A human readable description for the /skills reflex command.
@@ -36,14 +36,13 @@ import java.util.UUID;
  * @param systemPrompt The actual LLM prompt instruction block.
  */
 public record SkillDefinition(
-    String id,
-    String name,
-    String description,
-    List<String> triggerPatterns,
-    List<String> toolCapabilities,
-    int maxIterations,
-    String systemPrompt
-) {
+        String id,
+        String name,
+        String description,
+        List<String> triggerPatterns,
+        List<String> toolCapabilities,
+        int maxIterations,
+        String systemPrompt) {
     /**
      * Compact constructor enforcing non-null/non-blank rules and deep immutability.
      */

@@ -1,9 +1,9 @@
 package com.arcclaw.core.reflex;
 
+import jakarta.enterprise.context.ApplicationScoped;
+
 import java.util.List;
 import java.util.Optional;
-
-import jakarta.enterprise.context.ApplicationScoped;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 
@@ -13,15 +13,12 @@ import org.eclipse.microprofile.config.inject.ConfigProperty;
 @ApplicationScoped
 public class DelegateApprovalGuard {
 
-    @ConfigProperty(name = "arcclaw.hitl.delegate-approver-ids",
-                    defaultValue = "")
+    @ConfigProperty(name = "arcclaw.hitl.delegate-approver-ids", defaultValue = "")
     private Optional<List<String>> delegateApproverIds;
 
     public boolean isDelegate(String userId) {
         if (userId == null) return false;
-        return delegateApproverIds
-            .map(ids -> ids.contains(userId))
-            .orElse(false);
+        return delegateApproverIds.map(ids -> ids.contains(userId)).orElse(false);
     }
 
     /** For test purposes (§P75-H) */

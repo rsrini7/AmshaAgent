@@ -17,6 +17,7 @@ import com.arcclaw.core.tools.ToolRegistry;
 import com.arcclaw.core.util.TextPatternUtils;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+
 import org.apache.commons.text.StringEscapeUtils;
 import org.jboss.logging.Logger;
 
@@ -29,12 +30,10 @@ public class FinishOutcomeProcessor {
     static final String SALVAGE_REJECT_PHRASE = "completed the task";
 
     private static final Pattern INTERNAL_JVM_ERROR_PATTERN = Pattern.compile(
-            "(?:java\\.lang\\.)?" +
-            "(?:NullPointerException|IllegalArgumentException|" +
-            "IllegalStateException|StackOverflowError|OutOfMemoryError)" +
-            "(?::\\s.+)",
-            Pattern.MULTILINE
-    );
+            "(?:java\\.lang\\.)?" + "(?:NullPointerException|IllegalArgumentException|"
+                    + "IllegalStateException|StackOverflowError|OutOfMemoryError)"
+                    + "(?::\\s.+)",
+            Pattern.MULTILINE);
 
     private static final Pattern TOOL_CALL_JSON_LEAK =
             Pattern.compile("(?s)\\{\\s*\"(tool|action|function|callId|content|metadata)\"\\s*:.*?\\}", Pattern.DOTALL);
@@ -42,40 +41,33 @@ public class FinishOutcomeProcessor {
     /** Detects claims of having stored/saved/remembered user information without an actual tool call. */
     private static final Pattern HALLUCINATED_STORAGE_CLAIM = Pattern.compile(
             "(?i)\\b(?:I (?:have |'ve )?(?:stored|saved|remembered|noted|recorded|kept)|(?:your|the) (?:name|identity|interest|preference|information) (?:is|has been|was) (?:stored|saved|remembered|noted))\\b",
-            Pattern.MULTILINE
-    );
+            Pattern.MULTILINE);
 
     /** Detects claims of having scheduled a task/reminder/timer without an actual tool call. */
     private static final Pattern HALLUCINATED_SCHEDULE_CLAIM = Pattern.compile(
             "(?i)\\b(?:I (?:have |'ve )?(?:scheduled|set a (?:reminder|timer)|created a (?:cron|task))|task (?:is |has been )?scheduled|scheduled the task|cron job has been|will run (?:in|at|every)|remind you in|reminder has been set|timer has been set)\\b",
-            Pattern.MULTILINE
-    );
+            Pattern.MULTILINE);
 
     /** Detects knowledge disclaimers when recall/archival memory search results should have been synthesized. */
     private static final Pattern KNOWLEDGE_DISCLAIMER = Pattern.compile(
             "(?i)(?:I (?:do(?:n't| not) (?:have|know|possess|store|remember|recall)|(?:have|possess) (?:no|not)) (?:any )?(?:information|data|knowledge|record|detail|identity|name|preference)|(?:no|not? any) (?:information|data|knowledge|record) (?:about|regarding|on|of) (?:you|the user|their))",
-            Pattern.MULTILINE
-    );
+            Pattern.MULTILINE);
 
     private static final Pattern PREFIX_TOKEN_LEAK = Pattern.compile(
             "(?i)^(\\s*[*_]*(FINISH:?|Action:\\s*FINISH|Answer:|Final Answer:|Response:)[*_]*\\s*)+",
-            Pattern.MULTILINE
-    );
+            Pattern.MULTILINE);
 
-    private static final Pattern SUFFIX_TOKEN_LEAK = Pattern.compile(
-            "(?i)\\s*[*_]*(FINISH:?|Action:\\s*FINISH)[*_]*\\s*$",
-            Pattern.MULTILINE
-    );
+    private static final Pattern SUFFIX_TOKEN_LEAK =
+            Pattern.compile("(?i)\\s*[*_]*(FINISH:?|Action:\\s*FINISH)[*_]*\\s*$", Pattern.MULTILINE);
 
-    private static final Pattern FENCE_ONLY_PATTERN = Pattern.compile(
-            "^\\s*```[a-z]*\\s*[}\\]]*\\s*```\\s*$",
-            Pattern.CASE_INSENSITIVE
-    );
+    private static final Pattern FENCE_ONLY_PATTERN =
+            Pattern.compile("^\\s*```[a-z]*\\s*[}\\]]*\\s*```\\s*$", Pattern.CASE_INSENSITIVE);
 
     private static final List<String> SEARCH_TOOL_NAMES = List.of(
             ToolCapability.WEB_SEARCH_SERPER.toolName(),
             ToolCapability.WEB_SEARCH_BRAVE.toolName(),
-            "web_search", "search");
+            "web_search",
+            "search");
 
     private final AnswerGuardStrategy qualityGuard;
     private final CodeGenerationPolicy codePolicy;
@@ -85,13 +77,14 @@ public class FinishOutcomeProcessor {
     private final TextPatternUtils textPatternUtils;
     private final ToolRegistry toolRegistry;
 
-    public FinishOutcomeProcessor(AnswerGuardStrategy qualityGuard,
-                                  CodeGenerationPolicy codePolicy,
-                                  RateLimitTracker rateLimitTracker,
-                                  CorrectionStrategy correctionStrategy,
-                                  ObjectMapper objectMapper,
-                                  TextPatternUtils textPatternUtils,
-                                  ToolRegistry toolRegistry) {
+    public FinishOutcomeProcessor(
+            AnswerGuardStrategy qualityGuard,
+            CodeGenerationPolicy codePolicy,
+            RateLimitTracker rateLimitTracker,
+            CorrectionStrategy correctionStrategy,
+            ObjectMapper objectMapper,
+            TextPatternUtils textPatternUtils,
+            ToolRegistry toolRegistry) {
         this.qualityGuard = qualityGuard;
         this.codePolicy = codePolicy;
         this.rateLimitTracker = rateLimitTracker;
@@ -110,10 +103,8 @@ public class FinishOutcomeProcessor {
 
     public String extractCandidateAnswer(ReasoningStep step) {
         String candidateAnswer = step.thought();
-        if (step.actionInput() != null
-                && step.actionInput().containsKey(ReasoningStep.ACTION_INPUT_ANSWER_KEY)) {
-            candidateAnswer = String.valueOf(
-                    step.actionInput().get(ReasoningStep.ACTION_INPUT_ANSWER_KEY));
+        if (step.actionInput() != null && step.actionInput().containsKey(ReasoningStep.ACTION_INPUT_ANSWER_KEY)) {
+            candidateAnswer = String.valueOf(step.actionInput().get(ReasoningStep.ACTION_INPUT_ANSWER_KEY));
         }
 
         if (candidateAnswer != null) {
@@ -128,15 +119,15 @@ public class FinishOutcomeProcessor {
     public String unescapeAndNormalize(String candidateAnswer) {
         if (candidateAnswer == null) return null;
         String answer = StringEscapeUtils.unescapeHtml4(candidateAnswer);
-        answer = answer
-                .replace("\\u003c", "<")
+        answer = answer.replace("\\u003c", "<")
                 .replace("\\u003e", ">")
                 .replace("\\u0026", "&")
                 .replace("\\u0027", "'");
         return sanitizeAnswer(answer);
     }
 
-    public FinishActionHandler.FinishOutcome checkHallucination(String sessionId, List<ReasoningStep> history, ReasoningStep step, String answer) {
+    public FinishActionHandler.FinishOutcome checkHallucination(
+            String sessionId, List<ReasoningStep> history, ReasoningStep step, String answer) {
         if (answer == null) return null;
 
         FinishActionHandler.FinishOutcome result;
@@ -148,8 +139,8 @@ public class FinishOutcomeProcessor {
         return result;
     }
 
-    private FinishActionHandler.FinishOutcome checkHallucinatedSchedule(String sessionId,
-            List<ReasoningStep> history, ReasoningStep step, String answer) {
+    private FinishActionHandler.FinishOutcome checkHallucinatedSchedule(
+            String sessionId, List<ReasoningStep> history, ReasoningStep step, String answer) {
         boolean hasScheduleClaim = answer.contains(AgentSentinels.SCHEDULE_SUCCESS_MESSAGE)
                 || HALLUCINATED_SCHEDULE_CLAIM.matcher(answer).find();
         if (!hasScheduleClaim) return null;
@@ -162,54 +153,62 @@ public class FinishOutcomeProcessor {
         if (isNegative) return null;
         if (historyContainsSuccessfulSchedule(history)) return null;
 
-        log.warnf("FINISH-HANDLER: Hallucinated scheduling success detected for session %s. " +
-                  "No 'schedule_task' call found in history. Answer: %s", sessionId, answer);
+        log.warnf(
+                "FINISH-HANDLER: Hallucinated scheduling success detected for session %s. "
+                        + "No 'schedule_task' call found in history. Answer: %s",
+                sessionId, answer);
         ReasoningStep cleanStep = step.withObservation("Detected hallucinated scheduling success in FINISH answer");
         String hint = answer.contains(AgentSentinels.SCHEDULE_SUCCESS_MESSAGE)
-            ? "System: STOP. You claimed '" + AgentSentinels.SCHEDULE_SUCCESS_MESSAGE +
-              "' but you did NOT call the schedule_task tool. You must invoke the schedule_task tool with " +
-              "the correct cron expression and goal BEFORE calling FINISH."
-            : "System: STOP. You claimed to have scheduled/set a reminder but you did NOT call " +
-              "the schedule_task tool. You must invoke the schedule_task tool with " +
-              "the correct cron expression and goal BEFORE calling FINISH.";
+                ? "System: STOP. You claimed '" + AgentSentinels.SCHEDULE_SUCCESS_MESSAGE
+                        + "' but you did NOT call the schedule_task tool. You must invoke the schedule_task tool with "
+                        + "the correct cron expression and goal BEFORE calling FINISH."
+                : "System: STOP. You claimed to have scheduled/set a reminder but you did NOT call "
+                        + "the schedule_task tool. You must invoke the schedule_task tool with "
+                        + "the correct cron expression and goal BEFORE calling FINISH.";
         return new FinishActionHandler.FinishOutcome.Correction(cleanStep, hint);
     }
 
-    private FinishActionHandler.FinishOutcome checkHallucinatedStorage(String sessionId,
-            List<ReasoningStep> history, ReasoningStep step, String answer) {
+    private FinishActionHandler.FinishOutcome checkHallucinatedStorage(
+            String sessionId, List<ReasoningStep> history, ReasoningStep step, String answer) {
         if (!HALLUCINATED_STORAGE_CLAIM.matcher(answer).find()) return null;
         if (historyContainsIngestDocument(history)) return null;
 
-        log.warnf("FINISH-HANDLER: Hallucinated memory storage claim detected for session %s. " +
-                  "No 'ingest_document' call found in history.", sessionId);
+        log.warnf(
+                "FINISH-HANDLER: Hallucinated memory storage claim detected for session %s. "
+                        + "No 'ingest_document' call found in history.",
+                sessionId);
         ReasoningStep cleanStep = step.withObservation("Detected hallucinated memory storage claim in FINISH answer");
-        String hint = "System: STOP. You claimed to have stored/remembered user information but you did NOT call " +
-            "the ingest_document tool. You CANNOT store information without calling ingest_document. " +
-            "Either: (1) Call ingest_document NOW with the information, or (2) Answer honestly that " +
-            "you have NOT stored anything. NEVER claim a tool action you did not perform.";
+        String hint = "System: STOP. You claimed to have stored/remembered user information but you did NOT call "
+                + "the ingest_document tool. You CANNOT store information without calling ingest_document. "
+                + "Either: (1) Call ingest_document NOW with the information, or (2) Answer honestly that "
+                + "you have NOT stored anything. NEVER claim a tool action you did not perform.";
         return new FinishActionHandler.FinishOutcome.Correction(cleanStep, hint);
     }
 
-    private FinishActionHandler.FinishOutcome checkKnowledgeDisclaimer(String sessionId,
-            List<ReasoningStep> history, ReasoningStep step, String answer) {
+    private FinishActionHandler.FinishOutcome checkKnowledgeDisclaimer(
+            String sessionId, List<ReasoningStep> history, ReasoningStep step, String answer) {
         if (!KNOWLEDGE_DISCLAIMER.matcher(answer).find()) return null;
         String memoryResult = findMemorySearchResult(history);
         if (memoryResult == null) return null;
 
-        log.warnf("FINISH-HANDLER: Memory search synthesis failure detected for session %s. " +
-                  "Memory search returned results but answer disclaims knowledge.", sessionId);
+        log.warnf(
+                "FINISH-HANDLER: Memory search synthesis failure detected for session %s. "
+                        + "Memory search returned results but answer disclaims knowledge.",
+                sessionId);
         ReasoningStep cleanStep = step.withObservation("Detected memory search synthesis failure");
-        String hint = "System: STOP. You just searched your memory and found information about this user. " +
-            "Your memory search tool returned these results:\n---\n" +
-            memoryResult + "\n---\n" +
-            "You MUST synthesize these results into a natural, conversational answer. " +
-            "Do NOT say 'I don't have information' when your memory search just returned it. " +
-            "Read the tool results above and answer the user directly.";
+        String hint = "System: STOP. You just searched your memory and found information about this user. "
+                + "Your memory search tool returned these results:\n---\n"
+                + memoryResult
+                + "\n---\n" + "You MUST synthesize these results into a natural, conversational answer. "
+                + "Do NOT say 'I don't have information' when your memory search just returned it. "
+                + "Read the tool results above and answer the user directly.";
         return new FinishActionHandler.FinishOutcome.Correction(cleanStep, hint);
     }
 
-    public FinishActionHandler.FinishOutcome applyCodePolicy(String sessionId, String agentRole, List<ReasoningStep> history, String answer, ReasoningStep step) {
-        if (answer != null && codePolicy.isGeneratedCodeBlock(answer, agentRole)
+    public FinishActionHandler.FinishOutcome applyCodePolicy(
+            String sessionId, String agentRole, List<ReasoningStep> history, String answer, ReasoningStep step) {
+        if (answer != null
+                && codePolicy.isGeneratedCodeBlock(answer, agentRole)
                 && !codePolicy.canGenerateCode(agentRole)) {
             log.infof("FINISH-HANDLER code-gen blocked for role '%s' in session %s", agentRole, sessionId);
 
@@ -240,12 +239,13 @@ public class FinishOutcomeProcessor {
         return answer;
     }
 
-    public FinishActionHandler.FinishOutcome handleLeak(String candidateAnswer,
-                                     ReasoningStep step,
-                                     List<ReasoningStep> history,
-                                     int llmSchemaErrorCount,
-                                     String sessionId,
-                                     String goal) {
+    public FinishActionHandler.FinishOutcome handleLeak(
+            String candidateAnswer,
+            ReasoningStep step,
+            List<ReasoningStep> history,
+            int llmSchemaErrorCount,
+            String sessionId,
+            String goal) {
 
         boolean isLeak = qualityGuard.isRawToolCallLeak(candidateAnswer);
 
@@ -264,25 +264,30 @@ public class FinishOutcomeProcessor {
         boolean isBrokenFragment = FENCE_ONLY_PATTERN.matcher(cleanThought).matches();
 
         if (isBrokenFragment) {
-            log.warnf("FINISH-HANDLER: Detected broken JSON fragment in answer for session %s - treating as leak.", sessionId);
+            log.warnf(
+                    "FINISH-HANDLER: Detected broken JSON fragment in answer for session %s - treating as leak.",
+                    sessionId);
         }
 
         // Try to parse the leaked tool call FIRST — before early salvage strips it
         var leakedCall = qualityGuard.extractLeakedToolCall(candidateAnswer);
         if (leakedCall.isPresent()) {
             var call = leakedCall.get();
-            log.infof("LEAKED-TOOL-EXEC session %s: parsed leaked tool call '%s' from FINISH answer - executing directly",
+            log.infof(
+                    "LEAKED-TOOL-EXEC session %s: parsed leaked tool call '%s' from FINISH answer - executing directly",
                     sessionId, call.toolName());
             InfiniteLoopChatModel.getLastUsedSlot().ifPresent(InfiniteLoopChatModel::recordQualityFailure);
             ReasoningStep cleanStep = step.withObservation(cleanThought);
-            return new FinishActionHandler.FinishOutcome.ExecuteLeakedTool(call.toolName(), call.arguments(), cleanStep);
+            return new FinishActionHandler.FinishOutcome.ExecuteLeakedTool(
+                    call.toolName(), call.arguments(), cleanStep);
         }
 
         // JSON detected but no tool-call keys (e.g. {"response":"..."}) — treat as valid answer, not a leak.
         if (isLeak && !containsToolCallKeys(candidateAnswer)) {
             log.infof("FINISH-HANDLER session %s: JSON without tool-call keys - treating as valid answer", sessionId);
             var guarded = qualityGuard.guard(candidateAnswer, history).answer();
-            return new FinishActionHandler.FinishOutcome.Completed(AgentResult.finished(guarded, List.copyOf(history)), guarded);
+            return new FinishActionHandler.FinishOutcome.Completed(
+                    AgentResult.finished(guarded, List.copyOf(history)), guarded);
         }
 
         if ((llmSchemaErrorCount >= 1 || isBrokenFragment)
@@ -293,18 +298,22 @@ public class FinishOutcomeProcessor {
 
             if (looksLikeJson(cleanThought)) {
                 if (correctionStrategy.withinBudget(llmSchemaErrorCount)) {
-                    log.warnf("FINISH-HANDLER salvaged thought is still JSON for session %s - retrying with direct-answer hint", sessionId);
+                    log.warnf(
+                            "FINISH-HANDLER salvaged thought is still JSON for session %s - retrying with direct-answer hint",
+                            sessionId);
                     ReasoningStep cleanStep = step.withObservation("");
                     String leakedTool = qualityGuard.extractLeakedToolName(candidateAnswer);
-                    String directHint = "System: Your response was raw JSON, NOT a valid answer. " +
-                            "You are NOT allowed to write tool calls as text. " +
-                            "The information the user asked for IS in the conversation history above. " +
-                            "Read the history carefully and answer DIRECTLY in plain text using FINISH. " +
-                            "Do NOT call any tools. Do NOT output JSON.";
+                    String directHint = "System: Your response was raw JSON, NOT a valid answer. "
+                            + "You are NOT allowed to write tool calls as text. "
+                            + "The information the user asked for IS in the conversation history above. "
+                            + "Read the history carefully and answer DIRECTLY in plain text using FINISH. "
+                            + "Do NOT call any tools. Do NOT output JSON.";
                     return new FinishActionHandler.FinishOutcome.RetryLeak(cleanStep, directHint, leakedTool);
                 }
 
-                log.warnf("FINISH-HANDLER salvaged thought is still JSON - not usable, failing turn for session %s", sessionId);
+                log.warnf(
+                        "FINISH-HANDLER salvaged thought is still JSON - not usable, failing turn for session %s",
+                        sessionId);
                 AgentResult failed = AgentResult.failed(
                         "I encountered a formatting error (JSON echo) and could not complete your request.",
                         AgentResult.FailureCategory.SCHEMA_ERROR,
@@ -312,7 +321,8 @@ public class FinishOutcomeProcessor {
                 return new FinishActionHandler.FinishOutcome.SalvageFailed(failed);
             }
 
-            log.warnf("FINISH-HANDLER early salvage after %d leaks for session %s - clean thought is usable",
+            log.warnf(
+                    "FINISH-HANDLER early salvage after %d leaks for session %s - clean thought is usable",
                     llmSchemaErrorCount, sessionId);
 
             AnswerGuardStrategy.AnswerGuardResult guardResult = qualityGuard.guard(cleanThought, history);
@@ -329,7 +339,8 @@ public class FinishOutcomeProcessor {
         InfiniteLoopChatModel.getLastUsedSlot().ifPresent(InfiniteLoopChatModel::recordQualityFailure);
 
         if (correctionStrategy.withinBudget(llmSchemaErrorCount)) {
-            log.warnf("STATE-MACHINE session %s FINISH answer contains raw tool call JSON - retrying (attempt %d)",
+            log.warnf(
+                    "STATE-MACHINE session %s FINISH answer contains raw tool call JSON - retrying (attempt %d)",
                     sessionId, llmSchemaErrorCount + 1);
 
             ReasoningStep cleanStep = step.withObservation(cleanThought);
@@ -339,7 +350,9 @@ public class FinishOutcomeProcessor {
             String correctionHint = "System: " + severity + ". Your last response contained raw JSON/tool-call "
                     + "text instead of a proper FINISH answer. This is attempt " + (llmSchemaErrorCount + 1) + ". "
                     + "RULES: (1) NEVER write TOOLCALLS, raw JSON, or tool syntax in your FINISH answer text. "
-                    + (leakedTool != null ? "(2) If you need to call '" + leakedTool + "', use the TOOL CALLING API, not plain text. " : "")
+                    + (leakedTool != null
+                            ? "(2) If you need to call '" + leakedTool + "', use the TOOL CALLING API, not plain text. "
+                            : "")
                     + "(3) If the information you need is already in the conversation history above, "
                     + "read it carefully and answer DIRECTLY in plain text using FINISH. "
                     + "Do NOT call any tools. Do NOT output JSON. Just answer the user's question.";
@@ -352,14 +365,18 @@ public class FinishOutcomeProcessor {
     /** Returns true if the answer contains JSON keys characteristic of tool calls vs benign JSON. */
     private boolean containsToolCallKeys(String answer) {
         if (answer == null) return false;
-        return answer.contains("\"name\"") || answer.contains("\"tool_name\"") || answer.contains("\"tool_calls\"")
-                || answer.contains("\"function\"") || answer.contains("\"action\"") || answer.contains("\"parameters\"")
-                || answer.contains("\"arguments\"") || answer.contains("TOOLCALLS");
+        return answer.contains("\"name\"")
+                || answer.contains("\"tool_name\"")
+                || answer.contains("\"tool_calls\"")
+                || answer.contains("\"function\"")
+                || answer.contains("\"action\"")
+                || answer.contains("\"parameters\"")
+                || answer.contains("\"arguments\"")
+                || answer.contains("TOOLCALLS");
     }
 
-    private FinishActionHandler.FinishOutcome salvage(String candidateAnswer,
-                                  List<ReasoningStep> history,
-                                  String sessionId) {
+    private FinishActionHandler.FinishOutcome salvage(
+            String candidateAnswer, List<ReasoningStep> history, String sessionId) {
         String salvaged = qualityGuard.stripRawToolJson(candidateAnswer);
 
         if (!salvaged.isBlank()
@@ -368,7 +385,9 @@ public class FinishOutcomeProcessor {
                 && !salvaged.contains(SALVAGE_REJECT_PHRASE)) {
 
             if (looksLikeJson(salvaged)) {
-                log.errorf("STATE-MACHINE session %s exceeded schema limit. Salvaged thought is still JSON - failing turn.", sessionId);
+                log.errorf(
+                        "STATE-MACHINE session %s exceeded schema limit. Salvaged thought is still JSON - failing turn.",
+                        sessionId);
                 AgentResult failed = AgentResult.failed(
                         "I encountered a formatting error (JSON echo) and could not complete your request.",
                         AgentResult.FailureCategory.SCHEMA_ERROR,
@@ -376,13 +395,16 @@ public class FinishOutcomeProcessor {
                 return new FinishActionHandler.FinishOutcome.SalvageFailed(failed);
             }
 
-            log.errorf("STATE-MACHINE session %s exceeded schema self-correction limit after raw tool call leak. "
-                    + "Salvaging partially clean answer.", sessionId);
+            log.errorf(
+                    "STATE-MACHINE session %s exceeded schema self-correction limit after raw tool call leak. "
+                            + "Salvaging partially clean answer.",
+                    sessionId);
             AgentResult result = AgentResult.finished(salvaged, List.copyOf(history));
             return new FinishActionHandler.FinishOutcome.Completed(result, salvaged);
         }
 
-        log.errorf("STATE-MACHINE session %s exceeded schema self-correction limit. No salvageable answer found.",
+        log.errorf(
+                "STATE-MACHINE session %s exceeded schema self-correction limit. No salvageable answer found.",
                 sessionId);
         AgentResult failed = AgentResult.failed(
                 "I encountered a formatting error and could not complete your request. Please try again.",
@@ -400,9 +422,10 @@ public class FinishOutcomeProcessor {
     }
 
     private boolean historyContainsIngestDocument(List<ReasoningStep> history) {
-        return history.stream().anyMatch(step -> step instanceof ReasoningStep.ToolCallStep tc
-                && ToolCapability.INGEST_DOCUMENT.toolName().equals(tc.action())
-                && Boolean.TRUE.equals(tc.success()));
+        return history.stream()
+                .anyMatch(step -> step instanceof ReasoningStep.ToolCallStep tc
+                        && ToolCapability.INGEST_DOCUMENT.toolName().equals(tc.action())
+                        && Boolean.TRUE.equals(tc.success()));
     }
 
     private String findMemorySearchResult(List<ReasoningStep> history) {
@@ -421,18 +444,23 @@ public class FinishOutcomeProcessor {
 
     private static boolean isMemorySearchTool(String toolName) {
         return ToolCapability.RECALL_MEMORY_SEARCH.toolName().equals(toolName)
-            || ToolCapability.ARCHIVAL_MEMORY_SEARCH.toolName().equals(toolName);
+                || ToolCapability.ARCHIVAL_MEMORY_SEARCH.toolName().equals(toolName);
     }
 
     private boolean stepContainsSuccessfulSchedule(ReasoningStep step) {
         return switch (step) {
-            case ReasoningStep.ToolCallStep toolCall -> ToolCapability.SCHEDULE_TASK.toolName().equals(toolCall.action()) && Boolean.TRUE.equals(toolCall.success());
+            case ReasoningStep.ToolCallStep toolCall ->
+                ToolCapability.SCHEDULE_TASK.toolName().equals(toolCall.action())
+                        && Boolean.TRUE.equals(toolCall.success());
             case ReasoningStep.ParallelStep parallel -> {
                 Object batchRaw = parallel.actionInput().get("batch");
                 if (!(batchRaw instanceof String batchJson) || batchJson.isBlank()) yield false;
                 try {
-                    List<ParallelToolCall> calls = objectMapper.readValue(batchJson, new TypeReference<List<ParallelToolCall>>() {});
-                    yield calls.stream().anyMatch(call -> ToolCapability.SCHEDULE_TASK.toolName().equals(call.toolName()) && call.success());
+                    List<ParallelToolCall> calls =
+                            objectMapper.readValue(batchJson, new TypeReference<List<ParallelToolCall>>() {});
+                    yield calls.stream()
+                            .anyMatch(call ->
+                                    ToolCapability.SCHEDULE_TASK.toolName().equals(call.toolName()) && call.success());
                 } catch (Exception e) {
                     log.debugf("FINISH-HANDLER: failed to parse parallel batch: %s", LogUtil.rootMessage(e));
                     yield false;
@@ -446,7 +474,8 @@ public class FinishOutcomeProcessor {
         if (raw == null) return null;
         String stripped = TOOL_CALL_JSON_LEAK.matcher(raw).replaceAll("").strip();
         if (!stripped.equals(raw)) {
-            log.warnf("FINISH-HANDLER stripped leaked tool-call JSON from answer (%d chars removed)",
+            log.warnf(
+                    "FINISH-HANDLER stripped leaked tool-call JSON from answer (%d chars removed)",
                     raw.length() - stripped.length());
         }
         return stripped;
@@ -458,8 +487,8 @@ public class FinishOutcomeProcessor {
      * 1. Refusal + research goal → inject search tool
      * 2. Execution goal + no code in answer + sandbox available → inject sandbox_exec
      */
-    private FinishActionHandler.FinishOutcome tryInjectOnRefusal(String answer, String goal,
-                                                                  String sessionId, ReasoningStep step) {
+    private FinishActionHandler.FinishOutcome tryInjectOnRefusal(
+            String answer, String goal, String sessionId, ReasoningStep step) {
         if (goal == null) {
             log.debugf("TOOL-INJECT skip: goal is null for session %s", sessionId);
             return null;
@@ -474,9 +503,13 @@ public class FinishOutcomeProcessor {
             if (searchTool != null) {
                 log.infof("TOOL-INJECT session %s: salvaged refusal detected, injecting %s", sessionId, searchTool);
                 Map<String, Object> args = new HashMap<>();
-                args.put("query", goal.replaceAll("(?i)^(do )?research (on )?(use )?", "").trim());
+                args.put(
+                        "query",
+                        goal.replaceAll("(?i)^(do )?research (on )?(use )?", "").trim());
                 args.put("count", 5);
-                return new FinishActionHandler.FinishOutcome.InjectToolCall(searchTool, args,
+                return new FinishActionHandler.FinishOutcome.InjectToolCall(
+                        searchTool,
+                        args,
                         step.withObservation("Injecting search tool — salvaged answer was a refusal"));
             }
         }
@@ -488,9 +521,9 @@ public class FinishOutcomeProcessor {
             log.infof("TOOL-INJECT session %s: execution goal but no code in answer, forcing correction", sessionId);
             return new FinishActionHandler.FinishOutcome.Correction(
                     step.withObservation("Agent finished without writing code for an execution goal"),
-                    "STOP. You MUST write a complete program and call sandbox_exec to execute it. " +
-                    "The sandbox_exec tool requires 'language' (e.g. 'java') and 'code' parameters. " +
-                    "Do NOT explain. Do NOT research. Write the code NOW and call sandbox_exec immediately.");
+                    "STOP. You MUST write a complete program and call sandbox_exec to execute it. "
+                            + "The sandbox_exec tool requires 'language' (e.g. 'java') and 'code' parameters. "
+                            + "Do NOT explain. Do NOT research. Write the code NOW and call sandbox_exec immediately.");
         }
         return null;
     }

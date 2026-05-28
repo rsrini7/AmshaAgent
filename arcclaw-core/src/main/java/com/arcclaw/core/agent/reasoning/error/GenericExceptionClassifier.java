@@ -20,8 +20,8 @@ public class GenericExceptionClassifier extends LlmExceptionClassifierChain {
         if (cause instanceof IllegalArgumentException) {
             String msg = cause.getMessage();
             if (msg != null && (msg.contains("Invalid REST Client URL") || msg.contains("chat/completions"))) {
-                return new LlmServiceUnavailableException("Malformed LLM Base URL. " +
-                        "Check if the provider's base URL is correct. " + msg, original);
+                return new LlmServiceUnavailableException(
+                        "Malformed LLM Base URL. " + "Check if the provider's base URL is correct. " + msg, original);
             }
         }
 
@@ -30,7 +30,8 @@ public class GenericExceptionClassifier extends LlmExceptionClassifierChain {
 
         if (msg != null) {
             String lower = msg.toLowerCase();
-            if (lower.contains("timeout") || lower.contains("timed out")
+            if (lower.contains("timeout")
+                    || lower.contains("timed out")
                     || (lower.contains("exceeded") && lower.contains("ms"))) {
                 return new LlmServiceUnavailableException("LLM Request Timeout: " + msg, original);
             }

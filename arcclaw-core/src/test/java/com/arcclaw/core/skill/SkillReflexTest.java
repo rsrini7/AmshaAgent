@@ -15,6 +15,7 @@ import com.arcclaw.channel.api.ChannelUser;
 import com.arcclaw.core.agent.role.RoleDefinition;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.reflex.ReflexResult;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -64,11 +65,11 @@ class SkillReflexTest {
 
     @Test
     void testPopulatedRegistryOutput() {
-        SkillDefinition def1 = new SkillDefinition("id1", "reviewer", "Reviews PRs", List.of("pattern"), List.of(), 5, "prompt");
-        RoleDefinition role1 = new RoleDefinition(
-            "skill:reviewer", "Reviewer", "Reviews PRs", 5, false, false, Set.of(), Set.of()
-        );
-        CompiledSkillEntry e1 = new CompiledSkillEntry(def1, new Pattern[]{Pattern.compile("pattern")}, role1, "db");
+        SkillDefinition def1 =
+                new SkillDefinition("id1", "reviewer", "Reviews PRs", List.of("pattern"), List.of(), 5, "prompt");
+        RoleDefinition role1 =
+                new RoleDefinition("skill:reviewer", "Reviewer", "Reviews PRs", 5, false, false, Set.of(), Set.of());
+        CompiledSkillEntry e1 = new CompiledSkillEntry(def1, new Pattern[] {Pattern.compile("pattern")}, role1, "db");
 
         mockRegistry.reload(List.of(e1));
         ReflexResult result = reflex.execute("session1", "user1", "chat1", "/skills", createContext("/skills"));
@@ -80,9 +81,7 @@ class SkillReflexTest {
     @Test
     void testBlankDescriptionFallback() {
         SkillDefinition def1 = new SkillDefinition("id1", "minimal", "", List.of(), List.of(), 5, "prompt");
-        RoleDefinition role1 = new RoleDefinition(
-            "skill:minimal", "Minimal", "", 5, false, false, Set.of(), Set.of()
-        );
+        RoleDefinition role1 = new RoleDefinition("skill:minimal", "Minimal", "", 5, false, false, Set.of(), Set.of());
         CompiledSkillEntry e1 = new CompiledSkillEntry(def1, new Pattern[0], role1, "db");
 
         mockRegistry.reload(List.of(e1));

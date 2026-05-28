@@ -1,14 +1,17 @@
 package com.arcclaw.persistence.postgres;
 
+import dev.langchain4j.data.embedding.Embedding;
+import dev.langchain4j.model.embedding.EmbeddingModel;
+
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
 
 import com.arcclaw.persistence.api.BackendCapabilities;
 import com.arcclaw.persistence.api.CompactionStorePort;
@@ -18,13 +21,13 @@ import com.arcclaw.persistence.api.MemoryChunkDto;
 import com.arcclaw.persistence.api.MemoryEntryDto;
 import com.arcclaw.persistence.api.MemoryRetrievalPort;
 import com.arcclaw.persistence.postgres.jdbi.RagChunkJdbiDao;
-import dev.langchain4j.data.embedding.Embedding;
-import dev.langchain4j.model.embedding.EmbeddingModel;
-import io.quarkus.arc.Unremovable;
-import io.quarkus.arc.properties.IfBuildProperty;
+
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 import org.jdbi.v3.core.Jdbi;
+
+import io.quarkus.arc.Unremovable;
+import io.quarkus.arc.properties.IfBuildProperty;
 
 @ApplicationScoped
 @Unremovable
@@ -77,14 +80,14 @@ public class PostgresMemoryRetrievalAdapter implements MemoryRetrievalPort {
         List<MemoryChunkDto> merged = reciprocalRankFusion(topK, ftsResults, vectorResults);
 
         return merged.stream()
-            .map(chunk -> {
-                String text = chunk.text();
-                if (text != null && text.length() > maxSourceChars) {
-                    text = text.substring(0, maxSourceChars) + "\u2026";
-                }
-                return new MemoryChunkDto(chunk.chunkId(), text, chunk.score());
-            })
-            .toList();
+                .map(chunk -> {
+                    String text = chunk.text();
+                    if (text != null && text.length() > maxSourceChars) {
+                        text = text.substring(0, maxSourceChars) + "\u2026";
+                    }
+                    return new MemoryChunkDto(chunk.chunkId(), text, chunk.score());
+                })
+                .toList();
     }
 
     private List<MemoryChunkDto> searchVector(String query, int topN) {
@@ -108,8 +111,8 @@ public class PostgresMemoryRetrievalAdapter implements MemoryRetrievalPort {
         // that corrupt Agroal connection state if they fail inside a tx
         try {
             Embedding embedding = embeddingModel.embed(entry.text()).content();
-            jdbi.useExtension(RagChunkJdbiDao.class, dao ->
-                dao.upsertEmbedding(chunkId, floatArrayToJson(embedding.vector())));
+            jdbi.useExtension(
+                    RagChunkJdbiDao.class, dao -> dao.upsertEmbedding(chunkId, floatArrayToJson(embedding.vector())));
         } catch (Exception e) {
             log.warnf("Embedding unavailable for chunk %s: %s", chunkId, e.getMessage());
         }
@@ -119,11 +122,11 @@ public class PostgresMemoryRetrievalAdapter implements MemoryRetrievalPort {
     @Override
     public BackendCapabilities capabilities() {
         return new BackendCapabilities(
-            true,  // supportsFullTextSearch
-            true,  // supportsVectorSearch
-            true,  // supportsAdvisoryLocks
-            false  // supportsNestedTransactions
-        );
+                true, // supportsFullTextSearch
+                true, // supportsVectorSearch
+                true, // supportsAdvisoryLocks
+                false // supportsNestedTransactions
+                );
     }
 
     @SafeVarargs
@@ -137,19 +140,22 @@ public class PostgresMemoryRetrievalAdapter implements MemoryRetrievalPort {
                 int rank = i + 1;
                 double contribution = 1.0 / (RRF_K + rank);
                 rrfScores.merge(chunk.chunkId(), contribution, Double::sum);
-                chunkById.merge(chunk.chunkId(), chunk, (existing, incoming) ->
-                    (existing.text() == null || existing.text().isBlank()) ? incoming : existing);
+                chunkById.merge(
+                        chunk.chunkId(),
+                        chunk,
+                        (existing, incoming) ->
+                                (existing.text() == null || existing.text().isBlank()) ? incoming : existing);
             }
         }
 
         return rrfScores.entrySet().stream()
-            .sorted(Map.Entry.<String, Double>comparingByValue().reversed())
-            .limit(topN)
-            .map(e -> {
-                MemoryChunkDto orig = chunkById.get(e.getKey());
-                return new MemoryChunkDto(orig.chunkId(), orig.text(), e.getValue());
-            })
-            .toList();
+                .sorted(Map.Entry.<String, Double>comparingByValue().reversed())
+                .limit(topN)
+                .map(e -> {
+                    MemoryChunkDto orig = chunkById.get(e.getKey());
+                    return new MemoryChunkDto(orig.chunkId(), orig.text(), e.getValue());
+                })
+                .toList();
     }
 
     static String floatArrayToJson(float[] arr) {

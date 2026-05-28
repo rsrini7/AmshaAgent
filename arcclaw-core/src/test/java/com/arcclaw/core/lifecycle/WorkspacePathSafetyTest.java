@@ -2,18 +2,20 @@ package com.arcclaw.core.lifecycle;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import jakarta.inject.Inject;
+
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
-import jakarta.inject.Inject;
-
 import com.arcclaw.core.util.PathSanitizer;
-import io.quarkus.test.junit.QuarkusTest;
+
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledOnOs;
 import org.junit.jupiter.api.condition.OS;
+
+import io.quarkus.test.junit.QuarkusTest;
 
 @QuarkusTest
 class WorkspacePathSafetyTest {
@@ -35,7 +37,7 @@ class WorkspacePathSafetyTest {
     void testWorkspaceCleanup_withWindowsInvalidChars_doesNotThrow() throws IOException {
         String unsafeSessionId = "delegate:brahma-123";
         String safeDirName = PathSanitizer.sanitizeForFilesystem(unsafeSessionId);
-        
+
         Path sessionDir = Path.of(workspaceRootDir, safeDirName);
         Files.createDirectories(sessionDir);
         Files.writeString(sessionDir.resolve("test.txt"), "hello");
@@ -54,11 +56,12 @@ class WorkspacePathSafetyTest {
     void testPathSafety_windowsSpecific() {
         // Double check that Path.of works with the sanitized name but would fail with the original
         String unsafe = "illegal:char";
-        assertThrows(Exception.class, () -> Path.of(workspaceRootDir, unsafe), 
-            "Windows should reject colons in path components");
-        
+        assertThrows(
+                Exception.class,
+                () -> Path.of(workspaceRootDir, unsafe),
+                "Windows should reject colons in path components");
+
         String safe = PathSanitizer.sanitizeForFilesystem(unsafe);
-        assertDoesNotThrow(() -> Path.of(workspaceRootDir, safe),
-            "Sanitized path should be accepted by Windows");
+        assertDoesNotThrow(() -> Path.of(workspaceRootDir, safe), "Sanitized path should be accepted by Windows");
     }
 }

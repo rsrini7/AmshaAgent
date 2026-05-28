@@ -1,18 +1,19 @@
 package com.arcclaw.persistence.fs;
 
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+
 import java.time.Instant;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
-
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
 
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.persistence.api.CheckpointDto;
 import com.arcclaw.persistence.api.CheckpointStorePort;
 import com.arcclaw.persistence.api.CheckpointUpsertResult;
 import com.arcclaw.persistence.api.ReasoningStepDto;
+
 import io.quarkus.arc.Unremovable;
 import io.quarkus.arc.properties.IfBuildProperty;
 
@@ -36,28 +37,64 @@ public class FsCheckpointStoreAdapter implements CheckpointStorePort {
         CheckpointDto toSave;
         if (dto.id() == null) {
             toSave = new CheckpointDto(
-                helper.nextId(), session, role, dto.status(), dto.autonomyLevel(),
-                dto.stateJson(), dto.channelPlatformId(), dto.channelType(),
-                dto.originalGoal(), dto.failedAt(), dto.completedAt(), dto.failReason(),
-                dto.pendingToolName(), dto.batchToolDecisions(), dto.pendingToolParametersJson(),
-                dto.preExecutedResults(), dto.maxIterations(), dto.iterationsUsed(),
-                dto.retryAfterMs(), dto.systemNote(), dto.contextDataJson(),
-                dto.errorCode(), dto.traceId(), dto.rootCauseClass(),
-                dto.parentCheckpointId(), dto.depth(),
-                dto.createdAt() != null ? dto.createdAt() : Instant.now(), Instant.now()
-            );
+                    helper.nextId(),
+                    session,
+                    role,
+                    dto.status(),
+                    dto.autonomyLevel(),
+                    dto.stateJson(),
+                    dto.channelPlatformId(),
+                    dto.channelType(),
+                    dto.originalGoal(),
+                    dto.failedAt(),
+                    dto.completedAt(),
+                    dto.failReason(),
+                    dto.pendingToolName(),
+                    dto.batchToolDecisions(),
+                    dto.pendingToolParametersJson(),
+                    dto.preExecutedResults(),
+                    dto.maxIterations(),
+                    dto.iterationsUsed(),
+                    dto.retryAfterMs(),
+                    dto.systemNote(),
+                    dto.contextDataJson(),
+                    dto.errorCode(),
+                    dto.traceId(),
+                    dto.rootCauseClass(),
+                    dto.parentCheckpointId(),
+                    dto.depth(),
+                    dto.createdAt() != null ? dto.createdAt() : Instant.now(),
+                    Instant.now());
         } else {
             toSave = new CheckpointDto(
-                dto.id(), session, role, dto.status(), dto.autonomyLevel(),
-                dto.stateJson(), dto.channelPlatformId(), dto.channelType(),
-                dto.originalGoal(), dto.failedAt(), dto.completedAt(), dto.failReason(),
-                dto.pendingToolName(), dto.batchToolDecisions(), dto.pendingToolParametersJson(),
-                dto.preExecutedResults(), dto.maxIterations(), dto.iterationsUsed(),
-                dto.retryAfterMs(), dto.systemNote(), dto.contextDataJson(),
-                dto.errorCode(), dto.traceId(), dto.rootCauseClass(),
-                dto.parentCheckpointId(), dto.depth(),
-                dto.createdAt(), Instant.now()
-            );
+                    dto.id(),
+                    session,
+                    role,
+                    dto.status(),
+                    dto.autonomyLevel(),
+                    dto.stateJson(),
+                    dto.channelPlatformId(),
+                    dto.channelType(),
+                    dto.originalGoal(),
+                    dto.failedAt(),
+                    dto.completedAt(),
+                    dto.failReason(),
+                    dto.pendingToolName(),
+                    dto.batchToolDecisions(),
+                    dto.pendingToolParametersJson(),
+                    dto.preExecutedResults(),
+                    dto.maxIterations(),
+                    dto.iterationsUsed(),
+                    dto.retryAfterMs(),
+                    dto.systemNote(),
+                    dto.contextDataJson(),
+                    dto.errorCode(),
+                    dto.traceId(),
+                    dto.rootCauseClass(),
+                    dto.parentCheckpointId(),
+                    dto.depth(),
+                    dto.createdAt(),
+                    Instant.now());
         }
 
         store.write(List.of(FsCheckpointHelper.DOMAIN, session, fileName), toSave);
@@ -73,9 +110,7 @@ public class FsCheckpointStoreAdapter implements CheckpointStorePort {
 
     @Override
     public Optional<CheckpointDto> findById(Long id) {
-        return helper.loadAll().stream()
-            .filter(c -> id.equals(c.id()))
-            .findFirst();
+        return helper.loadAll().stream().filter(c -> id.equals(c.id())).findFirst();
     }
 
     @Override
@@ -86,9 +121,11 @@ public class FsCheckpointStoreAdapter implements CheckpointStorePort {
     @Override
     public List<CheckpointDto> findActiveBySession(String sessionId) {
         return helper.loadSession(sessionId).stream()
-            .filter(c -> c.status() == null || (!CheckpointStatus.COMPLETED.name().equals(c.status())
-                && !CheckpointStatus.FAILED.name().equals(c.status()) && !CheckpointStatus.ARCHIVED.name().equals(c.status())))
-            .toList();
+                .filter(c -> c.status() == null
+                        || (!CheckpointStatus.COMPLETED.name().equals(c.status())
+                                && !CheckpointStatus.FAILED.name().equals(c.status())
+                                && !CheckpointStatus.ARCHIVED.name().equals(c.status())))
+                .toList();
     }
 
     @Override
@@ -109,7 +146,8 @@ public class FsCheckpointStoreAdapter implements CheckpointStorePort {
         Optional<CheckpointDto> existing = findBySessionAndRole(sessionId, agentRole);
         if (existing.isEmpty()) return false;
         CheckpointDto cp = existing.get();
-        if (!CheckpointStatus.IN_PROGRESS.name().equals(cp.status()) && !CheckpointStatus.AWAITING_APPROVAL.name().equals(cp.status())) return false;
+        if (!CheckpointStatus.IN_PROGRESS.name().equals(cp.status())
+                && !CheckpointStatus.AWAITING_APPROVAL.name().equals(cp.status())) return false;
         save(withNewStatus(cp, CheckpointStatus.RESUMING.name()));
         return true;
     }
@@ -117,51 +155,52 @@ public class FsCheckpointStoreAdapter implements CheckpointStorePort {
     @Override
     public void releaseResumeClaim(String sessionId, String agentRole) {
         findBySessionAndRole(sessionId, agentRole).ifPresent(cp -> {
-            if (CheckpointStatus.RESUMING.name().equals(cp.status())) save(withNewStatus(cp, CheckpointStatus.IN_PROGRESS.name()));
+            if (CheckpointStatus.RESUMING.name().equals(cp.status()))
+                save(withNewStatus(cp, CheckpointStatus.IN_PROGRESS.name()));
         });
     }
 
     @Override
     public Optional<CheckpointDto> findLatestAwaitingApproval(String sessionId) {
         return helper.loadSession(sessionId).stream()
-            .filter(c -> CheckpointStatus.AWAITING_APPROVAL.name().equals(c.status()))
-            .max(Comparator.comparing(CheckpointDto::updatedAt, Comparator.nullsFirst(Comparator.naturalOrder())));
+                .filter(c -> CheckpointStatus.AWAITING_APPROVAL.name().equals(c.status()))
+                .max(Comparator.comparing(CheckpointDto::updatedAt, Comparator.nullsFirst(Comparator.naturalOrder())));
     }
 
     @Override
     public List<CheckpointDto> findStaleApprovals(Instant cutoff) {
         return helper.loadAll().stream()
-            .filter(c -> CheckpointStatus.AWAITING_APPROVAL.name().equals(c.status()))
-            .filter(c -> c.updatedAt() != null && c.updatedAt().isBefore(cutoff))
-            .toList();
+                .filter(c -> CheckpointStatus.AWAITING_APPROVAL.name().equals(c.status()))
+                .filter(c -> c.updatedAt() != null && c.updatedAt().isBefore(cutoff))
+                .toList();
     }
 
     @Override
     public Optional<CheckpointDto> findLatestAwaitingApprovalBySessionContaining(String segment) {
         return helper.loadAll().stream()
-            .filter(c -> CheckpointStatus.AWAITING_APPROVAL.name().equals(c.status()))
-            .filter(c -> c.sessionId() != null && c.sessionId().contains(segment))
-            .max(Comparator.comparing(CheckpointDto::updatedAt, Comparator.nullsFirst(Comparator.naturalOrder())));
+                .filter(c -> CheckpointStatus.AWAITING_APPROVAL.name().equals(c.status()))
+                .filter(c -> c.sessionId() != null && c.sessionId().contains(segment))
+                .max(Comparator.comparing(CheckpointDto::updatedAt, Comparator.nullsFirst(Comparator.naturalOrder())));
     }
 
     @Override
     public Optional<CheckpointDto> findLatestBySession(String sessionId) {
         return helper.loadSession(sessionId).stream()
-            .max(Comparator.comparing(CheckpointDto::updatedAt, Comparator.nullsFirst(Comparator.naturalOrder())));
+                .max(Comparator.comparing(CheckpointDto::updatedAt, Comparator.nullsFirst(Comparator.naturalOrder())));
     }
 
     @Override
     public Optional<CheckpointDto> findLatestNonArchivedBySession(String sessionId) {
         return helper.loadSession(sessionId).stream()
-            .filter(c -> !CheckpointStatus.ARCHIVED.name().equals(c.status()))
-            .max(Comparator.comparing(CheckpointDto::updatedAt, Comparator.nullsFirst(Comparator.naturalOrder())));
+                .filter(c -> !CheckpointStatus.ARCHIVED.name().equals(c.status()))
+                .max(Comparator.comparing(CheckpointDto::updatedAt, Comparator.nullsFirst(Comparator.naturalOrder())));
     }
 
     @Override
     public Optional<CheckpointDto> findLatestBySessionAndStatus(String sessionId, String status) {
         return helper.loadSession(sessionId).stream()
-            .filter(c -> status.equals(c.status()))
-            .max(Comparator.comparing(CheckpointDto::updatedAt, Comparator.nullsFirst(Comparator.naturalOrder())));
+                .filter(c -> status.equals(c.status()))
+                .max(Comparator.comparing(CheckpointDto::updatedAt, Comparator.nullsFirst(Comparator.naturalOrder())));
     }
 
     @Override
@@ -173,9 +212,11 @@ public class FsCheckpointStoreAdapter implements CheckpointStorePort {
     public List<ReasoningStepDto> loadSteps(Long checkpointId) {
         String cpIdStr = checkpointId.toString();
         return store.list(List.of(FsCheckpointHelper.DOMAIN, FsCheckpointHelper.STEPS, cpIdStr), ".json").stream()
-            .sorted(Comparator.naturalOrder())
-            .map(f -> store.read(List.of(FsCheckpointHelper.DOMAIN, FsCheckpointHelper.STEPS, cpIdStr, f), ReasoningStepDto.class))
-            .toList();
+                .sorted(Comparator.naturalOrder())
+                .map(f -> store.read(
+                        List.of(FsCheckpointHelper.DOMAIN, FsCheckpointHelper.STEPS, cpIdStr, f),
+                        ReasoningStepDto.class))
+                .toList();
     }
 
     @Override
@@ -185,31 +226,31 @@ public class FsCheckpointStoreAdapter implements CheckpointStorePort {
 
     @Override
     public List<CheckpointDto> findByStatus(String status) {
-        return helper.loadAll().stream()
-            .filter(c -> status.equals(c.status()))
-            .toList();
+        return helper.loadAll().stream().filter(c -> status.equals(c.status())).toList();
     }
 
     @Override
     public List<CheckpointDto> findAllActive() {
         return helper.loadAll().stream()
-            .filter(c -> !CheckpointStatus.terminalStatuses()
-                .contains(CheckpointStatus.valueOf(c.status())))
-            .toList();
+                .filter(c -> !CheckpointStatus.terminalStatuses().contains(CheckpointStatus.valueOf(c.status())))
+                .toList();
     }
 
     @Override
     public boolean isCheckpointExpired(String sessionId, long timeoutHours) {
         return findLatestBySession(sessionId)
-            .map(cp -> cp.updatedAt() != null && cp.updatedAt().plusSeconds(timeoutHours * 3600).isBefore(Instant.now()))
-            .orElse(false);
+                .map(cp -> cp.updatedAt() != null
+                        && cp.updatedAt().plusSeconds(timeoutHours * 3600).isBefore(Instant.now()))
+                .orElse(false);
     }
 
     @Override
     public boolean isSessionActive(String sessionId) {
         return helper.loadSession(sessionId).stream()
-            .anyMatch(c -> c.status() != null && !CheckpointStatus.COMPLETED.name().equals(c.status())
-                && !CheckpointStatus.FAILED.name().equals(c.status()) && !CheckpointStatus.ARCHIVED.name().equals(c.status()));
+                .anyMatch(c -> c.status() != null
+                        && !CheckpointStatus.COMPLETED.name().equals(c.status())
+                        && !CheckpointStatus.FAILED.name().equals(c.status())
+                        && !CheckpointStatus.ARCHIVED.name().equals(c.status()));
     }
 
     @Override
@@ -220,32 +261,54 @@ public class FsCheckpointStoreAdapter implements CheckpointStorePort {
     @Override
     public boolean hasPendingApprovalForChat(String chatId) {
         return helper.loadAll().stream()
-            .anyMatch(c -> CheckpointStatus.AWAITING_APPROVAL.name().equals(c.status()) && chatId.equals(c.channelPlatformId()));
+                .anyMatch(c -> CheckpointStatus.AWAITING_APPROVAL.name().equals(c.status())
+                        && chatId.equals(c.channelPlatformId()));
     }
 
     @Override
     public List<CheckpointDto> findInProgressZombies(Instant cutoff) {
         return helper.loadAll().stream()
-            .filter(c -> CheckpointStatus.IN_PROGRESS.name().equals(c.status()) || CheckpointStatus.AWAITING_APPROVAL.name().equals(c.status()))
-            .filter(c -> c.updatedAt() != null && c.updatedAt().isBefore(cutoff))
-            .toList();
+                .filter(c -> CheckpointStatus.IN_PROGRESS.name().equals(c.status())
+                        || CheckpointStatus.AWAITING_APPROVAL.name().equals(c.status()))
+                .filter(c -> c.updatedAt() != null && c.updatedAt().isBefore(cutoff))
+                .toList();
     }
 
     @Override
     public void markCheckpointsFailed(String sessionId) {
         for (CheckpointDto cp : helper.loadSession(sessionId)) {
-            if (cp.status() != null && !CheckpointStatus.COMPLETED.name().equals(cp.status()) && !CheckpointStatus.FAILED.name().equals(cp.status())) {
+            if (cp.status() != null
+                    && !CheckpointStatus.COMPLETED.name().equals(cp.status())
+                    && !CheckpointStatus.FAILED.name().equals(cp.status())) {
                 save(new CheckpointDto(
-                    cp.id(), cp.sessionId(), cp.agentRole(), CheckpointStatus.FAILED.name(), cp.autonomyLevel(),
-                    cp.stateJson(), cp.channelPlatformId(), cp.channelType(),
-                    cp.originalGoal(), Instant.now(), cp.completedAt(), "Session terminated",
-                    cp.pendingToolName(), cp.batchToolDecisions(), cp.pendingToolParametersJson(),
-                    cp.preExecutedResults(), cp.maxIterations(), cp.iterationsUsed(),
-                    cp.retryAfterMs(), cp.systemNote(), cp.contextDataJson(),
-                    "SESSION_TERMINATED", null, null,
-                    cp.parentCheckpointId(), cp.depth(),
-                    cp.createdAt(), Instant.now()
-                ));
+                        cp.id(),
+                        cp.sessionId(),
+                        cp.agentRole(),
+                        CheckpointStatus.FAILED.name(),
+                        cp.autonomyLevel(),
+                        cp.stateJson(),
+                        cp.channelPlatformId(),
+                        cp.channelType(),
+                        cp.originalGoal(),
+                        Instant.now(),
+                        cp.completedAt(),
+                        "Session terminated",
+                        cp.pendingToolName(),
+                        cp.batchToolDecisions(),
+                        cp.pendingToolParametersJson(),
+                        cp.preExecutedResults(),
+                        cp.maxIterations(),
+                        cp.iterationsUsed(),
+                        cp.retryAfterMs(),
+                        cp.systemNote(),
+                        cp.contextDataJson(),
+                        "SESSION_TERMINATED",
+                        null,
+                        null,
+                        cp.parentCheckpointId(),
+                        cp.depth(),
+                        cp.createdAt(),
+                        Instant.now()));
             }
         }
     }
@@ -260,56 +323,118 @@ public class FsCheckpointStoreAdapter implements CheckpointStorePort {
     public void purgeOldChatHistory(Instant cutoff) {
         for (CheckpointDto cp : helper.loadAll()) {
             if (cp.updatedAt() != null && cp.updatedAt().isBefore(cutoff)) {
-                store.delete(List.of(FsCheckpointHelper.DOMAIN, cp.sessionId(),
-                    FsCheckpointHelper.sanitizeRole(cp.agentRole()) + ".json"));
-                store.deleteDirectory(List.of(FsCheckpointHelper.DOMAIN, FsCheckpointHelper.STEPS, cp.id().toString()));
+                store.delete(List.of(
+                        FsCheckpointHelper.DOMAIN,
+                        cp.sessionId(),
+                        FsCheckpointHelper.sanitizeRole(cp.agentRole()) + ".json"));
+                store.deleteDirectory(List.of(
+                        FsCheckpointHelper.DOMAIN,
+                        FsCheckpointHelper.STEPS,
+                        cp.id().toString()));
             }
         }
     }
 
     @Override
     public void markFailed(Long id, String failReason, String errorCode, String traceId, String rootCauseClass) {
-        findById(id).ifPresent(cp -> save(new CheckpointDto(
-            cp.id(), cp.sessionId(), cp.agentRole(), CheckpointStatus.FAILED.name(), cp.autonomyLevel(),
-            cp.stateJson(), cp.channelPlatformId(), cp.channelType(),
-            cp.originalGoal(), Instant.now(), cp.completedAt(), failReason,
-            cp.pendingToolName(), cp.batchToolDecisions(), cp.pendingToolParametersJson(),
-            cp.preExecutedResults(), cp.maxIterations(), cp.iterationsUsed(),
-            cp.retryAfterMs(), cp.systemNote(), cp.contextDataJson(),
-            errorCode, traceId, rootCauseClass,
-            cp.parentCheckpointId(), cp.depth(),
-            cp.createdAt(), Instant.now()
-        )));
+        findById(id)
+                .ifPresent(cp -> save(new CheckpointDto(
+                        cp.id(),
+                        cp.sessionId(),
+                        cp.agentRole(),
+                        CheckpointStatus.FAILED.name(),
+                        cp.autonomyLevel(),
+                        cp.stateJson(),
+                        cp.channelPlatformId(),
+                        cp.channelType(),
+                        cp.originalGoal(),
+                        Instant.now(),
+                        cp.completedAt(),
+                        failReason,
+                        cp.pendingToolName(),
+                        cp.batchToolDecisions(),
+                        cp.pendingToolParametersJson(),
+                        cp.preExecutedResults(),
+                        cp.maxIterations(),
+                        cp.iterationsUsed(),
+                        cp.retryAfterMs(),
+                        cp.systemNote(),
+                        cp.contextDataJson(),
+                        errorCode,
+                        traceId,
+                        rootCauseClass,
+                        cp.parentCheckpointId(),
+                        cp.depth(),
+                        cp.createdAt(),
+                        Instant.now())));
     }
 
     @Override
     public void markCompleted(Long id) {
-        findById(id).ifPresent(cp -> save(new CheckpointDto(
-            cp.id(), cp.sessionId(), cp.agentRole(), CheckpointStatus.COMPLETED.name(), cp.autonomyLevel(),
-            cp.stateJson(), cp.channelPlatformId(), cp.channelType(),
-            cp.originalGoal(), cp.failedAt(), Instant.now(), cp.failReason(),
-            cp.pendingToolName(), cp.batchToolDecisions(), cp.pendingToolParametersJson(),
-            cp.preExecutedResults(), cp.maxIterations(), cp.iterationsUsed(),
-            cp.retryAfterMs(), cp.systemNote(), cp.contextDataJson(),
-            cp.errorCode(), cp.traceId(), cp.rootCauseClass(),
-            cp.parentCheckpointId(), cp.depth(),
-            cp.createdAt(), Instant.now()
-        )));
+        findById(id)
+                .ifPresent(cp -> save(new CheckpointDto(
+                        cp.id(),
+                        cp.sessionId(),
+                        cp.agentRole(),
+                        CheckpointStatus.COMPLETED.name(),
+                        cp.autonomyLevel(),
+                        cp.stateJson(),
+                        cp.channelPlatformId(),
+                        cp.channelType(),
+                        cp.originalGoal(),
+                        cp.failedAt(),
+                        Instant.now(),
+                        cp.failReason(),
+                        cp.pendingToolName(),
+                        cp.batchToolDecisions(),
+                        cp.pendingToolParametersJson(),
+                        cp.preExecutedResults(),
+                        cp.maxIterations(),
+                        cp.iterationsUsed(),
+                        cp.retryAfterMs(),
+                        cp.systemNote(),
+                        cp.contextDataJson(),
+                        cp.errorCode(),
+                        cp.traceId(),
+                        cp.rootCauseClass(),
+                        cp.parentCheckpointId(),
+                        cp.depth(),
+                        cp.createdAt(),
+                        Instant.now())));
     }
 
     @Override
     public void markOrphaned(Long id, String reason) {
-        findById(id).ifPresent(cp -> save(new CheckpointDto(
-            cp.id(), cp.sessionId(), cp.agentRole(), CheckpointStatus.ORPHANED.name(), cp.autonomyLevel(),
-            cp.stateJson(), cp.channelPlatformId(), cp.channelType(),
-            cp.originalGoal(), cp.failedAt(), cp.completedAt(), reason,
-            cp.pendingToolName(), cp.batchToolDecisions(), cp.pendingToolParametersJson(),
-            cp.preExecutedResults(), cp.maxIterations(), cp.iterationsUsed(),
-            cp.retryAfterMs(), cp.systemNote(), cp.contextDataJson(),
-            cp.errorCode(), cp.traceId(), cp.rootCauseClass(),
-            cp.parentCheckpointId(), cp.depth(),
-            cp.createdAt(), Instant.now()
-        )));
+        findById(id)
+                .ifPresent(cp -> save(new CheckpointDto(
+                        cp.id(),
+                        cp.sessionId(),
+                        cp.agentRole(),
+                        CheckpointStatus.ORPHANED.name(),
+                        cp.autonomyLevel(),
+                        cp.stateJson(),
+                        cp.channelPlatformId(),
+                        cp.channelType(),
+                        cp.originalGoal(),
+                        cp.failedAt(),
+                        cp.completedAt(),
+                        reason,
+                        cp.pendingToolName(),
+                        cp.batchToolDecisions(),
+                        cp.pendingToolParametersJson(),
+                        cp.preExecutedResults(),
+                        cp.maxIterations(),
+                        cp.iterationsUsed(),
+                        cp.retryAfterMs(),
+                        cp.systemNote(),
+                        cp.contextDataJson(),
+                        cp.errorCode(),
+                        cp.traceId(),
+                        cp.rootCauseClass(),
+                        cp.parentCheckpointId(),
+                        cp.depth(),
+                        cp.createdAt(),
+                        Instant.now())));
     }
 
     @Override
@@ -322,49 +447,103 @@ public class FsCheckpointStoreAdapter implements CheckpointStorePort {
         Optional<CheckpointDto> existing = findById(id);
         if (existing.isEmpty()) return false;
         CheckpointDto cp = existing.get();
-        if (!CheckpointStatus.FAILED.name().equals(cp.status()) && !CheckpointStatus.ORPHANED.name().equals(cp.status())) return false;
+        if (!CheckpointStatus.FAILED.name().equals(cp.status())
+                && !CheckpointStatus.ORPHANED.name().equals(cp.status())) return false;
         save(new CheckpointDto(
-            cp.id(), cp.sessionId(), cp.agentRole(), CheckpointStatus.IN_PROGRESS.name(), cp.autonomyLevel(),
-            cp.stateJson(), cp.channelPlatformId(), cp.channelType(),
-            cp.originalGoal(), null, null, null,
-            cp.pendingToolName(), cp.batchToolDecisions(), cp.pendingToolParametersJson(),
-            cp.preExecutedResults(), cp.maxIterations(), cp.iterationsUsed(),
-            cp.retryAfterMs(), cp.systemNote(), cp.contextDataJson(),
-            null, null, null,
-            cp.parentCheckpointId(), cp.depth(),
-            cp.createdAt(), Instant.now()
-        ));
+                cp.id(),
+                cp.sessionId(),
+                cp.agentRole(),
+                CheckpointStatus.IN_PROGRESS.name(),
+                cp.autonomyLevel(),
+                cp.stateJson(),
+                cp.channelPlatformId(),
+                cp.channelType(),
+                cp.originalGoal(),
+                null,
+                null,
+                null,
+                cp.pendingToolName(),
+                cp.batchToolDecisions(),
+                cp.pendingToolParametersJson(),
+                cp.preExecutedResults(),
+                cp.maxIterations(),
+                cp.iterationsUsed(),
+                cp.retryAfterMs(),
+                cp.systemNote(),
+                cp.contextDataJson(),
+                null,
+                null,
+                null,
+                cp.parentCheckpointId(),
+                cp.depth(),
+                cp.createdAt(),
+                Instant.now()));
         return true;
     }
 
     @Override
-    public CheckpointUpsertResult upsertWithSteps(String sessionId, String agentRole,
-        String stateJson, String autonomy, int iterationsUsed, String originalGoal, String contextDataJson) {
+    public CheckpointUpsertResult upsertWithSteps(
+            String sessionId,
+            String agentRole,
+            String stateJson,
+            String autonomy,
+            int iterationsUsed,
+            String originalGoal,
+            String contextDataJson) {
         Optional<CheckpointDto> existing = findBySessionAndRole(sessionId, agentRole);
         boolean created = existing.isEmpty();
         CheckpointDto cp = existing.orElse(null);
 
-        boolean preserveAwaiting = cp != null && (CheckpointStatus.AWAITING_APPROVAL.name().equals(cp.status()) || CheckpointStatus.RESUMING.name().equals(cp.status()));
+        boolean preserveAwaiting = cp != null
+                && (CheckpointStatus.AWAITING_APPROVAL.name().equals(cp.status())
+                        || CheckpointStatus.RESUMING.name().equals(cp.status()));
         String status = preserveAwaiting ? cp.status() : CheckpointStatus.IN_PROGRESS.name();
         String batchDecisions = preserveAwaiting ? cp.batchToolDecisions() : null;
-        String goal = (originalGoal != null && !originalGoal.isBlank()) ? originalGoal
-            : (cp != null ? cp.originalGoal() : null);
+        String goal = (originalGoal != null && !originalGoal.isBlank())
+                ? originalGoal
+                : (cp != null ? cp.originalGoal() : null);
 
         CheckpointDto saved = save(new CheckpointDto(
-            cp != null ? cp.id() : null,
-            sessionId, agentRole, status, autonomy, stateJson,
-            cp != null ? cp.channelPlatformId() : null, cp != null ? cp.channelType() : null,
-            goal, null, null, null, null, batchDecisions, null, null,
-            null, iterationsUsed, null, null, contextDataJson, null, null, null,
-            cp != null ? cp.parentCheckpointId() : null, cp != null ? cp.depth() : 0,
-            cp != null ? cp.createdAt() : Instant.now(), Instant.now()
-        ));
+                cp != null ? cp.id() : null,
+                sessionId,
+                agentRole,
+                status,
+                autonomy,
+                stateJson,
+                cp != null ? cp.channelPlatformId() : null,
+                cp != null ? cp.channelType() : null,
+                goal,
+                null,
+                null,
+                null,
+                null,
+                batchDecisions,
+                null,
+                null,
+                null,
+                iterationsUsed,
+                null,
+                null,
+                contextDataJson,
+                null,
+                null,
+                null,
+                cp != null ? cp.parentCheckpointId() : null,
+                cp != null ? cp.depth() : 0,
+                cp != null ? cp.createdAt() : Instant.now(),
+                Instant.now()));
         return new CheckpointUpsertResult(saved, created);
     }
 
     @Override
-    public CheckpointUpsertResult upsertAndFinalize(String sessionId, String agentRole,
-        String stateJson, String finalStatus, List<ReasoningStepDto> steps, String originalGoal, String contextDataJson) {
+    public CheckpointUpsertResult upsertAndFinalize(
+            String sessionId,
+            String agentRole,
+            String stateJson,
+            String finalStatus,
+            List<ReasoningStepDto> steps,
+            String originalGoal,
+            String contextDataJson) {
         Optional<CheckpointDto> existing = findBySessionAndRole(sessionId, agentRole);
         boolean created = existing.isEmpty();
         CheckpointDto cp = existing.orElse(null);
@@ -372,19 +551,39 @@ public class FsCheckpointStoreAdapter implements CheckpointStorePort {
         Instant now = Instant.now();
         Instant completedAt = CheckpointStatus.COMPLETED.name().equals(finalStatus) ? now : null;
         Instant failedAt = CheckpointStatus.FAILED.name().equals(finalStatus) ? now : null;
-        String goal = (originalGoal != null && !originalGoal.isBlank()) ? originalGoal
-            : (cp != null ? cp.originalGoal() : null);
+        String goal = (originalGoal != null && !originalGoal.isBlank())
+                ? originalGoal
+                : (cp != null ? cp.originalGoal() : null);
 
         CheckpointDto saved = save(new CheckpointDto(
-            cp != null ? cp.id() : null, sessionId, agentRole, finalStatus,
-            cp != null ? cp.autonomyLevel() : null, stateJson,
-            cp != null ? cp.channelPlatformId() : null, cp != null ? cp.channelType() : null,
-            goal, failedAt, completedAt, null, null, null, null, null,
-            cp != null ? cp.maxIterations() : null, cp != null ? cp.iterationsUsed() : 0,
-            null, null, contextDataJson, null, null, null,
-            cp != null ? cp.parentCheckpointId() : null, cp != null ? cp.depth() : 0,
-            cp != null ? cp.createdAt() : now, now
-        ));
+                cp != null ? cp.id() : null,
+                sessionId,
+                agentRole,
+                finalStatus,
+                cp != null ? cp.autonomyLevel() : null,
+                stateJson,
+                cp != null ? cp.channelPlatformId() : null,
+                cp != null ? cp.channelType() : null,
+                goal,
+                failedAt,
+                completedAt,
+                null,
+                null,
+                null,
+                null,
+                null,
+                cp != null ? cp.maxIterations() : null,
+                cp != null ? cp.iterationsUsed() : 0,
+                null,
+                null,
+                contextDataJson,
+                null,
+                null,
+                null,
+                cp != null ? cp.parentCheckpointId() : null,
+                cp != null ? cp.depth() : 0,
+                cp != null ? cp.createdAt() : now,
+                now));
         helper.persistSteps(saved.id(), steps);
         return new CheckpointUpsertResult(saved, created);
     }
@@ -396,8 +595,8 @@ public class FsCheckpointStoreAdapter implements CheckpointStorePort {
             markFailed(cp.id(), failReason, "ZOMBIE", null, null);
         }
         return helper.loadAll().stream()
-            .filter(c -> CheckpointStatus.FAILED.name().equals(c.status()) && failReason.equals(c.failReason()))
-            .toList();
+                .filter(c -> CheckpointStatus.FAILED.name().equals(c.status()) && failReason.equals(c.failReason()))
+                .toList();
     }
 
     @Override
@@ -406,47 +605,102 @@ public class FsCheckpointStoreAdapter implements CheckpointStorePort {
         if (existing.isEmpty()) return false;
         CheckpointDto cp = existing.get();
         String updatedDecisions = FsCheckpointHelper.updateJsonMap(
-            cp.batchToolDecisions() != null ? cp.batchToolDecisions() : "{}", toolName, decision);
+                cp.batchToolDecisions() != null ? cp.batchToolDecisions() : "{}", toolName, decision);
         save(new CheckpointDto(
-            cp.id(), cp.sessionId(), cp.agentRole(), cp.status(), cp.autonomyLevel(),
-            cp.stateJson(), cp.channelPlatformId(), cp.channelType(),
-            cp.originalGoal(), cp.failedAt(), cp.completedAt(), cp.failReason(),
-            cp.pendingToolName(), updatedDecisions, cp.pendingToolParametersJson(),
-            cp.preExecutedResults(), cp.maxIterations(), cp.iterationsUsed(),
-            cp.retryAfterMs(), cp.systemNote(), cp.contextDataJson(),
-            cp.errorCode(), cp.traceId(), cp.rootCauseClass(),
-            cp.parentCheckpointId(), cp.depth(),
-            cp.createdAt(), Instant.now()
-        ));
+                cp.id(),
+                cp.sessionId(),
+                cp.agentRole(),
+                cp.status(),
+                cp.autonomyLevel(),
+                cp.stateJson(),
+                cp.channelPlatformId(),
+                cp.channelType(),
+                cp.originalGoal(),
+                cp.failedAt(),
+                cp.completedAt(),
+                cp.failReason(),
+                cp.pendingToolName(),
+                updatedDecisions,
+                cp.pendingToolParametersJson(),
+                cp.preExecutedResults(),
+                cp.maxIterations(),
+                cp.iterationsUsed(),
+                cp.retryAfterMs(),
+                cp.systemNote(),
+                cp.contextDataJson(),
+                cp.errorCode(),
+                cp.traceId(),
+                cp.rootCauseClass(),
+                cp.parentCheckpointId(),
+                cp.depth(),
+                cp.createdAt(),
+                Instant.now()));
         return true;
     }
 
     @Override
     public void stampChannelInfo(Long checkpointId, String channelType, String channelPlatformId) {
-        findById(checkpointId).ifPresent(cp -> save(new CheckpointDto(
-            cp.id(), cp.sessionId(), cp.agentRole(), cp.status(), cp.autonomyLevel(),
-            cp.stateJson(), channelPlatformId, channelType,
-            cp.originalGoal(), cp.failedAt(), cp.completedAt(), cp.failReason(),
-            cp.pendingToolName(), cp.batchToolDecisions(), cp.pendingToolParametersJson(),
-            cp.preExecutedResults(), cp.maxIterations(), cp.iterationsUsed(),
-            cp.retryAfterMs(), cp.systemNote(), cp.contextDataJson(),
-            cp.errorCode(), cp.traceId(), cp.rootCauseClass(),
-            cp.parentCheckpointId(), cp.depth(),
-            cp.createdAt(), Instant.now()
-        )));
+        findById(checkpointId)
+                .ifPresent(cp -> save(new CheckpointDto(
+                        cp.id(),
+                        cp.sessionId(),
+                        cp.agentRole(),
+                        cp.status(),
+                        cp.autonomyLevel(),
+                        cp.stateJson(),
+                        channelPlatformId,
+                        channelType,
+                        cp.originalGoal(),
+                        cp.failedAt(),
+                        cp.completedAt(),
+                        cp.failReason(),
+                        cp.pendingToolName(),
+                        cp.batchToolDecisions(),
+                        cp.pendingToolParametersJson(),
+                        cp.preExecutedResults(),
+                        cp.maxIterations(),
+                        cp.iterationsUsed(),
+                        cp.retryAfterMs(),
+                        cp.systemNote(),
+                        cp.contextDataJson(),
+                        cp.errorCode(),
+                        cp.traceId(),
+                        cp.rootCauseClass(),
+                        cp.parentCheckpointId(),
+                        cp.depth(),
+                        cp.createdAt(),
+                        Instant.now())));
     }
 
     private static CheckpointDto withNewStatus(CheckpointDto cp, String newStatus) {
         return new CheckpointDto(
-            cp.id(), cp.sessionId(), cp.agentRole(), newStatus, cp.autonomyLevel(),
-            cp.stateJson(), cp.channelPlatformId(), cp.channelType(),
-            cp.originalGoal(), cp.failedAt(), cp.completedAt(), cp.failReason(),
-            cp.pendingToolName(), cp.batchToolDecisions(), cp.pendingToolParametersJson(),
-            cp.preExecutedResults(), cp.maxIterations(), cp.iterationsUsed(),
-            cp.retryAfterMs(), cp.systemNote(), cp.contextDataJson(),
-            cp.errorCode(), cp.traceId(), cp.rootCauseClass(),
-            cp.parentCheckpointId(), cp.depth(),
-            cp.createdAt(), Instant.now()
-        );
+                cp.id(),
+                cp.sessionId(),
+                cp.agentRole(),
+                newStatus,
+                cp.autonomyLevel(),
+                cp.stateJson(),
+                cp.channelPlatformId(),
+                cp.channelType(),
+                cp.originalGoal(),
+                cp.failedAt(),
+                cp.completedAt(),
+                cp.failReason(),
+                cp.pendingToolName(),
+                cp.batchToolDecisions(),
+                cp.pendingToolParametersJson(),
+                cp.preExecutedResults(),
+                cp.maxIterations(),
+                cp.iterationsUsed(),
+                cp.retryAfterMs(),
+                cp.systemNote(),
+                cp.contextDataJson(),
+                cp.errorCode(),
+                cp.traceId(),
+                cp.rootCauseClass(),
+                cp.parentCheckpointId(),
+                cp.depth(),
+                cp.createdAt(),
+                Instant.now());
     }
 }

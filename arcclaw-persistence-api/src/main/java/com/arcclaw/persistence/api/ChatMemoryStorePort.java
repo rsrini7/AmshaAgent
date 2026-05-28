@@ -9,7 +9,10 @@ import java.util.Optional;
  */
 public interface ChatMemoryStorePort {
     void save(ChatMemoryDto dto);
+
     Optional<ChatMemoryDto> findById(String memoryId);
+
     void deleteById(String memoryId);
+
     List<Long> getTimestamps(String memoryId);
 }

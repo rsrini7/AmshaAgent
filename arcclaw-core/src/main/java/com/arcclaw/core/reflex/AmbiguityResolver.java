@@ -21,12 +21,14 @@ public class AmbiguityResolver {
             return null;
         }
         if (pendingCrons.size() > 1) {
-            StringBuilder sb = new StringBuilder("⚠️ ").append(ambiguityTitle).append(". You have multiple tasks waiting:\n\n");
+            StringBuilder sb =
+                    new StringBuilder("⚠️ ").append(ambiguityTitle).append(". You have multiple tasks waiting:\n\n");
             int idx = 1;
             for (AgentCron c : pendingCrons) {
-                sb.append("%d️⃣ `/%s %d` or `/%s %s` - (Background) ".formatted(
-                        idx, actionName.toLowerCase(), idx, actionName.toLowerCase(), c.getId()))
-                  .append(c.getGoal()).append("\n");
+                sb.append("%d️⃣ `/%s %d` or `/%s %s` - (Background) "
+                                .formatted(idx, actionName.toLowerCase(), idx, actionName.toLowerCase(), c.getId()))
+                        .append(c.getGoal())
+                        .append("\n");
                 idx++;
             }
             sb.append("\nPlease reply with the specific reflex numbered option.");
@@ -34,5 +36,4 @@ public class AmbiguityResolver {
         }
         return null;
     }
-
 }

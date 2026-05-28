@@ -10,6 +10,7 @@ import java.util.List;
 
 import com.arcclaw.persistence.api.MemoryChunkDto;
 import com.arcclaw.persistence.api.MemoryRetrievalPort;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -29,8 +30,7 @@ class TwoTierMemoryServiceTest {
     void testDelegationToPort() {
         // Arrange
         MemoryChunkDto dto = new MemoryChunkDto("id-1", "text-1", 0.95);
-        when(memoryPort.search(anyString(), anyInt(), anyString()))
-                .thenReturn(List.of(dto));
+        when(memoryPort.search(anyString(), anyInt(), anyString())).thenReturn(List.of(dto));
 
         // Act
         List<ScoredChunk> results = service.search("query-1", "user-1", 1);
@@ -40,7 +40,7 @@ class TwoTierMemoryServiceTest {
         assertEquals("id-1", results.get(0).chunkId());
         assertEquals("text-1", results.get(0).text());
         assertEquals(0.95, results.get(0).score());
-        
+
         verify(memoryPort).search("query-1", 1, "user-1");
     }
 }

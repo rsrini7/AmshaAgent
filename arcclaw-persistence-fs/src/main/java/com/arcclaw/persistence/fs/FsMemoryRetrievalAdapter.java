@@ -1,15 +1,17 @@
 package com.arcclaw.persistence.fs;
 
-import java.nio.file.Path;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
+import dev.langchain4j.model.embedding.EmbeddingModel;
 
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
+
+import java.nio.file.Path;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 
 import com.arcclaw.persistence.api.BackendCapabilities;
 import com.arcclaw.persistence.api.IngestResult;
@@ -19,9 +21,10 @@ import com.arcclaw.persistence.api.MemoryRetrievalPort;
 import com.arcclaw.persistence.fs.lucene.LuceneIndexManager;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import dev.langchain4j.model.embedding.EmbeddingModel;
-import io.quarkus.arc.properties.IfBuildProperty;
+
 import org.jboss.logging.Logger;
+
+import io.quarkus.arc.properties.IfBuildProperty;
 
 @ApplicationScoped
 @IfBuildProperty(name = "arcclaw.persistence.backend", stringValue = "fs")
@@ -53,8 +56,8 @@ public class FsMemoryRetrievalAdapter implements MemoryRetrievalPort {
         vectorDimension = properties.vectorDimension();
         Path luceneIndexDir = Path.of(properties.luceneIndexDir());
         Path luceneDir = luceneIndexDir.isAbsolute()
-            ? luceneIndexDir.normalize()
-            : Path.of(properties.dataDir(), properties.luceneIndexDir()).normalize();
+                ? luceneIndexDir.normalize()
+                : Path.of(properties.dataDir(), properties.luceneIndexDir()).normalize();
         vectorSearchEnabled = embeddingModel != null && !embeddingModel.isUnsatisfied() && vectorDimension > 0;
         lucene = new LuceneIndexManager(luceneDir, vectorDimension);
         rebuildFromJson();
@@ -75,11 +78,10 @@ public class FsMemoryRetrievalAdapter implements MemoryRetrievalPort {
         List<String> files = store.list(List.of(DOMAIN), ".json");
         for (String f : files) {
             String id = f.replace(".json", "");
-            store.readOptional(List.of(DOMAIN, f), IndexEntry.class)
-                .ifPresent(entry -> {
-                    String mdJson = serializeMetadata(entry.metadata);
-                    lucene.index(id, entry.text, mdJson, null);
-                });
+            store.readOptional(List.of(DOMAIN, f), IndexEntry.class).ifPresent(entry -> {
+                String mdJson = serializeMetadata(entry.metadata);
+                lucene.index(id, entry.text, mdJson, null);
+            });
         }
         if (!files.isEmpty()) {
             LOG.infof("Rebuilt Lucene index from %d JSON entries", files.size());
@@ -97,8 +99,8 @@ public class FsMemoryRetrievalAdapter implements MemoryRetrievalPort {
                     return bm25Search(query, topK);
                 }
                 return lucene.searchHybrid(query, embeddingResult.content().vector(), topK).stream()
-                    .map(r -> new MemoryChunkDto(r.id(), r.content(), r.score()))
-                    .toList();
+                        .map(r -> new MemoryChunkDto(r.id(), r.content(), r.score()))
+                        .toList();
             } catch (Exception e) {
                 LOG.warnf("Vector search failed for query (falling back to BM25): %s", e.getMessage());
                 return bm25Search(query, topK);
@@ -136,8 +138,8 @@ public class FsMemoryRetrievalAdapter implements MemoryRetrievalPort {
 
     private List<MemoryChunkDto> bm25Search(String query, int topK) {
         return lucene.searchBM25(query, topK).stream()
-            .map(r -> new MemoryChunkDto(r.id(), r.content(), r.score()))
-            .toList();
+                .map(r -> new MemoryChunkDto(r.id(), r.content(), r.score()))
+                .toList();
     }
 
     private void validateDimension(float[] vector) {
@@ -149,8 +151,9 @@ public class FsMemoryRetrievalAdapter implements MemoryRetrievalPort {
         if (dimensionValidated) return;
         dimensionValidated = true;
         if (vector.length != vectorDimension) {
-            LOG.warnf("Vector dimension mismatch: configured=%d, model=%d — disabling vector search",
-                vectorDimension, vector.length);
+            LOG.warnf(
+                    "Vector dimension mismatch: configured=%d, model=%d — disabling vector search",
+                    vectorDimension, vector.length);
             vectorSearchEnabled = false;
         }
     }

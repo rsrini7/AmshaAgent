@@ -18,7 +18,7 @@ public class MockPersistenceAdapterPort implements PersistenceAdapterPort {
 
     @Override
     public void execute(String sessionId, String operationName, PersistenceAction action) {
-        // Just execute the action synchronously. 
+        // Just execute the action synchronously.
         // In unit tests, the action lambdas typically interact with other mocked repositories.
         action.execute();
     }

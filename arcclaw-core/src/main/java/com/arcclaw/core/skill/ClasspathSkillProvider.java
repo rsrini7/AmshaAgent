@@ -1,5 +1,8 @@
 package com.arcclaw.core.skill;
 
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+
 import java.io.BufferedReader;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -7,10 +10,8 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
-
 import com.arcclaw.common.util.LogUtil;
+
 import org.jboss.logging.Logger;
 
 @ApplicationScoped
@@ -41,8 +42,8 @@ public class ClasspathSkillProvider implements SkillProvider {
                 return skills;
             }
 
-            try (BufferedReader reader = new BufferedReader(
-                    new InputStreamReader(indexStream, StandardCharsets.UTF_8))) {
+            try (BufferedReader reader =
+                    new BufferedReader(new InputStreamReader(indexStream, StandardCharsets.UTF_8))) {
                 String line;
                 while ((line = reader.readLine()) != null) {
                     line = line.trim();

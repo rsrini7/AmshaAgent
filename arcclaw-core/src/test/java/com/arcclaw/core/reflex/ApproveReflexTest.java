@@ -13,13 +13,13 @@ import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import jakarta.inject.Inject;
+
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.Callable;
-
-import jakarta.inject.Inject;
 
 import com.arcclaw.channel.api.ChannelMessage;
 import com.arcclaw.channel.api.ChannelType;
@@ -39,20 +39,22 @@ import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.persistence.api.AgentCronDto;
 import com.arcclaw.persistence.api.CronStorePort;
-import io.quarkus.arc.ClientProxy;
-import io.quarkus.test.InjectMock;
-import io.quarkus.test.junit.QuarkusTest;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.MockedStatic;
+
+import io.quarkus.arc.ClientProxy;
+import io.quarkus.test.InjectMock;
+import io.quarkus.test.junit.QuarkusTest;
 
 @QuarkusTest
 class ApproveReflexTest {
 
     @Inject
     ApproveReflex approveReflex;
-    
+
     private MockedStatic<WorkspaceScopeHolder> mockedScope;
 
     @InjectMock
@@ -90,24 +92,33 @@ class ApproveReflexTest {
         }
         instance.notificationService = notificationServiceMock;
         lenient().when(notificationServiceMock.createJobNotifier()).thenReturn((cron, result) -> {});
-        
+
         // §7.29 guard: allow tests to proceed by default
-        when(statefulAgentStore.claimForResume(anyString(), anyString()))
-                .thenReturn(true);
- 
+        when(statefulAgentStore.claimForResume(anyString(), anyString())).thenReturn(true);
+
         when(checkpointResumeHandler.resolveResumeGoal(anyString(), anyString()))
                 .thenReturn("Resume Goal");
 
         when(delegateGuard.isDelegate(anyString())).thenReturn(true);
-                
+
         mockedScope = mockStatic(WorkspaceScopeHolder.class);
-        mockedScope.when(() -> WorkspaceScopeHolder.run(anyString(), any(Runnable.class)))
-                .thenAnswer(inv -> { ((Runnable) inv.getArgument(1)).run(); return null; });
-        mockedScope.when(() -> WorkspaceScopeHolder.run(anyString(), anyString(), anyString(), any(Runnable.class)))
-                .thenAnswer(inv -> { ((Runnable) inv.getArgument(3)).run(); return null; });
-        mockedScope.when(() -> WorkspaceScopeHolder.call(anyString(), any(Callable.class)))
+        mockedScope
+                .when(() -> WorkspaceScopeHolder.run(anyString(), any(Runnable.class)))
+                .thenAnswer(inv -> {
+                    ((Runnable) inv.getArgument(1)).run();
+                    return null;
+                });
+        mockedScope
+                .when(() -> WorkspaceScopeHolder.run(anyString(), anyString(), anyString(), any(Runnable.class)))
+                .thenAnswer(inv -> {
+                    ((Runnable) inv.getArgument(3)).run();
+                    return null;
+                });
+        mockedScope
+                .when(() -> WorkspaceScopeHolder.call(anyString(), any(Callable.class)))
                 .thenAnswer(inv -> ((Callable<?>) inv.getArgument(1)).call());
-        mockedScope.when(() -> WorkspaceScopeHolder.call(anyString(), anyString(), anyString(), any(Callable.class)))
+        mockedScope
+                .when(() -> WorkspaceScopeHolder.call(anyString(), anyString(), anyString(), any(Callable.class)))
                 .thenAnswer(inv -> ((Callable<?>) inv.getArgument(3)).call());
     }
 
@@ -128,8 +139,26 @@ class ApproveReflexTest {
     void testCronIdApprovalResumesAndCompletes() {
         String cronId = "cron-123";
         String userId = "user-1";
-        
-        var cron = new AgentCronDto(cronId, null, userId, "chat-1", null, null, null, null, true, null, null, null, "AWAITING_APPROVAL", null, null, "dlv-1", null, null);
+
+        var cron = new AgentCronDto(
+                cronId,
+                null,
+                userId,
+                "chat-1",
+                null,
+                null,
+                null,
+                null,
+                true,
+                null,
+                null,
+                null,
+                "AWAITING_APPROVAL",
+                null,
+                null,
+                "dlv-1",
+                null,
+                null);
 
         AgentCheckpoint cp = new AgentCheckpointRecord();
         cp.setSessionId("cron-session-123");
@@ -153,7 +182,25 @@ class ApproveReflexTest {
     @Test
     void testPlainApproveWithSinglePendingCronGuidesUser() {
         String userId = "user-1";
-        var cron = new AgentCronDto("cron-456", null, null, null, null, null, null, null, false, "Backup databases", null, null, "AWAITING_APPROVAL", null, null, null, null, null);
+        var cron = new AgentCronDto(
+                "cron-456",
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                false,
+                "Backup databases",
+                null,
+                null,
+                "AWAITING_APPROVAL",
+                null,
+                null,
+                null,
+                null,
+                null);
 
         when(statefulAgentStore.findLatestAwaitingApproval(anyString())).thenReturn(Optional.empty());
         when(cronStore.findAwaitingApprovalByUserId(userId)).thenReturn(List.of(cron));
@@ -176,9 +223,8 @@ class ApproveReflexTest {
         cp.setAgentRole(AgentRoleEnum.COORDINATOR.toScopedName());
 
         // Session CP exists
-        when(statefulAgentStore.findLatestAwaitingApproval("session-1"))
-                .thenReturn(Optional.of(cp));
-        
+        when(statefulAgentStore.findLatestAwaitingApproval("session-1")).thenReturn(Optional.of(cp));
+
         MessageContext ctx = createContext("/approve");
         ReflexResult result = approveReflex.execute("session-1", userId, "chat-1", "/approve", ctx);
 
@@ -195,28 +241,46 @@ class ApproveReflexTest {
         cp.setAgentRole(AgentRoleEnum.COORDINATOR.toScopedName());
 
         // Fix: Use specific IDs to avoid misidentifying cron ID as session ID
-        when(statefulAgentStore.findLatestAwaitingApproval("session-1"))
-                .thenReturn(Optional.of(cp));
-        when(statefulAgentStore.findLatestAwaitingApproval("cron-123"))
-                .thenReturn(Optional.empty());
-        
+        when(statefulAgentStore.findLatestAwaitingApproval("session-1")).thenReturn(Optional.of(cp));
+        when(statefulAgentStore.findLatestAwaitingApproval("cron-123")).thenReturn(Optional.empty());
+
         // MOCK THE GUARD TO FAIL (Someone else is already resuming)
         when(statefulAgentStore.claimForResume(anyString(), anyString())).thenReturn(false);
 
         // test for cron approval
         MessageContext ctx = createContext("/approve cron-123");
-        
+
         // Mock a cron pending
-        var cron = new AgentCronDto("cron-123", null, userId, "chat-1", null, null, null, null, false, null, null, null, "AWAITING_APPROVAL", null, null, null, null, null);
+        var cron = new AgentCronDto(
+                "cron-123",
+                null,
+                userId,
+                "chat-1",
+                null,
+                null,
+                null,
+                null,
+                false,
+                null,
+                null,
+                null,
+                "AWAITING_APPROVAL",
+                null,
+                null,
+                null,
+                null,
+                null);
         AgentCheckpoint cp2 = new AgentCheckpointRecord();
         cp2.setSessionId("cron-session-1");
         cp2.setAgentRole(AgentRoleEnum.COORDINATOR.toScopedName());
         when(checkpointApprovalService.approveAll(eq("cron-123"), anyString())).thenReturn(cp2);
         when(cronStore.findById("cron-123")).thenReturn(Optional.of(cron));
-        
+
         ReflexResult result = approveReflex.execute("session-1", userId, "chat-1", "/approve cron-123", ctx);
 
-        assertEquals("⏳ Already processing your approval. Please wait.", result.commandResponse().get());
+        assertEquals(
+                "⏳ Already processing your approval. Please wait.",
+                result.commandResponse().get());
         // Verify signal is NOT set because the loop was never entered
         assertFalse(ctx.isResumeSignal(), "Resume signal should NOT be set when guard blocks call");
     }
@@ -225,8 +289,44 @@ class ApproveReflexTest {
     void testPlainApproveWithMultiplePendingCronsListsAll() {
         // No live session + 2 CRONs → CRON-only disambiguation prompt
         String userId = "user-1";
-        var c1 = new AgentCronDto("cron-1", null, null, null, null, null, null, null, false, "Goal 1", null, null, "AWAITING_APPROVAL", null, null, null, null, null);
-        var c2 = new AgentCronDto("cron-2", null, null, null, null, null, null, null, false, "Goal 2", null, null, "AWAITING_APPROVAL", null, null, null, null, null);
+        var c1 = new AgentCronDto(
+                "cron-1",
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                false,
+                "Goal 1",
+                null,
+                null,
+                "AWAITING_APPROVAL",
+                null,
+                null,
+                null,
+                null,
+                null);
+        var c2 = new AgentCronDto(
+                "cron-2",
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                false,
+                "Goal 2",
+                null,
+                null,
+                "AWAITING_APPROVAL",
+                null,
+                null,
+                null,
+                null,
+                null);
 
         when(statefulAgentStore.findLatestAwaitingApproval(anyString())).thenReturn(Optional.empty());
         when(cronStore.findAwaitingApprovalByUserId(userId)).thenReturn(List.of(c1, c2));
@@ -252,7 +352,25 @@ class ApproveReflexTest {
         cp.setAgentRole("coordinator");
         when(statefulAgentStore.findLatestAwaitingApproval("session-1")).thenReturn(Optional.of(cp));
 
-        var cron = new AgentCronDto("cron-123", null, null, null, null, null, null, null, false, "Periodic backup", null, null, null, null, null, null, null, null);
+        var cron = new AgentCronDto(
+                "cron-123",
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                false,
+                "Periodic backup",
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null);
         when(cronStore.findAwaitingApprovalByUserId(userId)).thenReturn(List.of(cron));
 
         MessageContext ctx = createContext("/approve");
@@ -268,8 +386,26 @@ class ApproveReflexTest {
     void testCronUuidResolutionWithPrefix() {
         String jobId = UUID.randomUUID().toString();
         String fullId = "cron-" + jobId + "-" + UUID.randomUUID().toString();
-        
-        var cron = new AgentCronDto(jobId, null, "user-1", null, null, null, null, null, false, null, null, null, "AWAITING_APPROVAL", null, null, null, null, null);
+
+        var cron = new AgentCronDto(
+                jobId,
+                null,
+                "user-1",
+                null,
+                null,
+                null,
+                null,
+                null,
+                false,
+                null,
+                null,
+                null,
+                "AWAITING_APPROVAL",
+                null,
+                null,
+                null,
+                null,
+                null);
 
         AgentCheckpoint cp = new AgentCheckpointRecord();
         cp.setSessionId(fullId);
@@ -297,7 +433,7 @@ class ApproveReflexTest {
 
         MessageContext ctx = createContext("/approve");
         ReflexResult result = approveReflex.execute("session-1", "user-1", "chat-1", "/approve", ctx);
-        
+
         assertTrue(result.commandResponse().get().contains("last attempt failed"));
         assertTrue(result.commandResponse().get().contains("rate limit"));
     }

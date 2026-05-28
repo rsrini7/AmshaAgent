@@ -5,12 +5,13 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
 import jakarta.inject.Inject;
 
-import io.agroal.api.AgroalDataSource;
-import io.quarkus.arc.properties.IfBuildProperty;
-import io.quarkus.runtime.StartupEvent;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 import org.jdbi.v3.core.Jdbi;
+
+import io.agroal.api.AgroalDataSource;
+import io.quarkus.arc.properties.IfBuildProperty;
+import io.quarkus.runtime.StartupEvent;
 
 /**
  * Creates the vec_archival virtual table for vector embeddings on archival chunks.
@@ -43,26 +44,26 @@ public class ArchivalVecSchemaInitializer {
 
     void onStart(@Observes @Priority(200) StartupEvent ev) {
         if (!ftsInterceptor.isVectorSearchEnabled()) {
-            log.warn("ArchivalVecSchemaInitializer: vec0 not available — vec_archival skipped, " +
-                     "archival hybrid search degraded to BM25-only.");
+            log.warn("ArchivalVecSchemaInitializer: vec0 not available — vec_archival skipped, "
+                    + "archival hybrid search degraded to BM25-only.");
             return;
         }
 
         try {
             jdbi.withHandle(handle -> {
-                handle.createUpdate(
-                    "CREATE VIRTUAL TABLE IF NOT EXISTS vec_archival " +
-                    "USING vec0(" +
-                    "    chunk_id TEXT PRIMARY KEY," +
-                    "    embedding float[" + embedDimensions + "]" +
-                    ")"
-                ).execute();
+                handle.createUpdate("CREATE VIRTUAL TABLE IF NOT EXISTS vec_archival " + "USING vec0("
+                                + "    chunk_id TEXT PRIMARY KEY,"
+                                + "    embedding float["
+                                + embedDimensions + "]" + ")")
+                        .execute();
                 return null;
             });
             log.infof("ArchivalVecSchemaInitializer: vec_archival ensured (dims=%d).", embedDimensions);
         } catch (Exception e) {
-            log.warnf("ArchivalVecSchemaInitializer: Could not create vec_archival: %s. " +
-                      "Archival hybrid search degraded to BM25-only.", e.getMessage());
+            log.warnf(
+                    "ArchivalVecSchemaInitializer: Could not create vec_archival: %s. "
+                            + "Archival hybrid search degraded to BM25-only.",
+                    e.getMessage());
         }
     }
 }

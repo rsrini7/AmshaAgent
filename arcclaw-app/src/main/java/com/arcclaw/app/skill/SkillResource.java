@@ -1,9 +1,5 @@
 package com.arcclaw.app.skill;
 
-import java.time.Instant;
-import java.util.List;
-import java.util.stream.Collectors;
-
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
@@ -17,6 +13,10 @@ import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 
+import java.time.Instant;
+import java.util.List;
+import java.util.stream.Collectors;
+
 import com.arcclaw.core.api.dto.ArcClawErrorResponse;
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
@@ -25,8 +25,10 @@ import com.arcclaw.core.skill.SkillLoader;
 import com.arcclaw.core.skill.SkillRegistry;
 import com.arcclaw.persistence.api.SkillDto;
 import com.arcclaw.persistence.api.SkillStorePort;
-import io.smallrye.common.annotation.RunOnVirtualThread;
+
 import org.eclipse.microprofile.openapi.annotations.Operation;
+
+import io.smallrye.common.annotation.RunOnVirtualThread;
 
 @ApplicationScoped
 @Path("/skills")
@@ -53,14 +55,13 @@ public class SkillResource {
     @Operation(summary = "List all active agent skills")
     public List<SkillResponse> listSkills() {
         return registry.getAll().stream()
-            .map(e -> new SkillResponse(
-                e.definition().id(),
-                e.definition().name(),
-                e.definition().description(),
-                e.source(),
-                e.definition().triggerPatterns()
-            ))
-            .collect(Collectors.toList());
+                .map(e -> new SkillResponse(
+                        e.definition().id(),
+                        e.definition().name(),
+                        e.definition().description(),
+                        e.source(),
+                        e.definition().triggerPatterns()))
+                .collect(Collectors.toList());
     }
 
     @POST
@@ -77,38 +78,30 @@ public class SkillResource {
 
             if (existingOptional.isPresent()) {
                 var existing = existingOptional.get();
-                skillStore.save(new SkillDto(
-                    existing.id(),
-                    existing.name(),
-                    rawYamlDoc,
-                    existing.createdAt(),
-                    Instant.now()
-                ));
+                skillStore.save(
+                        new SkillDto(existing.id(), existing.name(), rawYamlDoc, existing.createdAt(), Instant.now()));
             } else {
-                skillStore.save(new SkillDto(
-                    def.id(),
-                    def.name(),
-                    rawYamlDoc,
-                    Instant.now(),
-                    Instant.now()
-                ));
+                skillStore.save(new SkillDto(def.id(), def.name(), rawYamlDoc, Instant.now(), Instant.now()));
             }
-            
+
             // Reload the registry to make it active immediately
             skillLoader.reloadAll(false);
 
-            auditService.recordMandatory("skills", "admin", "system",
+            auditService.recordMandatory(
+                    "skills",
+                    "admin",
+                    "system",
                     existingOptional.isPresent() ? SecurityEventType.SKILL_CREATED : SecurityEventType.SKILL_CREATED,
                     "skill=" + def.name() + " op=" + (existingOptional.isPresent() ? "update" : "create"));
 
             return Response.status(Response.Status.CREATED)
-                           .entity(new MessageResponse("Skill saved and registry reloaded: " + def.name()))
-                           .build();
+                    .entity(new MessageResponse("Skill saved and registry reloaded: " + def.name()))
+                    .build();
 
         } catch (IllegalArgumentException e) {
             return Response.status(Response.Status.BAD_REQUEST)
-                           .entity(new ArcClawErrorResponse("Invalid skill definition", e.getMessage()))
-                           .build();
+                    .entity(new ArcClawErrorResponse("Invalid skill definition", e.getMessage()))
+                    .build();
         }
     }
 
@@ -121,20 +114,19 @@ public class SkillResource {
         var existing = skillStore.findByName(name);
         if (existing.isEmpty()) {
             return Response.status(Response.Status.NOT_FOUND)
-                           .entity(new ArcClawErrorResponse("Database skill not found", "name: " + name))
-                           .build();
+                    .entity(new ArcClawErrorResponse("Database skill not found", "name: " + name))
+                    .build();
         }
 
         if (!skillStore.deleteById(existing.get().id())) {
             return Response.status(Response.Status.NOT_FOUND)
-                .entity(new ArcClawErrorResponse("Skill was already deleted", "id: " + existing.get().id()))
-                .build();
+                    .entity(new ArcClawErrorResponse(
+                            "Skill was already deleted", "id: " + existing.get().id()))
+                    .build();
         }
         skillLoader.reloadAll(false);
 
-        auditService.recordMandatory("skills", "admin", "system",
-                SecurityEventType.SKILL_DELETED,
-                "skill=" + name);
+        auditService.recordMandatory("skills", "admin", "system", SecurityEventType.SKILL_DELETED, "skill=" + name);
 
         return Response.ok(new MessageResponse("Deleted and reloaded: " + name)).build();
     }
@@ -149,12 +141,7 @@ public class SkillResource {
     }
 
     public record SkillResponse(
-        String id,
-        String name,
-        String description,
-        String source,
-        List<String> triggerPatterns
-    ) {}
+            String id, String name, String description, String source, List<String> triggerPatterns) {}
 
     public record MessageResponse(String message) {}
 }

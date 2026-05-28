@@ -1,5 +1,9 @@
 package com.arcclaw.persistence.sqlite.jdbi;
 
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.inject.Produces;
+import jakarta.inject.Inject;
+
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.sql.ResultSet;
@@ -9,16 +13,11 @@ import java.time.Instant;
 import java.util.Map;
 import java.util.UUID;
 
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.enterprise.inject.Produces;
-import jakarta.inject.Inject;
-
 import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.core.util.TemporalUtils;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.agroal.api.AgroalDataSource;
-import io.quarkus.arc.properties.IfBuildProperty;
+
 import org.jboss.logging.Logger;
 import org.jdbi.v3.core.Jdbi;
 import org.jdbi.v3.core.argument.AbstractArgumentFactory;
@@ -27,6 +26,9 @@ import org.jdbi.v3.core.config.ConfigRegistry;
 import org.jdbi.v3.core.mapper.ColumnMapper;
 import org.jdbi.v3.core.statement.StatementContext;
 import org.jdbi.v3.sqlobject.SqlObjectPlugin;
+
+import io.agroal.api.AgroalDataSource;
+import io.quarkus.arc.properties.IfBuildProperty;
 
 @ApplicationScoped
 @IfBuildProperty(name = "arcclaw.persistence.backend", stringValue = "sqlite", enableIfMissing = true)
@@ -42,14 +44,14 @@ public class JdbiProducer {
     @ApplicationScoped
     public Jdbi jdbi() {
         return Jdbi.create(dataSource)
-            .installPlugin(new SqlObjectPlugin())
-            .registerArgument(new InstantArgumentFactory())
-            .registerColumnMapper(Instant.class, new InstantColumnMapper())
-            .registerArgument(new JsonArgumentFactory(objectMapper))
-            .registerColumnMapper(new JsonColumnMapper(objectMapper))
-            .registerArgument(new UuidArgumentFactory())
-            .registerColumnMapper(UUID.class, new UuidColumnMapper())
-            .registerArgument(new FloatArrayArgumentFactory());
+                .installPlugin(new SqlObjectPlugin())
+                .registerArgument(new InstantArgumentFactory())
+                .registerColumnMapper(Instant.class, new InstantColumnMapper())
+                .registerArgument(new JsonArgumentFactory(objectMapper))
+                .registerColumnMapper(new JsonColumnMapper(objectMapper))
+                .registerArgument(new UuidArgumentFactory())
+                .registerColumnMapper(UUID.class, new UuidColumnMapper())
+                .registerArgument(new FloatArrayArgumentFactory());
     }
 
     static class InstantArgumentFactory extends AbstractArgumentFactory<Instant> {
@@ -59,8 +61,7 @@ public class JdbiProducer {
 
         @Override
         protected Argument build(Instant value, ConfigRegistry config) {
-            return (position, statement, ctx) ->
-                statement.setString(position, TemporalUtils.formatIsoLex(value));
+            return (position, statement, ctx) -> statement.setString(position, TemporalUtils.formatIsoLex(value));
         }
     }
 

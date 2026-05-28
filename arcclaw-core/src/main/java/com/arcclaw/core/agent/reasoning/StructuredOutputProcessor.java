@@ -1,10 +1,17 @@
 package com.arcclaw.core.agent.reasoning;
 
-import java.util.ArrayList;
-import java.util.List;
+import dev.langchain4j.data.message.ChatMessage;
+import dev.langchain4j.data.message.SystemMessage;
+import dev.langchain4j.data.message.UserMessage;
+import dev.langchain4j.model.chat.request.ChatRequest;
+import dev.langchain4j.model.chat.response.ChatResponse;
+import dev.langchain4j.model.output.TokenUsage;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
+
+import java.util.ArrayList;
+import java.util.List;
 
 import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.core.agent.reasoning.error.LlmProviderException;
@@ -16,14 +23,10 @@ import com.arcclaw.core.governance.GovernanceStrategy;
 import com.arcclaw.core.observability.AgentOTelConstants;
 import com.arcclaw.core.observability.AgentOtelContext;
 import com.arcclaw.core.util.AgentErrorMessageUtil;
-import dev.langchain4j.data.message.ChatMessage;
-import dev.langchain4j.data.message.SystemMessage;
-import dev.langchain4j.data.message.UserMessage;
-import dev.langchain4j.model.chat.request.ChatRequest;
-import dev.langchain4j.model.chat.response.ChatResponse;
-import dev.langchain4j.model.output.TokenUsage;
-import io.opentelemetry.api.trace.Span;
+
 import org.jboss.logging.Logger;
+
+import io.opentelemetry.api.trace.Span;
 
 /**
  * Handles structured output generation by interacting with the LLM provider.
@@ -39,10 +42,11 @@ public class StructuredOutputProcessor {
     private final AgentOtelContext otelContext;
 
     @Inject
-    public StructuredOutputProcessor(SystemPromptBuilder promptBuilder,
-                                    LlmProviderPort llmProviderPort,
-                                    GovernanceStrategy governanceLayer,
-                                    AgentOtelContext otelContext) {
+    public StructuredOutputProcessor(
+            SystemPromptBuilder promptBuilder,
+            LlmProviderPort llmProviderPort,
+            GovernanceStrategy governanceLayer,
+            AgentOtelContext otelContext) {
         this.promptBuilder = promptBuilder;
         this.llmProviderPort = llmProviderPort;
         this.governanceLayer = governanceLayer;
@@ -62,9 +66,7 @@ public class StructuredOutputProcessor {
             messages.add(SystemMessage.systemMessage(systemPrompt));
             messages.add(UserMessage.userMessage(schemaPrompt));
 
-            ChatRequest request = ChatRequest.builder()
-                    .messages(messages)
-                    .build();
+            ChatRequest request = ChatRequest.builder().messages(messages).build();
 
             ChatResponse response = llmProviderPort.nextStep(request);
 
@@ -74,9 +76,13 @@ public class StructuredOutputProcessor {
                     governanceLayer.recordLlmCall(sessionId, usage.inputTokenCount(), usage.outputTokenCount());
                     otelContext.recordLlmCall(sessionId, usage.inputTokenCount(), usage.outputTokenCount());
                 } catch (BudgetWarningException w) {
-                    log.warnf("Budget warning for session %s structured call: %s", sessionId, AgentErrorMessageUtil.safeMessage(w));
+                    log.warnf(
+                            "Budget warning for session %s structured call: %s",
+                            sessionId, AgentErrorMessageUtil.safeMessage(w));
                 } catch (BudgetExceededException be) {
-                    log.warnf("Budget exceeded in structured output for session %s: %s", sessionId, AgentErrorMessageUtil.safeMessage(be));
+                    log.warnf(
+                            "Budget exceeded in structured output for session %s: %s",
+                            sessionId, AgentErrorMessageUtil.safeMessage(be));
                     throw be;
                 }
             }

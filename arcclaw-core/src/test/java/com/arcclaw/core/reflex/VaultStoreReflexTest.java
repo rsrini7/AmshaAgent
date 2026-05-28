@@ -8,10 +8,10 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import jakarta.inject.Inject;
+
 import java.time.Instant;
 import java.util.Optional;
-
-import jakarta.inject.Inject;
 
 import com.arcclaw.channel.api.ChannelMessage;
 import com.arcclaw.channel.api.ChannelType;
@@ -19,10 +19,12 @@ import com.arcclaw.channel.api.ChannelUser;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.security.SecretVault;
 import com.arcclaw.core.security.VaultKey;
-import io.quarkus.test.InjectMock;
-import io.quarkus.test.junit.QuarkusTest;
+
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentMatchers;
+
+import io.quarkus.test.InjectMock;
+import io.quarkus.test.junit.QuarkusTest;
 
 @QuarkusTest
 public class VaultStoreReflexTest {
@@ -55,10 +57,12 @@ public class VaultStoreReflexTest {
 
         ReflexResult result = reflex.execute("sess-1", "user-1", "chat-123", input, context);
 
-        assertTrue(result.commandResponse().get().contains("Unknown vault key"), 
-            "Should return helpful error for unknown key");
-        assertTrue(result.commandResponse().get().contains("ARCCLAW_TOOLS_GITHUB_TOKEN"),
-            "Error message should list known keys");
+        assertTrue(
+                result.commandResponse().get().contains("Unknown vault key"),
+                "Should return helpful error for unknown key");
+        assertTrue(
+                result.commandResponse().get().contains("ARCCLAW_TOOLS_GITHUB_TOKEN"),
+                "Error message should list known keys");
     }
 
     @Test
@@ -67,16 +71,16 @@ public class VaultStoreReflexTest {
         ChannelUser user = new ChannelUser("user-1", "chat-123", "User 1", ChannelType.CLI);
         ChannelMessage message = new ChannelMessage.CliMessage(user, input, "sess-1", Instant.now());
         MessageContext context = new MessageContext("chat-123", user, message);
-        
+
         when(secretVault.retrieveSystemKey("ARCCLAW_TOOLS_GITHUB_TOKEN")).thenReturn(Optional.empty());
 
         ReflexResult result = reflex.execute("sess-1", "user-1", "chat-123", input, context);
-        
+
         assertNotNull(result);
         assertTrue(result.commandResponse().isPresent());
         assertTrue(result.commandResponse().get().contains("ARCCLAW_TOOLS_GITHUB_TOKEN"));
         assertTrue(result.commandResponse().get().contains("stored"));
-        
+
         verify(secretVault).storeSystemKey(eq("ARCCLAW_TOOLS_GITHUB_TOKEN"), ArgumentMatchers.any(byte[].class));
     }
 
@@ -86,12 +90,12 @@ public class VaultStoreReflexTest {
         ChannelUser user = new ChannelUser("user-1", "chat-123", "User 1", ChannelType.CLI);
         ChannelMessage message = new ChannelMessage.CliMessage(user, input, "sess-1", Instant.now());
         MessageContext context = new MessageContext("chat-123", user, message);
-        
+
         VaultKey mockEntry = mock(VaultKey.class);
         when(secretVault.retrieveSystemKey("ARCCLAW_TOOLS_GITHUB_TOKEN")).thenReturn(Optional.of(mockEntry));
 
         ReflexResult result = reflex.execute("sess-1", "user-1", "chat-123", input, context);
-        
+
         assertTrue(result.commandResponse().get().contains("already exists"));
         assertTrue(result.commandResponse().get().contains("--force"));
     }
@@ -102,12 +106,12 @@ public class VaultStoreReflexTest {
         ChannelUser user = new ChannelUser("user-1", "chat-123", "User 1", ChannelType.CLI);
         ChannelMessage message = new ChannelMessage.CliMessage(user, input, "sess-1", Instant.now());
         MessageContext context = new MessageContext("chat-123", user, message);
-        
+
         VaultKey mockEntry = mock(VaultKey.class);
         when(secretVault.retrieveSystemKey("ARCCLAW_TOOLS_GITHUB_TOKEN")).thenReturn(Optional.of(mockEntry));
 
         ReflexResult result = reflex.execute("sess-1", "user-1", "chat-123", input, context);
-        
+
         assertTrue(result.commandResponse().get().contains("stored"));
         verify(secretVault).storeSystemKey(eq("ARCCLAW_TOOLS_GITHUB_TOKEN"), ArgumentMatchers.any(byte[].class));
     }

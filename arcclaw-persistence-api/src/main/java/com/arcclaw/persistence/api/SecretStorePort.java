@@ -8,7 +8,10 @@ import java.util.Optional;
  */
 public interface SecretStorePort {
     void save(SecretDto dto);
+
     Optional<SecretDto> find(String sessionId, String keyName);
+
     void delete(String sessionId, String keyName);
+
     void deleteBySessionId(String sessionId);
 }

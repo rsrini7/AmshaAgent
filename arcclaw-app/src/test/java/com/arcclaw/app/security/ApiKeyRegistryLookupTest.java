@@ -5,14 +5,15 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import jakarta.inject.Inject;
+
 import java.util.Map;
 
-import jakarta.inject.Inject;
+import org.junit.jupiter.api.Test;
 
 import io.quarkus.test.junit.QuarkusTest;
 import io.quarkus.test.junit.QuarkusTestProfile;
 import io.quarkus.test.junit.TestProfile;
-import org.junit.jupiter.api.Test;
 
 @QuarkusTest
 @TestProfile(ApiKeyRegistryLookupTest.LookupProfile.class)
@@ -22,10 +23,9 @@ class ApiKeyRegistryLookupTest {
         @Override
         public Map<String, String> getConfigOverrides() {
             return Map.of(
-                "arcclaw.api.keys.admin", "sk-admin-123",
-                "arcclaw.api.keys.node-1", "sk-node-456",
-                "arcclaw.audit.hmac-key", "test-secret"
-            );
+                    "arcclaw.api.keys.admin", "sk-admin-123",
+                    "arcclaw.api.keys.node-1", "sk-node-456",
+                    "arcclaw.audit.hmac-key", "test-secret");
         }
     }
 

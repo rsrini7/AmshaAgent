@@ -1,5 +1,12 @@
 package com.arcclaw.core.tools;
 
+import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
+
+import jakarta.annotation.PostConstruct;
+import jakarta.annotation.PreDestroy;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -17,17 +24,12 @@ import java.time.Duration;
 import java.util.Map;
 import java.util.regex.Pattern;
 
-import jakarta.annotation.PostConstruct;
-import jakarta.annotation.PreDestroy;
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
-
 import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.agent.role.ToolMetadata;
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.security.ToolOperation;
-import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
+
 import org.jboss.logging.Logger;
 
 /**
@@ -41,23 +43,20 @@ import org.jboss.logging.Logger;
  */
 @ApplicationScoped
 @ToolMetadata(
-    capabilityId = "web_fetch",
-    description = "Fetch a URL and return its content as plain text. " +
-        "Use for reading articles, documentation, and static pages. " +
-        "For JavaScript-heavy sites, use browser_navigate instead.",
-    defaultRoles = {"researcher", "synthesizer", "coordinator"}
-)
+        capabilityId = "web_fetch",
+        description = "Fetch a URL and return its content as plain text. "
+                + "Use for reading articles, documentation, and static pages. "
+                + "For JavaScript-heavy sites, use browser_navigate instead.",
+        defaultRoles = {"researcher", "synthesizer", "coordinator"})
 public class SmartWebFetchTool implements AgentTool {
 
     private static final int MAX_CONTENT_CHARS = 8192;
     private static final int MAX_BODY_BYTES = 524_288; // 512KB limit to prevent OOM
-    private static final Pattern SAFE_URL_PATTERN =
-        Pattern.compile("^https?://.*", Pattern.CASE_INSENSITIVE);
+    private static final Pattern SAFE_URL_PATTERN = Pattern.compile("^https?://.*", Pattern.CASE_INSENSITIVE);
     private static final Pattern TAG_PATTERN = Pattern.compile("<[^>]+>");
     private static final Pattern WHITESPACE_PATTERN = Pattern.compile("[ \t]+");
     private static final Pattern MULTI_NEWLINE_PATTERN = Pattern.compile("\n{3,}");
-    private static final Pattern SCRIPT_STYLE_PATTERN =
-        Pattern.compile("(?is)<(script|style|noscript)[^>]*>.*?</\\1>");
+    private static final Pattern SCRIPT_STYLE_PATTERN = Pattern.compile("(?is)<(script|style|noscript)[^>]*>.*?</\\1>");
     private static final int MAX_REDIRECTS = 5;
 
     private static final Logger LOG = Logger.getLogger(SmartWebFetchTool.class);
@@ -73,10 +72,10 @@ public class SmartWebFetchTool implements AgentTool {
         try {
             socksProxy = new LocalSocksProxy();
             httpClient = HttpClient.newBuilder()
-                .connectTimeout(Duration.ofSeconds(10))
-                .followRedirects(HttpClient.Redirect.NEVER)
-                .proxy(ProxySelector.of(new InetSocketAddress("127.0.0.1", socksProxy.getPort())))
-                .build();
+                    .connectTimeout(Duration.ofSeconds(10))
+                    .followRedirects(HttpClient.Redirect.NEVER)
+                    .proxy(ProxySelector.of(new InetSocketAddress("127.0.0.1", socksProxy.getPort())))
+                    .build();
         } catch (IOException e) {
             throw new RuntimeException("Failed to initialize SOCKS proxy for SmartWebFetchTool", e);
         }
@@ -100,10 +99,10 @@ public class SmartWebFetchTool implements AgentTool {
 
     @Override
     public String description() {
-        return "Fetch a URL and return its content as plain text. " +
-               "Use for reading articles, documentation, and static pages. " +
-               "For JavaScript-heavy sites, use browser_navigate instead. " +
-               "Parameters: url (required), maxChars (optional, default 8192).";
+        return "Fetch a URL and return its content as plain text. "
+                + "Use for reading articles, documentation, and static pages. "
+                + "For JavaScript-heavy sites, use browser_navigate instead. "
+                + "Parameters: url (required), maxChars (optional, default 8192).";
     }
 
     @Override
@@ -129,11 +128,12 @@ public class SmartWebFetchTool implements AgentTool {
     @Override
     public JsonObjectSchema parametersSchema() {
         return JsonObjectSchema.builder()
-            .addStringProperty("url", "The full URL to fetch. Must begin with http:// or https://.")
-            .addIntegerProperty("maxChars",
-                "Maximum characters to return (default: 8192). Content is truncated at sentence boundaries.")
-            .required("url")
-            .build();
+                .addStringProperty("url", "The full URL to fetch. Must begin with http:// or https://.")
+                .addIntegerProperty(
+                        "maxChars",
+                        "Maximum characters to return (default: 8192). Content is truncated at sentence boundaries.")
+                .required("url")
+                .build();
     }
 
     @Override
@@ -144,8 +144,8 @@ public class SmartWebFetchTool implements AgentTool {
         }
         url = url.trim();
         if (!SAFE_URL_PATTERN.matcher(url).matches()) {
-            return ToolResponse.failure(400,
-                "Unsupported URL scheme. Only http:// and https:// are allowed. Got: " + url);
+            return ToolResponse.failure(
+                    400, "Unsupported URL scheme. Only http:// and https:// are allowed. Got: " + url);
         }
 
         String ssrfError = rejectPrivateHost(url);
@@ -186,15 +186,15 @@ public class SmartWebFetchTool implements AgentTool {
         text = TAG_PATTERN.matcher(text).replaceAll("");
         // Decode common HTML entities
         text = text.replace("&amp;", "&")
-                   .replace("&lt;", "<")
-                   .replace("&gt;", ">")
-                   .replace("&quot;", "\"")
-                   .replace("&#39;", "'")
-                   .replace("&nbsp;", " ")
-                   .replace("&mdash;", "—")
-                   .replace("&ndash;", "–")
-                   .replace("&hellip;", "…")
-                   .replace("&copy;", "©");
+                .replace("&lt;", "<")
+                .replace("&gt;", ">")
+                .replace("&quot;", "\"")
+                .replace("&#39;", "'")
+                .replace("&nbsp;", " ")
+                .replace("&mdash;", "—")
+                .replace("&ndash;", "–")
+                .replace("&hellip;", "…")
+                .replace("&copy;", "©");
         // Normalize whitespace
         text = WHITESPACE_PATTERN.matcher(text).replaceAll(" ");
         text = MULTI_NEWLINE_PATTERN.matcher(text).replaceAll("\n\n");
@@ -204,10 +204,7 @@ public class SmartWebFetchTool implements AgentTool {
     static String truncateAtSentence(String text, int maxLen) {
         if (text.length() <= maxLen) return text;
         String sub = text.substring(0, maxLen);
-        int lastSentence = Math.max(
-            sub.lastIndexOf('.'),
-            Math.max(sub.lastIndexOf('!'), sub.lastIndexOf('?'))
-        );
+        int lastSentence = Math.max(sub.lastIndexOf('.'), Math.max(sub.lastIndexOf('!'), sub.lastIndexOf('?')));
         return lastSentence > maxLen / 2 ? sub.substring(0, lastSentence + 1) : sub;
     }
 
@@ -226,15 +223,14 @@ public class SmartWebFetchTool implements AgentTool {
         }
 
         HttpRequest request = HttpRequest.newBuilder()
-            .uri(URI.create(url))
-            .timeout(Duration.ofSeconds(30))
-            .header("Accept", "text/html,text/plain,*/*")
-            .header("User-Agent", "ArcClaw/1.0 (+https://github.com/arcclaw)")
-            .GET()
-            .build();
+                .uri(URI.create(url))
+                .timeout(Duration.ofSeconds(30))
+                .header("Accept", "text/html,text/plain,*/*")
+                .header("User-Agent", "ArcClaw/1.0 (+https://github.com/arcclaw)")
+                .GET()
+                .build();
 
-        HttpResponse<InputStream> response = httpClient.send(request,
-                HttpResponse.BodyHandlers.ofInputStream());
+        HttpResponse<InputStream> response = httpClient.send(request, HttpResponse.BodyHandlers.ofInputStream());
 
         URI responseUri = response.uri();
         String responseUrl = responseUri.toString();
@@ -252,16 +248,15 @@ public class SmartWebFetchTool implements AgentTool {
             if (statusCode >= 300 && statusCode < 400) {
                 String location = response.headers().firstValue("location").orElse(null);
                 if (location == null) {
-                    return ToolResponse.failure(statusCode,
-                        "HTTP " + statusCode + " with no Location header fetching " + url);
+                    return ToolResponse.failure(
+                            statusCode, "HTTP " + statusCode + " with no Location header fetching " + url);
                 }
                 URI redirectUri = responseUri.resolve(location);
                 return fetchWithRedirects(redirectUri.toString(), maxChars, ctx, depth + 1);
             }
 
             if (statusCode >= 400) {
-                return ToolResponse.failure(statusCode,
-                    "HTTP " + statusCode + " fetching " + url);
+                return ToolResponse.failure(statusCode, "HTTP " + statusCode + " fetching " + url);
             }
 
             byte[] bodyBytes = bodyStream.readNBytes(MAX_BODY_BYTES);
@@ -283,8 +278,12 @@ public class SmartWebFetchTool implements AgentTool {
                 text = truncateAtSentence(text, maxChars) + "\n[content truncated at " + maxChars + " chars]";
             }
 
-            auditService.record(ctx.sessionId(), ctx.userId(), ctx.agentRole(),
-                SecurityEventType.TOOL_EXECUTED, "Web fetch: " + url);
+            auditService.record(
+                    ctx.sessionId(),
+                    ctx.userId(),
+                    ctx.agentRole(),
+                    SecurityEventType.TOOL_EXECUTED,
+                    "Web fetch: " + url);
 
             return ToolResponse.success("Content from " + url + ":\n\n" + text);
         } finally {
@@ -358,11 +357,11 @@ public class SmartWebFetchTool implements AgentTool {
                 }
             }
             if (!supportNoAuth) {
-                out.write(new byte[]{5, (byte) 0xFF});
+                out.write(new byte[] {5, (byte) 0xFF});
                 out.flush();
                 return false;
             }
-            out.write(new byte[]{5, 0});
+            out.write(new byte[] {5, 0});
             out.flush();
             return true;
         }
@@ -372,7 +371,7 @@ public class SmartWebFetchTool implements AgentTool {
             if (reqVer != 5) return null;
             int cmd = in.read();
             if (cmd != 1) { // CONNECT only
-                out.write(new byte[]{5, 7, 0, 1, 0, 0, 0, 0, 0, 0});
+                out.write(new byte[] {5, 7, 0, 1, 0, 0, 0, 0, 0, 0});
                 out.flush();
                 return null;
             }
@@ -395,7 +394,7 @@ public class SmartWebFetchTool implements AgentTool {
                 if (ipBytes.length < 16) return null;
                 host = InetAddress.getByAddress(ipBytes).getHostAddress();
             } else {
-                out.write(new byte[]{5, 8, 0, 1, 0, 0, 0, 0, 0, 0});
+                out.write(new byte[] {5, 8, 0, 1, 0, 0, 0, 0, 0, 0});
                 out.flush();
                 return null;
             }
@@ -413,15 +412,20 @@ public class SmartWebFetchTool implements AgentTool {
             try {
                 addresses = InetAddress.getAllByName(host);
             } catch (Exception e) {
-                out.write(new byte[]{5, 4, 0, 1, 0, 0, 0, 0, 0, 0});
+                out.write(new byte[] {5, 4, 0, 1, 0, 0, 0, 0, 0, 0});
                 out.flush();
                 return null;
             }
 
             for (InetAddress addr : addresses) {
-                if (addr.isLoopbackAddress() || addr.isLinkLocalAddress() || addr.isSiteLocalAddress() || addr.isMulticastAddress()) {
-                    LOG.warnf("SSRF block in SOCKS proxy: target host '%s' resolved to private IP '%s'", host, addr.getHostAddress());
-                    out.write(new byte[]{5, 2, 0, 1, 0, 0, 0, 0, 0, 0});
+                if (addr.isLoopbackAddress()
+                        || addr.isLinkLocalAddress()
+                        || addr.isSiteLocalAddress()
+                        || addr.isMulticastAddress()) {
+                    LOG.warnf(
+                            "SSRF block in SOCKS proxy: target host '%s' resolved to private IP '%s'",
+                            host, addr.getHostAddress());
+                    out.write(new byte[] {5, 2, 0, 1, 0, 0, 0, 0, 0, 0});
                     out.flush();
                     return null;
                 }
@@ -431,8 +435,8 @@ public class SmartWebFetchTool implements AgentTool {
 
         private void handleClient(Socket clientSocket) {
             try (clientSocket;
-                 InputStream in = clientSocket.getInputStream();
-                 OutputStream out = clientSocket.getOutputStream()) {
+                    InputStream in = clientSocket.getInputStream();
+                    OutputStream out = clientSocket.getOutputStream()) {
 
                 clientSocket.setSoTimeout(25_000); // 25s read timeout for client-side
 
@@ -449,10 +453,10 @@ public class SmartWebFetchTool implements AgentTool {
                     destSocket.connect(new InetSocketAddress(targetIp, target.port()), 10000); // 10s timeout
                     destSocket.setSoTimeout(20_000); // 20s read timeout for destination
                     try (InputStream destIn = destSocket.getInputStream();
-                         OutputStream destOut = destSocket.getOutputStream()) {
+                            OutputStream destOut = destSocket.getOutputStream()) {
 
                         // Send success reply
-                        out.write(new byte[]{5, 0, 0, 1, 0, 0, 0, 0, 0, 0});
+                        out.write(new byte[] {5, 0, 0, 1, 0, 0, 0, 0, 0, 0});
                         out.flush();
 
                         // Pipe streams bidirectionally
@@ -477,7 +481,7 @@ public class SmartWebFetchTool implements AgentTool {
                         }
                     }
                 } catch (Exception e) {
-                    out.write(new byte[]{5, 5, 0, 1, 0, 0, 0, 0, 0, 0});
+                    out.write(new byte[] {5, 5, 0, 1, 0, 0, 0, 0, 0, 0});
                     out.flush();
                 }
             } catch (IOException e) {

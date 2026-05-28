@@ -11,6 +11,5 @@ public interface LlmValidationGateway {
      * @return true if the model responds with a sensible reply
      * @throws LlmValidationException if connection/auth fails
      */
-    boolean validate(String provider, String model, String apiKey)
-        throws LlmValidationException;
+    boolean validate(String provider, String model, String apiKey) throws LlmValidationException;
 }

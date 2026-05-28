@@ -4,7 +4,7 @@ package com.arcclaw.core.pipeline;
  * Single step in the message processing pipeline.
  */
 public interface MessageHandler {
-    
+
     /**
      * Priority of the handler. Lower numbers run first.
      * Suggested ranges:
@@ -17,7 +17,7 @@ public interface MessageHandler {
 
     /**
      * Process the message.
-     * @return {@link HandleResult#STOP} if the pipeline should halt immediately, 
+     * @return {@link HandleResult#STOP} if the pipeline should halt immediately,
      *         {@link HandleResult#CONTINUE} to pass to the next handler.
      */
     HandleResult handle(MessageContext context);

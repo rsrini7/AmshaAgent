@@ -26,8 +26,13 @@ public class ArchivalContextCache {
 
     /** Immutable snapshot of cache state — either empty or populated. */
     private record CacheState(boolean loaded, String text) {
-        static CacheState empty() { return new CacheState(false, null); }
-        static CacheState of(String text) { return new CacheState(true, text); }
+        static CacheState empty() {
+            return new CacheState(false, null);
+        }
+
+        static CacheState of(String text) {
+            return new CacheState(true, text);
+        }
     }
 
     private final AtomicReference<CacheState> state = new AtomicReference<>(CacheState.empty());

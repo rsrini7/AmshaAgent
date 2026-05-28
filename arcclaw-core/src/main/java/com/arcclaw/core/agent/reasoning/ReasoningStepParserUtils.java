@@ -53,8 +53,12 @@ final class ReasoningStepParserUtils {
             boolean isUnescapedQuote = (c == '"' && prev != '\\');
             if (isUnescapedQuote && inString) {
                 char next = i + 1 < json.length() ? json.charAt(i + 1) : 0;
-                if (next != ',' && next != '}' && next != ']' && next != ':'
-                        && !Character.isWhitespace(next) && next != 0) {
+                if (next != ','
+                        && next != '}'
+                        && next != ']'
+                        && next != ':'
+                        && !Character.isWhitespace(next)
+                        && next != 0) {
                     sb.append('\\');
                     sb.append(c);
                     prev = c;

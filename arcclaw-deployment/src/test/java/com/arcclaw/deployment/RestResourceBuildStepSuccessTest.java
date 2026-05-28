@@ -1,5 +1,8 @@
 package com.arcclaw.deployment;
 
+import dev.langchain4j.model.chat.ChatModel;
+import dev.langchain4j.model.embedding.EmbeddingModel;
+
 import jakarta.annotation.Priority;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.context.Dependent;
@@ -14,19 +17,19 @@ import com.arcclaw.channel.api.ChannelAllowlist;
 import com.arcclaw.channel.api.IntentDetector;
 import com.arcclaw.core.agent.reasoning.StructuredOutputMode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import dev.langchain4j.model.chat.ChatModel;
-import dev.langchain4j.model.embedding.EmbeddingModel;
+
+import org.jboss.shrinkwrap.api.ShrinkWrap;
+import org.jboss.shrinkwrap.api.spec.JavaArchive;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.RegisterExtension;
+import org.mockito.Mockito;
+
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import io.quarkus.qute.Template;
 import io.quarkus.test.QuarkusUnitTest;
 import io.smallrye.common.annotation.Identifier;
 import io.smallrye.common.annotation.RunOnVirtualThread;
-import org.jboss.shrinkwrap.api.ShrinkWrap;
-import org.jboss.shrinkwrap.api.spec.JavaArchive;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.RegisterExtension;
-import org.mockito.Mockito;
 
 public class RestResourceBuildStepSuccessTest {
 

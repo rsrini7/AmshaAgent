@@ -12,6 +12,7 @@ import com.arcclaw.core.pipeline.SessionContext;
 import com.arcclaw.core.pipeline.SessionIdResolver;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.state.StatefulAgentStore;
+
 import org.jboss.logging.Logger;
 
 /**
@@ -37,9 +38,10 @@ public class SessionResolutionHandler implements MessageHandler {
     }
 
     @Inject
-    public SessionResolutionHandler(StatefulAgentStore agentStore,
-                                    SessionHeartbeatTracker heartbeatTracker,
-                                    SessionIdResolver sessionIdResolver) {
+    public SessionResolutionHandler(
+            StatefulAgentStore agentStore,
+            SessionHeartbeatTracker heartbeatTracker,
+            SessionIdResolver sessionIdResolver) {
         this.agentStore = agentStore;
         this.heartbeatTracker = heartbeatTracker;
         this.sessionIdResolver = sessionIdResolver;
@@ -75,7 +77,9 @@ public class SessionResolutionHandler implements MessageHandler {
             // or after a server restart before any checkpoint has been written.
             // The level is written back to heartbeat below, so this fires at most
             // once per session per JVM lifetime.
-            log.debugf("No stored autonomy found for session %s (first message or post-restart), defaulting to SUPERVISED", sessionId);
+            log.debugf(
+                    "No stored autonomy found for session %s (first message or post-restart), defaulting to SUPERVISED",
+                    sessionId);
             level = AutonomyLevel.SUPERVISED;
         }
 
@@ -84,9 +88,9 @@ public class SessionResolutionHandler implements MessageHandler {
         // We cap FULL→SUPERVISED for Telegram to prevent accidental
         // self-promotion via the "I am an AI" fallback.
         if (level == AutonomyLevel.FULL
-            && ChannelType.TELEGRAM.equals(context.getUser().channel())) {
-                log.debugf("Capping FULL→SUPERVISED for Telegram session %s", sessionId);
-                level = AutonomyLevel.SUPERVISED;
+                && ChannelType.TELEGRAM.equals(context.getUser().channel())) {
+            log.debugf("Capping FULL→SUPERVISED for Telegram session %s", sessionId);
+            level = AutonomyLevel.SUPERVISED;
         }
 
         // Write the resolved level back into the heartbeat cache.

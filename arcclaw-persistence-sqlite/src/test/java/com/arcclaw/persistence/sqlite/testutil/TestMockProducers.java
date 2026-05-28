@@ -4,13 +4,16 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import java.util.List;
-import java.util.Map;
+import dev.langchain4j.model.chat.ChatModel;
+import dev.langchain4j.model.embedding.EmbeddingModel;
 
 import jakarta.annotation.Priority;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Alternative;
 import jakarta.enterprise.inject.Produces;
+
+import java.util.List;
+import java.util.Map;
 
 import com.arcclaw.core.agent.loop.AgentExecutionContext;
 import com.arcclaw.core.agent.persona.Agent;
@@ -20,8 +23,7 @@ import com.arcclaw.core.agent.reasoning.ReasoningEngine;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.agent.reasoning.StructuredOutputMode;
 import com.arcclaw.core.routing.LlmModelFactory;
-import dev.langchain4j.model.chat.ChatModel;
-import dev.langchain4j.model.embedding.EmbeddingModel;
+
 import io.smallrye.common.annotation.Identifier;
 
 /**
@@ -122,9 +124,15 @@ public class TestMockProducers {
     @ApplicationScoped
     public static class MockReasoningEngine implements ReasoningEngine {
         @Override
-        public ReasoningStep nextStep(AgentExecutionContext context, String agentRole, String goal, List<ReasoningStep> history) {
-            return ReasoningStep.of("mock-persistence-test", ReasoningStep.FINISH, 
-                Map.of(ReasoningStep.ACTION_INPUT_ANSWER_KEY, "No-op mock reasoning engine."), null, 0, 0);
+        public ReasoningStep nextStep(
+                AgentExecutionContext context, String agentRole, String goal, List<ReasoningStep> history) {
+            return ReasoningStep.of(
+                    "mock-persistence-test",
+                    ReasoningStep.FINISH,
+                    Map.of(ReasoningStep.ACTION_INPUT_ANSWER_KEY, "No-op mock reasoning engine."),
+                    null,
+                    0,
+                    0);
         }
 
         @Override

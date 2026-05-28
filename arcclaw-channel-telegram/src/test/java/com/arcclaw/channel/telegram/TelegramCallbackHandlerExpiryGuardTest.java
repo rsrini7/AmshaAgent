@@ -16,6 +16,7 @@ import com.arcclaw.channel.api.hitl.ApprovalGateway;
 import com.arcclaw.channel.api.hitl.ApprovalOutcome;
 import com.arcclaw.channel.api.hitl.ApprovalResult;
 import com.fasterxml.jackson.databind.ObjectMapper;
+
 import org.apache.camel.Exchange;
 import org.apache.camel.Message;
 import org.apache.camel.component.telegram.model.Chat;
@@ -74,7 +75,7 @@ class TelegramCallbackHandlerExpiryGuardTest {
     void isCheckpointExpired_true_rejectsCall() {
         // mock expired
         when(approvalGateway.decide(eq("test-session"), eq("dummy_tool"), any(ApprovalDecision.class), anyString()))
-            .thenReturn(new ApprovalResult(ApprovalOutcome.EXPIRED, "test-session", "dummy_tool", 0, List.of()));
+                .thenReturn(new ApprovalResult(ApprovalOutcome.EXPIRED, "test-session", "dummy_tool", 0, List.of()));
 
         handler.handleCallback(exchange);
 
@@ -88,7 +89,7 @@ class TelegramCallbackHandlerExpiryGuardTest {
     void isCheckpointExpired_false_proceedsToApprove() {
         // mock not expired
         when(approvalGateway.decide(eq("test-session"), eq("dummy_tool"), any(ApprovalDecision.class), anyString()))
-            .thenReturn(new ApprovalResult(ApprovalOutcome.APPROVED, "test-session", "dummy_tool", 0, List.of()));
+                .thenReturn(new ApprovalResult(ApprovalOutcome.APPROVED, "test-session", "dummy_tool", 0, List.of()));
 
         handler.handleCallback(exchange);
 

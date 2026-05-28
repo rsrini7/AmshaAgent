@@ -4,6 +4,7 @@ import jakarta.annotation.Priority;
 import jakarta.enterprise.context.ApplicationScoped;
 
 import com.arcclaw.channel.api.IntentDetector;
+
 import io.quarkus.test.Mock;
 
 @Mock

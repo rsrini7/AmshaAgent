@@ -1,12 +1,12 @@
 package com.arcclaw.core.agent.loop;
 
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
-
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
 
 import com.arcclaw.channel.api.ChannelPlugin;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
@@ -18,6 +18,7 @@ import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.util.AgentErrorMessageUtil;
+
 import org.jboss.logging.Logger;
 
 /**
@@ -80,7 +81,9 @@ public class CheckpointResumeCoordinator {
         record FreshStart() implements ResumeDecision {}
 
         /** Resume with existing history. */
-        record ResumedHistory(List<ReasoningStep> history, int iterationsUsed, String checkpointRole, String contextDataJson) implements ResumeDecision {}
+        record ResumedHistory(
+                List<ReasoningStep> history, int iterationsUsed, String checkpointRole, String contextDataJson)
+                implements ResumeDecision {}
 
         /** Stale approval was active but discarded; starting fresh. */
         record AbortedStale() implements ResumeDecision {}
@@ -107,10 +110,8 @@ public class CheckpointResumeCoordinator {
      * @param context incoming message context for resume-signal detection
      * @return one of the three {@link ResumeDecision} variants
      */
-    public ResumeDecision resolveResumePath(String sessionId,
-                                            String canonicalRole,
-                                            String capturedUserId,
-                                            MessageContext context) {
+    public ResumeDecision resolveResumePath(
+            String sessionId, String canonicalRole, String capturedUserId, MessageContext context) {
 
         Optional<AgentCheckpoint> existingCheckpoint = agentStore.findLatestNonArchivedCheckpoint(sessionId);
         if (existingCheckpoint.isEmpty()) {
@@ -122,12 +123,14 @@ public class CheckpointResumeCoordinator {
 
         // Ensure we only resume if the role matches, OR if it's a cross-role resume (§7.31/§7.46)
         boolean roleMatches = Objects.equals(checkpoint.getAgentRole(), canonicalRole);
-        boolean isResumableStatus = (status == CheckpointStatus.AWAITING_APPROVAL || status == CheckpointStatus.RESUMING);
-        
+        boolean isResumableStatus =
+                (status == CheckpointStatus.AWAITING_APPROVAL || status == CheckpointStatus.RESUMING);
+
         if (!roleMatches && !isResumableStatus) {
-             log.debugf("CheckpointResumeCoordinator: latest checkpoint role (%s) != current role (%s). Starting fresh.", 
-                     checkpoint.getAgentRole(), canonicalRole);
-             return new ResumeDecision.FreshStart();
+            log.debugf(
+                    "CheckpointResumeCoordinator: latest checkpoint role (%s) != current role (%s). Starting fresh.",
+                    checkpoint.getAgentRole(), canonicalRole);
+            return new ResumeDecision.FreshStart();
         }
 
         if (status == CheckpointStatus.IN_PROGRESS) {
@@ -147,7 +150,8 @@ public class CheckpointResumeCoordinator {
 
     private ResumeDecision handleInProgress(AgentCheckpoint checkpoint) {
         List<ReasoningStep> loadedSteps = agentStore.deserializeSteps(checkpoint);
-        log.infof("CheckpointResumeCoordinator: restored %d steps from IN_PROGRESS for session=%s",
+        log.infof(
+                "CheckpointResumeCoordinator: restored %d steps from IN_PROGRESS for session=%s",
                 loadedSteps != null ? loadedSteps.size() : 0, checkpoint.getSessionId());
         return new ResumeDecision.ResumedHistory(
                 loadedSteps != null ? loadedSteps : new ArrayList<>(),
@@ -156,13 +160,14 @@ public class CheckpointResumeCoordinator {
                 checkpoint.getContextDataJson());
     }
 
-    private ResumeDecision handleAwaitingApproval(AgentCheckpoint checkpoint, MessageContext context, 
-                                                 String capturedUserId, String canonicalRole) {
+    private ResumeDecision handleAwaitingApproval(
+            AgentCheckpoint checkpoint, MessageContext context, String capturedUserId, String canonicalRole) {
         CheckpointStatus status = checkpoint.getStatus();
         boolean isResume = (context != null && context.isResumeSignal()) || status == CheckpointStatus.RESUMING;
         if (isResume) {
             List<ReasoningStep> loadedSteps = agentStore.deserializeSteps(checkpoint);
-            log.infof("CheckpointResumeCoordinator: restored %d steps from %s for session=%s",
+            log.infof(
+                    "CheckpointResumeCoordinator: restored %d steps from %s for session=%s",
                     loadedSteps != null ? loadedSteps.size() : 0, status, checkpoint.getSessionId());
             return new ResumeDecision.ResumedHistory(
                     loadedSteps != null ? loadedSteps : new ArrayList<>(),
@@ -177,9 +182,10 @@ public class CheckpointResumeCoordinator {
 
     private ResumeDecision handleCompleted(AgentCheckpoint checkpoint) {
         List<ReasoningStep> loadedSteps = agentStore.deserializeSteps(checkpoint);
-        log.infof("CheckpointResumeCoordinator: restored %d steps from COMPLETED turn for session=%s",
+        log.infof(
+                "CheckpointResumeCoordinator: restored %d steps from COMPLETED turn for session=%s",
                 loadedSteps != null ? loadedSteps.size() : 0, checkpoint.getSessionId());
-        
+
         checkpoint.setStatus(CheckpointStatus.ARCHIVED);
         agentStore.save(checkpoint);
 
@@ -188,28 +194,33 @@ public class CheckpointResumeCoordinator {
                 ? loadedSteps.subList(loadedSteps.size() - MAX_CARRY_STEPS, loadedSteps.size())
                 : (loadedSteps != null ? loadedSteps : new ArrayList<>());
 
-        return new ResumeDecision.ResumedHistory(
-                pruned, 0, checkpoint.getAgentRole(), checkpoint.getContextDataJson());
+        return new ResumeDecision.ResumedHistory(pruned, 0, checkpoint.getAgentRole(), checkpoint.getContextDataJson());
     }
 
-    private ResumeDecision handleTerminalMismatch(AgentCheckpoint checkpoint, CheckpointStatus status, boolean roleMatches) {
-        log.debugf("CheckpointResumeCoordinator: ignoring terminal checkpoint (status=%s, roleMatch=%b). Archiving.", 
+    private ResumeDecision handleTerminalMismatch(
+            AgentCheckpoint checkpoint, CheckpointStatus status, boolean roleMatches) {
+        log.debugf(
+                "CheckpointResumeCoordinator: ignoring terminal checkpoint (status=%s, roleMatch=%b). Archiving.",
                 status, roleMatches);
         checkpoint.setStatus(CheckpointStatus.ARCHIVED);
         agentStore.save(checkpoint);
         return new ResumeDecision.FreshStart();
     }
 
-    public static final String FAIL_REASON_STALE_DISCARD = "Discarded: new user message received before approval was given.";
+    public static final String FAIL_REASON_STALE_DISCARD =
+            "Discarded: new user message received before approval was given.";
 
-    private void archiveStaleApproval(String sessionId,
-                                      String canonicalRole,
-                                      String capturedUserId,
-                                      AgentCheckpoint checkpoint,
-                                      MessageContext context) {
+    private void archiveStaleApproval(
+            String sessionId,
+            String canonicalRole,
+            String capturedUserId,
+            AgentCheckpoint checkpoint,
+            MessageContext context) {
         String staleTool = checkpoint.getPendingToolName();
-        log.warnf("CheckpointResumeCoordinator: STALE-APPROVAL session=%s had pending tool '%s' "
-                + "but received new message. Archiving and starting fresh.", sessionId, staleTool);
+        log.warnf(
+                "CheckpointResumeCoordinator: STALE-APPROVAL session=%s had pending tool '%s' "
+                        + "but received new message. Archiving and starting fresh.",
+                sessionId, staleTool);
 
         // 🟢 FIX Bug 3: Scrub unfulfilled tool calls from ChatMemoryStore.
         // This ensures the discarded tool call doesn't re-surface in the next turn's history
@@ -227,14 +238,15 @@ public class CheckpointResumeCoordinator {
             notifyStaleApprovalDiscarded(sessionId, staleTool, context);
         }
 
-        auditService.record(sessionId, capturedUserId, checkpoint.getAgentRole(),
+        auditService.record(
+                sessionId,
+                capturedUserId,
+                checkpoint.getAgentRole(),
                 SecurityEventType.CHECKPOINT_FAILED,
                 "Stale AWAITING_APPROVAL discarded - new message received. tool=" + staleTool);
     }
 
-    private void notifyStaleApprovalDiscarded(String sessionId,
-                                              String staleTool,
-                                              MessageContext context) {
+    private void notifyStaleApprovalDiscarded(String sessionId, String staleTool, MessageContext context) {
         try {
             String toolLabel = staleTool != null ? staleTool : "a pending tool";
             String notice = """
@@ -243,11 +255,13 @@ public class CheckpointResumeCoordinator {
                     Your previous task was cancelled. Reply /retry to run it again.
                     """.formatted(toolLabel);
 
-            channelPluginRegistry.find(context.getUser().channel().id())
+            channelPluginRegistry
+                    .find(context.getUser().channel().id())
                     .map(ChannelPlugin::sender)
                     .ifPresent(sender -> sender.sendRaw(context.getUser(), notice));
         } catch (Exception e) {
-            log.warnf("CheckpointResumeCoordinator.notifyStaleApprovalDiscarded: failed for session %s: %s",
+            log.warnf(
+                    "CheckpointResumeCoordinator.notifyStaleApprovalDiscarded: failed for session %s: %s",
                     sessionId, AgentErrorMessageUtil.safeMessage(e));
         }
     }

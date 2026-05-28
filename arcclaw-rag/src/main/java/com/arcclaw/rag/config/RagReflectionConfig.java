@@ -4,16 +4,14 @@ import com.arcclaw.rag.EmbeddingModelProducer;
 import com.arcclaw.rag.RagContextEnricher;
 import com.arcclaw.rag.ScoredChunk;
 import com.arcclaw.rag.TwoTierMemoryService;
+
 import io.quarkus.runtime.annotations.RegisterForReflection;
 
 @RegisterForReflection(
-    targets = {
-        ScoredChunk.class,
-        RagContextEnricher.class,
-        TwoTierMemoryService.class,
-        EmbeddingModelProducer.class,
-    }
-)
-public class RagReflectionConfig {
-    
-}
+        targets = {
+            ScoredChunk.class,
+            RagContextEnricher.class,
+            TwoTierMemoryService.class,
+            EmbeddingModelProducer.class,
+        })
+public class RagReflectionConfig {}

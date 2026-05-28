@@ -5,19 +5,21 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import jakarta.inject.Inject;
 
-import io.quarkus.test.junit.QuarkusTest;
 import org.apache.camel.CamelContext;
 import org.apache.camel.Route;
 import org.apache.camel.ServiceStatus;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import io.quarkus.test.junit.QuarkusTest;
+
 @QuarkusTest
 class TelegramChannelRouteStartupTest {
 
     // All mock beans are provided by TestCoreMocks (shared across all @QuarkusTest tests)
 
-    @Inject CamelContext camelContext;
+    @Inject
+    CamelContext camelContext;
 
     @BeforeEach
     void stopPolling() throws Exception {
@@ -29,8 +31,7 @@ class TelegramChannelRouteStartupTest {
 
         // Stop the route immediately after startup to prevent real API polling
         // We only need to verify registration, not actual polling
-        if (camelContext.getRouteController()
-                .getRouteStatus("telegram-bot") == ServiceStatus.Started) {
+        if (camelContext.getRouteController().getRouteStatus("telegram-bot") == ServiceStatus.Started) {
             camelContext.getRouteController().stopRoute("telegram-bot");
         }
     }
@@ -38,8 +39,7 @@ class TelegramChannelRouteStartupTest {
     @Test
     void testTelegramRouteSelfRegisteredOnStartup() {
         // Route must exist even if stopped for this test
-        assertNotNull(camelContext.getRoute("telegram-bot"),
-            "telegram-bot route must be registered by onStart()");
+        assertNotNull(camelContext.getRoute("telegram-bot"), "telegram-bot route must be registered by onStart()");
     }
 
     @Test

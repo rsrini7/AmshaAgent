@@ -1,11 +1,11 @@
 package com.arcclaw.persistence.common.entity;
 
-import java.time.Instant;
-
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+
+import java.time.Instant;
 
 /**
  * Entity for table-based distributed locks (§T5-3).
@@ -33,12 +33,27 @@ public class AdvisoryLockEntity {
         this.expiresAt = expiresAt;
     }
 
-    public String getLockKey() { return lockKey; }
-    public void setLockKey(String lockKey) { this.lockKey = lockKey; }
+    public String getLockKey() {
+        return lockKey;
+    }
 
-    public String getOwnerId() { return ownerId; }
-    public void setOwnerId(String ownerId) { this.ownerId = ownerId; }
+    public void setLockKey(String lockKey) {
+        this.lockKey = lockKey;
+    }
 
-    public Instant getExpiresAt() { return expiresAt; }
-    public void setExpiresAt(Instant expiresAt) { this.expiresAt = expiresAt; }
+    public String getOwnerId() {
+        return ownerId;
+    }
+
+    public void setOwnerId(String ownerId) {
+        this.ownerId = ownerId;
+    }
+
+    public Instant getExpiresAt() {
+        return expiresAt;
+    }
+
+    public void setExpiresAt(Instant expiresAt) {
+        this.expiresAt = expiresAt;
+    }
 }

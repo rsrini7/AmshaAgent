@@ -4,16 +4,19 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.nio.file.Files;
-import java.nio.file.Path;import java.util.List;
-import java.util.Map;
-
 import jakarta.inject.Inject;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.List;
+import java.util.Map;
+
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
-import io.quarkus.test.junit.QuarkusTest;
+
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
+
+import io.quarkus.test.junit.QuarkusTest;
 
 @QuarkusTest
 public class ProcessIsolationExecutorTest {
@@ -34,11 +37,8 @@ public class ProcessIsolationExecutorTest {
                 Path workspaceRoot = Files.createTempDirectory("arcclaw-test-ws");
                 try {
                     SandboxResult result = executor.executeSandboxed(
-                            TEST_SESSION_ID,
-                            workspaceRoot,
-                            List.of("java", "-version"),
-                            Map.of() // no secrets needed
-                    );
+                            TEST_SESSION_ID, workspaceRoot, List.of("java", "-version"), Map.of() // no secrets needed
+                            );
                     assertNotNull(result, "Result should not be null");
                     assertNotNull(result.output(), "Output should not be null");
                 } finally {
@@ -61,10 +61,7 @@ public class ProcessIsolationExecutorTest {
                 Path workspaceRoot = Files.createTempDirectory("arcclaw-test-ws");
                 try {
                     SandboxResult result = executor.executeSandboxed(
-                            TEST_SESSION_ID,
-                            workspaceRoot,
-                            List.of("java", "-version"),
-                            Map.of());
+                            TEST_SESSION_ID, workspaceRoot, List.of("java", "-version"), Map.of());
                     assertNotNull(result);
                 } finally {
                     Files.deleteIfExists(workspaceRoot);
@@ -91,7 +88,8 @@ public class ProcessIsolationExecutorTest {
                             List.of("nonexistent-command-that-does-not-exist"),
                             Map.of());
                     assertFalse(result.success());
-                    // Allow for either a direct process error (NONE strategy) or a sandbox infra failure (PODMAN strategy)
+                    // Allow for either a direct process error (NONE strategy) or a sandbox infra failure (PODMAN
+                    // strategy)
                     String reason = result.reason();
                     assertTrue(reason.contains("SANDBOX_OFFLINE") || reason.contains("nonexistent-command"));
                 } finally {

@@ -9,6 +9,7 @@ import java.util.List;
 import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.InjectMocks;
@@ -55,9 +56,8 @@ class RagContextEnricherTest {
         String basePrompt = "Base prompt";
 
         List<ScoredChunk> mockChunks = List.of(
-            new ScoredChunk("id1", "ArcClaw is an agentic AI framework.", 0.85),
-            new ScoredChunk("id2", "It uses RAG for long-term memory.", 0.75)
-        );
+                new ScoredChunk("id1", "ArcClaw is an agentic AI framework.", 0.85),
+                new ScoredChunk("id2", "It uses RAG for long-term memory.", 0.75));
 
         when(memoryService.search(anyString(), eq("user-1"), anyInt())).thenReturn(mockChunks);
 
@@ -84,10 +84,9 @@ class RagContextEnricherTest {
     @Test
     void testAdaptiveThresholdFiltering() throws Exception {
         List<ScoredChunk> mockChunks = List.of(
-            new ScoredChunk("id1", "Strong match 1", 0.9),
-            new ScoredChunk("id2", "Strong match 2", 0.8),
-            new ScoredChunk("id3", "Weak match", 0.1)
-        );
+                new ScoredChunk("id1", "Strong match 1", 0.9),
+                new ScoredChunk("id2", "Strong match 2", 0.8),
+                new ScoredChunk("id3", "Weak match", 0.1));
 
         when(memoryService.search(anyString(), anyString(), anyInt())).thenReturn(mockChunks);
 
@@ -105,10 +104,9 @@ class RagContextEnricherTest {
         enricher.minScore = 0.5;
 
         List<ScoredChunk> mockChunks = List.of(
-            new ScoredChunk("id1", "High score", 0.9),
-            new ScoredChunk("id2", "Medium score", 0.6),
-            new ScoredChunk("id3", "Low score", 0.3)
-        );
+                new ScoredChunk("id1", "High score", 0.9),
+                new ScoredChunk("id2", "Medium score", 0.6),
+                new ScoredChunk("id3", "Low score", 0.3));
 
         when(memoryService.search(anyString(), anyString(), anyInt())).thenReturn(mockChunks);
 
@@ -126,11 +124,10 @@ class RagContextEnricherTest {
         enricher.minScore = -1.0;
 
         List<ScoredChunk> mockChunks = List.of(
-            new ScoredChunk("id1", "Best", 0.9),
-            new ScoredChunk("id2", "Good", 0.8),
-            new ScoredChunk("id3", "Mid", 0.5),
-            new ScoredChunk("id4", "Low", 0.1)
-        );
+                new ScoredChunk("id1", "Best", 0.9),
+                new ScoredChunk("id2", "Good", 0.8),
+                new ScoredChunk("id3", "Mid", 0.5),
+                new ScoredChunk("id4", "Low", 0.1));
 
         when(memoryService.search(anyString(), anyString(), anyInt())).thenReturn(mockChunks);
 
@@ -144,9 +141,7 @@ class RagContextEnricherTest {
 
     @Test
     void testSingleChunkDoesNotApplyAdaptiveThreshold() throws Exception {
-        List<ScoredChunk> mockChunks = List.of(
-            new ScoredChunk("id1", "Only result", 0.01)
-        );
+        List<ScoredChunk> mockChunks = List.of(new ScoredChunk("id1", "Only result", 0.01));
 
         when(memoryService.search(anyString(), anyString(), anyInt())).thenReturn(mockChunks);
 
@@ -159,10 +154,8 @@ class RagContextEnricherTest {
 
     @Test
     void testTwoChunksUseZeroThreshold() throws Exception {
-        List<ScoredChunk> mockChunks = List.of(
-            new ScoredChunk("id1", "Result A", 0.05),
-            new ScoredChunk("id2", "Result B", -0.1)
-        );
+        List<ScoredChunk> mockChunks =
+                List.of(new ScoredChunk("id1", "Result A", 0.05), new ScoredChunk("id2", "Result B", -0.1));
 
         when(memoryService.search(anyString(), anyString(), anyInt())).thenReturn(mockChunks);
 
@@ -190,9 +183,8 @@ class RagContextEnricherTest {
 
     @Test
     void testNullUserIdFallsBackToSessionId() throws Exception {
-        when(memoryService.search(anyString(), anyString(), anyInt())).thenReturn(List.of(
-            new ScoredChunk("id1", "Content", 0.8)
-        ));
+        when(memoryService.search(anyString(), anyString(), anyInt()))
+                .thenReturn(List.of(new ScoredChunk("id1", "Content", 0.8)));
 
         WorkspaceContext.run("sess-1", "user-1", "chat-1", AutonomyLevel.FULL, "COORDINATOR", () -> {
             return enricher.enrich("sess-1", null, "Query", "Base prompt");
@@ -204,11 +196,10 @@ class RagContextEnricherTest {
     @Test
     void testContextChunksLimit() throws Exception {
         List<ScoredChunk> manyChunks = List.of(
-            new ScoredChunk("id1", "One", 0.9),
-            new ScoredChunk("id2", "Two", 0.89),
-            new ScoredChunk("id3", "Three", 0.88),
-            new ScoredChunk("id4", "Four", 0.87)
-        );
+                new ScoredChunk("id1", "One", 0.9),
+                new ScoredChunk("id2", "Two", 0.89),
+                new ScoredChunk("id3", "Three", 0.88),
+                new ScoredChunk("id4", "Four", 0.87));
 
         when(memoryService.search(anyString(), anyString(), anyInt())).thenReturn(manyChunks);
 

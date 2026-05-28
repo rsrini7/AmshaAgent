@@ -11,6 +11,4 @@ package com.arcclaw.channel.api;
  * @see ContentNode
  * @see InteractionNode
  */
-public sealed interface ReplyNode
-        permits ContentNode, InteractionNode {
-}
+public sealed interface ReplyNode permits ContentNode, InteractionNode {}

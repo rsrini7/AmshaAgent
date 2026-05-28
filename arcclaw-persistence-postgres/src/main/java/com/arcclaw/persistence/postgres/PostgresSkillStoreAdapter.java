@@ -1,17 +1,19 @@
 package com.arcclaw.persistence.postgres;
 
-import java.util.List;
-import java.util.Optional;
-
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
+
+import java.util.List;
+import java.util.Optional;
 
 import com.arcclaw.persistence.api.SkillDto;
 import com.arcclaw.persistence.api.SkillStorePort;
 import com.arcclaw.persistence.postgres.jdbi.SkillJdbiDao;
+
+import org.jdbi.v3.core.Jdbi;
+
 import io.quarkus.arc.Unremovable;
 import io.quarkus.arc.properties.IfBuildProperty;
-import org.jdbi.v3.core.Jdbi;
 
 /**
  * PostgreSQL implementation of SkillStorePort using JDBI.

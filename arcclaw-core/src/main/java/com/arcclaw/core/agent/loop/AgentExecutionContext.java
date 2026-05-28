@@ -54,8 +54,7 @@ public final class AgentExecutionContext {
             String channelType,
             String channelPlatformId,
             String systemNote,
-            Map<String, Object> data
-    ) {
+            Map<String, Object> data) {
         this.sessionId = Objects.requireNonNull(sessionId, "sessionId must not be null");
         this.userId = userId;
         this.chatId = chatId;
@@ -63,8 +62,7 @@ public final class AgentExecutionContext {
         this.goal = Objects.requireNonNull(goal, "goal must not be null");
         this.autonomyLevel = Objects.requireNonNull(autonomyLevel, "autonomyLevel must not be null");
         this.structuredOutputMode = structuredOutputMode != null ? structuredOutputMode : StructuredOutputMode.NATIVE;
-        if (maxIterations <= 0)
-            throw new IllegalArgumentException("maxIterations must be > 0, got: " + maxIterations);
+        if (maxIterations <= 0) throw new IllegalArgumentException("maxIterations must be > 0, got: " + maxIterations);
         this.maxIterations = maxIterations;
         this.startingIteration = startingIteration;
         this.channelType = channelType;
@@ -73,42 +71,105 @@ public final class AgentExecutionContext {
         this.data = data != null ? Collections.unmodifiableMap(data) : Collections.emptyMap();
     }
 
-    public String sessionId() { return sessionId; }
-    public String userId() { return userId; }
-    public String chatId() { return chatId; }
-    public String agentRole() { return agentRole; }
-    public String goal() { return goal; }
-    public String systemNote() { return systemNote != null ? systemNote : ""; }
-    public AutonomyLevel autonomyLevel() { return autonomyLevel; }
-    public StructuredOutputMode structuredOutputMode() { return structuredOutputMode; }
-    public int maxIterations() { return maxIterations; }
-    public int startingIteration() { return startingIteration; }
-    public String channelType() { return channelType; }
-    public String channelPlatformId() { return channelPlatformId; }
-    public Map<String, Object> data() { return data; }
+    public String sessionId() {
+        return sessionId;
+    }
 
-    public CheckpointStatus lastCheckpointStatus() { return lastCheckpointStatus; }
+    public String userId() {
+        return userId;
+    }
+
+    public String chatId() {
+        return chatId;
+    }
+
+    public String agentRole() {
+        return agentRole;
+    }
+
+    public String goal() {
+        return goal;
+    }
+
+    public String systemNote() {
+        return systemNote != null ? systemNote : "";
+    }
+
+    public AutonomyLevel autonomyLevel() {
+        return autonomyLevel;
+    }
+
+    public StructuredOutputMode structuredOutputMode() {
+        return structuredOutputMode;
+    }
+
+    public int maxIterations() {
+        return maxIterations;
+    }
+
+    public int startingIteration() {
+        return startingIteration;
+    }
+
+    public String channelType() {
+        return channelType;
+    }
+
+    public String channelPlatformId() {
+        return channelPlatformId;
+    }
+
+    public Map<String, Object> data() {
+        return data;
+    }
+
+    public CheckpointStatus lastCheckpointStatus() {
+        return lastCheckpointStatus;
+    }
+
     public void setLastCheckpointStatus(CheckpointStatus status) {
         this.lastCheckpointStatus = status;
         this.statusDirty = false;
     }
 
-    public boolean isStatusDirty() { return statusDirty; }
-    public void markStatusDirty() { this.statusDirty = true; }
+    public boolean isStatusDirty() {
+        return statusDirty;
+    }
 
-    public boolean isForceFinishRetry() { return forceFinishRetry; }
-    public void setForceFinishRetry(boolean forceFinishRetry) { this.forceFinishRetry = forceFinishRetry; }
+    public void markStatusDirty() {
+        this.statusDirty = true;
+    }
 
-    public int getTruncationRetryCount() { return truncationRetryCount; }
-    public void incrementTruncationRetry() { this.truncationRetryCount++; }
+    public boolean isForceFinishRetry() {
+        return forceFinishRetry;
+    }
 
-    public int getCheckpointRestoreOffset() { return checkpointRestoreOffset; }
-    public void setCheckpointRestoreOffset(int offset) { this.checkpointRestoreOffset = offset; }
+    public void setForceFinishRetry(boolean forceFinishRetry) {
+        this.forceFinishRetry = forceFinishRetry;
+    }
+
+    public int getTruncationRetryCount() {
+        return truncationRetryCount;
+    }
+
+    public void incrementTruncationRetry() {
+        this.truncationRetryCount++;
+    }
+
+    public int getCheckpointRestoreOffset() {
+        return checkpointRestoreOffset;
+    }
+
+    public void setCheckpointRestoreOffset(int offset) {
+        this.checkpointRestoreOffset = offset;
+    }
 
     /** Convenience: true when full channel stamping info is available. */
     public boolean hasChannelInfo() {
-        return channelType != null && !channelType.isBlank()
-            && channelPlatformId != null && !channelPlatformId.isBlank();
+        return channelType != null
+                && !channelType.isBlank()
+                && channelPlatformId != null
+                && !channelPlatformId.isBlank();
     }
 
     public static AgentExecutionContext from(
@@ -117,8 +178,7 @@ public final class AgentExecutionContext {
             String userId,
             String chatId,
             AutonomyLevel autonomyLevel,
-            StructuredOutputMode structuredOutputMode
-    ) {
+            StructuredOutputMode structuredOutputMode) {
         int max = req.maxIterations() != null ? req.maxIterations() : 5;
         return new AgentExecutionContext(
                 sessionId,
@@ -133,7 +193,6 @@ public final class AgentExecutionContext {
                 null,
                 null,
                 null,
-                null
-        );
+                null);
     }
 }

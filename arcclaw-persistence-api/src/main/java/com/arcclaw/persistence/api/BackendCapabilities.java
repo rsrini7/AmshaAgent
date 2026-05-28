@@ -5,8 +5,7 @@ package com.arcclaw.persistence.api;
  * Used to determine what features are available for a given storage implementation.
  */
 public record BackendCapabilities(
-    boolean supportsFullTextSearch,
-    boolean supportsVectorSearch,
-    boolean supportsAdvisoryLocks,
-    boolean supportsNestedTransactions
-) {}
+        boolean supportsFullTextSearch,
+        boolean supportsVectorSearch,
+        boolean supportsAdvisoryLocks,
+        boolean supportsNestedTransactions) {}

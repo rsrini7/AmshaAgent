@@ -52,49 +52,192 @@ public final class AgentCronRecord implements AgentCron {
         return r;
     }
 
-    @Override public String getId() { return id; }
-    @Override public void setId(String id) { this.id = id; }
-    @Override public String getSessionId() { return sessionId; }
-    @Override public void setSessionId(String sessionId) { this.sessionId = sessionId; }
-    @Override public String getUserId() { return userId; }
-    @Override public void setUserId(String userId) { this.userId = userId; }
-    @Override public String getChatId() { return chatId; }
-    @Override public void setChatId(String chatId) { this.chatId = chatId; }
-    @Override public String getChannelType() { return channelType; }
-    @Override public void setChannelType(String channelType) { this.channelType = channelType; }
-    @Override public String getChannelPlatformId() { return channelPlatformId; }
-    @Override public void setChannelPlatformId(String channelPlatformId) { this.channelPlatformId = channelPlatformId; }
-    @Override public String getCronExpression() { return cronExpression; }
-    @Override public void setCronExpression(String cronExpression) { this.cronExpression = cronExpression; }
-    @Override public String getTimezone() { return timezone; }
-    @Override public void setTimezone(String timezone) { this.timezone = timezone; }
-    @Override public boolean isRunOnce() { return runOnce; }
-    @Override public void setRunOnce(boolean runOnce) { this.runOnce = runOnce; }
-    @Override public String getGoal() { return goal; }
-    @Override public void setGoal(String goal) { this.goal = goal; }
-    @Override public Instant getNextFireTime() { return nextFireTime; }
-    @Override public void setNextFireTime(Instant nextFireTime) { this.nextFireTime = nextFireTime; }
-    @Override public Instant getLastFireTime() { return lastFireTime; }
-    @Override public void setLastFireTime(Instant lastFireTime) { this.lastFireTime = lastFireTime; }
-    @Override public CronStatus getStatus() { return status; }
-    @Override public void setStatus(CronStatus status) { this.status = status; }
-    @Override public String getExecutionRole() { return executionRole; }
-    @Override public void setExecutionRole(String executionRole) { this.executionRole = executionRole; }
-    @Override public String getErrorReason() { return errorReason; }
-    @Override public void setErrorReason(String errorReason) { this.errorReason = errorReason; }
-    @Override public String getLastDeliveryId() { return lastDeliveryId; }
-    @Override public void setLastDeliveryId(String lastDeliveryId) { this.lastDeliveryId = lastDeliveryId; }
-    @Override public Instant getCreatedAt() { return createdAt; }
-    @Override public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }
-    @Override public Instant getUpdatedAt() { return updatedAt; }
-    @Override public void setUpdatedAt(Instant updatedAt) { this.updatedAt = updatedAt; }
+    @Override
+    public String getId() {
+        return id;
+    }
+
+    @Override
+    public void setId(String id) {
+        this.id = id;
+    }
+
+    @Override
+    public String getSessionId() {
+        return sessionId;
+    }
+
+    @Override
+    public void setSessionId(String sessionId) {
+        this.sessionId = sessionId;
+    }
+
+    @Override
+    public String getUserId() {
+        return userId;
+    }
+
+    @Override
+    public void setUserId(String userId) {
+        this.userId = userId;
+    }
+
+    @Override
+    public String getChatId() {
+        return chatId;
+    }
+
+    @Override
+    public void setChatId(String chatId) {
+        this.chatId = chatId;
+    }
+
+    @Override
+    public String getChannelType() {
+        return channelType;
+    }
+
+    @Override
+    public void setChannelType(String channelType) {
+        this.channelType = channelType;
+    }
+
+    @Override
+    public String getChannelPlatformId() {
+        return channelPlatformId;
+    }
+
+    @Override
+    public void setChannelPlatformId(String channelPlatformId) {
+        this.channelPlatformId = channelPlatformId;
+    }
+
+    @Override
+    public String getCronExpression() {
+        return cronExpression;
+    }
+
+    @Override
+    public void setCronExpression(String cronExpression) {
+        this.cronExpression = cronExpression;
+    }
+
+    @Override
+    public String getTimezone() {
+        return timezone;
+    }
+
+    @Override
+    public void setTimezone(String timezone) {
+        this.timezone = timezone;
+    }
+
+    @Override
+    public boolean isRunOnce() {
+        return runOnce;
+    }
+
+    @Override
+    public void setRunOnce(boolean runOnce) {
+        this.runOnce = runOnce;
+    }
+
+    @Override
+    public String getGoal() {
+        return goal;
+    }
+
+    @Override
+    public void setGoal(String goal) {
+        this.goal = goal;
+    }
+
+    @Override
+    public Instant getNextFireTime() {
+        return nextFireTime;
+    }
+
+    @Override
+    public void setNextFireTime(Instant nextFireTime) {
+        this.nextFireTime = nextFireTime;
+    }
+
+    @Override
+    public Instant getLastFireTime() {
+        return lastFireTime;
+    }
+
+    @Override
+    public void setLastFireTime(Instant lastFireTime) {
+        this.lastFireTime = lastFireTime;
+    }
+
+    @Override
+    public CronStatus getStatus() {
+        return status;
+    }
+
+    @Override
+    public void setStatus(CronStatus status) {
+        this.status = status;
+    }
+
+    @Override
+    public String getExecutionRole() {
+        return executionRole;
+    }
+
+    @Override
+    public void setExecutionRole(String executionRole) {
+        this.executionRole = executionRole;
+    }
+
+    @Override
+    public String getErrorReason() {
+        return errorReason;
+    }
+
+    @Override
+    public void setErrorReason(String errorReason) {
+        this.errorReason = errorReason;
+    }
+
+    @Override
+    public String getLastDeliveryId() {
+        return lastDeliveryId;
+    }
+
+    @Override
+    public void setLastDeliveryId(String lastDeliveryId) {
+        this.lastDeliveryId = lastDeliveryId;
+    }
+
+    @Override
+    public Instant getCreatedAt() {
+        return createdAt;
+    }
+
+    @Override
+    public void setCreatedAt(Instant createdAt) {
+        this.createdAt = createdAt;
+    }
+
+    @Override
+    public Instant getUpdatedAt() {
+        return updatedAt;
+    }
+
+    @Override
+    public void setUpdatedAt(Instant updatedAt) {
+        this.updatedAt = updatedAt;
+    }
 
     @Override
     public String toDisplayString() {
         String nextFire = (status == CronStatus.COMPLETED
-                || status == CronStatus.FAILED
-                || status == CronStatus.SKIPPED
-                || nextFireTime == null)
+                        || status == CronStatus.FAILED
+                        || status == CronStatus.SKIPPED
+                        || nextFireTime == null)
                 ? "N/A"
                 : TemporalUtils.formatIsoLex(nextFireTime);
 
@@ -103,9 +246,12 @@ public final class AgentCronRecord implements AgentCron {
             displayGoal = goal.replaceFirst("^CRON\\s+", "").trim();
             String lower = displayGoal.toLowerCase();
             if (lower.startsWith("output the following message:")) {
-                displayGoal = displayGoal.substring("output the following message:".length()).trim();
+                displayGoal = displayGoal
+                        .substring("output the following message:".length())
+                        .trim();
             } else if (lower.startsWith("output the message:")) {
-                displayGoal = displayGoal.substring("output the message:".length()).trim();
+                displayGoal =
+                        displayGoal.substring("output the message:".length()).trim();
             } else if (lower.startsWith("say ")) {
                 displayGoal = displayGoal.substring("say ".length()).trim();
             } else if (lower.startsWith("tell ")) {
@@ -119,8 +265,6 @@ public final class AgentCronRecord implements AgentCron {
 
         return String.format(
                 "**ID:** `%s`\n**Cron:** `%s` (%s)\n**Status:** %s\n**Goal:** %s\n**Next:** %s",
-                id, cronExpression, timezone, status,
-                displayGoal, nextFire
-        );
+                id, cronExpression, timezone, status, displayGoal, nextFire);
     }
 }

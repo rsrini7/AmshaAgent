@@ -1,15 +1,15 @@
 package com.arcclaw.persistence.sqlite;
 
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.inject.Instance;
+import jakarta.inject.Inject;
+
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.enterprise.inject.Instance;
-import jakarta.inject.Inject;
 
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
 import com.arcclaw.persistence.api.BackendCapabilities;
@@ -20,8 +20,10 @@ import com.arcclaw.persistence.api.MemoryChunkDto;
 import com.arcclaw.persistence.api.MemoryEntryDto;
 import com.arcclaw.persistence.api.MemoryRetrievalPort;
 import com.arcclaw.persistence.common.SessionKnowledgeBase;
-import io.quarkus.arc.properties.IfBuildProperty;
+
 import org.eclipse.microprofile.config.inject.ConfigProperty;
+
+import io.quarkus.arc.properties.IfBuildProperty;
 
 /**
  * SQLite implementation of {@link MemoryRetrievalPort}.
@@ -66,11 +68,13 @@ public class SqliteMemoryRetrievalAdapter implements MemoryRetrievalPort {
         // 3. Perform Vector Search
         List<MemoryChunkDto> vectorResults = new ArrayList<>();
         vectorResults.addAll(globalKb.search(query, topK * 2));
-        
+
         // Session-scoped vector search (if applicable)
         if (!sessionKb.isUnsatisfied() && WorkspaceScopeHolder.isActive()) {
-            sessionKb.get().search(query, topK * 2).forEach(c ->
-                vectorResults.add(new MemoryChunkDto(c.chunkId(), c.text(), c.score())));
+            sessionKb
+                    .get()
+                    .search(query, topK * 2)
+                    .forEach(c -> vectorResults.add(new MemoryChunkDto(c.chunkId(), c.text(), c.score())));
         }
 
         // Sort combined vector results to create a ranked list for RRF
@@ -81,24 +85,23 @@ public class SqliteMemoryRetrievalAdapter implements MemoryRetrievalPort {
 
         // 5. Truncate Pass
         return mergedResults.stream()
-            .map(chunk -> {
-                String text = chunk.text();
-                if (text != null && text.length() > maxSourceChars) {
-                    text = text.substring(0, maxSourceChars) + "…";
-                }
-                return new MemoryChunkDto(chunk.chunkId(), text, chunk.score());
-            })
-            .toList();
+                .map(chunk -> {
+                    String text = chunk.text();
+                    if (text != null && text.length() > maxSourceChars) {
+                        text = text.substring(0, maxSourceChars) + "…";
+                    }
+                    return new MemoryChunkDto(chunk.chunkId(), text, chunk.score());
+                })
+                .toList();
     }
 
     @Override
     public IngestResult index(MemoryEntryDto entry) {
         String chunkId = globalKb.ingest(entry.text());
-        String fallbackId = entry.id() != null ? "session-" + entry.id() : UUID.randomUUID().toString();
+        String fallbackId =
+                entry.id() != null ? "session-" + entry.id() : UUID.randomUUID().toString();
         if (!sessionKb.isUnsatisfied()) {
-            sessionKb.get().ingest(
-                chunkId != null ? chunkId : fallbackId,
-                entry.text());
+            sessionKb.get().ingest(chunkId != null ? chunkId : fallbackId, entry.text());
         }
         return new IngestResult(chunkId != null ? chunkId : fallbackId, chunkId == null);
     }
@@ -106,11 +109,11 @@ public class SqliteMemoryRetrievalAdapter implements MemoryRetrievalPort {
     @Override
     public BackendCapabilities capabilities() {
         return new BackendCapabilities(
-            true, // supportsFullTextSearch
-            ftsInterceptor.isVectorSearchEnabled(),
-            false, // supportsAdvisoryLocks
-            false  // supportsNestedTransactions
-        );
+                true, // supportsFullTextSearch
+                ftsInterceptor.isVectorSearchEnabled(),
+                false, // supportsAdvisoryLocks
+                false // supportsNestedTransactions
+                );
     }
 
     /**
@@ -128,18 +131,21 @@ public class SqliteMemoryRetrievalAdapter implements MemoryRetrievalPort {
                 double contribution = 1.0 / (RRF_K + rank);
                 rrfScores.merge(chunk.chunkId(), contribution, Double::sum);
                 // Prefer non-empty text
-                chunkById.merge(chunk.chunkId(), chunk, (existing, incoming) ->
-                    (existing.text() == null || existing.text().isBlank()) ? incoming : existing);
+                chunkById.merge(
+                        chunk.chunkId(),
+                        chunk,
+                        (existing, incoming) ->
+                                (existing.text() == null || existing.text().isBlank()) ? incoming : existing);
             }
         }
 
         return rrfScores.entrySet().stream()
-            .sorted(Map.Entry.<String, Double>comparingByValue().reversed())
-            .limit(topN)
-            .map(e -> {
-                MemoryChunkDto orig = chunkById.get(e.getKey());
-                return new MemoryChunkDto(orig.chunkId(), orig.text(), e.getValue());
-            })
-            .toList();
+                .sorted(Map.Entry.<String, Double>comparingByValue().reversed())
+                .limit(topN)
+                .map(e -> {
+                    MemoryChunkDto orig = chunkById.get(e.getKey());
+                    return new MemoryChunkDto(orig.chunkId(), orig.text(), e.getValue());
+                })
+                .toList();
     }
 }

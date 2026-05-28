@@ -1,13 +1,14 @@
 package com.arcclaw.core.agent.reasoning;
 
-import java.util.Optional;
-
 import jakarta.inject.Inject;
+
+import java.util.Optional;
 
 import com.arcclaw.core.scope.WorkspaceScoped;
 import com.arcclaw.core.state.CompactionEventBridge;
 import com.arcclaw.persistence.api.CompactionStorePort;
 import com.arcclaw.persistence.api.CompactionSummaryDto;
+
 import org.jboss.logging.Logger;
 
 /**
@@ -60,7 +61,8 @@ public class CompactionSummaryCache {
             compactionEventBridge.awaitIfInFlight(sessionId);
 
             log.tracef("CompactionSummaryCache: cache miss for session %s, fetching from DB", sessionId);
-            cachedSummary = summaryRepository.findLatestBySessionId(sessionId)
+            cachedSummary = summaryRepository
+                    .findLatestBySessionId(sessionId)
                     .map(CompactionSummaryDto::summary)
                     .orElse(null);
             loaded = true;

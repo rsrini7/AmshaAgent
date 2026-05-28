@@ -1,14 +1,16 @@
 package com.arcclaw.channel.telegram;
 
+import jakarta.enterprise.context.ApplicationScoped;
+
 import java.util.List;
 import java.util.Optional;
 
-import jakarta.enterprise.context.ApplicationScoped;
-
 import com.arcclaw.channel.api.ChannelAllowlist;
-import io.quarkus.arc.Unremovable;
+
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
+
+import io.quarkus.arc.Unremovable;
 
 @ApplicationScoped
 @Unremovable
@@ -31,8 +33,9 @@ public class TelegramAllowlistGuard implements ChannelAllowlist {
     @Override
     public boolean isAllowed(String userIdStr, String username) {
         // 1. Check strict numeric IDs first (Phase 46)
-        boolean hasNumericIds = allowedUserIds.isPresent() && !allowedUserIds.get().isEmpty();
-        
+        boolean hasNumericIds =
+                allowedUserIds.isPresent() && !allowedUserIds.get().isEmpty();
+
         if (hasNumericIds) {
             if (userIdStr != null) {
                 try {
@@ -46,14 +49,16 @@ public class TelegramAllowlistGuard implements ChannelAllowlist {
             }
             // If numeric IDs are configured, we strictly deny anything that doesn't match
             // (Ignoring the deprecated string list entirely for security)
-            log.warnf("SECURITY: Access denied for userId=%s username=%s — not in numeric allowlist", userIdStr, username);
+            log.warnf(
+                    "SECURITY: Access denied for userId=%s username=%s — not in numeric allowlist",
+                    userIdStr, username);
             return false;
         }
 
         // 2. Fallback to deprecated string username check
         // Robust check for blank strings to handle Quarkus parsing "" as [""]
-        boolean hasStringNames = allowedUsers.isPresent() 
-            && allowedUsers.get().stream().anyMatch(s -> s != null && !s.isBlank());
+        boolean hasStringNames =
+                allowedUsers.isPresent() && allowedUsers.get().stream().anyMatch(s -> s != null && !s.isBlank());
 
         if (!hasStringNames) {
             return true; // Open access (neither numeric nor valid string IDs configured)
@@ -70,7 +75,9 @@ public class TelegramAllowlistGuard implements ChannelAllowlist {
 
             String cleanAllowed = allowed.startsWith("@") ? allowed.substring(1) : allowed;
             if (cleanAllowed.equalsIgnoreCase(cleanUsername)) {
-                log.warnf("DEPRECATION WARNING: User %s authenticated via deprecated string username allowlist. Migrate to numeric allowed-user-ids.", username);
+                log.warnf(
+                        "DEPRECATION WARNING: User %s authenticated via deprecated string username allowlist. Migrate to numeric allowed-user-ids.",
+                        username);
                 return true;
             }
         }

@@ -1,14 +1,14 @@
 package com.arcclaw.core.agent.role;
 
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
-
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
 
 @ApplicationScoped
 public class RoleRegistry {
@@ -36,7 +36,7 @@ public class RoleRegistry {
     public Set<String> permittedTools(AgentRoleEnum role) {
         if (role == null) return Set.of();
         Set<String> coreTools = role.definition().toolNames();
-        
+
         // Null-safe for unit testing
         if (capabilityRegistry == null) {
             return coreTools;
@@ -55,7 +55,7 @@ public class RoleRegistry {
 
     /**
      * Controls which roles inherently require human approval before their tools execute.
-     * 
+     *
      * @param role the agent role
      * @return true if the role's tool calls require explicit approval
      */
@@ -63,7 +63,6 @@ public class RoleRegistry {
         if (role == null) return true;
         return role.definition().requiresApproval();
     }
-
 
     /**
      * Registers a new dynamic role derived from a skill.
@@ -88,8 +87,8 @@ public class RoleRegistry {
      */
     public Set<String> permittedToolsForDynamic(String canonicalName) {
         RoleDefinition def = dynamicRoles.get(canonicalName);
-        return def == null ? Set.of() : def.capabilities().stream()
-                .map(ToolCapability::toolName)
-                .collect(Collectors.toUnmodifiableSet());
+        return def == null
+                ? Set.of()
+                : def.capabilities().stream().map(ToolCapability::toolName).collect(Collectors.toUnmodifiableSet());
     }
 }

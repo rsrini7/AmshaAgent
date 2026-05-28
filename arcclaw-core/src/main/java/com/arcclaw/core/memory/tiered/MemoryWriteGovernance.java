@@ -1,8 +1,8 @@
 package com.arcclaw.core.memory.tiered;
 
-import java.util.concurrent.ConcurrentHashMap;
-
 import jakarta.enterprise.context.ApplicationScoped;
+
+import java.util.concurrent.ConcurrentHashMap;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
@@ -71,8 +71,7 @@ public class MemoryWriteGovernance {
     private final ConcurrentHashMap<String, Bucket> buckets = new ConcurrentHashMap<>();
 
     private Bucket getOrCreateBucket(String toolType, double maxTokens, double refillRatePerMs) {
-        return buckets.computeIfAbsent(toolType,
-            k -> new Bucket(maxTokens, refillRatePerMs));
+        return buckets.computeIfAbsent(toolType, k -> new Bucket(maxTokens, refillRatePerMs));
     }
 
     /**
@@ -82,8 +81,7 @@ public class MemoryWriteGovernance {
      */
     public void checkCoreWrite() {
         // 5 per minute = 5 tokens max, refill 5/60000 per ms
-        Bucket bucket = getOrCreateBucket("core", coreWritesPerMinute,
-            coreWritesPerMinute / 60_000.0);
+        Bucket bucket = getOrCreateBucket("core", coreWritesPerMinute, coreWritesPerMinute / 60_000.0);
         if (!bucket.tryConsume()) {
             log.warnf("Core memory write rate limit exceeded (%d/minute)", coreWritesPerMinute);
             throw new RateLimitExceededException("core_memory", coreWritesPerMinute, "minute");
@@ -97,8 +95,7 @@ public class MemoryWriteGovernance {
      */
     public void checkArchivalWrite() {
         // 10 per hour = 10 tokens max, refill 10/3600000 per ms
-        Bucket bucket = getOrCreateBucket("archival", archivalWritesPerHour,
-            archivalWritesPerHour / 3_600_000.0);
+        Bucket bucket = getOrCreateBucket("archival", archivalWritesPerHour, archivalWritesPerHour / 3_600_000.0);
         if (!bucket.tryConsume()) {
             log.warnf("Archival memory write rate limit exceeded (%d/hour)", archivalWritesPerHour);
             throw new RateLimitExceededException("archival_memory", archivalWritesPerHour, "hour");
@@ -114,15 +111,22 @@ public class MemoryWriteGovernance {
         private final String period;
 
         public RateLimitExceededException(String toolType, int limit, String period) {
-            super(String.format("Rate limit exceeded for %s: max %d per %s",
-                toolType, limit, period));
+            super(String.format("Rate limit exceeded for %s: max %d per %s", toolType, limit, period));
             this.toolType = toolType;
             this.limit = limit;
             this.period = period;
         }
 
-        public String toolType() { return toolType; }
-        public int limit() { return limit; }
-        public String period() { return period; }
+        public String toolType() {
+            return toolType;
+        }
+
+        public int limit() {
+            return limit;
+        }
+
+        public String period() {
+            return period;
+        }
     }
 }

@@ -1,12 +1,12 @@
 package com.arcclaw.core.pipeline.parsers;
 
-import java.util.Comparator;
-import java.util.List;
-import java.util.Optional;
-
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
+
+import java.util.Comparator;
+import java.util.List;
+import java.util.Optional;
 
 import com.arcclaw.channel.api.ChannelCommand;
 import com.arcclaw.channel.api.ChannelCommandParser;
@@ -40,8 +40,8 @@ public class CommandParserRegistry {
                 local = parsers;
                 if (local == null) {
                     local = parserInstances.stream()
-                        .sorted(Comparator.comparingInt(ChannelCommandParser::priority))
-                        .toList();
+                            .sorted(Comparator.comparingInt(ChannelCommandParser::priority))
+                            .toList();
                     parsers = local;
                 }
             }
@@ -59,10 +59,10 @@ public class CommandParserRegistry {
      */
     public ChannelCommand parse(String text, ChannelType channelType) {
         return parsers().stream()
-            .map(p -> p.parse(text, channelType))
-            .flatMap(Optional::stream)
-            .findFirst()
-            .orElseThrow(() -> new IllegalStateException(
-                "No ChannelCommandParser available. BuiltInChannelCommandParser must be registered"));
+                .map(p -> p.parse(text, channelType))
+                .flatMap(Optional::stream)
+                .findFirst()
+                .orElseThrow(() -> new IllegalStateException(
+                        "No ChannelCommandParser available. BuiltInChannelCommandParser must be registered"));
     }
 }

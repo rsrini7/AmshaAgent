@@ -9,6 +9,8 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import dev.langchain4j.exception.HttpException;
+
 import java.time.Instant;
 import java.util.Optional;
 
@@ -25,7 +27,7 @@ import com.arcclaw.core.channel.ChannelPluginRegistry;
 import com.arcclaw.core.pipeline.HandleResult;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.security.DestructiveVocabularyFilter;
-import dev.langchain4j.exception.HttpException;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -65,7 +67,6 @@ class IntentClassificationHandlerTest {
         handler.destructiveVocabularyFilter = destructiveFilter;
     }
 
-
     @Test
     void testHandle_rateLimit_notifiesUserAndDefaultsToCoordinator() {
         ChannelUser user = new ChannelUser("u1", "u1", "user", ChannelType.TELEGRAM);
@@ -78,7 +79,8 @@ class IntentClassificationHandlerTest {
         HandleResult result = handler.handle(context);
 
         assertEquals(HandleResult.CONTINUE, result);
-        assertEquals(AgentRoleEnum.COORDINATOR.toScopedName(), context.getAgentRole().get());
+        assertEquals(
+                AgentRoleEnum.COORDINATOR.toScopedName(), context.getAgentRole().get());
         verify(sender).sendRaw(eq(user), eq(CLASSIFICATION_RATE_LIMITED));
     }
 
@@ -88,12 +90,12 @@ class IntentClassificationHandlerTest {
         ChannelMessage msg = new ChannelMessage.TelegramMessage(user, "hello", "c1", Instant.now());
         MessageContext context = new MessageContext("c1", user, msg);
 
-        when(classifier.classify(anyString()))
-                .thenReturn(AgentRoleEnum.COORDINATOR.toScopedName());
+        when(classifier.classify(anyString())).thenReturn(AgentRoleEnum.COORDINATOR.toScopedName());
 
         handler.handle(context);
 
-        assertEquals(AgentRoleEnum.COORDINATOR.toScopedName(), context.getAgentRole().get());
+        assertEquals(
+                AgentRoleEnum.COORDINATOR.toScopedName(), context.getAgentRole().get());
     }
 
     @Test

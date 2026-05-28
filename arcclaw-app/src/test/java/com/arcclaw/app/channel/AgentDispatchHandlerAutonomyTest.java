@@ -7,12 +7,12 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
+import jakarta.inject.Inject;
+
 import java.time.Instant;
 import java.util.Collections;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
-
-import jakarta.inject.Inject;
 
 import com.arcclaw.channel.api.ChannelMessage;
 import com.arcclaw.channel.api.ChannelType;
@@ -25,10 +25,12 @@ import com.arcclaw.core.pipeline.SessionContext;
 import com.arcclaw.core.pipeline.handlers.AgentDispatchHandler;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
-import io.quarkus.test.InjectMock;
-import io.quarkus.test.junit.QuarkusTest;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+
+import io.quarkus.test.InjectMock;
+import io.quarkus.test.junit.QuarkusTest;
 
 @QuarkusTest
 class AgentDispatchHandlerAutonomyTest {
@@ -54,8 +56,7 @@ class AgentDispatchHandlerAutonomyTest {
         MessageContext ctx = new MessageContext("chat-full", user, msg);
         ctx.setSessionId("session-full");
         ctx.setAutonomyLevel(AutonomyLevel.FULL);
-        ctx.setSessionContext(new SessionContext(
-            "session-full", user, AutonomyLevel.FULL, false));
+        ctx.setSessionContext(new SessionContext("session-full", user, AutonomyLevel.FULL, false));
 
         AtomicReference<AutonomyLevel> captured = new AtomicReference<>();
         when(agentLoop.run(eq("session-full"), anyString(), anyString(), any(), anyInt(), eq(ctx)))
@@ -73,14 +74,14 @@ class AgentDispatchHandlerAutonomyTest {
 
     @Test
     void telegramPipelineDefaultsToSupervisedForUnknownSession() throws Exception {
-        ChannelUser user = new ChannelUser("user-supervised", "chat-supervised", "user-supervised", ChannelType.TELEGRAM);
+        ChannelUser user =
+                new ChannelUser("user-supervised", "chat-supervised", "user-supervised", ChannelType.TELEGRAM);
         ChannelMessage msg = new ChannelMessage.TelegramMessage(user, "hello", "chat-supervised", Instant.now());
         MessageContext ctx = new MessageContext("chat-supervised", user, msg);
         ctx.setSessionId("session-supervised");
         // SessionResolutionHandler now defaults null autonomy to SUPERVISED before dispatch
         ctx.setAutonomyLevel(AutonomyLevel.SUPERVISED);
-        ctx.setSessionContext(new SessionContext(
-            "session-supervised", user, AutonomyLevel.SUPERVISED, false));
+        ctx.setSessionContext(new SessionContext("session-supervised", user, AutonomyLevel.SUPERVISED, false));
 
         AtomicReference<AutonomyLevel> captured = new AtomicReference<>();
         when(agentLoop.run(eq("session-supervised"), anyString(), anyString(), any(), anyInt(), eq(ctx)))

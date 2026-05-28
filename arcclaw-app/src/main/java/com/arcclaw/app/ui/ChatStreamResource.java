@@ -1,8 +1,8 @@
 package com.arcclaw.app.ui;
 
-import java.time.Duration;
-import java.util.ArrayList;
-import java.util.List;
+import dev.langchain4j.data.message.AiMessage;
+import dev.langchain4j.data.message.ChatMessage;
+import dev.langchain4j.data.message.UserMessage;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
@@ -13,18 +13,21 @@ import jakarta.ws.rs.PathParam;
 import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.MediaType;
 
+import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
+
 import com.arcclaw.app.ui.dto.AgentEvent;
 import com.arcclaw.app.ui.dto.ChatMessageDto;
 import com.arcclaw.core.agent.event.AgentStateChangedEvent;
 import com.arcclaw.core.state.PersistentChatMemoryStore;
 import com.arcclaw.core.state.StatefulAgentStore;
-import dev.langchain4j.data.message.AiMessage;
-import dev.langchain4j.data.message.ChatMessage;
-import dev.langchain4j.data.message.UserMessage;
-import io.smallrye.mutiny.Multi;
-import io.smallrye.mutiny.operators.multi.processors.UnicastProcessor;
+
 import org.eclipse.microprofile.openapi.annotations.Operation;
 import org.jboss.resteasy.reactive.RestStreamElementType;
+
+import io.smallrye.mutiny.Multi;
+import io.smallrye.mutiny.operators.multi.processors.UnicastProcessor;
 
 /**
  * SSE endpoint to broadcast agent status updates to the Lit frontend.
@@ -35,7 +38,7 @@ public class ChatStreamResource {
 
     @Inject
     PersistentChatMemoryStore chatMemoryStore;
-    
+
     @Inject
     StatefulAgentStore statefulAgentStore;
 
@@ -47,10 +50,9 @@ public class ChatStreamResource {
 
     public void onStateChanged(@Observes AgentStateChangedEvent event) {
         processor.onNext(new AgentEvent(
-            "status_change",
-            event.agentName(),
-            event.newStatus() + (event.currentTask() != null ? " : " + event.currentTask() : "")
-        ));
+                "status_change",
+                event.agentName(),
+                event.newStatus() + (event.currentTask() != null ? " : " + event.currentTask() : "")));
     }
 
     @GET
@@ -58,7 +60,9 @@ public class ChatStreamResource {
     @RestStreamElementType(MediaType.APPLICATION_JSON)
     @Operation(summary = "Stream agent status changes and keep-alive heartbeats via SSE")
     public Multi<AgentEvent> stream() {
-        Multi<AgentEvent> heartbeat = Multi.createFrom().ticks().every(Duration.ofSeconds(20))
+        Multi<AgentEvent> heartbeat = Multi.createFrom()
+                .ticks()
+                .every(Duration.ofSeconds(20))
                 .map(t -> new AgentEvent("heartbeat", "system", "keep-alive"));
 
         // hotStream is shared - each subscriber gets their own downstream from the broadcast
@@ -71,7 +75,8 @@ public class ChatStreamResource {
     @Operation(summary = "Retrieve full chat history for a session, enriched with approval IDs")
     public List<ChatMessageDto> history(@PathParam("sessionId") String sessionId) {
 
-        final Long actionIdForPause = statefulAgentStore.findLatestAwaitingApproval(sessionId)
+        final Long actionIdForPause = statefulAgentStore
+                .findLatestAwaitingApproval(sessionId)
                 .map(cp -> cp.getId())
                 .orElse(null);
 

@@ -1,14 +1,15 @@
 package com.arcclaw.core.agent.loop;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
+
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import com.arcclaw.common.util.LogUtil;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+
 import org.jboss.logging.Logger;
 
 /**

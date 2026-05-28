@@ -1,8 +1,6 @@
 package com.arcclaw.rag;
 
-import java.time.Duration;
-import java.util.Optional;
-import java.util.stream.Collectors;
+import dev.langchain4j.model.embedding.EmbeddingModel;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Any;
@@ -10,10 +8,14 @@ import jakarta.enterprise.inject.Instance;
 import jakarta.enterprise.inject.Produces;
 import jakarta.inject.Inject;
 
-import dev.langchain4j.model.embedding.EmbeddingModel;
-import io.quarkus.runtime.Startup;
+import java.time.Duration;
+import java.util.Optional;
+import java.util.stream.Collectors;
+
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
+
+import io.quarkus.runtime.Startup;
 
 /**
  * CDI producer for EmbeddingModel.
@@ -63,24 +65,19 @@ public class EmbeddingModelProducer {
     public EmbeddingModel embeddingModel() {
         log.infof("Eager initialization of %s embedding model: %s", provider, modelName);
         String targetProvider = provider.toLowerCase().trim();
-        
+
         return factories.stream()
-            .filter(f -> f.providerId().equalsIgnoreCase(targetProvider))
-            .findFirst()
-            .map(factory -> {
-                EmbeddingModelConfig config = new EmbeddingModelConfig(
-                    targetProvider, 
-                    modelName, 
-                    baseUrl, 
-                    apiKey, 
-                    Duration.ofSeconds(timeoutSeconds)
-                );
-                return factory.create(config);
-            })
-            .orElseThrow(() -> new IllegalStateException(
-                "No EmbeddingProviderFactory found for provider: '" + targetProvider + "'. " +
-                "Available: " + factories.stream()
-                    .map(EmbeddingProviderFactory::providerId)
-                    .collect(Collectors.joining(", "))));
+                .filter(f -> f.providerId().equalsIgnoreCase(targetProvider))
+                .findFirst()
+                .map(factory -> {
+                    EmbeddingModelConfig config = new EmbeddingModelConfig(
+                            targetProvider, modelName, baseUrl, apiKey, Duration.ofSeconds(timeoutSeconds));
+                    return factory.create(config);
+                })
+                .orElseThrow(() -> new IllegalStateException(
+                        "No EmbeddingProviderFactory found for provider: '" + targetProvider + "'. " + "Available: "
+                                + factories.stream()
+                                        .map(EmbeddingProviderFactory::providerId)
+                                        .collect(Collectors.joining(", "))));
     }
 }

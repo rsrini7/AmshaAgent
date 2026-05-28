@@ -11,11 +11,12 @@ import java.util.List;
 import java.util.Map;
 
 import com.arcclaw.common.util.LogUtil;
+
 import org.jboss.logging.Logger;
 
 /**
- * A Tier 1 secret transport that writes an ephemeral env-file strictly to a RAM-backed 
- * tmpfs mount point. It enforces atomic POSIX permissions and avoids all String allocation 
+ * A Tier 1 secret transport that writes an ephemeral env-file strictly to a RAM-backed
+ * tmpfs mount point. It enforces atomic POSIX permissions and avoids all String allocation
  * of sensitive material.
  */
 public class TmpfsSecretTransport implements SecretTransport {
@@ -35,9 +36,9 @@ public class TmpfsSecretTransport implements SecretTransport {
         String override = System.getenv("ARCCLAW_SANDBOX_SECRET_TRANSPORT");
         if (override != null && !override.isBlank()) {
             return switch (override.toLowerCase()) {
-                case "tmpfs"  -> "/run/arcclaw/secrets";        // explicit Linux prod
+                case "tmpfs" -> "/run/arcclaw/secrets"; // explicit Linux prod
                 case "tmpdir" -> System.getProperty("java.io.tmpdir"); // explicit dev
-                default       -> override;                       // treat as a literal path
+                default -> override; // treat as a literal path
             };
         }
         // Auto-detect: only use tmpfs path on Linux where it actually exists
@@ -72,7 +73,7 @@ public class TmpfsSecretTransport implements SecretTransport {
         if (secrets == null || secrets.isEmpty()) {
             return List.of();
         }
-        
+
         this.managedSecrets = secrets;
 
         // 1. Ensure target path exists and is somewhat sane
@@ -83,15 +84,15 @@ public class TmpfsSecretTransport implements SecretTransport {
                 Files.createDirectories(actualMountPath);
             }
         } catch (IOException e) {
-            log.warnf("Cannot access tmpfs path %s (%s). Falling back to java.io.tmpdir.",
-                      tmpfsMountPath, e.getMessage());
+            log.warnf(
+                    "Cannot access tmpfs path %s (%s). Falling back to java.io.tmpdir.",
+                    tmpfsMountPath, e.getMessage());
             actualMountPath = Path.of(System.getProperty("java.io.tmpdir"));
         }
 
         // 2. Atomically create the restricted file
         try {
-            var strictAttrs = PosixFilePermissions.asFileAttribute(
-                    PosixFilePermissions.fromString("rw-------"));
+            var strictAttrs = PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rw-------"));
             envFile = Files.createTempFile(actualMountPath, "secrets-" + sessionId + "-", ".env", strictAttrs);
         } catch (UnsupportedOperationException | IllegalArgumentException e) {
             // Graceful degradation for Dev/Windows/macOS
@@ -112,7 +113,7 @@ public class TmpfsSecretTransport implements SecretTransport {
         // 4. Construct payload using ByteBuffer to strictly avoid String materialization
         byte[] backingArray = new byte[totalSize];
         ByteBuffer buffer = ByteBuffer.wrap(backingArray);
-        
+
         try {
             for (var entry : secrets.entrySet()) {
                 buffer.put(entry.getKey().getBytes(StandardCharsets.UTF_8));
@@ -120,10 +121,10 @@ public class TmpfsSecretTransport implements SecretTransport {
                 buffer.put(entry.getValue());
                 buffer.put((byte) '\n');
             }
-            
+
             // 5. Write pure bytes directly to the temp file
             Files.write(envFile, backingArray);
-            
+
         } finally {
             // MUST explicitly zero out the backing array buffer before it gets GC'd
             Arrays.fill(backingArray, (byte) 0);
@@ -181,22 +182,25 @@ public class TmpfsSecretTransport implements SecretTransport {
         try {
             var perms = PosixFilePermissions.toString(Files.getPosixFilePermissions(shmDir));
             if (perms.charAt(6) == 'w' || perms.charAt(8) == 'w') {
-                log.warnf("TmpfsSecretTransport: %s has overly permissive permissions (%s) - skipping sweep", shmDir, perms);
+                log.warnf(
+                        "TmpfsSecretTransport: %s has overly permissive permissions (%s) - skipping sweep",
+                        shmDir, perms);
             }
         } catch (UnsupportedOperationException | IOException _) {
             // Non-POSIX (Windows/macOS) — proceed without permission check
         }
         try (var stream = Files.list(shmDir)) {
-            stream
-                .filter(p -> p.getFileName().toString().startsWith("secrets-"))
-                .forEach(p -> {
-                    try {
-                        Files.delete(p);
-                        log.warnf("TmpfsSecretTransport: swept stale secret file from previous JVM crash: %s", p);
-                    } catch (IOException e) {
-                        log.warnf("TmpfsSecretTransport: could not delete stale file %s: %s", p, LogUtil.rootMessage(e));
-                    }
-                });
+            stream.filter(p -> p.getFileName().toString().startsWith("secrets-"))
+                    .forEach(p -> {
+                        try {
+                            Files.delete(p);
+                            log.warnf("TmpfsSecretTransport: swept stale secret file from previous JVM crash: %s", p);
+                        } catch (IOException e) {
+                            log.warnf(
+                                    "TmpfsSecretTransport: could not delete stale file %s: %s",
+                                    p, LogUtil.rootMessage(e));
+                        }
+                    });
         } catch (IOException e) {
             log.warnf("TmpfsSecretTransport: could not sweep stale tmpfs files: %s", LogUtil.rootMessage(e));
         }

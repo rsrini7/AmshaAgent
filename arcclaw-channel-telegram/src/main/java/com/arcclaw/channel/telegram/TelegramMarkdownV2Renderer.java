@@ -1,9 +1,9 @@
 package com.arcclaw.channel.telegram;
 
+import jakarta.enterprise.context.ApplicationScoped;
+
 import java.util.List;
 import java.util.stream.Collectors;
-
-import jakarta.enterprise.context.ApplicationScoped;
 
 import com.arcclaw.channel.api.ApprovalPrompt;
 import com.arcclaw.channel.api.ChannelType;
@@ -13,6 +13,7 @@ import com.arcclaw.channel.api.MarkdownEscapeService;
 import com.arcclaw.channel.api.MarkdownProfile;
 import com.arcclaw.channel.api.ReplyNode;
 import com.arcclaw.channel.api.ReplyRenderer;
+
 import org.jboss.logging.Logger;
 
 /**
@@ -40,9 +41,7 @@ public class TelegramMarkdownV2Renderer implements ReplyRenderer {
         if (nodes == null || nodes.isEmpty()) {
             return "";
         }
-        return nodes.stream()
-                .map(this::renderContentNode)
-                .collect(Collectors.joining("\n\n"));
+        return nodes.stream().map(this::renderContentNode).collect(Collectors.joining("\n\n"));
     }
 
     @Override
@@ -66,17 +65,14 @@ public class TelegramMarkdownV2Renderer implements ReplyRenderer {
     private String renderContentNode(ContentNode node) {
         return switch (node) {
             case ContentNode.Text t -> esc(t.content());
-            case ContentNode.Heading h -> h.level() == 1
-                    ? "*__" + esc(h.text()) + "__*"
-                    : "*" + esc(h.text()) + "*";
+            case ContentNode.Heading h -> h.level() == 1 ? "*__" + esc(h.text()) + "__*" : "*" + esc(h.text()) + "*";
             case ContentNode.CodeBlock cb -> {
                 String lang = cb.language() != null ? cb.language().trim() : "";
                 yield "```" + lang + "\n" + cb.code() + "\n```";
             }
             case ContentNode.InlineCode ic -> "`" + ic.code() + "`";
-            case ContentNode.BulletList bl -> bl.items().stream()
-                    .map(item -> "• " + esc(item))
-                    .collect(Collectors.joining("\n"));
+            case ContentNode.BulletList bl ->
+                bl.items().stream().map(item -> "• " + esc(item)).collect(Collectors.joining("\n"));
             case ContentNode.NumberedList nl -> {
                 StringBuilder sb = new StringBuilder();
                 for (int i = 0; i < nl.items().size(); i++) {
@@ -89,8 +85,9 @@ public class TelegramMarkdownV2Renderer implements ReplyRenderer {
             case ContentNode.Separator _ -> "---";
             case ContentNode.ErrorMessage em -> "❌ *ERROR [" + esc(em.category()) + "]*\n\n" + esc(em.reason());
             default -> {
-                log.warnf("Unsupported ContentNode type %s in Telegram renderer",
-                    node.getClass().getName());
+                log.warnf(
+                        "Unsupported ContentNode type %s in Telegram renderer",
+                        node.getClass().getName());
                 yield esc("[Unsupported content type]");
             }
         };

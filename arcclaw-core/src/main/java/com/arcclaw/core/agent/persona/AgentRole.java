@@ -1,14 +1,14 @@
 package com.arcclaw.core.agent.persona;
 
-import java.lang.annotation.*;
-
 import jakarta.inject.Qualifier;
+
+import java.lang.annotation.*;
 
 /**
  * CDI qualifier to distinguish agent persona beans.
  * <p>
  * Usage:
- * 
+ *
  * <pre>
  * {@literal @}ApplicationScoped
  * {@literal @}AgentRole("coordinator")
@@ -17,7 +17,7 @@ import jakarta.inject.Qualifier;
  */
 @Qualifier
 @Retention(RetentionPolicy.RUNTIME)
-@Target({ ElementType.TYPE, ElementType.METHOD, ElementType.FIELD, ElementType.PARAMETER })
+@Target({ElementType.TYPE, ElementType.METHOD, ElementType.FIELD, ElementType.PARAMETER})
 @Documented
 public @interface AgentRole {
     /**

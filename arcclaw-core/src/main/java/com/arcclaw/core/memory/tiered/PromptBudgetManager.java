@@ -29,13 +29,12 @@ public class PromptBudgetManager {
      * The truncation flags indicate whether the caller should append a marker.
      */
     public record BudgetEnforcedSections(
-        String coreMemory,
-        String compactionSummary,
-        String archivalContext,
-        boolean coreWasTruncated,
-        boolean summaryWasTruncated,
-        boolean archivalWasTruncated
-    ) {}
+            String coreMemory,
+            String compactionSummary,
+            String archivalContext,
+            boolean coreWasTruncated,
+            boolean summaryWasTruncated,
+            boolean archivalWasTruncated) {}
 
     /**
      * Enforce budget limits on memory prompt sections.
@@ -54,8 +53,14 @@ public class PromptBudgetManager {
         // Pass 1: Individual caps
         int coreCharBudget = calculateCharBudget(config.maxCoreMemoryTokens());
         int summaryCharBudget = calculateCharBudget(config.maxCompactionSummaryTokens());
-        if (core != null && core.length() > coreCharBudget) { core = truncateSafely(core, coreCharBudget); truncated[0] = true; }
-        if (summary != null && summary.length() > summaryCharBudget) { summary = truncateSafely(summary, summaryCharBudget); truncated[1] = true; }
+        if (core != null && core.length() > coreCharBudget) {
+            core = truncateSafely(core, coreCharBudget);
+            truncated[0] = true;
+        }
+        if (summary != null && summary.length() > summaryCharBudget) {
+            summary = truncateSafely(summary, summaryCharBudget);
+            truncated[1] = true;
+        }
 
         // Pass 2: Total cap with hierarchical trimming (archival → summary → core)
         int totalCharBudget = calculateCharBudget(config.totalNonConversationTokens());
@@ -74,7 +79,10 @@ public class PromptBudgetManager {
         int targetLen = Math.max(minKeep, text.length() - excess[0]);
         String trimmed = truncateSafely(text, targetLen);
         int actualRemoved = text.length() - trimmed.length();
-        if (actualRemoved > 0) { excess[0] -= actualRemoved; truncated[idx] = true; }
+        if (actualRemoved > 0) {
+            excess[0] -= actualRemoved;
+            truncated[idx] = true;
+        }
         return trimmed;
     }
 

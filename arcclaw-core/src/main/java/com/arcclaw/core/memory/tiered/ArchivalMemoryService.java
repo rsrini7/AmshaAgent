@@ -1,10 +1,10 @@
 package com.arcclaw.core.memory.tiered;
 
-import java.util.List;
-import java.util.Optional;
-
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
+
+import java.util.List;
+import java.util.Optional;
 
 import com.arcclaw.persistence.api.ArchivalChunkDto;
 import com.arcclaw.persistence.api.ArchivalMemoryStorePort;

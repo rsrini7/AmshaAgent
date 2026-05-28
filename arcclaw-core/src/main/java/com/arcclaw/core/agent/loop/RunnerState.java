@@ -2,6 +2,7 @@ package com.arcclaw.core.agent.loop;
 
 interface RunnerState {
     RunnerState execute(StateContext context);
+
     boolean isTerminal();
 
     /**
@@ -14,4 +15,3 @@ interface RunnerState {
         return false;
     }
 }
-

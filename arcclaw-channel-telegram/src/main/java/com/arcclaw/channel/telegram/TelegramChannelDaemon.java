@@ -4,9 +4,11 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
 import com.arcclaw.channel.api.ChannelDaemon;
-import io.quarkus.runtime.Quarkus;
+
 import org.apache.camel.CamelContext;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
+
+import io.quarkus.runtime.Quarkus;
 
 @ApplicationScoped
 public class TelegramChannelDaemon implements ChannelDaemon {

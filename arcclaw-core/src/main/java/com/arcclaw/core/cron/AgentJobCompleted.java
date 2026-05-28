@@ -21,13 +21,12 @@ import com.arcclaw.core.agent.result.AgentResult;
  * @param toolName           The tool requiring approval. {@code null} for non-approval events.
  */
 public record AgentJobCompleted(
-    String cronId,
-    String userId,
-    ChannelType channelType,
-    String channelPlatformId,
-    String correlationId,
-    String renderedAnswer,
-    AgentResult.FailureCategory failureCategory,
-    String cronSessionId,
-    String toolName
-) {}
+        String cronId,
+        String userId,
+        ChannelType channelType,
+        String channelPlatformId,
+        String correlationId,
+        String renderedAnswer,
+        AgentResult.FailureCategory failureCategory,
+        String cronSessionId,
+        String toolName) {}

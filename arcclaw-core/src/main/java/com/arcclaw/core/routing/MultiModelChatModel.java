@@ -1,5 +1,9 @@
 package com.arcclaw.core.routing;
 
+import dev.langchain4j.model.chat.ChatModel;
+import dev.langchain4j.model.chat.request.ChatRequest;
+import dev.langchain4j.model.chat.response.ChatResponse;
+
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -13,9 +17,7 @@ import com.arcclaw.core.agent.reasoning.error.LlmRateLimitException;
 import com.arcclaw.core.agent.reasoning.error.LlmServiceUnavailableException;
 import com.arcclaw.core.lifecycle.WorkspaceManager;
 import com.arcclaw.core.scope.WorkspaceContext;
-import dev.langchain4j.model.chat.ChatModel;
-import dev.langchain4j.model.chat.request.ChatRequest;
-import dev.langchain4j.model.chat.response.ChatResponse;
+
 import org.jboss.logging.Logger;
 
 /**
@@ -42,8 +44,12 @@ public class MultiModelChatModel implements ChatModel {
     private final int cooldownMaxSeconds;
     private final int cooldownTransientSeconds;
 
-    public MultiModelChatModel(String providerName, List<ModelEntry> entries,
-                               int cooldownBaseSeconds, int cooldownMaxSeconds, int cooldownTransientSeconds) {
+    public MultiModelChatModel(
+            String providerName,
+            List<ModelEntry> entries,
+            int cooldownBaseSeconds,
+            int cooldownMaxSeconds,
+            int cooldownTransientSeconds) {
         if (entries == null || entries.isEmpty()) {
             throw new IllegalArgumentException("MultiModelChatModel requires at least one entry");
         }
@@ -65,10 +71,11 @@ public class MultiModelChatModel implements ChatModel {
 
     @Override
     public String toString() {
-        return "MultiModel[" + providerName + ": " + entries.stream()
-                .map(ModelEntry::label)
-                .reduce((a, b) -> a + ", " + b)
-                .orElse("none") + "]";
+        return "MultiModel[" + providerName + ": "
+                + entries.stream()
+                        .map(ModelEntry::label)
+                        .reduce((a, b) -> a + ", " + b)
+                        .orElse("none") + "]";
     }
 
     @Override
@@ -88,7 +95,8 @@ public class MultiModelChatModel implements ChatModel {
                     continue;
                 }
                 if (h.isInCooldown()) {
-                    log.debugf("MultiModel: [%s] %s in cooldown (%ds remaining), skipping.",
+                    log.debugf(
+                            "MultiModel: [%s] %s in cooldown (%ds remaining), skipping.",
                             providerName, entry.label(), h.cooldownRemainingMs() / 1000);
                     continue;
                 }
@@ -112,7 +120,8 @@ public class MultiModelChatModel implements ChatModel {
             }
             // All entries blocked by TPM — request too large for any model in this provider
             if (health.values().stream().allMatch(h -> h.isTpmBlocked() || h.isPermanentlyDisabled())) {
-                throw new RuntimeException("MultiModel: [" + providerName + "] all models blocked — request too large for TPM limits");
+                throw new RuntimeException(
+                        "MultiModel: [" + providerName + "] all models blocked — request too large for TPM limits");
             }
 
             long shortestMs = Long.MAX_VALUE;
@@ -137,11 +146,21 @@ public class MultiModelChatModel implements ChatModel {
     private void classifyAndHandle(String label, ModelHealth h, Throwable t) {
         LlmProviderException classified = LlmExceptionClassifier.classify(t);
         switch (classified) {
-            case LlmRateLimitException r   -> handleRateLimit(label, h, r);
-            case LlmAuthenticationException a -> { h.disablePermanently(); log.errorf("MultiModel: [%s] %s permanently disabled (auth error): %s", providerName, label, a.getMessage()); }
+            case LlmRateLimitException r -> handleRateLimit(label, h, r);
+            case LlmAuthenticationException a -> {
+                h.disablePermanently();
+                log.errorf(
+                        "MultiModel: [%s] %s permanently disabled (auth error): %s",
+                        providerName, label, a.getMessage());
+            }
             case LlmServiceUnavailableException u -> handleServiceUnavailable(label, h, u);
             case LlmContentFilterException c -> throw c;
-            default                        -> { h.recordUnknownFailure(cooldownBaseSeconds, cooldownMaxSeconds); log.warnf("MultiModel: [%s] %s unclassified error, cooling down %ds. %s", providerName, label, h.cooldownRemainingMs() / 1000, classified.getMessage()); }
+            default -> {
+                h.recordUnknownFailure(cooldownBaseSeconds, cooldownMaxSeconds);
+                log.warnf(
+                        "MultiModel: [%s] %s unclassified error, cooling down %ds. %s",
+                        providerName, label, h.cooldownRemainingMs() / 1000, classified.getMessage());
+            }
         }
     }
 
@@ -149,7 +168,8 @@ public class MultiModelChatModel implements ChatModel {
         String msg = e.getMessage();
         if (msg != null && msg.toLowerCase().contains("per day")) {
             h.disablePermanently();
-            log.errorf("MultiModel: [%s] %s permanently disabled (daily quota exhausted): %s", providerName, label, msg);
+            log.errorf(
+                    "MultiModel: [%s] %s permanently disabled (daily quota exhausted): %s", providerName, label, msg);
         } else if (msg != null && msg.toLowerCase().contains("request too large")) {
             h.markTpmBlocked();
             log.infof("MultiModel: [%s] %s request too large for TPM, skipping. %s", providerName, label, msg);
@@ -163,14 +183,18 @@ public class MultiModelChatModel implements ChatModel {
         String msg = e.getMessage();
         if (msg != null && (msg.contains("tool_use_failed") || msg.contains("failed_generation"))) {
             h.disablePermanently();
-            log.errorf("MultiModel: [%s] %s permanently disabled (tool_use_failed - provider rejected response): %s", providerName, label, msg);
+            log.errorf(
+                    "MultiModel: [%s] %s permanently disabled (tool_use_failed - provider rejected response): %s",
+                    providerName, label, msg);
         } else {
             h.recordTransientFailure(cooldownTransientSeconds, cooldownBaseSeconds, cooldownMaxSeconds);
             if (h.isPermanentlyDisabled()) {
-                log.errorf("MultiModel: [%s] %s permanently disabled after %d consecutive transient errors: %s",
+                log.errorf(
+                        "MultiModel: [%s] %s permanently disabled after %d consecutive transient errors: %s",
                         providerName, label, MAX_CONSECUTIVE_FAILURES, msg);
             } else {
-                log.warnf("MultiModel: [%s] %s transient error, cooling down %ds. %s",
+                log.warnf(
+                        "MultiModel: [%s] %s transient error, cooling down %ds. %s",
                         providerName, label, h.cooldownRemainingMs() / 1000, msg);
             }
         }
@@ -186,7 +210,8 @@ public class MultiModelChatModel implements ChatModel {
                 if (WorkspaceContext.SESSION_ID.isBound()) {
                     String sessionId = WorkspaceContext.SESSION_ID.get();
                     if (WorkspaceManager.isSessionHalted(sessionId)) {
-                        throw new RuntimeException("MultiModel: [" + providerName + "] session " + sessionId + " halted during cooldown wait");
+                        throw new RuntimeException("MultiModel: [" + providerName + "] session " + sessionId
+                                + " halted during cooldown wait");
                     }
                 }
             }

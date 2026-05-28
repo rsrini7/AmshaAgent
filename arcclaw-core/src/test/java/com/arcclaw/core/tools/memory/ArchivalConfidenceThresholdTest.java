@@ -6,11 +6,13 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
+import dev.langchain4j.model.embedding.EmbeddingModel;
+
+import jakarta.enterprise.inject.Instance;
+
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
-
-import jakarta.enterprise.inject.Instance;
 
 import com.arcclaw.core.agent.reasoning.ArchivalContextCache;
 import com.arcclaw.core.config.TieredMemoryConfig;
@@ -18,7 +20,7 @@ import com.arcclaw.core.tools.ToolExecutionContext;
 import com.arcclaw.core.tools.ToolResponse;
 import com.arcclaw.persistence.api.ArchivalChunkDto;
 import com.arcclaw.persistence.api.ArchivalMemoryStorePort;
-import dev.langchain4j.model.embedding.EmbeddingModel;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
@@ -28,12 +30,16 @@ class ArchivalConfidenceThresholdTest {
 
     @Mock
     ArchivalMemoryStorePort store;
+
     @Mock
     ArchivalContextCache cache;
+
     @Mock
     TieredMemoryConfig tieredConfig;
+
     @Mock
     TieredMemoryConfig.ArchivalConfig archivalConfig;
+
     @Mock
     Instance<EmbeddingModel> embeddingModelInstance;
 
@@ -58,18 +64,36 @@ class ArchivalConfidenceThresholdTest {
     void testResults_belowConfidenceThreshold_filteredOut() {
         // Arrange: one chunk above threshold (0.8), one below (0.3)
         ArchivalChunkDto highConf = new ArchivalChunkDto(
-            "c1", "user1", "High confidence fact", "FACT",
-            "session1", "msg1", null, 0.8, 0, Instant.now(), Instant.now());
+                "c1",
+                "user1",
+                "High confidence fact",
+                "FACT",
+                "session1",
+                "msg1",
+                null,
+                0.8,
+                0,
+                Instant.now(),
+                Instant.now());
         ArchivalChunkDto lowConf = new ArchivalChunkDto(
-            "c2", "user1", "Low confidence guess", "FACT",
-            "session1", "msg2", null, 0.3, 0, Instant.now(), Instant.now());
+                "c2",
+                "user1",
+                "Low confidence guess",
+                "FACT",
+                "session1",
+                "msg2",
+                null,
+                0.3,
+                0,
+                Instant.now(),
+                Instant.now());
 
         when(store.search(any())).thenReturn(List.of(highConf, lowConf));
 
         // Act
         ToolResponse response = tool.execute(
-            new ToolExecutionContext(null, null, null, null, null, null, null, null, null, null, null, null),
-            Map.of("query", "test query"));
+                new ToolExecutionContext(null, null, null, null, null, null, null, null, null, null, null, null),
+                Map.of("query", "test query"));
 
         // Assert: low confidence chunk filtered out
         assertTrue(response.success());
@@ -81,15 +105,14 @@ class ArchivalConfidenceThresholdTest {
     void testResults_atExactThreshold_included() {
         // Arrange: chunk at exactly 0.6 threshold
         ArchivalChunkDto exactThreshold = new ArchivalChunkDto(
-            "c1", "user1", "Boundary fact", "FACT",
-            "session1", "msg1", null, 0.6, 0, Instant.now(), Instant.now());
+                "c1", "user1", "Boundary fact", "FACT", "session1", "msg1", null, 0.6, 0, Instant.now(), Instant.now());
 
         when(store.search(any())).thenReturn(List.of(exactThreshold));
 
         // Act
         ToolResponse response = tool.execute(
-            new ToolExecutionContext(null, null, null, null, null, null, null, null, null, null, null, null),
-            Map.of("query", "boundary query"));
+                new ToolExecutionContext(null, null, null, null, null, null, null, null, null, null, null, null),
+                Map.of("query", "boundary query"));
 
         // Assert: exact threshold chunk is included
         assertTrue(response.success());
@@ -100,15 +123,14 @@ class ArchivalConfidenceThresholdTest {
     void testAllResultsBelowThreshold_returnsNoRelevantKnowledge() {
         // Arrange: all chunks below threshold
         ArchivalChunkDto lowConf = new ArchivalChunkDto(
-            "c1", "user1", "Noisy result", "FACT",
-            "session1", "msg1", null, 0.4, 0, Instant.now(), Instant.now());
+                "c1", "user1", "Noisy result", "FACT", "session1", "msg1", null, 0.4, 0, Instant.now(), Instant.now());
 
         when(store.search(any())).thenReturn(List.of(lowConf));
 
         // Act
         ToolResponse response = tool.execute(
-            new ToolExecutionContext(null, null, null, null, null, null, null, null, null, null, null, null),
-            Map.of("query", "noisy query"));
+                new ToolExecutionContext(null, null, null, null, null, null, null, null, null, null, null, null),
+                Map.of("query", "noisy query"));
 
         // Assert: empty results
         assertTrue(response.success());

@@ -2,17 +2,19 @@ package com.arcclaw.persistence.postgres;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import jakarta.inject.Inject;
+
 import java.util.List;
 import java.util.Optional;
-
-import jakarta.inject.Inject;
 
 import com.arcclaw.persistence.api.CheckpointDto;
 import com.arcclaw.persistence.api.CheckpointStorePort;
 import com.arcclaw.persistence.api.ReasoningStepDto;
+
+import org.junit.jupiter.api.Test;
+
 import io.quarkus.test.common.QuarkusTestResource;
 import io.quarkus.test.junit.QuarkusTest;
-import org.junit.jupiter.api.Test;
 
 @QuarkusTest
 @QuarkusTestResource(PostgresTestResource.class)
@@ -83,5 +85,4 @@ class PostgresCheckpointStoreAdapterEdgeCaseTest {
         Optional<CheckpointDto> found = store.findLatestAwaitingApprovalBySessionContaining("no-such-session-segment");
         assertFalse(found.isPresent());
     }
-
 }

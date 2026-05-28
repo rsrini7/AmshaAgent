@@ -1,16 +1,16 @@
 package com.arcclaw.core.lifecycle;
 
-import java.time.Duration;
-import java.time.Instant;
-import java.util.List;
-import java.util.Set;
-import java.util.stream.Collectors;
-
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Event;
 import jakarta.enterprise.event.Observes;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
+
+import java.time.Duration;
+import java.time.Instant;
+import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.hitl.ApprovalDecision;
@@ -31,12 +31,14 @@ import com.arcclaw.core.util.BatchDecisionUtil;
 import com.arcclaw.persistence.api.CheckpointDto;
 import com.arcclaw.persistence.api.CheckpointStorePort;
 import com.fasterxml.jackson.databind.ObjectMapper;
+
+import org.eclipse.microprofile.config.inject.ConfigProperty;
+import org.jboss.logging.Logger;
+
 import io.micrometer.core.instrument.MeterRegistry;
 import io.quarkus.runtime.ShutdownEvent;
 import io.quarkus.runtime.StartupEvent;
 import io.quarkus.scheduler.Scheduled;
-import org.eclipse.microprofile.config.inject.ConfigProperty;
-import org.jboss.logging.Logger;
 
 /**
  * Orchestrates scheduled session cleanup and zombie recovery.
@@ -60,24 +62,34 @@ public class SessionReaper {
 
     @Inject
     WorkspaceManager workspaceManager;
+
     @Inject
     SessionHeartbeatTracker heartbeatTracker;
+
     @Inject
     Event<ApprovalDecisionEvent> decisionEvents;
+
     @Inject
     StatefulAgentStore agentStore;
+
     @Inject
     ObjectMapper objectMapper;
+
     @Inject
     SessionAuditSequencer auditSequencer;
+
     @Inject
     CheckpointStorePort checkpointStore;
+
     @Inject
     CompactionInFlightFlag compactionInFlight;
+
     @Inject
     AgentSseService agentSseService;
+
     @Inject
     CliResultBridge cliResultBridge;
+
     @Inject
     AuditService auditService;
 
@@ -119,13 +131,12 @@ public class SessionReaper {
         Instant inProgressCutoff = Instant.now().minus(Duration.ofMinutes(15));
 
         // Step 1: Mark IN_PROGRESS zombies FAILED
-        List<CheckpointDto> failed = checkpointStore.recoverInProgressZombies(
-                inProgressCutoff, "JVM crash recovery - orphaned at startup");
+        List<CheckpointDto> failed =
+                checkpointStore.recoverInProgressZombies(inProgressCutoff, "JVM crash recovery - orphaned at startup");
         if (!failed.isEmpty()) {
-            log.warnf("Zombie recovery: found and failed %d orphaned IN_PROGRESS checkpoint(s).",
-                    failed.size());
-            failed.forEach(dto -> log.infof("  Marked FAILED: id=%d session=%s role=%s",
-                    dto.id(), dto.sessionId(), dto.agentRole()));
+            log.warnf("Zombie recovery: found and failed %d orphaned IN_PROGRESS checkpoint(s).", failed.size());
+            failed.forEach(dto ->
+                    log.infof("  Marked FAILED: id=%d session=%s role=%s", dto.id(), dto.sessionId(), dto.agentRole()));
         } else {
             log.info("Zombie recovery: no orphaned IN_PROGRESS checkpoints found.");
         }
@@ -137,12 +148,14 @@ public class SessionReaper {
             log.infof("Zombie recovery: found %d AWAITING_APPROVAL checkpoint(s).", pendingApprovals.size());
             for (var dto : pendingApprovals) {
                 if (ChannelType.CLI.id().equalsIgnoreCase(dto.channelType())) {
-                    log.warnf("  Auto-denying CLI approval: id=%d session=%s tool=%s",
+                    log.warnf(
+                            "  Auto-denying CLI approval: id=%d session=%s tool=%s",
                             dto.id(), dto.sessionId(), dto.pendingToolName());
                     checkpointStore.transitionStatus(dto.id(), CheckpointStatus.DENIED.name());
                     cliResultBridge.cancel(dto.sessionId());
                 } else {
-                    log.infof("  Surviving approval: id=%d session=%s role=%s tool=%s",
+                    log.infof(
+                            "  Surviving approval: id=%d session=%s role=%s tool=%s",
                             dto.id(), dto.sessionId(), dto.agentRole(), dto.pendingToolName());
                     agentSseService.republishOnSubscribe(
                             dto.sessionId(), dto.pendingToolName(), dto.pendingToolParametersJson());
@@ -163,15 +176,12 @@ public class SessionReaper {
      */
     @Scheduled(every = "${arcclaw.workspace.gc-interval:5m}", delayed = "PT90S")
     public void gcSweep() {
-        if (shuttingDown)
-            return;
-        if (heartbeatTracker.activeSessionCount() == 0)
-            return;
+        if (shuttingDown) return;
+        if (heartbeatTracker.activeSessionCount() == 0) return;
 
         try {
             Instant cutoff = Instant.now().minus(Duration.ofMinutes(sessionTtlMinutes));
-            log.debugf("GC sweep: checking sessions against TTL=%dm (cutoff=%s)",
-                    sessionTtlMinutes, cutoff);
+            log.debugf("GC sweep: checking sessions against TTL=%dm (cutoff=%s)", sessionTtlMinutes, cutoff);
 
             Set<String> awaitingApprovalIds = findAwaitingApprovalIds();
 
@@ -209,8 +219,7 @@ public class SessionReaper {
 
     @Transactional(Transactional.TxType.NOT_SUPPORTED)
     Set<String> findAwaitingApprovalIds() {
-        return checkpointStore.findByStatus(CheckpointStatus.AWAITING_APPROVAL.name())
-                .stream()
+        return checkpointStore.findByStatus(CheckpointStatus.AWAITING_APPROVAL.name()).stream()
                 .map(CheckpointDto::sessionId)
                 .collect(Collectors.toSet());
     }
@@ -224,20 +233,20 @@ public class SessionReaper {
      */
     @Scheduled(every = "${arcclaw.workspace.gc-interval:5m}")
     public void sweepTimedOutApprovals() {
-        if (shuttingDown)
-            return;
+        if (shuttingDown) return;
 
         try {
             Instant cutoff = Instant.now().minus(Duration.ofHours(hitlTimeoutHours));
             List<AgentCheckpoint> stale = agentStore.findStaleAwaitingApproval(cutoff);
-            if (stale.isEmpty())
-                return;
+            if (stale.isEmpty()) return;
 
             for (AgentCheckpoint cp : stale) {
-                log.warnf("[HITL-GC] Session %s role %s has been awaiting approval for >%dh - auto-denying.",
+                log.warnf(
+                        "[HITL-GC] Session %s role %s has been awaiting approval for >%dh - auto-denying.",
                         cp.getSessionId(), cp.getAgentRole(), hitlTimeoutHours);
-                meterRegistry.counter("arcclaw.hitl.timeout.auto_deny",
-                        "role", cp.getAgentRole()).increment();
+                meterRegistry
+                        .counter("arcclaw.hitl.timeout.auto_deny", "role", cp.getAgentRole())
+                        .increment();
                 markApprovalTimedOut(cp);
             }
         } catch (RuntimeException e) {
@@ -257,14 +266,17 @@ public class SessionReaper {
 
     @Transactional(Transactional.TxType.NOT_SUPPORTED)
     void markApprovalTimedOut(AgentCheckpoint cp) {
-        auditService.recordMandatory(cp.getSessionId(), "system", cp.getAgentRole(),
+        auditService.recordMandatory(
+                cp.getSessionId(),
+                "system",
+                cp.getAgentRole(),
                 SecurityEventType.APPROVAL_DENIED,
                 "reason=timeout_hours=" + hitlTimeoutHours + " tool=" + cp.getPendingToolName());
 
         if (cp.hasBatchToolDecisions()) {
-            BatchDecisionUtil.pendingToolNames(cp, objectMapper).forEach(toolName -> agentStore.updateBatchToolDecision(
-                    cp.getSessionId(), cp.getAgentRole(), toolName,
-                    ToolDecision.DENIED.name()));
+            BatchDecisionUtil.pendingToolNames(cp, objectMapper)
+                    .forEach(toolName -> agentStore.updateBatchToolDecision(
+                            cp.getSessionId(), cp.getAgentRole(), toolName, ToolDecision.DENIED.name()));
         }
 
         agentStore.markFailed(cp.getId(), "Approval timed out after " + hitlTimeoutHours + " hours.");
@@ -295,8 +307,7 @@ public class SessionReaper {
      */
     @Scheduled(every = "24h", delayed = "PT10M")
     public void purgeOldChatHistory() {
-        if (shuttingDown)
-            return;
+        if (shuttingDown) return;
 
         Instant cutoff = Instant.now().minus(Duration.ofDays(retentionDays));
         log.infof("Purging chat history older than %d days (cutoff=%s)", retentionDays, cutoff);

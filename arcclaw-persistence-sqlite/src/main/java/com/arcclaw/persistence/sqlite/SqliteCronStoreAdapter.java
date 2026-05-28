@@ -1,21 +1,23 @@
 package com.arcclaw.persistence.sqlite;
 
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
-
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
 
 import com.arcclaw.core.state.CronStatus;
 import com.arcclaw.core.util.TemporalUtils;
 import com.arcclaw.persistence.api.AgentCronDto;
 import com.arcclaw.persistence.api.CronStorePort;
 import com.arcclaw.persistence.sqlite.jdbi.CronJdbiDao;
-import io.quarkus.arc.Unremovable;
-import io.quarkus.arc.properties.IfBuildProperty;
+
 import org.jboss.logging.Logger;
 import org.jdbi.v3.core.Jdbi;
+
+import io.quarkus.arc.Unremovable;
+import io.quarkus.arc.properties.IfBuildProperty;
 
 @ApplicationScoped
 @Unremovable
@@ -37,8 +39,9 @@ public class SqliteCronStoreAdapter implements CronStorePort {
 
     @Override
     public List<AgentCronDto> findDueCrons() {
-        return jdbi.withExtension(CronJdbiDao.class,
-            dao -> dao.findDueCrons(CronStatus.ACTIVE.name(), TemporalUtils.formatIsoLex(Instant.now())));
+        return jdbi.withExtension(
+                CronJdbiDao.class,
+                dao -> dao.findDueCrons(CronStatus.ACTIVE.name(), TemporalUtils.formatIsoLex(Instant.now())));
     }
 
     @Override
@@ -48,14 +51,13 @@ public class SqliteCronStoreAdapter implements CronStorePort {
 
     @Override
     public List<AgentCronDto> findAwaitingApprovalByUserId(String userId) {
-        return jdbi.withExtension(CronJdbiDao.class,
-            dao -> dao.findByUserIdAndStatus(userId, CronStatus.AWAITING_APPROVAL.name()));
+        return jdbi.withExtension(
+                CronJdbiDao.class, dao -> dao.findByUserIdAndStatus(userId, CronStatus.AWAITING_APPROVAL.name()));
     }
 
     @Override
     public List<AgentCronDto> findAllAwaitingApproval() {
-        return jdbi.withExtension(CronJdbiDao.class,
-            dao -> dao.findAllByStatus(CronStatus.AWAITING_APPROVAL.name()));
+        return jdbi.withExtension(CronJdbiDao.class, dao -> dao.findAllByStatus(CronStatus.AWAITING_APPROVAL.name()));
     }
 
     @Override
@@ -67,49 +69,59 @@ public class SqliteCronStoreAdapter implements CronStorePort {
     @Override
     public boolean claimForFire(String id) {
         if (id == null || id.isBlank()) return false;
-        return jdbi.withExtension(CronJdbiDao.class,
-            dao -> dao.claimForFire(id, CronStatus.RUNNING.name(), CronStatus.ACTIVE.name()));
+        return jdbi.withExtension(
+                CronJdbiDao.class, dao -> dao.claimForFire(id, CronStatus.RUNNING.name(), CronStatus.ACTIVE.name()));
     }
 
     @Override
     public void releaseClaimToActive(String id) {
         if (id == null || id.isBlank()) return;
-        jdbi.useExtension(CronJdbiDao.class,
-            dao -> dao.releaseClaim(id, CronStatus.ACTIVE.name(), CronStatus.RUNNING.name()));
+        jdbi.useExtension(
+                CronJdbiDao.class, dao -> dao.releaseClaim(id, CronStatus.ACTIVE.name(), CronStatus.RUNNING.name()));
     }
 
     @Override
     public void markFired(String id, Instant lastFireTime, Instant nextFireTime) {
         if (id == null || id.isBlank()) return;
         String now = TemporalUtils.formatIsoLex(Instant.now());
-        jdbi.useExtension(CronJdbiDao.class,
-            dao -> dao.markFired(id, CronStatus.ACTIVE.name(),
-                lastFireTime != null ? TemporalUtils.formatIsoLex(lastFireTime) : null,
-                nextFireTime != null ? TemporalUtils.formatIsoLex(nextFireTime) : null,
-                now));
+        jdbi.useExtension(
+                CronJdbiDao.class,
+                dao -> dao.markFired(
+                        id,
+                        CronStatus.ACTIVE.name(),
+                        lastFireTime != null ? TemporalUtils.formatIsoLex(lastFireTime) : null,
+                        nextFireTime != null ? TemporalUtils.formatIsoLex(nextFireTime) : null,
+                        now));
     }
 
     @Override
     public void markCompleted(String id, Instant lastFireTime) {
         if (id == null || id.isBlank()) return;
         String now = TemporalUtils.formatIsoLex(Instant.now());
-        jdbi.useExtension(CronJdbiDao.class,
-            dao -> dao.markCompleted(id, CronStatus.COMPLETED.name(),
-                lastFireTime != null ? TemporalUtils.formatIsoLex(lastFireTime) : null, now));
+        jdbi.useExtension(
+                CronJdbiDao.class,
+                dao -> dao.markCompleted(
+                        id,
+                        CronStatus.COMPLETED.name(),
+                        lastFireTime != null ? TemporalUtils.formatIsoLex(lastFireTime) : null,
+                        now));
     }
 
     @Override
     public void markAwaitingApproval(String id) {
         if (id == null || id.isBlank()) return;
-        jdbi.useExtension(CronJdbiDao.class,
-            dao -> dao.markStatus(id, CronStatus.AWAITING_APPROVAL.name(), TemporalUtils.formatIsoLex(Instant.now())));
+        jdbi.useExtension(
+                CronJdbiDao.class,
+                dao -> dao.markStatus(
+                        id, CronStatus.AWAITING_APPROVAL.name(), TemporalUtils.formatIsoLex(Instant.now())));
     }
 
     @Override
     public void markRunning(String id) {
         if (id == null || id.isBlank()) return;
-        jdbi.useExtension(CronJdbiDao.class,
-            dao -> dao.markStatus(id, CronStatus.RUNNING.name(), TemporalUtils.formatIsoLex(Instant.now())));
+        jdbi.useExtension(
+                CronJdbiDao.class,
+                dao -> dao.markStatus(id, CronStatus.RUNNING.name(), TemporalUtils.formatIsoLex(Instant.now())));
     }
 
     @Override
@@ -121,25 +133,31 @@ public class SqliteCronStoreAdapter implements CronStorePort {
     @Override
     public void markFailed(String id, String errorReason) {
         if (id == null || id.isBlank()) return;
-        jdbi.useExtension(CronJdbiDao.class,
-            dao -> dao.markFailed(id, CronStatus.FAILED.name(), errorReason, TemporalUtils.formatIsoLex(Instant.now())));
+        jdbi.useExtension(
+                CronJdbiDao.class,
+                dao -> dao.markFailed(
+                        id, CronStatus.FAILED.name(), errorReason, TemporalUtils.formatIsoLex(Instant.now())));
     }
 
     @Override
     public void markSkipped(String id, Instant nextFireTime, Instant now) {
         if (id == null || id.isBlank()) return;
-        jdbi.useExtension(CronJdbiDao.class,
-            dao -> dao.markSkipped(id, CronStatus.SKIPPED.name(),
-                nextFireTime != null ? TemporalUtils.formatIsoLex(nextFireTime) : null,
-                now != null ? TemporalUtils.formatIsoLex(now) : TemporalUtils.formatIsoLex(Instant.now())));
+        jdbi.useExtension(
+                CronJdbiDao.class,
+                dao -> dao.markSkipped(
+                        id,
+                        CronStatus.SKIPPED.name(),
+                        nextFireTime != null ? TemporalUtils.formatIsoLex(nextFireTime) : null,
+                        now != null ? TemporalUtils.formatIsoLex(now) : TemporalUtils.formatIsoLex(Instant.now())));
     }
 
     @Override
     public void reclaimStaleCrons(Instant threshold) {
         if (threshold == null) return;
-        jdbi.useExtension(CronJdbiDao.class,
-            dao -> dao.reclaimStale(CronStatus.ACTIVE.name(), CronStatus.RUNNING.name(),
-                TemporalUtils.formatIsoLex(threshold)));
+        jdbi.useExtension(
+                CronJdbiDao.class,
+                dao -> dao.reclaimStale(
+                        CronStatus.ACTIVE.name(), CronStatus.RUNNING.name(), TemporalUtils.formatIsoLex(threshold)));
     }
 
     @Override
@@ -150,31 +168,31 @@ public class SqliteCronStoreAdapter implements CronStorePort {
         String nextFire = dto.nextFireTime() != null ? TemporalUtils.formatIsoLex(dto.nextFireTime()) : null;
         String lastFire = dto.lastFireTime() != null ? TemporalUtils.formatIsoLex(dto.lastFireTime()) : null;
         jdbi.useHandle(handle -> handle.createUpdate(
-            "INSERT OR REPLACE INTO agent_cron (id, sessionId, userId, chatId, channelType, channelPlatformId, " +
-            "cronExpression, timezone, runonce, goal, nextFireTime, lastFireTime, status, executionRole, " +
-            "errorReason, lastDeliveryId, createdAt, updatedAt) " +
-            "VALUES (:id, :sessionId, :userId, :chatId, :channelType, :channelPlatformId, " +
-            ":cronExpression, :timezone, :runOnce, :goal, :nextFireTime, :lastFireTime, :status, :executionRole, " +
-            ":errorReason, :lastDeliveryId, :createdAt, :updatedAt)")
-            .bind("id", dto.id())
-            .bind("sessionId", dto.sessionId())
-            .bind("userId", dto.userId())
-            .bind("chatId", dto.chatId())
-            .bind("channelType", dto.channelType())
-            .bind("channelPlatformId", dto.channelPlatformId())
-            .bind("cronExpression", dto.cronExpression())
-            .bind("timezone", dto.timezone())
-            .bind("runOnce", dto.runOnce())
-            .bind("goal", dto.goal())
-            .bind("nextFireTime", nextFire)
-            .bind("lastFireTime", lastFire)
-            .bind("status", dto.status())
-            .bind("executionRole", dto.executionRole())
-            .bind("errorReason", dto.errorReason())
-            .bind("lastDeliveryId", dto.lastDeliveryId())
-            .bind("createdAt", createdAt)
-            .bind("updatedAt", now)
-            .execute());
+                        "INSERT OR REPLACE INTO agent_cron (id, sessionId, userId, chatId, channelType, channelPlatformId, "
+                                + "cronExpression, timezone, runonce, goal, nextFireTime, lastFireTime, status, executionRole, "
+                                + "errorReason, lastDeliveryId, createdAt, updatedAt) "
+                                + "VALUES (:id, :sessionId, :userId, :chatId, :channelType, :channelPlatformId, "
+                                + ":cronExpression, :timezone, :runOnce, :goal, :nextFireTime, :lastFireTime, :status, :executionRole, "
+                                + ":errorReason, :lastDeliveryId, :createdAt, :updatedAt)")
+                .bind("id", dto.id())
+                .bind("sessionId", dto.sessionId())
+                .bind("userId", dto.userId())
+                .bind("chatId", dto.chatId())
+                .bind("channelType", dto.channelType())
+                .bind("channelPlatformId", dto.channelPlatformId())
+                .bind("cronExpression", dto.cronExpression())
+                .bind("timezone", dto.timezone())
+                .bind("runOnce", dto.runOnce())
+                .bind("goal", dto.goal())
+                .bind("nextFireTime", nextFire)
+                .bind("lastFireTime", lastFire)
+                .bind("status", dto.status())
+                .bind("executionRole", dto.executionRole())
+                .bind("errorReason", dto.errorReason())
+                .bind("lastDeliveryId", dto.lastDeliveryId())
+                .bind("createdAt", createdAt)
+                .bind("updatedAt", now)
+                .execute());
     }
 
     @Override
@@ -196,8 +214,7 @@ public class SqliteCronStoreAdapter implements CronStorePort {
     @Override
     public List<AgentCronDto> findAll(String status, int offset, int limit) {
         if (status != null && !status.isBlank()) {
-            return jdbi.withExtension(CronJdbiDao.class,
-                dao -> dao.findAllByStatusPaginated(status, offset, limit));
+            return jdbi.withExtension(CronJdbiDao.class, dao -> dao.findAllByStatusPaginated(status, offset, limit));
         }
         return jdbi.withExtension(CronJdbiDao.class, dao -> dao.findAllPaginated(offset, limit));
     }
@@ -213,11 +230,10 @@ public class SqliteCronStoreAdapter implements CronStorePort {
     @Override
     public List<AgentCronDto> findByUserId(String userId, String status, int offset, int limit) {
         if (status != null && !status.isBlank()) {
-            return jdbi.withExtension(CronJdbiDao.class,
-                dao -> dao.findByUserIdAndStatusPaginated(userId, status, offset, limit));
+            return jdbi.withExtension(
+                    CronJdbiDao.class, dao -> dao.findByUserIdAndStatusPaginated(userId, status, offset, limit));
         }
-        return jdbi.withExtension(CronJdbiDao.class,
-            dao -> dao.findByUserIdPaginated(userId, offset, limit));
+        return jdbi.withExtension(CronJdbiDao.class, dao -> dao.findByUserIdPaginated(userId, offset, limit));
     }
 
     @Override

@@ -1,5 +1,10 @@
 package com.arcclaw.core.lifecycle;
 
+import dev.langchain4j.store.memory.chat.ChatMemoryStore;
+
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+
 import java.io.IOException;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
@@ -7,9 +12,6 @@ import java.nio.file.Path;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.concurrent.ConcurrentHashMap;
-
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
 
 import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.core.agent.loop.CliResultBridge;
@@ -21,10 +23,11 @@ import com.arcclaw.core.scope.WorkspaceScoped;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.util.PathSanitizer;
 import com.arcclaw.persistence.api.CheckpointStorePort;
-import dev.langchain4j.store.memory.chat.ChatMemoryStore;
-import io.quarkus.arc.Arc;
+
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
+
+import io.quarkus.arc.Arc;
 
 /**
  * Lifecycle orchestrator for workspace session termination and disk management.
@@ -61,8 +64,7 @@ public class WorkspaceManager {
     /** Returns true if any session has been halted (for interrupting blocking waits). */
     public static boolean isAnySessionHalted() {
         long now = System.currentTimeMillis();
-        return HALTED_SESSIONS.entrySet().stream()
-                .anyMatch(e -> now - e.getValue() <= HALTED_SESSION_TTL_MS);
+        return HALTED_SESSIONS.entrySet().stream().anyMatch(e -> now - e.getValue() <= HALTED_SESSION_TTL_MS);
     }
 
     /** Clears the halted flag for a session (used on fresh start). */
@@ -70,15 +72,32 @@ public class WorkspaceManager {
         HALTED_SESSIONS.remove(sessionId);
     }
 
-    @Inject WorkspaceManager self;
-    @Inject GovernanceStrategy governanceLayer;
-    @Inject ChatMemoryStore chatMemoryStore;
-    @Inject SessionHeartbeatTracker heartbeatTracker;
-    @Inject StatefulAgentStore statefulAgentStore;
-    @Inject CheckpointStorePort checkpointStore;
-    @Inject AuditObserver auditObserver;
-    @Inject CliResultBridge cliResultBridge;
-    @Inject ToolInvocationGuard toolInvocationGuard;
+    @Inject
+    WorkspaceManager self;
+
+    @Inject
+    GovernanceStrategy governanceLayer;
+
+    @Inject
+    ChatMemoryStore chatMemoryStore;
+
+    @Inject
+    SessionHeartbeatTracker heartbeatTracker;
+
+    @Inject
+    StatefulAgentStore statefulAgentStore;
+
+    @Inject
+    CheckpointStorePort checkpointStore;
+
+    @Inject
+    AuditObserver auditObserver;
+
+    @Inject
+    CliResultBridge cliResultBridge;
+
+    @Inject
+    ToolInvocationGuard toolInvocationGuard;
 
     @ConfigProperty(name = "arcclaw.workspace.root-dir", defaultValue = "./data/workspaces")
     String workspaceRootDir;
@@ -130,15 +149,13 @@ public class WorkspaceManager {
 
         // 4. Destroy CDI scope
         try {
-            var context = (WorkspaceScopeContext) Arc.container()
-                    .getActiveContext(WorkspaceScoped.class);
+            var context = (WorkspaceScopeContext) Arc.container().getActiveContext(WorkspaceScoped.class);
             if (context != null) {
                 context.destroySession(sessionId);
                 log.infof("CDI scope destroyed for session=%s", sessionId);
             }
         } catch (Exception e) {
-            log.warnf("Failed to destroy CDI scope for session=%s: %s",
-                      sessionId, LogUtil.rootMessage(e));
+            log.warnf("Failed to destroy CDI scope for session=%s: %s", sessionId, LogUtil.rootMessage(e));
         }
 
         // 5. Clear any in-flight batch resume flag and bridge state for this session.
@@ -158,18 +175,15 @@ public class WorkspaceManager {
         wipeWorkspaceDir(sessionId);
 
         try {
-            var context = (WorkspaceScopeContext) Arc.container()
-                    .getActiveContext(WorkspaceScoped.class);
+            var context = (WorkspaceScopeContext) Arc.container().getActiveContext(WorkspaceScoped.class);
             if (context != null) {
                 context.destroySession(sessionId);
                 toolInvocationGuard.clearSession(sessionId);
             }
         } catch (Exception e) {
-            log.warnf("CDI scope reset failed for session=%s: %s",
-                      sessionId, LogUtil.rootMessage(e));
+            log.warnf("CDI scope reset failed for session=%s: %s", sessionId, LogUtil.rootMessage(e));
         }
     }
-
 
     /**
      * Marks only genuinely live checkpoints as FAILED during session teardown.
@@ -185,7 +199,7 @@ public class WorkspaceManager {
      *
      * By excluding all terminal statuses, we ensure only truly in-flight checkpoints
      * (IN_PROGRESS, AWAITING_APPROVAL, AWAITING_RETRY_APPROVAL) are clobbered.
-     * 
+     *
      * Now delegates to CheckpointStorePort (arcclaw-persistence-sqlite via adapter).
      * The retry logic and SQLite-specific transaction handling is encapsulated there.
      */
@@ -195,16 +209,16 @@ public class WorkspaceManager {
         } catch (IllegalStateException e) {
             // Database connection pool already closed - JVM is shutting down, checkpoint
             // status update is best-effort only. Process is dying anyway.
-            log.debugf("markCheckpointsFailed skipped for session=%s - database closed (shutdown in progress)", sessionId);
+            log.debugf(
+                    "markCheckpointsFailed skipped for session=%s - database closed (shutdown in progress)", sessionId);
         } catch (Exception e) {
-            log.errorf("Failed to mark checkpoints FAILED for session=%s: %s",
-                       sessionId, LogUtil.rootMessage(e));
-            log.debugf("Full stacktrace for checkpoint failure marking for session=%s:\n%s",
-                       sessionId, LogUtil.trimmedStack(e));
+            log.errorf("Failed to mark checkpoints FAILED for session=%s: %s", sessionId, LogUtil.rootMessage(e));
+            log.debugf(
+                    "Full stacktrace for checkpoint failure marking for session=%s:\n%s",
+                    sessionId, LogUtil.trimmedStack(e));
             throw (e instanceof RuntimeException re)
-                ? re
-                : new RuntimeException(
-                    "Failed to mark checkpoints FAILED for session " + sessionId, e);
+                    ? re
+                    : new RuntimeException("Failed to mark checkpoints FAILED for session " + sessionId, e);
         }
     }
 
@@ -215,23 +229,20 @@ public class WorkspaceManager {
         try {
             Files.walkFileTree(workspaceDir, new SimpleFileVisitor<>() {
                 @Override
-                public FileVisitResult visitFile(Path file, BasicFileAttributes attrs)
-                        throws IOException {
+                public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
                     Files.delete(file);
                     return FileVisitResult.CONTINUE;
                 }
 
                 @Override
-                public FileVisitResult postVisitDirectory(Path dir, IOException exc)
-                        throws IOException {
+                public FileVisitResult postVisitDirectory(Path dir, IOException exc) throws IOException {
                     Files.delete(dir);
                     return FileVisitResult.CONTINUE;
                 }
             });
             log.infof("Workspace directory wiped: %s", workspaceDir);
         } catch (IOException e) {
-            log.warnf("Failed to wipe workspace dir %s: %s",
-                      workspaceDir, LogUtil.rootMessage(e));
+            log.warnf("Failed to wipe workspace dir %s: %s", workspaceDir, LogUtil.rootMessage(e));
         }
     }
 }

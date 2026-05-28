@@ -4,8 +4,9 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import jakarta.inject.Inject;
 
-import io.quarkus.test.junit.QuarkusTest;
 import org.junit.jupiter.api.Test;
+
+import io.quarkus.test.junit.QuarkusTest;
 
 @QuarkusTest
 public class WsAuthIntegrationTest {
@@ -24,7 +25,7 @@ public class WsAuthIntegrationTest {
         // Reused validation should fail
         assertFalse(tokenStore.validateAndConsumeToken(token));
     }
-    
+
     @Test
     public void testFailsWithExpiredToken() {
         // Caffeine stores tokens, hard to test expiration directly without changing the time.

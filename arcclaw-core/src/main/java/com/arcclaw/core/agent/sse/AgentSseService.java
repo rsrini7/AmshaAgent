@@ -1,10 +1,10 @@
 package com.arcclaw.core.agent.sse;
 
+import jakarta.enterprise.context.ApplicationScoped;
+
 import java.time.Duration;
 import java.time.Instant;
 import java.util.concurrent.ConcurrentHashMap;
-
-import jakarta.enterprise.context.ApplicationScoped;
 
 import io.smallrye.mutiny.Multi;
 import io.smallrye.mutiny.operators.multi.processors.BroadcastProcessor;
@@ -13,12 +13,10 @@ import io.smallrye.mutiny.operators.multi.processors.BroadcastProcessor;
 public class AgentSseService {
 
     // Active SSE subscribers per sessionId
-    private final ConcurrentHashMap<String, BroadcastProcessor<SseEvent>>
-        processors = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, BroadcastProcessor<SseEvent>> processors = new ConcurrentHashMap<>();
 
     // Pending events for sessions that survived restart (no active subscriber yet)
-    private final ConcurrentHashMap<String, SseEvent>
-        pendingEvents = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, SseEvent> pendingEvents = new ConcurrentHashMap<>();
 
     /**
      * Subscribe to SSE events for a session.
@@ -28,8 +26,7 @@ public class AgentSseService {
      * proxies and browsers that close idle SSE connections.
      */
     public Multi<SseEvent> subscribe(String sessionId) {
-        BroadcastProcessor<SseEvent> proc = processors
-            .computeIfAbsent(sessionId, id -> BroadcastProcessor.create());
+        BroadcastProcessor<SseEvent> proc = processors.computeIfAbsent(sessionId, id -> BroadcastProcessor.create());
 
         // Replay any pending event immediately on connect (zombie approval from restart)
         SseEvent pending = pendingEvents.remove(sessionId);
@@ -38,15 +35,13 @@ public class AgentSseService {
         }
 
         // Heartbeat stream - every 25s to prevent proxy/browser idle timeout
-        Multi<SseEvent> heartbeat = Multi.createFrom().ticks()
-            .every(Duration.ofSeconds(25))
-            .map(tick -> (SseEvent) new HeartbeatEvent(Instant.now()));
+        Multi<SseEvent> heartbeat = Multi.createFrom()
+                .ticks()
+                .every(Duration.ofSeconds(25))
+                .map(tick -> (SseEvent) new HeartbeatEvent(Instant.now()));
 
         // Merge live events + heartbeat
-        return Multi.createBy().merging().streams(
-            proc.toHotStream().onItem().castTo(SseEvent.class),
-            heartbeat
-        );
+        return Multi.createBy().merging().streams(proc.toHotStream().onItem().castTo(SseEvent.class), heartbeat);
     }
 
     /**
@@ -60,7 +55,8 @@ public class AgentSseService {
             proc.onNext(event);
         }
         // Store AWAITING_APPROVAL so UI gets it even if SSE connects after event fires
-        if (event instanceof HitlEvent h && HitlEventType.AWAITING_APPROVAL.wireValue().equals(h.type())) {
+        if (event instanceof HitlEvent h
+                && HitlEventType.AWAITING_APPROVAL.wireValue().equals(h.type())) {
             pendingEvents.put(sessionId, event);
         }
     }
@@ -70,15 +66,16 @@ public class AgentSseService {
      * Stores the event so the UI gets it when it subscribes after restart.
      */
     public void republishOnSubscribe(String sessionId, String toolName, String toolParams) {
-        pendingEvents.put(sessionId, new HitlEvent(
-            sessionId,
-            HitlEventType.AWAITING_APPROVAL.wireValue(),
-            toolName,
-            toolParams,
-            null, // riskLevel
-            null,
-            Instant.now()
-        ));
+        pendingEvents.put(
+                sessionId,
+                new HitlEvent(
+                        sessionId,
+                        HitlEventType.AWAITING_APPROVAL.wireValue(),
+                        toolName,
+                        toolParams,
+                        null, // riskLevel
+                        null,
+                        Instant.now()));
     }
 
     /**
@@ -96,23 +93,21 @@ public class AgentSseService {
     public interface SseEvent {}
 
     public record HitlEvent(
-        String sessionId,
-        String type,        // AWAITING_APPROVAL, APPROVED, DENIED, RESUMED
-        String toolName,
-        String toolParams,
-        String riskLevel,
-        String reason,
-        Instant timestamp
-    ) implements SseEvent {}
+            String sessionId,
+            String type, // AWAITING_APPROVAL, APPROVED, DENIED, RESUMED
+            String toolName,
+            String toolParams,
+            String riskLevel,
+            String reason,
+            Instant timestamp)
+            implements SseEvent {}
 
     public record AgentStatusEvent(
-        String sessionId,
-        String agentRole,
-        String status,      // RUNNING, COMPLETED, FAILED
-        Instant timestamp
-    ) implements SseEvent {}
+            String sessionId,
+            String agentRole,
+            String status, // RUNNING, COMPLETED, FAILED
+            Instant timestamp)
+            implements SseEvent {}
 
-    public record HeartbeatEvent(
-        Instant timestamp
-    ) implements SseEvent {}
+    public record HeartbeatEvent(Instant timestamp) implements SseEvent {}
 }

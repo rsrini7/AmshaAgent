@@ -2,18 +2,20 @@ package com.arcclaw.persistence.postgres;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import jakarta.inject.Inject;
+
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
-import jakarta.inject.Inject;
-
 import com.arcclaw.persistence.api.AuditEventDto;
 import com.arcclaw.persistence.api.AuditEventStorePort;
+
+import org.junit.jupiter.api.Test;
+
 import io.quarkus.test.common.QuarkusTestResource;
 import io.quarkus.test.junit.QuarkusTest;
-import org.junit.jupiter.api.Test;
 
 @QuarkusTest
 @QuarkusTestResource(PostgresTestResource.class)
@@ -26,25 +28,24 @@ class PostgresAuditEventStoreAdapterTest {
     void testSaveAndFindFilteredWithNulls() {
         UUID id = UUID.randomUUID();
         AuditEventDto dto = new AuditEventDto(
-            id,
-            "session-123",
-            "user-123",
-            "coordinator",
-            "goalhash",
-            "SUCCESS",
-            "TELEMETRY",
-            "detail",
-            10,
-            20,
-            new BigDecimal("0.001"),
-            Instant.now(),
-            1,
-            "1.0.0",
-            "idemp-key-123",
-            1L,
-            "hmac",
-            "prev"
-        );
+                id,
+                "session-123",
+                "user-123",
+                "coordinator",
+                "goalhash",
+                "SUCCESS",
+                "TELEMETRY",
+                "detail",
+                10,
+                20,
+                new BigDecimal("0.001"),
+                Instant.now(),
+                1,
+                "1.0.0",
+                "idemp-key-123",
+                1L,
+                "hmac",
+                "prev");
 
         store.save(dto);
 

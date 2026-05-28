@@ -17,6 +17,7 @@ import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.security.SecretVault;
 import com.fasterxml.jackson.databind.ObjectMapper;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -52,7 +53,7 @@ class SerperWebSearchToolTest {
             field.setAccessible(true);
             field.set(tool, httpClient);
         } catch (Exception e) {
-             throw new RuntimeException(e);
+            throw new RuntimeException(e);
         }
     }
 
@@ -70,8 +71,8 @@ class SerperWebSearchToolTest {
         tool.configApiKey = "none";
         Map<String, Object> params = Map.of("query", "test");
 
-        ToolResponse resp = WorkspaceContext.run("session-1", "user-1", "chat-1", 
-            AutonomyLevel.FULL, "RESEARCHER", () -> tool.execute(ctx(), params));
+        ToolResponse resp = WorkspaceContext.run(
+                "session-1", "user-1", "chat-1", AutonomyLevel.FULL, "RESEARCHER", () -> tool.execute(ctx(), params));
 
         assertEquals(503, resp.exitCode());
     }
@@ -87,7 +88,7 @@ class SerperWebSearchToolTest {
                   ]
                 }
                 """;
-        
+
         HttpResponse<String> mockResp = mock(HttpResponse.class);
         when(mockResp.statusCode()).thenReturn(200);
         when(mockResp.body()).thenReturn(mockBody);
@@ -95,8 +96,8 @@ class SerperWebSearchToolTest {
 
         Map<String, Object> params = Map.of("query", "ultimate answer");
 
-        ToolResponse resp = WorkspaceContext.run("session-1", "user-1", "chat-1", 
-            AutonomyLevel.FULL, "RESEARCHER", () -> tool.execute(ctx(), params));
+        ToolResponse resp = WorkspaceContext.run(
+                "session-1", "user-1", "chat-1", AutonomyLevel.FULL, "RESEARCHER", () -> tool.execute(ctx(), params));
 
         assertTrue(resp.success());
         assertTrue(resp.output().contains("Direct Answer"));
@@ -114,7 +115,7 @@ class SerperWebSearchToolTest {
                   ]
                 }
                 """;
-        
+
         HttpResponse<String> mockResp = mock(HttpResponse.class);
         when(mockResp.statusCode()).thenReturn(200);
         when(mockResp.body()).thenReturn(mockBody);
@@ -122,8 +123,8 @@ class SerperWebSearchToolTest {
 
         Map<String, Object> params = Map.of("query", "quarkus");
 
-        ToolResponse resp = WorkspaceContext.run("session-1", "user-1", "chat-1", 
-            AutonomyLevel.FULL, "RESEARCHER", () -> tool.execute(ctx(), params));
+        ToolResponse resp = WorkspaceContext.run(
+                "session-1", "user-1", "chat-1", AutonomyLevel.FULL, "RESEARCHER", () -> tool.execute(ctx(), params));
 
         assertTrue(resp.success());
         assertTrue(resp.output().contains("Quarkus Docs"));
@@ -140,8 +141,8 @@ class SerperWebSearchToolTest {
 
         Map<String, Object> params = Map.of("query", "test");
 
-        ToolResponse resp = WorkspaceContext.run("session-1", "user-1", "chat-1", 
-            AutonomyLevel.FULL, "RESEARCHER", () -> tool.execute(ctx(), params));
+        ToolResponse resp = WorkspaceContext.run(
+                "session-1", "user-1", "chat-1", AutonomyLevel.FULL, "RESEARCHER", () -> tool.execute(ctx(), params));
 
         assertEquals(401, resp.exitCode());
         assertTrue(resp.output().contains("Serper Search API failed"));
@@ -157,9 +158,9 @@ class SerperWebSearchToolTest {
 
         Map<String, Object> params = Map.of("query", "test", "count", 50);
 
-        ToolResponse resp = WorkspaceContext.run("session-1", "user-1", "chat-1", 
-            AutonomyLevel.FULL, "RESEARCHER", () -> tool.execute(ctx(), params));
-        
+        ToolResponse resp = WorkspaceContext.run(
+                "session-1", "user-1", "chat-1", AutonomyLevel.FULL, "RESEARCHER", () -> tool.execute(ctx(), params));
+
         assertTrue(resp.output().contains("No relevant web or news results"));
     }
 
@@ -169,7 +170,17 @@ class SerperWebSearchToolTest {
 
     private ToolExecutionContext ctx(String sessionId, String userId) {
         return new ToolExecutionContext(
-            sessionId, userId, "chat-1", "RESEARCHER", AutonomyLevel.FULL, 
-            "trace-1", null, null, null, null, null, null);
+                sessionId,
+                userId,
+                "chat-1",
+                "RESEARCHER",
+                AutonomyLevel.FULL,
+                "trace-1",
+                null,
+                null,
+                null,
+                null,
+                null,
+                null);
     }
 }

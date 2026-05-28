@@ -1,5 +1,7 @@
 package com.arcclaw.persistence.sqlite;
 
+import jakarta.inject.Singleton;
+
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -9,15 +11,15 @@ import java.sql.ResultSet;
 import java.sql.Statement;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import jakarta.inject.Singleton;
-
 import com.arcclaw.common.util.LogUtil;
-import io.agroal.api.AgroalPoolInterceptor;
-import io.quarkus.arc.Arc;
-import io.quarkus.arc.properties.IfBuildProperty;
+
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 import org.sqlite.SQLiteConnection;
+
+import io.agroal.api.AgroalPoolInterceptor;
+import io.quarkus.arc.Arc;
+import io.quarkus.arc.properties.IfBuildProperty;
 
 /**
  * Hardens SQLite FTS5 connection pooling by verifying/attaching the fts schema
@@ -35,7 +37,7 @@ import org.sqlite.SQLiteConnection;
  *       skip if vec0 is already registered on that specific handle.</li>
  *   <li>When not using SQLite backend, this bean is deactivated and Agroal ignores pool interceptor mappings if not loaded.</li>
  * </ul>
- * 
+ *
  * Encapsulated inside arcclaw-persistence-sqlite adapter module.
  * Registered with Agroal via Quarkus configuration.
  */
@@ -71,11 +73,12 @@ public class FtsConnectionInterceptor implements AgroalPoolInterceptor {
         } catch (Exception e) {
             if (Arc.container() != null) {
                 if (warnedFtsAttachment.compareAndSet(false, true)) {
-                    log.warnf("FtsConnectionInterceptor: Failed to verify/attach " +
-                              "fts schema (will suppress subsequent warnings): %s", LogUtil.rootMessage(e));
+                    log.warnf(
+                            "FtsConnectionInterceptor: Failed to verify/attach "
+                                    + "fts schema (will suppress subsequent warnings): %s",
+                            LogUtil.rootMessage(e));
                 }
-                log.debugf("Full stacktrace for fts attachment failure: %s",
-                           LogUtil.trimmedStack(e));
+                log.debugf("Full stacktrace for fts attachment failure: %s", LogUtil.trimmedStack(e));
             }
         }
     }
@@ -101,12 +104,15 @@ public class FtsConnectionInterceptor implements AgroalPoolInterceptor {
             } catch (Exception e) {
                 // Expected when connection is already inside a transaction — SQLite rejects
                 // safety-level changes mid-transaction. Harmless; suppress to TRACE.
-                log.tracef("FtsConnectionInterceptor: Could not set synchronous=NORMAL (in transaction?): %s", LogUtil.rootMessage(e));
+                log.tracef(
+                        "FtsConnectionInterceptor: Could not set synchronous=NORMAL (in transaction?): %s",
+                        LogUtil.rootMessage(e));
             }
         }
         if (!attached) {
             if (!connection.getAutoCommit()) {
-                log.debug("FtsConnectionInterceptor: Cannot ATTACH fts (transaction active). Will retry on next acquire.");
+                log.debug(
+                        "FtsConnectionInterceptor: Cannot ATTACH fts (transaction active). Will retry on next acquire.");
             } else {
                 File ftsDb = ftsDbFile();
                 try {
@@ -129,8 +135,8 @@ public class FtsConnectionInterceptor implements AgroalPoolInterceptor {
         try {
             boolean alreadyLoaded = false;
             try (Statement checkStmt = connection.createStatement();
-                 ResultSet moduleRs = checkStmt.executeQuery(
-                         "SELECT name FROM pragma_module_list WHERE name='vec0'")) {
+                    ResultSet moduleRs =
+                            checkStmt.executeQuery("SELECT name FROM pragma_module_list WHERE name='vec0'")) {
                 if (moduleRs.next()) {
                     alreadyLoaded = true;
                 }
@@ -138,23 +144,27 @@ public class FtsConnectionInterceptor implements AgroalPoolInterceptor {
             if (!alreadyLoaded) {
                 SQLiteConnection sqliteConn = connection.unwrap(SQLiteConnection.class);
                 sqliteConn.getDatabase().enable_load_extension(true);
-                String absoluteVecPath = resolveExtensionPath(vecExtensionPath).toAbsolutePath().toString().replace("\\", "/");
+                String absoluteVecPath = resolveExtensionPath(vecExtensionPath)
+                        .toAbsolutePath()
+                        .toString()
+                        .replace("\\", "/");
                 try (Statement vecStmt = connection.createStatement()) {
                     vecStmt.execute("SELECT load_extension('" + absoluteVecPath + "')");
                 }
             }
             if (vectorSearchEnabled.compareAndSet(false, true)) {
-                log.infof("FtsConnectionInterceptor: sqlite-vec loaded successfully" +
-                          " from path: %s", vecExtensionPath);
+                log.infof(
+                        "FtsConnectionInterceptor: sqlite-vec loaded successfully" + " from path: %s",
+                        vecExtensionPath);
             }
         } catch (Exception e) {
             if (warnedUnavailable.compareAndSet(false, true)) {
-                log.warnf("FtsConnectionInterceptor: sqlite-vec unavailable at " +
-                          "path '%s' - vector search degraded to FTS5-only. " +
-                          "Root cause: %s",
-                          vecExtensionPath, LogUtil.rootMessage(e));
-                log.debugf("Full stacktrace for vector load failure: %s",
-                           LogUtil.trimmedStack(e));
+                log.warnf(
+                        "FtsConnectionInterceptor: sqlite-vec unavailable at "
+                                + "path '%s' - vector search degraded to FTS5-only. "
+                                + "Root cause: %s",
+                        vecExtensionPath, LogUtil.rootMessage(e));
+                log.debugf("Full stacktrace for vector load failure: %s", LogUtil.trimmedStack(e));
             }
         }
     }
@@ -193,9 +203,9 @@ public class FtsConnectionInterceptor implements AgroalPoolInterceptor {
         if (parent == null || !Files.exists(parent)) {
             return false;
         }
-        return Files.exists(parent.resolve(filename + ".dylib")) ||
-               Files.exists(parent.resolve(filename + ".so")) ||
-               Files.exists(parent.resolve(filename + ".dll"));
+        return Files.exists(parent.resolve(filename + ".dylib"))
+                || Files.exists(parent.resolve(filename + ".so"))
+                || Files.exists(parent.resolve(filename + ".dll"));
     }
 
     public boolean isVectorSearchEnabled() {

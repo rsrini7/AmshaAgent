@@ -4,6 +4,13 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
+import dev.langchain4j.data.message.AiMessage;
+import dev.langchain4j.data.message.ChatMessage;
+import dev.langchain4j.data.message.SystemMessage;
+import dev.langchain4j.data.message.UserMessage;
+import dev.langchain4j.model.chat.ChatModel;
+import dev.langchain4j.model.chat.response.ChatResponse;
+
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
@@ -18,16 +25,12 @@ import com.arcclaw.core.memory.tiered.RecallMemoryService;
 import com.arcclaw.persistence.api.CompactionStorePort;
 import com.arcclaw.persistence.api.CompactionSummaryDto;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import dev.langchain4j.data.message.AiMessage;
-import dev.langchain4j.data.message.ChatMessage;
-import dev.langchain4j.data.message.SystemMessage;
-import dev.langchain4j.data.message.UserMessage;
-import dev.langchain4j.model.chat.ChatModel;
-import dev.langchain4j.model.chat.response.ChatResponse;
-import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 
 class CompactionServiceTest {
 
@@ -62,7 +65,7 @@ class CompactionServiceTest {
         service.objectMapper = new ObjectMapper();
         service.tieredConfig = mockTieredConfig;
         service.recallService = mockRecallService;
-        
+
         service.enabled = true;
         service.threshold = 10;
         service.keepRecent = 5;
@@ -87,15 +90,16 @@ class CompactionServiceTest {
     void testCompactionTriggersAtThreshold() {
         List<ChatMessage> msgs = new ArrayList<>();
         msgs.add(SystemMessage.systemMessage("SYS"));
-        for (int i=0; i<10; i++) {
+        for (int i = 0; i < 10; i++) {
             msgs.add(UserMessage.userMessage("Msg" + i));
         }
-        
+
         when(mockChatStore.getMessages("session1")).thenReturn(msgs);
         when(mockPort.findLatestBySessionId("session1")).thenReturn(Optional.empty());
-        when(mockModel.chat(any(UserMessage.class))).thenReturn(ChatResponse.builder()
-                .aiMessage(AiMessage.aiMessage("{\"summary\": \"New Summary Text\"}"))
-                .build());
+        when(mockModel.chat(any(UserMessage.class)))
+                .thenReturn(ChatResponse.builder()
+                        .aiMessage(AiMessage.aiMessage("{\"summary\": \"New Summary Text\"}"))
+                        .build());
 
         assertTrue(service.compact("session1", "test-user"));
 
@@ -108,13 +112,14 @@ class CompactionServiceTest {
     @Test
     void testBlankGuardHandling() {
         List<ChatMessage> msgs = new ArrayList<>();
-        for (int i=0; i<10; i++) {
+        for (int i = 0; i < 10; i++) {
             msgs.add(UserMessage.userMessage("Msg" + i));
         }
         when(mockChatStore.getMessages("session1")).thenReturn(msgs);
-        when(mockModel.chat(any(UserMessage.class))).thenReturn(ChatResponse.builder()
-                .aiMessage(AiMessage.aiMessage("   \n "))
-                .build());
+        when(mockModel.chat(any(UserMessage.class)))
+                .thenReturn(ChatResponse.builder()
+                        .aiMessage(AiMessage.aiMessage("   \n "))
+                        .build());
 
         assertFalse(service.compact("session1", "test-user"));
         verify(mockPort, never()).upsert(any());
@@ -126,39 +131,41 @@ class CompactionServiceTest {
         sb.append("A".repeat(2000));
         sb.append("\uD83D\uDE00"); // 😀
         String longText = sb.toString();
-        
+
         when(mockChatStore.getMessages("session1")).thenReturn(createMessages(10));
         when(mockPort.findLatestBySessionId("session1")).thenReturn(Optional.empty());
-        when(mockModel.chat(any(UserMessage.class))).thenReturn(ChatResponse.builder()
-                .aiMessage(AiMessage.aiMessage(longText))
-                .build());
+        when(mockModel.chat(any(UserMessage.class)))
+                .thenReturn(ChatResponse.builder()
+                        .aiMessage(AiMessage.aiMessage(longText))
+                        .build());
 
         assertTrue(service.compact("session1", "test-user"));
 
         ArgumentCaptor<CompactionSummaryDto> captor = ArgumentCaptor.forClass(CompactionSummaryDto.class);
         verify(mockPort).upsert(captor.capture());
-        
+
         String truncated = captor.getValue().summary();
         assertTrue(truncated.endsWith("...[truncated]"));
         char lastChar = truncated.charAt(1984);
         assertEquals('A', lastChar);
         assertFalse(Character.isSurrogate(lastChar));
-        
+
         sb = new StringBuilder();
         sb.append("A".repeat(1984));
         sb.append("\uD83D\uDE00"); // 😀 at 1985th codepoint
         sb.append("extra");
         longText = sb.toString();
-        
+
         reset(mockPort);
-        when(mockModel.chat(any(UserMessage.class))).thenReturn(ChatResponse.builder()
-                .aiMessage(AiMessage.aiMessage(longText))
-                .build());
-        
+        when(mockModel.chat(any(UserMessage.class)))
+                .thenReturn(ChatResponse.builder()
+                        .aiMessage(AiMessage.aiMessage(longText))
+                        .build());
+
         assertTrue(service.compact("session1", "test-user"));
         verify(mockPort).upsert(captor.capture());
         truncated = captor.getValue().summary();
-        
+
         assertTrue(truncated.contains("\uD83D\uDE00...[truncated]"));
         int emojiStart = truncated.indexOf("\uD83D\uDE00");
         assertEquals(1984, emojiStart);
@@ -168,7 +175,7 @@ class CompactionServiceTest {
 
     private List<ChatMessage> createMessages(int count) {
         List<ChatMessage> msgs = new ArrayList<>();
-        for (int i=0; i<count; i++) {
+        for (int i = 0; i < count; i++) {
             msgs.add(UserMessage.userMessage("Msg" + i));
         }
         return msgs;
@@ -179,9 +186,10 @@ class CompactionServiceTest {
         String shortText = "A".repeat(1985);
         when(mockChatStore.getMessages("session1")).thenReturn(createMessages(10));
         when(mockPort.findLatestBySessionId("session1")).thenReturn(Optional.empty());
-        when(mockModel.chat(any(UserMessage.class))).thenReturn(ChatResponse.builder()
-                .aiMessage(AiMessage.aiMessage(shortText))
-                .build());
+        when(mockModel.chat(any(UserMessage.class)))
+                .thenReturn(ChatResponse.builder()
+                        .aiMessage(AiMessage.aiMessage(shortText))
+                        .build());
 
         assertTrue(service.compact("session1", "test-user"));
         ArgumentCaptor<CompactionSummaryDto> captor = ArgumentCaptor.forClass(CompactionSummaryDto.class);
@@ -194,9 +202,10 @@ class CompactionServiceTest {
         String longText = "A".repeat(1986);
         when(mockChatStore.getMessages("session1")).thenReturn(createMessages(10));
         when(mockPort.findLatestBySessionId("session1")).thenReturn(Optional.empty());
-        when(mockModel.chat(any(UserMessage.class))).thenReturn(ChatResponse.builder()
-                .aiMessage(AiMessage.aiMessage(longText))
-                .build());
+        when(mockModel.chat(any(UserMessage.class)))
+                .thenReturn(ChatResponse.builder()
+                        .aiMessage(AiMessage.aiMessage(longText))
+                        .build());
 
         assertTrue(service.compact("session1", "test-user"));
         ArgumentCaptor<CompactionSummaryDto> captor = ArgumentCaptor.forClass(CompactionSummaryDto.class);
@@ -207,11 +216,11 @@ class CompactionServiceTest {
     @Test
     void truncationIsCodepointSafeAndReturnsTruncationSuffix() throws Exception {
         String input = "A".repeat(1984) + "\uD83D\uDE00" + "B".repeat(10);
-        
+
         Method m = CompactionService.class.getDeclaredMethod("truncateSafely", String.class);
         m.setAccessible(true);
         String result = (String) m.invoke(service, input);
-        
+
         String expected = "A".repeat(1984) + "\uD83D\uDE00...[truncated]";
         assertEquals(expected, result);
     }
@@ -220,7 +229,7 @@ class CompactionServiceTest {
     void testCompactRetriesOnRateLimit() {
         when(mockChatStore.getMessages("session1")).thenReturn(createMessages(10));
         when(mockPort.findLatestBySessionId("session1")).thenReturn(Optional.empty());
-        
+
         // Fail twice with 429, then succeed
         when(mockModel.chat(any(UserMessage.class)))
                 .thenThrow(new RuntimeException("Rate limit exceeded 429"))
@@ -244,13 +253,15 @@ class CompactionServiceTest {
         field.setAccessible(true);
         String template = (String) field.get(null);
 
-        assertTrue(template.contains("preferred name"),
-                "Compaction prompt should preserve preferred names");
-        assertTrue(template.contains("GitHub username or repo owner"),
+        assertTrue(template.contains("preferred name"), "Compaction prompt should preserve preferred names");
+        assertTrue(
+                template.contains("GitHub username or repo owner"),
                 "Compaction prompt should preserve GitHub usernames/owners");
-        assertTrue(template.contains("Keep those identifiers verbatim"),
+        assertTrue(
+                template.contains("Keep those identifiers verbatim"),
                 "Compaction prompt should keep stable identifiers exact");
-        assertTrue(template.contains("Do NOT preserve or restate secrets"),
+        assertTrue(
+                template.contains("Do NOT preserve or restate secrets"),
                 "Compaction prompt should exclude secrets from summaries");
     }
 

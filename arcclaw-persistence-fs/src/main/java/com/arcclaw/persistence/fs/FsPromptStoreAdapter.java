@@ -1,13 +1,14 @@
 package com.arcclaw.persistence.fs;
 
-import java.util.List;
-import java.util.Optional;
-
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
+import java.util.List;
+import java.util.Optional;
+
 import com.arcclaw.persistence.api.PromptDto;
 import com.arcclaw.persistence.api.PromptStorePort;
+
 import io.quarkus.arc.Unremovable;
 import io.quarkus.arc.properties.IfBuildProperty;
 
@@ -32,8 +33,8 @@ public class FsPromptStoreAdapter implements PromptStorePort {
     @Override
     public List<PromptDto> findAll() {
         return store.list(List.of(DOMAIN, BY_ID), ".json").stream()
-            .map(f -> store.read(List.of(DOMAIN, BY_ID, f), PromptDto.class))
-            .toList();
+                .map(f -> store.read(List.of(DOMAIN, BY_ID, f), PromptDto.class))
+                .toList();
     }
 
     @Override
@@ -44,21 +45,22 @@ public class FsPromptStoreAdapter implements PromptStorePort {
     @Override
     public Optional<PromptDto> findActive(String roleId, String sectionKey) {
         return store.readOptional(List.of(DOMAIN, BY_ROLE, roleId, sectionKey + ".json"), PromptDto.class)
-            .filter(dto -> "ACTIVE".equals(dto.status()));
+                .filter(dto -> "ACTIVE".equals(dto.status()));
     }
 
     @Override
     public List<PromptDto> findByRole(String roleId) {
         return store.list(List.of(DOMAIN, BY_ROLE, roleId), ".json").stream()
-            .map(f -> store.read(List.of(DOMAIN, BY_ROLE, roleId, f), PromptDto.class))
-            .toList();
+                .map(f -> store.read(List.of(DOMAIN, BY_ROLE, roleId, f), PromptDto.class))
+                .toList();
     }
 
     @Override
     public boolean deleteById(String id) {
         Optional<PromptDto> existing = store.readOptional(List.of(DOMAIN, BY_ID, id + ".json"), PromptDto.class);
         if (existing.isPresent()) {
-            store.delete(List.of(DOMAIN, BY_ROLE, existing.get().roleId(), existing.get().sectionKey() + ".json"));
+            store.delete(List.of(
+                    DOMAIN, BY_ROLE, existing.get().roleId(), existing.get().sectionKey() + ".json"));
             store.delete(List.of(DOMAIN, BY_ID, id + ".json"));
             return true;
         }
@@ -67,7 +69,8 @@ public class FsPromptStoreAdapter implements PromptStorePort {
 
     @Override
     public boolean deleteByRoleAndKey(String roleId, String sectionKey) {
-        Optional<PromptDto> existing = store.readOptional(List.of(DOMAIN, BY_ROLE, roleId, sectionKey + ".json"), PromptDto.class);
+        Optional<PromptDto> existing =
+                store.readOptional(List.of(DOMAIN, BY_ROLE, roleId, sectionKey + ".json"), PromptDto.class);
         if (existing.isPresent()) {
             store.delete(List.of(DOMAIN, BY_ID, existing.get().id() + ".json"));
             store.delete(List.of(DOMAIN, BY_ROLE, roleId, sectionKey + ".json"));
@@ -81,7 +84,8 @@ public class FsPromptStoreAdapter implements PromptStorePort {
         List<String> files = store.list(List.of(DOMAIN, BY_ID), ".json");
         for (String f : files) {
             Optional<PromptDto> p = store.readOptional(List.of(DOMAIN, BY_ID, f), PromptDto.class);
-            p.ifPresent(prompt -> store.delete(List.of(DOMAIN, BY_ROLE, prompt.roleId(), prompt.sectionKey() + ".json")));
+            p.ifPresent(
+                    prompt -> store.delete(List.of(DOMAIN, BY_ROLE, prompt.roleId(), prompt.sectionKey() + ".json")));
             store.delete(List.of(DOMAIN, BY_ID, f));
         }
         return files.size();

@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Optional;
 
 import com.arcclaw.persistence.api.SkillDto;
+
 import org.jdbi.v3.sqlobject.config.RegisterConstructorMapper;
 import org.jdbi.v3.sqlobject.customizer.Bind;
 import org.jdbi.v3.sqlobject.customizer.BindMethods;
@@ -13,7 +14,8 @@ import org.jdbi.v3.sqlobject.statement.SqlUpdate;
 @RegisterConstructorMapper(SkillDto.class)
 public interface SkillJdbiDao {
 
-    @SqlUpdate("INSERT INTO agent_skill (id, name, definitionYaml, createdAt, updatedAt) VALUES (:id, :name, :definitionYaml, :createdAt, :updatedAt) ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, definitionYaml = EXCLUDED.definitionYaml, createdAt = EXCLUDED.createdAt, updatedAt = EXCLUDED.updatedAt")
+    @SqlUpdate(
+            "INSERT INTO agent_skill (id, name, definitionYaml, createdAt, updatedAt) VALUES (:id, :name, :definitionYaml, :createdAt, :updatedAt) ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, definitionYaml = EXCLUDED.definitionYaml, createdAt = EXCLUDED.createdAt, updatedAt = EXCLUDED.updatedAt")
     void save(@BindMethods SkillDto dto);
 
     @SqlQuery("SELECT id, name, definitionYaml, createdAt, updatedAt FROM agent_skill WHERE id = :id")

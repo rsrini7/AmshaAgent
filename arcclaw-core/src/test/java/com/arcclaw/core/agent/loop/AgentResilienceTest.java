@@ -5,11 +5,11 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import jakarta.inject.Inject;
+
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
-
-import jakarta.inject.Inject;
 
 import com.arcclaw.core.agent.reasoning.ReasoningEngine;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
@@ -17,8 +17,10 @@ import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
-import io.quarkus.test.junit.QuarkusTest;
+
 import org.junit.jupiter.api.Test;
+
+import io.quarkus.test.junit.QuarkusTest;
 
 /**
  * Resilience tests for the Agent reasoning loop.
@@ -34,50 +36,55 @@ class AgentResilienceTest {
     @Inject
     AgentLoop agentLoop;
 
-
     @Test
     void testHallucinatedToolHandledGracefully() {
         WorkspaceScopeHolder.run(TEST_SESSION, () -> {
             WorkspaceContext.runWithFullAutonomy(TEST_SESSION, "test", "test", "coordinator", () -> {
-            var callCount = new AtomicInteger(0);
+                var callCount = new AtomicInteger(0);
 
-            ReasoningEngine engine = new ReasoningEngine() {
-                @Override
-                public ReasoningStep nextStep(AgentExecutionContext context, String role, String goal, List<ReasoningStep> history) {
-                    int call = callCount.incrementAndGet();
-                    if (call == 1) {
-                        // First call: LLM hallucinates a tool that doesn't exist
+                ReasoningEngine engine = new ReasoningEngine() {
+                    @Override
+                    public ReasoningStep nextStep(
+                            AgentExecutionContext context, String role, String goal, List<ReasoningStep> history) {
+                        int call = callCount.incrementAndGet();
+                        if (call == 1) {
+                            // First call: LLM hallucinates a tool that doesn't exist
+                            return ReasoningStep.pending(
+                                    "I need to search the web for this.",
+                                    "web_search", // <-- does NOT exist
+                                    Map.of("query", "test query"),
+                                    100,
+                                    100);
+                        }
+                        // Second call: after receiving the error observation, LLM self-corrects
                         return ReasoningStep.pending(
-                                "I need to search the web for this.",
-                                "web_search", // <-- does NOT exist
-                                Map.of("query", "test query"), 100, 100);
+                                "The web_search tool doesn't exist. I'll finish with what I know.",
+                                ReasoningStep.FINISH,
+                                Map.of("answer", "Self-corrected after tool not found."),
+                                100,
+                                100);
                     }
-                    // Second call: after receiving the error observation, LLM self-corrects
-                    return ReasoningStep.pending(
-                            "The web_search tool doesn't exist. I'll finish with what I know.",
-                            ReasoningStep.FINISH,
-                            Map.of("answer", "Self-corrected after tool not found."), 100, 100);
-                }
 
-                @Override
-                public String chatForStructuredOutput(String sessionId, String agentRole, String schemaPrompt) {
-                    throw new UnsupportedOperationException();
-                }
-            };
+                    @Override
+                    public String chatForStructuredOutput(String sessionId, String agentRole, String schemaPrompt) {
+                        throw new UnsupportedOperationException();
+                    }
+                };
 
-            AgentResult result = agentLoop.run("test hallucination", engine);
+                AgentResult result = agentLoop.run("test hallucination", engine);
 
-            assertInstanceOf(AgentResult.Finished.class, result, "Loop should succeed after self-correction");
-            assertEquals(2, result.steps().size(), "Should have 2 steps (hallucination + finish)");
+                assertInstanceOf(AgentResult.Finished.class, result, "Loop should succeed after self-correction");
+                assertEquals(2, result.steps().size(), "Should have 2 steps (hallucination + finish)");
 
-            // First step should have the error observation
-            var firstStep = result.steps().get(0);
-            assertEquals("web_search", firstStep.action());
-            assertNotNull(firstStep.observation());
-            assertTrue(firstStep.observation().contains("does not exist"),
-                    "Observation should explain the tool doesn't exist");
-            assertTrue(firstStep.observation().contains("Available tools"),
-                    "Observation should list available tools");
+                // First step should have the error observation
+                var firstStep = result.steps().get(0);
+                assertEquals("web_search", firstStep.action());
+                assertNotNull(firstStep.observation());
+                assertTrue(
+                        firstStep.observation().contains("does not exist"),
+                        "Observation should explain the tool doesn't exist");
+                assertTrue(
+                        firstStep.observation().contains("Available tools"), "Observation should list available tools");
             });
         });
     }
@@ -90,31 +97,34 @@ class AgentResilienceTest {
     void testMaxIterationsTerminatesRunawayLoop() {
         WorkspaceScopeHolder.run(TEST_SESSION, () -> {
             WorkspaceContext.runWithFullAutonomy(TEST_SESSION, "test", "test", "coordinator", () -> {
-            // Engine that always requests the same tool (never finishes)
-            ReasoningEngine engine = new ReasoningEngine() {
-                @Override
-                public ReasoningStep nextStep(AgentExecutionContext context, String role, String goal, List<ReasoningStep> history) {
-                    return ReasoningStep.pending(
-                        "I'll keep trying the github tool.",
-                        ToolCapability.GITHUB.toolName(),
-                        Map.of("repo", "test/repo"), 100, 100);
-                }
+                // Engine that always requests the same tool (never finishes)
+                ReasoningEngine engine = new ReasoningEngine() {
+                    @Override
+                    public ReasoningStep nextStep(
+                            AgentExecutionContext context, String role, String goal, List<ReasoningStep> history) {
+                        return ReasoningStep.pending(
+                                "I'll keep trying the github tool.",
+                                ToolCapability.GITHUB.toolName(),
+                                Map.of("repo", "test/repo"),
+                                100,
+                                100);
+                    }
 
-                @Override
-                public String chatForStructuredOutput(String sessionId, String agentRole, String schemaPrompt) {
-                    throw new UnsupportedOperationException();
-                }
-            };
+                    @Override
+                    public String chatForStructuredOutput(String sessionId, String agentRole, String schemaPrompt) {
+                        throw new UnsupportedOperationException();
+                    }
+                };
 
-            int maxIterations = 3;
-            AgentResult result = agentLoop.run("infinite loop test", engine, maxIterations);
+                int maxIterations = 3;
+                AgentResult result = agentLoop.run("infinite loop test", engine, maxIterations);
 
-            assertInstanceOf(AgentResult.LoopExceeded.class, result, "Loop should NOT succeed");
-            // At 3 iterations, the loop terminates. The history contains the 3 steps
-            // plus any final state transitions or markers. 
-            // In the current runner, it hits iteration 4, break, and returns LoopExceeded.
-            assertTrue(result.steps().size() >= maxIterations, "Should have at least maxIterations steps");
-            assertEquals(maxIterations, ((AgentResult.LoopExceeded) result).maxIterations());
+                assertInstanceOf(AgentResult.LoopExceeded.class, result, "Loop should NOT succeed");
+                // At 3 iterations, the loop terminates. The history contains the 3 steps
+                // plus any final state transitions or markers.
+                // In the current runner, it hits iteration 4, break, and returns LoopExceeded.
+                assertTrue(result.steps().size() >= maxIterations, "Should have at least maxIterations steps");
+                assertEquals(maxIterations, ((AgentResult.LoopExceeded) result).maxIterations());
             });
         });
     }
@@ -126,25 +136,24 @@ class AgentResilienceTest {
     void testFinishActionReturnsCorrectResult() {
         WorkspaceScopeHolder.run(TEST_SESSION, () -> {
             WorkspaceContext.runWithFullAutonomy(TEST_SESSION, "test", "test", "coordinator", () -> {
-            ReasoningEngine engine = new ReasoningEngine() {
-                @Override
-                public ReasoningStep nextStep(AgentExecutionContext context, String role, String goal, List<ReasoningStep> history) {
-                    return ReasoningStep.pending(
-                        "I'm done.",
-                        ReasoningStep.FINISH,
-                        Map.of("answer", "Task complete."), 100, 100);
-                }
+                ReasoningEngine engine = new ReasoningEngine() {
+                    @Override
+                    public ReasoningStep nextStep(
+                            AgentExecutionContext context, String role, String goal, List<ReasoningStep> history) {
+                        return ReasoningStep.pending(
+                                "I'm done.", ReasoningStep.FINISH, Map.of("answer", "Task complete."), 100, 100);
+                    }
 
-                @Override
-                public String chatForStructuredOutput(String sessionId, String agentRole, String schemaPrompt) {
-                    throw new UnsupportedOperationException();
-                }
-            };
+                    @Override
+                    public String chatForStructuredOutput(String sessionId, String agentRole, String schemaPrompt) {
+                        throw new UnsupportedOperationException();
+                    }
+                };
 
-            AgentResult result = agentLoop.run("finish test", engine);
+                AgentResult result = agentLoop.run("finish test", engine);
 
-            assertInstanceOf(AgentResult.Finished.class, result);
-            assertEquals("Task complete.", ((AgentResult.Finished) result).answer());
+                assertInstanceOf(AgentResult.Finished.class, result);
+                assertEquals("Task complete.", ((AgentResult.Finished) result).answer());
             });
         });
     }
@@ -156,22 +165,23 @@ class AgentResilienceTest {
     void testNullStepTerminatesGracefully() {
         WorkspaceScopeHolder.run(TEST_SESSION, () -> {
             WorkspaceContext.runWithFullAutonomy(TEST_SESSION, "test", "test", "coordinator", () -> {
-            ReasoningEngine engine = new ReasoningEngine() {
-                @Override
-                public ReasoningStep nextStep(AgentExecutionContext context, String role, String goal, List<ReasoningStep> history) {
-                    return null;
-                }
+                ReasoningEngine engine = new ReasoningEngine() {
+                    @Override
+                    public ReasoningStep nextStep(
+                            AgentExecutionContext context, String role, String goal, List<ReasoningStep> history) {
+                        return null;
+                    }
 
-                @Override
-                public String chatForStructuredOutput(String sessionId, String agentRole, String schemaPrompt) {
-                    throw new UnsupportedOperationException();
-                }
-            };
+                    @Override
+                    public String chatForStructuredOutput(String sessionId, String agentRole, String schemaPrompt) {
+                        throw new UnsupportedOperationException();
+                    }
+                };
 
-            AgentResult result = agentLoop.run("null step test", engine);
+                AgentResult result = agentLoop.run("null step test", engine);
 
-            assertInstanceOf(AgentResult.Failed.class, result);
-            assertTrue(((AgentResult.Failed) result).reason().contains("null step"));
+                assertInstanceOf(AgentResult.Failed.class, result);
+                assertTrue(((AgentResult.Failed) result).reason().contains("null step"));
             });
         });
     }
@@ -183,22 +193,23 @@ class AgentResilienceTest {
     void testEngineExceptionHandled() {
         WorkspaceScopeHolder.run(TEST_SESSION, () -> {
             WorkspaceContext.runWithFullAutonomy(TEST_SESSION, "test", "test", "coordinator", () -> {
-            ReasoningEngine engine = new ReasoningEngine() {
-                @Override
-                public ReasoningStep nextStep(AgentExecutionContext context, String role, String goal, List<ReasoningStep> history) {
-                    throw new RuntimeException("LLM API Timeout");
-                }
+                ReasoningEngine engine = new ReasoningEngine() {
+                    @Override
+                    public ReasoningStep nextStep(
+                            AgentExecutionContext context, String role, String goal, List<ReasoningStep> history) {
+                        throw new RuntimeException("LLM API Timeout");
+                    }
 
-                @Override
-                public String chatForStructuredOutput(String sessionId, String agentRole, String schemaPrompt) {
-                    throw new UnsupportedOperationException();
-                }
-            };
+                    @Override
+                    public String chatForStructuredOutput(String sessionId, String agentRole, String schemaPrompt) {
+                        throw new UnsupportedOperationException();
+                    }
+                };
 
-            AgentResult result = agentLoop.run("exception test", engine);
+                AgentResult result = agentLoop.run("exception test", engine);
 
-            assertInstanceOf(AgentResult.Failed.class, result);
-            assertTrue(((AgentResult.Failed) result).reason().contains("LLM API Timeout"));
+                assertInstanceOf(AgentResult.Failed.class, result);
+                assertTrue(((AgentResult.Failed) result).reason().contains("LLM API Timeout"));
             });
         });
     }

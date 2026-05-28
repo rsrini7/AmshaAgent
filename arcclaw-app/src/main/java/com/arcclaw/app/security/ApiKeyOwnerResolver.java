@@ -1,9 +1,9 @@
 package com.arcclaw.app.security;
 
-import java.util.Optional;
-
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
+
+import java.util.Optional;
 
 import com.arcclaw.core.security.SessionOwnerResolver;
 

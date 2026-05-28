@@ -17,6 +17,7 @@ import com.arcclaw.core.tools.ToolResponse;
 import com.arcclaw.persistence.api.IngestResult;
 import com.arcclaw.persistence.api.MemoryEntryDto;
 import com.arcclaw.persistence.api.MemoryRetrievalPort;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -44,26 +45,24 @@ class IngestDocumentToolTest {
     @BeforeEach
     void setUp() {
         context = new ToolExecutionContext(
-            "session-123",
-            "user-456",
-            "chat-789",
-            "coordinator",
-            AutonomyLevel.SUPERVISED,
-            "trace-abc",
-            "telegram",
-            "platform-123",
-            "RAW_USER_GOAL",
-            null,
-            null,
-            null
-        );
+                "session-123",
+                "user-456",
+                "chat-789",
+                "coordinator",
+                AutonomyLevel.SUPERVISED,
+                "trace-abc",
+                "telegram",
+                "platform-123",
+                "RAW_USER_GOAL",
+                null,
+                null,
+                null);
     }
 
     @Test
     void testExecuteWithTextParameter() {
         Map<String, Object> params = Map.of("text", "USER_PHONE=9884691847 and hobby is walking");
-        when(memoryPort.index(any(MemoryEntryDto.class)))
-                .thenReturn(new IngestResult("chunk-1", false));
+        when(memoryPort.index(any(MemoryEntryDto.class))).thenReturn(new IngestResult("chunk-1", false));
 
         ToolResponse response = tool.execute(context, params);
 
@@ -75,8 +74,7 @@ class IngestDocumentToolTest {
     @Test
     void testExecuteWithDocumentParameter() {
         Map<String, Object> params = Map.of("document", "USER_PHONE=9884691847 and hobby is walking");
-        when(memoryPort.index(any(MemoryEntryDto.class)))
-                .thenReturn(new IngestResult("chunk-1", false));
+        when(memoryPort.index(any(MemoryEntryDto.class))).thenReturn(new IngestResult("chunk-1", false));
 
         ToolResponse response = tool.execute(context, params);
 
@@ -88,8 +86,7 @@ class IngestDocumentToolTest {
     @Test
     void testExecuteWithContentParameter() {
         Map<String, Object> params = Map.of("content", "USER_PHONE=9884691847 and hobby is walking");
-        when(memoryPort.index(any(MemoryEntryDto.class)))
-                .thenReturn(new IngestResult("chunk-1", false));
+        when(memoryPort.index(any(MemoryEntryDto.class))).thenReturn(new IngestResult("chunk-1", false));
 
         ToolResponse response = tool.execute(context, params);
 
@@ -104,7 +101,8 @@ class IngestDocumentToolTest {
         ToolResponse response = tool.execute(context, params);
 
         assertEquals(400, response.exitCode());
-        assertTrue(response.output().contains("text' parameter was missing"),
+        assertTrue(
+                response.output().contains("text' parameter was missing"),
                 "Expected helpful error message, got: " + response.output());
     }
 }

@@ -30,7 +30,7 @@ class JdbiRetryWrapperTest {
         String result = wrapper.withRetry("test", 5, 10, () -> {
             if (attempts.incrementAndGet() < 3) {
                 throw new UnableToExecuteStatementException(
-                    new RuntimeException("SQLITE_BUSY: database is locked"), null);
+                        new RuntimeException("SQLITE_BUSY: database is locked"), null);
             }
             return "ok";
         });
@@ -41,25 +41,25 @@ class JdbiRetryWrapperTest {
     @Test
     void exhaustsAllAttempts() {
         AtomicInteger attempts = new AtomicInteger();
-        assertThrows(RuntimeException.class, () ->
-            wrapper.withRetry("test", 3, 10, () -> {
-                attempts.incrementAndGet();
-                throw new UnableToExecuteStatementException(
-                    new RuntimeException("SQLITE_BUSY: database is locked"), null);
-            })
-        );
+        assertThrows(
+                RuntimeException.class,
+                () -> wrapper.withRetry("test", 3, 10, () -> {
+                    attempts.incrementAndGet();
+                    throw new UnableToExecuteStatementException(
+                            new RuntimeException("SQLITE_BUSY: database is locked"), null);
+                }));
         assertEquals(3, attempts.get());
     }
 
     @Test
     void doesNotRetryNonBusyException() {
         AtomicInteger attempts = new AtomicInteger();
-        assertThrows(RuntimeException.class, () ->
-            wrapper.withRetry("test", 3, 10, () -> {
-                attempts.incrementAndGet();
-                throw new RuntimeException("some other error");
-            })
-        );
+        assertThrows(
+                RuntimeException.class,
+                () -> wrapper.withRetry("test", 3, 10, () -> {
+                    attempts.incrementAndGet();
+                    throw new RuntimeException("some other error");
+                }));
         assertEquals(1, attempts.get());
     }
 
@@ -68,8 +68,7 @@ class JdbiRetryWrapperTest {
         AtomicInteger attempts = new AtomicInteger();
         String result = wrapper.withRetry("test", 5, 10, () -> {
             if (attempts.incrementAndGet() < 2) {
-                throw new TransactionException(
-                    new RuntimeException("SQLITE_BUSY: database is locked"));
+                throw new TransactionException(new RuntimeException("SQLITE_BUSY: database is locked"));
             }
             return "ok";
         });
@@ -95,13 +94,13 @@ class JdbiRetryWrapperTest {
     @Test
     void voidRetryExhaustsOnBusy() {
         AtomicInteger attempts = new AtomicInteger();
-        assertThrows(RuntimeException.class, () ->
-            wrapper.withRetryVoid("test", 2, 10, () -> {
-                attempts.incrementAndGet();
-                throw new UnableToExecuteStatementException(
-                    new RuntimeException("SQLITE_BUSY: database is locked"), null);
-            })
-        );
+        assertThrows(
+                RuntimeException.class,
+                () -> wrapper.withRetryVoid("test", 2, 10, () -> {
+                    attempts.incrementAndGet();
+                    throw new UnableToExecuteStatementException(
+                            new RuntimeException("SQLITE_BUSY: database is locked"), null);
+                }));
         assertEquals(2, attempts.get());
     }
 }

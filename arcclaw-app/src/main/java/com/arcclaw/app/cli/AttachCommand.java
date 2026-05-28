@@ -1,14 +1,15 @@
 package com.arcclaw.app.cli;
 
-import java.util.Optional;
-import java.util.stream.Collectors;
+import picocli.CommandLine;
 
 import jakarta.enterprise.inject.Any;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
+import java.util.Optional;
+import java.util.stream.Collectors;
+
 import com.arcclaw.channel.api.ChannelDaemon;
-import picocli.CommandLine;
 
 /**
  * Attach command - keeps ArcClaw running as a background daemon for a specific channel.
@@ -30,13 +31,13 @@ public class AttachCommand implements Runnable {
     public void run() {
         String target = channel.toLowerCase();
         Optional<ChannelDaemon> daemon = daemons.stream()
-            .filter(d -> d.channelId().equalsIgnoreCase(target))
-            .findFirst();
+                .filter(d -> d.channelId().equalsIgnoreCase(target))
+                .findFirst();
 
         if (daemon.isEmpty()) {
-            System.out.printf("❌ Unknown channel '%s'. Available: %s%n",
-                channel,
-                daemons.stream().map(ChannelDaemon::channelId).collect(Collectors.joining(", ")));
+            System.out.printf(
+                    "❌ Unknown channel '%s'. Available: %s%n",
+                    channel, daemons.stream().map(ChannelDaemon::channelId).collect(Collectors.joining(", ")));
             return;
         }
 

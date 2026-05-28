@@ -10,18 +10,16 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
  * JSON serialization at runtime.
  */
 @RegisterForReflection(
-    targets = {
-        CoreMemoryBlockDto.class,
-        RecallMessageDto.class,
-        ArchivalChunkDto.class,
-        TieredMemoryHealthDto.class,
-        RecallSearchQuery.class,
-        ArchivalSearchQuery.class,
-        CoreMemoryStorePort.class,
-        RecallMemoryStorePort.class,
-        ArchivalMemoryStorePort.class,
-        VersionConflictException.class
-    }
-)
-public class TieredMemoryReflectionConfig {
-}
+        targets = {
+            CoreMemoryBlockDto.class,
+            RecallMessageDto.class,
+            ArchivalChunkDto.class,
+            TieredMemoryHealthDto.class,
+            RecallSearchQuery.class,
+            ArchivalSearchQuery.class,
+            CoreMemoryStorePort.class,
+            RecallMemoryStorePort.class,
+            ArchivalMemoryStorePort.class,
+            VersionConflictException.class
+        })
+public class TieredMemoryReflectionConfig {}

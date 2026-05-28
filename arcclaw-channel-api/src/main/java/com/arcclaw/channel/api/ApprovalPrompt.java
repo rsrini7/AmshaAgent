@@ -8,8 +8,7 @@ package com.arcclaw.channel.api;
  * @param paramsJson JSON representation of the tool parameters
  * @param sessionId  the session that will be resumed on approval
  */
-public record ApprovalPrompt(String toolName, String paramsJson, String sessionId)
-        implements InteractionNode {
+public record ApprovalPrompt(String toolName, String paramsJson, String sessionId) implements InteractionNode {
 
     @Override
     public String fallbackText() {

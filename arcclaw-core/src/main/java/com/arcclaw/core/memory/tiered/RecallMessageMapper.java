@@ -1,5 +1,10 @@
 package com.arcclaw.core.memory.tiered;
 
+import dev.langchain4j.data.message.AiMessage;
+import dev.langchain4j.data.message.ChatMessage;
+import dev.langchain4j.data.message.SystemMessage;
+import dev.langchain4j.data.message.UserMessage;
+
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -11,10 +16,6 @@ import java.util.UUID;
 import java.util.regex.Pattern;
 
 import com.arcclaw.persistence.api.RecallMessageDto;
-import dev.langchain4j.data.message.AiMessage;
-import dev.langchain4j.data.message.ChatMessage;
-import dev.langchain4j.data.message.SystemMessage;
-import dev.langchain4j.data.message.UserMessage;
 
 /**
  * Maps LangChain4j {@link ChatMessage} objects to {@link RecallMessageDto} records.
@@ -22,20 +23,18 @@ import dev.langchain4j.data.message.UserMessage;
 public final class RecallMessageMapper {
 
     private static final Pattern CODE_BLOCK_PATTERN = Pattern.compile(
-        "(?i)\\b(function|def |class |package |import |SELECT |FROM |WHERE |INSERT |UPDATE |DELETE )"
-    );
-    private static final Pattern ERROR_PATTERN = Pattern.compile(
-        "(?i)\\b(error|exception|failed|traceback|stack\\s?trace)\\b"
-    );
+            "(?i)\\b(function|def |class |package |import |SELECT |FROM |WHERE |INSERT |UPDATE |DELETE )");
+    private static final Pattern ERROR_PATTERN =
+            Pattern.compile("(?i)\\b(error|exception|failed|traceback|stack\\s?trace)\\b");
 
-    private RecallMessageMapper() {
-    }
+    private RecallMessageMapper() {}
 
     public static List<RecallMessageDto> map(String sessionId, String userId, List<ChatMessage> messages) {
         return map(sessionId, userId, messages, 0);
     }
 
-    public static List<RecallMessageDto> map(String sessionId, String userId, List<ChatMessage> messages, int startTurn) {
+    public static List<RecallMessageDto> map(
+            String sessionId, String userId, List<ChatMessage> messages, int startTurn) {
         List<RecallMessageDto> dtos = new ArrayList<>(messages.size());
         for (int i = 0; i < messages.size(); i++) {
             ChatMessage msg = messages.get(i);
@@ -44,21 +43,20 @@ public final class RecallMessageMapper {
             String type = extractType(msg);
 
             RecallMessageDto dto = new RecallMessageDto(
-                UUID.randomUUID().toString(),
-                sessionId,
-                userId,
-                startTurn + i,
-                sha256(content),
-                role,
-                type,
-                content,
-                null,
-                null,
-                CODE_BLOCK_PATTERN.matcher(content).find(),
-                ERROR_PATTERN.matcher(content).find(),
-                Instant.now(),
-                null
-            );
+                    UUID.randomUUID().toString(),
+                    sessionId,
+                    userId,
+                    startTurn + i,
+                    sha256(content),
+                    role,
+                    type,
+                    content,
+                    null,
+                    null,
+                    CODE_BLOCK_PATTERN.matcher(content).find(),
+                    ERROR_PATTERN.matcher(content).find(),
+                    Instant.now(),
+                    null);
             dtos.add(dto);
         }
         return dtos;
@@ -66,21 +64,20 @@ public final class RecallMessageMapper {
 
     public static RecallMessageDto compactionSummary(String sessionId, String userId, int turnNumber, String summary) {
         return new RecallMessageDto(
-            UUID.randomUUID().toString(),
-            sessionId,
-            userId,
-            turnNumber,
-            sha256(summary),
-            "system",
-            "COMPACTION_SUMMARY",
-            summary,
-            null,
-            null,
-            false,
-            false,
-            Instant.now(),
-            null
-        );
+                UUID.randomUUID().toString(),
+                sessionId,
+                userId,
+                turnNumber,
+                sha256(summary),
+                "system",
+                "COMPACTION_SUMMARY",
+                summary,
+                null,
+                null,
+                false,
+                false,
+                Instant.now(),
+                null);
     }
 
     private static String extractContent(ChatMessage msg) {

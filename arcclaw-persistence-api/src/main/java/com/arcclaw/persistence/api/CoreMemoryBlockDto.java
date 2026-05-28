@@ -7,11 +7,10 @@ import java.time.Instant;
  * Core Memory blocks are small, curated context blocks always rendered into the system prompt.
  */
 public record CoreMemoryBlockDto(
-    String blockId,
-    String userId,
-    String blockKey,
-    String content,
-    int version,
-    Instant createdAt,
-    Instant updatedAt
-) {}
+        String blockId,
+        String userId,
+        String blockKey,
+        String content,
+        int version,
+        Instant createdAt,
+        Instant updatedAt) {}

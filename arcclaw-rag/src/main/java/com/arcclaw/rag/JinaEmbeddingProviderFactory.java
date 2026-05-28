@@ -1,9 +1,10 @@
 package com.arcclaw.rag;
 
-import jakarta.enterprise.context.ApplicationScoped;
-
 import dev.langchain4j.model.embedding.EmbeddingModel;
 import dev.langchain4j.model.openai.OpenAiEmbeddingModel;
+
+import jakarta.enterprise.context.ApplicationScoped;
+
 import org.jboss.logging.Logger;
 
 /**
@@ -12,7 +13,7 @@ import org.jboss.logging.Logger;
  */
 @ApplicationScoped
 public class JinaEmbeddingProviderFactory implements EmbeddingProviderFactory {
-    
+
     private static final Logger log = Logger.getLogger(JinaEmbeddingProviderFactory.class);
 
     @Override
@@ -23,19 +24,19 @@ public class JinaEmbeddingProviderFactory implements EmbeddingProviderFactory {
     @Override
     public EmbeddingModel create(EmbeddingModelConfig config) {
         String key = requireApiKey(config);
-        
+
         // Maintain the Jina-specific logic from legacy EmbeddingModelProducer
         String jinaModel = config.modelName().equals("nomic-embed-text:v1.5")
-            ? "jina-embeddings-v5-text-nano"   // override Ollama default with Jina default
-            : config.modelName();
+                ? "jina-embeddings-v5-text-nano" // override Ollama default with Jina default
+                : config.modelName();
 
         log.infof("Creating Jina embedding model: %s (via OpenAI adapter) base=%s", jinaModel, config.baseUrl());
-        
+
         return OpenAiEmbeddingModel.builder()
-            .baseUrl(config.baseUrl())
-            .apiKey(key)
-            .modelName(jinaModel)
-            .timeout(config.timeout())
-            .build();
+                .baseUrl(config.baseUrl())
+                .apiKey(key)
+                .modelName(jinaModel)
+                .timeout(config.timeout())
+                .build();
     }
 }

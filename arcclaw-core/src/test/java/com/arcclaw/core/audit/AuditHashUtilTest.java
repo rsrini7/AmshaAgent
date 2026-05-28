@@ -4,14 +4,15 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
 
+import jakarta.enterprise.inject.Instance;
+
 import java.nio.charset.StandardCharsets;
 import java.util.Optional;
 import java.util.stream.IntStream;
 
-import jakarta.enterprise.inject.Instance;
-
 import com.arcclaw.core.security.SecretVault;
 import com.arcclaw.core.security.VaultKey;
+
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
@@ -43,8 +44,10 @@ public class AuditHashUtilTest {
         when(vaultInstance.get()).thenReturn(vault);
 
         AuditHashUtil util = new AuditHashUtil(vaultInstance);
-        assertThrows(IllegalStateException.class, () -> util.hmacHex("test"),
-            "hmacHex() must throw when HMAC key is unavailable - returning a placeholder silently breaks the WORM audit chain");
+        assertThrows(
+                IllegalStateException.class,
+                () -> util.hmacHex("test"),
+                "hmacHex() must throw when HMAC key is unavailable - returning a placeholder silently breaks the WORM audit chain");
     }
 
     @Test

@@ -8,6 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.arcclaw.channel.api.structured.SynthesisResult;
+
 import org.junit.jupiter.api.Test;
 
 class PermissiveJsonExtractorTest {
@@ -28,8 +29,8 @@ class PermissiveJsonExtractorTest {
     void testSizeCapExceededThrows() {
         int max = 512 * 1024;
         String huge = ".".repeat(max + 1);
-        JsonExtractionException ex = assertThrows(JsonExtractionException.class, 
-            () -> extractor.extract(huge, SynthesisResult.class));
+        JsonExtractionException ex =
+                assertThrows(JsonExtractionException.class, () -> extractor.extract(huge, SynthesisResult.class));
         assertTrue(ex.getMessage().contains("exceeds"));
     }
 
@@ -38,8 +39,8 @@ class PermissiveJsonExtractorTest {
         int max = 512 * 1024;
         String limit = ".".repeat(max);
         // Should pass size check, then fail parsing because it's just dots
-        JsonExtractionException ex = assertThrows(JsonExtractionException.class, 
-            () -> extractor.extract(limit, SynthesisResult.class));
+        JsonExtractionException ex =
+                assertThrows(JsonExtractionException.class, () -> extractor.extract(limit, SynthesisResult.class));
         // The message should be about parsing, not the limit
         assertFalse(ex.getMessage().contains("exceeds"));
     }
@@ -47,8 +48,8 @@ class PermissiveJsonExtractorTest {
     @Test
     void testDuplicateKeysThrow() {
         String json = "{\"finalResolution\": \"ok\", \"finalResolution\": \"error\"}";
-        JsonExtractionException ex = assertThrows(JsonExtractionException.class, 
-            () -> extractor.extract(json, SynthesisResult.class));
+        JsonExtractionException ex =
+                assertThrows(JsonExtractionException.class, () -> extractor.extract(json, SynthesisResult.class));
         assertTrue(ex.getMessage().contains("Duplicate field"));
     }
 

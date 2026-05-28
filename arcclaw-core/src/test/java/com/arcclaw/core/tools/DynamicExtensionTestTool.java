@@ -1,18 +1,17 @@
 package com.arcclaw.core.tools;
 
-import java.util.Map;
-
 import jakarta.enterprise.context.ApplicationScoped;
+
+import java.util.Map;
 
 import com.arcclaw.core.agent.role.ToolMetadata;
 import com.arcclaw.core.security.ToolOperation;
 
 @ApplicationScoped
 @ToolMetadata(
-    capabilityId = "DYNAMIC_TEST",
-    description = "A dummy tool for dynamic extension testing",
-    defaultRoles = {"researcher", "coordinator"}
-)
+        capabilityId = "DYNAMIC_TEST",
+        description = "A dummy tool for dynamic extension testing",
+        defaultRoles = {"researcher", "coordinator"})
 public class DynamicExtensionTestTool implements AgentTool {
 
     @Override

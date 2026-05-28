@@ -1,20 +1,21 @@
 package com.arcclaw.core.tools;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
+import dev.langchain4j.model.chat.request.json.JsonArraySchema;
+import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Event;
 import jakarta.inject.Inject;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
 
 import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.agent.role.ToolMetadata;
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.security.ToolOperation;
-import dev.langchain4j.model.chat.request.json.JsonArraySchema;
-import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
 
 /**
  * Component A2 - CheckListTool.
@@ -22,10 +23,9 @@ import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
  */
 @ApplicationScoped
 @ToolMetadata(
-    capabilityId = "manage_checklist",
-    description = "Manage task checklist progress",
-    defaultRoles = {"coder", "debugger"}
-)
+        capabilityId = "manage_checklist",
+        description = "Manage task checklist progress",
+        defaultRoles = {"coder", "debugger"})
 public class CheckListTool implements AgentTool {
 
     @Inject
@@ -37,7 +37,12 @@ public class CheckListTool implements AgentTool {
     // Data model
     public record CheckList(List<CheckListItem> checkList) {
         public record CheckListItem(String content, Status status, String activeForm) {}
-        public enum Status { pending, in_progress, completed }
+
+        public enum Status {
+            pending,
+            in_progress,
+            completed
+        }
     }
 
     @Override
@@ -68,16 +73,19 @@ public class CheckListTool implements AgentTool {
     public JsonObjectSchema parametersSchema() {
         // Single parameter: "checkList" - an array of objects
         return JsonObjectSchema.builder()
-            .addProperty("checkList", JsonArraySchema.builder()
-                .items(JsonObjectSchema.builder()
-                    .addStringProperty("content", "The item content/task description.")
-                    .addEnumProperty("status", List.of("pending", "in_progress", "completed"))
-                    .addStringProperty("activeForm", "The reference form/id associated with this step.")
-                    .required("content", "status", "activeForm")
-                    .build())
-                .build())
-            .required("checkList")
-            .build();
+                .addProperty(
+                        "checkList",
+                        JsonArraySchema.builder()
+                                .items(JsonObjectSchema.builder()
+                                        .addStringProperty("content", "The item content/task description.")
+                                        .addEnumProperty("status", List.of("pending", "in_progress", "completed"))
+                                        .addStringProperty(
+                                                "activeForm", "The reference form/id associated with this step.")
+                                        .required("content", "status", "activeForm")
+                                        .build())
+                                .build())
+                .required("checkList")
+                .build();
     }
 
     @Override
@@ -86,7 +94,7 @@ public class CheckListTool implements AgentTool {
         String userId = ctx.userId();
         String sessionId = ctx.sessionId();
         String agentRole = ctx.agentRole();
- 
+
         if (userId == null || userId.isBlank()) {
             return ToolResponse.failure(403, "Forbidden: userId is required for checklist management.");
         }
@@ -96,7 +104,7 @@ public class CheckListTool implements AgentTool {
             throw new IllegalArgumentException("checkList must not be null or empty.");
         }
         if (!(checkListRaw instanceof List)) {
-             throw new IllegalArgumentException("checkList parameter must be an array.");
+            throw new IllegalArgumentException("checkList parameter must be an array.");
         }
 
         List<Map<String, Object>> rawList = (List<Map<String, Object>>) checkListRaw;
@@ -139,7 +147,7 @@ public class CheckListTool implements AgentTool {
         // Validation rules
         if (inProgressCount > 1) {
             throw new IllegalArgumentException(
-                "At most ONE item may have status == in_progress at any time. Found: " + inProgressCount);
+                    "At most ONE item may have status == in_progress at any time. Found: " + inProgressCount);
         }
 
         CheckList checkList = new CheckList(items);
@@ -148,9 +156,13 @@ public class CheckListTool implements AgentTool {
         checkListEvents.fire(new CheckListEvent(sessionId, checkList));
 
         // Audit - NS2: Fail fast on missing role
-        auditService.record(sessionId, userId, agentRole, 
-            SecurityEventType.TOOL_EXECUTED, "Checklist updated with " + items.size() + " items");
- 
+        auditService.record(
+                sessionId,
+                userId,
+                agentRole,
+                SecurityEventType.TOOL_EXECUTED,
+                "Checklist updated with " + items.size() + " items");
+
         return ToolResponse.success("Checklist updated. Continue tracking progress.");
     }
 }

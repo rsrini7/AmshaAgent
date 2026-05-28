@@ -21,5 +21,4 @@ public record AuditEventResponse(
         BigDecimal usdCost,
         int iterationsUsed,
         Instant timestamp,
-        String hmacHash
-) {}
+        String hmacHash) {}

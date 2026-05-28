@@ -15,7 +15,7 @@ import com.arcclaw.core.agent.loop.AgentExecutionContext;
 public interface ReasoningEngine {
 
     /**
-     * Computes the next reasoning step given the current agent role, goal, 
+     * Computes the next reasoning step given the current agent role, goal,
      * and prior step history.
      *
      * @param context   The execution context containing dynamic session data.

@@ -1,5 +1,13 @@
 package com.arcclaw.core.tools;
 
+import dev.langchain4j.model.chat.request.json.JsonIntegerSchema;
+import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
+import dev.langchain4j.model.chat.request.json.JsonStringSchema;
+
+import jakarta.annotation.PostConstruct;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -7,10 +15,6 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Map;
-
-import jakarta.annotation.PostConstruct;
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
 
 import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.core.agent.role.ToolCapability;
@@ -22,9 +26,7 @@ import com.arcclaw.core.security.ToolOperation;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import dev.langchain4j.model.chat.request.json.JsonIntegerSchema;
-import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
-import dev.langchain4j.model.chat.request.json.JsonStringSchema;
+
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
@@ -34,10 +36,9 @@ import org.jboss.logging.Logger;
  */
 @ApplicationScoped
 @ToolMetadata(
-    capabilityId = "serper_web_search",
-    description = "Search the web for real-time Google results using the Serper API",
-    defaultRoles = {"researcher", "synthesizer"}
-)
+        capabilityId = "serper_web_search",
+        description = "Search the web for real-time Google results using the Serper API",
+        defaultRoles = {"researcher", "synthesizer"})
 public class SerperWebSearchTool implements AgentTool {
 
     @ConfigProperty(name = "arcclaw.tools.serper.api-key", defaultValue = "none")
@@ -48,12 +49,12 @@ public class SerperWebSearchTool implements AgentTool {
 
     private String getApiKey() {
         return vault.retrieveSystemKey("ARCCLAW_TOOLS_SERPER_API_KEY")
-            .map(vk -> {
-                try (vk) {
-                    return new String(vk.get(), StandardCharsets.UTF_8);
-                }
-            })
-            .orElse(configApiKey);
+                .map(vk -> {
+                    try (vk) {
+                        return new String(vk.get(), StandardCharsets.UTF_8);
+                    }
+                })
+                .orElse(configApiKey);
     }
 
     @Inject
@@ -69,9 +70,8 @@ public class SerperWebSearchTool implements AgentTool {
 
     @PostConstruct
     void init() {
-        httpClient = HttpClient.newBuilder()
-            .connectTimeout(Duration.ofSeconds(10))
-            .build();
+        httpClient =
+                HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build();
     }
 
     @Override
@@ -111,24 +111,30 @@ public class SerperWebSearchTool implements AgentTool {
     @Override
     public JsonObjectSchema parametersSchema() {
         return JsonObjectSchema.builder()
-            .addProperty("query", JsonStringSchema.builder()
-                .description("The search query to send to Serper.")
-                .build())
-            .addProperty("count", JsonIntegerSchema.builder()
-                .description("Number of organic results to return (integer, 1-10). Default is 5. " +
-                            "Set this parameter to the specific number if the user asks for 'top N' results.")
-                .build())
-            .addProperty("type", JsonStringSchema.builder()
-                .description("Optional result type: 'search' (default) for web results, or 'news' for latest news articles.")
-                .build())
-            .required("query")  // keep count optional so model can omit it safely
-            .build();
+                .addProperty(
+                        "query",
+                        JsonStringSchema.builder()
+                                .description("The search query to send to Serper.")
+                                .build())
+                .addProperty(
+                        "count",
+                        JsonIntegerSchema.builder()
+                                .description(
+                                        "Number of organic results to return (integer, 1-10). Default is 5. "
+                                                + "Set this parameter to the specific number if the user asks for 'top N' results.")
+                                .build())
+                .addProperty(
+                        "type",
+                        JsonStringSchema.builder()
+                                .description(
+                                        "Optional result type: 'search' (default) for web results, or 'news' for latest news articles.")
+                                .build())
+                .required("query") // keep count optional so model can omit it safely
+                .build();
     }
 
     private String resolveEndpoint(String type) {
-        return "news".equals(type)
-            ? "https://google.serper.dev/news"
-            : "https://google.serper.dev/search";
+        return "news".equals(type) ? "https://google.serper.dev/news" : "https://google.serper.dev/search";
     }
 
     @Override
@@ -137,14 +143,14 @@ public class SerperWebSearchTool implements AgentTool {
         String sessionId;
         String agentRole;
 
-        userId    = ctx.userId();
+        userId = ctx.userId();
         sessionId = ctx.sessionId();
         agentRole = ctx.agentRole();
 
         if (userId == null || userId.isBlank() || sessionId == null || agentRole == null) {
             return ToolResponse.failure(403, "Security violation: tenant context not bound.");
         }
- 
+
         String query = (String) params.get("query");
         if (query == null || query.isBlank()) {
             return ToolResponse.failure(400, "query parameter is required.");
@@ -160,10 +166,11 @@ public class SerperWebSearchTool implements AgentTool {
         try {
             HttpResponse<String> response = fetchSerperResponse(query, count, type);
             if (response.statusCode() != 200) {
-                 return ToolResponse.failure(response.statusCode(), "Serper Search API failed: " + response.body());
+                return ToolResponse.failure(response.statusCode(), "Serper Search API failed: " + response.body());
             }
 
-            auditService.record(sessionId, userId, agentRole, SecurityEventType.TOOL_EXECUTED, "Serper search: " + query);
+            auditService.record(
+                    sessionId, userId, agentRole, SecurityEventType.TOOL_EXECUTED, "Serper search: " + query);
             return parseSearchResponse(response.body(), query);
         } catch (Exception e) {
             if (e instanceof InterruptedException) Thread.currentThread().interrupt();
@@ -202,12 +209,12 @@ public class SerperWebSearchTool implements AgentTool {
         URI endpoint = URI.create(resolveEndpoint(type));
 
         HttpRequest request = HttpRequest.newBuilder()
-            .uri(endpoint)
-            .header("Content-Type", "application/json")
-            .header("X-API-KEY", getApiKey())
-            .POST(HttpRequest.BodyPublishers.ofString(requestBody))
-            .timeout(Duration.ofSeconds(15))
-            .build();
+                .uri(endpoint)
+                .header("Content-Type", "application/json")
+                .header("X-API-KEY", getApiKey())
+                .POST(HttpRequest.BodyPublishers.ofString(requestBody))
+                .timeout(Duration.ofSeconds(15))
+                .build();
 
         return httpClient.send(request, HttpResponse.BodyHandlers.ofString());
     }
@@ -218,10 +225,15 @@ public class SerperWebSearchTool implements AgentTool {
 
         if (root.has("answerBox")) {
             JsonNode ab = root.get("answerBox");
-            String answer = ab.has("answer") ? ab.get("answer").asText() :
-                           ab.has("snippet") ? ab.get("snippet").asText() :
-                           ab.has("snippetHighlighted") && ab.get("snippetHighlighted").isArray() && ab.get("snippetHighlighted").size() > 0 ?
-                           ab.get("snippetHighlighted").get(0).asText() : null;
+            String answer = ab.has("answer")
+                    ? ab.get("answer").asText()
+                    : ab.has("snippet")
+                            ? ab.get("snippet").asText()
+                            : ab.has("snippetHighlighted")
+                                            && ab.get("snippetHighlighted").isArray()
+                                            && ab.get("snippetHighlighted").size() > 0
+                                    ? ab.get("snippetHighlighted").get(0).asText()
+                                    : null;
             if (answer != null) {
                 sb.append("## Direct Answer\n").append(answer).append("\n\n");
             }
@@ -233,9 +245,11 @@ public class SerperWebSearchTool implements AgentTool {
             if (kgTitle != null) {
                 sb.append("## Knowledge Graph\n");
                 sb.append("**").append(kgTitle).append("**");
-                if (kg.has("type")) sb.append(" (").append(kg.get("type").asText()).append(")");
+                if (kg.has("type"))
+                    sb.append(" (").append(kg.get("type").asText()).append(")");
                 sb.append("\n");
-                if (kg.has("description")) sb.append(kg.get("description").asText()).append("\n");
+                if (kg.has("description"))
+                    sb.append(kg.get("description").asText()).append("\n");
                 sb.append("\n");
             }
         }
@@ -244,9 +258,15 @@ public class SerperWebSearchTool implements AgentTool {
         if (results.isArray() && results.size() > 0) {
             sb.append(root.has("news") ? "## News Results\n\n" : "## Web Results\n\n");
             for (JsonNode res : results) {
-                sb.append("Title: ").append(res.path("title").asText("Untitled")).append("\n");
-                sb.append("URL:   ").append(res.path("link").asText("Unknown URL")).append("\n");
-                sb.append("Snippet: ").append(res.path("snippet").asText("No snippet available.")).append("\n");
+                sb.append("Title: ")
+                        .append(res.path("title").asText("Untitled"))
+                        .append("\n");
+                sb.append("URL:   ")
+                        .append(res.path("link").asText("Unknown URL"))
+                        .append("\n");
+                sb.append("Snippet: ")
+                        .append(res.path("snippet").asText("No snippet available."))
+                        .append("\n");
                 if (res.has("date")) {
                     sb.append("Date: ").append(res.get("date").asText()).append("\n");
                 }
@@ -259,22 +279,25 @@ public class SerperWebSearchTool implements AgentTool {
             sb.append("## People Also Ask\n");
             for (int i = 0; i < Math.min(3, paa.size()); i++) {
                 JsonNode p = paa.get(i);
-                sb.append("- ").append(p.path("question").asText()).append(": ")
-                  .append(p.path("snippet").asText()).append("\n");
+                sb.append("- ")
+                        .append(p.path("question").asText())
+                        .append(": ")
+                        .append(p.path("snippet").asText())
+                        .append("\n");
             }
             sb.append("\n");
         }
 
         String fullResult = sb.toString().trim();
-        if (fullResult.length() < 50) { 
-             return ToolResponse.success("SEARCH_EXHAUSTED: No relevant web or news results were found for the query: '" + query + 
-                 "'. Do not retry with similar queries. FINISH with an apology.");
+        if (fullResult.length() < 50) {
+            return ToolResponse.success("SEARCH_EXHAUSTED: No relevant web or news results were found for the query: '"
+                    + query + "'. Do not retry with similar queries. FINISH with an apology.");
         }
 
         if (fullResult.length() > 4096) {
             int lastNewline = fullResult.lastIndexOf("\n\n", 4096);
             fullResult = (lastNewline > 0 ? fullResult.substring(0, lastNewline) : fullResult.substring(0, 4096))
-                         + "\n[results truncated]";
+                    + "\n[results truncated]";
         }
 
         return ToolResponse.success(fullResult);

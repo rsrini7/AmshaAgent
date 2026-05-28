@@ -39,14 +39,15 @@ class AppBootstrapTest {
     @Test
     void testLoadDotEnv_setsSystemProperties(@TempDir Path tempDir) throws IOException {
         Path envFile = tempDir.resolve(".env");
-        Files.write(envFile, List.of(
-            "KEY_A=hello",
-            "KEY_B=world",
-            "# comment line",
-            "KEY_C=value with spaces",
-            "KEY_D=value #inline comment",
-            "KEY_E=\"quoted#value\""
-        ));
+        Files.write(
+                envFile,
+                List.of(
+                        "KEY_A=hello",
+                        "KEY_B=world",
+                        "# comment line",
+                        "KEY_C=value with spaces",
+                        "KEY_D=value #inline comment",
+                        "KEY_E=\"quoted#value\""));
 
         EnvConfigInitializer.loadDotEnv(tempDir);
 
@@ -75,15 +76,13 @@ class AppBootstrapTest {
     }
 
     @Test
-    void testValidateAndAutoFixLlmConfig_publishesEffectiveContextWindowToDottedKey(@TempDir Path tempDir) throws Exception {
+    void testValidateAndAutoFixLlmConfig_publishesEffectiveContextWindowToDottedKey(@TempDir Path tempDir)
+            throws Exception {
         System.setProperty("ARCCLAW_LLM_PROVIDER", "cerebras");
         System.setProperty("ARCCLAW_LLM_CONTEXT_WINDOW", "8192");
 
         Path envFile = tempDir.resolve(".env");
-        Files.write(envFile, List.of(
-            "ARCCLAW_LLM_PROVIDER=cerebras",
-            "ARCCLAW_LLM_CONTEXT_WINDOW=8192"
-        ));
+        Files.write(envFile, List.of("ARCCLAW_LLM_PROVIDER=cerebras", "ARCCLAW_LLM_CONTEXT_WINDOW=8192"));
 
         invokeValidateAndAutoFixLlmConfig(tempDir);
 

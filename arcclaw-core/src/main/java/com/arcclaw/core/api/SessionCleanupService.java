@@ -22,6 +22,7 @@ import com.arcclaw.core.reflex.ReflexResult;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
 import com.arcclaw.core.security.AutonomyLevel;
+
 import org.jboss.logging.Logger;
 
 public class SessionCleanupService {
@@ -32,18 +33,19 @@ public class SessionCleanupService {
     private final AuditService auditService;
     private final String userId;
 
-    private static final List<String> NON_SLASH_REFLEX_PREFIXES = List.of(
-            "deletecron"
-    );
+    private static final List<String> NON_SLASH_REFLEX_PREFIXES = List.of("deletecron");
 
     private static final String REST_USER_ID = ApiConstants.REST_USER_ID;
     private static final String REST_USER_NAME = ApiConstants.REST_USER_NAME;
     private static final String REST_API_SESSION_PREFIX = "rest-api-";
     private static final String REST_CHAT_SESSION_PREFIX = "rest-chat-";
 
-    public SessionCleanupService(Logger log, SessionHeartbeatTracker heartbeatTracker,
-                                  ReflexRegistry reflexRegistry, AuditService auditService,
-                                  String userId) {
+    public SessionCleanupService(
+            Logger log,
+            SessionHeartbeatTracker heartbeatTracker,
+            ReflexRegistry reflexRegistry,
+            AuditService auditService,
+            String userId) {
         this.log = log;
         this.heartbeatTracker = heartbeatTracker;
         this.reflexRegistry = reflexRegistry;
@@ -66,19 +68,19 @@ public class SessionCleanupService {
         Optional<String> owner = heartbeatTracker.getOwner(sessionId);
         if (owner.isPresent()) {
             if (userId != null && !owner.get().equals(userId)) {
-                log.warnf("[SESSION-ISOLATION] key=%s attempted access to session=%s owned by key=%s",
-                          userId, sessionId, owner.get());
+                log.warnf(
+                        "[SESSION-ISOLATION] key=%s attempted access to session=%s owned by key=%s",
+                        userId, sessionId, owner.get());
 
                 auditService.recordMandatory(
-                    sessionId,
-                    userId,
-                    AgentSentinels.SYSTEM_ROLE,
-                    SecurityEventType.UNAUTHORIZED_ACCESS,
-                    "Key " + userId + " attempted cross-key session access"
-                );
+                        sessionId,
+                        userId,
+                        AgentSentinels.SYSTEM_ROLE,
+                        SecurityEventType.UNAUTHORIZED_ACCESS,
+                        "Key " + userId + " attempted cross-key session access");
 
-                return Optional.of(ServiceResult.error("SESSION_ACCESS_DENIED",
-                        "API key not authorized for this session"));
+                return Optional.of(
+                        ServiceResult.error("SESSION_ACCESS_DENIED", "API key not authorized for this session"));
             }
         }
         return Optional.empty();
@@ -86,7 +88,8 @@ public class SessionCleanupService {
 
     public MessageContext createRestContext(String sessionId, String goal) {
         ChannelUser user = new ChannelUser(REST_USER_ID, REST_USER_ID, REST_USER_NAME, ChannelType.REST_API);
-        ChannelMessage msg = new ChannelMessage.RestApiMessage(user, goal, REST_API_SESSION_PREFIX + sessionId, Instant.now());
+        ChannelMessage msg =
+                new ChannelMessage.RestApiMessage(user, goal, REST_API_SESSION_PREFIX + sessionId, Instant.now());
         return new MessageContext(REST_CHAT_SESSION_PREFIX + sessionId, user, msg);
     }
 
@@ -97,19 +100,25 @@ public class SessionCleanupService {
 
     public Optional<ServiceResult<Object>> handleSlashCommand(String sessionId, RunAgentRequest request) {
         String goal = request.goal();
-        if (goal == null || (!goal.startsWith("/") && NON_SLASH_REFLEX_PREFIXES.stream().noneMatch(goal.toLowerCase()::startsWith))) return Optional.empty();
+        if (goal == null
+                || (!goal.startsWith("/")
+                        && NON_SLASH_REFLEX_PREFIXES.stream().noneMatch(goal.toLowerCase()::startsWith)))
+            return Optional.empty();
 
         try {
             Callable<ServiceResult<Object>> op = () -> {
-                String canonicalRole = AgentRoleEnum.fromString(request.agentRole()).toScopedName();
+                String canonicalRole =
+                        AgentRoleEnum.fromString(request.agentRole()).toScopedName();
                 String channel = ChannelType.REST_API.name();
-                return WorkspaceContext.<ServiceResult<Object>>run(sessionId, REST_USER_ID, sessionId, AutonomyLevel.FULL, canonicalRole, channel, () -> {
-                    MessageContext context = createRestContext(sessionId, goal);
-                    ReflexResult result = reflexRegistry.processIfReflex(sessionId, REST_USER_ID, sessionId, goal, context);
-                    return result.commandResponse()
-                            .map(r -> ServiceResult.success((Object) Map.of("status", "OK", "message", r)))
-                            .orElse(null);
-                });
+                return WorkspaceContext.<ServiceResult<Object>>run(
+                        sessionId, REST_USER_ID, sessionId, AutonomyLevel.FULL, canonicalRole, channel, () -> {
+                            MessageContext context = createRestContext(sessionId, goal);
+                            ReflexResult result =
+                                    reflexRegistry.processIfReflex(sessionId, REST_USER_ID, sessionId, goal, context);
+                            return result.commandResponse()
+                                    .map(r -> ServiceResult.success((Object) Map.of("status", "OK", "message", r)))
+                                    .orElse(null);
+                        });
             };
             return Optional.ofNullable(WorkspaceScopeHolder.call(sessionId, op));
         } catch (Exception e) {

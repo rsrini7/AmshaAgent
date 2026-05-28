@@ -1,14 +1,20 @@
 package com.arcclaw.core.state;
 
+import dev.langchain4j.data.message.AiMessage;
+import dev.langchain4j.data.message.ChatMessage;
+import dev.langchain4j.data.message.SystemMessage;
+import dev.langchain4j.data.message.UserMessage;
+import dev.langchain4j.model.chat.ChatModel;
+
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.inject.Instance;
+import jakarta.inject.Inject;
+
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
-
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.enterprise.inject.Instance;
-import jakarta.inject.Inject;
 
 import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.core.agent.AgentSentinels;
@@ -26,14 +32,11 @@ import com.arcclaw.persistence.api.CompactionSummaryDto;
 import com.arcclaw.persistence.api.RecallMessageDto;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import dev.langchain4j.data.message.AiMessage;
-import dev.langchain4j.data.message.ChatMessage;
-import dev.langchain4j.data.message.SystemMessage;
-import dev.langchain4j.data.message.UserMessage;
-import dev.langchain4j.model.chat.ChatModel;
-import io.smallrye.common.annotation.Identifier;
+
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
+
+import io.smallrye.common.annotation.Identifier;
 
 /**
  * Business logic for summarizing conversation history (compaction).
@@ -146,25 +149,23 @@ public class CompactionService {
         if (!enabled) return false;
         List<ChatMessage> allMessages = chatMemoryStore.getMessages(sessionId);
 
-        long count = allMessages.stream()
-                .filter(m -> !(m instanceof SystemMessage))
-                .count();
+        long count =
+                allMessages.stream().filter(m -> !(m instanceof SystemMessage)).count();
         if (count > threshold) return true;
 
         // Character-volume guard (historical fallback)
-        long totalChars = allMessages.stream()
-                .mapToLong(m -> m.toString().length())
-                .sum();
+        long totalChars =
+                allMessages.stream().mapToLong(m -> m.toString().length()).sum();
         if (totalChars > maxCharsBeforeCompaction) {
-            log.debugf("CompactionService char threshold exceeded for session %s: %d chars",
-                    sessionId, totalChars);
+            log.debugf("CompactionService char threshold exceeded for session %s: %d chars", sessionId, totalChars);
             return true;
         }
 
         // Token-volume guard (Heuristic: ~4 chars per token)
         long estimatedTokens = totalChars / 4;
         if (estimatedTokens > maxTokensBeforeCompaction) {
-            log.debugf("CompactionService token threshold exceeded for session %s: %d tokens (est)",
+            log.debugf(
+                    "CompactionService token threshold exceeded for session %s: %d tokens (est)",
                     sessionId, estimatedTokens);
             return true;
         }
@@ -186,20 +187,19 @@ public class CompactionService {
         if (!enabled) return false;
 
         List<ChatMessage> allMessages = chatMemoryStore.getMessages(sessionId);
-        long totalChars = allMessages.stream()
-                .mapToLong(m -> m.toString().length())
-                .sum();
+        long totalChars =
+                allMessages.stream().mapToLong(m -> m.toString().length()).sum();
         long estimatedTokens = totalChars / 4;
 
         budgetTracker.recordContextRatio(estimatedTokens, maxTokensBeforeCompaction);
 
         if (log.isInfoEnabled()) {
-            log.infof("CompactionService starting for session %s (est %d tokens, ratio %.2f)",
+            log.infof(
+                    "CompactionService starting for session %s (est %d tokens, ratio %.2f)",
                     sessionId, estimatedTokens, (double) estimatedTokens / maxTokensBeforeCompaction);
         }
-        List<ChatMessage> nonSystemMessages = allMessages.stream()
-                .filter(m -> !(m instanceof SystemMessage))
-                .toList();
+        List<ChatMessage> nonSystemMessages =
+                allMessages.stream().filter(m -> !(m instanceof SystemMessage)).toList();
 
         if (nonSystemMessages.size() < threshold) {
             return false;
@@ -207,16 +207,16 @@ public class CompactionService {
 
         int size = nonSystemMessages.size();
         List<ChatMessage> toCompact = new ArrayList<>(nonSystemMessages.subList(0, size - keepRecent));
-        List<ChatMessage> toKeep   = new ArrayList<>(nonSystemMessages.subList(size - keepRecent, size));
+        List<ChatMessage> toKeep = new ArrayList<>(nonSystemMessages.subList(size - keepRecent, size));
 
         // §Bug-1 Fix: Preserve the last code block so it survives at least one follow-up turn
         // for fast-path execution to find it.
         for (int i = toCompact.size() - 1; i >= 0; i--) {
             ChatMessage msg = toCompact.get(i);
-            String content = msg instanceof AiMessage ? ((AiMessage) msg).text() :
-                             msg instanceof SystemMessage ? ((SystemMessage) msg).text() :
-                             msg.toString();
-            
+            String content = msg instanceof AiMessage
+                    ? ((AiMessage) msg).text()
+                    : msg instanceof SystemMessage ? ((SystemMessage) msg).text() : msg.toString();
+
             if (content != null && content.contains("```")) {
                 int end = content.lastIndexOf("```");
                 if (end > 0) {
@@ -236,8 +236,7 @@ public class CompactionService {
         String newSummary = executeCompactionTurn(sessionId, prompt);
 
         if (newSummary.isBlank()) {
-            log.warnf("Compaction returned blank summary for session %s. Aborting compaction.",
-                    sessionId);
+            log.warnf("Compaction returned blank summary for session %s. Aborting compaction.", sessionId);
             return false;
         }
 
@@ -246,13 +245,13 @@ public class CompactionService {
     }
 
     private StructuredOutputMode resolveCompactionMode() {
-        return (compactionModeInstance != null && !compactionModeInstance.isUnsatisfied()) 
-                ? compactionModeInstance.get() : StructuredOutputMode.NATIVE;
+        return (compactionModeInstance != null && !compactionModeInstance.isUnsatisfied())
+                ? compactionModeInstance.get()
+                : StructuredOutputMode.NATIVE;
     }
 
     private String buildCompactionPrompt(String sessionId, List<ChatMessage> toCompact) {
-        Optional<CompactionSummaryDto> existingSummaryOpt =
-                summaryRepository.findLatestBySessionId(sessionId);
+        Optional<CompactionSummaryDto> existingSummaryOpt = summaryRepository.findLatestBySessionId(sessionId);
         String existingSummaryText =
                 existingSummaryOpt.map(CompactionSummaryDto::summary).orElse("");
 
@@ -268,7 +267,9 @@ public class CompactionService {
         if (mode == StructuredOutputMode.NATIVE) {
             prompt = "Respond with valid JSON. Include the merged summary in a field named 'summary'.\n\n" + prompt;
         } else if (mode == StructuredOutputMode.PROMPT_DIRECTIVE) {
-            prompt = "CRITICAL: You MUST respond ONLY with the summary. Do not wrap your response in JSON, markdown, or code blocks.\n\n" + prompt;
+            prompt =
+                    "CRITICAL: You MUST respond ONLY with the summary. Do not wrap your response in JSON, markdown, or code blocks.\n\n"
+                            + prompt;
         }
         return prompt;
     }
@@ -278,9 +279,11 @@ public class CompactionService {
         int maxRetries = 3;
         for (int i = 1; i <= maxRetries; i++) {
             try {
-                String responseText = compactionModel.chat(UserMessage.userMessage(prompt))
-                        .aiMessage().text();
-                
+                String responseText = compactionModel
+                        .chat(UserMessage.userMessage(prompt))
+                        .aiMessage()
+                        .text();
+
                 if (responseText == null || responseText.isBlank()) {
                     newSummary = "";
                 } else if (resolveCompactionMode() == StructuredOutputMode.NATIVE) {
@@ -290,20 +293,24 @@ public class CompactionService {
                         if (summaryNode == null) summaryNode = node.get("content");
                         if (summaryNode == null) summaryNode = node.get("result");
 
-                        newSummary = (summaryNode != null && summaryNode.isTextual()) 
-                                ? summaryNode.asText().trim() : responseText.trim();
+                        newSummary = (summaryNode != null && summaryNode.isTextual())
+                                ? summaryNode.asText().trim()
+                                : responseText.trim();
                     } catch (Exception e) {
-                        log.warnf("Failed to parse compaction JSON for session %s (attempt %d/%d): %s",
+                        log.warnf(
+                                "Failed to parse compaction JSON for session %s (attempt %d/%d): %s",
                                 sessionId, i, maxRetries, LogUtil.rootMessage(e));
-                        
+
                         if (i < maxRetries) {
                             log.info("Retrying compaction with PROMPT_DIRECTIVE fallback to avoid JSON errors.");
                             // Temporarily switch to prompt directive for the retry
-                            String fallbackPrompt = "CRITICAL: You MUST respond ONLY with the summary prose. Do not use JSON.\n\n" + prompt;
+                            String fallbackPrompt =
+                                    "CRITICAL: You MUST respond ONLY with the summary prose. Do not use JSON.\n\n"
+                                            + prompt;
                             newSummary = executeCompactionTurn(sessionId, fallbackPrompt, i + 1, maxRetries);
                             return newSummary;
                         }
-                        
+
                         newSummary = responseText.trim();
                     }
                 } else {
@@ -320,7 +327,8 @@ public class CompactionService {
                         // Exponential Backoff: base * 2^attempt
                         // Safety: attempt is capped by Strategy.maxAttempts (clamped to 10), so no overflow risk.
                         long expDelay = Math.min(maxBackoffMs, 1000L * (1L << i));
-                        log.warnf("CompactionService: %s for session %s (attempt %d/%d). Retrying in %d ms...",
+                        log.warnf(
+                                "CompactionService: %s for session %s (attempt %d/%d). Retrying in %d ms...",
                                 errorType, sessionId, i, maxRetries, expDelay);
                         try {
                             Thread.sleep(expDelay);
@@ -340,7 +348,10 @@ public class CompactionService {
 
     private String executeCompactionTurn(String sessionId, String prompt, int attempt, int maxRetries) {
         try {
-            return compactionModel.chat(UserMessage.userMessage(prompt)).aiMessage().text();
+            return compactionModel
+                    .chat(UserMessage.userMessage(prompt))
+                    .aiMessage()
+                    .text();
         } catch (Exception e) {
             log.warnf("Compaction fallback attempt %d/%d failed: %s", attempt, maxRetries, LogUtil.rootMessage(e));
             throw new CompactionAbortedException("Compaction fallback failed", e);
@@ -354,13 +365,13 @@ public class CompactionService {
         return isJsonError(e.getCause());
     }
 
-    private void finalizeCompaction(String sessionId, String userId, String newSummary,
-                                    List<ChatMessage> toCompact, List<ChatMessage> toKeep) {
+    private void finalizeCompaction(
+            String sessionId, String userId, String newSummary, List<ChatMessage> toCompact, List<ChatMessage> toKeep) {
         PersistentChatMemoryStore.SessionMetadata metadata = chatMemoryStore.getSessionMetadata(sessionId);
         int cumulativeCount = metadata != null ? metadata.cumulativeNonSystemCount() : 0;
         int windowSize = metadata != null ? metadata.windowSize() : 0;
         int startTurn = Math.max(0, cumulativeCount - windowSize);
-        
+
         if (tieredConfig.enabled() && tieredConfig.recall().enabled()) {
             List<RecallMessageDto> dtos = RecallMessageMapper.map(sessionId, userId, toCompact, startTurn);
             recallService.insertBatch(dtos);
@@ -368,18 +379,16 @@ public class CompactionService {
 
         String truncatedSummary = truncateSafely(newSummary);
 
-        summaryRepository.upsert(new CompactionSummaryDto(
-            sessionId, truncatedSummary, Instant.now(), toCompact.size(), userId));
+        summaryRepository.upsert(
+                new CompactionSummaryDto(sessionId, truncatedSummary, Instant.now(), toCompact.size(), userId));
 
         if (tieredConfig.enabled() && tieredConfig.recall().enabled()) {
-            var dto = RecallMessageMapper.compactionSummary(sessionId, userId,
-                toCompact.size(), truncatedSummary);
+            var dto = RecallMessageMapper.compactionSummary(sessionId, userId, toCompact.size(), truncatedSummary);
             recallService.insertOrIgnore(dto);
         }
 
-        List<ChatMessage> filteredKeep = toKeep.stream()
-                .filter(m -> !(m instanceof SystemMessage))
-                .toList();
+        List<ChatMessage> filteredKeep =
+                toKeep.stream().filter(m -> !(m instanceof SystemMessage)).toList();
 
         chatMemoryStore.updateMessages(sessionId, filteredKeep);
 
@@ -387,10 +396,15 @@ public class CompactionService {
                 "{ \"messagesCompacted\": %d, \"keptRecent\": %d, \"summaryLength\": %d }",
                 toCompact.size(), filteredKeep.size(), truncatedSummary.length());
 
-        auditService.record(sessionId, AgentSentinels.SYSTEM_USER, AgentSentinels.SYSTEM_ROLE,
-                SecurityEventType.CONTEXT_COMPACTED, detail);
+        auditService.record(
+                sessionId,
+                AgentSentinels.SYSTEM_USER,
+                AgentSentinels.SYSTEM_ROLE,
+                SecurityEventType.CONTEXT_COMPACTED,
+                detail);
 
-        log.infof("Context compacted for session %s. Compacted %d messages, kept %d.",
+        log.infof(
+                "Context compacted for session %s. Compacted %d messages, kept %d.",
                 sessionId, toCompact.size(), filteredKeep.size());
     }
 
@@ -398,7 +412,7 @@ public class CompactionService {
         if (e == null) return false;
         String msg = e.getMessage();
         if (msg != null && (msg.contains("rate_limit_exceeded") || msg.contains("429"))) return true;
-        return isRateLimit(e.getCause());  // walk the cause chain
+        return isRateLimit(e.getCause()); // walk the cause chain
     }
 
     private String truncateSafely(String text) {

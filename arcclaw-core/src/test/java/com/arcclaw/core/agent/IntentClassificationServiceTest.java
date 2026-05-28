@@ -4,8 +4,9 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import jakarta.inject.Inject;
 
-import io.quarkus.test.junit.QuarkusTest;
 import org.junit.jupiter.api.Test;
+
+import io.quarkus.test.junit.QuarkusTest;
 
 @QuarkusTest
 class IntentClassificationServiceTest {
@@ -29,10 +30,10 @@ class IntentClassificationServiceTest {
 
         // Case insensitivity
         assertTrue(intentDetector.isWriteIntent("REMEMBER this"));
-        
+
         // Word boundaries
         assertFalse(intentDetector.isWriteIntent("passenger")); // contains 'save' but not as word
-        
+
         // Negative cases (read intents)
         assertFalse(intentDetector.isWriteIntent("read the file"));
         assertFalse(intentDetector.isWriteIntent("list all tasks"));
@@ -47,10 +48,10 @@ class IntentClassificationServiceTest {
         assertTrue(intentDetector.isFollowUpHeuristic("run it again"));
         assertTrue(intentDetector.isFollowUpHeuristic("in java please"));
         assertTrue(intentDetector.isFollowUpHeuristic("use sandbox for this"));
-        
+
         // Too long
         assertFalse(intentDetector.isFollowUpHeuristic("a".repeat(151)));
-        
+
         // No signals
         assertFalse(intentDetector.isFollowUpHeuristic("hello world"));
     }

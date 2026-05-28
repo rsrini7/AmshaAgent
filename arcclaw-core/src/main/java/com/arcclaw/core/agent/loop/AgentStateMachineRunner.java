@@ -1,10 +1,10 @@
 package com.arcclaw.core.agent.loop;
 
-import java.util.List;
-
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
+
+import java.util.List;
 
 import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.core.agent.IntentClassificationService;
@@ -17,11 +17,13 @@ import com.arcclaw.core.observability.AgentObserver;
 import com.arcclaw.core.observability.AgentOtelContext;
 import com.arcclaw.core.skill.SkillRegistry;
 import com.arcclaw.core.util.AgentErrorMessageUtil;
+
+import org.eclipse.microprofile.config.inject.ConfigProperty;
+import org.jboss.logging.Logger;
+
 import io.micrometer.core.instrument.MeterRegistry;
 import io.opentelemetry.api.trace.Span;
 import io.opentelemetry.context.Scope;
-import org.eclipse.microprofile.config.inject.ConfigProperty;
-import org.jboss.logging.Logger;
 
 /**
  * Orchestrates the Thought-Plan-Act-Observe loop.
@@ -49,19 +51,20 @@ public class AgentStateMachineRunner {
     private final BrowserPreflightHandler browserPreflightHandler;
 
     @Inject
-    public AgentStateMachineRunner(EngineStepHandler engineStepHandler,
-                                   ChatMemoryWriter writer,
-                                   Instance<AgentObserver> observers,
-                                   SkillRegistry skillRegistry,
-                                   AgentOtelContext agentOtelContext,
-                                   IntentClassificationService intentDetector,
-                                   LoopExitPublisher loopExitPublisher,
-                                   FinishActionHandler finishActionHandler,
-                                   CorrectionStrategy correctionStrategy,
-                                   @ConfigProperty(name = "arcclaw.agent.max-ratelimit-retries", defaultValue = "3") int maxRateLimitRetries,
-                                   MeterRegistry meterRegistry,
-                                   StepDecisionRouter stepDecisionRouter,
-                                    BrowserPreflightHandler browserPreflightHandler) {
+    public AgentStateMachineRunner(
+            EngineStepHandler engineStepHandler,
+            ChatMemoryWriter writer,
+            Instance<AgentObserver> observers,
+            SkillRegistry skillRegistry,
+            AgentOtelContext agentOtelContext,
+            IntentClassificationService intentDetector,
+            LoopExitPublisher loopExitPublisher,
+            FinishActionHandler finishActionHandler,
+            CorrectionStrategy correctionStrategy,
+            @ConfigProperty(name = "arcclaw.agent.max-ratelimit-retries", defaultValue = "3") int maxRateLimitRetries,
+            MeterRegistry meterRegistry,
+            StepDecisionRouter stepDecisionRouter,
+            BrowserPreflightHandler browserPreflightHandler) {
         this.engineStepHandler = engineStepHandler;
         this.writer = writer;
         this.observers = observers;
@@ -81,12 +84,11 @@ public class AgentStateMachineRunner {
      * Performs a single terminal synthesis pass (FINISH) after a tool has been
      * executed and approved during resumption.
      */
-    public AgentResult runFinishPass(AgentExecutionContext context,
-                                     ReasoningEngine engine,
-                                     List<ReasoningStep> history) {
+    public AgentResult runFinishPass(
+            AgentExecutionContext context, ReasoningEngine engine, List<ReasoningStep> history) {
         log.infof("StateMachine: performing terminal finish pass for session %s", context.sessionId());
         context.setForceFinishRetry(true);
-        
+
         int offset = context.getCheckpointRestoreOffset();
         ReasoningStep lastToolStep = history.stream()
                 .skip(offset)
@@ -102,9 +104,9 @@ public class AgentStateMachineRunner {
 
         if (lastToolStep != null && currentTurnHasSandboxAttempt) {
             history.add(ReasoningStep.systemMessage(
-                    "The sandbox_exec tool returned the following output. Report it EXACTLY:\n" +
-                    "OUTPUT: " + lastToolStep.observation() + "\n" +
-                    "Do NOT paraphrase, recalculate, or invent values. Use the exact value above."));
+                    "The sandbox_exec tool returned the following output. Report it EXACTLY:\n" + "OUTPUT: "
+                            + lastToolStep.observation() + "\n"
+                            + "Do NOT paraphrase, recalculate, or invent values. Use the exact value above."));
         }
 
         try {
@@ -113,24 +115,33 @@ public class AgentStateMachineRunner {
                 FinishActionHandler.FinishOutcome outcome = finishActionHandler.handle(context, history, finish, 0);
 
                 if (outcome instanceof FinishActionHandler.FinishOutcome.Completed c) {
-                    if (context.sessionId() != null && c.answer() != null && !c.answer().isBlank()) {
+                    if (context.sessionId() != null
+                            && c.answer() != null
+                            && !c.answer().isBlank()) {
                         writer.saveAnswer(context.sessionId(), c.answer());
                     }
                     return c.result();
                 }
             }
-            
-            log.warnf("StateMachine: terminal pass did not result in FINISH for session %s; retrying with guidance hint.", context.sessionId());
+
+            log.warnf(
+                    "StateMachine: terminal pass did not result in FINISH for session %s; retrying with guidance hint.",
+                    context.sessionId());
             int historySizeBeforeHint = history.size();
-            history.add(ReasoningStep.systemMessage("You have already executed the tool. Summarize the result and provide your final answer using the FINISH action now."));
-            
+            history.add(
+                    ReasoningStep.systemMessage(
+                            "You have already executed the tool. Summarize the result and provide your final answer using the FINISH action now."));
+
             try {
                 ReasoningStep retryStep = engine.nextStep(context, context.agentRole(), context.goal(), history);
                 if (retryStep instanceof ReasoningStep.FinishStep retryFinish) {
-                    FinishActionHandler.FinishOutcome retryOutcome = finishActionHandler.handle(context, history, retryFinish, 0);
+                    FinishActionHandler.FinishOutcome retryOutcome =
+                            finishActionHandler.handle(context, history, retryFinish, 0);
 
                     if (retryOutcome instanceof FinishActionHandler.FinishOutcome.Completed rc) {
-                        if (context.sessionId() != null && rc.answer() != null && !rc.answer().isBlank()) {
+                        if (context.sessionId() != null
+                                && rc.answer() != null
+                                && !rc.answer().isBlank()) {
                             writer.saveAnswer(context.sessionId(), rc.answer());
                         }
                         return rc.result();
@@ -142,16 +153,16 @@ public class AgentStateMachineRunner {
                 }
             }
 
-            log.errorf("StateMachine: terminal retry failed for session %s; falling back to standard loop.", context.sessionId());
+            log.errorf(
+                    "StateMachine: terminal retry failed for session %s; falling back to standard loop.",
+                    context.sessionId());
             return run(context, engine, history);
         } finally {
             context.setForceFinishRetry(false);
         }
     }
 
-    public AgentResult run(AgentExecutionContext context,
-                           ReasoningEngine engine,
-                           List<ReasoningStep> resumedHistory) {
+    public AgentResult run(AgentExecutionContext context, ReasoningEngine engine, List<ReasoningStep> resumedHistory) {
         context.setCheckpointRestoreOffset(resumedHistory.size());
 
         String goal = context.goal() != null ? context.goal() : "unknown";
@@ -172,44 +183,50 @@ public class AgentStateMachineRunner {
                 correctionStrategy,
                 browserPreflightHandler,
                 intentDetector,
-                maxRateLimitRetries
-        );
+                maxRateLimitRetries);
         StateContext stateContext = new StateContext(context, engine, resumedHistory);
 
         return runStateMachineLoop(services, stateContext, context, goalHash);
     }
 
-    private AgentResult runStateMachineLoop(RunnerServices services,
-                                            StateContext stateContext,
-                                            AgentExecutionContext context,
-                                            String goalHash) {
+    private AgentResult runStateMachineLoop(
+            RunnerServices services, StateContext stateContext, AgentExecutionContext context, String goalHash) {
         try {
             executeStateMachine(services, stateContext, context);
             return stateContext.finalResult();
 
         } catch (BudgetExceededException e) {
-            AgentResult failedResult = AgentResult.failed(e.getMessage(), AgentResult.FailureCategory.BUDGET_EXCEEDED, List.copyOf(stateContext.history()));
+            AgentResult failedResult = AgentResult.failed(
+                    e.getMessage(), AgentResult.FailureCategory.BUDGET_EXCEEDED, List.copyOf(stateContext.history()));
             stateContext.setFinalResult(failedResult);
             return failedResult;
         } catch (Exception e) {
-            log.errorf("StateMachine terminal failure %s: %s\n%s",
+            log.errorf(
+                    "StateMachine terminal failure %s: %s\n%s",
                     LogUtil.ctx(context.sessionId(), context.agentRole()),
-                    LogUtil.rootMessage(e), LogUtil.trimmedStack(e));
-            AgentResult failedResult = AgentResult.failed(LogUtil.rootMessage(e), AgentResult.FailureCategory.SYSTEM_ERROR, List.copyOf(stateContext.history()));
+                    LogUtil.rootMessage(e),
+                    LogUtil.trimmedStack(e));
+            AgentResult failedResult = AgentResult.failed(
+                    LogUtil.rootMessage(e),
+                    AgentResult.FailureCategory.SYSTEM_ERROR,
+                    List.copyOf(stateContext.history()));
             stateContext.setFinalResult(failedResult);
             return failedResult;
         } finally {
             AgentResult res = stateContext.finalResult();
-            meterRegistry.summary("arcclaw.agent.iterations.distribution", "role", context.agentRole())
+            meterRegistry
+                    .summary("arcclaw.agent.iterations.distribution", "role", context.agentRole())
                     .record(stateContext.iteration() - context.startingIteration());
             if (res != null) {
                 loopExitPublisher.publish(context, res);
-                observers.forEach(o -> o.onLoopComplete(context.sessionId(), context.userId(), context.agentRole(), goalHash, res));
+                observers.forEach(o ->
+                        o.onLoopComplete(context.sessionId(), context.userId(), context.agentRole(), goalHash, res));
             }
         }
     }
 
-    private void executeStateMachine(RunnerServices services, StateContext stateContext, AgentExecutionContext context) {
+    private void executeStateMachine(
+            RunnerServices services, StateContext stateContext, AgentExecutionContext context) {
         Span iterSpan = null;
         Scope iterScope = null;
         try {
@@ -217,10 +234,7 @@ public class AgentStateMachineRunner {
             while (!state.isTerminal()) {
                 if (state.isInsideIterationSpan() && iterSpan == null) {
                     iterSpan = agentOtelContext.startIterationSpan(
-                            context.sessionId(),
-                            stateContext.iteration(),
-                            context.agentRole()
-                    );
+                            context.sessionId(), stateContext.iteration(), context.agentRole());
                     @SuppressWarnings("MustBeClosedChecker") // Scope stored in iterScope, closed in finally block
                     Scope scope = iterSpan.makeCurrent();
                     iterScope = scope;
@@ -255,4 +269,3 @@ public class AgentStateMachineRunner {
         }
     }
 }
-

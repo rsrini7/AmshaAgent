@@ -19,9 +19,14 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class TelegramChannelSenderEditMessageTest {
 
-    @Mock ProducerTemplate producerTemplate;
-    @Mock TelegramMarkdownV2Renderer renderer;
-    @InjectMocks TelegramChannelSender sender;
+    @Mock
+    ProducerTemplate producerTemplate;
+
+    @Mock
+    TelegramMarkdownV2Renderer renderer;
+
+    @InjectMocks
+    TelegramChannelSender sender;
 
     @BeforeEach
     void setUp() {
@@ -34,11 +39,12 @@ class TelegramChannelSenderEditMessageTest {
         sender.editMessage("123", 456, "new text", markup);
 
         ArgumentCaptor<EditMessageTextMessage> captor = ArgumentCaptor.forClass(EditMessageTextMessage.class);
-        verify(producerTemplate).sendBodyAndHeader(
-            eq("telegram:bots"),
-            captor.capture(),
-            eq("CamelTelegramChatId"), // matches TelegramConstants.TELEGRAM_CHAT_ID value
-            eq("123"));
+        verify(producerTemplate)
+                .sendBodyAndHeader(
+                        eq("telegram:bots"),
+                        captor.capture(),
+                        eq("CamelTelegramChatId"), // matches TelegramConstants.TELEGRAM_CHAT_ID value
+                        eq("123"));
 
         EditMessageTextMessage edit = captor.getValue();
         assertEquals("123", edit.getChatId());
@@ -52,11 +58,8 @@ class TelegramChannelSenderEditMessageTest {
         sender.editMessage("123", 456, "removed", null);
 
         ArgumentCaptor<EditMessageTextMessage> captor = ArgumentCaptor.forClass(EditMessageTextMessage.class);
-        verify(producerTemplate).sendBodyAndHeader(
-            eq("telegram:bots"),
-            captor.capture(),
-            eq("CamelTelegramChatId"),
-            eq("123"));
+        verify(producerTemplate)
+                .sendBodyAndHeader(eq("telegram:bots"), captor.capture(), eq("CamelTelegramChatId"), eq("123"));
 
         EditMessageTextMessage edit = captor.getValue();
         assertNotNull(edit.getReplyMarkup(), "Reply markup should be set even if passed as null");

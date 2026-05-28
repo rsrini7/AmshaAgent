@@ -1,10 +1,5 @@
 package com.arcclaw.app.security;
 
-import java.security.Principal;
-import java.time.Clock;
-import java.util.Set;
-import java.util.UUID;
-
 import jakarta.annotation.Priority;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.Priorities;
@@ -18,13 +13,20 @@ import jakarta.ws.rs.core.SecurityContext;
 import jakarta.ws.rs.core.UriInfo;
 import jakarta.ws.rs.ext.Provider;
 
+import java.security.Principal;
+import java.time.Clock;
+import java.util.Set;
+import java.util.UUID;
+
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.util.HttpConstants;
 import com.arcclaw.core.util.MdcKeys;
-import io.vertx.core.http.HttpServerRequest;
+
 import org.jboss.logging.Logger;
 import org.jboss.logging.MDC;
+
+import io.vertx.core.http.HttpServerRequest;
 
 @Provider
 @Priority(Priorities.AUTHENTICATION)
@@ -59,9 +61,7 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
 
         String apiKey = resolveApiKey(requestContext);
 
-        String safeKey = apiKey != null
-            ? apiKey.substring(0, Math.min(4, apiKey.length())) + "****"
-            : "null";
+        String safeKey = apiKey != null ? apiKey.substring(0, Math.min(4, apiKey.length())) + "****" : "null";
         String ip = request.remoteAddress() != null ? request.remoteAddress().host() : "unknown";
         String method = requestContext.getMethod();
 
@@ -77,21 +77,29 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
 
         String userId = apiKeyRegistry.getKeyName(apiKey);
         boolean isInternalUiKey = "internal".equals(userId);
-        boolean isReadOnlyPolling = "GET".equals(method) && POLL_LIKE_PATHS.stream().anyMatch(finalPath::startsWith);
+        boolean isReadOnlyPolling =
+                "GET".equals(method) && POLL_LIKE_PATHS.stream().anyMatch(finalPath::startsWith);
 
         if (!(isReadOnlyPolling && isInternalUiKey)) {
-            boolean allowed = "GET".equals(method)
-                ? apiKeyRegistry.isAllowed(apiKey)
-                : apiKeyRegistry.isMutationAllowed(apiKey);
+            boolean allowed =
+                    "GET".equals(method) ? apiKeyRegistry.isAllowed(apiKey) : apiKeyRegistry.isMutationAllowed(apiKey);
             if (!allowed) {
                 logAudit(safeKey, finalPath, method, "RATE_LIMITED", ip, System.currentTimeMillis() - startTime);
-                auditService.record("auth-filter", userId, "system",
+                auditService.record(
+                        "auth-filter",
+                        userId,
+                        "system",
                         SecurityEventType.AUTH_REJECTED,
-                        "reason=RATE_LIMITED key=" + safeKey + " endpoint=" + finalPath + " method=" + method + " ip=" + ip);
+                        "reason=RATE_LIMITED key=" + safeKey + " endpoint=" + finalPath + " method=" + method + " ip="
+                                + ip);
                 requestContext.abortWith(Response.status(429)
                         .header("Retry-After", "60")
                         .type(MediaType.APPLICATION_JSON)
-                        .entity(new RateLimitErrorResponse("RATE_LIMITED", "Too many requests. Retry after 60 seconds.", 60, clock.instant().toString()))
+                        .entity(new RateLimitErrorResponse(
+                                "RATE_LIMITED",
+                                "Too many requests. Retry after 60 seconds.",
+                                60,
+                                clock.instant().toString()))
                         .build());
                 return;
             }
@@ -100,15 +108,30 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
         if (userId != null) {
             MDC.put(MdcKeys.REQUEST_ID, UUID.randomUUID().toString());
             MDC.put(MdcKeys.USER_ID, userId);
-            
+
             // §85-C: Propagate identity to JAX-RS SecurityContext.
             // Downstream resources (like HitlResource) rely on getUserPrincipal() to authorize operations.
             final String fUserId = userId;
             requestContext.setSecurityContext(new SecurityContext() {
-                @Override public Principal getUserPrincipal() { return () -> fUserId; }
-                @Override public boolean isUserInRole(String role) { return "internal".equals(fUserId); }
-                @Override public boolean isSecure() { return requestContext.getSecurityContext().isSecure(); }
-                @Override public String getAuthenticationScheme() { return "API_KEY"; }
+                @Override
+                public Principal getUserPrincipal() {
+                    return () -> fUserId;
+                }
+
+                @Override
+                public boolean isUserInRole(String role) {
+                    return "internal".equals(fUserId);
+                }
+
+                @Override
+                public boolean isSecure() {
+                    return requestContext.getSecurityContext().isSecure();
+                }
+
+                @Override
+                public String getAuthenticationScheme() {
+                    return "API_KEY";
+                }
             });
         }
 
@@ -142,26 +165,36 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
         return apiKey;
     }
 
-    private void abortUnauthorized(ContainerRequestContext requestContext, String safeKey, String finalPath,
-            String method, String ip, String reason, long startTime) {
+    private void abortUnauthorized(
+            ContainerRequestContext requestContext,
+            String safeKey,
+            String finalPath,
+            String method,
+            String ip,
+            String reason,
+            long startTime) {
         logAudit(safeKey, finalPath, method, "REJECTED_" + reason, ip, System.currentTimeMillis() - startTime);
-        auditService.record("auth-filter", "anonymous", "system",
+        auditService.record(
+                "auth-filter",
+                "anonymous",
+                "system",
                 SecurityEventType.AUTH_REJECTED,
                 "reason=" + reason + " key=" + safeKey + " endpoint=" + finalPath + " method=" + method + " ip=" + ip);
         requestContext.abortWith(Response.status(Response.Status.UNAUTHORIZED)
                 .type(MediaType.APPLICATION_JSON)
-                .entity(new AuthErrorResponse("UNAUTHORIZED", "Missing or invalid API key", clock.instant().toString()))
+                .entity(new AuthErrorResponse(
+                        "UNAUTHORIZED",
+                        "Missing or invalid API key",
+                        clock.instant().toString()))
                 .build());
     }
 
-    private static final Set<String> POLL_LIKE_PATHS = Set.of(
-        "/hitl", "/agents", "/skills", "/tools", "/chat/stream"
-    );
+    private static final Set<String> POLL_LIKE_PATHS = Set.of("/hitl", "/agents", "/skills", "/tools", "/chat/stream");
 
     private void logAudit(String key, String endpoint, String method, String status, String ip, long durationMs) {
         String msg = String.format(
-            "[API-AUTH] key=%s endpoint=%s method=%s status=%s ip=%s duration_ms=%d",
-            key, endpoint, method, status, ip, durationMs);
+                "[API-AUTH] key=%s endpoint=%s method=%s status=%s ip=%s duration_ms=%d",
+                key, endpoint, method, status, ip, durationMs);
 
         boolean isPollLike = POLL_LIKE_PATHS.stream().anyMatch(endpoint::startsWith);
 

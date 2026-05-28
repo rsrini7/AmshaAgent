@@ -2,19 +2,21 @@ package com.arcclaw.core.audit;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-import java.util.List;
-import java.util.UUID;
-
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
+
+import java.util.List;
+import java.util.UUID;
 
 import com.arcclaw.core.domain.model.AuditEventRecord;
 import com.arcclaw.core.test.MockAuditEventStorePort;
 import com.arcclaw.persistence.api.AuditEventDto;
 import com.arcclaw.persistence.api.AuditEventStorePort;
-import io.quarkus.test.junit.QuarkusTest;
+
 import org.junit.jupiter.api.Test;
+
+import io.quarkus.test.junit.QuarkusTest;
 
 @QuarkusTest
 public class AuditVerifierTest {
@@ -64,13 +66,24 @@ public class AuditVerifierTest {
         List<AuditEventDto> dtos = mockStore.findBySessionId(sessionId);
         AuditEventDto middle = dtos.get(1);
         AuditEventDto tampered = new AuditEventDto(
-                middle.id(), middle.sessionId(), middle.userId(), middle.agentRole(),
-                middle.goalHash(), middle.outcome(), middle.eventType(),
+                middle.id(),
+                middle.sessionId(),
+                middle.userId(),
+                middle.agentRole(),
+                middle.goalHash(),
+                middle.outcome(),
+                middle.eventType(),
                 "TAMPERED",
-                middle.inputTokens(), middle.outputTokens(), middle.usdCost(),
-                middle.timestamp(), middle.iterationsUsed(),
-                middle.appVersion(), middle.idempotencyKey(),
-                middle.sequence(), middle.hmacHash(), middle.prevHash());
+                middle.inputTokens(),
+                middle.outputTokens(),
+                middle.usdCost(),
+                middle.timestamp(),
+                middle.iterationsUsed(),
+                middle.appVersion(),
+                middle.idempotencyKey(),
+                middle.sequence(),
+                middle.hmacHash(),
+                middle.prevHash());
         mockStore.replaceDto(sessionId, 1, tampered);
 
         AuditVerifier.VerificationResult result = verifier.verifyChain(sessionId);

@@ -72,15 +72,13 @@ public class TieredMemoryProducer {
         Instance<T> matched = instances.select(new TieredBackendLiteral(backend.id()));
 
         if (matched.isUnsatisfied()) {
-            throw new IllegalStateException(
-                "No @" + TieredBackend.class.getSimpleName() + "(\"" + backend.id()
-                + "\") " + portName + " implementation found on the classpath.");
+            throw new IllegalStateException("No @" + TieredBackend.class.getSimpleName() + "(\"" + backend.id() + "\") "
+                    + portName + " implementation found on the classpath.");
         }
 
         if (matched.isAmbiguous()) {
-            throw new IllegalStateException(
-                "Multiple @" + TieredBackend.class.getSimpleName() + "(\"" + backend.id()
-                + "\") " + portName + " implementations found.");
+            throw new IllegalStateException("Multiple @" + TieredBackend.class.getSimpleName() + "(\"" + backend.id()
+                    + "\") " + portName + " implementations found.");
         }
 
         return matched.get();

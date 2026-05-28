@@ -6,6 +6,7 @@ import java.util.Optional;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.lifecycle.WorkspaceManager;
 import com.arcclaw.core.scope.WorkspaceContext;
+
 import org.jboss.logging.Logger;
 
 public class PreflightState implements RunnerState {
@@ -21,10 +22,8 @@ public class PreflightState implements RunnerState {
     public RunnerState execute(StateContext context) {
         if (!context.isBrowserPreflightChecked()) {
             context.setBrowserPreflightChecked(true);
-            Optional<AgentResult> preflightResult = services.browserPreflightHandler().run(
-                    context.executionContext(),
-                    context.history()
-            );
+            Optional<AgentResult> preflightResult =
+                    services.browserPreflightHandler().run(context.executionContext(), context.history());
             if (preflightResult.isPresent()) {
                 AgentResult res = preflightResult.get();
                 context.setFinalResult(res);
@@ -34,19 +33,22 @@ public class PreflightState implements RunnerState {
 
         int iteration = context.iteration();
         AgentExecutionContext execCtx = context.executionContext();
-        if (!(iteration < execCtx.maxIterations() || (iteration == execCtx.maxIterations() && execCtx.isForceFinishRetry()))) {
+        if (!(iteration < execCtx.maxIterations()
+                || (iteration == execCtx.maxIterations() && execCtx.isForceFinishRetry()))) {
             context.setFinalResult(AgentResult.loopExceeded(execCtx.maxIterations(), List.copyOf(context.history())));
             return services.failedState();
         }
 
         if (WorkspaceManager.isSessionHalted(execCtx.sessionId())) {
             log.warnf("Session %s halted — stopping agent loop at iteration %d", execCtx.sessionId(), iteration);
-            context.setFinalResult(AgentResult.failed("Session halted by user", AgentResult.FailureCategory.USER_ABORT, List.copyOf(context.history())));
+            context.setFinalResult(AgentResult.failed(
+                    "Session halted by user", AgentResult.FailureCategory.USER_ABORT, List.copyOf(context.history())));
             return services.failedState();
         }
 
         if (!WorkspaceContext.incrementAndCheckGlobalIterations()) {
-            log.warnf("Global iteration budget (%d) exceeded for session %s — terminating",
+            log.warnf(
+                    "Global iteration budget (%d) exceeded for session %s — terminating",
                     WorkspaceContext.DEFAULT_GLOBAL_MAX_ITERATIONS, execCtx.sessionId());
             context.setFinalResult(AgentResult.loopExceeded(iteration, List.copyOf(context.history())));
             return services.failedState();

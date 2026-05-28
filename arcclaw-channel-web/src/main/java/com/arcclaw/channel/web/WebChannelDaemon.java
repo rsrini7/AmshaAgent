@@ -6,6 +6,7 @@ import jakarta.inject.Inject;
 
 import com.arcclaw.channel.api.ChannelDaemon;
 import com.arcclaw.channel.api.ChannelType;
+
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
@@ -16,7 +17,8 @@ public class WebChannelDaemon implements ChannelDaemon {
     @ConfigProperty(name = "arcclaw.channel.web.enabled", defaultValue = "true")
     boolean enabled;
 
-    @Inject WebSocketSessionStore sessionStore;
+    @Inject
+    WebSocketSessionStore sessionStore;
 
     @Override
     public String channelId() {
@@ -34,7 +36,7 @@ public class WebChannelDaemon implements ChannelDaemon {
     }
 
     // While ChannelDaemon doesn't strictly define stop() in its API, we can provide it
-    // if there's a lifecycle observer, or just leave it out if the framework doesn't 
+    // if there's a lifecycle observer, or just leave it out if the framework doesn't
     // call it via the API. The prompt had a stop() method for logging.
     // For now we will add a method that can be called on bean destruction or similar if needed.
     @PreDestroy

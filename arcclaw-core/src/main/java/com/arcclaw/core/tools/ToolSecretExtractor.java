@@ -1,14 +1,15 @@
 package com.arcclaw.core.tools;
 
+import jakarta.enterprise.context.ApplicationScoped;
+
 import java.lang.reflect.Method;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-import jakarta.enterprise.context.ApplicationScoped;
-
 import com.arcclaw.core.security.RequiresSecret;
 import com.arcclaw.core.security.RequiresSecrets;
+
 import org.jboss.logging.Logger;
 
 /**
@@ -23,8 +24,7 @@ public class ToolSecretExtractor {
      * Reflectively reads {@link RequiresSecret} annotations from the named method
      * of a tool class to build the env-var → vault-key mapping.
      */
-    public Map<String, String> extractRequiredSecrets(
-            Class<? extends AgentTool> toolClass, String methodName) {
+    public Map<String, String> extractRequiredSecrets(Class<? extends AgentTool> toolClass, String methodName) {
         var secrets = new LinkedHashMap<String, String>();
 
         // Unwrap Quarkus CDI proxies to read annotations from the true class
@@ -34,8 +34,7 @@ public class ToolSecretExtractor {
             actualClass = actualClass.getSuperclass();
         }
         if (actualClass != toolClass) {
-            log.debugf("Unwrapped proxy %s to actual class %s", 
-                toolClass.getSimpleName(), actualClass.getSimpleName());
+            log.debugf("Unwrapped proxy %s to actual class %s", toolClass.getSimpleName(), actualClass.getSimpleName());
         }
 
         for (Method m : actualClass.getDeclaredMethods()) {
@@ -69,8 +68,9 @@ public class ToolSecretExtractor {
             }
         }
         if (!secrets.isEmpty()) {
-            log.debugf("Extracted %d required secrets from %s.%s", 
-                secrets.size(), actualClass.getSimpleName(), methodName);
+            log.debugf(
+                    "Extracted %d required secrets from %s.%s",
+                    secrets.size(), actualClass.getSimpleName(), methodName);
         }
         return Collections.unmodifiableMap(secrets);
     }

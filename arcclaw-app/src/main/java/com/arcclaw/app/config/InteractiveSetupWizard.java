@@ -15,6 +15,7 @@ import java.util.Set;
 
 import com.arcclaw.app.util.CliUtils;
 import com.arcclaw.common.util.LogUtil;
+
 import org.jboss.logging.Logger;
 
 /**
@@ -25,20 +26,31 @@ public class InteractiveSetupWizard {
     private static final Logger log = Logger.getLogger(InteractiveSetupWizard.class);
 
     private static final Set<String> SENSITIVE_KEYS = Set.of(
-        "ARCCLAW_GROQ_API_KEY", "ARCCLAW_OPENROUTER_API_KEY", "ARCCLAW_OPENAI_API_KEY",
-        "ARCCLAW_GEMINI_API_KEY", "ARCCLAW_NVIDIA_API_KEY", "ARCCLAW_CEREBRAS_API_KEY",
-        "ARCCLAW_OMLX_API_KEY",
-        "ARCCLAW_EMBED_API_KEY", "ARCCLAW_VAULT_PEPPER",
-        "ARCCLAW_AUDIT_HMAC_KEY", "ARCCLAW_API_KEYS_INTERNAL", "ARCCLAW_API_KEYS_CI",
-        "TELEGRAM_BOT_TOKEN",
-        "ARCCLAW_TOOLS_BRAVE_API_KEY", "ARCCLAW_TOOLS_SERPER_API_KEY", "ARCCLAW_TOOLS_GITHUB_TOKEN",
-        "ARCCLAW_INTENT_CLASSIFIER_API_KEY", "ARCCLAW_COMPACTION_API_KEY"
-    );
+            "ARCCLAW_GROQ_API_KEY",
+            "ARCCLAW_OPENROUTER_API_KEY",
+            "ARCCLAW_OPENAI_API_KEY",
+            "ARCCLAW_GEMINI_API_KEY",
+            "ARCCLAW_NVIDIA_API_KEY",
+            "ARCCLAW_CEREBRAS_API_KEY",
+            "ARCCLAW_OMLX_API_KEY",
+            "ARCCLAW_EMBED_API_KEY",
+            "ARCCLAW_VAULT_PEPPER",
+            "ARCCLAW_AUDIT_HMAC_KEY",
+            "ARCCLAW_API_KEYS_INTERNAL",
+            "ARCCLAW_API_KEYS_CI",
+            "TELEGRAM_BOT_TOKEN",
+            "ARCCLAW_TOOLS_BRAVE_API_KEY",
+            "ARCCLAW_TOOLS_SERPER_API_KEY",
+            "ARCCLAW_TOOLS_GITHUB_TOKEN",
+            "ARCCLAW_INTENT_CLASSIFIER_API_KEY",
+            "ARCCLAW_COMPACTION_API_KEY");
 
     private static final Set<String> AUTO_GENERATABLE_KEYS = Set.of(
-        "ARCCLAW_VAULT_PEPPER", "ARCCLAW_AUDIT_HMAC_KEY", 
-        "ARCCLAW_API_KEYS_INTERNAL", "ARCCLAW_API_KEYS_CI", "ARCCLAW_API_KEYS_ADMIN"
-    );
+            "ARCCLAW_VAULT_PEPPER",
+            "ARCCLAW_AUDIT_HMAC_KEY",
+            "ARCCLAW_API_KEYS_INTERNAL",
+            "ARCCLAW_API_KEYS_CI",
+            "ARCCLAW_API_KEYS_ADMIN");
 
     public static void run(Path binaryDir, String[] args) {
         if (System.getProperty("ARCCLAW_LLM_PROVIDER") == null && System.getenv("ARCCLAW_LLM_PROVIDER") == null) {
@@ -58,7 +70,7 @@ public class InteractiveSetupWizard {
 
         if (!missing.isEmpty()) {
             ensureBaseConfigsInEnv(envFile);
-            
+
             System.err.println();
             System.err.println("╔══════════════════════════════════════════════════════════╗");
             System.err.println("║         ArcClaw - First-Run Interactive Setup            ║");
@@ -85,9 +97,12 @@ public class InteractiveSetupWizard {
                     if (skipTelegram) continue;
                 }
 
-                if (spec.key().equals("ARCCLAW_TOOLS_GITHUB_TOKEN") && !promptOptionalModule(spec.key(), "GitHub repository access")) continue;
-                if (spec.key().equals("ARCCLAW_TOOLS_SERPER_API_KEY") && !promptOptionalModule(spec.key(), "Serper Search Integration")) continue;
-                if (spec.key().equals("ARCCLAW_TOOLS_BRAVE_API_KEY") && !promptOptionalModule(spec.key(), "Brave Search Integration")) continue;
+                if (spec.key().equals("ARCCLAW_TOOLS_GITHUB_TOKEN")
+                        && !promptOptionalModule(spec.key(), "GitHub repository access")) continue;
+                if (spec.key().equals("ARCCLAW_TOOLS_SERPER_API_KEY")
+                        && !promptOptionalModule(spec.key(), "Serper Search Integration")) continue;
+                if (spec.key().equals("ARCCLAW_TOOLS_BRAVE_API_KEY")
+                        && !promptOptionalModule(spec.key(), "Brave Search Integration")) continue;
 
                 promptVariable(envFile, spec);
             }
@@ -107,23 +122,28 @@ public class InteractiveSetupWizard {
         System.err.println("  │  8. OMLX - Local MLX-based server (no API key needed)");
         System.err.println("  │");
         String choice = readLineWithFallback(System.console(), "  └─ Select provider [1-8, Default: 1]: ");
-        String provider = switch (choice != null ? choice.trim() : "") {
-            case "2" -> "openrouter";
-            case "3" -> "openai";
-            case "4" -> "ollama";
-            case "5" -> "nvidia";
-            case "6" -> "gemini";
-            case "7" -> "cerebras";
-            case "8" -> "omlx";
-            default  -> "groq";
-        };
+        String provider =
+                switch (choice != null ? choice.trim() : "") {
+                    case "2" -> "openrouter";
+                    case "3" -> "openai";
+                    case "4" -> "ollama";
+                    case "5" -> "nvidia";
+                    case "6" -> "gemini";
+                    case "7" -> "cerebras";
+                    case "8" -> "omlx";
+                    default -> "groq";
+                };
         System.setProperty("ARCCLAW_LLM_PROVIDER", provider);
         System.setProperty("ARCCLAW_COMPACTION_PROVIDER", provider);
         System.setProperty("ARCCLAW_INTENT_CLASSIFIER_PROVIDER", provider);
     }
 
     private static void ensureBaseConfigsInEnv(Path envFile) {
-        EnvConfigInitializer.patchEnvFile(envFile, "ARCCLAW_LLM_PROVIDER", System.getProperty("ARCCLAW_LLM_PROVIDER", "groq"), EnvConfigInitializer.PatchMode.UPDATE);
+        EnvConfigInitializer.patchEnvFile(
+                envFile,
+                "ARCCLAW_LLM_PROVIDER",
+                System.getProperty("ARCCLAW_LLM_PROVIDER", "groq"),
+                EnvConfigInitializer.PatchMode.UPDATE);
     }
 
     private static boolean shouldPromptUnifiedKey(List<CliUtils.VarSpec> missing) {
@@ -140,11 +160,14 @@ public class InteractiveSetupWizard {
         String resp = readLineWithFallback(System.console(), "  └─ Use a single key for all? [Y/n]: ");
         if (resp == null || resp.trim().isEmpty() || resp.trim().toLowerCase().startsWith("y")) {
             String provider = System.getProperty("ARCCLAW_LLM_PROVIDER", "groq");
-            String key = readPasswordWithFallback(System.console(), "  └─ Enter " + provider.toUpperCase() + " API key: ");
+            String key =
+                    readPasswordWithFallback(System.console(), "  └─ Enter " + provider.toUpperCase() + " API key: ");
             if (key != null && !key.isBlank()) {
                 applyUnifiedKey(envFile, key, provider);
                 String llmKeyName = llmApiKeyForProvider(provider);
-                missing.removeIf(s -> s.key().equals(llmKeyName) || s.key().equals("ARCCLAW_INTENT_CLASSIFIER_API_KEY") || s.key().equals("ARCCLAW_COMPACTION_API_KEY"));
+                missing.removeIf(s -> s.key().equals(llmKeyName)
+                        || s.key().equals("ARCCLAW_INTENT_CLASSIFIER_API_KEY")
+                        || s.key().equals("ARCCLAW_COMPACTION_API_KEY"));
             }
         }
     }
@@ -162,12 +185,12 @@ public class InteractiveSetupWizard {
     private static String llmApiKeyForProvider(String provider) {
         return switch (provider.toLowerCase()) {
             case "openrouter" -> "ARCCLAW_OPENROUTER_API_KEY";
-            case "openai"     -> "ARCCLAW_OPENAI_API_KEY";
-            case "gemini"     -> "ARCCLAW_GEMINI_API_KEY";
-            case "cerebras"   -> "ARCCLAW_CEREBRAS_API_KEY";
-            case "nvidia"     -> "ARCCLAW_NVIDIA_API_KEY";
-            case "omlx"       -> "ARCCLAW_OMLX_API_KEY";
-            default           -> "ARCCLAW_GROQ_API_KEY";
+            case "openai" -> "ARCCLAW_OPENAI_API_KEY";
+            case "gemini" -> "ARCCLAW_GEMINI_API_KEY";
+            case "cerebras" -> "ARCCLAW_CEREBRAS_API_KEY";
+            case "nvidia" -> "ARCCLAW_NVIDIA_API_KEY";
+            case "omlx" -> "ARCCLAW_OMLX_API_KEY";
+            default -> "ARCCLAW_GROQ_API_KEY";
         };
     }
 
@@ -175,7 +198,8 @@ public class InteractiveSetupWizard {
         System.err.println("  ┌─ Telegram Integration");
         String response = readLineWithFallback(System.console(), "  └─ Enable Telegram? [y/N]: ");
         boolean enabled = response != null && response.trim().toLowerCase().startsWith("y");
-        EnvConfigInitializer.patchEnvFile(envFile, "ARCCLAW_TELEGRAM_ENABLED", String.valueOf(enabled), EnvConfigInitializer.PatchMode.UPDATE);
+        EnvConfigInitializer.patchEnvFile(
+                envFile, "ARCCLAW_TELEGRAM_ENABLED", String.valueOf(enabled), EnvConfigInitializer.PatchMode.UPDATE);
         System.setProperty("ARCCLAW_TELEGRAM_ENABLED", String.valueOf(enabled));
         return enabled;
     }
@@ -189,9 +213,12 @@ public class InteractiveSetupWizard {
     private static void promptVariable(Path envFile, CliUtils.VarSpec spec) {
         System.err.println("  ┌─ " + spec.key());
         System.err.println("  │  " + spec.description());
-        String prompt = "  └─ Enter value" + (AUTO_GENERATABLE_KEYS.contains(spec.key()) ? " (Enter to auto-generate): " : ": ");
-        String value = SENSITIVE_KEYS.contains(spec.key()) ? readPasswordWithFallback(System.console(), prompt) : readLineWithFallback(System.console(), prompt);
-        
+        String prompt = "  └─ Enter value"
+                + (AUTO_GENERATABLE_KEYS.contains(spec.key()) ? " (Enter to auto-generate): " : ": ");
+        String value = SENSITIVE_KEYS.contains(spec.key())
+                ? readPasswordWithFallback(System.console(), prompt)
+                : readLineWithFallback(System.console(), prompt);
+
         if (value == null || value.isBlank()) {
             if (AUTO_GENERATABLE_KEYS.contains(spec.key())) {
                 value = generateRandomValue();
@@ -222,7 +249,9 @@ public class InteractiveSetupWizard {
         System.err.flush();
         try {
             return new BufferedReader(new InputStreamReader(System.in)).readLine();
-        } catch (IOException e) { return null; }
+        } catch (IOException e) {
+            return null;
+        }
     }
 
     private static String readPasswordWithFallback(Console console, String prompt) {

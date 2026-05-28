@@ -22,16 +22,19 @@ public abstract class AbstractInboundMessagePipeline {
         this.lockManager = null;
     }
 
-    protected AbstractInboundMessagePipeline(ChannelServices channelServices, ChannelType channelType,
-                                              ProcessingLockManager lockManager) {
+    protected AbstractInboundMessagePipeline(
+            ChannelServices channelServices, ChannelType channelType, ProcessingLockManager lockManager) {
         this.channelServices = Objects.requireNonNull(channelServices, "channelServices must not be null");
         this.channelType = Objects.requireNonNull(channelType, "channelType must not be null");
         this.lockManager = Objects.requireNonNull(lockManager, "lockManager must not be null");
     }
 
     protected abstract void sendRawReply(ChannelUser user, String text);
+
     protected abstract void logWarn(String format, Object... args);
+
     protected abstract void logInfo(String format, Object... args);
+
     protected abstract void logError(String format, Throwable t);
 
     /**
@@ -76,17 +79,16 @@ public abstract class AbstractInboundMessagePipeline {
         logInfo("Message received for chat %s, delegating to SPI", chatId);
         final boolean finalAcquiredLock = acquiredLock;
 
-        channelServices.processAsync(channelMessage)
-            .handle((res, ex) -> {
-                if (ex != null) {
-                    logError("Uncaught exception in message processing for chat " + chatId, ex);
-                    sendRawReply(user, "Sorry, an internal error occurred while processing your message.");
-                }
-                if (finalAcquiredLock) {
-                    lockManager.unlock(chatId);
-                }
-                return null;
-            });
+        channelServices.processAsync(channelMessage).handle((res, ex) -> {
+            if (ex != null) {
+                logError("Uncaught exception in message processing for chat " + chatId, ex);
+                sendRawReply(user, "Sorry, an internal error occurred while processing your message.");
+            }
+            if (finalAcquiredLock) {
+                lockManager.unlock(chatId);
+            }
+            return null;
+        });
     }
 
     /**

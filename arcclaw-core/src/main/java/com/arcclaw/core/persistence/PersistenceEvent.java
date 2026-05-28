@@ -18,7 +18,10 @@ import com.arcclaw.persistence.api.PersistenceAction;
  */
 public final class PersistenceEvent {
 
-    public enum Tier { CRITICAL, TELEMETRY }
+    public enum Tier {
+        CRITICAL,
+        TELEMETRY
+    }
 
     private final Tier tier;
     private final String sessionId;
@@ -31,11 +34,12 @@ public final class PersistenceEvent {
      */
     private final CompletableFuture<Void> future;
 
-    private PersistenceEvent(Tier tier,
-                             String sessionId,
-                             SecurityEventType eventType,
-                             PersistenceAction dbAction,
-                             CompletableFuture<Void> future) {
+    private PersistenceEvent(
+            Tier tier,
+            String sessionId,
+            SecurityEventType eventType,
+            PersistenceAction dbAction,
+            CompletableFuture<Void> future) {
         this.tier = tier;
         this.sessionId = sessionId;
         this.eventType = eventType;
@@ -44,22 +48,33 @@ public final class PersistenceEvent {
     }
 
     /** Create a blocking CRITICAL event. The returned future must be joined by the caller. */
-    public static PersistenceEvent critical(String sessionId,
-                                            SecurityEventType eventType,
-                                            PersistenceAction dbAction) {
+    public static PersistenceEvent critical(String sessionId, SecurityEventType eventType, PersistenceAction dbAction) {
         return new PersistenceEvent(Tier.CRITICAL, sessionId, eventType, dbAction, new CompletableFuture<>());
     }
 
     /** Create a fire-and-forget TELEMETRY event. */
-    public static PersistenceEvent telemetry(String sessionId,
-                                              SecurityEventType eventType,
-                                              PersistenceAction dbAction) {
+    public static PersistenceEvent telemetry(
+            String sessionId, SecurityEventType eventType, PersistenceAction dbAction) {
         return new PersistenceEvent(Tier.TELEMETRY, sessionId, eventType, dbAction, null);
     }
 
-    public Tier getTier() { return tier; }
-    public String getSessionId() { return sessionId; }
-    public SecurityEventType getEventType() { return eventType; }
-    public PersistenceAction getDbAction() { return dbAction; }
-    public CompletableFuture<Void> getFuture() { return future; }
+    public Tier getTier() {
+        return tier;
+    }
+
+    public String getSessionId() {
+        return sessionId;
+    }
+
+    public SecurityEventType getEventType() {
+        return eventType;
+    }
+
+    public PersistenceAction getDbAction() {
+        return dbAction;
+    }
+
+    public CompletableFuture<Void> getFuture() {
+        return future;
+    }
 }

@@ -9,11 +9,10 @@ import java.util.Set;
  * {@code useVector} and {@code useBM25} flags.
  */
 public record ArchivalSearchQuery(
-    String userId,
-    String query,
-    int limit,
-    Set<String> chunkTypes,
-    boolean useVector,
-    boolean useBM25,
-    float[] queryEmbedding
-) {}
+        String userId,
+        String query,
+        int limit,
+        Set<String> chunkTypes,
+        boolean useVector,
+        boolean useBM25,
+        float[] queryEmbedding) {}

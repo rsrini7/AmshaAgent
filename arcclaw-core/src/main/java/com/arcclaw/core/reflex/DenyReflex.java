@@ -17,30 +17,81 @@ import com.arcclaw.core.util.AgentResultFormatter;
 @ReflexPriority(200)
 public class DenyReflex extends AbstractDecisionReflex {
 
-    @Override public String getActionName() { return "DENY"; }
-    @Override public String getAmbiguityTitle() { return "Ambiguous denial"; }
-    @Override public String getNoPendingMessage() { return NO_PENDING_ANYWHERE_SESSION; }
-    @Override public String getErrorMessage() { return DENIAL_ERROR; }
-    @Override public String getNotAuthorizedMessage() { return NOT_AUTHORIZED_DELEGATION; }
-    @Override public String getTargetNotAwaitingMessage() { return TARGET_SESSION_NOT_AWAITING; }
-
-    @Override public String getAlreadyProcessingMessage() { return ALREADY_PROCESSING_DENIAL; }
-    @Override protected String getSingleCronFallbackMessage(AgentCron cron) { 
-        return "⚠️ No active denial in this chat session.\n\nA background task is waiting:\n• " + cron.getGoal() + 
-               "\n\nUse: `/deny " + cron.getId() + "` to cancel it.";
+    @Override
+    public String getActionName() {
+        return "DENY";
     }
-    @Override public String getMultipleCronFallbackMessage(String list) { return cronMultipleAwaiting(list); }
-    @Override public String getCronSuccessResponse(AgentResult result) { return AgentResultFormatter.format(result); }
-    @Override public String getFailedRetryMessage() { return null; }
-    @Override public String getPerToolSuccessResponse(String toolName) { return UserMessages.toolDenied(toolName); }
+
+    @Override
+    public String getAmbiguityTitle() {
+        return "Ambiguous denial";
+    }
+
+    @Override
+    public String getNoPendingMessage() {
+        return NO_PENDING_ANYWHERE_SESSION;
+    }
+
+    @Override
+    public String getErrorMessage() {
+        return DENIAL_ERROR;
+    }
+
+    @Override
+    public String getNotAuthorizedMessage() {
+        return NOT_AUTHORIZED_DELEGATION;
+    }
+
+    @Override
+    public String getTargetNotAwaitingMessage() {
+        return TARGET_SESSION_NOT_AWAITING;
+    }
+
+    @Override
+    public String getAlreadyProcessingMessage() {
+        return ALREADY_PROCESSING_DENIAL;
+    }
+
+    @Override
+    protected String getSingleCronFallbackMessage(AgentCron cron) {
+        return "⚠️ No active denial in this chat session.\n\nA background task is waiting:\n• " + cron.getGoal()
+                + "\n\nUse: `/deny " + cron.getId() + "` to cancel it.";
+    }
+
+    @Override
+    public String getMultipleCronFallbackMessage(String list) {
+        return cronMultipleAwaiting(list);
+    }
+
+    @Override
+    public String getCronSuccessResponse(AgentResult result) {
+        return AgentResultFormatter.format(result);
+    }
+
+    @Override
+    public String getFailedRetryMessage() {
+        return null;
+    }
+
+    @Override
+    public String getPerToolSuccessResponse(String toolName) {
+        return UserMessages.toolDenied(toolName);
+    }
 
     @Override
     public boolean matches(String input) {
         return ChannelCommand.parse(input) instanceof ChannelCommand.Deny;
     }
 
-    @Override public SecurityEventType auditEventType() { return SecurityEventType.APPROVAL_DENIED; }
-    @Override public String auditDetail(String sessionId, String input) { return "action=DENY session=" + sessionId; }
+    @Override
+    public SecurityEventType auditEventType() {
+        return SecurityEventType.APPROVAL_DENIED;
+    }
+
+    @Override
+    public String auditDetail(String sessionId, String input) {
+        return "action=DENY session=" + sessionId;
+    }
 
     @Override
     protected AgentCheckpoint applyDecisionToTool(String sessionId, String toolName, String reason) {

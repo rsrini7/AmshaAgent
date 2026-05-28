@@ -61,10 +61,11 @@ class BatchHitlKeyboardBuilderTest {
         String compressed = BatchHitlKeyboardBuilder.compressSessionId(UUID_STR);
         String data = "BATCH_APPROVE|" + compressed + "|github:read_file";
         Optional<BatchHitlKeyboardBuilder.BatchCallbackEvent> event = BatchHitlKeyboardBuilder.parseCallback(data);
-        
+
         assertTrue(event.isPresent());
         assertTrue(event.get() instanceof BatchHitlKeyboardBuilder.BatchCallbackEvent.ApproveTool);
-        BatchHitlKeyboardBuilder.BatchCallbackEvent.ApproveTool approve = (BatchHitlKeyboardBuilder.BatchCallbackEvent.ApproveTool) event.get();
+        BatchHitlKeyboardBuilder.BatchCallbackEvent.ApproveTool approve =
+                (BatchHitlKeyboardBuilder.BatchCallbackEvent.ApproveTool) event.get();
         assertEquals(compressed, approve.sessionId());
         assertEquals("github:read_file", approve.toolName());
 
@@ -72,14 +73,16 @@ class BatchHitlKeyboardBuilderTest {
         event = BatchHitlKeyboardBuilder.parseCallback(data2);
         assertTrue(event.isPresent());
         assertTrue(event.get() instanceof BatchHitlKeyboardBuilder.BatchCallbackEvent.DenyTool);
-        BatchHitlKeyboardBuilder.BatchCallbackEvent.DenyTool deny = (BatchHitlKeyboardBuilder.BatchCallbackEvent.DenyTool) event.get();
+        BatchHitlKeyboardBuilder.BatchCallbackEvent.DenyTool deny =
+                (BatchHitlKeyboardBuilder.BatchCallbackEvent.DenyTool) event.get();
         assertEquals(compressed, deny.sessionId());
         assertEquals("sandbox:exec", deny.toolName());
     }
 
     @Test
     void test_parse_invalid_returns_empty() {
-        assertTrue(BatchHitlKeyboardBuilder.parseCallback("BATCH_INVALID|session").isEmpty());
+        assertTrue(
+                BatchHitlKeyboardBuilder.parseCallback("BATCH_INVALID|session").isEmpty());
         assertTrue(BatchHitlKeyboardBuilder.parseCallback(null).isEmpty());
         assertTrue(BatchHitlKeyboardBuilder.parseCallback("garbage").isEmpty());
     }
@@ -111,7 +114,7 @@ class BatchHitlKeyboardBuilderTest {
         var event = BatchHitlKeyboardBuilder.parseCallback(cb);
         assertTrue(event.isPresent());
         String decompressed = BatchHitlKeyboardBuilder.decompressSessionId(
-            ((BatchHitlKeyboardBuilder.BatchCallbackEvent.ApproveTool) event.get()).sessionId());
+                ((BatchHitlKeyboardBuilder.BatchCallbackEvent.ApproveTool) event.get()).sessionId());
         assertEquals(UUID_STR, decompressed);
     }
 }

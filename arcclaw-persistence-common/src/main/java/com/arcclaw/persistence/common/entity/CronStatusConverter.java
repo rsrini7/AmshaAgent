@@ -6,8 +6,7 @@ import jakarta.persistence.Converter;
 import com.arcclaw.core.state.CronStatus;
 
 @Converter(autoApply = false)
-public class CronStatusConverter
-        implements AttributeConverter<CronStatus, String> {
+public class CronStatusConverter implements AttributeConverter<CronStatus, String> {
 
     @Override
     public String convertToDatabaseColumn(CronStatus attribute) {

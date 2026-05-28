@@ -6,11 +6,11 @@ import java.util.concurrent.*;
 import java.util.stream.Collectors;
 
 /**
- * Decorator for {@link ExecutorService} that automatically propagates the 
+ * Decorator for {@link ExecutorService} that automatically propagates the
  * {@link WorkspaceScoped} session context to virtual threads.
  * <p>
- * It captures the current session ID from the calling thread and wraps 
- * every submitted {@link Runnable} or {@link Callable} in a 
+ * It captures the current session ID from the calling thread and wraps
+ * every submitted {@link Runnable} or {@link Callable} in a
  * {@link ScopedValue} binding block.
  */
 public class ContextAwareExecutorService implements ExecutorService {
@@ -47,7 +47,8 @@ public class ContextAwareExecutorService implements ExecutorService {
     }
 
     @Override
-    public <T> List<Future<T>> invokeAll(Collection<? extends Callable<T>> tasks, long timeout, TimeUnit unit) throws InterruptedException {
+    public <T> List<Future<T>> invokeAll(Collection<? extends Callable<T>> tasks, long timeout, TimeUnit unit)
+            throws InterruptedException {
         return delegate.invokeAll(wrapAll(tasks), timeout, unit);
     }
 
@@ -57,7 +58,8 @@ public class ContextAwareExecutorService implements ExecutorService {
     }
 
     @Override
-    public <T> T invokeAny(Collection<? extends Callable<T>> tasks, long timeout, TimeUnit unit) throws InterruptedException, ExecutionException, TimeoutException {
+    public <T> T invokeAny(Collection<? extends Callable<T>> tasks, long timeout, TimeUnit unit)
+            throws InterruptedException, ExecutionException, TimeoutException {
         return delegate.invokeAny(wrapAll(tasks), timeout, unit);
     }
 

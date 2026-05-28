@@ -4,12 +4,13 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
-import java.util.Optional;
-import java.util.stream.Stream;
+import dev.langchain4j.model.embedding.EmbeddingModel;
 
 import jakarta.enterprise.inject.Instance;
 
-import dev.langchain4j.model.embedding.EmbeddingModel;
+import java.util.Optional;
+import java.util.stream.Stream;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -48,18 +49,17 @@ class EmbeddingModelProducerTest {
         EmbeddingModel result = producer.embeddingModel();
 
         assertSame(mockModel, result);
-        verify(mockOpenAiFactory).create(argThat(cfg -> 
-            cfg.providerId().equals("openai") &&
-            cfg.modelName().equals("text-embedding-3-small") &&
-            cfg.apiKey().get().equals("test-key")
-        ));
+        verify(mockOpenAiFactory)
+                .create(argThat(cfg -> cfg.providerId().equals("openai")
+                        && cfg.modelName().equals("text-embedding-3-small")
+                        && cfg.apiKey().get().equals("test-key")));
         verifyNoInteractions(mockOllamaFactory);
     }
 
     @Test
     void testThrowsWhenProviderNotFound() {
         producer.provider = "unsupported";
-        
+
         IllegalStateException ex = assertThrows(IllegalStateException.class, () -> producer.embeddingModel());
         assertTrue(ex.getMessage().contains("No EmbeddingProviderFactory found for provider: 'unsupported'"));
         assertTrue(ex.getMessage().contains("openai, ollama"));

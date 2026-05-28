@@ -13,11 +13,23 @@ public interface CheckpointLifecyclePort {
 
     void archive(Long checkpointId);
 
-    CheckpointUpsertResult upsertWithSteps(String sessionId, String agentRole,
-        String stateJson, String autonomy, int iterationsUsed, String originalGoal, String contextDataJson);
+    CheckpointUpsertResult upsertWithSteps(
+            String sessionId,
+            String agentRole,
+            String stateJson,
+            String autonomy,
+            int iterationsUsed,
+            String originalGoal,
+            String contextDataJson);
 
-    CheckpointUpsertResult upsertAndFinalize(String sessionId, String agentRole,
-        String stateJson, String finalStatus, List<ReasoningStepDto> steps, String originalGoal, String contextDataJson);
+    CheckpointUpsertResult upsertAndFinalize(
+            String sessionId,
+            String agentRole,
+            String stateJson,
+            String finalStatus,
+            List<ReasoningStepDto> steps,
+            String originalGoal,
+            String contextDataJson);
 
     List<CheckpointDto> findStaleApprovals(Instant cutoff);
 

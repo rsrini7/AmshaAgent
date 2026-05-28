@@ -1,5 +1,10 @@
 package com.arcclaw.core.agent.loop;
 
+import jakarta.annotation.PostConstruct;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.inject.Instance;
+import jakarta.inject.Inject;
+
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
@@ -8,11 +13,6 @@ import java.util.Optional;
 import java.util.TreeMap;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedDeque;
-
-import jakarta.annotation.PostConstruct;
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.enterprise.inject.Instance;
-import jakarta.inject.Inject;
 
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
@@ -29,8 +29,10 @@ import com.arcclaw.core.tools.AgentTool;
 import com.arcclaw.core.tools.IdempotencyMode;
 import com.arcclaw.core.tools.ToolRegistry;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.quarkus.arc.Subclass;
+
 import org.jboss.logging.Logger;
+
+import io.quarkus.arc.Subclass;
 
 /**
  * Validates tool calls before invocation.
@@ -39,12 +41,21 @@ import org.jboss.logging.Logger;
 public class ToolInvocationGuard {
     private static final Logger log = Logger.getLogger(ToolInvocationGuard.class);
 
-    @Inject public RoleRegistry roleRegistry;
-    @Inject public ObjectMapper objectMapper;
-    @Inject public ToolRegistry toolRegistry;
-    @Inject public Instance<DynamicToolLookup> dynamicToolLookup;
-    @Inject public Instance<ToolGuardInterceptor> interceptors;
-    
+    @Inject
+    public RoleRegistry roleRegistry;
+
+    @Inject
+    public ObjectMapper objectMapper;
+
+    @Inject
+    public ToolRegistry toolRegistry;
+
+    @Inject
+    public Instance<DynamicToolLookup> dynamicToolLookup;
+
+    @Inject
+    public Instance<ToolGuardInterceptor> interceptors;
+
     private static final int MAX_DEDUP_SESSIONS = 1000;
     private final Map<String, Map<String, String>> sessionDedupeCache = new ConcurrentHashMap<>();
     private final ConcurrentLinkedDeque<String> sessionOrder = new ConcurrentLinkedDeque<>();
@@ -59,10 +70,9 @@ public class ToolInvocationGuard {
             return;
         }
         this.sortedInterceptors = interceptors.stream()
-            .sorted(Comparator.comparingInt(this::getPriority))
-            .toList();
+                .sorted(Comparator.comparingInt(this::getPriority))
+                .toList();
     }
-
 
     private int getPriority(ToolGuardInterceptor interceptor) {
         Class<?> clazz = interceptor.getClass();
@@ -74,21 +84,32 @@ public class ToolInvocationGuard {
     }
 
     public sealed interface GuardDecision
-            permits GuardDecision.Allow, GuardDecision.Deduplicate,
-            GuardDecision.PauseForApproval, GuardDecision.Blocked {
+            permits GuardDecision.Allow,
+                    GuardDecision.Deduplicate,
+                    GuardDecision.PauseForApproval,
+                    GuardDecision.Blocked {
         record Allow() implements GuardDecision {}
+
         record Deduplicate(String cachedObservation) implements GuardDecision {}
+
         record PauseForApproval(ApprovalFrame frame) implements GuardDecision {
             public PauseForApproval(String reason, String toolName) {
                 this(new ApprovalFrame(toolName, Map.of(), ApprovalFrame.RiskLevel.MEDIUM));
             }
         }
+
         record Blocked(String observation) implements GuardDecision {}
     }
 
-    public GuardDecision evaluate(String sessionId, String agentRole, AutonomyLevel level,
-            String toolName, Map<String, Object> params,
-            List<ReasoningStep> history, String goal, List<CompiledSkillEntry> skillSnapshot) {
+    public GuardDecision evaluate(
+            String sessionId,
+            String agentRole,
+            AutonomyLevel level,
+            String toolName,
+            Map<String, Object> params,
+            List<ReasoningStep> history,
+            String goal,
+            List<CompiledSkillEntry> skillSnapshot) {
 
         for (ToolGuardInterceptor interceptor : sortedInterceptors) {
             if (interceptor.handledToolNames().isEmpty()
@@ -102,8 +123,7 @@ public class ToolInvocationGuard {
         }
 
         var toolOpt = toolRegistry.findTool(toolName);
-        IdempotencyMode mode = toolOpt.map(AgentTool::idempotencyMode)
-                .orElse(IdempotencyMode.NON_IDEMPOTENT);
+        IdempotencyMode mode = toolOpt.map(AgentTool::idempotencyMode).orElse(IdempotencyMode.NON_IDEMPOTENT);
 
         if (mode != IdempotencyMode.NON_IDEMPOTENT) {
             GuardDecision dedupResult = checkDeduplication(sessionId, toolName, params, history);
@@ -112,13 +132,15 @@ public class ToolInvocationGuard {
 
         boolean isInternalTool = toolOpt.isPresent();
         boolean isDynamicAllowed = !isInternalTool
-                && dynamicToolLookup != null && !dynamicToolLookup.isUnsatisfied()
+                && dynamicToolLookup != null
+                && !dynamicToolLookup.isUnsatisfied()
                 && dynamicToolLookup.get().isDynamicToolAllowed(toolName);
 
         if (!isInternalTool && !isDynamicAllowed) {
             log.warnf(
-                "GUARD Unknown tool call attempt '%s' in session '%s' - " +
-                "not in ToolRegistry and not allowed by DynamicToolLookup.", toolName, sessionId);
+                    "GUARD Unknown tool call attempt '%s' in session '%s' - "
+                            + "not in ToolRegistry and not allowed by DynamicToolLookup.",
+                    toolName, sessionId);
             return new GuardDecision.Blocked("Tool '" + toolName + "' is not recognized or permitted.");
         }
 
@@ -127,29 +149,31 @@ public class ToolInvocationGuard {
                 || ToolCapability.MANAGE_SCHEDULE.toolName().equals(toolName);
         boolean isDelegationTool = ToolCapability.DELEGATE_TO_AGENT.toolName().equals(toolName);
 
-        boolean toolRequiresApproval = toolOpt
-                .map(tool -> tool.requiresManualApproval(params))
-                .orElse(false);
+        boolean toolRequiresApproval =
+                toolOpt.map(tool -> tool.requiresManualApproval(params)).orElse(false);
 
-        boolean isExempt = isSchedulingTool || isDelegationTool
-                || (level == AutonomyLevel.BACKGROUND && (ToolCapability.RECALL_MEMORY_SEARCH.toolName().equals(toolName)
-                    || ToolCapability.ARCHIVAL_MEMORY_SEARCH.toolName().equals(toolName)
-                    || ToolCapability.INGEST_DOCUMENT.toolName().equals(toolName)));
+        boolean isExempt = isSchedulingTool
+                || isDelegationTool
+                || (level == AutonomyLevel.BACKGROUND
+                        && (ToolCapability.RECALL_MEMORY_SEARCH.toolName().equals(toolName)
+                                || ToolCapability.ARCHIVAL_MEMORY_SEARCH
+                                        .toolName()
+                                        .equals(toolName)
+                                || ToolCapability.INGEST_DOCUMENT.toolName().equals(toolName)));
 
         if ((roleRegistry.requiresApprovalForTools(resolvedRole) || toolRequiresApproval)
                 && !isExempt
                 && !AutonomyLevel.FULL.equals(level)) {
 
-            ToolOperation op = toolOpt.map(AgentTool::requiredOperation)
-                    .orElse(ToolOperation.EXECUTE_SHELL);
+            ToolOperation op = toolOpt.map(AgentTool::requiredOperation).orElse(ToolOperation.EXECUTE_SHELL);
             ApprovalFrame frame = new ApprovalFrame(toolName, params, op.riskLevel());
             return new GuardDecision.PauseForApproval(frame);
         }
         return new GuardDecision.Allow();
     }
 
-    private GuardDecision checkDeduplication(String sessionId, String toolName,
-            Map<String, Object> params, List<ReasoningStep> history) {
+    private GuardDecision checkDeduplication(
+            String sessionId, String toolName, Map<String, Object> params, List<ReasoningStep> history) {
         if (sessionDedupeCache.size() >= MAX_DEDUP_SESSIONS && !sessionDedupeCache.containsKey(sessionId)) {
             String evictKey = sessionOrder.pollFirst();
             if (evictKey != null) {
@@ -176,8 +200,10 @@ public class ToolInvocationGuard {
         int scanLimit = Math.min(history.size(), 10);
         for (int i = history.size() - 1; i >= history.size() - scanLimit; i--) {
             ReasoningStep past = history.get(i);
-            if (past.observation() != null && !past.observation().isBlank()
-                    && toolName.equals(past.action()) && Objects.equals(params, past.actionInput())) {
+            if (past.observation() != null
+                    && !past.observation().isBlank()
+                    && toolName.equals(past.action())
+                    && Objects.equals(params, past.actionInput())) {
                 log.infof("GUARD: Caught duplicate tool call for '%s' in history for session %s", toolName, sessionId);
                 return new GuardDecision.Deduplicate(past.observation() + "\n\n[DEDUP-HISTORY]");
             }

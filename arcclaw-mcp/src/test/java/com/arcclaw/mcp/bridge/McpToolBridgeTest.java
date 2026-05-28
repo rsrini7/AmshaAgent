@@ -19,13 +19,15 @@ import com.arcclaw.core.tools.ToolRegistry;
 import com.arcclaw.core.tools.ToolResponse;
 import com.arcclaw.core.tools.ToolSchemaProvider;
 import com.arcclaw.mcp.config.McpToolAllowlist;
-import io.vertx.core.MultiMap;
-import io.vertx.core.http.HttpServerRequest;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.ArgumentMatchers;
 import org.mockito.Mockito;
+
+import io.vertx.core.MultiMap;
+import io.vertx.core.http.HttpServerRequest;
 
 class McpToolBridgeTest {
 
@@ -49,15 +51,17 @@ class McpToolBridgeTest {
 
     @Test
     void testGetExposedTools() throws Exception {
-        when(mockAllowlist.exposedTools()).thenReturn(List.of(ToolCapability.GITHUB.toolName(), ToolCapability.RECALL_MEMORY_SEARCH.toolName()));
+        when(mockAllowlist.exposedTools())
+                .thenReturn(List.of(ToolCapability.GITHUB.toolName(), ToolCapability.RECALL_MEMORY_SEARCH.toolName()));
         AgentTool mockTool = mock(AgentTool.class);
         when(mockRegistry.findTool(anyString())).thenReturn(Optional.of(mockTool));
         when(mockSchemaProvider.getJsonSchema(ArgumentMatchers.any())).thenReturn("{}");
-        
+
         List<McpToolDescriptor> tools = bridge.getExposedTools();
         assertEquals(2, tools.size());
         assertEquals(ToolCapability.GITHUB.toolName(), tools.get(0).name());
-        assertEquals(ToolCapability.RECALL_MEMORY_SEARCH.toolName(), tools.get(1).name());
+        assertEquals(
+                ToolCapability.RECALL_MEMORY_SEARCH.toolName(), tools.get(1).name());
     }
 
     @Test
@@ -84,7 +88,9 @@ class McpToolBridgeTest {
         when(mockRegistry.findTool(anyString())).thenReturn(Optional.of(mockTool));
         List<McpToolDescriptor> tools = bridge.getExposedTools();
         assertEquals(1, tools.size());
-        assertEquals(ToolCapability.RECALL_MEMORY_SEARCH.toolName(), tools.get(0).name()); // must NOT be "RECALL_MEMORY_SEARCH"
+        assertEquals(
+                ToolCapability.RECALL_MEMORY_SEARCH.toolName(),
+                tools.get(0).name()); // must NOT be "RECALL_MEMORY_SEARCH"
     }
 
     @Test
@@ -92,7 +98,7 @@ class McpToolBridgeTest {
         when(mockAllowlist.exposedTools()).thenReturn(List.of("invalid_tool", ToolCapability.GITHUB.toolName()));
         AgentTool mockTool = mock(AgentTool.class);
         when(mockRegistry.findTool(anyString())).thenReturn(Optional.of(mockTool));
-        
+
         List<McpToolDescriptor> tools = bridge.getExposedTools();
         assertEquals(1, tools.size());
         assertEquals(ToolCapability.GITHUB.toolName(), tools.get(0).name());
@@ -102,8 +108,8 @@ class McpToolBridgeTest {
     void testInvokeAllowlistedTool() {
         when(mockAllowlist.exposedTools()).thenReturn(List.of(ToolCapability.GITHUB.toolName()));
         when(mockRegistry.invokeTool(eq(ToolCapability.GITHUB.toolName()), eq("{}"), anyString()))
-            .thenReturn(ToolResponse.success("ok"));
-            
+                .thenReturn(ToolResponse.success("ok"));
+
         String result = bridge.executeTool(new McpToolRequest(ToolCapability.GITHUB.toolName(), "{}", null));
         assertEquals("ok", result);
     }
@@ -111,37 +117,57 @@ class McpToolBridgeTest {
     @Test
     void testInvokeNonAllowlistedTool() {
         when(mockAllowlist.exposedTools()).thenReturn(List.of(ToolCapability.RECALL_MEMORY_SEARCH.toolName()));
-        
-        assertThrows(McpToolNotAllowedException.class, () -> bridge.executeTool(new McpToolRequest(ToolCapability.GITHUB.toolName(), "{}", null)));
+
+        assertThrows(
+                McpToolNotAllowedException.class,
+                () -> bridge.executeTool(new McpToolRequest(ToolCapability.GITHUB.toolName(), "{}", null)));
     }
 
     @Test
     void testAuditRecordsHaveDistinctIdentities() {
         when(mockAllowlist.exposedTools()).thenReturn(List.of(ToolCapability.GITHUB.toolName()));
-        when(mockRegistry.invokeTool(eq(ToolCapability.GITHUB.toolName()), eq("{}"), anyString())).thenReturn(ToolResponse.success("ok"));
+        when(mockRegistry.invokeTool(eq(ToolCapability.GITHUB.toolName()), eq("{}"), anyString()))
+                .thenReturn(ToolResponse.success("ok"));
 
         // Client A
-        McpToolRequest reqA = new McpToolRequest(ToolCapability.GITHUB.toolName(), "{}", HttpServerRequest.class.cast(
-            Proxy.newProxyInstance(getClass().getClassLoader(), new Class[]{HttpServerRequest.class}, (p, m, args) -> {
-                if ("headers".equals(m.getName())) return MultiMap.caseInsensitiveMultiMap().add("X-MCP-Client-ID", "A").add("X-MCP-Session-ID", "1");
-                return null;
-            })));
+        McpToolRequest reqA = new McpToolRequest(
+                ToolCapability.GITHUB.toolName(),
+                "{}",
+                HttpServerRequest.class.cast(Proxy.newProxyInstance(
+                        getClass().getClassLoader(), new Class[] {HttpServerRequest.class}, (p, m, args) -> {
+                            if ("headers".equals(m.getName()))
+                                return MultiMap.caseInsensitiveMultiMap()
+                                        .add("X-MCP-Client-ID", "A")
+                                        .add("X-MCP-Session-ID", "1");
+                            return null;
+                        })));
         bridge.executeTool(reqA);
 
         // Client B
-        McpToolRequest reqB = new McpToolRequest(ToolCapability.GITHUB.toolName(), "{}", HttpServerRequest.class.cast(
-            Proxy.newProxyInstance(getClass().getClassLoader(), new Class[]{HttpServerRequest.class}, (p, m, args) -> {
-                if ("headers".equals(m.getName())) return MultiMap.caseInsensitiveMultiMap().add("X-MCP-Client-ID", "B").add("X-MCP-Session-ID", "2");
-                return null;
-            })));
+        McpToolRequest reqB = new McpToolRequest(
+                ToolCapability.GITHUB.toolName(),
+                "{}",
+                HttpServerRequest.class.cast(Proxy.newProxyInstance(
+                        getClass().getClassLoader(), new Class[] {HttpServerRequest.class}, (p, m, args) -> {
+                            if ("headers".equals(m.getName()))
+                                return MultiMap.caseInsensitiveMultiMap()
+                                        .add("X-MCP-Client-ID", "B")
+                                        .add("X-MCP-Session-ID", "2");
+                            return null;
+                        })));
         bridge.executeTool(reqB);
 
         ArgumentCaptor<String> sessionCaptor = ArgumentCaptor.forClass(String.class);
         ArgumentCaptor<String> userCaptor = ArgumentCaptor.forClass(String.class);
         ArgumentCaptor<String> detailCaptor = ArgumentCaptor.forClass(String.class);
-        
-        Mockito.verify(bridge.auditService, Mockito.times(2)).record(
-            sessionCaptor.capture(), userCaptor.capture(), anyString(), eq(SecurityEventType.TOOL_INVOKED), detailCaptor.capture());
+
+        Mockito.verify(bridge.auditService, Mockito.times(2))
+                .record(
+                        sessionCaptor.capture(),
+                        userCaptor.capture(),
+                        anyString(),
+                        eq(SecurityEventType.TOOL_INVOKED),
+                        detailCaptor.capture());
 
         assertEquals("mcp-A-1", sessionCaptor.getAllValues().get(0));
         assertEquals("mcp:A", userCaptor.getAllValues().get(0));
@@ -152,18 +178,29 @@ class McpToolBridgeTest {
     @Test
     void testRoleMappingFromCapabilities() {
         when(mockAllowlist.exposedTools()).thenReturn(List.of(ToolCapability.GITHUB.toolName()));
-        when(mockRegistry.invokeTool(eq(ToolCapability.GITHUB.toolName()), eq("{}"), anyString())).thenReturn(ToolResponse.success("ok"));
+        when(mockRegistry.invokeTool(eq(ToolCapability.GITHUB.toolName()), eq("{}"), anyString()))
+                .thenReturn(ToolResponse.success("ok"));
 
-        McpToolRequest reqCoder = new McpToolRequest(ToolCapability.GITHUB.toolName(), "{}", HttpServerRequest.class.cast(
-            Proxy.newProxyInstance(getClass().getClassLoader(), new Class[]{HttpServerRequest.class}, (p, m, args) -> {
-                if ("headers".equals(m.getName())) return MultiMap.caseInsensitiveMultiMap().add("X-MCP-Capabilities", "code_generation");
-                return null;
-            })));
+        McpToolRequest reqCoder = new McpToolRequest(
+                ToolCapability.GITHUB.toolName(),
+                "{}",
+                HttpServerRequest.class.cast(Proxy.newProxyInstance(
+                        getClass().getClassLoader(), new Class[] {HttpServerRequest.class}, (p, m, args) -> {
+                            if ("headers".equals(m.getName()))
+                                return MultiMap.caseInsensitiveMultiMap().add("X-MCP-Capabilities", "code_generation");
+                            return null;
+                        })));
         bridge.executeTool(reqCoder);
 
         ArgumentCaptor<String> roleCaptor = ArgumentCaptor.forClass(String.class);
-        Mockito.verify(bridge.auditService).record(anyString(), anyString(), roleCaptor.capture(), eq(SecurityEventType.TOOL_INVOKED), anyString());
-        
+        Mockito.verify(bridge.auditService)
+                .record(
+                        anyString(),
+                        anyString(),
+                        roleCaptor.capture(),
+                        eq(SecurityEventType.TOOL_INVOKED),
+                        anyString());
+
         assertEquals("coder", roleCaptor.getValue());
     }
 

@@ -2,11 +2,11 @@ package com.arcclaw.core.memory.tiered;
 
 import static java.lang.annotation.ElementType.*;
 
+import jakarta.inject.Qualifier;
+
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
-
-import jakarta.inject.Qualifier;
 
 /**
  * CDI qualifier for tiered memory backend identification.

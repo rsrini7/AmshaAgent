@@ -11,8 +11,10 @@ import com.arcclaw.core.governance.ApprovalFrame;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.quarkus.qute.TemplateData;
+
 import org.jboss.logging.Logger;
+
+import io.quarkus.qute.TemplateData;
 
 /**
  * Result of an {@link AgentLoop} execution.
@@ -28,7 +30,9 @@ public sealed interface AgentResult
     Logger log = Logger.getLogger(AgentResult.class);
 
     List<ReasoningStep> steps();
+
     int totalInputTokens();
+
     int totalOutputTokens();
 
     enum FailureCategory {
@@ -43,21 +47,13 @@ public sealed interface AgentResult
     }
 
     @TemplateData
-    record Finished(
-            String answer,
-            List<ReasoningStep> steps,
-            int totalInputTokens,
-            int totalOutputTokens
-    ) implements AgentResult {}
+    record Finished(String answer, List<ReasoningStep> steps, int totalInputTokens, int totalOutputTokens)
+            implements AgentResult {}
 
     @TemplateData
     record StructuredFinished(
-            String answer,
-            Object structured,
-            List<ReasoningStep> steps,
-            int totalInputTokens,
-            int totalOutputTokens
-    ) implements AgentResult {}
+            String answer, Object structured, List<ReasoningStep> steps, int totalInputTokens, int totalOutputTokens)
+            implements AgentResult {}
 
     @TemplateData
     record AwaitingApproval(
@@ -65,11 +61,13 @@ public sealed interface AgentResult
             String sessionId,
             List<ReasoningStep> steps,
             int totalInputTokens,
-            int totalOutputTokens
-    ) implements AgentResult {
-        
+            int totalOutputTokens)
+            implements AgentResult {
+
         @JsonIgnore
-        public String toolName() { return frame.tool(); }
+        public String toolName() {
+            return frame.tool();
+        }
 
         @JsonIgnore
         public String paramsJson() {
@@ -86,21 +84,13 @@ public sealed interface AgentResult
     }
 
     @TemplateData
-    record LoopExceeded(
-            int maxIterations,
-            List<ReasoningStep> steps,
-            int totalInputTokens,
-            int totalOutputTokens
-    ) implements AgentResult {}
+    record LoopExceeded(int maxIterations, List<ReasoningStep> steps, int totalInputTokens, int totalOutputTokens)
+            implements AgentResult {}
 
     @TemplateData
     record AwaitingRetry(
-            String sessionId,
-            int retryAfterMs,
-            List<ReasoningStep> steps,
-            int totalInputTokens,
-            int totalOutputTokens
-    ) implements AgentResult {}
+            String sessionId, int retryAfterMs, List<ReasoningStep> steps, int totalInputTokens, int totalOutputTokens)
+            implements AgentResult {}
 
     @TemplateData
     record Failed(
@@ -108,8 +98,8 @@ public sealed interface AgentResult
             FailureCategory category,
             List<ReasoningStep> steps,
             int totalInputTokens,
-            int totalOutputTokens
-    ) implements AgentResult {}
+            int totalOutputTokens)
+            implements AgentResult {}
 
     // Static factories mapping to the new types
 
@@ -121,7 +111,8 @@ public sealed interface AgentResult
         return new StructuredFinished(answer, structured, steps, sumIn(steps), sumOut(steps));
     }
 
-    static AgentResult awaitingApproval(String toolName, String paramsJson, String sessionId, List<ReasoningStep> steps) {
+    static AgentResult awaitingApproval(
+            String toolName, String paramsJson, String sessionId, List<ReasoningStep> steps) {
         Map<String, Object> params = Collections.emptyMap();
         try {
             params = new ObjectMapper().readValue(paramsJson, new TypeReference<Map<String, Object>>() {});

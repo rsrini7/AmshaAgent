@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
 import com.arcclaw.core.agent.role.AgentRoleEnum;
+
 import org.junit.jupiter.api.Test;
 
 /**
@@ -22,85 +23,111 @@ class EscalationPatternsTest {
     // --- Optimizer escalations ---
     @Test
     void optimizer_implementEscalatesToCoder() {
-        assertEquals(CODER, EscalationPatterns.determineNewPersonaEscalation(
-                AgentRoleEnum.OPTIMIZER.toScopedName(), "please implement a new feature"));
+        assertEquals(
+                CODER,
+                EscalationPatterns.determineNewPersonaEscalation(
+                        AgentRoleEnum.OPTIMIZER.toScopedName(), "please implement a new feature"));
     }
 
     @Test
     void optimizer_researchEscalatesToResearcher() {
-        assertEquals(RESEARCHER, EscalationPatterns.determineNewPersonaEscalation(
-                AgentRoleEnum.OPTIMIZER.toScopedName(), "find information about this API"));
+        assertEquals(
+                RESEARCHER,
+                EscalationPatterns.determineNewPersonaEscalation(
+                        AgentRoleEnum.OPTIMIZER.toScopedName(), "find information about this API"));
     }
 
     @Test
     void optimizer_debugEscalatesToDebugger() {
-        assertEquals(DEBUGGER, EscalationPatterns.determineNewPersonaEscalation(
-                AgentRoleEnum.OPTIMIZER.toScopedName(), "fix bug in the parser"));
+        assertEquals(
+                DEBUGGER,
+                EscalationPatterns.determineNewPersonaEscalation(
+                        AgentRoleEnum.OPTIMIZER.toScopedName(), "fix bug in the parser"));
     }
 
     @Test
     void optimizer_securityEscalatesToSentinel() {
-        assertEquals(SENTINEL, EscalationPatterns.determineNewPersonaEscalation(
-                AgentRoleEnum.OPTIMIZER.toScopedName(), "there is a security vulnerability"));
+        assertEquals(
+                SENTINEL,
+                EscalationPatterns.determineNewPersonaEscalation(
+                        AgentRoleEnum.OPTIMIZER.toScopedName(), "there is a security vulnerability"));
     }
 
     // --- Sentinel escalations ---
     @Test
     void sentinel_fixEscalatesToDebugger() {
-        assertEquals(DEBUGGER, EscalationPatterns.determineNewPersonaEscalation(
-                AgentRoleEnum.SENTINEL.toScopedName(), "patch the vulnerability"));
+        assertEquals(
+                DEBUGGER,
+                EscalationPatterns.determineNewPersonaEscalation(
+                        AgentRoleEnum.SENTINEL.toScopedName(), "patch the vulnerability"));
     }
 
     @Test
     void sentinel_researchEscalatesToResearcher() {
-        assertEquals(RESEARCHER, EscalationPatterns.determineNewPersonaEscalation(
-                AgentRoleEnum.SENTINEL.toScopedName(), "research the CVE advisory"));
+        assertEquals(
+                RESEARCHER,
+                EscalationPatterns.determineNewPersonaEscalation(
+                        AgentRoleEnum.SENTINEL.toScopedName(), "research the CVE advisory"));
     }
 
     @Test
     void sentinel_algorithmEscalatesToOptimizer() {
-        assertEquals(OPTIMIZER, EscalationPatterns.determineNewPersonaEscalation(
-                AgentRoleEnum.SENTINEL.toScopedName(), "complex logic in the encryption algorithm"));
+        assertEquals(
+                OPTIMIZER,
+                EscalationPatterns.determineNewPersonaEscalation(
+                        AgentRoleEnum.SENTINEL.toScopedName(), "complex logic in the encryption algorithm"));
     }
 
     // --- Healer escalations ---
     @Test
     void healer_fixEscalatesToDebugger() {
-        assertEquals(DEBUGGER, EscalationPatterns.determineNewPersonaEscalation(
-                AgentRoleEnum.HEALER.toScopedName(), "implement the fix"));
+        assertEquals(
+                DEBUGGER,
+                EscalationPatterns.determineNewPersonaEscalation(
+                        AgentRoleEnum.HEALER.toScopedName(), "implement the fix"));
     }
 
     @Test
     void healer_budgetEscalatesToCoordinator() {
-        assertEquals(COORDINATOR, EscalationPatterns.determineNewPersonaEscalation(
-                AgentRoleEnum.HEALER.toScopedName(), "review budget allocation"));
+        assertEquals(
+                COORDINATOR,
+                EscalationPatterns.determineNewPersonaEscalation(
+                        AgentRoleEnum.HEALER.toScopedName(), "review budget allocation"));
     }
 
     // --- Protector escalations ---
     @Test
     void protector_enforceEscalatesToDebugger() {
-        assertEquals(DEBUGGER, EscalationPatterns.determineNewPersonaEscalation(
-                AgentRoleEnum.PROTECTOR.toScopedName(), "enforce the security policy"));
+        assertEquals(
+                DEBUGGER,
+                EscalationPatterns.determineNewPersonaEscalation(
+                        AgentRoleEnum.PROTECTOR.toScopedName(), "enforce the security policy"));
     }
 
     // --- Purifier escalations ---
     @Test
     void purifier_codeChangeEscalatesToDebugger() {
-        assertEquals(DEBUGGER, EscalationPatterns.determineNewPersonaEscalation(
-                AgentRoleEnum.PURIFIER.toScopedName(), "implement the code change"));
+        assertEquals(
+                DEBUGGER,
+                EscalationPatterns.determineNewPersonaEscalation(
+                        AgentRoleEnum.PURIFIER.toScopedName(), "implement the code change"));
     }
 
     // --- Nurturer escalations ---
     @Test
     void nurturer_bugEscalatesToDebugger() {
-        assertEquals(DEBUGGER, EscalationPatterns.determineNewPersonaEscalation(
-                AgentRoleEnum.NURTURER.toScopedName(), "there is a bug in the error handler"));
+        assertEquals(
+                DEBUGGER,
+                EscalationPatterns.determineNewPersonaEscalation(
+                        AgentRoleEnum.NURTURER.toScopedName(), "there is a bug in the error handler"));
     }
 
     @Test
     void nurturer_crashEscalatesToDebugger() {
-        assertEquals(DEBUGGER, EscalationPatterns.determineNewPersonaEscalation(
-                AgentRoleEnum.NURTURER.toScopedName(), "the stack trace shows a crash"));
+        assertEquals(
+                DEBUGGER,
+                EscalationPatterns.determineNewPersonaEscalation(
+                        AgentRoleEnum.NURTURER.toScopedName(), "the stack trace shows a crash"));
     }
 
     // --- No match ---

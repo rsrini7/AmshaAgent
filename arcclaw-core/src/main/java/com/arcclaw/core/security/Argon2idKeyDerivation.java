@@ -1,11 +1,11 @@
 package com.arcclaw.core.security;
 
+import jakarta.enterprise.context.ApplicationScoped;
+
 import java.nio.ByteBuffer;
 import java.nio.CharBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
-
-import jakarta.enterprise.context.ApplicationScoped;
 
 import org.bouncycastle.crypto.generators.Argon2BytesGenerator;
 import org.bouncycastle.crypto.params.Argon2Parameters;

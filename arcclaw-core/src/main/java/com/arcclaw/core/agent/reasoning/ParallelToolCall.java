@@ -11,13 +11,13 @@ import java.util.Map;
  * ReasoningStep.actionInput for Architecture_Invariants.md §7.1.
  */
 public record ParallelToolCall(
-    String callId,                    // stable ID: "call_0", "call_1", ...
-    String toolName,                  // LLM-requested tool name
-    Map<String, Object> params,       // deserialized tool parameters
-    String paramsJson,                // §7.1: serialized JSON of params
-    String observation,               // null pre-execution; filled post-execution
-    boolean success                   // false pre-execution; set post-execution
-) {
+        String callId, // stable ID: "call_0", "call_1", ...
+        String toolName, // LLM-requested tool name
+        Map<String, Object> params, // deserialized tool parameters
+        String paramsJson, // §7.1: serialized JSON of params
+        String observation, // null pre-execution; filled post-execution
+        boolean success // false pre-execution; set post-execution
+        ) {
     /** Creates a pre-execution call with null observation. */
     public static ParallelToolCall pending(
             String callId, String toolName, Map<String, Object> params, String paramsJson) {
@@ -26,7 +26,6 @@ public record ParallelToolCall(
 
     /** Returns a copy of this call with the execution result filled in. */
     public ParallelToolCall withResult(String observation, boolean success) {
-        return new ParallelToolCall(
-            this.callId, this.toolName, this.params, this.paramsJson, observation, success);
+        return new ParallelToolCall(this.callId, this.toolName, this.params, this.paramsJson, observation, success);
     }
 }

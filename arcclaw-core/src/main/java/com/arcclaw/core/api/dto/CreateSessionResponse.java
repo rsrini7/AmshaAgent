@@ -1,4 +1,3 @@
 package com.arcclaw.core.api.dto;
 
-public record CreateSessionResponse(String sessionId) {
-}
+public record CreateSessionResponse(String sessionId) {}

@@ -1,20 +1,22 @@
 package com.arcclaw.core.security;
 
-import java.nio.charset.StandardCharsets;
-import java.security.SecureRandom;
-import java.util.Arrays;
-import java.util.Base64;
-
 import jakarta.annotation.Priority;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
 import jakarta.inject.Inject;
 
+import java.nio.charset.StandardCharsets;
+import java.security.SecureRandom;
+import java.util.Arrays;
+import java.util.Base64;
+
 import com.arcclaw.common.util.LogUtil;
-import io.quarkus.runtime.StartupEvent;
+
 import org.eclipse.microprofile.config.ConfigProvider;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
+
+import io.quarkus.runtime.StartupEvent;
 
 /**
  * Seeds host OS environment variables into the SecretVault when a workspace
@@ -81,23 +83,21 @@ public class DevSecretSeeder {
             //       POST /api/v1/vault/system-keys
             //     before audit integrity checks will pass.
             log.warnf(
-                "[DevSecretSeeder] Profile='%s', autoSeedEnabled=false - " +
-                "ARCCLAW_AUDIT_HMAC_KEY was NOT seeded into the vault. " +
-                "Audit log HMAC verification will fail until the key is " +
-                "provisioned manually. For production, set ARCCLAW_AUTO_SEED_SECRETS=true " +
-                "in your .env or insert directly into the vault database.",
-                profile
-            );
+                    "[DevSecretSeeder] Profile='%s', autoSeedEnabled=false - "
+                            + "ARCCLAW_AUDIT_HMAC_KEY was NOT seeded into the vault. "
+                            + "Audit log HMAC verification will fail until the key is "
+                            + "provisioned manually. For production, set ARCCLAW_AUTO_SEED_SECRETS=true "
+                            + "in your .env or insert directly into the vault database.",
+                    profile);
         }
 
         if (autoSeedEnabled) {
             seedDevSecrets();
         } else {
             log.debugf(
-                "[DevSecretSeeder] Auto-seed disabled (arcclaw.auto-seed-secrets=false). " +
-                "Tool secrets (GITHUB, SERPER, BRAVE) were not seeded. " +
-                "Provision them manually by sending the bot a message: store ARCCLAW_TOOLS_GITHUB_TOKEN=your_token"
-            );
+                    "[DevSecretSeeder] Auto-seed disabled (arcclaw.auto-seed-secrets=false). "
+                            + "Tool secrets (GITHUB, SERPER, BRAVE) were not seeded. "
+                            + "Provision them manually by sending the bot a message: store ARCCLAW_TOOLS_GITHUB_TOKEN=your_token");
         }
     }
 
@@ -191,10 +191,11 @@ public class DevSecretSeeder {
                 .orElse(null);
 
         if (hostValue == null || hostValue.isBlank() || "none".equalsIgnoreCase(hostValue.trim())) {
-            log.warnf("Secret seeder: %s not found or set to 'none' in config. " +
-                      "Provide it manually: send 'store %s=<value>' via chat, " +
-                      "or set it in .env and restart with ARCCLAW_AUTO_SEED_SECRETS=true.", 
-                      vaultKeyName, vaultKeyName);
+            log.warnf(
+                    "Secret seeder: %s not found or set to 'none' in config. "
+                            + "Provide it manually: send 'store %s=<value>' via chat, "
+                            + "or set it in .env and restart with ARCCLAW_AUTO_SEED_SECRETS=true.",
+                    vaultKeyName, vaultKeyName);
             return;
         }
 
@@ -204,8 +205,7 @@ public class DevSecretSeeder {
             secretVault.storeSystemKey(vaultKeyName, secretBytes);
             log.infof("Secret seeder: %s seeded into system vault from config.", vaultKeyName);
         } catch (Exception e) {
-            log.warnf("Secret seeder: failed to seed %s into system vault: %s",
-                      vaultKeyName, LogUtil.rootMessage(e));
+            log.warnf("Secret seeder: failed to seed %s into system vault: %s", vaultKeyName, LogUtil.rootMessage(e));
         } finally {
             Arrays.fill(secretBytes, (byte) 0);
         }

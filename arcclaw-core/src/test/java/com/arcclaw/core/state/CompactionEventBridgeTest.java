@@ -8,6 +8,7 @@ import java.util.Optional;
 
 import com.arcclaw.core.compaction.CompactionInFlightFlag;
 import com.arcclaw.core.compaction.CompactionRequest;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -33,7 +34,7 @@ class CompactionEventBridgeTest {
     void testDelegatesToServiceAndReleasesLockOnSuccess() {
         CompactionRequest request = new CompactionRequest("session1", "user1");
         when(agentStore.findLatestAwaitingApproval(anyString())).thenReturn(Optional.empty());
-        
+
         bridge.onCompactionRequested(request);
 
         verify(compactionService).compact("session1", "user1");

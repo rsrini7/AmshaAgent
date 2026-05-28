@@ -1,9 +1,9 @@
 package com.arcclaw.core.memory.tiered;
 
-import java.util.List;
-
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
+
+import java.util.List;
 
 import com.arcclaw.persistence.api.RecallMemoryStorePort;
 import com.arcclaw.persistence.api.RecallMessageDto;

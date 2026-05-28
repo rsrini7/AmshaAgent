@@ -8,18 +8,20 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import jakarta.inject.Inject;
+
 import java.util.HashMap;
 import java.util.Map;
-
-import jakarta.inject.Inject;
 
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.security.ToolOperation;
-import io.quarkus.test.InjectMock;
-import io.quarkus.test.junit.QuarkusTest;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+
+import io.quarkus.test.InjectMock;
+import io.quarkus.test.junit.QuarkusTest;
 
 @QuarkusTest
 class NullParamStrippingTest {
@@ -50,14 +52,14 @@ class NullParamStrippingTest {
     @Test
     void testDefaultBehavior_StripsNulls() {
         when(mockTool.shouldStripNullParams()).thenReturn(true);
-        
+
         Map<String, Object> inputParams = new HashMap<>();
         inputParams.put("keep", "value");
         inputParams.put("strip", null);
 
         WorkspaceContext.run("s1", "user", "chat", AutonomyLevel.FULL, "coordinator", () -> {
             registry.invokeTool("test-tool", inputParams);
-            
+
             verify(mockTool).execute(any(), argThat(params -> {
                 assertTrue(params.containsKey("keep"));
                 assertFalse(params.containsKey("strip"));
@@ -69,14 +71,14 @@ class NullParamStrippingTest {
     @Test
     void testOptOutBehavior_PreservesNulls() {
         when(mockTool.shouldStripNullParams()).thenReturn(false);
-        
+
         Map<String, Object> inputParams = new HashMap<>();
         inputParams.put("keep", "value");
         inputParams.put("preserve", null);
 
         WorkspaceContext.run("s1", "user", "chat", AutonomyLevel.FULL, "coordinator", () -> {
             registry.invokeTool("test-tool", inputParams);
-            
+
             verify(mockTool).execute(any(), argThat(params -> {
                 assertTrue(params.containsKey("keep"));
                 assertTrue(params.containsKey("preserve"));

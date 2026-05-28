@@ -1,13 +1,13 @@
 package com.arcclaw.persistence.common.entity;
 
-import java.io.Serializable;
-import java.util.Objects;
-
 import jakarta.persistence.Column;
 import jakarta.persistence.Embeddable;
 import jakarta.persistence.EmbeddedId;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Table;
+
+import java.io.Serializable;
+import java.util.Objects;
 
 import com.arcclaw.core.domain.model.EncryptedSecret;
 
@@ -42,24 +42,49 @@ public class EncryptedSecretEntity implements EncryptedSecret {
     }
 
     @Override
-    public String getSessionId() { return id.sessionId; }
-    public void setSessionId(String sessionId) { id.sessionId = sessionId; }
+    public String getSessionId() {
+        return id.sessionId;
+    }
+
+    public void setSessionId(String sessionId) {
+        id.sessionId = sessionId;
+    }
 
     @Override
-    public String getKeyName() { return id.keyName; }
-    public void setKeyName(String keyName) { id.keyName = keyName; }
+    public String getKeyName() {
+        return id.keyName;
+    }
+
+    public void setKeyName(String keyName) {
+        id.keyName = keyName;
+    }
 
     @Override
-    public int getEncryptionKeyVersion() { return encryptionKeyVersion; }
-    public void setEncryptionKeyVersion(int version) { this.encryptionKeyVersion = version; }
+    public int getEncryptionKeyVersion() {
+        return encryptionKeyVersion;
+    }
+
+    public void setEncryptionKeyVersion(int version) {
+        this.encryptionKeyVersion = version;
+    }
 
     @Override
-    public byte[] getCiphertext() { return ciphertext; }
-    public void setCiphertext(byte[] ciphertext) { this.ciphertext = ciphertext; }
+    public byte[] getCiphertext() {
+        return ciphertext;
+    }
+
+    public void setCiphertext(byte[] ciphertext) {
+        this.ciphertext = ciphertext;
+    }
 
     @Override
-    public byte[] getNonce() { return nonce; }
-    public void setNonce(byte[] nonce) { this.nonce = nonce; }
+    public byte[] getNonce() {
+        return nonce;
+    }
+
+    public void setNonce(byte[] nonce) {
+        this.nonce = nonce;
+    }
 
     @Embeddable
     public static class EncryptedSecretId implements Serializable {
@@ -70,6 +95,7 @@ public class EncryptedSecretEntity implements EncryptedSecret {
         private String keyName;
 
         public EncryptedSecretId() {}
+
         public EncryptedSecretId(String sessionId, String keyName) {
             this.sessionId = sessionId;
             this.keyName = keyName;

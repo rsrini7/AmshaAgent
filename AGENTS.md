@@ -4,9 +4,10 @@ Welcome! This document outlines the critical invariants, conventions, and archit
 
 ---
 
-* **Import Alignment**: After making any modifications to Java source files, you MUST run the import organization and FQN sorting script to align imports:
+* **Import Alignment**: After making any modifications to Java source files, you MUST run:
   ```bash
-  python3 ./fix_fqns.py
+  python3 ./fix_fqns.py          # FQN replacement only (short names + imports)
+  ./mvnw spotless:apply -q       # Format + import sorting + remove unused imports
   ```
 * **SonarQube Quality Gate**: Before committing, check for BLOCKER/CRITICAL issues:
   ```bash

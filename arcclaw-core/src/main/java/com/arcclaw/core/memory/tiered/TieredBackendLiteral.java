@@ -11,8 +11,7 @@ import jakarta.enterprise.util.AnnotationLiteral;
  *   TieredMemoryStorePort sqlite = stores.select(new TieredBackendLiteral("sqlite")).get();
  * }</pre>
  */
-public final class TieredBackendLiteral extends AnnotationLiteral<TieredBackend>
-    implements TieredBackend {
+public final class TieredBackendLiteral extends AnnotationLiteral<TieredBackend> implements TieredBackend {
 
     private static final long serialVersionUID = 1L;
 

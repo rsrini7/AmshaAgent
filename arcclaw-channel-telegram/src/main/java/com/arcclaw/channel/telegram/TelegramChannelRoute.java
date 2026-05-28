@@ -1,13 +1,13 @@
 package com.arcclaw.channel.telegram;
 
-import java.net.SocketException;
-
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
 import jakarta.inject.Inject;
 
+import java.net.SocketException;
+
 import com.arcclaw.common.util.LogUtil;
-import io.quarkus.runtime.StartupEvent;
+
 import org.apache.camel.CamelContext;
 import org.apache.camel.Exchange;
 import org.apache.camel.Predicate;
@@ -18,6 +18,8 @@ import org.apache.camel.component.telegram.TelegramComponent;
 import org.apache.camel.component.telegram.model.IncomingCallbackQuery;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
+
+import io.quarkus.runtime.StartupEvent;
 
 @ApplicationScoped
 public class TelegramChannelRoute extends RouteBuilder {
@@ -35,14 +37,17 @@ public class TelegramChannelRoute extends RouteBuilder {
 
     @Override
     public void configure() throws Exception {
-        log.infof("Telegram Route configuring (enabled=%b, tokenPresent=%b)", enabled, botToken != null && !botToken.isBlank());
+        log.infof(
+                "Telegram Route configuring (enabled=%b, tokenPresent=%b)",
+                enabled, botToken != null && !botToken.isBlank());
         if (!enabled) {
             log.info("Telegram channel disabled - skipping route");
             return;
         }
 
         // Fail fast if token is clearly a placeholder - don't let Camel hang
-        if (botToken == null || botToken.isBlank()
+        if (botToken == null
+                || botToken.isBlank()
                 || botToken.startsWith("mock")
                 || botToken.equals("mock-telegram-token")) {
             log.warn("Telegram bot token is a placeholder - skipping route registration.");
@@ -63,28 +68,28 @@ public class TelegramChannelRoute extends RouteBuilder {
         from("telegram:bots?timeout=10&backoffErrorThreshold=3&backoffMultiplier=2")
                 .routeId("telegram-bot")
                 .onException(RuntimeCamelException.class)
-                    .onWhen(new isSocketException())
-                    .process(new logTransientError())
-                    .handled(true)
-                    .maximumRedeliveries(0)
+                .onWhen(new isSocketException())
+                .process(new logTransientError())
+                .handled(true)
+                .maximumRedeliveries(0)
                 .end()
                 .choice()
-                    .when(body().isInstanceOf(IncomingCallbackQuery.class))
-                        .bean(TelegramCallbackHandler.class, "handleCallback")
-                    .otherwise()
-                        .bean(TelegramAgentHandler.class, "receiveMessage")
+                .when(body().isInstanceOf(IncomingCallbackQuery.class))
+                .bean(TelegramCallbackHandler.class, "handleCallback")
+                .otherwise()
+                .bean(TelegramAgentHandler.class, "receiveMessage")
                 .end();
     }
 
-    
     void onStart(@Observes StartupEvent ev) {
         log.infof("Telegram Route onStart (enabled=%b, contextStatus=%s)", enabled, camelContext.getStatus());
         if (!enabled || isPlaceholderToken()) return;
 
         try {
             if (System.getProperty("org.graalvm.nativeimage.imagecode") == null) {
-                camelContext.getLifecycleStrategies()
-                    .removeIf(s -> s.getClass().getName().contains("JmxManagement"));
+                camelContext
+                        .getLifecycleStrategies()
+                        .removeIf(s -> s.getClass().getName().contains("JmxManagement"));
             }
 
             if (camelContext.getStatus().isStopped()) {
@@ -97,8 +102,9 @@ public class TelegramChannelRoute extends RouteBuilder {
                 // ← DO NOT wrap in Thread/VirtualThread/lambda - must run on this CDI thread
                 camelContext.addRoutes(this);
                 camelContext.getRouteController().startRoute("telegram-bot");
-                log.infof("Telegram route started. Status=%s",
-                    camelContext.getRouteController().getRouteStatus("telegram-bot"));
+                log.infof(
+                        "Telegram route started. Status=%s",
+                        camelContext.getRouteController().getRouteStatus("telegram-bot"));
             }
         } catch (Exception e) {
             log.error("Telegram route registration failed", e);
@@ -106,9 +112,10 @@ public class TelegramChannelRoute extends RouteBuilder {
     }
 
     private boolean isPlaceholderToken() {
-        return botToken == null || botToken.isBlank()
-            || botToken.startsWith("mock")
-            || botToken.equals("mock-telegram-token");
+        return botToken == null
+                || botToken.isBlank()
+                || botToken.startsWith("mock")
+                || botToken.equals("mock-telegram-token");
     }
 
     /** Matches only when the root cause is a transient SocketException (connection reset, etc.) */

@@ -1,9 +1,9 @@
 package com.arcclaw.core.audit;
 
-import java.util.List;
-
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
+
+import java.util.List;
 
 import com.arcclaw.core.domain.model.AuditEvent;
 import com.arcclaw.core.domain.model.AuditEventRecord;
@@ -46,7 +46,6 @@ public class AuditVerifier {
 
         return new VerificationResult(true, null, events.size());
     }
-
 
     public record VerificationResult(boolean valid, String brokenAtId, int totalRows) {}
 }

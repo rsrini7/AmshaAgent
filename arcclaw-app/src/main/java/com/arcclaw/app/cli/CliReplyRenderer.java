@@ -1,15 +1,16 @@
 package com.arcclaw.app.cli;
 
+import jakarta.enterprise.context.ApplicationScoped;
+
 import java.util.List;
 import java.util.stream.Collectors;
-
-import jakarta.enterprise.context.ApplicationScoped;
 
 import com.arcclaw.channel.api.ApprovalPrompt;
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ContentNode;
 import com.arcclaw.channel.api.InteractionNode;
 import com.arcclaw.channel.api.ReplyRenderer;
+
 import org.fusesource.jansi.Ansi;
 import org.fusesource.jansi.Ansi.Color;
 import org.jboss.logging.Logger;
@@ -50,13 +51,12 @@ public class CliReplyRenderer implements ReplyRenderer {
 
     private String renderContentNode(ContentNode node) {
         return switch (node) {
-            case ContentNode.Text t         -> t.content() + "\n\n";
-            case ContentNode.Heading h      -> heading(h.text());
-            case ContentNode.CodeBlock cb   -> code(cb.code());
-            case ContentNode.InlineCode ic  -> codeInline(ic.code());
-            case ContentNode.BulletList bl  -> bl.items().stream()
-                    .map(item -> bullet("- ") + item)
-                    .collect(Collectors.joining("\n")) + "\n\n";
+            case ContentNode.Text t -> t.content() + "\n\n";
+            case ContentNode.Heading h -> heading(h.text());
+            case ContentNode.CodeBlock cb -> code(cb.code());
+            case ContentNode.InlineCode ic -> codeInline(ic.code());
+            case ContentNode.BulletList bl ->
+                bl.items().stream().map(item -> bullet("- ") + item).collect(Collectors.joining("\n")) + "\n\n";
             case ContentNode.NumberedList nl -> {
                 StringBuilder lst = new StringBuilder();
                 for (int i = 0; i < nl.items().size(); i++) {
@@ -66,12 +66,13 @@ public class CliReplyRenderer implements ReplyRenderer {
                 lst.append("\n");
                 yield lst.toString();
             }
-            case ContentNode.KeyValue kv    -> bold(kv.key()) + ": " + kv.value() + "\n\n";
-            case ContentNode.Separator _    -> "---\n\n";
-            case ContentNode.ErrorMessage err  -> error("[Error] ") + err.reason() + "\n\n";
+            case ContentNode.KeyValue kv -> bold(kv.key()) + ": " + kv.value() + "\n\n";
+            case ContentNode.Separator _ -> "---\n\n";
+            case ContentNode.ErrorMessage err -> error("[Error] ") + err.reason() + "\n\n";
             default -> {
-                log.warnf("Unsupported ContentNode type %s in CLI renderer",
-                    node.getClass().getName());
+                log.warnf(
+                        "Unsupported ContentNode type %s in CLI renderer",
+                        node.getClass().getName());
                 yield "[Unsupported content type]";
             }
         };

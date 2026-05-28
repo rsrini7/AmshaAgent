@@ -14,6 +14,7 @@ import java.util.Set;
 import com.arcclaw.persistence.api.ArchivalChunkDto;
 import com.arcclaw.persistence.api.ArchivalMemoryStorePort;
 import com.arcclaw.persistence.api.ArchivalSearchQuery;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
@@ -36,9 +37,17 @@ class ArchivalMemoryServiceTest {
     @Test
     void testUpsert_delegatesToStore() {
         ArchivalChunkDto chunk = new ArchivalChunkDto(
-            "c1", "user1", "Some knowledge", "FACT",
-            "session1", "msg1", "tag1",
-            0.8, 0, Instant.now(), Instant.now());
+                "c1",
+                "user1",
+                "Some knowledge",
+                "FACT",
+                "session1",
+                "msg1",
+                "tag1",
+                0.8,
+                0,
+                Instant.now(),
+                Instant.now());
 
         service.upsert(chunk);
         verify(store).upsert(chunk);
@@ -46,12 +55,19 @@ class ArchivalMemoryServiceTest {
 
     @Test
     void testSearch_delegatesToStore() {
-        ArchivalSearchQuery query = new ArchivalSearchQuery(
-            "user1", "knowledge query", 5, Set.of(), false, true, null);
+        ArchivalSearchQuery query = new ArchivalSearchQuery("user1", "knowledge query", 5, Set.of(), false, true, null);
         ArchivalChunkDto chunk = new ArchivalChunkDto(
-            "c1", "user1", "Some knowledge", "FACT",
-            "session1", "msg1", "tag1",
-            0.8, 0, Instant.now(), Instant.now());
+                "c1",
+                "user1",
+                "Some knowledge",
+                "FACT",
+                "session1",
+                "msg1",
+                "tag1",
+                0.8,
+                0,
+                Instant.now(),
+                Instant.now());
 
         when(store.search(any())).thenReturn(List.of(chunk));
         List<ArchivalChunkDto> results = service.search(query);
@@ -64,9 +80,17 @@ class ArchivalMemoryServiceTest {
     @Test
     void testGetById_delegatesToStore() {
         ArchivalChunkDto chunk = new ArchivalChunkDto(
-            "c1", "user1", "Some knowledge", "FACT",
-            "session1", "msg1", "tag1",
-            0.8, 0, Instant.now(), Instant.now());
+                "c1",
+                "user1",
+                "Some knowledge",
+                "FACT",
+                "session1",
+                "msg1",
+                "tag1",
+                0.8,
+                0,
+                Instant.now(),
+                Instant.now());
 
         when(store.getById("c1")).thenReturn(Optional.of(chunk));
         Optional<ArchivalChunkDto> result = service.getById("c1");

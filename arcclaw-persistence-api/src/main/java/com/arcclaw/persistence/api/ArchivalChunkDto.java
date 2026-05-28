@@ -12,15 +12,14 @@ import java.time.Instant;
  * @param accessCount monotonically incremented on retrieval; used for LRU eviction
  */
 public record ArchivalChunkDto(
-    String chunkId,
-    String userId,
-    String content,
-    String chunkType,
-    String sourceSession,
-    String sourceMessage,
-    String tags,
-    double confidence,
-    int accessCount,
-    Instant createdAt,
-    Instant updatedAt
-) {}
+        String chunkId,
+        String userId,
+        String content,
+        String chunkType,
+        String sourceSession,
+        String sourceMessage,
+        String tags,
+        double confidence,
+        int accessCount,
+        Instant createdAt,
+        Instant updatedAt) {}

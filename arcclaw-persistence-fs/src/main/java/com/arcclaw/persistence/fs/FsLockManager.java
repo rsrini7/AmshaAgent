@@ -1,5 +1,10 @@
 package com.arcclaw.persistence.fs;
 
+import jakarta.annotation.PostConstruct;
+import jakarta.annotation.PreDestroy;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+
 import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.io.UncheckedIOException;
@@ -12,15 +17,12 @@ import java.time.Instant;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
-import jakarta.annotation.PostConstruct;
-import jakarta.annotation.PreDestroy;
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
-
 import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.persistence.api.AdvisoryLockPort;
-import io.quarkus.arc.properties.IfBuildProperty;
+
 import org.jboss.logging.Logger;
+
+import io.quarkus.arc.properties.IfBuildProperty;
 
 @ApplicationScoped
 @IfBuildProperty(name = "arcclaw.persistence.backend", stringValue = "fs")
@@ -33,7 +35,8 @@ public class FsLockManager implements AdvisoryLockPort {
 
     @Inject
     public FsLockManager(FsStoreProperties properties) {
-        this.locksDir = Path.of(properties.dataDir()).resolve("locks").toAbsolutePath().normalize();
+        this.locksDir =
+                Path.of(properties.dataDir()).resolve("locks").toAbsolutePath().normalize();
     }
 
     protected FsLockManager() {

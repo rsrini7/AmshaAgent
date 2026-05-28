@@ -10,11 +10,11 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import jakarta.inject.Inject;
+
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeoutException;
-
-import jakarta.inject.Inject;
 
 import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.governance.BudgetExceededException;
@@ -23,10 +23,12 @@ import com.arcclaw.core.sandbox.SandboxResult;
 import com.arcclaw.core.sandbox.ToolExecutionException;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
-import io.quarkus.test.InjectMock;
-import io.quarkus.test.junit.QuarkusTest;
+
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+
+import io.quarkus.test.InjectMock;
+import io.quarkus.test.junit.QuarkusTest;
 
 @QuarkusTest
 class SandboxExecToolTest {
@@ -59,7 +61,9 @@ class SandboxExecToolTest {
             verify(mockIsolationExecutor).executeSandboxed(any(), any(), cmdCaptor.capture(), any());
 
             List<String> cmd = cmdCaptor.getValue();
-            assertEquals(EXPECTED_PYTHON, cmd.get(0),
+            assertEquals(
+                    EXPECTED_PYTHON,
+                    cmd.get(0),
                     "Python executable must be OS-aware: 'python' on Windows, 'python3' elsewhere");
             assertEquals("-c", cmd.get(1));
             assertEquals("print('hello')", cmd.get(2));
@@ -160,8 +164,7 @@ class SandboxExecToolTest {
             assertFalse(r.success());
             assertTrue(r.output().contains("'language' is required"));
             // Error message must include usage example so the LLM self-corrects next iteration
-            assertTrue(r.output().contains("language"),
-                    "Error must contain usage hint to help LLM self-correct");
+            assertTrue(r.output().contains("language"), "Error must contain usage hint to help LLM self-correct");
             verifyNoInteractions(mockIsolationExecutor);
             return null;
         });
@@ -261,7 +264,8 @@ class SandboxExecToolTest {
             ToolResponse r = tool.execute(ctx(), params);
 
             // SandboxExecTool returns a dynamic message for infra failures via buildSandboxOfflineMsg()
-            assertTrue(r.isInfraFailure());            assertTrue(r.output().contains("SANDBOX_OFFLINE"), "Actual: " + r.output());
+            assertTrue(r.isInfraFailure());
+            assertTrue(r.output().contains("SANDBOX_OFFLINE"), "Actual: " + r.output());
             return null;
         });
     }
@@ -340,9 +344,9 @@ class SandboxExecToolTest {
 
             Map<String, Object> params = Map.of("code", code, "language", "java");
             ToolResponse r = tool.execute(ctx(), params);
-            // VERIFY: r.success() may be false if javac is missing on host, 
+            // VERIFY: r.success() may be false if javac is missing on host,
             // but the test should be updated to account for the restored javac logic.
-            // If the user's environment HAS javac, this passes. 
+            // If the user's environment HAS javac, this passes.
             // If it DOESN'T, it fails with "Java compilation failed".
             // Since we must not modify SandboxExecTool much, we accept this dependency.
             assertTrue(r.success(), "Java compilation or execution failed: " + r.output());
@@ -350,8 +354,7 @@ class SandboxExecToolTest {
 
             // VERIFY: isolationExecutor is only called ONCE for the java run.
             // Compilation uses direct ProcessBuilder on host.
-            verify(mockIsolationExecutor, times(1))
-                    .executeSandboxed(any(), any(), any(), any());
+            verify(mockIsolationExecutor, times(1)).executeSandboxed(any(), any(), any(), any());
             return null;
         });
     }
@@ -425,7 +428,8 @@ class SandboxExecToolTest {
     @Test
     void java_runtime_exec_is_blocked_by_safety_scanner() throws Exception {
         WorkspaceContext.run("test-session", "user1", "chat1", AutonomyLevel.FULL, "coder", () -> {
-            String code = "public class Main { public static void main(String[] a) throws Exception { Runtime.getRuntime().exec(\"rm -rf /\"); } }";
+            String code =
+                    "public class Main { public static void main(String[] a) throws Exception { Runtime.getRuntime().exec(\"rm -rf /\"); } }";
             Map<String, Object> params = Map.of("code", code, "language", "java");
             ToolResponse r = tool.execute(ctx(), params);
 
@@ -464,8 +468,7 @@ class SandboxExecToolTest {
                 Map<String, Object> params = Map.of("code", "x", "language", lang);
                 ToolResponse r = tool.execute(ctx(), params);
                 // May succeed or fail depending on OS - just must NOT be "Unsupported language"
-                assertFalse(r.output().startsWith("Unsupported language"),
-                        "Language should be accepted: " + lang);
+                assertFalse(r.output().startsWith("Unsupported language"), "Language should be accepted: " + lang);
             }
             return null;
         });
@@ -477,7 +480,8 @@ class SandboxExecToolTest {
             Map<String, Object> params = Map.of("code", "puts 'hi'", "language", "ruby");
             ToolResponse r = tool.execute(ctx(), params);
             assertFalse(r.success());
-            assertTrue(r.output().contains("Unsupported language"), "Expected 'Unsupported language' in: " + r.output());
+            assertTrue(
+                    r.output().contains("Unsupported language"), "Expected 'Unsupported language' in: " + r.output());
             verifyNoInteractions(mockIsolationExecutor);
             return null;
         });
@@ -501,7 +505,17 @@ class SandboxExecToolTest {
 
     private ToolExecutionContext ctx() {
         return new ToolExecutionContext(
-            "test-session", "user1", "chat1", "coder", AutonomyLevel.FULL, 
-            "trace-1", null, null, null, null, null, null);
+                "test-session",
+                "user1",
+                "chat1",
+                "coder",
+                AutonomyLevel.FULL,
+                "trace-1",
+                null,
+                null,
+                null,
+                null,
+                null,
+                null);
     }
 }

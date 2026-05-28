@@ -6,6 +6,7 @@ import jakarta.inject.Inject;
 import com.arcclaw.core.lifecycle.WorkspaceManager;
 import com.arcclaw.core.message.UserMessages;
 import com.arcclaw.core.pipeline.MessageContext;
+
 import org.jboss.logging.Logger;
 
 @ApplicationScoped

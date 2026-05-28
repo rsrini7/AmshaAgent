@@ -8,6 +8,9 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
+import jakarta.inject.Inject;
+import jakarta.transaction.Transactional;
+
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Optional;
@@ -16,9 +19,6 @@ import java.util.concurrent.CompletionException;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
-
-import jakarta.inject.Inject;
-import jakarta.transaction.Transactional;
 
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
@@ -31,8 +31,10 @@ import com.arcclaw.persistence.api.AuditEventDto;
 import com.arcclaw.persistence.api.AuditEventStorePort;
 import com.arcclaw.persistence.api.SecretDto;
 import com.arcclaw.persistence.api.SecretStorePort;
-import io.quarkus.test.junit.QuarkusTest;
+
 import org.junit.jupiter.api.Test;
+
+import io.quarkus.test.junit.QuarkusTest;
 
 @QuarkusTest
 public class SecretVaultImplTest {
@@ -101,8 +103,8 @@ public class SecretVaultImplTest {
             // Flip the last bit of the ciphertext
             byte[] ct = dto.ciphertext();
             ct[ct.length - 1] ^= 1;
-            secretStore.save(new SecretDto(
-                    dto.sessionId(), dto.keyName(), dto.encryptionKeyVersion(), ct, dto.nonce()));
+            secretStore.save(
+                    new SecretDto(dto.sessionId(), dto.keyName(), dto.encryptionKeyVersion(), ct, dto.nonce()));
 
             // 3. Retrieve - Expect SecurityException (AEAD failure)
             assertThrows(SecurityException.class, () -> vault.get(API_KEY_NAME));
@@ -126,7 +128,8 @@ public class SecretVaultImplTest {
             auditService.waitForIdle();
 
             // 2. Steal ciphertext/nonce
-            SecretDto sourceDto = secretStore.find(TEST_SESSION_ID, API_KEY_NAME).orElse(null);
+            SecretDto sourceDto =
+                    secretStore.find(TEST_SESSION_ID, API_KEY_NAME).orElse(null);
 
             // 3. Inject into GITHUB_TOKEN slot
             insertForgedSecret(TEST_SESSION_ID, targetKeyName, sourceDto.ciphertext(), sourceDto.nonce());
@@ -270,30 +273,27 @@ public class SecretVaultImplTest {
 
         cleanDb();
 
-        CompletableFuture<Void> future = CompletableFuture.runAsync(() -> {
-            try {
-                WorkspaceContext.run(
-                        testSessionId,
-                        testUserId,
-                        "test-chat",
-                        AutonomyLevel.FULL,
-                        "test-role",
-                        () -> {
-                            vault.store("test-key", SECRET_PAYLOAD);
-                            return null;
-                        });
-            } catch (Exception e) {
-                throw new CompletionException(e);
-            }
-        }, Executors.newVirtualThreadPerTaskExecutor());
+        CompletableFuture<Void> future = CompletableFuture.runAsync(
+                () -> {
+                    try {
+                        WorkspaceContext.run(
+                                testSessionId, testUserId, "test-chat", AutonomyLevel.FULL, "test-role", () -> {
+                                    vault.store("test-key", SECRET_PAYLOAD);
+                                    return null;
+                                });
+                    } catch (Exception e) {
+                        throw new CompletionException(e);
+                    }
+                },
+                Executors.newVirtualThreadPerTaskExecutor());
 
         future.get();
         auditService.waitForIdle();
 
         // Verify audit record has correct user ID
         WorkspaceContext.runWithFullAutonomy(testSessionId, testUserId, "test-chat", "test-role", () -> {
-            List<AuditEventDto> events = auditStorePort.findAll(
-                    testSessionId, SecurityEventType.VAULT_STORE.name(), null, null, 0, 10);
+            List<AuditEventDto> events =
+                    auditStorePort.findAll(testSessionId, SecurityEventType.VAULT_STORE.name(), null, null, 0, 10);
 
             assertFalse(events.isEmpty(), "Audit event should be recorded");
             assertEquals(testUserId, events.get(0).userId());

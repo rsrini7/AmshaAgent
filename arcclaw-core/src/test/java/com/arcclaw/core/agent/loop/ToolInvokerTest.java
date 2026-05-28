@@ -15,10 +15,12 @@ import com.arcclaw.core.governance.RequiresApprovalException;
 import com.arcclaw.core.observability.AgentOtelContext;
 import com.arcclaw.core.tools.ToolRegistry;
 import com.arcclaw.core.tools.ToolResponse;
-import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
-import io.opentelemetry.api.trace.Span;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import io.opentelemetry.api.trace.Span;
 
 class ToolInvokerTest {
 
@@ -43,7 +45,8 @@ class ToolInvokerTest {
 
         // Mock OTel to return invalid (no-op) spans by default
         Span invalidSpan = Span.getInvalid();
-        when(agentOtelContext.startToolSpan(anyString(), anyString(), anyString())).thenReturn(invalidSpan);
+        when(agentOtelContext.startToolSpan(anyString(), anyString(), anyString()))
+                .thenReturn(invalidSpan);
     }
 
     @Test

@@ -39,8 +39,8 @@ class MemoryWriteGovernanceTest {
         governance.checkCoreWrite();
         governance.checkCoreWrite();
 
-        var ex = assertThrows(MemoryWriteGovernance.RateLimitExceededException.class,
-            () -> governance.checkCoreWrite());
+        var ex =
+                assertThrows(MemoryWriteGovernance.RateLimitExceededException.class, () -> governance.checkCoreWrite());
         assertEquals("core_memory", ex.toolType());
         assertEquals(3, ex.limit());
         assertEquals("minute", ex.period());
@@ -57,8 +57,8 @@ class MemoryWriteGovernanceTest {
         governance.checkArchivalWrite();
         governance.checkArchivalWrite();
 
-        var ex = assertThrows(MemoryWriteGovernance.RateLimitExceededException.class,
-            () -> governance.checkArchivalWrite());
+        var ex = assertThrows(
+                MemoryWriteGovernance.RateLimitExceededException.class, () -> governance.checkArchivalWrite());
         assertEquals("archival_memory", ex.toolType());
         assertEquals(2, ex.limit());
         assertEquals("hour", ex.period());
@@ -71,8 +71,7 @@ class MemoryWriteGovernanceTest {
         governance.checkCoreWrite();
         governance.checkCoreWrite();
         governance.checkCoreWrite();
-        assertThrows(MemoryWriteGovernance.RateLimitExceededException.class,
-            () -> governance.checkCoreWrite());
+        assertThrows(MemoryWriteGovernance.RateLimitExceededException.class, () -> governance.checkCoreWrite());
 
         // Archival still has budget
         assertDoesNotThrow(() -> governance.checkArchivalWrite());
@@ -90,16 +89,16 @@ class MemoryWriteGovernanceTest {
         governance.checkCoreWrite();
         governance.checkCoreWrite();
         governance.checkCoreWrite();
-        assertThrows(MemoryWriteGovernance.RateLimitExceededException.class,
-            () -> governance.checkCoreWrite());
+        assertThrows(MemoryWriteGovernance.RateLimitExceededException.class, () -> governance.checkCoreWrite());
 
         // New instance (simulates process restart) — fresh bucket, budget restored
         MemoryWriteGovernance newInstance = new MemoryWriteGovernance();
         newInstance.coreWritesPerMinute = 3;
         newInstance.archivalWritesPerHour = 2;
 
-        assertDoesNotThrow(newInstance::checkCoreWrite,
-            "Rate limits reset on new instance — this is intentional node-local behavior, not a bug");
+        assertDoesNotThrow(
+                newInstance::checkCoreWrite,
+                "Rate limits reset on new instance — this is intentional node-local behavior, not a bug");
     }
 
     /**

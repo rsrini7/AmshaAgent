@@ -12,6 +12,7 @@ import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ChannelUser;
 import com.arcclaw.core.pipeline.handlers.AgentDispatchHandler;
 import com.arcclaw.core.security.AutonomyLevel;
+
 import org.junit.jupiter.api.Test;
 
 class MessageContextTest {
@@ -35,12 +36,10 @@ class MessageContextTest {
         ChannelUser user = new ChannelUser("user1", "chat1", "John", ChannelType.CLI);
         ChannelMessage msg = new ChannelMessage.CliMessage(user, "hello", "sess1", Instant.now());
         MessageContext ctx = new MessageContext("chat1", user, msg);
-        
+
         // Do NOT call setSessionContext
         AgentDispatchHandler handler = new AgentDispatchHandler();
-        IllegalStateException ex = assertThrows(
-            IllegalStateException.class,
-            () -> handler.handle(ctx));
+        IllegalStateException ex = assertThrows(IllegalStateException.class, () -> handler.handle(ctx));
         assertTrue(ex.getMessage().contains("SessionResolutionHandler"));
     }
 

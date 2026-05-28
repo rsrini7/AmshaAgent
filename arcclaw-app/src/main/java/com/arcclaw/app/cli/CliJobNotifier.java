@@ -5,6 +5,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import com.arcclaw.channel.api.ChannelJobNotifier;
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.common.util.LogUtil;
+
 import org.jboss.logging.Logger;
 
 /**
@@ -35,7 +36,8 @@ public class CliJobNotifier implements ChannelJobNotifier {
     }
 
     @Override
-    public void notifyApprovalRequired(String recipient, String cronSessionId, String toolName, String renderedMessage) {
+    public void notifyApprovalRequired(
+            String recipient, String cronSessionId, String toolName, String renderedMessage) {
         try {
             System.err.println("\n[Cron Approval Required] Tool: " + toolName);
             if (renderedMessage != null && !renderedMessage.isBlank()) {
@@ -53,8 +55,8 @@ public class CliJobNotifier implements ChannelJobNotifier {
     public void notifyApprovalTimeout(String recipient, String sessionId, String pendingToolName, long timeoutMinutes) {
         try {
             String toolName = pendingToolName != null ? pendingToolName : "unknown";
-            System.err.println("\n[Cron Approval Timeout] Tool '" + toolName
-                    + "' timed out after " + timeoutMinutes + " minutes. Action cancelled.");
+            System.err.println("\n[Cron Approval Timeout] Tool '" + toolName + "' timed out after " + timeoutMinutes
+                    + " minutes. Action cancelled.");
             System.err.flush();
             log.infof("CLI-CRON-TIMEOUT session=%s tool=%s minutes=%d", sessionId, toolName, timeoutMinutes);
         } catch (Exception e) {

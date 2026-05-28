@@ -50,9 +50,9 @@ public enum AgentPersona {
         if (name == null || name.isBlank()) return Optional.empty();
         String n = name.trim().toLowerCase();
         for (AgentPersona p : values()) {
-            if (p.name().toLowerCase().equals(n) 
-                || p.roleId.equals(n) 
-                || p.aliases.stream().anyMatch(a -> a.equals(n))) {
+            if (p.name().toLowerCase().equals(n)
+                    || p.roleId.equals(n)
+                    || p.aliases.stream().anyMatch(a -> a.equals(n))) {
                 return Optional.of(p);
             }
         }

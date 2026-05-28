@@ -17,36 +17,36 @@ public class TmpfsSecretTransportTest {
     @Test
     void testPrepareAndDeliverLifecyle(@TempDir Path tempDir) throws IOException {
         String sessionId = "testSession";
-        
+
         // Setup raw secrets
         byte[] secret1 = "secret-value-1".getBytes();
         byte[] secret2 = "secret-value-2".getBytes();
-        
+
         Map<String, byte[]> secrets = new LinkedHashMap<>();
         secrets.put("KEY1", secret1);
         secrets.put("KEY2", secret2);
 
         Path envFilePath = null;
         try (TmpfsSecretTransport transport = new TmpfsSecretTransport(sessionId, tempDir)) {
-            
+
             // 1. Prepare
             List<String> commandArgs = transport.prepare(secrets);
-            
+
             assertNotNull(commandArgs);
             assertEquals(2, commandArgs.size());
             assertEquals("--env-file", commandArgs.get(0));
-            
+
             envFilePath = Path.of(commandArgs.get(1));
             assertTrue(Files.exists(envFilePath));
-            
+
             // Verify file sits inside the requested requested mount directory with the session prefix
             assertTrue(envFilePath.startsWith(tempDir));
             assertTrue(envFilePath.getFileName().toString().contains(sessionId));
-            
+
             // Verify format is pure bytes without String instantiation weirdness
             String content = Files.readString(envFilePath);
             assertEquals("KEY1=secret-value-1\nKEY2=secret-value-2\n", content);
-            
+
             // 2. Deliver (No op for tmpfs)
             assertDoesNotThrow(() -> transport.deliver(null));
         }
@@ -54,7 +54,7 @@ public class TmpfsSecretTransportTest {
         // 3. Verify Cleanup was triggered automatically via try-with-resources AutoCloseable
         assertFalse(Files.exists(envFilePath), "Env file must be deleted");
 
-        // 4. Verify original byte arrays were zeroed 
+        // 4. Verify original byte arrays were zeroed
         // Note: The caller owned them, but the transport takes over ownership to wipe them
         for (byte b : secret1) {
             assertEquals((byte) 0, b, "Secret material 1 was not zeroed out");
@@ -76,15 +76,15 @@ public class TmpfsSecretTransportTest {
     void testSweepStaleTmpFiles(@TempDir Path tempDir) throws IOException {
         Path staleSecret = tempDir.resolve("secrets-old.env");
         Path otherFile = tempDir.resolve("other-file.txt");
-        
+
         Files.writeString(staleSecret, "stale content");
         Files.writeString(otherFile, "other content");
-        
+
         assertTrue(Files.exists(staleSecret));
         assertTrue(Files.exists(otherFile));
-        
+
         TmpfsSecretTransport.sweepStaleTmpFilesStatic(tempDir);
-        
+
         assertFalse(Files.exists(staleSecret), "Stale secret should be swept");
         assertTrue(Files.exists(otherFile), "Other file should NOT be swept");
     }
@@ -94,5 +94,4 @@ public class TmpfsSecretTransportTest {
         Path nonExistent = Path.of("/tmp/this-dir-should-not-exist-12345");
         assertDoesNotThrow(() -> TmpfsSecretTransport.sweepStaleTmpFilesStatic(nonExistent));
     }
-
 }

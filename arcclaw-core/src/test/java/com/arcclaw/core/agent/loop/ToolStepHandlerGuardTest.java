@@ -8,11 +8,11 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import jakarta.enterprise.inject.Instance;
+
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-
-import jakarta.enterprise.inject.Instance;
 
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.agent.reasoning.StructuredOutputMode;
@@ -23,6 +23,7 @@ import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.tool.DynamicToolLookup;
 import com.arcclaw.core.tools.AgentTool;
 import com.arcclaw.core.tools.ToolRegistry;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -35,19 +36,51 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class ToolStepHandlerGuardTest {
 
-    @Mock ToolRegistry toolRegistry;
-    @Mock ToolInvocationGuard guard;
-    @Mock Instance<AgentObserver> observers;
-    @Mock ToolInvoker invoker;
-    @Mock ChatMemoryWriter writer;
-    @Mock Instance<DynamicToolLookup> dynamicToolLookup;
-    @Mock ApprovalCheckpointManager checkpointManager;
-    @Mock ParallelToolStepExecutor parallelExecutor;
-    @Mock ExecutionFailureRecoveryService recoveryService;
-    @InjectMocks ToolStepHandler handler;
+    @Mock
+    ToolRegistry toolRegistry;
+
+    @Mock
+    ToolInvocationGuard guard;
+
+    @Mock
+    Instance<AgentObserver> observers;
+
+    @Mock
+    ToolInvoker invoker;
+
+    @Mock
+    ChatMemoryWriter writer;
+
+    @Mock
+    Instance<DynamicToolLookup> dynamicToolLookup;
+
+    @Mock
+    ApprovalCheckpointManager checkpointManager;
+
+    @Mock
+    ParallelToolStepExecutor parallelExecutor;
+
+    @Mock
+    ExecutionFailureRecoveryService recoveryService;
+
+    @InjectMocks
+    ToolStepHandler handler;
 
     private AgentExecutionContext createCtx(String role, String goal) {
-        return new AgentExecutionContext("sess1", "user1", "chat1", role, goal, AutonomyLevel.FULL, StructuredOutputMode.NATIVE, 5, 0, null, null, null, null);
+        return new AgentExecutionContext(
+                "sess1",
+                "user1",
+                "chat1",
+                role,
+                goal,
+                AutonomyLevel.FULL,
+                StructuredOutputMode.NATIVE,
+                5,
+                0,
+                null,
+                null,
+                null,
+                null);
     }
 
     @BeforeEach
@@ -58,54 +91,63 @@ class ToolStepHandlerGuardTest {
     @Test
     void validateTool_coordinatorGithub_noResource_blocks() {
         AgentExecutionContext ctx = createCtx("coordinator", "find bugs in the app");
-        ReasoningStep step = ReasoningStep.pending("thought", ToolCapability.GITHUB.toolName(), Map.of("query", "NullPointerException"));
-        
+        ReasoningStep step = ReasoningStep.pending(
+                "thought", ToolCapability.GITHUB.toolName(), Map.of("query", "NullPointerException"));
+
         StepDecision decision = handler.validateTool(ctx, List.of(), step, 0);
-        
+
         // Silently rewrites to garuda instead of blocking with hint
         assertEquals(DecisionType.PROCEED, decision.type());
-        assertEquals(ToolCapability.DELEGATE_TO_AGENT.toolName(), decision.step().action());
+        assertEquals(
+                ToolCapability.DELEGATE_TO_AGENT.toolName(), decision.step().action());
         // Thought is preserved from original step
         assertEquals("thought", decision.step().thought());
         // Parameter 'agent' should be 'researcher'
         assertEquals("researcher", decision.step().actionInput().get("agent"));
         // Parameter 'goal' should contain 'github'
-        assertTrue(String.valueOf(decision.step().actionInput().get("goal")).contains(ToolCapability.GITHUB.toolName()));
+        assertTrue(
+                String.valueOf(decision.step().actionInput().get("goal")).contains(ToolCapability.GITHUB.toolName()));
     }
 
     @Test
     void validateTool_coordinatorGithub_resourceInGoal_allows() {
         AgentExecutionContext ctx = createCtx("coordinator", "summarize rsrini7/arcclaw");
-        ReasoningStep step = ReasoningStep.pending("thought", ToolCapability.GITHUB.toolName(), Map.of("query", "main"));
-        
-        when(toolRegistry.findTool(ToolCapability.GITHUB.toolName())).thenReturn(Optional.of(Mockito.mock(AgentTool.class)));
+        ReasoningStep step =
+                ReasoningStep.pending("thought", ToolCapability.GITHUB.toolName(), Map.of("query", "main"));
+
+        when(toolRegistry.findTool(ToolCapability.GITHUB.toolName()))
+                .thenReturn(Optional.of(Mockito.mock(AgentTool.class)));
 
         StepDecision decision = handler.validateTool(ctx, List.of(), step, 0);
-        
+
         assertEquals(DecisionType.PROCEED, decision.type());
     }
 
     @Test
     void validateTool_coordinatorGithub_resourceInArgs_allows() {
         AgentExecutionContext ctx = createCtx("coordinator", "check the code");
-        ReasoningStep step = ReasoningStep.pending("thought", ToolCapability.GITHUB.toolName(), Map.of("repo", "rsrini7/config"));
-        
-        when(toolRegistry.findTool(ToolCapability.GITHUB.toolName())).thenReturn(Optional.of(Mockito.mock(AgentTool.class)));
+        ReasoningStep step =
+                ReasoningStep.pending("thought", ToolCapability.GITHUB.toolName(), Map.of("repo", "rsrini7/config"));
+
+        when(toolRegistry.findTool(ToolCapability.GITHUB.toolName()))
+                .thenReturn(Optional.of(Mockito.mock(AgentTool.class)));
 
         StepDecision decision = handler.validateTool(ctx, List.of(), step, 0);
-        
+
         assertEquals(DecisionType.PROCEED, decision.type());
     }
 
     @Test
     void validateTool_nonCoordinator_noResource_allows() {
         AgentExecutionContext ctx = createCtx("saraswati", "find bugs in the app");
-        ReasoningStep step = ReasoningStep.pending("thought", ToolCapability.GITHUB.toolName(), Map.of("query", "NullPointerException"));
-        
-        when(toolRegistry.findTool(ToolCapability.GITHUB.toolName())).thenReturn(Optional.of(Mockito.mock(AgentTool.class)));
+        ReasoningStep step = ReasoningStep.pending(
+                "thought", ToolCapability.GITHUB.toolName(), Map.of("query", "NullPointerException"));
+
+        when(toolRegistry.findTool(ToolCapability.GITHUB.toolName()))
+                .thenReturn(Optional.of(Mockito.mock(AgentTool.class)));
 
         StepDecision decision = handler.validateTool(ctx, List.of(), step, 0);
-        
+
         assertEquals(DecisionType.PROCEED, decision.type());
     }
 
@@ -113,15 +155,25 @@ class ToolStepHandlerGuardTest {
     @SuppressWarnings("unchecked")
     void invokeToolAndObserve_pauseForApproval_persistsPendingStepInHistory() {
         AgentExecutionContext ctx = createCtx("researcher", "list gists");
-        ReasoningStep step = ReasoningStep.pending("thought", ToolCapability.GITHUB.toolName(), Map.of("target", "rsrini7"));
+        ReasoningStep step =
+                ReasoningStep.pending("thought", ToolCapability.GITHUB.toolName(), Map.of("target", "rsrini7"));
 
-        Mockito.lenient().doReturn(new ToolInvocationGuard.GuardDecision.PauseForApproval(
+        Mockito.lenient()
+                .doReturn(new ToolInvocationGuard.GuardDecision.PauseForApproval(
                         ToolCapability.GITHUB.toolName(), "{\"target\":\"rsrini7\"}"))
-                .when(guard).evaluate(
-                        anyString(), anyString(), any(AutonomyLevel.class), anyString(), 
-                        any(), anyList(), anyString(), anyList());
+                .when(guard)
+                .evaluate(
+                        anyString(),
+                        anyString(),
+                        any(AutonomyLevel.class),
+                        anyString(),
+                        any(),
+                        anyList(),
+                        anyString(),
+                        anyList());
         when(checkpointManager.persist(any(), any(), anyList(), any(), any()))
-                .thenReturn(AgentResult.awaitingApproval(ToolCapability.GITHUB.toolName(), "{\"target\":\"rsrini7\"}", "sess1", List.of()));
+                .thenReturn(AgentResult.awaitingApproval(
+                        ToolCapability.GITHUB.toolName(), "{\"target\":\"rsrini7\"}", "sess1", List.of()));
 
         StepDecision decision = handler.invokeToolAndObserve(ctx, List.of(), step, 0, List.of());
 
@@ -130,6 +182,8 @@ class ToolStepHandlerGuardTest {
         ArgumentCaptor<List<ReasoningStep>> historyCaptor = ArgumentCaptor.forClass(List.class);
         verify(checkpointManager).persist(any(), any(), historyCaptor.capture(), any(), any());
         assertEquals(1, historyCaptor.getValue().size());
-        assertEquals(ToolCapability.GITHUB.toolName(), historyCaptor.getValue().getFirst().action());
+        assertEquals(
+                ToolCapability.GITHUB.toolName(),
+                historyCaptor.getValue().getFirst().action());
     }
 }

@@ -12,17 +12,14 @@ import com.fasterxml.jackson.annotation.JsonTypeInfo;
  * <p>
  * Exit code 0 with {@code success=true} indicates clean execution.
  */
-@JsonTypeInfo(
-    use = JsonTypeInfo.Id.NAME,
-    include = JsonTypeInfo.As.PROPERTY,
-    property = "type"
-)
+@JsonTypeInfo(use = JsonTypeInfo.Id.NAME, include = JsonTypeInfo.As.PROPERTY, property = "type")
 @JsonSubTypes({
     @JsonSubTypes.Type(value = ToolResponse.ToolSuccess.class, name = "success"),
     @JsonSubTypes.Type(value = ToolResponse.ToolFailure.class, name = "failure"),
     @JsonSubTypes.Type(value = ToolResponse.ToolPending.class, name = "pending")
 })
-public sealed interface ToolResponse permits ToolResponse.ToolSuccess, ToolResponse.ToolFailure, ToolResponse.ToolPending {
+public sealed interface ToolResponse
+        permits ToolResponse.ToolSuccess, ToolResponse.ToolFailure, ToolResponse.ToolPending {
 
     /** Common output or message from the tool. */
     String output();
@@ -59,19 +56,18 @@ public sealed interface ToolResponse permits ToolResponse.ToolSuccess, ToolRespo
 
     /** Successful execution with output. */
     @JsonIgnoreProperties(ignoreUnknown = true)
-    record ToolSuccess(String output) implements ToolResponse {
-    }
+    record ToolSuccess(String output) implements ToolResponse {}
 
     /** Failed execution with detailed diagnostics. */
     @JsonIgnoreProperties(ignoreUnknown = true)
     record ToolFailure(
-        int exitCode,
-        String output,
-        boolean isInfraFailure,
-        String errorCode,
-        String traceId,
-        String rootCauseClass
-    ) implements ToolResponse {
+            int exitCode,
+            String output,
+            boolean isInfraFailure,
+            String errorCode,
+            String traceId,
+            String rootCauseClass)
+            implements ToolResponse {
         @Override
         public boolean success() {
             return false;
@@ -80,10 +76,7 @@ public sealed interface ToolResponse permits ToolResponse.ToolSuccess, ToolRespo
 
     /** HITL pause - tool execution is pending user approval. */
     @JsonIgnoreProperties(ignoreUnknown = true)
-    record ToolPending(
-        String output,
-        String approvalToken
-    ) implements ToolResponse {
+    record ToolPending(String output, String approvalToken) implements ToolResponse {
         @Override
         public boolean success() {
             return false;

@@ -5,9 +5,4 @@ package com.arcclaw.core.lifecycle;
  * Observed by app-layer to deliver channel notifications.
  */
 public record ApprovalTimedOutEvent(
-        String sessionId,
-        String channelPlatformId,
-        String channelType,
-        String pendingToolName,
-        long timeoutMinutes
-) {}
+        String sessionId, String channelPlatformId, String channelType, String pendingToolName, long timeoutMinutes) {}

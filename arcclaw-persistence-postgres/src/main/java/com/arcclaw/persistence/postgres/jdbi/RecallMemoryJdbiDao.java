@@ -3,6 +3,7 @@ package com.arcclaw.persistence.postgres.jdbi;
 import java.util.List;
 
 import com.arcclaw.persistence.api.RecallMessageDto;
+
 import org.jdbi.v3.sqlobject.config.RegisterConstructorMapper;
 import org.jdbi.v3.sqlobject.customizer.Bind;
 import org.jdbi.v3.sqlobject.customizer.BindMethods;
@@ -41,24 +42,25 @@ public interface RecallMemoryJdbiDao {
      * - includeSummaries=true includes summaries but ranks them lower.
      */
     @SqlQuery("""
-        SELECT message_id AS "messageId", session_id AS "sessionId", user_id AS "userId", 
-               turn_number AS "turnNumber", content_hash AS "contentHash", role, 
-               message_type AS "messageType", content, tool_name AS "toolName", 
-               tool_call_id AS "toolCallId", has_code AS "hasCode", has_error AS "hasError", 
+        SELECT message_id AS "messageId", session_id AS "sessionId", user_id AS "userId",
+               turn_number AS "turnNumber", content_hash AS "contentHash", role,
+               message_type AS "messageType", content, tool_name AS "toolName",
+               tool_call_id AS "toolCallId", has_code AS "hasCode", has_error AS "hasError",
                created_at AS "createdAt", metadata_json AS "metadataJson"
         FROM recall_messages
         WHERE user_id = :userId
           AND (:sessionId IS NULL OR session_id = :sessionId)
           AND (:includeSummaries = true OR message_type != 'COMPACTION_SUMMARY')
           AND content_tsv @@ plainto_tsquery('english', :query)
-        ORDER BY 
+        ORDER BY
             CASE WHEN :includeSummaries = true AND message_type = 'COMPACTION_SUMMARY' THEN 1 ELSE 0 END,
             ts_rank(content_tsv, plainto_tsquery('english', :query)) DESC
         LIMIT :limit
         """)
-    List<RecallMessageDto> search(@Bind("userId") String userId,
-                                  @Bind("sessionId") String sessionId,
-                                  @Bind("query") String query,
-                                  @Bind("includeSummaries") boolean includeSummaries,
-                                  @Bind("limit") int limit);
+    List<RecallMessageDto> search(
+            @Bind("userId") String userId,
+            @Bind("sessionId") String sessionId,
+            @Bind("query") String query,
+            @Bind("includeSummaries") boolean includeSummaries,
+            @Bind("limit") int limit);
 }

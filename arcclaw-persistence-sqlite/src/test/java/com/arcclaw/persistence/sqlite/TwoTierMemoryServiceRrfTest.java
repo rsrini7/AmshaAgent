@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import com.arcclaw.persistence.api.MemoryChunkDto;
+
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
@@ -34,7 +35,7 @@ class TwoTierMemoryServiceRrfTest {
         Assertions.assertEquals("doc-a", merged.get(0).chunkId());
         Assertions.assertEquals("doc-c", merged.get(1).chunkId());
         Assertions.assertEquals("doc-b", merged.get(2).chunkId());
-        
+
         Assertions.assertTrue(merged.get(0).score() > merged.get(1).score());
         Assertions.assertTrue(merged.get(1).score() > merged.get(2).score());
     }

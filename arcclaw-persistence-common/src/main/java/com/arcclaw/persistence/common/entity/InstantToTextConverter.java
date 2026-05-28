@@ -1,9 +1,9 @@
 package com.arcclaw.persistence.common.entity;
 
-import java.time.Instant;
-
 import jakarta.persistence.AttributeConverter;
 import jakarta.persistence.Converter;
+
+import java.time.Instant;
 
 import com.arcclaw.core.util.TemporalUtils;
 

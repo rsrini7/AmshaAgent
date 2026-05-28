@@ -5,20 +5,22 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import jakarta.inject.Inject;
+
 import java.util.Collections;
 import java.util.Map;
-
-import jakarta.inject.Inject;
 
 import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.sandbox.ProcessIsolationExecutor;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
-import io.quarkus.test.InjectMock;
-import io.quarkus.test.junit.QuarkusTest;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+
+import io.quarkus.test.InjectMock;
+import io.quarkus.test.junit.QuarkusTest;
 
 /**
  * Integration tests for the Tool Registry - CDI discovery and governance
@@ -38,7 +40,6 @@ class ToolRegistryTest {
     @InjectMock
     ProcessIsolationExecutor mockIsolationExecutor;
 
-
     @BeforeEach
     void activate() {
         // No-op. Scopes must be activated per-test using WorkspaceScopeHolder.run().
@@ -55,8 +56,8 @@ class ToolRegistryTest {
     @Test
     void testToolDiscovery() {
         var tools = registry.listTools();
-        assertTrue(tools.contains(ToolCapability.GITHUB.toolName()),
-                "GithubTool should be discovered, found: " + tools);
+        assertTrue(
+                tools.contains(ToolCapability.GITHUB.toolName()), "GithubTool should be discovered, found: " + tools);
     }
 
     /**
@@ -84,16 +85,17 @@ class ToolRegistryTest {
      */
     @Test
     void testGovernanceBlocksNetworkOutbound() {
-        // Use a role that has 'github' capability (e.g., COORDINATOR) 
+        // Use a role that has 'github' capability (e.g., COORDINATOR)
         // to pass the role-capability check, but then hit the autonomy level block.
         WorkspaceContext.run(TEST_SESSION, "coordinator", "", AutonomyLevel.READONLY, "coordinator", () -> {
-            ToolResponse response = registry.invokeTool(ToolCapability.GITHUB.toolName(), Map.<String, Object>of("target", "test/repo"));
+            ToolResponse response = registry.invokeTool(
+                    ToolCapability.GITHUB.toolName(), Map.<String, Object>of("target", "test/repo"));
 
             assertEquals(403, response.exitCode(), "Should return 403 Forbidden");
-            assertTrue(response.output().contains("NETWORK_OUTBOUND"),
+            assertTrue(
+                    response.output().contains("NETWORK_OUTBOUND"),
                     "Response output should mention the blocked operation");
-            assertTrue(response.output().contains("READONLY"),
-                    "Response output should mention the autonomy level");
+            assertTrue(response.output().contains("READONLY"), "Response output should mention the autonomy level");
         });
     }
 
@@ -109,7 +111,8 @@ class ToolRegistryTest {
             // This will *not* throw SecurityException (governance passes).
             // The tool itself may fail (no 'gh' binary) - that's fine; we're
             // testing governance, not the gh CLI.
-            ToolResponse response = registry.invokeTool(ToolCapability.GITHUB.toolName(), Map.<String, Object>of("target", "test/repo"));
+            ToolResponse response = registry.invokeTool(
+                    ToolCapability.GITHUB.toolName(), Map.<String, Object>of("target", "test/repo"));
             assertNotNull(response, "Should get a response (even if tool execution failed)");
         });
     }
@@ -121,7 +124,9 @@ class ToolRegistryTest {
     void testRequiresSecretExtraction() {
         var secrets = ToolRegistry.extractRequiredSecrets(GithubTool.class, "sandboxCommand");
         assertEquals(1, secrets.size(), "GithubTool should declare 1 secret");
-        assertEquals("ARCCLAW_TOOLS_GITHUB_TOKEN", secrets.get("GH_TOKEN"),
+        assertEquals(
+                "ARCCLAW_TOOLS_GITHUB_TOKEN",
+                secrets.get("GH_TOKEN"),
                 "GH_TOKEN env var should map to ARCCLAW_TOOLS_GITHUB_TOKEN vault key");
     }
 
@@ -131,7 +136,8 @@ class ToolRegistryTest {
     @Test
     void testInvokeUnknownToolThrows() {
         WorkspaceContext.run(TEST_SESSION, "user", "chat", AutonomyLevel.FULL, "coordinator", () -> {
-            assertThrows(IllegalArgumentException.class,
+            assertThrows(
+                    IllegalArgumentException.class,
                     () -> registry.invokeTool("nonexistent-tool", Collections.emptyMap()));
         });
     }
@@ -139,7 +145,7 @@ class ToolRegistryTest {
     @Test
     void secretsCachePrePopulatedAtStartup() {
         var githubTool = registry.findTool(ToolCapability.GITHUB.toolName()).get();
-        var first  = registry.extractRequiredSecrets(githubTool);
+        var first = registry.extractRequiredSecrets(githubTool);
         var second = registry.extractRequiredSecrets(githubTool);
         assertTrue(first == second || first.equals(second), "Should match from cache");
     }

@@ -8,6 +8,11 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import dev.langchain4j.data.message.ChatMessage;
+import dev.langchain4j.data.message.SystemMessage;
+import dev.langchain4j.data.message.UserMessage;
+import dev.langchain4j.store.memory.chat.ChatMemoryStore;
+
 import java.util.List;
 import java.util.Optional;
 
@@ -15,10 +20,7 @@ import com.arcclaw.core.config.TieredMemoryConfig;
 import com.arcclaw.core.memory.tiered.CoreMemoryPromptRenderer;
 import com.arcclaw.core.memory.tiered.CoreMemoryService;
 import com.arcclaw.core.memory.tiered.PromptBudgetManager;
-import dev.langchain4j.data.message.ChatMessage;
-import dev.langchain4j.data.message.SystemMessage;
-import dev.langchain4j.data.message.UserMessage;
-import dev.langchain4j.store.memory.chat.ChatMemoryStore;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.InjectMocks;
@@ -33,20 +35,28 @@ class ArchivalCacheLookupNoIoTest {
 
     @Mock
     ChatMemoryStore chatMemoryStore;
+
     @Mock
     CompactionSummaryCache summaryCache;
+
     @Mock
     TieredMemoryConfig tieredMemoryConfig;
+
     @Mock
     TieredMemoryConfig.ArchivalConfig archivalConfig;
+
     @Mock
     TieredMemoryConfig.CoreMemoryConfig coreMemoryConfig;
+
     @Mock
     CoreMemoryService coreMemoryService;
+
     @Mock
     CoreMemoryPromptRenderer coreMemoryRenderer;
+
     @Mock
     PromptBudgetManager budgetManager;
+
     @Mock
     ArchivalContextCache archivalContextCache;
 
@@ -64,7 +74,7 @@ class ArchivalCacheLookupNoIoTest {
         lenient().when(tieredMemoryConfig.enabled()).thenReturn(true);
         lenient().when(tieredMemoryConfig.archival()).thenReturn(archivalConfig);
         lenient().when(tieredMemoryConfig.coreMemory()).thenReturn(coreMemoryConfig);
-        lenient().when(coreMemoryConfig.enabled()).thenReturn(false);  // core memory off for these tests
+        lenient().when(coreMemoryConfig.enabled()).thenReturn(false); // core memory off for these tests
         lenient().when(archivalConfig.enabled()).thenReturn(true);
         lenient().when(archivalContextCache.getText()).thenReturn(Optional.empty());
     }
@@ -77,24 +87,22 @@ class ArchivalCacheLookupNoIoTest {
 
         // Budget manager passes through archival text
         when(budgetManager.enforce(any(), any(), any()))
-            .thenAnswer(invocation -> new PromptBudgetManager.BudgetEnforcedSections(
-                null, null, invocation.getArgument(2),
-                false, false, false));
+                .thenAnswer(invocation -> new PromptBudgetManager.BudgetEnforcedSections(
+                        null, null, invocation.getArgument(2), false, false, false));
 
-        when(chatMemoryStore.getMessages("s1")).thenReturn(List.of(
-            UserMessage.userMessage("What patterns should I use?")
-        ));
+        when(chatMemoryStore.getMessages("s1"))
+                .thenReturn(List.of(UserMessage.userMessage("What patterns should I use?")));
 
         // Act
         List<ChatMessage> result = assembler.assemble("s1", null, List.of());
 
         // Assert: [RELEVANT KNOWLEDGE] section is present
-        assertTrue(result.stream()
-            .filter(m -> m instanceof SystemMessage)
-            .map(m -> ((SystemMessage) m).text())
-            .anyMatch(t -> t.contains("[RELEVANT KNOWLEDGE]")
-                        && t.contains("Always use records for DTOs")),
-            "Archival context from cache should be injected as [RELEVANT KNOWLEDGE]");
+        assertTrue(
+                result.stream()
+                        .filter(m -> m instanceof SystemMessage)
+                        .map(m -> ((SystemMessage) m).text())
+                        .anyMatch(t -> t.contains("[RELEVANT KNOWLEDGE]") && t.contains("Always use records for DTOs")),
+                "Archival context from cache should be injected as [RELEVANT KNOWLEDGE]");
     }
 
     @Test
@@ -103,22 +111,21 @@ class ArchivalCacheLookupNoIoTest {
         when(archivalContextCache.getText()).thenReturn(Optional.empty());
 
         when(budgetManager.enforce(any(), any(), any()))
-            .thenAnswer(invocation -> new PromptBudgetManager.BudgetEnforcedSections(
-                null, null, null, false, false, false));
+                .thenAnswer(invocation ->
+                        new PromptBudgetManager.BudgetEnforcedSections(null, null, null, false, false, false));
 
-        when(chatMemoryStore.getMessages("s1")).thenReturn(List.of(
-            UserMessage.userMessage("Hello")
-        ));
+        when(chatMemoryStore.getMessages("s1")).thenReturn(List.of(UserMessage.userMessage("Hello")));
 
         // Act
         List<ChatMessage> result = assembler.assemble("s1", null, List.of());
 
         // Assert: no [RELEVANT KNOWLEDGE] section
-        assertFalse(result.stream()
-            .filter(m -> m instanceof SystemMessage)
-            .map(m -> ((SystemMessage) m).text())
-            .anyMatch(t -> t.contains("[RELEVANT KNOWLEDGE]")),
-            "No archival section should be injected when cache is empty");
+        assertFalse(
+                result.stream()
+                        .filter(m -> m instanceof SystemMessage)
+                        .map(m -> ((SystemMessage) m).text())
+                        .anyMatch(t -> t.contains("[RELEVANT KNOWLEDGE]")),
+                "No archival section should be injected when cache is empty");
     }
 
     @Test
@@ -127,12 +134,10 @@ class ArchivalCacheLookupNoIoTest {
         when(archivalConfig.enabled()).thenReturn(false);
 
         when(budgetManager.enforce(any(), any(), any()))
-            .thenAnswer(invocation -> new PromptBudgetManager.BudgetEnforcedSections(
-                null, null, null, false, false, false));
+                .thenAnswer(invocation ->
+                        new PromptBudgetManager.BudgetEnforcedSections(null, null, null, false, false, false));
 
-        when(chatMemoryStore.getMessages("s1")).thenReturn(List.of(
-            UserMessage.userMessage("Hello")
-        ));
+        when(chatMemoryStore.getMessages("s1")).thenReturn(List.of(UserMessage.userMessage("Hello")));
 
         // Act
         List<ChatMessage> result = assembler.assemble("s1", null, List.of());
@@ -142,9 +147,9 @@ class ArchivalCacheLookupNoIoTest {
 
         // Assert: no [RELEVANT KNOWLEDGE] section
         assertFalse(result.stream()
-            .filter(m -> m instanceof SystemMessage)
-            .map(m -> ((SystemMessage) m).text())
-            .anyMatch(t -> t.contains("[RELEVANT KNOWLEDGE]")));
+                .filter(m -> m instanceof SystemMessage)
+                .map(m -> ((SystemMessage) m).text())
+                .anyMatch(t -> t.contains("[RELEVANT KNOWLEDGE]")));
     }
 
     @Test
@@ -158,23 +163,21 @@ class ArchivalCacheLookupNoIoTest {
         when(archivalContextCache.getText()).thenReturn(Optional.empty());
 
         when(budgetManager.enforce(any(), any(), any()))
-            .thenAnswer(invocation -> new PromptBudgetManager.BudgetEnforcedSections(
-                null, null, null,
-                false, false, false));
+                .thenAnswer(invocation ->
+                        new PromptBudgetManager.BudgetEnforcedSections(null, null, null, false, false, false));
 
-        when(chatMemoryStore.getMessages("s1")).thenReturn(List.of(
-            UserMessage.userMessage("hello")
-        ));
+        when(chatMemoryStore.getMessages("s1")).thenReturn(List.of(UserMessage.userMessage("hello")));
 
         // Act
         List<ChatMessage> result = assembler.assemble("s1", null, List.of());
 
         // Assert: no [RELEVANT KNOWLEDGE] section injected
-        assertFalse(result.stream()
-            .filter(m -> m instanceof SystemMessage)
-            .map(m -> ((SystemMessage) m).text())
-            .anyMatch(t -> t.contains("[RELEVANT KNOWLEDGE]")),
-            "No [RELEVANT KNOWLEDGE] when cache is empty");
+        assertFalse(
+                result.stream()
+                        .filter(m -> m instanceof SystemMessage)
+                        .map(m -> ((SystemMessage) m).text())
+                        .anyMatch(t -> t.contains("[RELEVANT KNOWLEDGE]")),
+                "No [RELEVANT KNOWLEDGE] when cache is empty");
     }
 
     @Test
@@ -184,23 +187,21 @@ class ArchivalCacheLookupNoIoTest {
         when(archivalContextCache.getText()).thenReturn(Optional.of(cachedKnowledge));
 
         when(budgetManager.enforce(any(), any(), any()))
-            .thenAnswer(invocation -> new PromptBudgetManager.BudgetEnforcedSections(
-                null, null, "A".repeat(2000),
-                false, false, true));  // archivalWasTruncated = true
+                .thenAnswer(invocation -> new PromptBudgetManager.BudgetEnforcedSections(
+                        null, null, "A".repeat(2000), false, false, true)); // archivalWasTruncated = true
 
-        when(chatMemoryStore.getMessages("s1")).thenReturn(List.of(
-            UserMessage.userMessage("tell me everything")
-        ));
+        when(chatMemoryStore.getMessages("s1")).thenReturn(List.of(UserMessage.userMessage("tell me everything")));
 
         // Act
         List<ChatMessage> result = assembler.assemble("s1", null, List.of());
 
         // Assert: truncation marker present
-        assertTrue(result.stream()
-            .filter(m -> m instanceof SystemMessage)
-            .map(m -> ((SystemMessage) m).text())
-            .anyMatch(t -> t.contains("[RELEVANT KNOWLEDGE]")
-                        && t.contains("[... truncated to fit prompt budget]")),
-            "Truncated archival section should have truncation marker");
+        assertTrue(
+                result.stream()
+                        .filter(m -> m instanceof SystemMessage)
+                        .map(m -> ((SystemMessage) m).text())
+                        .anyMatch(t -> t.contains("[RELEVANT KNOWLEDGE]")
+                                && t.contains("[... truncated to fit prompt budget]")),
+                "Truncated archival section should have truncation marker");
     }
 }

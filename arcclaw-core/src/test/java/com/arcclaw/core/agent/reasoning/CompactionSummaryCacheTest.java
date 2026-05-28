@@ -9,6 +9,7 @@ import java.util.Optional;
 import com.arcclaw.core.state.CompactionEventBridge;
 import com.arcclaw.persistence.api.CompactionStorePort;
 import com.arcclaw.persistence.api.CompactionSummaryDto;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -36,7 +37,8 @@ class CompactionSummaryCacheTest {
     @Test
     void getSummary_WhenNotLoaded_FetchesFromRepository() {
         when(summaryRepository.findLatestBySessionId("sess-1"))
-                .thenReturn(Optional.of(new CompactionSummaryDto("sess-1", "summary text", Instant.now(), 1, "user-1")));
+                .thenReturn(
+                        Optional.of(new CompactionSummaryDto("sess-1", "summary text", Instant.now(), 1, "user-1")));
 
         Optional<String> result = cache.getSummary("sess-1");
 

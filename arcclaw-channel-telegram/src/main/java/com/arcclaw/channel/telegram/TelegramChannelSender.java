@@ -1,12 +1,12 @@
 package com.arcclaw.channel.telegram;
 
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
-
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
 
 import com.arcclaw.channel.api.ApprovalPrompt;
 import com.arcclaw.channel.api.ChannelSender;
@@ -15,6 +15,7 @@ import com.arcclaw.channel.api.ChannelUser;
 import com.arcclaw.channel.api.InteractionNode;
 import com.arcclaw.channel.api.ReplyNode;
 import com.arcclaw.common.util.LogUtil;
+
 import org.apache.camel.ProducerTemplate;
 import org.apache.camel.component.telegram.model.EditMessageTextMessage;
 import org.apache.camel.component.telegram.model.InlineKeyboardMarkup;
@@ -36,8 +37,7 @@ public class TelegramChannelSender implements ChannelSender {
     int maxLength;
 
     @Inject
-    public TelegramChannelSender(ProducerTemplate producerTemplate,
-                                 TelegramMarkdownV2Renderer renderer) {
+    public TelegramChannelSender(ProducerTemplate producerTemplate, TelegramMarkdownV2Renderer renderer) {
         this.producerTemplate = producerTemplate;
         this.renderer = renderer;
     }
@@ -53,7 +53,7 @@ public class TelegramChannelSender implements ChannelSender {
             log.warn("TELEGRAM-SEND: recipient or channelId is null - dropping");
             return;
         }
-        String chatId = recipient.channelId();  // ← was platformId()
+        String chatId = recipient.channelId(); // ← was platformId()
         if (nodes == null || nodes.isEmpty()) {
             sendRawToChatId(chatId, "(No response generated)");
             return;
@@ -66,22 +66,24 @@ public class TelegramChannelSender implements ChannelSender {
 
         // Component 73-A4 - Intercept ApprovalPrompt to add Telegram inline keyboard
         Optional<ApprovalPrompt> promptOpt = nodes.stream()
-            .filter(n -> n instanceof ApprovalPrompt)
-            .map(n -> (ApprovalPrompt) n)
-            .findFirst();
+                .filter(n -> n instanceof ApprovalPrompt)
+                .map(n -> (ApprovalPrompt) n)
+                .findFirst();
 
         if (promptOpt.isPresent()) {
             ApprovalPrompt prompt = promptOpt.get();
             List<String> toolNames;
-            if (prompt.toolName() != null && prompt.toolName().startsWith(InteractionNode.PARALLEL_SENTINEL_PIPE_PREFIX)) {
-                String toolNamesStr = prompt.toolName().substring(InteractionNode.PARALLEL_SENTINEL_PIPE_PREFIX.length());
+            if (prompt.toolName() != null
+                    && prompt.toolName().startsWith(InteractionNode.PARALLEL_SENTINEL_PIPE_PREFIX)) {
+                String toolNamesStr =
+                        prompt.toolName().substring(InteractionNode.PARALLEL_SENTINEL_PIPE_PREFIX.length());
                 toolNames = Arrays.asList(toolNamesStr.split(","));
             } else if (prompt.toolName() != null) {
                 toolNames = List.of(prompt.toolName());
             } else {
                 toolNames = List.of();
             }
-            
+
             InlineKeyboardMarkup markup = BatchHitlKeyboardBuilder.buildKeyboard(prompt.sessionId(), toolNames);
             sendWithKeyboard(recipient, rendered, markup);
         } else {
@@ -91,13 +93,15 @@ public class TelegramChannelSender implements ChannelSender {
 
     @Override
     public void sendRaw(ChannelUser recipient, String text) {
-        log.infof("TELEGRAM-SEND to=%s text=[%s]", recipient.channelId(), text.length() > 100 ? text.substring(0, 100) + "..." : text);
+        log.infof(
+                "TELEGRAM-SEND to=%s text=[%s]",
+                recipient.channelId(), text.length() > 100 ? text.substring(0, 100) + "..." : text);
 
         if (recipient == null || recipient.channelId() == null) {
             log.warn("TELEGRAM-SENDRAW: recipient or channelId is null - dropping");
             return;
         }
-        sendRawToChatId(recipient.channelId(), text);  // ← was platformId()
+        sendRawToChatId(recipient.channelId(), text); // ← was platformId()
     }
 
     /**
@@ -122,8 +126,7 @@ public class TelegramChannelSender implements ChannelSender {
         msg.setParseMode("MarkdownV2");
         msg.setReplyMarkup(markup);
 
-        producerTemplate.sendBodyAndHeader("telegram:bots", msg,
-            TelegramConstants.TELEGRAM_CHAT_ID, chatId);
+        producerTemplate.sendBodyAndHeader("telegram:bots", msg, TelegramConstants.TELEGRAM_CHAT_ID, chatId);
     }
 
     /**
@@ -140,18 +143,15 @@ public class TelegramChannelSender implements ChannelSender {
     public void editMessage(String chatId, int messageId, String newText, InlineKeyboardMarkup markup) {
         try {
             EditMessageTextMessage edit = EditMessageTextMessage.builder()
-                .chatId(chatId)
-                .messageId(messageId)
-                .text(newText != null ? newText : "")
-                .replyMarkup(markup != null ? markup : new InlineKeyboardMarkup())
-                .build();
-            producerTemplate.sendBodyAndHeader(
-                "telegram:bots", edit,
-                TelegramConstants.TELEGRAM_CHAT_ID, chatId);
+                    .chatId(chatId)
+                    .messageId(messageId)
+                    .text(newText != null ? newText : "")
+                    .replyMarkup(markup != null ? markup : new InlineKeyboardMarkup())
+                    .build();
+            producerTemplate.sendBodyAndHeader("telegram:bots", edit, TelegramConstants.TELEGRAM_CHAT_ID, chatId);
             log.debugf("editMessage sent for chatId=%s msgId=%d", chatId, messageId);
         } catch (Exception e) {
-            log.warnf("editMessage failed for chatId=%s msgId=%d: %s",
-                      chatId, messageId, LogUtil.rootMessage(e));
+            log.warnf("editMessage failed for chatId=%s msgId=%d: %s", chatId, messageId, LogUtil.rootMessage(e));
         }
     }
 
@@ -164,15 +164,14 @@ public class TelegramChannelSender implements ChannelSender {
             return;
         }
         if (text.length() <= maxLength) {
-            producerTemplate.sendBodyAndHeader(
-                "telegram:bots", text, TelegramConstants.TELEGRAM_CHAT_ID, chatId);
+            producerTemplate.sendBodyAndHeader("telegram:bots", text, TelegramConstants.TELEGRAM_CHAT_ID, chatId);
         } else {
             List<String> chunks = splitAtWordBoundary(text, maxLength);
-            log.infof("TELEGRAM-SEND splitting %d-char response into %d chunks for %s",
-                text.length(), chunks.size(), chatId);
+            log.infof(
+                    "TELEGRAM-SEND splitting %d-char response into %d chunks for %s",
+                    text.length(), chunks.size(), chatId);
             for (String chunk : chunks) {
-                producerTemplate.sendBodyAndHeader(
-                    "telegram:bots", chunk, TelegramConstants.TELEGRAM_CHAT_ID, chatId);
+                producerTemplate.sendBodyAndHeader("telegram:bots", chunk, TelegramConstants.TELEGRAM_CHAT_ID, chatId);
             }
         }
     }

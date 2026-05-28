@@ -12,6 +12,7 @@ import com.arcclaw.core.api.AgentResponseMapper.AgentResponse;
 import com.arcclaw.core.api.AgentResponseMapper.ApprovalRequiredResponse;
 import com.arcclaw.core.api.dto.ArcClawErrorResponse;
 import com.arcclaw.core.audit.AuditService;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
@@ -28,9 +29,8 @@ class AgentResponseMapperTest {
 
     @Test
     void testMapResult_finished_sync_returns200() {
-        AgentResult result = AgentResult.finished("Done", List.of(
-            ReasoningStep.of("thought", "FINISH", Map.of(), null, 10, 5)
-        ));
+        AgentResult result =
+                AgentResult.finished("Done", List.of(ReasoningStep.of("thought", "FINISH", Map.of(), null, 10, 5)));
         var mr = mapper.mapResult(result, false);
         assertEquals(200, mr.suggestedHttpStatus());
         AgentResponse entity = (AgentResponse) mr.entity();
@@ -69,7 +69,8 @@ class AgentResponseMapperTest {
 
     @Test
     void testMapResult_failed_compliance_returns451() {
-        AgentResult result = AgentResult.failed("Violation", AgentResult.FailureCategory.COMPLIANCE_VIOLATION, List.of());
+        AgentResult result =
+                AgentResult.failed("Violation", AgentResult.FailureCategory.COMPLIANCE_VIOLATION, List.of());
         var mr = mapper.mapResult(result, false);
         assertEquals(451, mr.suggestedHttpStatus());
         ArcClawErrorResponse entity = (ArcClawErrorResponse) mr.entity();

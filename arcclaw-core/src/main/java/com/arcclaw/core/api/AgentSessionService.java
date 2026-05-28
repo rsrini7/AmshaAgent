@@ -1,5 +1,8 @@
 package com.arcclaw.core.api;
 
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -8,9 +11,6 @@ import java.util.UUID;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 import java.util.function.Consumer;
-
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
 
 import com.arcclaw.channel.api.ChannelMessage;
 import com.arcclaw.channel.api.ChannelType;
@@ -43,9 +43,11 @@ import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.state.ToolDecision;
 import com.arcclaw.core.util.MdcManaged;
-import io.quarkus.virtual.threads.VirtualThreads;
+
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
+
+import io.quarkus.virtual.threads.VirtualThreads;
 
 @ApplicationScoped
 @MdcManaged
@@ -65,9 +67,7 @@ public class AgentSessionService {
     private final ExecutorService vThreads;
     private final int maxResumeIterations;
 
-    private static final List<String> NON_SLASH_REFLEX_PREFIXES = List.of(
-            "deletecron"
-    );
+    private static final List<String> NON_SLASH_REFLEX_PREFIXES = List.of("deletecron");
 
     private static final String REST_USER_ID = ApiConstants.REST_USER_ID;
     private static final String REST_USER_NAME = ApiConstants.REST_USER_NAME;
@@ -91,19 +91,21 @@ public class AgentSessionService {
     }
 
     @Inject
-    public AgentSessionService(Logger log,
-                               AgentLoop agentLoop,
-                               ReasoningEngine reasoningEngine,
-                               StatefulAgentStore agentStore,
-                               WorkspaceManager workspaceManager,
-                               SessionHeartbeatTracker heartbeatTracker,
-                               AgentResponseMapper responseMapper,
-                               ReflexRegistry reflexRegistry,
-                               CheckpointResumeHandler checkpointResumeHandler,
-                               CheckpointApprovalService checkpointApprovalService,
-                               AuditService auditService,
-                               @VirtualThreads ExecutorService vThreads,
-                               @ConfigProperty(name = "arcclaw.approval.max-resume-iterations", defaultValue = "5") int maxResumeIterations) {
+    public AgentSessionService(
+            Logger log,
+            AgentLoop agentLoop,
+            ReasoningEngine reasoningEngine,
+            StatefulAgentStore agentStore,
+            WorkspaceManager workspaceManager,
+            SessionHeartbeatTracker heartbeatTracker,
+            AgentResponseMapper responseMapper,
+            ReflexRegistry reflexRegistry,
+            CheckpointResumeHandler checkpointResumeHandler,
+            CheckpointApprovalService checkpointApprovalService,
+            AuditService auditService,
+            @VirtualThreads ExecutorService vThreads,
+            @ConfigProperty(name = "arcclaw.approval.max-resume-iterations", defaultValue = "5")
+                    int maxResumeIterations) {
         this.log = log;
         this.agentLoop = agentLoop;
         this.reasoningEngine = reasoningEngine;
@@ -129,7 +131,10 @@ public class AgentSessionService {
             heartbeatTracker.tryBindOwner(sessionId, userId);
         }
 
-        auditService.recordMandatory(sessionId, userId != null ? userId : "unknown", "system",
+        auditService.recordMandatory(
+                sessionId,
+                userId != null ? userId : "unknown",
+                "system",
                 SecurityEventType.SESSION_CREATED,
                 "autonomy=" + level.name());
 
@@ -162,8 +167,7 @@ public class AgentSessionService {
 
         Optional<AgentCheckpoint> cpOpt = agentStore.load(sessionId, canonicalRole);
         if (cpOpt.isPresent() && cpOpt.get().getStatus() == CheckpointStatus.AWAITING_APPROVAL) {
-            return ServiceResult.error("AWAITING_APPROVAL",
-                    "Session is awaiting human approval");
+            return ServiceResult.error("AWAITING_APPROVAL", "Session is awaiting human approval");
         }
 
         try {
@@ -171,12 +175,14 @@ public class AgentSessionService {
                 AutonomyLevel level = getOrDefaultAutonomy(sessionId);
                 String channel = ChannelType.REST_API.name();
 
-                return WorkspaceContext.<ServiceResult<Object>>run(sessionId, REST_USER_ID, sessionId, level, canonicalRole, channel, () -> {
-                    MessageContext context = createRestContext(sessionId, request.goal());
-                    context.setAutonomyLevel(level);
-                    AgentResult result = agentLoop.run(sessionId, canonicalRole, request.goal(), reasoningEngine, maxIterations, context);
-                    return new ServiceResult<>(responseMapper.mapResult(result, false), null, null);
-                });
+                return WorkspaceContext.<ServiceResult<Object>>run(
+                        sessionId, REST_USER_ID, sessionId, level, canonicalRole, channel, () -> {
+                            MessageContext context = createRestContext(sessionId, request.goal());
+                            context.setAutonomyLevel(level);
+                            AgentResult result = agentLoop.run(
+                                    sessionId, canonicalRole, request.goal(), reasoningEngine, maxIterations, context);
+                            return new ServiceResult<>(responseMapper.mapResult(result, false), null, null);
+                        });
             };
             return WorkspaceScopeHolder.call(sessionId, op);
         } catch (BudgetExceededException e) {
@@ -187,12 +193,19 @@ public class AgentSessionService {
         }
     }
 
-    public void runAsync(String sessionId, String userId, RunAgentRequest request, Consumer<ServiceResult<Object>> callback) {
+    public void runAsync(
+            String sessionId, String userId, RunAgentRequest request, Consumer<ServiceResult<Object>> callback) {
         var sessionError = validateSession(sessionId, userId);
-        if (sessionError.isPresent()) { callback.accept(sessionError.get()); return; }
+        if (sessionError.isPresent()) {
+            callback.accept(sessionError.get());
+            return;
+        }
 
         var roleError = validateRole(request.agentRole());
-        if (roleError.isPresent()) { callback.accept(roleError.get()); return; }
+        if (roleError.isPresent()) {
+            callback.accept(roleError.get());
+            return;
+        }
 
         vThreads.execute(() -> WorkspaceScopeHolder.run(sessionId, () -> {
             try {
@@ -217,20 +230,24 @@ public class AgentSessionService {
                 }
 
                 AutonomyLevel sessionLevel = getOrDefaultAutonomy(sessionId);
-                String canonicalRole = AgentRoleEnum.fromString(request.agentRole()).toScopedName();
+                String canonicalRole =
+                        AgentRoleEnum.fromString(request.agentRole()).toScopedName();
                 String channel = ChannelType.REST_API.name();
                 int maxIterations = request.maxIterations() != null ? request.maxIterations() : 5;
 
-                WorkspaceContext.<Void>run(sessionId, REST_USER_ID, sessionId, sessionLevel, canonicalRole, channel, () -> {
-                    MessageContext context = createRestContext(sessionId, request.goal());
-                    context.setAutonomyLevel(sessionLevel);
-                    AgentResult result = agentLoop.run(sessionId, canonicalRole, request.goal(), reasoningEngine, maxIterations, context);
-                    callback.accept(new ServiceResult<>(responseMapper.mapResult(result, true), null, null));
-                    return null;
-                });
+                WorkspaceContext.<Void>run(
+                        sessionId, REST_USER_ID, sessionId, sessionLevel, canonicalRole, channel, () -> {
+                            MessageContext context = createRestContext(sessionId, request.goal());
+                            context.setAutonomyLevel(sessionLevel);
+                            AgentResult result = agentLoop.run(
+                                    sessionId, canonicalRole, request.goal(), reasoningEngine, maxIterations, context);
+                            callback.accept(new ServiceResult<>(responseMapper.mapResult(result, true), null, null));
+                            return null;
+                        });
             } catch (Exception e) {
                 log.errorf("Async agent run failed: %s", LogUtil.rootMessage(e));
-                callback.accept(ServiceResult.error("SYSTEM", e.getMessage() != null ? e.getMessage() : "Internal error"));
+                callback.accept(
+                        ServiceResult.error("SYSTEM", e.getMessage() != null ? e.getMessage() : "Internal error"));
             }
         }));
     }
@@ -248,19 +265,26 @@ public class AgentSessionService {
                 }
 
                 checkpointApprovalService.approveAll(sessionId, "Human approved via REST");
-                auditService.recordMandatory(sessionId, userId, canonicalRole,
+                auditService.recordMandatory(
+                        sessionId,
+                        userId,
+                        canonicalRole,
                         SecurityEventType.APPROVAL_GRANTED,
                         "via=REST role=" + agentRole);
                 String channel = ChannelType.REST_API.name();
 
-                return WorkspaceContext.<ServiceResult<Object>>run(sessionId, REST_USER_ID, sessionId, AutonomyLevel.FULL, canonicalRole, channel, () -> {
-                    String resumeGoal = checkpointResumeHandler.resolveResumeGoal(sessionId, canonicalRole);
-                    int resumeIterations = checkpoint.get().getMaxIterations() != null ? Math.min(checkpoint.get().getMaxIterations(), maxResumeIterations) : maxResumeIterations;
-                    MessageContext context = createRestContext(sessionId, resumeGoal);
-                    context.setResumeSignal(true);
-                    AgentResult result = agentLoop.run(sessionId, agentRole, resumeGoal, reasoningEngine, resumeIterations, context);
-                    return new ServiceResult<>(responseMapper.mapResult(result, false), null, null);
-                });
+                return WorkspaceContext.<ServiceResult<Object>>run(
+                        sessionId, REST_USER_ID, sessionId, AutonomyLevel.FULL, canonicalRole, channel, () -> {
+                            String resumeGoal = checkpointResumeHandler.resolveResumeGoal(sessionId, canonicalRole);
+                            int resumeIterations = checkpoint.get().getMaxIterations() != null
+                                    ? Math.min(checkpoint.get().getMaxIterations(), maxResumeIterations)
+                                    : maxResumeIterations;
+                            MessageContext context = createRestContext(sessionId, resumeGoal);
+                            context.setResumeSignal(true);
+                            AgentResult result = agentLoop.run(
+                                    sessionId, agentRole, resumeGoal, reasoningEngine, resumeIterations, context);
+                            return new ServiceResult<>(responseMapper.mapResult(result, false), null, null);
+                        });
             };
             return WorkspaceScopeHolder.call(sessionId, op);
         } catch (Exception e) {
@@ -281,7 +305,10 @@ public class AgentSessionService {
                     return ServiceResult.error("NO_PENDING_APPROVAL", "No pending approval");
                 }
                 AgentCheckpoint cp = checkpointApprovalService.denyAll(sessionId, "Human denied via REST");
-                auditService.recordMandatory(sessionId, userId, canonicalRole,
+                auditService.recordMandatory(
+                        sessionId,
+                        userId,
+                        canonicalRole,
                         SecurityEventType.APPROVAL_DENIED,
                         "via=REST role=" + agentRole);
                 checkpointApprovalService.triggerResume(cp);
@@ -302,11 +329,13 @@ public class AgentSessionService {
             String canonicalRole = AgentRoleEnum.fromString(role).toScopedName();
             var checkpointOpt = agentStore.load(sessionId, canonicalRole);
             if (checkpointOpt.isEmpty()) {
-                return ServiceResult.success(Map.of("sessionId", sessionId, "status", CheckpointStatus.NOT_STARTED.name()));
+                return ServiceResult.success(
+                        Map.of("sessionId", sessionId, "status", CheckpointStatus.NOT_STARTED.name()));
             }
             var cp = checkpointOpt.get();
             List<ReasoningStep> steps = agentStore.loadSteps(cp.getId());
-            return ServiceResult.success(new SessionStatusResponse(sessionId, cp.getStatus().name(), steps, cp.getFailReason()));
+            return ServiceResult.success(
+                    new SessionStatusResponse(sessionId, cp.getStatus().name(), steps, cp.getFailReason()));
         } catch (Exception e) {
             return ServiceResult.error("SYSTEM", e.getMessage());
         }
@@ -316,16 +345,15 @@ public class AgentSessionService {
         var sessionError = validateSession(sessionId, userId);
         if (sessionError.isPresent()) return sessionError.get();
 
-        auditService.recordMandatory(sessionId, userId, "system",
-                SecurityEventType.SESSION_TERMINATED,
-                "via=REST");
+        auditService.recordMandatory(sessionId, userId, "system", SecurityEventType.SESSION_TERMINATED, "via=REST");
         workspaceManager.terminateSession(sessionId);
         return ServiceResult.success(null);
     }
 
     private MessageContext createRestContext(String sessionId, String goal) {
         ChannelUser user = new ChannelUser(REST_USER_ID, REST_USER_ID, REST_USER_NAME, ChannelType.REST_API);
-        ChannelMessage msg = new ChannelMessage.RestApiMessage(user, goal, REST_API_SESSION_PREFIX + sessionId, Instant.now());
+        ChannelMessage msg =
+                new ChannelMessage.RestApiMessage(user, goal, REST_API_SESSION_PREFIX + sessionId, Instant.now());
         return new MessageContext(REST_CHAT_SESSION_PREFIX + sessionId, user, msg);
     }
 
@@ -344,19 +372,19 @@ public class AgentSessionService {
         Optional<String> owner = heartbeatTracker.getOwner(sessionId);
         if (owner.isPresent()) {
             if (userId != null && !owner.get().equals(userId)) {
-                log.warnf("[SESSION-ISOLATION] key=%s attempted access to session=%s owned by key=%s",
-                          userId, sessionId, owner.get());
+                log.warnf(
+                        "[SESSION-ISOLATION] key=%s attempted access to session=%s owned by key=%s",
+                        userId, sessionId, owner.get());
 
                 auditService.recordMandatory(
-                    sessionId,
-                    userId,
-                    AgentSentinels.SYSTEM_ROLE,
-                    SecurityEventType.UNAUTHORIZED_ACCESS,
-                    "Key " + userId + " attempted cross-key session access"
-                );
+                        sessionId,
+                        userId,
+                        AgentSentinels.SYSTEM_ROLE,
+                        SecurityEventType.UNAUTHORIZED_ACCESS,
+                        "Key " + userId + " attempted cross-key session access");
 
-                return Optional.of(ServiceResult.error("SESSION_ACCESS_DENIED",
-                        "API key not authorized for this session"));
+                return Optional.of(
+                        ServiceResult.error("SESSION_ACCESS_DENIED", "API key not authorized for this session"));
             }
         }
         return Optional.empty();
@@ -364,19 +392,25 @@ public class AgentSessionService {
 
     private Optional<ServiceResult<Object>> handleSlashCommand(String sessionId, RunAgentRequest request) {
         String goal = request.goal();
-        if (goal == null || (!goal.startsWith("/") && NON_SLASH_REFLEX_PREFIXES.stream().noneMatch(goal.toLowerCase()::startsWith))) return Optional.empty();
+        if (goal == null
+                || (!goal.startsWith("/")
+                        && NON_SLASH_REFLEX_PREFIXES.stream().noneMatch(goal.toLowerCase()::startsWith)))
+            return Optional.empty();
 
         try {
             Callable<ServiceResult<Object>> op = () -> {
-                String canonicalRole = AgentRoleEnum.fromString(request.agentRole()).toScopedName();
+                String canonicalRole =
+                        AgentRoleEnum.fromString(request.agentRole()).toScopedName();
                 String channel = ChannelType.REST_API.name();
-                return WorkspaceContext.<ServiceResult<Object>>run(sessionId, REST_USER_ID, sessionId, AutonomyLevel.FULL, canonicalRole, channel, () -> {
-                    MessageContext context = createRestContext(sessionId, goal);
-                    ReflexResult result = reflexRegistry.processIfReflex(sessionId, REST_USER_ID, sessionId, goal, context);
-                    return result.commandResponse()
-                            .map(r -> ServiceResult.success((Object) Map.of("status", "OK", "message", r)))
-                            .orElse(null);
-                });
+                return WorkspaceContext.<ServiceResult<Object>>run(
+                        sessionId, REST_USER_ID, sessionId, AutonomyLevel.FULL, canonicalRole, channel, () -> {
+                            MessageContext context = createRestContext(sessionId, goal);
+                            ReflexResult result =
+                                    reflexRegistry.processIfReflex(sessionId, REST_USER_ID, sessionId, goal, context);
+                            return result.commandResponse()
+                                    .map(r -> ServiceResult.success((Object) Map.of("status", "OK", "message", r)))
+                                    .orElse(null);
+                        });
             };
             return Optional.ofNullable(WorkspaceScopeHolder.call(sessionId, op));
         } catch (Exception e) {

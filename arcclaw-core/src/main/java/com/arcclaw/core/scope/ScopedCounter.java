@@ -16,8 +16,7 @@ public class ScopedCounter {
     /**
      * Required no-arg constructor for CDI proxy generation.
      */
-    public ScopedCounter() {
-    }
+    public ScopedCounter() {}
 
     /**
      * Increment and return the new count.

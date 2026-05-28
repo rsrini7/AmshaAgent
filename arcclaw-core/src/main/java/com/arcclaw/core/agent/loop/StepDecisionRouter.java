@@ -1,10 +1,10 @@
 package com.arcclaw.core.agent.loop;
 
-import java.util.List;
-import java.util.Optional;
-
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
+
+import java.util.List;
+import java.util.Optional;
 
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.agent.result.AgentResult;
@@ -12,6 +12,7 @@ import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.lifecycle.WorkspaceManager;
 import com.arcclaw.core.skill.CompiledSkillEntry;
 import com.arcclaw.core.state.CheckpointStatus;
+
 import org.jboss.logging.Logger;
 
 /**
@@ -30,10 +31,11 @@ public class StepDecisionRouter {
     private final EngineStepHandler engineStepHandler;
 
     @Inject
-    public StepDecisionRouter(FinishActionHandler finishActionHandler,
-                              ToolStepHandler toolStepHandler,
-                              ChatMemoryWriter writer,
-                              EngineStepHandler engineStepHandler) {
+    public StepDecisionRouter(
+            FinishActionHandler finishActionHandler,
+            ToolStepHandler toolStepHandler,
+            ChatMemoryWriter writer,
+            EngineStepHandler engineStepHandler) {
         this.finishActionHandler = finishActionHandler;
         this.toolStepHandler = toolStepHandler;
         this.writer = writer;
@@ -50,8 +52,7 @@ public class StepDecisionRouter {
             Integer llmSchemaErrorCount,
             Integer consecutiveFailures,
             boolean retryEngine,
-            boolean isTerminal
-    ) {
+            boolean isTerminal) {
         public static RoutingOutcome terminal(AgentResult result) {
             return new RoutingOutcome(result, null, null, null, null, false, true);
         }
@@ -65,13 +66,14 @@ public class StepDecisionRouter {
         }
     }
 
-    public RoutingOutcome route(AgentExecutionContext context,
-                                List<ReasoningStep> history,
-                                ReasoningStep step,
-                                int llmSchemaErrorCount,
-                                int consecutiveFailures,
-                                List<CompiledSkillEntry> skillSnapshot) {
-        
+    public RoutingOutcome route(
+            AgentExecutionContext context,
+            List<ReasoningStep> history,
+            ReasoningStep step,
+            int llmSchemaErrorCount,
+            int consecutiveFailures,
+            List<CompiledSkillEntry> skillSnapshot) {
+
         ReasoningStep currentStep = step;
 
         while (true) {
@@ -85,45 +87,51 @@ public class StepDecisionRouter {
             }
 
             if (currentStep instanceof ReasoningStep.FinishStep finish) {
-                Optional<RoutingOutcome> finishOutcome = handleFinishOutcome(context, history, finish, llmSchemaErrorCount);
+                Optional<RoutingOutcome> finishOutcome =
+                        handleFinishOutcome(context, history, finish, llmSchemaErrorCount);
                 if (finishOutcome.isPresent()) return finishOutcome.get();
             }
 
-            StepDecision validationDecision = toolStepHandler.validateTool(context, history, currentStep, consecutiveFailures);
+            StepDecision validationDecision =
+                    toolStepHandler.validateTool(context, history, currentStep, consecutiveFailures);
 
             if (validationDecision.type() == DecisionType.TERMINAL) {
                 return RoutingOutcome.terminal(validationDecision.result());
             }
-            
+
             if (validationDecision.isRetryValidation()) {
                 currentStep = validationDecision.step();
                 consecutiveFailures = validationDecision.consecutiveFailures();
-                continue; 
+                continue;
             }
 
             if (validationDecision.type() == DecisionType.CONTINUE) {
-                 return RoutingOutcome.proceedToNextTurn(validationDecision.consecutiveFailures());
+                return RoutingOutcome.proceedToNextTurn(validationDecision.consecutiveFailures());
             }
 
             currentStep = validationDecision.step();
 
             if (currentStep instanceof ReasoningStep.FinishStep) {
-                continue; 
+                continue;
             }
 
             return handleToolInvocation(context, history, currentStep, consecutiveFailures, skillSnapshot);
         }
     }
 
-    private Optional<RoutingOutcome> handleFinishOutcome(AgentExecutionContext context,
-                                                         List<ReasoningStep> history,
-                                                         ReasoningStep.FinishStep currentStep,
-                                                         int llmSchemaErrorCount) {
+    private Optional<RoutingOutcome> handleFinishOutcome(
+            AgentExecutionContext context,
+            List<ReasoningStep> history,
+            ReasoningStep.FinishStep currentStep,
+            int llmSchemaErrorCount) {
         if (currentStep.isParallelBatch()) {
-            log.errorf("PARALLEL INVARIANT VIOLATION: session %s parallel batch step reached FINISH handler.", context.sessionId());
+            log.errorf(
+                    "PARALLEL INVARIANT VIOLATION: session %s parallel batch step reached FINISH handler.",
+                    context.sessionId());
         }
-        
-        FinishActionHandler.FinishOutcome outcome = finishActionHandler.handle(context, history, currentStep, llmSchemaErrorCount);
+
+        FinishActionHandler.FinishOutcome outcome =
+                finishActionHandler.handle(context, history, currentStep, llmSchemaErrorCount);
 
         if (outcome instanceof FinishActionHandler.FinishOutcome.Completed c) {
             context.setForceFinishRetry(false);
@@ -131,7 +139,7 @@ public class StepDecisionRouter {
                 writer.saveAnswer(context.sessionId(), c.answer());
             }
             history.add(currentStep.withObservation("Task completed."));
-            
+
             AgentResult res = c.result();
             if (AgentRoleEnum.SYNTHESIZER.toScopedName().equals(context.agentRole())) {
                 res = AgentResult.finished(c.answer(), List.copyOf(history));
@@ -148,28 +156,46 @@ public class StepDecisionRouter {
         } else if (outcome instanceof FinishActionHandler.FinishOutcome.SalvageFailed sf) {
             history.add(currentStep.withObservation("Salvage failed."));
             AgentResult failedResult = (sf.result() instanceof AgentResult.Failed f)
-                ? AgentResult.failed(f.reason(), f.category(), List.copyOf(history))
-                : sf.result();
+                    ? AgentResult.failed(f.reason(), f.category(), List.copyOf(history))
+                    : sf.result();
             return Optional.of(RoutingOutcome.terminal(failedResult));
         } else if (outcome instanceof FinishActionHandler.FinishOutcome.ExecuteLeakedTool elt) {
-            log.infof("LEAKED-TOOL-EXEC session %s: executing parsed tool '%s' from leaked FINISH answer",
+            log.infof(
+                    "LEAKED-TOOL-EXEC session %s: executing parsed tool '%s' from leaked FINISH answer",
                     context.sessionId(), elt.toolName());
             ReasoningStep.ToolCallStep syntheticStep = new ReasoningStep.ToolCallStep(
                     "Executing leaked tool call from FINISH answer",
                     elt.toolName(),
                     elt.arguments(),
-                    null, 0, 0, null, null, null, null, false, false);
+                    null,
+                    0,
+                    0,
+                    null,
+                    null,
+                    null,
+                    null,
+                    false,
+                    false);
             history.add(elt.correctedStep());
             RoutingOutcome invocationResult = handleToolInvocation(context, history, syntheticStep, 0, List.of());
             return Optional.of(invocationResult);
         } else if (outcome instanceof FinishActionHandler.FinishOutcome.InjectToolCall itc) {
-            log.infof("TOOL-INJECT session %s: injecting tool '%s' that agent missed",
+            log.infof(
+                    "TOOL-INJECT session %s: injecting tool '%s' that agent missed",
                     context.sessionId(), itc.toolName());
             ReasoningStep.ToolCallStep syntheticStep = new ReasoningStep.ToolCallStep(
                     "Injected tool call — agent finished without using available tools",
                     itc.toolName(),
                     itc.arguments(),
-                    null, 0, 0, null, null, null, null, false, false);
+                    null,
+                    0,
+                    0,
+                    null,
+                    null,
+                    null,
+                    null,
+                    false,
+                    false);
             history.add(itc.correctedStep());
             RoutingOutcome invocationResult = handleToolInvocation(context, history, syntheticStep, 0, List.of());
             return Optional.of(invocationResult);
@@ -177,31 +203,43 @@ public class StepDecisionRouter {
         return Optional.empty();
     }
 
-    private RoutingOutcome handleToolInvocation(AgentExecutionContext context,
-                                                List<ReasoningStep> history,
-                                                ReasoningStep currentStep,
-                                                int consecutiveFailures,
-                                                List<CompiledSkillEntry> skillSnapshot) {
+    private RoutingOutcome handleToolInvocation(
+            AgentExecutionContext context,
+            List<ReasoningStep> history,
+            ReasoningStep currentStep,
+            int consecutiveFailures,
+            List<CompiledSkillEntry> skillSnapshot) {
         if (context.isStatusDirty()) {
             var cpOpt = engineStepHandler.loadCheckpointStatus(context);
             context.setLastCheckpointStatus(cpOpt.orElse(null));
             if (context.lastCheckpointStatus() == CheckpointStatus.AWAITING_APPROVAL) {
                 // Retry once after a short delay — the claimForResume() transaction may have
                 // committed in a different thread but WAL visibility is not yet guaranteed.
-                try { Thread.sleep(150); } catch (InterruptedException ie) { Thread.currentThread().interrupt(); }
+                try {
+                    Thread.sleep(150);
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                }
                 context.markStatusDirty(); // force re-read from DB
                 cpOpt = engineStepHandler.loadCheckpointStatus(context);
                 context.setLastCheckpointStatus(cpOpt.orElse(null));
                 if (context.lastCheckpointStatus() == CheckpointStatus.AWAITING_APPROVAL) {
-                    log.warnf("Session %s is still AWAITING_APPROVAL after retry. Refusing to invoke tool.", context.sessionId());
-                    return RoutingOutcome.terminal(AgentResult.failed("State corrupted - tool execution attempted before approval persistence completed.",
-                            AgentResult.FailureCategory.SYSTEM_ERROR, List.copyOf(history)));
+                    log.warnf(
+                            "Session %s is still AWAITING_APPROVAL after retry. Refusing to invoke tool.",
+                            context.sessionId());
+                    return RoutingOutcome.terminal(AgentResult.failed(
+                            "State corrupted - tool execution attempted before approval persistence completed.",
+                            AgentResult.FailureCategory.SYSTEM_ERROR,
+                            List.copyOf(history)));
                 }
-                log.infof("Session %s: AWAITING_APPROVAL resolved to %s after WAL visibility retry.", context.sessionId(), context.lastCheckpointStatus());
+                log.infof(
+                        "Session %s: AWAITING_APPROVAL resolved to %s after WAL visibility retry.",
+                        context.sessionId(), context.lastCheckpointStatus());
             }
         }
 
-        StepDecision invocationDecision = toolStepHandler.invokeToolAndObserve(context, history, currentStep, consecutiveFailures, skillSnapshot);
+        StepDecision invocationDecision =
+                toolStepHandler.invokeToolAndObserve(context, history, currentStep, consecutiveFailures, skillSnapshot);
 
         if (invocationDecision.type() == DecisionType.TERMINAL) {
             return RoutingOutcome.terminal(invocationDecision.result());

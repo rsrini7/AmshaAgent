@@ -1,16 +1,17 @@
 package com.arcclaw.persistence.sqlite;
 
+import jakarta.enterprise.context.ApplicationScoped;
+
 import java.sql.SQLException;
 import java.sql.Statement;
 
-import jakarta.enterprise.context.ApplicationScoped;
-
-import io.quarkus.flyway.FlywayConfigurationCustomizer;
 import org.flywaydb.core.api.callback.BaseCallback;
 import org.flywaydb.core.api.callback.Context;
 import org.flywaydb.core.api.callback.Event;
 import org.flywaydb.core.api.configuration.FluentConfiguration;
 import org.jboss.logging.Logger;
+
+import io.quarkus.flyway.FlywayConfigurationCustomizer;
 
 /**
  * Drops FTS5 virtual tables before Flyway clean runs.

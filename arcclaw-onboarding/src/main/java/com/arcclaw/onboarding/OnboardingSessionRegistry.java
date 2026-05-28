@@ -1,12 +1,13 @@
 package com.arcclaw.onboarding;
 
-import java.util.concurrent.TimeUnit;
-
 import jakarta.enterprise.context.ApplicationScoped;
+
+import java.util.concurrent.TimeUnit;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
+
 import io.quarkus.runtime.annotations.RegisterForReflection;
 
 @ApplicationScoped
@@ -15,11 +16,18 @@ public class OnboardingSessionRegistry {
     @RegisterForReflection
     public static class OnboardingState {
         public enum Step {
-            WELCOME(1), PROVIDER(2), CREDENTIALS(3),
-            SYSTEM_PROMPT(4), MCP(5), COMPLETE(6);
+            WELCOME(1),
+            PROVIDER(2),
+            CREDENTIALS(3),
+            SYSTEM_PROMPT(4),
+            MCP(5),
+            COMPLETE(6);
 
             public final int number;
-            Step(int n) { this.number = n; }
+
+            Step(int n) {
+                this.number = n;
+            }
 
             public Step next() {
                 Step[] vals = values();
@@ -35,22 +43,41 @@ public class OnboardingSessionRegistry {
 
         // Jackson / Frontend Mapping
         @JsonProperty("step")
-        public int getStepNumber() { return currentStep.number; }
+        public int getStepNumber() {
+            return currentStep.number;
+        }
 
         @JsonProperty("name")
-        public String getStepName() { return currentStep.name(); }
+        public String getStepName() {
+            return currentStep.name();
+        }
 
         @JsonProperty("provider")
-        public String getSelectedProvider() { return selectedProvider; }
-        public void setSelectedProvider(String val) { this.selectedProvider = val; }
+        public String getSelectedProvider() {
+            return selectedProvider;
+        }
+
+        public void setSelectedProvider(String val) {
+            this.selectedProvider = val;
+        }
 
         @JsonProperty("model")
-        public String getSelectedModel() { return selectedModel; }
-        public void setSelectedModel(String val) { this.selectedModel = val; }
+        public String getSelectedModel() {
+            return selectedModel;
+        }
+
+        public void setSelectedModel(String val) {
+            this.selectedModel = val;
+        }
 
         @JsonProperty("credentialsValidated")
-        public boolean isCredentialsValidated() { return credentialsValidated; }
-        public void setCredentialsValidated(boolean val) { this.credentialsValidated = val; }
+        public boolean isCredentialsValidated() {
+            return credentialsValidated;
+        }
+
+        public void setCredentialsValidated(boolean val) {
+            this.credentialsValidated = val;
+        }
 
         public void advance() {
             this.currentStep = currentStep.next();
@@ -60,8 +87,13 @@ public class OnboardingSessionRegistry {
             return target.number <= currentStep.number + 1;
         }
 
-        public Step getCurrentStep() { return currentStep; }
-        public void setCurrentStep(Step step) { this.currentStep = step; }
+        public Step getCurrentStep() {
+            return currentStep;
+        }
+
+        public void setCurrentStep(Step step) {
+            this.currentStep = step;
+        }
     }
 
     private final Cache<String, OnboardingState> sessions = Caffeine.newBuilder()

@@ -46,14 +46,14 @@ public class WsAuthService {
         String token = tokenStore.generateToken();
         return new WsTokenResponse(token);
     }
-    
+
     public static class WsTokenResponse {
         public String token;
-        
+
         public WsTokenResponse(String token) {
             this.token = token;
         }
-        
+
         public WsTokenResponse() {}
     }
 }

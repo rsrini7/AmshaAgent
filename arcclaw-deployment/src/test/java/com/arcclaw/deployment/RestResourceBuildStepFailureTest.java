@@ -1,5 +1,8 @@
 package com.arcclaw.deployment;
 
+import dev.langchain4j.model.chat.ChatModel;
+import dev.langchain4j.model.embedding.EmbeddingModel;
+
 import jakarta.annotation.Priority;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.context.Dependent;
@@ -14,13 +17,7 @@ import com.arcclaw.channel.api.ChannelAllowlist;
 import com.arcclaw.channel.api.IntentDetector;
 import com.arcclaw.core.agent.reasoning.StructuredOutputMode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import dev.langchain4j.model.chat.ChatModel;
-import dev.langchain4j.model.embedding.EmbeddingModel;
-import io.micrometer.core.instrument.MeterRegistry;
-import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
-import io.quarkus.qute.Template;
-import io.quarkus.test.QuarkusUnitTest;
-import io.smallrye.common.annotation.Identifier;
+
 import org.jboss.shrinkwrap.api.ShrinkWrap;
 import org.jboss.shrinkwrap.api.spec.JavaArchive;
 import org.junit.jupiter.api.Assertions;
@@ -28,12 +25,18 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 import org.mockito.Mockito;
 
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import io.quarkus.qute.Template;
+import io.quarkus.test.QuarkusUnitTest;
+import io.smallrye.common.annotation.Identifier;
+
 public class RestResourceBuildStepFailureTest {
 
     @RegisterExtension
     static final QuarkusUnitTest config = new QuarkusUnitTest()
-            .setArchiveProducer(() -> ShrinkWrap.create(JavaArchive.class)
-                    .addClasses(InvalidResource.class, TestProducers.class))
+            .setArchiveProducer(
+                    () -> ShrinkWrap.create(JavaArchive.class).addClasses(InvalidResource.class, TestProducers.class))
             .overrideConfigKey("arcclaw.vault.pepper", "dummy-pepper-for-test-purposes-123")
             .overrideConfigKey("arcclaw.data-dir", ":memory:")
             .overrideConfigKey("arcclaw.auto-seed-secrets", "false")

@@ -3,9 +3,11 @@ package com.arcclaw.core.reflex;
 import jakarta.inject.Inject;
 
 import com.arcclaw.core.security.InputSanitizer;
-import io.quarkus.test.junit.QuarkusTest;
+
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
+
+import io.quarkus.test.junit.QuarkusTest;
 
 @QuarkusTest
 class PiiScanReflexTest {
@@ -74,7 +76,8 @@ class PiiScanReflexTest {
 
     @Test
     void testJwtRedaction() {
-        String input = "Token: eyJhbGciOiJIUzI1NiIsInR5cCI.eyJzdWIiOiIxMjM0NTY3ODkw.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c";
+        String input =
+                "Token: eyJhbGciOiJIUzI1NiIsInR5cCI.eyJzdWIiOiIxMjM0NTY3ODkw.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c";
         Assertions.assertTrue(piiScanReflex.detectsPii(input));
         String sanitized = piiScanReflex.sanitize("s1", "u1", input);
         Assertions.assertEquals("Token: [REDACTED-JWT]", sanitized);
@@ -115,15 +118,15 @@ class PiiScanReflexTest {
     @Test
     void testPhoneIndiaExact() {
         // Compact format: +919876543210
-        Assertions.assertEquals("Call me at [REDACTED-PHONE]", 
-            piiScanReflex.sanitize("s1", "u1", "Call me at +919876543210"));
+        Assertions.assertEquals(
+                "Call me at [REDACTED-PHONE]", piiScanReflex.sanitize("s1", "u1", "Call me at +919876543210"));
     }
 
     @Test
     void testPhoneIndiaSpacedExact() {
         // Spaced format: +91-9876543210
-        Assertions.assertEquals("Call me at [REDACTED-PHONE]",
-            piiScanReflex.sanitize("s1", "u1", "Call me at +91-9876543210"));
+        Assertions.assertEquals(
+                "Call me at [REDACTED-PHONE]", piiScanReflex.sanitize("s1", "u1", "Call me at +91-9876543210"));
     }
 
     @Test
@@ -131,10 +134,10 @@ class PiiScanReflexTest {
         // +919876543210 must be PHONE, not AADHAAR
         String input = "Call +919876543210";
         String sanitized = piiScanReflex.sanitize("s1", "u1", input);
-        Assertions.assertTrue(sanitized.contains("[REDACTED-PHONE]"), 
-            "Indian phone with +91 prefix must be PHONE not AADHAAR");
-        Assertions.assertFalse(sanitized.contains("[REDACTED-AADHAAR]"),
-            "Aadhaar redaction must not fire on phone numbers");
+        Assertions.assertTrue(
+                sanitized.contains("[REDACTED-PHONE]"), "Indian phone with +91 prefix must be PHONE not AADHAAR");
+        Assertions.assertFalse(
+                sanitized.contains("[REDACTED-AADHAAR]"), "Aadhaar redaction must not fire on phone numbers");
     }
 
     @Test
@@ -146,30 +149,37 @@ class PiiScanReflexTest {
     @Test
     void testIndianPII() {
         // GSTIN
-        Assertions.assertTrue(piiScanReflex.sanitize("test", "user", "My GST is 22AAAAA0000A1Z5").contains("[REDACTED-GSTIN]"));
-        
+        Assertions.assertTrue(piiScanReflex
+                .sanitize("test", "user", "My GST is 22AAAAA0000A1Z5")
+                .contains("[REDACTED-GSTIN]"));
+
         // Passport
-        Assertions.assertTrue(piiScanReflex.sanitize("test", "user", "Passport: Z1234567").contains("[REDACTED-PASSPORT]"));
-        
+        Assertions.assertTrue(
+                piiScanReflex.sanitize("test", "user", "Passport: Z1234567").contains("[REDACTED-PASSPORT]"));
+
         // DOB
-        Assertions.assertTrue(piiScanReflex.sanitize("test", "user", "DOB: 1990-01-01").contains("[REDACTED-DOB]"));
+        Assertions.assertTrue(
+                piiScanReflex.sanitize("test", "user", "DOB: 1990-01-01").contains("[REDACTED-DOB]"));
     }
 
     @Test
     void testGlobalPII() {
         // IPv6
-        Assertions.assertTrue(piiScanReflex.sanitize("test", "user", "Address: 2001:0db8:85a3:0000:0000:8a2e:0370:7334").contains("[REDACTED-IP]"));
+        Assertions.assertTrue(piiScanReflex
+                .sanitize("test", "user", "Address: 2001:0db8:85a3:0000:0000:8a2e:0370:7334")
+                .contains("[REDACTED-IP]"));
     }
 
     @Test
     void testUpiVpaRedaction() {
         // UPI VPA should be redacted
-        Assertions.assertTrue(piiScanReflex.sanitize("test", "user", "Pay me at srini@okaxis").contains("[REDACTED-UPI]"));
-        
-        // BUT valid email TLDs should NOT be caught by UPI (redundant since email regex runs first, but negative lookahead verifies logic)
+        Assertions.assertTrue(
+                piiScanReflex.sanitize("test", "user", "Pay me at srini@okaxis").contains("[REDACTED-UPI]"));
+
+        // BUT valid email TLDs should NOT be caught by UPI (redundant since email regex runs first, but negative
+        // lookahead verifies logic)
         String emailRes = piiScanReflex.sanitize("test", "user", "Contact me at srini@google.com");
         // It's already redacted as EMAIL by the existing PiiScanReflex logic
         Assertions.assertTrue(emailRes.contains("[REDACTED-EMAIL]"));
     }
-
 }

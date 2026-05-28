@@ -7,7 +7,8 @@ import com.arcclaw.core.tool.DynamicToolLookup;
 
 @ApplicationScoped
 public class DynamicToolLookupImpl implements DynamicToolLookup {
-    @Inject DynamicToolCapabilityRegistry registry;
+    @Inject
+    DynamicToolCapabilityRegistry registry;
 
     @Override
     public boolean isDynamicToolAllowed(String toolName) {

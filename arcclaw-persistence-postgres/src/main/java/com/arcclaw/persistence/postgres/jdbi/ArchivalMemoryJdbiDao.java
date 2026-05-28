@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Optional;
 
 import com.arcclaw.persistence.api.ArchivalChunkDto;
+
 import org.jdbi.v3.sqlobject.config.RegisterConstructorMapper;
 import org.jdbi.v3.sqlobject.customizer.Bind;
 import org.jdbi.v3.sqlobject.customizer.BindList;
@@ -44,11 +45,12 @@ public interface ArchivalMemoryJdbiDao {
         ORDER BY ts_rank(content_tsv, plainto_tsquery('english', :query)) DESC
         LIMIT :limit
         """)
-    List<ArchivalChunkDto> search(@Bind("userId") String userId,
-                                  @Bind("query") String query,
-                                  @Bind("limit") int limit,
-                                  @Bind("chunkTypesEmpty") boolean chunkTypesEmpty,
-                                  @Bind("chunkTypes") List<String> chunkTypes);
+    List<ArchivalChunkDto> search(
+            @Bind("userId") String userId,
+            @Bind("query") String query,
+            @Bind("limit") int limit,
+            @Bind("chunkTypesEmpty") boolean chunkTypesEmpty,
+            @Bind("chunkTypes") List<String> chunkTypes);
 
     @SqlQuery("""
         SELECT chunk_id AS "chunkId", user_id AS "userId", content, chunk_type AS "chunkType",

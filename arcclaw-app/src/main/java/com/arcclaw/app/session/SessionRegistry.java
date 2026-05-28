@@ -1,19 +1,21 @@
 package com.arcclaw.app.session;
 
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+
 import java.time.Instant;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.ReentrantLock;
 
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
-
 import com.arcclaw.core.pipeline.SessionIdResolver;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
-import io.quarkus.arc.properties.IfBuildProperty;
+
 import org.jboss.logging.Logger;
 import org.jdbi.v3.core.Jdbi;
+
+import io.quarkus.arc.properties.IfBuildProperty;
 
 /**
  * Persistent session registry backed by the {@code session_registry} table using JDBI.
@@ -28,9 +30,9 @@ public class SessionRegistry implements SessionIdResolver {
     private final Jdbi jdbi;
 
     private final Cache<String, ReentrantLock> userLocks = Caffeine.newBuilder()
-        .maximumSize(50_000)
-        .expireAfterAccess(30, TimeUnit.MINUTES)
-        .build();
+            .maximumSize(50_000)
+            .expireAfterAccess(30, TimeUnit.MINUTES)
+            .build();
 
     @Inject
     public SessionRegistry(Jdbi jdbi) {
@@ -42,28 +44,26 @@ public class SessionRegistry implements SessionIdResolver {
     }
 
     protected String lookupSession(String channelType, String channelId, String userId) {
-        return jdbi.withHandle(handle ->
-            handle.createQuery("SELECT session_id FROM session_registry WHERE channel_type = :ct AND channel_id = :ci AND user_id = :uid")
+        return jdbi.withHandle(handle -> handle.createQuery(
+                        "SELECT session_id FROM session_registry WHERE channel_type = :ct AND channel_id = :ci AND user_id = :uid")
                 .bind("ct", channelType)
                 .bind("ci", channelId)
                 .bind("uid", userId)
                 .mapTo(String.class)
                 .findFirst()
-                .orElse(null)
-        );
+                .orElse(null));
     }
 
     protected String insertSession(String channelType, String channelId, String userId, String newSessionId) {
-        jdbi.useHandle(handle ->
-            handle.createUpdate("INSERT INTO session_registry (channel_type, channel_id, user_id, session_id, created_at) " +
-                                "VALUES (:ct, :ci, :uid, :sid, :createdAt)")
+        jdbi.useHandle(handle -> handle.createUpdate(
+                        "INSERT INTO session_registry (channel_type, channel_id, user_id, session_id, created_at) "
+                                + "VALUES (:ct, :ci, :uid, :sid, :createdAt)")
                 .bind("ct", channelType)
                 .bind("ci", channelId)
                 .bind("uid", userId)
                 .bind("sid", newSessionId)
                 .bind("createdAt", Instant.now())
-                .execute()
-        );
+                .execute());
         return newSessionId;
     }
 
@@ -78,8 +78,7 @@ public class SessionRegistry implements SessionIdResolver {
 
             String newSessionId = UUID.randomUUID().toString();
             String id = insertSession(channelType, channelId, userId, newSessionId);
-            log.infof("SessionRegistry: created session %s for [%s/%s/%s]",
-                      id, channelType, channelId, userId);
+            log.infof("SessionRegistry: created session %s for [%s/%s/%s]", id, channelType, channelId, userId);
             return id;
         } finally {
             lock.unlock();

@@ -32,7 +32,7 @@ public final class NdjsonWriter {
      * @throws IOException if the write or flush fails
      */
     public static void writeLine(OutputStream out, String json) throws IOException {
-        Objects.requireNonNull(out,  "OutputStream must not be null");
+        Objects.requireNonNull(out, "OutputStream must not be null");
         Objects.requireNonNull(json, "JSON payload must not be null");
         out.write(json.getBytes(StandardCharsets.UTF_8));
         out.write('\n');

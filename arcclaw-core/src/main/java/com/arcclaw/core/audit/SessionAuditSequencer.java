@@ -1,9 +1,9 @@
 package com.arcclaw.core.audit;
 
+import jakarta.enterprise.context.ApplicationScoped;
+
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.ReentrantLock;
-
-import jakarta.enterprise.context.ApplicationScoped;
 
 /**
  * Coordinates atomic sequencing and HMAC chaining for session audits.

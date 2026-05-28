@@ -1,12 +1,12 @@
 package com.arcclaw.mcp.tool;
 
+import jakarta.enterprise.context.ApplicationScoped;
+
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
-
-import jakarta.enterprise.context.ApplicationScoped;
 
 import io.quarkus.arc.Unremovable;
 

@@ -13,13 +13,13 @@ import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import jakarta.inject.Inject;
+
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.Callable;
-
-import jakarta.inject.Inject;
 
 import com.arcclaw.channel.api.ChannelMessage;
 import com.arcclaw.channel.api.ChannelType;
@@ -38,20 +38,22 @@ import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.persistence.api.AgentCronDto;
 import com.arcclaw.persistence.api.CronStorePort;
-import io.quarkus.arc.ClientProxy;
-import io.quarkus.test.InjectMock;
-import io.quarkus.test.junit.QuarkusTest;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.MockedStatic;
+
+import io.quarkus.arc.ClientProxy;
+import io.quarkus.test.InjectMock;
+import io.quarkus.test.junit.QuarkusTest;
 
 @QuarkusTest
 class DenyReflexTest {
 
     @Inject
     DenyReflex denyReflex;
-    
+
     private MockedStatic<WorkspaceScopeHolder> mockedScope;
 
     @InjectMock
@@ -77,24 +79,35 @@ class DenyReflexTest {
         }
         instance.notificationService = notificationServiceMock;
         lenient().when(notificationServiceMock.createJobNotifier()).thenReturn((cron, result) -> {});
-        
-        // §7.29 guard: allow tests to proceed by default
-        when(statefulAgentStore.claimForResume(anyString(), anyString()))
-                .thenReturn(true);
 
-        lenient().when(checkpointApprovalService.denyAll(anyString(), anyString()))
+        // §7.29 guard: allow tests to proceed by default
+        when(statefulAgentStore.claimForResume(anyString(), anyString())).thenReturn(true);
+
+        lenient()
+                .when(checkpointApprovalService.denyAll(anyString(), anyString()))
                 .thenReturn(new AgentCheckpointRecord());
-        lenient().when(checkpointApprovalService.denyTool(anyString(), anyString(), anyString()))
+        lenient()
+                .when(checkpointApprovalService.denyTool(anyString(), anyString(), anyString()))
                 .thenReturn(new AgentCheckpointRecord());
-                
+
         mockedScope = mockStatic(WorkspaceScopeHolder.class);
-        mockedScope.when(() -> WorkspaceScopeHolder.run(anyString(), any(Runnable.class)))
-                .thenAnswer(inv -> { ((Runnable) inv.getArgument(1)).run(); return null; });
-        mockedScope.when(() -> WorkspaceScopeHolder.run(anyString(), anyString(), anyString(), any(Runnable.class)))
-                .thenAnswer(inv -> { ((Runnable) inv.getArgument(3)).run(); return null; });
-        mockedScope.when(() -> WorkspaceScopeHolder.call(anyString(), any(Callable.class)))
+        mockedScope
+                .when(() -> WorkspaceScopeHolder.run(anyString(), any(Runnable.class)))
+                .thenAnswer(inv -> {
+                    ((Runnable) inv.getArgument(1)).run();
+                    return null;
+                });
+        mockedScope
+                .when(() -> WorkspaceScopeHolder.run(anyString(), anyString(), anyString(), any(Runnable.class)))
+                .thenAnswer(inv -> {
+                    ((Runnable) inv.getArgument(3)).run();
+                    return null;
+                });
+        mockedScope
+                .when(() -> WorkspaceScopeHolder.call(anyString(), any(Callable.class)))
                 .thenAnswer(inv -> ((Callable<?>) inv.getArgument(1)).call());
-        mockedScope.when(() -> WorkspaceScopeHolder.call(anyString(), anyString(), anyString(), any(Callable.class)))
+        mockedScope
+                .when(() -> WorkspaceScopeHolder.call(anyString(), anyString(), anyString(), any(Callable.class)))
                 .thenAnswer(inv -> ((Callable<?>) inv.getArgument(3)).call());
     }
 
@@ -115,23 +128,45 @@ class DenyReflexTest {
     void testCronIdDenialResumesAndMarksFailed() throws Exception {
         String cronId = "cron-123";
         String userId = "user-1";
-        
-        var cron = new AgentCronDto(cronId, null, userId, "chat-1", null, null, null, null, false, null, null, null, "AWAITING_APPROVAL", null, null, "dlv-1", null, null);
+
+        var cron = new AgentCronDto(
+                cronId,
+                null,
+                userId,
+                "chat-1",
+                null,
+                null,
+                null,
+                null,
+                false,
+                null,
+                null,
+                null,
+                "AWAITING_APPROVAL",
+                null,
+                null,
+                "dlv-1",
+                null,
+                null);
 
         AgentCheckpoint cp = new AgentCheckpointRecord();
         cp.setSessionId("cron-session-1");
         cp.setAgentRole(AgentRoleEnum.COORDINATOR.toScopedName());
-        
+
         when(checkpointApprovalService.denyAll(eq(cronId), anyString())).thenReturn(cp);
         when(cronStore.findById(cronId)).thenReturn(Optional.of(cron));
-        when(agentLoop.run(anyString(), anyString(), eq(AgentSentinels.GOAL_DENY_APPROVED), any(), any(), anyInt(), any()))
+        when(agentLoop.run(
+                        anyString(), anyString(), eq(AgentSentinels.GOAL_DENY_APPROVED), any(), any(), anyInt(), any()))
                 .thenReturn(AgentResult.finished("Denial Ack", List.of()));
 
         MessageContext ctx = createContext("/deny " + cronId);
-        
-        ReflexResult result = WorkspaceScopeHolder.call("session-1", userId, "chat-1", () -> 
-                denyReflex.execute("session-1", userId, "chat-1", "/deny " + cronId, ctx));
-        
+
+        ReflexResult result = WorkspaceScopeHolder.call(
+                "session-1",
+                userId,
+                "chat-1",
+                () -> denyReflex.execute("session-1", userId, "chat-1", "/deny " + cronId, ctx));
+
         String resultText = result.commandResponse().get();
 
         assertEquals("Denial Ack", resultText);
@@ -143,7 +178,25 @@ class DenyReflexTest {
     @Test
     void testPlainDenyWithSinglePendingCronGuidesUser() {
         String userId = "user-1";
-        var cron = new AgentCronDto("cron-456", null, null, null, null, null, null, null, false, "Backup databases", null, null, "AWAITING_APPROVAL", null, null, null, null, null);
+        var cron = new AgentCronDto(
+                "cron-456",
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                false,
+                "Backup databases",
+                null,
+                null,
+                "AWAITING_APPROVAL",
+                null,
+                null,
+                null,
+                null,
+                null);
 
         when(statefulAgentStore.findLatestAwaitingApproval(anyString())).thenReturn(Optional.empty());
         when(cronStore.findAwaitingApprovalByUserId(userId)).thenReturn(List.of(cron));
@@ -152,10 +205,9 @@ class DenyReflexTest {
         ReflexResult result = denyReflex.execute("session-1", userId, "chat-1", "/deny", ctx);
         String resultText = result.commandResponse().get();
 
-        String expected = "⚠️ No active denial in this chat session.\n\n" +
-                        "A background task is waiting:\n" +
-                        "• Backup databases\n\n" +
-                        "Use: `/deny cron-456` to cancel it.";
+        String expected = "⚠️ No active denial in this chat session.\n\n" + "A background task is waiting:\n"
+                + "• Backup databases\n\n"
+                + "Use: `/deny cron-456` to cancel it.";
         assertEquals(expected, resultText);
     }
 
@@ -167,8 +219,7 @@ class DenyReflexTest {
         cp.setStatus(CheckpointStatus.AWAITING_APPROVAL);
         cp.setAgentRole("architect");
 
-        when(statefulAgentStore.findLatestAwaitingApproval(eq(sessionId)))
-                .thenReturn(Optional.of(cp));
+        when(statefulAgentStore.findLatestAwaitingApproval(eq(sessionId))).thenReturn(Optional.of(cp));
 
         MessageContext ctx = createContext("/deny");
         ReflexResult result = denyReflex.execute(sessionId, userId, "chat-1", "/deny", ctx);
@@ -181,8 +232,26 @@ class DenyReflexTest {
     @Test
     void testResumeGuardBlocksDuplicateCall() {
         String userId = "user-1";
-        var cron = new AgentCronDto("cron-123", null, userId, null, null, null, null, null, false, null, null, null, "AWAITING_APPROVAL", null, null, null, null, null);
-        
+        var cron = new AgentCronDto(
+                "cron-123",
+                null,
+                userId,
+                null,
+                null,
+                null,
+                null,
+                null,
+                false,
+                null,
+                null,
+                null,
+                "AWAITING_APPROVAL",
+                null,
+                null,
+                null,
+                null,
+                null);
+
         when(cronStore.findById("cron-123")).thenReturn(Optional.of(cron));
 
         AgentCheckpoint cp = new AgentCheckpointRecord();
@@ -190,14 +259,16 @@ class DenyReflexTest {
         cp.setStatus(CheckpointStatus.AWAITING_APPROVAL);
 
         when(checkpointApprovalService.denyAll(eq("cron-123"), anyString())).thenReturn(cp);
-        
+
         // MOCK THE GUARD TO FAIL
         when(statefulAgentStore.claimForResume(anyString(), anyString())).thenReturn(false);
 
         MessageContext ctx = createContext("/deny cron-123");
         ReflexResult result = denyReflex.execute("session-1", userId, "chat-1", "/deny cron-123", ctx);
 
-        assertEquals("⏳ Already processing your denial. Please wait.", result.commandResponse().get());
+        assertEquals(
+                "⏳ Already processing your denial. Please wait.",
+                result.commandResponse().get());
         assertFalse(ctx.isResumeSignal());
     }
 
@@ -211,7 +282,25 @@ class DenyReflexTest {
         cp.setAgentRole("coordinator");
         when(statefulAgentStore.findLatestAwaitingApproval("session-1")).thenReturn(Optional.of(cp));
 
-        var cron = new AgentCronDto("cron-123", null, null, null, null, null, null, null, false, "Periodic backup", null, null, null, null, null, null, null, null);
+        var cron = new AgentCronDto(
+                "cron-123",
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                false,
+                "Periodic backup",
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null);
         when(cronStore.findAwaitingApprovalByUserId(userId)).thenReturn(List.of(cron));
 
         MessageContext ctx = createContext("/deny");
@@ -227,8 +316,26 @@ class DenyReflexTest {
     void testCronUuidResolutionWithPrefix() throws Exception {
         String jobId = UUID.randomUUID().toString();
         String fullId = "cron-" + jobId + "-" + UUID.randomUUID().toString();
-        
-        var cron = new AgentCronDto(jobId, null, "user-1", null, null, null, null, null, false, null, null, null, "AWAITING_APPROVAL", null, null, null, null, null);
+
+        var cron = new AgentCronDto(
+                jobId,
+                null,
+                "user-1",
+                null,
+                null,
+                null,
+                null,
+                null,
+                false,
+                null,
+                null,
+                null,
+                "AWAITING_APPROVAL",
+                null,
+                null,
+                null,
+                null,
+                null);
 
         AgentCheckpoint cp = new AgentCheckpointRecord();
         cp.setSessionId(fullId);
@@ -236,7 +343,8 @@ class DenyReflexTest {
 
         when(checkpointApprovalService.denyAll(eq(fullId), anyString())).thenReturn(cp);
         when(cronStore.findById(jobId)).thenReturn(Optional.of(cron));
-        when(agentLoop.run(anyString(), anyString(), eq(AgentSentinels.GOAL_DENY_APPROVED), any(), any(), anyInt(), any()))
+        when(agentLoop.run(
+                        anyString(), anyString(), eq(AgentSentinels.GOAL_DENY_APPROVED), any(), any(), anyInt(), any()))
                 .thenReturn(AgentResult.finished("Denied", List.of()));
 
         MessageContext ctx = createContext("/deny " + fullId);
@@ -254,7 +362,7 @@ class DenyReflexTest {
 
         MessageContext ctx = createContext("/deny github");
         ReflexResult result = denyReflex.execute("session-1", "user-1", "chat-1", "/deny github", ctx);
-        
+
         assertTrue(result.commandResponse().get().contains(ToolCapability.GITHUB.toolName()));
         assertTrue(result.commandResponse().get().contains("denied"));
     }

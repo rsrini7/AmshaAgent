@@ -10,16 +10,16 @@ class SkillDefinitionTest {
 
     @Test
     void testNullNameThrows() {
-        assertThrows(NullPointerException.class, () ->
-            new SkillDefinition("id", null, "desc", List.of(), List.of(), 5, "systemPrompt")
-        );
+        assertThrows(
+                NullPointerException.class,
+                () -> new SkillDefinition("id", null, "desc", List.of(), List.of(), 5, "systemPrompt"));
     }
 
     @Test
     void testNullSystemPromptThrows() {
-        assertThrows(NullPointerException.class, () ->
-            new SkillDefinition("id", "code-reviewer", "desc", List.of(), List.of(), 5, null)
-        );
+        assertThrows(
+                NullPointerException.class,
+                () -> new SkillDefinition("id", "code-reviewer", "desc", List.of(), List.of(), 5, null));
     }
 
     @Test

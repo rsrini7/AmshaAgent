@@ -362,11 +362,37 @@
               <printFailingErrors>true</printFailingErrors>
               <includeTests>false</includeTests>
               <javaLanguageVersion>25</javaLanguageVersion>
-              <minimumPriority>2</minimumPriority>
               <rulesets>
                 <ruleset>/rulesets/java/arcclaw-rules.xml</ruleset>
               </rulesets>
             </configuration>
+          </execution>
+        </executions>
+      </plugin>
+      <plugin>
+        <groupId>com.diffplug.spotless</groupId>
+        <artifactId>spotless-maven-plugin</artifactId>
+        <version>3.5.1</version>
+        <configuration>
+          <java>
+            <palantirJavaFormat>
+              <version>2.91.0</version>
+            </palantirJavaFormat>
+            <removeUnusedImports/>
+            <importOrder>
+              <order>,javax,jakarta,java,com,org,io,</order>
+            </importOrder>
+            <excludes>
+              <exclude>**/target/**</exclude>
+              <exclude>**/generated-sources/**</exclude>
+            </excludes>
+          </java>
+        </configuration>
+        <executions>
+          <execution>
+            <id>spotless-check</id>
+            <phase>verify</phase>
+            <goals><goal>check</goal></goals>
           </execution>
         </executions>
       </plugin>

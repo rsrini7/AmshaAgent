@@ -1,5 +1,7 @@
 package com.arcclaw.channel.web;
 
+import jakarta.enterprise.context.ApplicationScoped;
+
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
@@ -8,24 +10,24 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
-import jakarta.enterprise.context.ApplicationScoped;
-
 import com.arcclaw.common.util.LogUtil;
-import io.quarkus.websockets.next.WebSocketConnection;
+
 import org.jboss.logging.Logger;
 
+import io.quarkus.websockets.next.WebSocketConnection;
+
 /**
- * Tracks active WebSocket connections and maps them to both temporary 
+ * Tracks active WebSocket connections and maps them to both temporary
  * platformIds (per-tab) and stable arcclawSessionIds (cross-tab).
  */
 @ApplicationScoped
 public class WebSocketSessionStore {
-    
+
     // platformId → WebSocketConnection
     private static final Logger log = Logger.getLogger(WebSocketSessionStore.class);
 
     private final Map<String, WebSocketConnection> platformToSession = new ConcurrentHashMap<>();
-    
+
     // connId → arcclawSessionId
     private final Map<String, String> connToArcclawSession = new ConcurrentHashMap<>();
 
@@ -61,12 +63,12 @@ public class WebSocketSessionStore {
 
     public List<WebSocketConnection> getConnectionsByArcclawSession(String arcclawSessionId) {
         if (arcclawSessionId == null) return Collections.emptyList();
-        
+
         return connToArcclawSession.entrySet().stream()
-            .filter(e -> arcclawSessionId.equals(e.getValue()))
-            .map(e -> findConnectionById(e.getKey()))
-            .filter(Objects::nonNull)
-            .toList();
+                .filter(e -> arcclawSessionId.equals(e.getValue()))
+                .map(e -> findConnectionById(e.getKey()))
+                .filter(Objects::nonNull)
+                .toList();
     }
 
     private WebSocketConnection findConnectionById(String connId) {

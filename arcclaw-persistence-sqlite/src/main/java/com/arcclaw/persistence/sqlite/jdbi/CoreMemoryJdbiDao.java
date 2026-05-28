@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Optional;
 
 import com.arcclaw.persistence.api.CoreMemoryBlockDto;
+
 import org.jdbi.v3.sqlobject.config.RegisterConstructorMapper;
 import org.jdbi.v3.sqlobject.customizer.Bind;
 import org.jdbi.v3.sqlobject.statement.SqlQuery;
@@ -26,7 +27,8 @@ public interface CoreMemoryJdbiDao {
     @SqlQuery("SELECT " + CORE_MEMORY_COLUMNS + " FROM core_memory_blocks WHERE user_id = :userId")
     List<CoreMemoryBlockDto> findByUser(@Bind("userId") String userId);
 
-    @SqlQuery("SELECT " + CORE_MEMORY_COLUMNS + " FROM core_memory_blocks WHERE user_id = :userId AND block_key = :blockKey")
+    @SqlQuery("SELECT " + CORE_MEMORY_COLUMNS
+            + " FROM core_memory_blocks WHERE user_id = :userId AND block_key = :blockKey")
     Optional<CoreMemoryBlockDto> findByKey(@Bind("userId") String userId, @Bind("blockKey") String blockKey);
 
     @SqlUpdate("""
@@ -38,9 +40,13 @@ public interface CoreMemoryJdbiDao {
             updated_at = :now
         WHERE version = :expectedVersion
         """)
-    int upsert(@Bind("blockId") String blockId, @Bind("userId") String userId,
-               @Bind("blockKey") String blockKey, @Bind("content") String content,
-               @Bind("expectedVersion") int expectedVersion, @Bind("now") Instant now);
+    int upsert(
+            @Bind("blockId") String blockId,
+            @Bind("userId") String userId,
+            @Bind("blockKey") String blockKey,
+            @Bind("content") String content,
+            @Bind("expectedVersion") int expectedVersion,
+            @Bind("now") Instant now);
 
     @SqlUpdate("DELETE FROM core_memory_blocks WHERE user_id = :userId AND block_key = :blockKey")
     void delete(@Bind("userId") String userId, @Bind("blockKey") String blockKey);

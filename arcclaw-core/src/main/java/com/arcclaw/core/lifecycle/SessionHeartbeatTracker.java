@@ -1,5 +1,7 @@
 package com.arcclaw.core.lifecycle;
 
+import jakarta.enterprise.context.ApplicationScoped;
+
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -8,9 +10,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
-import jakarta.enterprise.context.ApplicationScoped;
-
 import com.arcclaw.core.security.AutonomyLevel;
+
 import org.jboss.logging.Logger;
 
 /**
@@ -22,12 +23,11 @@ public class SessionHeartbeatTracker {
     private static final Logger log = Logger.getLogger(SessionHeartbeatTracker.class);
 
     public record SessionMetadata(
-        Instant lastHeartbeat,
-        AutonomyLevel autonomyLevel,
-        String ownerKeyName,
-        long totalInputTokens,
-        long totalOutputTokens
-    ) {}
+            Instant lastHeartbeat,
+            AutonomyLevel autonomyLevel,
+            String ownerKeyName,
+            long totalInputTokens,
+            long totalOutputTokens) {}
 
     /** Active session metadata: sessionId → last heartbeat + autonomyLevel. */
     private final ConcurrentHashMap<String, SessionMetadata> sessionData = new ConcurrentHashMap<>();
@@ -48,7 +48,7 @@ public class SessionHeartbeatTracker {
         // Preserve existing owner - heartbeat ticks must NOT erase ownership
         SessionMetadata existing = sessionData.get(sessionId);
         String existingOwner = (existing != null) ? existing.ownerKeyName() : null;
-        long existingIn  = (existing != null) ? existing.totalInputTokens()  : 0L;
+        long existingIn = (existing != null) ? existing.totalInputTokens() : 0L;
         long existingOut = (existing != null) ? existing.totalOutputTokens() : 0L;
         sessionData.put(sessionId, new SessionMetadata(Instant.now(), level, existingOwner, existingIn, existingOut));
         log.debugf("Heartbeat recorded for session=%s autonomy=%s", sessionId, level);
@@ -66,10 +66,7 @@ public class SessionHeartbeatTracker {
      */
     public Map<String, Instant> activeSessions() {
         return sessionData.entrySet().stream()
-                .collect(Collectors.toMap(
-                        Map.Entry::getKey,
-                        e -> e.getValue().lastHeartbeat()
-                ));
+                .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().lastHeartbeat()));
     }
 
     /**
@@ -110,27 +107,32 @@ public class SessionHeartbeatTracker {
     public void injectHeartbeat(String sessionId, Instant timestamp) {
         SessionMetadata existing = sessionData.get(sessionId);
         String existingOwner = (existing != null) ? existing.ownerKeyName() : null;
-        long existingIn  = (existing != null) ? existing.totalInputTokens()  : 0L;
+        long existingIn = (existing != null) ? existing.totalInputTokens() : 0L;
         long existingOut = (existing != null) ? existing.totalOutputTokens() : 0L;
-        sessionData.put(sessionId, new SessionMetadata(timestamp, AutonomyLevel.SUPERVISED, existingOwner, existingIn, existingOut));
+        sessionData.put(
+                sessionId,
+                new SessionMetadata(timestamp, AutonomyLevel.SUPERVISED, existingOwner, existingIn, existingOut));
         log.debugf("Heartbeat injected for session=%s timestamp=%s", sessionId, timestamp);
     }
 
     /**
      * Atomically bind an API key identity as owner of the session, if not already owned.
-     * 
+     *
      * @return true if the session is now owned by this user (or already was).
      *         false if the session is owned by someone else or doesn't exist.
      */
     public boolean tryBindOwner(String sessionId, String ownerKeyName) {
         if (ownerKeyName == null) return false;
-        
+
         SessionMetadata result = sessionData.computeIfPresent(sessionId, (_, existing) -> {
             if (existing.ownerKeyName() == null || existing.ownerKeyName().equals(ownerKeyName)) {
                 // Not owned yet, or already owned by this user → bind/keep.
                 return new SessionMetadata(
-                    existing.lastHeartbeat(), existing.autonomyLevel(), ownerKeyName, 
-                    existing.totalInputTokens(), existing.totalOutputTokens());
+                        existing.lastHeartbeat(),
+                        existing.autonomyLevel(),
+                        ownerKeyName,
+                        existing.totalInputTokens(),
+                        existing.totalOutputTokens());
             }
             // Owned by someone else → no change.
             return existing;
@@ -141,22 +143,19 @@ public class SessionHeartbeatTracker {
     }
 
     public void recordTokens(String sessionId, long inputTokens, long outputTokens) {
-        sessionData.computeIfPresent(sessionId, (_, existing) ->
-            new SessionMetadata(
-                existing.lastHeartbeat(),
-                existing.autonomyLevel(),
-                existing.ownerKeyName(),
-                inputTokens,
-                outputTokens
-            )
-        );
+        sessionData.computeIfPresent(
+                sessionId,
+                (_, existing) -> new SessionMetadata(
+                        existing.lastHeartbeat(),
+                        existing.autonomyLevel(),
+                        existing.ownerKeyName(),
+                        inputTokens,
+                        outputTokens));
     }
 
     public long[] getTokens(String sessionId) {
         SessionMetadata data = sessionData.get(sessionId);
-        return data != null
-            ? new long[]{data.totalInputTokens(), data.totalOutputTokens()}
-            : new long[]{0L, 0L};
+        return data != null ? new long[] {data.totalInputTokens(), data.totalOutputTokens()} : new long[] {0L, 0L};
     }
 
     /**
@@ -199,10 +198,7 @@ public class SessionHeartbeatTracker {
         if (ownerKeyName == null) return Map.of();
         return sessionData.entrySet().stream()
                 .filter(e -> ownerKeyName.equals(e.getValue().ownerKeyName()))
-                .collect(Collectors.toMap(
-                        Map.Entry::getKey,
-                        e -> e.getValue().lastHeartbeat()
-                ));
+                .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().lastHeartbeat()));
     }
 
     /**

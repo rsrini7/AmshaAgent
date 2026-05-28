@@ -25,66 +25,65 @@ import com.arcclaw.persistence.sqlite.jdbi.PromptJdbiDao;
 import com.arcclaw.persistence.sqlite.jdbi.RecallMemoryJdbiDao;
 import com.arcclaw.persistence.sqlite.jdbi.SecretJdbiDao;
 import com.arcclaw.persistence.sqlite.jdbi.SkillJdbiDao;
+
 import io.quarkus.runtime.annotations.RegisterForReflection;
 
 @RegisterForReflection(
-    targets = {
-        // JDBI DTOs (replaced JPA entities)
-        CheckpointDto.class,
-        AgentCronDto.class,
-        AuditEventDto.class,
-        ChatMemoryDto.class,
-        SecretDto.class,
-        SkillDto.class,
-        CompactionSummaryDto.class,
-        ReasoningStepDto.class,
-        CronRunDto.class,
-        PromptDto.class,
-        // JDBI DAOs (SQL Object proxies)
-        CheckpointJdbiDao.class,
-        CronJdbiDao.class,
-        CronRunJdbiDao.class,
-        LockJdbiDao.class,
-        SecretJdbiDao.class,
-        SecretJdbiDao.SecretDtoRow.class,
-        CompactionJdbiDao.class,
-        AuditJdbiDao.class,
-        ChatMemoryJdbiDao.class,
-        SkillJdbiDao.class,
-        PromptJdbiDao.class,
-        CoreMemoryJdbiDao.class,
-        RecallMemoryJdbiDao.class,
-        ArchivalMemoryJdbiDao.class,
-        // JDBI infrastructure
-        JdbiProducer.class,
-        JdbiRetryWrapper.class,
-        FtsSchemaInitializer.class,
-        // Store adapters (CDI beans)
-        SqlitePersistenceAdapter.class,
-        SqliteAuditEventStoreAdapter.class,
-        SqliteChatMemoryStoreAdapter.class,
-        SqliteCheckpointStoreAdapter.class,
-        SqliteCompactionStoreAdapter.class,
-        SqliteCoreMemoryStore.class,
-        SqliteRecallMemoryStore.class,
-        SqliteArchivalMemoryStore.class,
-        ArchivalVecSchemaInitializer.class,
-        VectorIngestionService.class,
-        SqliteCronStoreAdapter.class,
-        SqliteCronRunStoreAdapter.class,
-        SqlitePromptStoreAdapter.class,
-        SqliteSecretStoreAdapter.class,
-        SqliteSkillStoreAdapter.class,
-        SqliteAdvisoryLockAdapter.class,
-        // Existing infrastructure
-        GlobalKnowledgeBase.class,
-        SessionKnowledgeBase.class,
-        RagSchemaInitializer.class,
-        SqliteMemoryRetrievalAdapter.class,
-        SqliteWalConfigurer.class,
-        FtsConnectionInterceptor.class,
-        FtsCleanCallback.class
-    }
-)
-public class SqlitePersistenceReflectionConfig {
-}
+        targets = {
+            // JDBI DTOs (replaced JPA entities)
+            CheckpointDto.class,
+            AgentCronDto.class,
+            AuditEventDto.class,
+            ChatMemoryDto.class,
+            SecretDto.class,
+            SkillDto.class,
+            CompactionSummaryDto.class,
+            ReasoningStepDto.class,
+            CronRunDto.class,
+            PromptDto.class,
+            // JDBI DAOs (SQL Object proxies)
+            CheckpointJdbiDao.class,
+            CronJdbiDao.class,
+            CronRunJdbiDao.class,
+            LockJdbiDao.class,
+            SecretJdbiDao.class,
+            SecretJdbiDao.SecretDtoRow.class,
+            CompactionJdbiDao.class,
+            AuditJdbiDao.class,
+            ChatMemoryJdbiDao.class,
+            SkillJdbiDao.class,
+            PromptJdbiDao.class,
+            CoreMemoryJdbiDao.class,
+            RecallMemoryJdbiDao.class,
+            ArchivalMemoryJdbiDao.class,
+            // JDBI infrastructure
+            JdbiProducer.class,
+            JdbiRetryWrapper.class,
+            FtsSchemaInitializer.class,
+            // Store adapters (CDI beans)
+            SqlitePersistenceAdapter.class,
+            SqliteAuditEventStoreAdapter.class,
+            SqliteChatMemoryStoreAdapter.class,
+            SqliteCheckpointStoreAdapter.class,
+            SqliteCompactionStoreAdapter.class,
+            SqliteCoreMemoryStore.class,
+            SqliteRecallMemoryStore.class,
+            SqliteArchivalMemoryStore.class,
+            ArchivalVecSchemaInitializer.class,
+            VectorIngestionService.class,
+            SqliteCronStoreAdapter.class,
+            SqliteCronRunStoreAdapter.class,
+            SqlitePromptStoreAdapter.class,
+            SqliteSecretStoreAdapter.class,
+            SqliteSkillStoreAdapter.class,
+            SqliteAdvisoryLockAdapter.class,
+            // Existing infrastructure
+            GlobalKnowledgeBase.class,
+            SessionKnowledgeBase.class,
+            RagSchemaInitializer.class,
+            SqliteMemoryRetrievalAdapter.class,
+            SqliteWalConfigurer.class,
+            FtsConnectionInterceptor.class,
+            FtsCleanCallback.class
+        })
+public class SqlitePersistenceReflectionConfig {}

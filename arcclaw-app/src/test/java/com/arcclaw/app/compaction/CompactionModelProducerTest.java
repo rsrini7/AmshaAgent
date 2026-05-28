@@ -3,17 +3,20 @@ package com.arcclaw.app.compaction;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
-import java.util.Map;
+import dev.langchain4j.model.chat.ChatModel;
 
 import jakarta.inject.Inject;
 
+import java.util.Map;
+
 import com.arcclaw.core.routing.CompactionModelProducer;
-import dev.langchain4j.model.chat.ChatModel;
+
+import org.eclipse.microprofile.config.inject.ConfigProperty;
+import org.junit.jupiter.api.Test;
+
 import io.quarkus.test.junit.QuarkusTest;
 import io.quarkus.test.junit.QuarkusTestProfile;
 import io.quarkus.test.junit.TestProfile;
-import org.eclipse.microprofile.config.inject.ConfigProperty;
-import org.junit.jupiter.api.Test;
 
 public class CompactionModelProducerTest {
 
@@ -21,11 +24,11 @@ public class CompactionModelProducerTest {
         @Override
         public Map<String, String> getConfigOverrides() {
             return Map.of(
-                "quarkus.langchain4j.openai.api-key", "default-openai-key",
-                "quarkus.langchain4j.openai.base-url", "http://default-openai-url",
-                "arcclaw.llm.provider", "openai"
-                // Do not set arcclaw.memory.compaction.api-key directly to test fallback
-            );
+                    "quarkus.langchain4j.openai.api-key", "default-openai-key",
+                    "quarkus.langchain4j.openai.base-url", "http://default-openai-url",
+                    "arcclaw.llm.provider", "openai"
+                    // Do not set arcclaw.memory.compaction.api-key directly to test fallback
+                    );
         }
     }
 
@@ -33,17 +36,16 @@ public class CompactionModelProducerTest {
         @Override
         public Map<String, String> getConfigOverrides() {
             return Map.of(
-                "quarkus.langchain4j.openai.api-key", "default-openai-key",
-                "arcclaw.memory.compaction.api-key", "specific-compaction-key",
-                "arcclaw.llm.provider", "openai"
-            );
+                    "quarkus.langchain4j.openai.api-key", "default-openai-key",
+                    "arcclaw.memory.compaction.api-key", "specific-compaction-key",
+                    "arcclaw.llm.provider", "openai");
         }
     }
 
     @QuarkusTest
     @TestProfile(DefaultProfile.class)
     public static class DefaultFallbackTest {
-        
+
         @Inject
         CompactionModelProducer producer;
 
@@ -52,9 +54,11 @@ public class CompactionModelProducerTest {
 
         @Test
         void testFallbackToOpenAiKey() {
-            assertEquals("default-openai-key", resolvedApiKey, 
-                "Should fall back to quarkus.langchain4j.openai.api-key when specific key is not set");
-            
+            assertEquals(
+                    "default-openai-key",
+                    resolvedApiKey,
+                    "Should fall back to quarkus.langchain4j.openai.api-key when specific key is not set");
+
             ChatModel model = producer.compactionModel();
             assertNotNull(model, "Produced model should be non-null");
         }
@@ -72,9 +76,8 @@ public class CompactionModelProducerTest {
 
         @Test
         void testSpecificKeyOverride() {
-            assertEquals("specific-compaction-key", resolvedApiKey, 
-                "Should use specific compaction key when set");
-            
+            assertEquals("specific-compaction-key", resolvedApiKey, "Should use specific compaction key when set");
+
             ChatModel model = producer.compactionModel();
             assertNotNull(model, "Produced model should be non-null");
         }

@@ -22,6 +22,7 @@ import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.state.CompactionEventBridge;
 import com.arcclaw.core.state.CompactionService;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -35,11 +36,20 @@ import org.mockito.quality.Strictness;
 @MockitoSettings(strictness = Strictness.LENIENT)
 class CompactionHandlerTest {
 
-    @Mock private CompactionService compactionService;
-    @Mock private DomainEventBus eventBus;
-    @Mock private CompactionInFlightFlag compactionInFlight;
-    @Mock private RateLimitTracker rateLimitTracker;
-    @Mock private CompactionEventBridge compactionEventBridge;
+    @Mock
+    private CompactionService compactionService;
+
+    @Mock
+    private DomainEventBus eventBus;
+
+    @Mock
+    private CompactionInFlightFlag compactionInFlight;
+
+    @Mock
+    private RateLimitTracker rateLimitTracker;
+
+    @Mock
+    private CompactionEventBridge compactionEventBridge;
 
     @InjectMocks
     private CompactionHandler handler;
@@ -61,7 +71,8 @@ class CompactionHandlerTest {
             when(compactionInFlight.compareAndSet("session1", false, true)).thenReturn(true);
 
             CompletableFuture<Void> future = new CompletableFuture<>();
-            when(eventBus.publishAsync(eq(EventTypeCatalog.COMPACTION_REQUEST), any(CompactionRequest.class))).thenReturn(future);
+            when(eventBus.publishAsync(eq(EventTypeCatalog.COMPACTION_REQUEST), any(CompactionRequest.class)))
+                    .thenReturn(future);
 
             HandleResult result = handler.handle(ctx);
 
@@ -80,8 +91,7 @@ class CompactionHandlerTest {
 
             handler.handle(ctx);
 
-            ArgumentCaptor<CompactionRequest> captor =
-                    ArgumentCaptor.forClass(CompactionRequest.class);
+            ArgumentCaptor<CompactionRequest> captor = ArgumentCaptor.forClass(CompactionRequest.class);
             verify(eventBus, times(1)).publishAsync(eq(EventTypeCatalog.COMPACTION_REQUEST), captor.capture());
             assertEquals("session1", captor.getValue().sessionId());
             assertEquals("user1", captor.getValue().userId());
@@ -134,13 +144,13 @@ class CompactionHandlerTest {
         WorkspaceContext.run("session1", "user1", "chat1", AutonomyLevel.FULL, "coordinator", () -> {
             MessageContext ctx = mockContext("session1", "user1");
             when(compactionService.shouldCompact("session1")).thenReturn(true);
-            
+
             // First call
             when(compactionInFlight.compareAndSet("session1", false, true)).thenReturn(true);
             when(eventBus.publishAsync(any(), any())).thenReturn(CompletableFuture.completedFuture(null));
 
             handler.handle(ctx);
-            
+
             // Second call - should skip because handler didn't release it
             when(compactionInFlight.compareAndSet("session1", false, true)).thenReturn(false);
 

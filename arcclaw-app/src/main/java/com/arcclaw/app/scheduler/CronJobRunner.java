@@ -1,5 +1,8 @@
 package com.arcclaw.app.scheduler;
 
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -9,9 +12,6 @@ import java.util.Collections;
 import java.util.UUID;
 import java.util.concurrent.Callable;
 import java.util.regex.Pattern;
-
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
 
 import com.arcclaw.channel.api.ChannelMessage;
 import com.arcclaw.channel.api.ChannelType;
@@ -33,6 +33,7 @@ import com.arcclaw.persistence.api.CronRunStorePort;
 import com.arcclaw.persistence.api.CronStorePort;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
@@ -46,9 +47,12 @@ public class CronJobRunner {
     private static final Logger log = Logger.getLogger(CronJobRunner.class);
 
     private static final Pattern CRON_PREFIX_PATTERN = Pattern.compile("^CRON\\s+");
-    private static final Pattern PURE_ANNOUNCEMENT_PATTERN = Pattern.compile("^(?:print|say|tell|output(?: message)?|display|send(?: message| text)?).*");
-    private static final Pattern ANNOUNCEMENT_PREFIX_PATTERN = Pattern.compile("(?i)^(?:print|say|tell|output(?: message)?|display|send(?: message| text)?)(?:\\s+to\\s+(?:the\\s+)?(?:console|user|chat))?(?:\\s*[:=,])?\\s*");
-    private static final Pattern ANNOUNCEMENT_SUFFIX_PATTERN = Pattern.compile("(?i)(?:\\s+to\\s+(?:the\\s+)?(?:console|user|stdout|chat)|\\s+in\\s+(?:the\\s+)?chat)$");
+    private static final Pattern PURE_ANNOUNCEMENT_PATTERN =
+            Pattern.compile("^(?:print|say|tell|output(?: message)?|display|send(?: message| text)?).*");
+    private static final Pattern ANNOUNCEMENT_PREFIX_PATTERN = Pattern.compile(
+            "(?i)^(?:print|say|tell|output(?: message)?|display|send(?: message| text)?)(?:\\s+to\\s+(?:the\\s+)?(?:console|user|chat))?(?:\\s*[:=,])?\\s*");
+    private static final Pattern ANNOUNCEMENT_SUFFIX_PATTERN =
+            Pattern.compile("(?i)(?:\\s+to\\s+(?:the\\s+)?(?:console|user|stdout|chat)|\\s+in\\s+(?:the\\s+)?chat)$");
 
     @Inject
     AgentLoop agentLoop;
@@ -71,8 +75,6 @@ public class CronJobRunner {
     @ConfigProperty(name = "arcclaw.cron.max-iterations", defaultValue = "5")
     int cronMaxIterations;
 
-
-
     public void execute(AgentCron job) {
         String executionId = UUID.randomUUID().toString();
 
@@ -82,16 +84,30 @@ public class CronJobRunner {
 
         // Record cron run start
         CronRunDto run = new CronRunDto(
-            executionId, job.getId(), cronSessionId, "RUNNING",
-            Instant.now(), null, null, 0, 0, 0, BigDecimal.ZERO, Instant.now()
-        );
+                executionId,
+                job.getId(),
+                cronSessionId,
+                "RUNNING",
+                Instant.now(),
+                null,
+                null,
+                0,
+                0,
+                0,
+                BigDecimal.ZERO,
+                Instant.now());
         cronRunStore.save(run);
 
         heartbeatTracker.recordHeartbeat(cronSessionId, AutonomyLevel.SUPERVISED);
 
         try {
-            String stripped = job.getGoal() != null ? CRON_PREFIX_PATTERN.matcher(job.getGoal()).replaceFirst("").trim() : "";
-            
+            String stripped = job.getGoal() != null
+                    ? CRON_PREFIX_PATTERN
+                            .matcher(job.getGoal())
+                            .replaceFirst("")
+                            .trim()
+                    : "";
+
             if (isPureAnnouncement(stripped)) {
                 String announcement = stripAnnouncementPrefix(stripped);
                 log.infof("CRON-SHORT-CIRCUIT cronId=%s announcement='%s'", job.getId(), announcement);
@@ -102,8 +118,7 @@ public class CronJobRunner {
 
             if (isTimeCheck(stripped.toLowerCase())) {
                 log.infof("CRON-SHORT-CIRCUIT cronId=%s time-check", job.getId());
-                String time = ZonedDateTime.now(ZoneOffset.UTC)
-                    .format(DateTimeFormatter.RFC_1123_DATE_TIME);
+                String time = ZonedDateTime.now(ZoneOffset.UTC).format(DateTimeFormatter.RFC_1123_DATE_TIME);
                 AgentResult result = AgentResult.finished("The current time is " + time, Collections.emptyList());
                 resultHandler.handleSuccess(job, cronSessionId, executionId, result);
                 return;
@@ -122,20 +137,11 @@ public class CronJobRunner {
 
             Callable<AgentResult> op = () -> {
                 MessageContext context = createCronContext(job, cronSessionId, executionId, finalGoal, type);
-                return agentLoop.run(
-                    cronSessionId,
-                    role,
-                    finalGoal,
-                    systemNote,
-                    engine,
-                    cronMaxIterations,
-                    context
-                );
+                return agentLoop.run(cronSessionId, role, finalGoal, systemNote, engine, cronMaxIterations, context);
             };
 
             AgentResult result = WorkspaceContext.<AgentResult>run(
-                cronSessionId, job.getUserId(), job.getChatId(), AutonomyLevel.SUPERVISED, role, channel, op
-            );
+                    cronSessionId, job.getUserId(), job.getChatId(), AutonomyLevel.SUPERVISED, role, channel, op);
 
             resultHandler.handleSuccess(job, cronSessionId, executionId, result);
 
@@ -147,7 +153,7 @@ public class CronJobRunner {
     private boolean isPureAnnouncement(String goal) {
         if (goal == null || goal.isBlank()) return false;
         String normalized = goal.toLowerCase().trim();
-        
+
         // Explicit announcement prefixes
         if (PURE_ANNOUNCEMENT_PATTERN.matcher(normalized).matches()) {
             return true;
@@ -156,23 +162,35 @@ public class CronJobRunner {
         // Check for lack of tool-like verbs (heuristic for simple statements)
         // NOTE: These keywords are intentionally broad. The guard's purpose is to
         // route any goal that implies agent work into the agent loop, not to be selective.
-        boolean hasActionVerb = normalized.contains("fetch") || normalized.contains("search") 
-                || normalized.contains("check") || normalized.contains("monitor") 
-                || normalized.contains("run") || normalized.contains("execute")
-                || normalized.contains("investigate") || normalized.contains("analyze")
-                || normalized.contains("view") || normalized.contains("list")
-                || normalized.contains("delete") || normalized.contains("update")
-                || normalized.contains("create") || normalized.contains("google")
-                || normalized.contains("memory") || normalized.contains("browse")
-                || normalized.contains("find") || normalized.contains("retrieve")
-                || normalized.contains("get") || normalized.contains("write")
-                || normalized.contains("summarize") || normalized.contains("read")
-                || normalized.contains("extract") || normalized.contains("identify")
+        boolean hasActionVerb = normalized.contains("fetch")
+                || normalized.contains("search")
+                || normalized.contains("check")
+                || normalized.contains("monitor")
+                || normalized.contains("run")
+                || normalized.contains("execute")
+                || normalized.contains("investigate")
+                || normalized.contains("analyze")
+                || normalized.contains("view")
+                || normalized.contains("list")
+                || normalized.contains("delete")
+                || normalized.contains("update")
+                || normalized.contains("create")
+                || normalized.contains("google")
+                || normalized.contains("memory")
+                || normalized.contains("browse")
+                || normalized.contains("find")
+                || normalized.contains("retrieve")
+                || normalized.contains("get")
+                || normalized.contains("write")
+                || normalized.contains("summarize")
+                || normalized.contains("read")
+                || normalized.contains("extract")
+                || normalized.contains("identify")
                 || normalized.contains(ToolCapability.GITHUB.toolName())
                 || normalized.contains(ToolCapability.BROWSER_NAVIGATE.toolName())
                 || normalized.contains(ToolCapability.WEB_SEARCH_SERPER.toolName());
 
-        // §Issue: Exclude dynamic triggers from short-circuit. 
+        // §Issue: Exclude dynamic triggers from short-circuit.
         // If the message is a specific time check, we want the specialized short-circuit later.
         if (isTimeCheck(normalized) || normalized.contains("now") || normalized.contains("date")) {
             return false;
@@ -183,12 +201,12 @@ public class CronJobRunner {
 
     private boolean isTimeCheck(String normalized) {
         if (normalized == null || normalized.isBlank()) return false;
-        return normalized.contains("current time") ||
-               normalized.contains("current utc time") ||
-               normalized.contains("current system time") ||
-               normalized.contains("what time is it") ||
-               normalized.contains("tell me the time") ||
-               normalized.equals("check: what is the current time?");
+        return normalized.contains("current time")
+                || normalized.contains("current utc time")
+                || normalized.contains("current system time")
+                || normalized.contains("what time is it")
+                || normalized.contains("tell me the time")
+                || normalized.equals("check: what is the current time?");
     }
 
     private String stripAnnouncementPrefix(String goal) {
@@ -213,7 +231,7 @@ public class CronJobRunner {
      */
     private String unwrapToolCallGoal(String goal) {
         if (goal == null || goal.isBlank()) return goal;
-        
+
         // 1. Detect garuda(...) wrapper
         if (goal.startsWith(ToolCapability.DELEGATE_TO_AGENT.toolName()) && goal.contains("goal=")) {
             int goalStart = goal.indexOf("goal=\"");
@@ -238,7 +256,7 @@ public class CronJobRunner {
                 }
             }
         }
-        
+
         // 2. Detect JSON-like tool call if LLM stored raw JSON
         if (goal.startsWith("{") && goal.contains("\"goal\"")) {
             try {
@@ -248,7 +266,7 @@ public class CronJobRunner {
                 log.warnf("Failed to parse goal JSON, using original: %s", LogUtil.rootMessage(e));
             }
         }
-        
+
         return goal;
     }
 
@@ -259,53 +277,69 @@ public class CronJobRunner {
         }
 
         String normalized = goal != null ? goal.toLowerCase().trim() : "";
-        
+
         // Output-only goals: unconditionally override to coordinator
-        if (normalized.startsWith("output") || normalized.startsWith("say ")
-                || normalized.startsWith("send ") || normalized.startsWith("tell ")) {
+        if (normalized.startsWith("output")
+                || normalized.startsWith("say ")
+                || normalized.startsWith("send ")
+                || normalized.startsWith("tell ")) {
             return AgentRoleEnum.COORDINATOR.toScopedName();
         }
 
-        // §Refined Resolve: 
+        // §Refined Resolve:
         // 1. If it's a RAW tool call string (not yet unwrapped or intentional), run as COORDINATOR
         if (normalized.startsWith(ToolCapability.DELEGATE_TO_AGENT.toolName())) {
             return AgentRoleEnum.COORDINATOR.toScopedName();
         }
 
         // 2. If it's a github/browser/google command, go DIRECT to researcher (Issue 2)
-        if (normalized.startsWith(ToolCapability.GITHUB.toolName()) 
+        if (normalized.startsWith(ToolCapability.GITHUB.toolName())
                 || normalized.startsWith(ToolCapability.BROWSER_NAVIGATE.toolName())
                 || normalized.startsWith(ToolCapability.WEB_SEARCH_SERPER.toolName())
-                || normalized.startsWith("browse") || normalized.startsWith("google")
+                || normalized.startsWith("browse")
+                || normalized.startsWith("google")
                 || normalized.startsWith("search")) {
             return AgentRoleEnum.RESEARCHER.toScopedName();
         }
 
         // 3. Coordination hints
-        if (normalized.contains("coordinator task") || normalized.contains("meta-schedule") || normalized.contains("schedule next")) {
+        if (normalized.contains("coordinator task")
+                || normalized.contains("meta-schedule")
+                || normalized.contains("schedule next")) {
             return AgentRoleEnum.COORDINATOR.toScopedName();
         }
-        
+
         // 4. Role keywords
-        if (normalized.contains("researcher task") || normalized.contains("fetch") || normalized.contains("discovery")) {
+        if (normalized.contains("researcher task")
+                || normalized.contains("fetch")
+                || normalized.contains("discovery")) {
             return AgentRoleEnum.RESEARCHER.toScopedName();
-        } else if (normalized.contains("coder task") || normalized.contains("write code") || normalized.contains("write python")
-                || normalized.contains("write script") || normalized.contains("write program")
-                || normalized.contains("fix bug") || normalized.contains("refactor")
-                || normalized.contains("echo ") || normalized.contains("bash ") || normalized.contains("python ")
-                || normalized.contains("run ") || normalized.contains("execute ")) {
+        } else if (normalized.contains("coder task")
+                || normalized.contains("write code")
+                || normalized.contains("write python")
+                || normalized.contains("write script")
+                || normalized.contains("write program")
+                || normalized.contains("fix bug")
+                || normalized.contains("refactor")
+                || normalized.contains("echo ")
+                || normalized.contains("bash ")
+                || normalized.contains("python ")
+                || normalized.contains("run ")
+                || normalized.contains("execute ")) {
             // NOTE: "write program" is intentionally broad — false positives (e.g. "write program spec")
             // are acceptable since CODER will delegate or fail gracefully rather than silently mismatch.
             return AgentRoleEnum.CODER.toScopedName();
         }
-        
+
         // Default to coordinator for cron tasks to allow accurate delegation if specialist is unclear
         return AgentRoleEnum.COORDINATOR.toScopedName();
     }
 
-    private MessageContext createCronContext(AgentCron job, String sessionId, String executionId, String goal, ChannelType channelType) {
+    private MessageContext createCronContext(
+            AgentCron job, String sessionId, String executionId, String goal, ChannelType channelType) {
         ChannelUser user = new ChannelUser(job.getUserId(), job.getUserId(), "Cron User", channelType);
-        ChannelMessage msg = new ChannelMessage.RestApiMessage(user, goal, AgentSentinels.CRON_SESSION_PREFIX + job.getId(), Instant.now());
+        ChannelMessage msg = new ChannelMessage.RestApiMessage(
+                user, goal, AgentSentinels.CRON_SESSION_PREFIX + job.getId(), Instant.now());
         return new MessageContext(job.getChatId(), user, msg);
     }
 }

@@ -7,6 +7,7 @@ import java.util.Set;
 import com.tngtech.archunit.core.domain.JavaClass;
 import com.tngtech.archunit.core.importer.ClassFileImporter;
 import com.tngtech.archunit.core.importer.ImportOption;
+
 import org.junit.jupiter.api.Test;
 
 /**
@@ -54,8 +55,7 @@ class ReasoningStepSuccessNullSafetyTest {
             // Passes step.success() to constructor (null-safe — DTO accepts null Boolean)
             "com.arcclaw.core.state.CheckpointSerializer",
             // Uses Boolean.TRUE.equals() — null-safe (fixed 2026-05-28)
-            "com.arcclaw.core.observability.AgentTraceEnricher"
-    );
+            "com.arcclaw.core.observability.AgentTraceEnricher");
 
     /**
      * Enumerates all classes that call {@code ReasoningStep.success()} and verifies
@@ -81,9 +81,10 @@ class ReasoningStepSuccessNullSafetyTest {
         boolean hasNullable = successMethod.getAnnotations().stream()
                 .anyMatch(a -> a.getType().getName().contains("Nullable"));
 
-        assertTrue(hasNullable,
+        assertTrue(
+                hasNullable,
                 "ReasoningStep.success() must be annotated @Nullable. "
-                + "See AGENTS.md §1.5 — Heterogeneous Nullability in Sealed Interfaces.");
+                        + "See AGENTS.md §1.5 — Heterogeneous Nullability in Sealed Interfaces.");
     }
 
     @Test
@@ -105,9 +106,10 @@ class ReasoningStepSuccessNullSafetyTest {
                 .filter(name -> !VERIFIED_SAFE_CLASSES.contains(name))
                 .toList();
 
-        assertTrue(unverified.isEmpty(),
+        assertTrue(
+                unverified.isEmpty(),
                 "New classes calling ReasoningStep.success() must be verified null-safe "
-                + "and added to VERIFIED_SAFE_CLASSES in this test. "
-                + "See AGENTS.md §1.5 for the rule. Unverified: " + unverified);
+                        + "and added to VERIFIED_SAFE_CLASSES in this test. "
+                        + "See AGENTS.md §1.5 for the rule. Unverified: " + unverified);
     }
 }

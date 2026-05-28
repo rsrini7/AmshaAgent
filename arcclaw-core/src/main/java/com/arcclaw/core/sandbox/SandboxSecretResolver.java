@@ -1,13 +1,14 @@
 package com.arcclaw.core.sandbox;
 
-import java.util.LinkedHashMap;
-import java.util.Map;
-
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
+import java.util.LinkedHashMap;
+import java.util.Map;
+
 import com.arcclaw.core.security.SecretVault;
 import com.arcclaw.core.security.VaultKey;
+
 import org.jboss.logging.Logger;
 
 @ApplicationScoped
@@ -65,8 +66,9 @@ public class SandboxSecretResolver {
                 }
             } catch (Exception e) {
                 // Session vault unavailable (e.g. no active WorkspaceScope) - fall through
-                log.debugf("SandboxSecretResolver: session vault unavailable for %s (%s), " +
-                           "trying system vault", vaultKeyName, e.getMessage());
+                log.debugf(
+                        "SandboxSecretResolver: session vault unavailable for %s (%s), " + "trying system vault",
+                        vaultKeyName, e.getMessage());
             }
 
             // 2. Fall back to system vault (seeded at startup from .env)

@@ -14,6 +14,7 @@ import com.arcclaw.core.tools.ToolResponse;
 import com.arcclaw.persistence.api.RecallMemoryStorePort;
 import com.arcclaw.persistence.api.RecallMessageDto;
 import com.arcclaw.persistence.api.RecallSearchQuery;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -32,7 +33,7 @@ class RecallSearchTenantIsolationTest {
     void setup() {
         mockRecallStore = mock(RecallMemoryStorePort.class);
         tool = new RecallMemorySearchTool();
-        
+
         try {
             var field = RecallMemorySearchTool.class.getDeclaredField("recallStore");
             field.setAccessible(true);
@@ -47,14 +48,24 @@ class RecallSearchTenantIsolationTest {
         String userA = "user-A";
         String userB = "user-B";
         String sessionId = "test-session";
-        
+
         // User A's secret data
         RecallMessageDto userASecret = new RecallMessageDto(
-            "msg-1", sessionId, userA, 5, "hash1", "user", "USER_MESSAGE",
-            "My secret password is hunter2",
-            null, null, false, false, null, null
-        );
-        
+                "msg-1",
+                sessionId,
+                userA,
+                5,
+                "hash1",
+                "user",
+                "USER_MESSAGE",
+                "My secret password is hunter2",
+                null,
+                null,
+                false,
+                false,
+                null,
+                null);
+
         // Mock returns data based on query userId - verify in test
         when(mockRecallStore.search(any(RecallSearchQuery.class))).thenAnswer(invocation -> {
             RecallSearchQuery query = invocation.getArgument(0);
@@ -63,42 +74,32 @@ class RecallSearchTenantIsolationTest {
             }
             return List.of(); // User B gets nothing
         });
-        
+
         // User B searches - should get empty results
-        ToolResponse responseB = WorkspaceContext.run(sessionId, userB, "test-chat",
-                AutonomyLevel.SUPERVISED, "tool",
-                () -> {
+        ToolResponse responseB =
+                WorkspaceContext.run(sessionId, userB, "test-chat", AutonomyLevel.SUPERVISED, "tool", () -> {
                     try {
-                        return tool.execute(mockCtx(sessionId, userB), Map.of(
-                            "query", "secret password",
-                            "limit", 5
-                        ));
+                        return tool.execute(mockCtx(sessionId, userB), Map.of("query", "secret password", "limit", 5));
                     } catch (Exception e) {
                         throw new RuntimeException(e);
                     }
                 });
-        
+
         assertTrue(responseB.success());
-        assertTrue(responseB.output().contains("No exact matches found"), 
-                   "User B should not see User A's data");
-        
+        assertTrue(responseB.output().contains("No exact matches found"), "User B should not see User A's data");
+
         // User A searches - should see their own data
-        ToolResponse responseA = WorkspaceContext.run(sessionId, userA, "test-chat",
-                AutonomyLevel.SUPERVISED, "tool",
-                () -> {
+        ToolResponse responseA =
+                WorkspaceContext.run(sessionId, userA, "test-chat", AutonomyLevel.SUPERVISED, "tool", () -> {
                     try {
-                        return tool.execute(mockCtx(sessionId, userA), Map.of(
-                            "query", "secret password",
-                            "limit", 5
-                        ));
+                        return tool.execute(mockCtx(sessionId, userA), Map.of("query", "secret password", "limit", 5));
                     } catch (Exception e) {
                         throw new RuntimeException(e);
                     }
                 });
-        
+
         assertTrue(responseA.success());
-        assertTrue(responseA.output().contains("hunter2"), 
-                   "User A should see their own data");
+        assertTrue(responseA.output().contains("hunter2"), "User A should see their own data");
     }
 
     private ToolExecutionContext mockCtx(String sessionId, String userId) {

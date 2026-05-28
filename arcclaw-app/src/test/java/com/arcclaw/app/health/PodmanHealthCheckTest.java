@@ -3,8 +3,9 @@ package com.arcclaw.app.health;
 import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.is;
 
-import io.quarkus.test.junit.QuarkusTest;
 import org.junit.jupiter.api.Test;
+
+import io.quarkus.test.junit.QuarkusTest;
 
 @QuarkusTest
 class PodmanHealthCheckTest {
@@ -14,22 +15,18 @@ class PodmanHealthCheckTest {
 
     @Test
     void testLivenessEndpoint() {
-        given()
-                .port(9001)
-                .when().get("/q/health/live")
-                .then()
-                .statusCode(200)
-                .body("status", is("UP"));
+        given().port(9001).when().get("/q/health/live").then().statusCode(200).body("status", is("UP"));
     }
 
     @Test
     void testReadinessEndpoint() {
         // Log the full response to diagnose which readiness checks are DOWN
-        given()
-                .port(9001)
-                .when().get("/q/health/ready")
+        given().port(9001)
+                .when()
+                .get("/q/health/ready")
                 .then()
-                .log().all()
+                .log()
+                .all()
                 .statusCode(200)
                 .body("status", is("UP"));
     }

@@ -1,5 +1,7 @@
 package com.arcclaw.core.sandbox;
 
+import jakarta.enterprise.context.ApplicationScoped;
+
 import java.io.File;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
@@ -7,8 +9,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
-
-import jakarta.enterprise.context.ApplicationScoped;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
@@ -22,8 +22,8 @@ public class DirectExecutor {
     private long timeoutSeconds;
 
     /** Dev mode: no isolation, direct execution. */
-    public String executeDirectly(Path workspaceRoot, List<String> command,
-                                   Map<String, byte[]> secrets) throws Exception {
+    public String executeDirectly(Path workspaceRoot, List<String> command, Map<String, byte[]> secrets)
+            throws Exception {
         List<String> finalCommand = fixupCommandForWindows(command);
         var pb = new ProcessBuilder(finalCommand);
         File workspaceDir = workspaceRoot.toFile();
@@ -39,10 +39,10 @@ public class DirectExecutor {
             }
         }
         var process = pb.start();
-        
+
         // Drain stdout BEFORE waitFor() to avoid missing buffered output on Windows
         var output = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
-        
+
         boolean finished = process.waitFor(timeoutSeconds, TimeUnit.SECONDS);
         if (!finished) {
             process.destroyForcibly();

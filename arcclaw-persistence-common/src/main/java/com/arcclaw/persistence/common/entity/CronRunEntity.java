@@ -1,12 +1,12 @@
 package com.arcclaw.persistence.common.entity;
 
-import java.math.BigDecimal;
-import java.time.Instant;
-
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+
+import java.math.BigDecimal;
+import java.time.Instant;
 
 /**
  * Persistent entity for cron job execution history.

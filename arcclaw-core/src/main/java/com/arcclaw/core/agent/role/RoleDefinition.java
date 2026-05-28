@@ -30,8 +30,7 @@ public record RoleDefinition(
         boolean requiresApproval,
         boolean codeCapable,
         Set<ToolCapability> capabilities,
-        Set<String> aliases
-) {
+        Set<String> aliases) {
     /**
      * Compact constructor enforcing non-null/non-blank rules and deep immutability.
      */
@@ -55,9 +54,7 @@ public record RoleDefinition(
      * @return An immutable set of tool name strings. Guaranteed never null.
      */
     public Set<String> toolNames() {
-        return capabilities.stream()
-                .map(ToolCapability::toolName)
-                .collect(Collectors.toUnmodifiableSet());
+        return capabilities.stream().map(ToolCapability::toolName).collect(Collectors.toUnmodifiableSet());
     }
 
     /**
@@ -66,7 +63,15 @@ public record RoleDefinition(
     public RoleDefinition withCapabilities(Set<ToolCapability> additional) {
         Set<ToolCapability> all = new HashSet<>(this.capabilities);
         all.addAll(additional);
-        return new RoleDefinition(canonicalName, displayName, intentDescription, maxIterations, requiresApproval, codeCapable, all, aliases);
+        return new RoleDefinition(
+                canonicalName,
+                displayName,
+                intentDescription,
+                maxIterations,
+                requiresApproval,
+                codeCapable,
+                all,
+                aliases);
     }
 
     /** Returns true if this role is permitted to generate or fix source code blocks. */

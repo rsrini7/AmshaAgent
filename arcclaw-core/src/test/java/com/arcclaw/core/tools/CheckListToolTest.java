@@ -7,15 +7,16 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 
+import jakarta.enterprise.event.Event;
+
 import java.util.List;
 import java.util.Map;
-
-import jakarta.enterprise.event.Event;
 
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -46,10 +47,11 @@ class CheckListToolTest {
 
     @Test
     void testValidChecklistUpdate() {
-        Map<String, Object> params = Map.of("checkList", List.of(
-            Map.of("content", "Task 1", "status", "completed", "activeForm", "f1"),
-            Map.of("content", "Task 2", "status", "in_progress", "activeForm", "f2")
-        ));
+        Map<String, Object> params = Map.of(
+                "checkList",
+                List.of(
+                        Map.of("content", "Task 1", "status", "completed", "activeForm", "f1"),
+                        Map.of("content", "Task 2", "status", "in_progress", "activeForm", "f2")));
 
         WorkspaceContext.run(SESSION_ID, USER_ID, "chat-1", AutonomyLevel.FULL, "architect", () -> {
             ToolResponse resp = tool.execute(ctx(), params);
@@ -57,34 +59,37 @@ class CheckListToolTest {
 
             ArgumentCaptor<CheckListEvent> captor = ArgumentCaptor.forClass(CheckListEvent.class);
             verify(eventMock).fire(captor.capture());
-            
+
             assertEquals(SESSION_ID, captor.getValue().sessionId());
             assertEquals(2, captor.getValue().checkList().checkList().size());
-            assertEquals(CheckListTool.CheckList.Status.in_progress, captor.getValue().checkList().checkList().get(1).status());
-            
-            verify(auditService).record(eq(SESSION_ID), eq(USER_ID), eq("architect"), 
-                eq(SecurityEventType.TOOL_EXECUTED), any());
+            assertEquals(
+                    CheckListTool.CheckList.Status.in_progress,
+                    captor.getValue().checkList().checkList().get(1).status());
+
+            verify(auditService)
+                    .record(eq(SESSION_ID), eq(USER_ID), eq("architect"), eq(SecurityEventType.TOOL_EXECUTED), any());
         });
     }
 
     @Test
     void testMultipleInProgressItemsThrows() {
-        Map<String, Object> params = Map.of("checkList", List.of(
-            Map.of("content", "T1", "status", "in_progress", "activeForm", "f1"),
-            Map.of("content", "T2", "status", "in_progress", "activeForm", "f2")
-        ));
+        Map<String, Object> params = Map.of(
+                "checkList",
+                List.of(
+                        Map.of("content", "T1", "status", "in_progress", "activeForm", "f1"),
+                        Map.of("content", "T2", "status", "in_progress", "activeForm", "f2")));
 
         WorkspaceContext.run(SESSION_ID, USER_ID, "chat-1", AutonomyLevel.FULL, "architect", () -> {
-            IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, () -> tool.execute(ctx(), params));
+            IllegalArgumentException ex =
+                    assertThrows(IllegalArgumentException.class, () -> tool.execute(ctx(), params));
             assertTrue(ex.getMessage().contains("Found: 2"));
         });
     }
 
     @Test
     void testBlankContentThrows() {
-        Map<String, Object> params = Map.of("checkList", List.of(
-            Map.of("content", "", "status", "pending", "activeForm", "f1")
-        ));
+        Map<String, Object> params =
+                Map.of("checkList", List.of(Map.of("content", "", "status", "pending", "activeForm", "f1")));
 
         WorkspaceContext.run(SESSION_ID, USER_ID, "chat-1", AutonomyLevel.FULL, "architect", () -> {
             assertThrows(IllegalArgumentException.class, () -> tool.execute(ctx(), params));
@@ -103,16 +108,38 @@ class CheckListToolTest {
     @Test
     void testMissingUserIdThrowsForbidden() {
         ToolExecutionContext emptyUserCtx = new ToolExecutionContext(
-            SESSION_ID, "", "chat-1", "architect", AutonomyLevel.FULL, 
-            "trace-1", null, null, null, null, null, null);
-        
-        ToolResponse resp = tool.execute(emptyUserCtx, Map.of("checkList", List.of(Map.of("content", "t", "status", "pending", "activeForm", "f"))));
+                SESSION_ID,
+                "",
+                "chat-1",
+                "architect",
+                AutonomyLevel.FULL,
+                "trace-1",
+                null,
+                null,
+                null,
+                null,
+                null,
+                null);
+
+        ToolResponse resp = tool.execute(
+                emptyUserCtx,
+                Map.of("checkList", List.of(Map.of("content", "t", "status", "pending", "activeForm", "f"))));
         assertEquals(403, resp.exitCode());
     }
 
     private ToolExecutionContext ctx() {
         return new ToolExecutionContext(
-            SESSION_ID, USER_ID, "chat-1", "architect", AutonomyLevel.FULL, 
-            "trace-1", null, null, null, null, null, null);
+                SESSION_ID,
+                USER_ID,
+                "chat-1",
+                "architect",
+                AutonomyLevel.FULL,
+                "trace-1",
+                null,
+                null,
+                null,
+                null,
+                null,
+                null);
     }
 }

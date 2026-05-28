@@ -7,11 +7,13 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import dev.langchain4j.model.embedding.EmbeddingModel;
+
+import jakarta.enterprise.inject.Instance;
+
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
-
-import jakarta.enterprise.inject.Instance;
 
 import com.arcclaw.core.agent.reasoning.ArchivalContextCache;
 import com.arcclaw.core.config.TieredMemoryConfig;
@@ -19,7 +21,7 @@ import com.arcclaw.core.tools.ToolExecutionContext;
 import com.arcclaw.core.tools.ToolResponse;
 import com.arcclaw.persistence.api.ArchivalChunkDto;
 import com.arcclaw.persistence.api.ArchivalMemoryStorePort;
-import dev.langchain4j.model.embedding.EmbeddingModel;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
@@ -29,12 +31,16 @@ class ArchivalToolFirstPathTest {
 
     @Mock
     ArchivalMemoryStorePort store;
+
     @Mock
     ArchivalContextCache cache;
+
     @Mock
     TieredMemoryConfig tieredConfig;
+
     @Mock
     TieredMemoryConfig.ArchivalConfig archivalConfig;
+
     @Mock
     Instance<EmbeddingModel> embeddingModelInstance;
 
@@ -59,14 +65,23 @@ class ArchivalToolFirstPathTest {
     void testSuccessfulSearch_populatesCache() {
         // Arrange: store returns results
         ArchivalChunkDto chunk = new ArchivalChunkDto(
-            "c1", "user1", "Important pattern", "PATTERN",
-            "session1", "msg1", null, 0.9, 0, Instant.now(), Instant.now());
+                "c1",
+                "user1",
+                "Important pattern",
+                "PATTERN",
+                "session1",
+                "msg1",
+                null,
+                0.9,
+                0,
+                Instant.now(),
+                Instant.now());
         when(store.search(any())).thenReturn(List.of(chunk));
 
         // Act
         ToolResponse response = tool.execute(
-            new ToolExecutionContext(null, null, null, null, null, null, null, null, null, null, null, null),
-            Map.of("query", "find patterns"));
+                new ToolExecutionContext(null, null, null, null, null, null, null, null, null, null, null, null),
+                Map.of("query", "find patterns"));
 
         // Assert: cache was populated with formatted text
         verify(cache).put(any(String.class));
@@ -81,8 +96,8 @@ class ArchivalToolFirstPathTest {
 
         // Act
         ToolResponse response = tool.execute(
-            new ToolExecutionContext(null, null, null, null, null, null, null, null, null, null, null, null),
-            Map.of("query", "nothing found"));
+                new ToolExecutionContext(null, null, null, null, null, null, null, null, null, null, null, null),
+                Map.of("query", "nothing found"));
 
         // Assert: cache is NOT populated (avoids wasting prompt budget)
         verify(cache, never()).put(any(String.class));
@@ -94,14 +109,13 @@ class ArchivalToolFirstPathTest {
     void testToolFirstPolicy_cacheIsPopulatedBeforeReturn() {
         // Arrange: results present
         ArchivalChunkDto chunk = new ArchivalChunkDto(
-            "c1", "user1", "Stored fact", "FACT",
-            "session1", "msg1", null, 0.85, 0, Instant.now(), Instant.now());
+                "c1", "user1", "Stored fact", "FACT", "session1", "msg1", null, 0.85, 0, Instant.now(), Instant.now());
         when(store.search(any())).thenReturn(List.of(chunk));
 
         // Act
         ToolResponse response = tool.execute(
-            new ToolExecutionContext(null, null, null, null, null, null, null, null, null, null, null, null),
-            Map.of("query", "find facts"));
+                new ToolExecutionContext(null, null, null, null, null, null, null, null, null, null, null, null),
+                Map.of("query", "find facts"));
 
         // Assert: cache.put was called (tool-first path)
         verify(cache).put(any(String.class));

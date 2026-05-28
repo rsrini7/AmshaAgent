@@ -1,18 +1,19 @@
 package com.arcclaw.core.reflex;
 
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.inject.Default;
+import jakarta.inject.Inject;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.enterprise.inject.Default;
-import jakarta.inject.Inject;
-
 import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.message.UserMessages;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.security.InputSanitizer;
+
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
@@ -33,59 +34,56 @@ public class PiiScanReflex implements AgentReflex, InputSanitizer {
     @Inject
     Logger log;
 
-    private static final Pattern EMAIL          = Pattern.compile("[a-zA-Z0-9._%+\\-]+@[a-zA-Z0-9.\\-]+\\.[a-zA-Z]{2,}");
-    private static final Pattern PHONE_INDIA    = Pattern.compile("(?<![\\w])(?:\\+91[\\-\\s]?)?[6-9]\\d{9}(?![\\w])");
-    private static final Pattern PHONE_INTL     = Pattern.compile("(?<![\\w@.])\\+[1-9]\\d{6,14}(?![\\w])");
-    private static final Pattern SSN            = Pattern.compile("\\d{3}-\\d{2}-\\d{4}");
+    private static final Pattern EMAIL = Pattern.compile("[a-zA-Z0-9._%+\\-]+@[a-zA-Z0-9.\\-]+\\.[a-zA-Z]{2,}");
+    private static final Pattern PHONE_INDIA = Pattern.compile("(?<![\\w])(?:\\+91[\\-\\s]?)?[6-9]\\d{9}(?![\\w])");
+    private static final Pattern PHONE_INTL = Pattern.compile("(?<![\\w@.])\\+[1-9]\\d{6,14}(?![\\w])");
+    private static final Pattern SSN = Pattern.compile("\\d{3}-\\d{2}-\\d{4}");
     private static final Pattern AADHAAR_SPACED = Pattern.compile("[2-9]{1}[0-9]{3}\\s[0-9]{4}\\s[0-9]{4}");
-    private static final Pattern AADHAAR_COMPACT= Pattern.compile("(?<![+\\-\\d])[2-9][0-9]{11}(?!\\d)");
-    private static final Pattern PAN            = Pattern.compile("[A-Z]{5}[0-9]{4}[A-Z]{1}");
-    private static final Pattern CREDIT_CARD    = Pattern.compile("\\b(?:\\d{4}[\\s\\-]?){3}\\d{4}\\b");
-    private static final Pattern IPV4           = Pattern.compile("\\b(?:\\d{1,3}\\.){3}\\d{1,3}\\b");
-    private static final Pattern IPV6           = Pattern.compile("(?i)\\b(?:[a-f0-9]{1,4}:){7}[a-f0-9]{1,4}\\b");
-    private static final Pattern JWT            = Pattern.compile("eyJ[a-zA-Z0-9_\\-]+\\.eyJ[a-zA-Z0-9_\\-]+\\.[a-zA-Z0-9_\\-]+");
-    private static final Pattern DATE_OF_BIRTH  = Pattern.compile("(?i)(?:DOB|Date\\s*of\\s*Birth|Birthdate)[\\s:=-]*(?:\\d{4}-\\d{2}-\\d{2}|\\d{2}-\\d{2}-\\d{4})");
-    private static final Pattern PASSPORT_IN    = Pattern.compile("(?<![\\w])[A-Z][0-9]{7}(?![\\w])");
-    private static final Pattern GSTIN          = Pattern.compile("(?<![\\w])[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}(?![\\w])");
-    private static final Pattern UPI_VPA        = Pattern.compile(
-        "\\b[a-zA-Z0-9.\\-_]{2,256}@(?![^@]*\\.(com|in|org|net|io|co\\.in)\\b)[a-zA-Z]{2,64}\\b"
-    );
+    private static final Pattern AADHAAR_COMPACT = Pattern.compile("(?<![+\\-\\d])[2-9][0-9]{11}(?!\\d)");
+    private static final Pattern PAN = Pattern.compile("[A-Z]{5}[0-9]{4}[A-Z]{1}");
+    private static final Pattern CREDIT_CARD = Pattern.compile("\\b(?:\\d{4}[\\s\\-]?){3}\\d{4}\\b");
+    private static final Pattern IPV4 = Pattern.compile("\\b(?:\\d{1,3}\\.){3}\\d{1,3}\\b");
+    private static final Pattern IPV6 = Pattern.compile("(?i)\\b(?:[a-f0-9]{1,4}:){7}[a-f0-9]{1,4}\\b");
+    private static final Pattern JWT = Pattern.compile("eyJ[a-zA-Z0-9_\\-]+\\.eyJ[a-zA-Z0-9_\\-]+\\.[a-zA-Z0-9_\\-]+");
+    private static final Pattern DATE_OF_BIRTH = Pattern.compile(
+            "(?i)(?:DOB|Date\\s*of\\s*Birth|Birthdate)[\\s:=-]*(?:\\d{4}-\\d{2}-\\d{2}|\\d{2}-\\d{2}-\\d{4})");
+    private static final Pattern PASSPORT_IN = Pattern.compile("(?<![\\w])[A-Z][0-9]{7}(?![\\w])");
+    private static final Pattern GSTIN =
+            Pattern.compile("(?<![\\w])[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}(?![\\w])");
+    private static final Pattern UPI_VPA =
+            Pattern.compile("\\b[a-zA-Z0-9.\\-_]{2,256}@(?![^@]*\\.(com|in|org|net|io|co\\.in)\\b)[a-zA-Z]{2,64}\\b");
 
     // Matches markdown links: [display](href) or [display](mailto:href)
-    private static final Pattern MARKDOWN_LINK  = Pattern.compile(
-        "\\[([^\\]]+)]\\((?:mailto:)?([^)]+)\\)"
-    );
+    private static final Pattern MARKDOWN_LINK = Pattern.compile("\\[([^\\]]+)]\\((?:mailto:)?([^)]+)\\)");
 
     // Matches full UUIDs - used to protect them from card/phone pattern false positives
-    private static final Pattern UUID_PATTERN   = Pattern.compile(
-        "[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
-    );
+    private static final Pattern UUID_PATTERN =
+            Pattern.compile("[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}");
 
     private record PiiRule(Pattern pattern, String type, String replacement) {}
 
     private static final List<PiiRule> RULES = List.of(
-        new PiiRule(JWT,             "JWT",     "[" + AgentSentinels.REDACTED_HYPHEN + "JWT]"),
-        new PiiRule(EMAIL,           "EMAIL",   "[" + AgentSentinels.REDACTED_HYPHEN + "EMAIL]"),
-        new PiiRule(CREDIT_CARD,     "CARD",    "[" + AgentSentinels.REDACTED_HYPHEN + "CARD]"),
-        new PiiRule(AADHAAR_SPACED,  "AADHAAR", "[" + AgentSentinels.REDACTED_HYPHEN + "AADHAAR]"),
-        new PiiRule(SSN,             "SSN",     "[" + AgentSentinels.REDACTED_HYPHEN + "SSN]"),
-        // GSTIN before PAN - PAN is a subset of GSTIN
-        new PiiRule(GSTIN,           "GSTIN",   "[" + AgentSentinels.REDACTED_HYPHEN + "GSTIN]"),
-        new PiiRule(PAN,             "PAN",     "[" + AgentSentinels.REDACTED_HYPHEN + "PAN]"),
-        // Phone before Aadhaar - +91 numbers can look like 12-digit Aadhaar
-        new PiiRule(PHONE_INDIA,     "PHONE",   "[" + AgentSentinels.REDACTED_HYPHEN + "PHONE]"),
-        new PiiRule(PHONE_INTL,      "PHONE",   "[" + AgentSentinels.REDACTED_HYPHEN + "PHONE]"),
-        new PiiRule(AADHAAR_COMPACT, "AADHAAR", "[" + AgentSentinels.REDACTED_HYPHEN + "AADHAAR]"),
-        new PiiRule(
-            Pattern.compile("(?<!\\d)(?<!-)(?<![./])\\d{10}(?!\\d)(?!-)"), "PHONE",
-                        "[" + AgentSentinels.REDACTED_HYPHEN + "PHONE]"
-        ),
-        new PiiRule(PASSPORT_IN,     "PASSPORT","[" + AgentSentinels.REDACTED_HYPHEN + "PASSPORT]"),
-        new PiiRule(DATE_OF_BIRTH,   "DOB",     "[" + AgentSentinels.REDACTED_HYPHEN + "DOB]"),
-        new PiiRule(IPV4,            "IP",      "[" + AgentSentinels.REDACTED_HYPHEN + "IP]"),
-        new PiiRule(IPV6,            "IP",      "[" + AgentSentinels.REDACTED_HYPHEN + "IP]"),
-        new PiiRule(UPI_VPA,         "UPI",     "[" + AgentSentinels.REDACTED_HYPHEN + "UPI]")
-    );
+            new PiiRule(JWT, "JWT", "[" + AgentSentinels.REDACTED_HYPHEN + "JWT]"),
+            new PiiRule(EMAIL, "EMAIL", "[" + AgentSentinels.REDACTED_HYPHEN + "EMAIL]"),
+            new PiiRule(CREDIT_CARD, "CARD", "[" + AgentSentinels.REDACTED_HYPHEN + "CARD]"),
+            new PiiRule(AADHAAR_SPACED, "AADHAAR", "[" + AgentSentinels.REDACTED_HYPHEN + "AADHAAR]"),
+            new PiiRule(SSN, "SSN", "[" + AgentSentinels.REDACTED_HYPHEN + "SSN]"),
+            // GSTIN before PAN - PAN is a subset of GSTIN
+            new PiiRule(GSTIN, "GSTIN", "[" + AgentSentinels.REDACTED_HYPHEN + "GSTIN]"),
+            new PiiRule(PAN, "PAN", "[" + AgentSentinels.REDACTED_HYPHEN + "PAN]"),
+            // Phone before Aadhaar - +91 numbers can look like 12-digit Aadhaar
+            new PiiRule(PHONE_INDIA, "PHONE", "[" + AgentSentinels.REDACTED_HYPHEN + "PHONE]"),
+            new PiiRule(PHONE_INTL, "PHONE", "[" + AgentSentinels.REDACTED_HYPHEN + "PHONE]"),
+            new PiiRule(AADHAAR_COMPACT, "AADHAAR", "[" + AgentSentinels.REDACTED_HYPHEN + "AADHAAR]"),
+            new PiiRule(
+                    Pattern.compile("(?<!\\d)(?<!-)(?<![./])\\d{10}(?!\\d)(?!-)"),
+                    "PHONE",
+                    "[" + AgentSentinels.REDACTED_HYPHEN + "PHONE]"),
+            new PiiRule(PASSPORT_IN, "PASSPORT", "[" + AgentSentinels.REDACTED_HYPHEN + "PASSPORT]"),
+            new PiiRule(DATE_OF_BIRTH, "DOB", "[" + AgentSentinels.REDACTED_HYPHEN + "DOB]"),
+            new PiiRule(IPV4, "IP", "[" + AgentSentinels.REDACTED_HYPHEN + "IP]"),
+            new PiiRule(IPV6, "IP", "[" + AgentSentinels.REDACTED_HYPHEN + "IP]"),
+            new PiiRule(UPI_VPA, "UPI", "[" + AgentSentinels.REDACTED_HYPHEN + "UPI]"));
 
     /** Triggers block mode only - sanitize() always runs in Pass 2 regardless. */
     @Override
@@ -109,8 +107,7 @@ public class PiiScanReflex implements AgentReflex, InputSanitizer {
     }
 
     @Override
-    public ReflexResult execute(String sessionId, String userId, String chatId,
-            String input, MessageContext context) {
+    public ReflexResult execute(String sessionId, String userId, String chatId, String input, MessageContext context) {
         return ReflexResult.respond(UserMessages.PII_DETECTED, context);
     }
 
@@ -130,8 +127,7 @@ public class PiiScanReflex implements AgentReflex, InputSanitizer {
         while (uuidMatcher.find()) {
             String placeholder = "UUID_PLACEHOLDER_" + uuidPlaceholders.size() + "_";
             uuidPlaceholders.add(uuidMatcher.group());
-            uuidMatcher.appendReplacement(uuidProtected,
-                    Matcher.quoteReplacement(placeholder));
+            uuidMatcher.appendReplacement(uuidProtected, Matcher.quoteReplacement(placeholder));
         }
         uuidMatcher.appendTail(uuidProtected);
         result = uuidProtected.toString();
@@ -154,11 +150,9 @@ public class PiiScanReflex implements AgentReflex, InputSanitizer {
         }
 
         if (redacted) {
-            log.debugf("[PII-REDACTED] session=%s user=%s mode=%s types=%s " +
-                      "original_length=%d sanitized_length=%d",
-                    sessionId, userId, piiMode,
-                    String.join(",", detectedTypes),
-                    input.length(), result.length());
+            log.debugf(
+                    "[PII-REDACTED] session=%s user=%s mode=%s types=%s " + "original_length=%d sanitized_length=%d",
+                    sessionId, userId, piiMode, String.join(",", detectedTypes), input.length(), result.length());
         }
 
         return result;

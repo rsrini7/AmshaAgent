@@ -1,17 +1,19 @@
 package com.arcclaw.persistence.fs;
 
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
-
 import com.arcclaw.persistence.api.CronRunDto;
 import com.arcclaw.persistence.api.CronRunStorePort;
+
+import org.jboss.logging.Logger;
+
 import io.quarkus.arc.Unremovable;
 import io.quarkus.arc.properties.IfBuildProperty;
-import org.jboss.logging.Logger;
 
 @ApplicationScoped
 @Unremovable
@@ -46,13 +48,13 @@ public class FsCronRunStoreAdapter implements CronRunStorePort {
     public List<CronRunDto> findByCronId(String cronId, int offset, int limit) {
         List<CronRunDto> all = loadByCronId(cronId);
         all = all.stream()
-            .sorted((a, b) -> {
-                if (a.startedAt() == null && b.startedAt() == null) return 0;
-                if (a.startedAt() == null) return 1;
-                if (b.startedAt() == null) return -1;
-                return b.startedAt().compareTo(a.startedAt());
-            })
-            .toList();
+                .sorted((a, b) -> {
+                    if (a.startedAt() == null && b.startedAt() == null) return 0;
+                    if (a.startedAt() == null) return 1;
+                    if (b.startedAt() == null) return -1;
+                    return b.startedAt().compareTo(a.startedAt());
+                })
+                .toList();
         int end = Math.min(offset + limit, all.size());
         if (offset >= all.size()) return List.of();
         return all.subList(offset, end);
@@ -74,13 +76,13 @@ public class FsCronRunStoreAdapter implements CronRunStorePort {
             results = results.stream().filter(r -> status.equals(r.status())).toList();
         }
         results = results.stream()
-            .sorted((a, b) -> {
-                if (a.startedAt() == null && b.startedAt() == null) return 0;
-                if (a.startedAt() == null) return 1;
-                if (b.startedAt() == null) return -1;
-                return b.startedAt().compareTo(a.startedAt());
-            })
-            .toList();
+                .sorted((a, b) -> {
+                    if (a.startedAt() == null && b.startedAt() == null) return 0;
+                    if (a.startedAt() == null) return 1;
+                    if (b.startedAt() == null) return -1;
+                    return b.startedAt().compareTo(a.startedAt());
+                })
+                .toList();
         int end = Math.min(offset + limit, results.size());
         if (offset >= results.size()) return List.of();
         return results.subList(offset, end);
@@ -95,8 +97,7 @@ public class FsCronRunStoreAdapter implements CronRunStorePort {
         List<CronRunDto> runs = new ArrayList<>();
         List<String> files = store.list(List.of(DOMAIN, cronId), ".json");
         for (String file : files) {
-            store.readOptional(List.of(DOMAIN, cronId, file), CronRunDto.class)
-                .ifPresent(runs::add);
+            store.readOptional(List.of(DOMAIN, cronId, file), CronRunDto.class).ifPresent(runs::add);
         }
         return runs;
     }

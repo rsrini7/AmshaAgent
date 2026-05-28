@@ -37,7 +37,8 @@ class FtsConnectionInterceptorVecFallbackTest {
             interceptor.onConnectionAcquire(conn);
 
             // Verify: vector search should be disabled (binary missing), app didn't crash
-            Assertions.assertFalse(interceptor.isVectorSearchEnabled(),
+            Assertions.assertFalse(
+                    interceptor.isVectorSearchEnabled(),
                     "Vector search should be disabled when vec0 binary is missing");
 
             // Verify the interceptor is still functional

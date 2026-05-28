@@ -1,17 +1,19 @@
 package com.arcclaw.persistence.postgres;
 
-import java.time.Instant;
-import java.util.UUID;
-
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
+import java.time.Instant;
+import java.util.UUID;
+
 import com.arcclaw.persistence.api.AdvisoryLockPort;
 import com.arcclaw.persistence.postgres.jdbi.LockJdbiDao;
-import io.quarkus.arc.Unremovable;
-import io.quarkus.arc.properties.IfBuildProperty;
+
 import org.jboss.logging.Logger;
 import org.jdbi.v3.core.Jdbi;
+
+import io.quarkus.arc.Unremovable;
+import io.quarkus.arc.properties.IfBuildProperty;
 
 /**
  * PostgreSQL implementation of AdvisoryLockPort using JDBI.
@@ -64,8 +66,7 @@ public class PostgresAdvisoryLockAdapter implements AdvisoryLockPort {
     @Override
     public boolean isLocked(String lockKey) {
         try {
-            return jdbi.withExtension(LockJdbiDao.class, dao ->
-                dao.countActive(lockKey, Instant.now()) > 0);
+            return jdbi.withExtension(LockJdbiDao.class, dao -> dao.countActive(lockKey, Instant.now()) > 0);
         } catch (Exception e) {
             return false;
         }

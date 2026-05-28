@@ -1,10 +1,5 @@
 package com.arcclaw.app.ui;
 
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.TimeUnit;
-import java.util.stream.Collectors;
-
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
@@ -23,6 +18,11 @@ import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.core.SecurityContext;
 
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
+
 import com.arcclaw.app.ui.dto.CheckpointApprovalRequest;
 import com.arcclaw.app.ui.dto.CheckpointApprovalResponse;
 import com.arcclaw.app.ui.dto.PageDto;
@@ -34,20 +34,29 @@ import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.lifecycle.SessionHeartbeatTracker;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
-import io.smallrye.common.annotation.RunOnVirtualThread;
-import io.smallrye.mutiny.Multi;
+
 import org.eclipse.microprofile.openapi.annotations.Operation;
 import org.jboss.resteasy.reactive.RestStreamElementType;
+
+import io.smallrye.common.annotation.RunOnVirtualThread;
+import io.smallrye.mutiny.Multi;
 
 @ApplicationScoped
 @Path("hitl")
 @Produces(MediaType.APPLICATION_JSON)
 public class HitlResource {
 
-    @Inject Instance<HitlService> hitlService;
-    @Inject AgentSseService agentSseService;
-    @Inject SessionHeartbeatTracker heartbeatTracker;
-    @Inject AuditService auditService;
+    @Inject
+    Instance<HitlService> hitlService;
+
+    @Inject
+    AgentSseService agentSseService;
+
+    @Inject
+    SessionHeartbeatTracker heartbeatTracker;
+
+    @Inject
+    AuditService auditService;
 
     @Context
     SecurityContext securityContext;
@@ -65,19 +74,18 @@ public class HitlResource {
     @Operation(summary = "Subscribe to live HITL approval requests via SSE")
     public Multi<AgentSseService.SseEvent> hitlEvents(@QueryParam("sessionId") String sessionId) {
         if (sessionId == null || sessionId.isBlank()) {
-            return Multi.createFrom().failure(
-                new WebApplicationException(Response.Status.BAD_REQUEST));
+            return Multi.createFrom().failure(new WebApplicationException(Response.Status.BAD_REQUEST));
         }
 
         // §85-B: Lazy ownership binding for SSE subscription.
         // ApiKeyAuthFilter has already validated the key and put userId in MDC.
         String userId = (securityContext != null && securityContext.getUserPrincipal() != null)
-            ? securityContext.getUserPrincipal().getName()
-            : "anonymous";
+                ? securityContext.getUserPrincipal().getName()
+                : "anonymous";
         if (userId == null || "anonymous".equals(userId)) {
             return Multi.createFrom().failure(new WebApplicationException(Response.Status.UNAUTHORIZED));
         }
-        
+
         if (!heartbeatTracker.tryBindOwner(sessionId, userId)) {
             // Either session reaped, or owned by someone else.
             return Multi.createFrom().failure(new WebApplicationException(Response.Status.UNAUTHORIZED));
@@ -90,12 +98,11 @@ public class HitlResource {
     @RunOnVirtualThread
     @Operation(summary = "List all pending tool execution approvals for the current user")
     public Response listPending(
-            @QueryParam("page") @DefaultValue("0") int page,
-            @QueryParam("size") @DefaultValue("20") int size) {
+            @QueryParam("page") @DefaultValue("0") int page, @QueryParam("size") @DefaultValue("20") int size) {
         // ApiKeyAuthFilter has already validated the key and put userId in MDC.
         String userId = (securityContext != null && securityContext.getUserPrincipal() != null)
-            ? securityContext.getUserPrincipal().getName()
-            : "anonymous";
+                ? securityContext.getUserPrincipal().getName()
+                : "anonymous";
         if (userId == null || "anonymous".equals(userId)) {
             return Response.status(Response.Status.UNAUTHORIZED)
                     .entity(Map.of("error", "Cannot resolve user identity"))
@@ -107,17 +114,16 @@ public class HitlResource {
 
         if (!hitlService.isUnsatisfied()) {
             long totalCount = hitlService.get().countPendingApprovals(userId);
-            List<PendingApprovalDto> items = hitlService.get().getPendingApprovals(userId, effectiveSize, offset)
-                .values().stream()
-                .map(pending -> new PendingApprovalDto(
-                    pending.taskId(),
-                    pending.sessionId(),
-                    pending.toolName(),
-                    pending.params(),
-                    pending.requestedAt(),
-                    pending.agentRole()
-                ))
-                .collect(Collectors.toList());
+            List<PendingApprovalDto> items =
+                    hitlService.get().getPendingApprovals(userId, effectiveSize, offset).values().stream()
+                            .map(pending -> new PendingApprovalDto(
+                                    pending.taskId(),
+                                    pending.sessionId(),
+                                    pending.toolName(),
+                                    pending.params(),
+                                    pending.requestedAt(),
+                                    pending.agentRole()))
+                            .collect(Collectors.toList());
             PageDto<PendingApprovalDto> pageResult = PageDto.of(items, page, effectiveSize, totalCount);
             return Response.ok(pageResult).build();
         }
@@ -142,17 +148,22 @@ public class HitlResource {
         String reason = (request != null) ? request.reason() : "Approved via REST";
         if (hitlService.isUnsatisfied()) {
             return Response.status(Response.Status.NOT_IMPLEMENTED)
-                .entity(new ArcClawErrorResponse("HITL not available", "No database backend"))
-                .build();
+                    .entity(new ArcClawErrorResponse("HITL not available", "No database backend"))
+                    .build();
         }
         try {
             hitlService.get().resolve(taskId, toolName, true, reason);
             String userId = (securityContext != null && securityContext.getUserPrincipal() != null)
-                ? securityContext.getUserPrincipal().getName() : "anonymous";
-            auditService.recordMandatory("hitl-" + taskId, userId, "coordinator",
+                    ? securityContext.getUserPrincipal().getName()
+                    : "anonymous";
+            auditService.recordMandatory(
+                    "hitl-" + taskId,
+                    userId,
+                    "coordinator",
                     SecurityEventType.APPROVAL_GRANTED,
                     "taskId=" + taskId + " tool=" + toolName + " via=REST");
-            Response response = Response.ok(new CheckpointApprovalResponse("approved", taskId, toolName, reason)).build();
+            Response response = Response.ok(new CheckpointApprovalResponse("approved", taskId, toolName, reason))
+                    .build();
             if (idempotencyKey != null && !idempotencyKey.isBlank()) {
                 idempotencyCache.put(idempotencyKey, response);
             }
@@ -176,21 +187,29 @@ public class HitlResource {
             if (cached != null) return cached;
         }
         String toolName = (request != null) ? request.toolName() : null;
-        String reason = (request != null && request.reason() != null && !request.reason().isBlank()) 
-            ? request.reason() : "Rejected by user";
+        String reason = (request != null
+                        && request.reason() != null
+                        && !request.reason().isBlank())
+                ? request.reason()
+                : "Rejected by user";
         if (hitlService.isUnsatisfied()) {
             return Response.status(Response.Status.NOT_IMPLEMENTED)
-                .entity(new ArcClawErrorResponse("HITL not available", "No database backend"))
-                .build();
+                    .entity(new ArcClawErrorResponse("HITL not available", "No database backend"))
+                    .build();
         }
         try {
             hitlService.get().resolve(taskId, toolName, false, reason);
             String userId = (securityContext != null && securityContext.getUserPrincipal() != null)
-                ? securityContext.getUserPrincipal().getName() : "anonymous";
-            auditService.recordMandatory("hitl-" + taskId, userId, "coordinator",
+                    ? securityContext.getUserPrincipal().getName()
+                    : "anonymous";
+            auditService.recordMandatory(
+                    "hitl-" + taskId,
+                    userId,
+                    "coordinator",
                     SecurityEventType.APPROVAL_DENIED,
                     "taskId=" + taskId + " tool=" + toolName + " via=REST");
-            Response response = Response.ok(new CheckpointApprovalResponse("rejected", taskId, toolName, reason)).build();
+            Response response = Response.ok(new CheckpointApprovalResponse("rejected", taskId, toolName, reason))
+                    .build();
             if (idempotencyKey != null && !idempotencyKey.isBlank()) {
                 idempotencyCache.put(idempotencyKey, response);
             }
@@ -203,16 +222,17 @@ public class HitlResource {
     private Response handleException(String taskId, Exception e) {
         if (e.getMessage() != null && e.getMessage().contains("No pending")) {
             return Response.status(Response.Status.NOT_FOUND)
-                .entity(new ArcClawErrorResponse("No pending approval found", "taskId: " + taskId))
-                .build();
+                    .entity(new ArcClawErrorResponse("No pending approval found", "taskId: " + taskId))
+                    .build();
         }
         if (e.getMessage() != null && e.getMessage().contains("already resolved")) {
             return Response.status(Response.Status.CONFLICT)
-                .entity(new ArcClawErrorResponse("Already resolved", "taskId: " + taskId))
-                .build();
+                    .entity(new ArcClawErrorResponse("Already resolved", "taskId: " + taskId))
+                    .build();
         }
         return Response.serverError()
-            .entity(new ArcClawErrorResponse("System Error", e.getMessage() != null ? e.getMessage() : "Unknown error"))
-            .build();
+                .entity(new ArcClawErrorResponse(
+                        "System Error", e.getMessage() != null ? e.getMessage() : "Unknown error"))
+                .build();
     }
 }

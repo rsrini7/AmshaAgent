@@ -1,16 +1,17 @@
 package com.arcclaw.core.routing;
 
-import java.util.List;
-
 import jakarta.annotation.Priority;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Alternative;
 import jakarta.inject.Inject;
 
+import java.util.List;
+
 import com.arcclaw.channel.api.IntentDetector;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.skill.CompiledSkillEntry;
 import com.arcclaw.core.skill.SkillRegistry;
+
 import io.quarkus.arc.Unremovable;
 
 /**

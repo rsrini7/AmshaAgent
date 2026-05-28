@@ -1,5 +1,10 @@
 package com.arcclaw.mcp.transport;
 
+import jakarta.annotation.PostConstruct;
+import jakarta.annotation.PreDestroy;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -14,11 +19,6 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import jakarta.annotation.PostConstruct;
-import jakarta.annotation.PreDestroy;
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
-
 import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.core.sandbox.SandboxCircuitBreaker;
 import com.arcclaw.mcp.tool.DynamicToolCapability;
@@ -27,17 +27,24 @@ import com.arcclaw.mcp.tool.McpTransportType;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import io.smallrye.mutiny.Uni;
+
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
+
+import io.smallrye.mutiny.Uni;
 
 @ApplicationScoped
 public class PodmanMcpTransport {
     private static final Logger log = Logger.getLogger(PodmanMcpTransport.class);
 
-    @Inject SandboxCircuitBreaker sandboxCircuitBreaker;
-    @Inject DynamicToolCapabilityRegistry registry;
-    @Inject ObjectMapper objectMapper;
+    @Inject
+    SandboxCircuitBreaker sandboxCircuitBreaker;
+
+    @Inject
+    DynamicToolCapabilityRegistry registry;
+
+    @Inject
+    ObjectMapper objectMapper;
 
     private final ConcurrentHashMap<String, Process> activeProcesses = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, OutputStream> writers = new ConcurrentHashMap<>();
@@ -60,8 +67,8 @@ public class PodmanMcpTransport {
             t.setDaemon(true);
             return t;
         });
-        healthCheckExecutor.scheduleWithFixedDelay(this::healthCheck,
-            healthCheckIntervalMs, healthCheckIntervalMs, TimeUnit.MILLISECONDS);
+        healthCheckExecutor.scheduleWithFixedDelay(
+                this::healthCheck, healthCheckIntervalMs, healthCheckIntervalMs, TimeUnit.MILLISECONDS);
     }
 
     private void healthCheck() {
@@ -87,70 +94,80 @@ public class PodmanMcpTransport {
     }
 
     public Uni<Void> connect(McpServerConfig config) {
-        return Uni.createFrom().item(() -> {
-            if (sandboxCircuitBreaker.getState() == SandboxCircuitBreaker.CircuitBreakerState.OPEN) {
-                if (!sandboxCircuitBreaker.shouldAttemptPodman()) {
-                    throw new RuntimeException("MCP Podman circuit breaker is OPEN for server: " + config.serverName());
-                }
-            }
+        return Uni.createFrom()
+                .item(() -> {
+                    if (sandboxCircuitBreaker.getState() == SandboxCircuitBreaker.CircuitBreakerState.OPEN) {
+                        if (!sandboxCircuitBreaker.shouldAttemptPodman()) {
+                            throw new RuntimeException(
+                                    "MCP Podman circuit breaker is OPEN for server: " + config.serverName());
+                        }
+                    }
 
-            try {
-                List<String> command = new ArrayList<>();
-                command.add("podman");
-                command.add("run");
-                command.add("--rm");
-                command.add("-i");
-                command.add("--network=none");
-                
-                for (String env : config.envVars()) {
-                    command.add("--env");
-                    command.add(env);
-                }
-                
-                for (Map.Entry<String, String> label : config.labels().entrySet()) {
-                    command.add("--label");
-                    command.add(label.getKey() + "=" + label.getValue());
-                }
-                
-                command.add(config.podmanImage());
+                    try {
+                        List<String> command = new ArrayList<>();
+                        command.add("podman");
+                        command.add("run");
+                        command.add("--rm");
+                        command.add("-i");
+                        command.add("--network=none");
 
-                log.infof("Starting Podman MCP server: %s with image %s", config.serverName(), config.podmanImage());
-                ProcessBuilder pb = new ProcessBuilder(command);
-                pb.redirectErrorStream(false);
-                Process process = pb.start();
+                        for (String env : config.envVars()) {
+                            command.add("--env");
+                            command.add(env);
+                        }
 
-                activeProcesses.put(config.serverName(), process);
-                writers.put(config.serverName(), process.getOutputStream());
-                readers.put(config.serverName(), new BufferedReader(new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8)));
+                        for (Map.Entry<String, String> label : config.labels().entrySet()) {
+                            command.add("--label");
+                            command.add(label.getKey() + "=" + label.getValue());
+                        }
 
-                // Step 1: Initialize
-                ObjectNode initParams = objectMapper.createObjectNode();
-                initParams.put("protocolVersion", "2025-03-26");
-                initParams.set("capabilities", objectMapper.createObjectNode());
-                ObjectNode clientInfo = objectMapper.createObjectNode();
-                clientInfo.put("name", "arcclaw");
-                clientInfo.put("version", "1.0");
-                initParams.set("clientInfo", clientInfo);
+                        command.add(config.podmanImage());
 
-                sendRequest(config.serverName(), "initialize", initParams);
-                // Wait for init response
-                readResponse(config.serverName());
+                        log.infof(
+                                "Starting Podman MCP server: %s with image %s",
+                                config.serverName(), config.podmanImage());
+                        ProcessBuilder pb = new ProcessBuilder(command);
+                        pb.redirectErrorStream(false);
+                        Process process = pb.start();
 
-                // Step 2: Initialized notification
-                sendNotification(config.serverName(), "notifications/initialized", objectMapper.createObjectNode());
+                        activeProcesses.put(config.serverName(), process);
+                        writers.put(config.serverName(), process.getOutputStream());
+                        readers.put(
+                                config.serverName(),
+                                new BufferedReader(
+                                        new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8)));
 
-                // Step 3: List tools
-                JsonNode toolsResponse = sendRequest(config.serverName(), "tools/list", objectMapper.createObjectNode());
-                registerTools(config, toolsResponse);
+                        // Step 1: Initialize
+                        ObjectNode initParams = objectMapper.createObjectNode();
+                        initParams.put("protocolVersion", "2025-03-26");
+                        initParams.set("capabilities", objectMapper.createObjectNode());
+                        ObjectNode clientInfo = objectMapper.createObjectNode();
+                        clientInfo.put("name", "arcclaw");
+                        clientInfo.put("version", "1.0");
+                        initParams.set("clientInfo", clientInfo);
 
-                sandboxCircuitBreaker.recordSuccess();
-                log.infof("Connected to MCP server: %s", config.serverName());
-                return null;
-            } catch (IOException e) {
-                sandboxCircuitBreaker.recordFailure(sandboxCircuitBreaker.getState());
-                throw new RuntimeException("Failed to connect to MCP server: " + config.serverName(), e);
-            }
-        }).replaceWithVoid();
+                        sendRequest(config.serverName(), "initialize", initParams);
+                        // Wait for init response
+                        readResponse(config.serverName());
+
+                        // Step 2: Initialized notification
+                        sendNotification(
+                                config.serverName(), "notifications/initialized", objectMapper.createObjectNode());
+
+                        // Step 3: List tools
+                        JsonNode toolsResponse =
+                                sendRequest(config.serverName(), "tools/list", objectMapper.createObjectNode());
+                        registerTools(config, toolsResponse);
+
+                        sandboxCircuitBreaker.recordSuccess();
+                        log.infof("Connected to MCP server: %s", config.serverName());
+                        return null;
+                    } catch (IOException e) {
+                        sandboxCircuitBreaker.recordFailure(sandboxCircuitBreaker.getState());
+                        throw new RuntimeException("Failed to connect to MCP server: " + config.serverName(), e);
+                    }
+                })
+                .replaceWithVoid();
     }
 
     private void registerTools(McpServerConfig config, JsonNode toolsResponse) {
@@ -159,11 +176,11 @@ public class PodmanMcpTransport {
             for (JsonNode tool : tools) {
                 String name = tool.get("name").asText();
                 String desc = tool.has("description") ? tool.get("description").asText() : "";
-                String schema = tool.has("inputSchema") ? tool.get("inputSchema").toString() : "{}";
-                
+                String schema =
+                        tool.has("inputSchema") ? tool.get("inputSchema").toString() : "{}";
+
                 DynamicToolCapability cap = new DynamicToolCapability(
-                    name, desc, config.serverName(), McpTransportType.STDIO, false, schema
-                );
+                        name, desc, config.serverName(), McpTransportType.STDIO, false, schema);
                 registry.register(cap);
             }
         }
@@ -183,27 +200,30 @@ public class PodmanMcpTransport {
                 JsonNode result = sendRequest(serverName, "tools/call", params);
                 return objectMapper.writeValueAsString(result);
             } catch (IOException e) {
-                throw new RuntimeException("Failed to invoke dynamic tool: " + toolName + " on server: " + serverName, e);
+                throw new RuntimeException(
+                        "Failed to invoke dynamic tool: " + toolName + " on server: " + serverName, e);
             }
         });
     }
 
     public Uni<Void> disconnect(String serverName) {
-        return Uni.createFrom().item(() -> {
-            Process p = activeProcesses.remove(serverName);
-            if (p != null) {
-                p.destroy();
-            }
-            try {
-                OutputStream w = writers.remove(serverName);
-                if (w != null) w.close();
-                BufferedReader r = readers.remove(serverName);
-                if (r != null) r.close();
-            } catch (IOException e) {
-                log.warnf("Error closing streams for MCP server %s: %s", serverName, LogUtil.rootMessage(e));
-            }
-            return null;
-        }).replaceWithVoid();
+        return Uni.createFrom()
+                .item(() -> {
+                    Process p = activeProcesses.remove(serverName);
+                    if (p != null) {
+                        p.destroy();
+                    }
+                    try {
+                        OutputStream w = writers.remove(serverName);
+                        if (w != null) w.close();
+                        BufferedReader r = readers.remove(serverName);
+                        if (r != null) r.close();
+                    } catch (IOException e) {
+                        log.warnf("Error closing streams for MCP server %s: %s", serverName, LogUtil.rootMessage(e));
+                    }
+                    return null;
+                })
+                .replaceWithVoid();
     }
 
     private JsonNode sendRequest(String serverName, String method, ObjectNode params) throws IOException {
@@ -216,9 +236,10 @@ public class PodmanMcpTransport {
 
         writeLine(serverName, request);
         JsonNode response = readResponse(serverName);
-        
+
         if (response.has("error")) {
-            throw new RuntimeException("MCP server error: " + response.get("error").toString());
+            throw new RuntimeException(
+                    "MCP server error: " + response.get("error").toString());
         }
         return response.get("result");
     }
@@ -242,7 +263,7 @@ public class PodmanMcpTransport {
     private JsonNode readResponse(String serverName) throws IOException {
         BufferedReader reader = readers.get(serverName);
         if (reader == null) throw new IOException("No reader for server: " + serverName);
-        
+
         String line = reader.readLine();
         if (line == null) throw new IOException("MCP server closed connection unexpectedly");
         return objectMapper.readTree(line);

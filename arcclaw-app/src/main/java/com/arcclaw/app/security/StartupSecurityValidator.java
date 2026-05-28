@@ -1,18 +1,20 @@
 package com.arcclaw.app.security;
 
-import java.security.Security;
-import java.util.List;
-import java.util.Optional;
-
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
 import jakarta.enterprise.inject.spi.DeploymentException;
 import jakarta.inject.Inject;
 
+import java.security.Security;
+import java.util.List;
+import java.util.Optional;
+
 import com.arcclaw.core.security.SecretVault;
 import com.arcclaw.core.security.VaultConstants;
-import io.quarkus.runtime.StartupEvent;
+
 import org.eclipse.microprofile.config.inject.ConfigProperty;
+
+import io.quarkus.runtime.StartupEvent;
 
 @ApplicationScoped
 public class StartupSecurityValidator {
@@ -49,40 +51,36 @@ public class StartupSecurityValidator {
 
     private void validatePepper() {
         if (pepper.startsWith("dev-pepper")) {
-            throw new IllegalStateException(
-                    "[SECURITY] arcclaw.vault.pepper is using the dev default. " +
-                            "Set ARCCLAW_VAULT_PEPPER in your .env before running in prod.");
+            throw new IllegalStateException("[SECURITY] arcclaw.vault.pepper is using the dev default. "
+                    + "Set ARCCLAW_VAULT_PEPPER in your .env before running in prod.");
         }
     }
 
     private void validateHmacKey() {
         if (!vault.systemKeyExists(VaultConstants.AUDIT_HMAC_KEY_NAME)) {
-            throw new IllegalStateException(
-                    "FATAL: " + VaultConstants.AUDIT_HMAC_KEY_NAME + " is not present in SecretVault. " +
-                            "Provision this key before deploying to production.");
+            throw new IllegalStateException("FATAL: " + VaultConstants.AUDIT_HMAC_KEY_NAME
+                    + " is not present in SecretVault. " + "Provision this key before deploying to production.");
         }
     }
 
     private void validateAllowlist() {
         boolean hasUserIds = allowedUserIds.isPresent() && !allowedUserIds.get().isEmpty();
-        boolean hasUsernames = allowedUsers.isPresent()
-                && allowedUsers.get().stream().anyMatch(s -> s != null && !s.isBlank());
+        boolean hasUsernames =
+                allowedUsers.isPresent() && allowedUsers.get().stream().anyMatch(s -> s != null && !s.isBlank());
 
         if (!hasUserIds && !hasUsernames) {
-            throw new IllegalStateException(
-                    "[SECURITY] Both arcclaw.channel.telegram.allowed-user-ids and " +
-                            "arcclaw.channel.telegram.allowed-users are empty in " + profile + " profile. " +
-                            "Open access is strictly forbidden. " +
-                            "Configure at least one allowlist before deploying.");
+            throw new IllegalStateException("[SECURITY] Both arcclaw.channel.telegram.allowed-user-ids and "
+                    + "arcclaw.channel.telegram.allowed-users are empty in "
+                    + profile + " profile. " + "Open access is strictly forbidden. "
+                    + "Configure at least one allowlist before deploying.");
         }
 
         if (!hasUserIds && hasUsernames) {
-            throw new DeploymentException(
-                    "SECURITY: arcclaw.channel.telegram.allowed-user-ids (numeric) is " +
-                            "not configured, but arcclaw.channel.telegram.allowed-users " +
-                            "(string username list) is. String username allowlists are a " +
-                            "username-hijack vector and are forbidden in profile '" + profile +
-                            "'. Migrate to numeric Telegram user IDs before deploying.");
+            throw new DeploymentException("SECURITY: arcclaw.channel.telegram.allowed-user-ids (numeric) is "
+                    + "not configured, but arcclaw.channel.telegram.allowed-users "
+                    + "(string username list) is. String username allowlists are a "
+                    + "username-hijack vector and are forbidden in profile '"
+                    + profile + "'. Migrate to numeric Telegram user IDs before deploying.");
         }
     }
 }

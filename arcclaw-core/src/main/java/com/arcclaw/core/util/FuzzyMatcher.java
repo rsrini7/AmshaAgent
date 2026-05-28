@@ -17,9 +17,9 @@ public class FuzzyMatcher {
     public static boolean isClose(String input, String target) {
         if (input == null || target == null) return false;
         int dist = distance(input.toLowerCase().trim(), target.toLowerCase().trim());
-        
+
         // Dynamic threshold logic: more forgiving for longer words
-        if (target.length() <= 6) return dist <= 1; 
+        if (target.length() <= 6) return dist <= 1;
         return dist <= 2;
     }
 
@@ -51,7 +51,7 @@ public class FuzzyMatcher {
             for (int j = 1; j <= m; j++) {
                 int cost = (s1.charAt(i - 1) == s2.charAt(j - 1)) ? 0 : 1;
                 d[i][j] = Math.min(Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1), d[i - 1][j - 1] + cost);
-                
+
                 // Transposition check (Damerau improvement)
                 if (i > 1 && j > 1 && s1.charAt(i - 1) == s2.charAt(j - 2) && s1.charAt(i - 2) == s2.charAt(j - 1)) {
                     d[i][j] = Math.min(d[i][j], d[i - 2][j - 2] + cost);

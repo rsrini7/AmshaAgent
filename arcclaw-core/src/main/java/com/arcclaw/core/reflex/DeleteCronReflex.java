@@ -34,18 +34,14 @@ public class DeleteCronReflex implements AgentReflex {
     public boolean matches(String input) {
         if (input == null) return false;
         String t = input.trim().toLowerCase();
-        return t.startsWith("deletecron")
-                || t.startsWith("/deletecron")
-                || t.startsWith("/cron delete");
+        return t.startsWith("deletecron") || t.startsWith("/deletecron") || t.startsWith("/cron delete");
     }
 
     @Override
-    public ReflexResult execute(String sessionId, String userId, String chatId,
-            String input, MessageContext context) {
+    public ReflexResult execute(String sessionId, String userId, String chatId, String input, MessageContext context) {
 
         if (!WorkspaceScopeHolder.USER_ID.isBound()) {
-            return ReflexResult.respond(
-                    DELETE_CONTEXT_NOT_AVAILABLE, context);
+            return ReflexResult.respond(DELETE_CONTEXT_NOT_AVAILABLE, context);
         }
 
         String uid = WorkspaceScopeHolder.USER_ID.get();
@@ -54,32 +50,30 @@ public class DeleteCronReflex implements AgentReflex {
         String normalized = input.trim();
         String lower = normalized.toLowerCase();
         int prefixLen;
-        if (lower.startsWith("/cron delete"))  prefixLen = "/cron delete".length();
+        if (lower.startsWith("/cron delete")) prefixLen = "/cron delete".length();
         else if (lower.startsWith("/deletecron")) prefixLen = "/deletecron".length();
-        else                                    prefixLen = "deletecron".length();
+        else prefixLen = "deletecron".length();
 
         String cronId = normalized.substring(prefixLen).trim();
 
         if (cronId.isBlank()) {
-            return ReflexResult.respond(
-                    USAGE_DELETE_CRON, context);
+            return ReflexResult.respond(USAGE_DELETE_CRON, context);
         }
 
         // UUID format guard - prevents DB roundtrip for garbage input
-        if (!cronId.matches(
-                "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")) {
-            return ReflexResult.respond(
-                    UserMessages.cronInvalid(cronId), context);
+        if (!cronId.matches("[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")) {
+            return ReflexResult.respond(UserMessages.cronInvalid(cronId), context);
         }
 
         // Tenant-isolated delete - user B cannot delete user A's job
         int deleted = cronStore.deleteByIdAndUserId(cronId, uid);
         if (deleted == 0) {
-            return ReflexResult.respond(
-                    UserMessages.cronNotFound(cronId), context);
+            return ReflexResult.respond(UserMessages.cronNotFound(cronId), context);
         }
 
-        auditService.record(sessionId, uid,
+        auditService.record(
+                sessionId,
+                uid,
                 AgentRoleEnum.COORDINATOR.toScopedName(),
                 SecurityEventType.CRONDELETED,
                 "cronId=" + cronId + " via=reflex");

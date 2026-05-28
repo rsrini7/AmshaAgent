@@ -1,11 +1,5 @@
 package com.arcclaw.app.api;
 
-import java.time.Instant;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
-
 import jakarta.inject.Inject;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.DefaultValue;
@@ -19,6 +13,12 @@ import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.core.SecurityContext;
 
+import java.time.Instant;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+
 import com.arcclaw.core.api.AgentSessionService;
 import com.arcclaw.core.api.dto.ArcClawErrorResponse;
 import com.arcclaw.core.api.dto.AuditEventResponse;
@@ -30,6 +30,7 @@ import com.arcclaw.core.domain.model.AuditEventRecord;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.persistence.api.AuditEventDto;
 import com.arcclaw.persistence.api.AuditEventStorePort;
+
 import org.eclipse.microprofile.openapi.annotations.Operation;
 
 @Path("/audit")
@@ -53,9 +54,8 @@ public class AuditResource {
     @Path("/event-types")
     @Operation(summary = "List all valid SecurityEventType values for UI filters")
     public Response listEventTypes() {
-        List<String> types = Arrays.stream(SecurityEventType.values())
-                .map(Enum::name)
-                .toList();
+        List<String> types =
+                Arrays.stream(SecurityEventType.values()).map(Enum::name).toList();
         return Response.ok(Map.of("eventTypes", types)).build();
     }
 
@@ -78,16 +78,15 @@ public class AuditResource {
         List<AuditEventDto> events = auditStore.findAll(sessionId, eventType, from, to, offset, limit);
         long total = auditStore.countAll(sessionId, eventType, from, to);
 
-        List<AuditEventResponse> responseRows = events.stream()
-            .map(this::toResponseFromDto)
-            .toList();
+        List<AuditEventResponse> responseRows =
+                events.stream().map(this::toResponseFromDto).toList();
 
         return Response.ok(Map.of(
-            "events", responseRows,
-            "total", total,
-            "page", page,
-            "size", limit
-        )).build();
+                        "events", responseRows,
+                        "total", total,
+                        "page", page,
+                        "size", limit))
+                .build();
     }
 
     @GET
@@ -96,15 +95,16 @@ public class AuditResource {
     public Response getAuditEvent(@PathParam("id") String id) {
         try {
             UUID uuid = UUID.fromString(id);
-            return auditStore.findById(uuid)
-                .map(dto -> Response.ok(toResponseFromDto(dto)).build())
-                .orElse(Response.status(Response.Status.NOT_FOUND)
-                    .entity(new ArcClawErrorResponse("Audit event not found: " + id))
-                    .build());
+            return auditStore
+                    .findById(uuid)
+                    .map(dto -> Response.ok(toResponseFromDto(dto)).build())
+                    .orElse(Response.status(Response.Status.NOT_FOUND)
+                            .entity(new ArcClawErrorResponse("Audit event not found: " + id))
+                            .build());
         } catch (IllegalArgumentException e) {
             return Response.status(Response.Status.BAD_REQUEST)
-                .entity(new ArcClawErrorResponse("Invalid audit event ID: " + id))
-                .build();
+                    .entity(new ArcClawErrorResponse("Invalid audit event ID: " + id))
+                    .build();
         }
     }
 
@@ -116,16 +116,16 @@ public class AuditResource {
         if (authError.isPresent()) {
             var err = authError.get();
             return Response.status(Response.Status.NOT_FOUND)
-                    .entity(new ArcClawErrorResponse(err.errorMessage())).build();
+                    .entity(new ArcClawErrorResponse(err.errorMessage()))
+                    .build();
         }
 
         var events = auditStore.findBySessionId(sessionId).stream()
                 .map(AuditEventRecord::fromDto)
                 .toList();
 
-        List<AuditEventResponse> responseRows = events.stream()
-                .map(this::toResponse)
-                .toList();
+        List<AuditEventResponse> responseRows =
+                events.stream().map(this::toResponse).toList();
 
         return Response.ok(responseRows).build();
     }
@@ -138,7 +138,8 @@ public class AuditResource {
         if (authError.isPresent()) {
             var err = authError.get();
             return Response.status(Response.Status.NOT_FOUND)
-                    .entity(new ArcClawErrorResponse(err.errorMessage())).build();
+                    .entity(new ArcClawErrorResponse(err.errorMessage()))
+                    .build();
         }
 
         AuditVerifier.VerificationResult result = auditVerifier.verifyChain(sessionId);
@@ -154,22 +155,38 @@ public class AuditResource {
 
     private AuditEventResponse toResponse(AuditEvent e) {
         return new AuditEventResponse(
-                e.getId(), e.getSessionId(), e.getUserId(), e.getAgentRole(), e.getGoalHash(),
-                e.getOutcome(), e.getEventType(), e.getEventDetail(),
-                e.getInputTokens(), e.getOutputTokens(), e.getUsdCost(), e.getIterationsUsed(),
-                e.getTimestamp(), e.getHmacHash()
-        );
+                e.getId(),
+                e.getSessionId(),
+                e.getUserId(),
+                e.getAgentRole(),
+                e.getGoalHash(),
+                e.getOutcome(),
+                e.getEventType(),
+                e.getEventDetail(),
+                e.getInputTokens(),
+                e.getOutputTokens(),
+                e.getUsdCost(),
+                e.getIterationsUsed(),
+                e.getTimestamp(),
+                e.getHmacHash());
     }
 
     private AuditEventResponse toResponseFromDto(AuditEventDto dto) {
         return new AuditEventResponse(
-                dto.id(), dto.sessionId(), dto.userId(), dto.agentRole(), dto.goalHash(),
+                dto.id(),
+                dto.sessionId(),
+                dto.userId(),
+                dto.agentRole(),
+                dto.goalHash(),
                 dto.outcome() != null ? parseAuditOutcome(dto.outcome()) : null,
                 dto.eventType() != null ? parseSecurityEventType(dto.eventType()) : null,
                 dto.eventDetail(),
-                dto.inputTokens(), dto.outputTokens(), dto.usdCost(), dto.iterationsUsed(),
-                dto.timestamp(), dto.hmacHash()
-        );
+                dto.inputTokens(),
+                dto.outputTokens(),
+                dto.usdCost(),
+                dto.iterationsUsed(),
+                dto.timestamp(),
+                dto.hmacHash());
     }
 
     private AuditOutcome parseAuditOutcome(String value) {

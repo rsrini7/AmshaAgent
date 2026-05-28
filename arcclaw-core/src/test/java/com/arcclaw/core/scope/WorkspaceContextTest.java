@@ -7,6 +7,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicReference;
 
 import com.arcclaw.core.security.AutonomyLevel;
+
 import org.junit.jupiter.api.Test;
 
 class WorkspaceContextTest {
@@ -22,12 +23,20 @@ class WorkspaceContextTest {
             WorkspaceContext.runWithFullAutonomy("sess-1", "user-1", "chat-1", "coordinator", () -> {
                 thread1Level.set(WorkspaceContext.AUTONOMY.get());
                 latch1.countDown();
-                try { latch2.await(); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+                try {
+                    latch2.await();
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
             });
         });
 
         Thread t2 = new Thread(() -> {
-            try { latch1.await(); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+            try {
+                latch1.await();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
             WorkspaceContext.run("sess-2", "user-2", "chat-2", AutonomyLevel.READONLY, "researcher", () -> {
                 thread2Level.set(WorkspaceContext.AUTONOMY.get());
                 latch2.countDown();
@@ -74,8 +83,13 @@ class WorkspaceContextTest {
     @Test
     void testRunWithFullAutonomyBindsChannelType() throws Exception {
         String channelType = WorkspaceContext.runWithFullAutonomy(
-                "sess-1", "user-1", "chat-1", "coordinator", "telegram",
-                () -> WorkspaceContext.channelType().orElseThrow(() -> new IllegalStateException("CHANNEL_TYPE not bound")));
+                "sess-1",
+                "user-1",
+                "chat-1",
+                "coordinator",
+                "telegram",
+                () -> WorkspaceContext.channelType()
+                        .orElseThrow(() -> new IllegalStateException("CHANNEL_TYPE not bound")));
 
         assertEquals("telegram", channelType);
     }

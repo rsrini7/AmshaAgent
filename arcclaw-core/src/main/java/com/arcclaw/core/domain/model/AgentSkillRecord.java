@@ -24,11 +24,38 @@ public final class AgentSkillRecord implements AgentSkill {
         return r;
     }
 
-    @Override public String getId() { return id; }
-    @Override public String getName() { return name; }
-    @Override public String getDefinitionYaml() { return definitionYaml; }
-    @Override public void setDefinitionYaml(String definitionYaml) { this.definitionYaml = definitionYaml; }
-    @Override public Instant getCreatedAt() { return createdAt; }
-    @Override public Instant getUpdatedAt() { return updatedAt; }
-    @Override public void setUpdatedAt(Instant updatedAt) { this.updatedAt = updatedAt; }
+    @Override
+    public String getId() {
+        return id;
+    }
+
+    @Override
+    public String getName() {
+        return name;
+    }
+
+    @Override
+    public String getDefinitionYaml() {
+        return definitionYaml;
+    }
+
+    @Override
+    public void setDefinitionYaml(String definitionYaml) {
+        this.definitionYaml = definitionYaml;
+    }
+
+    @Override
+    public Instant getCreatedAt() {
+        return createdAt;
+    }
+
+    @Override
+    public Instant getUpdatedAt() {
+        return updatedAt;
+    }
+
+    @Override
+    public void setUpdatedAt(Instant updatedAt) {
+        this.updatedAt = updatedAt;
+    }
 }

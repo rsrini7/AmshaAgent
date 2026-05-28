@@ -1,16 +1,17 @@
 package com.arcclaw.core.memory.tiered;
 
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
-
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
 
 import com.arcclaw.core.config.TieredMemoryConfig;
 import com.arcclaw.persistence.api.CoreMemoryBlockDto;
 import com.arcclaw.persistence.api.CoreMemoryStorePort;
 import com.arcclaw.persistence.api.VersionConflictException;
+
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
@@ -19,9 +20,8 @@ public class CoreMemoryService {
 
     private static final Logger log = Logger.getLogger(CoreMemoryService.class);
 
-    private static final Set<String> ALLOWED_BLOCK_KEYS = Set.of(
-        "user_profile", "active_task", "constraints", "project_context", "preferences"
-    );
+    private static final Set<String> ALLOWED_BLOCK_KEYS =
+            Set.of("user_profile", "active_task", "constraints", "project_context", "preferences");
 
     @Inject
     CoreMemoryStorePort coreStore;
@@ -45,8 +45,7 @@ public class CoreMemoryService {
 
     public void upsert(String userId, String blockKey, String content) {
         if (!ALLOWED_BLOCK_KEYS.contains(blockKey)) {
-            throw new IllegalArgumentException("Unknown block key: " + blockKey
-                + ". Allowed: " + ALLOWED_BLOCK_KEYS);
+            throw new IllegalArgumentException("Unknown block key: " + blockKey + ". Allowed: " + ALLOWED_BLOCK_KEYS);
         }
 
         String trimmed = truncate(content, maxCharsPerBlock);
@@ -55,8 +54,7 @@ public class CoreMemoryService {
         int expectedVersion = existing.map(CoreMemoryBlockDto::version).orElse(0);
 
         if (existing.isEmpty() && coreStore.read(userId).size() >= maxBlocksPerUser) {
-            throw new IllegalStateException(
-                "Core Memory block limit reached: " + maxBlocksPerUser);
+            throw new IllegalStateException("Core Memory block limit reached: " + maxBlocksPerUser);
         }
 
         for (int attempt = 0; attempt < 3; attempt++) {
@@ -64,14 +62,14 @@ public class CoreMemoryService {
                 coreStore.upsert(userId, blockKey, trimmed, expectedVersion);
                 return;
             } catch (VersionConflictException e) {
-                log.debugf("CAS conflict on %s, attempt %d: expected=%d actual=%d",
-                    blockKey, attempt + 1, e.expectedVersion(), e.actualVersion());
+                log.debugf(
+                        "CAS conflict on %s, attempt %d: expected=%d actual=%d",
+                        blockKey, attempt + 1, e.expectedVersion(), e.actualVersion());
                 expectedVersion = e.actualVersion();
             }
         }
 
-        throw new IllegalStateException(
-            "Failed to upsert Core Memory block '" + blockKey + "' after 3 CAS retries");
+        throw new IllegalStateException("Failed to upsert Core Memory block '" + blockKey + "' after 3 CAS retries");
     }
 
     /**
@@ -94,14 +92,11 @@ public class CoreMemoryService {
      */
     public String append(String userId, String blockKey, String content) {
         if (!ALLOWED_BLOCK_KEYS.contains(blockKey)) {
-            throw new IllegalArgumentException("Unknown block key: " + blockKey
-                + ". Allowed: " + ALLOWED_BLOCK_KEYS);
+            throw new IllegalArgumentException("Unknown block key: " + blockKey + ". Allowed: " + ALLOWED_BLOCK_KEYS);
         }
 
-        if (coreStore.get(userId, blockKey).isEmpty()
-            && coreStore.read(userId).size() >= maxBlocksPerUser) {
-            throw new IllegalStateException(
-                "Core Memory block limit reached: " + maxBlocksPerUser);
+        if (coreStore.get(userId, blockKey).isEmpty() && coreStore.read(userId).size() >= maxBlocksPerUser) {
+            throw new IllegalStateException("Core Memory block limit reached: " + maxBlocksPerUser);
         }
 
         for (int attempt = 0; attempt < 3; attempt++) {
@@ -111,23 +106,23 @@ public class CoreMemoryService {
             String combined = current.isEmpty() ? content : current + "\n" + content;
 
             if (combined.length() > maxCharsPerBlock) {
-                throw new IllegalArgumentException(
-                    String.format("Append would exceed max block size (%d chars). Current: %d, Append: %d. " +
-                                  "Use 'core_memory_replace' to curate the block first.",
-                                  maxCharsPerBlock, current.length(), content.length()));
+                throw new IllegalArgumentException(String.format(
+                        "Append would exceed max block size (%d chars). Current: %d, Append: %d. "
+                                + "Use 'core_memory_replace' to curate the block first.",
+                        maxCharsPerBlock, current.length(), content.length()));
             }
 
             try {
                 coreStore.upsert(userId, blockKey, combined, expectedVersion);
                 return combined;
             } catch (VersionConflictException e) {
-                log.debugf("CAS conflict on append %s, attempt %d: expected=%d actual=%d",
-                    blockKey, attempt + 1, e.expectedVersion(), e.actualVersion());
+                log.debugf(
+                        "CAS conflict on append %s, attempt %d: expected=%d actual=%d",
+                        blockKey, attempt + 1, e.expectedVersion(), e.actualVersion());
             }
         }
 
-        throw new IllegalStateException(
-            "Failed to append to Core Memory block '" + blockKey + "' after 3 CAS retries");
+        throw new IllegalStateException("Failed to append to Core Memory block '" + blockKey + "' after 3 CAS retries");
     }
 
     public void delete(String userId, String blockKey) {

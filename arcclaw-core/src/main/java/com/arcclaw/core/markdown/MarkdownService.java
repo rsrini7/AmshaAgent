@@ -1,8 +1,8 @@
 package com.arcclaw.core.markdown;
 
-import java.util.List;
-
 import jakarta.enterprise.context.ApplicationScoped;
+
+import java.util.List;
 
 import org.commonmark.Extension;
 import org.commonmark.ext.gfm.tables.TablesExtension;

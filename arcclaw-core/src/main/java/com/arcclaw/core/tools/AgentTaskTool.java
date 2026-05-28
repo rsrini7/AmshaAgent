@@ -1,11 +1,13 @@
 package com.arcclaw.core.tools;
 
-import java.util.List;
-import java.util.Map;
-import java.util.stream.Collectors;
+import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
+
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.agent.role.ToolMetadata;
@@ -15,7 +17,6 @@ import com.arcclaw.core.security.ToolOperation;
 import com.arcclaw.core.task.TaskFile;
 import com.arcclaw.core.task.TaskManager;
 import com.arcclaw.core.task.TaskState;
-import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
 
 /**
  * Agent-callable tool for creating, querying, and managing markdown-based task files.
@@ -24,11 +25,10 @@ import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
  */
 @ApplicationScoped
 @ToolMetadata(
-    capabilityId = "agent_task",
-    description = "Create, list, update, and transition agent task files. " +
-        "Tasks are stored as Markdown files with YAML frontmatter.",
-    defaultRoles = {"coordinator", "synthesizer", "researcher"}
-)
+        capabilityId = "agent_task",
+        description = "Create, list, update, and transition agent task files. "
+                + "Tasks are stored as Markdown files with YAML frontmatter.",
+        defaultRoles = {"coordinator", "synthesizer", "researcher"})
 public class AgentTaskTool implements AgentTool {
 
     @Inject
@@ -44,10 +44,10 @@ public class AgentTaskTool implements AgentTool {
 
     @Override
     public String description() {
-        return "Create, list, update, and transition agent task files. " +
-               "Actions: create (name, description), list, list_active, " +
-               "transition (taskId, newStatus), update (taskId, body), delete (taskId). " +
-               "Status values: todo, in_progress, completed, awaiting_human_input, cancelled.";
+        return "Create, list, update, and transition agent task files. "
+                + "Actions: create (name, description), list, list_active, "
+                + "transition (taskId, newStatus), update (taskId, body), delete (taskId). "
+                + "Status values: todo, in_progress, completed, awaiting_human_input, cancelled.";
     }
 
     @Override
@@ -73,15 +73,16 @@ public class AgentTaskTool implements AgentTool {
     @Override
     public JsonObjectSchema parametersSchema() {
         return JsonObjectSchema.builder()
-            .addStringProperty("action",
-                "Operation to perform: create, list, list_active, get, transition, update, delete")
-            .addStringProperty("name", "Task name (required for create)")
-            .addStringProperty("description", "Task description / markdown body")
-            .addStringProperty("taskId", "Task file id (required for get/transition/update/delete)")
-            .addStringProperty("newStatus",
-                "New status for transition: todo, in_progress, completed, awaiting_human_input, cancelled")
-            .required("action")
-            .build();
+                .addStringProperty(
+                        "action", "Operation to perform: create, list, list_active, get, transition, update, delete")
+                .addStringProperty("name", "Task name (required for create)")
+                .addStringProperty("description", "Task description / markdown body")
+                .addStringProperty("taskId", "Task file id (required for get/transition/update/delete)")
+                .addStringProperty(
+                        "newStatus",
+                        "New status for transition: todo, in_progress, completed, awaiting_human_input, cancelled")
+                .required("action")
+                .build();
     }
 
     @Override
@@ -107,9 +108,12 @@ public class AgentTaskTool implements AgentTool {
         }
         String description = (String) params.getOrDefault("description", "");
         TaskFile task = taskManager.createTask(name.trim(), description);
-        auditService.record(ctx.sessionId(), ctx.userId(), ctx.agentRole(),
-            SecurityEventType.TOOL_EXECUTED,
-            "AgentTask: created task=" + task.name() + " id=" + task.id());
+        auditService.record(
+                ctx.sessionId(),
+                ctx.userId(),
+                ctx.agentRole(),
+                SecurityEventType.TOOL_EXECUTED,
+                "AgentTask: created task=" + task.name() + " id=" + task.id());
         return ToolResponse.success("Created task: " + task.name() + " (id: " + task.id() + ")");
     }
 
@@ -117,16 +121,16 @@ public class AgentTaskTool implements AgentTool {
         List<TaskFile> tasks = taskManager.listTasks();
         if (tasks.isEmpty()) return ToolResponse.success("No tasks found.");
         return ToolResponse.success(tasks.stream()
-            .map(t -> "• [" + t.status().name().toLowerCase() + "] " + t.name() + " — " + t.id())
-            .collect(Collectors.joining("\n")));
+                .map(t -> "• [" + t.status().name().toLowerCase() + "] " + t.name() + " — " + t.id())
+                .collect(Collectors.joining("\n")));
     }
 
     private ToolResponse doListActive() {
         List<TaskFile> tasks = taskManager.listActiveTasks();
         if (tasks.isEmpty()) return ToolResponse.success("No active tasks.");
         return ToolResponse.success(tasks.stream()
-            .map(t -> "• [" + t.status().name().toLowerCase() + "] " + t.name() + " — " + t.id())
-            .collect(Collectors.joining("\n")));
+                .map(t -> "• [" + t.status().name().toLowerCase() + "] " + t.name() + " — " + t.id())
+                .collect(Collectors.joining("\n")));
     }
 
     private ToolResponse doGet(Map<String, Object> params) {
@@ -134,12 +138,13 @@ public class AgentTaskTool implements AgentTool {
         if (id == null || id.isBlank()) {
             return ToolResponse.failure(400, "Parameter 'taskId' is required for get.");
         }
-        return taskManager.getTask(id.trim())
-            .map(t -> ToolResponse.success(
-                "Task: " + t.name() + "\nStatus: " + t.status().name().toLowerCase()
-                + "\nCreated: " + t.createdAt() + "\nUpdated: " + t.updatedAt()
-                + "\n\n" + t.body()))
-            .orElse(ToolResponse.failure(404, "Task not found: " + id));
+        return taskManager
+                .getTask(id.trim())
+                .map(t -> ToolResponse.success(
+                        "Task: " + t.name() + "\nStatus: " + t.status().name().toLowerCase()
+                                + "\nCreated: " + t.createdAt() + "\nUpdated: " + t.updatedAt()
+                                + "\n\n" + t.body()))
+                .orElse(ToolResponse.failure(404, "Task not found: " + id));
     }
 
     private ToolResponse doTransition(ToolExecutionContext ctx, Map<String, Object> params) {
@@ -154,10 +159,15 @@ public class AgentTaskTool implements AgentTool {
         try {
             TaskState newState = TaskState.fromString(statusStr);
             TaskFile updated = taskManager.transitionTo(id.trim(), newState);
-            auditService.record(ctx.sessionId(), ctx.userId(), ctx.agentRole(),
-                SecurityEventType.TOOL_EXECUTED,
-                "AgentTask: transition task=" + id + " newStatus=" + updated.status().name());
-            return ToolResponse.success("Task '" + updated.name() + "' is now " + updated.status().name().toLowerCase());
+            auditService.record(
+                    ctx.sessionId(),
+                    ctx.userId(),
+                    ctx.agentRole(),
+                    SecurityEventType.TOOL_EXECUTED,
+                    "AgentTask: transition task=" + id + " newStatus="
+                            + updated.status().name());
+            return ToolResponse.success("Task '" + updated.name() + "' is now "
+                    + updated.status().name().toLowerCase());
         } catch (IllegalArgumentException | IllegalStateException e) {
             return ToolResponse.failure(400, e.getMessage());
         }
@@ -173,9 +183,12 @@ public class AgentTaskTool implements AgentTool {
             return ToolResponse.failure(400, "Parameter 'description' is required for update.");
         }
         TaskFile updated = taskManager.updateBody(id.trim(), body);
-        auditService.record(ctx.sessionId(), ctx.userId(), ctx.agentRole(),
-            SecurityEventType.TOOL_EXECUTED,
-            "AgentTask: update task=" + id);
+        auditService.record(
+                ctx.sessionId(),
+                ctx.userId(),
+                ctx.agentRole(),
+                SecurityEventType.TOOL_EXECUTED,
+                "AgentTask: update task=" + id);
         return ToolResponse.success("Updated task: " + updated.name());
     }
 
@@ -186,12 +199,13 @@ public class AgentTaskTool implements AgentTool {
         }
         boolean ok = taskManager.deleteTask(id.trim());
         if (ok) {
-            auditService.record(ctx.sessionId(), ctx.userId(), ctx.agentRole(),
-                SecurityEventType.TOOL_EXECUTED,
-                "AgentTask: deleted task=" + id);
+            auditService.record(
+                    ctx.sessionId(),
+                    ctx.userId(),
+                    ctx.agentRole(),
+                    SecurityEventType.TOOL_EXECUTED,
+                    "AgentTask: deleted task=" + id);
         }
-        return ok
-            ? ToolResponse.success("Deleted task: " + id)
-            : ToolResponse.failure(404, "Task not found: " + id);
+        return ok ? ToolResponse.success("Deleted task: " + id) : ToolResponse.failure(404, "Task not found: " + id);
     }
 }

@@ -15,24 +15,59 @@ public final class DomainContext {
     private AutonomyLevel autonomyLevel;
     private SessionContext sessionContext;
 
-    public String getSessionId() { return sessionId; }
-    public void setSessionId(String sessionId) { this.sessionId = sessionId; }
+    public String getSessionId() {
+        return sessionId;
+    }
 
-    public String getAgentRole() { return agentRole; }
-    public void setAgentRole(String agentRole) { this.agentRole = agentRole; }
+    public void setSessionId(String sessionId) {
+        this.sessionId = sessionId;
+    }
 
-    public AgentState getInitialState() { return initialState; }
-    public void setInitialState(AgentState initialState) { this.initialState = initialState; }
+    public String getAgentRole() {
+        return agentRole;
+    }
 
-    public String getGoal() { return goal; }
-    public void setGoal(String goal) { this.goal = goal; }
+    public void setAgentRole(String agentRole) {
+        this.agentRole = agentRole;
+    }
 
-    public boolean isResumeSignal() { return resumeSignal; }
-    public void setResumeSignal(boolean resumeSignal) { this.resumeSignal = resumeSignal; }
+    public AgentState getInitialState() {
+        return initialState;
+    }
 
-    public AutonomyLevel getAutonomyLevel() { return autonomyLevel; }
-    public void setAutonomyLevel(AutonomyLevel autonomyLevel) { this.autonomyLevel = autonomyLevel; }
+    public void setInitialState(AgentState initialState) {
+        this.initialState = initialState;
+    }
 
-    public SessionContext getSessionContext() { return sessionContext; }
-    public void setSessionContext(SessionContext sessionContext) { this.sessionContext = sessionContext; }
+    public String getGoal() {
+        return goal;
+    }
+
+    public void setGoal(String goal) {
+        this.goal = goal;
+    }
+
+    public boolean isResumeSignal() {
+        return resumeSignal;
+    }
+
+    public void setResumeSignal(boolean resumeSignal) {
+        this.resumeSignal = resumeSignal;
+    }
+
+    public AutonomyLevel getAutonomyLevel() {
+        return autonomyLevel;
+    }
+
+    public void setAutonomyLevel(AutonomyLevel autonomyLevel) {
+        this.autonomyLevel = autonomyLevel;
+    }
+
+    public SessionContext getSessionContext() {
+        return sessionContext;
+    }
+
+    public void setSessionContext(SessionContext sessionContext) {
+        this.sessionContext = sessionContext;
+    }
 }

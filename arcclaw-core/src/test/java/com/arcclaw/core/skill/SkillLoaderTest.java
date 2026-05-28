@@ -3,11 +3,11 @@ package com.arcclaw.core.skill;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.time.Instant;
-import java.util.Optional;
-
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
+
+import java.time.Instant;
+import java.util.Optional;
 
 import com.arcclaw.core.agent.role.RoleDefinition;
 import com.arcclaw.core.agent.role.RoleRegistry;
@@ -15,10 +15,12 @@ import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.audit.TelemetryAuditService;
 import com.arcclaw.persistence.api.SkillDto;
 import com.arcclaw.persistence.api.SkillStorePort;
-import io.quarkus.test.InjectMock;
-import io.quarkus.test.junit.QuarkusTest;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+
+import io.quarkus.test.InjectMock;
+import io.quarkus.test.junit.QuarkusTest;
 
 @QuarkusTest
 class SkillLoaderTest {
@@ -80,8 +82,8 @@ class SkillLoaderTest {
         assertEquals(1, entry.triggerPatterns().length);
 
         Optional<RoleDefinition> dynRole = roleRegistry.getDynamicRoles().stream()
-            .filter(r -> r.canonicalName().equals("skill:code-reviewer"))
-            .findFirst();
+                .filter(r -> r.canonicalName().equals("skill:code-reviewer"))
+                .findFirst();
 
         assertTrue(dynRole.isPresent());
         assertEquals(3, dynRole.get().capabilities().size());
@@ -106,10 +108,12 @@ class SkillLoaderTest {
 
         assertEquals(1, skillRegistry.size());
         CompiledSkillEntry entry = skillRegistry.getAll().get(0);
-        
+
         // FAKE_TOOL_DOES_NOT_EXIST should be ignored, leaving only GITHUB (1 capability)
         assertEquals(1, entry.roleDefinition().capabilities().size());
-        assertEquals(ToolCapability.GITHUB.toolName(), entry.roleDefinition().capabilities().iterator().next().toolName());
+        assertEquals(
+                ToolCapability.GITHUB.toolName(),
+                entry.roleDefinition().capabilities().iterator().next().toolName());
     }
 
     @Test

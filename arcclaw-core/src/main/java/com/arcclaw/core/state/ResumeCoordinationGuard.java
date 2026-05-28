@@ -1,14 +1,15 @@
 package com.arcclaw.core.state;
 
-import java.time.Duration;
-import java.time.Instant;
-import java.util.concurrent.ConcurrentHashMap;
-
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
+import java.time.Duration;
+import java.time.Instant;
+import java.util.concurrent.ConcurrentHashMap;
+
 import com.arcclaw.persistence.api.AdvisoryLockPort;
+
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
@@ -40,7 +41,7 @@ public class ResumeCoordinationGuard {
 
     private static final Logger log = Logger.getLogger(ResumeCoordinationGuard.class);
 
-    /** 
+    /**
      * Capture both when the mark was set and whether it involves browser tools
      * so we can apply the correct TTL consistently.
      */
@@ -91,7 +92,7 @@ public class ResumeCoordinationGuard {
     /**
      * Returns {@code true} if the session is currently marked as RESUMING.
      *
-     * <p>Auto-expires stale marks after the appropriate TTL to prevent 
+     * <p>Auto-expires stale marks after the appropriate TTL to prevent
      * permanently blocked sessions after a crash.
      */
     public boolean isResuming(String sessionId) {
@@ -105,9 +106,10 @@ public class ResumeCoordinationGuard {
         long ttl = mark.hasBrowserTool() ? playwrightStaleMarkSeconds : staleResumeSeconds;
 
         if (Duration.between(mark.startTime(), Instant.now()).toSeconds() > ttl) {
-            log.warnf("ResumeCoordinationGuard: stale resume mark auto-expired for session=%s "
-                    + "(marked %s ago, ttl=%ds, browser=%b)", sessionId, 
-                    Duration.between(mark.startTime(), Instant.now()), ttl, mark.hasBrowserTool());
+            log.warnf(
+                    "ResumeCoordinationGuard: stale resume mark auto-expired for session=%s "
+                            + "(marked %s ago, ttl=%ds, browser=%b)",
+                    sessionId, Duration.between(mark.startTime(), Instant.now()), ttl, mark.hasBrowserTool());
             resumingBatches.remove(sessionId);
             return false;
         }

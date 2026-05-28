@@ -14,6 +14,7 @@ import com.arcclaw.core.tools.ToolResponse;
 import com.arcclaw.persistence.api.RecallMemoryStorePort;
 import com.arcclaw.persistence.api.RecallMessageDto;
 import com.arcclaw.persistence.api.RecallSearchQuery;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -31,7 +32,7 @@ class RecallSearchIncludeSummariesModeTest {
     void setup() {
         mockRecallStore = mock(RecallMemoryStorePort.class);
         tool = new RecallMemorySearchTool();
-        
+
         try {
             var field = RecallMemorySearchTool.class.getDeclaredField("recallStore");
             field.setAccessible(true);
@@ -45,43 +46,60 @@ class RecallSearchIncludeSummariesModeTest {
     void testSearchIncludesSummariesWhenRequested() throws Exception {
         String sessionId = "test-session-1";
         String userId = "test-user";
-        
+
         RecallMessageDto codeSnippet = new RecallMessageDto(
-            "msg-1", sessionId, userId, 5, "hash1", "agent", "AGENT_MESSAGE",
-            "```python\ndef calculate_total(items):\n    return sum(item.price for item in items)\n```",
-            null, null, true, false, null, null
-        );
-        
+                "msg-1",
+                sessionId,
+                userId,
+                5,
+                "hash1",
+                "agent",
+                "AGENT_MESSAGE",
+                "```python\ndef calculate_total(items):\n    return sum(item.price for item in items)\n```",
+                null,
+                null,
+                true,
+                false,
+                null,
+                null);
+
         RecallMessageDto summary = new RecallMessageDto(
-            "msg-2", sessionId, userId, 10, "hash2", "system", "COMPACTION_SUMMARY",
-            "User asked about calculate_total function for price summation",
-            null, null, false, false, null, null
-        );
-        
+                "msg-2",
+                sessionId,
+                userId,
+                10,
+                "hash2",
+                "system",
+                "COMPACTION_SUMMARY",
+                "User asked about calculate_total function for price summation",
+                null,
+                null,
+                false,
+                false,
+                null,
+                null);
+
         // Mock returns both when includeSummaries=true
         when(mockRecallStore.search(any(RecallSearchQuery.class))).thenReturn(List.of(codeSnippet, summary));
-        
-        ToolResponse response = WorkspaceContext.run(sessionId, userId, "test-chat",
-                AutonomyLevel.SUPERVISED, "tool",
-                () -> {
+
+        ToolResponse response =
+                WorkspaceContext.run(sessionId, userId, "test-chat", AutonomyLevel.SUPERVISED, "tool", () -> {
                     try {
-                        return tool.execute(mockCtx(sessionId, userId), Map.of(
-                            "query", "calculate_total",
-                            "include_summaries", true,
-                            "limit", 10
-                        ));
+                        return tool.execute(
+                                mockCtx(sessionId, userId),
+                                Map.of("query", "calculate_total", "include_summaries", true, "limit", 10));
                     } catch (Exception e) {
                         throw new RuntimeException(e);
                     }
                 });
-        
+
         assertTrue(response.success());
         String content = response.output();
-        
+
         // Both should be present
         assertTrue(content.contains("calculate_total"), "Should contain code snippet");
         assertTrue(content.contains("User asked about calculate_total"), "Should contain summary");
-        
+
         // Verify query was called with includeSummaries=true
         ArgumentCaptor<RecallSearchQuery> queryCaptor = ArgumentCaptor.forClass(RecallSearchQuery.class);
         verify(mockRecallStore).search(queryCaptor.capture());

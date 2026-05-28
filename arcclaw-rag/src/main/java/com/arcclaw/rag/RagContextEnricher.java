@@ -1,16 +1,17 @@
 package com.arcclaw.rag;
 
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
-
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
 
 import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.agent.reasoning.ContextEnricher;
 import com.arcclaw.core.util.Fts5QueryUtil;
+
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
@@ -18,13 +19,15 @@ import org.jboss.logging.Logger;
 public class RagContextEnricher implements ContextEnricher {
 
     private static final Logger log = Logger.getLogger(RagContextEnricher.class);
+
     @ConfigProperty(name = "arcclaw.rag.max-chunk-chars", defaultValue = "300")
     int maxChunkChars; // ~75 tokens per chunk from defaultValue
 
     @ConfigProperty(name = "arcclaw.rag.max-total-chars", defaultValue = "800")
     int maxTotalChars; // ~200 tokens total from defaultValue
 
-    @Inject TwoTierMemoryService memoryService;
+    @Inject
+    TwoTierMemoryService memoryService;
 
     @ConfigProperty(name = "arcclaw.rag.context-chunks", defaultValue = "3")
     int contextChunks;
@@ -43,9 +46,15 @@ public class RagContextEnricher implements ContextEnricher {
     // as srini" causes the LLM to conclude the store already happened and emit
     // "Done" in 1 token - bypassing the ingest_document tool entirely.
     private static final Set<String> WRITE_INTENT_TOKENS = Set.of(
-            "store", "save", "remember", "ingest", "add to knowledge",
-            "call me", "note that", "add to memory", "memorize"
-    );
+            "store",
+            "save",
+            "remember",
+            "ingest",
+            "add to knowledge",
+            "call me",
+            "note that",
+            "add to memory",
+            "memorize");
 
     @Override
     public String enrich(String sessionId, String userId, String goal, String basePrompt) {
@@ -79,7 +88,10 @@ public class RagContextEnricher implements ContextEnricher {
 
             // Compute adaptive threshold based on score distribution
             if (chunks.size() >= 3) {
-                double mean = chunks.stream().mapToDouble(ScoredChunk::score).average().orElse(0);
+                double mean = chunks.stream()
+                        .mapToDouble(ScoredChunk::score)
+                        .average()
+                        .orElse(0);
                 double sumSquares = chunks.stream()
                         .mapToDouble(c -> Math.pow(c.score() - mean, 2))
                         .sum();
@@ -87,11 +99,12 @@ public class RagContextEnricher implements ContextEnricher {
 
                 // Threshold keeps chunks within ~0.5 std-dev below the mean
                 double adaptive = mean - (0.5 * stdDev);
-                
+
                 // Final threshold is the max of adaptive and the configured hard floor
                 computedThreshold = Math.max(minScore, adaptive);
 
-                log.debugf("RagContextEnricher: adaptive threshold=%.4f (mean=%.4f, stdDev=%.4f, floor=%.4f) for session %s",
+                log.debugf(
+                        "RagContextEnricher: adaptive threshold=%.4f (mean=%.4f, stdDev=%.4f, floor=%.4f) for session %s",
                         (Object) computedThreshold, mean, stdDev, minScore, sessionId);
             } else {
                 // Too few samples for distribution - use a modest floor for small KBs (§ recommendation)
@@ -106,8 +119,9 @@ public class RagContextEnricher implements ContextEnricher {
                     .toList();
 
             if (relevant.isEmpty()) {
-                log.debugf("RagContextEnricher: skipping - 0/%d chunks passed threshold=%.4f for session %s",
-                    (Object) chunks.size(), threshold, sessionId);
+                log.debugf(
+                        "RagContextEnricher: skipping - 0/%d chunks passed threshold=%.4f for session %s",
+                        (Object) chunks.size(), threshold, sessionId);
                 return basePrompt;
             }
 
@@ -123,14 +137,14 @@ public class RagContextEnricher implements ContextEnricher {
                 context = context.substring(0, maxTotalChars) + "\n…[truncated]";
             }
 
-            log.debugf("RagContextEnricher: injecting %d/%d chunks (threshold=%.4f) for session %s",
+            log.debugf(
+                    "RagContextEnricher: injecting %d/%d chunks (threshold=%.4f) for session %s",
                     (Object) relevant.size(), chunks.size(), threshold, sessionId);
 
             return "## Retrieved Rag Context\n" + context + "\n\n---\n\n" + basePrompt;
 
         } catch (Exception e) {
-            log.warnf("RagContextEnricher enrichment failed for session %s: %s",
-                    sessionId, LogUtil.rootMessage(e));
+            log.warnf("RagContextEnricher enrichment failed for session %s: %s", sessionId, LogUtil.rootMessage(e));
             return basePrompt;
         }
     }

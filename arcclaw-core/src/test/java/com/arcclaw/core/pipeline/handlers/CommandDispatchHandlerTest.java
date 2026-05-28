@@ -28,6 +28,7 @@ import com.arcclaw.core.reflex.ReflexRegistry;
 import com.arcclaw.core.reflex.ReflexResult;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -49,7 +50,7 @@ class CommandDispatchHandlerTest {
         sender = mock(ChannelSender.class);
         channelPluginRegistry = mock(ChannelPluginRegistry.class);
         commandParserRegistry = mock(CommandParserRegistry.class);
-        
+
         ChannelPlugin plugin = mock(ChannelPlugin.class);
         when(plugin.sender()).thenReturn(sender);
         when(channelPluginRegistry.find(any(ChannelType.class))).thenReturn(Optional.of(plugin));
@@ -61,16 +62,12 @@ class CommandDispatchHandlerTest {
         handler.defaultTimezone = "Asia/Kolkata";
 
         // Wire the mock command parser to delegate to the real parse logic
-        when(commandParserRegistry.parse(any(), any())).thenAnswer(inv ->
-            ChannelCommand.parse(inv.getArgument(0)));
+        when(commandParserRegistry.parse(any(), any())).thenAnswer(inv -> ChannelCommand.parse(inv.getArgument(0)));
         mockedContext = mockStatic(WorkspaceContext.class);
-        
+
         @SuppressWarnings("unchecked")
-        OngoingStubbing<Object> stub = mockedContext
-            .when(() -> WorkspaceContext.run(
-                anyString(), anyString(), anyString(),
-                any(AutonomyLevel.class), anyString(), any(Callable.class)
-            ));
+        OngoingStubbing<Object> stub = mockedContext.when(() -> WorkspaceContext.run(
+                anyString(), anyString(), anyString(), any(AutonomyLevel.class), anyString(), any(Callable.class)));
 
         stub.thenAnswer(inv -> {
             Callable<?> task = inv.getArgument(5);
@@ -89,7 +86,7 @@ class CommandDispatchHandlerTest {
         ChannelMessage msg = new ChannelMessage.CliMessage(user, "/approve cron123", "sid", Instant.now());
         MessageContext ctx = createCtx(user, msg);
         ctx.setSessionId("test-session");
-        
+
         when(reflexRegistry.processIfReflex(anyString(), eq("1"), anyString(), eq("/approve cron123"), any()))
                 .thenReturn(new ReflexResult(Optional.of("Approving cron task..."), "/approve cron123"));
 
@@ -104,7 +101,7 @@ class CommandDispatchHandlerTest {
         ChannelMessage msg = new ChannelMessage.CliMessage(user, "/approve", "sid", Instant.now());
         MessageContext ctx = createCtx(user, msg);
         ctx.setSessionId("test-session");
-        
+
         when(reflexRegistry.processIfReflex(anyString(), eq("1"), anyString(), eq("/approve"), any()))
                 .thenReturn(new ReflexResult(Optional.of("Approving session..."), "/approve"));
 

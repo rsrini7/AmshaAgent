@@ -1,19 +1,21 @@
 package com.arcclaw.app.config;
 
+import jakarta.annotation.Priority;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.event.Observes;
+
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 
-import jakarta.annotation.Priority;
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.enterprise.event.Observes;
-
 import com.arcclaw.common.util.LogUtil;
-import io.quarkus.runtime.StartupEvent;
+
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
+
+import io.quarkus.runtime.StartupEvent;
 
 /**
  * Extracts the correct sqlite-vec native binary for the current OS/arch
@@ -29,9 +31,7 @@ public class Vec0NativeLibraryInstaller {
 
     private static final String RESOURCE_PREFIX = "/native/vec0/vec0-";
 
-
-    @ConfigProperty(name = "arcclaw.rag.vec-extension-path",
-                    defaultValue = "./lib/vec0")
+    @ConfigProperty(name = "arcclaw.rag.vec-extension-path", defaultValue = "./lib/vec0")
     String configuredVecPath;
 
     void onStart(@Observes @Priority(10) StartupEvent ev) {
@@ -56,9 +56,11 @@ public class Vec0NativeLibraryInstaller {
 
         try (InputStream in = Vec0NativeLibraryInstaller.class.getResourceAsStream(resourceName)) {
             if (in == null) {
-                log.warnf("Vec0 binary not found in JAR for platform [%s]. " +
-                    "RAG vector search will degrade to FTS5-only. " +
-                    "Manually place the binary at [%s].", osArchKey(), target);
+                log.warnf(
+                        "Vec0 binary not found in JAR for platform [%s]. "
+                                + "RAG vector search will degrade to FTS5-only. "
+                                + "Manually place the binary at [%s].",
+                        osArchKey(), target);
                 return;
             }
             Files.createDirectories(target.getParent());
@@ -71,11 +73,11 @@ public class Vec0NativeLibraryInstaller {
 
     /** Returns the OS+arch key used in the resource filename. */
     static String osArchKey() {
-        String os   = System.getProperty("os.name", "").toLowerCase();
+        String os = System.getProperty("os.name", "").toLowerCase();
         String arch = System.getProperty("os.arch", "").toLowerCase();
 
-        if (os.contains("linux"))   return arch.contains("aarch64") ? "linux-aarch64" : "linux-x86_64";
-        if (os.contains("mac"))     return arch.contains("aarch64") ? "macos-aarch64" : "macos-x86_64";
+        if (os.contains("linux")) return arch.contains("aarch64") ? "linux-aarch64" : "linux-x86_64";
+        if (os.contains("mac")) return arch.contains("aarch64") ? "macos-aarch64" : "macos-x86_64";
         if (os.contains("windows")) return "windows-x86_64";
         return "unknown";
     }
@@ -84,7 +86,7 @@ public class Vec0NativeLibraryInstaller {
     static String nativeExtension() {
         String os = System.getProperty("os.name", "").toLowerCase();
         if (os.contains("windows")) return ".dll";
-        if (os.contains("mac"))     return ".dylib";
+        if (os.contains("mac")) return ".dylib";
         return ".so";
     }
 }

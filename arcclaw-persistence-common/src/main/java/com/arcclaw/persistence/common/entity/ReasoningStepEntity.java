@@ -130,15 +130,35 @@ public class ReasoningStepEntity implements ReasoningStepRecord {
         this.outputTokens = outputTokens;
     }
 
-    public Boolean getSuccess() { return success; }
-    public void setSuccess(Boolean success) { this.success = success; }
+    public Boolean getSuccess() {
+        return success;
+    }
 
-    public String getErrorCode() { return errorCode; }
-    public void setErrorCode(String errorCode) { this.errorCode = errorCode; }
+    public void setSuccess(Boolean success) {
+        this.success = success;
+    }
 
-    public String getTraceId() { return traceId; }
-    public void setTraceId(String traceId) { this.traceId = traceId; }
+    public String getErrorCode() {
+        return errorCode;
+    }
 
-    public String getRootCauseClass() { return rootCauseClass; }
-    public void setRootCauseClass(String rootCauseClass) { this.rootCauseClass = rootCauseClass; }
+    public void setErrorCode(String errorCode) {
+        this.errorCode = errorCode;
+    }
+
+    public String getTraceId() {
+        return traceId;
+    }
+
+    public void setTraceId(String traceId) {
+        this.traceId = traceId;
+    }
+
+    public String getRootCauseClass() {
+        return rootCauseClass;
+    }
+
+    public void setRootCauseClass(String rootCauseClass) {
+        this.rootCauseClass = rootCauseClass;
+    }
 }

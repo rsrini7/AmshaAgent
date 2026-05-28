@@ -43,18 +43,19 @@ class SessionRegistryTest {
 
         // Stub useHandle
         doAnswer(invocation -> {
-            HandleConsumer<Exception> consumer = invocation.getArgument(0);
-            consumer.useHandle(handle);
-            return null;
-        }).when(jdbi).useHandle(any());
+                    HandleConsumer<Exception> consumer = invocation.getArgument(0);
+                    consumer.useHandle(handle);
+                    return null;
+                })
+                .when(jdbi)
+                .useHandle(any());
 
         // Stub query and update builders
         when(handle.createQuery(anyString())).thenReturn(query);
         when(query.bind(anyString(), any(Object.class))).thenReturn(query);
         when(query.bind(anyString(), anyString())).thenReturn(query);
 
-        ResultIterable<String> resultIterable = mock(
-                ResultIterable.class);
+        ResultIterable<String> resultIterable = mock(ResultIterable.class);
         when(query.mapTo(String.class)).thenReturn(resultIterable);
         when(resultIterable.findFirst()).thenReturn(Optional.empty());
 

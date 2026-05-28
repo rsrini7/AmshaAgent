@@ -5,14 +5,13 @@ package com.arcclaw.persistence.api;
  * Isolates core रीजनिंग logic from persistence implementation.
  */
 public record ReasoningStepDto(
-    String thoughtJson,
-    String action,
-    String actionInputJson,
-    String observation,
-    Integer inputTokens,
-    Integer outputTokens,
-    Boolean success,
-    String errorCode,
-    String traceId,
-    String rootCauseClass
-) {}
+        String thoughtJson,
+        String action,
+        String actionInputJson,
+        String observation,
+        Integer inputTokens,
+        Integer outputTokens,
+        Boolean success,
+        String errorCode,
+        String traceId,
+        String rootCauseClass) {}

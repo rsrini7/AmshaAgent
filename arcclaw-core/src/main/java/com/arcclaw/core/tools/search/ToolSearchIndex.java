@@ -1,16 +1,17 @@
 package com.arcclaw.core.tools.search;
 
+import jakarta.annotation.PostConstruct;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
-import jakarta.annotation.PostConstruct;
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
-
 import com.arcclaw.core.tools.ToolDiscoveryService;
 import com.arcclaw.core.tools.ToolRegistry;
+
 import org.apache.lucene.analysis.standard.StandardAnalyzer;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.Field;
@@ -75,7 +76,9 @@ public class ToolSearchIndex {
                     doc.add(new TextField(FIELD_DESCRIPTION, desc.description(), Field.Store.YES));
                     writer.addDocument(doc);
                 }
-                LOG.infof("ToolSearchIndex: indexed %d tools", discoveryService.getDescriptorCache().size());
+                LOG.infof(
+                        "ToolSearchIndex: indexed %d tools",
+                        discoveryService.getDescriptorCache().size());
             }
         } catch (IOException e) {
             LOG.errorf("Failed to build tool search index: %s", e.getMessage());

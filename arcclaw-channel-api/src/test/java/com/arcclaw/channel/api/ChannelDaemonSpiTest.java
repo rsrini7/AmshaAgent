@@ -22,13 +22,12 @@
 //     @Test
 //     void testTelegramChannelDaemonDiscoveredByCdi() {
 //         List<ChannelDaemon> daemonList = daemons.stream().collect(Collectors.toList());
-        
+
 //         Assertions.assertFalse(daemonList.isEmpty(), "At least one ChannelDaemon should be discovered");
-        
+
 //         boolean hasTelegram = daemonList.stream()
 //             .anyMatch(d -> d.channelId().equals("telegram"));
-            
+
 //         Assertions.assertTrue(hasTelegram, "TelegramChannelDaemon should be discovered via CDI");
 //     }
 // }
-

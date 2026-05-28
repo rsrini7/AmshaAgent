@@ -1,8 +1,5 @@
 package com.arcclaw.app.api;
 
-import java.util.List;
-import java.util.Map;
-
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.validation.Valid;
@@ -22,6 +19,9 @@ import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.core.SecurityContext;
 
+import java.util.List;
+import java.util.Map;
+
 import com.arcclaw.core.api.AgentResponseMapper;
 import com.arcclaw.core.api.AgentSessionService;
 import com.arcclaw.core.api.dto.ActiveAgentResponse;
@@ -33,8 +33,10 @@ import com.arcclaw.core.api.dto.ServiceResult;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.persistence.api.CheckpointCrudPort;
 import com.arcclaw.persistence.api.CheckpointDto;
-import io.smallrye.common.annotation.RunOnVirtualThread;
+
 import org.eclipse.microprofile.openapi.annotations.Operation;
+
+import io.smallrye.common.annotation.RunOnVirtualThread;
 
 @ApplicationScoped
 @Path("/sessions")
@@ -72,9 +74,9 @@ public class AgentResource {
         String userId = resolveUserId();
         var sessions = sessionService.listSessions(userId);
         return Response.ok(Map.of(
-                "sessions", sessions.keySet(),
-                "count", sessions.size()
-        )).build();
+                        "sessions", sessions.keySet(),
+                        "count", sessions.size()))
+                .build();
     }
 
     @GET
@@ -85,11 +87,21 @@ public class AgentResource {
         List<CheckpointDto> active = checkpointCrud.findAllActive();
         List<ActiveAgentResponse.AgentSummary> summaries = active.stream()
                 .map(cp -> new ActiveAgentResponse.AgentSummary(
-                        cp.id(), cp.sessionId(), cp.agentRole(), cp.status(),
-                        cp.autonomyLevel(), cp.depth(), cp.parentCheckpointId(),
-                        cp.originalGoal(), cp.channelType(), cp.channelPlatformId(),
-                        cp.iterationsUsed(), cp.maxIterations(), cp.pendingToolName(),
-                        cp.createdAt(), cp.updatedAt()))
+                        cp.id(),
+                        cp.sessionId(),
+                        cp.agentRole(),
+                        cp.status(),
+                        cp.autonomyLevel(),
+                        cp.depth(),
+                        cp.parentCheckpointId(),
+                        cp.originalGoal(),
+                        cp.channelType(),
+                        cp.channelPlatformId(),
+                        cp.iterationsUsed(),
+                        cp.maxIterations(),
+                        cp.pendingToolName(),
+                        cp.createdAt(),
+                        cp.updatedAt()))
                 .toList();
         return Response.ok(new ActiveAgentResponse(summaries.size(), summaries)).build();
     }
@@ -107,8 +119,8 @@ public class AgentResource {
     @POST
     @Path("/{id}/run-async")
     @Operation(summary = "Start an agent loop asynchronously")
-    public void runAgentAsync(@PathParam("id") String sessionId, @Valid RunAgentRequest request,
-            @Suspended AsyncResponse asyncResponse) {
+    public void runAgentAsync(
+            @PathParam("id") String sessionId, @Valid RunAgentRequest request, @Suspended AsyncResponse asyncResponse) {
         String userId = resolveUserId();
         sessionService.runAsync(sessionId, userId, request, result -> {
             asyncResponse.resume(toResponse(result));
@@ -143,8 +155,7 @@ public class AgentResource {
     @RunOnVirtualThread
     @Operation(summary = "Provide manual human approval for a pending tool execution")
     public Response approveSession(
-            @PathParam("id") String sessionId,
-            @QueryParam("agentRole") @DefaultValue("coordinator") String agentRole) {
+            @PathParam("id") String sessionId, @QueryParam("agentRole") @DefaultValue("coordinator") String agentRole) {
         String userId = resolveUserId();
         var result = sessionService.approve(sessionId, userId, agentRole);
         return toResponse(result);
@@ -155,8 +166,7 @@ public class AgentResource {
     @RunOnVirtualThread
     @Operation(summary = "Deny a pending tool execution and provide feedback to the agent")
     public Response denySession(
-            @PathParam("id") String sessionId,
-            @QueryParam("agentRole") @DefaultValue("coordinator") String agentRole) {
+            @PathParam("id") String sessionId, @QueryParam("agentRole") @DefaultValue("coordinator") String agentRole) {
         String userId = resolveUserId();
         var result = sessionService.deny(sessionId, userId, agentRole);
         return toResponse(result);
@@ -179,22 +189,38 @@ public class AgentResource {
             return Response.ok(value).build();
         }
         return switch (result.errorCode()) {
-            case "SESSION_NOT_FOUND" -> Response.status(Response.Status.NOT_FOUND)
-                    .entity(new ArcClawErrorResponse(result.errorMessage())).build();
-            case "SESSION_ACCESS_DENIED" -> Response.status(Response.Status.UNAUTHORIZED)
-                    .entity(new ArcClawErrorResponse(result.errorCode(), result.errorMessage(), null)).build();
-            case "UNKNOWN_ROLE", "FORK_BOMB_REJECTED" -> Response.status(Response.Status.BAD_REQUEST)
-                    .entity(new ArcClawErrorResponse(result.errorMessage())).build();
-            case "AWAITING_APPROVAL" -> Response.status(Response.Status.CONFLICT)
-                    .entity(new ArcClawErrorResponse(result.errorMessage())).build();
-            case "NO_PENDING_APPROVAL" -> Response.status(Response.Status.CONFLICT)
-                    .entity(new ArcClawErrorResponse(result.errorMessage())).build();
-            case "BUDGET" -> Response.status(429)
-                    .entity(new ArcClawErrorResponse(result.errorMessage())).build();
-            case "SYSTEM" -> Response.serverError()
-                    .entity(new ArcClawErrorResponse(result.errorMessage())).build();
-            default -> Response.serverError()
-                    .entity(new ArcClawErrorResponse(result.errorMessage())).build();
+            case "SESSION_NOT_FOUND" ->
+                Response.status(Response.Status.NOT_FOUND)
+                        .entity(new ArcClawErrorResponse(result.errorMessage()))
+                        .build();
+            case "SESSION_ACCESS_DENIED" ->
+                Response.status(Response.Status.UNAUTHORIZED)
+                        .entity(new ArcClawErrorResponse(result.errorCode(), result.errorMessage(), null))
+                        .build();
+            case "UNKNOWN_ROLE", "FORK_BOMB_REJECTED" ->
+                Response.status(Response.Status.BAD_REQUEST)
+                        .entity(new ArcClawErrorResponse(result.errorMessage()))
+                        .build();
+            case "AWAITING_APPROVAL" ->
+                Response.status(Response.Status.CONFLICT)
+                        .entity(new ArcClawErrorResponse(result.errorMessage()))
+                        .build();
+            case "NO_PENDING_APPROVAL" ->
+                Response.status(Response.Status.CONFLICT)
+                        .entity(new ArcClawErrorResponse(result.errorMessage()))
+                        .build();
+            case "BUDGET" ->
+                Response.status(429)
+                        .entity(new ArcClawErrorResponse(result.errorMessage()))
+                        .build();
+            case "SYSTEM" ->
+                Response.serverError()
+                        .entity(new ArcClawErrorResponse(result.errorMessage()))
+                        .build();
+            default ->
+                Response.serverError()
+                        .entity(new ArcClawErrorResponse(result.errorMessage()))
+                        .build();
         };
     }
 }

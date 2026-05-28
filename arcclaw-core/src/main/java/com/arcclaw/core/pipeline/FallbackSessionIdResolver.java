@@ -1,12 +1,13 @@
 package com.arcclaw.core.pipeline;
 
+import jakarta.enterprise.context.ApplicationScoped;
+
 import java.nio.charset.StandardCharsets;
 import java.util.UUID;
 
-import jakarta.enterprise.context.ApplicationScoped;
+import org.jboss.logging.Logger;
 
 import io.quarkus.arc.DefaultBean;
-import org.jboss.logging.Logger;
 
 /**
  * Fallback implementation of {@link SessionIdResolver} that uses UUID v3 (MD5).
@@ -29,9 +30,11 @@ public class FallbackSessionIdResolver implements SessionIdResolver {
     @Override
     public String resolveOrCreate(String channelType, String channelId, String userId) {
         String key = channelId + ":" + userId;
-        String sessionId = UUID.nameUUIDFromBytes(key.getBytes(StandardCharsets.UTF_8)).toString();
-        log.warnf("FallbackSessionIdResolver: using legacy MD5 session ID for [%s/%s/%s] → %s",
-                  channelType, channelId, userId, sessionId);
+        String sessionId =
+                UUID.nameUUIDFromBytes(key.getBytes(StandardCharsets.UTF_8)).toString();
+        log.warnf(
+                "FallbackSessionIdResolver: using legacy MD5 session ID for [%s/%s/%s] → %s",
+                channelType, channelId, userId, sessionId);
         return sessionId;
     }
 }

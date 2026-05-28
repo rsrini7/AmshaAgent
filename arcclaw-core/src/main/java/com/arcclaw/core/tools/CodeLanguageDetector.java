@@ -48,10 +48,11 @@ public class CodeLanguageDetector {
     public List<String> buildCommand(String lang, String code) {
         return switch (lang) {
             case "python", "python3" -> List.of(resolvePythonExecutable(), "-c", code);
-            case "bash"              -> List.of("bash", "-c", code);
-            case "node"              -> List.of("node", "-e", code);
-            default -> throw new IllegalArgumentException(
-                    "Unsupported language '" + lang + "'. Only Java, Python, Go, Node, and Bash are supported.");
+            case "bash" -> List.of("bash", "-c", code);
+            case "node" -> List.of("node", "-e", code);
+            default ->
+                throw new IllegalArgumentException(
+                        "Unsupported language '" + lang + "'. Only Java, Python, Go, Node, and Bash are supported.");
         };
     }
 

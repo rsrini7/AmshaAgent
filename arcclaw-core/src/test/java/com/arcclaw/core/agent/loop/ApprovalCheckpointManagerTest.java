@@ -21,6 +21,7 @@ import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.state.ToolDecision;
 import com.arcclaw.core.tools.ToolResponse;
 import com.fasterxml.jackson.databind.ObjectMapper;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -50,9 +51,20 @@ class ApprovalCheckpointManagerTest {
     }
 
     private AgentExecutionContext ctx() {
-        return new AgentExecutionContext("sess-1", "user-1", "chat-1", "coordinator",
-                "do task", AutonomyLevel.SUPERVISED,
-                null, 5, 0, "telegram", "12345", null, null);
+        return new AgentExecutionContext(
+                "sess-1",
+                "user-1",
+                "chat-1",
+                "coordinator",
+                "do task",
+                AutonomyLevel.SUPERVISED,
+                null,
+                5,
+                0,
+                "telegram",
+                "12345",
+                null,
+                null);
     }
 
     private ApprovalFrame frame() {
@@ -160,8 +172,20 @@ class ApprovalCheckpointManagerTest {
 
     @Test
     void persist_WithStringOverload_HandlesBlankChannelInfo() {
-        var ctx = new AgentExecutionContext("sess-1", "user-1", "chat-1", "coordinator",
-                "do task", AutonomyLevel.SUPERVISED, null, 5, 0, null, null, null, null);
+        var ctx = new AgentExecutionContext(
+                "sess-1",
+                "user-1",
+                "chat-1",
+                "coordinator",
+                "do task",
+                AutonomyLevel.SUPERVISED,
+                null,
+                5,
+                0,
+                null,
+                null,
+                null,
+                null);
         when(agentStore.load("sess-1", "coordinator")).thenReturn(Optional.empty());
         when(agentStore.saveWithSteps(any(), anyList())).thenAnswer(inv -> inv.getArgument(0));
 

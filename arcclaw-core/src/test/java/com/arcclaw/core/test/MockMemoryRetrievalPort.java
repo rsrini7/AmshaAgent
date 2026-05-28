@@ -1,11 +1,11 @@
 package com.arcclaw.core.test;
 
-import java.util.Collections;
-import java.util.List;
-
 import jakarta.annotation.Priority;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Alternative;
+
+import java.util.Collections;
+import java.util.List;
 
 import com.arcclaw.persistence.api.BackendCapabilities;
 import com.arcclaw.persistence.api.IngestResult;

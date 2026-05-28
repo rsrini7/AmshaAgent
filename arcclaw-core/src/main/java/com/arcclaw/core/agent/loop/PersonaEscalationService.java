@@ -1,12 +1,12 @@
 package com.arcclaw.core.agent.loop;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Set;
-
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Set;
 
 import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.core.agent.AgentSentinels;
@@ -17,6 +17,7 @@ import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.tools.ToolResponse;
 import com.fasterxml.jackson.databind.ObjectMapper;
+
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
@@ -112,9 +113,14 @@ public class PersonaEscalationService {
 
     private static final Logger log = Logger.getLogger(PersonaEscalationService.class);
 
-    @Inject ReasoningEngine reasoningEngine;
-    @Inject Instance<AgentLoop> agentLoop;
-    @Inject ObjectMapper objectMapper;
+    @Inject
+    ReasoningEngine reasoningEngine;
+
+    @Inject
+    Instance<AgentLoop> agentLoop;
+
+    @Inject
+    ObjectMapper objectMapper;
 
     @ConfigProperty(name = "arcclaw.agent.escalation.enabled", defaultValue = "true")
     boolean escalationEnabled;
@@ -125,10 +131,12 @@ public class PersonaEscalationService {
     /**
      * Represents the result of an escalation attempt.
      */
-    public record EscalationResult(String targetPersona, String result, int depthUsed, boolean success, String errorIfFailed) {
+    public record EscalationResult(
+            String targetPersona, String result, int depthUsed, boolean success, String errorIfFailed) {
         public static EscalationResult success(String target, String result, int depth) {
             return new EscalationResult(target, result, depth, true, null);
         }
+
         public static EscalationResult failure(String error) {
             return new EscalationResult(null, null, 0, false, error);
         }
@@ -257,33 +265,80 @@ public class PersonaEscalationService {
     /**
      * Attempts escalation by delegating to a more suitable persona.
      */
-    public EscalationResult attemptEscalation(String outerSessionId, String userId, String chatId,
-                                               String sourceRole, String targetRole,
-                                               String errorOutput, String originalGoal,
-                                               String originalCode, String language,
-                                               String channelType, String channelPlatformId) {
-        return attemptEscalation(outerSessionId, userId, chatId, sourceRole, targetRole,
-                errorOutput, originalGoal, originalCode, language, channelType, channelPlatformId, 1);
+    public EscalationResult attemptEscalation(
+            String outerSessionId,
+            String userId,
+            String chatId,
+            String sourceRole,
+            String targetRole,
+            String errorOutput,
+            String originalGoal,
+            String originalCode,
+            String language,
+            String channelType,
+            String channelPlatformId) {
+        return attemptEscalation(
+                outerSessionId,
+                userId,
+                chatId,
+                sourceRole,
+                targetRole,
+                errorOutput,
+                originalGoal,
+                originalCode,
+                language,
+                channelType,
+                channelPlatformId,
+                1);
     }
 
-    EscalationResult attemptEscalation(String outerSessionId, String userId, String chatId,
-                                        String sourceRole, String targetRole,
-                                        String errorOutput, String originalGoal,
-                                        String originalCode, String language,
-                                        String channelType, String channelPlatformId, int depth) {
-        return attemptEscalation(outerSessionId, userId, chatId, sourceRole, targetRole,
-                errorOutput, originalGoal, originalCode, language, channelType, channelPlatformId, depth, new ArrayList<>());
+    EscalationResult attemptEscalation(
+            String outerSessionId,
+            String userId,
+            String chatId,
+            String sourceRole,
+            String targetRole,
+            String errorOutput,
+            String originalGoal,
+            String originalCode,
+            String language,
+            String channelType,
+            String channelPlatformId,
+            int depth) {
+        return attemptEscalation(
+                outerSessionId,
+                userId,
+                chatId,
+                sourceRole,
+                targetRole,
+                errorOutput,
+                originalGoal,
+                originalCode,
+                language,
+                channelType,
+                channelPlatformId,
+                depth,
+                new ArrayList<>());
     }
 
-    EscalationResult attemptEscalation(String outerSessionId, String userId, String chatId,
-                                        String sourceRole, String targetRole,
-                                        String errorOutput, String originalGoal,
-                                        String originalCode, String language,
-                                        String channelType, String channelPlatformId, int depth,
-                                        List<String> escalationChain) {
+    EscalationResult attemptEscalation(
+            String outerSessionId,
+            String userId,
+            String chatId,
+            String sourceRole,
+            String targetRole,
+            String errorOutput,
+            String originalGoal,
+            String originalCode,
+            String language,
+            String channelType,
+            String channelPlatformId,
+            int depth,
+            List<String> escalationChain) {
 
         if (depth > maxEscalationDepth) {
-            log.warnf("[PersonaEscalation] Max depth %d reached for session %s, aborting",
+            log.warnf(
+                    "[PersonaEscalation] Max depth %d reached for session %s, aborting",
                     maxEscalationDepth, outerSessionId);
             return EscalationResult.failure("Max escalation depth reached");
         }
@@ -292,7 +347,8 @@ public class PersonaEscalationService {
         String pair = sourceRole + "->" + targetRole;
         escalationChain.add(pair);
         if (isPingPong(escalationChain)) {
-            log.warnf("[PersonaEscalation] Ping-pong detected: %s — aborting escalation for session %s",
+            log.warnf(
+                    "[PersonaEscalation] Ping-pong detected: %s — aborting escalation for session %s",
                     escalationChain, outerSessionId);
             return EscalationResult.failure("Escalation ping-pong detected: " + escalationChain);
         }
@@ -305,30 +361,43 @@ public class PersonaEscalationService {
             return EscalationResult.failure("Unknown target persona: " + targetRole);
         }
 
-        String innerSessionId = outerSessionId + AgentSentinels.ESCALATION_SESSION_SENTINEL
-                + sourceRole + ":" + targetRole + ":" + System.currentTimeMillis();
+        String innerSessionId = outerSessionId + AgentSentinels.ESCALATION_SESSION_SENTINEL + sourceRole + ":"
+                + targetRole + ":" + System.currentTimeMillis();
 
-        String escalationGoal = buildEscalationGoal(sourceRole, targetRole, errorOutput, originalGoal, originalCode, language);
+        String escalationGoal =
+                buildEscalationGoal(sourceRole, targetRole, errorOutput, originalGoal, originalCode, language);
 
-        log.infof("[PersonaEscalation] Escalating %s → %s (depth=%d) session=%s",
+        log.infof(
+                "[PersonaEscalation] Escalating %s → %s (depth=%d) session=%s",
                 sourceRole, targetRole, depth, innerSessionId);
 
         AgentResult result;
         try {
             int maxIterations = targetEnum.definition().maxIterations();
             result = WorkspaceContext.run(
-                    innerSessionId, userId, chatId, AutonomyLevel.FULL,
+                    innerSessionId,
+                    userId,
+                    chatId,
+                    AutonomyLevel.FULL,
                     targetEnum.toScopedName(),
-                    channelType, channelPlatformId,
-                    () -> agentLoop.get().run(innerSessionId, targetEnum.toScopedName(),
-                            escalationGoal, reasoningEngine, maxIterations));
+                    channelType,
+                    channelPlatformId,
+                    () -> agentLoop
+                            .get()
+                            .run(
+                                    innerSessionId,
+                                    targetEnum.toScopedName(),
+                                    escalationGoal,
+                                    reasoningEngine,
+                                    maxIterations));
         } catch (Exception e) {
             log.errorf("[PersonaEscalation] Delegation to %s failed: %s", targetRole, LogUtil.rootMessage(e));
             return EscalationResult.failure("Escalation delegation failed: " + e.getMessage());
         }
 
         if (result instanceof AgentResult.Finished f && f.answer() != null) {
-            log.infof("[PersonaEscalation] Escalation to %s succeeded (depth=%d) for session %s",
+            log.infof(
+                    "[PersonaEscalation] Escalation to %s succeeded (depth=%d) for session %s",
                     targetRole, depth, outerSessionId);
 
             // Check if the target also needs escalation
@@ -336,9 +405,20 @@ public class PersonaEscalationService {
                 String secondaryTarget = determineEscalationTarget(targetRole, f.answer(), escalationGoal);
                 if (secondaryTarget != null && !secondaryTarget.equals(sourceRole)) {
                     log.infof("[PersonaEscalation] %s needs further escalation to %s", targetRole, secondaryTarget);
-                    return attemptEscalation(outerSessionId, userId, chatId, targetRole, secondaryTarget,
-                            f.answer(), escalationGoal, originalCode, language, channelType, channelPlatformId,
-                            depth + 1, escalationChain);
+                    return attemptEscalation(
+                            outerSessionId,
+                            userId,
+                            chatId,
+                            targetRole,
+                            secondaryTarget,
+                            f.answer(),
+                            escalationGoal,
+                            originalCode,
+                            language,
+                            channelType,
+                            channelPlatformId,
+                            depth + 1,
+                            escalationChain);
                 }
             }
 
@@ -349,37 +429,53 @@ public class PersonaEscalationService {
         return EscalationResult.failure(errorMsg);
     }
 
-    String buildEscalationGoal(String sourceRole, String targetRole, String errorOutput, String originalGoal, String originalCode, String language) {
+    String buildEscalationGoal(
+            String sourceRole,
+            String targetRole,
+            String errorOutput,
+            String originalGoal,
+            String originalCode,
+            String language) {
         StringBuilder goal = new StringBuilder();
 
         String sourceDisplay = personaDisplayName(sourceRole);
         String targetDisplay = personaDisplayName(targetRole);
 
-        goal.append("ESCALATION FROM ").append(sourceDisplay).append(": ")
-            .append(targetDisplay).append(", the previous agent could not handle this task.\n\n")
-            .append("## ORIGINAL GOAL:\n```\n")
-            .append(originalGoal != null && !originalGoal.isBlank() ? originalGoal : "N/A")
-            .append(STR);
+        goal.append("ESCALATION FROM ")
+                .append(sourceDisplay)
+                .append(": ")
+                .append(targetDisplay)
+                .append(", the previous agent could not handle this task.\n\n")
+                .append("## ORIGINAL GOAL:\n```\n")
+                .append(originalGoal != null && !originalGoal.isBlank() ? originalGoal : "N/A")
+                .append(STR);
 
         if (errorOutput != null && !errorOutput.isBlank()) {
-            goal.append("## ERROR/OUTPUT FROM ").append(sourceDisplay).append(":\n```\n")
-                .append(truncate(errorOutput, 4000))
-                .append(STR);
+            goal.append("## ERROR/OUTPUT FROM ")
+                    .append(sourceDisplay)
+                    .append(":\n```\n")
+                    .append(truncate(errorOutput, 4000))
+                    .append(STR);
         }
 
         if (originalCode != null && !originalCode.isBlank()) {
-            goal.append("## RELEVANT CODE:\n```").append(language != null ? language : "text").append("\n")
-                .append(originalCode)
-                .append(STR);
+            goal.append("## RELEVANT CODE:\n```")
+                    .append(language != null ? language : "text")
+                    .append("\n")
+                    .append(originalCode)
+                    .append(STR);
         }
 
         goal.append("## YOUR TASK:\n")
-            .append("You are the ").append(targetDisplay).append(". ")
-            .append(sourceDisplay).append(" encountered a problem and escalated to you.\n")
-            .append("1. Analyze the situation\n")
-            .append("2. Provide a complete solution within your capabilities\n")
-            .append("3. If you also cannot handle this, state clearly what you need\n\n")
-            .append("IMPORTANT: Provide your best answer. Do not delegate further unless absolutely necessary.");
+                .append("You are the ")
+                .append(targetDisplay)
+                .append(". ")
+                .append(sourceDisplay)
+                .append(" encountered a problem and escalated to you.\n")
+                .append("1. Analyze the situation\n")
+                .append("2. Provide a complete solution within your capabilities\n")
+                .append("3. If you also cannot handle this, state clearly what you need\n\n")
+                .append("IMPORTANT: Provide your best answer. Do not delegate further unless absolutely necessary.");
 
         return goal.toString();
     }

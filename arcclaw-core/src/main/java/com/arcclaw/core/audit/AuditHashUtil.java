@@ -1,9 +1,5 @@
 package com.arcclaw.core.audit;
 
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.util.HexFormat;
-
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 
@@ -13,15 +9,21 @@ import jakarta.enterprise.event.Observes;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.util.HexFormat;
+
 import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.core.domain.model.AuditEvent;
 import com.arcclaw.core.security.CryptoConstants;
 import com.arcclaw.core.security.SecretVault;
 import com.arcclaw.core.security.VaultConstants;
 import com.arcclaw.core.security.VaultKey;
+
+import org.jboss.logging.Logger;
+
 import io.quarkus.arc.Arc;
 import io.quarkus.runtime.StartupEvent;
-import org.jboss.logging.Logger;
 
 @ApplicationScoped
 public class AuditHashUtil {
@@ -47,8 +49,10 @@ public class AuditHashUtil {
             getHmacKey();
             log.info("AuditHashUtil: HMAC key primed successfully.");
         } catch (Exception e) {
-            log.warnf("AuditHashUtil: Failed to primer HMAC key at startup: %s. " +
-                      "It will be lazily initialized on first use.", LogUtil.rootMessage(e));
+            log.warnf(
+                    "AuditHashUtil: Failed to primer HMAC key at startup: %s. "
+                            + "It will be lazily initialized on first use.",
+                    LogUtil.rootMessage(e));
         }
     }
 
@@ -64,9 +68,9 @@ public class AuditHashUtil {
                             .map(byte[]::clone)
                             .orElseThrow(() -> {
                                 return new IllegalStateException("Audit HMAC key '" + VaultConstants.AUDIT_HMAC_KEY_NAME
-                                        + "' is missing from SecretVault. " +
-                                        "Ensure DevSecretSeeder has seeded it in dev/test, " +
-                                        "or StartupSecurityValidator has verified it in prod.");
+                                        + "' is missing from SecretVault. "
+                                        + "Ensure DevSecretSeeder has seeded it in dev/test, "
+                                        + "or StartupSecurityValidator has verified it in prod.");
                             });
                     hmacKey = result;
                 }
@@ -79,7 +83,7 @@ public class AuditHashUtil {
      * Computes the SHA-256 hash of the input string and returns it as a hex string.
      * Prevents raw PII or secrets from being stored directly when hashing goals or
      * inputs.
-     * 
+     *
      * @param input The raw input to hash (e.g., user goal, reflex input)
      * @return 64-character hex string representing the SHA-256 hash,
      *         "genesis-fallback-null-input" if input is null.
@@ -100,7 +104,6 @@ public class AuditHashUtil {
         }
     }
 
-
     public String hmacHex(String data) {
         try {
             byte[] key = getHmacKey();
@@ -112,9 +115,10 @@ public class AuditHashUtil {
             return HexFormat.of().formatHex(hash);
         } catch (IllegalStateException | SecurityException e) {
             throw new IllegalStateException(
-                "Audit HMAC key unavailable. Chain integrity cannot be guaranteed. " +
-                "This usually means ARCCLAW_VAULT_PEPPER has changed or the database is incompatible. " +
-                "Ensure your pepper is correct, or delete 'arcclaw.db' to start fresh.", e);
+                    "Audit HMAC key unavailable. Chain integrity cannot be guaranteed. "
+                            + "This usually means ARCCLAW_VAULT_PEPPER has changed or the database is incompatible. "
+                            + "Ensure your pepper is correct, or delete 'arcclaw.db' to start fresh.",
+                    e);
         } catch (Exception e) {
             // Check if it's a shutdown race
             if (Arc.container() == null) {

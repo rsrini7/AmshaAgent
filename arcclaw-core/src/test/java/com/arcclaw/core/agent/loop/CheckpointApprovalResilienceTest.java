@@ -3,14 +3,15 @@ package com.arcclaw.core.agent.loop;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
-import java.util.Optional;
-
 import jakarta.enterprise.inject.Instance;
+
+import java.util.Optional;
 
 import com.arcclaw.core.agent.hitl.CheckpointApprovalService;
 import com.arcclaw.core.agent.sse.AgentSseService;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.fasterxml.jackson.databind.ObjectMapper;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -20,11 +21,20 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class CheckpointApprovalResilienceTest {
 
-    @Mock StatefulAgentStore agentStore;
-    @Mock AgentSseService sseService;
-    @Mock ObjectMapper objectMapper;
-    @Mock Instance<CheckpointResumeHandler> resumeHandlerInstance;
-    @InjectMocks CheckpointApprovalService service;
+    @Mock
+    StatefulAgentStore agentStore;
+
+    @Mock
+    AgentSseService sseService;
+
+    @Mock
+    ObjectMapper objectMapper;
+
+    @Mock
+    Instance<CheckpointResumeHandler> resumeHandlerInstance;
+
+    @InjectMocks
+    CheckpointApprovalService service;
 
     @Test
     void approveAll_throwsNotFound_whenNoCheckpointExists() {

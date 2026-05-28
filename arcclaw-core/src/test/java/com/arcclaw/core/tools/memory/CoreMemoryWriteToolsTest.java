@@ -19,6 +19,7 @@ import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.tools.ToolExecutionContext;
 import com.arcclaw.core.tools.ToolResponse;
 import com.arcclaw.persistence.api.CoreMemoryBlockDto;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
@@ -29,8 +30,10 @@ class CoreMemoryWriteToolsTest {
 
     @Mock
     CoreMemoryService coreMemoryService;
+
     @Mock
     MemoryWriteGovernance governance;
+
     @Mock
     AuditService auditService;
 
@@ -39,8 +42,7 @@ class CoreMemoryWriteToolsTest {
     CoreMemoryReplaceTool replaceTool;
 
     private static final ToolExecutionContext CTX =
-        new ToolExecutionContext(null, null, null, null, null, null,
-            null, null, null, null, null, null);
+            new ToolExecutionContext(null, null, null, null, null, null, null, null, null, null, null, null);
 
     @BeforeEach
     void setup() {
@@ -62,12 +64,12 @@ class CoreMemoryWriteToolsTest {
 
     @Test
     void testReadTool_allBlocks() throws Exception {
-        CoreMemoryBlockDto block = new CoreMemoryBlockDto(
-            "id1", "user1", "user_profile", "Alice, developer", 1, null, null);
+        CoreMemoryBlockDto block =
+                new CoreMemoryBlockDto("id1", "user1", "user_profile", "Alice, developer", 1, null, null);
         when(coreMemoryService.readAll("user1")).thenReturn(List.of(block));
 
-        ToolResponse response = WorkspaceContext.run("s1", "user1", "c1",
-            AutonomyLevel.FULL, "coordinator", () -> readTool.execute(CTX, Map.of()));
+        ToolResponse response = WorkspaceContext.run(
+                "s1", "user1", "c1", AutonomyLevel.FULL, "coordinator", () -> readTool.execute(CTX, Map.of()));
 
         assertTrue(response.success());
         assertTrue(response.output().contains("user_profile"));
@@ -76,13 +78,17 @@ class CoreMemoryWriteToolsTest {
 
     @Test
     void testReadTool_specificBlock() throws Exception {
-        CoreMemoryBlockDto block = new CoreMemoryBlockDto(
-            "id1", "user1", "constraints", "Never modify .env", 1, null, null);
+        CoreMemoryBlockDto block =
+                new CoreMemoryBlockDto("id1", "user1", "constraints", "Never modify .env", 1, null, null);
         when(coreMemoryService.get("user1", "constraints")).thenReturn(Optional.of(block));
 
-        ToolResponse response = WorkspaceContext.run("s1", "user1", "c1",
-            AutonomyLevel.FULL, "coordinator", () ->
-                readTool.execute(CTX, Map.of("block_key", "constraints")));
+        ToolResponse response = WorkspaceContext.run(
+                "s1",
+                "user1",
+                "c1",
+                AutonomyLevel.FULL,
+                "coordinator",
+                () -> readTool.execute(CTX, Map.of("block_key", "constraints")));
 
         assertTrue(response.success());
         assertTrue(response.output().contains("Never modify .env"));
@@ -90,12 +96,15 @@ class CoreMemoryWriteToolsTest {
 
     @Test
     void testAppendTool_usesAtomicAppend() throws Exception {
-        when(coreMemoryService.append("user1", "user_profile", "New fact"))
-            .thenReturn("New fact");
+        when(coreMemoryService.append("user1", "user_profile", "New fact")).thenReturn("New fact");
 
-        ToolResponse response = WorkspaceContext.run("s1", "user1", "c1",
-            AutonomyLevel.FULL, "coordinator", () ->
-                appendTool.execute(CTX, Map.of("block_key", "user_profile", "content", "New fact")));
+        ToolResponse response = WorkspaceContext.run(
+                "s1",
+                "user1",
+                "c1",
+                AutonomyLevel.FULL,
+                "coordinator",
+                () -> appendTool.execute(CTX, Map.of("block_key", "user_profile", "content", "New fact")));
 
         assertTrue(response.success());
         verify(governance).checkCoreWrite();
@@ -107,11 +116,15 @@ class CoreMemoryWriteToolsTest {
         // Simulate: append() does read-modify-write with CAS internally
         // First call returns the concatenated result
         when(coreMemoryService.append("user1", "active_task", "debug compaction"))
-            .thenReturn("existing content\ndebug compaction");
+                .thenReturn("existing content\ndebug compaction");
 
-        ToolResponse response = WorkspaceContext.run("s1", "user1", "c1",
-            AutonomyLevel.FULL, "coordinator", () ->
-                appendTool.execute(CTX, Map.of("block_key", "active_task", "content", "debug compaction")));
+        ToolResponse response = WorkspaceContext.run(
+                "s1",
+                "user1",
+                "c1",
+                AutonomyLevel.FULL,
+                "coordinator",
+                () -> appendTool.execute(CTX, Map.of("block_key", "active_task", "content", "debug compaction")));
 
         assertTrue(response.success());
         verify(coreMemoryService).append("user1", "active_task", "debug compaction");
@@ -119,9 +132,13 @@ class CoreMemoryWriteToolsTest {
 
     @Test
     void testReplaceTool_replacesEntireContent() throws Exception {
-        ToolResponse response = WorkspaceContext.run("s1", "user1", "c1",
-            AutonomyLevel.FULL, "coordinator", () ->
-                replaceTool.execute(CTX, Map.of("block_key", "constraints", "content", "New constraints")));
+        ToolResponse response = WorkspaceContext.run(
+                "s1",
+                "user1",
+                "c1",
+                AutonomyLevel.FULL,
+                "coordinator",
+                () -> replaceTool.execute(CTX, Map.of("block_key", "constraints", "content", "New constraints")));
 
         assertTrue(response.success());
         verify(coreMemoryService).upsert("user1", "constraints", "New constraints");
@@ -129,18 +146,26 @@ class CoreMemoryWriteToolsTest {
 
     @Test
     void testAppendTool_missingBlockKey_returnsError() throws Exception {
-        ToolResponse response = WorkspaceContext.run("s1", "user1", "c1",
-            AutonomyLevel.FULL, "coordinator", () ->
-                appendTool.execute(CTX, Map.of("content", "something")));
+        ToolResponse response = WorkspaceContext.run(
+                "s1",
+                "user1",
+                "c1",
+                AutonomyLevel.FULL,
+                "coordinator",
+                () -> appendTool.execute(CTX, Map.of("content", "something")));
 
         assertFalse(response.success());
     }
 
     @Test
     void testAppendTool_missingContent_returnsError() throws Exception {
-        ToolResponse response = WorkspaceContext.run("s1", "user1", "c1",
-            AutonomyLevel.FULL, "coordinator", () ->
-                appendTool.execute(CTX, Map.of("block_key", "user_profile")));
+        ToolResponse response = WorkspaceContext.run(
+                "s1",
+                "user1",
+                "c1",
+                AutonomyLevel.FULL,
+                "coordinator",
+                () -> appendTool.execute(CTX, Map.of("block_key", "user_profile")));
 
         assertFalse(response.success());
     }
@@ -148,11 +173,16 @@ class CoreMemoryWriteToolsTest {
     @Test
     void testAppendTool_invalidBlockKey_returnsError() throws Exception {
         Mockito.doThrow(new IllegalArgumentException("Unknown block key: bad_key"))
-            .when(coreMemoryService).append(anyString(), anyString(), anyString());
+                .when(coreMemoryService)
+                .append(anyString(), anyString(), anyString());
 
-        ToolResponse response = WorkspaceContext.run("s1", "user1", "c1",
-            AutonomyLevel.FULL, "coordinator", () ->
-                appendTool.execute(CTX, Map.of("block_key", "bad_key", "content", "test")));
+        ToolResponse response = WorkspaceContext.run(
+                "s1",
+                "user1",
+                "c1",
+                AutonomyLevel.FULL,
+                "coordinator",
+                () -> appendTool.execute(CTX, Map.of("block_key", "bad_key", "content", "test")));
 
         assertFalse(response.success());
     }
@@ -160,11 +190,16 @@ class CoreMemoryWriteToolsTest {
     @Test
     void testAppendTool_rateLimitExceeded_returns429() throws Exception {
         Mockito.doThrow(new MemoryWriteGovernance.RateLimitExceededException("core", 5, "minute"))
-            .when(governance).checkCoreWrite();
+                .when(governance)
+                .checkCoreWrite();
 
-        ToolResponse response = WorkspaceContext.run("s1", "user1", "c1",
-            AutonomyLevel.FULL, "coordinator", () ->
-                appendTool.execute(CTX, Map.of("block_key", "user_profile", "content", "test")));
+        ToolResponse response = WorkspaceContext.run(
+                "s1",
+                "user1",
+                "c1",
+                AutonomyLevel.FULL,
+                "coordinator",
+                () -> appendTool.execute(CTX, Map.of("block_key", "user_profile", "content", "test")));
 
         assertFalse(response.success());
     }
@@ -173,16 +208,23 @@ class CoreMemoryWriteToolsTest {
     void testAppendTool_auditLogged() throws Exception {
         when(coreMemoryService.append("user1", "user_profile", "test")).thenReturn("test");
 
-        ToolExecutionContext auditCtx = new ToolExecutionContext("s1", "user1", "c1", "coordinator",
-            null, null, null, null, null, null, null, null);
+        ToolExecutionContext auditCtx = new ToolExecutionContext(
+                "s1", "user1", "c1", "coordinator", null, null, null, null, null, null, null, null);
 
-        WorkspaceContext.run("s1", "user1", "c1",
-            AutonomyLevel.FULL, "coordinator", () ->
-                appendTool.execute(auditCtx, Map.of("block_key", "user_profile", "content", "test")));
+        WorkspaceContext.run(
+                "s1",
+                "user1",
+                "c1",
+                AutonomyLevel.FULL,
+                "coordinator",
+                () -> appendTool.execute(auditCtx, Map.of("block_key", "user_profile", "content", "test")));
 
-        verify(auditService).record(
-            "s1", "user1", "coordinator",
-            SecurityEventType.MEMORY_WRITE_MUTATED,
-            "tool=core_memory_append block=user_profile");
+        verify(auditService)
+                .record(
+                        "s1",
+                        "user1",
+                        "coordinator",
+                        SecurityEventType.MEMORY_WRITE_MUTATED,
+                        "tool=core_memory_append block=user_profile");
     }
 }

@@ -1,16 +1,17 @@
 package com.arcclaw.core.state;
 
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
-
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.ObservesAsync;
 import jakarta.inject.Inject;
 
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+
 import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.core.compaction.CompactionInFlightFlag;
 import com.arcclaw.core.compaction.CompactionRequest;
+
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
@@ -40,16 +41,14 @@ public class CompactionEventBridge {
      * the async event fires, so any concurrent getMessages() call on the same
      * session will always see the latch if compaction is in progress.
      */
-    private final ConcurrentHashMap<String, CountDownLatch> inFlightLatches =
-            new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, CountDownLatch> inFlightLatches = new ConcurrentHashMap<>();
 
     /**
      * Maps sessionId → the ID of the thread currently performing compaction for it.
      * Set at the start of onCompactionRequested and cleared in finally.
      * Used by awaitIfInFlight() to detect and skip self-deadlock.
      */
-    private final ConcurrentHashMap<String, Long> compactionThreadIds =
-            new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, Long> compactionThreadIds = new ConcurrentHashMap<>();
 
     @Inject
     CompactionService compactionService;
@@ -72,9 +71,10 @@ public class CompactionEventBridge {
     public void registerLatch(String sessionId) {
         CountDownLatch prev = inFlightLatches.put(sessionId, new CountDownLatch(1));
         if (prev != null) {
-            log.warnf("CompactionEventBridge: overwrote existing latch for session %s - " +
-                      "possible duplicate compaction registration; releasing old waiters",
-                      sessionId);
+            log.warnf(
+                    "CompactionEventBridge: overwrote existing latch for session %s - "
+                            + "possible duplicate compaction registration; releasing old waiters",
+                    sessionId);
             prev.countDown();
         }
         log.debugf("Compaction bridge registered in-flight latch for session %s", sessionId);
@@ -113,8 +113,7 @@ public class CompactionEventBridge {
         // resulting in a timeout stall on every compaction that reads history.
         Long ownerThreadId = compactionThreadIds.get(sessionId);
         if (ownerThreadId != null && ownerThreadId == Thread.currentThread().threadId()) {
-            log.tracef("CompactionEventBridge: skipping self-wait for compaction thread " +
-                       "on session %s", sessionId);
+            log.tracef("CompactionEventBridge: skipping self-wait for compaction thread " + "on session %s", sessionId);
             return;
         }
 
@@ -124,8 +123,10 @@ public class CompactionEventBridge {
         try {
             boolean completed = latch.await(awaitTimeoutSeconds, TimeUnit.SECONDS);
             if (!completed) {
-                log.warnf("CompactionEventBridge: timed out waiting for compaction " +
-                          "of session %s - proceeding with potentially stale state", sessionId);
+                log.warnf(
+                        "CompactionEventBridge: timed out waiting for compaction "
+                                + "of session %s - proceeding with potentially stale state",
+                        sessionId);
                 // Remove the stale entry so future calls for this session fast-path
                 // correctly. Two-arg remove: only removes if value still matches
                 // (safe against a concurrent registerLatch replacing it with a fresh one).
@@ -133,8 +134,7 @@ public class CompactionEventBridge {
             }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            log.warnf("CompactionEventBridge: interrupted while awaiting compaction " +
-                      "for session %s", sessionId);
+            log.warnf("CompactionEventBridge: interrupted while awaiting compaction " + "for session %s", sessionId);
         }
     }
 
@@ -148,7 +148,8 @@ public class CompactionEventBridge {
             // F15: Skip compaction only if the session is actively running (IN_PROGRESS),
             // to avoid racing with LLM chat memory reads. Safe to compact when paused
             // for human approval (AWAITING_APPROVAL) — no LLM turn is in flight.
-            if (agentStore.findLatestAwaitingApproval(request.sessionId())
+            if (agentStore
+                    .findLatestAwaitingApproval(request.sessionId())
                     .map(c -> c.getStatus() == CheckpointStatus.IN_PROGRESS)
                     .orElse(false)) {
                 log.infof("Compaction deferred for session %s: session actively in progress", request.sessionId());
@@ -157,10 +158,10 @@ public class CompactionEventBridge {
 
             compactionService.compact(request.sessionId(), request.userId());
         } catch (Exception e) {
-            log.errorf("Compaction failed for session %s: %s",
-                    request.sessionId(), LogUtil.rootMessage(e));
+            log.errorf("Compaction failed for session %s: %s", request.sessionId(), LogUtil.rootMessage(e));
             if (log.isTraceEnabled()) {
-                log.tracef("Full compaction failure detail for session %s: %s",
+                log.tracef(
+                        "Full compaction failure detail for session %s: %s",
                         request.sessionId(), LogUtil.trimmedStack(e));
             }
         } finally {
@@ -174,12 +175,10 @@ public class CompactionEventBridge {
             // so awaitIfInFlight() unblocks as soon as the DB write is done.
             CountDownLatch latch = inFlightLatches.remove(request.sessionId());
             if (latch != null) latch.countDown();
-            log.debugf("Compaction bridge released in-flight latch for session %s",
-                    request.sessionId());
+            log.debugf("Compaction bridge released in-flight latch for session %s", request.sessionId());
 
             compactionInFlight.set(request.sessionId(), false);
-            log.debugf("Compaction bridge released in-flight lock for session %s",
-                    request.sessionId());
+            log.debugf("Compaction bridge released in-flight lock for session %s", request.sessionId());
         }
     }
 }

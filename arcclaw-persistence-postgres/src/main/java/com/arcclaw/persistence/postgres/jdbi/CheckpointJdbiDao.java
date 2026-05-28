@@ -6,6 +6,7 @@ import java.util.Optional;
 
 import com.arcclaw.persistence.api.CheckpointDto;
 import com.arcclaw.persistence.api.ReasoningStepDto;
+
 import org.jdbi.v3.sqlobject.config.RegisterConstructorMapper;
 import org.jdbi.v3.sqlobject.customizer.Bind;
 import org.jdbi.v3.sqlobject.customizer.BindMethods;
@@ -49,49 +50,75 @@ public interface CheckpointJdbiDao {
     @SqlQuery("SELECT " + ALL_COLUMNS + " FROM agent_checkpoint WHERE checkpoint_id = :id")
     Optional<CheckpointDto> findById(@Bind("id") Long id);
 
-    @SqlQuery("SELECT " + ALL_COLUMNS + " FROM agent_checkpoint WHERE session_id = :sessionId AND agent_role = :agentRole AND status <> 'ARCHIVED' ORDER BY checkpoint_id DESC LIMIT 1")
-    Optional<CheckpointDto> findBySessionAndRole(@Bind("sessionId") String sessionId, @Bind("agentRole") String agentRole);
+    @SqlQuery(
+            "SELECT " + ALL_COLUMNS
+                    + " FROM agent_checkpoint WHERE session_id = :sessionId AND agent_role = :agentRole AND status <> 'ARCHIVED' ORDER BY checkpoint_id DESC LIMIT 1")
+    Optional<CheckpointDto> findBySessionAndRole(
+            @Bind("sessionId") String sessionId, @Bind("agentRole") String agentRole);
 
-    @SqlQuery("SELECT " + ALL_COLUMNS + " FROM agent_checkpoint WHERE session_id = :sessionId AND agent_role = :agentRole ORDER BY checkpoint_id DESC LIMIT 1")
-    Optional<CheckpointDto> findAnyBySessionAndRole(@Bind("sessionId") String sessionId, @Bind("agentRole") String agentRole);
+    @SqlQuery(
+            "SELECT " + ALL_COLUMNS
+                    + " FROM agent_checkpoint WHERE session_id = :sessionId AND agent_role = :agentRole ORDER BY checkpoint_id DESC LIMIT 1")
+    Optional<CheckpointDto> findAnyBySessionAndRole(
+            @Bind("sessionId") String sessionId, @Bind("agentRole") String agentRole);
 
-    @SqlQuery("SELECT " + ALL_COLUMNS + " FROM agent_checkpoint WHERE session_id = :sessionId AND status NOT IN ('COMPLETED', 'FAILED', 'DENIED', 'ARCHIVED') ORDER BY checkpoint_id ASC")
+    @SqlQuery(
+            "SELECT " + ALL_COLUMNS
+                    + " FROM agent_checkpoint WHERE session_id = :sessionId AND status NOT IN ('COMPLETED', 'FAILED', 'DENIED', 'ARCHIVED') ORDER BY checkpoint_id ASC")
     List<CheckpointDto> findActiveBySession(@Bind("sessionId") String sessionId);
 
-    @SqlQuery("SELECT " + ALL_COLUMNS + " FROM agent_checkpoint WHERE session_id = :sessionId AND status IN ('AWAITING_APPROVAL', 'RESUMING', 'IN_PROGRESS') ORDER BY checkpoint_id DESC LIMIT 1")
+    @SqlQuery(
+            "SELECT " + ALL_COLUMNS
+                    + " FROM agent_checkpoint WHERE session_id = :sessionId AND status IN ('AWAITING_APPROVAL', 'RESUMING', 'IN_PROGRESS') ORDER BY checkpoint_id DESC LIMIT 1")
     Optional<CheckpointDto> findLatestAwaiting(@Bind("sessionId") String sessionId);
 
     @SqlQuery("SELECT " + ALL_COLUMNS + " FROM agent_checkpoint WHERE status = :status ORDER BY checkpoint_id DESC")
     List<CheckpointDto> findByStatus(@Bind("status") String status);
 
-    @SqlQuery("SELECT " + ALL_COLUMNS + " FROM agent_checkpoint WHERE status NOT IN ('COMPLETED', 'FAILED', 'DENIED', 'ARCHIVED') ORDER BY updated_at DESC")
+    @SqlQuery(
+            "SELECT " + ALL_COLUMNS
+                    + " FROM agent_checkpoint WHERE status NOT IN ('COMPLETED', 'FAILED', 'DENIED', 'ARCHIVED') ORDER BY updated_at DESC")
     List<CheckpointDto> findAllActive();
 
-    @SqlQuery("SELECT " + ALL_COLUMNS + " FROM agent_checkpoint WHERE session_id = :sessionId ORDER BY checkpoint_id DESC LIMIT 1")
+    @SqlQuery("SELECT " + ALL_COLUMNS
+            + " FROM agent_checkpoint WHERE session_id = :sessionId ORDER BY checkpoint_id DESC LIMIT 1")
     Optional<CheckpointDto> findLatestBySession(@Bind("sessionId") String sessionId);
 
-    @SqlQuery("SELECT " + ALL_COLUMNS + " FROM agent_checkpoint WHERE session_id = :sessionId AND status <> 'ARCHIVED' ORDER BY checkpoint_id DESC LIMIT 1")
+    @SqlQuery(
+            "SELECT " + ALL_COLUMNS
+                    + " FROM agent_checkpoint WHERE session_id = :sessionId AND status <> 'ARCHIVED' ORDER BY checkpoint_id DESC LIMIT 1")
     Optional<CheckpointDto> findLatestNonArchived(@Bind("sessionId") String sessionId);
 
-    @SqlQuery("SELECT " + ALL_COLUMNS + " FROM agent_checkpoint WHERE session_id = :sessionId AND status = :status ORDER BY checkpoint_id DESC LIMIT 1")
-    Optional<CheckpointDto> findLatestBySessionAndStatus(@Bind("sessionId") String sessionId, @Bind("status") String status);
+    @SqlQuery(
+            "SELECT " + ALL_COLUMNS
+                    + " FROM agent_checkpoint WHERE session_id = :sessionId AND status = :status ORDER BY checkpoint_id DESC LIMIT 1")
+    Optional<CheckpointDto> findLatestBySessionAndStatus(
+            @Bind("sessionId") String sessionId, @Bind("status") String status);
 
-    @SqlQuery("SELECT " + ALL_COLUMNS + " FROM agent_checkpoint WHERE session_id LIKE '%' || :segment || '%' AND status IN ('AWAITING_APPROVAL', 'RESUMING', 'IN_PROGRESS') ORDER BY checkpoint_id DESC LIMIT 1")
+    @SqlQuery(
+            "SELECT " + ALL_COLUMNS
+                    + " FROM agent_checkpoint WHERE session_id LIKE '%' || :segment || '%' AND status IN ('AWAITING_APPROVAL', 'RESUMING', 'IN_PROGRESS') ORDER BY checkpoint_id DESC LIMIT 1")
     Optional<CheckpointDto> findLatestAwaitingBySegment(@Bind("segment") String segment);
 
-    @SqlQuery("SELECT COUNT(*) > 0 FROM agent_checkpoint WHERE channel_platform_id = :chatId AND status = 'AWAITING_APPROVAL' AND session_id NOT LIKE 'cron-%'")
+    @SqlQuery(
+            "SELECT COUNT(*) > 0 FROM agent_checkpoint WHERE channel_platform_id = :chatId AND status = 'AWAITING_APPROVAL' AND session_id NOT LIKE 'cron-%'")
     boolean hasPendingApprovalForChat(@Bind("chatId") String chatId);
 
     @SqlQuery("SELECT " + ALL_COLUMNS + " FROM agent_checkpoint WHERE status = 'IN_PROGRESS' AND updated_at < :cutoff")
     List<CheckpointDto> findInProgressZombies(@Bind("cutoff") Instant cutoff);
 
-    @SqlQuery("SELECT " + ALL_COLUMNS + " FROM agent_checkpoint WHERE status = 'AWAITING_APPROVAL' AND updated_at < :cutoff")
+    @SqlQuery("SELECT " + ALL_COLUMNS
+            + " FROM agent_checkpoint WHERE status = 'AWAITING_APPROVAL' AND updated_at < :cutoff")
     List<CheckpointDto> findStaleApprovals(@Bind("cutoff") Instant cutoff);
 
-    @SqlQuery("SELECT " + ALL_COLUMNS + " FROM agent_checkpoint WHERE session_id = :sessionId AND status = 'AWAITING_APPROVAL' AND updated_at < :cutoff ORDER BY checkpoint_id DESC LIMIT 1")
+    @SqlQuery(
+            "SELECT " + ALL_COLUMNS
+                    + " FROM agent_checkpoint WHERE session_id = :sessionId AND status = 'AWAITING_APPROVAL' AND updated_at < :cutoff ORDER BY checkpoint_id DESC LIMIT 1")
     List<CheckpointDto> findExpiredCheckpoints(@Bind("sessionId") String sessionId, @Bind("cutoff") Instant cutoff);
 
-    @SqlQuery("SELECT " + ALL_COLUMNS + " FROM agent_checkpoint WHERE session_id = :sessionId AND status NOT IN ('COMPLETED', 'FAILED', 'DENIED', 'ARCHIVED') LIMIT 1")
+    @SqlQuery(
+            "SELECT " + ALL_COLUMNS
+                    + " FROM agent_checkpoint WHERE session_id = :sessionId AND status NOT IN ('COMPLETED', 'FAILED', 'DENIED', 'ARCHIVED') LIMIT 1")
     List<CheckpointDto> findActiveBySessionAny(@Bind("sessionId") String sessionId);
 
     // ── Status Transitions ─────────────────────────────────────────────────
@@ -99,25 +126,41 @@ public interface CheckpointJdbiDao {
     @SqlUpdate("UPDATE agent_checkpoint SET status = :status, updated_at = :updatedAt WHERE checkpoint_id = :id")
     void transitionStatus(@Bind("id") Long id, @Bind("status") String status, @Bind("updatedAt") Instant updatedAt);
 
-    @SqlUpdate("UPDATE agent_checkpoint SET status = :status, updated_at = :updatedAt WHERE checkpoint_id = :id AND status = :expectedStatus")
-    boolean atomicTransition(@Bind("id") Long id, @Bind("status") String status, @Bind("updatedAt") Instant updatedAt, @Bind("expectedStatus") String expectedStatus);
+    @SqlUpdate(
+            "UPDATE agent_checkpoint SET status = :status, updated_at = :updatedAt WHERE checkpoint_id = :id AND status = :expectedStatus")
+    boolean atomicTransition(
+            @Bind("id") Long id,
+            @Bind("status") String status,
+            @Bind("updatedAt") Instant updatedAt,
+            @Bind("expectedStatus") String expectedStatus);
 
-    @SqlUpdate("UPDATE agent_checkpoint SET status = 'FAILED', fail_reason = :reason, error_code = :code, trace_id = :trace, root_cause_class = :root, failed_at = :now, updated_at = :now WHERE checkpoint_id = :id")
-    void markFailed(@Bind("id") Long id, @Bind("reason") String reason, @Bind("code") String code, @Bind("trace") String trace, @Bind("root") String root, @Bind("now") Instant now);
+    @SqlUpdate(
+            "UPDATE agent_checkpoint SET status = 'FAILED', fail_reason = :reason, error_code = :code, trace_id = :trace, root_cause_class = :root, failed_at = :now, updated_at = :now WHERE checkpoint_id = :id")
+    void markFailed(
+            @Bind("id") Long id,
+            @Bind("reason") String reason,
+            @Bind("code") String code,
+            @Bind("trace") String trace,
+            @Bind("root") String root,
+            @Bind("now") Instant now);
 
-    @SqlUpdate("UPDATE agent_checkpoint SET status = 'COMPLETED', completed_at = :now, updated_at = :now WHERE checkpoint_id = :id")
+    @SqlUpdate(
+            "UPDATE agent_checkpoint SET status = 'COMPLETED', completed_at = :now, updated_at = :now WHERE checkpoint_id = :id")
     void markCompleted(@Bind("id") Long id, @Bind("now") Instant now);
 
-    @SqlUpdate("UPDATE agent_checkpoint SET status = 'ORPHANED', fail_reason = :reason, failed_at = :now, updated_at = :now WHERE checkpoint_id = :id")
+    @SqlUpdate(
+            "UPDATE agent_checkpoint SET status = 'ORPHANED', fail_reason = :reason, failed_at = :now, updated_at = :now WHERE checkpoint_id = :id")
     void markOrphaned(@Bind("id") Long id, @Bind("reason") String reason, @Bind("now") Instant now);
 
     @SqlUpdate("UPDATE agent_checkpoint SET status = 'ARCHIVED', updated_at = :now WHERE checkpoint_id = :id")
     void archive(@Bind("id") Long id, @Bind("now") Instant now);
 
-    @SqlUpdate("UPDATE agent_checkpoint SET status = 'AWAITING_RETRY', retry_after_ms = :retryAfterMs, updated_at = :now WHERE checkpoint_id = :id")
+    @SqlUpdate(
+            "UPDATE agent_checkpoint SET status = 'AWAITING_RETRY', retry_after_ms = :retryAfterMs, updated_at = :now WHERE checkpoint_id = :id")
     void markForRetry(@Bind("id") Long id, @Bind("retryAfterMs") Integer retryAfterMs, @Bind("now") Instant now);
 
-    @SqlUpdate("UPDATE agent_checkpoint SET status = 'IN_PROGRESS', retry_after_ms = NULL, updated_at = :now WHERE checkpoint_id = :id AND status = 'AWAITING_RETRY'")
+    @SqlUpdate(
+            "UPDATE agent_checkpoint SET status = 'IN_PROGRESS', retry_after_ms = NULL, updated_at = :now WHERE checkpoint_id = :id AND status = 'AWAITING_RETRY'")
     boolean claimForRetry(@Bind("id") Long id, @Bind("now") Instant now);
 
     // ── Resume Claim ──────────────────────────────────────────────────────
@@ -131,7 +174,11 @@ public interface CheckpointJdbiDao {
             )
             AND (status = 'AWAITING_APPROVAL' OR (status IN ('RESUMING', 'IN_PROGRESS') AND updated_at < :cutoff))
             """)
-    boolean claimForResume(@Bind("sessionId") String sessionId, @Bind("agentRole") String agentRole, @Bind("now") Instant now, @Bind("cutoff") Instant cutoff);
+    boolean claimForResume(
+            @Bind("sessionId") String sessionId,
+            @Bind("agentRole") String agentRole,
+            @Bind("now") Instant now,
+            @Bind("cutoff") Instant cutoff);
 
     @SqlUpdate("""
             UPDATE agent_checkpoint SET status = 'AWAITING_APPROVAL', updated_at = :now
@@ -142,7 +189,8 @@ public interface CheckpointJdbiDao {
             )
             AND status = 'RESUMING'
             """)
-    void releaseResumeClaim(@Bind("sessionId") String sessionId, @Bind("agentRole") String agentRole, @Bind("now") Instant now);
+    void releaseResumeClaim(
+            @Bind("sessionId") String sessionId, @Bind("agentRole") String agentRole, @Bind("now") Instant now);
 
     // ── Full Row Upsert ────────────────────────────────────────────────────
 
@@ -193,19 +241,37 @@ public interface CheckpointJdbiDao {
 
     // ── Targeted Column Updates ───────────────────────────────────────────
 
-    @SqlUpdate("UPDATE agent_checkpoint SET channel_type = :channelType, channel_platform_id = :channelPlatformId, updated_at = :now, version = version + 1 WHERE checkpoint_id = :id")
-    void stampChannelInfo(@Bind("id") Long id, @Bind("channelType") String channelType, @Bind("channelPlatformId") String channelPlatformId, @Bind("now") Instant now);
+    @SqlUpdate(
+            "UPDATE agent_checkpoint SET channel_type = :channelType, channel_platform_id = :channelPlatformId, updated_at = :now, version = version + 1 WHERE checkpoint_id = :id")
+    void stampChannelInfo(
+            @Bind("id") Long id,
+            @Bind("channelType") String channelType,
+            @Bind("channelPlatformId") String channelPlatformId,
+            @Bind("now") Instant now);
 
-    @SqlUpdate("UPDATE agent_checkpoint SET batch_tool_decisions = :json, updated_at = :now WHERE session_id = :sessionId AND agent_role = :agentRole AND status = 'AWAITING_APPROVAL'")
-    boolean atomicUpdateBatchDecision(@Bind("sessionId") String sessionId, @Bind("agentRole") String agentRole, @Bind("json") String json, @Bind("now") Instant now);
+    @SqlUpdate(
+            "UPDATE agent_checkpoint SET batch_tool_decisions = :json, updated_at = :now WHERE session_id = :sessionId AND agent_role = :agentRole AND status = 'AWAITING_APPROVAL'")
+    boolean atomicUpdateBatchDecision(
+            @Bind("sessionId") String sessionId,
+            @Bind("agentRole") String agentRole,
+            @Bind("json") String json,
+            @Bind("now") Instant now);
 
-    @SqlUpdate("UPDATE agent_checkpoint SET status = :status, batch_tool_decisions = :json, updated_at = :now WHERE session_id = :sessionId AND agent_role = :agentRole AND status = 'AWAITING_APPROVAL'")
-    boolean atomicUpdateBatchDecisionWithStatus(@Bind("sessionId") String sessionId, @Bind("agentRole") String agentRole, @Bind("status") String status, @Bind("json") String json, @Bind("now") Instant now);
+    @SqlUpdate(
+            "UPDATE agent_checkpoint SET status = :status, batch_tool_decisions = :json, updated_at = :now WHERE session_id = :sessionId AND agent_role = :agentRole AND status = 'AWAITING_APPROVAL'")
+    boolean atomicUpdateBatchDecisionWithStatus(
+            @Bind("sessionId") String sessionId,
+            @Bind("agentRole") String agentRole,
+            @Bind("status") String status,
+            @Bind("json") String json,
+            @Bind("now") Instant now);
 
     // ── Bulk Operations ────────────────────────────────────────────────────
 
-    @SqlUpdate("UPDATE agent_checkpoint SET status = 'FAILED', fail_reason = :reason, failed_at = :now, updated_at = :now WHERE session_id = :sessionId AND status NOT IN ('COMPLETED', 'FAILED', 'DENIED', 'ARCHIVED')")
-    int markCheckpointsFailed(@Bind("sessionId") String sessionId, @Bind("reason") String reason, @Bind("now") Instant now);
+    @SqlUpdate(
+            "UPDATE agent_checkpoint SET status = 'FAILED', fail_reason = :reason, failed_at = :now, updated_at = :now WHERE session_id = :sessionId AND status NOT IN ('COMPLETED', 'FAILED', 'DENIED', 'ARCHIVED')")
+    int markCheckpointsFailed(
+            @Bind("sessionId") String sessionId, @Bind("reason") String reason, @Bind("now") Instant now);
 
     @SqlUpdate("DELETE FROM agent_checkpoint WHERE session_id = :sessionId AND agent_role = :agentRole")
     void deleteCheckpoint(@Bind("sessionId") String sessionId, @Bind("agentRole") String agentRole);
@@ -213,10 +279,13 @@ public interface CheckpointJdbiDao {
     @SqlUpdate("DELETE FROM agent_checkpoint WHERE checkpoint_id = :id")
     void deleteById(@Bind("id") Long id);
 
-    @SqlUpdate("UPDATE agent_checkpoint SET status = 'FAILED', fail_reason = :reason, error_code = 'ZOMBIE', failed_at = :now, updated_at = :now WHERE status = 'IN_PROGRESS' AND updated_at < :cutoff")
-    int recoverInProgressZombies(@Bind("cutoff") Instant cutoff, @Bind("reason") String reason, @Bind("now") Instant now);
+    @SqlUpdate(
+            "UPDATE agent_checkpoint SET status = 'FAILED', fail_reason = :reason, error_code = 'ZOMBIE', failed_at = :now, updated_at = :now WHERE status = 'IN_PROGRESS' AND updated_at < :cutoff")
+    int recoverInProgressZombies(
+            @Bind("cutoff") Instant cutoff, @Bind("reason") String reason, @Bind("now") Instant now);
 
-    @SqlUpdate("DELETE FROM reasoning_step WHERE checkpoint_id IN (SELECT checkpoint_id FROM agent_checkpoint WHERE updated_at < :cutoff)")
+    @SqlUpdate(
+            "DELETE FROM reasoning_step WHERE checkpoint_id IN (SELECT checkpoint_id FROM agent_checkpoint WHERE updated_at < :cutoff)")
     int deleteReasoningStepsForPurge(@Bind("cutoff") Instant cutoff);
 
     @SqlUpdate("DELETE FROM agent_checkpoint WHERE updated_at < :cutoff")
@@ -227,7 +296,8 @@ public interface CheckpointJdbiDao {
     @SqlUpdate("DELETE FROM reasoning_step WHERE checkpoint_id = :checkpointId")
     void deleteSteps(@Bind("checkpointId") Long checkpointId);
 
-    @SqlQuery("SELECT thoughtJson AS \"thoughtJson\", action, actionInputJson AS \"actionInputJson\", observation, input_tokens AS \"inputTokens\", output_tokens AS \"outputTokens\", success, error_code AS \"errorCode\", trace_id AS \"traceId\", root_cause_class AS \"rootCauseClass\" FROM reasoning_step WHERE checkpoint_id = :checkpointId ORDER BY sequence_num ASC")
+    @SqlQuery(
+            "SELECT thoughtJson AS \"thoughtJson\", action, actionInputJson AS \"actionInputJson\", observation, input_tokens AS \"inputTokens\", output_tokens AS \"outputTokens\", success, error_code AS \"errorCode\", trace_id AS \"traceId\", root_cause_class AS \"rootCauseClass\" FROM reasoning_step WHERE checkpoint_id = :checkpointId ORDER BY sequence_num ASC")
     @RegisterConstructorMapper(ReasoningStepDto.class)
     List<ReasoningStepDto> loadSteps(@Bind("checkpointId") Long checkpointId);
 }

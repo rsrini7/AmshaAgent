@@ -15,6 +15,7 @@ import com.arcclaw.core.reflex.DelegateApprovalGuard;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.util.PreExecutionFilter;
 import com.fasterxml.jackson.databind.ObjectMapper;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -31,11 +32,10 @@ class CoreIntegrationTest {
     @Test
     void testPreExecutionFilter_MixedTools() {
         var calls = List.of(
-            new ParallelToolCall("1", "safe_read", Map.of(), "{}", null, true),
-            new ParallelToolCall("2", "unsafe_write", Map.of(), "{}", null, true)
-        );
+                new ParallelToolCall("1", "safe_read", Map.of(), "{}", null, true),
+                new ParallelToolCall("2", "unsafe_write", Map.of(), "{}", null, true));
         var result = PreExecutionFilter.split(calls, AutonomyLevel.SUPERVISED, Set.of("safe_read"));
-        
+
         assertEquals(1, result.preExecutable().size());
         assertEquals("safe_read", result.preExecutable().get(0).toolName());
         assertEquals(1, result.hitlPending().size());
@@ -46,7 +46,7 @@ class CoreIntegrationTest {
     void testDelegateApprovalGuard_Configured() {
         var guard = new DelegateApprovalGuard();
         guard.setDelegateApproverIds(List.of("admin123"));
-        
+
         assertTrue(guard.isDelegate("admin123"));
         assertFalse(guard.isDelegate("user456"));
     }
@@ -55,7 +55,7 @@ class CoreIntegrationTest {
     void testChannelCommand_ParseSessionId() {
         String input = "/approve b2ada049-88e1-474d-9589-783a82190d46";
         ChannelCommand cmd = ChannelCommand.parse(input);
-        
+
         assertTrue(cmd instanceof ChannelCommand.Approve);
         ChannelCommand.Approve app = (ChannelCommand.Approve) cmd;
         assertEquals(Optional.of("b2ada049-88e1-474d-9589-783a82190d46"), app.targetId());

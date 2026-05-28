@@ -2,10 +2,10 @@ package com.arcclaw.persistence.sqlite.audit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+import jakarta.inject.Inject;
+
 import java.math.BigDecimal;
 import java.util.UUID;
-
-import jakarta.inject.Inject;
 
 import com.arcclaw.core.audit.AuditEventRecorder;
 import com.arcclaw.core.audit.AuditHashUtil;
@@ -14,10 +14,12 @@ import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.persistence.api.AuditEventStorePort;
 import com.arcclaw.persistence.common.entity.AuditEventEntity;
-import io.quarkus.test.junit.QuarkusTest;
+
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+
+import io.quarkus.test.junit.QuarkusTest;
 
 @QuarkusTest
 class AuditEventRepositoryTest {
@@ -42,17 +44,19 @@ class AuditEventRepositoryTest {
     @Test
     void testPersistAndFind() {
         String sessionId = "audit-" + UUID.randomUUID();
-        
+
         AuditEventEntity event = AuditEventEntity.of(
-            sessionId,
-            "user-1",
-            "coordinator",
-            "goal-hash",
-            AuditOutcome.FINISH,
-            SecurityEventType.CHECKPOINT_CREATED,
-            0, 0, BigDecimal.ZERO, 0,
-            "demo"
-        );
+                sessionId,
+                "user-1",
+                "coordinator",
+                "goal-hash",
+                AuditOutcome.FINISH,
+                SecurityEventType.CHECKPOINT_CREATED,
+                0,
+                0,
+                BigDecimal.ZERO,
+                0,
+                "demo");
         event.setPrevHash("prev");
         event.setHmacHash("hmac");
 
@@ -67,7 +71,6 @@ class AuditEventRepositoryTest {
     @Test
     void testValidation_rejectsNullSessionId() {
         AuditEventEntity event = new AuditEventEntity();
-        Assertions.assertThrows(IllegalStateException.class,
-            () -> recorder.validateBeforePersist(event));
+        Assertions.assertThrows(IllegalStateException.class, () -> recorder.validateBeforePersist(event));
     }
 }

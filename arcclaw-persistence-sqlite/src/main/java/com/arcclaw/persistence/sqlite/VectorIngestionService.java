@@ -1,20 +1,22 @@
 package com.arcclaw.persistence.sqlite;
 
+import jakarta.annotation.PreDestroy;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
-import jakarta.annotation.PreDestroy;
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
-
 import com.arcclaw.common.util.LogUtil;
-import io.quarkus.arc.properties.IfBuildProperty;
+
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 import org.jdbi.v3.core.Jdbi;
+
+import io.quarkus.arc.properties.IfBuildProperty;
 
 /**
  * Serializes sqlite-vec vector writes onto a single platform thread.
@@ -42,8 +44,7 @@ public class VectorIngestionService {
     int embedDimensions;
 
     private final ExecutorService writerExecutor = Executors.newSingleThreadExecutor(
-        Thread.ofPlatform().name("archival-vec-writer").daemon(true).factory()
-    );
+            Thread.ofPlatform().name("archival-vec-writer").daemon(true).factory());
 
     /**
      * Ingest a chunk's embedding into vec_archival. Runs on a single platform
@@ -54,36 +55,44 @@ public class VectorIngestionService {
      * @return a future that completes when the write is done
      */
     public CompletableFuture<Void> ingestVector(String chunkId, float[] embedding) {
-        return CompletableFuture.runAsync(() -> {
-            jdbi.useHandle(handle -> {
-                handle.createUpdate(
-                    "INSERT OR REPLACE INTO vec_archival(chunk_id, embedding) VALUES (?, ?)")
-                    .bind(0, chunkId)
-                    .bind(1, embedding)
-                    .execute();
-            });
-        }, writerExecutor).exceptionally(ex -> {
-            log.errorf("VectorIngestionService: vector write failed for chunk %s: %s",
-                chunkId, LogUtil.rootMessage(ex));
-            return null;
-        });
+        return CompletableFuture.runAsync(
+                        () -> {
+                            jdbi.useHandle(handle -> {
+                                handle.createUpdate(
+                                                "INSERT OR REPLACE INTO vec_archival(chunk_id, embedding) VALUES (?, ?)")
+                                        .bind(0, chunkId)
+                                        .bind(1, embedding)
+                                        .execute();
+                            });
+                        },
+                        writerExecutor)
+                .exceptionally(ex -> {
+                    log.errorf(
+                            "VectorIngestionService: vector write failed for chunk %s: %s",
+                            chunkId, LogUtil.rootMessage(ex));
+                    return null;
+                });
     }
 
     /**
      * Delete a chunk's embedding from vec_archival.
      */
     public CompletableFuture<Void> deleteVector(String chunkId) {
-        return CompletableFuture.runAsync(() -> {
-            jdbi.useHandle(handle -> {
-                handle.createUpdate("DELETE FROM vec_archival WHERE chunk_id = ?")
-                    .bind(0, chunkId)
-                    .execute();
-            });
-        }, writerExecutor).exceptionally(ex -> {
-            log.errorf("VectorIngestionService: vector delete failed for chunk %s: %s",
-                chunkId, LogUtil.rootMessage(ex));
-            return null;
-        });
+        return CompletableFuture.runAsync(
+                        () -> {
+                            jdbi.useHandle(handle -> {
+                                handle.createUpdate("DELETE FROM vec_archival WHERE chunk_id = ?")
+                                        .bind(0, chunkId)
+                                        .execute();
+                            });
+                        },
+                        writerExecutor)
+                .exceptionally(ex -> {
+                    log.errorf(
+                            "VectorIngestionService: vector delete failed for chunk %s: %s",
+                            chunkId, LogUtil.rootMessage(ex));
+                    return null;
+                });
     }
 
     /**
@@ -95,17 +104,15 @@ public class VectorIngestionService {
      * @return array of [chunkId, distance] pairs, ordered by distance ASC
      */
     public List<Object[]> searchVector(float[] queryEmbedding, int limit) {
-        return jdbi.withHandle(handle ->
-            handle.createQuery(
-                    "SELECT chunk_id, vec_distance_cosine(embedding, :embedding) AS distance " +
-                    "FROM vec_archival " +
-                    "ORDER BY distance ASC " +
-                    "LIMIT :limit")
+        return jdbi.withHandle(handle -> handle.createQuery(
+                        "SELECT chunk_id, vec_distance_cosine(embedding, :embedding) AS distance "
+                                + "FROM vec_archival "
+                                + "ORDER BY distance ASC "
+                                + "LIMIT :limit")
                 .bind("embedding", queryEmbedding)
                 .bind("limit", limit)
-                .map((rs, ctx) -> new Object[]{rs.getString("chunk_id"), rs.getDouble("distance")})
-                .list()
-        );
+                .map((rs, ctx) -> new Object[] {rs.getString("chunk_id"), rs.getDouble("distance")})
+                .list());
     }
 
     /**

@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.tools.ToolResponse;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -64,7 +65,8 @@ class ExecutionFailureRecoveryServiceTest {
 
     @Test
     void extractCodeFromResponse_fencedCodeBlock() {
-        String response = "Here is the fixed code:\n```go\npackage main\n\nfunc main() {\n    fmt.Println(\"hello\")\n}\n```";
+        String response =
+                "Here is the fixed code:\n```go\npackage main\n\nfunc main() {\n    fmt.Println(\"hello\")\n}\n```";
         String code = service.extractCodeFromResponse(response);
         assertNotNull(code);
         assertEquals("package main\n\nfunc main() {\n    fmt.Println(\"hello\")\n}", code);
@@ -72,7 +74,8 @@ class ExecutionFailureRecoveryServiceTest {
 
     @Test
     void extractCodeFromResponse_fencedCodeBlockWithLanguage() {
-        String response = "```java\npublic class Main {\n    public static void main(String[] args) {\n        System.out.println(\"hi\");\n    }\n}\n```";
+        String response =
+                "```java\npublic class Main {\n    public static void main(String[] args) {\n        System.out.println(\"hi\");\n    }\n}\n```";
         String code = service.extractCodeFromResponse(response);
         assertNotNull(code);
         assertTrue(code.contains("public class Main"));
@@ -141,7 +144,8 @@ class ExecutionFailureRecoveryServiceTest {
 
     @Test
     void formatAgentResultError_awaitingApproval() {
-        AgentResult result = AgentResult.awaitingApproval(ToolCapability.SANDBOX_EXEC.toolName(), "null", "sess1", null);
+        AgentResult result =
+                AgentResult.awaitingApproval(ToolCapability.SANDBOX_EXEC.toolName(), "null", "sess1", null);
         String msg = service.formatAgentResultError(result);
         assertTrue(msg.contains("requires human approval"));
     }

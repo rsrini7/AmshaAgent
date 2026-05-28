@@ -11,10 +11,15 @@ import java.util.UUID;
  */
 public interface AuditEventStorePort {
     void save(AuditEventDto dto);
+
     Optional<String> findLatestHash(String sessionId);
+
     List<AuditEventDto> findBySessionId(String sessionId);
+
     long countByIdempotencyKey(String key);
+
     long countEventsByType(String sessionId, String eventType);
+
     long getMaxSequence(String sessionId);
 
     /**

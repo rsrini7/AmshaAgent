@@ -4,6 +4,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 
 import com.arcclaw.core.llm.LlmValidationException;
 import com.arcclaw.core.llm.LlmValidationGateway;
+
 import io.quarkus.test.Mock;
 
 @Mock

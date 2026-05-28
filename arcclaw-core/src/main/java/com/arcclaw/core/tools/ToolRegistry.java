@@ -1,5 +1,10 @@
 package com.arcclaw.core.tools;
 
+import jakarta.annotation.PostConstruct;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.event.Observes;
+import jakarta.inject.Inject;
+
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Collections;
@@ -9,11 +14,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
-
-import jakarta.annotation.PostConstruct;
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.enterprise.event.Observes;
-import jakarta.inject.Inject;
 
 import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.core.agent.role.ToolCapability;
@@ -31,11 +31,13 @@ import com.arcclaw.core.util.ClassUtils;
 import com.arcclaw.core.util.PathSanitizer;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+
+import org.eclipse.microprofile.config.inject.ConfigProperty;
+import org.jboss.logging.Logger;
+
 import io.opentelemetry.api.trace.Span;
 import io.quarkus.arc.Unremovable;
 import io.quarkus.runtime.StartupEvent;
-import org.eclipse.microprofile.config.inject.ConfigProperty;
-import org.jboss.logging.Logger;
 
 /**
  * CDI-based tool registry with governance enforcement.
@@ -60,12 +62,23 @@ public class ToolRegistry {
 
     private static final Logger log = Logger.getLogger(ToolRegistry.class);
 
-    @Inject ToolDiscoveryService discoveryService;
-    @Inject ToolGovernanceGuard governanceGuard;
-    @Inject ToolSecretExtractor secretExtractor;
-    @Inject ProcessIsolationExecutor isolationExecutor;
-    @Inject ObjectMapper objectMapper;
-    @Inject AuditService auditService;
+    @Inject
+    ToolDiscoveryService discoveryService;
+
+    @Inject
+    ToolGovernanceGuard governanceGuard;
+
+    @Inject
+    ToolSecretExtractor secretExtractor;
+
+    @Inject
+    ProcessIsolationExecutor isolationExecutor;
+
+    @Inject
+    ObjectMapper objectMapper;
+
+    @Inject
+    AuditService auditService;
 
     @ConfigProperty(name = "arcclaw.workspace.root-dir", defaultValue = "./data/workspaces")
     String workspaceRootDir;
@@ -103,8 +116,7 @@ public class ToolRegistry {
      * Invokes a tool by name after verifying governance constraints.
      */
     public ToolResponse invokeTool(String toolName, Map<String, Object> params) {
-        var tool = findTool(toolName)
-                .orElseThrow(() -> new IllegalArgumentException("Unknown tool: " + toolName));
+        var tool = findTool(toolName).orElseThrow(() -> new IllegalArgumentException("Unknown tool: " + toolName));
 
         ToolExecutionContext ctx = new ToolExecutionContext(
                 WorkspaceContext.SESSION_ID.isBound() ? WorkspaceContext.SESSION_ID.get() : "system",
@@ -117,9 +129,10 @@ public class ToolRegistry {
                 WorkspaceContext.CHANNEL_PLATFORM_ID.isBound() ? WorkspaceContext.CHANNEL_PLATFORM_ID.get() : null,
                 WorkspaceContext.RAW_USER_GOAL.isBound() ? WorkspaceContext.RAW_USER_GOAL.get() : null,
                 WorkspaceContext.SUGGESTED_CRON.isBound() ? WorkspaceContext.SUGGESTED_CRON.get() : null,
-                WorkspaceContext.SUGGESTED_NEXT_FIRE_TIME.isBound() ? WorkspaceContext.SUGGESTED_NEXT_FIRE_TIME.get() : null,
-                WorkspaceContext.SUGGESTED_CRON_SOURCE.isBound() ? WorkspaceContext.SUGGESTED_CRON_SOURCE.get() : null
-        );
+                WorkspaceContext.SUGGESTED_NEXT_FIRE_TIME.isBound()
+                        ? WorkspaceContext.SUGGESTED_NEXT_FIRE_TIME.get()
+                        : null,
+                WorkspaceContext.SUGGESTED_CRON_SOURCE.isBound() ? WorkspaceContext.SUGGESTED_CRON_SOURCE.get() : null);
 
         // 1. Governance checks
         try {
@@ -133,7 +146,9 @@ public class ToolRegistry {
 
         // Mandatory audit: TOOL_INVOKED (fail-closed compliance)
         auditService.record(
-                ctx.sessionId(), ctx.userId(), ctx.agentRole(),
+                ctx.sessionId(),
+                ctx.userId(),
+                ctx.agentRole(),
                 SecurityEventType.TOOL_INVOKED,
                 "tool=" + toolName + " op=" + tool.requiredOperation());
 
@@ -148,9 +163,9 @@ public class ToolRegistry {
         }
 
         // §Fix: Strictly strip parameters NOT defined in the tool's schema.
-        // LLMs frequently hallucinate extra parameters. While ScheduleTaskTool now supports 
+        // LLMs frequently hallucinate extra parameters. While ScheduleTaskTool now supports
         // 'executionRole', other tools might crash or return a 400 if they receive unknown keys.
-        if (tool.parametersSchema() != null 
+        if (tool.parametersSchema() != null
                 && tool.parametersSchema().properties() != null
                 && !tool.parametersSchema().properties().isEmpty()) {
             Set<String> allowedKeys = tool.parametersSchema().properties().keySet();
@@ -187,9 +202,8 @@ public class ToolRegistry {
             tool.prepareWorkspace(workspaceRoot, params);
             var command = tool.sandboxCommand(ctx, params);
 
-            SandboxResult result = isolationExecutor.executeSandboxed(
-                    ctx.sessionId(), workspaceRoot,
-                    command, requiredSecrets);
+            SandboxResult result =
+                    isolationExecutor.executeSandboxed(ctx.sessionId(), workspaceRoot, command, requiredSecrets);
 
             if (result.isInfraFailure()) {
                 return ToolResponse.infraFailure(result.reason());
@@ -212,6 +226,7 @@ public class ToolRegistry {
             return handleExecutionException(ctx, toolName, e);
         }
     }
+
     private ToolResponse invokeDirect(ToolExecutionContext ctx, AgentTool tool, Map<String, Object> params) {
         String toolName = tool.name();
         log.infof("Invoking tool '%s' directly (sandbox opted out)", toolName);
@@ -239,7 +254,7 @@ public class ToolRegistry {
         }
         String raw = unwrapped.getMessage() != null ? unwrapped.getMessage() : ClassUtils.getCleanName(unwrapped);
         String traceId = Span.current().getSpanContext().getTraceId();
-        
+
         String friendly;
         if (toolName.equalsIgnoreCase(ToolCapability.GITHUB.toolName()) && raw.contains("Cannot run program \"gh\"")) {
             friendly = "GitHub integration is not available in this environment. The `gh` CLI is not installed.";
@@ -248,7 +263,8 @@ public class ToolRegistry {
         }
 
         log.errorf("Tool '%s' execution failed: %s", toolName, raw);
-        ToolResponse response = ToolResponse.failure(1, friendly, "TOOL_EXECUTION_FAILED", traceId, ClassUtils.getCleanName(unwrapped));
+        ToolResponse response =
+                ToolResponse.failure(1, friendly, "TOOL_EXECUTION_FAILED", traceId, ClassUtils.getCleanName(unwrapped));
         governanceGuard.recordToolFailureAudit(ctx, toolName, response);
         return response;
     }
@@ -268,6 +284,7 @@ public class ToolRegistry {
     public List<ToolDescriptor> listToolDescriptors() {
         return List.copyOf(discoveryService.getDescriptorCache().values());
     }
+
     public Map<String, String> extractRequiredSecrets(AgentTool tool) {
         return discoveryService.getSecretsCache().getOrDefault(tool.name(), Collections.emptyMap());
     }

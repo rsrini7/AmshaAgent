@@ -1,16 +1,18 @@
 package com.arcclaw.app;
 
+import picocli.CommandLine;
+import picocli.CommandLine.Command;
+
 import jakarta.inject.Inject;
 
 import com.arcclaw.app.cli.AttachCommand;
 import com.arcclaw.app.cli.ChatCommand;
 import com.arcclaw.app.config.AppBootstrap;
 import com.arcclaw.app.util.CliUtils;
+
 import io.quarkus.runtime.Quarkus;
 import io.quarkus.runtime.QuarkusApplication;
 import io.quarkus.runtime.annotations.QuarkusMain;
-import picocli.CommandLine;
-import picocli.CommandLine.Command;
 
 /**
  * ArcClaw Dual-Mode Entry Point.
@@ -34,12 +36,10 @@ import picocli.CommandLine.Command;
  * config system. We only check whether required vars are present.
  */
 @QuarkusMain
-@Command(name = "arcclaw", mixinStandardHelpOptions = true, subcommands = {
-        AskCommand.class,
-        ServeCommand.class,
-        ChatCommand.class,
-        AttachCommand.class
-})
+@Command(
+        name = "arcclaw",
+        mixinStandardHelpOptions = true,
+        subcommands = {AskCommand.class, ServeCommand.class, ChatCommand.class, AttachCommand.class})
 @SuppressWarnings("java:S106")
 public class ArcClawCli implements Runnable, QuarkusApplication {
 

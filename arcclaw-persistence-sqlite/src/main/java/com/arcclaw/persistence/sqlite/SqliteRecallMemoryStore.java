@@ -1,18 +1,20 @@
 package com.arcclaw.persistence.sqlite;
 
-import java.util.List;
-import java.util.Optional;
-
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
+
+import java.util.List;
+import java.util.Optional;
 
 import com.arcclaw.core.memory.tiered.TieredBackend;
 import com.arcclaw.persistence.api.RecallMemoryStorePort;
 import com.arcclaw.persistence.api.RecallMessageDto;
 import com.arcclaw.persistence.api.RecallSearchQuery;
 import com.arcclaw.persistence.sqlite.jdbi.RecallMemoryJdbiDao;
-import io.quarkus.arc.properties.IfBuildProperty;
+
 import org.jdbi.v3.core.Jdbi;
+
+import io.quarkus.arc.properties.IfBuildProperty;
 
 @ApplicationScoped
 @TieredBackend("sqlite")
@@ -32,8 +34,7 @@ public class SqliteRecallMemoryStore implements RecallMemoryStorePort {
 
     @Override
     public void insertOrIgnore(RecallMessageDto message) {
-        jdbi.useExtension(RecallMemoryJdbiDao.class,
-            dao -> dao.insertOrIgnore(message));
+        jdbi.useExtension(RecallMemoryJdbiDao.class, dao -> dao.insertOrIgnore(message));
     }
 
     @Override
@@ -41,21 +42,19 @@ public class SqliteRecallMemoryStore implements RecallMemoryStorePort {
         if (messages == null || messages.isEmpty()) {
             return;
         }
-        jdbi.useExtension(RecallMemoryJdbiDao.class,
-            dao -> dao.insertBatch(messages));
+        jdbi.useExtension(RecallMemoryJdbiDao.class, dao -> dao.insertBatch(messages));
     }
 
     @Override
     public List<RecallMessageDto> search(RecallSearchQuery query) {
-        return jdbi.withExtension(RecallMemoryJdbiDao.class, dao -> 
-            dao.search(
-                query.userId(), 
-                query.isCrossSession() ? null : query.sessionId(), 
-                query.query(), 
-                query.includeSummaries(), 
-                query.limit()
-            )
-        );
+        return jdbi.withExtension(
+                RecallMemoryJdbiDao.class,
+                dao -> dao.search(
+                        query.userId(),
+                        query.isCrossSession() ? null : query.sessionId(),
+                        query.query(),
+                        query.includeSummaries(),
+                        query.limit()));
     }
 
     @Override
@@ -64,6 +63,5 @@ public class SqliteRecallMemoryStore implements RecallMemoryStorePort {
     }
 
     @Override
-    public void purgeExpired(String userId, int retentionDays) {
-    }
+    public void purgeExpired(String userId, int retentionDays) {}
 }

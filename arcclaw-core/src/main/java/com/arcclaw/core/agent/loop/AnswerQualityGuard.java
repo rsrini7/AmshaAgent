@@ -1,19 +1,20 @@
 package com.arcclaw.core.agent.loop;
 
+import jakarta.annotation.PostConstruct;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+
 import java.util.List;
 import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
-import jakarta.annotation.PostConstruct;
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
-
 import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.tools.ToolRegistry;
 import com.arcclaw.core.util.TextPatternUtils;
+
 import org.jboss.logging.Logger;
 
 /**
@@ -54,15 +55,11 @@ public class AnswerQualityGuard implements AnswerGuardStrategy {
 
     @PostConstruct
     void initialize() {
-        String toolNames = toolRegistry.listTools().stream()
-                .sorted()
-                .collect(Collectors.joining("|"));
+        String toolNames = toolRegistry.listTools().stream().sorted().collect(Collectors.joining("|"));
 
         // Dynamic pattern: \b(tool1|tool2|...)\s*\(([^)]*)\)
-        this.nakedFunctionCallPattern = Pattern.compile(
-                "\\b(" + toolNames + ")\\s*\\(([^)]*)\\)",
-                Pattern.CASE_INSENSITIVE
-        );
+        this.nakedFunctionCallPattern =
+                Pattern.compile("\\b(" + toolNames + ")\\s*\\(([^)]*)\\)", Pattern.CASE_INSENSITIVE);
         this.leakedToolCallParser = new LeakedToolCallParser(toolRegistry);
         log.debugf("AnswerQualityGuard initialized with dynamic naked call pattern for tools: %s", toolNames);
     }
@@ -72,12 +69,10 @@ public class AnswerQualityGuard implements AnswerGuardStrategy {
     // -------------------------------------------------------------------------
 
     /** Detects standard JSON tool-call envelope: {"type":"function", ...} */
-    static final Pattern RAW_TOOL_CALL_PATTERN =
-            Pattern.compile("\"type\"\\s*:\\s*\"function\"", Pattern.DOTALL);
+    static final Pattern RAW_TOOL_CALL_PATTERN = Pattern.compile("\"type\"\\s*:\\s*\"function\"", Pattern.DOTALL);
 
     /** Detects tool_calls array: {"tool_calls": [...]} */
-    static final Pattern RAW_TOOL_CALLS_ARRAY_PATTERN =
-            Pattern.compile("\"tool_calls\"\\s*:\\s*\\[", Pattern.DOTALL);
+    static final Pattern RAW_TOOL_CALLS_ARRAY_PATTERN = Pattern.compile("\"tool_calls\"\\s*:\\s*\\[", Pattern.DOTALL);
 
     /** Detects markdown-wrapped delegatetoagent or m-delegate call. */
     static final Pattern RAW_DELEGATE_CALL_PATTERN =
@@ -88,27 +83,23 @@ public class AnswerQualityGuard implements AnswerGuardStrategy {
             Pattern.compile("\"(?:tool_)?name\"\\s*:\\s*\"[^\"]+\"\\s*,\\s*\"parameters\"", Pattern.DOTALL);
 
     /** Detects NVIDIA-style TOOLCALLS prefix leaking into FINISH text. */
-    static final Pattern NVIDIA_TOOL_CALL_PATTERN =
-            Pattern.compile("TOOLCALLS", Pattern.CASE_INSENSITIVE);
+    static final Pattern NVIDIA_TOOL_CALL_PATTERN = Pattern.compile("TOOLCALLS", Pattern.CASE_INSENSITIVE);
 
     /** Detects Mistral-style [TOOL_CALLS] prefix leaking into FINISH text. */
-    static final Pattern MISTRAL_TOOL_CALL_PATTERN =
-            Pattern.compile("\\[TOOL_CALLS\\]", Pattern.CASE_INSENSITIVE);
+    static final Pattern MISTRAL_TOOL_CALL_PATTERN = Pattern.compile("\\[TOOL_CALLS\\]", Pattern.CASE_INSENSITIVE);
 
     /**
      * Extracts the tool name from a standard JSON leak so the correction hint
      * can name the tool explicitly.
      * Previously compiled inline inside the FINISH handler - §9.1 violation fixed.
      */
-    static final Pattern LEAKED_TOOL_NAME_PATTERN =
-            Pattern.compile("\"name\"\\s*:\\s*\"([^\"]+)\"");
+    static final Pattern LEAKED_TOOL_NAME_PATTERN = Pattern.compile("\"name\"\\s*:\\s*\"([^\"]+)\"");
 
     /**
      * Extracts the tool name from an NVIDIA-style TOOLCALLS leak.
      * Previously compiled inline inside the FINISH handler - §9.1 violation fixed.
      */
-    static final Pattern NVIDIA_TOOL_NAME_PATTERN =
-            Pattern.compile("TOOLCALLS\\s+(\\S+)");
+    static final Pattern NVIDIA_TOOL_NAME_PATTERN = Pattern.compile("TOOLCALLS\\s+(\\S+)");
 
     /**
      * Strips everything from the first TOOLCALLS token onwards (inclusive).
@@ -116,12 +107,10 @@ public class AnswerQualityGuard implements AnswerGuardStrategy {
      * highest-frequency §9.1 violation because that method is called on every
      * FINISH answer.
      */
-    static final Pattern NVIDIA_STRIP_PATTERN =
-            Pattern.compile("(?i)TOOLCALLS.*", Pattern.DOTALL);
+    static final Pattern NVIDIA_STRIP_PATTERN = Pattern.compile("(?i)TOOLCALLS.*", Pattern.DOTALL);
 
     /** Strips everything from the first [TOOL_CALLS] token onwards. */
-    static final Pattern MISTRAL_STRIP_PATTERN =
-            Pattern.compile("(?i)\\[TOOL_CALLS\\].*", Pattern.DOTALL);
+    static final Pattern MISTRAL_STRIP_PATTERN = Pattern.compile("(?i)\\[TOOL_CALLS\\].*", Pattern.DOTALL);
 
     /**
      * Matches suspiciously short non-answers: "Done.", "OK.", "ok", etc.
@@ -144,8 +133,7 @@ public class AnswerQualityGuard implements AnswerGuardStrategy {
     static final int DESCRIPTIVE_BYPASS_MIN_LENGTH = 500;
 
     /** Keywords that indicate a descriptive intent rather than a technical leak. */
-    static final Pattern DESC_KEYWORD_PATTERN =
-            Pattern.compile("(?i)capabilities|available tools|agent roles|schema");
+    static final Pattern DESC_KEYWORD_PATTERN = Pattern.compile("(?i)capabilities|available tools|agent roles|schema");
 
     // -------------------------------------------------------------------------
     // Public API
@@ -163,7 +151,8 @@ public class AnswerQualityGuard implements AnswerGuardStrategy {
 
         // Heuristic: If the answer is long and contains descriptive keywords,
         // it is likely a valid explanation of capabilities rather than a leak.
-        if (answer.length() > DESCRIPTIVE_BYPASS_MIN_LENGTH && DESC_KEYWORD_PATTERN.matcher(answer).find()) {
+        if (answer.length() > DESCRIPTIVE_BYPASS_MIN_LENGTH
+                && DESC_KEYWORD_PATTERN.matcher(answer).find()) {
             return false;
         }
 
@@ -173,7 +162,8 @@ public class AnswerQualityGuard implements AnswerGuardStrategy {
                 || RAW_TOOL_JSON_PATTERN.matcher(answer).find()
                 || NVIDIA_TOOL_CALL_PATTERN.matcher(answer).find()
                 || MISTRAL_TOOL_CALL_PATTERN.matcher(answer).find()
-                || (nakedFunctionCallPattern != null && nakedFunctionCallPattern.matcher(answer).find())
+                || (nakedFunctionCallPattern != null
+                        && nakedFunctionCallPattern.matcher(answer).find())
                 || textPatternUtils.looksLikeJson(answer);
     }
 
@@ -194,20 +184,20 @@ public class AnswerQualityGuard implements AnswerGuardStrategy {
     public String stripRawToolJson(String answer) {
         if (answer == null) return "";
         String stripped = answer;
-        
+
         // Remove markdown JSON code blocks entirely if they appear to be tool leaks
         // Handles nested braces correctly by matching until the closing fence.
         stripped = stripped.replaceAll("(?s)```json\\s*.*?\\s*```", "");
-        
+
         // Remove {"type": "function", ...} - greedy to handle nested objects
         stripped = stripped.replaceAll("(?s)\\{[^{}]*\"type\"\\s*:\\s*\"function\"[^{}]*}", "");
-        
+
         // Remove {"tool_calls": [...]} or {"calls": [...]} entirely
         stripped = stripped.replaceAll("(?s)\\{\\s*\"(?:tool_)?calls\"\\s*:.*?}", "");
-        
+
         // Remove {"name": ..., "parameters": ...} or {"tool_name": ..., "parameters": ...}
         stripped = stripped.replaceAll("(?s)\\{\\s*\"(?:tool_)?name\"\\s*:.*?\"parameters\"\\s*:.*?}", "");
-        
+
         // Remove naked function calls: tool_name(param="value")
         if (nakedFunctionCallPattern != null) {
             stripped = nakedFunctionCallPattern.matcher(stripped).replaceAll("");
@@ -216,19 +206,22 @@ public class AnswerQualityGuard implements AnswerGuardStrategy {
         // Final catch-all for any trailing JSON fragment or punctuation-only remnants
         String trimmed = stripped.strip();
         if (trimmed.length() < 10) {
-             // If very short and consists only of JSON/markdown punctuation, clear it
-             if (trimmed.matches("^[\\s\\{\\}\\[\\]\\\":\\,`\\-]*$")) {
-                 stripped = "";
-             }
+            // If very short and consists only of JSON/markdown punctuation, clear it
+            if (trimmed.matches("^[\\s\\{\\}\\[\\]\\\":\\,`\\-]*$")) {
+                stripped = "";
+            }
         }
 
         // Final catch-all: if the entire remaining text is a single JSON object, remove it
         trimmed = stripped.strip();
         if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
             // Check if it contains tool-related keys
-            if (trimmed.contains("\"name\"") || trimmed.contains("\"action\"") 
-                    || trimmed.contains("\"tool\"") || trimmed.contains("\"function\"")
-                    || trimmed.contains("\"query\"") || trimmed.contains("\"parameters\"")) {
+            if (trimmed.contains("\"name\"")
+                    || trimmed.contains("\"action\"")
+                    || trimmed.contains("\"tool\"")
+                    || trimmed.contains("\"function\"")
+                    || trimmed.contains("\"query\"")
+                    || trimmed.contains("\"parameters\"")) {
                 stripped = "";
             }
         }
@@ -248,19 +241,19 @@ public class AnswerQualityGuard implements AnswerGuardStrategy {
         if (nameMatcher.find()) return nameMatcher.group(1);
         Matcher nvidiaMatcher = NVIDIA_TOOL_NAME_PATTERN.matcher(answer);
         if (nvidiaMatcher.find()) return nvidiaMatcher.group(1);
-        
+
         if (nakedFunctionCallPattern != null) {
             Matcher nakedMatcher = nakedFunctionCallPattern.matcher(answer);
             if (nakedMatcher.find()) {
-                 // Heuristic: get the part before the first '('
-                 String block = nakedMatcher.group(0);
-                 int parenIdx = block.indexOf('(');
-                 if (parenIdx > 0) return block.substring(0, parenIdx).trim();
+                // Heuristic: get the part before the first '('
+                String block = nakedMatcher.group(0);
+                int parenIdx = block.indexOf('(');
+                if (parenIdx > 0) return block.substring(0, parenIdx).trim();
             }
         }
 
         if (answer.contains("delegatetoagent")) return "delegatetoagent";
-        
+
         if (textPatternUtils.looksLikeJson(answer)) {
             return "a structured JSON block";
         }
@@ -276,11 +269,13 @@ public class AnswerQualityGuard implements AnswerGuardStrategy {
     @Override
     public AnswerGuardResult guard(String rawAnswer, List<ReasoningStep> history) {
         if (rawAnswer == null || rawAnswer.isBlank()) {
-            return new AnswerGuardResult("I wasn't able to generate a response. Please try again.", false, "null_or_blank");
+            return new AnswerGuardResult(
+                    "I wasn't able to generate a response. Please try again.", false, "null_or_blank");
         }
 
-        String sessionId = "unknown"; // Strategy signature change - may need contextual session lookup if logging is critical here
-        
+        String sessionId =
+                "unknown"; // Strategy signature change - may need contextual session lookup if logging is critical here
+
         // Existing leak detection
         if (isRawToolCallLeak(rawAnswer)) {
             String toolName = extractLeakedToolName(rawAnswer);
@@ -289,7 +284,7 @@ public class AnswerQualityGuard implements AnswerGuardStrategy {
 
         String guarded = guardFinalAnswer(rawAnswer, 0, sessionId);
         boolean salvaged = !guarded.equals(rawAnswer.strip());
-        
+
         if (guarded.contains("Please try again") && !salvaged) {
             return new AnswerGuardResult(guarded, false, "answer_validation_failed");
         }
@@ -319,7 +314,8 @@ public class AnswerQualityGuard implements AnswerGuardStrategy {
 
         // Guard 1: suspiciously short non-answer
         if (SUSPICIOUSLY_SHORT.matcher(stripped).matches()) {
-            log.warnf("ANSWER-GUARD suspiciously short answer '%s' (tokens=%d) for session %s - retry prompt",
+            log.warnf(
+                    "ANSWER-GUARD suspiciously short answer '%s' (tokens=%d) for session %s - retry prompt",
                     stripped, outputTokens, sessionId);
             return "I wasn't able to generate a meaningful response. Please try again.";
         }
@@ -327,7 +323,8 @@ public class AnswerQualityGuard implements AnswerGuardStrategy {
         // Guard 2: punctuation-only garbage (Bug-1 fix)
         long alphaCount = stripped.chars().filter(Character::isLetterOrDigit).count();
         if (stripped.length() < MIN_ANSWER_ALPHA_LENGTH && alphaCount == 0) {
-            log.warnf("ANSWER-GUARD punctuation-only answer '%s' (tokens=%d) for session %s - retry prompt",
+            log.warnf(
+                    "ANSWER-GUARD punctuation-only answer '%s' (tokens=%d) for session %s - retry prompt",
                     stripped, outputTokens, sessionId);
             return "I wasn't able to generate a meaningful response. Please try again.";
         }
@@ -343,7 +340,9 @@ public class AnswerQualityGuard implements AnswerGuardStrategy {
 
         // Guard 4: compaction "Retrieved Context" echo
         if (AgentSentinels.CONTEXT_RETRIEVED_ECHO_PATTERN.matcher(stripped).find()) {
-            log.warnf("ANSWER-GUARD detected Retrieved Context echo in answer for session %s - stripping header", sessionId);
+            log.warnf(
+                    "ANSWER-GUARD detected Retrieved Context echo in answer for session %s - stripping header",
+                    sessionId);
             stripped = stripContextHeader(stripped, AgentSentinels.CONTEXT_RETRIEVED_ECHO_PATTERN);
             if (stripped.isBlank()) {
                 return "I wasn't able to generate a clean response. Please try again.";
@@ -352,7 +351,9 @@ public class AnswerQualityGuard implements AnswerGuardStrategy {
 
         // Guard 5: system-prompt echo (delegates pattern ref to AgentSentinels)
         if (AgentSentinels.SYSTEM_PROMPT_ECHO_PATTERN.matcher(stripped).find()) {
-            log.warnf("ANSWER-GUARD detected system prompt echo in answer for session %s - stripping internal context", sessionId);
+            log.warnf(
+                    "ANSWER-GUARD detected system prompt echo in answer for session %s - stripping internal context",
+                    sessionId);
             int echoStart = findEchoStart(stripped, AgentSentinels.SYSTEM_PROMPT_ECHO_PATTERN);
             if (echoStart > 0) {
                 String salvaged = stripped.substring(0, echoStart).strip();
@@ -364,7 +365,7 @@ public class AnswerQualityGuard implements AnswerGuardStrategy {
         }
 
         // Guard 6: system instruction echo (delegates pattern ref to AgentSentinels)
-        // The model echoes back formatting instructions ("Response must be 1-2 sentences") 
+        // The model echoes back formatting instructions ("Response must be 1-2 sentences")
         // as meta-commentary instead of answering the user's question.
         if (AgentSentinels.SYSTEM_INSTRUCTION_ECHO_PATTERN.matcher(stripped).find()) {
             log.warnf("ANSWER-GUARD detected system instruction echo in answer for session %s - rejecting", sessionId);

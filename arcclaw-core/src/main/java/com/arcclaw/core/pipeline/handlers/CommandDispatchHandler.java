@@ -17,6 +17,7 @@ import com.arcclaw.core.reflex.ReflexResult;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.util.TimeContextInjector;
+
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
@@ -44,8 +45,7 @@ public class CommandDispatchHandler implements MessageHandler {
 
     @Override
     public HandleResult handle(MessageContext context) {
-        ChannelCommand cmd = commandParserRegistry.parse(
-            context.getMessage().text(), context.getChannelType());
+        ChannelCommand cmd = commandParserRegistry.parse(context.getMessage().text(), context.getChannelType());
 
         if (cmd instanceof ChannelCommand.BuiltInChannelCommand bic) {
             return switch (bic) {
@@ -73,9 +73,9 @@ public class CommandDispatchHandler implements MessageHandler {
                     dispatch(context, "/status");
                     yield HandleResult.STOP;
                 }
-                case ChannelCommand.History _ -> { 
-                    dispatch(context, "/history"); 
-                    yield HandleResult.STOP; 
+                case ChannelCommand.History _ -> {
+                    dispatch(context, "/history");
+                    yield HandleResult.STOP;
                 }
                 case ChannelCommand.Halt _ -> {
                     dispatch(context, "/halt");
@@ -84,7 +84,7 @@ public class CommandDispatchHandler implements MessageHandler {
                 case ChannelCommand.Reset _ -> {
                     dispatch(context, "/reset");
                     yield HandleResult.STOP;
-                }     
+                }
                 case ChannelCommand.Start s -> {
                     if (s.payload().isPresent()) {
                         dispatch(context, s.payload().get());
@@ -110,18 +110,20 @@ public class CommandDispatchHandler implements MessageHandler {
     }
 
     private void sendWelcomeMessage(MessageContext context) {
-        channelPluginRegistry.find(context.getChannelType())
-            .map(ChannelPlugin::sender)
-            .ifPresent(sender -> sender.sendRaw(context.getUser(),
-                "👋 Hello! I'm *ArcClaw*, your AI agent.\n\n"
-                + "Just type your question or task in plain text.\n\n"
-                + "*Commands:*\n"
-                + "/cron - list scheduled tasks\n"
-                + "/status - session state\n"
-                + "/history - conversation history\n"
-                + "/reset - clear this session\n"
-                + "/halt - stop current task\n"
-                + "/approve · /deny - HITL approvals"));
+        channelPluginRegistry
+                .find(context.getChannelType())
+                .map(ChannelPlugin::sender)
+                .ifPresent(sender -> sender.sendRaw(
+                        context.getUser(),
+                        "👋 Hello! I'm *ArcClaw*, your AI agent.\n\n"
+                                + "Just type your question or task in plain text.\n\n"
+                                + "*Commands:*\n"
+                                + "/cron - list scheduled tasks\n"
+                                + "/status - session state\n"
+                                + "/history - conversation history\n"
+                                + "/reset - clear this session\n"
+                                + "/halt - stop current task\n"
+                                + "/approve · /deny - HITL approvals"));
     }
 
     private HandleResult handleUnknownCommand(MessageContext context, ChannelCommand.Unknown u) {
@@ -134,11 +136,13 @@ public class CommandDispatchHandler implements MessageHandler {
         ReflexResult result = null;
         try {
             result = WorkspaceContext.run(
-                sessionId, userId, chatId, 
-                AutonomyLevel.FULL, AgentRoleEnum.COORDINATOR.toScopedName(),
-                () -> reflexRegistry.processIfReflex(sessionId, userId, chatId, u.raw(), context)
-            );
-                
+                    sessionId,
+                    userId,
+                    chatId,
+                    AutonomyLevel.FULL,
+                    AgentRoleEnum.COORDINATOR.toScopedName(),
+                    () -> reflexRegistry.processIfReflex(sessionId, userId, chatId, u.raw(), context));
+
             if (result != null && result.sanitizedInput() != null) {
                 context.setGoal(result.sanitizedInput());
             }
@@ -146,33 +150,36 @@ public class CommandDispatchHandler implements MessageHandler {
             log.errorf("[CommandDispatch] Error processing command '%s': %s", u.raw(), LogUtil.rootMessage(e));
             log.debug("Full command dispatch failure stack trace:", e);
 
-            channelPluginRegistry.find(context.getChannelType())
-                .map(ChannelPlugin::sender)
-                .ifPresentOrElse(
-                    s -> s.sendRaw(context.getUser(), "⚠️ Command failed due to an internal error. Please try again."),
-                    () -> log.warnf("CommandDispatchHandler: no sender for type %s - error reply dropped", context.getChannelType())
-                );
+            channelPluginRegistry
+                    .find(context.getChannelType())
+                    .map(ChannelPlugin::sender)
+                    .ifPresentOrElse(
+                            s -> s.sendRaw(
+                                    context.getUser(), "⚠️ Command failed due to an internal error. Please try again."),
+                            () -> log.warnf(
+                                    "CommandDispatchHandler: no sender for type %s - error reply dropped",
+                                    context.getChannelType()));
             return HandleResult.STOP;
         }
 
         if (result != null && result.commandResponse().isPresent()) {
             String response = result.commandResponse().get();
-            channelPluginRegistry.find(context.getChannelType())
-                .map(ChannelPlugin::sender)
-                .ifPresentOrElse(
-                    s -> s.sendRaw(context.getUser(), response),
-                    () -> log.warnf("CommandDispatchHandler: no sender for type %s", context.getChannelType())
-                );
+            channelPluginRegistry
+                    .find(context.getChannelType())
+                    .map(ChannelPlugin::sender)
+                    .ifPresentOrElse(
+                            s -> s.sendRaw(context.getUser(), response),
+                            () -> log.warnf("CommandDispatchHandler: no sender for type %s", context.getChannelType()));
             return HandleResult.STOP;
         }
 
         if (u.raw().startsWith("/cron")) {
-            channelPluginRegistry.find(context.getChannelType())
-                .map(ChannelPlugin::sender)
-                .ifPresentOrElse(
-                    s -> s.sendRaw(context.getUser(), "❓ Did you mean `/crons`? Use that to list tasks."),
-                    () -> log.warnf("CommandDispatchHandler: no sender for type %s", context.getChannelType())
-                );
+            channelPluginRegistry
+                    .find(context.getChannelType())
+                    .map(ChannelPlugin::sender)
+                    .ifPresentOrElse(
+                            s -> s.sendRaw(context.getUser(), "❓ Did you mean `/crons`? Use that to list tasks."),
+                            () -> log.warnf("CommandDispatchHandler: no sender for type %s", context.getChannelType()));
             return HandleResult.STOP;
         }
 
@@ -186,8 +193,8 @@ public class CommandDispatchHandler implements MessageHandler {
 
     private void dispatch(MessageContext context, String input) {
         String sessionId = context.getSessionId().orElse("");
-        String userId    = context.getUser().platformId();
-        String chatId    = context.getChatId();
+        String userId = context.getUser().platformId();
+        String chatId = context.getChatId();
 
         log.infof("[CommandDispatch] command='%s' session=%s", input, sessionId);
 
@@ -195,37 +202,37 @@ public class CommandDispatchHandler implements MessageHandler {
         ReflexResult result = null;
         try {
             result = WorkspaceContext.run(
-                sessionId,
-                userId,
-                chatId,
-                AutonomyLevel.FULL,
-                AgentRoleEnum.COORDINATOR.toScopedName(),
-                () -> reflexRegistry.processIfReflex(sessionId, userId, chatId, input, context)
-            );
+                    sessionId,
+                    userId,
+                    chatId,
+                    AutonomyLevel.FULL,
+                    AgentRoleEnum.COORDINATOR.toScopedName(),
+                    () -> reflexRegistry.processIfReflex(sessionId, userId, chatId, input, context));
         } catch (Exception e) {
             log.errorf("[CommandDispatch] Error processing command '%s': %s", input, LogUtil.rootMessage(e));
             log.debug("Full command dispatch failure stack trace:", e);
-            
-            channelPluginRegistry.find(context.getChannelType())
-                .map(ChannelPlugin::sender)
-                .ifPresentOrElse(
-                    s -> s.sendRaw(context.getUser(), "⚠️ Command failed due to an internal error. Please try again."),
-                    () -> log.warnf("CommandDispatchHandler: no sender for type %s", context.getChannelType())
-                );
+
+            channelPluginRegistry
+                    .find(context.getChannelType())
+                    .map(ChannelPlugin::sender)
+                    .ifPresentOrElse(
+                            s -> s.sendRaw(
+                                    context.getUser(), "⚠️ Command failed due to an internal error. Please try again."),
+                            () -> log.warnf("CommandDispatchHandler: no sender for type %s", context.getChannelType()));
             return;
         }
 
-        if(result != null){
+        if (result != null) {
             result.commandResponse().ifPresent(response -> {
                 if (response.isBlank()) return;
-                channelPluginRegistry.find(context.getChannelType())
-                    .map(ChannelPlugin::sender)
-                    .ifPresentOrElse(
-                        s -> s.sendRaw(context.getUser(), response),
-                        () -> log.warnf("CommandDispatchHandler: no sender for type %s", context.getChannelType())
-                    );
-                }
-            );
+                channelPluginRegistry
+                        .find(context.getChannelType())
+                        .map(ChannelPlugin::sender)
+                        .ifPresentOrElse(
+                                s -> s.sendRaw(context.getUser(), response),
+                                () -> log.warnf(
+                                        "CommandDispatchHandler: no sender for type %s", context.getChannelType()));
+            });
         }
     }
 }

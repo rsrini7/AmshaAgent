@@ -25,7 +25,7 @@ public enum TieredMemoryBackend {
                 return b;
             }
         }
-        throw new IllegalArgumentException("Unknown tiered memory backend: " + id
-            + ". Valid values: sqlite, postgres, fs");
+        throw new IllegalArgumentException(
+                "Unknown tiered memory backend: " + id + ". Valid values: sqlite, postgres, fs");
     }
 }

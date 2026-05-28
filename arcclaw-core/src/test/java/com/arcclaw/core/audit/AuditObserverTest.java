@@ -2,16 +2,18 @@ package com.arcclaw.core.audit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-import java.util.List;
-
 import jakarta.inject.Inject;
+
+import java.util.List;
 
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.domain.model.AuditEvent;
 import com.arcclaw.core.domain.model.AuditEventRecord;
 import com.arcclaw.persistence.api.AuditEventStorePort;
-import io.quarkus.test.junit.QuarkusTest;
+
 import org.junit.jupiter.api.Test;
+
+import io.quarkus.test.junit.QuarkusTest;
 
 @QuarkusTest
 public class AuditObserverTest {
@@ -28,16 +30,16 @@ public class AuditObserverTest {
     @Test
     public void testLoopCompletionFiresAudit() {
         String sessionId = "test-observe-" + System.currentTimeMillis();
-        
+
         // Simulate LLM calls to accumulate tokens
         observer.recordLlmCall(sessionId, 50, 10);
         observer.recordLlmCall(sessionId, 50, 10); // Total: 100 in, 20 out
 
         AgentResult result = AgentResult.finished("Done", List.of());
         String goalHash = "testhash";
-        
+
         observer.onLoopComplete(sessionId, "userX", "coder", goalHash, result);
-        
+
         auditService.waitForIdle();
 
         var events = auditStore.findBySessionId(sessionId).stream()

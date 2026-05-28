@@ -17,6 +17,7 @@ import java.util.concurrent.TimeUnit;
 import com.arcclaw.core.sandbox.SandboxCircuitBreaker;
 import com.arcclaw.mcp.tool.DynamicToolCapabilityRegistry;
 import com.fasterxml.jackson.databind.ObjectMapper;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -43,7 +44,8 @@ class PodmanMcpTransportTest {
         when(mockCB.shouldAttemptPodman()).thenReturn(false);
 
         McpServerConfig config = new McpServerConfig("test", "img", List.of(), Map.of());
-        assertThrows(RuntimeException.class, () -> transport.connect(config).await().indefinitely());
+        assertThrows(
+                RuntimeException.class, () -> transport.connect(config).await().indefinitely());
     }
 
     @Test
@@ -58,8 +60,8 @@ class PodmanMcpTransportTest {
         when(mockCB.getState()).thenReturn(SandboxCircuitBreaker.CircuitBreakerState.OPEN);
         when(mockCB.shouldAttemptPodman()).thenReturn(false);
         McpServerConfig config = new McpServerConfig("s", "img", List.of(), Map.of());
-        assertThrows(RuntimeException.class, () ->
-            transport.connect(config).await().indefinitely());
+        assertThrows(
+                RuntimeException.class, () -> transport.connect(config).await().indefinitely());
         verify(mockCB, atLeastOnce()).getState();
         verify(mockCB).shouldAttemptPodman();
     }
@@ -71,8 +73,8 @@ class PodmanMcpTransportTest {
         when(mockCB.getState()).thenReturn(SandboxCircuitBreaker.CircuitBreakerState.OPEN);
         when(mockCB.shouldAttemptPodman()).thenReturn(true);
         McpServerConfig config = new McpServerConfig("test", "nonexistent-image-xyz-404", List.of(), Map.of());
-        assertThrows(RuntimeException.class, () ->
-            transport.connect(config).await().indefinitely());
+        assertThrows(
+                RuntimeException.class, () -> transport.connect(config).await().indefinitely());
         verify(mockCB).recordFailure(any());
     }
 
@@ -80,11 +82,12 @@ class PodmanMcpTransportTest {
     void testPreDestroyCleanup() throws Exception {
         Process mockProcess = mock(Process.class);
         when(mockProcess.waitFor(3, TimeUnit.SECONDS)).thenReturn(true);
-        
+
         Field activeProcessesField = PodmanMcpTransport.class.getDeclaredField("activeProcesses");
         activeProcessesField.setAccessible(true);
         @SuppressWarnings("unchecked")
-        ConcurrentHashMap<String, Process> activeProcesses = (ConcurrentHashMap<String, Process>) activeProcessesField.get(transport);
+        ConcurrentHashMap<String, Process> activeProcesses =
+                (ConcurrentHashMap<String, Process>) activeProcessesField.get(transport);
         activeProcesses.put("test-session", mockProcess);
 
         transport.cleanup();

@@ -1,11 +1,11 @@
 package com.arcclaw.core.agent.reasoning;
 
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+
 import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Collectors;
-
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
 
 import com.arcclaw.core.agent.loop.AgentExecutionContext;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
@@ -49,10 +49,13 @@ public class PromptSectionBuilder {
             "compile and run" any code, you MUST use `garuda(agent=brahma)` to handle the execution.
             """;
 
-    private static final String COMPACT_EXECUTION_BOUNDARY_SANDBOX = "EXECUTION BOUNDARY: Use `sandbox_exec` for run/execute/compile.\n";
-    private static final String COMPACT_EXECUTION_BOUNDARY_NO_SANDBOX = "EXECUTION BOUNDARY: You cannot run code directly. Delegate to 'brahma' for execution.\n";
+    private static final String COMPACT_EXECUTION_BOUNDARY_SANDBOX =
+            "EXECUTION BOUNDARY: Use `sandbox_exec` for run/execute/compile.\n";
+    private static final String COMPACT_EXECUTION_BOUNDARY_NO_SANDBOX =
+            "EXECUTION BOUNDARY: You cannot run code directly. Delegate to 'brahma' for execution.\n";
 
-    private static final String COMPACT_BROWSER_RETRY_RULE = "BROWSER EXTRACTION RETRY RULE: If `browser_navigate` extraction returns too little text, retry once with a broader selector.\n";
+    private static final String COMPACT_BROWSER_RETRY_RULE =
+            "BROWSER EXTRACTION RETRY RULE: If `browser_navigate` extraction returns too little text, retry once with a broader selector.\n";
 
     public String buildExecutionBoundaryRule(AgentRoleEnum roleEnum, boolean isCompact) {
         boolean hasSandbox = capabilityRegistry.hasCapability(roleEnum.id(), ToolCapability.SANDBOX_EXEC.toolName());
@@ -63,7 +66,8 @@ public class PromptSectionBuilder {
     }
 
     public String buildBrowserRetryRule(AgentExecutionContext context, AgentRoleEnum roleEnum, boolean isCompact) {
-        boolean hasBrowser = getAvailableToolNames(context, roleEnum).contains(ToolCapability.BROWSER_NAVIGATE.toolName());
+        boolean hasBrowser =
+                getAvailableToolNames(context, roleEnum).contains(ToolCapability.BROWSER_NAVIGATE.toolName());
         if (!hasBrowser) return "";
         if (isCompact) return COMPACT_BROWSER_RETRY_RULE;
 
@@ -75,7 +79,8 @@ public class PromptSectionBuilder {
                 """;
     }
 
-    public String buildToolContaminationGuard(AgentExecutionContext context, AgentRoleEnum roleEnum, boolean isCompact) {
+    public String buildToolContaminationGuard(
+            AgentExecutionContext context, AgentRoleEnum roleEnum, boolean isCompact) {
         String toolList = getAvailableToolNames(context, roleEnum).stream()
                 .sorted(Comparator.naturalOrder())
                 .collect(Collectors.joining(", "));
@@ -94,12 +99,12 @@ public class PromptSectionBuilder {
 
     public List<String> getAvailableToolNames(AgentExecutionContext context, AgentRoleEnum roleEnum) {
         boolean isBackground = context != null && context.autonomyLevel() == AutonomyLevel.BACKGROUND;
-        return capabilityRegistry.getSupplementalTools(roleEnum.id())
-                .stream()
-                .filter(name -> toolRegistry.findTool(name)
-                        .map(AgentTool::isEnabled).orElse(false))
-                .filter(name -> !isBackground ||
-                        (!ToolCapability.SCHEDULE_TASK.toolName().equals(name) && !ToolCapability.MANAGE_SCHEDULE.toolName().equals(name)))
+        return capabilityRegistry.getSupplementalTools(roleEnum.id()).stream()
+                .filter(name ->
+                        toolRegistry.findTool(name).map(AgentTool::isEnabled).orElse(false))
+                .filter(name -> !isBackground
+                        || (!ToolCapability.SCHEDULE_TASK.toolName().equals(name)
+                                && !ToolCapability.MANAGE_SCHEDULE.toolName().equals(name)))
                 .toList();
     }
 }

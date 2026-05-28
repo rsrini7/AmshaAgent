@@ -3,21 +3,25 @@ package com.arcclaw.core.routing;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.util.stream.Collectors;
-
 import jakarta.enterprise.inject.Any;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
-import io.quarkus.test.junit.QuarkusTest;
+import java.util.stream.Collectors;
+
 import org.junit.jupiter.api.Test;
+
+import io.quarkus.test.junit.QuarkusTest;
 
 @QuarkusTest
 class LlmProviderFactoryTest {
 
-    @Inject LlmModelFactory factory;
+    @Inject
+    LlmModelFactory factory;
 
-    @Inject @Any Instance<RoutingChatModelProvider> factories;
+    @Inject
+    @Any
+    Instance<RoutingChatModelProvider> factories;
 
     @Test
     void groqProviderIsDiscoveredViaSpi() {
@@ -42,7 +46,7 @@ class LlmProviderFactoryTest {
         IllegalStateException e = assertThrows(IllegalStateException.class, () -> {
             factory.createModel("anthropic", "https://api.anthropic.com", "key", "claude-3", 100, null, 1, null, null);
         });
-        
+
         String message = e.getMessage();
         assertTrue(message.contains("anthropic"));
         assertTrue(message.contains("Registered:"));

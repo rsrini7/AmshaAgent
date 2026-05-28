@@ -1,13 +1,14 @@
 package com.arcclaw.persistence.fs;
 
-import java.util.List;
-import java.util.Optional;
-
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
+import java.util.List;
+import java.util.Optional;
+
 import com.arcclaw.persistence.api.SkillDto;
 import com.arcclaw.persistence.api.SkillStorePort;
+
 import io.quarkus.arc.Unremovable;
 import io.quarkus.arc.properties.IfBuildProperty;
 
@@ -32,8 +33,8 @@ public class FsSkillStoreAdapter implements SkillStorePort {
     @Override
     public List<SkillDto> findAll() {
         return store.list(List.of(DOMAIN, BY_ID), ".json").stream()
-            .map(f -> store.read(List.of(DOMAIN, BY_ID, f), SkillDto.class))
-            .toList();
+                .map(f -> store.read(List.of(DOMAIN, BY_ID, f), SkillDto.class))
+                .toList();
     }
 
     @Override

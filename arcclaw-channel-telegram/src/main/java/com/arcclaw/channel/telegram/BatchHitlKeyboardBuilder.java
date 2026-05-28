@@ -13,6 +13,7 @@ import java.util.regex.Pattern;
 
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
+
 import org.apache.camel.component.telegram.model.InlineKeyboardButton;
 import org.apache.camel.component.telegram.model.InlineKeyboardMarkup;
 import org.jboss.logging.Logger;
@@ -50,19 +51,19 @@ class BatchHitlKeyboardBuilder {
             String safeToolName = toolName.replace("|", "_").replace(":", "_");
             String approveCb = truncateOrCache("A|" + compressedId + "|" + safeToolName, sessionId);
             String denyCb = truncateOrCache("D|" + compressedId + "|" + safeToolName, sessionId);
-            
+
             List<InlineKeyboardButton> row = new ArrayList<>();
-            
+
             InlineKeyboardButton appBtn = new InlineKeyboardButton();
             appBtn.setText("✅ " + toolName);
             appBtn.setCallbackData(approveCb);
             row.add(appBtn);
-            
+
             InlineKeyboardButton denBtn = new InlineKeyboardButton();
             denBtn.setText("🚫 " + toolName);
             denBtn.setCallbackData(denyCb);
             row.add(denBtn);
-            
+
             rows.add(row);
         }
 
@@ -106,9 +107,9 @@ class BatchHitlKeyboardBuilder {
                 try {
                     uuid1 = UUID.fromString(body.substring(0, 36));
                     bytes1 = ByteBuffer.allocate(16)
-                        .putLong(uuid1.getMostSignificantBits())
-                        .putLong(uuid1.getLeastSignificantBits())
-                        .array();
+                            .putLong(uuid1.getMostSignificantBits())
+                            .putLong(uuid1.getLeastSignificantBits())
+                            .array();
                 } catch (IllegalArgumentException e) {
                     return raw;
                 }
@@ -118,12 +119,12 @@ class BatchHitlKeyboardBuilder {
                     try {
                         UUID uuid2 = UUID.fromString(suffix.substring(1));
                         byte[] bytes2 = ByteBuffer.allocate(16)
-                            .putLong(uuid2.getMostSignificantBits())
-                            .putLong(uuid2.getLeastSignificantBits())
-                            .array();
+                                .putLong(uuid2.getMostSignificantBits())
+                                .putLong(uuid2.getLeastSignificantBits())
+                                .array();
                         return COMPRESSED_CRON_PREFIX
-                            + B64_ENCODER.encodeToString(bytes1)
-                            + B64_ENCODER.encodeToString(bytes2);
+                                + B64_ENCODER.encodeToString(bytes1)
+                                + B64_ENCODER.encodeToString(bytes2);
                     } catch (IllegalArgumentException e) {
                         return raw;
                     }
@@ -139,9 +140,9 @@ class BatchHitlKeyboardBuilder {
             try {
                 UUID uuid = UUID.fromString(uuidStr);
                 byte[] bytes = ByteBuffer.allocate(16)
-                    .putLong(uuid.getMostSignificantBits())
-                    .putLong(uuid.getLeastSignificantBits())
-                    .array();
+                        .putLong(uuid.getMostSignificantBits())
+                        .putLong(uuid.getLeastSignificantBits())
+                        .array();
                 return B64_ENCODER.encodeToString(bytes) + suffix;
             } catch (IllegalArgumentException e) {
                 return raw;
@@ -217,8 +218,10 @@ class BatchHitlKeyboardBuilder {
 
     static boolean isUuid(String s) {
         return s.length() == 36
-            && s.charAt(8) == '-' && s.charAt(13) == '-'
-            && s.charAt(18) == '-' && s.charAt(23) == '-';
+                && s.charAt(8) == '-'
+                && s.charAt(13) == '-'
+                && s.charAt(18) == '-'
+                && s.charAt(23) == '-';
     }
 
     /**
@@ -232,8 +235,9 @@ class BatchHitlKeyboardBuilder {
         String token = generateShortToken();
         sessionCache.put(token, originalSessionId);
 
-        log.warnf("Callback data (%d bytes) exceeded limit for session '%s'. Cached under token '%s'",
-            cbInfo.length(), originalSessionId, token);
+        log.warnf(
+                "Callback data (%d bytes) exceeded limit for session '%s'. Cached under token '%s'",
+                cbInfo.length(), originalSessionId, token);
         int firstPipe = cbInfo.indexOf('|');
         if (firstPipe > 0) {
             int secondPipe = cbInfo.indexOf('|', firstPipe + 1);
@@ -289,6 +293,7 @@ class BatchHitlKeyboardBuilder {
 
     sealed interface BatchCallbackEvent {
         record ApproveTool(String sessionId, String toolName) implements BatchCallbackEvent {}
+
         record DenyTool(String sessionId, String toolName) implements BatchCallbackEvent {}
     }
 }

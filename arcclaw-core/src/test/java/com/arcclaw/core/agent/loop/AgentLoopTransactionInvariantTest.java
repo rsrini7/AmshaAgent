@@ -6,8 +6,9 @@ import jakarta.inject.Inject;
 import jakarta.transaction.Status;
 import jakarta.transaction.TransactionManager;
 
-import io.quarkus.test.junit.QuarkusTest;
 import org.junit.jupiter.api.Test;
+
+import io.quarkus.test.junit.QuarkusTest;
 
 @QuarkusTest
 class AgentLoopTransactionInvariantTest {
@@ -22,7 +23,9 @@ class AgentLoopTransactionInvariantTest {
         // Real enforcement happens via architectural review and the JTA log suppression logic
         // in application.yaml which monitors for propagated transaction context leaking into
         // the Vert.x event loop threads.
-        assertEquals(Status.STATUS_NO_TRANSACTION, transactionManager.getStatus(),
-            "Baseline invariant: the execution context must be transaction-free before entering the Agent reasoning loop.");
+        assertEquals(
+                Status.STATUS_NO_TRANSACTION,
+                transactionManager.getStatus(),
+                "Baseline invariant: the execution context must be transaction-free before entering the Agent reasoning loop.");
     }
 }

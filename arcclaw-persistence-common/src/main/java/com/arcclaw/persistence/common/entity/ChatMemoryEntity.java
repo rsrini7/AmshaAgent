@@ -28,12 +28,11 @@ public class ChatMemoryEntity implements ChatMemory {
     /**
      * Default constructor required by JPA.
      */
-    public ChatMemoryEntity() {
-    }
+    public ChatMemoryEntity() {}
 
     /**
      * Full constructor.
-     * 
+     *
      * @param memoryId     Unique ID for the chat memory (usually sessionId)
      * @param messagesJson Serialized List of ChatMessage
      * @param metadataJson Serialized message metadata (e.g. timestamps)

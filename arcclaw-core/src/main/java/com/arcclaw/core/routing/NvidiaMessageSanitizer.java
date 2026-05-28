@@ -1,5 +1,16 @@
 package com.arcclaw.core.routing;
 
+import dev.langchain4j.agent.tool.ToolExecutionRequest;
+import dev.langchain4j.data.message.AiMessage;
+import dev.langchain4j.data.message.ChatMessage;
+import dev.langchain4j.data.message.SystemMessage;
+import dev.langchain4j.data.message.ToolExecutionResultMessage;
+import dev.langchain4j.data.message.UserMessage;
+import dev.langchain4j.model.chat.ChatModel;
+import dev.langchain4j.model.chat.request.ChatRequest;
+import dev.langchain4j.model.chat.response.ChatResponse;
+import dev.langchain4j.model.output.FinishReason;
+
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -13,16 +24,7 @@ import java.util.regex.Pattern;
 import com.arcclaw.common.util.LogUtil;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import dev.langchain4j.agent.tool.ToolExecutionRequest;
-import dev.langchain4j.data.message.AiMessage;
-import dev.langchain4j.data.message.ChatMessage;
-import dev.langchain4j.data.message.SystemMessage;
-import dev.langchain4j.data.message.ToolExecutionResultMessage;
-import dev.langchain4j.data.message.UserMessage;
-import dev.langchain4j.model.chat.ChatModel;
-import dev.langchain4j.model.chat.request.ChatRequest;
-import dev.langchain4j.model.chat.response.ChatResponse;
-import dev.langchain4j.model.output.FinishReason;
+
 import org.jboss.logging.Logger;
 
 /**
@@ -44,14 +46,15 @@ public class NvidiaMessageSanitizer implements ChatModel {
         this.model = model;
     }
 
-    private static final Pattern BRACKET_TOOL_PATTERN =
-        Pattern.compile("\\[[a-zA-Z0-9_]+[\\(\\s][^\\]]*\\]");
+    private static final Pattern BRACKET_TOOL_PATTERN = Pattern.compile("\\[[a-zA-Z0-9_]+[\\(\\s][^\\]]*\\]");
 
     @Override
     public ChatResponse chat(ChatRequest request) {
-        log.debugf("NvidiaMessageSanitizer: sanitizing request with %d messages", request.messages().size());
+        log.debugf(
+                "NvidiaMessageSanitizer: sanitizing request with %d messages",
+                request.messages().size());
         if (model == null) throw new IllegalStateException("NvidiaMessageSanitizer: model is null");
-        
+
         Set<String> allowedTools = new HashSet<>();
         if (request.toolSpecifications() != null) {
             request.toolSpecifications().forEach(spec -> allowedTools.add(spec.name()));
@@ -60,33 +63,35 @@ public class NvidiaMessageSanitizer implements ChatModel {
         // Pass 1 & 2: Sanitize input history
         Map<String, String> idMap = new HashMap<>();
         List<ChatMessage> sanitizedIn = sanitize(request.messages(), idMap, allowedTools);
-        
-        ChatRequest.Builder builder = ChatRequest.builder()
-                .messages(sanitizedIn);
 
-        if (request.toolSpecifications() != null && !request.toolSpecifications().isEmpty()) {
+        ChatRequest.Builder builder = ChatRequest.builder().messages(sanitizedIn);
+
+        if (request.toolSpecifications() != null
+                && !request.toolSpecifications().isEmpty()) {
             builder.toolSpecifications(request.toolSpecifications());
         } else if (request.parameters() != null) {
             builder.parameters(request.parameters());
         }
-                
+
         ChatResponse response = model.chat(builder.build());
-        
+
         // 🟢 FIX: Handle Mistral native [TOOL_CALLS] leak (§ recommendation)
-        if (response.aiMessage() != null && response.aiMessage().text() != null 
+        if (response.aiMessage() != null
+                && response.aiMessage().text() != null
                 && response.aiMessage().text().contains("[TOOL_CALLS]")) {
             return normalizeMistralResponse(response);
         }
 
         // Pass 3: Sanitize model response to ensure future turns start with compliant IDs
         if (response.aiMessage() != null) {
-             AiMessage sanitizedAi = internalSanitizeAiMessage(response.aiMessage(), new HashMap<>(), response.aiMessage().toolExecutionRequests(), allowedTools);
-             return ChatResponse.builder()
-                     .aiMessage(sanitizedAi)
-                     .metadata(response.metadata())
-                     .build();
+            AiMessage sanitizedAi = internalSanitizeAiMessage(
+                    response.aiMessage(), new HashMap<>(), response.aiMessage().toolExecutionRequests(), allowedTools);
+            return ChatResponse.builder()
+                    .aiMessage(sanitizedAi)
+                    .metadata(response.metadata())
+                    .build();
         }
-        
+
         return response;
     }
 
@@ -100,7 +105,7 @@ public class NvidiaMessageSanitizer implements ChatModel {
 
         while (m.find()) {
             if (firstMatchIdx == -1) firstMatchIdx = m.start();
-            
+
             String toolName = m.group(1);
             String jsonPayload = m.group(2);
 
@@ -112,9 +117,10 @@ public class NvidiaMessageSanitizer implements ChatModel {
                         for (JsonNode node : root) {
                             requests.add(ToolExecutionRequest.builder()
                                     .name(node.path("name").asText())
-                                    .arguments(node.path("arguments").isObject()
-                                            ? node.path("arguments").toString()
-                                            : node.path("arguments").asText("{}"))
+                                    .arguments(
+                                            node.path("arguments").isObject()
+                                                    ? node.path("arguments").toString()
+                                                    : node.path("arguments").asText("{}"))
                                     .build());
                         }
                     }
@@ -132,7 +138,9 @@ public class NvidiaMessageSanitizer implements ChatModel {
 
         if (!requests.isEmpty()) {
             String thought = text.substring(0, firstMatchIdx).strip();
-            log.infof("[NvidiaSanitizer] Normalized %d chained Mistral tool calls - routing through approval gate", requests.size());
+            log.infof(
+                    "[NvidiaSanitizer] Normalized %d chained Mistral tool calls - routing through approval gate",
+                    requests.size());
             return ChatResponse.builder()
                     .aiMessage(AiMessage.from(thought.isEmpty() ? null : thought, requests))
                     .tokenUsage(response.tokenUsage())
@@ -184,16 +192,15 @@ public class NvidiaMessageSanitizer implements ChatModel {
         List<ChatMessage> result = new ArrayList<>();
         for (int i = 0; i < messages.size(); i++) {
             ChatMessage msg = messages.get(i);
-            
+
             // sequence guard: system hints following tool results must be merged into result text.
-            if (msg instanceof SystemMessage sm && !result.isEmpty() 
+            if (msg instanceof SystemMessage sm
+                    && !result.isEmpty()
                     && result.get(result.size() - 1) instanceof ToolExecutionResultMessage lastTool) {
-                
+
                 ToolExecutionResultMessage merged = ToolExecutionResultMessage.from(
-                    lastTool.id(), 
-                    lastTool.toolName(), 
-                    lastTool.text() + "\n\n[System Hint: " + sm.text() + "]");
-                
+                        lastTool.id(), lastTool.toolName(), lastTool.text() + "\n\n[System Hint: " + sm.text() + "]");
+
                 result.set(result.size() - 1, merged);
                 continue;
             }
@@ -204,7 +211,7 @@ public class NvidiaMessageSanitizer implements ChatModel {
                     List<ToolExecutionRequest> bipartite = ai.toolExecutionRequests().stream()
                             .filter(req -> validBipartiteIds.contains(req.id()))
                             .toList();
-                    
+
                     if (bipartite.isEmpty() && ai.text() != null && !ai.text().isBlank()) {
                         result.add(AiMessage.from(stripBrackets(ai.text())));
                     } else if (!bipartite.isEmpty()) {
@@ -225,13 +232,14 @@ public class NvidiaMessageSanitizer implements ChatModel {
                 result.add(msg);
             }
         }
-        
+
         // sequence guard: if the final message is an assistant message, append a synthetic empty user turn
         if (!result.isEmpty() && result.get(result.size() - 1) instanceof AiMessage) {
-            log.debugf("NvidiaMessageSanitizer: Sequence ends on an assistant message. Appending a synthetic empty user turn to avoid generation prompt errors.");
+            log.debugf(
+                    "NvidiaMessageSanitizer: Sequence ends on an assistant message. Appending a synthetic empty user turn to avoid generation prompt errors.");
             result.add(UserMessage.from("Please proceed."));
         }
-        
+
         return result;
     }
 
@@ -240,7 +248,8 @@ public class NvidiaMessageSanitizer implements ChatModel {
         return BRACKET_TOOL_PATTERN.matcher(text).replaceAll("").strip();
     }
 
-    private AiMessage internalSanitizeAiMessage(AiMessage ai, Map<String, String> idMap, List<ToolExecutionRequest> requests, Set<String> allowedTools) {
+    private AiMessage internalSanitizeAiMessage(
+            AiMessage ai, Map<String, String> idMap, List<ToolExecutionRequest> requests, Set<String> allowedTools) {
         String text = stripBrackets(ai.text());
 
         if (requests == null || requests.isEmpty()) {
@@ -256,7 +265,7 @@ public class NvidiaMessageSanitizer implements ChatModel {
 
             String oldId = req.id();
             String newId = idMap.computeIfAbsent(oldId, k -> generateNvidiaId());
-            
+
             sanitizedRequests.add(ToolExecutionRequest.builder()
                     .id(newId)
                     .name(req.name())
@@ -265,15 +274,13 @@ public class NvidiaMessageSanitizer implements ChatModel {
         }
 
         if (sanitizedRequests.isEmpty()) {
-             return AiMessage.from(text != null ? text : "");
+            return AiMessage.from(text != null ? text : "");
         }
 
         return AiMessage.from(text, sanitizedRequests);
     }
 
     private static String generateNvidiaId() {
-        return UUID.randomUUID().toString()
-                .replaceAll("-", "")
-                .substring(0, 9);
+        return UUID.randomUUID().toString().replaceAll("-", "").substring(0, 9);
     }
 }

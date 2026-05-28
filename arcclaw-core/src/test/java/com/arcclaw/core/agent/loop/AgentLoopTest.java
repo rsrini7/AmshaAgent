@@ -44,148 +44,164 @@ import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.tools.ToolRegistry;
 import com.arcclaw.core.util.TextPatternUtils;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.micrometer.core.instrument.Counter;
-import io.micrometer.core.instrument.MeterRegistry;
-import io.opentelemetry.api.trace.Span;
-import io.opentelemetry.context.Scope;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentMatchers;
 
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.context.Scope;
+
 class AgentLoopTest {
 
-        private LlmProviderPort model;
-        private ToolRegistry toolRegistry;
-        private RoleRegistry roleRegistry;
-        private SystemPromptBuilder promptBuilder;
-        private ChatHistoryAssembler historyAssembler;
-        private ReasoningStepParser stepParser;
-        private LangChainReasoningEngine engine;
+    private LlmProviderPort model;
+    private ToolRegistry toolRegistry;
+    private RoleRegistry roleRegistry;
+    private SystemPromptBuilder promptBuilder;
+    private ChatHistoryAssembler historyAssembler;
+    private ReasoningStepParser stepParser;
+    private LangChainReasoningEngine engine;
 
-        @BeforeEach
-        void setUp() throws Exception {
-                model = mock(LlmProviderPort.class);
-                toolRegistry = mock(ToolRegistry.class);
-                roleRegistry = mock(RoleRegistry.class);
-                promptBuilder = mock(SystemPromptBuilder.class);
-                historyAssembler = mock(ChatHistoryAssembler.class);
-                stepParser = mock(ReasoningStepParser.class);
-                CompactionSummaryCache summaryCache = mock(CompactionSummaryCache.class);
-                AgentOtelContext otelContext = mock(AgentOtelContext.class);
-                GovernanceStrategy governanceLayer = mock(GovernanceStrategy.class);
-                RateLimitTracker rateLimitTracker = mock(RateLimitTracker.class);
-                IntentClassificationService intentClassifier = mock(IntentClassificationService.class);
+    @BeforeEach
+    void setUp() throws Exception {
+        model = mock(LlmProviderPort.class);
+        toolRegistry = mock(ToolRegistry.class);
+        roleRegistry = mock(RoleRegistry.class);
+        promptBuilder = mock(SystemPromptBuilder.class);
+        historyAssembler = mock(ChatHistoryAssembler.class);
+        stepParser = mock(ReasoningStepParser.class);
+        CompactionSummaryCache summaryCache = mock(CompactionSummaryCache.class);
+        AgentOtelContext otelContext = mock(AgentOtelContext.class);
+        GovernanceStrategy governanceLayer = mock(GovernanceStrategy.class);
+        RateLimitTracker rateLimitTracker = mock(RateLimitTracker.class);
+        IntentClassificationService intentClassifier = mock(IntentClassificationService.class);
 
-                when(promptBuilder.build(any(), any(), any(), any(), ArgumentMatchers.anyBoolean())).thenReturn("MOCK SYSTEM PROMPT");
+        when(promptBuilder.build(any(), any(), any(), any(), ArgumentMatchers.anyBoolean()))
+                .thenReturn("MOCK SYSTEM PROMPT");
 
-                // Setup Collaborators
-                ReasoningMessageAssembler messageAssembler = new ReasoningMessageAssembler(historyAssembler, toolRegistry);
-                RecoveryProcessor recoveryProcessor = new RecoveryProcessor(new ObjectMapper(), new TextPatternUtils());
-                ReasoningValidator reasoningValidator = new ReasoningValidator(summaryCache);
-                StructuredOutputProcessor structuredOutputProcessor = new StructuredOutputProcessor(promptBuilder, model, governanceLayer, otelContext);
+        // Setup Collaborators
+        ReasoningMessageAssembler messageAssembler = new ReasoningMessageAssembler(historyAssembler, toolRegistry);
+        RecoveryProcessor recoveryProcessor = new RecoveryProcessor(new ObjectMapper(), new TextPatternUtils());
+        ReasoningValidator reasoningValidator = new ReasoningValidator(summaryCache);
+        StructuredOutputProcessor structuredOutputProcessor =
+                new StructuredOutputProcessor(promptBuilder, model, governanceLayer, otelContext);
 
-                // Instantiate engine using full constructor
-                engine = new LangChainReasoningEngine(
-                    model, roleRegistry, promptBuilder,
-                    rateLimitTracker, intentClassifier,
-                    mock(MeterRegistry.class), new TextPatternUtils(),
-                    stepParser, messageAssembler, recoveryProcessor, structuredOutputProcessor, reasoningValidator, null
-                );
+        // Instantiate engine using full constructor
+        engine = new LangChainReasoningEngine(
+                model,
+                roleRegistry,
+                promptBuilder,
+                rateLimitTracker,
+                intentClassifier,
+                mock(MeterRegistry.class),
+                new TextPatternUtils(),
+                stepParser,
+                messageAssembler,
+                recoveryProcessor,
+                structuredOutputProcessor,
+                reasoningValidator,
+                null);
 
-                // Inject otelContext via reflection (field injection, not constructor)
-                try {
-                    var otelField = LangChainReasoningEngine.class.getDeclaredField("otelContext");
-                    otelField.setAccessible(true);
-                    otelField.set(engine, otelContext);
-                } catch (Exception e) {
-                    throw new RuntimeException("Failed to inject otelContext", e);
-                }
+        // Inject otelContext via reflection (field injection, not constructor)
+        try {
+            var otelField = LangChainReasoningEngine.class.getDeclaredField("otelContext");
+            otelField.setAccessible(true);
+            otelField.set(engine, otelContext);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to inject otelContext", e);
+        }
+    }
+
+    private void setField(Object target, String name, Object value) throws Exception {
+        Field field = target.getClass().getDeclaredField(name);
+        field.setAccessible(true);
+        field.set(target, value);
+    }
+
+    @Test
+    void testAgentLoopDelegatesToStateMachineRunner() {
+        // Reflection check to ensure methods moved to the runner are indeed gone from
+        // AgentLoop
+        Class<AgentLoop> clazz = AgentLoop.class;
+        String[] deletedMethods = {
+            "runLoop",
+            "processEngineStep",
+            "validateTool",
+            "invokeToolAndObserve",
+            "handleFinishAction",
+            "saveGoalToChatMemory"
+        };
+
+        for (String methodName : deletedMethods) {
+            boolean exists = Arrays.stream(clazz.getDeclaredMethods())
+                    .anyMatch(m -> m.getName().equals(methodName));
+            assertFalse(exists, "Method " + methodName + " should have been deleted from AgentLoop");
         }
 
-        private void setField(Object target, String name, Object value) throws Exception {
-                Field field = target.getClass().getDeclaredField(name);
-                field.setAccessible(true);
-                field.set(target, value);
-        }
+        // Also check if the injection is there
+        boolean hasRunner = Arrays.stream(clazz.getDeclaredFields())
+                .anyMatch(f -> f.getName().equals("stateMachineRunner"));
+        assertTrue(hasRunner, "AgentLoop should have stateMachineRunner injected");
+    }
 
-        @Test
-        void testAgentLoopDelegatesToStateMachineRunner() {
-                // Reflection check to ensure methods moved to the runner are indeed gone from
-                // AgentLoop
-                Class<AgentLoop> clazz = AgentLoop.class;
-                String[] deletedMethods = { "runLoop", "processEngineStep", "validateTool", "invokeToolAndObserve",
-                                "handleFinishAction", "saveGoalToChatMemory" };
+    @Test
+    void channelStampFailureDoesNotCorruptAwaitingApprovalResult() throws Exception {
+        AgentLoop loop = new AgentLoop();
 
-                for (String methodName : deletedMethods) {
-                        boolean exists = Arrays.stream(clazz.getDeclaredMethods())
-                                        .anyMatch(m -> m.getName().equals(methodName));
-                        assertFalse(exists, "Method " + methodName + " should have been deleted from AgentLoop");
-                }
+        StatefulAgentStore agentStore = mock(StatefulAgentStore.class);
+        AgentStateMachineRunner stateMachineRunner = mock(AgentStateMachineRunner.class);
+        CheckpointResumeHandler checkpointResumeHandler = mock(CheckpointResumeHandler.class);
+        AuditHashUtil hashUtil = mock(AuditHashUtil.class);
+        SessionLifecycleCoordinator sessionLifecycleCoordinator = mock(SessionLifecycleCoordinator.class);
+        CheckpointResumeCoordinator checkpointResumeCoordinator = mock(CheckpointResumeCoordinator.class);
+        ObservabilityManager observabilityManager = mock(ObservabilityManager.class);
+        AgentSseService agentSseService = mock(AgentSseService.class);
+        MeterRegistry meterRegistry = mock(MeterRegistry.class);
+        Counter counter = mock(Counter.class);
+        when(meterRegistry.counter(anyString(), any(String[].class))).thenReturn(counter);
 
-                // Also check if the injection is there
-                boolean hasRunner = Arrays.stream(clazz.getDeclaredFields())
-                                .anyMatch(f -> f.getName().equals("stateMachineRunner"));
-                assertTrue(hasRunner, "AgentLoop should have stateMachineRunner injected");
-        }
+        IntentClassificationService intentClassificationService = mock(IntentClassificationService.class);
 
-        @Test
-        void channelStampFailureDoesNotCorruptAwaitingApprovalResult() throws Exception {
-                AgentLoop loop = new AgentLoop();
+        when(sessionLifecycleCoordinator.setupMdc(any(), any())).thenReturn("user");
+        when(checkpointResumeCoordinator.resolveResumePath(any(), any(), any(), any()))
+                .thenReturn(new CheckpointResumeCoordinator.ResumeDecision.FreshStart());
 
-                StatefulAgentStore agentStore = mock(StatefulAgentStore.class);
-                AgentStateMachineRunner stateMachineRunner = mock(AgentStateMachineRunner.class);
-                CheckpointResumeHandler checkpointResumeHandler = mock(CheckpointResumeHandler.class);
-                AuditHashUtil hashUtil = mock(AuditHashUtil.class);
-                SessionLifecycleCoordinator sessionLifecycleCoordinator = mock(SessionLifecycleCoordinator.class);
-                CheckpointResumeCoordinator checkpointResumeCoordinator = mock(CheckpointResumeCoordinator.class);
-                ObservabilityManager observabilityManager = mock(ObservabilityManager.class);
-                AgentSseService agentSseService = mock(AgentSseService.class);
-                MeterRegistry meterRegistry = mock(MeterRegistry.class);
-                Counter counter = mock(Counter.class);
-                when(meterRegistry.counter(anyString(), any(String[].class))).thenReturn(counter);
-                
-                IntentClassificationService intentClassificationService = mock(IntentClassificationService.class);
+        setField(loop, "agentStore", agentStore);
+        setField(loop, "stateMachineRunner", stateMachineRunner);
+        setField(loop, "checkpointResumeHandler", checkpointResumeHandler);
+        setField(loop, "hashUtil", hashUtil);
+        setField(loop, "sessionLifecycleCoordinator", sessionLifecycleCoordinator);
+        Span span = mock(Span.class);
+        Scope scope = mock(Scope.class);
+        when(span.makeCurrent()).thenReturn(scope);
+        when(observabilityManager.beginSession(any(), any(), any())).thenReturn(span);
 
-                when(sessionLifecycleCoordinator.setupMdc(any(), any())).thenReturn("user");
-                when(checkpointResumeCoordinator.resolveResumePath(any(), any(), any(), any()))
-                        .thenReturn(new CheckpointResumeCoordinator.ResumeDecision.FreshStart());
+        setField(loop, "checkpointResumeCoordinator", checkpointResumeCoordinator);
+        setField(loop, "observabilityManager", observabilityManager);
+        setField(loop, "agentSseService", agentSseService);
+        setField(loop, "meterRegistry", meterRegistry);
+        setField(loop, "intentClassificationService", intentClassificationService);
 
-                setField(loop, "agentStore", agentStore);
-                setField(loop, "stateMachineRunner", stateMachineRunner);
-                setField(loop, "checkpointResumeHandler", checkpointResumeHandler);
-                setField(loop, "hashUtil", hashUtil);
-                setField(loop, "sessionLifecycleCoordinator", sessionLifecycleCoordinator);
-                Span span = mock(Span.class);
-                Scope scope = mock(Scope.class);
-                when(span.makeCurrent()).thenReturn(scope);
-                when(observabilityManager.beginSession(any(), any(), any())).thenReturn(span);
+        ChannelUser user = new ChannelUser("foo", "bar", "disp", ChannelType.TELEGRAM);
+        ChannelMessage msg = new ChannelMessage.TelegramMessage(user, "h", "foo", Instant.now());
+        MessageContext ctx = new MessageContext("foo", user, msg);
 
-                setField(loop, "checkpointResumeCoordinator", checkpointResumeCoordinator);
-                setField(loop, "observabilityManager", observabilityManager);
-                setField(loop, "agentSseService", agentSseService);
-                setField(loop, "meterRegistry", meterRegistry);
-                setField(loop, "intentClassificationService", intentClassificationService);
+        AgentCheckpoint checkpoint = mock(AgentCheckpointRecord.class);
+        when(checkpoint.getStatus()).thenReturn(CheckpointStatus.IN_PROGRESS);
 
-                ChannelUser user = new ChannelUser("foo", "bar", "disp", ChannelType.TELEGRAM);
-                ChannelMessage msg = new ChannelMessage.TelegramMessage(user, "h", "foo", Instant.now());
-                MessageContext ctx = new MessageContext("foo", user, msg);
+        when(agentStore.load(any(), any())).thenReturn(Optional.of(checkpoint));
+        when(agentStore.save(any())).thenThrow(new RuntimeException("SQLITE_BUSY"));
 
-                AgentCheckpoint checkpoint = mock(AgentCheckpointRecord.class);
-                when(checkpoint.getStatus()).thenReturn(CheckpointStatus.IN_PROGRESS);
+        AgentResult approval = AgentResult.awaitingApproval("mytool", "{}", "s1", Collections.emptyList());
+        when(stateMachineRunner.run(any(), any(), any())).thenReturn(approval);
 
-                when(agentStore.load(any(), any())).thenReturn(Optional.of(checkpoint));
-                when(agentStore.save(any())).thenThrow(new RuntimeException("SQLITE_BUSY"));
+        WorkspaceContext.run("s1", "user", "chat", AutonomyLevel.FULL, "coordinator", () -> {
+            AgentResult result = loop.runWithRole("s1", "coord", "goal", null, engine, 5, ctx);
 
-                AgentResult approval = AgentResult
-                                .awaitingApproval("mytool", "{}", "s1", Collections.emptyList());
-                when(stateMachineRunner.run(any(), any(), any())).thenReturn(approval);
-
-                WorkspaceContext.run("s1", "user", "chat", AutonomyLevel.FULL, "coordinator", () -> {
-                        AgentResult result = loop.runWithRole("s1", "coord", "goal", null, engine, 5,
-                                        ctx);
-
-                        assertTrue(result instanceof AgentResult.AwaitingApproval);
-                        return null;
-                });
-        }
+            assertTrue(result instanceof AgentResult.AwaitingApproval);
+            return null;
+        });
+    }
 }

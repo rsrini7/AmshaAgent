@@ -15,9 +15,8 @@ import java.util.regex.Pattern;
 public class CronTimeResolver {
 
     // Handles: "in 5 min", "in a min", "in an hour", "after 10 minutes", "in one hour"
-    private static final Pattern IN_RELATIVE_TIME_PATTERN =
-            Pattern.compile("(?:in|after)\\s+(?:exactly\\s+)?(a|an|one|\\d+)\\s*(min(?:utes?)?|hours?)",
-                    Pattern.CASE_INSENSITIVE);
+    private static final Pattern IN_RELATIVE_TIME_PATTERN = Pattern.compile(
+            "(?:in|after)\\s+(?:exactly\\s+)?(a|an|one|\\d+)\\s*(min(?:utes?)?|hours?)", Pattern.CASE_INSENSITIVE);
 
     private static final Pattern AT_TIME_PATTERN =
             Pattern.compile("at\\s+(\\d{1,2})(?::(\\d{2}))?\\s*(am|pm)?", Pattern.CASE_INSENSITIVE);
@@ -27,13 +26,11 @@ public class CronTimeResolver {
 
     // Handles: "every minute", "every 5 minutes", "every hour", "every 2 hours"
     private static final Pattern EVERY_PATTERN =
-            Pattern.compile("every\\s+(?:(\\d+)\\s+)?(min(?:utes?)?|hours?)",
-                    Pattern.CASE_INSENSITIVE);
+            Pattern.compile("every\\s+(?:(\\d+)\\s+)?(min(?:utes?)?|hours?)", Pattern.CASE_INSENSITIVE);
 
     // Negation guard (Invariant 4.11)
     private static final Pattern NEGATION_GUARD =
-            Pattern.compile("\\b(?:not|don't|do not|never|cancel|stop|remove)\\b",
-                    Pattern.CASE_INSENSITIVE);
+            Pattern.compile("\\b(?:not|don't|do not|never|cancel|stop|remove)\\b", Pattern.CASE_INSENSITIVE);
 
     public static boolean isValidCron(String cron) {
         return cron != null && VALID_CRON_PATTERN.matcher(cron.trim()).matches();
@@ -87,7 +84,7 @@ public class CronTimeResolver {
             long amount = (q.equalsIgnoreCase("a") || q.equalsIgnoreCase("an") || q.equalsIgnoreCase("one"))
                     ? 1L
                     : Long.parseLong(q);
-            
+
             if (unit.startsWith("hour")) {
                 return nowUtc.plusHours(amount);
             } else {
@@ -97,15 +94,15 @@ public class CronTimeResolver {
 
         var m2 = AT_TIME_PATTERN.matcher(msg);
         if (m2.find()) {
-            int hour   = Integer.parseInt(m2.group(1));
+            int hour = Integer.parseInt(m2.group(1));
             int minute = m2.group(2) != null ? Integer.parseInt(m2.group(2)) : 0;
             if ("pm".equalsIgnoreCase(m2.group(3)) && hour < 12) hour += 12;
-            if ("am".equalsIgnoreCase(m2.group(3)) && hour == 12) hour  = 0;
-            
+            if ("am".equalsIgnoreCase(m2.group(3)) && hour == 12) hour = 0;
+
             ZonedDateTime nowLocal = ZonedDateTime.now(userZone);
-            ZonedDateTime local = nowLocal
-                    .withHour(hour).withMinute(minute).withSecond(0).withNano(0);
-            
+            ZonedDateTime local =
+                    nowLocal.withHour(hour).withMinute(minute).withSecond(0).withNano(0);
+
             if (local.isBefore(nowLocal)) local = local.plusDays(1);
             return local.withZoneSameInstant(ZoneOffset.UTC);
         }

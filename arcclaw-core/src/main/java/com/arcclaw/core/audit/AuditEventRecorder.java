@@ -1,14 +1,15 @@
 package com.arcclaw.core.audit;
 
-import java.util.concurrent.locks.ReentrantLock;
-
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 
+import java.util.concurrent.locks.ReentrantLock;
+
 import com.arcclaw.core.domain.model.AuditEvent;
 import com.arcclaw.persistence.api.AuditEventDto;
 import com.arcclaw.persistence.api.AuditEventStorePort;
+
 import io.quarkus.arc.Unremovable;
 
 @ApplicationScoped
@@ -55,8 +56,7 @@ public class AuditEventRecorder {
             throw new IllegalStateException("AuditEvent.prevHash must not be null - genesis hash failed");
         if (event.getHmacHash() == null || event.getHmacHash().isBlank())
             throw new IllegalStateException("AuditEvent.hmacHash must not be null - HMAC failed");
-        if (event.getSequence() < 0)
-            throw new IllegalStateException("AuditEvent.sequence must be >= 0");
+        if (event.getSequence() < 0) throw new IllegalStateException("AuditEvent.sequence must be >= 0");
     }
 
     @Transactional(Transactional.TxType.SUPPORTS)
@@ -66,24 +66,23 @@ public class AuditEventRecorder {
 
     private AuditEventDto toDto(AuditEvent entity) {
         return new AuditEventDto(
-            entity.getId(),
-            entity.getSessionId(),
-            entity.getUserId(),
-            entity.getAgentRole(),
-            entity.getGoalHash(),
-            entity.getOutcome() != null ? entity.getOutcome().name() : null,
-            entity.getEventType() != null ? entity.getEventType().name() : null,
-            entity.getEventDetail(),
-            entity.getInputTokens(),
-            entity.getOutputTokens(),
-            entity.getUsdCost(),
-            entity.getTimestamp(),
-            entity.getIterationsUsed(),
-            entity.getAppVersion(),
-            entity.getIdempotencyKey(),
-            entity.getSequence(),
-            entity.getHmacHash(),
-            entity.getPrevHash()
-        );
+                entity.getId(),
+                entity.getSessionId(),
+                entity.getUserId(),
+                entity.getAgentRole(),
+                entity.getGoalHash(),
+                entity.getOutcome() != null ? entity.getOutcome().name() : null,
+                entity.getEventType() != null ? entity.getEventType().name() : null,
+                entity.getEventDetail(),
+                entity.getInputTokens(),
+                entity.getOutputTokens(),
+                entity.getUsdCost(),
+                entity.getTimestamp(),
+                entity.getIterationsUsed(),
+                entity.getAppVersion(),
+                entity.getIdempotencyKey(),
+                entity.getSequence(),
+                entity.getHmacHash(),
+                entity.getPrevHash());
     }
 }

@@ -10,13 +10,13 @@ import java.util.List;
  * regardless of CDI {@code Instance} iteration order. Lower value = higher priority.
  */
 public interface SkillProvider {
-    /** 
+    /**
      * Loads skill definitions from this provider's source.
      * @return List of raw skill definitions.
      */
     List<SkillDefinition> load();
 
-    /** 
+    /**
      * Returns the name of the source (for logging/metadata).
      */
     String sourceName();
@@ -28,5 +28,7 @@ public interface SkillProvider {
      *
      * @return priority value, default 100
      */
-    default int priority() { return 100; }
+    default int priority() {
+        return 100;
+    }
 }

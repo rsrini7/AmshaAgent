@@ -14,6 +14,7 @@ import com.arcclaw.core.tools.ToolResponse;
 import com.arcclaw.persistence.api.RecallMemoryStorePort;
 import com.arcclaw.persistence.api.RecallMessageDto;
 import com.arcclaw.persistence.api.RecallSearchQuery;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -33,7 +34,7 @@ class RecallSearchCodeSnippetNoSummaryPollutionTest {
     void setup() {
         mockRecallStore = mock(RecallMemoryStorePort.class);
         tool = new RecallMemorySearchTool();
-        
+
         // Inject mock via reflection
         try {
             var field = RecallMemorySearchTool.class.getDeclaredField("recallStore");
@@ -48,43 +49,49 @@ class RecallSearchCodeSnippetNoSummaryPollutionTest {
     void testSearchExcludesSummariesByDefault() throws Exception {
         String sessionId = "test-session-1";
         String userId = "test-user";
-        
+
         // Setup: Raw code snippet at Turn 5
         RecallMessageDto codeSnippet = new RecallMessageDto(
-            "msg-1", sessionId, userId, 5, "hash1", "agent", "AGENT_MESSAGE",
-            "```python\ndef calculate_total(items):\n    return sum(item.price for item in items)\n```",
-            null, null, true, false, null, null
-        );
-        
+                "msg-1",
+                sessionId,
+                userId,
+                5,
+                "hash1",
+                "agent",
+                "AGENT_MESSAGE",
+                "```python\ndef calculate_total(items):\n    return sum(item.price for item in items)\n```",
+                null,
+                null,
+                true,
+                false,
+                null,
+                null);
+
         // Mock search to return only code snippet when includeSummaries=false
         when(mockRecallStore.search(any(RecallSearchQuery.class))).thenReturn(List.of(codeSnippet));
-        
+
         // Execute search WITHOUT include_summaries flag (default=false), WITH session_id (default=current)
-        ToolResponse response = WorkspaceContext.run(sessionId, userId, "test-chat",
-                AutonomyLevel.SUPERVISED, "tool",
-                () -> {
+        ToolResponse response =
+                WorkspaceContext.run(sessionId, userId, "test-chat", AutonomyLevel.SUPERVISED, "tool", () -> {
                     try {
-                        return tool.execute(mockCtx(sessionId, userId), Map.of(
-                            "query", "calculate_total",
-                            "limit", 5
-                        ));
+                        return tool.execute(mockCtx(sessionId, userId), Map.of("query", "calculate_total", "limit", 5));
                     } catch (Exception e) {
                         throw new RuntimeException(e);
                     }
                 });
-        
+
         // Verify success
         assertTrue(response.success(), "Search should succeed");
-        
+
         // Verify result contains code snippet
         String content = response.output();
         assertTrue(content.contains("calculate_total"), "Should contain code snippet");
         assertTrue(content.contains("agent"), "Should identify role as agent");
-        
+
         // Verify summary is NOT present
         assertFalse(content.contains("COMPACTION_SUMMARY"), "Should NOT contain summary type");
         assertFalse(content.contains("User asked about calculate_total"), "Summary content should be absent");
-        
+
         // Verify query was called with includeSummaries=false
         ArgumentCaptor<RecallSearchQuery> queryCaptor = ArgumentCaptor.forClass(RecallSearchQuery.class);
         verify(mockRecallStore).search(queryCaptor.capture());

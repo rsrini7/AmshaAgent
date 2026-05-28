@@ -3,7 +3,7 @@ package com.arcclaw.persistence.api;
 /**
  * Transfer object representing a scored memory chunk for search results.
  * This is a minimal DTO that does not depend on heavy domain types.
- * 
+ *
  * Adapters may translate between this DTO and their internal domain models
  * (e.g., ScoredChunk in arcclaw-rag).
  */

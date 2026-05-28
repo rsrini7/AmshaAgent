@@ -22,7 +22,7 @@ class OnboardingSessionRegistryTest {
         assertEquals(OnboardingSessionRegistry.OnboardingState.Step.WELCOME, state1.currentStep);
 
         state1.selectedProvider = "openai";
-        
+
         OnboardingSessionRegistry.OnboardingState state2 = registry.getOrCreate(sid);
         assertSame(state1, state2);
         assertEquals("openai", state2.selectedProvider);
@@ -32,10 +32,10 @@ class OnboardingSessionRegistryTest {
     void testAdvanceStep() {
         OnboardingSessionRegistry.OnboardingState state = registry.getOrCreate("s1");
         assertEquals(OnboardingSessionRegistry.OnboardingState.Step.WELCOME, state.currentStep);
-        
+
         state.advance();
         assertEquals(OnboardingSessionRegistry.OnboardingState.Step.PROVIDER, state.currentStep);
-        
+
         state.advance();
         assertEquals(OnboardingSessionRegistry.OnboardingState.Step.CREDENTIALS, state.currentStep);
     }
@@ -44,7 +44,7 @@ class OnboardingSessionRegistryTest {
     void testCanProceedTo() {
         OnboardingSessionRegistry.OnboardingState state = registry.getOrCreate("s1");
         // Current: WELCOME (1)
-        
+
         assertTrue(state.canProceedTo(OnboardingSessionRegistry.OnboardingState.Step.WELCOME));
         assertTrue(state.canProceedTo(OnboardingSessionRegistry.OnboardingState.Step.PROVIDER)); // 1 + 1 = 2
         assertFalse(state.canProceedTo(OnboardingSessionRegistry.OnboardingState.Step.CREDENTIALS)); // 3 > 2
@@ -54,9 +54,9 @@ class OnboardingSessionRegistryTest {
     void testRemove() {
         String sid = "sess-123";
         registry.getOrCreate(sid).selectedProvider = "test";
-        
+
         registry.remove(sid);
-        
+
         OnboardingSessionRegistry.OnboardingState state = registry.getOrCreate(sid);
         assertNull(state.selectedProvider);
         assertEquals(OnboardingSessionRegistry.OnboardingState.Step.WELCOME, state.currentStep);

@@ -1,8 +1,8 @@
 package com.arcclaw.core.memory.tiered;
 
-import java.util.List;
-
 import jakarta.enterprise.context.ApplicationScoped;
+
+import java.util.List;
 
 import com.arcclaw.persistence.api.CoreMemoryBlockDto;
 
@@ -27,14 +27,15 @@ public class CoreMemoryPromptRenderer {
                 continue;
             }
 
-            String label = switch (block.blockKey()) {
-                case "user_profile" -> "User";
-                case "active_task" -> "Active Task";
-                case "constraints" -> "Constraints";
-                case "project_context" -> "Project Context";
-                case "preferences" -> "Preferences";
-                default -> block.blockKey();
-            };
+            String label =
+                    switch (block.blockKey()) {
+                        case "user_profile" -> "User";
+                        case "active_task" -> "Active Task";
+                        case "constraints" -> "Constraints";
+                        case "project_context" -> "Project Context";
+                        case "preferences" -> "Preferences";
+                        default -> block.blockKey();
+                    };
 
             sb.append(label).append(": ").append(block.content()).append("\n");
         }

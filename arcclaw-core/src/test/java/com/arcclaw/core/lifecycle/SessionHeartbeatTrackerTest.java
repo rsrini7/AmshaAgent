@@ -8,6 +8,7 @@ import java.time.Instant;
 import java.util.Optional;
 
 import com.arcclaw.core.security.AutonomyLevel;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -39,16 +40,16 @@ class SessionHeartbeatTrackerTest {
     @Test
     void testTryBindOwnerPreventHijack() {
         heartbeatTracker.recordHeartbeat("sess1", AutonomyLevel.SUPERVISED);
-        
+
         // First bind succeeds
         assertTrue(heartbeatTracker.tryBindOwner("sess1", "userA"));
-        
+
         // Second bind with DIFFERENT user fails (prevents hijack)
         assertFalse(heartbeatTracker.tryBindOwner("sess1", "userB"));
-        
+
         // Second bind with SAME user succeeds (idempotent)
         assertTrue(heartbeatTracker.tryBindOwner("sess1", "userA"));
-        
+
         assertEquals("userA", heartbeatTracker.getOwner("sess1").get());
     }
 

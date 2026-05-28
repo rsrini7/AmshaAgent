@@ -9,7 +9,7 @@ import dev.langchain4j.model.embedding.EmbeddingModel;
  * as a CDI bean, without modifying {@code EmbeddingModelProducer}.
  */
 public interface EmbeddingProviderFactory {
-    
+
     /** Canonical lowercase provider ID, e.g. "openai", "ollama", "jina". */
     String providerId();
 
@@ -18,9 +18,9 @@ public interface EmbeddingProviderFactory {
 
     /** Helper for factories to enforce API key presence. */
     default String requireApiKey(EmbeddingModelConfig config) {
-        return config.apiKey().filter(k -> !k.isBlank())
-            .orElseThrow(() -> new IllegalStateException(
-                "arcclaw.rag.embed-api-key is required for provider '" + providerId() + "'. " +
-                "Set ARCCLAW_EMBED_API_KEY in .env"));
+        return config.apiKey()
+                .filter(k -> !k.isBlank())
+                .orElseThrow(() -> new IllegalStateException("arcclaw.rag.embed-api-key is required for provider '"
+                        + providerId() + "'. " + "Set ARCCLAW_EMBED_API_KEY in .env"));
     }
 }

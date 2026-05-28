@@ -2,13 +2,15 @@ package com.arcclaw.deployment.scope;
 
 import com.arcclaw.core.scope.WorkspaceScopeContext;
 import com.arcclaw.core.scope.WorkspaceScoped;
+
+import org.jboss.jandex.DotName;
+
 import io.quarkus.arc.deployment.ContextRegistrationPhaseBuildItem;
 import io.quarkus.arc.deployment.ContextRegistrationPhaseBuildItem.ContextConfiguratorBuildItem;
 import io.quarkus.arc.deployment.CustomScopeBuildItem;
 import io.quarkus.arc.deployment.UnremovableBeanBuildItem;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
-import org.jboss.jandex.DotName;
 
 /**
  * Quarkus build-time processor that registers the {@link WorkspaceScoped}
@@ -49,10 +51,7 @@ public class WorkspaceScopeProcessor {
     @BuildStep
     ContextConfiguratorBuildItem registerContext(ContextRegistrationPhaseBuildItem phase) {
         return new ContextConfiguratorBuildItem(
-                phase.getContext()
-                        .configure(WorkspaceScoped.class)
-                        .normal()
-                        .contextClass(WorkspaceScopeContext.class));
+                phase.getContext().configure(WorkspaceScoped.class).normal().contextClass(WorkspaceScopeContext.class));
     }
 
     /**
@@ -64,9 +63,7 @@ public class WorkspaceScopeProcessor {
      */
     @BuildStep
     void unremovableBeans(BuildProducer<UnremovableBeanBuildItem> producer) {
-        producer.produce(
-                new UnremovableBeanBuildItem(
-                        new UnremovableBeanBuildItem.BeanClassNameExclusion(
-                                WorkspaceScopeContext.class.getName())));
+        producer.produce(new UnremovableBeanBuildItem(
+                new UnremovableBeanBuildItem.BeanClassNameExclusion(WorkspaceScopeContext.class.getName())));
     }
 }

@@ -8,6 +8,7 @@ import com.arcclaw.core.agent.event.AgentStateChangedEvent;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.observability.AgentObserver;
 import com.arcclaw.core.util.AgentGuards;
+
 import org.jboss.logging.Logger;
 
 @ApplicationScoped
@@ -15,32 +16,33 @@ public class AgentStateObserver implements AgentObserver {
 
     private static final Logger log = Logger.getLogger(AgentStateObserver.class);
 
-    @Inject Event<AgentStateChangedEvent> stateChangedEvent;
+    @Inject
+    Event<AgentStateChangedEvent> stateChangedEvent;
 
     @Override
     public void recordLlmCall(String sessionId, int inputTokens, int outputTokens) {}
 
     @Override
-    public void onLoopComplete(String sessionId, String userId,
-            String agentRole, String goalHash, AgentResult result) {
+    public void onLoopComplete(String sessionId, String userId, String agentRole, String goalHash, AgentResult result) {
         if (AgentGuards.isShuttingDown()) {
             log.debugf("Container shutting down - skipping onLoopComplete for session %s", sessionId);
             return;
         }
 
-        String status = switch (result) {
-            case AgentResult.Finished _         -> "idle";
-            case AgentResult.StructuredFinished _ -> "idle";
-            case AgentResult.AwaitingApproval _ -> "awaiting_approval";
-            case AgentResult.AwaitingRetry _ -> "awaiting_retry";
-            case AgentResult.LoopExceeded _     -> "idle";
-            case AgentResult.Failed _           -> "idle";
-        };
+        String status =
+                switch (result) {
+                    case AgentResult.Finished _ -> "idle";
+                    case AgentResult.StructuredFinished _ -> "idle";
+                    case AgentResult.AwaitingApproval _ -> "awaiting_approval";
+                    case AgentResult.AwaitingRetry _ -> "awaiting_retry";
+                    case AgentResult.LoopExceeded _ -> "idle";
+                    case AgentResult.Failed _ -> "idle";
+                };
         stateChangedEvent.fire(new AgentStateChangedEvent(
-            sessionId,
-            agentRole,  // agentName
-            status,
-            ""          // currentTask cleared on complete
-        ));
+                sessionId,
+                agentRole, // agentName
+                status,
+                "" // currentTask cleared on complete
+                ));
     }
 }

@@ -1,10 +1,10 @@
 package com.arcclaw.core.reflex;
 
-import java.util.Optional;
-import java.util.function.BiConsumer;
-
 import jakarta.enterprise.context.Dependent;
 import jakarta.inject.Inject;
+
+import java.util.Optional;
+import java.util.function.BiConsumer;
 
 import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.agent.loop.AgentLoop;
@@ -23,11 +23,20 @@ import com.arcclaw.persistence.api.CronStorePort;
 @Dependent
 public class CronDecisionRouter {
 
-    @Inject StatefulAgentStore statefulAgentStore;
-    @Inject CronStorePort cronStore;
-    @Inject AgentLoop agentLoop;
-    @Inject ReasoningEngine reasoningEngine;
-    @Inject WorkspaceManager workspaceManager;
+    @Inject
+    StatefulAgentStore statefulAgentStore;
+
+    @Inject
+    CronStorePort cronStore;
+
+    @Inject
+    AgentLoop agentLoop;
+
+    @Inject
+    ReasoningEngine reasoningEngine;
+
+    @Inject
+    WorkspaceManager workspaceManager;
 
     public String execute(CronContext ctx) throws Exception {
         String cronId = ctx.cronId;
@@ -56,12 +65,23 @@ public class CronDecisionRouter {
             ctx.context.setGoal(goal);
 
             int budget = pendingCheckpoint.getMaxIterations() != null
-                ? Math.max(3, pendingCheckpoint.getMaxIterations()) : 3;
+                    ? Math.max(3, pendingCheckpoint.getMaxIterations())
+                    : 3;
 
-            result = WorkspaceContext.run(cronSessionId, cron.getUserId(), cron.getChatId(),
-                AutonomyLevel.SUPERVISED, cronRole,
-                () -> agentLoop.run(cronSessionId, cronRole, goal,
-                    pendingCheckpoint.getSystemNote(), reasoningEngine, budget, ctx.context));
+            result = WorkspaceContext.run(
+                    cronSessionId,
+                    cron.getUserId(),
+                    cron.getChatId(),
+                    AutonomyLevel.SUPERVISED,
+                    cronRole,
+                    () -> agentLoop.run(
+                            cronSessionId,
+                            cronRole,
+                            goal,
+                            pendingCheckpoint.getSystemNote(),
+                            reasoningEngine,
+                            budget,
+                            ctx.context));
 
             if (result == null) {
                 return ctx.errorMsg().get();
@@ -73,14 +93,20 @@ public class CronDecisionRouter {
         } finally {
             statefulAgentStore.clearBatchResuming(cronSessionId);
             if (result != null && isTerminalResult(result)) {
-                try { workspaceManager.terminateSession(cronSessionId); } catch (Exception e) { /* best effort */ }
+                try {
+                    workspaceManager.terminateSession(cronSessionId);
+                } catch (Exception e) {
+                    /* best effort */
+                }
             }
         }
     }
 
     private boolean isTerminalResult(AgentResult result) {
-        return result instanceof AgentResult.Finished || result instanceof AgentResult.StructuredFinished
-            || result instanceof AgentResult.Failed || result instanceof AgentResult.LoopExceeded;
+        return result instanceof AgentResult.Finished
+                || result instanceof AgentResult.StructuredFinished
+                || result instanceof AgentResult.Failed
+                || result instanceof AgentResult.LoopExceeded;
     }
 
     private String resolveSessionId(String cronId) {
@@ -114,32 +140,40 @@ public class CronDecisionRouter {
     }
 
     public record CronContext(
-        String cronId,
-        String userId,
-        String chatId,
-        String reason,
-        MessageContext context,
-        DecisionApplier applyDecisionToAll,
-        MessageProvider alreadyProcessingMsg,
-        GoalProvider cronResumeGoal,
-        PostDecisionHandler postProcessCronDecision,
-        ResultMessageProvider successResponse,
-        MessageProvider errorMsg,
-        BiConsumer<AgentCron, AgentResult> jobNotifier
-    ) {
-        @FunctionalInterface public interface DecisionApplier {
+            String cronId,
+            String userId,
+            String chatId,
+            String reason,
+            MessageContext context,
+            DecisionApplier applyDecisionToAll,
+            MessageProvider alreadyProcessingMsg,
+            GoalProvider cronResumeGoal,
+            PostDecisionHandler postProcessCronDecision,
+            ResultMessageProvider successResponse,
+            MessageProvider errorMsg,
+            BiConsumer<AgentCron, AgentResult> jobNotifier) {
+        @FunctionalInterface
+        public interface DecisionApplier {
             AgentCheckpoint apply(String sessionId, String reason);
         }
-        @FunctionalInterface public interface MessageProvider {
+
+        @FunctionalInterface
+        public interface MessageProvider {
             String get();
         }
-        @FunctionalInterface public interface GoalProvider {
+
+        @FunctionalInterface
+        public interface GoalProvider {
             String get(String cronSessionId, String cronRole);
         }
-        @FunctionalInterface public interface PostDecisionHandler {
+
+        @FunctionalInterface
+        public interface PostDecisionHandler {
             void accept(AgentCron cron, String reason, AgentResult result);
         }
-        @FunctionalInterface public interface ResultMessageProvider {
+
+        @FunctionalInterface
+        public interface ResultMessageProvider {
             String get(AgentResult result);
         }
     }

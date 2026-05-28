@@ -12,8 +12,7 @@ class MarkdownEscapeServiceTest {
     private final MarkdownProfile profile = MarkdownProfile.TELEGRAM_V2;
 
     @ParameterizedTest
-    @ValueSource(chars = {'_','*','[',']','(',')',
-        '~','`','>','#','+','-','=','|','{','}','.','!'})
+    @ValueSource(chars = {'_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!'})
     void testSingleSpecialCharEscaped(char c) {
         String input = String.valueOf(c);
         String expected = "\\" + c;
@@ -30,7 +29,7 @@ class MarkdownEscapeServiceTest {
         // If a character is already backslash-escaped, it shouldn't get another backslash
         String input = "Hello \\. World";
         assertEquals("Hello \\. World", service.escape(input, profile));
-        
+
         String input2 = "\\*bold\\*";
         assertEquals("\\*bold\\*", service.escape(input2, profile));
     }
@@ -45,11 +44,13 @@ class MarkdownEscapeServiceTest {
     void testCorpusNestedMarkdownStructures() {
         // Tests related to string corpora that look like nested markdown
         String input1 = "This is *bold* and _italic_ and `code`";
-        // Expected for TelegramV2 is that they all get escaped so renderer can handle them explicitly if we map directly,
-        // Wait, the esc() method escapes *everything* blindly, so even nested markdown will just have its syntax tokens escaped.
+        // Expected for TelegramV2 is that they all get escaped so renderer can handle them explicitly if we map
+        // directly,
+        // Wait, the esc() method escapes *everything* blindly, so even nested markdown will just have its syntax tokens
+        // escaped.
         String expected1 = "This is \\*bold\\* and \\_italic\\_ and \\`code\\`";
         assertEquals(expected1, service.escape(input1, profile));
-        
+
         String input2 = "[Link](http://example.com)";
         String expected2 = "\\[Link\\]\\(http://example\\.com\\)";
         assertEquals(expected2, service.escape(input2, profile));

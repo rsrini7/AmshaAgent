@@ -6,15 +6,17 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import java.util.List;
-
-import com.arcclaw.core.security.InputSanitizer;
 import dev.langchain4j.agent.tool.ToolExecutionRequest;
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.ToolExecutionResultMessage;
 import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.store.memory.chat.ChatMemoryStore;
+
+import java.util.List;
+
+import com.arcclaw.core.security.InputSanitizer;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -36,15 +38,23 @@ class ChatMemoryWriterBugFixTest {
     @SuppressWarnings("unchecked")
     void testScrubUnfulfilledToolCalls_removesOrphanedAiMessage() {
         String sessionId = "s1";
-        ToolExecutionRequest req1 = ToolExecutionRequest.builder().id("c1").name("tool1").arguments("{}").build();
-        ToolExecutionRequest req2 = ToolExecutionRequest.builder().id("c2").name("tool2").arguments("{}").build();
+        ToolExecutionRequest req1 = ToolExecutionRequest.builder()
+                .id("c1")
+                .name("tool1")
+                .arguments("{}")
+                .build();
+        ToolExecutionRequest req2 = ToolExecutionRequest.builder()
+                .id("c2")
+                .name("tool2")
+                .arguments("{}")
+                .build();
 
         List<ChatMessage> history = List.of(
                 UserMessage.userMessage("first goal"),
                 AiMessage.aiMessage("thought", List.of(req1)),
                 new ToolExecutionResultMessage("c1", "tool1", "result1"),
                 AiMessage.aiMessage("second thought", List.of(req2)) // This one is unfulfilled
-        );
+                );
 
         when(store.getMessages(sessionId)).thenReturn(history);
 

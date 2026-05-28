@@ -5,12 +5,14 @@ import static org.junit.jupiter.api.Assertions.*;
 import com.arcclaw.core.structured.StructuredOutputEngine;
 import com.arcclaw.core.tools.ToolRegistry;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.quarkus.qute.Template;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+
+import io.quarkus.qute.Template;
 
 @ExtendWith(MockitoExtension.class)
 class AgentProducerTest {

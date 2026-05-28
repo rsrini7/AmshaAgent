@@ -1,11 +1,13 @@
 package com.arcclaw.core.tools.memory;
 
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
+import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
+
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 
 import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.agent.role.ToolMetadata;
@@ -17,7 +19,7 @@ import com.arcclaw.core.tools.IdempotencyMode;
 import com.arcclaw.core.tools.ToolExecutionContext;
 import com.arcclaw.core.tools.ToolResponse;
 import com.arcclaw.persistence.api.CoreMemoryBlockDto;
-import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
+
 import org.jboss.logging.Logger;
 
 /**
@@ -28,12 +30,11 @@ import org.jboss.logging.Logger;
  */
 @ApplicationScoped
 @ToolMetadata(
-    capabilityId = "core_memory_read",
-    description = "Read core memory blocks for the current user. " +
-                  "Returns all blocks or a specific block by key. " +
-                  "Block keys: user_profile, active_task, constraints, project_context, preferences.",
-    defaultRoles = {"architect", "coordinator", "researcher", "synthesizer", "coder"}
-)
+        capabilityId = "core_memory_read",
+        description =
+                "Read core memory blocks for the current user. " + "Returns all blocks or a specific block by key. "
+                        + "Block keys: user_profile, active_task, constraints, project_context, preferences.",
+        defaultRoles = {"architect", "coordinator", "researcher", "synthesizer", "coder"})
 public class CoreMemoryReadTool implements AgentTool {
 
     private static final Logger log = Logger.getLogger(CoreMemoryReadTool.class);
@@ -48,16 +49,15 @@ public class CoreMemoryReadTool implements AgentTool {
 
     @Override
     public String description() {
-        return "Read core memory blocks (user profile, active task, constraints, project context, preferences). " +
-               "Returns all blocks or a specific block by key.";
+        return "Read core memory blocks (user profile, active task, constraints, project context, preferences). "
+                + "Returns all blocks or a specific block by key.";
     }
 
     @Override
     public JsonObjectSchema parametersSchema() {
         return JsonObjectSchema.builder()
-            .addStringProperty("block_key",
-                "Optional specific block key to read. Omit to read all blocks.")
-            .build();
+                .addStringProperty("block_key", "Optional specific block key to read. Omit to read all blocks.")
+                .build();
     }
 
     @Override
@@ -109,7 +109,6 @@ public class CoreMemoryReadTool implements AgentTool {
     }
 
     private String formatBlock(CoreMemoryBlockDto block) {
-        return String.format("### [%s] (v%d)\n%s",
-            block.blockKey(), block.version(), block.content());
+        return String.format("### [%s] (v%d)\n%s", block.blockKey(), block.version(), block.content());
     }
 }

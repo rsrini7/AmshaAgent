@@ -1,15 +1,14 @@
 package com.arcclaw.core.agent.loop;
 
-import java.util.Comparator;
-import java.util.List;
-
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
+import java.util.Comparator;
+import java.util.List;
+
 @ApplicationScoped
 public class ToolObservationSanitizer {
-
 
     @Inject
     Instance<ObservationTransformer> transformers;

@@ -1,16 +1,17 @@
 package com.arcclaw.app.config;
 
-import java.io.IOException;
-import java.io.InputStream;
-import java.util.Properties;
-
 import jakarta.annotation.Priority;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
 
-import io.quarkus.runtime.StartupEvent;
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.Properties;
+
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
+
+import io.quarkus.runtime.StartupEvent;
 
 /**
  * Validates that the runtime persistence backend matches the backend
@@ -37,34 +38,34 @@ public class BackendValidator {
 
         if ("default".equals(buildBackend)) {
             // JVM mode — all backends available, no validation needed
-            log.debugf("BackendValidator: JVM mode (build-backend=default), runtime=%s — all backends available.",
-                runtimeBackend);
+            log.debugf(
+                    "BackendValidator: JVM mode (build-backend=default), runtime=%s — all backends available.",
+                    runtimeBackend);
             return;
         }
 
         // Native mode — build-backend was baked in
         if (!buildBackend.equals(runtimeBackend)) {
             log.errorf(
-                "╔══════════════════════════════════════════════════════════════════╗%n" +
-                "║  BACKEND MISMATCH DETECTED                                      ║%n" +
-                "╠══════════════════════════════════════════════════════════════════╣%n" +
-                "║  This binary was built for backend:  %-28s ║%n" +
-                "║  Your .env is configured for:        %-28s ║%n" +
-                "║                                                                    ║%n" +
-                "║  Options:                                                          ║%n" +
-                "║    1. Use the correct binary:  arcclaw-%-24s ║%n" +
-                "║    2. Change .env:  ARCCLAW_PERSISTENCE_BACKEND=%-15s ║%n" +
-                "║    3. Rebuild:  mise run build:native-%-22s  ║%n" +
-                "╚══════════════════════════════════════════════════════════════════╝",
-                buildBackend, runtimeBackend,
-                buildBackend.equals("postgres") ? "pg" : buildBackend,
-                buildBackend,
-                buildBackend.equals("postgres") ? "pg" : buildBackend
-            );
-            throw new BackendMismatchException(
-                String.format(
-                    "Native binary built for '%s' but .env has ARCCLAW_PERSISTENCE_BACKEND=%s. " +
-                    "Use the '%s' binary or set ARCCLAW_PERSISTENCE_BACKEND=%s in .env.",
+                    "╔══════════════════════════════════════════════════════════════════╗%n"
+                            + "║  BACKEND MISMATCH DETECTED                                      ║%n"
+                            + "╠══════════════════════════════════════════════════════════════════╣%n"
+                            + "║  This binary was built for backend:  %-28s ║%n"
+                            + "║  Your .env is configured for:        %-28s ║%n"
+                            + "║                                                                    ║%n"
+                            + "║  Options:                                                          ║%n"
+                            + "║    1. Use the correct binary:  arcclaw-%-24s ║%n"
+                            + "║    2. Change .env:  ARCCLAW_PERSISTENCE_BACKEND=%-15s ║%n"
+                            + "║    3. Rebuild:  mise run build:native-%-22s  ║%n"
+                            + "╚══════════════════════════════════════════════════════════════════╝",
+                    buildBackend,
+                    runtimeBackend,
+                    buildBackend.equals("postgres") ? "pg" : buildBackend,
+                    buildBackend,
+                    buildBackend.equals("postgres") ? "pg" : buildBackend);
+            throw new BackendMismatchException(String.format(
+                    "Native binary built for '%s' but .env has ARCCLAW_PERSISTENCE_BACKEND=%s. "
+                            + "Use the '%s' binary or set ARCCLAW_PERSISTENCE_BACKEND=%s in .env.",
                     buildBackend, runtimeBackend, buildBackend, buildBackend));
         }
 
@@ -72,8 +73,7 @@ public class BackendValidator {
     }
 
     private static String readBuildBackend() {
-        try (InputStream is = BackendValidator.class.getClassLoader()
-                .getResourceAsStream("build-info.properties")) {
+        try (InputStream is = BackendValidator.class.getClassLoader().getResourceAsStream("build-info.properties")) {
             if (is == null) {
                 return "default";
             }

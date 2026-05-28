@@ -2,17 +2,19 @@ package com.arcclaw.persistence.postgres;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import jakarta.inject.Inject;
+
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
-import jakarta.inject.Inject;
-
 import com.arcclaw.persistence.api.AgentCronDto;
 import com.arcclaw.persistence.api.CronStorePort;
+
+import org.junit.jupiter.api.Test;
+
 import io.quarkus.test.common.QuarkusTestResource;
 import io.quarkus.test.junit.QuarkusTest;
-import org.junit.jupiter.api.Test;
 
 @QuarkusTest
 @QuarkusTestResource(PostgresTestResource.class)
@@ -116,9 +118,24 @@ class PostgresCronStoreAdapterTest {
     }
 
     private AgentCronDto createCron(String id, String userId, String status) {
-        return new AgentCronDto(id, "sess-" + id, userId, "chat-1", "telegram",
-            "plat-1", "0 0 * * * ?", "UTC", false, "goal-" + id,
-            Instant.now().plusSeconds(3600), null, status, "assistant", null, null,
-            Instant.now(), Instant.now());
+        return new AgentCronDto(
+                id,
+                "sess-" + id,
+                userId,
+                "chat-1",
+                "telegram",
+                "plat-1",
+                "0 0 * * * ?",
+                "UTC",
+                false,
+                "goal-" + id,
+                Instant.now().plusSeconds(3600),
+                null,
+                status,
+                "assistant",
+                null,
+                null,
+                Instant.now(),
+                Instant.now());
     }
 }

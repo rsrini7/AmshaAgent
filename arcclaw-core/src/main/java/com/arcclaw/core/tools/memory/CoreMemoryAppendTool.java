@@ -1,9 +1,11 @@
 package com.arcclaw.core.tools.memory;
 
-import java.util.Map;
+import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
+
+import java.util.Map;
 
 import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.agent.role.ToolMetadata;
@@ -17,7 +19,7 @@ import com.arcclaw.core.tools.AgentTool;
 import com.arcclaw.core.tools.IdempotencyMode;
 import com.arcclaw.core.tools.ToolExecutionContext;
 import com.arcclaw.core.tools.ToolResponse;
-import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
+
 import org.jboss.logging.Logger;
 
 /**
@@ -33,12 +35,11 @@ import org.jboss.logging.Logger;
  */
 @ApplicationScoped
 @ToolMetadata(
-    capabilityId = "core_memory_append",
-    description = "Append content to a core memory block (or create if missing). " +
-                  "Rate limited to 5 writes/minute. CAS versioning prevents conflicts. " +
-                  "Keys: user_profile, active_task, constraints, project_context, preferences.",
-    defaultRoles = {"architect", "coordinator", "researcher", "synthesizer", "coder"}
-)
+        capabilityId = "core_memory_append",
+        description = "Append content to a core memory block (or create if missing). "
+                + "Rate limited to 5 writes/minute. CAS versioning prevents conflicts. "
+                + "Keys: user_profile, active_task, constraints, project_context, preferences.",
+        defaultRoles = {"architect", "coordinator", "researcher", "synthesizer", "coder"})
 public class CoreMemoryAppendTool implements AgentTool {
 
     private static final Logger log = Logger.getLogger(CoreMemoryAppendTool.class);
@@ -59,19 +60,18 @@ public class CoreMemoryAppendTool implements AgentTool {
 
     @Override
     public String description() {
-        return "Append content to a core memory block (or create if missing). " +
-               "Rate limited to 5 writes/minute.";
+        return "Append content to a core memory block (or create if missing). " + "Rate limited to 5 writes/minute.";
     }
 
     @Override
     public JsonObjectSchema parametersSchema() {
         return JsonObjectSchema.builder()
-            .addStringProperty("block_key",
-                "Block key to append to. One of: user_profile, active_task, constraints, project_context, preferences.")
-            .addStringProperty("content",
-                "Content to append to the block.")
-            .required("block_key", "content")
-            .build();
+                .addStringProperty(
+                        "block_key",
+                        "Block key to append to. One of: user_profile, active_task, constraints, project_context, preferences.")
+                .addStringProperty("content", "Content to append to the block.")
+                .required("block_key", "content")
+                .build();
     }
 
     @Override
@@ -111,9 +111,11 @@ public class CoreMemoryAppendTool implements AgentTool {
 
             // Audit
             auditService.record(
-                ctx.sessionId(), userId, ctx.agentRole(),
-                SecurityEventType.MEMORY_WRITE_MUTATED,
-                "tool=core_memory_append block=" + blockKey);
+                    ctx.sessionId(),
+                    userId,
+                    ctx.agentRole(),
+                    SecurityEventType.MEMORY_WRITE_MUTATED,
+                    "tool=core_memory_append block=" + blockKey);
 
             return ToolResponse.success("Appended to block '" + blockKey + "'.");
 

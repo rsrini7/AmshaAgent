@@ -1,15 +1,17 @@
 package com.arcclaw.core.agent.reasoning;
 
-import java.util.List;
-import java.util.Optional;
+import dev.langchain4j.model.chat.ChatModel;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
+import java.util.List;
+import java.util.Optional;
+
 import com.arcclaw.core.routing.ChatModelFactory;
 import com.arcclaw.core.routing.MultiModelChatModel;
 import com.arcclaw.core.routing.NvidiaMessageSanitizer;
-import dev.langchain4j.model.chat.ChatModel;
+
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 @ApplicationScoped
@@ -21,12 +23,10 @@ public class NvidiaProviderFactory implements AgentChatModelProvider {
     @ConfigProperty(name = "ARCCLAW_NVIDIA_API_KEY")
     Optional<String> apiKey;
 
-    @ConfigProperty(name = "ARCCLAW_NVIDIA_BASE_URL", 
-                    defaultValue = "https://integrate.api.nvidia.com/v1")
+    @ConfigProperty(name = "ARCCLAW_NVIDIA_BASE_URL", defaultValue = "https://integrate.api.nvidia.com/v1")
     String baseUrl;
 
-    @ConfigProperty(name = "ARCCLAW_NVIDIA_MODEL",
-                    defaultValue = "bytedance/seed-oss-36b-instruct")
+    @ConfigProperty(name = "ARCCLAW_NVIDIA_MODEL", defaultValue = "bytedance/seed-oss-36b-instruct")
     String modelName;
 
     @Override
@@ -41,14 +41,20 @@ public class NvidiaProviderFactory implements AgentChatModelProvider {
 
     @Override
     public ChatModel create() {
-        String key = apiKey.orElseThrow(() -> new IllegalStateException(
-                "Nvidia requires ARCCLAW_NVIDIA_API_KEY"));
+        String key = apiKey.orElseThrow(() -> new IllegalStateException("Nvidia requires ARCCLAW_NVIDIA_API_KEY"));
         List<MultiModelChatModel.ModelEntry> entries = ChatModelFactory.buildMultiModelEntries(
-                key, modelName, "nvidia",
+                key,
+                modelName,
+                "nvidia",
                 (k, m) -> new NvidiaMessageSanitizer(ChatModelFactory.createOpenAi(
-                        baseUrl, k, m,
-                        agentConfig.maxTokens(), agentConfig.timeout(), agentConfig.maxRetries(),
-                        agentConfig.temperature(), agentConfig.logHttp())));
+                        baseUrl,
+                        k,
+                        m,
+                        agentConfig.maxTokens(),
+                        agentConfig.timeout(),
+                        agentConfig.maxRetries(),
+                        agentConfig.temperature(),
+                        agentConfig.logHttp())));
         if (entries.size() == 1) return entries.get(0).model();
         return new MultiModelChatModel("nvidia", entries, 5);
     }

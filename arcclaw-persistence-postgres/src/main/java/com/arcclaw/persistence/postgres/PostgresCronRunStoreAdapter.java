@@ -1,19 +1,21 @@
 package com.arcclaw.persistence.postgres;
 
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
-
 import com.arcclaw.persistence.api.CronRunDto;
 import com.arcclaw.persistence.api.CronRunStorePort;
 import com.arcclaw.persistence.postgres.jdbi.CronRunJdbiDao;
-import io.quarkus.arc.Unremovable;
-import io.quarkus.arc.properties.IfBuildProperty;
+
 import org.jboss.logging.Logger;
 import org.jdbi.v3.core.Jdbi;
+
+import io.quarkus.arc.Unremovable;
+import io.quarkus.arc.properties.IfBuildProperty;
 
 @ApplicationScoped
 @Unremovable
@@ -41,11 +43,18 @@ public class PostgresCronRunStoreAdapter implements CronRunStorePort {
             Optional<CronRunDto> existing = dao.findById(dto.id());
             Instant createdAt = existing.map(CronRunDto::createdAt).orElseGet(Instant::now);
             CronRunDto toSave = new CronRunDto(
-                dto.id(), dto.cronId(), dto.sessionId(), dto.status(),
-                dto.startedAt(), dto.finishedAt(), dto.errorReason(),
-                dto.iterationsUsed(), dto.inputTokens(), dto.outputTokens(),
-                dto.usdCost(), createdAt
-            );
+                    dto.id(),
+                    dto.cronId(),
+                    dto.sessionId(),
+                    dto.status(),
+                    dto.startedAt(),
+                    dto.finishedAt(),
+                    dto.errorReason(),
+                    dto.iterationsUsed(),
+                    dto.inputTokens(),
+                    dto.outputTokens(),
+                    dto.usdCost(),
+                    createdAt);
             dao.save(toSave);
         });
     }

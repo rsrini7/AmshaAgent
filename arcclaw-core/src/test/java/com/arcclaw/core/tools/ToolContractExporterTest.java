@@ -2,6 +2,8 @@ package com.arcclaw.core.tools;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import jakarta.enterprise.inject.Vetoed;
+
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
@@ -9,10 +11,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-import jakarta.enterprise.inject.Vetoed;
-
 import com.arcclaw.core.security.ToolOperation;
 import com.fasterxml.jackson.databind.ObjectMapper;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -57,9 +58,21 @@ class ToolContractExporterTest {
 
     @Vetoed
     static class FakeTool implements AgentTool {
-        @Override public String name() { return "fake_tool"; }
-        @Override public String description() { return "A fake tool"; }
-        @Override public ToolOperation requiredOperation() { return ToolOperation.EXECUTE_SHELL; }
+        @Override
+        public String name() {
+            return "fake_tool";
+        }
+
+        @Override
+        public String description() {
+            return "A fake tool";
+        }
+
+        @Override
+        public ToolOperation requiredOperation() {
+            return ToolOperation.EXECUTE_SHELL;
+        }
+
         @Override
         public ToolResponse execute(ToolExecutionContext ctx, Map<String, Object> params) {
             return ToolResponse.success("ok");
@@ -69,13 +82,18 @@ class ToolContractExporterTest {
     @Vetoed
     static class FakeToolRegistry extends ToolRegistry {
         private final Map<String, AgentTool> tools = new LinkedHashMap<>();
+
         FakeToolRegistry(AgentTool... toolList) {
             for (AgentTool t : toolList) tools.put(t.name(), t);
         }
-        @Override public Optional<AgentTool> findTool(String name) {
+
+        @Override
+        public Optional<AgentTool> findTool(String name) {
             return Optional.ofNullable(tools.get(name));
         }
-        @Override public List<String> listTools() {
+
+        @Override
+        public List<String> listTools() {
             return List.copyOf(tools.keySet());
         }
     }
@@ -84,13 +102,22 @@ class ToolContractExporterTest {
     static class FakeDiscoveryService extends ToolDiscoveryService {
         private final Map<String, ToolRegistry.ToolDescriptor> descriptors = new LinkedHashMap<>();
         private final Map<String, Map<String, String>> secrets = new LinkedHashMap<>();
+
         FakeDiscoveryService(AgentTool... toolList) {
             for (AgentTool t : toolList) {
                 descriptors.put(t.name(), new ToolRegistry.ToolDescriptor(t.name(), t.description(), "{}"));
                 secrets.put(t.name(), Map.of());
             }
         }
-        @Override public Map<String, ToolRegistry.ToolDescriptor> getDescriptorCache() { return descriptors; }
-        @Override public Map<String, Map<String, String>> getSecretsCache() { return secrets; }
+
+        @Override
+        public Map<String, ToolRegistry.ToolDescriptor> getDescriptorCache() {
+            return descriptors;
+        }
+
+        @Override
+        public Map<String, Map<String, String>> getSecretsCache() {
+            return secrets;
+        }
     }
 }

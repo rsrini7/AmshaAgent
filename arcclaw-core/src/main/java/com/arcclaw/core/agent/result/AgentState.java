@@ -18,11 +18,7 @@ public sealed interface AgentState
 
     record InProgress(List<ReasoningStep> steps) implements AgentState {}
 
-    record AwaitingApproval(
-            String toolName,
-            String paramsJson,
-            List<ReasoningStep> steps
-    ) implements AgentState {
+    record AwaitingApproval(String toolName, String paramsJson, List<ReasoningStep> steps) implements AgentState {
         public AgentResult toResult(String sessionId) {
             return AgentResult.awaitingApproval(toolName, paramsJson, sessionId, steps);
         }

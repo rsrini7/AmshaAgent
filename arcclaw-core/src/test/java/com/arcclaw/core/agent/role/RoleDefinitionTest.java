@@ -41,7 +41,8 @@ public class RoleDefinitionTest {
         assertTrue(def.capabilities().contains(ToolCapability.GITHUB));
 
         // Returned sets are unmodifiable
-        assertThrows(UnsupportedOperationException.class, () -> def.capabilities().add(ToolCapability.SCHEDULE_TASK));
+        assertThrows(
+                UnsupportedOperationException.class, () -> def.capabilities().add(ToolCapability.SCHEDULE_TASK));
         assertThrows(UnsupportedOperationException.class, () -> def.toolNames().add("hacked"));
     }
 
@@ -54,7 +55,6 @@ public class RoleDefinitionTest {
         assertFalse(AgentRoleEnum.COORDINATOR.definition().canGenerateCode());
         assertFalse(AgentRoleEnum.SYNTHESIZER.definition().canGenerateCode());
     }
-
 
     @Test
     void testDeityAliases() {

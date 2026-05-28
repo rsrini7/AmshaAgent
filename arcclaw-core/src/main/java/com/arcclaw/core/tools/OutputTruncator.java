@@ -13,8 +13,8 @@ public class OutputTruncator {
     public String truncate(String output) {
         if (output == null || output.isBlank()) return NO_OUTPUT_SENTINEL;
         if (output.length() <= maxOutputChars) return output;
-        int endIndex = output.offsetByCodePoints(
-                0, Math.min(output.codePointCount(0, output.length()), maxOutputChars));
+        int endIndex =
+                output.offsetByCodePoints(0, Math.min(output.codePointCount(0, output.length()), maxOutputChars));
         return output.substring(0, endIndex) + TRUNCATION_SUFFIX;
     }
 }

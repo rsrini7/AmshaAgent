@@ -1,6 +1,7 @@
 package com.arcclaw.core.security;
 
 import com.arcclaw.core.agent.role.AgentRoleEnum;
+
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
@@ -19,8 +20,10 @@ public class DestructiveVocabularyFilterTest {
     void testCoderExemptBySandboxOnlyCapabilities() {
         // Coder is exempt (sandbox-only role via config)
         String result = filter.filter(AgentRoleEnum.CODER.id(), "delete the broken class");
-        Assertions.assertEquals(AgentRoleEnum.CODER.id(), result,
-            "Coder must be exempt from destructive vocabulary filter - sandbox-only role");
+        Assertions.assertEquals(
+                AgentRoleEnum.CODER.id(),
+                result,
+                "Coder must be exempt from destructive vocabulary filter - sandbox-only role");
     }
 
     @Test

@@ -25,6 +25,7 @@ import com.arcclaw.core.scope.WorkspaceScopeHolder;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.persistence.api.CronStorePort;
 import com.fasterxml.jackson.databind.ObjectMapper;
+
 import org.jboss.logging.Logger;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -36,14 +37,26 @@ import org.mockito.MockitoAnnotations;
 
 public class ApproveReflexDelegationTest {
 
-    @Mock CheckpointApprovalService checkpointApprovalService;
-    @Mock StatefulAgentStore statefulAgentStore;
-    @Mock CronStorePort cronStore;
-    @Mock CheckpointResumeHandler checkpointResumeHandler;
-    @Mock ApprovalNotificationService notificationService;
+    @Mock
+    CheckpointApprovalService checkpointApprovalService;
+
+    @Mock
+    StatefulAgentStore statefulAgentStore;
+
+    @Mock
+    CronStorePort cronStore;
+
+    @Mock
+    CheckpointResumeHandler checkpointResumeHandler;
+
+    @Mock
+    ApprovalNotificationService notificationService;
+
     ObjectMapper objectMapper = new ObjectMapper();
-    @InjectMocks ApproveReflex approveReflex;
-    
+
+    @InjectMocks
+    ApproveReflex approveReflex;
+
     private MockedStatic<WorkspaceScopeHolder> mockedScope;
 
     @BeforeEach
@@ -53,15 +66,25 @@ public class ApproveReflexDelegationTest {
         approveReflex.log = Logger.getLogger("test");
         approveReflex.objectMapper = objectMapper;
         lenient().when(notificationService.createJobNotifier()).thenReturn((cron, result) -> {});
-        
+
         mockedScope = mockStatic(WorkspaceScopeHolder.class);
-        mockedScope.when(() -> WorkspaceScopeHolder.run(anyString(), any(Runnable.class)))
-                .thenAnswer(inv -> { ((Runnable) inv.getArgument(1)).run(); return null; });
-        mockedScope.when(() -> WorkspaceScopeHolder.run(anyString(), anyString(), anyString(), any(Runnable.class)))
-                .thenAnswer(inv -> { ((Runnable) inv.getArgument(3)).run(); return null; });
-        mockedScope.when(() -> WorkspaceScopeHolder.call(anyString(), any(Callable.class)))
+        mockedScope
+                .when(() -> WorkspaceScopeHolder.run(anyString(), any(Runnable.class)))
+                .thenAnswer(inv -> {
+                    ((Runnable) inv.getArgument(1)).run();
+                    return null;
+                });
+        mockedScope
+                .when(() -> WorkspaceScopeHolder.run(anyString(), anyString(), anyString(), any(Runnable.class)))
+                .thenAnswer(inv -> {
+                    ((Runnable) inv.getArgument(3)).run();
+                    return null;
+                });
+        mockedScope
+                .when(() -> WorkspaceScopeHolder.call(anyString(), any(Callable.class)))
                 .thenAnswer(inv -> ((Callable<?>) inv.getArgument(1)).call());
-        mockedScope.when(() -> WorkspaceScopeHolder.call(anyString(), anyString(), anyString(), any(Callable.class)))
+        mockedScope
+                .when(() -> WorkspaceScopeHolder.call(anyString(), anyString(), anyString(), any(Callable.class)))
                 .thenAnswer(inv -> ((Callable<?>) inv.getArgument(3)).call());
     }
 

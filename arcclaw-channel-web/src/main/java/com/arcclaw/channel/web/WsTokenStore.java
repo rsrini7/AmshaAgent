@@ -1,18 +1,17 @@
 package com.arcclaw.channel.web;
 
+import jakarta.enterprise.context.ApplicationScoped;
+
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
-
-import jakarta.enterprise.context.ApplicationScoped;
 
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 
 @ApplicationScoped
 public class WsTokenStore {
-    private final Cache<String, Boolean> tokenCache = Caffeine.newBuilder()
-            .expireAfterWrite(5, TimeUnit.MINUTES)
-            .build();
+    private final Cache<String, Boolean> tokenCache =
+            Caffeine.newBuilder().expireAfterWrite(5, TimeUnit.MINUTES).build();
 
     public String generateToken() {
         String token = UUID.randomUUID().toString();

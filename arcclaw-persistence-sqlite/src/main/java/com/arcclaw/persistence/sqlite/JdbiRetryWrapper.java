@@ -1,15 +1,17 @@
 package com.arcclaw.persistence.sqlite;
 
+import jakarta.enterprise.context.ApplicationScoped;
+
 import java.util.concurrent.Callable;
 import java.util.function.Predicate;
 
-import jakarta.enterprise.context.ApplicationScoped;
-
 import com.arcclaw.core.util.BackoffRetryExecutor;
-import io.quarkus.arc.properties.IfBuildProperty;
+
 import org.jboss.logging.Logger;
 import org.jdbi.v3.core.statement.UnableToExecuteStatementException;
 import org.jdbi.v3.core.transaction.TransactionException;
+
+import io.quarkus.arc.properties.IfBuildProperty;
 
 /**
  * Lightweight retry wrapper for SQLITE_BUSY/SQLITE_LOCKED errors via JDBI.
@@ -23,12 +25,8 @@ public class JdbiRetryWrapper {
     private static final Logger log = Logger.getLogger(JdbiRetryWrapper.class);
 
     public <T> T withRetry(String opName, int maxAttempts, long initialBackoffMs, Callable<T> action) {
-        var strategy = new BackoffRetryExecutor.Strategy(
-            Math.max(1, maxAttempts),
-            Math.max(10, initialBackoffMs),
-            2000,
-            0.25
-        );
+        var strategy =
+                new BackoffRetryExecutor.Strategy(Math.max(1, maxAttempts), Math.max(10, initialBackoffMs), 2000, 0.25);
         try {
             return BackoffRetryExecutor.execute(opName, strategy, RETRY_PREDICATE, action);
         } catch (Exception e) {

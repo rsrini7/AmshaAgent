@@ -36,8 +36,7 @@ class Argon2idKeyDerivationTest {
         field.setAccessible(true);
         char[] pepper = (char[]) field.get(keyDerivation);
 
-        assertEquals("secret-pepper", new String(pepper),
-                "pepperChars must persist after deriveSessionKey() returns");
+        assertEquals("secret-pepper", new String(pepper), "pepperChars must persist after deriveSessionKey() returns");
 
         VaultKey secondKey = keyDerivation.deriveSessionKey("second-session");
         assertNotNull(secondKey);
@@ -59,13 +58,11 @@ class Argon2idKeyDerivationTest {
 
     @Test
     void nullSessionIdThrows() {
-        assertThrows(IllegalArgumentException.class,
-                () -> keyDerivation.deriveSessionKey(null));
+        assertThrows(IllegalArgumentException.class, () -> keyDerivation.deriveSessionKey(null));
     }
 
     @Test
     void blankSessionIdThrows() {
-        assertThrows(IllegalArgumentException.class,
-                () -> keyDerivation.deriveSessionKey("   "));
+        assertThrows(IllegalArgumentException.class, () -> keyDerivation.deriveSessionKey("   "));
     }
 }

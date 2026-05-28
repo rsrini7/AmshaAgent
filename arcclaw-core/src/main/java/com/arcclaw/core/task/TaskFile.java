@@ -27,14 +27,7 @@ import java.util.Map;
  * @param updatedAt  When the task was last modified.
  * @param body       Markdown body content (after frontmatter).
  */
-public record TaskFile(
-    String id,
-    String name,
-    TaskState status,
-    Instant createdAt,
-    Instant updatedAt,
-    String body
-) {
+public record TaskFile(String id, String name, TaskState status, Instant createdAt, Instant updatedAt, String body) {
     public TaskFile withStatus(TaskState newStatus) {
         return new TaskFile(id, name, newStatus, createdAt, Instant.now(), body);
     }

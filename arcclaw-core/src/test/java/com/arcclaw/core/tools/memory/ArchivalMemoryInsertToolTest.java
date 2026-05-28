@@ -19,6 +19,7 @@ import com.arcclaw.core.tools.IdempotencyMode;
 import com.arcclaw.core.tools.ToolExecutionContext;
 import com.arcclaw.core.tools.ToolResponse;
 import com.arcclaw.persistence.api.ArchivalChunkDto;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -30,18 +31,20 @@ class ArchivalMemoryInsertToolTest {
 
     @Mock
     ArchivalMemoryService archivalMemoryService;
+
     @Mock
     MemoryWriteGovernance governance;
+
     @Mock
     TieredMemoryConfig tieredConfig;
+
     @Mock
     AuditService auditService;
 
     ArchivalMemoryInsertTool tool;
 
     private static final ToolExecutionContext CTX =
-        new ToolExecutionContext(null, null, null, null, null, null,
-            null, null, null, null, null, null);
+            new ToolExecutionContext(null, null, null, null, null, null, null, null, null, null, null, null);
 
     @BeforeEach
     void setup() {
@@ -76,11 +79,17 @@ class ArchivalMemoryInsertToolTest {
 
     @Test
     void testSuccessfulInsert() throws Exception {
-        ToolResponse response = WorkspaceContext.run("s1", "user1", "c1",
-            AutonomyLevel.FULL, "coordinator", () ->
-                tool.execute(CTX, Map.of(
-                    "content", "Always use records for DTOs",
-                    "chunk_type", "PATTERN")));
+        ToolResponse response = WorkspaceContext.run(
+                "s1",
+                "user1",
+                "c1",
+                AutonomyLevel.FULL,
+                "coordinator",
+                () -> tool.execute(
+                        CTX,
+                        Map.of(
+                                "content", "Always use records for DTOs",
+                                "chunk_type", "PATTERN")));
 
         assertTrue(response.success());
         assertTrue(response.output().contains("Inserted archival chunk"));
@@ -90,12 +99,18 @@ class ArchivalMemoryInsertToolTest {
 
     @Test
     void testInsert_withTags() throws Exception {
-        ToolResponse response = WorkspaceContext.run("s1", "user1", "c1",
-            AutonomyLevel.FULL, "coordinator", () ->
-                tool.execute(CTX, Map.of(
-                    "content", "Use Quarkus for microservices",
-                    "chunk_type", "PREFERENCE",
-                    "tags", "quarkus,java")));
+        ToolResponse response = WorkspaceContext.run(
+                "s1",
+                "user1",
+                "c1",
+                AutonomyLevel.FULL,
+                "coordinator",
+                () -> tool.execute(
+                        CTX,
+                        Map.of(
+                                "content", "Use Quarkus for microservices",
+                                "chunk_type", "PREFERENCE",
+                                "tags", "quarkus,java")));
 
         assertTrue(response.success());
         ArgumentCaptor<ArchivalChunkDto> captor = ArgumentCaptor.forClass(ArchivalChunkDto.class);
@@ -105,20 +120,30 @@ class ArchivalMemoryInsertToolTest {
 
     @Test
     void testInvalidChunkType_returnsError() throws Exception {
-        ToolResponse response = WorkspaceContext.run("s1", "user1", "c1",
-            AutonomyLevel.FULL, "coordinator", () ->
-                tool.execute(CTX, Map.of(
-                    "content", "some content",
-                    "chunk_type", "INVALID")));
+        ToolResponse response = WorkspaceContext.run(
+                "s1",
+                "user1",
+                "c1",
+                AutonomyLevel.FULL,
+                "coordinator",
+                () -> tool.execute(
+                        CTX,
+                        Map.of(
+                                "content", "some content",
+                                "chunk_type", "INVALID")));
 
         assertFalse(response.success());
     }
 
     @Test
     void testMissingContent_returnsError() throws Exception {
-        ToolResponse response = WorkspaceContext.run("s1", "user1", "c1",
-            AutonomyLevel.FULL, "coordinator", () ->
-                tool.execute(CTX, Map.of("chunk_type", "FACT")));
+        ToolResponse response = WorkspaceContext.run(
+                "s1",
+                "user1",
+                "c1",
+                AutonomyLevel.FULL,
+                "coordinator",
+                () -> tool.execute(CTX, Map.of("chunk_type", "FACT")));
 
         assertFalse(response.success());
     }
@@ -127,11 +152,13 @@ class ArchivalMemoryInsertToolTest {
     void testContentExceedsMax_returnsError() throws Exception {
         String longContent = "x".repeat(4001);
 
-        ToolResponse response = WorkspaceContext.run("s1", "user1", "c1",
-            AutonomyLevel.FULL, "coordinator", () ->
-                tool.execute(CTX, Map.of(
-                    "content", longContent,
-                    "chunk_type", "FACT")));
+        ToolResponse response = WorkspaceContext.run(
+                "s1",
+                "user1",
+                "c1",
+                AutonomyLevel.FULL,
+                "coordinator",
+                () -> tool.execute(CTX, Map.of("content", longContent, "chunk_type", "FACT")));
 
         assertFalse(response.success());
     }
@@ -140,11 +167,13 @@ class ArchivalMemoryInsertToolTest {
     void testContentAtMax_succeeds() throws Exception {
         String maxContent = "x".repeat(4000);
 
-        ToolResponse response = WorkspaceContext.run("s1", "user1", "c1",
-            AutonomyLevel.FULL, "coordinator", () ->
-                tool.execute(CTX, Map.of(
-                    "content", maxContent,
-                    "chunk_type", "DOC")));
+        ToolResponse response = WorkspaceContext.run(
+                "s1",
+                "user1",
+                "c1",
+                AutonomyLevel.FULL,
+                "coordinator",
+                () -> tool.execute(CTX, Map.of("content", maxContent, "chunk_type", "DOC")));
 
         assertTrue(response.success());
     }
@@ -152,24 +181,37 @@ class ArchivalMemoryInsertToolTest {
     @Test
     void testRateLimitExceeded_returns429() throws Exception {
         Mockito.doThrow(new MemoryWriteGovernance.RateLimitExceededException("archival", 10, "hour"))
-            .when(governance).checkArchivalWrite();
+                .when(governance)
+                .checkArchivalWrite();
 
-        ToolResponse response = WorkspaceContext.run("s1", "user1", "c1",
-            AutonomyLevel.FULL, "coordinator", () ->
-                tool.execute(CTX, Map.of(
-                    "content", "test",
-                    "chunk_type", "FACT")));
+        ToolResponse response = WorkspaceContext.run(
+                "s1",
+                "user1",
+                "c1",
+                AutonomyLevel.FULL,
+                "coordinator",
+                () -> tool.execute(
+                        CTX,
+                        Map.of(
+                                "content", "test",
+                                "chunk_type", "FACT")));
 
         assertFalse(response.success());
     }
 
     @Test
     void testChunkTypeCaseInsensitive() throws Exception {
-        ToolResponse response = WorkspaceContext.run("s1", "user1", "c1",
-            AutonomyLevel.FULL, "coordinator", () ->
-                tool.execute(CTX, Map.of(
-                    "content", "test content",
-                    "chunk_type", "fact")));
+        ToolResponse response = WorkspaceContext.run(
+                "s1",
+                "user1",
+                "c1",
+                AutonomyLevel.FULL,
+                "coordinator",
+                () -> tool.execute(
+                        CTX,
+                        Map.of(
+                                "content", "test content",
+                                "chunk_type", "fact")));
 
         assertTrue(response.success());
         ArgumentCaptor<ArchivalChunkDto> captor = ArgumentCaptor.forClass(ArchivalChunkDto.class);

@@ -14,7 +14,8 @@ public class JsonExtractionException extends ArcClawException {
         this(message, null, null, null, null);
     }
 
-    public JsonExtractionException(String message, String rawResponse, Class<?> targetType, String jacksonPath, Throwable cause) {
+    public JsonExtractionException(
+            String message, String rawResponse, Class<?> targetType, String jacksonPath, Throwable cause) {
         super(message, cause);
         this.rawResponse = rawResponse;
         this.targetType = targetType;

@@ -1,9 +1,9 @@
 package com.arcclaw.core.tools;
 
-import java.util.Optional;
-
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
+
+import java.util.Optional;
 
 import com.arcclaw.core.agent.role.ToolCapability;
 
@@ -29,8 +29,6 @@ public class ToolCategoryMapper {
         }
 
         // 2. Fall back to ToolCapability for built-in tools
-        return ToolCapability.fromToolName(base)
-                .map(ToolCapability::category)
-                .orElse(ToolCategory.INTERNAL);
+        return ToolCapability.fromToolName(base).map(ToolCapability::category).orElse(ToolCategory.INTERNAL);
     }
 }

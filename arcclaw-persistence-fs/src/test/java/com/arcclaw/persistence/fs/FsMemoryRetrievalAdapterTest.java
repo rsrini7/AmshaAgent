@@ -3,6 +3,13 @@ package com.arcclaw.persistence.fs;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
+import dev.langchain4j.data.embedding.Embedding;
+import dev.langchain4j.data.segment.TextSegment;
+import dev.langchain4j.model.embedding.EmbeddingModel;
+import dev.langchain4j.model.output.Response;
+
+import jakarta.enterprise.inject.Instance;
+
 import java.io.IOException;
 import java.lang.reflect.Field;
 import java.nio.file.Files;
@@ -11,16 +18,11 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 
-import jakarta.enterprise.inject.Instance;
-
 import com.arcclaw.persistence.api.BackendCapabilities;
 import com.arcclaw.persistence.api.IngestResult;
 import com.arcclaw.persistence.api.MemoryChunkDto;
 import com.arcclaw.persistence.api.MemoryEntryDto;
-import dev.langchain4j.data.embedding.Embedding;
-import dev.langchain4j.data.segment.TextSegment;
-import dev.langchain4j.model.embedding.EmbeddingModel;
-import dev.langchain4j.model.output.Response;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -35,10 +37,25 @@ class FsMemoryRetrievalAdapterTest {
     void setUp() throws Exception {
         tempDir = Files.createTempDirectory("arcclaw-adapter-test-");
         FsStoreProperties props = new FsStoreProperties() {
-            @Override public String dataDir() { return tempDir.toString(); }
-            @Override public int lockTimeoutSeconds() { return 5; }
-            @Override public String luceneIndexDir() { return "lucene-index"; }
-            @Override public int vectorDimension() { return 4; }
+            @Override
+            public String dataDir() {
+                return tempDir.toString();
+            }
+
+            @Override
+            public int lockTimeoutSeconds() {
+                return 5;
+            }
+
+            @Override
+            public String luceneIndexDir() {
+                return "lucene-index";
+            }
+
+            @Override
+            public int vectorDimension() {
+                return 4;
+            }
         };
         fileStore = new FilesystemFileStore(props);
         fileStore.ensureDataDir();
@@ -59,12 +76,16 @@ class FsMemoryRetrievalAdapterTest {
                 if (lucene != null) {
                     lucene.getClass().getMethod("close").invoke(lucene);
                 }
-            } catch (Exception _) { }
+            } catch (Exception _) {
+            }
         }
         if (tempDir != null) {
             try (var walk = Files.walk(tempDir)) {
                 walk.sorted(Comparator.reverseOrder()).forEach(p -> {
-                    try { Files.deleteIfExists(p); } catch (IOException _) { }
+                    try {
+                        Files.deleteIfExists(p);
+                    } catch (IOException _) {
+                    }
                 });
             }
         }
@@ -208,10 +229,25 @@ class FsMemoryRetrievalAdapterTest {
 
     private FsStoreProperties tempProps() {
         return new FsStoreProperties() {
-            @Override public String dataDir() { return tempDir.toString(); }
-            @Override public int lockTimeoutSeconds() { return 5; }
-            @Override public String luceneIndexDir() { return "lucene-index"; }
-            @Override public int vectorDimension() { return 4; }
+            @Override
+            public String dataDir() {
+                return tempDir.toString();
+            }
+
+            @Override
+            public int lockTimeoutSeconds() {
+                return 5;
+            }
+
+            @Override
+            public String luceneIndexDir() {
+                return "lucene-index";
+            }
+
+            @Override
+            public int vectorDimension() {
+                return 4;
+            }
         };
     }
 
@@ -233,9 +269,8 @@ class FsMemoryRetrievalAdapterTest {
 
         @Override
         public Response<List<Embedding>> embedAll(List<TextSegment> textSegments) {
-            List<Embedding> embeddings = textSegments.stream()
-                .map(ts -> embed(ts.text()).content())
-                .toList();
+            List<Embedding> embeddings =
+                    textSegments.stream().map(ts -> embed(ts.text()).content()).toList();
             return Response.from(embeddings);
         }
     }

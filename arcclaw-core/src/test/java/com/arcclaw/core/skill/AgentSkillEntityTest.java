@@ -6,6 +6,7 @@ import java.time.Instant;
 
 import com.arcclaw.core.domain.model.AgentSkillRecord;
 import com.arcclaw.persistence.api.SkillDto;
+
 import org.junit.jupiter.api.Test;
 
 class AgentSkillEntityTest {

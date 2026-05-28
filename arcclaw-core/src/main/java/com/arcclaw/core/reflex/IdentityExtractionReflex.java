@@ -1,11 +1,11 @@
 package com.arcclaw.core.reflex;
 
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
 
 import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.core.audit.AuditService;
@@ -13,6 +13,7 @@ import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.persistence.api.MemoryEntryDto;
 import com.arcclaw.persistence.api.MemoryRetrievalPort;
+
 import org.eclipse.microprofile.context.ManagedExecutor;
 import org.jboss.logging.Logger;
 
@@ -22,11 +23,14 @@ public class IdentityExtractionReflex implements AgentReflex {
 
     private static final Logger log = Logger.getLogger(IdentityExtractionReflex.class);
 
-    @Inject MemoryRetrievalPort memoryPort;
+    @Inject
+    MemoryRetrievalPort memoryPort;
 
-    @Inject ManagedExecutor managedExecutor;
+    @Inject
+    ManagedExecutor managedExecutor;
 
-    @Inject AuditService auditService;
+    @Inject
+    AuditService auditService;
 
     private static final Pattern NAME_PATTERN = Pattern.compile("(?i)\\b(?:my name is|i am|i'm)\\s+([a-zA-Z]+)\\b");
     private static final Pattern ALIAS_PATTERN = Pattern.compile("(?i)\\b(?:call me)\\s+([a-zA-Z]+)\\b");
@@ -34,33 +38,38 @@ public class IdentityExtractionReflex implements AgentReflex {
     private static final Pattern PREF_PATTERN = Pattern.compile("(?i)\\b(?:i prefer)\\s+(.+)");
     private static final Pattern LIKE_PATTERN = Pattern.compile("(?i)\\b(?:i like|i love|i enjoy)\\s+(.+)");
     private static final Pattern EMPLOYER_PATTERN = Pattern.compile("(?i)\\b(?:i work at|i work for)\\s+(.+)");
-    private static final Pattern LOCATION_PATTERN = Pattern.compile("(?i)\\b(?:i am based in|i live in|i'm based in)\\s+(.+)");
-    private static final Pattern ROLE_PATTERN = Pattern.compile("(?i)\\bi (?:teach|study|tutor|mentor|coach|am a|work as)\\s+(.+)");
+    private static final Pattern LOCATION_PATTERN =
+            Pattern.compile("(?i)\\b(?:i am based in|i live in|i'm based in)\\s+(.+)");
+    private static final Pattern ROLE_PATTERN =
+            Pattern.compile("(?i)\\bi (?:teach|study|tutor|mentor|coach|am a|work as)\\s+(.+)");
 
     @Override
     public boolean matches(String input) {
         if (input == null || input.isBlank()) return false;
         String trimmed = input.trim();
-        
+
         // 1. Guard: If it ends with a question mark, it's a query, not a fact to ingest.
         if (trimmed.endsWith("?")) return false;
 
         String lower = trimmed.toLowerCase();
-        
+
         // 2. Guard: Common question starters
-        if (lower.startsWith("what ") || lower.startsWith("who ") || lower.startsWith("how ") || 
-            lower.startsWith("do you ") || lower.startsWith("can you ")) {
+        if (lower.startsWith("what ")
+                || lower.startsWith("who ")
+                || lower.startsWith("how ")
+                || lower.startsWith("do you ")
+                || lower.startsWith("can you ")) {
             return false;
         }
 
-        return NAME_PATTERN.matcher(lower).find() ||
-               ALIAS_PATTERN.matcher(lower).find() ||
-               HOBBY_PATTERN.matcher(lower).find() ||
-               PREF_PATTERN.matcher(lower).find() ||
-               LIKE_PATTERN.matcher(lower).find() ||
-               EMPLOYER_PATTERN.matcher(lower).find() ||
-               LOCATION_PATTERN.matcher(lower).find() ||
-               ROLE_PATTERN.matcher(lower).find();
+        return NAME_PATTERN.matcher(lower).find()
+                || ALIAS_PATTERN.matcher(lower).find()
+                || HOBBY_PATTERN.matcher(lower).find()
+                || PREF_PATTERN.matcher(lower).find()
+                || LIKE_PATTERN.matcher(lower).find()
+                || EMPLOYER_PATTERN.matcher(lower).find()
+                || LOCATION_PATTERN.matcher(lower).find()
+                || ROLE_PATTERN.matcher(lower).find();
     }
 
     @Override
@@ -68,19 +77,23 @@ public class IdentityExtractionReflex implements AgentReflex {
         // §Bug-4 Fix: Prevent label pollution by splitting compound sentences.
         String[] clauses = input.split("(?i)\\b(and|but)\\b|[,\\.]");
         boolean prevWasFirstPerson = false;
-        
+
         for (String rawClause : clauses) {
             String clause = rawClause.trim();
             if (clause.isBlank()) continue;
-            
+
             // Re-inject dropped pronouns for compound verbs (e.g. "i am Srini and love to study")
             String lower = clause.toLowerCase();
-            boolean isFirstPerson = lower.startsWith("i ") || lower.startsWith("i'm") || lower.startsWith("my ") || lower.contains(" i ") || lower.contains(" i'm");
-            
+            boolean isFirstPerson = lower.startsWith("i ")
+                    || lower.startsWith("i'm")
+                    || lower.startsWith("my ")
+                    || lower.contains(" i ")
+                    || lower.contains(" i'm");
+
             if (!isFirstPerson && prevWasFirstPerson) {
                 clause = "i " + clause;
             }
-            
+
             prevWasFirstPerson = isFirstPerson || (!isFirstPerson && prevWasFirstPerson);
 
             extractAndIngest(sessionId, userId, clause, NAME_PATTERN, IdentityLabel.USER_NAME);
@@ -102,20 +115,20 @@ public class IdentityExtractionReflex implements AgentReflex {
         if (matcher.find()) {
             String value = matcher.group(1).trim();
             String fullText = buildFactText(label, value);
-            
+
             MemoryEntryDto dto = new MemoryEntryDto(
-                null, 
-                fullText, 
-                Map.of("label", label.name().toLowerCase())
-            );
-            
+                    null, fullText, Map.of("label", label.name().toLowerCase()));
+
             final String sid = sessionId;
             final String uid = userId;
             managedExecutor.submit(() -> {
                 try {
                     memoryPort.index(dto);
                     log.infof("IdentityExtractionReflex ingested fact silently: label=%s, fact='%s'", label, fullText);
-                    auditService.record(sid, uid, "IdentityExtractionReflex",
+                    auditService.record(
+                            sid,
+                            uid,
+                            "IdentityExtractionReflex",
                             SecurityEventType.MEMORY_INGESTED,
                             "label=" + label.name().toLowerCase() + " fact=" + fullText);
                 } catch (Exception e) {
@@ -124,7 +137,7 @@ public class IdentityExtractionReflex implements AgentReflex {
             });
         }
     }
-    
+
     private String buildFactText(IdentityLabel label, String value) {
         return switch (label) {
             case USER_NAME -> "The user's name is " + value + ".";

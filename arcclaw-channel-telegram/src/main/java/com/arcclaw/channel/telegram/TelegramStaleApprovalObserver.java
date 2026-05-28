@@ -8,6 +8,7 @@ import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ChannelUser;
 import com.arcclaw.channel.api.hitl.ApprovalDecisionEvent;
 import com.arcclaw.channel.api.hitl.ApprovalOutcome;
+
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 @ApplicationScoped
@@ -32,20 +33,19 @@ public class TelegramStaleApprovalObserver {
             return; // only handle Telegram channel
         }
 
-        String toolDisplay = event.toolName() != null
-            && event.toolName().startsWith("parallel|")
-            ? "batch: " + event.toolName().substring("parallel|".length())
-            : event.toolName();
+        String toolDisplay = event.toolName() != null && event.toolName().startsWith("parallel|")
+                ? "batch: " + event.toolName().substring("parallel|".length())
+                : event.toolName();
 
         // §7.28: escape at call site for MarkdownV2
         String msg = String.format(
-            "⏱ Your approval window for `%s` has expired (>%dh).\n" +
-            "The pending tool execution was automatically cancelled.\n" +
-            "Start a new request to try again.",
-            renderer.esc(toolDisplay != null ? toolDisplay : "unknown"),
-            hitlTimeoutHours);
+                "⏱ Your approval window for `%s` has expired (>%dh).\n"
+                        + "The pending tool execution was automatically cancelled.\n"
+                        + "Start a new request to try again.",
+                renderer.esc(toolDisplay != null ? toolDisplay : "unknown"), hitlTimeoutHours);
 
-        ChannelUser user = new ChannelUser(event.channelPlatformId(), event.channelPlatformId(), "unknown", ChannelType.TELEGRAM);
+        ChannelUser user =
+                new ChannelUser(event.channelPlatformId(), event.channelPlatformId(), "unknown", ChannelType.TELEGRAM);
         // Using sendWithKeyboard(..., null) to leverage its MarkdownV2 parse mode support
         sender.sendWithKeyboard(user, msg, null);
     }

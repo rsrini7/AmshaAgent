@@ -1,18 +1,20 @@
 package com.arcclaw.persistence.sqlite;
 
-import java.time.Instant;
-import java.util.UUID;
-
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
+
+import java.time.Instant;
+import java.util.UUID;
 
 import com.arcclaw.core.util.TemporalUtils;
 import com.arcclaw.persistence.api.AdvisoryLockPort;
 import com.arcclaw.persistence.sqlite.jdbi.LockJdbiDao;
-import io.quarkus.arc.Unremovable;
-import io.quarkus.arc.properties.IfBuildProperty;
+
 import org.jboss.logging.Logger;
 import org.jdbi.v3.core.Jdbi;
+
+import io.quarkus.arc.Unremovable;
+import io.quarkus.arc.properties.IfBuildProperty;
 
 @ApplicationScoped
 @Unremovable
@@ -38,31 +40,40 @@ public class SqliteAdvisoryLockAdapter implements AdvisoryLockPort {
     @Override
     public boolean tryLock(String lockKey, int timeoutSeconds) {
         log.tracef("tryLock key=%s timeout=%d", lockKey, timeoutSeconds);
-        return retryWrapper.withRetry("try-lock-" + lockKey, 3, 50, () ->
-            jdbi.inTransaction(handle -> {
-                var dao = handle.attach(LockJdbiDao.class);
-                String now = TemporalUtils.formatIsoLex(Instant.now());
-                dao.deleteExpired(lockKey, now);
-                int rows = dao.tryInsert(lockKey, ownerId,
-                    TemporalUtils.formatIsoLex(Instant.now().plusSeconds(timeoutSeconds)));
-                return rows > 0;
-            })
-        );
+        return retryWrapper.withRetry(
+                "try-lock-" + lockKey,
+                3,
+                50,
+                () -> jdbi.inTransaction(handle -> {
+                    var dao = handle.attach(LockJdbiDao.class);
+                    String now = TemporalUtils.formatIsoLex(Instant.now());
+                    dao.deleteExpired(lockKey, now);
+                    int rows = dao.tryInsert(
+                            lockKey,
+                            ownerId,
+                            TemporalUtils.formatIsoLex(Instant.now().plusSeconds(timeoutSeconds)));
+                    return rows > 0;
+                }));
     }
 
     @Override
     public void unlock(String lockKey) {
         log.tracef("unlock key=%s", lockKey);
-        retryWrapper.withRetryVoid("unlock-" + lockKey, 3, 50, () ->
-            jdbi.useExtension(LockJdbiDao.class, dao -> dao.deleteByOwner(lockKey, ownerId))
-        );
+        retryWrapper.withRetryVoid(
+                "unlock-" + lockKey,
+                3,
+                50,
+                () -> jdbi.useExtension(LockJdbiDao.class, dao -> dao.deleteByOwner(lockKey, ownerId)));
     }
 
     @Override
     public boolean isLocked(String lockKey) {
-        return retryWrapper.withRetry("is-locked-" + lockKey, 3, 50, () ->
-            jdbi.withExtension(LockJdbiDao.class, dao ->
-                dao.countActive(lockKey, TemporalUtils.formatIsoLex(Instant.now())) > 0)
-        );
+        return retryWrapper.withRetry(
+                "is-locked-" + lockKey,
+                3,
+                50,
+                () -> jdbi.withExtension(
+                        LockJdbiDao.class,
+                        dao -> dao.countActive(lockKey, TemporalUtils.formatIsoLex(Instant.now())) > 0));
     }
 }

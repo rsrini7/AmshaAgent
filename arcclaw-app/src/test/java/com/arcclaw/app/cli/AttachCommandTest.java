@@ -1,14 +1,16 @@
 package com.arcclaw.app.cli;
 
-import java.io.ByteArrayOutputStream;
-import java.io.PrintStream;
+import picocli.CommandLine;
 
 import jakarta.inject.Inject;
 
-import io.quarkus.test.junit.QuarkusTest;
+import java.io.ByteArrayOutputStream;
+import java.io.PrintStream;
+
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
-import picocli.CommandLine;
+
+import io.quarkus.test.junit.QuarkusTest;
 
 @QuarkusTest
 class AttachCommandTest {
@@ -25,7 +27,8 @@ class AttachCommandTest {
         cmd.execute("whatsapp");
 
         String output = outContent.toString();
-        Assertions.assertTrue(output.contains("Unknown channel 'whatsapp'"), "Output should contain unknown channel error");
+        Assertions.assertTrue(
+                output.contains("Unknown channel 'whatsapp'"), "Output should contain unknown channel error");
         Assertions.assertTrue(output.contains("telegram"), "Output should list available channels like telegram");
     }
 }

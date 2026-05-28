@@ -1,20 +1,22 @@
 package com.arcclaw.persistence.postgres;
 
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
-
 import com.arcclaw.persistence.api.AuditEventDto;
 import com.arcclaw.persistence.api.AuditEventStorePort;
 import com.arcclaw.persistence.postgres.jdbi.AuditJdbiDao;
-import io.quarkus.arc.Unremovable;
-import io.quarkus.arc.properties.IfBuildProperty;
+
 import org.jboss.logging.Logger;
 import org.jdbi.v3.core.Jdbi;
+
+import io.quarkus.arc.Unremovable;
+import io.quarkus.arc.properties.IfBuildProperty;
 
 /**
  * PostgreSQL implementation of the AuditEventStorePort using JDBI.
@@ -75,14 +77,14 @@ public class PostgresAuditEventStoreAdapter implements AuditEventStorePort {
     }
 
     @Override
-    public List<AuditEventDto> findAll(String sessionId, String eventType, Instant from, Instant to, int offset, int limit) {
-        return jdbi.withExtension(AuditJdbiDao.class,
-            dao -> dao.findFiltered(sessionId, eventType, from, to, offset, limit));
+    public List<AuditEventDto> findAll(
+            String sessionId, String eventType, Instant from, Instant to, int offset, int limit) {
+        return jdbi.withExtension(
+                AuditJdbiDao.class, dao -> dao.findFiltered(sessionId, eventType, from, to, offset, limit));
     }
 
     @Override
     public long countAll(String sessionId, String eventType, Instant from, Instant to) {
-        return jdbi.withExtension(AuditJdbiDao.class,
-            dao -> dao.countFiltered(sessionId, eventType, from, to));
+        return jdbi.withExtension(AuditJdbiDao.class, dao -> dao.countFiltered(sessionId, eventType, from, to));
     }
 }

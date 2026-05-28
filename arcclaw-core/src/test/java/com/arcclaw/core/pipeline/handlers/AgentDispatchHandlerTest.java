@@ -34,6 +34,7 @@ import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.skill.SkillRegistry;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.util.TimeContextInjector;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -88,54 +89,107 @@ class AgentDispatchHandlerTest {
     @SuppressWarnings("unchecked")
     void testFullAutonomySessionIsNotDowngradedToSupervised() throws Exception {
         MessageContext context = createTestContext(AutonomyLevel.FULL);
-        
-        mockedContext.when(() -> WorkspaceContext.run(
-                anyString(), anyString(), anyString(), eq(AutonomyLevel.FULL), anyString(), anyString(), anyString(), any(Callable.class)))
+
+        mockedContext
+                .when(() -> WorkspaceContext.run(
+                        anyString(),
+                        anyString(),
+                        anyString(),
+                        eq(AutonomyLevel.FULL),
+                        anyString(),
+                        anyString(),
+                        anyString(),
+                        any(Callable.class)))
                 .thenReturn(AgentResult.finished("ok", List.of()));
 
         handler.handle(context);
 
         mockedContext.verify(() -> WorkspaceContext.run(
-                anyString(), anyString(), anyString(), any(AutonomyLevel.class), anyString(), anyString(), anyString(), any(Callable.class)));
+                anyString(),
+                anyString(),
+                anyString(),
+                any(AutonomyLevel.class),
+                anyString(),
+                anyString(),
+                anyString(),
+                any(Callable.class)));
     }
 
     @Test
     @SuppressWarnings("unchecked")
     void testReadonlySessionIsNotUpgraded() throws Exception {
         MessageContext context = createTestContext(AutonomyLevel.READONLY);
-        
-        mockedContext.when(() -> WorkspaceContext.run(
-                anyString(), anyString(), anyString(), eq(AutonomyLevel.READONLY), anyString(), anyString(), anyString(), any(Callable.class)))
+
+        mockedContext
+                .when(() -> WorkspaceContext.run(
+                        anyString(),
+                        anyString(),
+                        anyString(),
+                        eq(AutonomyLevel.READONLY),
+                        anyString(),
+                        anyString(),
+                        anyString(),
+                        any(Callable.class)))
                 .thenReturn(AgentResult.finished("ok", List.of()));
 
         handler.handle(context);
 
         mockedContext.verify(() -> WorkspaceContext.run(
-                anyString(), anyString(), anyString(), any(AutonomyLevel.class), anyString(), anyString(), anyString(), any(Callable.class)));
+                anyString(),
+                anyString(),
+                anyString(),
+                any(AutonomyLevel.class),
+                anyString(),
+                anyString(),
+                anyString(),
+                any(Callable.class)));
     }
 
     @Test
     @SuppressWarnings("unchecked")
     void testNewSessionDefaultsToSupervised() throws Exception {
         MessageContext context = createTestContext(null); // No autonomy in context
-        
-        mockedContext.when(() -> WorkspaceContext.run(
-                anyString(), anyString(), anyString(), any(AutonomyLevel.class), anyString(), anyString(), anyString(), any(Callable.class)))
+
+        mockedContext
+                .when(() -> WorkspaceContext.run(
+                        anyString(),
+                        anyString(),
+                        anyString(),
+                        any(AutonomyLevel.class),
+                        anyString(),
+                        anyString(),
+                        anyString(),
+                        any(Callable.class)))
                 .thenReturn(AgentResult.finished("ok", List.of()));
 
         handler.handle(context);
 
         mockedContext.verify(() -> WorkspaceContext.run(
-                anyString(), anyString(), anyString(), any(AutonomyLevel.class), anyString(), anyString(), anyString(), any(Callable.class)));
+                anyString(),
+                anyString(),
+                anyString(),
+                any(AutonomyLevel.class),
+                anyString(),
+                anyString(),
+                anyString(),
+                any(Callable.class)));
     }
 
     @Test
     @SuppressWarnings("unchecked")
     void testBudgetExceededPropagatesToCaller() throws Exception {
         MessageContext context = createTestContext(AutonomyLevel.FULL);
-        
-        mockedContext.when(() -> WorkspaceContext.run(
-                anyString(), anyString(), anyString(), any(AutonomyLevel.class), anyString(), anyString(), anyString(), any(Callable.class)))
+
+        mockedContext
+                .when(() -> WorkspaceContext.run(
+                        anyString(),
+                        anyString(),
+                        anyString(),
+                        any(AutonomyLevel.class),
+                        anyString(),
+                        anyString(),
+                        anyString(),
+                        any(Callable.class)))
                 .thenThrow(new BudgetExceededException("Budget exceeded for sess123"));
 
         assertThrows(BudgetExceededException.class, () -> handler.handle(context));
@@ -154,19 +208,28 @@ class AgentDispatchHandlerTest {
         when(agentLoop.run(anyString(), anyString(), anyString(), any(), anyInt(), any(MessageContext.class)))
                 .thenReturn(AgentResult.finished("ok", List.of()));
 
-        mockedContext.when(() -> WorkspaceContext.run(
-                anyString(), anyString(), anyString(), any(AutonomyLevel.class), anyString(), anyString(), anyString(), any(Callable.class)))
+        mockedContext
+                .when(() -> WorkspaceContext.run(
+                        anyString(),
+                        anyString(),
+                        anyString(),
+                        any(AutonomyLevel.class),
+                        anyString(),
+                        anyString(),
+                        anyString(),
+                        any(Callable.class)))
                 .thenAnswer(inv -> ((Callable<?>) inv.getArgument(7)).call());
 
         handler.handle(context);
 
-        verify(agentLoop).run(
-                eq("sess123"),
-                eq("coordinator"),
-                eq("browse https://spring.io/blog top 3 titles"),
-                eq(reasoningEngine),
-                eq(5),
-                eq(context));
+        verify(agentLoop)
+                .run(
+                        eq("sess123"),
+                        eq("coordinator"),
+                        eq("browse https://spring.io/blog top 3 titles"),
+                        eq(reasoningEngine),
+                        eq(5),
+                        eq(context));
     }
 
     @Test
@@ -176,7 +239,9 @@ class AgentDispatchHandlerTest {
         context.setGoal(null);
 
         lenient().when(intentClassifier.isContinuityCommand("test")).thenReturn(true);
-        lenient().when(intentClassifier.isContinuityCommand("schedule a search every minute")).thenReturn(false);
+        lenient()
+                .when(intentClassifier.isContinuityCommand("schedule a search every minute"))
+                .thenReturn(false);
 
         AgentCheckpoint mockCheckpoint = Mockito.mock(AgentCheckpoint.class);
         when(mockCheckpoint.getOriginalGoal()).thenReturn("schedule a search every minute");
@@ -189,32 +254,40 @@ class AgentDispatchHandlerTest {
         when(agentLoop.run(anyString(), anyString(), anyString(), any(), anyInt(), any(MessageContext.class)))
                 .thenReturn(AgentResult.finished("ok", List.of()));
 
-        mockedContext.when(() -> WorkspaceContext.run(
-                anyString(), anyString(), anyString(), any(AutonomyLevel.class), anyString(), anyString(), anyString(), any(Callable.class)))
+        mockedContext
+                .when(() -> WorkspaceContext.run(
+                        anyString(),
+                        anyString(),
+                        anyString(),
+                        any(AutonomyLevel.class),
+                        anyString(),
+                        anyString(),
+                        anyString(),
+                        any(Callable.class)))
                 .thenAnswer(inv -> ((Callable<?>) inv.getArgument(7)).call());
 
         try (MockedStatic<TimeContextInjector> mockedTimeInjector = mockStatic(TimeContextInjector.class)) {
             handler.handle(context);
 
-            mockedTimeInjector.verify(() -> TimeContextInjector.inject(
-                    eq(context), eq("schedule a search every minute"), eq("Asia/Kolkata")));
+            mockedTimeInjector.verify(() ->
+                    TimeContextInjector.inject(eq(context), eq("schedule a search every minute"), eq("Asia/Kolkata")));
         }
     }
 
     private MessageContext createTestContext(AutonomyLevel level) {
         ChannelUser user = new ChannelUser("u1", "u1", "User 1", ChannelType.REST_API);
         ChannelMessage msg = new ChannelMessage.RestApiMessage(user, "test", "m1", Instant.now());
-        
+
         MessageContext context = new MessageContext("chat123", user, msg);
         context.setSessionId("sess123");
         context.setAutonomyLevel(level);
         context.setAgentRole("coordinator");
-        
+
         // Populate SessionContext as required by AgentDispatchHandler
         AutonomyLevel finalLevel = level != null ? level : AutonomyLevel.SUPERVISED;
         SessionContext sessionContext = new SessionContext("sess123", user, finalLevel, false);
         context.setSessionContext(sessionContext);
-        
+
         return context;
     }
 }

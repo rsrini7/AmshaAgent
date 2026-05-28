@@ -1,11 +1,13 @@
 package com.arcclaw.core.tools.memory;
 
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
+
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.agent.role.ToolMetadata;
@@ -19,7 +21,7 @@ import com.arcclaw.core.util.Fts5QueryUtil;
 import com.arcclaw.persistence.api.RecallMemoryStorePort;
 import com.arcclaw.persistence.api.RecallMessageDto;
 import com.arcclaw.persistence.api.RecallSearchQuery;
-import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
+
 import org.jboss.logging.Logger;
 
 /**
@@ -33,12 +35,12 @@ import org.jboss.logging.Logger;
  */
 @ApplicationScoped
 @ToolMetadata(
-    capabilityId = "recall_memory_search",
-    description = "Searches EXACT conversation history for specific code snippets, error traces, or past decisions. " +
-                  "Use this when you need to recall exact details (e.g., 'the stack trace from yesterday', 'the Python function we wrote'). " +
-                  "Does NOT search high-level summaries unless explicitly requested with include_summaries=true.",
-    defaultRoles = {"architect", "coordinator", "researcher", "synthesizer", "coder"}
-)
+        capabilityId = "recall_memory_search",
+        description =
+                "Searches EXACT conversation history for specific code snippets, error traces, or past decisions. "
+                        + "Use this when you need to recall exact details (e.g., 'the stack trace from yesterday', 'the Python function we wrote'). "
+                        + "Does NOT search high-level summaries unless explicitly requested with include_summaries=true.",
+        defaultRoles = {"architect", "coordinator", "researcher", "synthesizer", "coder"})
 public class RecallMemorySearchTool implements AgentTool {
 
     private static final Logger log = Logger.getLogger(RecallMemorySearchTool.class);
@@ -65,14 +67,15 @@ public class RecallMemorySearchTool implements AgentTool {
     @Override
     public JsonObjectSchema parametersSchema() {
         return JsonObjectSchema.builder()
-            .addStringProperty("query", "Keywords or exact text to search for in conversation history")
-            .addStringProperty("session_id", 
-                "Session ID to scope search (default: current session). " +
-                "Pass 'all' or '*' to search across all sessions for this user.")
-            .addBooleanProperty("include_summaries", "Include compaction summaries in results (default: false)")
-            .addIntegerProperty("limit", "Maximum results to return (default: 5)")
-            .required("query")
-            .build();
+                .addStringProperty("query", "Keywords or exact text to search for in conversation history")
+                .addStringProperty(
+                        "session_id",
+                        "Session ID to scope search (default: current session). "
+                                + "Pass 'all' or '*' to search across all sessions for this user.")
+                .addBooleanProperty("include_summaries", "Include compaction summaries in results (default: false)")
+                .addIntegerProperty("limit", "Maximum results to return (default: 5)")
+                .required("query")
+                .build();
     }
 
     @Override
@@ -114,7 +117,7 @@ public class RecallMemorySearchTool implements AgentTool {
                 sessionId = val;
             }
         }
-        
+
         boolean includeSummaries = Boolean.TRUE.equals(params.get("include_summaries"));
         int limit = params.containsKey("limit") ? ((Number) params.get("limit")).intValue() : 5;
 
@@ -123,12 +126,12 @@ public class RecallMemorySearchTool implements AgentTool {
         // PostgreSQL plainto_tsquery is safe by design, but tool layer doesn't know backend
         // (abstraction boundary). Punctuation loss on Postgres is acceptable tradeoff.
         String safeQuery = Fts5QueryUtil.toFts5Phrase(query);
-        log.debugf("Recall search: userId=%s, sessionId=%s, query=%s (sanitized from %s), includeSummaries=%s, limit=%d",
-                   userId, sessionId, safeQuery, query, includeSummaries, limit);
+        log.debugf(
+                "Recall search: userId=%s, sessionId=%s, query=%s (sanitized from %s), includeSummaries=%s, limit=%d",
+                userId, sessionId, safeQuery, query, includeSummaries, limit);
 
-        RecallSearchQuery searchQuery = new RecallSearchQuery(
-            userId, safeQuery, sessionId, limit, includeSummaries, Set.of()
-        );
+        RecallSearchQuery searchQuery =
+                new RecallSearchQuery(userId, safeQuery, sessionId, limit, includeSummaries, Set.of());
 
         List<RecallMessageDto> results = recallStore.search(searchQuery);
 
@@ -142,9 +145,13 @@ public class RecallMemorySearchTool implements AgentTool {
         StringBuilder sb = new StringBuilder();
         sb.append("Found ").append(results.size()).append(" exact matches:\n\n");
         for (RecallMessageDto msg : results) {
-            sb.append("### [Session ").append(msg.sessionId())
-              .append(" | Turn ").append(msg.turnNumber())
-              .append(" | ").append(msg.role()).append("]\n");
+            sb.append("### [Session ")
+                    .append(msg.sessionId())
+                    .append(" | Turn ")
+                    .append(msg.turnNumber())
+                    .append(" | ")
+                    .append(msg.role())
+                    .append("]\n");
             sb.append(msg.content()).append("\n\n");
         }
         return ToolResponse.success(sb.toString());
