@@ -198,7 +198,7 @@ public class LoopResultHandler {
             log.infof("[AgentLoop] Delegate result for session %s contains failure phrases - injecting observation to allow coordinator wrap-up without restart", sessionId);
 
             List<ReasoningStep> historyWithFailure = new ArrayList<>(resumedHistory);
-            historyWithFailure.add(ReasoningStep.observe(ToolCapability.DELEGATE_TO_AGENT.toolName(), observation, "Delegate failed - synthesize and finish"));
+            historyWithFailure.add(ReasoningStep.observeStep(ToolCapability.DELEGATE_TO_AGENT.toolName(), observation, "Delegate failed - synthesize and finish"));
 
             return Optional.of(AgentResult.finished(observation, historyWithFailure));
         }

@@ -131,7 +131,7 @@ public class ToolResultProcessor {
                 String fallbackGoal = "The browser was unable to visit " + url + " directly. " +
                         "Please use serper_web_search to find information about this page or its content.";
 
-                ReasoningStep fallbackStep = ReasoningStep.observe(ToolCapability.BROWSER_NAVIGATE.toolName(),
+                ReasoningStep fallbackStep = ReasoningStep.observeStep(ToolCapability.BROWSER_NAVIGATE.toolName(),
                         "Tool execution failed: " + obs + ". Fallback: " + fallbackGoal,
                         "Browser navigation failed, falling back to search.");
                 history.add(fallbackStep);
@@ -151,7 +151,7 @@ public class ToolResultProcessor {
                 String fallbackGoal = "The web_fetch tool was unable to retrieve " + url + " (error: " + obs + "). " +
                         "Please try browser_navigate to visit this URL instead.";
 
-                ReasoningStep fallbackStep = ReasoningStep.observe(ToolCapability.WEB_FETCH.toolName(),
+                ReasoningStep fallbackStep = ReasoningStep.observeStep(ToolCapability.WEB_FETCH.toolName(),
                         "Tool execution failed: " + obs + ". Fallback: " + fallbackGoal,
                         "web_fetch failed, falling back to browser_navigate.");
                 history.add(fallbackStep);

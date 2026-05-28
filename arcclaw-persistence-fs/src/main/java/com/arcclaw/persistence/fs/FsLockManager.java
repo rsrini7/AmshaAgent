@@ -61,7 +61,10 @@ public class FsLockManager implements AdvisoryLockPort {
         Path lockFile = lockFilePath(lockKey);
         try {
             Files.createDirectories(lockFile.getParent());
-            RandomAccessFile raf = new RandomAccessFile(lockFile.toFile(), "rw");
+        } catch (IOException _) {
+            return false;
+        }
+        try (RandomAccessFile raf = new RandomAccessFile(lockFile.toFile(), "rw")) {
             FileChannel channel = raf.getChannel();
             try {
                 FileLock fileLock = channel.tryLock();
@@ -71,15 +74,11 @@ public class FsLockManager implements AdvisoryLockPort {
                     heldLocks.put(lockKey, new LockHolder(raf, channel, fileLock));
                     return true;
                 }
-                channel.close();
-                raf.close();
                 return false;
             } catch (OverlappingFileLockException e) {
-                channel.close();
-                raf.close();
                 return false;
             }
-        } catch (IOException e) {
+        } catch (IOException _) {
             return false;
         }
     }

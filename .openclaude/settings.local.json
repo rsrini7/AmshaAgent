@@ -53,7 +53,8 @@
       "Bash(echo:*)",
       "Bash(xargs kill:*)",
       "Bash(./mvnw test-compile:*)",
-      "Bash(find . -path *)"
+      "Bash(find . -path *)",
+      "Bash(source .env)"
     ]
   }
 }

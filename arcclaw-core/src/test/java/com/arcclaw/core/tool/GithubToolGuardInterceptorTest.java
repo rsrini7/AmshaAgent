@@ -47,7 +47,7 @@ class GithubToolGuardInterceptorTest {
         when(chatMemoryStore.getMessages(anyString())).thenReturn(List.of());
 
         Optional<ToolInvocationGuard.GuardDecision> result = interceptor.evaluate(
-                "s1", "coordinator", AutonomyLevel.SUPERVISED, GithubTool.NAME, Map.of(), List.of(), "abc def", List.of());
+                "s1", "coordinator", AutonomyLevel.SUPERVISED, GithubTool.TOOL_NAME, Map.of(), List.of(), "abc def", List.of());
 
         assertTrue(result.isPresent());
         assertInstanceOf(ToolInvocationGuard.GuardDecision.Blocked.class, result.get());
@@ -58,11 +58,11 @@ class GithubToolGuardInterceptorTest {
     void testGithubPreApprovedReturnsEmpty() {
         AgentCheckpoint cp = new AgentCheckpointRecord();
         cp.setStatus(CheckpointStatus.AWAITING_APPROVAL);
-        cp.setPendingToolName(GithubTool.NAME);
+        cp.setPendingToolName(GithubTool.TOOL_NAME);
         when(agentStore.load(anyString(), anyString())).thenReturn(Optional.of(cp));
 
         Optional<ToolInvocationGuard.GuardDecision> result = interceptor.evaluate(
-                "s1", "coordinator", AutonomyLevel.SUPERVISED, GithubTool.NAME, Map.of(), List.of(), "how are you?", List.of());
+                "s1", "coordinator", AutonomyLevel.SUPERVISED, GithubTool.TOOL_NAME, Map.of(), List.of(), "how are you?", List.of());
 
         assertTrue(result.isEmpty(), "Pre-approved GitHub should pass through to HITL layer");
     }

@@ -47,7 +47,7 @@ public class GithubToolGuardInterceptor implements ToolGuardInterceptor {
 
     @Override
     public Set<String> handledToolNames() {
-        return Set.of(GithubTool.NAME);
+        return Set.of(GithubTool.TOOL_NAME);
     }
 
     @Override
@@ -83,7 +83,7 @@ public class GithubToolGuardInterceptor implements ToolGuardInterceptor {
                 || AgentSentinels.GOAL_RESUME_APPROVED.equals(goal);
 
         boolean hasRecentGithubContext = history.stream()
-                .anyMatch(s -> GithubTool.NAME.equals(s.action())
+                .anyMatch(s -> GithubTool.TOOL_NAME.equals(s.action())
                         && s.observation() != null
                         && !s.observation().isBlank());
 
@@ -93,7 +93,7 @@ public class GithubToolGuardInterceptor implements ToolGuardInterceptor {
                 if (memory != null) {
                     hasRecentGithubContext = memory.stream().anyMatch(msg ->
                             msg instanceof ToolExecutionResultMessage term
-                                    && GithubTool.NAME.equals(term.toolName())
+                                    && GithubTool.TOOL_NAME.equals(term.toolName())
                             || msg instanceof AiMessage ai
                                     && ai.text() != null
                                     && GITHUB_TRIGGER_PATTERN.matcher(ai.text()).find());

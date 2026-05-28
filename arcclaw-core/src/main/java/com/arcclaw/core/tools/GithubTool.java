@@ -67,11 +67,11 @@ public class GithubTool implements AgentTool {
     private static final Set<String> ALLOWED_ACTIONS  = Set.of("repo", "gist");
     private static final Set<String> ALLOWED_COMMANDS = Set.of("view", "list");
 
-    public static final String NAME = ToolCapability.GITHUB.toolName();
+    public static final String TOOL_NAME = ToolCapability.GITHUB.toolName();
 
     @Override
     public String name() {
-        return NAME;
+        return TOOL_NAME;
     }
 
     @Override

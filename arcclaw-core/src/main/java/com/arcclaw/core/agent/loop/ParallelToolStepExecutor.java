@@ -283,7 +283,7 @@ public class ParallelToolStepExecutor {
                     String.format("Tool timed out after %ds.", toolTimeoutSeconds),
                     false));
                 observers.forEach(o -> o.onStepComplete(context.sessionId(), context.agentRole(),
-                    ReasoningStep.observe(timedOut.toolName(),
+                    ReasoningStep.observeStep(timedOut.toolName(),
                         String.format("Tool timed out after %ds.", toolTimeoutSeconds),
                         "System")));
             } catch (ExecutionException e) {
@@ -292,7 +292,7 @@ public class ParallelToolStepExecutor {
                 ParallelToolCall failedCall = allowedCalls.get(i);
                 allowedCompleted.add(failedCall.withResult("Unexpected execution failure.", false));
                 observers.forEach(o -> o.onStepComplete(context.sessionId(), context.agentRole(),
-                    ReasoningStep.observe(failedCall.toolName(),
+                    ReasoningStep.observeStep(failedCall.toolName(),
                         "Unexpected execution failure.", "System")));
             }
         }

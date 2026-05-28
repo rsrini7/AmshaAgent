@@ -72,7 +72,7 @@ public class ScheduleTaskTool implements AgentTool {
 
     private static final Logger log = Logger.getLogger(ScheduleTaskTool.class);
 
-    public static final String NAME = ToolCapability.SCHEDULE_TASK.toolName();
+    public static final String TOOL_NAME = ToolCapability.SCHEDULE_TASK.toolName();
 
     /**
      * Rejects vague goals with unresolved references (zero LLM cost - pure regex).
@@ -89,7 +89,7 @@ public class ScheduleTaskTool implements AgentTool {
     @Inject Event<CronTaskScheduled> cronScheduledEvent;
 
     @Override
-    public String name() { return NAME; }
+    public String name() { return TOOL_NAME; }
 
     @Override
     public String description() {

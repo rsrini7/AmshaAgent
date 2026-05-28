@@ -192,7 +192,7 @@ public sealed interface ReasoningStep permits
         return new ObservationStep("System Directive", observation, 0, 0, true, null, null, null, false);
     }
 
-    static ReasoningStep observe(String action, String observation, String thought) {
+    static ReasoningStep observeStep(String action, String observation, String thought) {
         return new ToolCallStep(thought, action, Map.of(), observation, 0, 0, true, null, null, null, false, false);
     }
 
