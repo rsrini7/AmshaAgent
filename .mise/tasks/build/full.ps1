@@ -32,6 +32,12 @@ if (Test-Path '.env') {
 try {
     $env:MAVEN_OPTS = "$mOpts -Xmx${jitGB}g -Xms${jitGB}g"
 
+    # Phase 0: Format code (Spotless + FQN replacement)
+    python3 ./fix_fqns.py
+    & $mvnw spotless:apply --no-transfer-progress -q
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    Write-Host '✅  Code formatted (Spotless + FQN replacement).'
+
     # Phase 1: Build Maven backend first (generates OpenAPI spec)
     & $mvnw clean install -am -DskipTests --no-transfer-progress -T $threads
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
