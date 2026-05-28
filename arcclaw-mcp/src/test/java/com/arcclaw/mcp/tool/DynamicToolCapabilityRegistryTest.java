@@ -94,7 +94,7 @@ class DynamicToolCapabilityRegistryTest {
                         }
                     } else {
                         for (int j = 0; j < 100; j++) {
-                            registry.getAll().stream().count();
+                            var _ = registry.getAll().stream().count();
                         }
                     }
                 } catch (Exception e) {

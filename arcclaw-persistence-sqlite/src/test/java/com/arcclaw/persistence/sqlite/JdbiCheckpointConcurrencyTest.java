@@ -57,7 +57,7 @@ class JdbiCheckpointConcurrencyTest {
 
         for (int i = 0; i < threads; i++) {
             int idx = i;
-            executor.submit(() -> {
+            var _ = executor.submit(() -> {
                 try {
                     latch.await();
                     CheckpointDto dto = new CheckpointDto(

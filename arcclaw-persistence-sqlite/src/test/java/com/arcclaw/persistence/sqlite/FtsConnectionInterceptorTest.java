@@ -59,10 +59,8 @@ class FtsConnectionInterceptorTest {
      *   <li>load_extension Statement is ready for verification</li>
      * </ul>
      *
-     * @param vec0AlreadyLoaded {@code true}  → simulates a re-borrowed connection
-     *                                           (vec0 already registered, load skipped)
-     *                          {@code false} → simulates a fresh connection handle
-     *                                           (vec0 not yet registered, load must fire)
+     * @param vec0AlreadyLoaded true simulates a re-borrowed connection (vec0 already registered, load skipped);
+     *                          false simulates a fresh connection handle (vec0 not yet registered, load must fire)
      */
     private record ConnBundle(Connection conn, Statement vecStmt) {}
 

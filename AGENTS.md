@@ -110,6 +110,62 @@ Welcome! This document outlines the critical invariants, conventions, and archit
 * **Enforcement**: ArchUnit test `ReasoningStepSuccessNullSafetyTest` scans all call sites and rejects raw auto-unboxing of `ReasoningStep.success()`.
 * **Reference**: `ReasoningStep.java` sealed interface, `AgentTraceEnricher.onStepComplete()` NPE fix (2026-05-28).
 
+### 1.6 JDK 25 Language Features (GA Only — No Preview)
+
+* **Rule**: ArcClaw targets JDK 25 (GA). Use finalized language features below. **Do NOT use preview features** — they may change or be removed.
+* **Enforcement**: Code using preview features will be rejected at review.
+
+#### Use These (Finalized in JDK 21–25)
+
+| Feature | JEP | Since | Use Instead Of |
+|---|---|---|---|
+| **Unnamed variables `_`** | JEP 456 | JDK 22 | `var unused = ...` → `var _ = ...` for intentionally discarded values |
+| **Pattern matching `switch`** | JEP 441 | JDK 21 | `if-else` chains with `instanceof` casts → `switch (obj) { case Type t -> ... }` |
+| **Record patterns** | JEP 440 | JDK 21 | Manual field extraction → `case Point(int x, int y) -> ...` |
+| **Sealed interfaces** | JEP 409 | JDK 17 | Open hierarchies → `sealed interface X permits A, B, C` |
+| **Pattern matching `instanceof`** | JEP 394 | JDK 16 | `if (x instanceof T) { T t = (T) x; }` → `if (x instanceof T t)` |
+| **Text blocks** | JEP 378 | JDK 15 | String concatenation for SQL/JSON/HTML → `"""..."""` |
+| **Virtual threads** | JEP 444 | JDK 21 | Platform thread pools for I/O-bound work → `Thread.ofVirtual()` |
+| **Scoped values** | JEP 481 | JDK 25 | `ThreadLocal` for request-scoped data → `ScopedValue` |
+| **Flexible constructors** | JEP 513 | JDK 25 | Workarounds for super() ordering → validate/transform before `super()` |
+
+#### Do NOT Use (Preview in JDK 25 — May Change)
+
+| Feature | JEP | Status | Why Not |
+|---|---|---|---|
+| Structured concurrency | JEP 505 | Preview | API may change in JDK 26 |
+| Stream gatherers | JEP 485 | Preview | API may change |
+| Module import declarations | JEP 511 | Preview | Syntax may change |
+| Compact source files | JEP 512 | Preview | Main method simplification — not for library code |
+| Value classes | JEP 502 | Preview | Memory layout optimization — experimental |
+
+#### Examples
+
+```java
+// ✅ Unnamed variable (JDK 22+)
+var _ = conn.close();                    // intentionally discarded
+var _ = executor.submit(() -> { ... });  // Future intentionally ignored
+
+// ✅ Pattern matching switch (JDK 21+)
+return switch (step) {
+    case ToolCallStep tc  -> tc.success() != null && tc.success();
+    case FinishStep f     -> true;
+    case ParallelStep p   -> Boolean.TRUE.equals(p.success());
+    case ObservationStep o -> Boolean.TRUE.equals(o.success());
+};
+
+// ✅ Pattern matching instanceof (JDK 16+)
+if (response instanceof ToolResponse.ToolSuccess s) {
+    return s.output();
+}
+
+// ❌ DO NOT: unnamed variable with old style
+@SuppressWarnings("unused") String unused = conn.close();
+
+// ❌ DO NOT: preview features
+import module java.base;  // JEP 511 — preview, do not use
+```
+
 ---
 
 ## 2. Key Framework Components
