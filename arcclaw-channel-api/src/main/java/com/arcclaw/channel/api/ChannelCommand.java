@@ -122,7 +122,7 @@ public interface ChannelCommand {
         return new CronTasks();
     }
 
-    static final Pattern UUID_PATTERN =
+    Pattern UUID_PATTERN =
             Pattern.compile("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$");
 
     private static Optional<String> parseTargetId(Optional<String> argOpt) {
