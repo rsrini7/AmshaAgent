@@ -324,14 +324,8 @@ public class ReasoningStepParser {
         return parsed != null ? parsed : Map.of();
     }
 
-    @SuppressWarnings("unchecked")
     private void coerceBooleans(Map<String, Object> map) {
         ReasoningStepParserUtils.coerceBooleans(map);
-    }
-
-    @SuppressWarnings("unchecked")
-    private void coerceBooleans(List<Object> list) {
-        ReasoningStepParserUtils.coerceBooleans(list);
     }
 
     private String sanitizeJson(String json) {
