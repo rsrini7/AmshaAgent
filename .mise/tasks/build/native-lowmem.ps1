@@ -1,0 +1,62 @@
+#!/usr/bin/env pwsh
+#MISE description = "Native binary - local GraalVM, 6 GB heap cap (use when RAM is tight) - auto-switches JDK"
+$ErrorActionPreference = 'Stop'
+$mvnw   = if ($IsWindows) { '.\mvnw.cmd' } else { './mvnw' }
+$suffix = if ($IsWindows) { '-runner.exe' } else { '-runner' }
+Write-Host 'ℹ️   build:native-lowmem: local GraalVM, heap capped at 6 GB.'
+
+# --- Auto-Heal stranded backups before shielding ---
+if (Test-Path '.env.build-backup') {
+    if (Test-Path '.env') { Remove-Item '.env' -Force }
+    Rename-Item '.env.build-backup' '.env'
+    Write-Host '⚠️  Recovered stranded .env.build-backup before starting new build.'
+}
+
+$envBackup = $null
+if (Test-Path '.env') {
+    Rename-Item '.env' '.env.build-backup'
+    $envBackup = $true
+    Write-Host 'ℹ️   .env shielded (.env.build-backup) - secrets will not be baked into binary.'
+} elseif (Test-Path 'build.env') {
+    Copy-Item 'build.env' '.env'
+    $envBackup = 'build.env'
+    Write-Host 'ℹ️   build.env activated for native compilation (no secrets).'
+} else {
+    Write-Host 'ℹ️   No .env found - building without config override (good for CI).'
+}
+try {
+    # ── Memory Scaling (Low-Mem Mode) ──────────────────────────────────────
+    if ($IsMacOS) {
+        $vm = vm_stat; $ps = [int](($vm | Select-String 'page size of (\d+)').Matches[0].Groups[1].Value)
+        $availGB = [Math]::Floor(([int](($vm | Select-String 'Pages free:').ToString() -replace '.*:\s+(\d+)\.','$1') + [int](($vm | Select-String 'Pages inactive:').ToString() -replace '.*:\s+(\d+)\.','$1')) * $ps / 1GB)
+        if ($availGB -lt 4) { $availGB = [Math]::Floor([int64](sysctl -n hw.memsize) / 1GB) }
+    } elseif ($IsWindows) {
+        $availGB = [Math]::Floor([System.GC]::GetGCMemoryInfo().TotalAvailableMemoryBytes / 1GB)
+    } else {
+        $availGB = [Math]::Floor([int64]((Select-String 'MemAvailable:' /proc/meminfo).ToString() -replace '.*:\s+(\d+)\s+kB','$1') / 1MB)
+    }
+    $targetGB = [Math]::Max(2, [Math]::Min([Math]::Floor($availGB * 0.6), 6)) # 60%, capped at 6G for lowmem
+    Write-Host "🧠 Allocating ${targetGB}G for native-image (Low-Mem: 60% of ${availGB}G available)..."
+
+    mise use --path mise.toml java@graalvm-community-25.0.2
+    # ... jenv bypass ...
+    $graalPath = (mise where java@graalvm-community-25.0.2).Trim()
+    $env:GRAALVM_HOME = $graalPath
+    $env:JAVA_HOME = $graalPath
+
+    $env:MAVEN_OPTS = '--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow'
+    & $mvnw clean package -Pnative -pl arcclaw-app -am -DskipTests `
+        "-Darcclaw.persistence.backend=sqlite" `
+        "-Dquarkus.profile=prod" `
+        '-Dquarkus.native.container-build=false' `
+        "-Dquarkus.native.native-image-xmx=${targetGB}g"
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    Write-Host "✅  Native lowmem build complete [local]: arcclaw-app/target/arcclaw-app-1.0.0-SNAPSHOT$suffix"
+    Write-Host '▶   Assembling dist/ folder...'
+    mise run dist
+} finally {
+    if ($envBackup -eq $true -and (Test-Path '.env.build-backup')) { Rename-Item '.env.build-backup' '.env'; Write-Host 'ℹ️   .env restored.' }
+    elseif ($envBackup -eq 'build.env') { Remove-Item '.env' -ErrorAction SilentlyContinue; Write-Host 'ℹ️   Temporary build.env copy removed.' }
+    mise use --path mise.toml java@temurin-25
+    Write-Host '✅  Switched back to Temurin 25.'
+}
