@@ -6,9 +6,9 @@
                              https://pmd.sourceforge.io/ruleset_2_0_0.xsd">
 
     <description>Enforces maximum boundaries for class and method structures on JDK 25.
-    NcssCount for method/type size. ExcessiveLength for file size.
-    PMD loads entire categories when referencing individual rules — violations from
-    unrelated rules in those categories are expected noise. SonarQube is the real gate.</description>
+    NcssCount measures non-commenting source statements for method (80) and type (500).
+    Note: ExcessiveLength was removed in PMD 7.x. NcssCount's typeReportLevel=500
+    serves as the file length gate (a 500-line file will have ~450+ NCSS lines).</description>
 
     <exclude-pattern>.*/module-info\.java</exclude-pattern>
 
@@ -17,13 +17,6 @@
         <properties>
             <property name="typeReportLevel" value="500"/>
             <property name="methodReportLevel" value="80"/>
-        </properties>
-    </rule>
-
-    <!-- File length: max 500 lines -->
-    <rule ref="category/java/design.xml/ExcessiveLength">
-        <properties>
-            <property name="minimum" value="500"/>
         </properties>
     </rule>
 
