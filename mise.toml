@@ -2069,56 +2069,14 @@ Write-Host '✅  arcclaw service restarted.'
 # =============================================================================
 # DATABASE HELPERS
 # =============================================================================
-
-[tasks."db:inspect"]
-description = "Open arcclaw-meta.db in sqlite3 interactive CLI"
-dir = "{{config_root}}"
-shell = "pwsh -NonInteractive -Command"
-quiet = true
-run = """
-$ErrorActionPreference = 'Stop'
-$dataDir = if ($env:ARCCLAW_DATA_DIR) { $env:ARCCLAW_DATA_DIR } else { './data' }
-$db = "$dataDir/arcclaw-meta.db"
-if (-not (Test-Path $db)) {
-    Write-Host "❌  Database not found at: $db"
-    Write-Host '    Has ArcClaw been started at least once?'
-    exit 1
-}
-Write-Host "Opening $db ..."
-sqlite3 $db
-"""
-
-[tasks."db:fts-check"]
-description = "Verify SQLite FTS5 is available (required for full-text search)"
-dir = "{{config_root}}"
-shell = "pwsh -NonInteractive -Command"
-quiet = true
-run = """
-$result = sqlite3 ':memory:' 'CREATE VIRTUAL TABLE t USING fts5(x);' 2>&1
-if ($LASTEXITCODE -eq 0) {
-    Write-Host '✅  FTS5 is available.'
-} else {
-    Write-Host '❌  FTS5 not available.'
-    if (-not $IsWindows) { Write-Host '    Fix: sudo apt install sqlite3' }
-    exit 1
-}
-"""
-
-[tasks."db:vec-check"]
-description = "Check sqlite-vec extension exists for your platform (lib/vec0.dll / .so / .dylib)"
-dir = "{{config_root}}"
-shell = "pwsh -NonInteractive -Command"
-quiet = true
-run = """
-$ext = if ($IsWindows) { './lib/vec0.dll' } elseif ($IsMacOS) { './lib/vec0.dylib' } else { './lib/vec0.so' }
-if (Test-Path $ext) {
-    Write-Host "✅  sqlite-vec extension found: $ext"
-} else {
-    Write-Host "❌  Extension not found: $ext"
-    Write-Host '    Download from: https://github.com/asg017/sqlite-vec/releases/tag/v0.1.6'
-    exit 1
-}
-"""
+# Tasks are defined as .ps1 scripts in .mise/tasks/db/ for cross-platform compatibility
+# - sqlite/inspect.ps1      - Open arcclaw-meta.db in sqlite3 interactive CLI
+# - sqlite/fts-check.ps1    - Verify SQLite FTS5 is available
+# - sqlite/vec-check.ps1    - Check sqlite-vec extension exists
+# - pg/start.ps1            - Start PostgreSQL 16 container via Podman
+# - pg/stop.ps1             - Stop and remove PostgreSQL container
+# - pg/status.ps1           - Check PostgreSQL container health
+# - pg/reset.ps1            - Drop and recreate the arcclaw database (wipes all data)
 
 # =============================================================================
 # INFO / HELP
@@ -2164,142 +2122,6 @@ run = ["mise tasks"]
 #
 # When using PostgreSQL, the Podman container is auto-started.
 # =============================================================================
-
-[tasks."db:pg:start"]
-description = "Start PostgreSQL 16 container via Podman (for dev/postgresql profile)"
-dir = "{{config_root}}"
-shell = "pwsh -Command"
-quiet = false
-run = """
-$ErrorActionPreference = 'Stop'
-
-# Ensure Podman machine is running before container operations
-$test = podman ps --noheading 2>&1
-if ($LASTEXITCODE -ne 0) {
-    Write-Host '⚠️   Podman is not running.'
-    $confirm = Read-Host 'Start Podman machine now? [Y/n]'
-    if ($confirm -eq '' -or $confirm -eq 'y' -or $confirm -eq 'Y') {
-        $startResult = podman machine start 2>&1
-        if ($LASTEXITCODE -ne 0) {
-            if ($startResult -match 'already running') {
-                Write-Host '⚠️   Podman machine reported "already running" but connection failed — forcing restart...'
-                podman machine stop 2>&1 | Out-Null; Start-Sleep -Seconds 2
-                podman machine start 2>&1
-                if ($LASTEXITCODE -ne 0) { Write-Host "❌  Podman machine failed to restart. Run: podman machine init"; exit 1 }
-            } else {
-                Write-Host "❌  Podman machine failed to start. Run: podman machine init"; exit 1
-            }
-        }
-        Write-Host "✅  Podman machine started."
-        Start-Sleep -Seconds 3
-    } else {
-        Write-Host "❌  Podman is required for PostgreSQL."
-        exit 1
-    }
-}
-
-$container = 'arcclaw-pg'
-$existing = podman ps -a --filter name=$container --no-trunc 2>&1 | Select-String $container
-if ($existing) {
-    $status = podman ps --filter name=$container --no-trunc 2>&1 | Select-String $container
-    if ($status) {
-        Write-Host "✅  PostgreSQL container '$container' is already running."
-        exit 0
-    }
-    Write-Host "ℹ️   Container '$container' exists but stopped — starting..."
-    podman start $container
-    if ($LASTEXITCODE -ne 0) { Write-Host "❌  Failed to start container."; exit 1 }
-    Write-Host "✅  Container started."
-    exit 0
-}
-Write-Host "▶   Creating PostgreSQL container '$container'..."
-podman run -d --name $container `
-    -e POSTGRES_DB=arcclaw `
-    -e POSTGRES_USER=arcclaw `
-    -e POSTGRES_PASSWORD=changeme `
-    -p 5432:5432 `
-    --health-cmd='pg_isready -U arcclaw' `
-    --health-interval=3s `
-    --health-timeout=2s `
-    --health-retries=5 `
-    pgvector/pgvector:0.8.0-pg16
-if ($LASTEXITCODE -ne 0) { Write-Host "❌  Failed to create container. Try: podman pull pgvector/pgvector:0.8.0-pg16"; exit 1 }
-if ($LASTEXITCODE -ne 0) { Write-Host "❌  Failed to create container."; exit 1 }
-Write-Host "⏳  Waiting for PostgreSQL to become healthy..."
-$ready = $false
-for ($i = 0; $i -lt 15; $i++) {
-    $status = podman inspect $container | ConvertFrom-Json | Select-Object -ExpandProperty State | Select-Object -ExpandProperty Health | Select-Object -ExpandProperty Status
-    if ($status -eq 'healthy') { $ready = $true; break }
-    Start-Sleep -Seconds 1
-}
-if (-not $ready) {
-    Write-Host "⚠️   Health check did not become healthy — container may still be starting."
-    podman logs -n 5 $container 2>&1 | ForEach-Object { Write-Host "  $_" }
-} else {
-    Write-Host "✅  PostgreSQL 16 is ready on port 5432."
-}
-"""
-
-[tasks."db:pg:stop"]
-description = "Stop and remove PostgreSQL container"
-dir = "{{config_root}}"
-shell = "pwsh -NonInteractive -Command"
-quiet = true
-run = """
-$ErrorActionPreference = 'Stop'
-$container = 'arcclaw-pg'
-$existing = podman ps -a --filter name=$container --no-trunc 2>&1 | Select-String $container
-if (-not $existing) {
-    Write-Host "ℹ️   No PostgreSQL container found."
-    exit 0
-}
-Write-Host "▶   Stopping container '$container'..."
-podman stop $container 2>&1 | Out-Null
-podman rm $container 2>&1 | Out-Null
-Write-Host "✅  PostgreSQL container stopped and removed."
-"""
-
-[tasks."db:pg:status"]
-description = "Check PostgreSQL container health"
-dir = "{{config_root}}"
-shell = "pwsh -NonInteractive -Command"
-quiet = true
-run = """
-$container = 'arcclaw-pg'
-$existing = podman ps -a --filter name=$container --no-trunc 2>&1 | Select-String $container
-if (-not $existing) {
-    Write-Host '❌  PostgreSQL container not found. Run: mise run db:pg:start'
-    exit 1
-}
-$state = podman inspect $container | ConvertFrom-Json | Select-Object -ExpandProperty State
-$status = $state.Status
-$health = $state.Health.Status
-Write-Host "✅  Container status: $status | Health: $health"
-$ports = podman port $container 2>&1
-if ($ports) { $ports | ForEach-Object { Write-Host "  $_" } }
-"""
-
-[tasks."db:pg:reset"]
-description = "Drop and recreate the arcclaw database (wipes all data)"
-dir = "{{config_root}}"
-shell = "pwsh -NonInteractive -Command"
-quiet = true
-run = """
-$ErrorActionPreference = 'Stop'
-$container = 'arcclaw-pg'
-$existing = podman ps --filter name=$container --no-trunc 2>&1 | Select-String $container
-if (-not $existing) {
-    Write-Host "❌  PostgreSQL container is not running. Run: mise run db:pg:start"
-    exit 1
-}
-Write-Host "⚠️   WARNING: This will permanently delete all PostgreSQL data."
-Write-Host "      Creating a new database requires Flyway clean + migrate."
-$confirm = Read-Host "Type 'reset' to confirm"
-if ($confirm -ne 'reset') { Write-Host "Aborted."; exit 1 }
-podman exec $container psql -U arcclaw -d postgres -c "DROP DATABASE IF EXISTS arcclaw WITH (FORCE);" 2>&1 | Out-Null
-podman exec $container psql -U arcclaw -d postgres -c "CREATE DATABASE arcclaw;" 2>&1 | Out-Null
-Write-Host "✅  Database 'arcclaw' recreated. Run 'mise run jar:pg' to apply Flyway migrations."
-"""
 
 # ── Dev mode with PostgreSQL ────────────────────────────────────────────────
 

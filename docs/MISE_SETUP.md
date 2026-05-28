@@ -320,9 +320,9 @@ mise run help    # or: mise tasks
 | `mise run podman:stop` | macOS: stop Podman VM |
 | `mise run podman:socket` | WSL2/Linux: enable Podman user socket |
 | `mise run podman:status` | Podman + image status |
-| `mise run db:inspect` | Open `arcclaw-meta.db` in sqlite3 |
-| `mise run db:fts-check` | Verify FTS5 available |
-| `mise run db:vec-check` | Check `lib/vec0` extension for current platform |
+| `mise run db:sqlite:inspect` | Open `arcclaw-meta.db` in sqlite3 |
+| `mise run db:sqlite:fts-check` | Verify FTS5 available |
+| `mise run db:sqlite:vec-check` | Check `lib/vec0` extension for current platform |
 | `mise run info` | Print Java, Podman, Docker versions |
 | `mise run help` | List all tasks |
 
@@ -532,9 +532,9 @@ Use [Podman Desktop](https://podman-desktop.io/) or Docker Desktop.
 ## 15. Database Helpers
 
 ```bash
-mise run db:inspect     # sqlite3 interactive CLI on arcclaw-meta.db
-mise run db:fts-check   # verify FTS5
-mise run db:vec-check   # verify lib/vec0 extension for your platform
+mise run db:sqlite:inspect     # sqlite3 interactive CLI on arcclaw-meta.db
+mise run db:sqlite:fts-check   # verify FTS5
+mise run db:sqlite:vec-check   # verify lib/vec0 extension for your platform
 ```
 
 ***
@@ -650,7 +650,7 @@ mise run setup:env-check
 
 1. Check logs for "Vec0 binary installed to [...]" or "Vec0 binary already present".
 2. If failed, manually place the extension: `lib/vec0.so` (Linux), `lib/vec0.dylib` (macOS), `lib/vec0.dll` (Windows).
-3. Verify FTS5 is available: `mise run db:fts-check`.
+3. Verify FTS5 is available: `mise run db:sqlite:fts-check`.
 4. Then restart ArcClaw - vec0 is loaded at boot, not lazily.
 
 ### Native exe exits immediately (Windows)
