@@ -205,7 +205,26 @@ public class FinishOutcomeProcessor {
         }
 
         // JSON detected but no tool-call keys (e.g. {"response":"..."}) — treat as valid answer, not a leak.
+        // UNLESS it's thinking-style JSON ({"thoughts":...,"plan":...,"criticism":...}) — the LLM's
+        // internal reasoning leaked into the answer. Retry with a direct-answer hint.
         if (isLeak && !containsToolCallKeys(candidateAnswer)) {
+            if (isThinkingJson(candidateAnswer)) {
+                log.warnf("FINISH-HANDLER session %s: thinking-style JSON leaked into answer - retrying", sessionId);
+                if (correctionStrategy.withinBudget(llmSchemaErrorCount)) {
+                    ReasoningStep cleanStep = step.withObservation("");
+                    String hint = "System: Your response was a JSON thought structure, NOT a valid answer. "
+                            + "You MUST respond in plain text only. "
+                            + "Read the conversation history carefully and answer the user's question DIRECTLY "
+                            + "in plain text using FINISH. Do NOT output JSON, tool calls, or structured data.";
+                    return new FinishActionHandler.FinishOutcome.Correction(cleanStep, hint);
+                }
+                // Budget exceeded — salvage what we can
+                String stripped = qualityGuard.stripRawToolJson(candidateAnswer);
+                if (!stripped.isBlank() && stripped.length() > SALVAGE_MIN_LENGTH) {
+                    return new FinishActionHandler.FinishOutcome.Completed(
+                            AgentResult.finished(stripped, List.copyOf(history)), stripped);
+                }
+            }
             log.infof("FINISH-HANDLER session %s: JSON without tool-call keys - treating as valid answer", sessionId);
             var guarded = qualityGuard.guard(candidateAnswer, history).answer();
             return new FinishActionHandler.FinishOutcome.Completed(
@@ -337,6 +356,22 @@ public class FinishOutcomeProcessor {
 
     public boolean looksLikeJson(String text) {
         return textPatternUtils.looksLikeJson(text);
+    }
+
+    /**
+     * Detects thinking-style JSON structures that small models emit instead of answers.
+     * E.g., {"thoughts": {"text": "...", "reasoning": "...", "plan": "...", "criticism": "..."}}
+     */
+    private boolean isThinkingJson(String text) {
+        if (text == null) return false;
+        String lower = text.strip().toLowerCase();
+        if (!lower.startsWith("{")) return false;
+        // Check for common thinking-structure keys
+        int thinkingKeys = 0;
+        for (String key : List.of("thoughts", "reasoning", "plan", "criticism", "speak", "thought")) {
+            if (lower.contains("\"" + key + "\"")) thinkingKeys++;
+        }
+        return thinkingKeys >= 2;
     }
 
     public boolean historyContainsSuccessfulSchedule(List<ReasoningStep> history) {
