@@ -6,6 +6,7 @@ import java.util.Optional;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.lifecycle.WorkspaceManager;
 import com.arcclaw.core.scope.WorkspaceContext;
+import com.arcclaw.core.util.AgentGuards;
 
 import org.jboss.logging.Logger;
 
@@ -43,6 +44,15 @@ public class PreflightState implements RunnerState {
             log.warnf("Session %s halted — stopping agent loop at iteration %d", execCtx.sessionId(), iteration);
             context.setFinalResult(AgentResult.failed(
                     "Session halted by user", AgentResult.FailureCategory.USER_ABORT, List.copyOf(context.history())));
+            return services.failedState();
+        }
+
+        if (AgentGuards.isShuttingDown()) {
+            log.warnf(
+                    "Container shutting down — stopping agent loop for session %s at iteration %d",
+                    execCtx.sessionId(), iteration);
+            context.setFinalResult(AgentResult.failed(
+                    "System shutting down", AgentResult.FailureCategory.USER_ABORT, List.copyOf(context.history())));
             return services.failedState();
         }
 
