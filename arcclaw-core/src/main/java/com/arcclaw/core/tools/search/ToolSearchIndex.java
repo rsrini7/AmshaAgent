@@ -15,7 +15,6 @@ import com.arcclaw.core.tools.ToolRegistry;
 import org.apache.lucene.analysis.standard.StandardAnalyzer;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.Field;
-import org.apache.lucene.document.StringField;
 import org.apache.lucene.document.TextField;
 import org.apache.lucene.index.DirectoryReader;
 import org.apache.lucene.index.IndexWriter;
@@ -72,7 +71,7 @@ public class ToolSearchIndex {
                     String name = entry.getKey();
                     ToolRegistry.ToolDescriptor desc = entry.getValue();
                     Document doc = new Document();
-                    doc.add(new StringField(FIELD_NAME, name, Field.Store.YES));
+                    doc.add(new TextField(FIELD_NAME, name, Field.Store.YES));
                     doc.add(new TextField(FIELD_DESCRIPTION, desc.description(), Field.Store.YES));
                     writer.addDocument(doc);
                 }
@@ -124,8 +123,9 @@ public class ToolSearchIndex {
         } catch (ParseException e) {
             LOG.debugf("Tool query parse failed (benign): %s", e.getMessage());
             return List.of();
-        } catch (IOException e) {
-            LOG.warnf("Tool search failed: %s", e.getMessage());
+        } catch (Exception e) {
+            // IllegalArgumentException (PhraseQuery on non-position field), IOException, etc.
+            LOG.debugf("Tool search failed (benign): %s", e.getMessage());
             return List.of();
         }
     }

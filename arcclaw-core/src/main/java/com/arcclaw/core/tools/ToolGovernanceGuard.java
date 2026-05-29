@@ -98,12 +98,19 @@ public class ToolGovernanceGuard {
         // we throw SecurityException (403).
         if (!autonomyPolicy.isAllowed(level, requiredOp)) {
 
-            // 2. HITL EXEMPTION: configured tools bypass approval in SUPERVISED mode.
+            // 2. HITL EXEMPTION: configured tools bypass both approval AND hard block
+            // for salvageable operations. The exemption means "trust this tool completely".
             boolean isHitlExempt = hitlExemptTools.contains(toolName);
 
-            // 3. SUPERVISED SALVAGE: If blocked by policy but in SUPERVISED mode,
+            // 3. HITL EXEMPT + SALVAGEABLE: allow the tool to proceed without approval or block.
+            if (isHitlExempt && supervisedSalvageOps.contains(requiredOp)) {
+                log.debugf("Tool '%s' exempt from HITL at level %s (operation=%s)", toolName, level, requiredOp);
+                return; // allowed — no approval, no block
+            }
+
+            // 4. SUPERVISED SALVAGE: If blocked by policy but in SUPERVISED mode,
             // pivot to PauseForApproval (409) instead of hard 403 for configured ops.
-            if (level == AutonomyLevel.SUPERVISED && !isHitlExempt && supervisedSalvageOps.contains(requiredOp)) {
+            if (level == AutonomyLevel.SUPERVISED && supervisedSalvageOps.contains(requiredOp)) {
                 log.infof("Tool '%s' requires approval at level %s (operation=%s)", toolName, level, requiredOp);
 
                 ApprovalFrame frame = new ApprovalFrame(toolName, params, requiredOp.riskLevel());
