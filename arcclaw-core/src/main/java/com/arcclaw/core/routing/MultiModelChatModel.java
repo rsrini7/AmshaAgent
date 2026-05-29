@@ -15,6 +15,7 @@ import com.arcclaw.core.agent.reasoning.error.LlmExceptionClassifier;
 import com.arcclaw.core.agent.reasoning.error.LlmProviderException;
 import com.arcclaw.core.agent.reasoning.error.LlmRateLimitException;
 import com.arcclaw.core.agent.reasoning.error.LlmServiceUnavailableException;
+import com.arcclaw.core.agent.reasoning.error.LlmToolCallException;
 import com.arcclaw.core.lifecycle.WorkspaceManager;
 import com.arcclaw.core.scope.WorkspaceContext;
 
@@ -155,6 +156,9 @@ public class MultiModelChatModel implements ChatModel {
             }
             case LlmServiceUnavailableException u -> handleServiceUnavailable(label, h, u);
             case LlmContentFilterException c -> throw c;
+            // Re-throw tool-call errors so the agent loop can extract failed_generation as the answer.
+            // Don't cool down slots — "not in request.tools" is a client-side issue, not a provider failure.
+            case LlmToolCallException tc -> throw tc;
             default -> {
                 h.recordUnknownFailure(cooldownBaseSeconds, cooldownMaxSeconds);
                 log.warnf(

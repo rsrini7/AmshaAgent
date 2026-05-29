@@ -35,6 +35,12 @@ public class GenericExceptionClassifier extends LlmExceptionClassifierChain {
                     || (lower.contains("exceeded") && lower.contains("ms"))) {
                 return new LlmServiceUnavailableException("LLM Request Timeout: " + msg, original);
             }
+            // "not in request.tools" means the LLM called a non-existent tool (e.g., FINISH).
+            // This is a client-side issue, not a provider failure — classify as LlmToolCallException
+            // so the agent loop can extract failed_generation as the answer.
+            if (lower.contains("not in request.tools")) {
+                return new LlmToolCallException(msg, original);
+            }
             if (lower.contains("tool_use_failed") || lower.contains("failed_generation")) {
                 return new LlmServiceUnavailableException("Tool call format rejected by provider: " + msg, original);
             }
