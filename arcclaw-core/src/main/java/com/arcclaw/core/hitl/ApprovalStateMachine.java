@@ -5,6 +5,7 @@ import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import jakarta.transaction.Transactional.TxType;
 
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -187,6 +188,19 @@ public class ApprovalStateMachine implements ApprovalGateway {
 
     private static String resolveByPrefix(String toolName, List<String> allTools, String sessionId) {
         if (allTools.contains(toolName) || "all".equalsIgnoreCase(toolName)) return toolName;
+
+        // Handle combined parallel-batch identifiers like "garuda_github" from Telegram buttons.
+        // If all underscore-separated parts are in the tool list, approve all pending tools.
+        if (toolName.contains("_")) {
+            String[] parts = toolName.split("_");
+            if (parts.length > 1 && Arrays.stream(parts).allMatch(allTools::contains)) {
+                log.infof(
+                        "[ASM] Combined parallel-batch tool '%s' resolved to approve-all for session=%s",
+                        toolName, sessionId);
+                return "all";
+            }
+        }
+
         List<String> matches =
                 allTools.stream().filter(t -> t.startsWith(toolName)).toList();
         return matches.size() == 1 ? matches.get(0) : null;
