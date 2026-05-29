@@ -120,12 +120,27 @@ public class FinishOutcomeProcessor {
             log.infof("FINISH-HANDLER code-gen blocked for role '%s' in session %s", agentRole, sessionId);
 
             ReasoningStep cleanStep = step.withObservation("Code generation blocked for " + agentRole);
-            String hint = "System: You attempted to output code in your FINISH answer, but your role (" + agentRole
-                    + ") cannot generate code. " + codePolicy.buildRefusalMessage(agentRole)
-                    + " Do NOT tell the user to ask them separately. "
-                    + "Instead, use the `garuda` tool NOW with agent='coder' and a complete goal "
-                    + "that includes the full code generation, execution, and result-checking request. "
-                    + "Wait for coder's response, then FINISH with the result.";
+
+            // Detect deep delegation context — if we're already inside a delegation chain,
+            // telling the LLM to "use garuda" would create a delegate→blocked→FINISH→blocked loop.
+            boolean inDeepDelegation = sessionId != null
+                    && sessionId.split(Pattern.quote(AgentSentinels.DELEGATE_SESSION_SENTINEL)).length - 1 >= 2;
+
+            String hint;
+            if (inDeepDelegation) {
+                hint = "System: You attempted to output code in your FINISH answer, but your role (" + agentRole
+                        + ") cannot generate code and you are already at maximum delegation depth. "
+                        + "You CANNOT delegate to a coder. FINISH now with a plain text summary of "
+                        + "what was accomplished, what the issue is, and what remains to be done. "
+                        + "Do NOT output code blocks. Do NOT use garuda.";
+            } else {
+                hint = "System: You attempted to output code in your FINISH answer, but your role (" + agentRole
+                        + ") cannot generate code. " + codePolicy.buildRefusalMessage(agentRole)
+                        + " Do NOT tell the user to ask them separately. "
+                        + "Instead, use the `garuda` tool NOW with agent='coder' and a complete goal "
+                        + "that includes the full code generation, execution, and result-checking request. "
+                        + "Wait for coder's response, then FINISH with the result.";
+            }
 
             return new FinishActionHandler.FinishOutcome.Correction(cleanStep, hint);
         }

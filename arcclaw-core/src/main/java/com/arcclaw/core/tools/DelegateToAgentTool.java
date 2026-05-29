@@ -138,12 +138,14 @@ public class DelegateToAgentTool implements AgentTool {
             log.warnf(
                     "[DELEGATE] Hard block: delegation depth limit (%d) reached for session %s",
                     maxDelegationDepth, outerSessionId);
-            return ToolResponse.failure(
-                    400,
-                    String.format(
-                            "Recursion limit exceeded: Maximum delegation depth of %d reached. "
-                                    + "You cannot delegate further to prevent infinite loops.",
-                            maxDelegationDepth));
+            // Return success (not failure) to prevent the LLM from retrying.
+            // A failure response causes the LLM to loop: retry delegate → blocked → retry...
+            // A success response lets the LLM FINISH naturally with the status as its answer.
+            return ToolResponse.success(String.format(
+                    "Delegation blocked: maximum depth of %d reached. You CANNOT delegate further. "
+                            + "You MUST FINISH now with a plain text summary of what was accomplished "
+                            + "and what remains. Do NOT attempt to use garuda again.",
+                    maxDelegationDepth));
         }
 
         String normalized;
