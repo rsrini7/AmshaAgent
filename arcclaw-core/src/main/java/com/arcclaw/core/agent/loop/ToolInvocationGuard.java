@@ -152,14 +152,13 @@ public class ToolInvocationGuard {
         boolean toolRequiresApproval =
                 toolOpt.map(tool -> tool.requiresManualApproval(params)).orElse(false);
 
-        boolean isExempt = isSchedulingTool
-                || isDelegationTool
-                || (level == AutonomyLevel.BACKGROUND
-                        && (ToolCapability.RECALL_MEMORY_SEARCH.toolName().equals(toolName)
-                                || ToolCapability.ARCHIVAL_MEMORY_SEARCH
-                                        .toolName()
-                                        .equals(toolName)
-                                || ToolCapability.INGEST_DOCUMENT.toolName().equals(toolName)));
+        // Memory search/ingest tools are read-only and should be exempt from HITL approval
+        // at both BACKGROUND and SUPERVISED levels. Only FULL autonomy bypasses all checks.
+        boolean isMemoryTool = ToolCapability.RECALL_MEMORY_SEARCH.toolName().equals(toolName)
+                || ToolCapability.ARCHIVAL_MEMORY_SEARCH.toolName().equals(toolName)
+                || ToolCapability.INGEST_DOCUMENT.toolName().equals(toolName);
+
+        boolean isExempt = isSchedulingTool || isDelegationTool || (isMemoryTool && level != AutonomyLevel.READONLY);
 
         if ((roleRegistry.requiresApprovalForTools(resolvedRole) || toolRequiresApproval)
                 && !isExempt

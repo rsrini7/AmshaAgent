@@ -299,7 +299,16 @@ public class FinishActionHandler {
         }
 
         // Case 3: Scheduling goal + not scheduled + schedule_task permitted -> force scheduling correction
-        if (AgentSentinels.SCHEDULING_KEYWORDS.matcher(goal).find()
+        // BUT skip if the goal is about SEARCHING for scheduled tasks (e.g., "search memory for cron tasks we
+        // scheduled")
+        boolean isSchedulingGoal =
+                AgentSentinels.SCHEDULING_KEYWORDS.matcher(goal).find();
+        boolean isSearchGoal = AgentSentinels.RESEARCH_KEYWORDS.matcher(goal).find()
+                || goal.toLowerCase().contains("memory")
+                || goal.toLowerCase().contains("recall")
+                || goal.toLowerCase().contains("find");
+        if (isSchedulingGoal
+                && !isSearchGoal
                 && isToolPermitted(context.agentRole(), ToolCapability.SCHEDULE_TASK.toolName())) {
             boolean actuallyScheduled = resultProcessor.historyContainsSuccessfulSchedule(history);
             if (!actuallyScheduled) {
