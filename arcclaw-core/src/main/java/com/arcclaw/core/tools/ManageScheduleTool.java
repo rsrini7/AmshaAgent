@@ -103,7 +103,11 @@ public class ManageScheduleTool implements AgentTool {
 
         String action = (String) params.get("action");
         if (action == null || action.isBlank()) {
-            return ToolResponse.failure(400, "action is required (list or delete).");
+            return ToolResponse.failure(
+                    400,
+                    "action is required. Use 'list' to see all cron jobs, or 'delete' with an ID. "
+                            + "Example: {\"action\": \"delete\", \"cronId\": \"<uuid>\"}. "
+                            + "Or use /crons in Telegram to list, /cron delete <id> to delete.");
         }
 
         return switch (action.trim().toLowerCase()) {
