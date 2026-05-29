@@ -211,6 +211,24 @@ class ResumeStrategyDispatcher {
                     completeInProgressCheckpoint(checkpoint);
                     return stateMachineRunner.runFinishPass(context, reasoningEngine, history);
                 } else {
+                    // web_fetch fallback to browser_navigate (same logic as ToolResultProcessor)
+                    if (ToolCapability.WEB_FETCH.toolName().equals(toolName)) {
+                        String url = extractUrlFromParams(paramsJson);
+                        if (url != null && !url.isBlank()) {
+                            log.infof(
+                                    "[ResumeStrategy] web_fetch failed for %s - falling back to browser_navigate", url);
+                            String fallbackGoal = "The web_fetch tool was unable to retrieve " + url
+                                    + " (error: " + response.output() + "). "
+                                    + "Please try browser_navigate to visit this URL instead.";
+                            history.add(ReasoningStep.observeStep(
+                                    ToolCapability.WEB_FETCH.toolName(),
+                                    "Tool execution failed: " + response.output() + ". Fallback: " + fallbackGoal,
+                                    "web_fetch failed, falling back to browser_navigate."));
+                            completeInProgressCheckpoint(checkpoint);
+                            return stateMachineRunner.run(context.withGoal(fallbackGoal), reasoningEngine, history);
+                        }
+                    }
+
                     AgentResult healResult = tryAutoHealOnResume(
                             response,
                             paramsJson,
@@ -478,5 +496,20 @@ class ResumeStrategyDispatcher {
             return context.channelType();
         }
         return "unknown";
+    }
+
+    /** Extracts the "url" value from a JSON params string. Returns null if not found. */
+    private static String extractUrlFromParams(String paramsJson) {
+        if (paramsJson == null || paramsJson.isBlank()) return null;
+        // Simple extraction — avoids full JSON parsing for a single field
+        int idx = paramsJson.indexOf("\"url\"");
+        if (idx < 0) return null;
+        int colon = paramsJson.indexOf(':', idx + 5);
+        if (colon < 0) return null;
+        int start = paramsJson.indexOf('"', colon + 1);
+        if (start < 0) return null;
+        int end = paramsJson.indexOf('"', start + 1);
+        if (end < 0) return null;
+        return paramsJson.substring(start + 1, end);
     }
 }

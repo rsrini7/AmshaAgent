@@ -195,4 +195,22 @@ public final class AgentExecutionContext {
                 null,
                 null);
     }
+
+    /** Returns a copy of this context with a different goal. */
+    public AgentExecutionContext withGoal(String newGoal) {
+        return new AgentExecutionContext(
+                sessionId,
+                userId,
+                chatId,
+                agentRole,
+                newGoal,
+                autonomyLevel,
+                structuredOutputMode,
+                maxIterations,
+                startingIteration,
+                channelType,
+                channelPlatformId,
+                systemNote,
+                data);
+    }
 }
