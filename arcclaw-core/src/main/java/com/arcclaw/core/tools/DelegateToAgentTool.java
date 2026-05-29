@@ -39,6 +39,7 @@ import org.jboss.logging.Logger;
 import io.opentelemetry.api.trace.Span;
 import io.opentelemetry.api.trace.StatusCode;
 import io.opentelemetry.context.Context;
+import io.quarkus.arc.Arc;
 
 /**
  * Allows the coordinator to delegate specialized tasks (like coding or debugging)
@@ -114,6 +115,15 @@ public class DelegateToAgentTool implements AgentTool {
 
     @Override
     public ToolResponse execute(ToolExecutionContext ctx, Map<String, Object> params) {
+        // Guard against shutdown race — CDI container may be dead if Quarkus shut down
+        // while a session was still running (known pattern: shutdown-race-condition-pattern).
+        // Only block when container was started but is now shut down (not in unit tests where Arc never started).
+        var arcContainer = Arc.container();
+        if (arcContainer != null && !arcContainer.isRunning()) {
+            log.warnf("[DELEGATE] CDI container shutting down, aborting delegation");
+            return ToolResponse.failure(503, "System is shutting down. Delegation aborted.");
+        }
+
         String currentRoleName = ctx.agentRole();
         String outerSessionId = ctx.sessionId();
         String userId = ctx.userId();
