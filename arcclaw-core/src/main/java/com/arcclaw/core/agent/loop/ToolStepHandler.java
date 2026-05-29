@@ -271,20 +271,28 @@ public class ToolStepHandler {
                     originalGoal);
 
             if (recovery.success()) {
-                log.infof(
-                        "[AutoHeal] Recovery succeeded, re-executing sandbox_exec with fixed code (attempts=%d)",
-                        recovery.attemptsUsed());
-                Map<String, Object> fixedParams = new HashMap<>(params);
-                fixedParams.put("code", recovery.fixedCode());
-                ToolResponse retriedResponse = invokeToolWithParams(context, history, step, toolName, fixedParams);
-
-                if (retriedResponse instanceof ToolResponse.ToolFailure retryFailure
-                        && !retryFailure.isInfraFailure()) {
-                    log.warnf("[AutoHeal] Re-execution also failed, attempting persona escalation");
+                // Pre-re-execution validation: skip podman if code is obviously broken
+                String execValidationError = recoveryService.validateForExecution(recovery.fixedCode(), language);
+                if (execValidationError != null) {
+                    log.warnf("[AutoHeal] Fixed code failed pre-execution validation: %s", execValidationError);
                     response = attemptEscalationAfterHealFailure(
-                            context, step, toolName, params, failure, retryFailure, history);
+                            context, step, toolName, params, failure, failure, history);
                 } else {
-                    response = retriedResponse;
+                    log.infof(
+                            "[AutoHeal] Recovery succeeded, re-executing sandbox_exec with fixed code (attempts=%d)",
+                            recovery.attemptsUsed());
+                    Map<String, Object> fixedParams = new HashMap<>(params);
+                    fixedParams.put("code", recovery.fixedCode());
+                    ToolResponse retriedResponse = invokeToolWithParams(context, history, step, toolName, fixedParams);
+
+                    if (retriedResponse instanceof ToolResponse.ToolFailure retryFailure
+                            && !retryFailure.isInfraFailure()) {
+                        log.warnf("[AutoHeal] Re-execution also failed, attempting persona escalation");
+                        response = attemptEscalationAfterHealFailure(
+                                context, step, toolName, params, failure, retryFailure, history);
+                    } else {
+                        response = retriedResponse;
+                    }
                 }
             } else {
                 log.warnf("[AutoHeal] Recovery failed: %s, attempting persona escalation", recovery.errorIfFailed());

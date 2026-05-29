@@ -323,6 +323,13 @@ class ResumeStrategyDispatcher {
             return null;
         }
 
+        // Pre-re-execution validation: skip podman if code is obviously broken
+        String execValidationError = recoveryService.validateForExecution(recovery.fixedCode(), language);
+        if (execValidationError != null) {
+            log.warnf("[AutoHeal-Resume] Fixed code failed pre-execution validation: %s", execValidationError);
+            return null;
+        }
+
         log.infof(
                 "[AutoHeal-Resume] Recovery succeeded, re-executing sandbox_exec with fixed code (attempts=%d)",
                 recovery.attemptsUsed());
