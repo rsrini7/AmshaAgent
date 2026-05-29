@@ -51,7 +51,7 @@ public interface PolicyConfig {
         /**
          * Tool names that bypass HITL approval in SUPERVISED mode.
          */
-        @WithDefault("schedule_task,manage_schedule")
+        @WithDefault("schedule_task,manage_schedule,garuda")
         List<String> hitlExemptTools();
 
         /**
