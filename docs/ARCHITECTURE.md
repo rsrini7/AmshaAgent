@@ -760,7 +760,7 @@ Every significant event writes an `AuditEvent` with HMAC-SHA256 chain linking re
 ```
 AuditService.record(sessionId, userId, agentRole, SecurityEventType, detail)
   → AuditHashUtil.hmacHex(prevHash + "|" + payload)
-  → AuditEventRepository.record() → em.persist(AuditEvent)
+  → SqliteAuditEventStoreAdapter.save(AuditEventDto)  // JDBI, not JPA
 ```
 
 `AuditVerifier.verifyChain(sessionId)` re-computes HMAC for all events. `AsyncPersistenceEngine` drains two virtual threads (critical path / telemetry path). `ComplianceViolationException` thrown on mandatory audit write failure after all retries.

@@ -142,7 +142,7 @@
       {
         "name": "arcclaw-persistence-common",
         "path": "arcclaw-persistence-common/",
-        "description": "Shared JPA-annotated entity POJOs"
+        "description": "Shared JDBI records/DTOs and SessionKnowledgeBase"
       },
       {
         "name": "arcclaw-channel-api",
@@ -379,6 +379,6 @@
     "Babysitter mode: semi-autonomous"
   ],
   "createdAt": "2026-05-30T17:13:00.000Z",
-  "updatedAt": "2026-05-30T17:22:00.000Z",
-  "version": 2
+  "updatedAt": "2026-05-30T17:30:00.000Z",
+  "version": 3
 }
