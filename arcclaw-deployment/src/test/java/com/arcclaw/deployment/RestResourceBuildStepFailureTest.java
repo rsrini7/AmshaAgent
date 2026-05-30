@@ -7,8 +7,11 @@ import jakarta.annotation.Priority;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.context.Dependent;
 import jakarta.enterprise.inject.Alternative;
-import jakarta.enterprise.inject.Produces;
 import jakarta.inject.Named;
+import jakarta.ws.rs.GET;
+import jakarta.ws.rs.Path;
+import jakarta.ws.rs.Produces;
+import jakarta.ws.rs.core.MediaType;
 
 import com.arcclaw.channel.api.ChannelAllowlist;
 import com.arcclaw.channel.api.IntentDetector;
@@ -32,7 +35,8 @@ public class RestResourceBuildStepFailureTest {
 
     @RegisterExtension
     static final QuarkusUnitTest config = new QuarkusUnitTest()
-            .setArchiveProducer(() -> ShrinkWrap.create(JavaArchive.class).addClasses(TestProducers.class))
+            .setArchiveProducer(
+                    () -> ShrinkWrap.create(JavaArchive.class).addClasses(TestProducers.class, FakeRestResource.class))
             .overrideConfigKey("arcclaw.vault.pepper", "dummy-pepper-for-test-purposes-123")
             .overrideConfigKey("arcclaw.data-dir", ":memory:")
             .overrideConfigKey("arcclaw.auto-seed-secrets", "false")
@@ -45,6 +49,19 @@ public class RestResourceBuildStepFailureTest {
     public void testBuildFails() {
         // This line should not be reached if setExpectedException works as intended
         Assertions.fail("Build should have failed due to missing @RunOnVirtualThread");
+    }
+
+    /**
+     * Fake REST resource in com.arcclaw package WITHOUT @RunOnVirtualThread.
+     * This triggers RestResourceBuildStep's validation.
+     */
+    @Path("/fake-test")
+    @Produces(MediaType.APPLICATION_JSON)
+    public static class FakeRestResource {
+        @GET
+        public String get() {
+            return "ok";
+        }
     }
 
     @Dependent
