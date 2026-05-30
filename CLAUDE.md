@@ -33,5 +33,21 @@ Max: 500 lines/file · 80 lines/method · cognitive complexity ≤ 15.
 ## SQLite Diagnostics
 `sqlite3 data/arcclaw-meta.db ".tables"` · `sqlite3 data/arcclaw-fts.db ".tables"`
 
+## Babysitter
+ArcClaw is babysitter-enabled. Use `/skill:babysit` to orchestrate complex workflows via babysitter runs.
+
+**Recommended processes** for this project:
+- `gsd` — day-to-day development workflow for Pxxx phase-based work
+- `spec-driven-development` — quality gates for mature codebase
+- `evolutionary.js` — iterative refinement matching phase-based workflow
+
+**Recommended skills**: `code-review-pipeline`, `research-first-dev`, `continuous-learning`, `security-scanning`
+
+**Methodology**: evolutionary with spec-driven refinement
+
+**Project profile**: `.a5c/project-profile.json`
+
+**Babysitter mode**: semi-autonomous
+
 ## See Also
 [AGENTS.md](./AGENTS.md) — full developer guide with invariants, patterns, and checklists.

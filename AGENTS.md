@@ -161,6 +161,24 @@ On restart, auto-deny ALL stale `AWAITING_APPROVAL` checkpoints for all channel 
 
 ---
 
+## 6. Babysitter Integration
+
+This project is babysitter-enabled for complex workflow orchestration.
+
+**Invocation**: Use `/skill:babysit` or refer to the `cradle/user-install` / `cradle/project-install` processes.
+
+**Project profile**: `.a5c/project-profile.json` — contains tech stack, architecture, conventions, and pain points.
+
+**Quality gates**: `.a5c/quality-gates.json` — pre-commit checks and deploy gates.
+
+**Mode**: semi-autonomous (babysitter pauses for approval on breakpoints).
+
+**Recommended methodology**: evolutionary with spec-driven refinement.
+
+**Relevant docs**:
+- `CLAUDE.md` — has a ## Babysitter section with quick commands
+- `.a5c/` — project-level babysitter configuration
+
 ## 6. Adding a New Persona (Agent Role)
 
 1. **`AgentPersona.java`** — Add enum entry (`roleId`, `displayName`, `aliases`)
