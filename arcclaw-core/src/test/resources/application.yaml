@@ -25,7 +25,6 @@ arcclaw:
       hitl-exempt-tools:
         - schedule_task
         - manage_schedule
-        - garuda
       supervised-salvage-operations:
         - NETWORK_OUTBOUND
         - VAULT_ACCESS

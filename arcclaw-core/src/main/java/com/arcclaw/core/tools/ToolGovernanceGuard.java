@@ -100,11 +100,12 @@ public class ToolGovernanceGuard {
         AutonomyLevel level = ctx.autonomyLevel();
 
         // 0. ROLE TRUST: if the role has requiresApproval=false, it's a trusted execution role.
-        // Trusted roles bypass operation policy checks — their tools are pre-approved by role definition.
+        // Trusted roles bypass operation policy checks for non-sensitive operations.
+        // NETWORK_OUTBOUND is always subject to policy — external search requires HITL for all roles.
         AgentRoleEnum roleEnum = AgentRoleEnum.fromString(ctx.agentRole());
         boolean isTrustedRole = !roleRegistry.requiresApprovalForTools(roleEnum);
-        if (isTrustedRole) {
-            return; // trusted role — allow all operations
+        if (isTrustedRole && requiredOp != ToolOperation.NETWORK_OUTBOUND) {
+            return; // trusted role — allow non-network operations
         }
 
         // 1. HARD BLOCK check: if the policy says "not allowed" (e.g., READONLY level),

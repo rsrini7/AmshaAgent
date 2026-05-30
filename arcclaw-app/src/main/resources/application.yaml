@@ -690,7 +690,7 @@ mp:
         # garuda is exempt because delegation is the coordinator's primary function —
         # blocking it at SUPERVISED level creates a dead-end (coordinator can't delegate,
         # can't code-gen, can only FINISH with no result).
-        hitl-exempt-tools: ${ARCCLAW_HITL_EXEMPT_TOOLS:schedule_task,manage_schedule,garuda}
+        hitl-exempt-tools: ${ARCCLAW_HITL_EXEMPT_TOOLS:schedule_task,manage_schedule}
 
 "%dev":
   quarkus:
