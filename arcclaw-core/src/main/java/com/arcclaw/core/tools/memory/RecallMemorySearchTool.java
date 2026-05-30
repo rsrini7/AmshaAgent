@@ -40,7 +40,7 @@ import org.jboss.logging.Logger;
                 "Searches EXACT conversation history for specific code snippets, error traces, or past decisions. "
                         + "Use this when you need to recall exact details (e.g., 'the stack trace from yesterday', 'the Python function we wrote'). "
                         + "Does NOT search high-level summaries unless explicitly requested with include_summaries=true.",
-        defaultRoles = {"architect", "coordinator", "researcher", "synthesizer", "coder"})
+        defaultRoles = {"architect", "coordinator", "researcher", "synthesizer", "coder", "debugger"})
 public class RecallMemorySearchTool implements AgentTool {
 
     private static final Logger log = Logger.getLogger(RecallMemorySearchTool.class);
