@@ -11,6 +11,10 @@ import io.micrometer.core.instrument.MeterRegistry;
 @ApplicationScoped
 public class MetricsAgentObserver implements AgentObserver {
 
+    private static final String TAG_ROLE = "role";
+    private static final String TAG_TOOL = "tool";
+    private static final String UNKNOWN = "unknown";
+
     @Inject
     MeterRegistry registry;
 
@@ -25,20 +29,25 @@ public class MetricsAgentObserver implements AgentObserver {
     @Override
     public void onStepComplete(String sessionId, String role, ReasoningStep step) {
         // Count agent invocations tagged by role
-        registry.counter("arcclaw.agent.invocations", "role", role != null ? role : "unknown")
+        registry.counter("arcclaw.agent.invocations", TAG_ROLE, role != null ? role : UNKNOWN)
                 .increment();
 
         // Track which tools are being called and how often
         if (step.action() != null
                 && !ReasoningStep.FINISH.equals(step.action())
                 && !ReasoningStep.PARALLEL_SENTINEL_DUNDER.equals(step.action())) {
-            registry.counter("arcclaw.agent.tool.calls", "tool", step.action(), "role", role != null ? role : "unknown")
+            registry.counter(
+                            "arcclaw.agent.tool.calls",
+                            TAG_TOOL,
+                            step.action(),
+                            TAG_ROLE,
+                            role != null ? role : UNKNOWN)
                     .increment();
         }
 
         if (ReasoningStep.PARALLEL_SENTINEL_DUNDER.equals(step.action())) {
             // Count batch-level metrics (invocation is a parallel batch)
-            registry.counter("arcclaw.agent.parallel.batches", "role", role != null ? role : "unknown")
+            registry.counter("arcclaw.agent.parallel.batches", TAG_ROLE, role != null ? role : UNKNOWN)
                     .increment();
         }
 

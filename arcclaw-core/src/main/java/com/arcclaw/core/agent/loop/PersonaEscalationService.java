@@ -482,18 +482,18 @@ public class PersonaEscalationService {
 
     private String personaDisplayName(String role) {
         return switch (role) {
-            case "coder" -> "Brahma (Coder)";
-            case "debugger" -> "Shiva (Debugger)";
-            case "researcher" -> "Saraswati (Researcher)";
-            case "architect" -> "Brihaspati (Architect)";
-            case "coordinator" -> "Vishnu (Coordinator)";
-            case "synthesizer" -> "Dattatreya (Synthesizer)";
-            case "optimizer" -> "Ganesha (Optimizer)";
-            case "sentinel" -> "Kartikeya (Sentinel)";
-            case "healer" -> "Lakshmi (Healer)";
-            case "protector" -> "Durga (Protector)";
-            case "purifier" -> "Kali (Purifier)";
-            case "nurturer" -> "Parvati (Nurturer)";
+            case "coder" -> AgentRoleEnum.CODER.definition().displayName();
+            case "debugger" -> AgentRoleEnum.DEBUGGER.definition().displayName();
+            case "researcher" -> AgentRoleEnum.RESEARCHER.definition().displayName();
+            case "architect" -> AgentRoleEnum.ARCHITECT.definition().displayName();
+            case "coordinator" -> AgentRoleEnum.COORDINATOR.definition().displayName();
+            case "synthesizer" -> AgentRoleEnum.SYNTHESIZER.definition().displayName();
+            case "optimizer" -> AgentRoleEnum.OPTIMIZER.definition().displayName();
+            case "sentinel" -> AgentRoleEnum.SENTINEL.definition().displayName();
+            case "healer" -> AgentRoleEnum.HEALER.definition().displayName();
+            case "protector" -> AgentRoleEnum.PROTECTOR.definition().displayName();
+            case "purifier" -> AgentRoleEnum.PURIFIER.definition().displayName();
+            case "nurturer" -> AgentRoleEnum.NURTURER.definition().displayName();
             default -> role;
         };
     }

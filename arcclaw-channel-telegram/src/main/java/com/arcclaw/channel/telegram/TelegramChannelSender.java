@@ -29,6 +29,8 @@ import org.jboss.logging.Logger;
 @ApplicationScoped
 public class TelegramChannelSender implements ChannelSender {
 
+    private static final String TELEGRAM_BOTS_ENDPOINT = "telegram:bots";
+
     private final ProducerTemplate producerTemplate;
     private final TelegramMarkdownV2Renderer renderer;
     private static final Logger log = Logger.getLogger(TelegramChannelSender.class);
@@ -126,7 +128,7 @@ public class TelegramChannelSender implements ChannelSender {
         msg.setParseMode("MarkdownV2");
         msg.setReplyMarkup(markup);
 
-        producerTemplate.sendBodyAndHeader("telegram:bots", msg, TelegramConstants.TELEGRAM_CHAT_ID, chatId);
+        producerTemplate.sendBodyAndHeader(TELEGRAM_BOTS_ENDPOINT, msg, TelegramConstants.TELEGRAM_CHAT_ID, chatId);
     }
 
     /**
@@ -148,7 +150,8 @@ public class TelegramChannelSender implements ChannelSender {
                     .text(newText != null ? newText : "")
                     .replyMarkup(markup != null ? markup : new InlineKeyboardMarkup())
                     .build();
-            producerTemplate.sendBodyAndHeader("telegram:bots", edit, TelegramConstants.TELEGRAM_CHAT_ID, chatId);
+            producerTemplate.sendBodyAndHeader(
+                    TELEGRAM_BOTS_ENDPOINT, edit, TelegramConstants.TELEGRAM_CHAT_ID, chatId);
             log.debugf("editMessage sent for chatId=%s msgId=%d", chatId, messageId);
         } catch (Exception e) {
             log.warnf("editMessage failed for chatId=%s msgId=%d: %s", chatId, messageId, LogUtil.rootMessage(e));
@@ -203,14 +206,16 @@ public class TelegramChannelSender implements ChannelSender {
             return;
         }
         if (text.length() <= maxLength) {
-            producerTemplate.sendBodyAndHeader("telegram:bots", text, TelegramConstants.TELEGRAM_CHAT_ID, chatId);
+            producerTemplate.sendBodyAndHeader(
+                    TELEGRAM_BOTS_ENDPOINT, text, TelegramConstants.TELEGRAM_CHAT_ID, chatId);
         } else {
             List<String> chunks = splitAtWordBoundary(text, maxLength);
             log.infof(
                     "TELEGRAM-SEND splitting %d-char response into %d chunks for %s",
                     text.length(), chunks.size(), chatId);
             for (String chunk : chunks) {
-                producerTemplate.sendBodyAndHeader("telegram:bots", chunk, TelegramConstants.TELEGRAM_CHAT_ID, chatId);
+                producerTemplate.sendBodyAndHeader(
+                        TELEGRAM_BOTS_ENDPOINT, chunk, TelegramConstants.TELEGRAM_CHAT_ID, chatId);
             }
         }
     }

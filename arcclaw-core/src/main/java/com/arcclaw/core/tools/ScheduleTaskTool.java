@@ -74,6 +74,11 @@ public class ScheduleTaskTool implements AgentTool {
     private static final Logger log = Logger.getLogger(ScheduleTaskTool.class);
 
     public static final String TOOL_NAME = ToolCapability.SCHEDULE_TASK.toolName();
+    private static final String PARAM_GOAL = "goal";
+    private static final String PARAM_CRON_EXPRESSION = "cronExpression";
+    private static final String PARAM_TIMEZONE = "timezone";
+    private static final String PARAM_RUN_ONCE = "runOnce";
+    private static final String PARAM_CHANNEL = "channel";
 
     /**
      * Rejects vague goals with unresolved references (zero LLM cost - pure regex).
@@ -131,13 +136,13 @@ public class ScheduleTaskTool implements AgentTool {
     public JsonObjectSchema parametersSchema() {
         return JsonObjectSchema.builder()
                 .addProperty(
-                        "goal",
+                        PARAM_GOAL,
                         JsonStringSchema.builder()
                                 .description("Fully self-contained action for the future agent. "
                                         + "No pronouns, no time references, no re-scheduling instructions.")
                                 .build())
                 .addProperty(
-                        "cronExpression",
+                        PARAM_CRON_EXPRESSION,
                         JsonStringSchema.builder()
                                 .description("Required for recurring tasks (runOnce=false). "
                                         + "Provide a valid 5-field UNIX cron expression. "
@@ -146,14 +151,14 @@ public class ScheduleTaskTool implements AgentTool {
                                         + "Omit only for one-time tasks (runOnce=true).")
                                 .build())
                 .addProperty(
-                        "timezone",
+                        PARAM_TIMEZONE,
                         JsonStringSchema.builder()
                                 .description("IANA timezone for cron interpretation (default: UTC). "
                                         + "Example: 'Asia/Kolkata', 'America/New_York'. "
                                         + "Omit or use 'UTC' if unknown - do NOT pass an empty string.")
                                 .build())
                 .addProperty(
-                        "runOnce",
+                        PARAM_RUN_ONCE,
                         JsonAnyOfSchema.builder()
                                 .anyOf(
                                         JsonBooleanSchema.builder().build(),
@@ -170,7 +175,7 @@ public class ScheduleTaskTool implements AgentTool {
                                         + "Use 'coordinator' only if the task itself needs to schedule further tasks. "
                                         + "Default: 'researcher'.")
                                 .build())
-                .required("goal")
+                .required(PARAM_GOAL)
                 .build();
     }
 
@@ -181,7 +186,7 @@ public class ScheduleTaskTool implements AgentTool {
         ToolResponse validationError = validateExecutionContext(ctx);
         if (validationError != null) return validationError;
 
-        String goal = (String) params.get("goal");
+        String goal = (String) params.get(PARAM_GOAL);
         ZoneId zone = parseTimezone(params);
         boolean runOnce = parseRunOnce(params);
         if (!runOnce) {
@@ -191,7 +196,8 @@ public class ScheduleTaskTool implements AgentTool {
 
         String cronExpression = resolveCron(params);
         cronExpression = resolveCronOrDefault(cronExpression, ctx);
-        boolean cronFromJavaSide = (cronExpression != null && !cronExpression.equals(params.get("cronExpression")));
+        boolean cronFromJavaSide =
+                (cronExpression != null && !cronExpression.equals(params.get(PARAM_CRON_EXPRESSION)));
 
         if (cronFromJavaSide || "UTC".equals(ctx.suggestedCronSource())) {
             zone = ZoneId.of("UTC");
@@ -295,7 +301,7 @@ public class ScheduleTaskTool implements AgentTool {
     }
 
     private boolean parseRunOnce(Map<String, Object> params) {
-        Object runOnceRaw = params.get("runOnce");
+        Object runOnceRaw = params.get(PARAM_RUN_ONCE);
         return switch (runOnceRaw) {
             case Boolean b -> b;
             case String s -> Boolean.parseBoolean(s);
@@ -313,7 +319,7 @@ public class ScheduleTaskTool implements AgentTool {
     }
 
     private String resolveCron(Map<String, Object> params) {
-        String cronExpression = (String) params.get("cronExpression");
+        String cronExpression = (String) params.get(PARAM_CRON_EXPRESSION);
         if (cronExpression == null || cronExpression.isBlank()) {
             cronExpression = (String) params.get("cron");
         }
@@ -407,9 +413,9 @@ public class ScheduleTaskTool implements AgentTool {
      * a canonical IANA string, never an empty value.
      */
     private ZoneId parseTimezone(Map<String, Object> params) {
-        if (!params.containsKey("timezone")) return ZoneId.of("UTC");
+        if (!params.containsKey(PARAM_TIMEZONE)) return ZoneId.of("UTC");
 
-        String raw = String.valueOf(params.get("timezone")).strip();
+        String raw = String.valueOf(params.get(PARAM_TIMEZONE)).strip();
         if (raw.isEmpty() || "null".equalsIgnoreCase(raw)) return ZoneId.of("UTC");
 
         try {

@@ -44,6 +44,8 @@ import org.jboss.logging.Logger;
 public class RecallMemorySearchTool implements AgentTool {
 
     private static final Logger log = Logger.getLogger(RecallMemorySearchTool.class);
+    private static final String PARAM_QUERY = "query";
+    private static final String PARAM_SESSION_ID = "session_id";
 
     @Inject
     RecallMemoryStorePort recallStore;
@@ -67,14 +69,14 @@ public class RecallMemorySearchTool implements AgentTool {
     @Override
     public JsonObjectSchema parametersSchema() {
         return JsonObjectSchema.builder()
-                .addStringProperty("query", "Keywords or exact text to search for in conversation history")
+                .addStringProperty(PARAM_QUERY, "Keywords or exact text to search for in conversation history")
                 .addStringProperty(
-                        "session_id",
+                        PARAM_SESSION_ID,
                         "Session ID to scope search (default: current session). "
                                 + "Pass 'all' or '*' to search across all sessions for this user.")
                 .addBooleanProperty("include_summaries", "Include compaction summaries in results (default: false)")
                 .addIntegerProperty("limit", "Maximum results to return (default: 5)")
-                .required("query")
+                .required(PARAM_QUERY)
                 .build();
     }
 
@@ -95,7 +97,7 @@ public class RecallMemorySearchTool implements AgentTool {
 
     @Override
     public ToolResponse execute(ToolExecutionContext ctx, Map<String, Object> params) {
-        String query = (String) params.get("query");
+        String query = (String) params.get(PARAM_QUERY);
         if (query == null || query.isBlank()) {
             return ToolResponse.failure(400, "query parameter is required");
         }
@@ -107,10 +109,10 @@ public class RecallMemorySearchTool implements AgentTool {
 
         // Handle session_id: missing=current, null/"all"/"*"=cross-session, explicit value=specific session
         String sessionId;
-        if (!params.containsKey("session_id")) {
+        if (!params.containsKey(PARAM_SESSION_ID)) {
             sessionId = ctx.sessionId();
         } else {
-            String val = (String) params.get("session_id");
+            String val = (String) params.get(PARAM_SESSION_ID);
             if (val == null || "all".equalsIgnoreCase(val) || "*".equals(val)) {
                 sessionId = null;
             } else {

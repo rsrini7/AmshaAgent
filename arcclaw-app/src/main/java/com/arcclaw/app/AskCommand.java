@@ -16,6 +16,7 @@ import com.arcclaw.channel.api.ChannelUser;
 import com.arcclaw.core.agent.loop.AgentLoop;
 import com.arcclaw.core.agent.reasoning.ReasoningEngine;
 import com.arcclaw.core.agent.result.AgentResult;
+import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.lifecycle.WorkspaceManager;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
@@ -41,7 +42,7 @@ public class AskCommand implements Runnable {
 
     @Option(
             names = {"--role", "-r"},
-            defaultValue = "coordinator",
+            defaultValue = AgentRoleEnum.COORDINATOR_ID,
             description = "Agent role (coordinator | coder | researcher | debugger)")
     String role;
 

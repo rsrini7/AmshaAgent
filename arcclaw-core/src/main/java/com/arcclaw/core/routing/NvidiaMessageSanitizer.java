@@ -22,6 +22,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import com.arcclaw.common.util.LogUtil;
+import com.arcclaw.core.agent.reasoning.ToolCallJsonKeys;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -116,11 +117,14 @@ public class NvidiaMessageSanitizer implements ChatModel {
                     if (root.isArray()) {
                         for (JsonNode node : root) {
                             requests.add(ToolExecutionRequest.builder()
-                                    .name(node.path("name").asText())
+                                    .name(node.path(ToolCallJsonKeys.NAME).asText())
                                     .arguments(
-                                            node.path("arguments").isObject()
-                                                    ? node.path("arguments").toString()
-                                                    : node.path("arguments").asText("{}"))
+                                            node.path(ToolCallJsonKeys.ARGUMENTS)
+                                                            .isObject()
+                                                    ? node.path(ToolCallJsonKeys.ARGUMENTS)
+                                                            .toString()
+                                                    : node.path(ToolCallJsonKeys.ARGUMENTS)
+                                                            .asText(ToolCallJsonKeys.EMPTY_JSON))
                                     .build());
                         }
                     }

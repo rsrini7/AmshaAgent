@@ -11,6 +11,7 @@ import java.util.Map;
 import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.core.agent.reasoning.ParallelToolCall;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
+import com.arcclaw.core.agent.reasoning.ToolCallJsonKeys;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.agent.sse.AgentSseService;
 import com.arcclaw.core.agent.sse.HitlEventType;
@@ -175,7 +176,7 @@ public class ApprovalCheckpointManager {
                         .map(ParallelToolCall::toolName)
                         .distinct()
                         .reduce((a, b) -> a + "|" + b)
-                        .orElse("batch");
+                        .orElse(ToolCallJsonKeys.BATCH);
 
         String originalBatchJson = "[]";
         Map<String, ToolDecision> decisions = new LinkedHashMap<>();
@@ -258,10 +259,10 @@ public class ApprovalCheckpointManager {
                         .map(ParallelToolCall::toolName)
                         .distinct()
                         .reduce((a, b) -> a + "|" + b)
-                        .orElse("batch");
+                        .orElse(ToolCallJsonKeys.BATCH);
 
         String originalBatchJson = "[]";
-        String preExecutedJson = "{}";
+        String preExecutedJson = ToolCallJsonKeys.EMPTY_JSON;
         Map<String, ToolDecision> decisions = new LinkedHashMap<>();
 
         try {
@@ -319,8 +320,8 @@ public class ApprovalCheckpointManager {
                         null,
                         Instant.now()));
 
-        ApprovalFrame frame =
-                new ApprovalFrame(compositeName, Map.of("batch", originalBatchJson), ApprovalFrame.RiskLevel.MEDIUM);
+        ApprovalFrame frame = new ApprovalFrame(
+                compositeName, Map.of(ToolCallJsonKeys.BATCH, originalBatchJson), ApprovalFrame.RiskLevel.MEDIUM);
         return AgentResult.awaitingApproval(frame, sessionId, List.copyOf(history));
     }
 }

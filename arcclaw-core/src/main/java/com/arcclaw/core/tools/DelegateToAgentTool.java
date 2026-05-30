@@ -56,6 +56,8 @@ import io.opentelemetry.context.Context;
 public class DelegateToAgentTool implements AgentTool {
 
     private static final Logger log = Logger.getLogger(DelegateToAgentTool.class);
+    private static final String PARAM_AGENT = "agent";
+    private static final String PARAM_GOAL = "goal";
 
     @Inject
     ReasoningEngine reasoningEngine;
@@ -99,17 +101,17 @@ public class DelegateToAgentTool implements AgentTool {
     public JsonObjectSchema parametersSchema() {
         return JsonObjectSchema.builder()
                 .addProperty(
-                        "agent",
+                        PARAM_AGENT,
                         JsonStringSchema.builder()
                                 .description(
                                         "The name of the specialist sub-agent (e.g., shiva, brahma, saraswati, brihaspati, dattatreya, ganesha, kartikeya, lakshmi, durga, kali, parvati, coordinator).")
                                 .build())
                 .addProperty(
-                        "goal",
+                        PARAM_GOAL,
                         JsonStringSchema.builder()
                                 .description("The self-contained task description for the sub-agent.")
                                 .build())
-                .required("agent", "goal")
+                .required(PARAM_AGENT, PARAM_GOAL)
                 .build();
     }
 
@@ -127,8 +129,8 @@ public class DelegateToAgentTool implements AgentTool {
         String userId = ctx.userId();
         String chatId = ctx.chatId();
 
-        Object agentObj = params.get("agent");
-        Object goalObj = params.get("goal");
+        Object agentObj = params.get(PARAM_AGENT);
+        Object goalObj = params.get(PARAM_GOAL);
         String delegatableList = getDelegatableAgentList();
 
         if (agentObj == null || String.valueOf(agentObj).isBlank()) {

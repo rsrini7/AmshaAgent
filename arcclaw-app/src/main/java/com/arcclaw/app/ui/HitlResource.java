@@ -27,6 +27,7 @@ import com.arcclaw.app.ui.dto.CheckpointApprovalRequest;
 import com.arcclaw.app.ui.dto.CheckpointApprovalResponse;
 import com.arcclaw.app.ui.dto.PageDto;
 import com.arcclaw.app.ui.dto.PendingApprovalDto;
+import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.agent.sse.AgentSseService;
 import com.arcclaw.core.api.dto.ArcClawErrorResponse;
 import com.arcclaw.core.audit.AuditService;
@@ -45,6 +46,10 @@ import io.smallrye.mutiny.Multi;
 @Path("hitl")
 @Produces(MediaType.APPLICATION_JSON)
 public class HitlResource {
+
+    private static final String HITL_AUDIT_PREFIX = "hitl-";
+    private static final String AUDIT_TASK_ID_PREFIX = "taskId=";
+    private static final String COORDINATOR_ROLE = AgentRoleEnum.COORDINATOR.id();
 
     @Inject
     Instance<HitlService> hitlService;
@@ -157,11 +162,11 @@ public class HitlResource {
                     ? securityContext.getUserPrincipal().getName()
                     : "anonymous";
             auditService.recordMandatory(
-                    "hitl-" + taskId,
+                    HITL_AUDIT_PREFIX + taskId,
                     userId,
-                    "coordinator",
+                    COORDINATOR_ROLE,
                     SecurityEventType.APPROVAL_GRANTED,
-                    "taskId=" + taskId + " tool=" + toolName + " via=REST");
+                    AUDIT_TASK_ID_PREFIX + taskId + " tool=" + toolName + " via=REST");
             Response response = Response.ok(new CheckpointApprovalResponse("approved", taskId, toolName, reason))
                     .build();
             if (idempotencyKey != null && !idempotencyKey.isBlank()) {
@@ -203,11 +208,11 @@ public class HitlResource {
                     ? securityContext.getUserPrincipal().getName()
                     : "anonymous";
             auditService.recordMandatory(
-                    "hitl-" + taskId,
+                    HITL_AUDIT_PREFIX + taskId,
                     userId,
-                    "coordinator",
+                    COORDINATOR_ROLE,
                     SecurityEventType.APPROVAL_DENIED,
-                    "taskId=" + taskId + " tool=" + toolName + " via=REST");
+                    AUDIT_TASK_ID_PREFIX + taskId + " tool=" + toolName + " via=REST");
             Response response = Response.ok(new CheckpointApprovalResponse("rejected", taskId, toolName, reason))
                     .build();
             if (idempotencyKey != null && !idempotencyKey.isBlank()) {

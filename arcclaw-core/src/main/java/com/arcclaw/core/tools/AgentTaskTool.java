@@ -34,6 +34,12 @@ public class AgentTaskTool implements AgentTool {
     @Inject
     TaskManager taskManager;
 
+    private static final String PARAM_ACTION = "action";
+    private static final String PARAM_NAME = "name";
+    private static final String PARAM_DESCRIPTION = "description";
+    private static final String PARAM_TASK_ID = "taskId";
+    private static final String PARAM_NEW_STATUS = "newStatus";
+
     @Inject
     AuditService auditService;
 
@@ -74,20 +80,22 @@ public class AgentTaskTool implements AgentTool {
     public JsonObjectSchema parametersSchema() {
         return JsonObjectSchema.builder()
                 .addStringProperty(
-                        "action", "Operation to perform: create, list, list_active, get, transition, update, delete")
-                .addStringProperty("name", "Task name (required for create)")
-                .addStringProperty("description", "Task description / markdown body")
-                .addStringProperty("taskId", "Task file id (required for get/transition/update/delete)")
+                        PARAM_ACTION,
+                        "Operation to perform: create, list, list_active, get, transition, update, delete")
+                .addStringProperty(PARAM_NAME, "Task name (required for create)")
+                .addStringProperty(PARAM_DESCRIPTION, "Task description / markdown body")
+                .addStringProperty(PARAM_TASK_ID, "Task file id (required for get/transition/update/delete)")
                 .addStringProperty(
-                        "newStatus",
+                        PARAM_NEW_STATUS,
                         "New status for transition: todo, in_progress, completed, awaiting_human_input, cancelled")
-                .required("action")
+                .required(PARAM_ACTION)
                 .build();
     }
 
     @Override
     public ToolResponse execute(ToolExecutionContext ctx, Map<String, Object> params) {
-        String action = params.getOrDefault("action", "list").toString().trim().toLowerCase();
+        String action =
+                params.getOrDefault(PARAM_ACTION, "list").toString().trim().toLowerCase();
 
         return switch (action) {
             case "create" -> doCreate(ctx, params);
@@ -102,11 +110,11 @@ public class AgentTaskTool implements AgentTool {
     }
 
     private ToolResponse doCreate(ToolExecutionContext ctx, Map<String, Object> params) {
-        String name = (String) params.get("name");
+        String name = (String) params.get(PARAM_NAME);
         if (name == null || name.isBlank()) {
             return ToolResponse.failure(400, "Parameter 'name' is required for create.");
         }
-        String description = (String) params.getOrDefault("description", "");
+        String description = (String) params.getOrDefault(PARAM_DESCRIPTION, "");
         TaskFile task = taskManager.createTask(name.trim(), description);
         auditService.record(
                 ctx.sessionId(),
@@ -134,7 +142,7 @@ public class AgentTaskTool implements AgentTool {
     }
 
     private ToolResponse doGet(Map<String, Object> params) {
-        String id = (String) params.get("taskId");
+        String id = (String) params.get(PARAM_TASK_ID);
         if (id == null || id.isBlank()) {
             return ToolResponse.failure(400, "Parameter 'taskId' is required for get.");
         }
@@ -148,8 +156,8 @@ public class AgentTaskTool implements AgentTool {
     }
 
     private ToolResponse doTransition(ToolExecutionContext ctx, Map<String, Object> params) {
-        String id = (String) params.get("taskId");
-        String statusStr = (String) params.get("newStatus");
+        String id = (String) params.get(PARAM_TASK_ID);
+        String statusStr = (String) params.get(PARAM_NEW_STATUS);
         if (id == null || id.isBlank()) {
             return ToolResponse.failure(400, "Parameter 'taskId' is required for transition.");
         }
@@ -174,8 +182,8 @@ public class AgentTaskTool implements AgentTool {
     }
 
     private ToolResponse doUpdate(ToolExecutionContext ctx, Map<String, Object> params) {
-        String id = (String) params.get("taskId");
-        String body = (String) params.get("description");
+        String id = (String) params.get(PARAM_TASK_ID);
+        String body = (String) params.get(PARAM_DESCRIPTION);
         if (id == null || id.isBlank()) {
             return ToolResponse.failure(400, "Parameter 'taskId' is required for update.");
         }
@@ -193,7 +201,7 @@ public class AgentTaskTool implements AgentTool {
     }
 
     private ToolResponse doDelete(ToolExecutionContext ctx, Map<String, Object> params) {
-        String id = (String) params.get("taskId");
+        String id = (String) params.get(PARAM_TASK_ID);
         if (id == null || id.isBlank()) {
             return ToolResponse.failure(400, "Parameter 'taskId' is required for delete.");
         }

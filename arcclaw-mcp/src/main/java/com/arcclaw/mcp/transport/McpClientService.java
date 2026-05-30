@@ -52,6 +52,9 @@ import io.smallrye.common.annotation.Identifier;
 public class McpClientService {
 
     private static final Logger log = Logger.getLogger(McpClientService.class);
+    private static final String METRIC_MCP_LOAD_FAILURE = "arcclaw.mcp.tool.load.failure";
+    private static final String TAG_SERVER = "server";
+    private static final String TAG_PHASE = "phase";
 
     private final ConcurrentHashMap<String, ReentrantLock> stdioLocks = new ConcurrentHashMap<>();
 
@@ -145,7 +148,7 @@ public class McpClientService {
             if (initResp.statusCode() != 200) {
                 if (meterRegistry != null) {
                     meterRegistry
-                            .counter("arcclaw.mcp.tool.load.failure", "server", serverName, "phase", "initialize")
+                            .counter(METRIC_MCP_LOAD_FAILURE, TAG_SERVER, serverName, TAG_PHASE, "initialize")
                             .increment();
                 }
                 throw new McpConnectionException(
@@ -161,7 +164,7 @@ public class McpClientService {
             if (toolsResp.statusCode() != 200) {
                 if (meterRegistry != null) {
                     meterRegistry
-                            .counter("arcclaw.mcp.tool.load.failure", "server", serverName, "phase", "list")
+                            .counter(METRIC_MCP_LOAD_FAILURE, TAG_SERVER, serverName, TAG_PHASE, "list")
                             .increment();
                 }
                 throw new McpConnectionException(
@@ -182,7 +185,7 @@ public class McpClientService {
         } catch (Exception e) {
             if (meterRegistry != null) {
                 meterRegistry
-                        .counter("arcclaw.mcp.tool.load.failure", "server", serverName, "phase", "connect_exception")
+                        .counter(METRIC_MCP_LOAD_FAILURE, TAG_SERVER, serverName, TAG_PHASE, "connect_exception")
                         .increment();
             }
             if (e instanceof InterruptedException) Thread.currentThread().interrupt();
@@ -233,7 +236,7 @@ public class McpClientService {
         } catch (Exception e) {
             if (meterRegistry != null) {
                 meterRegistry
-                        .counter("arcclaw.mcp.tool.load.failure", "server", serverName, "phase", "stdio_connect")
+                        .counter(METRIC_MCP_LOAD_FAILURE, TAG_SERVER, serverName, TAG_PHASE, "stdio_connect")
                         .increment();
             }
             if (e instanceof InterruptedException) Thread.currentThread().interrupt();
@@ -260,7 +263,7 @@ public class McpClientService {
     @CircuitBreaker(requestVolumeThreshold = 10, failureRatio = 0.5, delay = 5000)
     public String invoke(String serverName, String toolName, String paramsJson) {
         var timer = Timer.builder("arcclaw.mcp.tool.invocation")
-                .tag("server", serverName)
+                .tag(TAG_SERVER, serverName)
                 .tag("tool", toolName);
         var sample = Timer.start(meterRegistry);
         String exceptionClass = "none";

@@ -16,6 +16,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 import com.arcclaw.common.util.LogUtil;
+import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.ComplianceViolationException;
@@ -122,7 +123,9 @@ public class ToolRegistry {
                 WorkspaceContext.SESSION_ID.isBound() ? WorkspaceContext.SESSION_ID.get() : "system",
                 WorkspaceContext.getUserIdOrUnknown(),
                 WorkspaceContext.CHAT_ID.isBound() ? WorkspaceContext.CHAT_ID.get() : "system",
-                WorkspaceContext.AGENT_ROLE.isBound() ? WorkspaceContext.AGENT_ROLE.get() : "coordinator",
+                WorkspaceContext.AGENT_ROLE.isBound()
+                        ? WorkspaceContext.AGENT_ROLE.get()
+                        : AgentRoleEnum.COORDINATOR.id(),
                 WorkspaceContext.AUTONOMY.isBound() ? WorkspaceContext.AUTONOMY.get() : AutonomyLevel.SUPERVISED,
                 Span.current().getSpanContext().getTraceId(),
                 WorkspaceContext.CHANNEL_TYPE.isBound() ? WorkspaceContext.CHANNEL_TYPE.get() : null,

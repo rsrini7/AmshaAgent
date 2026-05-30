@@ -18,6 +18,7 @@ import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.agent.reasoning.ReasoningEngine;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.agent.reasoning.StructuredOutputMode;
+import com.arcclaw.core.agent.reasoning.ToolCallJsonKeys;
 import com.arcclaw.core.agent.reasoning.error.LlmAuthenticationException;
 import com.arcclaw.core.agent.reasoning.error.LlmContentFilterException;
 import com.arcclaw.core.agent.reasoning.error.LlmExceptionClassifier;
@@ -123,8 +124,11 @@ public class EngineStepHandler {
             if (step != null) {
                 boolean isBlankFinish = step instanceof ReasoningStep.FinishStep finish
                         && (finish.actionInput() == null
-                                || finish.actionInput().get("answer") == null
-                                || finish.actionInput().get("answer").toString().isBlank());
+                                || finish.actionInput().get(ToolCallJsonKeys.ANSWER) == null
+                                || finish.actionInput()
+                                        .get(ToolCallJsonKeys.ANSWER)
+                                        .toString()
+                                        .isBlank());
 
                 if (!(step instanceof ReasoningStep.ObservationStep)
                         && !step.isFastPath()
@@ -138,7 +142,7 @@ public class EngineStepHandler {
 
                 if (step instanceof ReasoningStep.FinishStep finish) {
                     String answer = finish.actionInput() != null
-                            ? String.valueOf(finish.actionInput().get("answer"))
+                            ? String.valueOf(finish.actionInput().get(ToolCallJsonKeys.ANSWER))
                             : "";
                     if (RawJsonGuard.looksLikeRawToolJson(answer)) {
                         return StepDecision.retryEngine(hintBuilder.buildRawJsonInAnswerHint(), llmSchemaErrorCount);

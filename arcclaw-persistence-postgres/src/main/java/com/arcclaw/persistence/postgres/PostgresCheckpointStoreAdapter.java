@@ -10,6 +10,7 @@ import java.util.Map;
 import java.util.Optional;
 
 import com.arcclaw.common.util.LogUtil;
+import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.ToolDecision;
 import com.arcclaw.persistence.api.CheckpointDto;
 import com.arcclaw.persistence.api.CheckpointStorePort;
@@ -68,8 +69,10 @@ public class PostgresCheckpointStoreAdapter implements CheckpointStorePort {
                     : dao.findAnyBySessionAndRole(checkpointDto.sessionId(), checkpointDto.agentRole());
             CheckpointDto toSave;
             if (existing.isPresent()
-                    && "AWAITING_APPROVAL".equals(checkpointDto.status())
-                    && "AWAITING_APPROVAL".equals(existing.get().status())) {
+                    && CheckpointStatus.AWAITING_APPROVAL.name().equals(checkpointDto.status())
+                    && CheckpointStatus.AWAITING_APPROVAL
+                            .name()
+                            .equals(existing.get().status())) {
                 toSave = mergeBatchDecisions(existing.get(), checkpointDto);
             } else {
                 toSave = checkpointDto;
@@ -97,9 +100,10 @@ public class PostgresCheckpointStoreAdapter implements CheckpointStorePort {
             Optional<CheckpointDto> existing = dao.findAnyBySessionAndRole(sessionId, agentRole);
             boolean created = existing.isEmpty();
             Instant now = Instant.now();
-            String status = existing.map(CheckpointDto::status).orElse("IN_PROGRESS");
-            if (!"AWAITING_APPROVAL".equals(status) && !"RESUMING".equals(status)) {
-                status = "IN_PROGRESS";
+            String status = existing.map(CheckpointDto::status).orElse(CheckpointStatus.IN_PROGRESS.name());
+            if (!CheckpointStatus.AWAITING_APPROVAL.name().equals(status)
+                    && !CheckpointStatus.RESUMING.name().equals(status)) {
+                status = CheckpointStatus.IN_PROGRESS.name();
             }
             CheckpointDto dto = new CheckpointDto(
                     null,
@@ -363,7 +367,7 @@ public class PostgresCheckpointStoreAdapter implements CheckpointStorePort {
                 return false;
             }
             CheckpointDto dto = cp.get();
-            if (!"AWAITING_APPROVAL".equals(dto.status())) {
+            if (!CheckpointStatus.AWAITING_APPROVAL.name().equals(dto.status())) {
                 log.warnf(
                         "[BatchOps] Checkpoint status is '%s' instead of AWAITING_APPROVAL for session=%s",
                         dto.status(), sessionId);

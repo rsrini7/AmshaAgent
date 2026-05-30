@@ -6,6 +6,8 @@ import java.util.List;
 import java.util.Optional;
 import java.util.regex.Pattern;
 
+import com.arcclaw.core.agent.role.AgentRoleEnum;
+
 @ApplicationScoped
 public class DefaultRoutingProvider implements IntentRoutingProvider {
 
@@ -30,7 +32,7 @@ public class DefaultRoutingProvider implements IntentRoutingProvider {
 
     @Override
     public Optional<String> fastPathRole() {
-        return Optional.of("coordinator");
+        return Optional.of(AgentRoleEnum.COORDINATOR.id());
     }
 
     @Override

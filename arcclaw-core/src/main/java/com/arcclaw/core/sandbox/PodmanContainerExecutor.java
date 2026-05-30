@@ -32,6 +32,8 @@ import io.quarkus.runtime.StartupEvent;
 @ApplicationScoped
 public class PodmanContainerExecutor {
 
+    private static final String PODMAN_ENV_FLAG = "--env";
+
     private static final Logger log = Logger.getLogger(PodmanContainerExecutor.class);
 
     private static volatile boolean podmanAvailable = false;
@@ -170,19 +172,19 @@ public class PodmanContainerExecutor {
                 "-v",
                 workspaceRoot.toAbsolutePath() + ":/workspace:ro",
                 "--user=" + toolRunnerUser + ":" + toolRunnerUser,
-                "--env",
+                PODMAN_ENV_FLAG,
                 "GOCACHE=/tmp/go-cache",
-                "--env",
+                PODMAN_ENV_FLAG,
                 "GOPATH=/tmp/go-path",
-                "--env",
+                PODMAN_ENV_FLAG,
                 "GOMAXPROCS=1",
-                "--env",
+                PODMAN_ENV_FLAG,
                 "JAVA_TOOL_OPTIONS=-Djava.io.tmpdir=/tmp",
-                "--env",
+                PODMAN_ENV_FLAG,
                 "GH_CONFIG_DIR=/tmp/gh-config",
-                "--env",
+                PODMAN_ENV_FLAG,
                 "GH_NO_UPDATE_NOTIFIER=1",
-                "--env",
+                PODMAN_ENV_FLAG,
                 "GH_PROMPT_DISABLED=1",
                 "--pids-limit=" + CONTAINER_PIDS_LIMIT,
                 "--ulimit=nofile=256:256"));

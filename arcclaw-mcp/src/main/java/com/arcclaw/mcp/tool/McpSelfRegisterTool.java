@@ -36,6 +36,8 @@ import com.arcclaw.mcp.transport.McpClientService;
 public class McpSelfRegisterTool implements AgentTool {
 
     private static final Pattern SAFE_NAME_PATTERN = Pattern.compile("^[a-zA-Z0-9_-]+$");
+    private static final String PARAM_NAME = "name";
+    private static final String PARAM_TRANSPORT = "transport";
 
     @Inject
     McpClientService mcpClientService;
@@ -74,14 +76,17 @@ public class McpSelfRegisterTool implements AgentTool {
     @Override
     public JsonObjectSchema parametersSchema() {
         return JsonObjectSchema.builder()
-                .addStringProperty("name", "The unique name for this MCP server (alphanumeric, underscores, hyphens).")
+                .addStringProperty(
+                        PARAM_NAME, "The unique name for this MCP server (alphanumeric, underscores, hyphens).")
                 .addEnumProperty(
-                        "transport", List.of("http", "stdio"), "Transport type: http (SSE) or stdio (local process).")
+                        PARAM_TRANSPORT,
+                        List.of("http", "stdio"),
+                        "Transport type: http (SSE) or stdio (local process).")
                 .addStringProperty("url", "The URL for HTTP/SSE transport (e.g., http://localhost:3000/mcp).")
                 .addStringProperty("command", "The command to run for STDIO transport (e.g., npx, python, docker).")
                 .addStringProperty("args", "Comma-separated arguments for the command.")
                 .addStringProperty("env", "Environment variables (KEY=VALUE lines).")
-                .required("name", "transport")
+                .required(PARAM_NAME, PARAM_TRANSPORT)
                 .build();
     }
 
@@ -97,12 +102,12 @@ public class McpSelfRegisterTool implements AgentTool {
             return ToolResponse.failure(403, "Security violation: tenant context not bound.");
         }
 
-        String name = (String) params.get("name");
+        String name = (String) params.get(PARAM_NAME);
         if (name == null || !SAFE_NAME_PATTERN.matcher(name).matches()) {
             return ToolResponse.failure(400, "Invalid name. Must match " + SAFE_NAME_PATTERN.pattern());
         }
 
-        String transportStr = (String) params.get("transport");
+        String transportStr = (String) params.get(PARAM_TRANSPORT);
 
         try {
             if ("http".equalsIgnoreCase(transportStr)) {

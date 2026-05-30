@@ -18,6 +18,7 @@ import jakarta.ws.rs.core.SecurityContext;
 import java.util.List;
 import java.util.Map;
 
+import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.api.dto.ArcClawErrorResponse;
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
@@ -36,6 +37,9 @@ import org.jboss.logging.Logger;
 public class CronResource {
 
     private static final Logger log = Logger.getLogger(CronResource.class);
+    private static final String CRON_AUDIT_PREFIX = "cron-";
+    private static final String AUDIT_CRON_ID_PREFIX = "cronId=";
+    private static final String COORDINATOR_ROLE = AgentRoleEnum.COORDINATOR.id();
 
     @Inject
     CronStorePort cronStore;
@@ -96,7 +100,11 @@ public class CronResource {
         }
         log.infof("Deleted cron job %s by user %s", id, userId);
         auditService.recordMandatory(
-                "cron-" + id, userId, "coordinator", SecurityEventType.CRONDELETED, "cronId=" + id + " via=REST");
+                CRON_AUDIT_PREFIX + id,
+                userId,
+                COORDINATOR_ROLE,
+                SecurityEventType.CRONDELETED,
+                AUDIT_CRON_ID_PREFIX + id + " via=REST");
         return Response.ok(Map.of("deleted", true, "id", id)).build();
     }
 
@@ -121,7 +129,11 @@ public class CronResource {
                     cronStore.markCompleted(cron.id(), cron.lastFireTime());
                     log.infof("Paused cron job %s", id);
                     auditService.recordMandatory(
-                            "cron-" + id, userId, "coordinator", SecurityEventType.CRON_PAUSED, "cronId=" + id);
+                            CRON_AUDIT_PREFIX + id,
+                            userId,
+                            COORDINATOR_ROLE,
+                            SecurityEventType.CRON_PAUSED,
+                            AUDIT_CRON_ID_PREFIX + id);
                     return Response.ok(Map.of("paused", true, "id", id)).build();
                 })
                 .orElse(Response.status(Response.Status.NOT_FOUND)
@@ -169,7 +181,11 @@ public class CronResource {
                     cronStore.save(reactivated);
                     log.infof("Resumed cron job %s", id);
                     auditService.recordMandatory(
-                            "cron-" + id, userId, "coordinator", SecurityEventType.CRON_RESUMED, "cronId=" + id);
+                            CRON_AUDIT_PREFIX + id,
+                            userId,
+                            COORDINATOR_ROLE,
+                            SecurityEventType.CRON_RESUMED,
+                            AUDIT_CRON_ID_PREFIX + id);
                     return Response.ok(Map.of("resumed", true, "id", id)).build();
                 })
                 .orElse(Response.status(Response.Status.NOT_FOUND)
@@ -199,11 +215,11 @@ public class CronResource {
                     cronStore.releaseClaimToActive(id);
                     log.infof("Force-triggered cron job %s", id);
                     auditService.recordMandatory(
-                            "cron-" + id,
+                            CRON_AUDIT_PREFIX + id,
                             userId,
-                            "coordinator",
+                            COORDINATOR_ROLE,
                             SecurityEventType.CRON_FORCE_TRIGGERED,
-                            "cronId=" + id);
+                            AUDIT_CRON_ID_PREFIX + id);
                     return Response.ok(Map.of("triggered", true, "id", id)).build();
                 })
                 .orElse(Response.status(Response.Status.NOT_FOUND)

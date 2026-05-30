@@ -24,6 +24,10 @@ import com.arcclaw.persistence.api.CronStorePort;
 @ReflexPriority(500)
 public class DeleteCronReflex implements AgentReflex {
 
+    private static final String PREFIX_DELETECRON = "deletecron";
+    private static final String PREFIX_SLASH_DELETECRON = "/deletecron";
+    private static final String PREFIX_CRON_DELETE = "/cron delete";
+
     @Inject
     CronStorePort cronStore;
 
@@ -34,7 +38,9 @@ public class DeleteCronReflex implements AgentReflex {
     public boolean matches(String input) {
         if (input == null) return false;
         String t = input.trim().toLowerCase();
-        return t.startsWith("deletecron") || t.startsWith("/deletecron") || t.startsWith("/cron delete");
+        return t.startsWith(PREFIX_DELETECRON)
+                || t.startsWith(PREFIX_SLASH_DELETECRON)
+                || t.startsWith(PREFIX_CRON_DELETE);
     }
 
     @Override
@@ -50,9 +56,9 @@ public class DeleteCronReflex implements AgentReflex {
         String normalized = input.trim();
         String lower = normalized.toLowerCase();
         int prefixLen;
-        if (lower.startsWith("/cron delete")) prefixLen = "/cron delete".length();
-        else if (lower.startsWith("/deletecron")) prefixLen = "/deletecron".length();
-        else prefixLen = "deletecron".length();
+        if (lower.startsWith(PREFIX_CRON_DELETE)) prefixLen = PREFIX_CRON_DELETE.length();
+        else if (lower.startsWith(PREFIX_SLASH_DELETECRON)) prefixLen = PREFIX_SLASH_DELETECRON.length();
+        else prefixLen = PREFIX_DELETECRON.length();
 
         String cronId = normalized.substring(prefixLen).trim();
 

@@ -35,6 +35,7 @@ public class AgentFunctionProcessor {
 
     private static final DotName AGENT_FUNCTION = DotName.createSimple(AgentFunction.class.getName());
     private static final DotName JSON_PROPERTY = DotName.createSimple(JsonProperty.class.getName());
+    private static final String SCHEMA_PROPERTIES = "properties";
 
     private final ObjectMapper mapper = new ObjectMapper();
 
@@ -74,8 +75,8 @@ public class AgentFunctionProcessor {
             Set<String> processedTypes = new HashSet<>();
             buildSchema(index, returnType, schema, processedTypes, reflectiveClasses);
 
-            if (schema.has("properties")
-                    && !schema.get("properties").fieldNames().hasNext()) {
+            if (schema.has(SCHEMA_PROPERTIES)
+                    && !schema.get(SCHEMA_PROPERTIES).fieldNames().hasNext()) {
                 throw new IllegalStateException(
                         "Schema for " + schemaName + " has no properties. " + "recordComponents() returned empty for "
                                 + returnType.name() + ". Check Jandex index contains the return type.");

@@ -74,5 +74,5 @@ tool-contracts.json
 results*.json
 autotest/logs/
 
-
+.a5c/
 .scannerwork/

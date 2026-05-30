@@ -242,19 +242,19 @@ public class ChatHistoryAssembler {
             if (step.action() != null
                     && !step.action().equals(ReasoningStep.FINISH)
                     && !ReasoningStep.OBSERVE.equals(step.action())) {
-                String argsJson = "{}";
+                String argsJson = ToolCallJsonKeys.EMPTY_JSON;
                 try {
                     if (step.actionInput() != null) {
                         Map<String, Object> input = step.actionInput();
                         argsJson = (input.size() == 1
-                                        && input.containsKey("parameters")
-                                        && input.get("parameters") instanceof String)
-                                ? (String) input.get("parameters")
+                                        && input.containsKey(ToolCallJsonKeys.PARAMETERS)
+                                        && input.get(ToolCallJsonKeys.PARAMETERS) instanceof String)
+                                ? (String) input.get(ToolCallJsonKeys.PARAMETERS)
                                 : objectMapper.writeValueAsString(input);
                     }
                 } catch (JsonProcessingException e) {
                     log.warnf("Failed to serialize action input: %s", LogUtil.rootMessage(e));
-                    argsJson = "{}";
+                    argsJson = ToolCallJsonKeys.EMPTY_JSON;
                 }
 
                 String callId = "call_" + i;

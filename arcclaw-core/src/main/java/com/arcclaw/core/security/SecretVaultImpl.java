@@ -23,6 +23,8 @@ import io.opentelemetry.api.trace.StatusCode;
 @ApplicationScoped
 public class SecretVaultImpl implements SecretVault {
 
+    private static final String AUDIT_KEY_NAME_PREFIX = "keyName=";
+
     @Inject
     Argon2idKeyDerivation keyDerivation;
 
@@ -122,13 +124,13 @@ public class SecretVaultImpl implements SecretVault {
                         userId,
                         AgentSentinels.SYSTEM_ROLE,
                         SecurityEventType.VAULT_STORE,
-                        "keyName=" + keyName);
+                        AUDIT_KEY_NAME_PREFIX + keyName);
                 auditService.record(
                         sessionId,
                         userId,
                         AgentSentinels.SYSTEM_ROLE,
                         SecurityEventType.VAULT_ACCESS,
-                        "keyName=" + keyName + " op=STORE");
+                        AUDIT_KEY_NAME_PREFIX + keyName + " op=STORE");
             }
 
             if (span != null) span.setStatus(StatusCode.OK);
@@ -174,13 +176,13 @@ public class SecretVaultImpl implements SecretVault {
                             userId,
                             AgentSentinels.SYSTEM_ROLE,
                             SecurityEventType.VAULT_RETRIEVE_MISS,
-                            "keyName=" + keyName);
+                            AUDIT_KEY_NAME_PREFIX + keyName);
                     auditService.record(
                             sessionId,
                             userId,
                             AgentSentinels.SYSTEM_ROLE,
                             SecurityEventType.VAULT_ACCESS,
-                            "keyName=" + keyName + " op=RETRIEVE_MISS");
+                            AUDIT_KEY_NAME_PREFIX + keyName + " op=RETRIEVE_MISS");
                 }
                 if (span != null) {
                     span.setAttribute(AgentOTelConstants.ATTR_VAULT_FOUND, false);
@@ -199,13 +201,13 @@ public class SecretVaultImpl implements SecretVault {
                         userId,
                         AgentSentinels.SYSTEM_ROLE,
                         SecurityEventType.VAULT_RETRIEVE,
-                        "keyName=" + keyName);
+                        AUDIT_KEY_NAME_PREFIX + keyName);
                 auditService.record(
                         sessionId,
                         userId,
                         AgentSentinels.SYSTEM_ROLE,
                         SecurityEventType.VAULT_ACCESS,
-                        "keyName=" + keyName + " op=RETRIEVE");
+                        AUDIT_KEY_NAME_PREFIX + keyName + " op=RETRIEVE");
             }
             if (span != null) {
                 span.setAttribute("vault.found", true);

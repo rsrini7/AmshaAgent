@@ -24,6 +24,7 @@ import org.jboss.logging.Logger;
 
 /**
  * Agent tool for appending to a core memory block.
+ *
  * <p>
  * If the block exists, appends the new content separated by a newline.
  * If the block does not exist, creates it.
@@ -43,6 +44,8 @@ import org.jboss.logging.Logger;
 public class CoreMemoryAppendTool implements AgentTool {
 
     private static final Logger log = Logger.getLogger(CoreMemoryAppendTool.class);
+    private static final String PARAM_BLOCK_KEY = "block_key";
+    private static final String PARAM_CONTENT = "content";
 
     @Inject
     CoreMemoryService coreMemoryService;
@@ -67,10 +70,10 @@ public class CoreMemoryAppendTool implements AgentTool {
     public JsonObjectSchema parametersSchema() {
         return JsonObjectSchema.builder()
                 .addStringProperty(
-                        "block_key",
+                        PARAM_BLOCK_KEY,
                         "Block key to append to. One of: user_profile, active_task, constraints, project_context, preferences.")
-                .addStringProperty("content", "Content to append to the block.")
-                .required("block_key", "content")
+                .addStringProperty(PARAM_CONTENT, "Content to append to the block.")
+                .required(PARAM_BLOCK_KEY, PARAM_CONTENT)
                 .build();
     }
 
@@ -93,8 +96,8 @@ public class CoreMemoryAppendTool implements AgentTool {
     public ToolResponse execute(ToolExecutionContext ctx, Map<String, Object> params) {
         try {
             String userId = WorkspaceContext.getUserIdOrUnknown();
-            String blockKey = (String) params.get("block_key");
-            String content = (String) params.get("content");
+            String blockKey = (String) params.get(PARAM_BLOCK_KEY);
+            String content = (String) params.get(PARAM_CONTENT);
 
             if (blockKey == null || blockKey.isBlank()) {
                 return ToolResponse.failure(400, "'block_key' is required.");

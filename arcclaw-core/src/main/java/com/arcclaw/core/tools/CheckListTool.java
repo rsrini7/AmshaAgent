@@ -28,6 +28,11 @@ import com.arcclaw.core.security.ToolOperation;
         defaultRoles = {"coder", "debugger"})
 public class CheckListTool implements AgentTool {
 
+    private static final String PARAM_CHECKLIST = "checkList";
+    private static final String PARAM_ACTIVE_FORM = "activeForm";
+    private static final String PARAM_CONTENT = "content";
+    private static final String PARAM_STATUS = "status";
+
     @Inject
     Event<CheckListEvent> checkListEvents;
 
@@ -74,17 +79,17 @@ public class CheckListTool implements AgentTool {
         // Single parameter: "checkList" - an array of objects
         return JsonObjectSchema.builder()
                 .addProperty(
-                        "checkList",
+                        PARAM_CHECKLIST,
                         JsonArraySchema.builder()
                                 .items(JsonObjectSchema.builder()
-                                        .addStringProperty("content", "The item content/task description.")
-                                        .addEnumProperty("status", List.of("pending", "in_progress", "completed"))
+                                        .addStringProperty(PARAM_CONTENT, "The item content/task description.")
+                                        .addEnumProperty(PARAM_STATUS, List.of("pending", "in_progress", "completed"))
                                         .addStringProperty(
-                                                "activeForm", "The reference form/id associated with this step.")
-                                        .required("content", "status", "activeForm")
+                                                PARAM_ACTIVE_FORM, "The reference form/id associated with this step.")
+                                        .required(PARAM_CONTENT, PARAM_STATUS, PARAM_ACTIVE_FORM)
                                         .build())
                                 .build())
-                .required("checkList")
+                .required(PARAM_CHECKLIST)
                 .build();
     }
 
@@ -99,7 +104,7 @@ public class CheckListTool implements AgentTool {
             return ToolResponse.failure(403, "Forbidden: userId is required for checklist management.");
         }
 
-        Object checkListRaw = params.get("checkList");
+        Object checkListRaw = params.get(PARAM_CHECKLIST);
         if (checkListRaw == null) {
             throw new IllegalArgumentException("checkList must not be null or empty.");
         }
@@ -116,9 +121,9 @@ public class CheckListTool implements AgentTool {
         int inProgressCount = 0;
 
         for (Map<String, Object> map : rawList) {
-            String content = (String) map.get("content");
-            String statusStr = (String) map.get("status");
-            String activeForm = (String) map.get("activeForm");
+            String content = (String) map.get(PARAM_CONTENT);
+            String statusStr = (String) map.get(PARAM_STATUS);
+            String activeForm = (String) map.get(PARAM_ACTIVE_FORM);
 
             if (content == null || content.isBlank()) {
                 throw new IllegalArgumentException("Each item's content must not be blank.");

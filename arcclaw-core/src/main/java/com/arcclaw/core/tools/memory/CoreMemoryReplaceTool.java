@@ -41,6 +41,8 @@ import org.jboss.logging.Logger;
 public class CoreMemoryReplaceTool implements AgentTool {
 
     private static final Logger log = Logger.getLogger(CoreMemoryReplaceTool.class);
+    private static final String PARAM_BLOCK_KEY = "block_key";
+    private static final String PARAM_CONTENT = "content";
 
     @Inject
     CoreMemoryService coreMemoryService;
@@ -65,10 +67,10 @@ public class CoreMemoryReplaceTool implements AgentTool {
     public JsonObjectSchema parametersSchema() {
         return JsonObjectSchema.builder()
                 .addStringProperty(
-                        "block_key",
+                        PARAM_BLOCK_KEY,
                         "Block key to replace. One of: user_profile, active_task, constraints, project_context, preferences.")
-                .addStringProperty("content", "New content for the block (replaces existing content entirely).")
-                .required("block_key", "content")
+                .addStringProperty(PARAM_CONTENT, "New content for the block (replaces existing content entirely).")
+                .required(PARAM_BLOCK_KEY, PARAM_CONTENT)
                 .build();
     }
 
@@ -91,8 +93,8 @@ public class CoreMemoryReplaceTool implements AgentTool {
     public ToolResponse execute(ToolExecutionContext ctx, Map<String, Object> params) {
         try {
             String userId = WorkspaceContext.getUserIdOrUnknown();
-            String blockKey = (String) params.get("block_key");
-            String content = (String) params.get("content");
+            String blockKey = (String) params.get(PARAM_BLOCK_KEY);
+            String content = (String) params.get(PARAM_CONTENT);
 
             if (blockKey == null || blockKey.isBlank()) {
                 return ToolResponse.failure(400, "'block_key' is required.");

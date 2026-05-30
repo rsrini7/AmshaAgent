@@ -73,7 +73,9 @@ public enum ToolCapability {
     INGEST_DOCUMENT("ingest_document", ToolCategory.DATABASE, "Ingest a document into the RAG knowledge base"),
 
     MANAGE_CHECKLIST(
-            "manage_checklist", ToolCategory.DATABASE, "Manage a project checklist to track multi-step execution progress."),
+            "manage_checklist",
+            ToolCategory.DATABASE,
+            "Manage a project checklist to track multi-step execution progress."),
 
     REGISTER_MCP_SERVER(
             "register_mcp_server",

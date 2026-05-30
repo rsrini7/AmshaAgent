@@ -41,6 +41,11 @@ import org.jboss.logging.Logger;
         defaultRoles = {"researcher", "synthesizer"})
 public class SerperWebSearchTool implements AgentTool {
 
+    private static final String PARAM_QUERY = "query";
+    private static final String PARAM_COUNT = "count";
+    private static final String PARAM_SNIPPET = "snippet";
+    private static final String PARAM_SNIPPET_HIGHLIGHTED = "snippetHighlighted";
+
     @ConfigProperty(name = "arcclaw.tools.serper.api-key", defaultValue = "none")
     String configApiKey;
 
@@ -112,12 +117,12 @@ public class SerperWebSearchTool implements AgentTool {
     public JsonObjectSchema parametersSchema() {
         return JsonObjectSchema.builder()
                 .addProperty(
-                        "query",
+                        PARAM_QUERY,
                         JsonStringSchema.builder()
                                 .description("The search query to send to Serper.")
                                 .build())
                 .addProperty(
-                        "count",
+                        PARAM_COUNT,
                         JsonIntegerSchema.builder()
                                 .description(
                                         "Number of organic results to return (integer, 1-10). Default is 5. "
@@ -151,7 +156,7 @@ public class SerperWebSearchTool implements AgentTool {
             return ToolResponse.failure(403, "Security violation: tenant context not bound.");
         }
 
-        String query = (String) params.get("query");
+        String query = (String) params.get(PARAM_QUERY);
         if (query == null || query.isBlank()) {
             return ToolResponse.failure(400, "query parameter is required.");
         }
@@ -179,8 +184,8 @@ public class SerperWebSearchTool implements AgentTool {
     }
 
     private int parseCount(Map<String, Object> params) {
-        if (!params.containsKey("count")) return 5;
-        Object cObj = params.get("count");
+        if (!params.containsKey(PARAM_COUNT)) return 5;
+        Object cObj = params.get(PARAM_COUNT);
         if (cObj instanceof Number n) {
             return Math.min(10, Math.max(1, n.intValue()));
         } else if (cObj instanceof String s) {
@@ -227,12 +232,12 @@ public class SerperWebSearchTool implements AgentTool {
             JsonNode ab = root.get("answerBox");
             String answer = ab.has("answer")
                     ? ab.get("answer").asText()
-                    : ab.has("snippet")
-                            ? ab.get("snippet").asText()
-                            : ab.has("snippetHighlighted")
-                                            && ab.get("snippetHighlighted").isArray()
-                                            && ab.get("snippetHighlighted").size() > 0
-                                    ? ab.get("snippetHighlighted").get(0).asText()
+                    : ab.has(PARAM_SNIPPET)
+                            ? ab.get(PARAM_SNIPPET).asText()
+                            : ab.has(PARAM_SNIPPET_HIGHLIGHTED)
+                                            && ab.get(PARAM_SNIPPET_HIGHLIGHTED).isArray()
+                                            && ab.get(PARAM_SNIPPET_HIGHLIGHTED).size() > 0
+                                    ? ab.get(PARAM_SNIPPET_HIGHLIGHTED).get(0).asText()
                                     : null;
             if (answer != null) {
                 sb.append("## Direct Answer\n").append(answer).append("\n\n");
@@ -265,7 +270,7 @@ public class SerperWebSearchTool implements AgentTool {
                         .append(res.path("link").asText("Unknown URL"))
                         .append("\n");
                 sb.append("Snippet: ")
-                        .append(res.path("snippet").asText("No snippet available."))
+                        .append(res.path(PARAM_SNIPPET).asText("No snippet available."))
                         .append("\n");
                 if (res.has("date")) {
                     sb.append("Date: ").append(res.get("date").asText()).append("\n");
@@ -282,7 +287,7 @@ public class SerperWebSearchTool implements AgentTool {
                 sb.append("- ")
                         .append(p.path("question").asText())
                         .append(": ")
-                        .append(p.path("snippet").asText())
+                        .append(p.path(PARAM_SNIPPET).asText())
                         .append("\n");
             }
             sb.append("\n");

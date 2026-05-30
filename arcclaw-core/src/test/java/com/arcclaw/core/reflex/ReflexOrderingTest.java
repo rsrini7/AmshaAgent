@@ -8,7 +8,6 @@ import java.time.Instant;
 import java.util.UUID;
 
 import com.arcclaw.channel.api.ChannelMessage;
-import com.arcclaw.core.message.UserMessages;
 import com.arcclaw.core.pipeline.MessageContext;
 
 import org.junit.jupiter.api.Test;
@@ -54,19 +53,19 @@ class ReflexOrderingTest {
         String userId = "test-user";
         String chatId = "test-chat";
 
-        // Input with PII. PiiScanReflex has priority 20 and defaults to BLOCK_AND_NOTIFY.
+        // Input with PII. PiiScanReflex has priority 20 and defaults to REDACT_AND_FORWARD.
         String input = "My email is test@example.com";
         var cliMsg = new ChannelMessage.CliMessage(null, input, sessionId, Instant.now());
         MessageContext context = new MessageContext(chatId, null, cliMsg);
 
         ReflexResult result = reflexRegistry.processIfReflex(sessionId, userId, chatId, input, context);
 
-        // In BLOCK_AND_NOTIFY mode (default), it fires in Pass 1
-        assertTrue(result.commandResponse().isPresent());
-        assertEquals(UserMessages.PII_DETECTED, result.commandResponse().get());
+        // In REDACT_AND_FORWARD mode (default), PII is redacted but not blocked
+        assertTrue(result.sanitizedInput().contains("[REDACTED-EMAIL]"));
+        assertFalse(result.commandResponse().isPresent());
 
-        // The sanitizedInput field in this case is the original text (from ReflexResult.respond)
-        assertEquals(input, result.sanitizedInput());
+        // In REDACT_AND_FORWARD mode, sanitizedInput contains the redacted text
+        assertEquals("My email is [REDACTED-EMAIL]", result.sanitizedInput());
     }
 
     @Test

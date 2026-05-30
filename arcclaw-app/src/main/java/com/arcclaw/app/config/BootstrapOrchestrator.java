@@ -15,6 +15,8 @@ public class BootstrapOrchestrator {
 
     private static final Logger log = Logger.getLogger(BootstrapOrchestrator.class);
 
+    private static final String PROP_DATA_DIR = "ARCCLAW_DATA_DIR";
+
     public static void bootstrap(String[] args) {
         Path binaryDir = resolveBinaryDir();
         drainInputBuffer();
@@ -97,17 +99,16 @@ public class BootstrapOrchestrator {
 
     private static void provisionDataDirectory(Path binaryDir) {
         String rawDataDir = System.getProperty(
-                "ARCCLAW_DATA_DIR",
+                PROP_DATA_DIR,
                 System.getenv()
-                        .getOrDefault(
-                                "ARCCLAW_DATA_DIR", binaryDir.resolve("data").toString()));
+                        .getOrDefault(PROP_DATA_DIR, binaryDir.resolve("data").toString()));
         try {
             Path dirPath = Path.of(rawDataDir).toAbsolutePath().normalize();
             if (!Files.exists(dirPath)) {
                 Files.createDirectories(dirPath);
                 Files.createDirectories(dirPath.resolve("workspaces"));
             }
-            System.setProperty("ARCCLAW_DATA_DIR", dirPath.toString());
+            System.setProperty(PROP_DATA_DIR, dirPath.toString());
         } catch (IOException e) {
             System.err.println("[ArcClaw] ⚠️  Warning: Failed to create data directory: " + e.getMessage());
         }

@@ -29,8 +29,9 @@ public class ReasoningStepDeserializer extends JsonDeserializer<ReasoningStep> {
         }
 
         // Backward compatibility for legacy flat records based on "action" field
-        String action = node.has("action") && !node.get("action").isNull()
-                ? node.get("action").asText()
+        String action = node.has(ToolCallJsonKeys.ACTION)
+                        && !node.get(ToolCallJsonKeys.ACTION).isNull()
+                ? node.get(ToolCallJsonKeys.ACTION).asText()
                 : null;
 
         if (ReasoningStep.FINISH.equals(action)) {

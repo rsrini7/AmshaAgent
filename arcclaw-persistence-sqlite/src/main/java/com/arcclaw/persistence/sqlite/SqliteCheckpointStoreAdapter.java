@@ -10,6 +10,7 @@ import java.util.Map;
 import java.util.Optional;
 
 import com.arcclaw.common.util.LogUtil;
+import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.ToolDecision;
 import com.arcclaw.core.util.TemporalUtils;
 import com.arcclaw.persistence.api.CheckpointDto;
@@ -79,8 +80,10 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
                             : dao.findAnyBySessionAndRole(checkpointDto.sessionId(), checkpointDto.agentRole());
                     CheckpointDto toSave;
                     if (existing.isPresent()
-                            && "AWAITING_APPROVAL".equals(checkpointDto.status())
-                            && "AWAITING_APPROVAL".equals(existing.get().status())) {
+                            && CheckpointStatus.AWAITING_APPROVAL.name().equals(checkpointDto.status())
+                            && CheckpointStatus.AWAITING_APPROVAL
+                                    .name()
+                                    .equals(existing.get().status())) {
                         toSave =
                                 SqliteCheckpointHelper.mergeBatchDecisions(existing.get(), checkpointDto, objectMapper);
                     } else {
@@ -117,10 +120,11 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
                     var dao = handle.attach(CheckpointJdbiDao.class);
                     Optional<CheckpointDto> existing = dao.findAnyBySessionAndRole(sessionId, agentRole);
                     boolean created = existing.isEmpty();
-                    String status = existing.map(CheckpointDto::status).orElse("IN_PROGRESS");
+                    String status = existing.map(CheckpointDto::status).orElse(CheckpointStatus.IN_PROGRESS.name());
                     // Preserve AWAITING_APPROVAL / RESUMING if already set
-                    if (!"AWAITING_APPROVAL".equals(status) && !"RESUMING".equals(status)) {
-                        status = "IN_PROGRESS";
+                    if (!CheckpointStatus.AWAITING_APPROVAL.name().equals(status)
+                            && !CheckpointStatus.RESUMING.name().equals(status)) {
+                        status = CheckpointStatus.IN_PROGRESS.name();
                     }
                     CheckpointDto dto = CheckpointDtoHelper.create(
                             sessionId,
@@ -372,7 +376,7 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
                         return false;
                     }
                     CheckpointDto dto = cp.get();
-                    if (!"AWAITING_APPROVAL".equals(dto.status())) {
+                    if (!CheckpointStatus.AWAITING_APPROVAL.name().equals(dto.status())) {
                         log.warnf(
                                 "[BatchOps] Checkpoint status is '%s' instead of AWAITING_APPROVAL for session=%s",
                                 dto.status(), sessionId);

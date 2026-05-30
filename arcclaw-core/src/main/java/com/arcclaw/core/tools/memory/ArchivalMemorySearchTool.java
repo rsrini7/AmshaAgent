@@ -32,6 +32,7 @@ import org.jboss.logging.Logger;
 
 /**
  * Agent tool for semantic search across long-term archival knowledge.
+ *
  * <p>
  * Searches the Archival tier — typed knowledge chunks (CODE, DOC, PATTERN,
  * FACT, PREFERENCE, DIRECTIVE) with BM25 + optional vector hybrid search.
@@ -51,6 +52,8 @@ import org.jboss.logging.Logger;
                 + "'project conventions', 'user preferences'). Returns typed chunks with confidence scores.",
         defaultRoles = {"architect", "coordinator", "researcher", "synthesizer", "coder"})
 public class ArchivalMemorySearchTool implements AgentTool {
+
+    private static final String PARAM_QUERY = "query";
 
     private static final Logger log = Logger.getLogger(ArchivalMemorySearchTool.class);
 
@@ -79,12 +82,12 @@ public class ArchivalMemorySearchTool implements AgentTool {
     @Override
     public JsonObjectSchema parametersSchema() {
         return JsonObjectSchema.builder()
-                .addStringProperty("query", "Keywords or semantic text to search for in archival knowledge")
+                .addStringProperty(PARAM_QUERY, "Keywords or semantic text to search for in archival knowledge")
                 .addIntegerProperty("limit", "Max results to return (default from config, typically 3-8)")
                 .addStringProperty(
                         "chunk_types",
                         "Comma-separated chunk type filter: CODE, DOC, PATTERN, FACT, PREFERENCE, DIRECTIVE")
-                .required("query")
+                .required(PARAM_QUERY)
                 .build();
     }
 
@@ -110,7 +113,7 @@ public class ArchivalMemorySearchTool implements AgentTool {
             String userId = WorkspaceContext.getUserIdOrUnknown();
 
             // 2. Parse params
-            String rawQuery = (String) params.get("query");
+            String rawQuery = (String) params.get(PARAM_QUERY);
             if (rawQuery == null || rawQuery.isBlank()) {
                 return ToolResponse.failure(400, "'query' parameter is required.");
             }

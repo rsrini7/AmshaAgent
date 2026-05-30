@@ -10,6 +10,7 @@ import java.util.stream.Collectors;
 
 import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.core.agent.loop.AnswerGuardStrategy.LeakedToolCall;
+import com.arcclaw.core.agent.reasoning.ToolCallJsonKeys;
 import com.arcclaw.core.tools.ToolRegistry;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -128,11 +129,14 @@ public class LeakedToolCallParser {
     private Optional<LeakedToolCall> parseToolCallsArray(Map<String, Object> parsed) {
         Object calls = parsed.get("tool_calls");
         if (calls instanceof List<?> list && !list.isEmpty() && list.get(0) instanceof Map<?, ?> callMap) {
-            Object nameObj = callMap.containsKey("name") ? callMap.get("name") : callMap.get("function");
+            Object nameObj = callMap.containsKey(ToolCallJsonKeys.NAME)
+                    ? callMap.get(ToolCallJsonKeys.NAME)
+                    : callMap.get(ToolCallJsonKeys.FUNCTION);
             String callName = nameObj instanceof String s ? s : null;
             if (callName != null && toolRegistry.listTools().contains(callName)) {
-                Object argsObj =
-                        callMap.containsKey("arguments") ? callMap.get("arguments") : callMap.get("parameters");
+                Object argsObj = callMap.containsKey(ToolCallJsonKeys.ARGUMENTS)
+                        ? callMap.get(ToolCallJsonKeys.ARGUMENTS)
+                        : callMap.get(ToolCallJsonKeys.PARAMETERS);
                 @SuppressWarnings("unchecked")
                 Map<String, Object> callArgs = argsObj instanceof Map ? (Map<String, Object>) argsObj : Map.of();
                 return Optional.of(new LeakedToolCall(callName, callArgs));
@@ -158,7 +162,12 @@ public class LeakedToolCallParser {
     }
 
     private String extractToolName(Map<String, Object> parsed) {
-        for (String key : List.of("name", "tool_name", "tool", "action", "function")) {
+        for (String key : List.of(
+                ToolCallJsonKeys.NAME,
+                ToolCallJsonKeys.TOOL_NAME,
+                ToolCallJsonKeys.TOOL,
+                ToolCallJsonKeys.ACTION,
+                ToolCallJsonKeys.FUNCTION)) {
             Object val = parsed.get(key);
             if (val instanceof String s) return s;
         }
@@ -166,8 +175,8 @@ public class LeakedToolCallParser {
     }
 
     private Map<String, Object> extractParams(Map<String, Object> parsed) {
-        Object raw = parsed.get("parameters");
-        if (raw == null) raw = parsed.get("arguments");
+        Object raw = parsed.get(ToolCallJsonKeys.PARAMETERS);
+        if (raw == null) raw = parsed.get(ToolCallJsonKeys.ARGUMENTS);
         // Small models (e.g., Groq llama-4-scout) use "params" as the wrapper key
         if (raw == null) raw = parsed.get("params");
         if (raw == null) raw = parsed;
@@ -177,14 +186,14 @@ public class LeakedToolCallParser {
         for (var entry : m.entrySet()) {
             if (entry.getKey() instanceof String k
                     && !List.of(
-                                    "name",
-                                    "tool_name",
-                                    "tool",
-                                    "action",
-                                    "function",
+                                    ToolCallJsonKeys.NAME,
+                                    ToolCallJsonKeys.TOOL_NAME,
+                                    ToolCallJsonKeys.TOOL,
+                                    ToolCallJsonKeys.ACTION,
+                                    ToolCallJsonKeys.FUNCTION,
                                     "type",
-                                    "parameters",
-                                    "arguments",
+                                    ToolCallJsonKeys.PARAMETERS,
+                                    ToolCallJsonKeys.ARGUMENTS,
                                     "params")
                             .contains(k)) {
                 params.put(k, entry.getValue());

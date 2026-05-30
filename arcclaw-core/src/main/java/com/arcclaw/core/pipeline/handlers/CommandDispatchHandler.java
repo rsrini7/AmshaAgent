@@ -26,6 +26,8 @@ public class CommandDispatchHandler implements MessageHandler {
 
     private static final Logger log = Logger.getLogger(CommandDispatchHandler.class);
 
+    private static final String WARN_NO_SENDER = "CommandDispatchHandler: no sender for type %s";
+
     @ConfigProperty(name = "arcclaw.agent.default-timezone", defaultValue = "Asia/Kolkata")
     String defaultTimezone;
 
@@ -169,7 +171,7 @@ public class CommandDispatchHandler implements MessageHandler {
                     .map(ChannelPlugin::sender)
                     .ifPresentOrElse(
                             s -> s.sendRaw(context.getUser(), response),
-                            () -> log.warnf("CommandDispatchHandler: no sender for type %s", context.getChannelType()));
+                            () -> log.warnf(WARN_NO_SENDER, context.getChannelType()));
             return HandleResult.STOP;
         }
 
@@ -179,7 +181,7 @@ public class CommandDispatchHandler implements MessageHandler {
                     .map(ChannelPlugin::sender)
                     .ifPresentOrElse(
                             s -> s.sendRaw(context.getUser(), "❓ Did you mean `/crons`? Use that to list tasks."),
-                            () -> log.warnf("CommandDispatchHandler: no sender for type %s", context.getChannelType()));
+                            () -> log.warnf(WARN_NO_SENDER, context.getChannelType()));
             return HandleResult.STOP;
         }
 
@@ -218,7 +220,7 @@ public class CommandDispatchHandler implements MessageHandler {
                     .ifPresentOrElse(
                             s -> s.sendRaw(
                                     context.getUser(), "⚠️ Command failed due to an internal error. Please try again."),
-                            () -> log.warnf("CommandDispatchHandler: no sender for type %s", context.getChannelType()));
+                            () -> log.warnf(WARN_NO_SENDER, context.getChannelType()));
             return;
         }
 
@@ -230,8 +232,7 @@ public class CommandDispatchHandler implements MessageHandler {
                         .map(ChannelPlugin::sender)
                         .ifPresentOrElse(
                                 s -> s.sendRaw(context.getUser(), response),
-                                () -> log.warnf(
-                                        "CommandDispatchHandler: no sender for type %s", context.getChannelType()));
+                                () -> log.warnf(WARN_NO_SENDER, context.getChannelType()));
             });
         }
     }

@@ -54,10 +54,13 @@ import io.quarkus.runtime.ShutdownEvent;
 @CommandLine.Command(name = "chat", description = "Start an interactive chat session with ArcClaw")
 public class ChatCommand implements Runnable {
 
+    private static final String CLI_USER_ID = "cli-user";
+    private static final String CLI_CHAT_ID = "cli-chat";
+
     @CommandLine.Option(
             names = {"-r", "--role"},
-            defaultValue = "coordinator")
-    String role = "coordinator";
+            defaultValue = AgentRoleEnum.COORDINATOR_ID)
+    String role = AgentRoleEnum.COORDINATOR_ID;
 
     @Inject
     Logger log;
@@ -171,8 +174,8 @@ public class ChatCommand implements Runnable {
             heartbeatTracker.recordHeartbeat(sessionId);
             WorkspaceContext.run(
                     sessionId,
-                    "cli-user",
-                    "cli-chat",
+                    CLI_USER_ID,
+                    CLI_CHAT_ID,
                     AutonomyLevel.SUPERVISED,
                     AgentRoleEnum.COORDINATOR.toScopedName(),
                     () -> {
@@ -247,7 +250,7 @@ public class ChatCommand implements Runnable {
             TimeContextInjector.inject(context, input, defaultTimezone);
 
             ReflexResult reflexResult =
-                    reflexRegistry.processIfReflex(sessionId, "cli-user", "cli-chat", input, context);
+                    reflexRegistry.processIfReflex(sessionId, CLI_USER_ID, CLI_CHAT_ID, input, context);
 
             if (reflexResult.commandResponse().isPresent()) {
                 String response = reflexResult.commandResponse().get();
@@ -308,7 +311,7 @@ public class ChatCommand implements Runnable {
             TimeContextInjector.inject(context, input, defaultTimezone);
 
             ReflexResult reflexResult =
-                    reflexRegistry.processIfReflex(sessionId, "cli-user", "cli-chat", input, context);
+                    reflexRegistry.processIfReflex(sessionId, CLI_USER_ID, CLI_CHAT_ID, input, context);
 
             if (reflexResult.commandResponse().isPresent()) {
                 String response = reflexResult.commandResponse().get();
@@ -446,8 +449,8 @@ public class ChatCommand implements Runnable {
     }
 
     private MessageContext createCliContext(String sessionId, String input) {
-        ChannelUser user = new ChannelUser("cli-user", "cli-user", "CLI User", ChannelType.CLI);
+        ChannelUser user = new ChannelUser(CLI_USER_ID, CLI_USER_ID, "CLI User", ChannelType.CLI);
         ChannelMessage msg = new ChannelMessage.CliMessage(user, input, sessionId, Instant.now());
-        return new MessageContext("cli-chat", user, msg);
+        return new MessageContext(CLI_CHAT_ID, user, msg);
     }
 }

@@ -22,6 +22,7 @@ import jakarta.ws.rs.core.SecurityContext;
 import java.util.List;
 import java.util.Map;
 
+import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.api.AgentResponseMapper;
 import com.arcclaw.core.api.AgentSessionService;
 import com.arcclaw.core.api.dto.ActiveAgentResponse;
@@ -155,7 +156,8 @@ public class AgentResource {
     @RunOnVirtualThread
     @Operation(summary = "Provide manual human approval for a pending tool execution")
     public Response approveSession(
-            @PathParam("id") String sessionId, @QueryParam("agentRole") @DefaultValue("coordinator") String agentRole) {
+            @PathParam("id") String sessionId,
+            @QueryParam("agentRole") @DefaultValue(AgentRoleEnum.COORDINATOR_ID) String agentRole) {
         String userId = resolveUserId();
         var result = sessionService.approve(sessionId, userId, agentRole);
         return toResponse(result);
@@ -166,7 +168,8 @@ public class AgentResource {
     @RunOnVirtualThread
     @Operation(summary = "Deny a pending tool execution and provide feedback to the agent")
     public Response denySession(
-            @PathParam("id") String sessionId, @QueryParam("agentRole") @DefaultValue("coordinator") String agentRole) {
+            @PathParam("id") String sessionId,
+            @QueryParam("agentRole") @DefaultValue(AgentRoleEnum.COORDINATOR_ID) String agentRole) {
         String userId = resolveUserId();
         var result = sessionService.deny(sessionId, userId, agentRole);
         return toResponse(result);

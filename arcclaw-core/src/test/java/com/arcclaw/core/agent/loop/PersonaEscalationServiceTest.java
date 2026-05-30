@@ -273,8 +273,8 @@ class PersonaEscalationServiceTest {
     @Test
     void buildEscalationGoal_containsSourceAndTarget() {
         String goal = service.buildEscalationGoal("coder", "researcher", "cannot find symbol", "use List", null, null);
-        assertTrue(goal.contains("ESCALATION FROM Brahma (Coder)"));
-        assertTrue(goal.contains("Saraswati (Researcher)"));
+        assertTrue(goal.contains("ESCALATION FROM Brahma (The Creator)"));
+        assertTrue(goal.contains("Saraswati (The Researcher)"));
     }
 
     @Test

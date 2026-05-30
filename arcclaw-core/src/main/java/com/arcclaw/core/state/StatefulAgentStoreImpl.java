@@ -53,6 +53,8 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
 
     private static final Logger log = Logger.getLogger(StatefulAgentStoreImpl.class);
 
+    private static final String UNKNOWN_CALLER = "unknown";
+
     @Inject
     CheckpointStorePort storeAdapter;
 
@@ -199,32 +201,32 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
 
     @Override
     public void markFailed(Long id, String reason) {
-        transitionService.markFailed(id, reason, null, null, null, "unknown");
+        transitionService.markFailed(id, reason, null, null, null, UNKNOWN_CALLER);
     }
 
     @Override
     public void markFailed(AgentCheckpoint cp, String reason) {
-        transitionService.markFailed(cp.getId(), reason, null, null, null, "unknown");
+        transitionService.markFailed(cp.getId(), reason, null, null, null, UNKNOWN_CALLER);
     }
 
     @Override
     public void markFailed(Long id, String reason, String errorCode, String traceId, String rootCauseClass) {
-        transitionService.markFailed(id, reason, errorCode, traceId, rootCauseClass, "unknown");
+        transitionService.markFailed(id, reason, errorCode, traceId, rootCauseClass, UNKNOWN_CALLER);
     }
 
     @Override
     public void markFailed(AgentCheckpoint cp, String reason, String errorCode, String traceId, String rootCauseClass) {
-        transitionService.markFailed(cp.getId(), reason, errorCode, traceId, rootCauseClass, "unknown");
+        transitionService.markFailed(cp.getId(), reason, errorCode, traceId, rootCauseClass, UNKNOWN_CALLER);
     }
 
     @Override
     public void markOrphaned(Long checkpointId, String reason) {
-        transitionService.markOrphaned(checkpointId, reason, "unknown");
+        transitionService.markOrphaned(checkpointId, reason, UNKNOWN_CALLER);
     }
 
     @Override
     public void markCompleted(Long checkpointId) {
-        transitionService.markCompleted(checkpointId, "unknown");
+        transitionService.markCompleted(checkpointId, UNKNOWN_CALLER);
     }
 
     @Override
