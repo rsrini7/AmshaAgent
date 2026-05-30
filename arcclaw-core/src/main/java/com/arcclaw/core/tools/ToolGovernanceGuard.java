@@ -101,11 +101,13 @@ public class ToolGovernanceGuard {
 
         // 0. ROLE TRUST: if the role has requiresApproval=false, it's a trusted execution role.
         // Trusted roles bypass operation policy checks for non-sensitive operations.
-        // NETWORK_OUTBOUND is always subject to policy — external search requires HITL for all roles.
+        // NETWORK_OUTBOUND (external search) and EXECUTE_SHELL (code execution) always require HITL.
         AgentRoleEnum roleEnum = AgentRoleEnum.fromString(ctx.agentRole());
         boolean isTrustedRole = !roleRegistry.requiresApprovalForTools(roleEnum);
-        if (isTrustedRole && requiredOp != ToolOperation.NETWORK_OUTBOUND) {
-            return; // trusted role — allow non-network operations
+        boolean isSensitiveOp =
+                requiredOp == ToolOperation.NETWORK_OUTBOUND || requiredOp == ToolOperation.EXECUTE_SHELL;
+        if (isTrustedRole && !isSensitiveOp) {
+            return; // trusted role — allow non-sensitive operations
         }
 
         // 1. HARD BLOCK check: if the policy says "not allowed" (e.g., READONLY level),
