@@ -76,7 +76,7 @@ public enum ToolCapability {
             "check_list", ToolCategory.DATABASE, "Manage a project checklist to track multi-step execution progress."),
 
     REGISTER_MCP_SERVER(
-            "add_mcp_server",
+            "register_mcp_server",
             ToolCategory.INTERNAL,
             "Dynamically register a new MCP server (HTTP or STDIO) into the agent's toolbelt."),
 

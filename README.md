@@ -82,8 +82,8 @@ See [docs/QUICK_START.md](./docs/QUICK_START.md) for detailed setup options.
 | Role | Persona | Tools | Max Iter |
 |---|---|---|---|
 | `coordinator` | Vishnu | github, schedule, memory, garuda | 7 |
-| `coder` | Brahma | sandbox_exec, check_list, MCP, garuda | 15 |
-| `debugger` | Shiva | github, sandbox_exec, check_list, memory, garuda | 15 |
+| `coder` | Brahma | sandbox_exec, manage_checklist, MCP, garuda | 15 |
+| `debugger` | Shiva | github, sandbox_exec, manage_checklist, memory, garuda | 15 |
 | `researcher` | Saraswati | github, memory, brave_web_search, serper_web_search, garuda | 10 |
 | `architect` | Brihaspati | github, memory, garuda | 7 |
 | `synthesizer` | Dattatreya | github, schedule, memory, web_search, garuda | 10 |
@@ -190,4 +190,4 @@ arcclaw-ui/                   ← Lit 3.x + TypeScript web frontend
 
 ---
 
-> **Last updated**: ArcClaw V1.0.0 · Quarkus 3.27.2 · JDK 25 · 17 modules · 18 tools · 17 reflexes · 10 LLM providers
+> **Last updated**: ArcClaw V1.0.0 · Quarkus 3.27.2 · JDK 25 · 17 modules · 21 tools · 17 reflexes · 11 LLM providers

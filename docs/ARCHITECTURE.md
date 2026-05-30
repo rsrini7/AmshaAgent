@@ -21,7 +21,7 @@
 | `arcclaw-persistence-fs` | Filesystem-based adapter (Lucene BM25) |
 | `arcclaw-rag` | Two-tier vector (vec0) + FTS5 RAG memory |
 | `arcclaw-mcp` | MCP server bridge + dynamic client tool loading |
-| `arcclaw-onboarding` | 6-step setup wizard REST API |
+| `arcclaw-onboarding` | 5-step setup wizard REST API + /complete |
 | `arcclaw-tool-playwright` | Playwright browser automation tool |
 | `arcclaw-common` | Shared utilities (LogUtil, constants) |
 | `arcclaw-ui` | Lit 3.x + TypeScript web frontend |
@@ -55,7 +55,7 @@ Three distinct ingestion paths all converge on the same `MessagePipeline`:
 ```
 POST /api/v1/sessions/{id}/run
   → ApiKeyAuthFilter (HMAC-SHA256 against stored digest; raw key never stored)
-  → Bucket4j token-bucket (20 req/min per key)
+  → ApiKeyRegistry.isAllowed() + isMutationAllowed() (custom rate limiter)
   → AgentSessionService.runSync()
   → WorkspaceScopeHolder.call() → WorkspaceContext.run(...)
   → AgentLoop.run(...)
@@ -132,10 +132,10 @@ Build system prompt → LLM reasoning call → Parse ReasoningStep
 System prompt construction (`SystemPromptBuilder`):
 1. Loads persona identity and role template from `PromptRegistry` (multi-backend). Falls back to classpath `/templates/personas/` and `/templates/prompts/`. Auto-seeds DB on first startup with SHA-256 drift detection.
 2. Injects compaction summary from `CompactionSummaryCache` — blocks via `CompactionEventBridge.awaitIfInFlight(sessionId)` to prevent stale-null race.
-3. Runs all `ContextEnricher` CDI implementations. `RagContextEnricher` searches both memory tiers, scores by cosine similarity, injects `Retrieved Context` block.
+3. Runs all `ContextEnricher` CDI implementations. `RagContextEnricher` searches both memory tiers, scores by cosine similarity, injects `## Retrieved Rag Context` block.
 4. Appends `SystemEnvironmentContextEnricher` metadata.
 
-LLM call (`LangChainReasoningEngine.nextStep()`): Retrieves `ChatModel` from `ChatModelProducer`, assembles messages via `ChatHistoryAssembler`, filters tools via `RoleRegistry.permittedTools()`. Cron sessions suppress scheduling tools.
+LLM call (`LangChainReasoningEngine.nextStep()`): Retrieves `ChatModel` from `LlmProviderPort`, assembles messages via `ReasoningMessageAssembler`, filters tools via `RoleRegistry.permittedTools()`. Cron sessions suppress scheduling tools.
 
 Exception classification:
 
@@ -202,7 +202,7 @@ ToolFailure (any role, any tool)
 - DEDUP → return cached; BLOCKED → fill "blocked" observation; peers continue.
 - Pass 2: Execute ALLOWED tools in parallel virtual threads with OTel context propagation.
 - Merge results in original call order.
-- On resume: `batchToolDecisions` map from checkpoint; pre-executed results restored (not re-executed); double-resume guard via `markBatchResuming()`.
+- On resume: batch tool decisions deserialized from checkpoint state JSON; pre-executed results restored (not re-executed).
 
 **Step E: ToolInvoker:** `toolRegistry.invokeTool()` → OTel child span → `AgentTool.execute(params)` → `ToolObservationSanitizer.sanitize()` (PII redaction, injection redaction, truncation).
 
@@ -260,20 +260,22 @@ The LLM can request multiple tools in one step. Parallel batches:
 
 | Role | Persona | Tools | Max Iter |
 |---|---|---|---|
-| `coordinator` | Vishnu | github, schedule, memory, garuda | 7 |
-| `coder` | Brahma | sandbox_exec, check_list, MCP, garuda | 15 |
-| `debugger` | Shiva | github, sandbox_exec, check_list, memory, garuda | 15 |
-| `researcher` | Saraswati | github, memory, brave_web_search, serper_web_search, garuda | 10 |
-| `architect` | Brihaspati | github, memory, garuda | 7 |
-| `synthesizer` | Dattatreya | github, schedule, memory, web_search, garuda | 10 |
-| `optimizer` | Ganesha | github, sandbox_exec, garuda | 10 |
-| `sentinel` | Kartikeya | github, sandbox_exec, garuda | 10 |
-| `healer` | Lakshmi | github, memory, garuda | 10 |
-| `protector` | Durga | github, memory, garuda | 10 |
-| `purifier` | Kali | github, memory, garuda | 10 |
-| `nurturer` | Parvati | github, memory, garuda | 10 |
+| `coordinator` | Vishnu | github, web_fetch, schedule, memory (5), garuda, agent_task | 7 |
+| `coder` | Brahma | sandbox_exec, manage_checklist, memory (5), garuda | 15 |
+| `debugger` | Shiva | github, sandbox_exec, manage_checklist, recall_memory_search, garuda | 15 |
+| `researcher` | Saraswati | github, web_fetch, brave/serper search, memory (5), garuda, agent_task | 10 |
+| `architect` | Brihaspati | github, memory (5), garuda | 7 |
+| `synthesizer` | Dattatreya | github, web_fetch, schedule, brave/serper search, memory (5), ingest_document, garuda, agent_task | 10 |
+| `optimizer` | Ganesha | sandbox_exec, garuda | 10 |
+| `sentinel` | Kartikeya | sandbox_exec, garuda | 10 |
+| `healer` | Lakshmi | garuda | 10 |
+| `protector` | Durga | garuda | 10 |
+| `purifier` | Kali | garuda | 10 |
+| `nurturer` | Parvati | garuda | 10 |
 
-All roles have `garuda` for delegation (non-coordinators restricted by capability subset). Tool schemas dynamically assembled via `@ToolMetadata(defaultRoles=...)`.
+**memory (5)** = `recall_memory_search`, `archival_memory_search`, `core_memory_read`, `core_memory_append`, `core_memory_replace`, `archival_memory_insert` (6 tools; debugger only gets `recall_memory_search`).
+
+All 12 roles have `garuda` for delegation. Tool schemas dynamically assembled via `@ToolMetadata(defaultRoles=...)`.
 
 ---
 
@@ -301,11 +303,9 @@ Retrieval merges FTS5 keyword search + sqlite-vec vector search via Reciprocal R
 **Ingest flow** (`IngestDocumentTool.execute()` — always requires HITL approval):
 1. Sanitize text (strip consecutive dashes, markdown artifacts, control characters)
 2. `EmbeddingModel.embed(text)` → float vector
-3. `INSERT OR REPLACE INTO fts.vec_global(chunkId, embedding)` — vec0 ANN index
-4. `em.persist(RagChunkEntity)` — stores original text for hydration
-5. `sessionKb.ingest()` — adds to in-memory store
+3. `memoryPort.index()` — persists to vec0 + rag_chunk + in-memory store (adapter handles all three)
 
-**Retrieval** (`RagContextEnricher.enrich()`): Embeds current goal, searches session KB (in-memory ANN) and global KB (vec0 KNN), scores by cosine similarity, deduplicates by `chunkId`, injects top-N as `Retrieved Context` block. `CONTEXT_RAG_ECHO_PATTERN` guard prevents LLM echoing injected headers.
+**Retrieval** (`RagContextEnricher.enrich()`): Embeds current goal, searches via `TwoTierMemoryService.search()` (session KB in-memory ANN + global KB vec0 KNN), applies adaptive thresholding, deduplicates by `chunkId`, injects top-N as `## Retrieved Rag Context` block.
 
 **Embedding provider:** `EmbeddingModelProducer` resolves via `arcclaw.rag.embed-provider` (ollama / openai / jina).
 
@@ -356,7 +356,7 @@ User clicks button (BATCH_APPROVE|sessionId|toolName)
 
 **REST:**
 ```
-POST /api/v1/sessions/{id}/approve?agentRole=coordinator
+POST /hitl/{taskId}/approve (via HitlResource)
   → AgentSessionService.approve()
   → agentStore.load() → verify AWAITING_APPROVAL
   → AgentLoop.run(resolvedResumeGoal, isResumeSignal=true)
@@ -365,8 +365,8 @@ POST /api/v1/sessions/{id}/approve?agentRole=coordinator
 **Web UI:**
 ```
 GET  /hitl            → lists all AWAITING_APPROVAL checkpoints
-POST /hitl/{id}/approve  → HitlService.resolve() → CheckpointApprovalService.approveTool()
-POST /hitl/{id}/reject   → HitlService.resolve() → CheckpointApprovalService.denyTool()
+POST /hitl/{taskId}/approve  → HitlService.resolve() → CheckpointApprovalService.approveTool()
+POST /hitl/{taskId}/reject   → HitlService.resolve() → CheckpointApprovalService.denyTool()
 GET  /hitl/events        → SSE stream via AgentSseService.subscribe(sessionId)
 ```
 
@@ -436,22 +436,28 @@ graph TD
 
 ## Built-in Tools
 
-| Tool | Tool Name | Operation | Sandbox | Default Roles |
-|---|---|---|---|---|
-| Brave Web Search | `brave_web_search` | `NETWORK_OUTBOUND` | — | researcher |
-| Serper Web Search | `serper_web_search` | `NETWORK_OUTBOUND` | — | researcher, synthesizer |
-| Smart Web Fetch | `smart_web_fetch` | `NETWORK_OUTBOUND` | — | researcher, synthesizer |
-| GitHub | `github` | `NETWORK_OUTBOUND` | — | all 6 core roles |
-| Sandbox Exec | `sandbox_exec` | `EXECUTE_SHELL` | Podman | coder, debugger |
-| Recall Memory Search | `recall_memory_search` | `DATABASE_READ` | — | all 6 + debugger |
-| Archival Memory Search | `archival_memory_search` | `DATABASE_READ` | — | all 6 roles |
-| Ingest Document | `ingest_document` | `DATABASE_WRITE` | — | coordinator, synthesizer |
-| Schedule Task | `schedule_task` | `DATABASE_WRITE` | — | coordinator, synthesizer |
-| Manage Schedule | `manage_schedule` | `DATABASE_WRITE` | — | coordinator, synthesizer |
-| Delegate (Garuda) | `garuda` | `DELEGATE_AUTONOMOUS` | — | all 6 roles |
-| Check List | `check_list` | `DATABASE_WRITE` | — | coder, debugger |
-| Playwright CLI | `playwright_cli` | `COMPUTE` | — | coder |
-| MCP dynamic tools | (varies) | (varies) | — | all roles with MCP |
+| Tool | Tool Name | Operation | Default Roles |
+|---|---|---|---|
+| GitHub | `github` | `NETWORK_OUTBOUND` | architect, coordinator, researcher, debugger, synthesizer |
+| Brave Web Search | `brave_web_search` | `NETWORK_OUTBOUND` | researcher, synthesizer |
+| Serper Web Search | `serper_web_search` | `NETWORK_OUTBOUND` | researcher, synthesizer |
+| Smart Web Fetch | `web_fetch` | `NETWORK_OUTBOUND` | researcher, synthesizer, coordinator |
+| Sandbox Exec | `sandbox_exec` | `EXECUTE_SHELL` | coder, debugger |
+| Playwright CLI | `browser_navigate` | `NETWORK_OUTBOUND` | coder |
+| Recall Memory Search | `recall_memory_search` | `READ_FS` | architect, coordinator, researcher, synthesizer, coder, debugger |
+| Archival Memory Search | `archival_memory_search` | `READ_FS` | architect, coordinator, researcher, synthesizer, coder |
+| Core Memory Read | `core_memory_read` | `READ_FS` | architect, coordinator, researcher, synthesizer, coder |
+| Core Memory Append | `core_memory_append` | `WRITE_MEMORY` | architect, coordinator, researcher, synthesizer, coder |
+| Core Memory Replace | `core_memory_replace` | `WRITE_MEMORY` | architect, coordinator, researcher, synthesizer, coder |
+| Archival Memory Insert | `archival_memory_insert` | `WRITE_FS` | architect, coordinator, researcher, synthesizer, coder |
+| Ingest Document | `ingest_document` | `WRITE_MEMORY` | coordinator, synthesizer |
+| Schedule Task | `schedule_task` | `SCHEDULE_AUTONOMOUS` | coordinator, synthesizer |
+| Manage Schedule | `manage_schedule` | `READ_FS` | coordinator, synthesizer |
+| Manage Checklist | `manage_checklist` | `READ_FS` | coder, debugger |
+| Agent Task | `agent_task` | `WRITE_FS` | coordinator, synthesizer, researcher |
+| Delegate (Garuda) | `garuda` | `DELEGATE_AUTONOMOUS` | all 12 roles |
+| Register MCP Server | `register_mcp_server` | `NETWORK_OUTBOUND` | (dynamic) |
+| MCP dynamic tools | (varies) | (varies) | all roles with MCP |
 
 ### Governance by Autonomy Level
 
@@ -518,11 +524,10 @@ See [SETUP.md](./SETUP.md) for detailed backend switching instructions.
 | Cerebras | Cerebras models | Daily quota detection disables slot permanently |
 | Nvidia | Nvidia models | NVIDIA inference API |
 | OMLX | OMLX models | OMLX inference |
+| LlamaCpp | `llama.cpp` models | Local inference via OpenAI-compatible API on port 9000 |
 | Infinite Loop | Multi-slot | Quality tracking + cooldown between providers |
 
 The **compaction model** is separate — always a lighter/cheaper model regardless of reasoning provider.
-
----
 
 ---
 
@@ -541,12 +546,13 @@ Runs **before** Quarkus CDI container boots:
 | Priority | Observer | Action |
 |---|---|---|
 | 10 | `Vec0NativeLibraryInstaller` | Re-fires native lib install (belt-and-suspenders) |
-| 90 | `SessionSchemaInitializer` | Ensures `session_registry` table exists |
-| 100 | `RagSchemaInitializer` | Warms Agroal pool; loads `vec0` extension; ATTACHes FTS DB; creates `fts.vec_global` |
+| 2100 | `RagSchemaInitializer` | Warms Agroal pool; loads `vec0` extension; ATTACHes FTS DB; creates `fts.vec_global` (priority = `APPLICATION + 100`) |
+| 150 | `DevSecretSeederStartup` | Dev-profile only — seeds mock API keys (`@IfBuildProfile("dev")`) |
 | Unordered | `SkillLoader.onStart()` | Loads skills from classpath + SQLite DB; compiles trigger `Pattern[]`; registers dynamic roles |
 | Unordered | `StartupSecurityValidator` | **Hard gate in prod:** throws if vault pepper equals dev default, HMAC key absent, or allowlist has usernames instead of numeric IDs |
-| Unordered | `DevSecretSeederStartup` | Dev-profile only — seeds mock API keys |
-| Unordered | `AgentCronScheduler` (on `ApplicationReady`) | Restores persisted cron jobs so scheduled tasks survive restarts |
+| Unordered | `AgentCronScheduler` (on `StartupEvent`) | Restores persisted cron jobs so scheduled tasks survive restarts |
+
+Note: `session_registry` table is created by Flyway baseline migration (`V1__baseline.sql`), not a CDI observer.
 
 ### Build-Time Processors (`arcclaw-deployment`)
 
@@ -585,16 +591,19 @@ WorkspaceContext.run(sessionId, userId, chatId, autonomyLevel, agentRole, channe
 
 `WorkspaceContext.runWithFullAutonomy()` overrides autonomy to `FULL` for tool execution on approved or cron paths.
 
-### Session Termination (7-step teardown)
+### Session Termination
 
 `WorkspaceManager.terminateSession(sessionId)`:
-1. Remove heartbeat from `SessionHeartbeatTracker`
-2. Clear budget memory (`GovernanceLayer.clearSession()`)
-3. `markCheckpointsFailed()` — marks only `IN_PROGRESS`/`AWAITING_APPROVAL`/`AWAITING_RETRY_APPROVAL` as `FAILED`; excludes `COMPLETED`/`FAILED`/`ARCHIVED`/`COMPROMISED`
-4. Wipe session workspace directory (recursive delete)
-5. Clear in-memory + persistent `ChatMemory`
-6. Destroy `@WorkspaceScoped` CDI context
-7. `statefulAgentStore.clearBatchResuming(sessionId)`
+1. Mark session halted (`HALTED_SESSIONS.put`)
+2. Guard: `statefulAgentStore.isBatchResuming()` check
+3. Remove heartbeat from `SessionHeartbeatTracker`
+4. Clear budget memory (`GovernanceLayer.clearSession()`)
+5. Clear tool invocation guard state (`toolInvocationGuard.clearSession()`)
+6. Cleanup audit observer (`auditObserver.cleanupSession()`)
+7. `markCheckpointsFailed()` — marks only `IN_PROGRESS`/`AWAITING_APPROVAL`/`AWAITING_RETRY_APPROVAL` as `FAILED`; excludes `COMPLETED`/`FAILED`/`ARCHIVED`/`COMPROMISED`
+8. Wipe session workspace directory (recursive delete)
+9. Destroy `@WorkspaceScoped` CDI context (`context.destroySession()`)
+10. Cancel CLI result bridge + clear batch resuming state
 
 ---
 
@@ -691,33 +700,36 @@ Config: `arcclaw.agent.auto-heal.enabled` (default `true`), `arcclaw.agent.auto-
 
 ### Cross-Persona Escalation
 
-`PersonaEscalationService` detects capability boundaries and auto-routes to specialists:
+`PersonaEscalationService` detects capability boundaries and auto-routes to specialists. Paths implemented for coder, debugger, architect, and researcher:
 
 | Source | Target | Trigger |
 |---|---|---|
+| Brahma (coder) | Shiva (debugger) | Sandbox execution failure |
 | Brahma (coder) | Saraswati (researcher) | Unknown API/dependency |
 | Brahma (coder) | Brihaspati (architect) | Architecture/trade-off decision |
 | Shiva (debugger) | Saraswati (researcher) | Obscure error needing research |
 | Shiva (debugger) | Brahma (coder) | Fundamental flaw needing rewrite |
+| Shiva (debugger) | Ganesha (optimizer) | Complex recursive logic |
+| Shiva (debugger) | Kartikeya (sentinel) | Security vulnerability |
 | Saraswati (researcher) | Brahma (coder) | Research complete, needs implementation |
 | Brihaspati (architect) | Brahma (coder) | Architecture decided, needs coding |
 | Brihaspati (architect) | Saraswati (researcher) | Needs external research |
 
-Config: `arcclaw.agent.escalation.enabled` (default `true`), `arcclaw.agent.escalation.max-depth` (default `2`). Session sentinel: `:escalate:`.
+Config: `arcclaw.agent.escalation.enabled` (default `true`), `arcclaw.agent.escalation.max-depth` (default `2`). Session sentinel: `:escalate:`. Circuit breaker: `isPingPong()` detects A→B→A→B loops in last 4 entries.
 
 ### Delegation & Escalation Flow
 
 ```mermaid
 graph TD
     COORD["Coordinator (Vishnu)"] -->|garuda agent=brahma| GUARD[ToolInvocationGuard]
-    GUARD -->|capability subset check| SUB["Sub-Agent (Brahma)"]
+    GUARD -->|role-based tool filter via RoleRegistry| SUB["Sub-Agent (Brahma)"]
     SUB --> LOOP[Thought-Plan-Act-Observe Loop]
     LOOP -->|sandbox_exec fail| HEAL["Auto-Heal: Shiva :heal:"]
     LOOP -->|knowledge gap| ESC["Escalation :escalate:"]
     HEAL -->|fixed code| LOOP
     ESC -->|target persona handles| LOOP
     LOOP -->|clean answer| FAST[tryDelegateFinishFastPath]
-    FAST -->|skip wrap-up, ~9800 tokens saved| RESULT[Return to Coordinator]
+    FAST -->|skip wrap-up| RESULT[Return to Coordinator]
 ```
 
 ---
@@ -731,7 +743,9 @@ After `AgentLoop.run()` returns in the cron path, `CronResultHandler` processes:
 | `Finished` (run-once) | `cronRepository.markCompleted()` + audit `CRON_FIRED` |
 | `Finished` (recurring) | `CronScheduleUtil.computeNext()` → `markFired(nextFireTime)` |
 | `AwaitingApproval` | `cronRepository.markAwaitingApproval()` |
-| `Failed` / `LoopExceeded` | `cronRepository.markFailed()` + audit `CRON_FAILED` |
+| `AwaitingRetry` | Handled via `CronResultHandler` retry logic |
+| `Failed` / `LoopExceeded` (run-once) | `cronRepository.markFailed()` + audit `CRON_FAILED` |
+| `Failed` / `LoopExceeded` (recurring) | **Rescheduled** via `computeNext()` + `markFired()` (not permanently failed) |
 
 `ChannelCronNotificationDispatcher` dispatches completion notifications via `ChannelPlugin.jobNotifier()`.
 
@@ -745,7 +759,7 @@ Every significant event writes an `AuditEvent` with HMAC-SHA256 chain linking re
 
 ```
 AuditService.record(sessionId, userId, agentRole, SecurityEventType, detail)
-  → AuditHashUtil.compute(id + sessionId + eventType + detail + timestamp, vaultKey)
+  → AuditHashUtil.hmacHex(prevHash + "|" + payload)
   → AuditEventRepository.record() → em.persist(AuditEvent)
 ```
 
@@ -753,7 +767,7 @@ AuditService.record(sessionId, userId, agentRole, SecurityEventType, detail)
 
 ### Security Events Audited
 
-61 event types across categories: loop events, tool events, approval events, injection/PII, vault, checkpoint, cron, skill, MCP, session, settings, and more.
+56 event types across categories: loop events, tool events, approval events, injection/PII, vault, checkpoint, cron, skill, MCP, session, settings, and more.
 
 ---
 
@@ -763,15 +777,15 @@ AuditService.record(sessionId, userId, agentRole, SecurityEventType, detail)
 
 Spans at three levels parented under session root span:
 - **Session span** (`arcclaw.session`): cumulative prompt + completion tokens
-- **Iteration span** (`agent.iteration`): one per loop iteration; carries session ID, role, iteration number
-- **Tool span** (`tool.call`): one per `ToolInvoker.invoke()`; carries tool name, operation
-- **Reflex span** (`reflex.execute`): one per matched reflex
+- **Iteration span** (`arcclaw.agent.iteration`): one per loop iteration; carries session ID, role, iteration number
+- **Tool span** (`arcclaw.tool.call`): one per `ToolInvoker.invoke()`; carries tool name, operation
+- **Reflex span** (`arcclaw.reflex.execute`): one per matched reflex
 
 Exported to Jaeger via OTLP at `http://localhost:4317`.
 
 ### Micrometer
 
-`MetricsAgentObserver.onLoopComplete()` records per-loop counters and histograms. Exposed at `/q/metrics`.
+`MetricsAgentObserver.onStepComplete()` records per-step counters. Exposed at `/q/metrics`.
 
 ### SSE Real-Time UI Events
 
@@ -779,10 +793,10 @@ Exported to Jaeger via OTLP at `http://localhost:4317`.
 
 | Event | Trigger |
 |---|---|
-| `AgentStateChangedEvent` | `idle` / `active` / `awaiting-approval` transitions |
-| `HitlEvent` | `AWAITING_APPROVAL` / `APPROVED` / `DENIED` / `RESUMED` |
-| `AgentStatusEvent` | `RUNNING` / `COMPLETED` / `FAILED` |
-| `HeartbeatEvent` | 20-second keep-alive |
+| `AgentStateChangedEvent` | CDI event: `idle` / `active` / `awaiting-approval` transitions (not SSE) |
+| `HitlEvent` | SSE: `AWAITING_APPROVAL` / `APPROVED` / `DENIED` / `RESUMED` |
+| `AgentStatusEvent` | SSE: `RUNNING` / `COMPLETED` / `FAILED` |
+| `HeartbeatEvent` | SSE: 25-second keep-alive |
 
 ---
 
@@ -792,7 +806,7 @@ Exported to Jaeger via OTLP at `http://localhost:4317`.
 |---|---|
 | `arc-chat-interface` | Main chat UI; WebSocket + HITL approval cards via SSE |
 | `arc-settings` | LLM provider switch, API key update, system prompt edit |
-| `arc-onboarding` | 6-step wizard calling `/onboarding/step*` endpoints |
+| `arc-onboarding` | 5-step wizard calling `/onboarding/step*` + `/complete` endpoints |
 | `arc-agent-status` | Live agent status via REST poll + SSE |
 | `arc-audit-panel` | WORM audit chain event display |
 | `arc-scheduler-panel` | Cron job management |
@@ -805,18 +819,18 @@ Exported to Jaeger via OTLP at `http://localhost:4317`.
 
 ## Onboarding Wizard
 
-6-step REST wizard at `/onboarding`:
+5-step REST wizard at `/onboarding`:
 
 | Step | Endpoint | Action |
 |---|---|---|
-| 1 | `POST /onboarding/step/1` | Returns system info (version, current provider) |
-| 2 | `POST /onboarding/step/2` | Saves LLM provider config |
+| 1 | `POST /onboarding/step/1` | Advances from WELCOME to PROVIDER state |
+| 2 | `POST /onboarding/step/2` | Saves LLM provider/model selection |
 | 3 | `POST /onboarding/step/3` | Validates credential via `LlmValidationGateway`; encrypts in vault |
 | 4 | `POST /onboarding/step/4` | Persists custom system prompt |
 | 5 | `POST /onboarding/step/5` | Registers MCP server connections |
-| 6 | `POST /onboarding/step/6` | Configures Telegram bot token |
+| — | `GET /onboarding/complete` | Finalizes onboarding |
 
-`OnboardingStepProvider` SPI allows future steps to self-register.
+`OnboardingStepProvider` SPI allows future steps to self-register ("5 core steps").
 
 ---
 
@@ -903,7 +917,7 @@ External Input
   │ agentStore.saveAndFinalize()                │
   │ AgentSseService.publish(AgentStatusEvent)   │
   │ AuditService.record(HMAC-chained event)     │
-  │ MetricsAgentObserver.onLoopComplete()       │
+  │ MetricsAgentObserver.onStepComplete()       │
   │ AgentOtelContext.endSessionSpan()           │
   └──────┬──────────────────────────────────────┘
          │

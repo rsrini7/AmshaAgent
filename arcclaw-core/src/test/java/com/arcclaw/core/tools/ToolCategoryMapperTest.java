@@ -35,7 +35,7 @@ class ToolCategoryMapperTest {
         assertEquals(ToolCategory.INTERNAL, mapper.categoryFor("schedule_task"));
         assertEquals(ToolCategory.INTERNAL, mapper.categoryFor("manage_schedule"));
         assertEquals(ToolCategory.INTERNAL, mapper.categoryFor("garuda"));
-        assertEquals(ToolCategory.INTERNAL, mapper.categoryFor("add_mcp_server"));
+        assertEquals(ToolCategory.INTERNAL, mapper.categoryFor("register_mcp_server"));
     }
 
     @Test

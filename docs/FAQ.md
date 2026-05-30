@@ -194,7 +194,7 @@ Apache Camel's `camel-telegram` component handles the long-polling lifecycle, gr
 |---|---|---|---|
 | `coordinator` | Vishnu | Can use all tools | General tasks, delegation, scheduling |
 | `researcher` | Saraswati | Read-only tools only; never fabricates | External data retrieval, GitHub lookups |
-| `coder` | Brahma | sandbox_exec + check_list + add_mcp_server | Code execution, engineering tasks |
+| `coder` | Brahma | sandbox_exec + manage_checklist + register_mcp_server | Code execution, engineering tasks |
 | `debugger` | Shiva | GitHub only; contrarian by design | Bug analysis, stack traces, security audits |
 | `architect` | Brihaspati | GitHub + memory search; never writes code | ADRs, design reviews, trade-off analysis |
 | `synthesizer` | Dattatreya | All tools; only for cross-domain tasks | Multi-agent output integration |
