@@ -118,11 +118,12 @@ public class AgentDispatchHandler implements MessageHandler {
 
         String rawMessageText =
                 context.getMessage() != null ? context.getMessage().text() : "";
-        boolean isContinuity = intentClassifier.isContinuityCommand(rawMessageText)
-                || intentClassifier.isFollowUpHeuristic(rawMessageText);
+        // Only isContinuityCommand ("same", "again", "retry") restores the old goal.
+        // isFollowUpHeuristic ("run", "execute", "in java") preserves the ROLE but uses the NEW goal.
+        boolean isExplicitContinuity = intentClassifier.isContinuityCommand(rawMessageText);
 
         String restoredGoal = null;
-        if (isContinuity) {
+        if (isExplicitContinuity) {
             restoredGoal = agentStore
                     .findLatestNonArchivedCheckpoint(sessionId)
                     .map(AgentCheckpoint::getOriginalGoal)
@@ -149,7 +150,7 @@ public class AgentDispatchHandler implements MessageHandler {
 
         log.infof(
                 "[AgentDispatch] Goal Resolution: rawGoal='%s' rawMessage='%s' isContinuity=%b restoredGoal='%s' finalGoal='%s'",
-                logSafeRawGoal, logSafeRawMessage, isContinuity, logSafeRestoredGoal, goal);
+                logSafeRawGoal, logSafeRawMessage, isExplicitContinuity, logSafeRestoredGoal, goal);
 
         return goal;
     }
