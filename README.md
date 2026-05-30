@@ -190,4 +190,4 @@ arcclaw-ui/                   ← Lit 3.x + TypeScript web frontend
 
 ---
 
-> **Last updated**: ArcClaw V1.0.0 · Quarkus 3.27.2 · JDK 25 · 18 modules · 14 tools · 17 reflexes · 10 LLM providers
+> **Last updated**: ArcClaw V1.0.0 · Quarkus 3.27.2 · JDK 25 · 17 modules · 18 tools · 17 reflexes · 10 LLM providers

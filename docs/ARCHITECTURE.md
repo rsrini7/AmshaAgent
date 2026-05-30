@@ -28,7 +28,7 @@
 
 **Dependency flow:** `arcclaw-app` → `arcclaw-core` → `arcclaw-channel-api` ← `arcclaw-channel-telegram`, `arcclaw-channel-web`. `arcclaw-deployment` is build-time only (not in runtime fat-jar). `arcclaw-rag`, `arcclaw-mcp`, and `arcclaw-tool-playwright` are optional runtime modules discovered via CDI. Persistence follows hexagonal architecture: `arcclaw-persistence-api` defines ports, `arcclaw-persistence-common` holds shared entities, three adapters (sqlite, postgres, fs) implement ports.
 
-![Module Architecture](./ProjectWorkflowDocs/assets/arcclaw_module_architecture.svg)
+![Module Architecture](./assets/arcclaw_module_architecture.svg)
 
 ---
 
@@ -90,7 +90,7 @@ ws://host/ws/chat
   → WorkspaceContext.run() → AgentLoop.run() + CRON CONSTRAINT directive
 ```
 
-![Message Pipeline](./ProjectWorkflowDocs/assets/arcclaw_message_pipeline.svg)
+![Message Pipeline](./assets/arcclaw_message_pipeline.svg)
 
 ---
 
@@ -108,7 +108,7 @@ Build system prompt → LLM reasoning call → Parse ReasoningStep
        → ChatMemoryWriter → next iteration (loop)
 ```
 
-![Agent Loop](./ProjectWorkflowDocs/assets/arcclaw_agent_loop.svg)
+![Agent Loop](./assets/arcclaw_agent_loop.svg)
 
 ### Agent Loop Lifecycle (`AgentLoop.run`)
 
@@ -455,14 +455,23 @@ graph TD
 
 ### Governance by Autonomy Level
 
-| Operation | FULL | SUPERVISED | READONLY |
-|---|---|---|---|
-| `DATABASE_READ` | ✅ | ✅ | ✅ |
-| `DATABASE_WRITE` | ✅ | ✅ | ❌ |
-| `NETWORK_OUTBOUND` | ✅ | HITL pause | ❌ |
-| `EXECUTE_SHELL` | ✅ | HITL pause | ❌ |
-| `DELEGATE_AUTONOMOUS` | ✅ | ✅ | ✅ |
-| `VAULT_ACCESS` | ✅ | HITL pause | ❌ |
+The `AutonomyPolicy` defines which operations are auto-allowed at each level. Operations not auto-allowed pass through `ToolGovernanceGuard` for role trust pre-flight and potential HITL approval.
+
+| Operation | FULL | SUPERVISED | BACKGROUND | READONLY |
+|---|---|---|---|---|
+| `READ_FS` | ✅ | ✅ | ✅ | ✅ |
+| `WRITE_FS` | ✅ | guard → HITL | ❌ | ❌ |
+| `WRITE_MEMORY` | ✅ | guard → HITL | ❌ | ❌ |
+| `NETWORK_OUTBOUND` | ✅ | guard → HITL | ✅ | ❌ |
+| `EXECUTE_SHELL` | ✅ | guard → HITL | ❌ | ❌ |
+| `VAULT_ACCESS` | ✅ | guard → HITL | ❌ | ❌ |
+| `SCHEDULE_AUTONOMOUS` | ✅ | ✅ | ❌ | ❌ |
+| `DELEGATE_AUTONOMOUS` | ✅ | guard → HITL | ✅ | ❌ |
+
+- **FULL**: all operations allowed without approval.
+- **SUPERVISED** (default): only `READ_FS` and `SCHEDULE_AUTONOMOUS` auto-allowed; everything else evaluated by `ToolGovernanceGuard`.
+- **BACKGROUND** (cron execution): `READ_FS`, `NETWORK_OUTBOUND`, `DELEGATE_AUTONOMOUS` allowed; mutations blocked.
+- **READONLY**: only `READ_FS` allowed; all side-effecting operations blocked.
 
 ### Trusted Role Bypass
 
@@ -963,7 +972,6 @@ graph TD
 
 | Document | Purpose |
 |---|---|
-| [PROJECT-WORKFLOW.md](./ProjectWorkflowDocs/PROJECT-WORKFLOW.md) | Redirect to this file — all content merged into ARCHITECTURE.md |
 | [Architecture_Invariants.md](./Architecture_Invariants.md) | Mandatory architecture rules (40+ invariants) |
 | [FAQ.md](./FAQ.md) | Architecture Q&A, design rationale, operational guidance |
 | [ARCCLAW_EXTENSION.md](./ARCCLAW_EXTENSION.md) | Adding tools, personas, reflexes, channels, skills, LLM providers |
