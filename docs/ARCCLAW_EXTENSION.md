@@ -155,7 +155,7 @@ Map.entry(AgentPersona.ANALYST.roleId(), new RoleDefinition(
     AgentPersona.ANALYST.displayName(),
     "Interprets structured data and produces clear summaries.",
     5,       // maxIterations
-    true,    // requiresApproval
+    true,    // requiresApproval — false = trusted role (bypasses non-sensitive op checks)
     false,   // codeCapable
     Set.of(), // capabilities - assembled dynamically via @ToolMetadata
     AgentPersona.ANALYST.aliases()
@@ -565,6 +565,11 @@ public class MyObservationTransformer implements ObservationTransformer {
 ## 8. Add a ToolGuardInterceptor
 
 `ToolInvocationGuard` runs before every tool invocation and decides whether to allow, block, deduplicate, or pause for approval. You can plug in custom governance rules via the `ToolGuardInterceptor` SPI - for example, to enforce domain-specific constraints, rate limits per tool, or custom block patterns.
+
+**Sensitive operations requiring HITL:** `NETWORK_OUTBOUND` and `EXECUTE_SHELL` are
+classified as sensitive operations that always require HITL approval, even for trusted
+roles (roles with `requiresApproval=false` in their `RoleDefinition`). See Architecture
+Invariant §4.10.2 for the role-based governance bypass rules.
 
 ### Implementing a custom interceptor
 

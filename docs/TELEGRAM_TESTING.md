@@ -970,17 +970,31 @@ concurrent audit writes for the same session are serialized via `SessionAuditSeq
 `SessionReaper` runs at startup and terminates any sessions with `IN_PROGRESS` or
 `AWAITING_APPROVAL` checkpoints that were left open by a previous crash.
 
+**Important change (2026-05-30):** Zombie recovery now auto-denies ALL stale
+`AWAITING_APPROVAL` checkpoints for **all channel types** (CLI, Telegram, WebSocket UI),
+not just CLI. After restart, conversation context is stale — the LLM would be confused
+by old approval failures. Denial fires:
+- `ApprovalDecisionEvent` for Telegram inline keyboard button updates ("expired")
+- `agentSseService.complete()` for WebSocket UI SSE stream completion
+- `cliResultBridge.cancel()` for CLI session unblocking
+
 **Test:**
-1. Start a task: `Write a very long essay...` (something that takes time)
-2. While the agent is thinking, kill the process immediately (`Ctrl+C` hard)
+1. Trigger an AWAITING_APPROVAL checkpoint (e.g., invoke a tool requiring approval)
+2. Kill the process immediately (`Ctrl+C` hard) — do NOT approve or deny
 3. Restart the app
 
 **Expect on restart:**
 ```
-INFO  [SessionReaper] Recovering zombie session <uuid> - marking FAILED
+INFO  [SessionReaper] Zombie recovery: found N AWAITING_APPROVAL checkpoint(s) — auto-denying all.
+WARN    Auto-denying stale approval: id=<id> session=<uuid> role=<role> tool=<tool>
 ```
 
+**Verify Telegram behavior:** The inline approval keyboard from before the crash
+now shows buttons as "expired". The Telegram message is edited in-place.
+
 Sending a new message on the same session works - the agent starts fresh.
+
+**Reference:** `SessionReaper.java` zombie recovery step 2, `ApprovalDecisionEvent.java`.
 
 ---
 

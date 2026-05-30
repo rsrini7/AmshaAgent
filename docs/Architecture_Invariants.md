@@ -221,6 +221,35 @@ Sub-sessions spawned by `DelegateToAgentTool` MUST inherit `READONLY` from the p
   This exemption is encoded in `ToolInvocationGuard` and MUST NOT be removed when
   adding new scheduling-adjacent tools without explicit review.
 
+### 4.10.2 Role-Based Tool Governance Bypass (§Invariant-RoleGovernanceBypass)
+
+`ToolGovernanceGuard` has a **role trust pre-flight check** that runs before operation-level
+policy enforcement. Trusted roles (those with `requiresApproval=false` in their
+`RoleDefinition`) bypass operation policy checks for **non-sensitive** operations.
+
+**Sensitive operations (`NETWORK_OUTBOUND` and `EXECUTE_SHELL`) always require HITL**
+regardless of role trust:
+
+```java
+boolean isSensitiveOp =
+    requiredOp == ToolOperation.NETWORK_OUTBOUND || requiredOp == ToolOperation.EXECUTE_SHELL;
+if (isTrustedRole && !isSensitiveOp) {
+    return; // trusted role — allow non-sensitive operations
+}
+```
+
+MUST NOT add new `ToolOperation` values without evaluating whether they should be
+classified as sensitive. Any operation involving external network access, arbitrary
+code execution, or privilege escalation MUST be added to the `isSensitiveOp` check.
+
+MUST NOT add roles to the HITL-exempt tools list (`hitl-exempt-tools`) as a replacement
+for the role trust pre-flight. The role trust check is preferred because it is
+dynamic (evaluated against the `RoleRegistry` at runtime) rather than static
+(config-driven). The `garuda` role has been removed from `hitl-exempt-tools` —
+its trusted role status is determined by `RoleRegistry.requiresApprovalForTools()`.
+
+**Reference:** `ToolGovernanceGuard.checkPolicy()`, `AgentRoleEnum.RoleDefinition.requiresApproval`, `PolicyConfig.HITL_EXEMPT_TOOLS`.
+
 ## 4.11 Intent Routing Negation Safety
 
 Fast-path routing patterns in IntentRoutingProvider implementations

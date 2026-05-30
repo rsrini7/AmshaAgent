@@ -16,6 +16,12 @@ Refer to [AGENTS.md](./AGENTS.md) for full developer instructions, including:
 * The Transaction-Free Zone (no high-latency network/LLM calls inside DB transactions).
 * Exception Classification Chain of Responsibility.
 * Inbound Message Pipeline abstractions.
+* Continuity intent vs follow-up heuristics (only `isExplicitContinuity` restores old goal; execution follow-ups use new goal).
+* Role-based tool governance bypass (trusted roles skip non-sensitive op checks; `NETWORK_OUTBOUND` and `EXECUTE_SHELL` always require HITL).
+* Garuda removed from HITL-exempt tools list.
+* Telegram garbled line stripping filter for outbound messages.
+* Zombie recovery auto-denies ALL channels (CLI, Telegram, WebSocket UI) on restart.
+* Saraswati role disabled from delegation (`requiresApproval=false`).
 
 ## 4. Security & Planning Best Practices
 * **Defense-in-Depth Sanitization**: Never rely solely on client-side HTML sanitization (e.g., DOMPurify). Ensure that LLM-generated output or rich text is sanitized server-side (e.g., using `HtmlSanitizerService` / OWASP HTML Sanitizer) before being broadcast to clients or persisted.

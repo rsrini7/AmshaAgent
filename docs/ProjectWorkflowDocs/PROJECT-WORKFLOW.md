@@ -314,12 +314,17 @@ Budget tracking: `GovernanceStrategy.recordLlmCall()` checks per-session token b
          → GuardDecision.Deduplicate(cachedObservation)
 3. Role tool schema check
          → GuardDecision.Blocked("Tool not permitted for this role")
-4. HITL pre-approval check:
+4. Role trust pre-flight check:
    - roleRegistry.requiresApprovalForTools(role)
-   - && tool is NOT a scheduling tool (exempt per §4.10)
+     - false → trusted role; skip non-sensitive op checks (go to step 6)
+     - true → untrusted role; proceed to operation-level checks (step 5)
+   - Sensitive operations (NETWORK_OUTBOUND, EXECUTE_SHELL) always reach step 5
+     regardless of role trust.
+5. HITL pre-approval check:
+   - tool is NOT a scheduling tool (exempt per §4.10)
    - && autonomy is NOT FULL
          → GuardDecision.PauseForApproval(toolName, paramsJson)
-5. Default → GuardDecision.Allow
+6. Default → GuardDecision.Allow
 ```
 
 ### Step C.1: ToolStepHandler - Auto-Heal Hook

@@ -9,6 +9,12 @@
 * **Transaction-Free Zone**: No LLM calls, network requests, or tool execution inside `@Transactional`.
 * **Null-safe sealed interface access**: If a sealed interface method returns a nullable wrapper (`Boolean`, `Integer`), always use `Boolean.TRUE.equals(x)` or `!= null` guard. Never auto-unbox. See AGENTS.md §1.5.
 * **JDK 25 GA features only**: Use finalized features — `var _` for discarded values, pattern matching `switch`, sealed interfaces, `instanceof` pattern matching, text blocks. Do NOT use preview features (structured concurrency, stream gatherers, module imports, value classes). See AGENTS.md §1.6.
+* **Continuity intent vs follow-up**: Only `isExplicitContinuity` (try again, retry, redo, proceed, continue) restores the OLD goal. Execution follow-ups (run it, execute, do it) use the NEW goal. See AGENTS.md §1.7.
+* **Garuda no longer HITL-exempt**: `garuda` was removed from `hitl-exempt-tools`. Role-based governance bypass handles trusted roles instead. See AGENTS.md §2.9.
+* **Role-based tool governance bypass**: Trusted roles (`requiresApproval=false`) skip operation policy checks for non-sensitive operations. `NETWORK_OUTBOUND` and `EXECUTE_SHELL` always require HITL. See AGENTS.md §2.9.
+* **Garble-strip Telegram output**: Always call `TelegramChannelSender.stripGarbledLines()` before sending outbound Telegram messages to filter lines with >80% garbled characters. See AGENTS.md §3.2.
+* **Zombie recovery auto-denies ALL channels**: `SessionReaper` auto-denies stale `AWAITING_APPROVAL` checkpoints for CLI, Telegram, and UI channels — fires `ApprovalDecisionEvent` and completes SSE streams. See AGENTS.md §3.3.
+* **Saraswati disabled from delegation**: `saraswati` now has `requiresApproval=false`, meaning other agents cannot delegate tasks to the researcher role. See AGENTS.md §3.4.
 * **Import alignment**: After editing Java files, run `python3 ./fix_fqns.py` then `./mvnw spotless:apply -q`.
 * **SonarQube check**: Before committing, run `mise run sonar:issues` to find BLOCKER/CRITICAL issues. Fix BLOCKERs before committing.
 

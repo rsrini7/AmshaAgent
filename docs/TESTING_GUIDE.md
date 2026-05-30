@@ -321,8 +321,14 @@ VALUES ('zombie-test-1', 'zombie-session-999', 'coordinator', 'AWAITING_APPROVAL
 Restart ArcClaw. Check logs immediately:
 
 ```
-INFO  [WorkspaceManager] [ZOMBIE-RECOVERY] recovered 1 stale session(s) - marked FAILED
+INFO  [SessionReaper] Zombie recovery: found N AWAITING_APPROVAL checkpoint(s) — auto-denying all.
+WARN    Auto-denying stale approval: id=<id> session=<uuid> role=<role> tool=<tool>
 ```
+
+**Note (2026-05-30):** All stale `AWAITING_APPROVAL` checkpoints are now auto-denied for
+ALL channel types (CLI, Telegram, WebSocket UI). The reaper fires `ApprovalDecisionEvent`
+and completes SSE streams via `agentSseService.complete()`. Previously only CLI approvals
+were auto-denied; Telegram/UI approvals survived the restart with stale context.
 
 ---
 

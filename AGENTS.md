@@ -175,6 +175,15 @@ import module java.base;  // JEP 511 — preview, do not use
 
 ---
 
+### 1.7 Continuity Intent vs Follow-Up Heuristics
+
+* **Rule**: Intent classification **MUST** distinguish between explicit continuity commands (which restore the **old** goal) and follow-up heuristics (which preserve the **role** but use the **new** goal input).
+* **Continuity commands** (restore old goal): `try again`, `retry`, `do it again`, `once more`, `redo`, `go ahead`, `proceed`, `continue`, `now execute`, `run that`, `execute it`, `run this`
+* **Execution follow-ups** (NOT continuity — use NEW goal): `execute`, `run it`, `do it`, `Execute the code`, single-word execution commands like `run java`, `run python`, `run node`, `run go`, `run bash`
+* **Enforcement**: `AgentDispatchHandler.resolveGoal()` uses `isExplicitContinuity` (renamed from `isContinuity`). `IntentClassificationService.CONTINUITY_PATTERN` excludes bare execution verbs. `TextPatternUtils.isFollowUpHeuristic()` handles language-specific run commands.
+* **Reason**: Execution follow-ups ("run it", "execute") should use the current user message as the new goal, not the old restored goal. Mixing them causes stale context to be restored after compaction, producing confusing results.
+* **Reference**: `IntentClassificationService.java` CONTINUITY_PATTERN, `AgentDispatchHandler.java` resolveGoal(), `IntentClassificationServiceTest.java` assertions.
+
 ## 2. Key Framework Components
 
 ### 2.1 Exception Classification (Chain of Responsibility)
@@ -275,10 +284,73 @@ import module java.base;  // JEP 511 — preview, do not use
 * **Query Safety**: On `ParseException` (e.g., `[ref:...]` brackets in goal text), falls back to `QueryParser.escape()` before retrying. Returns empty on total parse failure.
 * **Lifecycle**: Rebuilt on startup via `@PostConstruct`. Can be hot-reloaded via public `rebuild()` method.
 
+### 2.9 Role-Based Tool Governance Bypass
+
+* **Structure**: `ToolGovernanceGuard` (`arcclaw-core/.../tools/ToolGovernanceGuard.java`) now has a **role trust pre-flight check** before operation-level policy enforcement.
+* **Pattern**:
+  ```java
+  AgentRoleEnum roleEnum = AgentRoleEnum.fromString(ctx.agentRole());
+  boolean isTrustedRole = !roleRegistry.requiresApprovalForTools(roleEnum);
+  boolean isSensitiveOp =
+          requiredOp == ToolOperation.NETWORK_OUTBOUND || requiredOp == ToolOperation.EXECUTE_SHELL;
+  if (isTrustedRole && !isSensitiveOp) {
+      return; // trusted role — allow non-sensitive operations
+  }
+  ```
+* **Trusted roles** (those with `requiresApproval=false` in their `RoleDefinition`) bypass operation policy checks for **non-sensitive** operations.
+* **Sensitive operations always require HITL**: `NETWORK_OUTBOUND` (external search) and `EXECUTE_SHELL` (code execution) always trigger HITL regardless of role trust.
+* **When adding a new `ToolOperation` that should always require HITL**, add it to the `isSensitiveOp` check in `ToolGovernanceGuard.checkPolicy()`.
+* **Garuda removed from HITL-exempt tools**: `garuda` is no longer in the `hitl-exempt-tools` list across all config files (`.env.example`, `application.yaml`, `PolicyConfig.java`). The role-based bypass now handles trusted role access instead.
+* **Reference**: `ToolGovernanceGuard.java`, `AgentRoleEnum.java` `RoleDefinition.requiresApproval`, `PolicyConfig.hitlExemptTools()`.
+
+### 2.10 EXECUTE_SHELL as Sensitive Tool Operation
+
+* **Rule**: `EXECUTE_SHELL` is classified as a **sensitive tool operation** — alongside `NETWORK_OUTBOUND`. Both always require HITL for trusted roles.
+* **Enforcement**: `ToolGovernanceGuard.checkPolicy()` checks `requiredOp == ToolOperation.NETWORK_OUTBOUND || requiredOp == ToolOperation.EXECUTE_SHELL` for the sensitive op gate.
+* **Verification**: Run the app and confirm that `sandbox_exec` triggers AWAITING_APPROVAL at SUPERVISED autonomy level even for trusted roles.
+* **Reference**: `ToolGovernanceGuard.java` isSensitiveOp check, `ToolOperation.java` enum.
+
 ---
 
 ### 3.1 No Hardcoded Tool Name Strings
 * **Rule**: Never use hardcoded strings like `"sandbox_exec"`, `"github"`, `"schedule_task"`, etc. in Java code logic. Always reference the canonical name via `ToolCapability.ENUM.toolName()`.
+
+### 3.2 Telegram Garbled Line Stripping
+* **Rule**: All outbound Telegram messages **MUST** be sanitized via `stripGarbledLines()` before sending. This filters lines where >80% of non-space characters are garbled/control characters (`?`, `…`, em-dashes, non-breaking hyphens, OTHER_PUNCTUATION).
+* **Pattern**:
+  ```java
+  text = stripGarbledLines(text);
+  if (text.isBlank()) {
+      log.warnf("Attempted to send garbled-only message to %s - skipping", chatId);
+      return;
+  }
+  ```
+* **Location**: `TelegramChannelSender.java` `sendMessageInternal()` calls `stripGarbledLines()` at the top of the method, before length-based chunking.
+* **Reason**: Free/quantized LLM models sometimes produce spurious control character sequences before real content. Stripping them prevents user-facing garbled output.
+* **Reference**: `TelegramChannelSender.stripGarbledLines()`, `TelegramChannelSender.sendMessageInternal()`.
+
+### 3.3 SessionReaper Zombie Recovery — All Channels
+* **Rule**: On service restart, `SessionReaper` **MUST** auto-deny ALL stale `AWAITING_APPROVAL` checkpoints for **all** channel types (CLI, Telegram, WebSocket UI), not just CLI.
+* **Pattern**:
+  ```java
+  // After restart, conversation context is stale — auto-deny all pending approvals
+  checkpointStore.transitionStatus(dto.id(), CheckpointStatus.DENIED.name());
+
+  // Fire decision event for Telegram/UI to update inline keyboards/SSE streams
+  decisionEvents.fireAsync(new ApprovalDecisionEvent(...));
+  agentSseService.complete(dto.sessionId());
+  ```
+* **Behavior**:
+  - **CLI**: `cliResultBridge.cancel()` is called to unblock CLI sessions.
+  - **Telegram**: An `ApprovalDecisionEvent` is fired so inline keyboard buttons update to show "expired".
+  - **UI (WebSocket)**: `agentSseService.complete()` completes the SSE stream so subscribers are notified.
+* **Reference**: `SessionReaper.java` zombie recovery step 2, `ApprovalDecisionEvent.java`, `AgentSseService.complete()`.
+
+### 3.4 Saraswati (Researcher) Role Disabled from Delegation
+* **Rule**: The `saraswati` researcher role now has `requiresApproval=false` in its `RoleDefinition`, meaning it is **disabled from delegation** — other agents cannot delegate tasks to Saraswati.
+* **Location**: `AgentRoleEnum.java` `DEFINITIONS` map for `AgentPersona.SARASWATI`.
+* **Reason**: Saraswati's role definition was adjusted to reduce delegation surface area. The researcher role is a read-only information retrieval role; direct delegation to it is unnecessary when all roles have `garuda` for escalation.
+* **Reference**: `AgentRoleEnum.java` `DEFINITIONS.put(SARASWATI_ID, ...)`.
 * **Reason**: Hardcoded strings silently break when tool names change. The enum is the single source of truth.
 * **Exceptions** (not refactorable):
   * `@ToolMetadata(capabilityId = "...")` / `@Tool(name = "...")` annotation attributes (require compile-time constants)
