@@ -68,14 +68,16 @@ class IntentClassificationServiceTest {
         assertTrue(intentDetector.isContinuityCommand("retry the task"));
         assertTrue(intentDetector.isContinuityCommand("retry carefully"));
 
-        // Execution continuity — prevents stale context from compacted summaries
-        assertTrue(intentDetector.isContinuityCommand("execute"));
-        assertTrue(intentDetector.isContinuityCommand("run it"));
+        // Execution follow-ups — NOT continuity (use NEW goal, not restored old goal)
+        assertFalse(intentDetector.isContinuityCommand("execute"));
+        assertFalse(intentDetector.isContinuityCommand("run it"));
+        assertFalse(intentDetector.isContinuityCommand("do it"));
+
+        // Multi-word execution commands ARE continuity (explicit "execute it", "run that")
         assertTrue(intentDetector.isContinuityCommand("now execute it"));
-        assertTrue(intentDetector.isContinuityCommand("do it"));
         assertTrue(intentDetector.isContinuityCommand("execute it"));
         assertTrue(intentDetector.isContinuityCommand("run that"));
-        assertTrue(intentDetector.isContinuityCommand("Execute the code"));
-        assertTrue(intentDetector.isContinuityCommand("RUN IT"));
+        assertFalse(intentDetector.isContinuityCommand("Execute the code"));
+        assertFalse(intentDetector.isContinuityCommand("RUN IT"));
     }
 }
