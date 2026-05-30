@@ -16,8 +16,11 @@ import com.arcclaw.mcp.tool.DynamicToolCapabilityRegistry;
 
 import org.eclipse.microprofile.openapi.annotations.Operation;
 
+import io.smallrye.common.annotation.RunOnVirtualThread;
+
 @ApplicationScoped
 @Path("/mcp")
+@RunOnVirtualThread
 public class McpAdminResource {
 
     @Inject

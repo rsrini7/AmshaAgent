@@ -31,7 +31,7 @@ The reactor enforces strict architectural separation that prevents accidental de
 
 - **`arcclaw-channel-api`** - Channel SPI contracts (6 interfaces: `ChannelPlugin`, `ChannelSender`, `ReplyRenderer`, `ChannelAllowlist`, `ChannelJobNotifier`, `ChannelDaemon`) plus structured output types. Zero implementation — allows `arcclaw-core` to reference channel concepts without coupling to any specific adapter.
 - **`arcclaw-persistence-api`** - Hexagonal architecture port interfaces (`CheckpointStorePort`, `ChatMemoryStorePort`, `CronStorePort`, `SecretStorePort`, `SkillStorePort`, `AuditEventStorePort`, `AuditSchemaPort`, `CompactionStorePort`, `MemoryRetrievalPort`, `AdvisoryLockPort`, `PersistenceAdapterPort`). Core depends on ports, not implementations.
-- **`arcclaw-persistence-common`** - Shared JPA entities (`AgentCheckpointEntity`, `AgentCronEntity`, `AuditEventEntity`, `ReasoningStepEntity`) used by all persistence adapters.
+- **`arcclaw-persistence-common`** - Shared JDBI records/DTOs and `SessionKnowledgeBase` (in-memory embedding store) used by all persistence adapters.
 - **`arcclaw-core`** - Agent runtime kernel. Domain logic, tools, reflexes, governance, sandbox, pipeline, and CDI interfaces. Has zero awareness of REST, Telegram, or CLI.
 - **`arcclaw-persistence-sqlite`** - SQLite adapter implementing all persistence ports. Contains `GlobalKnowledgeBase`, `SessionKnowledgeBase`, WAL configuration, FTS5 setup, and `RagSchemaInitializer`.
 - **`arcclaw-persistence-fs`** - Filesystem-based persistence adapter for environments without SQLite.
@@ -445,7 +445,7 @@ After this, `GET /api/v1/mcp/tools` should show `registeredDynamicTools` with 2 
 
 ArcClaw uses a rolling window `ChatMemoryStore` capped at `arcclaw.chat-memory.max-messages` (default 20). When the window fills, the `CompactionHandler` in the message pipeline triggers `ContextCompactionService` if the message count exceeds `arcclaw.memory.compaction.threshold` (default 5 above the keep-recent count).
 
-Compaction uses `llama-3.1-8b-instant` to summarize the oldest messages into a `CompactionSummaryEntity`, discards the originals from the rolling window, and preserves the most recent `keep-recent` (default 5) messages verbatim. The summary is also written into the FTS5 database (`arcclaw-fts.db`) so it can be recalled later via `MemorySearchTool`.
+Compaction uses `llama-3.1-8b-instant` to summarize the oldest messages into a `CompactionSummaryDto`, discards the originals from the rolling window, and preserves the most recent `keep-recent` (default 5) messages verbatim. The summary is also written into the FTS5 database (`arcclaw-fts.db`) so it can be recalled later via `MemorySearchTool`.
 
 ---
 
@@ -534,7 +534,7 @@ Built-in examples: `SynthesisFunction` returns `SynthesisResult` (synthesizer's 
 ### Q: How does the autonomous cron scheduler work end-to-end?
 
 1. A user asks an agent to schedule a future task. The `coordinator` or `synthesizer` persona invokes `ScheduleTaskTool` with a 5-field UNIX cron expression, a self-contained goal, an optional timezone, and a `runOnce` flag.
-2. The tool validates the cron expression (via `cron-utils`), computes `nextFireTime`, and writes an `AgentCronEntity` with status `PENDING` to the `agent_cron` SQLite table.
+2. The tool validates the cron expression (via `cron-utils`), computes `nextFireTime`, and writes an `AgentCronDto` with status `PENDING` to the `agent_cron` SQLite table.
 3. `AgentCronScheduler` polls every 30 seconds (`arcclaw.cron.poll-interval`). It picks up `PENDING` jobs whose `nextFireTime ≤ now()` and hands them to `CronJobRunner`.
 4. `CronJobRunner` executes an agent loop (capped at `arcclaw.cron.max-iterations`, default 2) for the cron goal. On completion, it fires a CDI `AgentJobCompleted` event.
 5. `TelegramCronNotificationObserver` (or `CliCronNotificationObserver`) observes the event and delivers the result to the originating chat.

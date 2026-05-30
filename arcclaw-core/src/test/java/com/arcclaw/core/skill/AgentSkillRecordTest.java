@@ -9,7 +9,7 @@ import com.arcclaw.persistence.api.SkillDto;
 
 import org.junit.jupiter.api.Test;
 
-class AgentSkillEntityTest {
+class AgentSkillRecordTest {
 
     @Test
     void testAccessors() {

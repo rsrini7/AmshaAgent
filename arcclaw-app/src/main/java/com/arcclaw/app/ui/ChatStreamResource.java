@@ -26,6 +26,7 @@ import com.arcclaw.core.state.StatefulAgentStore;
 import org.eclipse.microprofile.openapi.annotations.Operation;
 import org.jboss.resteasy.reactive.RestStreamElementType;
 
+import io.smallrye.common.annotation.RunOnVirtualThread;
 import io.smallrye.mutiny.Multi;
 import io.smallrye.mutiny.operators.multi.processors.UnicastProcessor;
 
@@ -34,6 +35,7 @@ import io.smallrye.mutiny.operators.multi.processors.UnicastProcessor;
  */
 @Path("chat/stream")
 @ApplicationScoped
+@RunOnVirtualThread
 public class ChatStreamResource {
 
     @Inject

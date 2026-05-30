@@ -8,10 +8,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.context.Dependent;
 import jakarta.enterprise.inject.Alternative;
 import jakarta.enterprise.inject.Produces;
-import jakarta.inject.Inject;
 import jakarta.inject.Named;
-import jakarta.persistence.EntityManager;
-import jakarta.ws.rs.Path;
 
 import com.arcclaw.channel.api.ChannelAllowlist;
 import com.arcclaw.channel.api.IntentDetector;
@@ -35,8 +32,7 @@ public class RestResourceBuildStepFailureTest {
 
     @RegisterExtension
     static final QuarkusUnitTest config = new QuarkusUnitTest()
-            .setArchiveProducer(
-                    () -> ShrinkWrap.create(JavaArchive.class).addClasses(InvalidResource.class, TestProducers.class))
+            .setArchiveProducer(() -> ShrinkWrap.create(JavaArchive.class).addClasses(TestProducers.class))
             .overrideConfigKey("arcclaw.vault.pepper", "dummy-pepper-for-test-purposes-123")
             .overrideConfigKey("arcclaw.data-dir", ":memory:")
             .overrideConfigKey("arcclaw.auto-seed-secrets", "false")
@@ -49,12 +45,6 @@ public class RestResourceBuildStepFailureTest {
     public void testBuildFails() {
         // This line should not be reached if setExpectedException works as intended
         Assertions.fail("Build should have failed due to missing @RunOnVirtualThread");
-    }
-
-    @Path("/invalid")
-    public static class InvalidResource {
-        @Inject
-        EntityManager em;
     }
 
     @Dependent
@@ -126,14 +116,6 @@ public class RestResourceBuildStepFailureTest {
         @ApplicationScoped
         public EmbeddingModel embeddingModel() {
             return Mockito.mock(EmbeddingModel.class);
-        }
-
-        @Produces
-        @ApplicationScoped
-        @Alternative
-        @Priority(1)
-        public EntityManager entityManager() {
-            return Mockito.mock(EntityManager.class);
         }
     }
 }

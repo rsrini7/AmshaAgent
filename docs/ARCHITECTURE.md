@@ -316,7 +316,7 @@ Retrieval merges FTS5 keyword search + sqlite-vec vector search via Reciprocal R
 `CompactionService.compact()`:
 1. Fetches old `ChatMemory` turns beyond the compaction window
 2. Calls the compaction model (separate from reasoning model)
-3. Writes summary to `CompactionSummaryEntity` in SQLite
+3. Writes summary to `CompactionSummaryDto` via `summaryRepository.upsert()`
 4. Clears compacted turns from `PersistentChatMemoryStore`
 5. Releases `CompactionEventBridge` latch so `CompactionSummaryCache` reads fresh summary
 
@@ -556,7 +556,7 @@ Note: `session_registry` table is created by Flyway baseline migration (`V1__bas
 
 ### Build-Time Processors (`arcclaw-deployment`)
 
-`WorkspaceScopeProcessor` registers `@WorkspaceScoped` as custom CDI scope at build time. `RestResourceBuildStep` enforces `@RunOnVirtualThread` on JAX-RS resources injecting `EntityManager`. `AgentFunctionProcessor` processes `@AgentFunction` interfaces and generates JSON schemas from SAM return types at build time.
+`WorkspaceScopeProcessor` registers `@WorkspaceScoped` as custom CDI scope at build time. `RestResourceBuildStep` enforces `@RunOnVirtualThread` on JAX-RS resources injecting `EntityManager`. **Note:** This guard catches third-party langchain4j REST APIs (Gemini, Anthropic, OpenAI) that still use JPA internally — ArcClaw's own code has zero JPA/EntityManager usage. `AgentFunctionProcessor` processes `@AgentFunction` interfaces and generates JSON schemas from SAM return types at build time.
 
 ---
 

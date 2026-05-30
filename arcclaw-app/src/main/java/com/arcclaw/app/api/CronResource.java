@@ -31,9 +31,12 @@ import com.arcclaw.persistence.api.CronStorePort;
 import org.eclipse.microprofile.openapi.annotations.Operation;
 import org.jboss.logging.Logger;
 
+import io.smallrye.common.annotation.RunOnVirtualThread;
+
 @Path("/cron")
 @Produces(MediaType.APPLICATION_JSON)
 @Consumes(MediaType.APPLICATION_JSON)
+@RunOnVirtualThread
 public class CronResource {
 
     private static final Logger log = Logger.getLogger(CronResource.class);

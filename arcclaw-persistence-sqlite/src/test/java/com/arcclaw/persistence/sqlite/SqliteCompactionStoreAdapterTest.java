@@ -31,7 +31,7 @@ class SqliteCompactionStoreAdapterTest {
     }
 
     @Test
-    void testUpsert_insertsNewEntity() {
+    void testUpsert_insertsNew() {
         String sessionId = "insert-" + System.currentTimeMillis();
         repository.upsert(new CompactionSummaryDto(sessionId, "summary-1", Instant.now(), 3, "test-user"));
 
@@ -45,7 +45,7 @@ class SqliteCompactionStoreAdapterTest {
     }
 
     @Test
-    void testUpsert_updatesExistingEntity() {
+    void testUpsert_updatesExisting() {
         String sessionId = "update-" + System.currentTimeMillis();
         repository.upsert(new CompactionSummaryDto(sessionId, "summary-1", Instant.now(), 1, "test-user"));
 
@@ -63,7 +63,7 @@ class SqliteCompactionStoreAdapterTest {
     }
 
     @Test
-    void testDeleteBySessionId_removesEntity() {
+    void testDeleteBySessionId_removes() {
         String sessionId = "delete-" + System.currentTimeMillis();
         repository.upsert(new CompactionSummaryDto(sessionId, "summary-1", Instant.now(), 2, "test-user"));
 

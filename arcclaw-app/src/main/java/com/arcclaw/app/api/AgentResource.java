@@ -43,6 +43,7 @@ import io.smallrye.common.annotation.RunOnVirtualThread;
 @Path("/sessions")
 @Consumes(MediaType.APPLICATION_JSON)
 @Produces(MediaType.APPLICATION_JSON)
+@RunOnVirtualThread
 public class AgentResource {
 
     @Inject

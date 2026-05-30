@@ -93,9 +93,9 @@ public class ArchitectureBoundaryTest {
 
     // 8. com.arcclaw.core does NOT depend on jakarta.persistence.EntityManager (§5.14.1)
     @ArchTest
-    static final ArchRule coreShouldNotUseEntityManager = noClasses()
+    static final ArchRule anyPackageShouldNotUseEntityManager = noClasses()
             .that()
-            .resideInAPackage("com.arcclaw.core..")
+            .resideInAPackage("com.arcclaw..")
             .should()
             .dependOnClassesThat()
             .haveFullyQualifiedName("jakarta.persistence.EntityManager")

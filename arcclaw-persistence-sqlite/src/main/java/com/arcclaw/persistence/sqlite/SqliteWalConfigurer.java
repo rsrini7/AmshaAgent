@@ -24,7 +24,7 @@ import io.quarkus.runtime.StartupEvent;
  * Ensures SQLite WAL mode is enabled for concurrent read/write and
  * re-attaches the FTS database on every fresh connection if needed.
  * <p>
- * Entity table DDL is managed by Flyway (V1__baseline.sql).
+ * Table DDL is managed by Flyway (V1__baseline.sql).
  * Logic moved to the persistence-sqlite module to isolate SQLite-specific
  * boot configuration from the core domain.
  */

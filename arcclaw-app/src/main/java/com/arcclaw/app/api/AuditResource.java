@@ -33,9 +33,12 @@ import com.arcclaw.persistence.api.AuditEventStorePort;
 
 import org.eclipse.microprofile.openapi.annotations.Operation;
 
+import io.smallrye.common.annotation.RunOnVirtualThread;
+
 @Path("/audit")
 @Produces(MediaType.APPLICATION_JSON)
 @Consumes(MediaType.APPLICATION_JSON)
+@RunOnVirtualThread
 public class AuditResource {
 
     @Inject

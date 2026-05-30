@@ -118,7 +118,7 @@ public interface StatefulAgentStore extends PendingApprovalChecker {
      * Save the final state of a checkpoint and mark it as completed or failed.
      * <p>
      * This creates/updates the {@link AgentCheckpoint} and persists all
-     * {@link ReasoningStepEntity} rows in a single atomic transaction.
+     * {@link ReasoningStepDto} rows in a single atomic transaction.
      *
      * @param sessionId   The workspace session ID.
      * @param agentRole   The agent role identifier.

@@ -28,7 +28,6 @@ import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.persistence.api.CheckpointCrudPort;
 import com.arcclaw.persistence.api.CheckpointDto;
-import com.arcclaw.persistence.common.entity.AgentCheckpointEntity;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -77,11 +76,11 @@ class AgentResourceTest {
         Mockito.when(apiKeyRegistry.isMutationAllowed(anyString())).thenReturn(true);
 
         // Mock store to return a valid (completed) checkpoint for status checks
-        AgentCheckpoint checkpoint = new AgentCheckpointEntity();
-        checkpoint.setSessionId("any-session");
-        checkpoint.setAgentRole("coordinator");
-        checkpoint.setStatus(CheckpointStatus.COMPLETED);
-        checkpoint.setStateJson("[{\"description\":\"Calculated final answer\"}]");
+        AgentCheckpoint checkpoint = Mockito.mock(AgentCheckpoint.class);
+        Mockito.when(checkpoint.getSessionId()).thenReturn("any-session");
+        Mockito.when(checkpoint.getAgentRole()).thenReturn("coordinator");
+        Mockito.when(checkpoint.getStatus()).thenReturn(CheckpointStatus.COMPLETED);
+        Mockito.when(checkpoint.getStateJson()).thenReturn("[{\"description\":\"Calculated final answer\"}]");
 
         Mockito.when(agentStore.load(anyString(), anyString())).thenReturn(Optional.of(checkpoint));
         Mockito.when(agentStore.loadSteps(any()))

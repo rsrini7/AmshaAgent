@@ -36,7 +36,7 @@ public class ChannelApprovalTimeoutDispatcher {
         if (typeOpt.isEmpty()) {
             log.warnf(
                     "ChannelApprovalTimeoutDispatcher: unknown channelType '%s' for session %s - "
-                            + "dropping timeout notification. Fix: ensure channelType is set on AgentCronEntity.",
+                            + "dropping timeout notification. Fix: ensure channelType is set on AgentCronDto.",
                     event.channelType(), event.sessionId());
             return;
         }

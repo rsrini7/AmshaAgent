@@ -309,10 +309,10 @@ public class SessionReaper {
         auditSequencer.releaseStaleSession(cp.getSessionId());
     }
 
-    // CHAT HISTORY RETENTION SWEEP - purges ChatMemoryEntity rows for old sessions
+    // CHAT HISTORY RETENTION SWEEP - purges chat_memory rows for old sessions
 
     /**
-     * Purge ChatMemoryEntity rows where sessionId has no active/recent checkpoint.
+     * Purge ChatMemory rows where sessionId has no active/recent checkpoint.
      * This prevents the chat_memory table from growing unboundedly (§85-retention).
      */
     @Scheduled(every = "24h", delayed = "PT10M")

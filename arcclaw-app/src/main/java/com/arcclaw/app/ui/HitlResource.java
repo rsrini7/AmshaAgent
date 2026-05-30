@@ -45,6 +45,7 @@ import io.smallrye.mutiny.Multi;
 @ApplicationScoped
 @Path("hitl")
 @Produces(MediaType.APPLICATION_JSON)
+@RunOnVirtualThread
 public class HitlResource {
 
     private static final String HITL_AUDIT_PREFIX = "hitl-";
@@ -100,7 +101,6 @@ public class HitlResource {
     }
 
     @GET
-    @RunOnVirtualThread
     @Operation(summary = "List all pending tool execution approvals for the current user")
     public Response listPending(
             @QueryParam("page") @DefaultValue("0") int page, @QueryParam("size") @DefaultValue("20") int size) {
@@ -139,7 +139,6 @@ public class HitlResource {
     @POST
     @Path("{taskId}/approve")
     @Consumes(MediaType.APPLICATION_JSON)
-    @RunOnVirtualThread
     @Operation(summary = "Approve a pending tool execution")
     public Response approve(
             @PathParam("taskId") String taskId,
@@ -181,7 +180,6 @@ public class HitlResource {
     @POST
     @Path("{taskId}/reject")
     @Consumes(MediaType.APPLICATION_JSON)
-    @RunOnVirtualThread
     @Operation(summary = "Reject a pending tool execution")
     public Response reject(
             @PathParam("taskId") String taskId,

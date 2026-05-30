@@ -15,10 +15,13 @@ import jakarta.ws.rs.core.Response;
 
 import com.arcclaw.channel.api.ChannelServices;
 
+import io.smallrye.common.annotation.RunOnVirtualThread;
+
 @Path("/chat/ws-token")
 @Consumes(MediaType.APPLICATION_JSON)
 @Produces(MediaType.APPLICATION_JSON)
-public class WsAuthService {
+@RunOnVirtualThread
+public class WsAuthResource {
 
     private static final String COOKIE_API_KEY = "ARCCLAW_API_KEY";
 

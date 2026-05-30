@@ -20,9 +20,12 @@ import com.arcclaw.core.memory.tiered.CoreMemoryService;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.persistence.api.CoreMemoryBlockDto;
 
+import io.smallrye.common.annotation.RunOnVirtualThread;
+
 @Path("/admin/memory/core")
 @Produces(MediaType.APPLICATION_JSON)
 @Consumes(MediaType.APPLICATION_JSON)
+@RunOnVirtualThread
 public class CoreMemoryAdminResource {
 
     @Inject

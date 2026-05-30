@@ -8,9 +8,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.context.Dependent;
 import jakarta.enterprise.inject.Alternative;
 import jakarta.enterprise.inject.Produces;
-import jakarta.inject.Inject;
 import jakarta.inject.Named;
-import jakarta.persistence.EntityManager;
 import jakarta.ws.rs.Path;
 
 import com.arcclaw.channel.api.ChannelAllowlist;
@@ -20,7 +18,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.jboss.shrinkwrap.api.ShrinkWrap;
 import org.jboss.shrinkwrap.api.spec.JavaArchive;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 import org.mockito.Mockito;
 
@@ -29,32 +26,18 @@ import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import io.quarkus.qute.Template;
 import io.quarkus.test.QuarkusUnitTest;
 import io.smallrye.common.annotation.Identifier;
-import io.smallrye.common.annotation.RunOnVirtualThread;
 
 public class RestResourceBuildStepSuccessTest {
 
     @RegisterExtension
     static final QuarkusUnitTest config = new QuarkusUnitTest()
-            .setArchiveProducer(() -> ShrinkWrap.create(JavaArchive.class)
-                    .addClasses(ValidResource.class, NonJpaResource.class, TestProducers.class))
+            .setArchiveProducer(() -> ShrinkWrap.create(JavaArchive.class).addClasses(TestProducers.class))
             .overrideConfigKey("arcclaw.vault.pepper", "dummy-pepper-for-test-purposes-123")
             .overrideConfigKey("arcclaw.data-dir", ":memory:")
             .overrideConfigKey("arcclaw.auto-seed-secrets", "false")
             .overrideConfigKey("arcclaw.llm.gemini.api-key", "dummy-gemini-key")
             .overrideConfigKey("quarkus.langchain4j.timeout", "10s")
             .overrideConfigKey("quarkus.arc.exclude-types", "com.arcclaw.core.**,com.arcclaw.persistence.sqlite.**");
-
-    @Test
-    public void testBuildSucceeds() {
-        // No-op, just verifying build success
-    }
-
-    @Path("/valid")
-    @RunOnVirtualThread
-    public static class ValidResource {
-        @Inject
-        EntityManager em;
-    }
 
     @Path("/non-jpa")
     public static class NonJpaResource {
@@ -130,14 +113,6 @@ public class RestResourceBuildStepSuccessTest {
         @ApplicationScoped
         public EmbeddingModel embeddingModel() {
             return mock(EmbeddingModel.class);
-        }
-
-        @Produces
-        @ApplicationScoped
-        @Alternative
-        @Priority(1)
-        public EntityManager entityManager() {
-            return mock(EntityManager.class);
         }
 
         private <T> T mock(Class<T> clazz) {

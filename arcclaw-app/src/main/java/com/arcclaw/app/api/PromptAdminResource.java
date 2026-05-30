@@ -22,9 +22,12 @@ import com.arcclaw.core.agent.reasoning.prompt.PromptConstants;
 import com.arcclaw.core.agent.reasoning.prompt.PromptRegistry;
 import com.arcclaw.persistence.api.PromptDto;
 
+import io.smallrye.common.annotation.RunOnVirtualThread;
+
 @Path("/admin/prompts")
 @Produces(MediaType.APPLICATION_JSON)
 @Consumes(MediaType.APPLICATION_JSON)
+@RunOnVirtualThread
 public class PromptAdminResource {
 
     @Inject
