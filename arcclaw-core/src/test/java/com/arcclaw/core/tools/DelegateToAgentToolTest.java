@@ -220,7 +220,7 @@ class DelegateToAgentToolTest {
 
         assertFalse(response.success());
         assertEquals(409, response.exitCode());
-        assertTrue(response.output().contains("paused for human approval"));
+        assertTrue(response.output().contains("approval"));
     }
 
     @Test

@@ -156,11 +156,50 @@ public class TelegramChannelSender implements ChannelSender {
     }
 
     /**
+     * Strips garbled output lines (mostly ?, …, ‑, em-dash, special punctuation) that free models
+     * sometimes produce before real content. Keeps lines with actual alphanumeric content.
+     */
+    static String stripGarbledLines(String text) {
+        if (text == null || text.isBlank()) return text;
+        StringBuilder result = new StringBuilder();
+        for (String line : text.split("\n", -1)) {
+            // Count garbled characters: ?, …, ‑, —, em-dash, special punctuation, spaces
+            long garbled = line.chars()
+                    .filter(c -> c == '?'
+                            || c == '…'
+                            || c == '\u2011' // non-breaking hyphen
+                            || c == '\u2014' // em-dash
+                            || c == '\u2013' // en-dash
+                            || c == '\u2026' // horizontal ellipsis
+                            || c == '.'
+                            || c == ','
+                            || c == ' '
+                            || Character.getType(c) == Character.OTHER_PUNCTUATION)
+                    .count();
+            // If more than 80% of non-space characters are garbled, skip the line
+            long nonSpace = line.chars().filter(c -> !Character.isWhitespace(c)).count();
+            if (nonSpace > 0 && garbled > nonSpace * 0.8) {
+                continue; // skip garbled line
+            }
+            result.append(line).append('\n');
+        }
+        // Trim trailing newline
+        String cleaned = result.toString();
+        if (cleaned.endsWith("\n")) cleaned = cleaned.substring(0, cleaned.length() - 1);
+        return cleaned;
+    }
+
+    /**
      * Internal helper to send a message to a specific chat ID, handling chunking if needed.
      */
     private void sendRawToChatId(String chatId, String text) {
         if (text == null || text.isBlank()) {
             log.warnf("Attempted to send empty message to %s - skipping", chatId);
+            return;
+        }
+        text = stripGarbledLines(text);
+        if (text.isBlank()) {
+            log.warnf("Attempted to send garbled-only message to %s - skipping", chatId);
             return;
         }
         if (text.length() <= maxLength) {

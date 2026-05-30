@@ -40,7 +40,9 @@ public final class UserMessages {
                     + "Please request the coordinator to delegate via coder.";
     public static final String DELEGATION_FAILED_FORMAT = "Delegation to '%s' failed: %s";
     public static final String DELEGATION_PAUSED_FORMAT =
-            "Agent '%s' paused for human approval of tool '%s'. Delegation cannot complete until the inner session is approved. Session: %s";
+            "Delegation to '%s' requires approval for tool '%s' (session: %s). "
+                    + "The delegated agent is waiting for human approval. "
+                    + "Inform the user that approval is needed and wait for it to be granted.";
     public static final String DELEGATION_EXCEEDED_FORMAT =
             "Agent '%s' exceeded its iteration budget (%d iterations). Try simplifying the goal.";
     public static final String SESSION_CLEARED = "🧹 Session state and temporary workspace cleared.";
