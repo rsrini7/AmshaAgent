@@ -92,7 +92,7 @@ public class InfiniteLoopAgentChatModelProvider implements AgentChatModelProvide
         // Log provider summary table
         StringBuilder table = new StringBuilder();
         table.append("\n┌─────────────────────────────────────────────────────────────────────┐\n");
-        table.append("│                    LLM PROVIDER CONFIGURATION                      │\n");
+        table.append("│                    LLM PROVIDER CONFIGURATION                       │\n");
         table.append("├──────────────┬──────────────────────────────────────────────────────┤\n");
         table.append(String.format("│ %-12s │ %-52s │\n", "Provider", "Model(s)"));
         table.append("├──────────────┼──────────────────────────────────────────────────────┤\n");
@@ -114,7 +114,7 @@ public class InfiniteLoopAgentChatModelProvider implements AgentChatModelProvide
 
         table.append("├──────────────┴──────────────────────────────────────────────────────┤\n");
         table.append(String.format(
-                "│ Cooldown: %ds base, %ds max, %ds transient │ %6dms max latency  │\n",
+                "│ Cooldown: %ds base, %ds max, %ds transient │ %6dms max latency   │\n",
                 cooldownBaseSeconds, cooldownMaxSeconds, cooldownTransientSeconds, maxLatencyMs));
         table.append("└─────────────────────────────────────────────────────────────────────┘");
         log.infof("InfiniteLoop: Provider summary:%s", table);

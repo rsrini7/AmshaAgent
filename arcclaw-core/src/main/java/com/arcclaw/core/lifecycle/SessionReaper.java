@@ -141,25 +141,35 @@ public class SessionReaper {
             log.info("Zombie recovery: no orphaned IN_PROGRESS checkpoints found.");
         }
 
-        // Step 2: Replay surviving AWAITING_APPROVAL - never orphan at startup
-        // CLI approvals are auto-denied (CLI has no SSE subscription to replay into)
+        // Step 2: Auto-deny ALL stale AWAITING_APPROVAL on restart.
+        // After restart, conversation context is stale — the LLM will be confused
+        // by old approval failures. All channels (CLI, Telegram, UI) are denied.
+        // Users can re-issue their request after restart.
         List<CheckpointDto> pendingApprovals = checkpointStore.findByStatus(CheckpointStatus.AWAITING_APPROVAL.name());
         if (!pendingApprovals.isEmpty()) {
-            log.infof("Zombie recovery: found %d AWAITING_APPROVAL checkpoint(s).", pendingApprovals.size());
+            log.infof(
+                    "Zombie recovery: found %d AWAITING_APPROVAL checkpoint(s) — auto-denying all.",
+                    pendingApprovals.size());
             for (var dto : pendingApprovals) {
+                log.warnf(
+                        "  Auto-denying stale approval: id=%d session=%s role=%s tool=%s",
+                        dto.id(), dto.sessionId(), dto.agentRole(), dto.pendingToolName());
+                checkpointStore.transitionStatus(dto.id(), CheckpointStatus.DENIED.name());
+
+                // Notify all channels consistently
                 if (ChannelType.CLI.id().equalsIgnoreCase(dto.channelType())) {
-                    log.warnf(
-                            "  Auto-denying CLI approval: id=%d session=%s tool=%s",
-                            dto.id(), dto.sessionId(), dto.pendingToolName());
-                    checkpointStore.transitionStatus(dto.id(), CheckpointStatus.DENIED.name());
                     cliResultBridge.cancel(dto.sessionId());
-                } else {
-                    log.infof(
-                            "  Surviving approval: id=%d session=%s role=%s tool=%s",
-                            dto.id(), dto.sessionId(), dto.agentRole(), dto.pendingToolName());
-                    agentSseService.republishOnSubscribe(
-                            dto.sessionId(), dto.pendingToolName(), dto.pendingToolParametersJson());
                 }
+                // Telegram: fire decision event so buttons are edited to "expired"
+                // UI: complete SSE stream so subscribers are notified
+                decisionEvents.fireAsync(new ApprovalDecisionEvent(
+                        dto.sessionId(),
+                        dto.channelType(),
+                        dto.channelPlatformId(),
+                        dto.pendingToolName(),
+                        ApprovalDecision.REJECT,
+                        ApprovalOutcome.EXPIRED));
+                agentSseService.complete(dto.sessionId());
             }
         } else {
             log.info("Zombie recovery: no orphaned AWAITING_APPROVAL checkpoints found.");
