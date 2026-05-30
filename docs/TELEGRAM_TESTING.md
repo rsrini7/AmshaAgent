@@ -1,9 +1,9 @@
 # ArcClaw - Telegram Testing Guide
 
 > **Prerequisites**: ArcClaw is running in `attach telegram` mode with a valid `TELEGRAM_BOT_TOKEN`
-> and your user ID in `ARCCLAW_TELEGRAM_ALLOWED_USER_IDS`. See [SETUP.md Section 7.7](./SETUP.md#77-telegram-bot-setup-required-for-attach-telegram-mode) for setup.
+> and your user ID in `ARCCLAW_TELEGRAM_ALLOWED_USER_IDS`. See [MANUAL_SETUP.md §5.5](./MANUAL_SETUP.md#55-telegram-required-only-for-attach-mode) for Telegram setup.
 
-> **Docs**: [README](./README.md) · [Setup](./SETUP.md) · [Testing Guide](./TESTING_GUIDE.md) · [FAQ](./FAQ.md) · [REST Client Files](./rest-http/)
+> **Docs**: [README](../README.md) · [ARCHITECTURE.md](./ARCHITECTURE.md) · [CONFIGURATION.md](./CONFIGURATION.md) · [Setup](./SETUP.md) · [FAQ](./FAQ.md)
 
 ---
 

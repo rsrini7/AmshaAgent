@@ -7,7 +7,7 @@
 
 ---
 
-> **Docs**: [README](./README.md) · [MISE Setup](./MISE_SETUP.md) · [Testing Guide](./TESTING_GUIDE.md) · [Telegram Testing](./TELEGRAM_TESTING.md) · [FAQ](./FAQ.md)
+> **Docs**: [README](../README.md) · [ARCHITECTURE.md](./ARCHITECTURE.md) · [CONFIGURATION.md](./CONFIGURATION.md) · [Testing Guide](./TESTING_GUIDE.md) · [FAQ](./FAQ.md)
 
 ---
 
@@ -1105,14 +1105,14 @@ The `init-perms` service in `docker-compose.yaml` handles this automatically by 
 
 | Document | Purpose |
 |---|---|
-| [`README.md`](./README.md) | Architecture overview, agent personas, security model |
+| [`README.md`](../README.md) | Architecture overview, agent personas, security model |
 | [`MISE_SETUP.md`](./MISE_SETUP.md) | Automated setup via mise task runner (recommended) |
 | [`TESTING_GUIDE.md`](./TESTING_GUIDE.md) | End-to-end testing (19 sections) |
 | [`TELEGRAM_TESTING.md`](./TELEGRAM_TESTING.md) | Telegram bot end-to-end testing |
 | [`ARCCLAW_EXTENSION.md`](./ARCCLAW_EXTENSION.md) | Extension guide: 15 SPIs for tools, reflexes, channels, routing, persistence |
 | [`CHANNEL_SPI.md`](./CHANNEL_SPI.md) | Adding new channels (Discord, Slack, etc.) via 6-interface SPI |
 | [`FAQ.md`](./FAQ.md) | Architecture Q&A, security rationale, operational guidance |
-| [`rest-http/`](./rest-http/) | IntelliJ / VSCode REST Client files |
+| [`rest-http/`](../rest-http/) | IntelliJ / VSCode REST Client files |
 
 ---
 

@@ -2,9 +2,9 @@
 
 > **Stack**: JDK 25 · Quarkus 3.27.2 · LangChain4J 1.x · SQLite (WAL + FTS5 + sqlite-vec) · Podman (rootless) · Groq Cloud
 >
-> This guide covers the automated test suite and the complete REST API surface. Use alongside [TELEGRAM_TESTING.md](./TELEGRAM_TESTING.md) for full end-to-end coverage, and [rest-http/README.md](./rest-http/README.md) for the `.http` file reference.
+> This guide covers the automated test suite and the complete REST API surface. Use alongside [TELEGRAM_TESTING.md](./TELEGRAM_TESTING.md) for full end-to-end coverage, and [rest-http/README.md](../rest-http/README.md) for the `.http` file reference.
 
-> **Docs**: [README](./README.md) · [Setup](./SETUP.md) · [Telegram Testing](./TELEGRAM_TESTING.md) · [FAQ](./FAQ.md) · [REST Client Files](./rest-http/)
+> **Docs**: [README](../README.md) · [ARCHITECTURE.md](./ARCHITECTURE.md) · [CONFIGURATION.md](./CONFIGURATION.md) · [Setup](./SETUP.md) · [FAQ](./FAQ.md)
 
 ---
 
@@ -144,7 +144,7 @@ ARCCLAW_TELEGRAM_BOT_TOKEN=...  # required for attach telegram mode only
 
 ### REST Client Files Index
 
-All HTTP test files live in `rest-http/`. See [rest-http/README.md](./rest-http/README.md) for full details.
+All HTTP test files live in `rest-http/`. See [rest-http/README.md](../rest-http/README.md) for full details.
 
 | File | Coverage |
 |---|---|
