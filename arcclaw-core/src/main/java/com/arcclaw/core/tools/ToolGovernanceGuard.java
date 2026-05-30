@@ -8,7 +8,9 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.agent.role.CapabilityRegistry;
+import com.arcclaw.core.agent.role.RoleRegistry;
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.config.PolicyConfig;
@@ -40,6 +42,9 @@ public class ToolGovernanceGuard {
 
     @Inject
     CapabilityRegistry capabilityRegistry;
+
+    @Inject
+    RoleRegistry roleRegistry;
 
     @Inject
     PolicyConfig policyConfig;
@@ -93,6 +98,14 @@ public class ToolGovernanceGuard {
     public void verifyAutonomy(
             ToolExecutionContext ctx, String toolName, ToolOperation requiredOp, Map<String, Object> params) {
         AutonomyLevel level = ctx.autonomyLevel();
+
+        // 0. ROLE TRUST: if the role has requiresApproval=false, it's a trusted execution role.
+        // Trusted roles bypass operation policy checks — their tools are pre-approved by role definition.
+        AgentRoleEnum roleEnum = AgentRoleEnum.fromString(ctx.agentRole());
+        boolean isTrustedRole = !roleRegistry.requiresApprovalForTools(roleEnum);
+        if (isTrustedRole) {
+            return; // trusted role — allow all operations
+        }
 
         // 1. HARD BLOCK check: if the policy says "not allowed" (e.g., READONLY level),
         // we throw SecurityException (403).
