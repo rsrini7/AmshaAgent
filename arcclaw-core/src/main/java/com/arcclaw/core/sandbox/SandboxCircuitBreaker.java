@@ -27,10 +27,10 @@ public class SandboxCircuitBreaker {
     private final AtomicLong openedAtWallClock = new AtomicLong(0L);
     private final AtomicLong openedAtNano = new AtomicLong(0L);
 
-    @ConfigProperty(name = "arcclaw.sandbox.podman.failure-threshold", defaultValue = "3")
+    @ConfigProperty(name = "arcclaw.sandbox.circuit-breaker.failure-threshold", defaultValue = "3")
     int podmanFailureThreshold;
 
-    @ConfigProperty(name = "arcclaw.sandbox.podman.reset-timeout-seconds", defaultValue = "30")
+    @ConfigProperty(name = "arcclaw.sandbox.circuit-breaker.reset-timeout-seconds", defaultValue = "30")
     int resetTimeoutSeconds;
 
     // For testability

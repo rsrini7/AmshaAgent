@@ -9,10 +9,10 @@ import org.eclipse.microprofile.config.inject.ConfigProperty;
 @ApplicationScoped
 public class OpenRouterLlmProviderFactory implements RoutingChatModelProvider {
 
-    @ConfigProperty(name = "arcclaw.openrouter.site-url", defaultValue = "https://github.com/rsrini7/arcclaw")
+    @ConfigProperty(name = "arcclaw.llm.openrouter.site-url", defaultValue = "https://github.com/rsrini7/arcclaw")
     String siteUrl;
 
-    @ConfigProperty(name = "arcclaw.openrouter.app-name", defaultValue = "ArcClaw")
+    @ConfigProperty(name = "arcclaw.llm.openrouter.app-name", defaultValue = "ArcClaw")
     String appName;
 
     @Override

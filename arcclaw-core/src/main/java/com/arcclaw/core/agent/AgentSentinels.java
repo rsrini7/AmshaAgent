@@ -95,7 +95,7 @@ public final class AgentSentinels {
                     + "|\\*\\*ArcClaw Version\\*\\*"
                     + "|\\*\\*Git Repository Detected\\*\\*"
                     + "|\\*\\*Registered Agent Tools\\*\\*"
-                    + "|You are (?:Vishnu|Brahma|Shiva|Saraswati|Ganesha|Shakti|Kartikeya),",
+                    + "|You are (?:Vishnu|Brahma|Shiva|Saraswati|Ganesha|Kartikeya|Brihaspati|Lakshmi|Durga|Kali|Parvati|Dattatreya),",
             Pattern.CASE_INSENSITIVE);
 
     public static final String SYSTEM_ROLE = "system";

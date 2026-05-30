@@ -595,7 +595,8 @@ arcclaw:
     java-executable: "${ARCCLAW_SANDBOX_JAVA_EXECUTABLE:}"
     allow-insecure-fallback: "${ARCCLAW_SANDBOX_ALLOW_INSECURE_FALLBACK:false}"
     circuit-breaker:
-      failure-threshold: 3   # was 2; gives LLM one retry for param errors
+      failure-threshold: ${ARCCLAW_SANDBOX_CB_FAILURE_THRESHOLD:3}   # was 2; gives LLM one retry for param errors
+      reset-timeout-seconds: ${ARCCLAW_SANDBOX_CB_RESET_TIMEOUT_SECONDS:30}
 
   autonomy:
     default-level: SUPERVISED

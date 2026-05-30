@@ -102,7 +102,7 @@ public class WorkspaceManager {
     @ConfigProperty(name = "arcclaw.workspace.root-dir", defaultValue = "./data/workspaces")
     String workspaceRootDir;
 
-    @ConfigProperty(name = "arcclaw.chat-memory.max-messages", defaultValue = "100")
+    @ConfigProperty(name = "arcclaw.chat-memory.max-messages", defaultValue = "20")
     int maxMessages;
 
     // Session Termination

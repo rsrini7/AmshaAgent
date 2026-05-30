@@ -25,7 +25,7 @@ class ToolCategoryMapperTest {
     void categoryFor_database() {
         assertEquals(ToolCategory.DATABASE, mapper.categoryFor("recall_memory_search"));
         assertEquals(ToolCategory.DATABASE, mapper.categoryFor("ingest_document"));
-        assertEquals(ToolCategory.DATABASE, mapper.categoryFor("check_list"));
+        assertEquals(ToolCategory.DATABASE, mapper.categoryFor("manage_checklist"));
         assertEquals(ToolCategory.DATABASE, mapper.categoryFor("agent_task"));
     }
 
