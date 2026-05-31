@@ -20,7 +20,9 @@ public class AgentStateObserver implements AgentObserver {
     Event<AgentStateChangedEvent> stateChangedEvent;
 
     @Override
-    public void recordLlmCall(String sessionId, int inputTokens, int outputTokens) {}
+    public void recordLlmCall(String sessionId, int inputTokens, int outputTokens) {
+        // No-op: AgentStateObserver only cares about loop completion events
+    }
 
     @Override
     public void onLoopComplete(String sessionId, String userId, String agentRole, String goalHash, AgentResult result) {

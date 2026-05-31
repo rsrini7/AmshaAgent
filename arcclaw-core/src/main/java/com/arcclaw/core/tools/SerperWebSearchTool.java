@@ -134,7 +134,7 @@ public class SerperWebSearchTool implements AgentTool {
                                 .description(
                                         "Optional result type: 'search' (default) for web results, or 'news' for latest news articles.")
                                 .build())
-                .required("query") // keep count optional so model can omit it safely
+                .required(PARAM_QUERY)
                 .build();
     }
 

@@ -133,6 +133,7 @@ public class OnboardingResource {
     @POST
     @Path("/step/1")
     @Operation(summary = "Start onboarding and move to Provider selection")
+    @SuppressWarnings("java:S1192")
     public Response step1(@CookieParam(COOKIE_NAME) Cookie cookie, @Context HttpHeaders headers) {
         String sid = resolveSessionId(cookie, headers);
         OnboardingState state = registry.getOrCreate(sid);

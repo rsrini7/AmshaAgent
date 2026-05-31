@@ -42,6 +42,7 @@ public class ToolSchemaProvider {
         }
     }
 
+    @SuppressWarnings("java:S1192")
     private Map<String, Object> schemaToMap(JsonObjectSchema schema) {
         if (schema == null) return null;
         Map<String, Object> result = new LinkedHashMap<>();

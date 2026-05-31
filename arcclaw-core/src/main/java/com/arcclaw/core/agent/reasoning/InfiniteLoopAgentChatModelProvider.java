@@ -102,7 +102,7 @@ public class InfiniteLoopAgentChatModelProvider implements AgentChatModelProvide
             // Extract model name from MultiModel or single model
             String modelName;
             if (slot.model() instanceof MultiModelChatModel multi) {
-                modelName = multi.toString().replaceAll("MultiModel\\[", "").replaceAll("\\]", "");
+                modelName = multi.toString().replace("MultiModel[", "").replace("]", "");
             } else {
                 modelName = modelStr.length() > 52 ? modelStr.substring(0, 49) + "..." : modelStr;
             }

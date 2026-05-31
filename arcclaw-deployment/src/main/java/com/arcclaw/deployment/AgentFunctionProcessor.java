@@ -157,6 +157,7 @@ public class AgentFunctionProcessor {
         buildSchema(index, itemType, node.putObject("items"), processedTypes, reflectiveClasses);
     }
 
+    @SuppressWarnings("java:S1192")
     private void buildObjectSchema(
             IndexView index,
             Type type,

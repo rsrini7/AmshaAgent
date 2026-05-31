@@ -75,6 +75,7 @@ public class PromptInjectionReflex implements AgentReflex, InputSanitizer {
 
     private record InjectionRule(Pattern pattern, String category) {}
 
+    @SuppressWarnings("java:S1192")
     private static final List<InjectionRule> RULES = List.of(
             // Category 3 - ArcClaw Governance Bypass (project-specific)
             new InjectionRule(HUMAN_APPROVED, "GOVERNANCE_BYPASS"),

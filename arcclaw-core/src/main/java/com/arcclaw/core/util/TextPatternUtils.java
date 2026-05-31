@@ -15,7 +15,9 @@ public class TextPatternUtils {
     @ConfigProperty(name = "arcclaw.core.util.json-salvage-max-lines", defaultValue = "20")
     int jsonSalvageMaxLines = 20;
 
-    public TextPatternUtils() {}
+    public TextPatternUtils() {
+        /* CDI proxy */
+    }
 
     /**
      * Returns true if the original goal requested execution.

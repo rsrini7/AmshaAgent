@@ -38,8 +38,8 @@ public class PodmanContainerExecutor {
 
     private static final Logger log = Logger.getLogger(PodmanContainerExecutor.class);
 
-    private static volatile boolean podmanAvailable = false;
-    private static volatile long lastChecked = 0;
+    private volatile boolean podmanAvailable = false;
+    private volatile long lastChecked = 0;
 
     @Inject
     AgentOtelContext otelContext;

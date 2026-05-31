@@ -43,7 +43,7 @@ public final class AgentSentinels {
 
     // PII Redaction
     public static final String REDACTED_HYPHEN = "REDACTED-";
-    public static final Pattern REDACTED_HYPHEN_PATTERN = Pattern.compile("REDACTED-");
+    public static final Pattern REDACTED_HYPHEN_PATTERN = Pattern.compile(REDACTED_HYPHEN);
     public static final String DATA_IS_PII_REDACTED = "isPiiRedacted";
 
     // Intent/Chitchat

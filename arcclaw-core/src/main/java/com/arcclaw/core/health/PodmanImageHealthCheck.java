@@ -23,6 +23,7 @@ public class PodmanImageHealthCheck implements HealthCheck {
     boolean sandboxEnabled;
 
     @Override
+    @SuppressWarnings("java:S1192")
     public HealthCheckResponse call() {
         if (!sandboxEnabled) {
             return HealthCheckResponse.named("Podman Image: " + containerImage)
