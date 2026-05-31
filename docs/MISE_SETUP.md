@@ -184,11 +184,10 @@ After reloading: `mise run <TAB>` shows all tasks with tab completion.
 
 ### What `mise run setup` does
 
-1. `.env.example` → `.env` (skips if exists)
-2. `chmod +x mvnw` (Linux/macOS/WSL2 only)
-3. `mise install java@temurin-25`
-4. `mise install java@graalvm-community-25.0.2`
+1. `setup:chmod-tasks` — makes all .mise/task scripts executable
+2. `setup:wsl-crlf` — fixes CRLF line endings in WSL2 (no-op on other platforms)
 
+> **Note:** `.env` creation and JDK installation are now split into `mise run arcclaw:setup`.
 ***
 
 ## 4. Trust the Config File
@@ -276,22 +275,22 @@ mise run help    # or: mise tasks
 
 | Task | What it does |
 |---|---|
-| `mise run start` | Bootstrap guide - works before `mise install` |
+| `mise run start` | Bootstrap guide — works before `mise install` |
 | **`mise run setup:profile`** | Write mise activate + completion to shell profile (idempotent) |
-| **`mise run setup`** | `.env`, chmod +x mvnw, install JDKs |
+| **`mise run setup`** | Make tasks executable, fix CRLF (WSL2) |
 | `mise run setup:wsl-crlf` | Fix CRLF in mvnw (WSL2 after Windows clone) |
 | `mise run setup:env-check` | Validate `.env` for missing/placeholder values |
 | **`mise run jdk:status`** | Show active JDK + all installed |
 | `mise run jdk:graalvm` | Switch to GraalVM Community 25.0.2 |
 | `mise run jdk:temurin` | Switch back to Temurin 25 |
 | `mise run jdk:install` | Install both JDKs (idempotent) |
-| **`mise run build-app`** | JVM build, skip tests - fast daily driver |
+| **`mise run build:app`** | JVM build, skip tests — fast daily driver |
 | `mise run build:full` | Clean install all modules, skip tests |
 | `mise run build:test` | Build and run all tests |
 | `mise run build:native` | Native binary - auto-detects Podman or local GraalVM |
 | `mise run build:native-local` | Native binary - always local GraalVM, no container |
 | `mise run build:native-lowmem` | Native binary - local GraalVM, 6 GB heap cap |
-| `mise run clean` | `mvnw clean` |
+| `mise run build:clean` | `mvnw clean` |
 | **`mise run dev`** | Hot-reload serve on :8080 (strategy: NONE) |
 | `mise run dev:chat` | Hot-reload - interactive REPL |
 | `mise run dev:attach` | Hot-reload - Telegram daemon |
@@ -314,7 +313,7 @@ mise run help    # or: mise tasks
 | `mise run compose:down-clean` | Stop stack + delete volumes (prompts YES) |
 | `mise run compose:logs` | Follow arcclaw container logs |
 | `mise run compose:restart` | Restart only arcclaw service |
-| `mise run sandbox:check` | Verify tool-runner image exists |
+| `mise run podman:sandbox-check` | Verify tool-runner image exists |
 | `mise run podman:init` | macOS: init Podman VM (6 GB RAM, 4 CPUs) |
 | `mise run podman:start` | macOS: start Podman VM |
 | `mise run podman:stop` | macOS: stop Podman VM |
@@ -331,10 +330,11 @@ mise run help    # or: mise tasks
 ## 8. Build Tasks
 
 ```bash
-mise run build-app              # JVM build, skip tests → quarkus-run.jar
+```bash
+mise run build:app              # JVM build, skip tests → quarkus-run.jar
 mise run build:full             # all modules (after branch switch), skip tests
 mise run build:test             # with tests
-mise run clean
+mise run build:clean
 ```
 
 ### .env shielding - secrets stay out of the binary

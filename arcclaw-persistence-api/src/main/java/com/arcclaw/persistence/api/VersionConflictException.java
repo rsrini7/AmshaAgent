@@ -1,7 +1,7 @@
 package com.arcclaw.persistence.api;
 
 /**
- * Thrown by {@link TieredMemoryStorePort#upsertCoreMemory} when the
+ * Thrown by {@link CoreMemoryStorePort#upsert} when the
  * {@code expectedVersion} does not match the current stored version.
  * <p>
  * Implements CAS (Compare-And-Swap) semantics for Core Memory block updates.

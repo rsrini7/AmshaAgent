@@ -249,6 +249,9 @@ public class ToolStepHandler {
                     "⚠️ " + failure.output(), AgentResult.FailureCategory.SYSTEM_ERROR, List.copyOf(history)));
         }
 
+        // Track whether auto-heal already attempted escalation to prevent duplicate
+        boolean autoHealAttemptedEscalation = false;
+
         // Auto-heal hook: intercept sandbox_exec failures for coder and delegate to Shiva
         if (response instanceof ToolResponse.ToolFailure failure
                 && recoveryService.shouldAttemptRecovery(context.agentRole(), toolName, response)) {
@@ -294,23 +297,28 @@ public class ToolStepHandler {
                         response = retriedResponse;
                     }
                 }
+                autoHealAttemptedEscalation = true;
             } else {
+                autoHealAttemptedEscalation = true;
                 log.warnf("[AutoHeal] Recovery failed: %s, attempting persona escalation", recovery.errorIfFailed());
                 response =
                         attemptEscalationAfterHealFailure(context, step, toolName, params, failure, failure, history);
             }
         }
 
-        // Persona escalation hook: intercept failures that match escalation patterns
-        if (response instanceof ToolResponse.ToolFailure failure
-                && escalationService.shouldAttemptEscalation(context.agentRole(), toolName, response)) {
-            String targetRole =
-                    escalationService.determineEscalationTarget(context.agentRole(), failure.output(), context.goal());
-            if (targetRole != null) {
-                log.infof(
-                        "[PersonaEscalation] Detected escalation pattern for session %s, routing %s → %s",
-                        context.sessionId(), context.agentRole(), targetRole);
-                response = attemptEscalation(context, step, toolName, params, failure, targetRole, history);
+        // Skip generic escalation hook if auto-heal already attempted it
+        if (!autoHealAttemptedEscalation) {
+            // Persona escalation hook: intercept failures that match escalation patterns
+            if (response instanceof ToolResponse.ToolFailure failure
+                    && escalationService.shouldAttemptEscalation(context.agentRole(), toolName, response)) {
+                String targetRole = escalationService.determineEscalationTarget(
+                        context.agentRole(), failure.output(), context.goal());
+                if (targetRole != null) {
+                    log.infof(
+                            "[PersonaEscalation] Detected escalation pattern for session %s, routing %s → %s",
+                            context.sessionId(), context.agentRole(), targetRole);
+                    response = attemptEscalation(context, step, toolName, params, failure, targetRole, history);
+                }
             }
         }
 

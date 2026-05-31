@@ -59,7 +59,7 @@ public class SqliteRecallMemoryStore implements RecallMemoryStorePort {
 
     @Override
     public Optional<RecallMessageDto> getById(String messageId) {
-        return Optional.empty();
+        return jdbi.withExtension(RecallMemoryJdbiDao.class, dao -> dao.getById(messageId));
     }
 
     @Override

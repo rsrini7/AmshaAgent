@@ -248,7 +248,7 @@ dynamic (evaluated against the `RoleRegistry` at runtime) rather than static
 (config-driven). The `garuda` role has been removed from `hitl-exempt-tools` —
 its trusted role status is determined by `RoleRegistry.requiresApprovalForTools()`.
 
-**Reference:** `ToolGovernanceGuard.checkPolicy()`, `AgentRoleEnum.RoleDefinition.requiresApproval`, `PolicyConfig.HITL_EXEMPT_TOOLS`.
+**Reference:** `ToolGovernanceGuard.verifyAutonomy()`, `AgentRoleEnum.RoleDefinition.requiresApproval`, `PolicyConfig.HITL_EXEMPT_TOOLS`.
 
 ## 4.11 Intent Routing Negation Safety
 
@@ -710,7 +710,7 @@ export ARCCLAW_PERSISTENCE_BACKEND=postgres
 |---------|------------------------|-------|
 | **SQLite** (default) | None — zero config | Data stored in `./arcclaw-data/` by default |
 | **PostgreSQL** | `QUARKUS_DATASOURCE_JDBC_URL`, `QUARKUS_DATASOURCE_USERNAME`, `QUARKUS_DATASOURCE_PASSWORD` | Flyway auto-creates schema on startup |
-| **Filesystem** | `ARCCLAW_FS_DATA_DIR` (optional, default `./arcclaw-data`) | Uses Lucene index for BM25 search |
+| **Filesystem** | `ARCCLAW_FS_DATA_DIR` (optional, default `./data/fs`) | Uses Lucene index for BM25 search |
 
 ### Why SQLite Is the Default
 
@@ -814,11 +814,9 @@ This is **3 archives × 3 binaries each = 9 binaries total** across all platform
 ### 6.4 Resource loading
 - For generated/augmented resources in multi-module tests, prefer context-classloader resource loading when required by current Quarkus augmentation behavior.
 
-## 6.5 @RunOnVirtualThread enforcement (REMOVED — JDBI Migration)
+## 6.5 @RunOnVirtualThread enforcement (Revised — Post-JDBI)
 
-This rule was specific to Hibernate's `EntityManager` in JAX-RS resources. Since **all modules
-have migrated to JDBI**, there is no `EntityManager` to inject in any REST resource.
-`RestResourceBuildStep` has been removed.
+`RestResourceBuildStep` was NOT removed — it was restructured to enforce `@RunOnVirtualThread` on ALL `com.arcclaw` REST resource classes, not just those with `EntityManager` injection. The build step validates that every `@Path`-annotated class carries the `@RunOnVirtualThread` annotation, failing the build if any resource lacks it.
 
 ### 6.6 Static run-time objects
 - MUST NOT store JDK or library objects that require run-time initialization (e.g. `java.net.http.HttpClient`, `java.lang.Thread`, or descriptors) in `static` or `static final` fields when building for native-image.
@@ -874,7 +872,7 @@ EXCEPTION WHEN OTHERS THEN
 END $$;
 ```
 
-The `embedding vector(768)` column and HNSW index MUST be similarly guarded with `IF EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'vector')`.
+The `embedding vector(768)` column and HNSW index MUST be similarly guarded with `IF EXISTS (SELECT 1 FROM pg_available_extensions WHERE name = 'vector')`.
 
 **Rationale:** Tests use embedded Postgres (Testcontainers / `io.zonky.test`) which does not have pgvector installed. Unconditional `CREATE EXTENSION vector` fails with `could not open extension control file` and blocks all Postgres tests.
 

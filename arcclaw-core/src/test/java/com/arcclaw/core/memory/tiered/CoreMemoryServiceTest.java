@@ -52,8 +52,9 @@ class CoreMemoryServiceTest {
         service = new CoreMemoryService();
         service.coreStore = coreStore;
         service.config = tieredConfig;
-        service.maxBlocksPerUser = 20;
-        service.maxCharsPerBlock = 2000;
+        when(tieredConfig.coreMemory()).thenReturn(coreMemoryConfig);
+        when(coreMemoryConfig.maxBlocksPerUser()).thenReturn(20);
+        when(coreMemoryConfig.maxCharsPerBlock()).thenReturn(2000);
     }
 
     @Test

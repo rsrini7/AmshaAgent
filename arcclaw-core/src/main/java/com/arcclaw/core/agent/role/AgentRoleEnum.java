@@ -86,7 +86,7 @@ public record AgentRoleEnum(String id) {
                             AgentPersona.SARASWATI.displayName(),
                             "Perform information retrieval, web searches, and documentation lookups.",
                             10,
-                            false,
+                            true,
                             false,
                             Set.of(),
                             AgentPersona.SARASWATI.aliases())),

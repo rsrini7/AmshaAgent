@@ -142,7 +142,7 @@ On restart, auto-deny ALL stale `AWAITING_APPROVAL` checkpoints for all channel 
 ## 4. Maven Build & Dependency Resolution
 
 * **Local repo sync**: After modifying a dependency module, run `./mvnw clean install -DskipTests` so dependent modules see the latest classes.
-* **PMD gates**: 500 lines/file, 80 lines/method, cognitive complexity ≤ 15. PMD runs during `verify` phase. SonarQube (`mise run sonar:issues`) is primary gate.
+* **PMD gates**: 500 lines/file, 80 lines/method, cognitive complexity ≤ 50 (transitioning to 15). PMD runs during `verify` phase. SonarQube (`mise run sonar:issues`) is primary gate.
 * **Version management**: All third-party dependency versions in parent `pom.xml` `<dependencyManagement>` via `<property>`. Module `pom.xml` entries **MUST NOT** have hardcoded `<version>`. Exceptions: plugin versions (managed separately), internal deps use `${project.version}`, BOM imports use their own property.
 * **PostgreSQL conflict**: Native PG on `:5432` intercepts Podman container's PG. Detect: `lsof -i :5432`. Fix: stop/uninstall native PG service (see OS-specific commands in `docs/MANUAL_SETUP.md`).
 

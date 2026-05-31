@@ -38,7 +38,7 @@
 
 ## 1. Running the Test Suite
 
-ArcClaw has **1458 tests** across the multi-module reactor.
+ArcClaw has **1664 tests** across the multi-module reactor.
 
 ### 1.1 Run all tests
 
@@ -105,9 +105,9 @@ When the `%test` profile is active:
 - Fault tolerance is disabled (`quarkus.smallrye-fault-tolerance.enabled: false`)
 - `DevSecretSeederStartup` bean is absent - it is `@IfBuildProfile("dev")` only (Phase 64-B2)
 
-### 1.6 Target: 1458+ green, 0 failures
+### 1.6 Target: 1664+ green, 0 failures
 
-After any code change, the full suite must remain at or above 1458 passing tests. Do not accept a lower count - missing tests indicate a compilation failure or a deleted test case.
+After any code change, the full suite must remain at or above 1664 passing tests. Do not accept a lower count — missing tests indicate a compilation failure or a deleted test case.
 
 ---
 
@@ -1980,7 +1980,7 @@ Run after deploying all Phase 64 fixes.
 
 Run after any significant code change. Combine automated + manual.
 
-### Automated (1458 tests - must remain green)
+### Automated (1664 tests — must remain green)
 
 ```bash
 ./mvnw clean test -pl arcclaw-app -am
@@ -2142,4 +2142,4 @@ For `ARCCLAW_VAULT_PEPPER` and `ARCCLAW_AUDIT_HMAC_KEY`, use stable 32+ characte
 
 ---
 
-*Last updated: ArcClaw V1.0.0 · Quarkus 3.27.2 · JDK 25 · 1458 tests · 17 modules · 15 tools · 10 LLM providers · Cron run history API · Answer Quality Guard*
+*Last updated: ArcClaw V1.0.0 · Quarkus 3.27.2 · JDK 25 · 1664 tests · 17 modules · 15 tools · 10 LLM providers · Tiered Memory · Answer Quality Guard*

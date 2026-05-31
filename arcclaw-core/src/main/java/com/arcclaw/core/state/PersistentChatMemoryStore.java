@@ -25,6 +25,7 @@ import com.arcclaw.core.agent.reasoning.MessageTag;
 import com.arcclaw.core.config.TieredMemoryConfig;
 import com.arcclaw.core.memory.tiered.RecallMemoryService;
 import com.arcclaw.core.memory.tiered.RecallMessageMapper;
+import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.persistence.api.ChatMemoryDto;
 import com.arcclaw.persistence.api.ChatMemoryStorePort;
 import com.arcclaw.persistence.api.RecallMessageDto;
@@ -131,7 +132,7 @@ public class PersistentChatMemoryStore implements ChatMemoryStore {
         String json = ChatMessageSerializer.messagesToJson(toKeep);
         String metadataJson = null;
         int currentWindowSize = nonSystemMessages.size();
-        int newlyAdded = Math.max(0, currentWindowSize - lastWindowSize);
+        int newlyAdded = Math.max(0, nonSystemMessages.size() - currentTimestamps.size());
         int cumulativeCount = lastCumulativeCount + newlyAdded;
         try {
             Map<String, Object> meta = new LinkedHashMap<>();
@@ -151,7 +152,8 @@ public class PersistentChatMemoryStore implements ChatMemoryStore {
             int startTurn = lastCumulativeCount;
             int tailStart = Math.max(0, nonSystemMessages.size() - delta);
             List<ChatMessage> newMessages = nonSystemMessages.subList(tailStart, nonSystemMessages.size());
-            List<RecallMessageDto> dtos = RecallMessageMapper.map(id, "default", newMessages, startTurn);
+            List<RecallMessageDto> dtos =
+                    RecallMessageMapper.map(id, WorkspaceContext.getUserIdOrUnknown(), newMessages, startTurn);
             recallService.insertBatch(dtos);
         }
     }

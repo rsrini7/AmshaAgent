@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Map;
 
 import com.arcclaw.core.pipeline.MessageContext;
+import com.arcclaw.core.util.ClassUtils;
 
 /**
  * Lists all registered reflexes with their priority and trigger pattern.
@@ -65,8 +66,15 @@ public class ListReflexesReflex implements AgentReflex {
     }
 
     private ReflexDescriptor resolveDescriptor(AgentReflex reflex) {
-        ReflexDescriptor desc = DESCRIPTORS.get(reflex.getClass());
-        if (desc != null) return desc;
+        Class<?> reflexClass = reflex.getClass();
+        // Unwrap CDI proxy: Quarkus @ApplicationScoped beans are proxied,
+        // so reflex.getClass() returns e.g. ApproveReflex_ClientProxy
+        String cleanName = ClassUtils.getCleanName(reflexClass);
+        for (var entry : DESCRIPTORS.entrySet()) {
+            if (ClassUtils.getCleanName(entry.getKey()).equals(cleanName)) {
+                return entry.getValue();
+            }
+        }
 
         // Handle cross-module reflexes loaded from different classloaders
         String simpleName = reflex.getClass().getSimpleName();

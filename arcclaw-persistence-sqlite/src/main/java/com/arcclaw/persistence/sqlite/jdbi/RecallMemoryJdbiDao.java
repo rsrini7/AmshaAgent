@@ -1,6 +1,7 @@
 package com.arcclaw.persistence.sqlite.jdbi;
 
 import java.util.List;
+import java.util.Optional;
 
 import com.arcclaw.persistence.api.RecallMessageDto;
 
@@ -64,4 +65,15 @@ public interface RecallMemoryJdbiDao {
             @Bind("query") String query,
             @Bind("includeSummaries") boolean includeSummaries,
             @Bind("limit") int limit);
+
+    @SqlQuery("""
+        SELECT m.message_id AS "messageId", m.session_id AS "sessionId", m.user_id AS "userId",
+               m.turn_number AS "turnNumber", m.content_hash AS "contentHash", m.role,
+               m.message_type AS "messageType", m.content, m.tool_name AS "toolName",
+               m.tool_call_id AS "toolCallId", m.has_code AS "hasCode", m.has_error AS "hasError",
+               m.created_at AS "createdAt", m.metadata_json AS "metadataJson"
+        FROM recall_messages m
+        WHERE m.message_id = :messageId
+        """)
+    Optional<RecallMessageDto> getById(@Bind("messageId") String messageId);
 }

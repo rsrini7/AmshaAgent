@@ -86,7 +86,7 @@ public class ArchivalMemoryInsertTool implements AgentTool {
 
     @Override
     public ToolOperation requiredOperation() {
-        return ToolOperation.WRITE_FS;
+        return ToolOperation.WRITE_MEMORY;
     }
 
     @Override

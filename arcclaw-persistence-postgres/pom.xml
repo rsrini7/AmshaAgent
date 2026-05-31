@@ -21,7 +21,7 @@
             <version>${project.version}</version>
         </dependency>
 
-        <!-- Shared JPA entities -->
+        <!-- Shared DTOs/utilities -->
         <dependency>
             <groupId>com.arcclaw</groupId>
             <artifactId>arcclaw-persistence-common</artifactId>

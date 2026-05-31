@@ -183,10 +183,11 @@ public class TmpfsSecretTransport implements SecretTransport {
         // Validate directory is not world-writable before listing/operating on it
         try {
             var perms = PosixFilePermissions.toString(Files.getPosixFilePermissions(shmDir));
-            if (perms.charAt(6) == 'w' || perms.charAt(8) == 'w') {
+            if (perms.charAt(4) == 'w' || perms.charAt(7) == 'w') {
                 log.warnf(
                         "TmpfsSecretTransport: %s has overly permissive permissions (%s) - skipping sweep",
                         shmDir, perms);
+                return;
             }
         } catch (UnsupportedOperationException | IOException _) {
             // Non-POSIX (Windows/macOS) — proceed without permission check

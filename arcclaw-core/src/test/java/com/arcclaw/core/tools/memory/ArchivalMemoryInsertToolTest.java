@@ -71,10 +71,10 @@ class ArchivalMemoryInsertToolTest {
         // We verify the tool metadata is correct so the guard path is wired:
         // 1. Tool declares requiresManualApproval=true
         // 2. Tool declares non-idempotent
-        // 3. Tool declares WRITE_FS operation (risk level 2)
+        // 3. Tool declares WRITE_MEMORY operation (LOW risk — memory write, not filesystem)
         assertTrue(tool.requiresManualApproval(Map.of("content", "x", "chunk_type", "FACT")));
         assertEquals(IdempotencyMode.NON_IDEMPOTENT, tool.idempotencyMode());
-        assertEquals(ToolOperation.WRITE_FS, tool.requiredOperation());
+        assertEquals(ToolOperation.WRITE_MEMORY, tool.requiredOperation());
     }
 
     @Test

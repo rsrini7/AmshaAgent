@@ -19,7 +19,7 @@ Fixes over v2.0:
 import sys, os, re, time, queue, threading, argparse, json, textwrap, uuid, pathlib
 from dataclasses import dataclass, field
 from enum import Enum
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 import subprocess
 
@@ -597,7 +597,7 @@ def write_json_report(results: list[TestResult], path: str):
         for r in results
     ]
     with open(path, "w", encoding="utf-8") as f:
-        json.dump({"generated_at": datetime.now(datetime.UTC).isoformat(),
+        json.dump({"generated_at": datetime.now(timezone.utc).isoformat(),
                    "results": data}, f, indent=2, ensure_ascii=False)
     print(f"[Report] JSON saved to {path}")
 

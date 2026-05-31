@@ -48,7 +48,8 @@ public class CoreMemoryAdminResource {
         return coreMemoryService
                 .get(userId, blockKey)
                 .map(Response::ok)
-                .orElse(Response.status(Response.Status.NOT_FOUND))
+                .orElse(Response.status(Response.Status.NOT_FOUND)
+                        .entity(new ArcClawErrorResponse("Core memory block not found: " + blockKey)))
                 .build();
     }
 

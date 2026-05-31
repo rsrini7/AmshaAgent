@@ -12,7 +12,6 @@ import com.arcclaw.persistence.api.CoreMemoryBlockDto;
 import com.arcclaw.persistence.api.CoreMemoryStorePort;
 import com.arcclaw.persistence.api.VersionConflictException;
 
-import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
 @ApplicationScoped
@@ -29,12 +28,6 @@ public class CoreMemoryService {
     @Inject
     TieredMemoryConfig config;
 
-    @ConfigProperty(name = "arcclaw.memory.tiered.core-memory.max-blocks-per-user", defaultValue = "20")
-    int maxBlocksPerUser;
-
-    @ConfigProperty(name = "arcclaw.memory.tiered.core-memory.max-chars-per-block", defaultValue = "2000")
-    int maxCharsPerBlock;
-
     public List<CoreMemoryBlockDto> readAll(String userId) {
         return coreStore.read(userId);
     }
@@ -48,13 +41,15 @@ public class CoreMemoryService {
             throw new IllegalArgumentException("Unknown block key: " + blockKey + ". Allowed: " + ALLOWED_BLOCK_KEYS);
         }
 
-        String trimmed = truncate(content, maxCharsPerBlock);
+        String trimmed = truncate(content, config.coreMemory().maxCharsPerBlock());
 
         Optional<CoreMemoryBlockDto> existing = coreStore.get(userId, blockKey);
         int expectedVersion = existing.map(CoreMemoryBlockDto::version).orElse(0);
 
-        if (existing.isEmpty() && coreStore.read(userId).size() >= maxBlocksPerUser) {
-            throw new IllegalStateException("Core Memory block limit reached: " + maxBlocksPerUser);
+        if (existing.isEmpty()
+                && coreStore.read(userId).size() >= config.coreMemory().maxBlocksPerUser()) {
+            throw new IllegalStateException(
+                    "Core Memory block limit reached: " + config.coreMemory().maxBlocksPerUser());
         }
 
         for (int attempt = 0; attempt < 3; attempt++) {
@@ -95,8 +90,10 @@ public class CoreMemoryService {
             throw new IllegalArgumentException("Unknown block key: " + blockKey + ". Allowed: " + ALLOWED_BLOCK_KEYS);
         }
 
-        if (coreStore.get(userId, blockKey).isEmpty() && coreStore.read(userId).size() >= maxBlocksPerUser) {
-            throw new IllegalStateException("Core Memory block limit reached: " + maxBlocksPerUser);
+        if (coreStore.get(userId, blockKey).isEmpty()
+                && coreStore.read(userId).size() >= config.coreMemory().maxBlocksPerUser()) {
+            throw new IllegalStateException(
+                    "Core Memory block limit reached: " + config.coreMemory().maxBlocksPerUser());
         }
 
         for (int attempt = 0; attempt < 3; attempt++) {
@@ -105,11 +102,11 @@ public class CoreMemoryService {
             String current = existing.map(CoreMemoryBlockDto::content).orElse("");
             String combined = current.isEmpty() ? content : current + "\n" + content;
 
-            if (combined.length() > maxCharsPerBlock) {
+            if (combined.length() > config.coreMemory().maxCharsPerBlock()) {
                 throw new IllegalArgumentException(String.format(
                         "Append would exceed max block size (%d chars). Current: %d, Append: %d. "
                                 + "Use 'core_memory_replace' to curate the block first.",
-                        maxCharsPerBlock, current.length(), content.length()));
+                        config.coreMemory().maxCharsPerBlock(), current.length(), content.length()));
             }
 
             try {

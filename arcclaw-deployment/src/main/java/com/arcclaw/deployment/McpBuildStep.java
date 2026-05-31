@@ -11,14 +11,15 @@ public class McpBuildStep {
 
     @BuildStep
     ReflectiveClassBuildItem registerMcpReflections(CombinedIndexBuildItem index) {
-        // Register all classes in com.arcclaw.mcp package for reflection
-        // This is necessary for serialization and CDI discovery in native image.
+        // Register classes needed for JSON serialization and dynamic tool dispatch.
+        // DTOs are covered by McpReflectionConfig — this covers the remaining
+        // transport/bridge infrastructure that Quarkus may not detect automatically.
         String[] classNames = index.getIndex().getKnownClasses().stream()
                 .map(ClassInfo::name)
                 .map(DotName::toString)
-                .filter(name -> name.startsWith("com.arcclaw.mcp"))
+                .filter(name ->
+                        name.startsWith("com.arcclaw.mcp.transport") || name.startsWith("com.arcclaw.mcp.bridge"))
                 .toArray(String[]::new);
-
         return ReflectiveClassBuildItem.builder(classNames).methods().fields().build();
     }
 }

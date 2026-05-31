@@ -13,8 +13,8 @@ if command -v podman &> /dev/null; then
     fi
     
     # Linux/WSL2: Check for Unix socket
-    UID=$(id -u 2>/dev/null)
-    SOCK="/run/user/$UID/podman/podman.sock"
+    MYUID=$(id -u 2>/dev/null)
+    SOCK="/run/user/$MYUID/podman/podman.sock"
     if [ -S "$SOCK" ]; then
         echo "unix://$SOCK"
         exit 0
