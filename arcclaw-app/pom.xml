@@ -81,6 +81,12 @@
       <version>${quarkus.version}</version>
       <scope>test</scope>
     </dependency>
+    <!-- JaCoCo coverage for Quarkus forked test JVMs (auto-configures agent + report) -->
+    <dependency>
+      <groupId>io.quarkus</groupId>
+      <artifactId>quarkus-jacoco</artifactId>
+      <scope>test</scope>
+    </dependency>
     <!-- JUnit 4 removed — all tests use JUnit 5 Jupiter. Re-add if DevMode ClassNotFoundException returns. -->
     <!-- Force local deployment module onto test classpath -->
     <dependency>

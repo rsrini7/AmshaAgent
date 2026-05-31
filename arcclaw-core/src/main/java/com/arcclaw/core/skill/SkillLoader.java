@@ -164,7 +164,7 @@ public class SkillLoader {
                             + "' - excluded. Valid values: " + validCapabilityNames();
                     LOG.warnf(w);
                     warnings.add(w);
-                    return (ToolCapability) null;
+                    return null;
                 })
                 .filter(Objects::nonNull)
                 .collect(Collectors.toUnmodifiableSet());

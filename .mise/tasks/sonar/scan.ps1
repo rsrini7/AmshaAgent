@@ -2,6 +2,9 @@
 #MISE shell = "pwsh -NonInteractive -Command"
 #MISE description = "Run SonarQube analysis (requires SONAR_TOKEN in .env)"
 $ErrorActionPreference = 'Stop'
+# Clean stale scanner work directory from previous runs
+$scannerDir = Join-Path $PSScriptRoot '..\..\..\.scannerwork'
+if (Test-Path $scannerDir) { Remove-Item -Recurse -Force $scannerDir }
 Write-Host '▶   Running SonarQube analysis...'
 
 # Check if SONAR_TOKEN is set
@@ -25,9 +28,9 @@ $args = @(
     "-Dsonar.sources=.",
     "-Dsonar.host.url=$sonarUrl",
     "-Dsonar.token=$env:SONAR_TOKEN",
-    "-Dsonar.java.binaries=arcclaw-app/target/classes",
+    "-Dsonar.java.binaries=**/target/classes",
     "-Dsonar.exclusions=**/target/**,**/node_modules/**,arcclaw-ui/**",
-    "-Dsonar.coverage.jacoco.xmlReportPaths=**/target/site/jacoco/jacoco.xml"
+    "-Dsonar.coverage.jacoco.xmlReportPaths=**/target/jacoco-report/jacoco.xml"
 )
 & sonar-scanner $args
 
