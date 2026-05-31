@@ -19,6 +19,13 @@
         </properties>
     </rule>
 
+    <!-- Cognitive complexity: max 50 (PMD 7.x) . Require refactoring and then adjust later-->
+    <rule ref="category/java/design.xml/CognitiveComplexity">
+        <properties>
+            <property name="reportLevel" value="50"/>
+        </properties>
+    </rule>
+
     <!-- Total class length: max 500 lines (including blanks, comments).
          Uses ClassBody span since ClassDeclaration only covers the declaration line in PMD 7.x. -->
     <rule name="ExcessiveClassLength"

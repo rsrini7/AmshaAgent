@@ -1,8 +1,11 @@
 package com.arcclaw.deployment;
 
+import static java.util.Map.entry;
+
 import java.io.IOException;
 import java.lang.reflect.Modifier;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
 
 import com.arcclaw.channel.api.structured.AgentFunction;
@@ -37,6 +40,19 @@ public class AgentFunctionProcessor {
     private static final DotName JSON_PROPERTY = DotName.createSimple(JsonProperty.class.getName());
     private static final String SCHEMA_PROPERTIES = "properties";
 
+    private static final Map<String, String> PRIMITIVE_TYPES = Map.ofEntries(
+            entry("java.lang.String", "string"),
+            entry("java.lang.Double", "number"),
+            entry("java.lang.Float", "number"),
+            entry("java.lang.Integer", "integer"),
+            entry("java.lang.Long", "integer"),
+            entry("java.lang.Boolean", "boolean"),
+            entry("double", "number"),
+            entry("float", "number"),
+            entry("int", "integer"),
+            entry("long", "integer"),
+            entry("boolean", "boolean"));
+
     private final ObjectMapper mapper = new ObjectMapper();
 
     @BuildStep
@@ -52,7 +68,6 @@ public class AgentFunctionProcessor {
         for (AnnotationInstance ai : index.getAnnotations(AGENT_FUNCTION)) {
             ClassInfo interfaceInfo = ai.target().asClass();
 
-            // 1. Find the Single Abstract Method (SAM)
             MethodInfo sam = interfaceInfo.methods().stream()
                     .filter(m -> (m.flags() & Modifier.ABSTRACT) != 0)
                     .findFirst()
@@ -70,7 +85,6 @@ public class AgentFunctionProcessor {
                         + "(jandex-maven-plugin or META-INF/beans.xml) and is on the augmentation classpath.");
             }
 
-            // 2. Generate JSON Schema recursively
             ObjectNode schema = mapper.createObjectNode();
             Set<String> processedTypes = new HashSet<>();
             buildSchema(index, returnType, schema, processedTypes, reflectiveClasses);
@@ -88,7 +102,6 @@ public class AgentFunctionProcessor {
             resources.produce(new GeneratedResourceBuildItem(path, bytes));
             nativeResources.produce(new NativeImageResourceBuildItem(path));
 
-            // Register the interface itself for reflection
             reflectiveClasses.produce(
                     ReflectiveClassBuildItem.builder(interfaceInfo.name().toString())
                             .methods()
@@ -106,94 +119,120 @@ public class AgentFunctionProcessor {
 
         String typeName = type.name().toString();
 
-        // Basic types
-        if (typeName.equals("java.lang.String")) {
-            node.put("type", "string");
-            return;
-        }
-        if (typeName.equals("double")
-                || typeName.equals("float")
-                || typeName.equals("java.lang.Double")
-                || typeName.equals("java.lang.Float")) {
-            node.put("type", "number");
-            return;
-        }
-        if (typeName.equals("int")
-                || typeName.equals("long")
-                || typeName.equals("java.lang.Integer")
-                || typeName.equals("java.lang.Long")) {
-            node.put("type", "integer");
-            return;
-        }
-        if (typeName.equals("boolean") || typeName.equals("java.lang.Boolean")) {
-            node.put("type", "boolean");
+        if (tryResolvePrimitive(typeName, node)) {
             return;
         }
 
-        // List/Array
         if (type.kind() == Type.Kind.PARAMETERIZED_TYPE && typeName.equals("java.util.List")) {
-            node.put("type", "array");
-            Type itemType = type.asParameterizedType().arguments().get(0);
-            buildSchema(index, itemType, node.putObject("items"), processedTypes, reflectiveClasses);
+            buildArraySchema(index, type, node, processedTypes, reflectiveClasses);
             return;
         }
 
-        // Record or Class
         if (type.kind() == Type.Kind.CLASS || type.kind() == Type.Kind.PARAMETERIZED_TYPE) {
-            if (processedTypes.contains(typeName)) {
-                node.put("type", "object"); // prevent infinite recursion
-                return;
-            }
-            processedTypes.add(typeName);
+            buildObjectSchema(index, type, typeName, node, processedTypes, reflectiveClasses);
+        }
+    }
 
-            ClassInfo classInfo = index.getClassByName(type.name());
-            if (classInfo == null) {
-                node.put("type", "object");
-                return;
-            }
+    /**
+     * Sets the JSON Schema type for primitive/wrapper types.
+     * Returns true if the type was handled, false if it's a complex type.
+     */
+    private boolean tryResolvePrimitive(String typeName, ObjectNode node) {
+        String jsonType = PRIMITIVE_TYPES.get(typeName);
+        if (jsonType != null) {
+            node.put("type", jsonType);
+            return true;
+        }
+        return false;
+    }
 
-            // Register for reflection
-            reflectiveClasses.produce(ReflectiveClassBuildItem.builder(typeName)
-                    .methods()
-                    .fields()
-                    .build());
+    private void buildArraySchema(
+            IndexView index,
+            Type type,
+            ObjectNode node,
+            Set<String> processedTypes,
+            BuildProducer<ReflectiveClassBuildItem> reflectiveClasses) {
+        node.put("type", "array");
+        Type itemType = type.asParameterizedType().arguments().get(0);
+        buildSchema(index, itemType, node.putObject("items"), processedTypes, reflectiveClasses);
+    }
 
+    private void buildObjectSchema(
+            IndexView index,
+            Type type,
+            String typeName,
+            ObjectNode node,
+            Set<String> processedTypes,
+            BuildProducer<ReflectiveClassBuildItem> reflectiveClasses) {
+
+        if (processedTypes.contains(typeName)) {
             node.put("type", "object");
-            ObjectNode properties = node.putObject("properties");
-            ArrayNode required = node.putArray("required");
+            return;
+        }
+        processedTypes.add(typeName);
 
-            // Handle Records (Jandex handles record components)
-            if (classInfo.isRecord()) {
-                for (RecordComponentInfo rc : classInfo.recordComponents()) {
-                    ObjectNode prop = properties.putObject(rc.name());
-                    buildSchema(index, rc.type(), prop, processedTypes, reflectiveClasses);
+        ClassInfo classInfo = index.getClassByName(type.name());
+        if (classInfo == null) {
+            node.put("type", "object");
+            return;
+        }
 
-                    AnnotationInstance ann = rc.annotation(JSON_PROPERTY);
-                    if (ann != null) {
-                        AnnotationValue val = ann.value("required");
-                        if (val != null && val.asBoolean()) {
-                            required.add(rc.name());
-                        }
-                    }
-                }
-            } else {
-                // Handle regular classes (simplified, only fields)
-                classInfo.fields().forEach(f -> {
-                    if ((f.flags() & Modifier.STATIC) == 0) {
-                        ObjectNode prop = properties.putObject(f.name());
-                        buildSchema(index, f.type(), prop, processedTypes, reflectiveClasses);
+        reflectiveClasses.produce(
+                ReflectiveClassBuildItem.builder(typeName).methods().fields().build());
 
-                        AnnotationInstance ann = f.annotation(JSON_PROPERTY);
-                        if (ann != null) {
-                            AnnotationValue val = ann.value("required");
-                            if (val != null && val.asBoolean()) {
-                                required.add(f.name());
-                            }
-                        }
-                    }
-                });
+        node.put("type", "object");
+        ObjectNode properties = node.putObject("properties");
+        ArrayNode required = node.putArray("required");
+
+        if (classInfo.isRecord()) {
+            for (RecordComponentInfo rc : classInfo.recordComponents()) {
+                addProperty(index, rc.name(), rc.type(), properties, required, processedTypes, reflectiveClasses);
             }
-            node.put("additionalProperties", false);
+        } else {
+            classInfo.fields().forEach(f -> {
+                if ((f.flags() & Modifier.STATIC) == 0) {
+                    addProperty(index, f.name(), f.type(), properties, required, processedTypes, reflectiveClasses);
+                }
+            });
+        }
+        node.put("additionalProperties", false);
+    }
+
+    private void addProperty(
+            IndexView index,
+            String name,
+            Type type,
+            ObjectNode properties,
+            ArrayNode required,
+            Set<String> processedTypes,
+            BuildProducer<ReflectiveClassBuildItem> reflectiveClasses) {
+        ObjectNode prop = properties.putObject(name);
+        buildSchema(index, type, prop, processedTypes, reflectiveClasses);
+
+        AnnotationInstance ann = null;
+        // Try record component annotation first, then field annotation
+        ClassInfo classInfo = index.getClassByName(type.name());
+        if (classInfo != null) {
+            for (RecordComponentInfo rc : classInfo.recordComponents()) {
+                if (rc.name().equals(name)) {
+                    ann = rc.annotation(JSON_PROPERTY);
+                    break;
+                }
+            }
+        }
+        if (ann == null && classInfo != null) {
+            for (var f : classInfo.fields()) {
+                if (f.name().equals(name)) {
+                    ann = f.annotation(JSON_PROPERTY);
+                    break;
+                }
+            }
+        }
+        if (ann != null) {
+            AnnotationValue val = ann.value("required");
+            if (val != null && val.asBoolean()) {
+                required.add(name);
+            }
         }
     }
 }

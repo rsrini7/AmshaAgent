@@ -11,59 +11,81 @@ public class LangChain4jExceptionClassifier extends LlmExceptionClassifierChain 
     public LlmProviderException classify(Throwable t) {
         Throwable cause = t;
         while (cause != null) {
-            if (cause instanceof InvalidRequestException
-                    || (cause instanceof HttpException && ((HttpException) cause).statusCode() == 400)) {
-                String msg = AgentErrorMessageUtil.safeMessage(cause);
-
-                if (isSchemaValidationError(msg)) {
-                    return new LlmMalformedResponseException(msg, t);
-                }
-
-                if (msg != null && (msg.contains("tool_use_failed") || msg.contains("not in request.tools"))) {
-                    return new LlmToolCallException(msg, t);
-                }
-
-                if (msg != null
-                        && (msg.contains("model_not_found")
-                                || msg.contains("does not exist")
-                                || msg.contains("invalid_api_key")
-                                || msg.contains("API_KEY_INVALID"))) {
-                    String hint = msg.contains("model_not_found") || msg.contains("does not exist")
-                            ? " MODEL MAY HAVE BEEN REMOVED — check provider's model list and update ARCCLAW_*_MODEL."
-                            : "";
-                    return new LlmAuthenticationException(msg + hint, t);
-                }
-
-                if (msg != null
-                        && (msg.toLowerCase().contains("degraded")
-                                || msg.toLowerCase().contains("cannot be invoked")
-                                || msg.toLowerCase().contains("overloaded"))) {
-                    return new LlmServiceUnavailableException(msg, t);
-                }
-            }
-
-            if (cause instanceof HttpException) {
-                int status = ((HttpException) cause).statusCode();
-                String msg = AgentErrorMessageUtil.safeMessage(cause);
-                if (status == 429 || isRateLimitError(msg)) {
-                    return new LlmRateLimitException(msg != null ? msg : "Rate limit hit", t);
-                }
-                if (status == 401 || status == 403) {
-                    return new LlmAuthenticationException(msg != null ? msg : "Authentication failed", t);
-                }
-                if (status == 404) {
-                    return new LlmAuthenticationException(
-                            "Model not found (404). MODEL MAY HAVE BEEN REMOVED — check provider's model list and update ARCCLAW_*_MODEL. "
-                                    + (msg != null ? msg : ""),
-                            t);
-                }
-                if (status >= 500) {
-                    return new LlmServiceUnavailableException(msg != null ? msg : "Service unavailable", t);
-                }
-            }
+            LlmProviderException result = classifyCause(cause, t);
+            if (result != null) return result;
             cause = cause.getCause();
         }
         return delegate(t);
+    }
+
+    private LlmProviderException classifyCause(Throwable cause, Throwable original) {
+        if (cause instanceof InvalidRequestException
+                || (cause instanceof HttpException http && http.statusCode() == 400)) {
+            return classify400(cause, original);
+        }
+        if (cause instanceof HttpException http) {
+            return classifyHttp(http.statusCode(), AgentErrorMessageUtil.safeMessage(cause), original);
+        }
+        return null;
+    }
+
+    private LlmProviderException classify400(Throwable cause, Throwable original) {
+        String msg = AgentErrorMessageUtil.safeMessage(cause);
+        if (isSchemaValidationError(msg)) {
+            return new LlmMalformedResponseException(msg, original);
+        }
+        if (isToolCallError(msg)) {
+            return new LlmToolCallException(msg, original);
+        }
+        if (isAuthOrModelError(msg)) {
+            String hint = (msg.contains("model_not_found") || msg.contains("does not exist"))
+                    ? " MODEL MAY HAVE BEEN REMOVED — check provider's model list and update ARCCLAW_*_MODEL."
+                    : "";
+            return new LlmAuthenticationException(msg + hint, original);
+        }
+        if (isServiceDegraded(msg)) {
+            return new LlmServiceUnavailableException(msg, original);
+        }
+        return null;
+    }
+
+    private LlmProviderException classifyHttp(int status, String msg, Throwable original) {
+        return switch (status) {
+            case 401, 403 -> new LlmAuthenticationException(msg != null ? msg : "Authentication failed", original);
+            case 404 ->
+                new LlmAuthenticationException(
+                        "Model not found (404). MODEL MAY HAVE BEEN REMOVED — check provider's model list and update ARCCLAW_*_MODEL. "
+                                + (msg != null ? msg : ""),
+                        original);
+            case 429 -> new LlmRateLimitException(msg != null ? msg : "Rate limit hit", original);
+            default -> {
+                if (isRateLimitError(msg)) {
+                    yield new LlmRateLimitException(msg != null ? msg : "Rate limit hit", original);
+                }
+                if (status >= 500) {
+                    yield new LlmServiceUnavailableException(msg != null ? msg : "Service unavailable", original);
+                }
+                yield null;
+            }
+        };
+    }
+
+    private static boolean isToolCallError(String msg) {
+        return msg != null && (msg.contains("tool_use_failed") || msg.contains("not in request.tools"));
+    }
+
+    private static boolean isAuthOrModelError(String msg) {
+        return msg != null
+                && (msg.contains("model_not_found")
+                        || msg.contains("does not exist")
+                        || msg.contains("invalid_api_key")
+                        || msg.contains("API_KEY_INVALID"));
+    }
+
+    private static boolean isServiceDegraded(String msg) {
+        if (msg == null) return false;
+        String lower = msg.toLowerCase();
+        return lower.contains("degraded") || lower.contains("cannot be invoked") || lower.contains("overloaded");
     }
 
     private static boolean isSchemaValidationError(String message) {
