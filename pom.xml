@@ -63,11 +63,8 @@
     <jboss-logmanager.version>3.0.6.Final</jboss-logmanager.version>
     <jline.version>3.30.11</jline.version>
     <jansi.version>2.4.3</jansi.version>
-    <jacoco.version>0.8.12</jacoco.version>
+    <jacoco.version>0.8.14</jacoco.version>
     <maven.surefire.argLine>--add-opens java.base/java.lang=ALL-UNNAMED --add-opens java.base/java.nio=ALL-UNNAMED --add-opens java.base/sun.nio.ch=ALL-UNNAMED --add-opens java.base/jdk.internal.misc=ALL-UNNAMED -Dnet.bytebuddy.experimental=true --enable-native-access=ALL-UNNAMED</maven.surefire.argLine>
-    <!-- Pre-declared so that ${jacoco.argLine} resolves to empty string at POM parse
-         time (before JaCoCo's prepare-agent sets the actual value at runtime). -->
-    <jacoco.argLine></jacoco.argLine>
   </properties>
  
   <dependencyManagement>
@@ -323,7 +320,7 @@
           <artifactId>maven-surefire-plugin</artifactId>
           <version>3.5.0</version>
             <configuration>
-            <argLine>${jacoco.argLine} ${maven.surefire.argLine}</argLine>
+            <argLine>${argLine} ${maven.surefire.argLine}</argLine>
             <systemPropertyVariables>
               <java.util.logging.manager>org.jboss.logmanager.LogManager</java.util.logging.manager>
               <maven.home>${maven.home}</maven.home>
