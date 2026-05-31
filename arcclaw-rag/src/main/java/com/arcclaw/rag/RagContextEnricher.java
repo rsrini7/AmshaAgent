@@ -4,6 +4,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -151,7 +152,7 @@ public class RagContextEnricher implements ContextEnricher {
 
     private boolean isWriteIntent(String goal) {
         if (goal == null) return false;
-        String lower = goal.toLowerCase();
+        String lower = goal.toLowerCase(Locale.ROOT);
         return WRITE_INTENT_TOKENS.stream().anyMatch(lower::contains);
     }
 }

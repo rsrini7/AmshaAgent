@@ -10,6 +10,7 @@ import java.io.StringReader;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -92,7 +93,7 @@ public class WebChatEndpoint {
             }
 
             String arcclawSessionId = channelServices.resolveOrCreateSession(
-                    ChannelType.WEBSOCKET.id().toUpperCase(), platformId, platformId);
+                    ChannelType.WEBSOCKET.id().toUpperCase(Locale.ROOT), platformId, platformId);
 
             // Close any stale connection for the same platformId to prevent duplicate broadcasts
             String pid = platformId;

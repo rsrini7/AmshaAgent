@@ -9,6 +9,7 @@ import jakarta.enterprise.inject.Produces;
 import jakarta.inject.Inject;
 
 import java.time.Duration;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
@@ -64,7 +65,7 @@ public class EmbeddingModelProducer {
     @ApplicationScoped
     public EmbeddingModel embeddingModel() {
         log.infof("Eager initialization of %s embedding model: %s", provider, modelName);
-        String targetProvider = provider.toLowerCase().trim();
+        String targetProvider = provider.toLowerCase(Locale.ROOT).trim();
 
         return factories.stream()
                 .filter(f -> f.providerId().equalsIgnoreCase(targetProvider))

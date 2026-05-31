@@ -6,6 +6,8 @@ import jakarta.enterprise.event.Observes;
 import jakarta.inject.Inject;
 import jakarta.interceptor.Interceptor;
 
+import java.util.Locale;
+
 import com.arcclaw.persistence.api.AuditSchemaPort;
 
 import org.jboss.logging.Logger;
@@ -82,7 +84,7 @@ public class PostgresAuditSchemaEnforcer implements AuditSchemaPort {
             // Verify if we are running on Postgres
             String dbProduct = jdbi.withHandle(handle ->
                     handle.createQuery("SELECT version()").mapTo(String.class).one());
-            if (dbProduct != null && dbProduct.toLowerCase().contains("postgres")) {
+            if (dbProduct != null && dbProduct.toLowerCase(Locale.ROOT).contains("postgres")) {
                 enforceWormConstraints();
 
                 // Add indexes
