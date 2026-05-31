@@ -22,6 +22,7 @@ import com.arcclaw.persistence.postgres.jdbi.JdbiProducer;
 import com.arcclaw.persistence.postgres.jdbi.LockJdbiDao;
 import com.arcclaw.persistence.postgres.jdbi.PromptJdbiDao;
 import com.arcclaw.persistence.postgres.jdbi.RagChunkJdbiDao;
+import com.arcclaw.persistence.postgres.jdbi.RecallMemoryJdbiDao;
 import com.arcclaw.persistence.postgres.jdbi.SecretJdbiDao;
 import com.arcclaw.persistence.postgres.jdbi.SkillJdbiDao;
 
@@ -72,6 +73,7 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             PostgresSecretStoreAdapter.class,
             PostgresSkillStoreAdapter.class,
             PostgresAdvisoryLockAdapter.class,
-            PostgresRecallMemoryStore.class
+            PostgresRecallMemoryStore.class,
+            RecallMemoryJdbiDao.class
         })
 public class PostgresPersistenceReflectionConfig {}

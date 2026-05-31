@@ -179,7 +179,7 @@ This project is babysitter-enabled for complex workflow orchestration.
 - `CLAUDE.md` — has a ## Babysitter section with quick commands
 - `.a5c/` — project-level babysitter configuration
 
-## 6. Adding a New Persona (Agent Role)
+## 7. Adding a New Persona (Agent Role)
 
 1. **`AgentPersona.java`** — Add enum entry (`roleId`, `displayName`, `aliases`)
 2. **`AgentRoleEnum.java`** — Add `static final` ID constant, instance, and `RoleDefinition` in `DEFINITIONS` (use `Map.ofEntries()` if >10)
@@ -200,7 +200,7 @@ This project is babysitter-enabled for complex workflow orchestration.
 
 ---
 
-## 7. GraalVM Native-Image Reflection Registration
+## 8. GraalVM Native-Image Reflection Registration
 
 **Rule**: Every new Java file needs evaluation for `@RegisterForReflection`. JVM-mode success ≠ native-image safety.
 

@@ -67,7 +67,7 @@ See [docs/QUICK_START.md](./docs/QUICK_START.md) for detailed setup options.
 | Directory | Purpose |
 |-----------|---------|
 | `docs/` | All documentation — architecture, setup, config, security, testing, extension guides |
-| `docs/ProjectWorkflowDocs/assets/` | Architecture diagrams (SVG) — referenced from README + ARCHITECTURE.md |
+| `docs/assets/` | Architecture diagrams (SVG) — referenced from README + ARCHITECTURE.md |
 | `arcclaw-app/` | Main deployable: CLI, REST, security, wiring |
 | `arcclaw-core/` | Agent loop, tools, audit, governance, sandbox, reflexes |
 | `arcclaw-persistence-*/` | Hexagonal persistence: API ports + SQLite / PostgreSQL / FS adapters |

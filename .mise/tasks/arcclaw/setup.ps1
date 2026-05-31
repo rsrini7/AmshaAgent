@@ -42,8 +42,8 @@ if (-not (Test-Path $envPath)) {
     Set-EnvLine $envPath 'ARCCLAW_API_KEYS_CI'       (New-RandomBase64)
     Write-Host "  OK  Auto-generated: VAULT_PEPPER - AUDIT_HMAC_KEY - API_KEYS`n"
 
-    # ── FIX Bug 4: call shared wizard via $PSScriptRoot, not a bare relative path
-    & "$PSScriptRoot/../shared/prompt-llm-wizard.ps1" -envPath $envPath
+    # TODO: shared/prompt-llm-wizard.ps1 was removed — LLM provider config handled by InteractiveSetupWizard at first run
+    # & "$PSScriptRoot/../shared/prompt-llm-wizard.ps1" -envPath $envPath
 
     # ── Telegram (dev-only: simplified, optional) ─────────────────────────────
     $tgTokenPeek = Read-Host "  TELEGRAM_BOT_TOKEN  (Enter to skip and disable Telegram for local dev)"

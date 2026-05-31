@@ -61,6 +61,7 @@ import io.smallrye.common.annotation.RunOnVirtualThread;
 @Path("/onboarding")
 @Produces(MediaType.APPLICATION_JSON)
 @ApplicationScoped
+@RunOnVirtualThread
 public class OnboardingResource {
 
     private static final Logger log = Logger.getLogger(OnboardingResource.class);
@@ -182,7 +183,6 @@ public class OnboardingResource {
     @POST
     @Path("/step/3")
     @Consumes(MediaType.APPLICATION_JSON)
-    @RunOnVirtualThread
     @Operation(summary = "Validate credentials and move to System Prompt step")
     public Response step3(Step3Request req, @CookieParam(COOKIE_NAME) Cookie cookie, @Context HttpHeaders headers) {
         String sid = resolveSessionId(cookie, headers);

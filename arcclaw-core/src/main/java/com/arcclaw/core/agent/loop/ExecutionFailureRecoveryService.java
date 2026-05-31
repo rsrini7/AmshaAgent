@@ -44,7 +44,7 @@ import org.jboss.logging.Logger;
  *
  * <p>Design rules:
  * <ul>
- *   <li>Only activates for sandbox_exec failures under coder role</li>
+ *   <li>Only activates for sandbox_exec failures (any role with sandbox_exec capability)</li>
  *   <li>Max attempts configurable (default 2)</li>
  *   <li>Isolated sub-session with :heal: sentinel</li>
  *   <li>Shiva returns code only; Brahma remains the executor</li>
@@ -79,8 +79,9 @@ public class ExecutionFailureRecoveryService {
      * Represents a recovery result with the fixed code and attempt count.
      *
      * @param fixedCode the validated fixed code (non-null only on success)
+     * @param fixedCode the fixed code (non-null only on success)
      * @param attemptsUsed number of attempts used (non-zero only on success)
-     * @param true if recovery succeeded
+     * @param success true if recovery succeeded
      * @param errorIfFailed error message (non-null only on failure)
      * @param extractedCode the code extracted from Shiva's response, even if validation failed
      *                      (preserved so the next attempt can build on it instead of losing it)
@@ -244,7 +245,7 @@ public class ExecutionFailureRecoveryService {
                     "\n\n--- Previous fix attempt " + attempt + " also failed ---\n" + result.errorIfFailed();
             // Use preserved extracted code from the previous attempt if available,
             // rather than trying to parse it from the error message
-            previousCode = result.extractedCode();
+            previousCode = result.extractedCode() != null ? result.extractedCode() : previousCode;
         }
 
         log.warnf("[AutoHeal] All %d recovery attempts failed for session %s", maxAttempts, outerSessionId);

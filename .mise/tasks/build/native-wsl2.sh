@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #MISE description="WSL2: Linux binary via rsync to local ext4 - auto-detects Podman vs local GraalVM"
 #MISE quiet=true
-#MISE depends=["setup:wsl-crlf", "build:ui-copy"]
+#MISE depends=["setup:wsl-crlf", "build:ui:copy"]
 
 set -e
 

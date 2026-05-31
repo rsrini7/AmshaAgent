@@ -43,6 +43,7 @@ import io.smallrye.common.annotation.RunOnVirtualThread;
 @Path("/settings")
 @Produces(MediaType.APPLICATION_JSON)
 @ApplicationScoped
+@RunOnVirtualThread
 public class SettingsResource {
 
     @Inject
@@ -111,7 +112,6 @@ public class SettingsResource {
     @PATCH
     @Path("/provider")
     @Consumes(MediaType.APPLICATION_JSON)
-    @RunOnVirtualThread
     @Operation(summary = "Update LLM provider and validate credentials")
     public Response updateProvider(@HeaderParam("X-ArcClaw-API-Key") String key, ProviderUpdateRequest req) {
         checkAuth(key);

@@ -200,7 +200,7 @@ run = ["mise tasks"]
 # DEV MODE TASKS  (hot reload - Temurin 25, no Podman)
 # =============================================================================
 # Tasks are defined as .ps1 scripts for cross-platform compatibility
-# - dev/quarkus-dev.ps1 - Serve on :8080 with hot reload
+# - dev/serve.ps1       - Serve on :8080 with hot reload
 # - dev/chat.ps1        - Interactive REPL with hot reload
 # - dev/attach.ps1      - Telegram daemon with hot reload
 # - dev/ask.ps1         - One-shot task (set $env:GOAL first)
