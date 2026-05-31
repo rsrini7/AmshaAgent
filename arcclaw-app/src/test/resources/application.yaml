@@ -17,6 +17,7 @@ arcclaw:
     telegram:
       enabled: false
       bot-token: "mock-telegram-token"
+      allowed-user-ids: "12345"
   tools:
     playwright:
       enabled: false

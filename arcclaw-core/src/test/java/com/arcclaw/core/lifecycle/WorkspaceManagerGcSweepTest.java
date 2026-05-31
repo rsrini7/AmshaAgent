@@ -4,6 +4,7 @@ import static java.time.temporal.ChronoUnit.MINUTES;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -11,9 +12,13 @@ import static org.mockito.Mockito.when;
 
 import jakarta.inject.Inject;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.time.Instant;
+import java.util.HexFormat;
 import java.util.List;
 
+import com.arcclaw.core.audit.AuditHashUtil;
 import com.arcclaw.core.domain.model.AgentCheckpoint;
 import com.arcclaw.core.domain.model.AgentCheckpointRecord;
 import com.arcclaw.core.state.CheckpointStatus;
@@ -45,9 +50,19 @@ class WorkspaceManagerGcSweepTest {
     @InjectMock
     StatefulAgentStore agentStoreMock; // Mock to avoid DB hits during irrelevant side effects
 
+    @InjectMock
+    AuditHashUtil auditHashUtil;
+
     @BeforeEach
     void setup() {
         heartbeatTracker.clearAll();
+        lenient().when(auditHashUtil.sha256hex(anyString())).thenCallRealMethod();
+        lenient().when(auditHashUtil.hmacHex(anyString())).thenAnswer(inv -> {
+            String data = inv.getArgument(0);
+            MessageDigest md = MessageDigest.getInstance("SHA-256");
+            return HexFormat.of().formatHex(md.digest(data.getBytes(StandardCharsets.UTF_8)));
+        });
+        lenient().doCallRealMethod().when(auditHashUtil).calculateChainFields(any(), any());
     }
 
     @Test

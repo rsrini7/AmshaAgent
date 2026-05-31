@@ -51,7 +51,6 @@ class HitlResourceTest {
     private static final String USER_ID = "test-user";
     private static final String TASK_ID = "task-123";
 
-    @SuppressWarnings("unchecked")
     @BeforeEach
     void setUp() {
         resource = new HitlResource();

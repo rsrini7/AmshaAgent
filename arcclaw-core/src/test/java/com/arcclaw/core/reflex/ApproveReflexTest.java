@@ -15,7 +15,10 @@ import static org.mockito.Mockito.when;
 
 import jakarta.inject.Inject;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.time.Instant;
+import java.util.HexFormat;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -30,6 +33,7 @@ import com.arcclaw.core.agent.loop.CheckpointResumeHandler;
 import com.arcclaw.core.agent.reasoning.ReasoningEngine;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
+import com.arcclaw.core.audit.AuditHashUtil;
 import com.arcclaw.core.domain.model.AgentCheckpoint;
 import com.arcclaw.core.domain.model.AgentCheckpointRecord;
 import com.arcclaw.core.lifecycle.WorkspaceManager;
@@ -82,6 +86,9 @@ class ApproveReflexTest {
     @InjectMock
     DelegateApprovalGuard delegateGuard;
 
+    @InjectMock
+    AuditHashUtil auditHashUtil;
+
     ApprovalNotificationService notificationServiceMock = mock(ApprovalNotificationService.class);
 
     @BeforeEach
@@ -93,6 +100,15 @@ class ApproveReflexTest {
         }
         instance.notificationService = notificationServiceMock;
         lenient().when(notificationServiceMock.createJobNotifier()).thenReturn((cron, result) -> {});
+
+        // Mock AuditHashUtil to avoid HMAC key missing in test environment
+        lenient().when(auditHashUtil.sha256hex(anyString())).thenCallRealMethod();
+        lenient().when(auditHashUtil.hmacHex(anyString())).thenAnswer(inv -> {
+            String data = inv.getArgument(0);
+            MessageDigest md = MessageDigest.getInstance("SHA-256");
+            return HexFormat.of().formatHex(md.digest(data.getBytes(StandardCharsets.UTF_8)));
+        });
+        lenient().doCallRealMethod().when(auditHashUtil).calculateChainFields(any(), any());
 
         // §7.29 guard: allow tests to proceed by default
         when(statefulAgentStore.claimForResume(anyString(), anyString())).thenReturn(true);

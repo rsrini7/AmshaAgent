@@ -1,9 +1,16 @@
 package com.arcclaw.core.audit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doCallRealMethod;
+import static org.mockito.Mockito.when;
 
 import jakarta.inject.Inject;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.util.HexFormat;
 import java.util.List;
 
 import com.arcclaw.core.agent.result.AgentResult;
@@ -11,8 +18,10 @@ import com.arcclaw.core.domain.model.AuditEvent;
 import com.arcclaw.core.domain.model.AuditEventRecord;
 import com.arcclaw.persistence.api.AuditEventStorePort;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
 
 @QuarkusTest
@@ -26,6 +35,20 @@ public class AuditObserverTest {
 
     @Inject
     AuditService auditService;
+
+    @InjectMock
+    AuditHashUtil auditHashUtil;
+
+    @BeforeEach
+    void setupHmacMock() {
+        when(auditHashUtil.sha256hex(anyString())).thenCallRealMethod();
+        when(auditHashUtil.hmacHex(anyString())).thenAnswer(inv -> {
+            String data = inv.getArgument(0);
+            MessageDigest md = MessageDigest.getInstance("SHA-256");
+            return HexFormat.of().formatHex(md.digest(data.getBytes(StandardCharsets.UTF_8)));
+        });
+        doCallRealMethod().when(auditHashUtil).calculateChainFields(any(), any());
+    }
 
     @Test
     public void testLoopCompletionFiresAudit() {

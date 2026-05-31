@@ -63,7 +63,6 @@ class WsAuthResourceTest {
 
     @Test
     void issueTokenThrows401WithNullApiKey() {
-        Cookie cookie = null;
         when(httpHeaders.getCookies()).thenReturn(Collections.emptyMap());
 
         WebApplicationException ex = assertThrows(WebApplicationException.class, () -> resource.issueToken(null));

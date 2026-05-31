@@ -1,9 +1,15 @@
 package com.arcclaw.core.governance;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.lenient;
 
 import jakarta.inject.Inject;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.util.HexFormat;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -11,6 +17,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import com.arcclaw.core.audit.AuditHashUtil;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
 
@@ -18,6 +25,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
 
 @QuarkusTest
@@ -26,11 +34,21 @@ class GovernanceLayerAssertBudgetTest {
     @Inject
     GovernanceLayer governanceLayer;
 
+    @InjectMock
+    AuditHashUtil auditHashUtil;
+
     private String sessionId;
 
     @BeforeEach
     void setup() {
         sessionId = UUID.randomUUID().toString();
+        lenient().when(auditHashUtil.sha256hex(anyString())).thenCallRealMethod();
+        lenient().when(auditHashUtil.hmacHex(anyString())).thenAnswer(inv -> {
+            String data = inv.getArgument(0);
+            MessageDigest md = MessageDigest.getInstance("SHA-256");
+            return HexFormat.of().formatHex(md.digest(data.getBytes(StandardCharsets.UTF_8)));
+        });
+        lenient().doCallRealMethod().when(auditHashUtil).calculateChainFields(any(), any());
     }
 
     @AfterEach
