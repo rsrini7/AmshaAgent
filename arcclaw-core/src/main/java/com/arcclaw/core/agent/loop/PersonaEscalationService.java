@@ -258,7 +258,7 @@ public class PersonaEscalationService {
                 || errorLower.contains("arrayindexoutofbounds")
                 || errorLower.contains("classcastexception")
                 || errorLower.contains("illegalargument")
-                || errorLower.contains("error:") && errorLower.contains(".java")
+                || (errorLower.contains("error:") && errorLower.contains(".java"))
                 || errorLower.contains("exception in thread");
     }
 

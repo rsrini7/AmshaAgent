@@ -247,7 +247,7 @@ public class CheckpointApprovalService {
      * event only after the resume handler completes (or fails).
      * <p>
      * §Issue-2 Fix: Previously this published RESUMED before calling the handler,
-     * and {@link #recordResumed} would publish a second one. Now we publish exactly once.
+     * and a duplicate RESUMED would be published. Now we publish exactly once.
      */
     public void triggerResume(AgentCheckpoint cp) {
         if (cp == null) return;

@@ -14,7 +14,7 @@ import com.arcclaw.core.security.AutonomyLevel;
  * Contract for persisting and retrieving agent reasoning checkpoints.
  * <p>
  * Implementations handle Jackson serialization of {@code List<ReasoningStep>}
- * to/from the {@link AgentCheckpoint#stateJson} field.
+ * to/from the {@link AgentCheckpoint#getStateJson()} field.
  */
 public interface StatefulAgentStore extends PendingApprovalChecker {
 
@@ -288,6 +288,7 @@ public interface StatefulAgentStore extends PendingApprovalChecker {
      */
     boolean isSessionActive(String sessionId);
 
+    @Override
     boolean hasPendingApproval(String sessionId);
 
     boolean hasPendingApprovalForChat(String chatId);

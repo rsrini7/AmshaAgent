@@ -96,7 +96,7 @@ public class RateLimitRetryScheduler {
                 if (shuttingDown) return;
                 if (cp.getUpdatedAt() == null) continue;
 
-                long ageSec = Duration.between(cp.getUpdatedAt(), now).getSeconds();
+                long ageSec = Duration.between(cp.getUpdatedAt(), now).toSeconds();
                 maxAgeSec = Math.max(maxAgeSec, ageSec);
 
                 long retryAfterMs = cp.getRetryAfterMs() != null ? cp.getRetryAfterMs() : defaultRetryDelayMs;

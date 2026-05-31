@@ -91,9 +91,9 @@ final class ReasoningStepParserUtils {
             Object value = entry.getValue();
             if (value instanceof String s) {
                 if ("true".equalsIgnoreCase(s)) {
-                    entry.setValue(Boolean.TRUE);
+                    entry.setValue(true);
                 } else if ("false".equalsIgnoreCase(s)) {
-                    entry.setValue(Boolean.FALSE);
+                    entry.setValue(false);
                 }
             } else if (value instanceof Map) {
                 coerceBooleans((Map<String, Object>) value);
@@ -109,9 +109,9 @@ final class ReasoningStepParserUtils {
             Object item = list.get(i);
             if (item instanceof String s) {
                 if ("true".equalsIgnoreCase(s)) {
-                    list.set(i, Boolean.TRUE);
+                    list.set(i, true);
                 } else if ("false".equalsIgnoreCase(s)) {
-                    list.set(i, Boolean.FALSE);
+                    list.set(i, false);
                 }
             } else if (item instanceof Map) {
                 coerceBooleans((Map<String, Object>) item);

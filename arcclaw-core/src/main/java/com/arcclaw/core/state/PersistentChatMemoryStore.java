@@ -115,7 +115,6 @@ public class PersistentChatMemoryStore implements ChatMemoryStore {
         // Timestamp handling (H1) — read from metadata
         ReadMetadata metadata = readMetadata(id);
         int lastCumulativeCount = metadata.cumulativeNonSystemCount;
-        int lastWindowSize = metadata.windowSize;
         List<Long> currentTimestamps = metadata.timestamps;
         List<Long> updatedTimestamps = new ArrayList<>();
         long now = System.currentTimeMillis();

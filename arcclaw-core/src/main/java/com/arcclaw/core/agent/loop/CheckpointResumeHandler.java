@@ -269,9 +269,8 @@ public class CheckpointResumeHandler {
                     List.of(
                             new ContentNode.Text(output),
                             new ApprovalPrompt(aa.toolName(), aa.paramsJson(), sessionId)));
-        } else if (ChannelType.WEBSOCKET.id().equalsIgnoreCase(cType.id())) {
-            s.sendRaw(user, output);
         } else {
+            // CLI, WebSocket, and unknown channel types all use raw text delivery
             s.sendRaw(user, output);
         }
     }

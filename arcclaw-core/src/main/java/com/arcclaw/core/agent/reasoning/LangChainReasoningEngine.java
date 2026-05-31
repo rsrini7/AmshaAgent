@@ -355,7 +355,7 @@ public class LangChainReasoningEngine implements ReasoningEngine {
     private ReasoningStep tryCodeRecovery(
             String extractedProse, int truncationRetryCount, String targetLanguage, String sessionId) {
         if (extractedProse == null
-                || !recoveryProcessor.containsEmbeddedSandboxToolCall(extractedProse) && truncationRetryCount < 2)
+                || (!recoveryProcessor.containsEmbeddedSandboxToolCall(extractedProse) && truncationRetryCount < 2))
             return null;
 
         String partialCode = recoveryProcessor.extractPartialCodeFromTruncatedJson(extractedProse);

@@ -38,8 +38,8 @@ public final class AgentExecutionContext {
     private volatile CheckpointStatus lastCheckpointStatus;
     private volatile boolean statusDirty = true;
     private volatile boolean forceFinishRetry = false;
-    private volatile int truncationRetryCount = 0;
-    private volatile int checkpointRestoreOffset = 0;
+    private int truncationRetryCount = 0;
+    private int checkpointRestoreOffset = 0;
 
     public AgentExecutionContext(
             String sessionId,

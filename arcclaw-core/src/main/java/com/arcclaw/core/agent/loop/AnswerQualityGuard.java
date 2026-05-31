@@ -146,6 +146,7 @@ public class AnswerQualityGuard implements AnswerGuardStrategy {
      * @param answer the candidate FINISH answer text
      * @return {@code true} if a leak is detected
      */
+    @Override
     public boolean isRawToolCallLeak(String answer) {
         if (answer == null || answer.isBlank()) return false;
 
@@ -181,6 +182,7 @@ public class AnswerQualityGuard implements AnswerGuardStrategy {
      * @param answer raw answer text that may contain tool-call artefacts
      * @return cleaned answer string (may be blank if the entire text was a leak)
      */
+    @Override
     public String stripRawToolJson(String answer) {
         if (answer == null) return "";
         String stripped = answer;
@@ -235,6 +237,7 @@ public class AnswerQualityGuard implements AnswerGuardStrategy {
      * @param answer answer text known to contain a leak
      * @return the tool name extracted from the leak, or a safe fallback string
      */
+    @Override
     public String extractLeakedToolName(String answer) {
         if (answer == null) return "the intended tool";
         Matcher nameMatcher = LEAKED_TOOL_NAME_PATTERN.matcher(answer);

@@ -48,7 +48,7 @@ import io.micrometer.core.instrument.MeterRegistry;
  *
  * <h3>⚠️ Alias handling stays inside resolution (§4.4)</h3>
  * <p>All role alias expansion is contained entirely within
- * {@link #resolveCanonicalRole(String, String)}. No other method in this class
+ * {@link #resolveCanonicalRole(String, String, String)}. No other method in this class
  * may branch on, inspect, or expand role aliases.
  *
  * <p>After creation, verify no {@code @Transactional} leaked in:
