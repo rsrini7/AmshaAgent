@@ -9,6 +9,7 @@ import jakarta.inject.Inject;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 import com.arcclaw.core.agent.role.ToolCapability;
@@ -137,7 +138,7 @@ public class CheckListTool implements AgentTool {
 
             CheckList.Status status;
             try {
-                status = CheckList.Status.valueOf(statusStr.toLowerCase());
+                status = CheckList.Status.valueOf(statusStr.toLowerCase(Locale.ROOT));
             } catch (Exception e) {
                 throw new IllegalArgumentException("Invalid status: " + statusStr);
             }

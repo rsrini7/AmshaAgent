@@ -1,5 +1,6 @@
 package com.arcclaw.core.util;
 
+import java.util.Locale;
 import java.util.regex.Pattern;
 
 /**
@@ -16,7 +17,9 @@ public class FuzzyMatcher {
      */
     public static boolean isClose(String input, String target) {
         if (input == null || target == null) return false;
-        int dist = distance(input.toLowerCase().trim(), target.toLowerCase().trim());
+        int dist = distance(
+                input.toLowerCase(Locale.ROOT).trim(),
+                target.toLowerCase(Locale.ROOT).trim());
 
         // Dynamic threshold logic: more forgiving for longer words
         if (target.length() <= 6) return dist <= 1;
@@ -28,7 +31,10 @@ public class FuzzyMatcher {
      */
     public static boolean isClose(String input, String target, int maxDistance) {
         if (input == null || target == null) return false;
-        return distance(input.toLowerCase().trim(), target.toLowerCase().trim()) <= maxDistance;
+        return distance(
+                        input.toLowerCase(Locale.ROOT).trim(),
+                        target.toLowerCase(Locale.ROOT).trim())
+                <= maxDistance;
     }
 
     /**

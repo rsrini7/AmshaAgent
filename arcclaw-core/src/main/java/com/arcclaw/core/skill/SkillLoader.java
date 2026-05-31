@@ -10,6 +10,7 @@ import java.util.Arrays;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -128,7 +129,7 @@ public class SkillLoader {
                     false,
                     false, // codeCapable
                     toolsResult.valid(),
-                    Set.of(def.name().toLowerCase()));
+                    Set.of(def.name().toLowerCase(Locale.ROOT)));
 
             map.put(def.name(), new CompiledSkillEntry(def, compiledPatterns, roleDef, source));
 
@@ -154,7 +155,7 @@ public class SkillLoader {
         List<String> warnings = new ArrayList<>();
         Set<ToolCapability> valid = rawTools.stream()
                 .map(str -> {
-                    String normalized = str.toUpperCase().replace("_", "");
+                    String normalized = str.toUpperCase(Locale.ROOT).replace("_", "");
                     for (ToolCapability cap : ToolCapability.values()) {
                         if (cap.name().replace("_", "").equals(normalized)) {
                             return cap;

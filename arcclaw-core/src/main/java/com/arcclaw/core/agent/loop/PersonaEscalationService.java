@@ -6,6 +6,7 @@ import jakarta.inject.Inject;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 
 import com.arcclaw.common.util.LogUtil;
@@ -164,8 +165,8 @@ public class PersonaEscalationService {
             return null;
         }
 
-        String errorLower = errorOutput.toLowerCase();
-        String goalLower = originalGoal != null ? originalGoal.toLowerCase() : "";
+        String errorLower = errorOutput.toLowerCase(Locale.ROOT);
+        String goalLower = originalGoal != null ? originalGoal.toLowerCase(Locale.ROOT) : "";
 
         String target = escalateByRole(sourceRole, errorLower, goalLower);
         if (target != null) return target;

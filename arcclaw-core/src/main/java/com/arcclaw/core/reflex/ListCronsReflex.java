@@ -6,6 +6,7 @@ import jakarta.inject.Inject;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -41,7 +42,7 @@ public class ListCronsReflex implements AgentReflex {
     @Override
     public boolean matches(String input) {
         if (input == null) return false;
-        String trimmed = input.trim().toLowerCase();
+        String trimmed = input.trim().toLowerCase(Locale.ROOT);
         return EXACT_MATCHES.contains(trimmed) || PREFIX_MATCHES.stream().anyMatch(trimmed::startsWith);
     }
 

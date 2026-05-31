@@ -1,6 +1,7 @@
 package com.arcclaw.core.reflex;
 
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 
 import com.arcclaw.core.domain.model.AgentCheckpoint;
@@ -26,7 +27,12 @@ public class AmbiguityResolver {
             int idx = 1;
             for (AgentCron c : pendingCrons) {
                 sb.append("%d️⃣ `/%s %d` or `/%s %s` - (Background) "
-                                .formatted(idx, actionName.toLowerCase(), idx, actionName.toLowerCase(), c.getId()))
+                                .formatted(
+                                        idx,
+                                        actionName.toLowerCase(Locale.ROOT),
+                                        idx,
+                                        actionName.toLowerCase(Locale.ROOT),
+                                        c.getId()))
                         .append(c.getGoal())
                         .append("\n");
                 idx++;

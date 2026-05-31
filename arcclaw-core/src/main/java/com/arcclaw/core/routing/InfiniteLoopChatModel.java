@@ -6,6 +6,7 @@ import dev.langchain4j.model.chat.response.ChatResponse;
 
 import java.lang.ref.WeakReference;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
@@ -227,7 +228,7 @@ public class InfiniteLoopChatModel implements ChatModel {
 
     private void handleRateLimit(String slotName, SlotHealth h, LlmRateLimitException e) {
         String msg = e.getMessage();
-        if (msg != null && msg.toLowerCase().contains("per day")) {
+        if (msg != null && msg.toLowerCase(Locale.ROOT).contains("per day")) {
             h.disablePermanently();
             log.errorf("InfiniteLoop: Slot [%s] permanently disabled (daily quota exhausted): %s", slotName, msg);
         } else {

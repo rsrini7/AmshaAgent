@@ -7,6 +7,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
@@ -61,7 +62,7 @@ public class DirectExecutor {
      */
     private List<String> fixupCommandForWindows(List<String> command) {
         if (command == null || command.isEmpty()) return command;
-        String os = System.getProperty("os.name", "").toLowerCase();
+        String os = System.getProperty("os.name", "").toLowerCase(Locale.ROOT);
         if (!os.contains("win")) return command;
 
         String exe = command.get(0);

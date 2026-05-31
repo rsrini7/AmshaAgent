@@ -5,6 +5,7 @@ import jakarta.inject.Inject;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -394,7 +395,7 @@ public class AgentSessionService {
         String goal = request.goal();
         if (goal == null
                 || (!goal.startsWith("/")
-                        && NON_SLASH_REFLEX_PREFIXES.stream().noneMatch(goal.toLowerCase()::startsWith)))
+                        && NON_SLASH_REFLEX_PREFIXES.stream().noneMatch(goal.toLowerCase(Locale.ROOT)::startsWith)))
             return Optional.empty();
 
         try {

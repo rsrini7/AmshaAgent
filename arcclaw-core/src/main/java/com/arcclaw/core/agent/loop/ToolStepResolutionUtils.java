@@ -2,6 +2,7 @@ package com.arcclaw.core.agent.loop;
 
 import jakarta.enterprise.inject.Instance;
 
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
@@ -64,7 +65,7 @@ public final class ToolStepResolutionUtils {
 
     public static boolean isListOnlyGoal(String goal) {
         if (goal == null || goal.isBlank()) return true;
-        String lower = goal.toLowerCase();
+        String lower = goal.toLowerCase(Locale.ROOT);
         return MUTATING_GOAL_KEYWORDS.stream().noneMatch(lower::contains);
     }
 }

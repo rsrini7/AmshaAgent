@@ -12,6 +12,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.TimeoutException;
@@ -158,7 +159,7 @@ public class SandboxExecTool implements AgentTool {
         if (code == null) throw new IllegalArgumentException("Parameter 'code' is required.");
         if (lang == null) throw new IllegalArgumentException("Parameter 'language' is required.");
 
-        lang = lang.toLowerCase();
+        lang = lang.toLowerCase(Locale.ROOT);
 
         auditService.record(
                 ctx.sessionId(),
@@ -205,7 +206,7 @@ public class SandboxExecTool implements AgentTool {
         String lang = (String) params.get("language");
         String code = (String) params.get("code");
         if (lang == null || code == null) return;
-        lang = lang.toLowerCase();
+        lang = lang.toLowerCase(Locale.ROOT);
 
         if ("java".equals(lang)) {
             if (!codeLanguageDetector.containsTypeDeclaration(code)) {
@@ -249,7 +250,7 @@ public class SandboxExecTool implements AgentTool {
             String lang = (String) params.get("language");
             if (lang == null) return ToolResponse.failure(1, "Parameter 'language' is required.");
             if (code == null) return ToolResponse.failure(1, "Parameter 'code' is required.");
-            lang = lang.toLowerCase();
+            lang = lang.toLowerCase(Locale.ROOT);
 
             String violation = SandboxCodeSafetyScanner.findViolation(lang, code);
             if (violation != null) return ToolResponse.failure(1, "🚫 Execution blocked: " + violation);

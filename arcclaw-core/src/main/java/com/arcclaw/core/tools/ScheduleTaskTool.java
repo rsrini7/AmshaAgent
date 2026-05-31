@@ -13,6 +13,7 @@ import java.time.DateTimeException;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import java.util.regex.Pattern;
@@ -266,8 +267,8 @@ public class ScheduleTaskTool implements AgentTool {
 
     private boolean shouldTreatAsRunOnce(String goal, ToolExecutionContext ctx, boolean runOnce) {
         String combined = "";
-        if (goal != null) combined += " " + goal.toLowerCase();
-        if (ctx.rawUserGoal() != null) combined += " " + ctx.rawUserGoal().toLowerCase();
+        if (goal != null) combined += " " + goal.toLowerCase(Locale.ROOT);
+        if (ctx.rawUserGoal() != null) combined += " " + ctx.rawUserGoal().toLowerCase(Locale.ROOT);
 
         boolean hasIntervalKeyword =
                 combined.contains("every") || combined.contains("recurring") || combined.contains("each");

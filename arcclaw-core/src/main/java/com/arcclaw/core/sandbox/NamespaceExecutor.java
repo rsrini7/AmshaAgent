@@ -7,6 +7,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.concurrent.TimeUnit;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
@@ -25,7 +26,8 @@ public class NamespaceExecutor {
      * Falls back gracefully on non-Linux (dev/macOS/Windows).
      */
     public String executeInNamespace(Path workspaceRoot, List<String> command) throws Exception {
-        boolean isLinux = System.getProperty("os.name", "").toLowerCase().contains("linux");
+        boolean isLinux =
+                System.getProperty("os.name", "").toLowerCase(Locale.ROOT).contains("linux");
         ProcessBuilder pb;
         if (isLinux) {
             var fullCmd = new ArrayList<>(List.of(

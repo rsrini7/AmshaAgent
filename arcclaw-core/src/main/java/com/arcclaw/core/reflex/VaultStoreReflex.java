@@ -7,6 +7,7 @@ import jakarta.transaction.Transactional;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -71,7 +72,7 @@ public class VaultStoreReflex implements AgentReflex {
             return new ReflexResult(Optional.empty(), input);
         }
 
-        String keyName = m.group(1).toUpperCase();
+        String keyName = m.group(1).toUpperCase(Locale.ROOT);
         String value = m.group(2).trim();
         boolean force = m.group(3) != null;
 

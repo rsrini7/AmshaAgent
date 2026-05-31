@@ -9,6 +9,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.stream.Collectors;
 
@@ -110,7 +111,7 @@ public class ManageScheduleTool implements AgentTool {
                             + "Or use /crons in Telegram to list, /cron delete <id> to delete.");
         }
 
-        return switch (action.trim().toLowerCase()) {
+        return switch (action.trim().toLowerCase(Locale.ROOT)) {
             case "list" -> {
                 List<AgentCron> jobs = cronStore.findByUserId(userId).stream()
                         .map(AgentCronRecord::fromDto)

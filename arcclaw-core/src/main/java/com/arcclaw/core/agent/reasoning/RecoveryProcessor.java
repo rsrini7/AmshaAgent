@@ -4,6 +4,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
 import java.util.List;
+import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -111,7 +112,7 @@ public class RecoveryProcessor {
 
     public boolean containsEmbeddedSandboxToolCall(String prose) {
         if (prose == null) return false;
-        String lower = prose.toLowerCase();
+        String lower = prose.toLowerCase(Locale.ROOT);
         return lower.contains("\"sandbox_exec\"")
                 || lower.contains(ToolCapability.SANDBOX_EXEC.toolName())
                 || (lower.contains("\"code\"") && lower.contains("\"language\""));
@@ -121,7 +122,7 @@ public class RecoveryProcessor {
         if (prose == null || prose.isBlank()) return false;
         if (prose.contains("u003c") || prose.contains("u003e") || prose.contains("u0026")) return true;
         if (prose.contains("```")) return false;
-        String lower = prose.toLowerCase();
+        String lower = prose.toLowerCase(Locale.ROOT);
         boolean hasCodeKeywords = lower.contains("public class")
                 || lower.contains("public static void")
                 || lower.contains("func main")
@@ -140,7 +141,7 @@ public class RecoveryProcessor {
     public boolean proseIsUnexecutedCodePlan(String prose) {
         if (prose == null || prose.isBlank()) return false;
         if (prose.contains("```")) return true;
-        String lower = prose.toLowerCase();
+        String lower = prose.toLowerCase(Locale.ROOT);
         return lower.contains("public class ")
                 || lower.contains("func main")
                 || lower.contains("def ")
@@ -190,7 +191,7 @@ public class RecoveryProcessor {
 
     private String normalizeExecutionLanguage(String rawLanguage) {
         if (rawLanguage == null) return null;
-        String language = rawLanguage.trim().toLowerCase();
+        String language = rawLanguage.trim().toLowerCase(Locale.ROOT);
         return switch (language) {
             case "python3" -> "python";
             case "sh" -> "bash";

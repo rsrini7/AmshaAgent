@@ -1,6 +1,7 @@
 package com.arcclaw.core.domain.model;
 
 import java.time.Instant;
+import java.util.Locale;
 
 import com.arcclaw.core.state.CronStatus;
 import com.arcclaw.core.util.TemporalUtils;
@@ -243,7 +244,7 @@ public final class AgentCronRecord implements AgentCron {
         String displayGoal = "N/A";
         if (goal != null) {
             displayGoal = goal.replaceFirst("^CRON\\s+", "").trim();
-            String lower = displayGoal.toLowerCase();
+            String lower = displayGoal.toLowerCase(Locale.ROOT);
             if (lower.startsWith("output the following message:")) {
                 displayGoal = displayGoal
                         .substring("output the following message:".length())

@@ -9,6 +9,7 @@ import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.util.Locale;
 
 import com.arcclaw.common.util.LogUtil;
 
@@ -73,8 +74,8 @@ public class Vec0NativeLibraryInstaller {
 
     /** Returns the OS+arch key used in the resource filename. */
     static String osArchKey() {
-        String os = System.getProperty("os.name", "").toLowerCase();
-        String arch = System.getProperty("os.arch", "").toLowerCase();
+        String os = System.getProperty("os.name", "").toLowerCase(Locale.ROOT);
+        String arch = System.getProperty("os.arch", "").toLowerCase(Locale.ROOT);
 
         if (os.contains("linux")) return arch.contains("aarch64") ? "linux-aarch64" : "linux-x86_64";
         if (os.contains("mac")) return arch.contains("aarch64") ? "macos-aarch64" : "macos-x86_64";
@@ -84,7 +85,7 @@ public class Vec0NativeLibraryInstaller {
 
     /** Returns the native library file extension for the current OS. */
     static String nativeExtension() {
-        String os = System.getProperty("os.name", "").toLowerCase();
+        String os = System.getProperty("os.name", "").toLowerCase(Locale.ROOT);
         if (os.contains("windows")) return ".dll";
         if (os.contains("mac")) return ".dylib";
         return ".so";

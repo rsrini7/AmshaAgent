@@ -11,6 +11,7 @@ import java.nio.file.StandardCopyOption;
 import java.security.SecureRandom;
 import java.util.Base64;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 
 import com.arcclaw.app.util.CliUtils;
@@ -158,10 +159,12 @@ public class InteractiveSetupWizard {
         System.err.println("  ┌─ Unified API Key Setup");
         System.err.println("  │  ArcClaw uses LLMs for assistant, intent classifier, and compaction.");
         String resp = readLineWithFallback(System.console(), "  └─ Use a single key for all? [Y/n]: ");
-        if (resp == null || resp.trim().isEmpty() || resp.trim().toLowerCase().startsWith("y")) {
+        if (resp == null
+                || resp.trim().isEmpty()
+                || resp.trim().toLowerCase(Locale.ROOT).startsWith("y")) {
             String provider = System.getProperty("ARCCLAW_LLM_PROVIDER", "groq");
-            String key =
-                    readPasswordWithFallback(System.console(), "  └─ Enter " + provider.toUpperCase() + " API key: ");
+            String key = readPasswordWithFallback(
+                    System.console(), "  └─ Enter " + provider.toUpperCase(Locale.ROOT) + " API key: ");
             if (key != null && !key.isBlank()) {
                 applyUnifiedKey(envFile, key, provider);
                 String llmKeyName = llmApiKeyForProvider(provider);
@@ -183,7 +186,7 @@ public class InteractiveSetupWizard {
     }
 
     private static String llmApiKeyForProvider(String provider) {
-        return switch (provider.toLowerCase()) {
+        return switch (provider.toLowerCase(Locale.ROOT)) {
             case "openrouter" -> "ARCCLAW_OPENROUTER_API_KEY";
             case "openai" -> "ARCCLAW_OPENAI_API_KEY";
             case "gemini" -> "ARCCLAW_GEMINI_API_KEY";
@@ -197,7 +200,8 @@ public class InteractiveSetupWizard {
     private static boolean promptTelegramEnablement(Path envFile) {
         System.err.println("  ┌─ Telegram Integration");
         String response = readLineWithFallback(System.console(), "  └─ Enable Telegram? [y/N]: ");
-        boolean enabled = response != null && response.trim().toLowerCase().startsWith("y");
+        boolean enabled =
+                response != null && response.trim().toLowerCase(Locale.ROOT).startsWith("y");
         EnvConfigInitializer.patchEnvFile(
                 envFile, "ARCCLAW_TELEGRAM_ENABLED", String.valueOf(enabled), EnvConfigInitializer.PatchMode.UPDATE);
         System.setProperty("ARCCLAW_TELEGRAM_ENABLED", String.valueOf(enabled));
@@ -207,7 +211,7 @@ public class InteractiveSetupWizard {
     private static boolean promptOptionalModule(String key, String label) {
         System.err.println("  ┌─ " + label);
         String response = readLineWithFallback(System.console(), "  └─ Configure " + key + "? [y/N]: ");
-        return response != null && response.trim().toLowerCase().startsWith("y");
+        return response != null && response.trim().toLowerCase(Locale.ROOT).startsWith("y");
     }
 
     private static void promptVariable(Path envFile, CliUtils.VarSpec spec) {

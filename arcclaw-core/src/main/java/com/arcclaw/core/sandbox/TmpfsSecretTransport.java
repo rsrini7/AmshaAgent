@@ -8,6 +8,7 @@ import java.nio.file.Path;
 import java.nio.file.attribute.PosixFilePermissions;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 import com.arcclaw.common.util.LogUtil;
@@ -35,14 +36,14 @@ public class TmpfsSecretTransport implements SecretTransport {
     private static String resolveSecretDir() {
         String override = System.getenv("ARCCLAW_SANDBOX_SECRET_TRANSPORT");
         if (override != null && !override.isBlank()) {
-            return switch (override.toLowerCase()) {
+            return switch (override.toLowerCase(Locale.ROOT)) {
                 case "tmpfs" -> "/run/arcclaw/secrets"; // explicit Linux prod
                 case "tmpdir" -> System.getProperty("java.io.tmpdir"); // explicit dev
                 default -> override; // treat as a literal path
             };
         }
         // Auto-detect: only use tmpfs path on Linux where it actually exists
-        String os = System.getProperty("os.name", "").toLowerCase();
+        String os = System.getProperty("os.name", "").toLowerCase(Locale.ROOT);
         if (os.contains("linux")) {
             return "/run/arcclaw/secrets";
         }

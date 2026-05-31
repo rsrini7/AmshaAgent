@@ -1,6 +1,7 @@
 package com.arcclaw.core.agent.loop;
 
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
@@ -101,7 +102,7 @@ public class ToolResultProcessor {
             ToolResponse res,
             String obs,
             List<ReasoningStep> history) {
-        String action = String.valueOf(params.getOrDefault("action", "")).toLowerCase();
+        String action = String.valueOf(params.getOrDefault("action", "")).toLowerCase(Locale.ROOT);
         if (!"list".equals(action)) {
             String finalAnswer = (res != null && res.success() ? "✅ " : "❌ ") + obs;
             writer.saveAnswer(ctx.sessionId(), finalAnswer);

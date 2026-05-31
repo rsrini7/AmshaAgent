@@ -7,6 +7,7 @@ import jakarta.inject.Inject;
 
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.Locale;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ExecutionException;
@@ -35,7 +36,7 @@ public class LlmValidationService implements LlmValidationGateway {
                 vault.storeSystemKey(VaultConstants.LLM_API_KEY, apiKey.getBytes(StandardCharsets.UTF_8));
             }
             String effectiveBaseUrl =
-                    switch (provider.toLowerCase()) {
+                    switch (provider.toLowerCase(Locale.ROOT)) {
                         case "groq" -> "https://api.groq.com/openai/v1";
                         case "openai" -> "https://api.openai.com/v1";
                         case "anthropic" -> "https://api.anthropic.com";

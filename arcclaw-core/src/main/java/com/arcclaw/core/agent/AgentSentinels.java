@@ -1,5 +1,6 @@
 package com.arcclaw.core.agent;
 
+import java.util.Locale;
 import java.util.regex.Pattern;
 
 /**
@@ -52,7 +53,7 @@ public final class AgentSentinels {
     public static final String SCHEDULE_SUCCESS_MESSAGE = "Task scheduled successfully";
 
     public static boolean isCronGoal(String goal) {
-        return goal != null && goal.toUpperCase().startsWith(CRON_PREFIX);
+        return goal != null && goal.toUpperCase(Locale.ROOT).startsWith(CRON_PREFIX);
     }
 
     public static String stripCronPrefix(String goal) {

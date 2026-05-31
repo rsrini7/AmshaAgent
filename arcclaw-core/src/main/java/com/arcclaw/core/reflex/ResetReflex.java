@@ -5,6 +5,7 @@ import dev.langchain4j.store.memory.chat.ChatMemoryStore;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
+import java.util.Locale;
 import java.util.regex.Pattern;
 
 import com.arcclaw.core.agent.role.AgentRoleEnum;
@@ -51,7 +52,8 @@ public class ResetReflex implements AgentReflex {
     @Override
     public String auditDetail(String sessionId, String input) {
         boolean isHard = input != null
-                && (input.toLowerCase().contains("hard") || input.toLowerCase().contains("clear all"));
+                && (input.toLowerCase(Locale.ROOT).contains("hard")
+                        || input.toLowerCase(Locale.ROOT).contains("clear all"));
         return "reflex=ResetReflex type=" + (isHard ? "HARD" : "SOFT") + " session=" + sessionId;
     }
 
@@ -59,7 +61,7 @@ public class ResetReflex implements AgentReflex {
     public ReflexResult execute(String sessionId, String userId, String chatId, String input, MessageContext context) {
         log.infof("[ResetReflex] User requested session reset for %s", sessionId);
 
-        String trimmed = input.trim().toLowerCase();
+        String trimmed = input.trim().toLowerCase(Locale.ROOT);
         boolean isHardReset = trimmed.contains("hard") || trimmed.contains("clear all");
 
         // 0. Clear halted flag — allows fresh start after /halt

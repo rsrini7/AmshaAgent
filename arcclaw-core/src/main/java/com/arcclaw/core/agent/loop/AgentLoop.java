@@ -8,6 +8,7 @@ import jakarta.inject.Inject;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 import com.arcclaw.core.agent.IntentClassificationService;
@@ -114,7 +115,7 @@ public class AgentLoop {
     public AgentResult run(String sessionId, String agentRole, String goal, ReasoningEngine engine, int maxIterations) {
         int budget = maxIterations;
         if (goal != null) {
-            String lower = goal.toLowerCase();
+            String lower = goal.toLowerCase(Locale.ROOT);
             if (lower.contains("store")
                     || lower.contains("remember")
                     || lower.contains("call me")

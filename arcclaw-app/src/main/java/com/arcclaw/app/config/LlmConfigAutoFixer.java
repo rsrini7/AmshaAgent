@@ -1,6 +1,7 @@
 package com.arcclaw.app.config;
 
 import java.nio.file.Path;
+import java.util.Locale;
 
 /**
  * Handles LLM model and base URL auto-correction based on the selected provider.
@@ -22,7 +23,7 @@ public class LlmConfigAutoFixer {
     private static void resolveContextWindow(Path envFile, String provider) {
         String current = System.getProperty("ARCCLAW_LLM_CONTEXT_WINDOW", System.getenv("ARCCLAW_LLM_CONTEXT_WINDOW"));
         String target =
-                switch (provider.toLowerCase()) {
+                switch (provider.toLowerCase(Locale.ROOT)) {
                     case "gemini" -> "1000000";
                     case "ollama" -> "8192";
                     default -> "128000";
@@ -37,7 +38,7 @@ public class LlmConfigAutoFixer {
     }
 
     private static void resolveStructuredOutputModes(String provider) {
-        String modelKey = "ARCCLAW_" + provider.toUpperCase() + "_MODEL";
+        String modelKey = "ARCCLAW_" + provider.toUpperCase(Locale.ROOT) + "_MODEL";
         String model = System.getProperty(modelKey, System.getenv(modelKey));
         String target = (model != null && model.contains("llama-4-scout")) ? "PROMPT_DIRECTIVE" : "NATIVE";
         System.setProperty("arcclaw.llm.structured-output-mode", target);

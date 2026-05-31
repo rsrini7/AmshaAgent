@@ -2,6 +2,7 @@ package com.arcclaw.core.agent.loop;
 
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.regex.Pattern;
 
@@ -364,7 +365,7 @@ public class FinishOutcomeProcessor {
      */
     private boolean isThinkingJson(String text) {
         if (text == null) return false;
-        String lower = text.strip().toLowerCase();
+        String lower = text.strip().toLowerCase(Locale.ROOT);
         if (!lower.startsWith("{")) return false;
         // Check for common thinking-structure keys
         int thinkingKeys = 0;

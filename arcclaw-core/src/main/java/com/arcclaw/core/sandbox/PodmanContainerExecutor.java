@@ -10,6 +10,7 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -296,7 +297,7 @@ public class PodmanContainerExecutor {
     private long resolveTimeout(List<String> command) {
         // Detect network calls: gh, curl, wget, python -m pip, etc.
         if (!command.isEmpty()) {
-            String first = command.get(0).toLowerCase();
+            String first = command.get(0).toLowerCase(Locale.ROOT);
             if (first.equals("gh") || first.equals("curl") || first.equals("wget")) {
                 return networkTimeoutSeconds;
             }

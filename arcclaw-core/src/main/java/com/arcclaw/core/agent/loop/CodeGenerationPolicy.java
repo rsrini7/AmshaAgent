@@ -2,6 +2,7 @@ package com.arcclaw.core.agent.loop;
 
 import jakarta.enterprise.context.ApplicationScoped;
 
+import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -87,7 +88,7 @@ public class CodeGenerationPolicy {
         if (block == null || block.isBlank()) return false;
 
         Matcher headerMatcher = FENCE_HEADER_PATTERN.matcher(block);
-        String language = headerMatcher.find() ? headerMatcher.group(1).toLowerCase() : "";
+        String language = headerMatcher.find() ? headerMatcher.group(1).toLowerCase(Locale.ROOT) : "";
         String body = block.replaceFirst("^```[\\w-]*\\R", "")
                 .replaceFirst("\\R```\\s*$", "")
                 .trim();

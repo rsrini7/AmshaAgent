@@ -4,6 +4,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 
 import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -28,7 +29,7 @@ public class DelegationRoutingProvider implements IntentRoutingProvider {
     // Do NOT add vishnu or coordinator here.
     private static final String AGENT_NAMES = Arrays.stream(AgentPersona.values())
             .filter(p -> p != AgentPersona.VISHNU)
-            .flatMap(p -> Stream.concat(Stream.of(p.name().toLowerCase(), p.roleId()), p.aliases().stream()))
+            .flatMap(p -> Stream.concat(Stream.of(p.name().toLowerCase(Locale.ROOT), p.roleId()), p.aliases().stream()))
             .distinct()
             .collect(Collectors.joining("|"));
 

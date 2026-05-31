@@ -4,6 +4,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 import com.arcclaw.core.pipeline.MessageContext;
@@ -43,7 +44,7 @@ public class ListReflexesReflex implements AgentReflex {
     @Override
     public boolean matches(String input) {
         if (input == null) return false;
-        String t = input.trim().toLowerCase();
+        String t = input.trim().toLowerCase(Locale.ROOT);
         return t.equals("/reflex") || t.equals("/reflexes") || t.equals("/commands") || t.equals("/help");
     }
 

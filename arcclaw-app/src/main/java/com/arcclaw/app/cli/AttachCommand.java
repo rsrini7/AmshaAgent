@@ -6,6 +6,7 @@ import jakarta.enterprise.inject.Any;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
+import java.util.Locale;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
@@ -29,7 +30,7 @@ public class AttachCommand implements Runnable {
 
     @Override
     public void run() {
-        String target = channel.toLowerCase();
+        String target = channel.toLowerCase(Locale.ROOT);
         Optional<ChannelDaemon> daemon = daemons.stream()
                 .filter(d -> d.channelId().equalsIgnoreCase(target))
                 .findFirst();

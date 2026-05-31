@@ -8,6 +8,7 @@ import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
 import java.time.Duration;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -101,7 +102,7 @@ public class LlmModelFactory {
                                         .collect(Collectors.joining(", "))));
 
         LlmModelConfig config = new LlmModelConfig(
-                provider.toLowerCase(),
+                provider.toLowerCase(Locale.ROOT),
                 effectiveModel,
                 effectiveBaseUrl,
                 Optional.ofNullable(apiKey).filter(k -> !k.isBlank()),

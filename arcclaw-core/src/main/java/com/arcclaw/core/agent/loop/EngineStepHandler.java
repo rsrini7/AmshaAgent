@@ -9,6 +9,7 @@ import java.net.SocketTimeoutException;
 import java.time.Duration;
 import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -238,7 +239,7 @@ public class EngineStepHandler {
             String rawError = classified.getMessage() != null ? classified.getMessage() : "";
             if (rawError.contains("not in request.tools")) {
                 String unavailableTool = exceptionRouter.extractUnavailableToolName(rawError);
-                if (unavailableTool != null && AGENT_IDENTIFIERS.contains(unavailableTool.toLowerCase())) {
+                if (unavailableTool != null && AGENT_IDENTIFIERS.contains(unavailableTool.toLowerCase(Locale.ROOT))) {
                     return StepDecision.retryEngine(
                             hintBuilder.buildHallucinatedAgentToolHint(unavailableTool), llmSchemaErrorCount);
                 }

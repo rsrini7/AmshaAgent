@@ -11,6 +11,7 @@ import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 
 import java.util.List;
+import java.util.Locale;
 import java.util.stream.Collectors;
 
 import com.arcclaw.app.ui.dto.AgentStatusDto;
@@ -71,7 +72,7 @@ public class AgentStatusResource {
                             s.name(),
                             s.status(),
                             s.currentTask(),
-                            AutonomyLevel.SUPERVISED.name().toLowerCase(),
+                            AutonomyLevel.SUPERVISED.name().toLowerCase(Locale.ROOT),
                             totalTokens // ← was 0L
                             );
                 })

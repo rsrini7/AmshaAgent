@@ -6,6 +6,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.stream.Collectors;
 
@@ -95,7 +96,7 @@ public class AgentTaskTool implements AgentTool {
     @Override
     public ToolResponse execute(ToolExecutionContext ctx, Map<String, Object> params) {
         String action =
-                params.getOrDefault(PARAM_ACTION, "list").toString().trim().toLowerCase();
+                params.getOrDefault(PARAM_ACTION, "list").toString().trim().toLowerCase(Locale.ROOT);
 
         return switch (action) {
             case "create" -> doCreate(ctx, params);
@@ -129,7 +130,7 @@ public class AgentTaskTool implements AgentTool {
         List<TaskFile> tasks = taskManager.listTasks();
         if (tasks.isEmpty()) return ToolResponse.success("No tasks found.");
         return ToolResponse.success(tasks.stream()
-                .map(t -> "• [" + t.status().name().toLowerCase() + "] " + t.name() + " — " + t.id())
+                .map(t -> "• [" + t.status().name().toLowerCase(Locale.ROOT) + "] " + t.name() + " — " + t.id())
                 .collect(Collectors.joining("\n")));
     }
 
@@ -137,7 +138,7 @@ public class AgentTaskTool implements AgentTool {
         List<TaskFile> tasks = taskManager.listActiveTasks();
         if (tasks.isEmpty()) return ToolResponse.success("No active tasks.");
         return ToolResponse.success(tasks.stream()
-                .map(t -> "• [" + t.status().name().toLowerCase() + "] " + t.name() + " — " + t.id())
+                .map(t -> "• [" + t.status().name().toLowerCase(Locale.ROOT) + "] " + t.name() + " — " + t.id())
                 .collect(Collectors.joining("\n")));
     }
 
@@ -149,7 +150,7 @@ public class AgentTaskTool implements AgentTool {
         return taskManager
                 .getTask(id.trim())
                 .map(t -> ToolResponse.success(
-                        "Task: " + t.name() + "\nStatus: " + t.status().name().toLowerCase()
+                        "Task: " + t.name() + "\nStatus: " + t.status().name().toLowerCase(Locale.ROOT)
                                 + "\nCreated: " + t.createdAt() + "\nUpdated: " + t.updatedAt()
                                 + "\n\n" + t.body()))
                 .orElse(ToolResponse.failure(404, "Task not found: " + id));
@@ -175,7 +176,7 @@ public class AgentTaskTool implements AgentTool {
                     "AgentTask: transition task=" + id + " newStatus="
                             + updated.status().name());
             return ToolResponse.success("Task '" + updated.name() + "' is now "
-                    + updated.status().name().toLowerCase());
+                    + updated.status().name().toLowerCase(Locale.ROOT));
         } catch (IllegalArgumentException | IllegalStateException e) {
             return ToolResponse.failure(400, e.getMessage());
         }

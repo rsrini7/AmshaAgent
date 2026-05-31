@@ -10,6 +10,7 @@ import jakarta.inject.Inject;
 
 import java.util.Comparator;
 import java.util.List;
+import java.util.Locale;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -179,11 +180,11 @@ public class IntentDetectorService implements IntentDetector {
         } catch (TimeoutException te) {
             log.warnf("IntentDetector SLA breach (TIMEOUT > %dms) - using fast fallback model", slaTimeoutMs);
             String rawFallback = tryFallbackOrHeuristic(finalSafePrompt, userMessage);
-            return destructiveFilter.filter(sanitize(rawFallback.trim().toLowerCase()), userMessage);
+            return destructiveFilter.filter(sanitize(rawFallback.trim().toLowerCase(Locale.ROOT)), userMessage);
         } catch (Exception e) {
             log.warnf("Intent classifier failed: %s. Using fast fallback model.", LogUtil.rootMessage(e));
             String rawFallback = tryFallbackOrHeuristic(finalSafePrompt, userMessage);
-            return destructiveFilter.filter(sanitize(rawFallback.trim().toLowerCase()), userMessage);
+            return destructiveFilter.filter(sanitize(rawFallback.trim().toLowerCase(Locale.ROOT)), userMessage);
         }
         long elapsedMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startNs);
         if (elapsedMs > slaWarnMs) {
@@ -195,7 +196,7 @@ public class IntentDetectorService implements IntentDetector {
             return AgentRoleEnum.COORDINATOR.toScopedName();
         }
 
-        String result = sanitize(raw.trim().toLowerCase());
+        String result = sanitize(raw.trim().toLowerCase(Locale.ROOT));
         log.debugf("CLASSIFIER invoked, SLA=%dms, role=%s", elapsedMs, result);
         return destructiveFilter.filter(result, userMessage);
     }
@@ -214,7 +215,7 @@ public class IntentDetectorService implements IntentDetector {
     }
 
     private String localHeuristicClassify(String userMessage) {
-        String lower = userMessage.toLowerCase().trim();
+        String lower = userMessage.toLowerCase(Locale.ROOT).trim();
 
         // 1. Prioritize Coordination/Scheduling (unambiguous keywords only)
         if (lower.contains("schedule") || lower.contains("cron") || lower.contains("remind")) {
@@ -250,7 +251,7 @@ public class IntentDetectorService implements IntentDetector {
     }
 
     private String sanitize(String raw) {
-        String lowerRaw = raw.toLowerCase();
+        String lowerRaw = raw.toLowerCase(Locale.ROOT);
         for (AgentRoleEnum role : agentRoleRegistry.allRoles()) {
             // Match canonical name (e.g. "debugger")
             if (lowerRaw.contains(role.toScopedName())) return role.toScopedName();
@@ -259,13 +260,13 @@ public class IntentDetectorService implements IntentDetector {
             // e.g. "Brahaspati" from "Brahaspati (Architect)"
             String displayName = role.definition().displayName();
             String deityName = displayName.contains("(")
-                    ? displayName.substring(0, displayName.indexOf("(")).trim().toLowerCase()
-                    : displayName.toLowerCase();
+                    ? displayName.substring(0, displayName.indexOf("(")).trim().toLowerCase(Locale.ROOT)
+                    : displayName.toLowerCase(Locale.ROOT);
             if (!deityName.isBlank() && lowerRaw.contains(deityName)) return role.toScopedName();
 
             // Match registered aliases (deity names and common misspellings)
             for (String alias : role.definition().aliases()) {
-                if (lowerRaw.contains(alias.toLowerCase())) return role.toScopedName();
+                if (lowerRaw.contains(alias.toLowerCase(Locale.ROOT))) return role.toScopedName();
             }
         }
         return AgentRoleEnum.COORDINATOR.toScopedName(); // safe default

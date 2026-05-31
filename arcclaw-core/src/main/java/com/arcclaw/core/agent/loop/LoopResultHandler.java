@@ -3,6 +3,7 @@ package com.arcclaw.core.agent.loop;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 
 import com.arcclaw.channel.api.ChannelPlugin;
@@ -221,7 +222,7 @@ public class LoopResultHandler {
             }
         }
 
-        String lowerObs = observation.toLowerCase();
+        String lowerObs = observation.toLowerCase(Locale.ROOT);
         String opening = lowerObs.length() > 150 ? lowerObs.substring(0, 150) : lowerObs;
         if (opening.contains("i was unable")
                 || opening.contains("unable to fetch")

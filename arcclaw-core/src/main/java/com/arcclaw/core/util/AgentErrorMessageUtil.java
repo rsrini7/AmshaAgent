@@ -2,6 +2,7 @@ package com.arcclaw.core.util;
 
 import static com.arcclaw.core.message.UserMessages.*;
 
+import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -159,7 +160,7 @@ public final class AgentErrorMessageUtil {
         int hours = 0;
         int minutes = 0;
         int seconds = 0;
-        String s = rawInterval.trim().toLowerCase();
+        String s = rawInterval.trim().toLowerCase(Locale.ROOT);
 
         Matcher m1 = DURATION_PATTERN.matcher(s);
 

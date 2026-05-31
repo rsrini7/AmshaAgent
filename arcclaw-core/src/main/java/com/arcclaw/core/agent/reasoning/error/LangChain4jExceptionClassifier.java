@@ -3,6 +3,8 @@ package com.arcclaw.core.agent.reasoning.error;
 import dev.langchain4j.exception.HttpException;
 import dev.langchain4j.exception.InvalidRequestException;
 
+import java.util.Locale;
+
 import com.arcclaw.core.util.AgentErrorMessageUtil;
 
 public class LangChain4jExceptionClassifier extends LlmExceptionClassifierChain {
@@ -86,13 +88,13 @@ public class LangChain4jExceptionClassifier extends LlmExceptionClassifierChain 
 
     private static boolean isServiceDegraded(String msg) {
         if (msg == null) return false;
-        String lower = msg.toLowerCase();
+        String lower = msg.toLowerCase(Locale.ROOT);
         return lower.contains("degraded") || lower.contains("cannot be invoked") || lower.contains("overloaded");
     }
 
     private static boolean isSchemaValidationError(String message) {
         if (message == null) return false;
-        String lower = message.toLowerCase();
+        String lower = message.toLowerCase(Locale.ROOT);
         return lower.contains("tool call validation failed")
                 || lower.contains("did not match schema")
                 || lower.contains("value must be one of")

@@ -6,6 +6,7 @@ import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -21,7 +22,7 @@ public class CodeLanguageDetector {
     private static final Pattern FS_ILLEGAL_CHARS = Pattern.compile("[:<>\"\\\\|?*]");
 
     private static final boolean IS_WINDOWS =
-            System.getProperty("os.name", "").toLowerCase().contains("win");
+            System.getProperty("os.name", "").toLowerCase(Locale.ROOT).contains("win");
 
     private final Optional<String> configuredPythonExe;
     private final Optional<String> configuredJavaExe;

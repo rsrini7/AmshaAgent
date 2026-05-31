@@ -1,6 +1,7 @@
 package com.arcclaw.core.sandbox;
 
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.regex.Pattern;
 
@@ -114,7 +115,7 @@ public final class SandboxCodeSafetyScanner {
             if (p.matcher(code).find()) return p.pattern();
         }
 
-        String normalizedLang = lang != null ? lang.toLowerCase() : "";
+        String normalizedLang = lang != null ? lang.toLowerCase(Locale.ROOT) : "";
         for (Pattern p : LANG_PATTERNS.getOrDefault(normalizedLang, List.of())) {
             if (p.matcher(code).find()) return p.pattern();
         }

@@ -9,6 +9,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
+import java.util.Locale;
 import java.util.Map;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -354,7 +355,7 @@ public class DelegateToAgentTool implements AgentTool {
      * after redirect (caller should tell LLM to proceed directly).
      */
     private String normalizeAgent(String agentName, String goal, String currentRoleName, String delegatableList) {
-        String normalized = agentName.trim().toLowerCase();
+        String normalized = agentName.trim().toLowerCase(Locale.ROOT);
 
         if (isSelfDelegation(normalized, currentRoleName)) {
             log.infof("[REDIRECT] %s tried to delegate to itself — auto-redirecting to coordinator", currentRoleName);

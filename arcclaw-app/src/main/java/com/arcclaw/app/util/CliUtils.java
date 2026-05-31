@@ -4,6 +4,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 
 /**
@@ -171,7 +172,7 @@ public class CliUtils {
         // 1. LLM Primary Key first
         String llmProvider = Optional.ofNullable(System.getenv("ARCCLAW_LLM_PROVIDER"))
                 .orElseGet(() -> System.getProperty("ARCCLAW_LLM_PROVIDER", "groq"))
-                .toLowerCase();
+                .toLowerCase(Locale.ROOT);
 
         VarSpec providerKeySpec =
                 switch (llmProvider) {
@@ -243,7 +244,7 @@ public class CliUtils {
      * @param args the raw CLI args passed to {@code main()}
      */
     public static void validateRequiredEnvVars(String[] args) {
-        String mode = args.length > 0 ? args[0].toLowerCase() : "";
+        String mode = args.length > 0 ? args[0].toLowerCase(Locale.ROOT) : "";
 
         // No validation needed for help/version flags
         if (mode.equals("--help") || mode.equals("-h") || mode.equals("--version") || mode.equals("-v")) {

@@ -3,6 +3,7 @@ package com.arcclaw.app.config;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Locale;
 
 import com.arcclaw.common.util.LogUtil;
 
@@ -60,7 +61,7 @@ public class BootstrapOrchestrator {
     }
 
     private static void reexecWithLdPreloadIfNeeded(String[] args) {
-        String os = System.getProperty("os.name").toLowerCase();
+        String os = System.getProperty("os.name").toLowerCase(Locale.ROOT);
         if (!os.contains("linux")
                 || System.getenv("ARCCLAW_LD_PRELOAD_SET") != null
                 || System.getenv("LD_PRELOAD") != null) return;

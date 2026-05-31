@@ -4,6 +4,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 
 /**
@@ -39,9 +40,10 @@ public class ReasoningValidator {
         if (sessionId != null && summaryCache != null) {
             Optional<String> summary = summaryCache.getSummary(sessionId);
             if (summary.isPresent() && language != null) {
-                String s = summary.get().toLowerCase();
-                if (s.contains("failed") && s.contains(language.toLowerCase()) && s.contains(toolName.toLowerCase()))
-                    return true;
+                String s = summary.get().toLowerCase(Locale.ROOT);
+                if (s.contains("failed")
+                        && s.contains(language.toLowerCase(Locale.ROOT))
+                        && s.contains(toolName.toLowerCase(Locale.ROOT))) return true;
             }
         }
         return false;

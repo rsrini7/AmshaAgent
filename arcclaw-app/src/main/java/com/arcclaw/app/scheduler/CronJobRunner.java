@@ -9,6 +9,7 @@ import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Collections;
+import java.util.Locale;
 import java.util.UUID;
 import java.util.concurrent.Callable;
 import java.util.regex.Pattern;
@@ -116,7 +117,7 @@ public class CronJobRunner {
                 return;
             }
 
-            if (isTimeCheck(stripped.toLowerCase())) {
+            if (isTimeCheck(stripped.toLowerCase(Locale.ROOT))) {
                 log.infof("CRON-SHORT-CIRCUIT cronId=%s time-check", job.getId());
                 String time = ZonedDateTime.now(ZoneOffset.UTC).format(DateTimeFormatter.RFC_1123_DATE_TIME);
                 AgentResult result = AgentResult.finished("The current time is " + time, Collections.emptyList());
@@ -152,7 +153,7 @@ public class CronJobRunner {
 
     private boolean isPureAnnouncement(String goal) {
         if (goal == null || goal.isBlank()) return false;
-        String normalized = goal.toLowerCase().trim();
+        String normalized = goal.toLowerCase(Locale.ROOT).trim();
 
         // Explicit announcement prefixes
         if (PURE_ANNOUNCEMENT_PATTERN.matcher(normalized).matches()) {
@@ -276,7 +277,7 @@ public class CronJobRunner {
             return explicitRole;
         }
 
-        String normalized = goal != null ? goal.toLowerCase().trim() : "";
+        String normalized = goal != null ? goal.toLowerCase(Locale.ROOT).trim() : "";
 
         // Output-only goals: unconditionally override to coordinator
         if (normalized.startsWith("output")

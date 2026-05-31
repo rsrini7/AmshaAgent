@@ -1,5 +1,7 @@
 package com.arcclaw.core.agent.reasoning.error;
 
+import java.util.Locale;
+
 public abstract class LlmExceptionClassifierChain {
     protected LlmExceptionClassifierChain next;
 
@@ -18,7 +20,7 @@ public abstract class LlmExceptionClassifierChain {
 
     protected boolean isRateLimitError(String message) {
         if (message == null) return false;
-        String lower = message.toLowerCase();
+        String lower = message.toLowerCase(Locale.ROOT);
         return lower.contains("ratelimitexceeded")
                 || lower.contains("tokens per minute")
                 || lower.contains("tokens per day")

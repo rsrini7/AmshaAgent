@@ -3,6 +3,7 @@ package com.arcclaw.core.reflex;
 import jakarta.inject.Inject;
 
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
@@ -107,7 +108,7 @@ public abstract class AbstractDecisionReflex implements AgentReflex {
         DecisionParams d = extractDecisionParams(cmd);
         if (d == null) return ReflexResult.forward(context);
 
-        String reason = d.reasonOpt.orElse("CLI " + getActionName().toLowerCase());
+        String reason = d.reasonOpt.orElse("CLI " + getActionName().toLowerCase(Locale.ROOT));
         AmbiguityResolver ambiguityResolver = new AmbiguityResolver(getActionName(), getAmbiguityTitle());
 
         try {
@@ -137,8 +138,8 @@ public abstract class AbstractDecisionReflex implements AgentReflex {
                 if (!pendingCrons.isEmpty()) {
                     if (pendingCrons.size() == 1) return getSingleCronFallbackMessage(pendingCrons.getFirst());
                     String cronList = pendingCrons.stream()
-                            .map(c ->
-                                    "• `/%s %s` - %s".formatted(getActionName().toLowerCase(), c.getId(), c.getGoal()))
+                            .map(c -> "• `/%s %s` - %s"
+                                    .formatted(getActionName().toLowerCase(Locale.ROOT), c.getId(), c.getGoal()))
                             .collect(Collectors.joining("\n"));
                     return getMultipleCronFallbackMessage(cronList);
                 }
@@ -272,7 +273,7 @@ public abstract class AbstractDecisionReflex implements AgentReflex {
         targetId = resolveNumericTargetIndex(targetId, sessionId, userId);
 
         // Resolve prefix match for cron job IDs
-        String prefix = targetId.toLowerCase();
+        String prefix = targetId.toLowerCase(Locale.ROOT);
         if (prefix.startsWith(AgentSentinels.CRON_SESSION_PREFIX)) {
             prefix = prefix.substring(AgentSentinels.CRON_SESSION_PREFIX.length());
         }
@@ -282,7 +283,7 @@ public abstract class AbstractDecisionReflex implements AgentReflex {
                     .collect(Collectors.toList());
             String finalPrefix = prefix;
             Optional<AgentCron> matchedCron = pendingCrons.stream()
-                    .filter(c -> c.getId().toLowerCase().startsWith(finalPrefix))
+                    .filter(c -> c.getId().toLowerCase(Locale.ROOT).startsWith(finalPrefix))
                     .findFirst();
             if (matchedCron.isPresent()) {
                 targetId = matchedCron.get().getId();
@@ -307,7 +308,8 @@ public abstract class AbstractDecisionReflex implements AgentReflex {
             if (!pendingCrons.isEmpty()) {
                 if (pendingCrons.size() == 1) return getSingleCronFallbackMessage(pendingCrons.getFirst());
                 String cronList = pendingCrons.stream()
-                        .map(c -> "• `/%s %s` - %s".formatted(getActionName().toLowerCase(), c.getId(), c.getGoal()))
+                        .map(c -> "• `/%s %s` - %s"
+                                .formatted(getActionName().toLowerCase(Locale.ROOT), c.getId(), c.getGoal()))
                         .collect(Collectors.joining("\n"));
                 return getMultipleCronFallbackMessage(cronList);
             }

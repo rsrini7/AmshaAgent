@@ -1,5 +1,6 @@
 package com.arcclaw.channel.api;
 
+import java.util.Locale;
 import java.util.Optional;
 import java.util.regex.Pattern;
 
@@ -91,7 +92,7 @@ public interface ChannelCommand {
         if (!matcher.matches()) {
             return new Unknown(input);
         }
-        String cmd = matcher.group(1).toLowerCase();
+        String cmd = matcher.group(1).toLowerCase(Locale.ROOT);
         String arg = matcher.group(2); // may be null
         String reason = matcher.group(3); // may be null
         Optional<String> optArg = Optional.ofNullable(arg);

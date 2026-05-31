@@ -3,6 +3,7 @@ package com.arcclaw.core.routing;
 import jakarta.enterprise.context.ApplicationScoped;
 
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.regex.Pattern;
 
@@ -77,7 +78,7 @@ public class ResearcherRoutingProvider implements IntentRoutingProvider {
     @Override
     public boolean shouldSkip(String userMessage) {
         if (userMessage == null) return true;
-        String lower = userMessage.toLowerCase();
+        String lower = userMessage.toLowerCase(Locale.ROOT);
         boolean hasUrl = lower.contains("http://") || lower.contains("https://");
         boolean hasGithubRef = lower.contains("github") || lower.contains("/");
         boolean hasBrowseVerbs = lower.contains("browse")

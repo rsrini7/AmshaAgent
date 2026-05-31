@@ -2,6 +2,8 @@ package com.arcclaw.core.util;
 
 import jakarta.enterprise.context.ApplicationScoped;
 
+import java.util.Locale;
+
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 /**
@@ -20,7 +22,7 @@ public class TextPatternUtils {
      */
     public boolean goalRequestsExecution(String goal) {
         if (goal == null) return false;
-        String lower = goal.toLowerCase();
+        String lower = goal.toLowerCase(Locale.ROOT);
         return lower.contains("execute")
                 || lower.contains("must execute")
                 || lower.contains("and execute")
@@ -48,7 +50,7 @@ public class TextPatternUtils {
      */
     public String goalMentionsLanguage(String goal) {
         if (goal == null) return null;
-        String lower = " " + goal.toLowerCase().replaceAll("[^a-z0-9]", " ") + " ";
+        String lower = " " + goal.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]", " ") + " ";
 
         if (lower.contains(" java ")) return "java";
         if (lower.contains(" python ") || lower.contains(" py ")) return "python";

@@ -1,5 +1,6 @@
 package com.arcclaw.channel.api;
 
+import java.util.Locale;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -57,7 +58,7 @@ public final class ChannelType {
         if (id == null || id.isBlank()) {
             throw new IllegalArgumentException("ChannelType id must not be null or blank");
         }
-        String normalized = id.toLowerCase().trim();
+        String normalized = id.toLowerCase(Locale.ROOT).trim();
         return REGISTRY.computeIfAbsent(normalized, ChannelType::new);
     }
 
@@ -70,7 +71,7 @@ public final class ChannelType {
      */
     public static Optional<ChannelType> fromString(String value) {
         if (value == null || value.isBlank()) return Optional.empty();
-        String normalized = value.toLowerCase().trim();
+        String normalized = value.toLowerCase(Locale.ROOT).trim();
         return Optional.ofNullable(REGISTRY.get(normalized));
     }
 
@@ -101,7 +102,7 @@ public final class ChannelType {
      * the former enum's {@code name()} method.
      */
     public String name() {
-        return id.toUpperCase();
+        return id.toUpperCase(Locale.ROOT);
     }
 
     @Override

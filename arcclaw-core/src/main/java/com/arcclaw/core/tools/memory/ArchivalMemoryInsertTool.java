@@ -6,6 +6,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
 import java.time.Instant;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -116,7 +117,7 @@ public class ArchivalMemoryInsertTool implements AgentTool {
             if (content == null || content.isBlank()) {
                 return ToolResponse.failure(400, "'content' is required.");
             }
-            if (chunkType == null || !ALLOWED_CHUNK_TYPES.contains(chunkType.toUpperCase())) {
+            if (chunkType == null || !ALLOWED_CHUNK_TYPES.contains(chunkType.toUpperCase(Locale.ROOT))) {
                 return ToolResponse.failure(400, "'chunk_type' must be one of: " + ALLOWED_CHUNK_TYPES);
             }
             if (content.length() > MAX_CONTENT_CHARS) {
@@ -131,7 +132,7 @@ public class ArchivalMemoryInsertTool implements AgentTool {
                     UUID.randomUUID().toString(),
                     userId,
                     content.trim(),
-                    chunkType.toUpperCase(),
+                    chunkType.toUpperCase(Locale.ROOT),
                     ctx.sessionId(),
                     null, // sourceMessage
                     tags,

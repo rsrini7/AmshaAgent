@@ -1,5 +1,7 @@
 package com.arcclaw.core.agent.reasoning.error;
 
+import java.util.Locale;
+
 import com.arcclaw.core.util.AgentErrorMessageUtil;
 
 public class GenericExceptionClassifier extends LlmExceptionClassifierChain {
@@ -29,7 +31,7 @@ public class GenericExceptionClassifier extends LlmExceptionClassifierChain {
         if (isRateLimitError(msg)) return new LlmRateLimitException(msg, original);
 
         if (msg != null) {
-            String lower = msg.toLowerCase();
+            String lower = msg.toLowerCase(Locale.ROOT);
             if (lower.contains("timeout")
                     || lower.contains("timed out")
                     || (lower.contains("exceeded") && lower.contains("ms"))) {

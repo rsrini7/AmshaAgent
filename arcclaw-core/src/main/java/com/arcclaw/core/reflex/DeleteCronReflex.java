@@ -5,6 +5,8 @@ import static com.arcclaw.core.message.UserMessages.*;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
+import java.util.Locale;
+
 import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
@@ -37,7 +39,7 @@ public class DeleteCronReflex implements AgentReflex {
     @Override
     public boolean matches(String input) {
         if (input == null) return false;
-        String t = input.trim().toLowerCase();
+        String t = input.trim().toLowerCase(Locale.ROOT);
         return t.startsWith(PREFIX_DELETECRON)
                 || t.startsWith(PREFIX_SLASH_DELETECRON)
                 || t.startsWith(PREFIX_CRON_DELETE);
@@ -54,7 +56,7 @@ public class DeleteCronReflex implements AgentReflex {
 
         // Normalize prefix - extract cronId regardless of which reflex form was used
         String normalized = input.trim();
-        String lower = normalized.toLowerCase();
+        String lower = normalized.toLowerCase(Locale.ROOT);
         int prefixLen;
         if (lower.startsWith(PREFIX_CRON_DELETE)) prefixLen = PREFIX_CRON_DELETE.length();
         else if (lower.startsWith(PREFIX_SLASH_DELETECRON)) prefixLen = PREFIX_SLASH_DELETECRON.length();

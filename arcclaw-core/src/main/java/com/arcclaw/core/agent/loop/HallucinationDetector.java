@@ -1,6 +1,7 @@
 package com.arcclaw.core.agent.loop;
 
 import java.util.List;
+import java.util.Locale;
 import java.util.regex.Pattern;
 
 import com.arcclaw.common.util.LogUtil;
@@ -54,11 +55,11 @@ class HallucinationDetector {
                 || HALLUCINATED_SCHEDULE_CLAIM.matcher(answer).find();
         if (!hasScheduleClaim) return null;
 
-        boolean isNegative = answer.toLowerCase().contains("not scheduled")
-                || answer.toLowerCase().contains("cannot schedule")
-                || answer.toLowerCase().contains("can't schedule")
-                || answer.toLowerCase().contains("failed to schedule")
-                || answer.toLowerCase().contains("unable to schedule");
+        boolean isNegative = answer.toLowerCase(Locale.ROOT).contains("not scheduled")
+                || answer.toLowerCase(Locale.ROOT).contains("cannot schedule")
+                || answer.toLowerCase(Locale.ROOT).contains("can't schedule")
+                || answer.toLowerCase(Locale.ROOT).contains("failed to schedule")
+                || answer.toLowerCase(Locale.ROOT).contains("unable to schedule");
         if (isNegative) return null;
         if (historyContainsSuccessfulSchedule(history)) return null;
 

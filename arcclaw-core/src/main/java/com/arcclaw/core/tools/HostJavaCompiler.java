@@ -6,6 +6,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Locale;
 
 import org.jboss.logging.Logger;
 
@@ -15,7 +16,7 @@ public class HostJavaCompiler {
     private static final Logger log = Logger.getLogger(HostJavaCompiler.class);
 
     static final boolean IS_WINDOWS =
-            System.getProperty("os.name", "").toLowerCase().contains("win");
+            System.getProperty("os.name", "").toLowerCase(Locale.ROOT).contains("win");
 
     public void compile(Path javaFile, Path outputDir) throws IOException {
         Path javacExe = resolveJavac();

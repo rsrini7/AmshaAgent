@@ -6,6 +6,7 @@ import jakarta.inject.Inject;
 
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 import com.arcclaw.core.agent.AgentSentinels;
@@ -304,9 +305,9 @@ public class FinishActionHandler {
         boolean isSchedulingGoal =
                 AgentSentinels.SCHEDULING_KEYWORDS.matcher(goal).find();
         boolean isSearchGoal = AgentSentinels.RESEARCH_KEYWORDS.matcher(goal).find()
-                || goal.toLowerCase().contains("memory")
-                || goal.toLowerCase().contains("recall")
-                || goal.toLowerCase().contains("find");
+                || goal.toLowerCase(Locale.ROOT).contains("memory")
+                || goal.toLowerCase(Locale.ROOT).contains("recall")
+                || goal.toLowerCase(Locale.ROOT).contains("find");
         if (isSchedulingGoal
                 && !isSearchGoal
                 && isToolPermitted(context.agentRole(), ToolCapability.SCHEDULE_TASK.toolName())) {

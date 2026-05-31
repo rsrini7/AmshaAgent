@@ -3,6 +3,7 @@ package com.arcclaw.core.reflex;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
+import java.util.Locale;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -51,7 +52,7 @@ public class IdentityExtractionReflex implements AgentReflex {
         // 1. Guard: If it ends with a question mark, it's a query, not a fact to ingest.
         if (trimmed.endsWith("?")) return false;
 
-        String lower = trimmed.toLowerCase();
+        String lower = trimmed.toLowerCase(Locale.ROOT);
 
         // 2. Guard: Common question starters
         if (lower.startsWith("what ")
@@ -83,7 +84,7 @@ public class IdentityExtractionReflex implements AgentReflex {
             if (clause.isBlank()) continue;
 
             // Re-inject dropped pronouns for compound verbs (e.g. "i am Srini and love to study")
-            String lower = clause.toLowerCase();
+            String lower = clause.toLowerCase(Locale.ROOT);
             boolean isFirstPerson = lower.startsWith("i ")
                     || lower.startsWith("i'm")
                     || lower.startsWith("my ")
@@ -117,7 +118,7 @@ public class IdentityExtractionReflex implements AgentReflex {
             String fullText = buildFactText(label, value);
 
             MemoryEntryDto dto = new MemoryEntryDto(
-                    null, fullText, Map.of("label", label.name().toLowerCase()));
+                    null, fullText, Map.of("label", label.name().toLowerCase(Locale.ROOT)));
 
             final String sid = sessionId;
             final String uid = userId;
@@ -130,7 +131,7 @@ public class IdentityExtractionReflex implements AgentReflex {
                             uid,
                             "IdentityExtractionReflex",
                             SecurityEventType.MEMORY_INGESTED,
-                            "label=" + label.name().toLowerCase() + " fact=" + fullText);
+                            "label=" + label.name().toLowerCase(Locale.ROOT) + " fact=" + fullText);
                 } catch (Exception e) {
                     log.warnf("IdentityExtractionReflex failed to ingest fact: %s", LogUtil.rootMessage(e));
                 }

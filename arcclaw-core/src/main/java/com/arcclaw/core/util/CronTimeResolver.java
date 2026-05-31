@@ -3,6 +3,7 @@ package com.arcclaw.core.util;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
+import java.util.Locale;
 import java.util.regex.Pattern;
 
 /**
@@ -55,7 +56,7 @@ public class CronTimeResolver {
         var m = EVERY_PATTERN.matcher(msg);
         if (m.find()) {
             String amount = m.group(1);
-            String unit = m.group(2).toLowerCase();
+            String unit = m.group(2).toLowerCase(Locale.ROOT);
 
             if (unit.startsWith("min")) {
                 if (amount == null || "1".equals(amount)) return "*/1 * * * *";
@@ -80,7 +81,7 @@ public class CronTimeResolver {
         var m1 = IN_RELATIVE_TIME_PATTERN.matcher(msg);
         if (m1.find()) {
             String q = m1.group(1);
-            String unit = m1.group(2).toLowerCase();
+            String unit = m1.group(2).toLowerCase(Locale.ROOT);
             long amount = (q.equalsIgnoreCase("a") || q.equalsIgnoreCase("an") || q.equalsIgnoreCase("one"))
                     ? 1L
                     : Long.parseLong(q);

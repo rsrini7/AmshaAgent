@@ -5,6 +5,7 @@ import dev.langchain4j.model.chat.request.ChatRequest;
 import dev.langchain4j.model.chat.response.ChatResponse;
 
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -170,11 +171,11 @@ public class MultiModelChatModel implements ChatModel {
 
     private void handleRateLimit(String label, ModelHealth h, LlmRateLimitException e) {
         String msg = e.getMessage();
-        if (msg != null && msg.toLowerCase().contains("per day")) {
+        if (msg != null && msg.toLowerCase(Locale.ROOT).contains("per day")) {
             h.disablePermanently();
             log.errorf(
                     "MultiModel: [%s] %s permanently disabled (daily quota exhausted): %s", providerName, label, msg);
-        } else if (msg != null && msg.toLowerCase().contains("request too large")) {
+        } else if (msg != null && msg.toLowerCase(Locale.ROOT).contains("request too large")) {
             h.markTpmBlocked();
             log.infof("MultiModel: [%s] %s request too large for TPM, skipping. %s", providerName, label, msg);
         } else {

@@ -9,6 +9,7 @@ import jakarta.inject.Inject;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
@@ -410,7 +411,7 @@ public class ReasoningStepParser {
 
     private boolean isSchedulingGoal(String rawGoal) {
         if (rawGoal == null || rawGoal.isBlank()) return false;
-        String lower = rawGoal.toLowerCase();
+        String lower = rawGoal.toLowerCase(Locale.ROOT);
         boolean hasScheduleVerb = lower.contains("schedule")
                 || lower.contains("remind")
                 || lower.contains("alarm")

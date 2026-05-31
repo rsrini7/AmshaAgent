@@ -1,6 +1,7 @@
 package com.arcclaw.core.agent.role;
 
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -227,7 +228,7 @@ public record AgentRoleEnum(String id) {
             return COORDINATOR;
         }
 
-        String normalized = roleStr.trim().toLowerCase();
+        String normalized = roleStr.trim().toLowerCase(Locale.ROOT);
 
         // Skill-based dynamic routing
         if (isSkillRole(normalized)) {
@@ -247,7 +248,7 @@ public record AgentRoleEnum(String id) {
     /** Returns true only if the role string maps to a known built-in role. */
     public static boolean isKnownRole(String roleStr) {
         if (roleStr == null || roleStr.isBlank()) return false;
-        String normalized = roleStr.trim().toLowerCase();
+        String normalized = roleStr.trim().toLowerCase(Locale.ROOT);
         if (isSkillRole(normalized)) return true;
         for (AgentRoleEnum builtIn : BUILT_IN) {
             RoleDefinition def = DEFINITIONS.get(builtIn.id());
