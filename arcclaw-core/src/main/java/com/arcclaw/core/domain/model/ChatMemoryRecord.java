@@ -8,8 +8,7 @@ public final class ChatMemoryRecord implements ChatMemory {
     private String messagesJson;
     private String metadataJson;
 
-    public ChatMemoryRecord() {}
-
+    /** Required no-arg constructor for JDBI RowMapper / Jackson deserialization. */
     public static ChatMemoryRecord fromDto(ChatMemoryDto dto) {
         ChatMemoryRecord r = new ChatMemoryRecord();
         r.memoryId = dto.memoryId();

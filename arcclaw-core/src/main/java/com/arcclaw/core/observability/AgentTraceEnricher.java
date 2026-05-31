@@ -19,7 +19,9 @@ public class AgentTraceEnricher implements AgentObserver {
     AgentOtelContext otelContext;
 
     @Override
-    public void recordLlmCall(String sessionId, int inputTokens, int outputTokens) {}
+    public void recordLlmCall(String sessionId, int inputTokens, int outputTokens) {
+        // No-op: LLM token tracking handled by MetricsAgentObserver. This enricher only instruments spans.
+    }
 
     @Override
     public void onStepComplete(String sessionId, String role, ReasoningStep step) {

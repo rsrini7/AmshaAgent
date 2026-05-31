@@ -49,8 +49,7 @@ public final class AgentCheckpointRecord implements AgentCheckpoint {
     private Instant createdAt;
     private Instant updatedAt;
 
-    public AgentCheckpointRecord() {}
-
+    /** Required no-arg constructor for JDBI RowMapper / Jackson deserialization. */
     public static AgentCheckpointRecord fromDto(CheckpointDto dto) {
         AgentCheckpointRecord r = new AgentCheckpointRecord();
         r.id = dto.id();

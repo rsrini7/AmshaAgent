@@ -10,8 +10,7 @@ public final class EncryptedSecretRecord implements EncryptedSecret {
     private byte[] ciphertext;
     private byte[] nonce;
 
-    public EncryptedSecretRecord() {}
-
+    /** Required no-arg constructor for JDBI RowMapper / Jackson deserialization. */
     public static EncryptedSecretRecord fromDto(SecretDto dto) {
         EncryptedSecretRecord r = new EncryptedSecretRecord();
         r.sessionId = dto.sessionId();

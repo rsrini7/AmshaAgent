@@ -26,7 +26,8 @@ $args = @(
     "-Dsonar.host.url=$sonarUrl",
     "-Dsonar.token=$env:SONAR_TOKEN",
     "-Dsonar.java.binaries=arcclaw-app/target/classes",
-    "-Dsonar.exclusions=**/target/**,**/node_modules/**,arcclaw-ui/**"
+    "-Dsonar.exclusions=**/target/**,**/node_modules/**,arcclaw-ui/**",
+    "-Dsonar.coverage.jacoco.xmlReportPaths=**/target/site/jacoco/jacoco.xml"
 )
 & sonar-scanner $args
 

@@ -186,12 +186,28 @@ public class AgentFunctionProcessor {
 
         if (classInfo.isRecord()) {
             for (RecordComponentInfo rc : classInfo.recordComponents()) {
-                addProperty(index, classInfo, rc.name(), rc.type(), properties, required, processedTypes, reflectiveClasses);
+                addProperty(
+                        index,
+                        classInfo,
+                        rc.name(),
+                        rc.type(),
+                        properties,
+                        required,
+                        processedTypes,
+                        reflectiveClasses);
             }
         } else {
             classInfo.fields().forEach(f -> {
                 if ((f.flags() & Modifier.STATIC) == 0) {
-                    addProperty(index, classInfo, f.name(), f.type(), properties, required, processedTypes, reflectiveClasses);
+                    addProperty(
+                            index,
+                            classInfo,
+                            f.name(),
+                            f.type(),
+                            properties,
+                            required,
+                            processedTypes,
+                            reflectiveClasses);
                 }
             });
         }

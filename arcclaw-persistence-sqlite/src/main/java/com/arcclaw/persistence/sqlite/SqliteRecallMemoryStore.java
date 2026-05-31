@@ -63,5 +63,7 @@ public class SqliteRecallMemoryStore implements RecallMemoryStorePort {
     }
 
     @Override
-    public void purgeExpired(String userId, int retentionDays) {}
+    public void purgeExpired(String userId, int retentionDays) {
+        // No-op: recall messages are ephemeral per-session — no server-side expiry needed.
+    }
 }

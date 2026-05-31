@@ -30,8 +30,7 @@ public final class AuditEventRecord implements AuditEvent {
     private String hmacHash;
     private String prevHash;
 
-    public AuditEventRecord() {}
-
+    /** Required no-arg constructor for JDBI RowMapper / Jackson deserialization. */
     public static AuditEventRecord of(
             String sessionId,
             String userId,

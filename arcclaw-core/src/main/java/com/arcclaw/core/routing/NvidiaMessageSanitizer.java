@@ -285,6 +285,6 @@ public class NvidiaMessageSanitizer implements ChatModel {
     }
 
     private static String generateNvidiaId() {
-        return UUID.randomUUID().toString().replaceAll("-", "").substring(0, 9);
+        return UUID.randomUUID().toString().replace("-", "").substring(0, 9);
     }
 }

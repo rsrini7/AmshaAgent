@@ -12,8 +12,7 @@ public final class AgentSkillRecord implements AgentSkill {
     private Instant createdAt;
     private Instant updatedAt;
 
-    public AgentSkillRecord() {}
-
+    /** Required no-arg constructor for JDBI RowMapper / Jackson deserialization. */
     public static AgentSkillRecord fromDto(SkillDto dto) {
         AgentSkillRecord r = new AgentSkillRecord();
         r.id = dto.id();

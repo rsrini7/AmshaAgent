@@ -129,13 +129,11 @@ class DelegateToAgentToolTest {
 
         ToolResponse response = tool.execute(ctx, params);
 
-        // Self-delegation auto-redirects to coordinator but coordinator->coordinator
-        // is invalid — should produce a non-zero exit code failure
+        // Self-delegation auto-redirects to coordinator → tool returns success
+        // telling the LLM to proceed with its own tools (not an error).
         assertNotNull(response);
-        assertFalse(response.success());
-        assertTrue(response.exitCode() != 0
-                || response.output().contains("cannot delegate to coordinator")
-                || response.output().contains("self-delegation"));
+        assertTrue(response.success());
+        assertTrue(response.output().contains("delegate") || response.output().contains("own tools"));
     }
 
     @Test

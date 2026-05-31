@@ -189,6 +189,7 @@ public class FileSystemTaskRepository {
                 case "status" -> status = TaskState.fromString(lm.group(2));
                 case "createdAt" -> createdAt = safeParseInstant(lm.group(2));
                 case "updatedAt" -> updatedAt = safeParseInstant(lm.group(2));
+                default -> {} // unknown frontmatter key — ignore silently
             }
         }
 

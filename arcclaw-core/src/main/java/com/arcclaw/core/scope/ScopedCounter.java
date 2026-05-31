@@ -13,10 +13,9 @@ public class ScopedCounter {
 
     private final AtomicInteger count = new AtomicInteger(0);
 
-    /**
-     * Required no-arg constructor for CDI proxy generation.
-     */
-    public ScopedCounter() {}
+    public ScopedCounter() {
+        // Required no-arg constructor for CDI proxy generation.
+    }
 
     /**
      * Increment and return the new count.

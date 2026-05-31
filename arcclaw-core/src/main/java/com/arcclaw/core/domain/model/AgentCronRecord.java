@@ -27,8 +27,7 @@ public final class AgentCronRecord implements AgentCron {
     private Instant createdAt;
     private Instant updatedAt;
 
-    public AgentCronRecord() {}
-
+    /** Required no-arg constructor for JDBI RowMapper / Jackson deserialization. */
     public static AgentCronRecord fromDto(AgentCronDto dto) {
         AgentCronRecord r = new AgentCronRecord();
         r.id = dto.id();

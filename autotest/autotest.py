@@ -597,7 +597,7 @@ def write_json_report(results: list[TestResult], path: str):
         for r in results
     ]
     with open(path, "w", encoding="utf-8") as f:
-        json.dump({"generated_at": datetime.utcnow().isoformat(),
+        json.dump({"generated_at": datetime.now(datetime.UTC).isoformat(),
                    "results": data}, f, indent=2, ensure_ascii=False)
     print(f"[Report] JSON saved to {path}")
 
