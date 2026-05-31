@@ -8,9 +8,9 @@ import jakarta.enterprise.event.Observes;
 import jakarta.inject.Inject;
 
 import java.io.BufferedReader;
-import java.nio.charset.StandardCharsets;
 import java.io.Console;
 import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.List;
@@ -272,7 +272,8 @@ public class ChatCommand implements Runnable {
     /** Fallback for non-TTY environments (CI, piped stdin, Docker without -t). */
     private void chatLoopFallback(String sessionId) {
         Console console = System.console();
-        BufferedReader fallbackReader = (console == null) ? new BufferedReader(new InputStreamReader(System.in, StandardCharsets.UTF_8)) : null;
+        BufferedReader fallbackReader =
+                (console == null) ? new BufferedReader(new InputStreamReader(System.in, StandardCharsets.UTF_8)) : null;
 
         while (true) {
             String input;

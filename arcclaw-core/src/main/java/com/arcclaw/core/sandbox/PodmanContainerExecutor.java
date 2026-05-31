@@ -7,6 +7,7 @@ import jakarta.inject.Inject;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
@@ -15,7 +16,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
-import java.nio.charset.StandardCharsets;
 import java.util.concurrent.TimeUnit;
 
 import com.arcclaw.common.util.LogUtil;

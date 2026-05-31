@@ -261,7 +261,12 @@ public class CheckpointResumeHandler {
     }
 
     private void sendFormattedResult(
-            ChannelSender s, ChannelUser user, AgentResult result, String output, String sessionId, ChannelType _cType) {
+            ChannelSender s,
+            ChannelUser user,
+            AgentResult result,
+            String output,
+            String sessionId,
+            ChannelType _cType) {
         if (result instanceof AgentResult.AwaitingApproval aa
                 && aa.toolName().startsWith(ReasoningStep.PARALLEL_SENTINEL_PIPE_PREFIX)) {
             s.send(

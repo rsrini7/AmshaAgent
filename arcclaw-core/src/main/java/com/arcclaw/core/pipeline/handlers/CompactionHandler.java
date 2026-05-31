@@ -67,12 +67,13 @@ public class CompactionHandler implements MessageHandler {
             if (compactionInFlight.compareAndSet(sessionId, false, true)) {
                 compactionEventBridge.registerLatch(sessionId);
                 try {
-                    eventBus.publishAsync(
-                                    EventTypeCatalog.COMPACTION_REQUEST, new CompactionRequest(sessionId, userId))
+                    eventBus.publishAsync(EventTypeCatalog.COMPACTION_REQUEST, new CompactionRequest(sessionId, userId))
                             .exceptionally(ex -> {
                                 compactionInFlight.set(sessionId, false);
                                 compactionEventBridge.releaseLatch(sessionId);
-                                log.errorf("Async compaction failed for session %s: %s", sessionId, LogUtil.rootMessage(ex));
+                                log.errorf(
+                                        "Async compaction failed for session %s: %s",
+                                        sessionId, LogUtil.rootMessage(ex));
                                 return null;
                             });
                     log.debugf("Async compaction triggered for session %s", sessionId);
