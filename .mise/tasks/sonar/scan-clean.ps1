@@ -22,10 +22,8 @@ if (-not $env:SONAR_TOKEN) {
 # Get SonarQube URL from env or use default
 $sonarUrl = if ($env:SONAR_API_URL) { $env:SONAR_API_URL } else { 'http://localhost:9000' }
 
-# Build first
-Write-Host '📦  Building project...'
-$mvnw = if ($IsWindows) { '.\mvnw.cmd' } else { './mvnw' }
-& $mvnw clean install -pl arcclaw-app -am -DskipTests --no-transfer-progress
+# Build + test with coverage via canonical task
+mise run build:test
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 Write-Host ''

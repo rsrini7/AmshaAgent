@@ -5,6 +5,10 @@ $ErrorActionPreference = 'Stop'
 # Clean stale scanner work directory from previous runs
 $scannerDir = Join-Path $PSScriptRoot '..' '..' '..' '.scannerwork'
 if (Test-Path $scannerDir) { Remove-Item -Recurse -Force $scannerDir }
+Write-Host '🔬  Running test suite to generate coverage data...'
+mise run build:test
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+Write-Host ''
 Write-Host '▶   Running SonarQube analysis...'
 
 # Check if SONAR_TOKEN is set
