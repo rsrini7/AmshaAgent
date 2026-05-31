@@ -78,7 +78,6 @@ public class ExecutionFailureRecoveryService {
     /**
      * Represents a recovery result with the fixed code and attempt count.
      *
-     * @param fixedCode the validated fixed code (non-null only on success)
      * @param fixedCode the fixed code (non-null only on success)
      * @param attemptsUsed number of attempts used (non-zero only on success)
      * @param success true if recovery succeeded
@@ -333,7 +332,7 @@ public class ExecutionFailureRecoveryService {
                 .append("## ORIGINAL CODE:\n```")
                 .append(language)
                 .append("\n")
-                .append(currentCode)
+                .append(currentCode != null ? currentCode : "NO CODE PROVIDED")
                 .append("\n```\n\n")
                 .append("## YOUR TASK:\n")
                 .append("1. Analyze the error and identify the root cause\n")

@@ -1490,9 +1490,9 @@ Every new or modified class MUST compile cleanly under JDK 25 standard without p
 
 ---
 
-## 11. Frontend (Lit/Web Component) Invariants
+## 23. Frontend (Lit/Web Component) Invariants
 
-### 11.1 Shadow DOM Event Boundary
+### 23.1 Shadow DOM Event Boundary
 
 Custom events dispatched from inside a Lit component's Shadow DOM MUST use `window.dispatchEvent()`. Events with `bubbles: true; composed: true` do NOT reliably cross the Shadow DOM boundary in all cases (observed with Chrome + Lit 3.x). This affects any event the shell needs to receive from child components.
 
@@ -1515,7 +1515,7 @@ Affected events (MUST use `window.dispatchEvent`):
 - `session-ready` (chat → shell, sessionId handoff)
 - `ws-status-change` (WsManager → shell, WebSocket status updates)
 
-### 11.2 CSS Height Resolution in Flex Layouts
+### 23.2 CSS Height Resolution in Flex Layouts
 
 Percentage height (`height: 100%`) on a child element does NOT resolve reliably when the parent is a flex item with `overflow-y: auto`. The flex item's computed height is not considered "definite" for percentage resolution in all browsers. This manifests as blank content areas.
 
@@ -1537,7 +1537,7 @@ Percentage height (`height: 100%`) on a child element does NOT resolve reliably 
 }
 ```
 
-### 11.3 Scrollbar Styles in Shadow DOM
+### 23.3 Scrollbar Styles in Shadow DOM
 
 `::-webkit-scrollbar` pseudo-element styles defined in the document's `<style>` block do NOT apply to scrollable elements inside Shadow DOMs. Each component with a scrollable container MUST define its own scrollbar styles.
 
@@ -1555,7 +1555,7 @@ Components with internal scrollable containers that need explicit scrollbar styl
 - `arc-audit-panel.ts`: `.table-wrap`, `.drawer`
 - `arc-scheduler-panel.ts`: `.drawer`
 
-### 11.4 Dynamic Tag Names in Templates
+### 23.4 Dynamic Tag Names in Templates
 
 Using `<${route.component}>` syntax (dynamic tag names from array iteration) can silently fail if the component is not yet registered as a custom element at render time. This produces a blank page with no console error.
 
@@ -1568,7 +1568,7 @@ ${this._route === '#/chat' ? html`<arc-chat-interface class="content-area"></arc
 ${ROUTES.map(r => html`<${r.component} class="content-area"></${r.component}>`)}
 ```
 
-### 11.5 `updated()` Lifecycle Guard for Async Connections
+### 23.5 `updated()` Lifecycle Guard for Async Connections
 
 When a Lit component's `updated()` lifecycle triggers an async connection (e.g., WebSocket), the guard condition MUST check for a property that is available on the **first render**, not a property that is only set after a subsequent async operation.
 
@@ -1589,7 +1589,7 @@ updated(changedProperties) {
 }
 ```
 
-### 11.6 WebSocket Stale Connection Guard
+### 23.6 WebSocket Stale Connection Guard
 
 When reconnecting a WebSocket, the old connection's `onclose` handler may fire AFTER the new connection is established. This handler must check that it is still the current manager before reacting.
 
@@ -1609,9 +1609,9 @@ Always call `this._ws.disconnect()` before nullifying the old connection in `rec
 
 ---
 
-## 12. Threading & Concurrency Invariants
+## 24. Threading & Concurrency Invariants
 
-### 12.1 Virtual Threads + `synchronized` on JDK 25
+### 24.1 Virtual Threads + `synchronized` on JDK 25
 
 JDK 25 has resolved the virtual-thread pinning issue with `synchronized` blocks. You do NOT need to migrate `synchronized` to `ReentrantLock` for Loom compatibility. Keep `synchronized` where it is semantically correct.
 
@@ -1621,7 +1621,7 @@ The existing `ReentrantLock` usages in `VaultKeyCache` and `SecretVaultImpl` are
 - `synchronized` blocks → safe on JDK 25, prefer for simplicity
 - `ReentrantLock` → only when CDI proxying requires it (field-level lock on `@ApplicationScoped` beans)
 
-### 12.2 Halt/Cancellation Interruption Checks
+### 24.2 Halt/Cancellation Interruption Checks
 
 Tool execution loops MUST check `Thread.currentThread().isInterrupted()` and `WorkspaceManager.isSessionHalted(sessionId)` at loop boundaries. These are GA APIs (no preview features) and are the primary halt propagation mechanism.
 

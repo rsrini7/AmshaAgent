@@ -129,9 +129,13 @@ class DelegateToAgentToolTest {
 
         ToolResponse response = tool.execute(ctx, params);
 
-        // Self-delegation now auto-redirects to coordinator (not rejected)
-        // The tool should still return a failure since coordinator->coordinator isn't valid
+        // Self-delegation auto-redirects to coordinator but coordinator->coordinator
+        // is invalid — should produce a non-zero exit code failure
         assertNotNull(response);
+        assertFalse(response.success());
+        assertTrue(response.exitCode() != 0
+                || response.output().contains("cannot delegate to coordinator")
+                || response.output().contains("self-delegation"));
     }
 
     @Test

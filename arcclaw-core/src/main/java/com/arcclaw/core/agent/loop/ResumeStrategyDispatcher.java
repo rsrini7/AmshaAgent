@@ -202,8 +202,6 @@ class ResumeStrategyDispatcher {
                             + "Summarize what was stored for the user in a natural conversational tone."));
                 }
 
-                completeInProgressCheckpoint(checkpoint);
-
                 if (response instanceof ToolResponse.ToolSuccess success) {
                     if (ToolCapability.DELEGATE_TO_AGENT.toolName().equals(toolName)) {
                         return AgentResult.finished(success.output(), List.copyOf(history));
