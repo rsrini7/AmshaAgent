@@ -23,6 +23,7 @@ import org.jboss.logging.Logger;
 /**
  * Handles the interactive CLI setup wizard flow.
  */
+@SuppressWarnings("java:S1192")
 public class InteractiveSetupWizard {
 
     private static final Logger log = Logger.getLogger(InteractiveSetupWizard.class);

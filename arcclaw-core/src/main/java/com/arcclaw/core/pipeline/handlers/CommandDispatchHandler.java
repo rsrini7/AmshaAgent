@@ -120,13 +120,27 @@ public class CommandDispatchHandler implements MessageHandler {
 
                         Just type your question or task in plain text.
 
-                        *Commands:*
-                        /cron - list scheduled tasks
-                        /status - session state
+                        *Session:*
+                        /status - session state, tokens, budget
                         /history - conversation history
-                        /reset - clear this session
-                        /halt - stop current task
-                        /approve · /deny - HITL approvals"""));
+                        /reset - soft reset (keeps chat)
+                        /resethard - hard reset (wipes everything)
+                        /halt - emergency stop
+
+                        *Tasks:*
+                        /crons - list scheduled tasks
+                        /deletecron <id> - delete a cron job
+                        /retry - retry last stale approval
+
+                        *HITL:*
+                        /approve [id] - approve pending action
+                        /deny [id] - deny pending action
+
+                        *Tools:*
+                        /vault KEY=VALUE - store encrypted secret
+                        /skills - list loaded skills
+                        /mcp - MCP server status
+                        /commands - list all commands"""));
     }
 
     private HandleResult handleUnknownCommand(MessageContext context, ChannelCommand.Unknown u) {

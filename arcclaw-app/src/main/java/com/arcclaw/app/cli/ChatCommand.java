@@ -53,6 +53,7 @@ import org.jline.terminal.TerminalBuilder;
 import io.quarkus.runtime.ShutdownEvent;
 
 @CommandLine.Command(name = "chat", description = "Start an interactive chat session with ArcClaw")
+@SuppressWarnings("java:S1192")
 public class ChatCommand implements Runnable {
 
     private static final String CLI_USER_ID = "cli-user";

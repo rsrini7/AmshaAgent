@@ -19,6 +19,7 @@ import io.quarkus.test.junit.QuarkusTest;
 
 @QuarkusTest
 @QuarkusTestResource(PostgresTestResource.class)
+@SuppressWarnings("java:S1192")
 class PostgresCheckpointStoreAdapterTest {
 
     @Inject

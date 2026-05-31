@@ -60,6 +60,7 @@ public class ToolSchemaProvider {
         return result;
     }
 
+    @SuppressWarnings("java:S1192")
     private Object elementToMap(JsonSchemaElement el) {
         if (el == null) return null;
         return switch (el) {

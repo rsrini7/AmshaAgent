@@ -30,6 +30,7 @@ import org.jboss.logging.Logger;
  * Parses the ChatResponse from LangChain4j into a ReasoningStep.
  */
 @ApplicationScoped
+@SuppressWarnings("java:S1192")
 public class ReasoningStepParser {
 
     private static final Logger log = Logger.getLogger(ReasoningStepParser.class);

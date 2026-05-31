@@ -162,6 +162,7 @@ public class SecretVaultImpl implements SecretVault {
         return get(keyName, userId, sessionId);
     }
 
+    @SuppressWarnings("java:S2093") // VaultKey lifecycle managed by VaultKeyCache, not local scope
     private Optional<VaultKey> get(String keyName, String userId, String sessionId) {
         Span span = otelContext.childSpan(sessionId, AgentOTelConstants.SPAN_VAULT_RETRIEVE);
         try {

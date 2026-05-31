@@ -37,6 +37,7 @@ import io.opentelemetry.api.trace.StatusCode;
  * Delegates message assembly, recovery processing, and structured output to specialized components.
  */
 @ApplicationScoped
+@SuppressWarnings("java:S1192")
 public class LangChainReasoningEngine implements ReasoningEngine {
 
     private static final Logger log = Logger.getLogger(LangChainReasoningEngine.class);

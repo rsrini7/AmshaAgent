@@ -1,3 +1,5 @@
+/start
+
 Hey i am Srini and love to Study a lot and teach kids.. who are you ?
 
 schedule to write python program Factorial of 10 and execute then share the result after 2 mins

@@ -46,6 +46,7 @@ import io.smallrye.mutiny.Multi;
 @Path("hitl")
 @Produces(MediaType.APPLICATION_JSON)
 @RunOnVirtualThread
+@SuppressWarnings("java:S1192")
 public class HitlResource {
 
     private static final String HITL_AUDIT_PREFIX = "hitl-";

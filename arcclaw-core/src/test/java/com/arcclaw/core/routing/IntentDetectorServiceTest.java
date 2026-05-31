@@ -20,6 +20,7 @@ import io.quarkus.test.junit.QuarkusTest;
 import io.smallrye.common.annotation.Identifier;
 
 @QuarkusTest
+@SuppressWarnings("java:S1192")
 public class IntentDetectorServiceTest {
 
     @Inject

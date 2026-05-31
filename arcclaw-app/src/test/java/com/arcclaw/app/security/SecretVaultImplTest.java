@@ -37,6 +37,7 @@ import org.junit.jupiter.api.Test;
 import io.quarkus.test.junit.QuarkusTest;
 
 @QuarkusTest
+@SuppressWarnings("java:S1192")
 public class SecretVaultImplTest {
 
     @Inject

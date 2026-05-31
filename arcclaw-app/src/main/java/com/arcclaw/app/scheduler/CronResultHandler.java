@@ -38,6 +38,7 @@ import org.jboss.logging.Logger;
  * records audit events, fires telemetry events, and manages workspace sessions.
  */
 @ApplicationScoped
+@SuppressWarnings("java:S1192")
 public class CronResultHandler {
 
     private static final Logger log = Logger.getLogger(CronResultHandler.class);

@@ -12,7 +12,7 @@ import org.junit.jupiter.api.Test;
  * SR-2: Test coverage for arcclaw-persistence-api.
  * Focuses on contract integrity and DTO null-safety.
  */
-public class PersistenceDtoTest {
+class PersistenceDtoTest {
 
     @Test
     void testCheckpointDtoIntegrity() {
@@ -61,7 +61,9 @@ public class PersistenceDtoTest {
             }
 
             @Override
-            public void unlock(String k) {}
+            public void unlock(String k) {
+                // no-op for contract test
+            }
 
             @Override
             public boolean isLocked(String k) {

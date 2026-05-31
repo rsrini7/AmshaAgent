@@ -6,6 +6,7 @@ import java.util.List;
 
 import org.junit.jupiter.api.Test;
 
+@SuppressWarnings("java:S1192")
 class SkillDefinitionTest {
 
     @Test

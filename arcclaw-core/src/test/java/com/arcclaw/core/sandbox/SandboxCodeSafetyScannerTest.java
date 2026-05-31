@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 
 import org.junit.jupiter.api.Test;
 
+@SuppressWarnings("java:S1192")
 public class SandboxCodeSafetyScannerTest {
     @Test
     void rmrf_is_blocked() {

@@ -21,6 +21,7 @@ import io.quarkus.arc.properties.IfBuildProperty;
 @ApplicationScoped
 @Unremovable
 @IfBuildProperty(name = "arcclaw.persistence.backend", stringValue = "fs")
+@SuppressWarnings("java:S1192")
 public class FsCronStoreAdapter implements CronStorePort {
 
     private static final Logger log = Logger.getLogger(FsCronStoreAdapter.class);

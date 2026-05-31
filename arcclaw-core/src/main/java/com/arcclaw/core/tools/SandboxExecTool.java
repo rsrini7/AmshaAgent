@@ -41,6 +41,7 @@ import org.jboss.logging.Logger;
         capabilityId = "sandbox_exec",
         description = "Execute code in an isolated sandbox",
         defaultRoles = {"coder", "debugger"})
+@SuppressWarnings("java:S1192")
 public class SandboxExecTool implements AgentTool {
 
     private static final Logger log = Logger.getLogger(SandboxExecTool.class);

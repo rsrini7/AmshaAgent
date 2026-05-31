@@ -33,6 +33,7 @@ import org.mockito.MockitoAnnotations;
 /**
  * Tests for CoreMemoryService, focusing on CAS atomic append behavior.
  */
+@SuppressWarnings("java:S1192")
 class CoreMemoryServiceTest {
 
     @Mock

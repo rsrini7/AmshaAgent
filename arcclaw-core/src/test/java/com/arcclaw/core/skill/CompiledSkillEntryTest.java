@@ -10,6 +10,7 @@ import com.arcclaw.core.agent.role.RoleDefinition;
 
 import org.junit.jupiter.api.Test;
 
+@SuppressWarnings("java:S1192")
 class CompiledSkillEntryTest {
 
     private final SkillDefinition mockDef =

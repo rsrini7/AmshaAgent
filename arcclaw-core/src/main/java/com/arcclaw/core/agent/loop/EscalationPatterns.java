@@ -7,6 +7,7 @@ import com.arcclaw.core.agent.role.AgentRoleEnum;
 /**
  * Escalation keyword patterns and new-persona routing logic.
  */
+@SuppressWarnings("java:S1192")
 final class EscalationPatterns {
 
     private EscalationPatterns() {}

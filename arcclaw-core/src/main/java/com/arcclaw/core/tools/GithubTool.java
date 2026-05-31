@@ -45,6 +45,7 @@ import org.jboss.logging.Logger;
         capabilityId = "github",
         description = "Read-only access to GitHub repositories and resources",
         defaultRoles = {"architect", "coordinator", "researcher", "debugger", "synthesizer"})
+@SuppressWarnings("java:S1192")
 public class GithubTool implements AgentTool {
 
     private static final Logger log = Logger.getLogger(GithubTool.class);

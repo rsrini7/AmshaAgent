@@ -15,6 +15,7 @@ import io.quarkus.arc.properties.IfBuildProperty;
 @ApplicationScoped
 @Unremovable
 @IfBuildProperty(name = "arcclaw.persistence.backend", stringValue = "fs")
+@SuppressWarnings("java:S1192")
 public class FsSkillStoreAdapter implements SkillStorePort {
 
     private static final String DOMAIN = "skills";

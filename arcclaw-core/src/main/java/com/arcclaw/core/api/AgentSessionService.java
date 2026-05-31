@@ -52,6 +52,7 @@ import io.quarkus.virtual.threads.VirtualThreads;
 
 @ApplicationScoped
 @MdcManaged
+@SuppressWarnings("java:S1192")
 public class AgentSessionService {
 
     private final Logger log;

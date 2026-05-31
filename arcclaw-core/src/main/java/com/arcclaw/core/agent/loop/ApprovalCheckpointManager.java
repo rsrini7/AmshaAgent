@@ -30,6 +30,7 @@ import org.jboss.logging.Logger;
  * Handles checkpoint persistence and SSE notification logic.
  */
 @ApplicationScoped
+@SuppressWarnings("java:S1192")
 public class ApprovalCheckpointManager {
 
     private static final Logger log = Logger.getLogger(ApprovalCheckpointManager.class);

@@ -14,6 +14,7 @@ import org.junit.jupiter.api.Test;
 import io.quarkus.test.junit.QuarkusTest;
 
 @QuarkusTest
+@SuppressWarnings("java:S1192")
 class TelegramChannelRouteStartupTest {
 
     // All mock beans are provided by TestCoreMocks (shared across all @QuarkusTest tests)

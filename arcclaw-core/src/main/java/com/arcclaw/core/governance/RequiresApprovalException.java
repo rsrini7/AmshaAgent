@@ -9,7 +9,7 @@ import com.arcclaw.core.exception.ArcClawException;
  */
 public class RequiresApprovalException extends ArcClawException {
 
-    private final ApprovalFrame frame;
+    private final transient ApprovalFrame frame;
     private final String sessionId;
 
     public RequiresApprovalException(ApprovalFrame frame, String sessionId) {

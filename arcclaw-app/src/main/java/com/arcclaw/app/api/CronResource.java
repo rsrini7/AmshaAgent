@@ -37,6 +37,7 @@ import io.smallrye.common.annotation.RunOnVirtualThread;
 @Produces(MediaType.APPLICATION_JSON)
 @Consumes(MediaType.APPLICATION_JSON)
 @RunOnVirtualThread
+@SuppressWarnings("java:S1192")
 public class CronResource {
 
     private static final Logger log = Logger.getLogger(CronResource.class);

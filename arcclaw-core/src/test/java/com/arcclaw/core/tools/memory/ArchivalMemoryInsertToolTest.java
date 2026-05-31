@@ -27,6 +27,7 @@ import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
 
+@SuppressWarnings("java:S1192")
 class ArchivalMemoryInsertToolTest {
 
     @Mock

@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Test;
 /**
  * Unit tests for {@link ChannelUser} compact constructor validation.
  */
+@SuppressWarnings("java:S1192")
 class ChannelUserTest {
 
     @Test

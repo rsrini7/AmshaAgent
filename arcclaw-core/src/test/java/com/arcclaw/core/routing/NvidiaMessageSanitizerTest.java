@@ -18,6 +18,7 @@ import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+@SuppressWarnings("java:S1192")
 class NvidiaMessageSanitizerTest {
 
     private NvidiaMessageSanitizer sanitizer;

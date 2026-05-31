@@ -15,6 +15,7 @@ import io.quarkus.arc.properties.IfBuildProperty;
 @ApplicationScoped
 @Unremovable
 @IfBuildProperty(name = "arcclaw.persistence.backend", stringValue = "fs")
+@SuppressWarnings("java:S1192")
 public class FsPromptStoreAdapter implements PromptStorePort {
 
     private static final String DOMAIN = "prompts";

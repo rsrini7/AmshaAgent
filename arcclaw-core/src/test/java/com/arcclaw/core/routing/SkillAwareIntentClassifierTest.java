@@ -26,6 +26,7 @@ import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
 
 @QuarkusTest
+@SuppressWarnings("java:S1192")
 class SkillAwareIntentDetectorTest {
 
     @InjectMock
@@ -41,7 +42,9 @@ class SkillAwareIntentDetectorTest {
     SkillAwareIntentDetector classifier;
 
     @BeforeEach
-    void setup() {}
+    void setup() {
+        // No shared state to initialize — mocks injected per-test
+    }
 
     @Test
     void testFastPathRoutesToSkillAndBypassesLLM() {

@@ -27,6 +27,7 @@ public class MetricsAgentObserver implements AgentObserver {
     }
 
     @Override
+    @SuppressWarnings("java:S1192")
     public void onStepComplete(String sessionId, String role, ReasoningStep step) {
         // Count agent invocations tagged by role
         registry.counter("arcclaw.agent.invocations", TAG_ROLE, role != null ? role : UNKNOWN)

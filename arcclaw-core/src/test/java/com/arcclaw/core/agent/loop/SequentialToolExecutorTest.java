@@ -21,6 +21,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import io.opentelemetry.context.Context;
 
 @ExtendWith(MockitoExtension.class)
+@SuppressWarnings("java:S1192")
 class SequentialToolExecutorTest {
 
     @Mock

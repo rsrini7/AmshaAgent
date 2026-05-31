@@ -22,6 +22,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.MockitoAnnotations;
 import org.mockito.Spy;
 
+@SuppressWarnings("java:S1192")
 class ReasoningStepParserTest {
 
     @Spy

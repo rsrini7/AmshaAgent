@@ -31,6 +31,7 @@ import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
 
 @QuarkusTest
+@SuppressWarnings("java:S1192")
 class SandboxExecToolTest {
 
     @Inject

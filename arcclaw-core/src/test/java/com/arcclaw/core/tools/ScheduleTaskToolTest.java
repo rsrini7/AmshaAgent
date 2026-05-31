@@ -26,6 +26,7 @@ import com.arcclaw.persistence.api.CronStorePort;
 
 import org.junit.jupiter.api.Test;
 
+@SuppressWarnings("java:S1192")
 class ScheduleTaskToolTest {
 
     private final CronStorePort cronStore = mock(CronStorePort.class);
