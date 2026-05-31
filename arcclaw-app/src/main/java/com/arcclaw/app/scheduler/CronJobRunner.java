@@ -337,7 +337,7 @@ public class CronJobRunner {
     }
 
     private MessageContext createCronContext(
-            AgentCron job, String sessionId, String executionId, String goal, ChannelType channelType) {
+            AgentCron job, String _sessionId, String _executionId, String goal, ChannelType channelType) {
         ChannelUser user = new ChannelUser(job.getUserId(), job.getUserId(), "Cron User", channelType);
         ChannelMessage msg = new ChannelMessage.RestApiMessage(
                 user, goal, AgentSentinels.CRON_SESSION_PREFIX + job.getId(), Instant.now());

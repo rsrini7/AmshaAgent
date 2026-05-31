@@ -111,7 +111,7 @@ public class ApprovalCheckpointManager {
         }
 
         // Save checkpoint metadata and reasoning steps in one atomic store write.
-        cp = agentStore.saveWithSteps(cp, history);
+        agentStore.saveWithSteps(cp, history);
 
         log.infof(
                 "STATE-MACHINE Pausing session %s for human approval of tool %s "

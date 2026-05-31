@@ -212,7 +212,7 @@ public class CheckpointResumeCoordinator {
 
     private void archiveStaleApproval(
             String sessionId,
-            String canonicalRole,
+            String _canonicalRole,
             String capturedUserId,
             AgentCheckpoint checkpoint,
             MessageContext context) {

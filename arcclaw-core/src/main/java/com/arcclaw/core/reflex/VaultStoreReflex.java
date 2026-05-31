@@ -59,12 +59,13 @@ public class VaultStoreReflex implements AgentReflex {
     public ReflexResult execute(String sessionId, String userId, String chatId, String input, MessageContext context) {
         String trimmed = input.trim();
         if (trimmed.equalsIgnoreCase("vault") || trimmed.equalsIgnoreCase("/vault")) {
-            return ReflexResult.respond(
-                    "🔐 *Usage Guide: vault*\n\n"
-                            + "Use this to securely store API keys and sensitive tokens. They will be encrypted and never shown to the AI.\n"
-                            + "`vault KEY=VALUE` (e.g., `vault GITHUB_TOKEN=...`)\n\n"
-                            + "To save general notes or documents for the AI, use `store` instead.",
-                    context);
+            return ReflexResult.respond("""
+                    🔐 *Usage Guide: vault*
+
+                    Use this to securely store API keys and sensitive tokens. They will be encrypted and never shown to the AI.
+                    `vault KEY=VALUE` (e.g., `vault GITHUB_TOKEN=...`)
+
+                    To save general notes or documents for the AI, use `store` instead.""", context);
         }
 
         Matcher m = VAULT_STORE_PATTERN.matcher(trimmed);

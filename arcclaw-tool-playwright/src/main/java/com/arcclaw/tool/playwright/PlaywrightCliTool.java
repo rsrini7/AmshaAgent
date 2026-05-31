@@ -365,7 +365,7 @@ public class PlaywrightCliTool implements AgentTool {
             ProcessBuilder pb = new ProcessBuilder(platformCommand(cmd));
             pb.redirectErrorStream(true);
             Process process = pb.start();
-            String output = new String(process.getInputStream().readAllBytes());
+            String output = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
             int exit = process.waitFor();
             if (exit != 0) {
                 String firstLine = output.lines().findFirst().orElse(output.trim());

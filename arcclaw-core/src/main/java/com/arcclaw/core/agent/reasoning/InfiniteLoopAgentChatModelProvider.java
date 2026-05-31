@@ -54,7 +54,7 @@ public class InfiniteLoopAgentChatModelProvider implements AgentChatModelProvide
 
     @Override
     public ChatModel create() {
-        String[] providerNames = loopModels.split(",");
+        String[] providerNames = loopModels.split(",", -1);
         List<InfiniteLoopChatModel.Slot> slots = new ArrayList<>();
 
         for (String raw : providerNames) {

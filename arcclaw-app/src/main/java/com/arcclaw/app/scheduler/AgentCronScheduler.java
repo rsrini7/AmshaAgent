@@ -184,7 +184,7 @@ public class AgentCronScheduler {
 
         if (delayMillis < 120_000) {
             log.infof("CRON-PRECISE-SCHEDULE id=%s, firing in %dms", job.getId(), Math.max(0, delayMillis));
-            preciseScheduler.schedule(
+            var _ = preciseScheduler.schedule(
                     () -> {
                         try {
                             selfProxy.get().executeSoonInternal(jobId);

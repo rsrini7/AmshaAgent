@@ -209,9 +209,9 @@ public class EngineStepHandler {
             Exception e,
             AgentExecutionContext context,
             int llmSchemaErrorCount,
-            int iteration,
+            int _iteration,
             List<ReasoningStep> history,
-            String transientError) {
+            String _transientError) {
 
         LlmProviderException classified = LlmExceptionClassifier.classify(e);
 

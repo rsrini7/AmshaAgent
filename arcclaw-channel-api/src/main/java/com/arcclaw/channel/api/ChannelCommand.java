@@ -115,7 +115,7 @@ public interface ChannelCommand {
     }
 
     private static BuiltInChannelCommand parseCronCommand(String arg, String input) {
-        String[] parts = WHITESPACE_PATTERN.split(input.trim());
+        String[] parts = WHITESPACE_PATTERN.split(input.trim(), -1);
         if ("delete".equalsIgnoreCase(arg)) {
             String cronId = parts.length > 2 ? parts[2].strip() : null;
             return new DeleteCron(Optional.ofNullable(cronId == null || cronId.isBlank() ? null : cronId));

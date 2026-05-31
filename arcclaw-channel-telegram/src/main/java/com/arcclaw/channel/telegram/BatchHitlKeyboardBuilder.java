@@ -272,7 +272,7 @@ class BatchHitlKeyboardBuilder {
     static Optional<BatchCallbackEvent> parseCallback(String callbackData) {
         if (callbackData == null) return Optional.empty();
 
-        String[] parts = PIPE_PATTERN.split(callbackData);
+        String[] parts = PIPE_PATTERN.split(callbackData, -1);
         if (parts.length < 2) return Optional.empty();
 
         String action = parts[0];

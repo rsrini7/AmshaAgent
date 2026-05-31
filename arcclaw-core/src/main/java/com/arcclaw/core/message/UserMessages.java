@@ -54,10 +54,12 @@ public final class UserMessages {
     public static final String NO_HISTORY_FOUND = "📭 No conversation history found for this session.";
     public static final String HISTORY_YOU_PREFIX = ". 👤 *You:* ";
     public static final String HISTORY_AI_PREFIX = ". 🤖 *ArcClaw:* ";
-    public static final String STATUS_FORMAT = "📊 *Status:* %s\n" + "💰 *Cost:* $%.4f / $%.2f (%.1f%%)\n"
-            + "🔢 *Tokens:* %d in + %d out = %d total\n"
-            + "🧠 *Memory:* %s\n"
-            + "⏱️ *Session:* %s";
+    public static final String STATUS_FORMAT = """
+            📊 *Status:* %s
+            💰 *Cost:* $%.4f / $%.2f (%.1f%%)
+            🔢 *Tokens:* %d in + %d out = %d total
+            🧠 *Memory:* %s
+            ⏱️ *Session:* %s""";
     public static final String NO_PENDING_APPROVAL = "No pending approval found for this session.";
     public static final String NO_PENDING_DENIAL = "No pending denial found for this session.";
     public static final String NO_PENDING_ANYWHERE = "No pending tool executions require approval.";
@@ -71,10 +73,13 @@ public final class UserMessages {
     public static final String CRON_NO_CHECKPOINT =
             "❌ No pending checkpoint found for this task. It may have already been processed.";
     public static final String CRON_MULTIPLE_AWAITING = "⚠️ Multiple background tasks awaiting approval:\n\n%s";
-    public static final String CRON_SINGLE_AWAITING_GUIDE =
-            "⚠️ No active approval in this chat session.\n\n" + "A background task is waiting for your approval:\n"
-                    + "• %s\n\n"
-                    + "Use: `/approve %s` to approve, or `/deny %s` to cancel.";
+    public static final String CRON_SINGLE_AWAITING_GUIDE = """
+            ⚠️ No active approval in this chat session.
+
+            A background task is waiting for your approval:
+            • %s
+
+            Use: `/approve %s` to approve, or `/deny %s` to cancel.""";
 
     // Generic Errors
     public static final String INTERNAL_ERROR = "⚠️ An internal error occurred. Please try again.";
@@ -100,10 +105,13 @@ public final class UserMessages {
     public static final String AI_SERVICE_ERROR = "⚠️ The AI service returned an error. Please try again shortly.";
     public static final String INTERNAL_LLM_ERROR =
             "⚠️ I encountered an internal error and could not complete your request. Please try again.";
-    public static final String TOKEN_LIMIT_REACHED_FORMAT = "⚠️ **Daily Token Limit Reached**\n" + "• Limit: %s\n"
-            + "• Used: %s\n"
-            + "• Requested: %s\n\n"
-            + "⏳ Please try again in %s.";
+    public static final String TOKEN_LIMIT_REACHED_FORMAT = """
+            ⚠️ **Daily Token Limit Reached**
+            • Limit: %s
+            • Used: %s
+            • Requested: %s
+
+            ⏳ Please try again in %s.""";
     public static final String TOKEN_LIMIT_SIMPLE_FORMAT = "⚠️ Daily token limit reached. Please try again in %s.";
 
     // Success / Informational

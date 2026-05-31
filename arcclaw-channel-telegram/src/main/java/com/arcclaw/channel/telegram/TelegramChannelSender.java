@@ -79,7 +79,7 @@ public class TelegramChannelSender implements ChannelSender {
                     && prompt.toolName().startsWith(InteractionNode.PARALLEL_SENTINEL_PIPE_PREFIX)) {
                 String toolNamesStr =
                         prompt.toolName().substring(InteractionNode.PARALLEL_SENTINEL_PIPE_PREFIX.length());
-                toolNames = Arrays.asList(toolNamesStr.split(","));
+                toolNames = Arrays.asList(toolNamesStr.split(",", -1));
             } else if (prompt.toolName() != null) {
                 toolNames = List.of(prompt.toolName());
             } else {

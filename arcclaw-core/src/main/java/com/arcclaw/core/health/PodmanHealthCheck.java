@@ -2,6 +2,7 @@ package com.arcclaw.core.health;
 
 import jakarta.enterprise.context.ApplicationScoped;
 
+import java.nio.charset.StandardCharsets;
 import java.util.concurrent.TimeUnit;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
@@ -67,7 +68,7 @@ public class PodmanHealthCheck implements HealthCheck {
                         .build();
             }
 
-            String err = new String(process.getInputStream().readAllBytes()).trim();
+            String err = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8).trim();
             return HealthCheckResponse.named("Podman Engine")
                     .down()
                     .withData("error", err.length() > 200 ? err.substring(0, 200) : err)

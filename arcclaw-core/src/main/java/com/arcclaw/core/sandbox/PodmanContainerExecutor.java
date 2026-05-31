@@ -15,6 +15,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.nio.charset.StandardCharsets;
 import java.util.concurrent.TimeUnit;
 
 import com.arcclaw.common.util.LogUtil;
@@ -228,7 +229,7 @@ public class PodmanContainerExecutor {
     private String readSandboxOutputAndGetResult(Process process, List<String> command) throws Exception {
         var stdoutFuture = CompletableFuture.supplyAsync(() -> {
             try {
-                return new String(process.getInputStream().readAllBytes());
+                return new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
             } catch (IOException e) {
                 log.warnf("Failed to drain sandbox stdout: %s", LogUtil.rootMessage(e));
                 return "";
@@ -236,7 +237,7 @@ public class PodmanContainerExecutor {
         });
         var stderrFuture = CompletableFuture.supplyAsync(() -> {
             try {
-                return new String(process.getErrorStream().readAllBytes());
+                return new String(process.getErrorStream().readAllBytes(), StandardCharsets.UTF_8);
             } catch (IOException e) {
                 log.warnf("Failed to drain sandbox stderr: %s", LogUtil.rootMessage(e));
                 return "";

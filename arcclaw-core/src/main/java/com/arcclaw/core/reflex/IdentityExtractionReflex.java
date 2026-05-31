@@ -76,7 +76,7 @@ public class IdentityExtractionReflex implements AgentReflex {
     @Override
     public ReflexResult execute(String sessionId, String userId, String chatId, String input, MessageContext context) {
         // §Bug-4 Fix: Prevent label pollution by splitting compound sentences.
-        String[] clauses = input.split("(?i)\\b(and|but)\\b|[,\\.]");
+        String[] clauses = input.split("(?i)\\b(and|but)\\b|[,\\.]", -1);
         boolean prevWasFirstPerson = false;
 
         for (String rawClause : clauses) {
@@ -122,7 +122,7 @@ public class IdentityExtractionReflex implements AgentReflex {
 
             final String sid = sessionId;
             final String uid = userId;
-            managedExecutor.submit(() -> {
+            var _ = managedExecutor.submit(() -> {
                 try {
                     memoryPort.index(dto);
                     log.infof("IdentityExtractionReflex ingested fact silently: label=%s, fact='%s'", label, fullText);

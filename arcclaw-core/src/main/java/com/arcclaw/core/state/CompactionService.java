@@ -346,7 +346,7 @@ public class CompactionService {
         return newSummary;
     }
 
-    private String executeCompactionTurn(String sessionId, String prompt, int attempt, int maxRetries) {
+    private String executeCompactionTurn(String _sessionId, String prompt, int attempt, int maxRetries) {
         try {
             return compactionModel
                     .chat(UserMessage.userMessage(prompt))

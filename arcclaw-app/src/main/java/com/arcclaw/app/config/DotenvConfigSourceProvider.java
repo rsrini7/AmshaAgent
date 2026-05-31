@@ -124,7 +124,7 @@ public class DotenvConfigSourceProvider implements ConfigSourceProvider {
     private static class DotenvConfigSource implements ConfigSource {
         private final Map<String, String> properties;
 
-        public DotenvConfigSource(Map<String, String> properties) {
+        DotenvConfigSource(Map<String, String> properties) {
             this.properties = properties;
         }
 

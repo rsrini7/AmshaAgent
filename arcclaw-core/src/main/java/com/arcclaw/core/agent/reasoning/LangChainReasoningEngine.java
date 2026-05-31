@@ -392,7 +392,7 @@ public class LangChainReasoningEngine implements ReasoningEngine {
             boolean isWriteIntent,
             String agentRole,
             List<ReasoningStep> history,
-            String sessionId) {
+            String _sessionId) {
         if (extractedProse == null || extractedProse.isBlank()) return null;
 
         if (recoveryProcessor.containsEmbeddedSandboxToolCall(extractedProse)) {

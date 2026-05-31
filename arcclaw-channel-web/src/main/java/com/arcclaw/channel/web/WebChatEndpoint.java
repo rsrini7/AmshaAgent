@@ -80,9 +80,9 @@ public class WebChatEndpoint {
             String platformId = null;
 
             if (query != null && query.contains("sessionId=")) {
-                String[] parts = query.split("sessionId=");
+                String[] parts = query.split("sessionId=", 2);
                 if (parts.length > 1) {
-                    platformId = URLDecoder.decode(parts[1].split("&")[0], StandardCharsets.UTF_8);
+                    platformId = URLDecoder.decode(parts[1].split("&", 2)[0], StandardCharsets.UTF_8);
                 }
             }
 
@@ -193,7 +193,10 @@ public class WebChatEndpoint {
                     new ChannelMessage.WebSocketMessage(user, text, platformId, Instant.now());
 
             // ChannelServices.processAsync propagates CDI context and handles pipeline orchestration
-            channelServices.processAsync(msg);
+            var _ = channelServices.processAsync(msg).exceptionally(ex -> {
+                log.warnf("WebSocket pipeline error: %s", LogUtil.rootMessage(ex));
+                return null;
+            });
 
         } catch (Exception e) {
             log.warnf("Failed to process incoming WebSocket message: %s\n%s", message, LogUtil.trimmedStack(e));

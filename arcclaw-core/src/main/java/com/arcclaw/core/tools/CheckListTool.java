@@ -76,6 +76,7 @@ public class CheckListTool implements AgentTool {
         return false;
     }
 
+    @Override
     public JsonObjectSchema parametersSchema() {
         // Single parameter: "checkList" - an array of objects
         return JsonObjectSchema.builder()

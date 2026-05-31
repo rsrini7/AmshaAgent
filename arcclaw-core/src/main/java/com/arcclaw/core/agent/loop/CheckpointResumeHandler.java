@@ -230,7 +230,7 @@ public class CheckpointResumeHandler {
     }
 
     private void dispatchResumeResult(
-            MessageContext context,
+            MessageContext _context,
             AgentResult result,
             ChannelType cType,
             ChannelUser user,
@@ -261,7 +261,7 @@ public class CheckpointResumeHandler {
     }
 
     private void sendFormattedResult(
-            ChannelSender s, ChannelUser user, AgentResult result, String output, String sessionId, ChannelType cType) {
+            ChannelSender s, ChannelUser user, AgentResult result, String output, String sessionId, ChannelType _cType) {
         if (result instanceof AgentResult.AwaitingApproval aa
                 && aa.toolName().startsWith(ReasoningStep.PARALLEL_SENTINEL_PIPE_PREFIX)) {
             s.send(
@@ -291,7 +291,7 @@ public class CheckpointResumeHandler {
 
         if (checkpoint.isParallelBatch()) {
             String[] tools = toolName.substring(ReasoningStep.PARALLEL_SENTINEL_PIPE_PREFIX.length())
-                    .split(",");
+                    .split(",", -1);
             Map<String, Integer> counts = new LinkedHashMap<>();
             for (String t : tools) {
                 counts.put(t, counts.getOrDefault(t, 0) + 1);

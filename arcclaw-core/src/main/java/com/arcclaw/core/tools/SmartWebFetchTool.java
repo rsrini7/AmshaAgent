@@ -317,14 +317,14 @@ public class SmartWebFetchTool implements AgentTool {
         private final Thread serverThread;
         private volatile boolean closed = false;
 
-        public LocalSocksProxy() throws IOException {
+        private LocalSocksProxy() throws IOException {
             this.serverSocket = new ServerSocket();
             this.serverSocket.setReuseAddress(true);
             this.serverSocket.bind(new InetSocketAddress(InetAddress.getLoopbackAddress(), 0), 50);
             this.serverThread = Thread.ofVirtual().start(this::run);
         }
 
-        public int getPort() {
+        private int getPort() {
             return serverSocket.getLocalPort();
         }
 

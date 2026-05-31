@@ -161,6 +161,7 @@ public class FsAuditEventStoreAdapter implements AuditEventStorePort {
 
     private record IndexEntry(String id, String idempotencyKey, String eventType, Instant timestamp) {}
 
+    @SuppressWarnings("EffectivelyPrivate") // public fields needed for Jackson serialization
     private static class SessionIndex {
         public long maxSequence = 0;
         public List<IndexEntry> events = new ArrayList<>();

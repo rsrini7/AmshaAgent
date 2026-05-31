@@ -38,11 +38,10 @@ public class TelegramStaleApprovalObserver {
                 : event.toolName();
 
         // §7.28: escape at call site for MarkdownV2
-        String msg = String.format(
-                "⏱ Your approval window for `%s` has expired (>%dh).\n"
-                        + "The pending tool execution was automatically cancelled.\n"
-                        + "Start a new request to try again.",
-                renderer.esc(toolDisplay != null ? toolDisplay : "unknown"), hitlTimeoutHours);
+        String msg = String.format("""
+                ⏱ Your approval window for `%s` has expired (>%dh).
+                The pending tool execution was automatically cancelled.
+                Start a new request to try again.""", renderer.esc(toolDisplay != null ? toolDisplay : "unknown"), hitlTimeoutHours);
 
         ChannelUser user =
                 new ChannelUser(event.channelPlatformId(), event.channelPlatformId(), "unknown", ChannelType.TELEGRAM);

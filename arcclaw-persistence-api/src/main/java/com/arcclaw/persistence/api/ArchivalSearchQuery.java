@@ -8,6 +8,7 @@ import java.util.Set;
  * Supports BM25-only, vector-only, and hybrid search modes via
  * {@code useVector} and {@code useBM25} flags.
  */
+@SuppressWarnings("ArrayRecordComponent") // float[] for vector embeddings is correct
 public record ArchivalSearchQuery(
         String userId,
         String query,

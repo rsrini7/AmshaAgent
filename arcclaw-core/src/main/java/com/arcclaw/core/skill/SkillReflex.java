@@ -46,7 +46,7 @@ public class SkillReflex implements AgentReflex {
                         e.definition().description().isBlank()
                                 ? "No description"
                                 : e.definition().description(),
-                        e.triggerPatterns().length))
+                        e.triggerPatterns().size()))
                 .collect(Collectors.joining("\n"));
 
         return ReflexResult.respond("### Active Skills\n\n" + list, context);

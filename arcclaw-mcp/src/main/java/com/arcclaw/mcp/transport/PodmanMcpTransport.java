@@ -67,7 +67,7 @@ public class PodmanMcpTransport {
             t.setDaemon(true);
             return t;
         });
-        healthCheckExecutor.scheduleWithFixedDelay(
+        var _ = healthCheckExecutor.scheduleWithFixedDelay(
                 this::healthCheck, healthCheckIntervalMs, healthCheckIntervalMs, TimeUnit.MILLISECONDS);
     }
 

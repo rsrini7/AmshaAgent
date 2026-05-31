@@ -67,6 +67,7 @@ public record CheckpointDto(
                 updatedAt);
     }
 
+    @SuppressWarnings("ReferenceEquality") // intentional identity check for short-circuit optimization
     public CheckpointDto ensureTimestamps(Instant fallbackCreated, Instant fallbackUpdated) {
         Instant c = createdAt != null ? createdAt : fallbackCreated;
         Instant u = updatedAt != null ? updatedAt : fallbackUpdated;

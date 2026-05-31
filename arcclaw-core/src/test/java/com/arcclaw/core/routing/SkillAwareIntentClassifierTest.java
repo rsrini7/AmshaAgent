@@ -49,7 +49,7 @@ class SkillAwareIntentDetectorTest {
         RoleDefinition roleDefinition =
                 new RoleDefinition("skill:code-reviewer", "Code Reviewer", "desc", 5, false, false, Set.of(), Set.of());
         CompiledSkillEntry entry =
-                new CompiledSkillEntry(def, new Pattern[] {Pattern.compile(".*review.*code.*")}, roleDefinition, "db");
+                new CompiledSkillEntry(def, List.of(Pattern.compile(".*review.*code.*")), roleDefinition, "db");
 
         when(skillRegistry.currentSnapshot()).thenReturn(List.of(entry));
 

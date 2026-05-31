@@ -20,7 +20,7 @@ public class LlmConfigAutoFixer {
         resolveStructuredOutputModes(provider);
     }
 
-    private static void resolveContextWindow(Path envFile, String provider) {
+    private static void resolveContextWindow(Path _envFile, String provider) {
         String current = System.getProperty("ARCCLAW_LLM_CONTEXT_WINDOW", System.getenv("ARCCLAW_LLM_CONTEXT_WINDOW"));
         String target =
                 switch (provider.toLowerCase(Locale.ROOT)) {

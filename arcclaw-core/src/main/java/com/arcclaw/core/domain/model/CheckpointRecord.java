@@ -397,7 +397,7 @@ public final class CheckpointRecord implements AgentCheckpoint {
     public List<String> parallelToolNames() {
         if (!isParallelBatch()) return Collections.emptyList();
         String composite = pendingToolName.substring(ReasoningStep.PARALLEL_SENTINEL_PIPE_PREFIX.length());
-        return Arrays.asList(composite.split(","));
+        return Arrays.asList(composite.split(",", -1));
     }
 
     @Override

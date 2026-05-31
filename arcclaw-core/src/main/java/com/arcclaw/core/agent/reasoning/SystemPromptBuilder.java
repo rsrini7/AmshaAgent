@@ -167,7 +167,7 @@ public class SystemPromptBuilder {
             AgentRoleEnum roleEnum,
             String agentRole,
             boolean isCompact,
-            String goal,
+            String _goal,
             boolean isSimpleChitchat) {
 
         if (isSimpleChitchat) {

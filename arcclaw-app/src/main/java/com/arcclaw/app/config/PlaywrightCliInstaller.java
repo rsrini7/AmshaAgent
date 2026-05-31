@@ -1,6 +1,7 @@
 package com.arcclaw.app.config;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -102,7 +103,7 @@ public class PlaywrightCliInstaller {
                 return false;
             }
             if (p.exitValue() != 0) return false;
-            String ver = new String(p.getInputStream().readAllBytes()).trim();
+            String ver = new String(p.getInputStream().readAllBytes(), StandardCharsets.UTF_8).trim();
             return ver.startsWith("v") && Integer.parseInt(ver.substring(1, ver.indexOf('.'))) >= 20;
         } catch (Exception e) {
             return false;
@@ -128,7 +129,7 @@ public class PlaywrightCliInstaller {
             pb.redirectErrorStream(true);
             pb.environment().put("NPM_CONFIG_TIMEOUT", NPM_INSTALL_TIMEOUT_SEC);
             Process p = pb.start();
-            String output = new String(p.getInputStream().readAllBytes());
+            String output = new String(p.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
             int exit = p.waitFor();
 
             if (exit == 0) {
@@ -162,7 +163,7 @@ public class PlaywrightCliInstaller {
         ProcessBuilder pb = new ProcessBuilder(platformCommand(cmd));
         pb.redirectErrorStream(true);
         Process p = pb.start();
-        String out = new String(p.getInputStream().readAllBytes());
+        String out = new String(p.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
         int exit = p.waitFor();
         if (exit != 0) throw new IOException("exit " + exit + ": " + out.trim());
         return out;

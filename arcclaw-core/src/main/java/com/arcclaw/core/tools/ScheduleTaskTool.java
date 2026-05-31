@@ -79,7 +79,6 @@ public class ScheduleTaskTool implements AgentTool {
     private static final String PARAM_CRON_EXPRESSION = "cronExpression";
     private static final String PARAM_TIMEZONE = "timezone";
     private static final String PARAM_RUN_ONCE = "runOnce";
-    private static final String PARAM_CHANNEL = "channel";
 
     /**
      * Rejects vague goals with unresolved references (zero LLM cost - pure regex).
@@ -226,7 +225,7 @@ public class ScheduleTaskTool implements AgentTool {
         if (pronounError != null) return pronounError;
 
         if (runOnce && cronExpression != null) {
-            String[] fields = WHITESPACE_PATTERN.split(cronExpression.trim());
+            String[] fields = WHITESPACE_PATTERN.split(cronExpression.trim(), -1);
             if (fields.length == 5) {
                 cronExpression = fields[0] + " " + fields[1] + " * * *";
             }
@@ -265,7 +264,7 @@ public class ScheduleTaskTool implements AgentTool {
         return null;
     }
 
-    private boolean shouldTreatAsRunOnce(String goal, ToolExecutionContext ctx, boolean runOnce) {
+    private boolean shouldTreatAsRunOnce(String goal, ToolExecutionContext ctx, boolean _runOnce) {
         String combined = "";
         if (goal != null) combined += " " + goal.toLowerCase(Locale.ROOT);
         if (ctx.rawUserGoal() != null) combined += " " + ctx.rawUserGoal().toLowerCase(Locale.ROOT);

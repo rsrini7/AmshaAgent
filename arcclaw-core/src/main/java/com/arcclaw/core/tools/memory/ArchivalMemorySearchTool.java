@@ -190,7 +190,7 @@ public class ArchivalMemorySearchTool implements AgentTool {
 
     private Set<String> parseChunkTypes(String raw) {
         if (raw == null || raw.isBlank()) return Set.of();
-        return Arrays.stream(raw.split(","))
+        return Arrays.stream(raw.split(",", -1))
                 .map(String::trim)
                 .filter(s -> !s.isBlank())
                 .collect(Collectors.toSet());

@@ -73,7 +73,7 @@ public class FuzzyMatcher {
      */
     public static boolean containsFuzzy(String sentence, String target) {
         if (sentence == null || target == null) return false;
-        String[] words = WHITESPACE_PATTERN.split(sentence);
+        String[] words = WHITESPACE_PATTERN.split(sentence, -1);
         for (String word : words) {
             if (isClose(word, target)) return true;
         }

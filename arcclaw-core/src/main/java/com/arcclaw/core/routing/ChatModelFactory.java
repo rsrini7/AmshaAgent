@@ -147,8 +147,8 @@ public final class ChatModelFactory {
      */
     public static List<MultiModelChatModel.ModelEntry> buildMultiModelEntries(
             String keys, String models, String providerName, BiFunction<String, String, ChatModel> modelFactory) {
-        String[] keyArr = keys.split(",");
-        String[] modelArr = models.split(",");
+        String[] keyArr = keys.split(",", -1);
+        String[] modelArr = models.split(",", -1);
 
         // Trim and filter empty values
         keyArr = Arrays.stream(keyArr)

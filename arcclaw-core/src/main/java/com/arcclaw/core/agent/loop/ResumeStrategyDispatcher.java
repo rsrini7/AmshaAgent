@@ -389,7 +389,7 @@ class ResumeStrategyDispatcher {
             String sessionId,
             AgentExecutionContext context,
             List<ReasoningStep> history,
-            String channelType,
+            String _channelType,
             AgentCheckpoint checkpoint,
             AgentStateMachineRunner stateMachineRunner) {
         if (!(response instanceof ToolResponse.ToolFailure failure)

@@ -426,6 +426,7 @@ public class FsCronStoreAdapter implements CronStorePort {
                 .orElse(new UserIndex());
     }
 
+    @SuppressWarnings("EffectivelyPrivate") // public field needed for Jackson serialization
     private static class UserIndex {
         public List<String> ids = new ArrayList<>();
     }

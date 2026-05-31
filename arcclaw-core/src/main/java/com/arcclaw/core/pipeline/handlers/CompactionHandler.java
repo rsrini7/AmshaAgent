@@ -3,6 +3,7 @@ package com.arcclaw.core.pipeline.handlers;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
+import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.core.compaction.CompactionInFlightFlag;
 import com.arcclaw.core.compaction.CompactionRequest;
 import com.arcclaw.core.event.DomainEventBus;
@@ -67,7 +68,13 @@ public class CompactionHandler implements MessageHandler {
                 compactionEventBridge.registerLatch(sessionId);
                 try {
                     eventBus.publishAsync(
-                            EventTypeCatalog.COMPACTION_REQUEST, new CompactionRequest(sessionId, userId));
+                                    EventTypeCatalog.COMPACTION_REQUEST, new CompactionRequest(sessionId, userId))
+                            .exceptionally(ex -> {
+                                compactionInFlight.set(sessionId, false);
+                                compactionEventBridge.releaseLatch(sessionId);
+                                log.errorf("Async compaction failed for session %s: %s", sessionId, LogUtil.rootMessage(ex));
+                                return null;
+                            });
                     log.debugf("Async compaction triggered for session %s", sessionId);
                 } catch (Throwable t) {
                     compactionInFlight.set(sessionId, false);

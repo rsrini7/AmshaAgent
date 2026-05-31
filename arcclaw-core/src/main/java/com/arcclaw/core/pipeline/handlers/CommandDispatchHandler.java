@@ -115,17 +115,18 @@ public class CommandDispatchHandler implements MessageHandler {
         channelPluginRegistry
                 .find(context.getChannelType())
                 .map(ChannelPlugin::sender)
-                .ifPresent(sender -> sender.sendRaw(
-                        context.getUser(),
-                        "👋 Hello! I'm *ArcClaw*, your AI agent.\n\n"
-                                + "Just type your question or task in plain text.\n\n"
-                                + "*Commands:*\n"
-                                + "/cron - list scheduled tasks\n"
-                                + "/status - session state\n"
-                                + "/history - conversation history\n"
-                                + "/reset - clear this session\n"
-                                + "/halt - stop current task\n"
-                                + "/approve · /deny - HITL approvals"));
+                .ifPresent(sender -> sender.sendRaw(context.getUser(), """
+                        👋 Hello! I'm *ArcClaw*, your AI agent.
+
+                        Just type your question or task in plain text.
+
+                        *Commands:*
+                        /cron - list scheduled tasks
+                        /status - session state
+                        /history - conversation history
+                        /reset - clear this session
+                        /halt - stop current task
+                        /approve · /deny - HITL approvals"""));
     }
 
     private HandleResult handleUnknownCommand(MessageContext context, ChannelCommand.Unknown u) {

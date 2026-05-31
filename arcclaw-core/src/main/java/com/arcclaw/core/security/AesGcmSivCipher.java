@@ -109,5 +109,6 @@ public class AesGcmSivCipher {
     /**
      * Simple DTO to hold encryption output.
      */
+    @SuppressWarnings("ArrayRecordComponent") // byte[] for cryptographic data is correct
     public record CipherResult(byte[] ciphertext, byte[] nonce) {}
 }

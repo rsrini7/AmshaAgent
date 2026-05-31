@@ -40,6 +40,6 @@ public class CdiDomainEventBus implements DomainEventBus {
             throw new IllegalArgumentException("Event type mismatch: " + eventType.getName() + " != "
                     + eventPayload.getClass().getName());
         }
-        return event.fireAsync(eventPayload).thenApply(unused -> (Void) null).toCompletableFuture();
+        return event.fireAsync(eventPayload).thenApply(_ -> (Void) null).toCompletableFuture();
     }
 }

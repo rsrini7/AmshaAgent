@@ -23,7 +23,7 @@ public class ResumeResultHelper {
     StatefulAgentStore statefulAgentStore;
 
     public String runSync(String sessionId, String activeRole, String userId, String chatId) {
-        cliResultBridge.register(sessionId);
+        var _ = cliResultBridge.register(sessionId);
         try {
             AgentResult result =
                     checkpointResumeHandler.resumeAfterBatchDecisionSync(sessionId, activeRole, userId, chatId, "cli");
@@ -37,7 +37,7 @@ public class ResumeResultHelper {
     }
 
     public String pollBridge(String sessionId) {
-        cliResultBridge.register(sessionId);
+        var _ = cliResultBridge.register(sessionId);
         try {
             AgentResult bridgeResult = cliResultBridge.waitForResult(sessionId, 200);
             return bridgeResult != null ? AgentResultFormatter.format(bridgeResult) : null;

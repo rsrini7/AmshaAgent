@@ -29,5 +29,6 @@ public interface SecretJdbiDao {
     @SqlUpdate("DELETE FROM encrypted_secrets WHERE session_id = :sessionId")
     void deleteBySessionId(@Bind("sessionId") String sessionId);
 
+    @SuppressWarnings("ArrayRecordComponent") // byte[] for cryptographic data mapped by JDBI
     record SecretDtoRow(String sessionId, String keyName, int encryptionKeyVersion, byte[] ciphertext, byte[] nonce) {}
 }

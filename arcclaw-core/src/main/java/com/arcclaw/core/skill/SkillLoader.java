@@ -107,7 +107,7 @@ public class SkillLoader {
     private List<String> addSafe(Map<String, CompiledSkillEntry> map, SkillDefinition def, String source) {
         List<String> warnings = new ArrayList<>();
         try {
-            Pattern[] compiledPatterns = compilePatterns(def.triggerPatterns());
+            List<Pattern> compiledPatterns = compilePatterns(def.triggerPatterns());
             CompileToolsResult toolsResult = compileTools(def.name(), def.toolCapabilities());
             warnings.addAll(toolsResult.warnings());
 
@@ -141,10 +141,10 @@ public class SkillLoader {
         return warnings;
     }
 
-    private Pattern[] compilePatterns(List<String> rawPatterns) {
+    private List<Pattern> compilePatterns(List<String> rawPatterns) {
         return rawPatterns.stream()
                 .map(p -> Pattern.compile(p, Pattern.CASE_INSENSITIVE))
-                .toArray(Pattern[]::new);
+                .toList();
     }
 
     private CompileToolsResult compileTools(String skillName, List<String> rawTools) {

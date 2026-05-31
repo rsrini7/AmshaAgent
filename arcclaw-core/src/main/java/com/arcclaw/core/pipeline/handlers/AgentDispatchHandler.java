@@ -106,7 +106,7 @@ public class AgentDispatchHandler implements MessageHandler {
         return HandleResult.STOP;
     }
 
-    private String resolveGoal(MessageContext context, SessionContext session, String sessionId) {
+    private String resolveGoal(MessageContext context, SessionContext _session, String sessionId) {
         String rawGoal = (context.getGoal() != null && !context.getGoal().isBlank())
                 ? context.getGoal()
                 : (context.getMessage() != null ? context.getMessage().text() : "");

@@ -79,7 +79,7 @@ public abstract class AbstractInboundMessagePipeline {
         logInfo("Message received for chat %s, delegating to SPI", chatId);
         final boolean finalAcquiredLock = acquiredLock;
 
-        channelServices.processAsync(channelMessage).handle((res, ex) -> {
+        var _ = channelServices.processAsync(channelMessage).handle((res, ex) -> {
             if (ex != null) {
                 logError("Uncaught exception in message processing for chat " + chatId, ex);
                 sendRawReply(user, "Sorry, an internal error occurred while processing your message.");

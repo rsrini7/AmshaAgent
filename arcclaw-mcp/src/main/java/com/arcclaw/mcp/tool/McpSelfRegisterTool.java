@@ -124,7 +124,7 @@ public class McpSelfRegisterTool implements AgentTool {
 
                 String argsStr = (String) params.get("args");
                 List<String> argsList = (argsStr != null && !argsStr.isBlank())
-                        ? Arrays.stream(argsStr.split(","))
+                        ? Arrays.stream(argsStr.split(",", -1))
                                 .map(String::trim)
                                 .filter(s -> !s.isEmpty())
                                 .toList()
@@ -133,7 +133,7 @@ public class McpSelfRegisterTool implements AgentTool {
                 String envStr = (String) params.get("env");
                 Map<String, String> envMap = new HashMap<>();
                 if (envStr != null && !envStr.isBlank()) {
-                    for (String line : envStr.split("\n")) {
+                    for (String line : envStr.split("\n", -1)) {
                         int eqIdx = line.indexOf('=');
                         if (eqIdx > 0) {
                             envMap.put(

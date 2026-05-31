@@ -134,6 +134,6 @@ public class ChatModelProducer {
 
     private String clean(String value) {
         if (value == null) return null;
-        return value.split("#")[0].trim();
+        return value.split("#", 2)[0].trim();
     }
 }

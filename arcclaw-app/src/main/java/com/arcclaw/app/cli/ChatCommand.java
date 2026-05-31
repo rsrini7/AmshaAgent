@@ -8,6 +8,7 @@ import jakarta.enterprise.event.Observes;
 import jakarta.inject.Inject;
 
 import java.io.BufferedReader;
+import java.nio.charset.StandardCharsets;
 import java.io.Console;
 import java.io.InputStreamReader;
 import java.nio.file.Path;
@@ -235,7 +236,7 @@ public class ChatCommand implements Runnable {
 
             if (!input.startsWith("/approve") && !input.startsWith("/deny")) {
                 if (hitlPending) {
-                    cliResultBridge.register(sessionId);
+                    var _ = cliResultBridge.register(sessionId);
                     terminal.writer()
                             .println(
                                     "\n▶ ArcClaw> ⏸ Approval pending - type /approve or /deny before sending new messages.");
@@ -271,7 +272,7 @@ public class ChatCommand implements Runnable {
     /** Fallback for non-TTY environments (CI, piped stdin, Docker without -t). */
     private void chatLoopFallback(String sessionId) {
         Console console = System.console();
-        BufferedReader fallbackReader = (console == null) ? new BufferedReader(new InputStreamReader(System.in)) : null;
+        BufferedReader fallbackReader = (console == null) ? new BufferedReader(new InputStreamReader(System.in, StandardCharsets.UTF_8)) : null;
 
         while (true) {
             String input;
@@ -297,7 +298,7 @@ public class ChatCommand implements Runnable {
 
             if (!input.startsWith("/approve") && !input.startsWith("/deny")) {
                 if (hitlPending) {
-                    cliResultBridge.register(sessionId);
+                    var _ = cliResultBridge.register(sessionId);
                     System.out.println(
                             "\n▶ ArcClaw> ⏸ Approval pending - type /approve or /deny before sending new messages.");
                     continue;

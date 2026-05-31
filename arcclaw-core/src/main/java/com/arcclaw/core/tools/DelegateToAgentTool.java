@@ -389,6 +389,7 @@ public class DelegateToAgentTool implements AgentTool {
         return current.id().equals(normalized) || current.definition().aliases().contains(normalized);
     }
 
+    @SuppressWarnings("ReferenceEquality") // enum identity comparison is correct
     private boolean isCoderDelegatingToResearcher(String normalized, String currentRoleName) {
         if (!AgentRoleEnum.isKnownRole(normalized)) return false;
         AgentRoleEnum current = AgentRoleEnum.fromString(currentRoleName);
@@ -396,6 +397,7 @@ public class DelegateToAgentTool implements AgentTool {
         return current == AgentRoleEnum.CODER && target == AgentRoleEnum.RESEARCHER;
     }
 
+    @SuppressWarnings("ReferenceEquality") // enum identity comparison is correct
     private boolean isCombinedGoalToResearcher(String normalized, String currentRoleName, String goal) {
         if (!AgentRoleEnum.isKnownRole(normalized)) return false;
         AgentRoleEnum current = AgentRoleEnum.fromString(currentRoleName);

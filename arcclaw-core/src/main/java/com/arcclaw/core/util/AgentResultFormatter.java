@@ -110,7 +110,7 @@ public class AgentResultFormatter {
                 + formatHitlMessage(toolName, null, cronId, true);
     }
 
-    private static String formatBasicHitlMessage(String compositeName, String cronId, boolean isCron) {
+    private static String formatBasicHitlMessage(String compositeName, String _cronId, boolean _isCron) {
         StringBuilder sb = new StringBuilder();
         boolean isBatch =
                 compositeName != null && compositeName.startsWith(ReasoningStep.PARALLEL_SENTINEL_PIPE_PREFIX);
@@ -132,7 +132,7 @@ public class AgentResultFormatter {
         if (isBatch) {
             String[] tools = compositeName
                     .substring(ReasoningStep.PARALLEL_SENTINEL_PIPE_PREFIX.length())
-                    .split(",");
+                    .split(",", -1);
             sb.append("⏸ Parallel batch execution requires approval.\n\n");
             sb.append("Tools pending:\n");
 

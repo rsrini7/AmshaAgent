@@ -16,10 +16,9 @@ class CompiledSkillEntryTest {
             new SkillDefinition("id-123", "reviewer", "desc", List.of(), List.of(), 5, "prompt");
     private final RoleDefinition mockRole =
             new RoleDefinition("skill:reviewer", "reviewer", "desc", 5, false, false, Set.of(), Set.of());
-    private final Pattern[] patterns = new Pattern[] {
-        Pattern.compile("review.*code", Pattern.CASE_INSENSITIVE),
-        Pattern.compile("check.*pr", Pattern.CASE_INSENSITIVE)
-    };
+    private final List<Pattern> patterns = List.of(
+            Pattern.compile("review.*code", Pattern.CASE_INSENSITIVE),
+            Pattern.compile("check.*pr", Pattern.CASE_INSENSITIVE));
 
     @Test
     void testMatchesTrueWhenInputMatchesPattern() {

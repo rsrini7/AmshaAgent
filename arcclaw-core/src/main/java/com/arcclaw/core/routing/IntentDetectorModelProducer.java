@@ -84,7 +84,7 @@ public class IntentDetectorModelProducer {
 
     private String clean(String v) {
         if (v == null) return null;
-        return v.split("#")[0].trim();
+        return v.split("#", 2)[0].trim();
     }
 
     @Produces

@@ -283,7 +283,7 @@ public class OnboardingResource {
                                 : List.of();
                         Map<String, String> envMap = new HashMap<>();
                         if (s.env() != null && !s.env().isBlank()) {
-                            for (String line : s.env().split("\\n")) {
+                            for (String line : s.env().split("\\n", -1)) {
                                 String[] parts = line.split("=", 2);
                                 if (parts.length == 2) envMap.put(parts[0].trim(), parts[1].trim());
                             }

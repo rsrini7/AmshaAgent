@@ -99,6 +99,7 @@ public class GovernanceLayer implements GovernanceStrategy {
 
     private record BudgetUpdateResult(BudgetStatus status, double currentCost, double hardLimit) {}
 
+    @Override
     public void recordLlmCall(String sessionId, int inputTokens, int outputTokens) {
         if (sessionId == null) {
             return;
@@ -180,6 +181,7 @@ public class GovernanceLayer implements GovernanceStrategy {
     /**
      * Clears tracked budget for a session (usually called when session terminates).
      */
+    @Override
     public void clearSession(String sessionId) {
         budgets.remove(sessionId);
     }
@@ -187,6 +189,7 @@ public class GovernanceLayer implements GovernanceStrategy {
     /**
      * Gets the total tracked USD cost for a given session.
      */
+    @Override
     public double getSessionCost(String sessionId) {
         SessionBudget budget = budgets.get(sessionId);
         if (budget != null) {
@@ -196,10 +199,12 @@ public class GovernanceLayer implements GovernanceStrategy {
         return 0.0;
     }
 
+    @Override
     public double getBudgetUsd() {
         return budgetUsd;
     }
 
+    @Override
     public int getSessionInputTokens(String sessionId) {
         SessionBudget b = budgets.get(sessionId);
         if (b != null) {
@@ -209,6 +214,7 @@ public class GovernanceLayer implements GovernanceStrategy {
         return 0;
     }
 
+    @Override
     public int getSessionOutputTokens(String sessionId) {
         SessionBudget b = budgets.get(sessionId);
         if (b != null) {
@@ -222,6 +228,7 @@ public class GovernanceLayer implements GovernanceStrategy {
      * Checks if a session is currently over its budget limit.
      * Throws BudgetExceededException if already over limit.
      */
+    @Override
     public void assertWithinBudget(String sessionId) {
         SessionBudget budget = budgets.get(sessionId);
         if (budget != null && budget.getTotalCost() >= budget.hardLimit) {

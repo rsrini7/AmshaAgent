@@ -69,7 +69,7 @@ class SkillReflexTest {
                 new SkillDefinition("id1", "reviewer", "Reviews PRs", List.of("pattern"), List.of(), 5, "prompt");
         RoleDefinition role1 =
                 new RoleDefinition("skill:reviewer", "Reviewer", "Reviews PRs", 5, false, false, Set.of(), Set.of());
-        CompiledSkillEntry e1 = new CompiledSkillEntry(def1, new Pattern[] {Pattern.compile("pattern")}, role1, "db");
+        CompiledSkillEntry e1 = new CompiledSkillEntry(def1, List.of(Pattern.compile("pattern")), role1, "db");
 
         mockRegistry.reload(List.of(e1));
         ReflexResult result = reflex.execute("session1", "user1", "chat1", "/skills", createContext("/skills"));
@@ -82,7 +82,7 @@ class SkillReflexTest {
     void testBlankDescriptionFallback() {
         SkillDefinition def1 = new SkillDefinition("id1", "minimal", "", List.of(), List.of(), 5, "prompt");
         RoleDefinition role1 = new RoleDefinition("skill:minimal", "Minimal", "", 5, false, false, Set.of(), Set.of());
-        CompiledSkillEntry e1 = new CompiledSkillEntry(def1, new Pattern[0], role1, "db");
+        CompiledSkillEntry e1 = new CompiledSkillEntry(def1, List.of(), role1, "db");
 
         mockRegistry.reload(List.of(e1));
         ReflexResult result = reflex.execute("session1", "user1", "chat1", "/skills", createContext("/skills"));

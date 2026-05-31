@@ -240,7 +240,7 @@ public abstract class AbstractDecisionReflex implements AgentReflex {
     }
 
     private String handlePerToolDecision(
-            String toolName, String sessionId, String userId, String chatId, String reason, MessageContext context)
+            String toolName, String sessionId, String _userId, String _chatId, String reason, MessageContext _context)
             throws Exception {
         Optional<AgentCheckpoint> latestPending = statefulAgentStore.findLatestAwaitingApproval(sessionId);
         String activeRole = latestPending

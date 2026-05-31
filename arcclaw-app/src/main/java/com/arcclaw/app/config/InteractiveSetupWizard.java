@@ -1,6 +1,7 @@
 package com.arcclaw.app.config;
 
 import java.io.BufferedReader;
+import java.nio.charset.StandardCharsets;
 import java.io.Console;
 import java.io.IOException;
 import java.io.InputStream;
@@ -254,7 +255,7 @@ public class InteractiveSetupWizard {
         System.err.print(prompt);
         System.err.flush();
         try {
-            return new BufferedReader(new InputStreamReader(System.in)).readLine();
+            return new BufferedReader(new InputStreamReader(System.in, StandardCharsets.UTF_8)).readLine();
         } catch (IOException e) {
             return null;
         }

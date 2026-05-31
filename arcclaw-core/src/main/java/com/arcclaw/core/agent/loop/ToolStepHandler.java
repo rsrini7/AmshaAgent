@@ -486,7 +486,7 @@ public class ToolStepHandler {
             ReasoningStep step,
             String toolName,
             Map<String, Object> params,
-            ToolResponse.ToolFailure originalFailure,
+            ToolResponse.ToolFailure _originalFailure,
             ToolResponse.ToolFailure retryFailure,
             List<ReasoningStep> history) {
         String targetRole =
@@ -502,12 +502,12 @@ public class ToolStepHandler {
 
     private ToolResponse attemptEscalation(
             AgentExecutionContext context,
-            ReasoningStep step,
-            String toolName,
+            ReasoningStep _step,
+            String _toolName,
             Map<String, Object> params,
             ToolResponse.ToolFailure failure,
             String targetRole,
-            List<ReasoningStep> history) {
+            List<ReasoningStep> _history) {
         String originalCode = extractParam(params, "code");
         String language = extractParam(params, "language");
         String originalGoal = context.goal();

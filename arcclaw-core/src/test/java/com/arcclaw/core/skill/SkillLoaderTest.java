@@ -79,7 +79,7 @@ class SkillLoaderTest {
         CompiledSkillEntry entry = skillRegistry.getAll().get(0);
         assertEquals("code-reviewer", entry.definition().name());
         assertEquals("database", entry.source());
-        assertEquals(1, entry.triggerPatterns().length);
+        assertEquals(1, entry.triggerPatterns().size());
 
         Optional<RoleDefinition> dynRole = roleRegistry.getDynamicRoles().stream()
                 .filter(r -> r.canonicalName().equals("skill:code-reviewer"))

@@ -88,7 +88,7 @@ public class ToolResultProcessor {
     private StepDecision handleScheduleTaskOutcome(
             AgentExecutionContext ctx, ToolResponse res, String obs, List<ReasoningStep> history) {
         if (res != null && res.success()) {
-            String cleanOutput = obs.split("\n\nCRITICAL DIRECTIVE:")[0];
+            String cleanOutput = obs.split("\n\nCRITICAL DIRECTIVE:", 2)[0];
             String finalAnswer = "✅ " + cleanOutput;
             writer.saveAnswer(ctx.sessionId(), finalAnswer);
             return StepDecision.terminal(AgentResult.finished(finalAnswer, List.copyOf(history)));
@@ -147,7 +147,7 @@ public class ToolResultProcessor {
     }
 
     private StepDecision handleBrowserOutcome(
-            AgentExecutionContext ctx,
+            AgentExecutionContext _ctx,
             Map<String, Object> params,
             ToolResponse res,
             String obs,
@@ -173,7 +173,7 @@ public class ToolResultProcessor {
     }
 
     private StepDecision handleWebFetchOutcome(
-            AgentExecutionContext ctx,
+            AgentExecutionContext _ctx,
             Map<String, Object> params,
             ToolResponse res,
             String obs,

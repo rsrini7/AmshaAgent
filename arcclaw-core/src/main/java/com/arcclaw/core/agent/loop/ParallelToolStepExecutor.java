@@ -266,7 +266,7 @@ public class ParallelToolStepExecutor {
 
     private List<ParallelToolCall> runAllowedCallsAsync(
             AgentExecutionContext context,
-            List<ReasoningStep> history,
+            List<ReasoningStep> _history,
             List<ParallelToolCall> allowedCalls,
             Context otelContext) {
 
