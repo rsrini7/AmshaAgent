@@ -331,9 +331,9 @@ class AbstractDecisionReflexDeepTest {
 
     // ── Helper methods ───────────────────────────────────────────────────
 
-    @SuppressWarnings("unchecked")
     private record DecisionParams(Optional<String> targetId, Optional<String> toolName, Optional<String> reasonOpt) {}
 
+    @SuppressWarnings("unchecked")
     private DecisionParams invokeExtractDecisionParams(ChannelCommand cmd) throws Exception {
         Method m = AbstractDecisionReflex.class.getDeclaredMethod("extractDecisionParams", ChannelCommand.class);
         m.setAccessible(true);

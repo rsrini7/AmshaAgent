@@ -329,9 +329,9 @@ class AgentSessionServiceDeepTest {
         RunAgentRequest request = new RunAgentRequest("goal", "coordinator", 5);
 
         @SuppressWarnings("unchecked")
-        var callback = mock(Consumer.class);
+        Consumer<ServiceResult<Object>> callback = mock(Consumer.class);
         service.runAsync("s1", "user-1", request, callback);
-        verify(callback).accept(any(ServiceResult.class));
+        verify(callback).accept(any());
     }
 
     @Test
@@ -341,8 +341,8 @@ class AgentSessionServiceDeepTest {
         RunAgentRequest request = new RunAgentRequest("goal", "unknown_role", 5);
 
         @SuppressWarnings("unchecked")
-        var callback = mock(Consumer.class);
+        Consumer<ServiceResult<Object>> callback = mock(Consumer.class);
         service.runAsync("s1", "user-1", request, callback);
-        verify(callback).accept(any(ServiceResult.class));
+        verify(callback).accept(any());
     }
 }

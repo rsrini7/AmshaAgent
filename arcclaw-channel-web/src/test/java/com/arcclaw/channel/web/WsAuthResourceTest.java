@@ -80,7 +80,7 @@ class WsAuthResourceTest {
     @Test
     void issueTokenFallsBackToCookieWhenHeaderMissing() {
         String cookieValue = "cookie-api-key";
-        Cookie cookie = new Cookie("ARCCLAW_API_KEY", cookieValue);
+        Cookie cookie = new Cookie.Builder("ARCCLAW_API_KEY").value(cookieValue).build();
         when(httpHeaders.getCookies()).thenReturn(Map.of("ARCCLAW_API_KEY", cookie));
         when(channelServices.isValidIdentity(cookieValue)).thenReturn(true);
         when(tokenStore.generateToken()).thenReturn("ws-token-from-cookie");

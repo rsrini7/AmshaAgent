@@ -9,8 +9,6 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import java.util.concurrent.Callable;
-
 import com.arcclaw.persistence.api.AdvisoryLockPort;
 import com.arcclaw.persistence.sqlite.JdbiRetryWrapper;
 import com.arcclaw.persistence.sqlite.SqliteAdvisoryLockAdapter;
@@ -41,8 +39,7 @@ class SqliteAdvisoryLockAdapterTest {
 
     @Test
     void tryLock_delegatesToRetryWrapper() {
-        when(retryWrapper.withRetry(anyString(), anyInt(), anyLong(), any(Callable.class)))
-                .thenReturn(true);
+        when(retryWrapper.withRetry(anyString(), anyInt(), anyLong(), any())).thenReturn(true);
 
         boolean result = adapter.tryLock("test-lock", 30);
 
@@ -52,8 +49,7 @@ class SqliteAdvisoryLockAdapterTest {
 
     @Test
     void isLocked_delegatesToRetryWrapper() {
-        when(retryWrapper.withRetry(anyString(), anyInt(), anyLong(), any(Callable.class)))
-                .thenReturn(false);
+        when(retryWrapper.withRetry(anyString(), anyInt(), anyLong(), any())).thenReturn(false);
 
         boolean result = adapter.isLocked("test-lock");
 
