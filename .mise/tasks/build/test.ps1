@@ -38,6 +38,7 @@ if (Test-Path '.env') {
         Write-Host '✅  Code formatted (Spotless + FQN replacement).'
 
         $env:MAVEN_OPTS = "$mOpts -Xmx${jitGB}g -Xms${jitGB}g"
+        $env:MAVEN_ARGS = "-ntp"
         & $mvnw clean verify -am "-Dquarkus.test.profile=test"
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
         Write-Host '✅  Tests complete.'

@@ -39,7 +39,7 @@ $args = @(
     "-Dsonar.token=$env:SONAR_TOKEN",
     "-Dsonar.java.binaries=**/target/classes",
     "-Dsonar.exclusions=**/target/**,**/node_modules/**,arcclaw-ui/**",
-    "-Dsonar.coverage.jacoco.xmlReportPaths=**/target/jacoco-report/jacoco.xml"
+    "-Dsonar.coverage.jacoco.xmlReportPaths=**/target/jacoco-report/jacoco.xml,**/target/site/jacoco/jacoco.xml"
 )
 & sonar-scanner $args
 

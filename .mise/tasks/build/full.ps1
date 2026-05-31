@@ -32,6 +32,7 @@ if (Test-Path '.env') {
 
 try {
     $env:MAVEN_OPTS = "$mOpts -Xmx${jitGB}g -Xms${jitGB}g"
+    $env:MAVEN_ARGS = "-ntp"
 
     # Phase 0: Format code (Spotless + FQN replacement)
     python3 ./fix_fqns.py

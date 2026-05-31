@@ -80,6 +80,11 @@ by shelling out to the official @playwright/cli daemon (Node.js 20+ required).</
       <artifactId>mockito-core</artifactId>
       <scope>test</scope>
     </dependency>
+    <dependency>
+      <groupId>io.quarkus</groupId>
+      <artifactId>quarkus-jacoco</artifactId>
+      <scope>test</scope>
+    </dependency>
   </dependencies>
 
   <build>
