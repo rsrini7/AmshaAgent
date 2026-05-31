@@ -19,7 +19,7 @@
         </properties>
     </rule>
 
-    <!-- Cognitive complexity: max 50 (PMD 7.x) . Require refactoring and then adjust later-->
+    <!-- Cognitive complexity: max 50 (PMD 7.x). Require refactoring and then adjust later. -->
     <rule ref="category/java/design.xml/CognitiveComplexity">
         <properties>
             <property name="reportLevel" value="50"/>

@@ -50,6 +50,11 @@ public class LangChain4jExceptionClassifier extends LlmExceptionClassifierChain 
     }
 
     private LlmProviderException classifyHttp(int status, String msg, Throwable original) {
+        // Check rate-limit message FIRST (any status), matching old behavior:
+        // some providers return rate-limit-like errors on non-429 statuses
+        if (isRateLimitError(msg)) {
+            return new LlmRateLimitException(msg != null ? msg : "Rate limit hit", original);
+        }
         return switch (status) {
             case 401, 403 -> new LlmAuthenticationException(msg != null ? msg : "Authentication failed", original);
             case 404 ->
@@ -59,9 +64,6 @@ public class LangChain4jExceptionClassifier extends LlmExceptionClassifierChain 
                         original);
             case 429 -> new LlmRateLimitException(msg != null ? msg : "Rate limit hit", original);
             default -> {
-                if (isRateLimitError(msg)) {
-                    yield new LlmRateLimitException(msg != null ? msg : "Rate limit hit", original);
-                }
                 if (status >= 500) {
                     yield new LlmServiceUnavailableException(msg != null ? msg : "Service unavailable", original);
                 }

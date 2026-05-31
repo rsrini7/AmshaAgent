@@ -186,12 +186,12 @@ public class AgentFunctionProcessor {
 
         if (classInfo.isRecord()) {
             for (RecordComponentInfo rc : classInfo.recordComponents()) {
-                addProperty(index, rc.name(), rc.type(), properties, required, processedTypes, reflectiveClasses);
+                addProperty(index, classInfo, rc.name(), rc.type(), properties, required, processedTypes, reflectiveClasses);
             }
         } else {
             classInfo.fields().forEach(f -> {
                 if ((f.flags() & Modifier.STATIC) == 0) {
-                    addProperty(index, f.name(), f.type(), properties, required, processedTypes, reflectiveClasses);
+                    addProperty(index, classInfo, f.name(), f.type(), properties, required, processedTypes, reflectiveClasses);
                 }
             });
         }
@@ -200,6 +200,7 @@ public class AgentFunctionProcessor {
 
     private void addProperty(
             IndexView index,
+            ClassInfo containingClass,
             String name,
             Type type,
             ObjectNode properties,
@@ -209,19 +210,17 @@ public class AgentFunctionProcessor {
         ObjectNode prop = properties.putObject(name);
         buildSchema(index, type, prop, processedTypes, reflectiveClasses);
 
+        // Look up @JsonProperty on the containing class's record component or field, not on the type's class
         AnnotationInstance ann = null;
-        // Try record component annotation first, then field annotation
-        ClassInfo classInfo = index.getClassByName(type.name());
-        if (classInfo != null) {
-            for (RecordComponentInfo rc : classInfo.recordComponents()) {
+        if (containingClass.isRecord()) {
+            for (RecordComponentInfo rc : containingClass.recordComponents()) {
                 if (rc.name().equals(name)) {
                     ann = rc.annotation(JSON_PROPERTY);
                     break;
                 }
             }
-        }
-        if (ann == null && classInfo != null) {
-            for (var f : classInfo.fields()) {
+        } else {
+            for (var f : containingClass.fields()) {
                 if (f.name().equals(name)) {
                     ann = f.annotation(JSON_PROPERTY);
                     break;
