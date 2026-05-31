@@ -666,9 +666,11 @@ class PersistencePortContractTest {
 
         @Override
         public void markCheckpointsFailed(String sessionId) {}
+        // Stub: not exercised by current contract tests.
 
         @Override
         public void deleteCheckpoint(String sessionId, String role) {}
+        // Stub: not exercised by current contract tests.
 
         @Override
         public CheckpointUpsertResult upsertWithSteps(
@@ -701,19 +703,24 @@ class PersistencePortContractTest {
 
         @Override
         public void purgeOldChatHistory(Instant cutoff) {}
+        // Stub: not exercised by current contract tests.
 
         @Override
         public void markFailed(
                 Long checkpointId, String failReason, String errorCode, String traceId, String rootCauseClass) {}
+        // Stub: not exercised by current contract tests.
 
         @Override
         public void markCompleted(Long checkpointId) {}
+        // Stub: not exercised by current contract tests.
 
         @Override
         public void markOrphaned(Long checkpointId, String reason) {}
+        // Stub: not exercised by current contract tests.
 
         @Override
         public void archive(Long checkpointId) {}
+        // Stub: not exercised by current contract tests.
 
         @Override
         public boolean claimForRetry(Long id) {
@@ -722,6 +729,7 @@ class PersistencePortContractTest {
 
         @Override
         public void releaseResumeClaim(String sessionId, String agentRole) {}
+        // Stub: not exercised by current contract tests.
 
         @Override
         public boolean atomicUpdateBatchToolDecision(
@@ -736,6 +744,7 @@ class PersistencePortContractTest {
 
         @Override
         public void stampChannelInfo(Long checkpointId, String channelType, String channelPlatformId) {}
+        // Stub: not exercised by current contract tests.
     }
 
     static class InMemoryCronStore implements CronStorePort {
@@ -818,6 +827,7 @@ class PersistencePortContractTest {
 
         @Override
         public void setDeliveryId(String id, String deliveryId) {}
+        // Stub: not exercised by current contract tests.
 
         @Override
         public void markFailed(String id, String errorReason) {
@@ -827,9 +837,11 @@ class PersistencePortContractTest {
 
         @Override
         public void markSkipped(String id, Instant nextFireTime, Instant now) {}
+        // Stub: not exercised by current contract tests.
 
         @Override
         public void reclaimStaleCrons(Instant threshold) {}
+        // Stub: not exercised by current contract tests.
 
         @Override
         public void save(AgentCronDto dto) {
