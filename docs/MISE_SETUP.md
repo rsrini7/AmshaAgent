@@ -549,7 +549,8 @@ mise run db:sqlite:vec-check   # verify lib/vec0 extension for your platform
 | `ARCCLAW_AUDIT_HMAC_KEY` | `.env` | ≥32 bytes, never change after first boot |
 | `ARCCLAW_API_KEYS_INTERNAL` | `.env` | Bearer token for REST API |
 | `ARCCLAW_API_KEYS_CI` | `.env` | CI/CD read-only key |
-| `ARCCLAW_EMBED_API_KEY` | `.env` | Jina AI embedding key (starts with `jina_`) |
+| `ARCCLAW_INFINITE_LOOP_EMBEDDING_PROVIDERS` | `.env` | Comma-separated embedding providers (default `ollama`). |
+| `ARCCLAW_EMBEDDING_<PROVIDER>_API_KEY` | `.env` | Per-provider embedding key (e.g. `ARCCLAW_EMBEDDING_JINA_API_KEY`). Required for non-local providers. |
 | `TELEGRAM_BOT_TOKEN` | `.env` | Only for `attach` mode |
 | `GOAL` | shell env | Goal string for `jar:ask`, `dev:ask`, `native:ask` |
 | `ROLE` | shell env | Optional role override for `ask` tasks |

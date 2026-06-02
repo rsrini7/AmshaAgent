@@ -24,12 +24,11 @@ public class JinaEmbeddingProviderFactory implements EmbeddingProviderFactory {
     @Override
     public EmbeddingModel create(EmbeddingModelConfig config) {
         String key = requireApiKey(config);
-
-        // Maintain the Jina-specific logic from legacy EmbeddingModelProducer
+        // Jina is OpenAI-compatible; default to its own model when the Ollama default
+        // leaks through (e.g. via shared config templates).
         String jinaModel = config.modelName().equals("nomic-embed-text:v1.5")
-                ? "jina-embeddings-v5-text-nano" // override Ollama default with Jina default
+                ? "jina-embeddings-v5-text-nano"
                 : config.modelName();
-
         log.infof("Creating Jina embedding model: %s (via OpenAI adapter) base=%s", jinaModel, config.baseUrl());
 
         return OpenAiEmbeddingModel.builder()

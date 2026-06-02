@@ -23,8 +23,8 @@ public class InfiniteLoopAgentChatModelProvider implements AgentChatModelProvide
 
     private static final Logger log = Logger.getLogger(InfiniteLoopAgentChatModelProvider.class);
 
-    @ConfigProperty(name = "arcclaw.infinite-loop.models", defaultValue = "omlx,groq,openrouter")
-    String loopModels;
+    @ConfigProperty(name = "arcclaw.infinite-loop.llm.providers", defaultValue = "omlx,groq,openrouter")
+    String loopProviders;
 
     @ConfigProperty(name = "arcclaw.infinite-loop.cooldown-base-seconds", defaultValue = "30")
     int cooldownBaseSeconds;
@@ -54,7 +54,7 @@ public class InfiniteLoopAgentChatModelProvider implements AgentChatModelProvide
 
     @Override
     public ChatModel create() {
-        String[] providerNames = loopModels.split(",", -1);
+        String[] providerNames = loopProviders.split(",", -1);
         List<InfiniteLoopChatModel.Slot> slots = new ArrayList<>();
 
         for (String raw : providerNames) {
@@ -80,8 +80,8 @@ public class InfiniteLoopAgentChatModelProvider implements AgentChatModelProvide
 
         if (slots.isEmpty()) {
             throw new IllegalStateException(
-                    "InfiniteLoop: No slots could be initialized. Check ARCCLAW_INFINITE_LOOP_MODELS_LIST="
-                            + loopModels);
+                    "InfiniteLoop: No slots could be initialized. Check ARCCLAW_INFINITE_LOOP_LLM_PROVIDERS="
+                            + loopProviders);
         }
 
         log.infof(

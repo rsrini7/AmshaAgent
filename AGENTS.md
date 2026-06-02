@@ -154,7 +154,7 @@ On restart, auto-deny ALL stale `AWAITING_APPROVAL` checkpoints for all channel 
 2. **`AgentChatModelProvider`** — `arcclaw-core/.../agent/reasoning/<Name>ProviderFactory.java`
 3. **`LlmModelFactory.java`** — Add URL pattern to `URL_PROVIDER_MAP`
 4. **`OnboardingResource.java`** — Add default model to `DEFAULT_MODELS`
-5. **`.env`** — Add `ARCCLAW_<NAME>_BASE_URL`, `ARCCLAW_<NAME>_MODEL`, add to `ARCCLAW_INFINITE_LOOP_MODELS_LIST`
+5. **`.env`** — Add `ARCCLAW_<NAME>_BASE_URL`, `ARCCLAW_<NAME>_MODEL`, add to `ARCCLAW_INFINITE_LOOP_LLM_PROVIDERS`
 6. **`.env.example`** — Same additions
 7. **`arc-settings.ts`** + **`arc-onboarding-step2.ts`** — Add to `PROVIDERS`/`providers` arrays
 8. **Verify**: `./mvnw compile -q` + `cd arcclaw-ui && npm run build`

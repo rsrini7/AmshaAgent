@@ -307,13 +307,13 @@ Retrieval merges FTS5 keyword search + sqlite-vec vector search via Reciprocal R
 
 **Retrieval** (`RagContextEnricher.enrich()`): Embeds current goal, searches via `TwoTierMemoryService.search()` (session KB in-memory ANN + global KB vec0 KNN), applies adaptive thresholding, deduplicates by `chunkId`, injects top-N as `## Retrieved Rag Context` block.
 
-**Embedding provider:** `EmbeddingModelProducer` resolves via `arcclaw.rag.embed-provider` (ollama / openai / jina).
+**Embedding provider:** `InfiniteLoopEmbeddingModelProvider` produces an `InfiniteLoopEmbeddingModel` that rotates through the providers listed in `arcclaw.infinite-loop.embedding.providers` (ollama / openai / jina) with health tracking and exponential-backoff cooldown.
 
 ### Context Compaction
 
 `CompactionHandler` (priority 60) runs before agent dispatch when token/message count exceeds threshold. Uses a separate lighter LLM (`llama-3.1-8b-instant` via Groq by default) to summarize older turns.
 
-`CompactionService.compact()`:
+ `CompactionService.compact()`:
 1. Fetches old `ChatMemory` turns beyond the compaction window
 2. Calls the compaction model (separate from reasoning model)
 3. Writes summary to `CompactionSummaryDto` via `summaryRepository.upsert()`

@@ -12,7 +12,7 @@ public class RagResourcesBuildStep {
                         "com.arcclaw.rag.RagContextEnricher",
                         "com.arcclaw.rag.TwoTierMemoryService",
                         "com.arcclaw.rag.GlobalKnowledgeBase",
-                        "com.arcclaw.rag.EmbeddingModelProducer")
+                        "com.arcclaw.rag.InfiniteLoopEmbeddingModelProvider")
                 .methods(true)
                 .fields(true)
                 .build();

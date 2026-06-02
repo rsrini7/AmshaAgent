@@ -271,9 +271,13 @@ Edit `.env`:
 # LLM - required
 ARCCLAW_LLM_API_KEY=gsk_your_key_here          # get from console.groq.com
 
-# Embedding - required (Jina free tier: 1M tokens/month)
-ARCCLAW_EMBED_API_KEY=jina_your_key     # get from jina.ai
-ARCCLAW_EMBED_PROVIDER=jina
+# Embedding - multi-slot infinite-loop (Ollama local by default)
+ARCCLAW_INFINITE_LOOP_EMBEDDING_PROVIDERS=ollama,jina
+ARCCLAW_EMBEDDING_OLLAMA_MODEL=nomic-embed-text:v1.5
+ARCCLAW_EMBEDDING_OLLAMA_BASE_URL=http://localhost:11434
+ARCCLAW_EMBEDDING_JINA_API_KEY=jina_your_key     # get from jina.ai
+ARCCLAW_EMBEDDING_JINA_MODEL=jina-embeddings-v5-text-nano
+ARCCLAW_EMBEDDING_JINA_BASE_URL=https://api.jina.ai/v1/
 ARCCLAW_EMBED_DIMENSIONS=768
 
 # GitHub - optional, needed for researcher role GitHub tool
@@ -922,9 +926,15 @@ if (Test-Path lib/vec0.dll) { Write-Host "OK: lib/vec0.dll" } else { Write-Host 
 | `ARCCLAW_AUDIT_HMAC_KEY` | ✅ | - | Min 32 bytes. **Immutable after first boot.** |
 | `ARCCLAW_API_KEYS_INTERNAL` | ✅ | - | Bearer token for REST API (`Authorization: Bearer`). |
 | `ARCCLAW_API_KEYS_CI` | Optional | - | CI/CD read-only API key. |
-| `ARCCLAW_EMBED_API_KEY` | ✅ | - | Jina AI key (default provider). Starts with `jina_`. |
-| `ARCCLAW_EMBED_PROVIDER` | Optional | `jina` | `jina` \| `openai` \| `ollama` |
-| `ARCCLAW_EMBED_DIMENSIONS` | Optional | `768` | Must match model. Jina nano = 768. |
+| `ARCCLAW_INFINITE_LOOP_EMBEDDING_PROVIDERS` | Optional | `ollama` | Comma-separated embedding providers (ollama, openai, jina, ...). |
+| `ARCCLAW_EMBEDDING_<PROVIDER>_API_KEY` | Required for non-local providers | - | Per-provider embedding key (e.g. `ARCCLAW_EMBEDDING_JINA_API_KEY`). |
+| `ARCCLAW_EMBEDDING_<PROVIDER>_MODEL` | Optional | (per provider) | Per-provider embedding model (e.g. `ARCCLAW_EMBEDDING_JINA_MODEL`). |
+| `ARCCLAW_EMBEDDING_<PROVIDER>_BASE_URL` | Optional | (per provider) | Per-provider base URL (e.g. `ARCCLAW_EMBEDDING_OLLAMA_BASE_URL`). |
+| `ARCCLAW_INFINITE_LOOP_COMPACTION_PROVIDERS` | Optional | `groq,ollama` | Comma-separated compaction providers. |
+| `ARCCLAW_COMPACTION_<PROVIDER>_API_KEY` | Required for non-local providers | - | Per-provider compaction key (e.g. `ARCCLAW_COMPACTION_GROQ_API_KEY`). |
+| `ARCCLAW_INFINITE_LOOP_CLASSIFIER_PROVIDERS` | Optional | `groq,ollama` | Comma-separated classifier providers. |
+| `ARCCLAW_CLASSIFIER_<PROVIDER>_API_KEY` | Required for non-local providers | - | Per-provider classifier key (e.g. `ARCCLAW_CLASSIFIER_GROQ_API_KEY`). |
+| `ARCCLAW_EMBED_DIMENSIONS` | Optional | `768` | Must match model. Jina nano = 768, OpenAI 3-small = 1536. |
 | `ARCCLAW_AUTO_SEED_SECRETS` | Optional | `false` | Set `true` to seed vault from env on boot. |
 | `GITHUB_TOKEN` | Optional | - | Required for GitHub tool (researcher role). |
 | `ARCCLAW_DATA_DIR` | Optional | `./data` | Path to SQLite databases and workspaces. |

@@ -24,27 +24,43 @@ Generate secrets: `openssl rand -base64 32` (Linux/macOS) or `[Convert]::ToBase6
 
 ## Compaction
 
+Compaction uses a multi-slot infinite-loop failover (per-slot provider list). Each
+provider in the list has its own slot with independent health tracking.
+
 | Variable | Default | Description |
 |---|---|---|
-| `ARCCLAW_COMPACTION_PROVIDER` | `groq` | Compaction-specific LLM provider (should be cheap/fast) |
-| `ARCCLAW_COMPACTION_MODEL` | `llama-3.1-8b-instant` | Compaction model name |
-| `ARCCLAW_COMPACTION_BASE_URL` | `https://api.groq.com/openai/v1` | Compaction API base URL |
-| `ARCCLAW_COMPACTION_API_KEY` | — | Compaction API key (falls back to LLM key if unset) |
-| `ARCCLAW_COMPACTION_MAX_RETRIES` | `3` | Max compaction retries |
-| `ARCCLAW_COMPACTION_OLLAMA_MODEL` | `mistral-small:latest` | Ollama model for compaction |
+| `ARCCLAW_INFINITE_LOOP_COMPACTION_PROVIDERS` | `groq,ollama` | Comma-separated compaction providers (slot order) |
+| `ARCCLAW_COMPACTION_GROQ_API_KEY` | — | Groq API key for the compaction slot |
+| `ARCCLAW_COMPACTION_GROQ_MODEL` | `llama-3.1-8b-instant` | Compaction model on Groq |
+| `ARCCLAW_COMPACTION_GROQ_BASE_URL` | `https://api.groq.com/openai/v1` | Groq base URL for compaction |
+| `ARCCLAW_COMPACTION_GROQ_MAX_RETRIES` | `3` | Max retries for the Groq compaction slot |
+| `ARCCLAW_COMPACTION_OLLAMA_MODEL` | `mistral-small:latest` | Ollama model for the compaction slot |
+| `ARCCLAW_COMPACTION_OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama base URL for compaction |
 | `ARCCLAW_COMPACTION_STRUCTURED_OUTPUT_MODE` | `NATIVE` | Compaction structured output mode |
+
+For non-Groq providers, mirror the pattern with `ARCCLAW_COMPACTION_{PROVIDER}_{KEY}`.
+Available providers: `groq`, `openai`, `openrouter`, `cerebras`, `gemini`, `nvidia`,
+`omlx`, `ollama`. Local providers (`ollama`, `omlx`) do not require an API key.
 
 ## Intent Classification
 
+Intent classification uses a multi-slot infinite-loop failover. The primary
+`intent-classifier` ChatModel bean rotates through the listed providers; the
+`intent-classifier-fallback` ChatModel is a hard-coded Ollama safety net for
+when all slots are exhausted.
+
 | Variable | Default | Description |
 |---|---|---|
-| `ARCCLAW_INTENT_CLASSIFIER_PROVIDER` | `groq` | Intent classifier provider |
-| `ARCCLAW_INTENT_CLASSIFIER_MODEL` | `llama-3.1-8b-instant` | Intent classifier model |
-| `ARCCLAW_INTENT_CLASSIFIER_BASE_URL` | `https://api.groq.com/openai/v1` | Intent classifier API base URL |
-| `ARCCLAW_INTENT_CLASSIFIER_API_KEY` | `not-configured` | Intent classifier API key |
-| `ARCCLAW_INTENT_CLASSIFIER_MAX_RETRIES` | `3` | Max intent classification retries |
-| `ARCCLAW_INTENT_CLASSIFIER_OLLAMA_MODEL` | `mistral-small:latest` | Ollama model for intent |
-| `ARCCLAW_INTENT_CLASSIFIER_STRUCTURED_OUTPUT_MODE` | `NATIVE` | Intent classifier structured output mode |
+| `ARCCLAW_INFINITE_LOOP_CLASSIFIER_PROVIDERS` | `groq,ollama` | Comma-separated classifier providers (slot order) |
+| `ARCCLAW_CLASSIFIER_GROQ_API_KEY` | — | Groq API key for the classifier slot |
+| `ARCCLAW_CLASSIFIER_GROQ_MODEL` | `llama-3.1-8b-instant` | Classifier model on Groq |
+| `ARCCLAW_CLASSIFIER_GROQ_BASE_URL` | `https://api.groq.com/openai/v1` | Groq base URL for classifier |
+| `ARCCLAW_CLASSIFIER_GROQ_MAX_RETRIES` | `3` | Max retries for the Groq classifier slot |
+| `ARCCLAW_CLASSIFIER_OLLAMA_MODEL` | `mistral-small:latest` | Ollama model for the classifier slot |
+| `ARCCLAW_CLASSIFIER_OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama base URL for classifier |
+| `ARCCLAW_INTENT_CLASSIFIER_STRUCTURED_OUTPUT_MODE` | `NATIVE` | Classifier structured output mode |
+
+For non-Groq providers, mirror the pattern with `ARCCLAW_CLASSIFIER_{PROVIDER}_{KEY}`.
 
 ## Agent Loop
 
@@ -59,9 +75,17 @@ Generate secrets: `openssl rand -base64 32` (Linux/macOS) or `[Convert]::ToBase6
 
 ## Infinite Loop (Multi-Provider Failover)
 
+Each slot (LLM, compaction, classifier, embedding) maintains its own provider
+list. Slots rotate through their list, applying cooldown / exponential backoff
+on transient errors and permanent disable on auth failures. Every slot shares
+the same cooldown timing.
+
 | Variable | Default | Description |
 |---|---|---|
-| `ARCCLAW_INFINITE_LOOP_MODELS_LIST` | `omlx,groq,openrouter` | Comma-separated providers for multi-slot routing |
+| `ARCCLAW_INFINITE_LOOP_LLM_PROVIDERS` | `omlx,groq,openrouter` | Comma-separated LLM providers (slot order) |
+| `ARCCLAW_INFINITE_LOOP_COMPACTION_PROVIDERS` | `groq,ollama` | Comma-separated compaction providers |
+| `ARCCLAW_INFINITE_LOOP_CLASSIFIER_PROVIDERS` | `groq,ollama` | Comma-separated classifier providers |
+| `ARCCLAW_INFINITE_LOOP_EMBEDDING_PROVIDERS` | `ollama` | Comma-separated embedding providers |
 | `ARCCLAW_INFINITE_LOOP_COOLDOWN_BASE_SECONDS` | `30` | Base cooldown between provider switches (s) |
 | `ARCCLAW_INFINITE_LOOP_COOLDOWN_MAX_SECONDS` | `300` | Max cooldown (s) |
 | `ARCCLAW_INFINITE_LOOP_COOLDOWN_TRANSIENT_SECONDS` | `5` | Transient error cooldown (s) |
@@ -78,13 +102,23 @@ Generate secrets: `openssl rand -base64 32` (Linux/macOS) or `[Convert]::ToBase6
 
 ## Embedding
 
+Embedding uses a multi-slot infinite-loop failover. Each provider in the list
+has its own slot. The vector dimension is shared (set once for the storage
+schema) and must match the model used by every active provider.
+
 | Variable | Default | Description |
 |---|---|---|
-| `ARCCLAW_EMBED_PROVIDER` | `ollama` | Embedding provider: ollama, openai, jina |
-| `ARCCLAW_EMBED_MODEL` | `nomic-embed-text:v1.5` | Embedding model name |
-| `ARCCLAW_EMBED_BASE_URL` | `http://localhost:11434` | Embedding API base URL |
-| `ARCCLAW_EMBED_API_KEY` | — | Embedding API key |
-| `ARCCLAW_EMBED_DIMENSIONS` | `768` | Embedding vector dimension |
+| `ARCCLAW_INFINITE_LOOP_EMBEDDING_PROVIDERS` | `ollama` | Comma-separated embedding providers (slot order) |
+| `ARCCLAW_EMBEDDING_OLLAMA_MODEL` | `nomic-embed-text:v1.5` | Ollama embedding model |
+| `ARCCLAW_EMBEDDING_OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama base URL for embedding |
+| `ARCCLAW_EMBEDDING_JINA_API_KEY` | — | Jina AI API key |
+| `ARCCLAW_EMBEDDING_JINA_MODEL` | `jina-embeddings-v5-text-nano` | Jina embedding model |
+| `ARCCLAW_EMBEDDING_JINA_BASE_URL` | `https://api.jina.ai/v1/` | Jina base URL |
+| `ARCCLAW_EMBEDDING_OPENAI_API_KEY` | — | OpenAI API key for embedding |
+| `ARCCLAW_EMBEDDING_OPENAI_MODEL` | `text-embedding-3-small` | OpenAI embedding model |
+| `ARCCLAW_EMBEDDING_OPENAI_BASE_URL` | `https://api.openai.com/v1` | OpenAI base URL for embedding |
+| `ARCCLAW_EMBEDDING_<PROVIDER>_TIMEOUT_SECONDS` | `30` | Per-provider embedding timeout (s) |
+| `ARCCLAW_EMBED_DIMENSIONS` | `768` | Embedding vector dimension (must match active model) |
 
 ## Memory & RAG
 

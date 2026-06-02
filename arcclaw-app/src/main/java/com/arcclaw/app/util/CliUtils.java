@@ -40,24 +40,10 @@ public class CliUtils {
      * Required for every mode except bare --help / --version.
      * Per-provider API keys (ARCCLAW_GROQ_API_KEY etc.) are provider-conditional.
      * See GROQ_KEY_SPEC / OPENROUTER_KEY_SPEC / OPENAI_KEY_SPEC below.
+     * Compaction, intent-classifier, and embedding API keys are computed dynamically
+     * from the selected provider in {@link #getMissingVarSpecs(String[])}.
      */
     private static final VarSpec[] CORE_VARS = {
-        new VarSpec(
-                "ARCCLAW_INTENT_CLASSIFIER_API_KEY",
-                "API key for the intent classifier LLM.",
-                "If empty, ArcClaw can use your main LLM API key.",
-                "Add:  ARCCLAW_INTENT_CLASSIFIER_API_KEY=gsk_..."),
-        new VarSpec(
-                "ARCCLAW_COMPACTION_API_KEY",
-                "API key for the context compaction LLM.",
-                "If empty, ArcClaw can use your main LLM API key.",
-                "Add:  ARCCLAW_COMPACTION_API_KEY=gsk_..."),
-        new VarSpec(
-                "ARCCLAW_EMBED_API_KEY",
-                "API key for the embedding provider (default: Jina AI).",
-                "1. Sign up at https://jina.ai - free tier: 1M tokens/month, no credit card",
-                "2. Copy your API key - it starts with 'jina_'",
-                "3. Add:  ARCCLAW_EMBED_API_KEY=jina_your_key_here"),
         new VarSpec(
                 "ARCCLAW_VAULT_PEPPER",
                 "Secret pepper for the credential vault (>=32 random characters).",
@@ -89,6 +75,103 @@ public class CliUtils {
                 "  Windows:      [Convert]::ToBase64String((1..32 | %{[byte](Get-Random -Max 256)}))",
                 "Then add:  ARCCLAW_API_KEYS_CI=<generated value>"),
     };
+
+    /**
+     * Per-provider API-key spec for the compaction slot. Returns {@code null}
+     * for providers that don't need a key (ollama, omlx).
+     */
+    private static VarSpec compactionKeySpecFor(String provider) {
+        return switch (provider) {
+            case "ollama", "omlx" -> null;
+            case "openrouter" ->
+                providerKeySpec(
+                        "openrouter", "ARCCLAW_COMPACTION_OPENROUTER_API_KEY", "sk-or-v1-", "https://openrouter.ai");
+            case "openai" ->
+                providerKeySpec("openai", "ARCCLAW_COMPACTION_OPENAI_API_KEY", "sk-", "https://platform.openai.com");
+            case "gemini" ->
+                providerKeySpec("gemini", "ARCCLAW_COMPACTION_GEMINI_API_KEY", "AIza", "https://aistudio.google.com");
+            case "cerebras" ->
+                providerKeySpec("cerebras", "ARCCLAW_COMPACTION_CEREBRAS_API_KEY", "csk-", "https://cloud.cerebras.ai");
+            case "nvidia" ->
+                providerKeySpec("nvidia", "ARCCLAW_COMPACTION_NVIDIA_API_KEY", "nvapi-", "https://build.nvidia.com");
+            default -> providerKeySpec("groq", "ARCCLAW_COMPACTION_GROQ_API_KEY", "gsk_", "https://console.groq.com");
+        };
+    }
+
+    /**
+     * Per-provider API-key spec for the intent-classifier slot. Returns {@code null}
+     * for providers that don't need a key (ollama, omlx).
+     */
+    private static VarSpec classifierKeySpecFor(String provider) {
+        return switch (provider) {
+            case "ollama", "omlx" -> null;
+            case "openrouter" ->
+                providerKeySpec(
+                        "openrouter", "ARCCLAW_CLASSIFIER_OPENROUTER_API_KEY", "sk-or-v1-", "https://openrouter.ai");
+            case "openai" ->
+                providerKeySpec("openai", "ARCCLAW_CLASSIFIER_OPENAI_API_KEY", "sk-", "https://platform.openai.com");
+            case "gemini" ->
+                providerKeySpec("gemini", "ARCCLAW_CLASSIFIER_GEMINI_API_KEY", "AIza", "https://aistudio.google.com");
+            case "cerebras" ->
+                providerKeySpec("cerebras", "ARCCLAW_CLASSIFIER_CEREBRAS_API_KEY", "csk-", "https://cloud.cerebras.ai");
+            case "nvidia" ->
+                providerKeySpec("nvidia", "ARCCLAW_CLASSIFIER_NVIDIA_API_KEY", "nvapi-", "https://build.nvidia.com");
+            default -> providerKeySpec("groq", "ARCCLAW_CLASSIFIER_GROQ_API_KEY", "gsk_", "https://console.groq.com");
+        };
+    }
+
+    /**
+     * Per-provider API-key spec for the embedding slot. Returns {@code null}
+     * for providers that don't need a key (ollama).
+     */
+    private static VarSpec embeddingKeySpecFor(String provider) {
+        return switch (provider) {
+            case "ollama" -> null;
+            case "openai" ->
+                providerKeySpec("openai", "ARCCLAW_EMBEDDING_OPENAI_API_KEY", "sk-", "https://platform.openai.com");
+            case "jina" ->
+                providerKeySpec(
+                        "jina",
+                        "ARCCLAW_EMBEDDING_JINA_API_KEY",
+                        "jina_",
+                        "https://jina.ai (free tier: 1M tokens/month, no credit card)");
+            default -> null;
+        };
+    }
+
+    private static VarSpec providerKeySpec(String provider, String envVar, String keyPrefix, String signupUrl) {
+        return new VarSpec(
+                envVar,
+                "API key for the " + provider + " provider (starts with '" + keyPrefix + "').",
+                "1. Sign up at " + signupUrl,
+                "2. Create an API key - it starts with '" + keyPrefix + "'",
+                "3. Add:  " + envVar + "=" + keyPrefix + "your_key_here");
+    }
+
+    /** Resolves the first provider in a comma-separated provider list (e.g. "groq,ollama"). */
+    private static String firstProvider(String csv) {
+        if (csv == null || csv.isBlank()) return "groq";
+        int comma = csv.indexOf(',');
+        return (comma < 0 ? csv : csv.substring(0, comma)).trim().toLowerCase(Locale.ROOT);
+    }
+
+    /**
+     * Resolves the primary LLM API-key {@link VarSpec} for a provider name.
+     * Returns {@code null} for {@code ollama} (no key required).
+     * Kept package-private for unit tests.
+     */
+    static VarSpec llmKeySpecFor(String provider) {
+        return switch (provider == null ? "groq" : provider.toLowerCase(Locale.ROOT)) {
+            case "openrouter" -> OPENROUTER_KEY_SPEC;
+            case "openai" -> OPENAI_KEY_SPEC;
+            case "gemini" -> GEMINI_KEY_SPEC;
+            case "nvidia" -> NVIDIA_KEY_SPEC;
+            case "cerebras" -> CEREBRAS_KEY_SPEC;
+            case "omlx" -> OMLX_KEY_SPEC;
+            case "ollama" -> null;
+            default -> GROQ_KEY_SPEC;
+        };
+    }
 
     private static final VarSpec GROQ_KEY_SPEC = new VarSpec(
             "ARCCLAW_GROQ_API_KEY",
@@ -173,21 +256,29 @@ public class CliUtils {
         String llmProvider = Optional.ofNullable(System.getenv("ARCCLAW_LLM_PROVIDER"))
                 .orElseGet(() -> System.getProperty("ARCCLAW_LLM_PROVIDER", "groq"))
                 .toLowerCase(Locale.ROOT);
-
-        VarSpec providerKeySpec =
-                switch (llmProvider) {
-                    case "openrouter" -> OPENROUTER_KEY_SPEC;
-                    case "openai" -> OPENAI_KEY_SPEC;
-                    case "gemini" -> GEMINI_KEY_SPEC;
-                    case "nvidia" -> NVIDIA_KEY_SPEC;
-                    case "cerebras" -> CEREBRAS_KEY_SPEC;
-                    case "omlx" -> OMLX_KEY_SPEC;
-                    case "ollama" -> null;
-                    default -> GROQ_KEY_SPEC;
-                };
+        VarSpec providerKeySpec = llmKeySpecFor(llmProvider);
         if (providerKeySpec != null && !isSet(providerKeySpec.key)) missing.add(providerKeySpec);
 
-        // 2. Intent/Compaction/Embed and Security keys
+        // 1b. Per-slot API keys for compaction / intent-classifier / embedding.
+        // Each infinite-loop provider list selects the first entry for key resolution.
+        String compactionProvider = firstProvider(Optional.ofNullable(
+                        System.getenv("ARCCLAW_INFINITE_LOOP_COMPACTION_PROVIDERS"))
+                .orElseGet(() -> System.getProperty("ARCCLAW_INFINITE_LOOP_COMPACTION_PROVIDERS", "groq,ollama")));
+        String classifierProvider = firstProvider(Optional.ofNullable(
+                        System.getenv("ARCCLAW_INFINITE_LOOP_CLASSIFIER_PROVIDERS"))
+                .orElseGet(() -> System.getProperty("ARCCLAW_INFINITE_LOOP_CLASSIFIER_PROVIDERS", "groq,ollama")));
+        String embeddingProvider =
+                firstProvider(Optional.ofNullable(System.getenv("ARCCLAW_INFINITE_LOOP_EMBEDDING_PROVIDERS"))
+                        .orElseGet(() -> System.getProperty("ARCCLAW_INFINITE_LOOP_EMBEDDING_PROVIDERS", "ollama")));
+
+        VarSpec compactionKeySpec = compactionKeySpecFor(compactionProvider);
+        if (compactionKeySpec != null && !isSet(compactionKeySpec.key)) missing.add(compactionKeySpec);
+        VarSpec classifierKeySpec = classifierKeySpecFor(classifierProvider);
+        if (classifierKeySpec != null && !isSet(classifierKeySpec.key)) missing.add(classifierKeySpec);
+        VarSpec embeddingKeySpec = embeddingKeySpecFor(embeddingProvider);
+        if (embeddingKeySpec != null && !isSet(embeddingKeySpec.key)) missing.add(embeddingKeySpec);
+
+        // 2. Security keys
         for (VarSpec spec : CORE_VARS) {
             if (!isSet(spec.key())) missing.add(spec);
         }

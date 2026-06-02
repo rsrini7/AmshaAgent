@@ -23,7 +23,7 @@ import org.jboss.logging.Logger;
 /**
  * Handles the interactive CLI setup wizard flow.
  */
-@SuppressWarnings("java:S1192")
+@SuppressWarnings({"java:S1192", "java:S106"})
 public class InteractiveSetupWizard {
 
     private static final Logger log = Logger.getLogger(InteractiveSetupWizard.class);
@@ -36,7 +36,8 @@ public class InteractiveSetupWizard {
             "ARCCLAW_NVIDIA_API_KEY",
             "ARCCLAW_CEREBRAS_API_KEY",
             "ARCCLAW_OMLX_API_KEY",
-            "ARCCLAW_EMBED_API_KEY",
+            "ARCCLAW_EMBEDDING_JINA_API_KEY",
+            "ARCCLAW_EMBEDDING_OPENAI_API_KEY",
             "ARCCLAW_VAULT_PEPPER",
             "ARCCLAW_AUDIT_HMAC_KEY",
             "ARCCLAW_API_KEYS_INTERNAL",
@@ -45,8 +46,12 @@ public class InteractiveSetupWizard {
             "ARCCLAW_TOOLS_BRAVE_API_KEY",
             "ARCCLAW_TOOLS_SERPER_API_KEY",
             "ARCCLAW_TOOLS_GITHUB_TOKEN",
-            "ARCCLAW_INTENT_CLASSIFIER_API_KEY",
-            "ARCCLAW_COMPACTION_API_KEY");
+            "ARCCLAW_COMPACTION_GROQ_API_KEY",
+            "ARCCLAW_COMPACTION_CEREBRAS_API_KEY",
+            "ARCCLAW_COMPACTION_OPENROUTER_API_KEY",
+            "ARCCLAW_CLASSIFIER_GROQ_API_KEY",
+            "ARCCLAW_CLASSIFIER_CEREBRAS_API_KEY",
+            "ARCCLAW_CLASSIFIER_OPENROUTER_API_KEY");
 
     private static final Set<String> AUTO_GENERATABLE_KEYS = Set.of(
             "ARCCLAW_VAULT_PEPPER",
@@ -137,24 +142,34 @@ public class InteractiveSetupWizard {
                     default -> "groq";
                 };
         System.setProperty("ARCCLAW_LLM_PROVIDER", provider);
-        System.setProperty("ARCCLAW_COMPACTION_PROVIDER", provider);
-        System.setProperty("ARCCLAW_INTENT_CLASSIFIER_PROVIDER", provider);
+        System.setProperty("ARCCLAW_INFINITE_LOOP_LLM_PROVIDERS", provider);
+        System.setProperty("ARCCLAW_INFINITE_LOOP_COMPACTION_PROVIDERS", provider);
+        System.setProperty("ARCCLAW_INFINITE_LOOP_CLASSIFIER_PROVIDERS", provider);
     }
 
     private static void ensureBaseConfigsInEnv(Path envFile) {
+        String provider = System.getProperty("ARCCLAW_LLM_PROVIDER", "groq");
         EnvConfigInitializer.patchEnvFile(
-                envFile,
-                "ARCCLAW_LLM_PROVIDER",
-                System.getProperty("ARCCLAW_LLM_PROVIDER", "groq"),
-                EnvConfigInitializer.PatchMode.UPDATE);
+                envFile, "ARCCLAW_LLM_PROVIDER", provider, EnvConfigInitializer.PatchMode.UPDATE);
+        EnvConfigInitializer.patchEnvFile(
+                envFile, "ARCCLAW_INFINITE_LOOP_LLM_PROVIDERS", provider, EnvConfigInitializer.PatchMode.UPDATE);
+        EnvConfigInitializer.patchEnvFile(
+                envFile, "ARCCLAW_INFINITE_LOOP_COMPACTION_PROVIDERS", provider, EnvConfigInitializer.PatchMode.UPDATE);
+        EnvConfigInitializer.patchEnvFile(
+                envFile, "ARCCLAW_INFINITE_LOOP_CLASSIFIER_PROVIDERS", provider, EnvConfigInitializer.PatchMode.UPDATE);
     }
 
     private static boolean shouldPromptUnifiedKey(List<CliUtils.VarSpec> missing) {
-        String llmKeyName = llmApiKeyForProvider(System.getProperty("ARCCLAW_LLM_PROVIDER", "groq"));
+        String provider = System.getProperty("ARCCLAW_LLM_PROVIDER", "groq").toLowerCase(Locale.ROOT);
+        String llmKeyName = llmApiKeyForProvider(provider);
         boolean llmKeyMissing = missing.stream().anyMatch(s -> s.key().equals(llmKeyName));
-        boolean intentKeyMissing = missing.stream().anyMatch(s -> s.key().equals("ARCCLAW_INTENT_CLASSIFIER_API_KEY"));
-        boolean compactionKeyMissing = missing.stream().anyMatch(s -> s.key().equals("ARCCLAW_COMPACTION_API_KEY"));
-        return llmKeyMissing && (intentKeyMissing || compactionKeyMissing);
+        String compactionKey = compactionApiKeyForProvider(provider);
+        String classifierKey = classifierApiKeyForProvider(provider);
+        boolean compactionKeyMissing =
+                compactionKey != null && missing.stream().anyMatch(s -> s.key().equals(compactionKey));
+        boolean classifierKeyMissing =
+                classifierKey != null && missing.stream().anyMatch(s -> s.key().equals(classifierKey));
+        return llmKeyMissing && (compactionKeyMissing || classifierKeyMissing);
     }
 
     private static void promptUnifiedKey(Path envFile, List<CliUtils.VarSpec> missing) {
@@ -164,25 +179,34 @@ public class InteractiveSetupWizard {
         if (resp == null
                 || resp.trim().isEmpty()
                 || resp.trim().toLowerCase(Locale.ROOT).startsWith("y")) {
-            String provider = System.getProperty("ARCCLAW_LLM_PROVIDER", "groq");
+            String provider = System.getProperty("ARCCLAW_LLM_PROVIDER", "groq").toLowerCase(Locale.ROOT);
             String key = readPasswordWithFallback(
                     System.console(), "  └─ Enter " + provider.toUpperCase(Locale.ROOT) + " API key: ");
             if (key != null && !key.isBlank()) {
                 applyUnifiedKey(envFile, key, provider);
                 String llmKeyName = llmApiKeyForProvider(provider);
+                String compactionKey = compactionApiKeyForProvider(provider);
+                String classifierKey = classifierApiKeyForProvider(provider);
                 missing.removeIf(s -> s.key().equals(llmKeyName)
-                        || s.key().equals("ARCCLAW_INTENT_CLASSIFIER_API_KEY")
-                        || s.key().equals("ARCCLAW_COMPACTION_API_KEY"));
+                        || (compactionKey != null && s.key().equals(compactionKey))
+                        || (classifierKey != null && s.key().equals(classifierKey)));
             }
         }
     }
 
     private static void applyUnifiedKey(Path envFile, String key, String provider) {
         String llmKeyName = llmApiKeyForProvider(provider);
-        String[] keys = {llmKeyName, "ARCCLAW_INTENT_CLASSIFIER_API_KEY", "ARCCLAW_COMPACTION_API_KEY"};
-        for (String k : keys) {
-            System.setProperty(k, key);
-            EnvConfigInitializer.patchEnvFile(envFile, k, key, EnvConfigInitializer.PatchMode.UPDATE);
+        String compactionKey = compactionApiKeyForProvider(provider);
+        String classifierKey = classifierApiKeyForProvider(provider);
+        EnvConfigInitializer.patchEnvFile(envFile, llmKeyName, key, EnvConfigInitializer.PatchMode.UPDATE);
+        System.setProperty(llmKeyName, key);
+        if (compactionKey != null) {
+            EnvConfigInitializer.patchEnvFile(envFile, compactionKey, key, EnvConfigInitializer.PatchMode.UPDATE);
+            System.setProperty(compactionKey, key);
+        }
+        if (classifierKey != null) {
+            EnvConfigInitializer.patchEnvFile(envFile, classifierKey, key, EnvConfigInitializer.PatchMode.UPDATE);
+            System.setProperty(classifierKey, key);
         }
         System.err.println("     ✓ Unified key saved.");
     }
@@ -196,6 +220,38 @@ public class InteractiveSetupWizard {
             case "nvidia" -> "ARCCLAW_NVIDIA_API_KEY";
             case "omlx" -> "ARCCLAW_OMLX_API_KEY";
             default -> "ARCCLAW_GROQ_API_KEY";
+        };
+    }
+
+    /**
+     * Returns the per-provider env-var name for the compaction slot's API key,
+     * or {@code null} if the provider does not require an API key (e.g. ollama, omlx).
+     */
+    private static String compactionApiKeyForProvider(String provider) {
+        return switch (provider.toLowerCase(Locale.ROOT)) {
+            case "ollama", "omlx" -> null;
+            case "openrouter" -> "ARCCLAW_COMPACTION_OPENROUTER_API_KEY";
+            case "openai" -> "ARCCLAW_COMPACTION_OPENAI_API_KEY";
+            case "gemini" -> "ARCCLAW_COMPACTION_GEMINI_API_KEY";
+            case "cerebras" -> "ARCCLAW_COMPACTION_CEREBRAS_API_KEY";
+            case "nvidia" -> "ARCCLAW_COMPACTION_NVIDIA_API_KEY";
+            default -> "ARCCLAW_COMPACTION_GROQ_API_KEY";
+        };
+    }
+
+    /**
+     * Returns the per-provider env-var name for the intent-classifier slot's API key,
+     * or {@code null} if the provider does not require an API key (e.g. ollama, omlx).
+     */
+    private static String classifierApiKeyForProvider(String provider) {
+        return switch (provider.toLowerCase(Locale.ROOT)) {
+            case "ollama", "omlx" -> null;
+            case "openrouter" -> "ARCCLAW_CLASSIFIER_OPENROUTER_API_KEY";
+            case "openai" -> "ARCCLAW_CLASSIFIER_OPENAI_API_KEY";
+            case "gemini" -> "ARCCLAW_CLASSIFIER_GEMINI_API_KEY";
+            case "cerebras" -> "ARCCLAW_CLASSIFIER_CEREBRAS_API_KEY";
+            case "nvidia" -> "ARCCLAW_CLASSIFIER_NVIDIA_API_KEY";
+            default -> "ARCCLAW_CLASSIFIER_GROQ_API_KEY";
         };
     }
 
@@ -257,7 +313,7 @@ public class InteractiveSetupWizard {
         System.err.flush();
         try {
             return new BufferedReader(new InputStreamReader(System.in, StandardCharsets.UTF_8)).readLine();
-        } catch (IOException e) {
+        } catch (IOException _) {
             return null;
         }
     }

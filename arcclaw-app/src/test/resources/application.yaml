@@ -4,6 +4,27 @@ arcclaw:
     root-dir: "./target/workspaces"
   rag:
     vec-extension-path: "./target/lib/vec0"
+  infinite-loop:
+    compaction:
+      providers: "groq"
+    classifier:
+      providers: "groq"
+    embedding:
+      providers: "ollama"
+  compaction:
+    groq:
+      api-key: "test-compaction-key"
+      model: "llama-3.1-8b-instant"
+      base-url: "https://api.groq.com/openai/v1"
+  classifier:
+    groq:
+      api-key: "test-classifier-key"
+      model: "llama-3.1-8b-instant"
+      base-url: "https://api.groq.com/openai/v1"
+  embedding:
+    ollama:
+      model: "nomic-embed-text:v1.5"
+      base-url: "http://localhost:11434"
   skills:
     hot-reload: false
   auto-seed-secrets: false
@@ -112,10 +133,3 @@ quarkus:
         level: "OFF"
       "com.arcclaw.app.session.SessionRegistry":
         level: "WARN"
-
-"%test":
-  arcclaw:
-    data-dir: "target/"
-    memory:
-      compaction:
-        api-key: "test-compaction-key-not-real"

@@ -309,7 +309,9 @@ smallrye:
 
 # =============================================================================
 # ARCCLAW APPLICATION CONFIG
-# Refer .env.example for how to switch embed providers.
+# Embedding providers are configured via `arcclaw.infinite-loop.embedding.providers`
+# with per-provider keys under `arcclaw.embedding.{provider}.{key}`.
+# See .env.example for full details.
 # =============================================================================
 arcclaw:
   data-dir: "${ARCCLAW_DATA_DIR:./data}"
@@ -335,7 +337,14 @@ arcclaw:
       app-name: "${ARCCLAW_OPENROUTER_APP_NAME:https://github.com/rsrini7/arcclaw}"
       site-url: "${ARCCLAW_OPENROUTER_SITE_URL:https://github.com/rsrini7/arcclaw}"
   infinite-loop:
-    models: ${ARCCLAW_INFINITE_LOOP_MODELS_LIST:omlx,groq,openrouter}
+    llm:
+      providers: ${ARCCLAW_INFINITE_LOOP_LLM_PROVIDERS:omlx,groq,openrouter}
+    compaction:
+      providers: ${ARCCLAW_INFINITE_LOOP_COMPACTION_PROVIDERS:groq,ollama}
+    classifier:
+      providers: ${ARCCLAW_INFINITE_LOOP_CLASSIFIER_PROVIDERS:groq,ollama}
+    embedding:
+      providers: ${ARCCLAW_INFINITE_LOOP_EMBEDDING_PROVIDERS:ollama}
     cooldown-base-seconds: ${ARCCLAW_INFINITE_LOOP_COOLDOWN_BASE_SECONDS:30}
     cooldown-max-seconds: ${ARCCLAW_INFINITE_LOOP_COOLDOWN_MAX_SECONDS:300}
     cooldown-transient-seconds: ${ARCCLAW_INFINITE_LOOP_COOLDOWN_TRANSIENT_SECONDS:5}
@@ -351,12 +360,8 @@ arcclaw:
     max-total-chars: 800
     max-chunk-chars: 300
     max-source-chars: 400
-    embed-provider: ${ARCCLAW_EMBED_PROVIDER:ollama}
-    embed-model: ${ARCCLAW_EMBED_MODEL:nomic-embed-text:v1.5}
-    embed-base-url: ${ARCCLAW_EMBED_BASE_URL:http://localhost:11434}
-    embed-api-key: ${ARCCLAW_EMBED_API_KEY:}
-    embed-timeout-seconds: 30
     # Embedding vector dimension. nomic-embed-text = 768. mxbai-embed-large = 1024.
+    # MUST match the model used by the active embedding provider.
     embed-dimensions: ${ARCCLAW_EMBED_DIMENSIONS:768}
     # Path where sqlite-vec native lib is extracted/loaded from.
     # The OS-specific extension (.so, .dll) is added automatically.
@@ -372,15 +377,8 @@ arcclaw:
       enabled: true
   routing:
     intent-classifier:
-      base-url: ${ARCCLAW_INTENT_CLASSIFIER_BASE_URL:https://api.groq.com/openai/v1}
-      api-key: ${ARCCLAW_INTENT_CLASSIFIER_API_KEY:not-configured}
-      # Specific model alias for free tier ensures structured mode support (§OpenRouter-Fix)
-      provider: ${ARCCLAW_INTENT_CLASSIFIER_PROVIDER:groq}
-      model: ${ARCCLAW_INTENT_CLASSIFIER_MODEL:llama-3.1-8b-instant}
       ollama-model: ${ARCCLAW_INTENT_CLASSIFIER_OLLAMA_MODEL:mistral-small:latest}
       structured-output-mode: ${ARCCLAW_INTENT_CLASSIFIER_STRUCTURED_OUTPUT_MODE:NATIVE}
-      timeout-seconds: 5
-      max-retries: ${ARCCLAW_INTENT_CLASSIFIER_MAX_RETRIES:3}
       sla-warn-ms: 2000
   memory:
     compaction:
@@ -388,14 +386,7 @@ arcclaw:
       threshold: 10
       keep-recent: 5
       max-output-tokens: 1024
-      max-chars: 96000 
-      api-key: "${ARCCLAW_COMPACTION_API_KEY}"
-      base-url: "${ARCCLAW_COMPACTION_BASE_URL:https://api.groq.com/openai/v1}"
-      provider: "${ARCCLAW_COMPACTION_PROVIDER:groq}"
-      model: "${ARCCLAW_COMPACTION_MODEL:llama-3.1-8b-instant}"
-      ollama-model: "${ARCCLAW_COMPACTION_OLLAMA_MODEL:mistral-small:latest}"
-      structured-output-mode: ${ARCCLAW_COMPACTION_STRUCTURED_OUTPUT_MODE:NATIVE}
-      max-retries: ${ARCCLAW_COMPACTION_MAX_RETRIES:3}
+      max-chars: 96000
       max-backoff-ms: ${ARCCLAW_MEMORY_COMPACTION_MAX_BACKOFF_MS:60000}
     tiered:
       enabled: ${ARCCLAW_MEMORY_TIERED_ENABLED:false}
@@ -863,9 +854,13 @@ mp:
       level: INFO
   arcclaw:
     data-dir: "${ARCCLAW_DATA_DIR:./data}"
-    rag:
-      # Switch embedding provider to Jina for native binary build (§Graal-Ollama-Fix)
-      embed-provider: jina 
+    # Embedding provider list for native binary builds.
+    # Jina is the recommended embedding provider for native images since Ollama
+    # native HTTP client has compatibility issues. Configure per-provider keys
+    # under arcclaw.embedding.{provider}.{key} (see .env.example).
+    infinite-loop:
+      embedding:
+        providers: jina,ollama
     agent:
       max-ratelimit-retries: ${ARCCLAW_AGENT_MAX_RATELIMIT_RETRIES:3}
       schema-correction:

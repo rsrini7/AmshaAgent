@@ -32,8 +32,10 @@ class AppBootstrapTest {
         System.clearProperty("arcclaw.routing.intent-classifier.structured-output-mode");
         System.clearProperty("ARCCLAW_COMPACTION_STRUCTURED_OUTPUT_MODE");
         System.clearProperty("arcclaw.memory.compaction.structured-output-mode");
-        System.clearProperty("ARCCLAW_COMPACTION_PROVIDER");
-        System.clearProperty("ARCCLAW_INTENT_CLASSIFIER_PROVIDER");
+        System.clearProperty("ARCCLAW_INFINITE_LOOP_LLM_PROVIDERS");
+        System.clearProperty("ARCCLAW_INFINITE_LOOP_COMPACTION_PROVIDERS");
+        System.clearProperty("ARCCLAW_INFINITE_LOOP_CLASSIFIER_PROVIDERS");
+        System.clearProperty("ARCCLAW_INFINITE_LOOP_EMBEDDING_PROVIDERS");
     }
 
     @Test

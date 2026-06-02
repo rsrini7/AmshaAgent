@@ -502,7 +502,7 @@ ARCCLAW_LLM_MODEL_NAME=my-model-name
 ```
 
 > [!NOTE]
-> The model used for **agent reasoning** is configured via `arcclaw.llm.provider` / `ARCCLAW_LLM_PROVIDER`. The model used for **intent classification** is configured via `arcclaw.routing.intent-classifier.model` (defaults to `llama-3.1-8b-instant`). The model for **context compaction** is produced by `CompactionModelProducer` in `arcclaw-app`. All three can be configured independently.
+> The model used for **agent reasoning** is configured via `arcclaw.llm.provider` / `ARCCLAW_LLM_PROVIDER`. The model used for **intent classification** is produced by `InfiniteLoopIntentChatModelProvider` and selected from `arcclaw.infinite-loop.classifier.providers`. The model for **context compaction** is produced by `InfiniteLoopCompactionChatModelProvider` and selected from `arcclaw.infinite-loop.compaction.providers`. All three can be configured independently per-slot with infinite-loop failover.
 
 **Built-in LLM providers:**
 
@@ -805,7 +805,7 @@ Lower priority = processed first, wins on name collision. Use values between 10 
 
 ## 14. Add an EmbeddingProviderFactory (Embedding Models)
 
-`EmbeddingProviderFactory` adds new embedding model providers for RAG vector search. The `EmbeddingModelProducer` discovers all implementations via CDI and selects the active one based on `arcclaw.rag.embed-provider`.
+`EmbeddingProviderFactory` adds new embedding model providers for RAG vector search. `InfiniteLoopEmbeddingModelProvider` discovers all implementations via CDI and routes across the provider list in `arcclaw.infinite-loop.embedding.providers` with health tracking and cooldown.
 
 ```java
 @ApplicationScoped
@@ -830,12 +830,13 @@ public class CohereEmbeddingProviderFactory implements EmbeddingProviderFactory 
 | `OllamaEmbeddingProviderFactory` | `ollama` | `nomic-embed-text:v1.5` |
 | `OpenAiEmbeddingProviderFactory` | `openai` | `text-embedding-3-small` |
 
-Wire via `.env`:
+Wire via `.env` (add the provider to the slot list, then add per-provider keys):
 
 ```properties
-arcclaw.rag.embed-provider=cohere
-arcclaw.rag.embed-model=embed-english-v3.0
-arcclaw.rag.embed-api-key=your-key
+ARCCLAW_INFINITE_LOOP_EMBEDDING_PROVIDERS=ollama,cohere
+ARCCLAW_EMBEDDING_COHERE_API_KEY=your-key
+ARCCLAW_EMBEDDING_COHERE_MODEL=embed-english-v3.0
+ARCCLAW_EMBEDDING_COHERE_BASE_URL=https://api.cohere.com/v1
 ```
 
 ---

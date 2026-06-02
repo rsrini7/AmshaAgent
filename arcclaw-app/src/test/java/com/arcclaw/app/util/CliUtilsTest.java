@@ -15,15 +15,27 @@ import org.junit.jupiter.api.Test;
  */
 class CliUtilsTest {
 
-    // Keys used in CORE_VARS
+    // Default per-slot API keys resolved by the per-provider logic in CliUtils.
+    // Tests below set ARCCLAW_INFINITE_LOOP_*_PROVIDERS to switch slot providers.
     private static final String[] CORE_KEYS = {
-        "ARCCLAW_INTENT_CLASSIFIER_API_KEY",
-        "ARCCLAW_COMPACTION_API_KEY",
-        "ARCCLAW_EMBED_API_KEY",
-        "ARCCLAW_VAULT_PEPPER",
-        "ARCCLAW_AUDIT_HMAC_KEY",
-        "ARCCLAW_API_KEYS_INTERNAL",
-        "ARCCLAW_API_KEYS_CI",
+        "ARCCLAW_VAULT_PEPPER", "ARCCLAW_AUDIT_HMAC_KEY", "ARCCLAW_API_KEYS_INTERNAL", "ARCCLAW_API_KEYS_CI",
+    };
+
+    private static final String[] PER_PROVIDER_KEYS = {
+        "ARCCLAW_COMPACTION_GROQ_API_KEY",
+        "ARCCLAW_COMPACTION_CEREBRAS_API_KEY",
+        "ARCCLAW_COMPACTION_OPENROUTER_API_KEY",
+        "ARCCLAW_COMPACTION_OPENAI_API_KEY",
+        "ARCCLAW_COMPACTION_GEMINI_API_KEY",
+        "ARCCLAW_COMPACTION_NVIDIA_API_KEY",
+        "ARCCLAW_CLASSIFIER_GROQ_API_KEY",
+        "ARCCLAW_CLASSIFIER_CEREBRAS_API_KEY",
+        "ARCCLAW_CLASSIFIER_OPENROUTER_API_KEY",
+        "ARCCLAW_CLASSIFIER_OPENAI_API_KEY",
+        "ARCCLAW_CLASSIFIER_GEMINI_API_KEY",
+        "ARCCLAW_CLASSIFIER_NVIDIA_API_KEY",
+        "ARCCLAW_EMBEDDING_JINA_API_KEY",
+        "ARCCLAW_EMBEDDING_OPENAI_API_KEY",
     };
 
     private static final String[] TELEGRAM_KEYS = {
@@ -37,9 +49,13 @@ class CliUtilsTest {
     @AfterEach
     void cleanupSystemProperties() {
         for (String k : CORE_KEYS) System.clearProperty(k);
+        for (String k : PER_PROVIDER_KEYS) System.clearProperty(k);
         for (String k : TELEGRAM_KEYS) System.clearProperty(k);
         for (String k : OPTIONAL_TOOL_KEYS) System.clearProperty(k);
         System.clearProperty("ARCCLAW_LLM_PROVIDER");
+        System.clearProperty("ARCCLAW_INFINITE_LOOP_COMPACTION_PROVIDERS");
+        System.clearProperty("ARCCLAW_INFINITE_LOOP_CLASSIFIER_PROVIDERS");
+        System.clearProperty("ARCCLAW_INFINITE_LOOP_EMBEDDING_PROVIDERS");
         System.clearProperty("ARCCLAW_TELEGRAM_ENABLED");
     }
 
@@ -178,68 +194,67 @@ class CliUtilsTest {
     void isExplicitOptOut_nullKey_returnsFalse() throws Exception {
         assertFalse(invokeIsExplicitOptOut("NONEXISTENT_OPTOUT_KEY_12345"));
     }
-
     // -----------------------------------------------------------------------
-    // resolveProviderKeySpec (private static)
+    // llmKeySpecFor (package-private static)
     // -----------------------------------------------------------------------
 
     @Test
-    void resolveProviderKeySpec_groq_default() throws Exception {
+    void llmKeySpecFor_groq_default() throws Exception {
         Object spec = invokeResolveProviderKeySpec("groq");
         assertNotNull(spec);
         assertEquals("ARCCLAW_GROQ_API_KEY", ((CliUtils.VarSpec) spec).key());
     }
 
     @Test
-    void resolveProviderKeySpec_openrouter() throws Exception {
+    void llmKeySpecFor_openrouter() throws Exception {
         Object spec = invokeResolveProviderKeySpec("openrouter");
         assertNotNull(spec);
         assertEquals("ARCCLAW_OPENROUTER_API_KEY", ((CliUtils.VarSpec) spec).key());
     }
 
     @Test
-    void resolveProviderKeySpec_openai() throws Exception {
+    void llmKeySpecFor_openai() throws Exception {
         Object spec = invokeResolveProviderKeySpec("openai");
         assertNotNull(spec);
         assertEquals("ARCCLAW_OPENAI_API_KEY", ((CliUtils.VarSpec) spec).key());
     }
 
     @Test
-    void resolveProviderKeySpec_gemini() throws Exception {
+    void llmKeySpecFor_gemini() throws Exception {
         Object spec = invokeResolveProviderKeySpec("gemini");
         assertNotNull(spec);
         assertEquals("ARCCLAW_GEMINI_API_KEY", ((CliUtils.VarSpec) spec).key());
     }
 
     @Test
-    void resolveProviderKeySpec_nvidia() throws Exception {
+    void llmKeySpecFor_nvidia() throws Exception {
         Object spec = invokeResolveProviderKeySpec("nvidia");
         assertNotNull(spec);
         assertEquals("ARCCLAW_NVIDIA_API_KEY", ((CliUtils.VarSpec) spec).key());
     }
 
     @Test
-    void resolveProviderKeySpec_cerebras() throws Exception {
+    void llmKeySpecFor_cerebras() throws Exception {
         Object spec = invokeResolveProviderKeySpec("cerebras");
         assertNotNull(spec);
         assertEquals("ARCCLAW_CEREBRAS_API_KEY", ((CliUtils.VarSpec) spec).key());
     }
 
     @Test
-    void resolveProviderKeySpec_omlx() throws Exception {
+    void llmKeySpecFor_omlx() throws Exception {
         Object spec = invokeResolveProviderKeySpec("omlx");
         assertNotNull(spec);
         assertEquals("ARCCLAW_OMLX_API_KEY", ((CliUtils.VarSpec) spec).key());
     }
 
     @Test
-    void resolveProviderKeySpec_ollama_returnsNull() throws Exception {
+    void llmKeySpecFor_ollama_returnsNull() throws Exception {
         Object spec = invokeResolveProviderKeySpec("ollama");
         assertNull(spec);
     }
 
     @Test
-    void resolveProviderKeySpec_unknownDefaultsToGroq() throws Exception {
+    void llmKeySpecFor_unknownDefaultsToGroq() throws Exception {
         Object spec = invokeResolveProviderKeySpec("something-else");
         assertNotNull(spec);
         assertEquals("ARCCLAW_GROQ_API_KEY", ((CliUtils.VarSpec) spec).key());
@@ -316,7 +331,7 @@ class CliUtilsTest {
     }
 
     private static Object invokeResolveProviderKeySpec(String provider) throws Exception {
-        Method m = CliUtils.class.getDeclaredMethod("resolveProviderKeySpec", String.class);
+        Method m = CliUtils.class.getDeclaredMethod("llmKeySpecFor", String.class);
         m.setAccessible(true);
         try {
             return m.invoke(null, provider);
@@ -327,9 +342,13 @@ class CliUtilsTest {
 
     private void setAllVars() {
         for (String k : CORE_KEYS) System.setProperty(k, "test-value-123");
+        for (String k : PER_PROVIDER_KEYS) System.setProperty(k, "test-value-123");
         for (String k : TELEGRAM_KEYS) System.setProperty(k, "test-value-123");
         for (String k : OPTIONAL_TOOL_KEYS) System.setProperty(k, "test-value-123");
         // Provider key
         System.setProperty("ARCCLAW_GROQ_API_KEY", "gsk_test123");
+        // Default slot providers (groq for compaction/classifier, ollama for embedding)
+        // already covered by the COMPACTION_GROQ / CLASSIFIER_GROQ / embedding keys
+        // in PER_PROVIDER_KEYS — nothing else to do.
     }
 }
