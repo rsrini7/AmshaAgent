@@ -2,7 +2,6 @@ package com.arcclaw.app.util;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.List;
 
@@ -10,12 +9,12 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 /**
- * Deep unit tests for {@link CliUtils}.
+ * Deep unit tests for {@link CliUtils} and related utility classes.
  * Tests public methods and private static helpers via reflection.
  */
 class CliUtilsTest {
 
-    // Default per-slot API keys resolved by the per-provider logic in CliUtils.
+    // Default per-slot API keys resolved by the per-provider logic in ProviderKeySpecs.
     // Tests below set ARCCLAW_INFINITE_LOOP_*_PROVIDERS to switch slot providers.
     private static final String[] CORE_KEYS = {
         "ARCCLAW_VAULT_PEPPER", "ARCCLAW_AUDIT_HMAC_KEY", "ARCCLAW_API_KEYS_INTERNAL", "ARCCLAW_API_KEYS_CI",
@@ -65,7 +64,7 @@ class CliUtilsTest {
 
     @Test
     void varSpec_constructorAndGetters() {
-        var spec = new CliUtils.VarSpec("KEY", "desc", "step1", "step2");
+        var spec = new VarSpec("KEY", "desc", "step1", "step2");
         assertEquals("KEY", spec.key());
         assertEquals("desc", spec.description());
         assertArrayEquals(new String[] {"step1", "step2"}, spec.howToGet());
@@ -73,13 +72,13 @@ class CliUtilsTest {
 
     @Test
     void varSpec_singleHowToGetStep() {
-        var spec = new CliUtils.VarSpec("K", "D", "only step");
+        var spec = new VarSpec("K", "D", "only step");
         assertEquals(1, spec.howToGet().length);
         assertEquals("only step", spec.howToGet()[0]);
     }
 
     // -----------------------------------------------------------------------
-    // isSet (private static) — tested via reflection
+    // isSet (private static) — tested via reflection against CliUtils
     // -----------------------------------------------------------------------
 
     @Test
@@ -194,70 +193,68 @@ class CliUtilsTest {
     void isExplicitOptOut_nullKey_returnsFalse() throws Exception {
         assertFalse(invokeIsExplicitOptOut("NONEXISTENT_OPTOUT_KEY_12345"));
     }
+
     // -----------------------------------------------------------------------
-    // llmKeySpecFor (package-private static)
+    // llmKeySpecFor (ProviderKeySpecs — public static)
     // -----------------------------------------------------------------------
 
     @Test
-    void llmKeySpecFor_groq_default() throws Exception {
-        Object spec = invokeResolveProviderKeySpec("groq");
-        assertNotNull(spec);
-        assertEquals("ARCCLAW_GROQ_API_KEY", ((CliUtils.VarSpec) spec).key());
+    void llmKeySpecFor_groq_default() {
+        assertEquals(
+                "ARCCLAW_GROQ_API_KEY", ProviderKeySpecs.llmKeySpecFor("groq").key());
     }
 
     @Test
-    void llmKeySpecFor_openrouter() throws Exception {
-        Object spec = invokeResolveProviderKeySpec("openrouter");
-        assertNotNull(spec);
-        assertEquals("ARCCLAW_OPENROUTER_API_KEY", ((CliUtils.VarSpec) spec).key());
+    void llmKeySpecFor_openrouter() {
+        assertEquals(
+                "ARCCLAW_OPENROUTER_API_KEY",
+                ProviderKeySpecs.llmKeySpecFor("openrouter").key());
     }
 
     @Test
-    void llmKeySpecFor_openai() throws Exception {
-        Object spec = invokeResolveProviderKeySpec("openai");
-        assertNotNull(spec);
-        assertEquals("ARCCLAW_OPENAI_API_KEY", ((CliUtils.VarSpec) spec).key());
+    void llmKeySpecFor_openai() {
+        assertEquals(
+                "ARCCLAW_OPENAI_API_KEY",
+                ProviderKeySpecs.llmKeySpecFor("openai").key());
     }
 
     @Test
-    void llmKeySpecFor_gemini() throws Exception {
-        Object spec = invokeResolveProviderKeySpec("gemini");
-        assertNotNull(spec);
-        assertEquals("ARCCLAW_GEMINI_API_KEY", ((CliUtils.VarSpec) spec).key());
+    void llmKeySpecFor_gemini() {
+        assertEquals(
+                "ARCCLAW_GEMINI_API_KEY",
+                ProviderKeySpecs.llmKeySpecFor("gemini").key());
     }
 
     @Test
-    void llmKeySpecFor_nvidia() throws Exception {
-        Object spec = invokeResolveProviderKeySpec("nvidia");
-        assertNotNull(spec);
-        assertEquals("ARCCLAW_NVIDIA_API_KEY", ((CliUtils.VarSpec) spec).key());
+    void llmKeySpecFor_nvidia() {
+        assertEquals(
+                "ARCCLAW_NVIDIA_API_KEY",
+                ProviderKeySpecs.llmKeySpecFor("nvidia").key());
     }
 
     @Test
-    void llmKeySpecFor_cerebras() throws Exception {
-        Object spec = invokeResolveProviderKeySpec("cerebras");
-        assertNotNull(spec);
-        assertEquals("ARCCLAW_CEREBRAS_API_KEY", ((CliUtils.VarSpec) spec).key());
+    void llmKeySpecFor_cerebras() {
+        assertEquals(
+                "ARCCLAW_CEREBRAS_API_KEY",
+                ProviderKeySpecs.llmKeySpecFor("cerebras").key());
     }
 
     @Test
-    void llmKeySpecFor_omlx() throws Exception {
-        Object spec = invokeResolveProviderKeySpec("omlx");
-        assertNotNull(spec);
-        assertEquals("ARCCLAW_OMLX_API_KEY", ((CliUtils.VarSpec) spec).key());
+    void llmKeySpecFor_omlx() {
+        assertEquals(
+                "ARCCLAW_OMLX_API_KEY", ProviderKeySpecs.llmKeySpecFor("omlx").key());
     }
 
     @Test
-    void llmKeySpecFor_ollama_returnsNull() throws Exception {
-        Object spec = invokeResolveProviderKeySpec("ollama");
-        assertNull(spec);
+    void llmKeySpecFor_ollama_returnsNull() {
+        assertNull(ProviderKeySpecs.llmKeySpecFor("ollama"));
     }
 
     @Test
-    void llmKeySpecFor_unknownDefaultsToGroq() throws Exception {
-        Object spec = invokeResolveProviderKeySpec("something-else");
-        assertNotNull(spec);
-        assertEquals("ARCCLAW_GROQ_API_KEY", ((CliUtils.VarSpec) spec).key());
+    void llmKeySpecFor_unknownDefaultsToGroq() {
+        assertEquals(
+                "ARCCLAW_GROQ_API_KEY",
+                ProviderKeySpecs.llmKeySpecFor("something-else").key());
     }
 
     // -----------------------------------------------------------------------
@@ -267,7 +264,7 @@ class CliUtilsTest {
     @Test
     void getMissingVarSpecs_withAllVarsSet_returnsEmpty() {
         setAllVars();
-        List<CliUtils.VarSpec> missing = CliUtils.getMissingVarSpecs(new String[] {});
+        List<VarSpec> missing = CliUtils.getMissingVarSpecs(new String[] {});
         assertTrue(missing.isEmpty(), "Expected no missing vars when all are set");
     }
 
@@ -278,7 +275,7 @@ class CliUtilsTest {
         System.setProperty("ARCCLAW_TOOLS_GITHUB_TOKEN", "none");
         System.setProperty("ARCCLAW_TOOLS_SERPER_API_KEY", "skip");
         System.setProperty("ARCCLAW_TOOLS_BRAVE_API_KEY", "false");
-        List<CliUtils.VarSpec> missing = CliUtils.getMissingVarSpecs(new String[] {});
+        List<VarSpec> missing = CliUtils.getMissingVarSpecs(new String[] {});
         assertTrue(missing.isEmpty());
     }
 
@@ -315,7 +312,7 @@ class CliUtilsTest {
     }
 
     // -----------------------------------------------------------------------
-    // Reflection helpers
+    // Reflection helpers for CliUtils private methods
     // -----------------------------------------------------------------------
 
     private static boolean invokeIsSet(String key) throws Exception {
@@ -328,16 +325,6 @@ class CliUtilsTest {
         Method m = CliUtils.class.getDeclaredMethod("isExplicitOptOut", String.class);
         m.setAccessible(true);
         return (boolean) m.invoke(null, key);
-    }
-
-    private static Object invokeResolveProviderKeySpec(String provider) throws Exception {
-        Method m = CliUtils.class.getDeclaredMethod("llmKeySpecFor", String.class);
-        m.setAccessible(true);
-        try {
-            return m.invoke(null, provider);
-        } catch (InvocationTargetException e) {
-            throw (Exception) e.getCause();
-        }
     }
 
     private void setAllVars() {

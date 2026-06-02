@@ -16,6 +16,7 @@ import java.util.Locale;
 import java.util.Set;
 
 import com.arcclaw.app.util.CliUtils;
+import com.arcclaw.app.util.VarSpec;
 import com.arcclaw.common.util.LogUtil;
 
 import org.jboss.logging.Logger;
@@ -65,7 +66,7 @@ public class InteractiveSetupWizard {
             promptProviderSelection();
         }
 
-        List<CliUtils.VarSpec> missing = CliUtils.getMissingVarSpecs(args);
+        List<VarSpec> missing = CliUtils.getMissingVarSpecs(args);
         Path envFile = binaryDir.resolve(".env");
 
         if (!Files.exists(envFile)) {
@@ -96,7 +97,7 @@ public class InteractiveSetupWizard {
                 promptUnifiedKey(envFile, missing);
             }
 
-            for (CliUtils.VarSpec spec : missing) {
+            for (VarSpec spec : missing) {
                 if (isTelegramKey(spec.key())) {
                     if (!askedTelegram) {
                         skipTelegram = !promptTelegramEnablement(envFile);
@@ -159,7 +160,7 @@ public class InteractiveSetupWizard {
                 envFile, "ARCCLAW_INFINITE_LOOP_CLASSIFIER_PROVIDERS", provider, EnvConfigInitializer.PatchMode.UPDATE);
     }
 
-    private static boolean shouldPromptUnifiedKey(List<CliUtils.VarSpec> missing) {
+    private static boolean shouldPromptUnifiedKey(List<VarSpec> missing) {
         String provider = System.getProperty("ARCCLAW_LLM_PROVIDER", "groq").toLowerCase(Locale.ROOT);
         String llmKeyName = llmApiKeyForProvider(provider);
         boolean llmKeyMissing = missing.stream().anyMatch(s -> s.key().equals(llmKeyName));
@@ -172,7 +173,7 @@ public class InteractiveSetupWizard {
         return llmKeyMissing && (compactionKeyMissing || classifierKeyMissing);
     }
 
-    private static void promptUnifiedKey(Path envFile, List<CliUtils.VarSpec> missing) {
+    private static void promptUnifiedKey(Path envFile, List<VarSpec> missing) {
         System.err.println("  ┌─ Unified API Key Setup");
         System.err.println("  │  ArcClaw uses LLMs for assistant, intent classifier, and compaction.");
         String resp = readLineWithFallback(System.console(), "  └─ Use a single key for all? [Y/n]: ");
@@ -272,7 +273,7 @@ public class InteractiveSetupWizard {
         return response != null && response.trim().toLowerCase(Locale.ROOT).startsWith("y");
     }
 
-    private static void promptVariable(Path envFile, CliUtils.VarSpec spec) {
+    private static void promptVariable(Path envFile, VarSpec spec) {
         System.err.println("  ┌─ " + spec.key());
         System.err.println("  │  " + spec.description());
         String prompt = "  └─ Enter value"
