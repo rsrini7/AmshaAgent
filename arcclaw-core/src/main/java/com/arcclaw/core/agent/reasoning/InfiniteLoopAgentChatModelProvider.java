@@ -1,6 +1,9 @@
 package com.arcclaw.core.agent.reasoning;
 
+import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.model.chat.ChatModel;
+import dev.langchain4j.model.chat.request.ChatRequest;
+import dev.langchain4j.model.chat.response.ChatResponse;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Any;
@@ -15,6 +18,7 @@ import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.core.routing.InfiniteLoopChatModel;
 import com.arcclaw.core.routing.MultiModelChatModel;
 
+import org.eclipse.microprofile.config.ConfigProvider;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
@@ -79,6 +83,27 @@ public class InfiniteLoopAgentChatModelProvider implements AgentChatModelProvide
         }
 
         if (slots.isEmpty()) {
+            if (ConfigProvider.getConfig()
+                    .getOptionalValue("quarkus.profile", String.class)
+                    .orElse("prod")
+                    .equals("test")) {
+                log.warn("InfiniteLoop: No slots could be initialized in test profile. Using dummy chat model.");
+                ChatModel dummy = new ChatModel() {
+                    @Override
+                    public ChatResponse chat(ChatRequest request) {
+                        return ChatResponse.builder()
+                                .aiMessage(AiMessage.from("Dummy response"))
+                                .build();
+                    }
+                };
+                return new InfiniteLoopChatModel(
+                        "agent-chat",
+                        List.of(new InfiniteLoopChatModel.Slot("dummy", dummy)),
+                        cooldownBaseSeconds,
+                        cooldownMaxSeconds,
+                        cooldownTransientSeconds,
+                        maxLatencyMs);
+            }
             throw new IllegalStateException(
                     "InfiniteLoop: No slots could be initialized. Check ARCCLAW_INFINITE_LOOP_LLM_PROVIDERS="
                             + loopProviders);

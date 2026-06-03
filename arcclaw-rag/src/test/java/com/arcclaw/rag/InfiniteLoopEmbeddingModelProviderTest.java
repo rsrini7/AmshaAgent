@@ -63,7 +63,11 @@ class InfiniteLoopEmbeddingModelProviderTest {
     @Test
     void testThrowsWhenNoValidSlots() {
         provider.loopProviders = "unsupported";
-
-        assertThrows(IllegalStateException.class, () -> provider.embeddingModel());
+        System.setProperty("quarkus.profile", "prod");
+        try {
+            assertThrows(IllegalStateException.class, () -> provider.embeddingModel());
+        } finally {
+            System.clearProperty("quarkus.profile");
+        }
     }
 }

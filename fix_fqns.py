@@ -57,30 +57,39 @@ def process_file(path):
 
     line_ending = '\r\n' if '\r\n' in content else '\n'
     lines = content.splitlines()
+
+    existing_imports = []
     imports = set()
-    output = []
+    package_line = None
+    body_lines = []
+
+    in_header_imports = False
+
+    for line in lines:
+        s = line.strip()
+        if s.startswith('package '):
+            package_line = line
+            continue
+        elif s.startswith('import '):
+            imp = s[len('import '):].rstrip(';').strip()
+            existing_imports.append(imp)
+            imports.add(imp)
+            in_header_imports = True
+            continue
+        else:
+            body_lines.append(line)
+
+    output_body = []
     modified = False
     in_block_comment = False
 
-    # Collect existing imports
-    for line in lines:
+    for line in body_lines:
         s = line.strip()
-        if s.startswith('import '):
-            imp = s[len('import '):].rstrip(';').strip()
-            imports.add(imp)
-
-    # FQN replacement pass
-    for line in lines:
-        s = line.strip()
-
-        if s.startswith('package ') or s.startswith('import '):
-            output.append(line)
-            continue
 
         if in_block_comment:
             if '*/' in line:
                 in_block_comment = False
-            output.append(line)
+            output_body.append(line)
             continue
 
         check = re.sub(r'"(?:[^"\\]|\\.)*"', '', line)
@@ -91,7 +100,7 @@ def process_file(path):
             open_pos = check.find('/*')
             if '*/' not in check[open_pos + 2:]:
                 in_block_comment = True
-            output.append(line)
+            output_body.append(line)
             continue
 
         temp_line = line
@@ -102,12 +111,11 @@ def process_file(path):
 
             if is_in_line_comment_or_string(temp_line, pos):
                 continue
-            if '// fully qualified to disambiguate' in line:
+            if '// fully qualified to disambiguate' in temp_line:
                 continue
             if should_skip_import(fqn, path):
                 continue
 
-            # Keep Caffeine internals fully qualified
             if 'caffeine.cache.' in fqn and not simple.startswith('Caffeine'):
                 if '// fully qualified to disambiguate' not in temp_line:
                     temp_line += ' // fully qualified to disambiguate'
@@ -126,13 +134,28 @@ def process_file(path):
                 imports.add(fqn)
                 modified = True
 
-        output.append(temp_line)
+        output_body.append(temp_line)
 
     if not modified:
         return False
 
+    final_lines = []
+
+    if package_line:
+        final_lines.append(package_line)
+        final_lines.append('')
+
+    for imp in sorted(imports):
+        final_lines.append(f'import {imp};')
+
+    if imports:
+        final_lines.append('')
+
+    final_lines.extend(output_body)
+
     with open(path, 'w', encoding='utf-8') as f:
-        f.write(line_ending.join(output) + line_ending)
+        f.write(line_ending.join(final_lines) + line_ending)
+
     return True
 
 

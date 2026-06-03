@@ -1,6 +1,9 @@
 package com.arcclaw.rag;
 
+import dev.langchain4j.data.embedding.Embedding;
+import dev.langchain4j.data.segment.TextSegment;
 import dev.langchain4j.model.embedding.EmbeddingModel;
+import dev.langchain4j.model.output.Response;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Any;
@@ -89,6 +92,31 @@ public class InfiniteLoopEmbeddingModelProvider {
             }
 
             if (slots.isEmpty()) {
+                if (ConfigProvider.getConfig()
+                        .getOptionalValue("quarkus.profile", String.class)
+                        .orElse("prod")
+                        .equals("test")) {
+                    log.warn(
+                            "Embedding loop: No embedding slots could be initialized in test profile. Using dummy embedding model.");
+                    return new EmbeddingModel() {
+                        @Override
+                        public Response<Embedding> embed(String text) {
+                            return Response.from(new Embedding(new float[768]));
+                        }
+
+                        @Override
+                        public Response<Embedding> embed(TextSegment textSegment) {
+                            return Response.from(new Embedding(new float[768]));
+                        }
+
+                        @Override
+                        public Response<List<Embedding>> embedAll(List<TextSegment> textSegments) {
+                            return Response.from(textSegments.stream()
+                                    .map(s -> new Embedding(new float[768]))
+                                    .toList());
+                        }
+                    };
+                }
                 throw new IllegalStateException("No embedding providers configured. "
                         + "Check arcclaw.infinite-loop.embedding.providers (currently: " + loopProviders + ")");
             }

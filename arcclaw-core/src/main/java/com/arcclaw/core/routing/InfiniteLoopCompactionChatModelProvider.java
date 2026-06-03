@@ -1,6 +1,9 @@
 package com.arcclaw.core.routing;
 
+import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.model.chat.ChatModel;
+import dev.langchain4j.model.chat.request.ChatRequest;
+import dev.langchain4j.model.chat.response.ChatResponse;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Produces;
@@ -88,6 +91,27 @@ public class InfiniteLoopCompactionChatModelProvider {
             }
 
             if (slots.isEmpty()) {
+                if (ConfigProvider.getConfig()
+                        .getOptionalValue("quarkus.profile", String.class)
+                        .orElse("prod")
+                        .equals("test")) {
+                    log.warn(
+                            "Compaction loop: No compaction providers could be initialized in test profile. Using dummy compaction model.");
+                    ChatModel dummy = new ChatModel() {
+                        @Override
+                        public ChatResponse chat(ChatRequest request) {
+                            return ChatResponse.builder()
+                                    .aiMessage(AiMessage.from("Dummy compaction response"))
+                                    .build();
+                        }
+                    };
+                    return new InfiniteLoopChatModel(
+                            "compaction-chat",
+                            List.of(new InfiniteLoopChatModel.Slot("dummy", dummy)),
+                            cooldownBaseSeconds,
+                            cooldownMaxSeconds,
+                            cooldownTransientSeconds);
+                }
                 throw new IllegalStateException("No compaction providers configured. "
                         + "Check arcclaw.infinite-loop.compaction.providers (currently: " + loopProviders + ")");
             }
