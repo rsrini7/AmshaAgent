@@ -25,6 +25,7 @@ import org.eclipse.microprofile.config.ConfigProvider;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
+import io.quarkus.runtime.LaunchMode;
 import io.quarkus.runtime.Startup;
 
 /**
@@ -92,10 +93,8 @@ public class InfiniteLoopEmbeddingModelProvider {
             }
 
             if (slots.isEmpty()) {
-                if (ConfigProvider.getConfig()
-                        .getOptionalValue("quarkus.profile", String.class)
-                        .orElse("prod")
-                        .equals("test")) {
+                boolean isTest = LaunchMode.current() == LaunchMode.TEST;
+                if (isTest && !Boolean.getBoolean("arcclaw.test.force-error")) {
                     log.warn(
                             "Embedding loop: No embedding slots could be initialized in test profile. Using dummy embedding model.");
                     return new EmbeddingModel() {

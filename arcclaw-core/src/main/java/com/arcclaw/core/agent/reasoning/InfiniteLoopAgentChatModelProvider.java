@@ -18,9 +18,10 @@ import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.core.routing.InfiniteLoopChatModel;
 import com.arcclaw.core.routing.MultiModelChatModel;
 
-import org.eclipse.microprofile.config.ConfigProvider;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
+
+import io.quarkus.runtime.LaunchMode;
 
 @ApplicationScoped
 public class InfiniteLoopAgentChatModelProvider implements AgentChatModelProvider {
@@ -83,10 +84,8 @@ public class InfiniteLoopAgentChatModelProvider implements AgentChatModelProvide
         }
 
         if (slots.isEmpty()) {
-            if (ConfigProvider.getConfig()
-                    .getOptionalValue("quarkus.profile", String.class)
-                    .orElse("prod")
-                    .equals("test")) {
+            boolean isTest = LaunchMode.current() == LaunchMode.TEST;
+            if (isTest && !Boolean.getBoolean("arcclaw.test.force-error")) {
                 log.warn("InfiniteLoop: No slots could be initialized in test profile. Using dummy chat model.");
                 ChatModel dummy = new ChatModel() {
                     @Override

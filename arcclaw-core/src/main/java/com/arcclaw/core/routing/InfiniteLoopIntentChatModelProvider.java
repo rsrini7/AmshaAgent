@@ -22,6 +22,7 @@ import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
 import io.quarkus.arc.Unremovable;
+import io.quarkus.runtime.LaunchMode;
 import io.smallrye.common.annotation.Identifier;
 
 /**
@@ -85,10 +86,8 @@ public class InfiniteLoopIntentChatModelProvider {
             }
 
             if (slots.isEmpty()) {
-                if (ConfigProvider.getConfig()
-                        .getOptionalValue("quarkus.profile", String.class)
-                        .orElse("prod")
-                        .equals("test")) {
+                boolean isTest = LaunchMode.current() == LaunchMode.TEST;
+                if (isTest && !Boolean.getBoolean("arcclaw.test.force-error")) {
                     log.warn(
                             "Classifier loop: No classifier providers could be initialized in test profile. Using dummy classifier model.");
                     ChatModel dummy = new ChatModel() {
