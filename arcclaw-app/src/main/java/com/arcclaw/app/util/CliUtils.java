@@ -300,7 +300,7 @@ public class CliUtils {
             return;
         }
 
-        // Case 1: explicitly enabled but vars missing
+        // Case 1: explicitly enabled
         if (enabled) {
             List<String> missingKeys = new ArrayList<>();
             if (!hasToken) missingKeys.add("TELEGRAM_BOT_TOKEN");
@@ -314,27 +314,27 @@ public class CliUtils {
                 System.err.println("        or run in attach mode:  ./arcclaw attach");
                 System.err.println();
             }
+
+            // Case 3: token set and enabled, but access control missing - security hole
+            if (hasToken && (!hasUserIds || !hasUsers)) {
+                System.err.println();
+                System.err.println("  WARN: TELEGRAM_BOT_TOKEN is set but access-control vars are missing.");
+                if (!hasUserIds) System.err.println("        - ARCCLAW_TELEGRAM_ALLOWED_USER_IDS is not set");
+                if (!hasUsers) System.err.println("        - ARCCLAW_TELEGRAM_ALLOWED_USERS is not set");
+                System.err.println("        Without these, the bot may respond to messages from anyone.");
+                System.err.println("        Find your user ID by messaging @userinfobot on Telegram.");
+                System.err.println();
+            }
             return;
         }
 
         // Case 2: token present but Telegram not enabled - looks like an oversight
-        if (hasToken && !enabled) {
+        if (hasToken) {
             System.err.println();
             System.err.println("  WARN: TELEGRAM_BOT_TOKEN is set but ARCCLAW_TELEGRAM_ENABLED is not 'true'.");
             System.err.println("        Telegram will NOT start in serve mode.");
             System.err.println("        To enable: add  ARCCLAW_TELEGRAM_ENABLED=true  to your .env");
             System.err.println("        To run as Telegram daemon: ./arcclaw attach");
-            System.err.println();
-        }
-
-        // Case 3: token set and enabled, but access control missing - security hole
-        if (hasToken && enabled && (!hasUserIds || !hasUsers)) {
-            System.err.println();
-            System.err.println("  WARN: TELEGRAM_BOT_TOKEN is set but access-control vars are missing.");
-            if (!hasUserIds) System.err.println("        - ARCCLAW_TELEGRAM_ALLOWED_USER_IDS is not set");
-            if (!hasUsers) System.err.println("        - ARCCLAW_TELEGRAM_ALLOWED_USERS is not set");
-            System.err.println("        Without these, the bot may respond to messages from anyone.");
-            System.err.println("        Find your user ID by messaging @userinfobot on Telegram.");
             System.err.println();
         }
     }

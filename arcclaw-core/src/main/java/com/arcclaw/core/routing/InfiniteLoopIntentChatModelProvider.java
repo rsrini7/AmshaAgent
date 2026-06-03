@@ -91,8 +91,8 @@ public class InfiniteLoopIntentChatModelProvider {
                     slots.size(),
                     slots.stream().map(InfiniteLoopChatModel.Slot::name).toList());
 
-            instance =
-                    new InfiniteLoopChatModel(slots, cooldownBaseSeconds, cooldownMaxSeconds, cooldownTransientSeconds);
+            instance = new InfiniteLoopChatModel(
+                    "intent-classifier-chat", slots, cooldownBaseSeconds, cooldownMaxSeconds, cooldownTransientSeconds);
             return instance;
         }
     }

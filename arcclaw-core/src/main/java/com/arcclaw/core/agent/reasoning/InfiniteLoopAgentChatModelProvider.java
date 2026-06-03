@@ -123,7 +123,7 @@ public class InfiniteLoopAgentChatModelProvider implements AgentChatModelProvide
                 + "'model not found' or 404, check the provider's model list and update ARCCLAW_*_MODEL.");
 
         return new InfiniteLoopChatModel(
-                slots, cooldownBaseSeconds, cooldownMaxSeconds, cooldownTransientSeconds, maxLatencyMs);
+                "agent-chat", slots, cooldownBaseSeconds, cooldownMaxSeconds, cooldownTransientSeconds, maxLatencyMs);
     }
 
     private AgentChatModelProvider findProvider(String name) {

@@ -19,6 +19,7 @@ public class InfiniteLoopChatModel implements ChatModel {
     private final List<Slot> slots;
 
     public InfiniteLoopChatModel(
+            String loopId,
             List<Slot> slots,
             int cooldownBaseSeconds,
             int cooldownMaxSeconds,
@@ -32,6 +33,7 @@ public class InfiniteLoopChatModel implements ChatModel {
                 .map(s -> new InfiniteLoopProvider.Slot<>(s.name(), s.model()))
                 .toList();
         this.provider = new InfiniteLoopProvider<>(
+                loopId,
                 providerSlots,
                 (model, request) -> model.chat((ChatRequest) request),
                 cooldownBaseSeconds,
@@ -41,8 +43,26 @@ public class InfiniteLoopChatModel implements ChatModel {
     }
 
     public InfiniteLoopChatModel(
+            String loopId,
+            List<Slot> slots,
+            int cooldownBaseSeconds,
+            int cooldownMaxSeconds,
+            int cooldownTransientSeconds) {
+        this(loopId, slots, cooldownBaseSeconds, cooldownMaxSeconds, cooldownTransientSeconds, 60_000L);
+    }
+
+    public InfiniteLoopChatModel(
+            List<Slot> slots,
+            int cooldownBaseSeconds,
+            int cooldownMaxSeconds,
+            int cooldownTransientSeconds,
+            long maxLatencyMs) {
+        this("agent-chat", slots, cooldownBaseSeconds, cooldownMaxSeconds, cooldownTransientSeconds, maxLatencyMs);
+    }
+
+    public InfiniteLoopChatModel(
             List<Slot> slots, int cooldownBaseSeconds, int cooldownMaxSeconds, int cooldownTransientSeconds) {
-        this(slots, cooldownBaseSeconds, cooldownMaxSeconds, cooldownTransientSeconds, 60_000L);
+        this("agent-chat", slots, cooldownBaseSeconds, cooldownMaxSeconds, cooldownTransientSeconds, 60_000L);
     }
 
     @Override

@@ -1,6 +1,7 @@
 package com.arcclaw.core.routing;
 
 import java.lang.ref.WeakReference;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -48,7 +49,9 @@ public class InfiniteLoopProvider<T, R> {
     private static final ConcurrentHashMap<String, WeakReference<InfiniteLoopProvider<?, ?>>> instances =
             new ConcurrentHashMap<>();
     private static final ScopedValue<String> LAST_USED_SLOT = ScopedValue.newInstance();
+    private static final ThreadLocal<Map<String, String>> lastUsedSlots = ThreadLocal.withInitial(HashMap::new);
 
+    private final String loopId;
     private final List<Slot<T>> slots;
     private final Map<String, SlotHealth> health;
     private final AtomicInteger currentIndex;
@@ -65,15 +68,34 @@ public class InfiniteLoopProvider<T, R> {
             int cooldownMaxSeconds,
             int cooldownTransientSeconds,
             long maxLatencyMs) {
+        this(
+                "agent-chat",
+                slots,
+                invoker,
+                cooldownBaseSeconds,
+                cooldownMaxSeconds,
+                cooldownTransientSeconds,
+                maxLatencyMs);
+    }
+
+    public InfiniteLoopProvider(
+            String loopId,
+            List<Slot<T>> slots,
+            ModelInvoker<T, R> invoker,
+            int cooldownBaseSeconds,
+            int cooldownMaxSeconds,
+            int cooldownTransientSeconds,
+            long maxLatencyMs) {
         if (slots == null || slots.isEmpty()) {
             throw new IllegalArgumentException("InfiniteLoopProvider requires at least one slot");
         }
+        this.loopId = loopId;
         this.slots = List.copyOf(slots);
         this.invoker = invoker;
         this.health = new ConcurrentHashMap<>();
         for (Slot<T> s : slots) {
             health.put(s.name(), new SlotHealth());
-            instances.put(s.name(), new WeakReference<>(this));
+            instances.put(loopId + ":" + s.name(), new WeakReference<>(this));
         }
         this.currentIndex = new AtomicInteger(0);
         this.cooldownBaseSeconds = cooldownBaseSeconds;
@@ -87,23 +109,37 @@ public class InfiniteLoopProvider<T, R> {
         if (LAST_USED_SLOT.isBound() && LAST_USED_SLOT.get() != null) {
             return Optional.of(LAST_USED_SLOT.get());
         }
-        return Optional.empty();
+        return Optional.ofNullable(lastUsedSlots.get().get("agent-chat"));
+    }
+
+    /** Returns the slot name that served the most recent invoke() call in the specified loop. */
+    public static Optional<String> getLastUsedSlot(String loopId) {
+        if (LAST_USED_SLOT.isBound() && LAST_USED_SLOT.get() != null) {
+            return Optional.of(LAST_USED_SLOT.get());
+        }
+        return Optional.ofNullable(lastUsedSlots.get().get(loopId));
     }
 
     /** Records a quality failure for the given slot. After threshold failures, the slot enters cooldown. */
     public static void recordQualityFailure(String slotName) {
-        WeakReference<InfiniteLoopProvider<?, ?>> ref = instances.get(slotName);
+        recordQualityFailure("agent-chat", slotName);
+    }
+
+    /** Records a quality failure for the given slot in a specific loop. */
+    public static void recordQualityFailure(String loopId, String slotName) {
+        WeakReference<InfiniteLoopProvider<?, ?>> ref = instances.get(loopId + ":" + slotName);
         if (ref == null) {
             log.warnf(
-                    "InfiniteLoop: recordQualityFailure called for unknown slot [%s] "
+                    "InfiniteLoop: recordQualityFailure called for unknown slot [%s] under loop [%s] "
                             + "— check slot registration or ScopedValue propagation",
-                    slotName);
+                    slotName, loopId);
             return;
         }
         InfiniteLoopProvider<?, ?> instance = ref.get();
         if (instance == null) {
-            instances.remove(slotName, ref);
-            log.warnf("InfiniteLoop: recordQualityFailure stale reference for slot [%s] — removed", slotName);
+            instances.remove(loopId + ":" + slotName, ref);
+            log.warnf(
+                    "InfiniteLoop: recordQualityFailure stale reference for slot [%s:%s] — removed", loopId, slotName);
             return;
         }
         SlotHealth h = instance.health.get(slotName);
@@ -111,12 +147,12 @@ public class InfiniteLoopProvider<T, R> {
         h.recordQualityFailure(instance.cooldownTransientSeconds);
         if (h.qualityFailures >= QUALITY_FAILURE_THRESHOLD) {
             log.warnf(
-                    "InfiniteLoop: Slot [%s] hit %d quality failures — cooling down %ds.",
-                    slotName, h.qualityFailures, instance.cooldownTransientSeconds);
+                    "InfiniteLoop: Slot [%s:%s] hit %d quality failures — cooling down %ds.",
+                    loopId, slotName, h.qualityFailures, instance.cooldownTransientSeconds);
         } else {
             log.infof(
-                    "InfiniteLoop: Slot [%s] quality failure %d/%d.",
-                    slotName, h.qualityFailures, QUALITY_FAILURE_THRESHOLD);
+                    "InfiniteLoop: Slot [%s:%s] quality failure %d/%d.",
+                    loopId, slotName, h.qualityFailures, QUALITY_FAILURE_THRESHOLD);
         }
     }
 
@@ -131,9 +167,12 @@ public class InfiniteLoopProvider<T, R> {
                 it.remove();
                 continue;
             }
-            SlotHealth h = instance.health.get(entry.getKey());
+            String qualifiedKey = entry.getKey();
+            int colon = qualifiedKey.indexOf(':');
+            String slotName = colon < 0 ? qualifiedKey : qualifiedKey.substring(colon + 1);
+            SlotHealth h = instance.health.get(slotName);
             if (h != null) {
-                sb.append(entry.getKey())
+                sb.append(qualifiedKey)
                         .append(":qf=")
                         .append(h.qualityFailures)
                         .append(":cf=")
@@ -186,6 +225,7 @@ public class InfiniteLoopProvider<T, R> {
                     }
                     h.recordSuccess();
                     currentIndex.set(idx);
+                    lastUsedSlots.get().put(loopId, slot.name());
                     log.infof("InfiniteLoop: Slot [%s] responded successfully (%dms).", slot.name(), elapsedMs);
                     return response;
                 } catch (Throwable t) {

@@ -28,6 +28,7 @@ public class InfiniteLoopEmbeddingModel implements EmbeddingModel {
             throw new IllegalArgumentException("InfiniteLoopEmbeddingModel requires at least one slot");
         }
         this.provider = new InfiniteLoopProvider<>(
+                "embedding-single",
                 slots,
                 (model, request) -> model.embed((String) request),
                 cooldownBaseSeconds,
@@ -35,6 +36,7 @@ public class InfiniteLoopEmbeddingModel implements EmbeddingModel {
                 cooldownTransientSeconds,
                 maxLatencyMs);
         this.batchProvider = new InfiniteLoopProvider<>(
+                "embedding-batch",
                 slots,
                 (model, request) -> model.embedAll((List<TextSegment>) request),
                 cooldownBaseSeconds,
