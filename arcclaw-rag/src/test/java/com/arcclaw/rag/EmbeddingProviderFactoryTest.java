@@ -27,6 +27,12 @@ class EmbeddingProviderFactoryTest {
     }
 
     @Test
+    void testOpenAiDefaultBaseUrl() {
+        OpenAiEmbeddingProviderFactory factory = new OpenAiEmbeddingProviderFactory();
+        assertEquals("https://api.openai.com/v1", factory.defaultBaseUrl());
+    }
+
+    @Test
     void testOpenAiRequiresApiKey() {
         OpenAiEmbeddingProviderFactory factory = new OpenAiEmbeddingProviderFactory();
         EmbeddingModelConfig noKey = new EmbeddingModelConfig(
@@ -45,6 +51,12 @@ class EmbeddingProviderFactoryTest {
     }
 
     @Test
+    void testOllamaDefaultBaseUrl() {
+        OllamaEmbeddingProviderFactory factory = new OllamaEmbeddingProviderFactory();
+        assertEquals("http://localhost:11434", factory.defaultBaseUrl());
+    }
+
+    @Test
     void testOllamaCreateDoesNotThrow() {
         OllamaEmbeddingProviderFactory factory = new OllamaEmbeddingProviderFactory();
         EmbeddingModelConfig ollamaConfig = new EmbeddingModelConfig(
@@ -56,6 +68,12 @@ class EmbeddingProviderFactoryTest {
     void testJinaProviderId() {
         JinaEmbeddingProviderFactory factory = new JinaEmbeddingProviderFactory();
         assertEquals("jina", factory.providerId());
+    }
+
+    @Test
+    void testJinaDefaultBaseUrl() {
+        JinaEmbeddingProviderFactory factory = new JinaEmbeddingProviderFactory();
+        assertEquals("https://api.jina.ai/v1/", factory.defaultBaseUrl());
     }
 
     @Test

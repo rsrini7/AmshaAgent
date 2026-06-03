@@ -143,7 +143,7 @@ public class InfiniteLoopEmbeddingModelProvider {
 
         var config = ConfigProvider.getConfig();
         String model = resolveRequired(config, providerName, "model");
-        String baseUrl = resolveOptional(config, providerName, "base-url", "http://localhost:11434");
+        String baseUrl = resolveOptional(config, providerName, "base-url", factory.defaultBaseUrl());
         String apiKey = resolveOptional(config, providerName, "api-key", "");
         int timeout = resolveOptionalInt(config, providerName, "timeout-seconds", 30);
         Optional<String> optKey = Optional.ofNullable(apiKey).filter(k -> !k.isBlank());

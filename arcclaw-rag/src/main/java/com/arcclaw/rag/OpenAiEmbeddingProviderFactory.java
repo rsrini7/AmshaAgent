@@ -21,6 +21,11 @@ public class OpenAiEmbeddingProviderFactory implements EmbeddingProviderFactory 
     }
 
     @Override
+    public String defaultBaseUrl() {
+        return "https://api.openai.com/v1";
+    }
+
+    @Override
     public EmbeddingModel create(EmbeddingModelConfig config) {
         String key = requireApiKey(config);
         log.infof("Creating OpenAI embedding model: %s", config.modelName());

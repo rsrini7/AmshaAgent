@@ -15,6 +15,11 @@ public interface EmbeddingProviderFactory {
     /** Canonical lowercase provider ID, e.g. "openai", "ollama", "jina". */
     String providerId();
 
+    /** Default base URL used if none is configured. */
+    default String defaultBaseUrl() {
+        return "http://localhost:11434";
+    }
+
     /** Builds the model for this provider using the validated config. */
     EmbeddingModel create(EmbeddingModelConfig config);
 

@@ -22,6 +22,11 @@ public class JinaEmbeddingProviderFactory implements EmbeddingProviderFactory {
     }
 
     @Override
+    public String defaultBaseUrl() {
+        return "https://api.jina.ai/v1/";
+    }
+
+    @Override
     public EmbeddingModel create(EmbeddingModelConfig config) {
         String key = requireApiKey(config);
         // Jina is OpenAI-compatible; default to its own model when the Ollama default

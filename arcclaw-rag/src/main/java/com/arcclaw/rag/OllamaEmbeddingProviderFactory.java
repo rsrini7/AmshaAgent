@@ -21,6 +21,11 @@ public class OllamaEmbeddingProviderFactory implements EmbeddingProviderFactory 
     }
 
     @Override
+    public String defaultBaseUrl() {
+        return "http://localhost:11434";
+    }
+
+    @Override
     public EmbeddingModel create(EmbeddingModelConfig config) {
         log.infof("Creating local Ollama embedding model: %s url=%s", config.modelName(), config.baseUrl());
         return OllamaEmbeddingModel.builder()
