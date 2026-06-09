@@ -307,3 +307,9 @@ schema) and must match the model used by every active provider.
 | `OLLAMA_MODEL` | `mistral-small:latest` | Ollama default model |
 | `ARCCLAW_OPENROUTER_APP_NAME` | (repo URL) | OpenRouter app name |
 | `ARCCLAW_OPENROUTER_SITE_URL` | (repo URL) | OpenRouter site URL |
+
+## Testing
+
+| Property / Variable | Default | Description |
+|---|---|---|
+| `arcclaw.test.force-error` | _(system prop)_ | When running tests, set `-Darcclaw.test.force-error=true` to force `InfiniteLoopProvider` to fail with real errors instead of injecting dummy fallbacks (`"Dummy response"`). Useful for testing error-handling paths explicitly. |

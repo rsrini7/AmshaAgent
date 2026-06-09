@@ -17,6 +17,7 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             TieredMemoryHealthDto.class,
             RecallSearchQuery.class,
             ArchivalSearchQuery.class,
+            CheckpointDtoHelper.class,
             CoreMemoryStorePort.class,
             RecallMemoryStorePort.class,
             ArchivalMemoryStorePort.class,
