@@ -300,11 +300,16 @@ public class InteractiveSetupWizard {
         return key.startsWith("TELEGRAM_") || key.startsWith("ARCCLAW_TELEGRAM_");
     }
 
-    private static final SecureRandom RNG = new SecureRandom();
-
+    @SuppressWarnings("java:S2119")
     private static String generateRandomValue() {
         byte[] bytes = new byte[32];
-        RNG.nextBytes(bytes);
+        // Instantiate SecureRandom locally — NOT as a static field.
+        // GraalVM native image marks java.security.SecureRandom for run-time
+        // initialization. A static field would pin the instance into the image
+        // heap at build time, causing:
+        //   UnsupportedFeatureException: An object of type 'java.security.SecureRandom'
+        //   was found in the image heap.
+        new SecureRandom().nextBytes(bytes);
         return Base64.getEncoder().encodeToString(bytes);
     }
 

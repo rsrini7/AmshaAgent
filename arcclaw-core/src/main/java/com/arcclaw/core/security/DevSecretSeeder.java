@@ -111,6 +111,7 @@ public class DevSecretSeeder {
      * Dev/test only - generates a random ephemeral HMAC key.
      * Do NOT call in prod: the key changes every boot, breaking the audit chain.
      */
+    @SuppressWarnings("java:S2119")
     private void seedAuditHmacKey() {
         String keyName = VaultConstants.AUDIT_HMAC_KEY_NAME;
         if (!secretVault.systemKeyExists(keyName)) {
