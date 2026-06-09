@@ -147,7 +147,12 @@ public class FsCheckpointStoreAdapter implements CheckpointStorePort {
     @Override
     public Optional<CheckpointDto> findLatestAwaitingApprovalBySessionContaining(String segment) {
         return helper.loadAll().stream()
-                .filter(c -> CheckpointStatus.AWAITING_APPROVAL.name().equals(c.status()))
+                .filter(c -> {
+                    String st = c.status();
+                    return CheckpointStatus.AWAITING_APPROVAL.name().equals(st)
+                            || CheckpointStatus.RESUMING.name().equals(st)
+                            || CheckpointStatus.IN_PROGRESS.name().equals(st);
+                })
                 .filter(c -> c.sessionId() != null && c.sessionId().contains(segment))
                 .max(Comparator.comparing(CheckpointDto::updatedAt, Comparator.nullsFirst(Comparator.naturalOrder())));
     }
@@ -238,8 +243,7 @@ public class FsCheckpointStoreAdapter implements CheckpointStorePort {
     @Override
     public List<CheckpointDto> findInProgressZombies(Instant cutoff) {
         return helper.loadAll().stream()
-                .filter(c -> CheckpointStatus.IN_PROGRESS.name().equals(c.status())
-                        || CheckpointStatus.AWAITING_APPROVAL.name().equals(c.status()))
+                .filter(c -> CheckpointStatus.IN_PROGRESS.name().equals(c.status()))
                 .filter(c -> c.updatedAt() != null && c.updatedAt().isBefore(cutoff))
                 .toList();
     }
