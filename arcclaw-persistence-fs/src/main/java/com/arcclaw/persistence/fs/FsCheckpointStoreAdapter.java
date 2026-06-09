@@ -4,6 +4,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
@@ -93,6 +94,7 @@ public class FsCheckpointStoreAdapter implements CheckpointStorePort {
                 .filter(c -> c.status() == null
                         || (!CheckpointStatus.COMPLETED.name().equals(c.status())
                                 && !CheckpointStatus.FAILED.name().equals(c.status())
+                                && !CheckpointStatus.DENIED.name().equals(c.status())
                                 && !CheckpointStatus.ARCHIVED.name().equals(c.status())))
                 .toList();
     }
@@ -212,9 +214,11 @@ public class FsCheckpointStoreAdapter implements CheckpointStorePort {
 
     @Override
     public boolean isCheckpointExpired(String sessionId, long timeoutHours) {
-        return findLatestBySession(sessionId)
-                .map(cp -> cp.updatedAt() != null
-                        && cp.updatedAt().plusSeconds(timeoutHours * 3600).isBefore(Instant.now()))
+        Instant cutoff = Instant.now().minus(timeoutHours, ChronoUnit.HOURS);
+        return helper.loadSession(sessionId).stream()
+                .filter(c -> CheckpointStatus.AWAITING_APPROVAL.name().equals(c.status()))
+                .max(Comparator.comparing(CheckpointDto::updatedAt, Comparator.nullsFirst(Comparator.naturalOrder())))
+                .map(cp -> cp.updatedAt() != null && cp.updatedAt().isBefore(cutoff))
                 .orElse(false);
     }
 
@@ -224,6 +228,7 @@ public class FsCheckpointStoreAdapter implements CheckpointStorePort {
                 .anyMatch(c -> c.status() != null
                         && !CheckpointStatus.COMPLETED.name().equals(c.status())
                         && !CheckpointStatus.FAILED.name().equals(c.status())
+                        && !CheckpointStatus.DENIED.name().equals(c.status())
                         && !CheckpointStatus.ARCHIVED.name().equals(c.status()));
     }
 
