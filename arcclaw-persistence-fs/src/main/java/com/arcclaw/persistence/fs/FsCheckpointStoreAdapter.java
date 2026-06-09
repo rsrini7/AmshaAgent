@@ -231,7 +231,8 @@ public class FsCheckpointStoreAdapter implements CheckpointStorePort {
     public boolean hasPendingApprovalForChat(String chatId) {
         return helper.loadAll().stream()
                 .anyMatch(c -> CheckpointStatus.AWAITING_APPROVAL.name().equals(c.status())
-                        && chatId.equals(c.channelPlatformId()));
+                        && chatId.equals(c.channelPlatformId())
+                        && !c.sessionId().startsWith("cron-"));
     }
 
     @Override
