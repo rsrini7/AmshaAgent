@@ -228,7 +228,7 @@ ArcClaw/
 │   ├── vec0.dll         ← Windows  (Auto-installed on first boot)
 │   ├── vec0.so          ← Linux    (Auto-installed on first boot)
 │   └── vec0.dylib       ← macOS    (Auto-installed on first boot)
-├── dist/                ← produced by: mise run dist  (gitignored)
+├── dist/                ← produced by: mise run dist:dist  (gitignored)
 └── arcclaw-app/
     └── target/
         ├── quarkus-app/quarkus-run.jar           ← produced by: mise run build-app
@@ -306,7 +306,7 @@ mise run help    # or: mise tasks
 | `mise run native:chat` | Native binary - interactive REPL |
 | `mise run native:attach` | Native binary - Telegram daemon |
 | `mise run native:ask` | Native binary - one-shot task (`$env:GOAL="..."`) |
-| **`mise run dist`** | Assemble `dist/` folder: binary + vec0 + launchers |
+| **`mise run dist:dist`** | Assemble `dist/` folder: binary + vec0 + launchers |
 | `mise run dist:pack` | Create OS-specific release archives |
 | `mise run compose:up` | Full observability stack up |
 | `mise run compose:down` | Stop stack, keep volumes |
@@ -424,7 +424,7 @@ $env:GOAL = "summarize today's logs"; mise run native:ask
 ### Assemble a dist/ folder (ship-ready)
 
 ```bash
-mise run dist
+mise run dist:dist
 ```
 
 Produces:
@@ -465,10 +465,11 @@ Manual download is **no longer required**, but you can override the auto-install
 
 ```bash
 # 1. Build on WSL2/Linux
-mise run build:native && mise run dist
+mise run build:native && mise run dist:dist
+
 
 # 2. Build on Windows (separate terminal)
-mise run build:native; mise run dist
+mise run build:native; mise run dist:dist
 
 # 3. Pack all archives (run from either platform)
 mise run dist:pack

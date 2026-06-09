@@ -8,7 +8,7 @@ Write-Host '  Building all 3 backend variants (local GraalVM)...'
 Write-Host '═══════════════════════════════════════════════════'
 Write-Host ''
 
-# 1. SQLite (default) — copies to dist/arcclaw-sqlite via 'mise run dist'
+# 1. SQLite (default) — copies to dist/arcclaw-sqlite via 'mise run dist:dist'
 Write-Host '── [1/3] SQLite (default) ──'
 mise run build:native-local
 if (Test-Path "dist/arcclaw-sqlite$exeSuffix") {
