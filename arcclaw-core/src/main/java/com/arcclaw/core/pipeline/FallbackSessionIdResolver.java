@@ -10,30 +10,33 @@ import org.jboss.logging.Logger;
 import io.quarkus.arc.DefaultBean;
 
 /**
- * Fallback implementation of {@link SessionIdResolver} that uses UUID v3 (MD5).
+ * Fallback implementation of {@link SessionIdResolver} used when no database
+ * session registry is available (e.g. filesystem backend or test-only mode).
  * <p>
- * Used in {@code arcclaw-core} tests and any deployment that does not include
- * {@code arcclaw-app}'s {@code SessionRegistry}.
+ * Uses deterministic UUID v3 (MD5) so the same Telegram chat always receives
+ * the same session ID across restarts. MD5 is acceptable here because the
+ * input is a low-entropy public channel identifier — there is no security
+ * requirement, only uniqueness and determinism.
  * <p>
- * In production (arcclaw-app), {@code SessionRegistry} is a standard CDI bean
- * which automatically overrides this default bean without any extra configuration.
- * <p>
- * <strong>Do not use in production:</strong> MD5 (UUID v3) is weak and lacks
- * the {@code channelType} component.
+ * In SQL-backed deployments, {@code SessionRegistry} is active and overrides
+ * this bean with true random UUID v4 persisted to the {@code session_registry}
+ * table.
  */
 @ApplicationScoped
 @DefaultBean
+@SuppressWarnings("java:S4790") // MD5 is acceptable for UUID v3 name hashing (non-cryptographic)
 public class FallbackSessionIdResolver implements SessionIdResolver {
 
     private static final Logger log = Logger.getLogger(FallbackSessionIdResolver.class);
 
     @Override
     public String resolveOrCreate(String channelType, String channelId, String userId) {
-        String key = channelId + ":" + userId;
+        String key = channelType + ":" + channelId + ":" + userId;
         String sessionId =
                 UUID.nameUUIDFromBytes(key.getBytes(StandardCharsets.UTF_8)).toString();
-        log.warnf(
-                "FallbackSessionIdResolver: using legacy MD5 session ID for [%s/%s/%s] → %s",
+        log.infof(
+                "[Fs-Backend] No database session registry. "
+                        + "Deriving deterministic UUID v3 session ID for [%s/%s/%s] → %s",
                 channelType, channelId, userId, sessionId);
         return sessionId;
     }
