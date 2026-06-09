@@ -19,6 +19,7 @@ import com.arcclaw.channel.api.hitl.ApprovalGateway;
 import com.arcclaw.channel.api.hitl.ApprovalOutcome;
 import com.arcclaw.channel.api.hitl.ApprovalResult;
 import com.arcclaw.common.util.LogUtil;
+import com.arcclaw.core.reflex.ApprovalNotificationService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.apache.camel.Exchange;
@@ -42,6 +43,9 @@ public class TelegramCallbackHandler {
 
     @Inject
     ApprovalGateway approvalGateway;
+
+    @Inject
+    ApprovalNotificationService notificationService;
 
     @Inject
     ObjectMapper objectMapper;
@@ -140,6 +144,13 @@ public class TelegramCallbackHandler {
             if (popupText != null) {
                 answerCallback(query.getId(), popupText);
             }
+
+            // Flush queued CRON HITL notifications now that this chat's approval
+            // slot is free. Without this, cron jobs queued behind live-session
+            // approvals are never notified (see RCA: TelegramCallbackHandler
+            // bypasses AbstractDecisionReflex which normally handles the flush).
+            notificationService.flushPendingNotifications(chatId);
+
         } catch (Exception e) {
             log.error("Failed to process callback", e);
             sender.sendRaw(user, "❌ Failed to process callback");
