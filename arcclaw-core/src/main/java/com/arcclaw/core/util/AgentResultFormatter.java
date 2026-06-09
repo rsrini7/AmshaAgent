@@ -40,6 +40,13 @@ public class AgentResultFormatter {
      */
     private static final Pattern TOOLCALL_FRAGMENT = Pattern.compile("(?s)(OLCALL>|</TOOLCALL>|<TOOLCALL).*");
 
+    /**
+     * JSON wrapper that some LLMs emit around plain-text answers.
+     * e.g. {"response":"The answer is 42"}
+     */
+    private static final Pattern RESPONSE_JSON_WRAPPER =
+            Pattern.compile("^\\s*\\{\\s*\"response\"\\s*:\\s*\"(.*)\"\\s*\\}\\s*$", Pattern.DOTALL);
+
     public static String format(AgentResult result) {
         return format(result, false);
     }
@@ -94,6 +101,15 @@ public class AgentResultFormatter {
         // 2. Bare JSON tool-array that IS the entire answer string
         if (BARE_TOOL_JSON_ARRAY.matcher(cleaned).matches()) {
             return "[Tool output was malformed - no answer text was generated.]";
+        }
+
+        // 2b. JSON wrapper {"response":"..."} — unwrap to plain text
+        var responseWrapper = RESPONSE_JSON_WRAPPER.matcher(cleaned);
+        if (responseWrapper.matches()) {
+            String unwrapped = responseWrapper.group(1).replace("\\\"", "\"").strip();
+            return unwrapped.isBlank()
+                    ? "[Tool output was malformed - no answer text was generated.]"
+                    : unwrapped;
         }
 
         // 3. Trailing/leading fragment from a split TOOLCALL block
