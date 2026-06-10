@@ -40,6 +40,11 @@ public class NvidiaProviderFactory implements AgentChatModelProvider {
     }
 
     @Override
+    public String baseUrl() {
+        return baseUrl;
+    }
+
+    @Override
     public ChatModel create() {
         String key = apiKey.orElseThrow(() -> new IllegalStateException("Nvidia requires ARCCLAW_NVIDIA_API_KEY"));
         List<MultiModelChatModel.ModelEntry> entries = ChatModelFactory.buildMultiModelEntries(

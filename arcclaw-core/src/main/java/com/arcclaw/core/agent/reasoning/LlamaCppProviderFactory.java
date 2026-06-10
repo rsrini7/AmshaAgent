@@ -35,6 +35,11 @@ public class LlamaCppProviderFactory implements AgentChatModelProvider {
     }
 
     @Override
+    public String baseUrl() {
+        return baseUrl;
+    }
+
+    @Override
     public ChatModel create() {
         return OpenAiChatModel.builder()
                 .baseUrl(baseUrl)

@@ -22,6 +22,10 @@ public interface AgentChatModelProvider {
      */
     ChatModel create();
 
+    default String baseUrl() {
+        return "unknown";
+    }
+
     /**
      * Returns the structured output compliance mode for this model.
      * Defaults to NATIVE for modern reliable models.

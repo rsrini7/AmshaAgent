@@ -43,7 +43,11 @@ public class InfiniteLoopProvider<T, R> {
         R invoke(T model, Object request) throws Exception;
     }
 
-    public record Slot<T>(String name, T model) {}
+    public record Slot<T>(String name, T model, String baseUrl) {
+        public Slot(String name, T model) {
+            this(name, model, null);
+        }
+    }
 
     // Global registry for quality failure reporting from outside (e.g., FinishOutcomeProcessor).
     // Uses WeakReference so old instances can be GC'd when replaced.
@@ -227,7 +231,9 @@ public class InfiniteLoopProvider<T, R> {
                     h.recordSuccess();
                     currentIndex.set(idx);
                     lastUsedSlots.get().put(loopId, slot.name());
-                    log.infof("InfiniteLoop: Slot [%s] responded successfully (%dms).", slot.name(), elapsedMs);
+                    log.infof(
+                            "InfiniteLoop: Slot [%s] responded successfully (%dms) baseUrl=%s.",
+                            slot.name(), elapsedMs, slot.baseUrl());
                     return response;
                 } catch (Throwable t) {
                     classifyAndHandle(slot.name(), h, t);

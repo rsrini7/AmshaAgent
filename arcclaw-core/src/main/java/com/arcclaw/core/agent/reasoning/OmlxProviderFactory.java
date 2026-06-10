@@ -40,6 +40,11 @@ public class OmlxProviderFactory implements AgentChatModelProvider {
     }
 
     @Override
+    public String baseUrl() {
+        return baseUrl;
+    }
+
+    @Override
     public ChatModel create() {
         String model = modelName.orElseThrow(() -> new IllegalStateException("OMLX requires ARCCLAW_OMLX_MODEL"));
         // Disable Qwen/DeepSeek thinking mode — puts chain-of-thought in content field

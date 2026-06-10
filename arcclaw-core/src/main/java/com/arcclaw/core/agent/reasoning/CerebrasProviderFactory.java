@@ -39,6 +39,11 @@ public class CerebrasProviderFactory implements AgentChatModelProvider {
     }
 
     @Override
+    public String baseUrl() {
+        return baseUrl;
+    }
+
+    @Override
     public ChatModel create() {
         String key = apiKey.orElseThrow(() -> new IllegalStateException("Cerebras requires ARCCLAW_CEREBRAS_API_KEY"));
         List<MultiModelChatModel.ModelEntry> entries = ChatModelFactory.buildMultiModelEntries(

@@ -39,6 +39,11 @@ public class OpenAiProviderFactory implements AgentChatModelProvider {
     }
 
     @Override
+    public String baseUrl() {
+        return baseUrl;
+    }
+
+    @Override
     public ChatModel create() {
         String key = apiKey.orElseThrow(() -> new IllegalStateException("OpenAI requires ARCCLAW_OPENAI_API_KEY"));
         String model = modelName.orElseThrow(() -> new IllegalStateException("OpenAI requires ARCCLAW_OPENAI_MODEL"));

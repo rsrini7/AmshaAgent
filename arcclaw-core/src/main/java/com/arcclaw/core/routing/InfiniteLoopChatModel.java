@@ -13,7 +13,11 @@ import java.util.Optional;
  */
 public class InfiniteLoopChatModel implements ChatModel {
 
-    public record Slot(String name, ChatModel model) {}
+    public record Slot(String name, ChatModel model, String baseUrl) {
+        public Slot(String name, ChatModel model) {
+            this(name, model, null);
+        }
+    }
 
     private final InfiniteLoopProvider<ChatModel, ChatResponse> provider;
     private final List<Slot> slots;
@@ -30,7 +34,7 @@ public class InfiniteLoopChatModel implements ChatModel {
         }
         this.slots = List.copyOf(slots);
         List<InfiniteLoopProvider.Slot<ChatModel>> providerSlots = slots.stream()
-                .map(s -> new InfiniteLoopProvider.Slot<>(s.name(), s.model()))
+                .map(s -> new InfiniteLoopProvider.Slot<>(s.name(), s.model(), s.baseUrl()))
                 .toList();
         this.provider = new InfiniteLoopProvider<>(
                 loopId,

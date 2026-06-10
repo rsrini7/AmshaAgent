@@ -39,6 +39,11 @@ public class GroqProviderFactory implements AgentChatModelProvider {
     }
 
     @Override
+    public String baseUrl() {
+        return baseUrl;
+    }
+
+    @Override
     public ChatModel create() {
         String key = apiKey.orElseThrow(() -> new IllegalStateException("Groq requires ARCCLAW_GROQ_API_KEY"));
         List<MultiModelChatModel.ModelEntry> entries = ChatModelFactory.buildMultiModelEntries(

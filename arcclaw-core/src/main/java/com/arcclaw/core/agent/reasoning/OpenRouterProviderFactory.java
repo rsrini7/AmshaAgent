@@ -45,6 +45,11 @@ public class OpenRouterProviderFactory implements AgentChatModelProvider {
     }
 
     @Override
+    public String baseUrl() {
+        return baseUrl;
+    }
+
+    @Override
     public ChatModel create() {
         String key =
                 apiKey.orElseThrow(() -> new IllegalStateException("OpenRouter requires ARCCLAW_OPENROUTER_API_KEY"));

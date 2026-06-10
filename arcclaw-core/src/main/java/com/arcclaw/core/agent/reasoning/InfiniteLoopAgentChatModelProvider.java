@@ -76,8 +76,9 @@ public class InfiniteLoopAgentChatModelProvider implements AgentChatModelProvide
             }
             try {
                 ChatModel model = provider.create();
-                slots.add(new InfiniteLoopChatModel.Slot(name, model));
-                log.infof("InfiniteLoop: Slot [%s] initialized (%s).", name, model);
+                String baseUrl = provider.baseUrl();
+                slots.add(new InfiniteLoopChatModel.Slot(name, model, baseUrl));
+                log.infof("InfiniteLoop: Slot [%s] initialized (%s) baseUrl=%s.", name, model, baseUrl);
             } catch (Exception e) {
                 log.warnf("InfiniteLoop: Slot [%s] failed to initialize: %s. Skipping.", name, LogUtil.rootMessage(e));
             }
@@ -97,7 +98,7 @@ public class InfiniteLoopAgentChatModelProvider implements AgentChatModelProvide
                 };
                 return new InfiniteLoopChatModel(
                         "agent-chat",
-                        List.of(new InfiniteLoopChatModel.Slot("dummy", dummy)),
+                        List.of(new InfiniteLoopChatModel.Slot("dummy", dummy, null)),
                         cooldownBaseSeconds,
                         cooldownMaxSeconds,
                         cooldownTransientSeconds,

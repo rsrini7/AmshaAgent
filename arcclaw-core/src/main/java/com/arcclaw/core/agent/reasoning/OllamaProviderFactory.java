@@ -31,6 +31,11 @@ public class OllamaProviderFactory implements AgentChatModelProvider {
     }
 
     @Override
+    public String baseUrl() {
+        return baseUrl;
+    }
+
+    @Override
     public ChatModel create() {
         return OllamaChatModel.builder()
                 .baseUrl(baseUrl)

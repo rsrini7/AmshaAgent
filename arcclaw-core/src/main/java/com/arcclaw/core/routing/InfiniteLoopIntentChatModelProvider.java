@@ -77,9 +77,10 @@ public class InfiniteLoopIntentChatModelProvider {
                 String trimmed = name.trim().toLowerCase(Locale.ROOT);
                 if (trimmed.isEmpty()) continue;
                 try {
-                    ChatModel model = createModelForProvider(trimmed);
-                    slots.add(new InfiniteLoopChatModel.Slot(trimmed, model));
-                    log.infof("Classifier loop: added slot [%s]", trimmed);
+                    var modelAndBaseUrl = createModelForProvider(trimmed);
+                    slots.add(new InfiniteLoopChatModel.Slot(
+                            trimmed, modelAndBaseUrl.model(), modelAndBaseUrl.baseUrl()));
+                    log.infof("Classifier loop: added slot [%s] baseUrl=%s", trimmed, modelAndBaseUrl.baseUrl());
                 } catch (Exception e) {
                     log.warnf("Classifier loop: skipping slot [%s] — %s", trimmed, e.getMessage());
                 }
@@ -100,7 +101,7 @@ public class InfiniteLoopIntentChatModelProvider {
                     };
                     return new InfiniteLoopChatModel(
                             "intent-classifier-chat",
-                            List.of(new InfiniteLoopChatModel.Slot("dummy", dummy)),
+                            List.of(new InfiniteLoopChatModel.Slot("dummy", dummy, "unknown")),
                             cooldownBaseSeconds,
                             cooldownMaxSeconds,
                             cooldownTransientSeconds);
@@ -120,25 +121,29 @@ public class InfiniteLoopIntentChatModelProvider {
         }
     }
 
-    private ChatModel createModelForProvider(String providerName) {
+    private record ModelAndBaseUrl(ChatModel model, String baseUrl) {}
+
+    private ModelAndBaseUrl createModelForProvider(String providerName) {
         var config = ConfigProvider.getConfig();
         String baseUrl = resolveRequired(config, providerName, "base-url");
         String apiKey = resolveOptional(config, providerName, "api-key", "");
         String model = resolveRequired(config, providerName, "model");
         int retries = resolveOptionalInt(config, providerName, "max-retries", 3);
 
-        return modelFactory.createModel(
-                providerName,
-                baseUrl,
-                apiKey,
-                model,
-                null,
-                Duration.ofSeconds(5),
-                retries,
-                baseUrl,
-                model,
-                StructuredOutputMode.NATIVE,
-                true);
+        return new ModelAndBaseUrl(
+                modelFactory.createModel(
+                        providerName,
+                        baseUrl,
+                        apiKey,
+                        model,
+                        null,
+                        Duration.ofSeconds(5),
+                        retries,
+                        baseUrl,
+                        model,
+                        StructuredOutputMode.NATIVE,
+                        true),
+                baseUrl);
     }
 
     private static String resolveRequired(Config config, String provider, String key) {
