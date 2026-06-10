@@ -7,6 +7,7 @@ if (-not (Test-Path $jar)) { Write-Host '❌  JAR not found. Run: mise run build
 $cmd = if ($args.Count -gt 0 -and $args[0]) { $args[0] } else { 'serve' }
 [console]::InputEncoding = [console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $jvmArgs = @(
+    '--add-modules=jdk.incubator.vector',
     '--add-opens=java.base/java.nio=ALL-UNNAMED',
     '--add-opens=java.base/jdk.internal.misc=ALL-UNNAMED',
     '--add-opens=java.base/java.lang=ALL-UNNAMED',

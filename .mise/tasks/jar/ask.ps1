@@ -13,6 +13,7 @@ if (-not $goal) {
 }
 [console]::InputEncoding = [console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $jvmArgs = @(
+    '--add-modules=jdk.incubator.vector',
     '--add-opens=java.base/java.nio=ALL-UNNAMED',
     '--add-opens=java.base/jdk.internal.misc=ALL-UNNAMED',
     '--add-opens=java.base/java.lang=ALL-UNNAMED',
