@@ -25,9 +25,13 @@ $env:OPENAI_TARGET_API_URL = "https://api.cerebras.ai/v1"
 
 bash -c "PYTHONUNBUFFERED=1 OPENAI_TARGET_API_URL=https://api.cerebras.ai/v1 nohup uvx --python 3.12 --from 'headroom-ai[proxy,ml,code]' headroom proxy --port 8791 --code-aware > '$LogDir/$Provider.log' 2> '$LogDir/$Provider.err' &"
 
-Start-Sleep -Seconds 2
-
-$listener = bash -c "lsof -i :$Port -t -sTCP:listen 2>/dev/null | head -1"
+$maxRetries = 6
+$listener = $null
+for ($i = 0; $i -lt $maxRetries; $i++) {
+    Start-Sleep -Seconds 1
+    $listener = bash -c "lsof -i :$Port -t -sTCP:listen 2>/dev/null | head -1"
+    if ($listener) { break }
+}
 if ($listener) {
     $listener | Set-Content $PidFile
     Write-Host "✅  Headroom proxy for Cerebras started (PID $listener) on port $Port"
