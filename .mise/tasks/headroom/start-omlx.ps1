@@ -25,7 +25,7 @@ $env:OPENAI_TARGET_API_URL = "http://127.0.0.1:8000/v1"
 
 bash -c "PYTHONUNBUFFERED=1 HEADROOM_CONFIG_DIR=$PSScriptRoot/../../../.headroom/config HEADROOM_MODEL_LIMITS=$PSScriptRoot/../../../.headroom/config/models.json OPENAI_TARGET_API_URL=http://127.0.0.1:8000/v1 nohup uvx --python 3.12 --from 'headroom-ai[proxy,ml,code]' headroom proxy --port 8795 --memory --code-aware > '$LogDir/$Provider.log' 2> '$LogDir/$Provider.err' &"
 
-$maxRetries = 6
+$maxRetries = 12
 $listener = $null
 for ($i = 0; $i -lt $maxRetries; $i++) {
     Start-Sleep -Seconds 1
