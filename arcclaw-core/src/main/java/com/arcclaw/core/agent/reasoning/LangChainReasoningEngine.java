@@ -1,5 +1,9 @@
 package com.arcclaw.core.agent.reasoning;
 
+import dev.langchain4j.data.message.AiMessage;
+import dev.langchain4j.data.message.SystemMessage;
+import dev.langchain4j.data.message.ToolExecutionResultMessage;
+import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.model.chat.request.ChatRequest;
 import dev.langchain4j.model.chat.response.ChatResponse;
 
@@ -261,13 +265,17 @@ public class LangChainReasoningEngine implements ReasoningEngine {
         boolean isCompact = isSimpleChitchat || context.isForceFinishRetry();
         Span span = otelContext.childSpan(context.sessionId(), AgentOTelConstants.SPAN_LLM_PROVIDER_CALL);
         try {
+            int msgCount = request.messages() != null ? request.messages().size() : 0;
+            int estTokens = estimateTokens(request);
+            int totalChars = countChars(request);
             if (span != null) {
                 span.setAttribute(AgentOTelConstants.ATTR_LLM_WRITE_INTENT, isWriteIntent);
                 span.setAttribute("arcclaw.llm.is_compact", isCompact);
-                span.setAttribute(
-                        AgentOTelConstants.ATTR_LLM_MESSAGE_COUNT,
-                        request.messages() != null ? (long) request.messages().size() : 0L);
+                span.setAttribute(AgentOTelConstants.ATTR_LLM_MESSAGE_COUNT, (long) msgCount);
             }
+            log.infof(
+                    "LLM call: %d messages, ~%d est. tokens, %d chars, role=%s, compact=%s",
+                    msgCount, estTokens, totalChars, context.agentRole(), isCompact);
             ChatResponse response = ScopedValue.where(WorkspaceContext.IS_WRITE_INTENT, isWriteIntent)
                     .where(WorkspaceContext.IS_COMPACT, isCompact)
                     .call(() -> llmProviderPort.nextStep(request));
@@ -469,5 +477,35 @@ public class LangChainReasoningEngine implements ReasoningEngine {
             }
         }
         return parsedStep;
+    }
+
+    /** Estimate tokens from all messages using chars/4 heuristic (matches PromptBudgetManager). */
+    private static int estimateTokens(ChatRequest request) {
+        if (request.messages() == null) return 0;
+        int total = 0;
+        for (var msg : request.messages()) {
+            String text = null;
+            if (msg instanceof SystemMessage sm) text = sm.text();
+            else if (msg instanceof UserMessage um) text = um.singleText();
+            else if (msg instanceof AiMessage am) text = am.text();
+            else if (msg instanceof ToolExecutionResultMessage tm) text = tm.text();
+            if (text != null) total += text.length() / 4;
+        }
+        return total;
+    }
+
+    /** Count total characters across all message texts. */
+    private static int countChars(ChatRequest request) {
+        if (request.messages() == null) return 0;
+        int total = 0;
+        for (var msg : request.messages()) {
+            String text = null;
+            if (msg instanceof SystemMessage sm) text = sm.text();
+            else if (msg instanceof UserMessage um) text = um.singleText();
+            else if (msg instanceof AiMessage am) text = am.text();
+            else if (msg instanceof ToolExecutionResultMessage tm) text = tm.text();
+            total += text != null ? text.length() : 0;
+        }
+        return total;
     }
 }

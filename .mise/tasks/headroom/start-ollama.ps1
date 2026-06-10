@@ -1,9 +1,9 @@
 #!/usr/bin/env pwsh
 #MISE shell = "pwsh -NonInteractive -Command"
-#MISE description = "Start Headroom proxy for Ollama on port 8791"
+#MISE description = "Start Headroom proxy for Ollama on port 8794"
 
 $ErrorActionPreference = 'Stop'
-$Port = 8791
+$Port = 8794
 $Provider = "ollama"
 $PidFile = "$PSScriptRoot/pids/$Provider.pid"
 $LogDir = "$PSScriptRoot/logs"

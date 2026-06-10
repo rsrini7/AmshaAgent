@@ -6,10 +6,14 @@ $ErrorActionPreference = 'Stop'
 $PidsDir = "$PSScriptRoot/pids"
 
 $PortMap = @{
-    "openrouter" = 8788
-    "groq"       = 8789
-    "nvidia"     = 8790
-    "ollama"     = 8791
+    "openrouter" = 8788;
+    "groq" = 8789;
+    "nvidia" = 8790;
+    "cerebras" = 8791;
+    "gemini" = 8792;
+    "openai" = 8793;
+    "ollama" = 8794;
+    "omlx" = 8795;
 }
 
 if (-not (Test-Path $PidsDir)) {
