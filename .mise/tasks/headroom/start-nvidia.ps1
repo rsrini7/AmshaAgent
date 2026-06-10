@@ -1,6 +1,6 @@
 #!/usr/bin/env pwsh
 #MISE shell = "pwsh -NonInteractive -Command"
-#MISE description = "Start Headroom proxy for NVIDIA on port 8790"
+#MISE description = "Start Headroom proxy for Nvidia on port 8790"
 
 $ErrorActionPreference = 'Stop'
 $Port = 8790
@@ -10,38 +10,34 @@ $LogDir = "$PSScriptRoot/logs"
 
 New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
 
-# Check if already running
 if (Test-Path $PidFile) {
     $oldPid = Get-Content $PidFile
     $proc = Get-Process -Id $oldPid -ErrorAction SilentlyContinue
     if ($proc) {
-        Write-Host "✅ Headroom proxy for NVIDIA already running (PID $oldPid) on port $Port"
+        Write-Host "✅ Headroom proxy for Nvidia already running (PID $oldPid) on port $Port"
         exit 0
     }
 }
 
-$env:PYTHONUNBUFFERED = "1"
-
-Write-Host "▶  Starting Headroom proxy for NVIDIA on port $Port ..."
+Write-Host "▶  Starting Headroom proxy for Nvidia on port $Port ..."
 
 $env:OPENAI_TARGET_API_URL = "https://integrate.api.nvidia.com/v1"
 
-$proc = Start-Process -FilePath "uvx" `
-    -ArgumentList "--python", "3.12", "--from", "headroom-ai[proxy,ml,code]", "headroom", "proxy", "--port", "$Port", "--code-aware" `
-    -RedirectStandardOutput "$LogDir/$Provider.log" `
-    -RedirectStandardError "$LogDir/$Provider.log" `
-    -PassThru
+bash -c "PYTHONUNBUFFERED=1 OPENAI_TARGET_API_URL=https://integrate.api.nvidia.com/v1 nohup uvx --python 3.12 --from 'headroom-ai[proxy,ml,code]' headroom proxy --port 8790 --code-aware > '$LogDir/$Provider.log' 2> '$LogDir/$Provider.err' &"
 
-$proc.Id | Set-Content $PidFile
+Start-Sleep -Seconds 2
 
-Start-Sleep -Seconds 1
-$check = Get-Process -Id $proc.Id -ErrorAction SilentlyContinue
-if (-not $check) {
-    Write-Host "❌  Failed to start Headroom proxy for NVIDIA. Check logs:"
-    Write-Host "    $LogDir/$Provider.log"
-    Remove-Item $PidFile -ErrorAction SilentlyContinue
-    exit 1
+$listener = bash -c "lsof -i :$Port -t -sTCP:listen 2>/dev/null | head -1"
+if ($listener) {
+    $listener | Set-Content $PidFile
+    Write-Host "✅  Headroom proxy for Nvidia started (PID $listener) on port $Port"
+    Write-Host "    Logs: $LogDir/$Provider.log  (stdout)"
+    Write-Host "    Errors: $LogDir/$Provider.err  (stderr)"
+    exit 0
 }
 
-Write-Host "✅  Headroom proxy for NVIDIA started (PID $($proc.Id)) on port $Port"
-Write-Host "    Logs: $LogDir/$Provider.log"
+Write-Host "❌  Failed to start Headroom proxy for Nvidia. Check logs:"
+Write-Host "    $LogDir/$Provider.log  (stdout)"
+Write-Host "    $LogDir/$Provider.err  (stderr)"
+Remove-Item $PidFile -ErrorAction SilentlyContinue
+exit 1

@@ -1,6 +1,6 @@
 #!/usr/bin/env pwsh
 #MISE shell = "pwsh -NonInteractive -Command"
-#MISE description = "Start Headroom proxy for Gemini on port 8792 (native Gemini backend)"
+#MISE description = "Start Headroom proxy for Gemini on port 8792"
 
 $ErrorActionPreference = 'Stop'
 $Port = 8792
@@ -20,27 +20,23 @@ if (Test-Path $PidFile) {
 }
 
 Write-Host "▶  Starting Headroom proxy for Gemini on port $Port ..."
-Write-Host "    ⚠️  Gemini uses native API. Wire ArcClaw Gemini provider to"
-Write-Host "        ARCCLAW_GEMINI_BASE_URL=http://localhost:$Port/v1beta"
 
-$env:PYTHONUNBUFFERED = "1"
 
-$proc = Start-Process -FilePath "uvx" `
-    -ArgumentList "--python", "3.12", "--from", "headroom-ai[proxy,ml,code]", "headroom", "proxy", "--port", "$Port", "--backend", "gemini", "--code-aware" `
-    -RedirectStandardOutput "$LogDir/$Provider.log" `
-    -RedirectStandardError "$LogDir/$Provider.log" `
-    -PassThru
+bash -c "PYTHONUNBUFFERED=1 nohup uvx --python 3.12 --from 'headroom-ai[proxy,ml,code]' headroom proxy --port 8792 --backend gemini --code-aware > '$LogDir/$Provider.log' 2> '$LogDir/$Provider.err' &"
 
-$proc.Id | Set-Content $PidFile
+Start-Sleep -Seconds 2
 
-Start-Sleep -Seconds 1
-$check = Get-Process -Id $proc.Id -ErrorAction SilentlyContinue
-if (-not $check) {
-    Write-Host "❌  Failed to start Headroom proxy for Gemini. Check logs:"
-    Write-Host "    $LogDir/$Provider.log"
-    Remove-Item $PidFile -ErrorAction SilentlyContinue
-    exit 1
+$listener = bash -c "lsof -i :$Port -t -sTCP:listen 2>/dev/null | head -1"
+if ($listener) {
+    $listener | Set-Content $PidFile
+    Write-Host "✅  Headroom proxy for Gemini started (PID $listener) on port $Port"
+    Write-Host "    Logs: $LogDir/$Provider.log  (stdout)"
+    Write-Host "    Errors: $LogDir/$Provider.err  (stderr)"
+    exit 0
 }
 
-Write-Host "✅  Headroom proxy for Gemini started (PID $($proc.Id)) on port $Port"
-Write-Host "    Logs: $LogDir/$Provider.log"
+Write-Host "❌  Failed to start Headroom proxy for Gemini. Check logs:"
+Write-Host "    $LogDir/$Provider.log  (stdout)"
+Write-Host "    $LogDir/$Provider.err  (stderr)"
+Remove-Item $PidFile -ErrorAction SilentlyContinue
+exit 1

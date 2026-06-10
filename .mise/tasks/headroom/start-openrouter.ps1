@@ -1,6 +1,6 @@
 #!/usr/bin/env pwsh
 #MISE shell = "pwsh -NonInteractive -Command"
-#MISE description = "Start Headroom proxy for OpenRouter on port 8788"
+#MISE description = "Start Headroom proxy for Openrouter on port 8788"
 
 $ErrorActionPreference = 'Stop'
 $Port = 8788
@@ -10,36 +10,33 @@ $LogDir = "$PSScriptRoot/logs"
 
 New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
 
-# Check if already running
 if (Test-Path $PidFile) {
     $oldPid = Get-Content $PidFile
     $proc = Get-Process -Id $oldPid -ErrorAction SilentlyContinue
     if ($proc) {
-        Write-Host "✅ Headroom proxy for OpenRouter already running (PID $oldPid) on port $Port"
+        Write-Host "✅ Headroom proxy for Openrouter already running (PID $oldPid) on port $Port"
         exit 0
     }
 }
 
-$env:PYTHONUNBUFFERED = "1"
+Write-Host "▶  Starting Headroom proxy for Openrouter on port $Port ..."
 
-Write-Host "▶  Starting Headroom proxy for OpenRouter on port $Port ..."
 
-$proc = Start-Process -FilePath "uvx" `
-    -ArgumentList "--python", "3.12", "--from", "headroom-ai[proxy,ml,code]", "headroom", "proxy", "--port", "$Port", "--backend", "openrouter", "--code-aware" `
-    -RedirectStandardOutput "$LogDir/$Provider.log" `
-    -RedirectStandardError "$LogDir/$Provider.log" `
-    -PassThru
+bash -c "PYTHONUNBUFFERED=1 nohup uvx --python 3.12 --from 'headroom-ai[proxy,ml,code]' headroom proxy --port 8788 --backend openrouter --code-aware > '$LogDir/$Provider.log' 2> '$LogDir/$Provider.err' &"
 
-$proc.Id | Set-Content $PidFile
+Start-Sleep -Seconds 2
 
-Start-Sleep -Seconds 1
-$check = Get-Process -Id $proc.Id -ErrorAction SilentlyContinue
-if (-not $check) {
-    Write-Host "❌  Failed to start Headroom proxy for OpenRouter. Check logs:"
-    Write-Host "    $LogDir/$Provider.log"
-    Remove-Item $PidFile -ErrorAction SilentlyContinue
-    exit 1
+$listener = bash -c "lsof -i :$Port -t -sTCP:listen 2>/dev/null | head -1"
+if ($listener) {
+    $listener | Set-Content $PidFile
+    Write-Host "✅  Headroom proxy for Openrouter started (PID $listener) on port $Port"
+    Write-Host "    Logs: $LogDir/$Provider.log  (stdout)"
+    Write-Host "    Errors: $LogDir/$Provider.err  (stderr)"
+    exit 0
 }
 
-Write-Host "✅  Headroom proxy for OpenRouter started (PID $($proc.Id)) on port $Port"
-Write-Host "    Logs: $LogDir/$Provider.log"
+Write-Host "❌  Failed to start Headroom proxy for Openrouter. Check logs:"
+Write-Host "    $LogDir/$Provider.log  (stdout)"
+Write-Host "    $LogDir/$Provider.err  (stderr)"
+Remove-Item $PidFile -ErrorAction SilentlyContinue
+exit 1
