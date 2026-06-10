@@ -45,7 +45,7 @@ public class InfiniteLoopProvider<T, R> {
 
     public record Slot<T>(String name, T model, String baseUrl) {
         public Slot(String name, T model) {
-            this(name, model, null);
+            this(name, model, "unknown");
         }
     }
 

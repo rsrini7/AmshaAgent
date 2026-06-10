@@ -15,7 +15,7 @@ public class InfiniteLoopChatModel implements ChatModel {
 
     public record Slot(String name, ChatModel model, String baseUrl) {
         public Slot(String name, ChatModel model) {
-            this(name, model, null);
+            this(name, model, "unknown");
         }
     }
 
