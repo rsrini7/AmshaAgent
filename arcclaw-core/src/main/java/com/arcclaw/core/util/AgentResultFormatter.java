@@ -107,9 +107,7 @@ public class AgentResultFormatter {
         var responseWrapper = RESPONSE_JSON_WRAPPER.matcher(cleaned);
         if (responseWrapper.matches()) {
             String unwrapped = responseWrapper.group(1).replace("\\\"", "\"").strip();
-            return unwrapped.isBlank()
-                    ? "[Tool output was malformed - no answer text was generated.]"
-                    : unwrapped;
+            return unwrapped.isBlank() ? "[Tool output was malformed - no answer text was generated.]" : unwrapped;
         }
 
         // 3. Trailing/leading fragment from a split TOOLCALL block

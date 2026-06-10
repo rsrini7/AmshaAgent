@@ -84,3 +84,6 @@ autotest/logs/
 .scannerwork/
 
 .kimchi/
+
+.mise/tasks/headroom/logs/
+.mise/tasks/headroom/pids/

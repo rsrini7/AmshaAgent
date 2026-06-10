@@ -43,8 +43,6 @@ import io.quarkus.runtime.StartupEvent;
 @ApplicationScoped
 public class DevSecretSeeder {
 
-
-
     @Inject
     Logger log;
 
