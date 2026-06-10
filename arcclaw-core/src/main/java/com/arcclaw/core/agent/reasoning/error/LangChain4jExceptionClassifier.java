@@ -80,7 +80,8 @@ public class LangChain4jExceptionClassifier extends LlmExceptionClassifierChain 
         return msg != null
                 && (msg.contains("tool_use_failed")
                         || msg.contains("not in request.tools")
-                        || msg.contains("tool call validation failed"));
+                        || msg.contains("tool call validation failed")
+                        || msg.contains("json mode cannot be combined with tool/function calling"));
     }
 
     private static boolean isAuthOrModelError(String msg) {

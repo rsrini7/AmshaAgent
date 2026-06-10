@@ -43,7 +43,8 @@ public class GenericExceptionClassifier extends LlmExceptionClassifierChain {
             // so the agent loop can extract failed_generation as the answer.
             if (lower.contains("not in request.tools")
                     || lower.contains("tool_use_failed")
-                    || lower.contains("failed_generation")) {
+                    || lower.contains("failed_generation")
+                    || lower.contains("json mode cannot be combined with tool/function calling")) {
                 return new LlmToolCallException(msg, original);
             }
         }
