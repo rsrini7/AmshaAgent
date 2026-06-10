@@ -20,6 +20,8 @@ if (Test-Path $PidFile) {
     }
 }
 
+$env:PYTHONUNBUFFERED = "1"
+
 Write-Host "▶  Starting Headroom proxy for NVIDIA on port $Port ..."
 
 $env:OPENAI_TARGET_API_URL = "https://integrate.api.nvidia.com/v1"
@@ -36,7 +38,7 @@ Start-Sleep -Seconds 1
 $check = Get-Process -Id $proc.Id -ErrorAction SilentlyContinue
 if (-not $check) {
     Write-Host "❌  Failed to start Headroom proxy for NVIDIA. Check logs:"
-    Write-Host "    $LogDir/$Provider.err"
+    Write-Host "    $LogDir/$Provider.log"
     Remove-Item $PidFile -ErrorAction SilentlyContinue
     exit 1
 }

@@ -20,6 +20,8 @@ if (Test-Path $PidFile) {
     }
 }
 
+$env:PYTHONUNBUFFERED = "1"
+
 Write-Host "▶  Starting Headroom proxy for OpenRouter on port $Port ..."
 
 $proc = Start-Process -FilePath "uvx" `
@@ -34,7 +36,7 @@ Start-Sleep -Seconds 1
 $check = Get-Process -Id $proc.Id -ErrorAction SilentlyContinue
 if (-not $check) {
     Write-Host "❌  Failed to start Headroom proxy for OpenRouter. Check logs:"
-    Write-Host "    $LogDir/$Provider.err"
+    Write-Host "    $LogDir/$Provider.log"
     Remove-Item $PidFile -ErrorAction SilentlyContinue
     exit 1
 }
