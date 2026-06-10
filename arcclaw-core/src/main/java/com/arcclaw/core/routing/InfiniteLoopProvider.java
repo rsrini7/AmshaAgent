@@ -13,6 +13,7 @@ import java.util.stream.Collectors;
 import com.arcclaw.core.agent.reasoning.error.LlmAuthenticationException;
 import com.arcclaw.core.agent.reasoning.error.LlmContentFilterException;
 import com.arcclaw.core.agent.reasoning.error.LlmExceptionClassifier;
+import com.arcclaw.core.agent.reasoning.error.LlmMalformedResponseException;
 import com.arcclaw.core.agent.reasoning.error.LlmProviderException;
 import com.arcclaw.core.agent.reasoning.error.LlmRateLimitException;
 import com.arcclaw.core.agent.reasoning.error.LlmServiceUnavailableException;
@@ -272,6 +273,7 @@ public class InfiniteLoopProvider<T, R> {
             case LlmServiceUnavailableException u -> handleServiceUnavailable(slotName, h, u);
             case LlmContentFilterException c -> throw c;
             case LlmToolCallException tc -> throw tc;
+            case LlmMalformedResponseException mr -> throw mr;
             default -> handleUnknownError(slotName, h, classified);
         }
     }

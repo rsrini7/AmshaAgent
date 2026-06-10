@@ -33,11 +33,13 @@ public class LangChain4jExceptionClassifier extends LlmExceptionClassifierChain 
 
     private LlmProviderException classify400(Throwable cause, Throwable original) {
         String msg = AgentErrorMessageUtil.safeMessage(cause);
-        if (isSchemaValidationError(msg)) {
-            return new LlmMalformedResponseException(msg, original);
-        }
+        // Tool-call errors first: a message like "tool call validation failed"
+        // also matches isSchemaValidationError, so precedence matters.
         if (isToolCallError(msg)) {
             return new LlmToolCallException(msg, original);
+        }
+        if (isSchemaValidationError(msg)) {
+            return new LlmMalformedResponseException(msg, original);
         }
         if (isAuthOrModelError(msg)) {
             String hint = (msg.contains("model_not_found") || msg.contains("does not exist"))
@@ -75,7 +77,10 @@ public class LangChain4jExceptionClassifier extends LlmExceptionClassifierChain 
     }
 
     private static boolean isToolCallError(String msg) {
-        return msg != null && (msg.contains("tool_use_failed") || msg.contains("not in request.tools"));
+        return msg != null
+                && (msg.contains("tool_use_failed")
+                        || msg.contains("not in request.tools")
+                        || msg.contains("tool call validation failed"));
     }
 
     private static boolean isAuthOrModelError(String msg) {

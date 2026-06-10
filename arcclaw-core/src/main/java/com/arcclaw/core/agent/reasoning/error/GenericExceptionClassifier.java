@@ -38,13 +38,13 @@ public class GenericExceptionClassifier extends LlmExceptionClassifierChain {
                 return new LlmServiceUnavailableException("LLM Request Timeout: " + msg, original);
             }
             // "not in request.tools" means the LLM called a non-existent tool (e.g., FINISH).
-            // This is a client-side issue, not a provider failure — classify as LlmToolCallException
+            // tool_use_failed / failed_generation means the model generated invalid tool params.
+            // These are client-side issues, not provider failures — classify as LlmToolCallException
             // so the agent loop can extract failed_generation as the answer.
-            if (lower.contains("not in request.tools")) {
+            if (lower.contains("not in request.tools")
+                    || lower.contains("tool_use_failed")
+                    || lower.contains("failed_generation")) {
                 return new LlmToolCallException(msg, original);
-            }
-            if (lower.contains("tool_use_failed") || lower.contains("failed_generation")) {
-                return new LlmServiceUnavailableException("Tool call format rejected by provider: " + msg, original);
             }
         }
         return null;

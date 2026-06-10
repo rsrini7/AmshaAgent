@@ -13,6 +13,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import com.arcclaw.core.agent.reasoning.error.LlmAuthenticationException;
 import com.arcclaw.core.agent.reasoning.error.LlmContentFilterException;
 import com.arcclaw.core.agent.reasoning.error.LlmExceptionClassifier;
+import com.arcclaw.core.agent.reasoning.error.LlmMalformedResponseException;
 import com.arcclaw.core.agent.reasoning.error.LlmProviderException;
 import com.arcclaw.core.agent.reasoning.error.LlmRateLimitException;
 import com.arcclaw.core.agent.reasoning.error.LlmServiceUnavailableException;
@@ -157,9 +158,10 @@ public class MultiModelChatModel implements ChatModel {
             }
             case LlmServiceUnavailableException u -> handleServiceUnavailable(label, h, u);
             case LlmContentFilterException c -> throw c;
-            // Re-throw tool-call errors so the agent loop can extract failed_generation as the answer.
-            // Don't cool down slots — "not in request.tools" is a client-side issue, not a provider failure.
+            // Re-throw tool-call and malformed-response errors so the agent loop can handle them.
+            // Don't cool down slots — these are client-side issues, not transient provider failures.
             case LlmToolCallException tc -> throw tc;
+            case LlmMalformedResponseException mr -> throw mr;
             default -> {
                 h.recordUnknownFailure(cooldownBaseSeconds, cooldownMaxSeconds);
                 log.warnf(
