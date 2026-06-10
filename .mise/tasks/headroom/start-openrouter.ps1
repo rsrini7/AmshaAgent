@@ -22,7 +22,7 @@ if (Test-Path $PidFile) {
 Write-Host "▶  Starting Headroom proxy for Openrouter on port $Port ..."
 
 
-bash -c "PYTHONUNBUFFERED=1 nohup uvx --python 3.12 --from 'headroom-ai[proxy,ml,code]' headroom proxy --port 8788 --backend openrouter --code-aware > '$LogDir/$Provider.log' 2> '$LogDir/$Provider.err' &"
+bash -c "PYTHONUNBUFFERED=1 HEADROOM_CONFIG_DIR=$PSScriptRoot/../../../.headroom/config HEADROOM_MODEL_LIMITS=$PSScriptRoot/../../../.headroom/config/models.json nohup uvx --python 3.12 --from 'headroom-ai[proxy,ml,code]' headroom proxy --port 8788 --backend openrouter --memory --code-aware > '$LogDir/$Provider.log' 2> '$LogDir/$Provider.err' &"
 
 $maxRetries = 6
 $listener = $null
