@@ -89,6 +89,12 @@ public class AgentStateMachineRunner {
         log.infof("StateMachine: performing terminal finish pass for session %s", context.sessionId());
         context.setForceFinishRetry(true);
 
+        int historySizeBeforeTerminalHint = history.size();
+        history.add(
+                ReasoningStep.systemMessage("CRITICAL TERMINAL MODE: The tool above has been executed successfully. "
+                        + "You are in the final synthesis pass. Your ONLY permitted action is FINISH. "
+                        + "Do NOT call any more tools. Provide a brief plain-text summary of what was accomplished."));
+
         int offset = context.getCheckpointRestoreOffset();
         ReasoningStep lastToolStep = history.stream()
                 .skip(offset)
@@ -130,7 +136,10 @@ public class AgentStateMachineRunner {
             int historySizeBeforeHint = history.size();
             history.add(
                     ReasoningStep.systemMessage(
-                            "You have already executed the tool. Summarize the result and provide your final answer using the FINISH action now."));
+                            "CRITICAL: You have already executed the tool successfully. Do NOT call any more tools. "
+                                    + "Your ONLY remaining action is to FINISH with a plain text summary of what you did. "
+                                    + "Provide the summary directly as natural language prose — no JSON, no XML, no code blocks. "
+                                    + "Even a short sentence like 'Information stored successfully' is acceptable. Finish now."));
 
             try {
                 ReasoningStep retryStep = engine.nextStep(context, context.agentRole(), context.goal(), history);
@@ -159,6 +168,9 @@ public class AgentStateMachineRunner {
             return run(context, engine, history);
         } finally {
             context.setForceFinishRetry(false);
+            if (history.size() > historySizeBeforeTerminalHint) {
+                history.subList(historySizeBeforeTerminalHint, history.size()).clear();
+            }
         }
     }
 
