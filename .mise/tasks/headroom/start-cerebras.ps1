@@ -25,7 +25,7 @@ $env:OPENAI_TARGET_API_URL = "https://api.cerebras.ai/v1"
 
 bash -c "PYTHONUNBUFFERED=1 HEADROOM_CONFIG_DIR=$PSScriptRoot/../../../.headroom/config HEADROOM_MODEL_LIMITS=$PSScriptRoot/../../../.headroom/config/models.json OPENAI_TARGET_API_URL=https://api.cerebras.ai/v1 nohup uvx --python 3.12 --from 'headroom-ai[proxy,ml,code]' headroom proxy --port 8791 --memory --code-aware > '$LogDir/$Provider.log' 2> '$LogDir/$Provider.err' &"
 
-$maxRetries = 12
+$maxRetries = 20
 $listener = $null
 for ($i = 0; $i -lt $maxRetries; $i++) {
     Start-Sleep -Seconds 1
