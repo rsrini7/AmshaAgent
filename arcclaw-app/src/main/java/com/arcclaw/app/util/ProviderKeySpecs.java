@@ -72,6 +72,13 @@ public final class ProviderKeySpecs {
             "1. Run:  mlx_lm.server --model mlx-community/<model> --port 8000",
             "2. Add:  ARCCLAW_OMLX_API_KEY=not-needed");
 
+    public static final VarSpec GENERIC_OPENAI_KEY_SPEC = new VarSpec(
+            "ARCCLAW_GENERIC_OPENAI_API_KEY",
+            "Generic OpenAI-compatible API key.",
+            "1. Sign up with your OpenAI-compatible provider",
+            "2. Create an API key",
+            "3. Add:  ARCCLAW_GENERIC_OPENAI_API_KEY=your_key_here");
+
     // -----------------------------------------------------------------------
     // Key spec resolution — primary LLM
     // -----------------------------------------------------------------------
@@ -88,6 +95,7 @@ public final class ProviderKeySpecs {
             case "nvidia" -> NVIDIA_KEY_SPEC;
             case "cerebras" -> CEREBRAS_KEY_SPEC;
             case "omlx" -> OMLX_KEY_SPEC;
+            case "generic-openai" -> GENERIC_OPENAI_KEY_SPEC;
             case "ollama" -> null;
             default -> GROQ_KEY_SPEC;
         };
@@ -115,6 +123,9 @@ public final class ProviderKeySpecs {
                 providerKeySpec("cerebras", "ARCCLAW_COMPACTION_CEREBRAS_API_KEY", "csk-", "https://cloud.cerebras.ai");
             case "nvidia" ->
                 providerKeySpec("nvidia", "ARCCLAW_COMPACTION_NVIDIA_API_KEY", "nvapi-", "https://build.nvidia.com");
+            case "generic-openai" ->
+                providerKeySpec(
+                        "generic-openai", "ARCCLAW_COMPACTION_GENERIC_OPENAI_API_KEY", "", "your provider dashboard");
             default -> providerKeySpec("groq", "ARCCLAW_COMPACTION_GROQ_API_KEY", "gsk_", "https://console.groq.com");
         };
     }
@@ -141,6 +152,9 @@ public final class ProviderKeySpecs {
                 providerKeySpec("cerebras", "ARCCLAW_CLASSIFIER_CEREBRAS_API_KEY", "csk-", "https://cloud.cerebras.ai");
             case "nvidia" ->
                 providerKeySpec("nvidia", "ARCCLAW_CLASSIFIER_NVIDIA_API_KEY", "nvapi-", "https://build.nvidia.com");
+            case "generic-openai" ->
+                providerKeySpec(
+                        "generic-openai", "ARCCLAW_CLASSIFIER_GENERIC_OPENAI_API_KEY", "", "your provider dashboard");
             default -> providerKeySpec("groq", "ARCCLAW_CLASSIFIER_GROQ_API_KEY", "gsk_", "https://console.groq.com");
         };
     }

@@ -13,6 +13,7 @@ import java.security.SecureRandom;
 import java.util.Base64;
 import java.util.List;
 import java.util.Locale;
+import java.util.Optional;
 import java.util.Set;
 
 import com.arcclaw.app.util.CliUtils;
@@ -50,9 +51,11 @@ public class InteractiveSetupWizard {
             "ARCCLAW_COMPACTION_GROQ_API_KEY",
             "ARCCLAW_COMPACTION_CEREBRAS_API_KEY",
             "ARCCLAW_COMPACTION_OPENROUTER_API_KEY",
+            "ARCCLAW_COMPACTION_GENERIC_OPENAI_API_KEY",
             "ARCCLAW_CLASSIFIER_GROQ_API_KEY",
             "ARCCLAW_CLASSIFIER_CEREBRAS_API_KEY",
-            "ARCCLAW_CLASSIFIER_OPENROUTER_API_KEY");
+            "ARCCLAW_CLASSIFIER_OPENROUTER_API_KEY",
+            "ARCCLAW_CLASSIFIER_GENERIC_OPENAI_API_KEY");
 
     private static final Set<String> AUTO_GENERATABLE_KEYS = Set.of(
             "ARCCLAW_VAULT_PEPPER",
@@ -129,6 +132,7 @@ public class InteractiveSetupWizard {
         System.err.println("  │  6. Gemini - Google AI (free tier available)");
         System.err.println("  │  7. Cerebras - Ultra-fast LPU inference");
         System.err.println("  │  8. OMLX - Local MLX-based server (no API key needed)");
+        System.err.println("  │  9. Generic OpenAI - any OpenAI-compatible endpoint");
         System.err.println("  │");
         String choice = readLineWithFallback(System.console(), "  └─ Select provider [1-8, Default: 1]: ");
         String provider =
@@ -140,6 +144,7 @@ public class InteractiveSetupWizard {
                     case "6" -> "gemini";
                     case "7" -> "cerebras";
                     case "8" -> "omlx";
+                    case "9" -> "generic-openai";
                     default -> "groq";
                 };
         System.setProperty("ARCCLAW_LLM_PROVIDER", provider);
@@ -149,7 +154,9 @@ public class InteractiveSetupWizard {
     }
 
     private static void ensureBaseConfigsInEnv(Path envFile) {
-        String provider = System.getProperty("ARCCLAW_LLM_PROVIDER", "groq");
+        String provider = Optional.ofNullable(System.getProperty("ARCCLAW_LLM_PROVIDER"))
+                .or(() -> Optional.ofNullable(System.getenv("ARCCLAW_LLM_PROVIDER")))
+                .orElse("groq");
         EnvConfigInitializer.patchEnvFile(
                 envFile, "ARCCLAW_LLM_PROVIDER", provider, EnvConfigInitializer.PatchMode.UPDATE);
         EnvConfigInitializer.patchEnvFile(
@@ -220,6 +227,7 @@ public class InteractiveSetupWizard {
             case "cerebras" -> "ARCCLAW_CEREBRAS_API_KEY";
             case "nvidia" -> "ARCCLAW_NVIDIA_API_KEY";
             case "omlx" -> "ARCCLAW_OMLX_API_KEY";
+            case "generic-openai" -> "ARCCLAW_GENERIC_OPENAI_API_KEY";
             default -> "ARCCLAW_GROQ_API_KEY";
         };
     }
@@ -236,6 +244,7 @@ public class InteractiveSetupWizard {
             case "gemini" -> "ARCCLAW_COMPACTION_GEMINI_API_KEY";
             case "cerebras" -> "ARCCLAW_COMPACTION_CEREBRAS_API_KEY";
             case "nvidia" -> "ARCCLAW_COMPACTION_NVIDIA_API_KEY";
+            case "generic-openai" -> "ARCCLAW_COMPACTION_GENERIC_OPENAI_API_KEY";
             default -> "ARCCLAW_COMPACTION_GROQ_API_KEY";
         };
     }
@@ -252,6 +261,7 @@ public class InteractiveSetupWizard {
             case "gemini" -> "ARCCLAW_CLASSIFIER_GEMINI_API_KEY";
             case "cerebras" -> "ARCCLAW_CLASSIFIER_CEREBRAS_API_KEY";
             case "nvidia" -> "ARCCLAW_CLASSIFIER_NVIDIA_API_KEY";
+            case "generic-openai" -> "ARCCLAW_CLASSIFIER_GENERIC_OPENAI_API_KEY";
             default -> "ARCCLAW_CLASSIFIER_GROQ_API_KEY";
         };
     }
