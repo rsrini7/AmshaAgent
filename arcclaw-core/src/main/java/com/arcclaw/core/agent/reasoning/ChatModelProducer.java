@@ -38,7 +38,8 @@ public class ChatModelProducer {
             Map.entry("ollama", "http://localhost:11434"),
             Map.entry("omlx", "http://127.0.0.1:8000/v1"),
             Map.entry("llamacpp", "http://127.0.0.1:8080/v1"),
-            Map.entry("gemini", "https://generativelanguage.googleapis.com/v1beta"));
+            Map.entry("gemini", "https://generativelanguage.googleapis.com/v1beta"),
+            Map.entry("generic-openai", ""));
 
     @ConfigProperty(name = "arcclaw.llm.provider", defaultValue = "groq")
     String provider;

@@ -14,6 +14,8 @@ $PortMap = @{
     "openai" = 8793;
     "ollama" = 8794;
     "omlx" = 8795;
+    "generic-openai" = 8796;
+    "llamacpp" = 8797;
 }
 
 if (-not (Test-Path $PidsDir)) {

@@ -17,6 +17,7 @@ const PROVIDERS = [
   { id:'gemini',      name:'Gemini',       tag:'Google AI',       icon:'Ge', color:'#4285f4' },
   { id:'omlx',        name:'OMLX',         tag:'Local MLX server', icon:'M',  color:'#5dade2' },
   { id:'llamacpp',    name:'llama.cpp',    tag:'Local GGUF',      icon:'L',  color:'#e74c3c' },
+  { id:'generic-openai', name:'Generic OpenAI', tag:'Any endpoint', icon:'⚡', color:'#888888' },
 ];
 
 @customElement('arc-settings')

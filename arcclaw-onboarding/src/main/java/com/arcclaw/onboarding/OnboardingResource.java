@@ -100,7 +100,8 @@ public class OnboardingResource {
             Map.entry("cerebras", "llama-3.3-70b"),
             Map.entry("gemini", "gemini-2.0-flash"),
             Map.entry("omlx", "mlx-community/gemma-4-26b-a4b-it-4bit"),
-            Map.entry("llamacpp", "qwen3"));
+            Map.entry("llamacpp", "qwen3"),
+            Map.entry("generic-openai", ""));
 
     @GET
     @Path("/status")

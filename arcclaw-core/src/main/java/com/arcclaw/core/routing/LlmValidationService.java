@@ -20,6 +20,8 @@ import com.arcclaw.core.llm.LlmValidationGateway;
 import com.arcclaw.core.security.SecretVault;
 import com.arcclaw.core.security.VaultConstants;
 
+import org.eclipse.microprofile.config.inject.ConfigProperty;
+
 @ApplicationScoped
 public class LlmValidationService implements LlmValidationGateway {
 
@@ -28,6 +30,9 @@ public class LlmValidationService implements LlmValidationGateway {
 
     @Inject
     LlmModelFactory modelFactory;
+
+    @ConfigProperty(name = "ARCCLAW_GENERIC_OPENAI_BASE_URL", defaultValue = "")
+    String genericOpenAiBaseUrl;
 
     @Override
     public boolean validate(String provider, String model, String apiKey) throws LlmValidationException {
@@ -46,8 +51,14 @@ public class LlmValidationService implements LlmValidationGateway {
                         case "nvidia" -> "https://integrate.api.nvidia.com/v1";
                         case "omlx" -> "http://127.0.0.1:8000/v1";
                         case "llamacpp" -> "http://127.0.0.1:9000/v1";
+                        case "generic-openai" -> genericOpenAiBaseUrl;
                         default -> "";
                     };
+
+            if ("generic-openai".equalsIgnoreCase(provider) && effectiveBaseUrl.isBlank()) {
+                throw new LlmValidationException(
+                        "generic-openai provider requires ARCCLAW_GENERIC_OPENAI_BASE_URL to be configured");
+            }
 
             // Use the factory to create a model manually passing api key
             ChatModel chatModel = modelFactory.createModel(
