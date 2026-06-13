@@ -7,6 +7,7 @@ import jakarta.enterprise.inject.Produces;
 
 import com.arcclaw.core.agent.reasoning.StructuredOutputMode;
 
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
 import io.quarkus.arc.Unremovable;
@@ -25,11 +26,14 @@ public class CompactionModelProducer {
 
     private static final Logger log = Logger.getLogger(CompactionModelProducer.class);
 
+    @ConfigProperty(name = "arcclaw.compaction.structured-output-mode", defaultValue = "NATIVE")
+    String compactionMode;
+
     @Produces
     @Dependent
     @Identifier("compaction-mode")
     public StructuredOutputMode compactionMode() {
-        StructuredOutputMode mode = StructuredOutputMode.NATIVE;
+        StructuredOutputMode mode = StructuredOutputMode.valueOf(compactionMode.toUpperCase());
         log.infof("CompactionModelProducer structured-output-mode=%s", mode);
         return mode;
     }
