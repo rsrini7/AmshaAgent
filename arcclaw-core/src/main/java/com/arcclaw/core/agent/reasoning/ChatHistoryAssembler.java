@@ -270,10 +270,8 @@ public class ChatHistoryAssembler {
                 if (!isRecent && rawObs != null && rawObs.length() > 500) {
                     rawObs = rawObs.substring(0, 497) + "... [truncated]";
                 }
-                if (rawObs != null) {
-                    String safeObs = truncateObservation(rawObs, step.action());
-                    messages.add(ToolExecutionResultMessage.toolExecutionResultMessage(callId, step.action(), safeObs));
-                }
+                String safeObs = truncateObservation(rawObs, step.action());
+                messages.add(ToolExecutionResultMessage.toolExecutionResultMessage(callId, step.action(), safeObs));
             } else if (ReasoningStep.OBSERVE.equals(step.action())) {
                 String obs = step.observation();
                 if (obs != null && !obs.isBlank()) {
