@@ -34,6 +34,9 @@ public class GenericOpenAiProviderFactory implements AgentChatModelProvider {
     @ConfigProperty(name = "ARCCLAW_GENERIC_OPENAI_MODEL", defaultValue = "")
     String modelName;
 
+    @ConfigProperty(name = "ARCCLAW_GENERIC_OPENAI_EXTRA_BODY")
+    Optional<String> extraBody;
+
     @Override
     public String providerName() {
         return "generic-openai";
@@ -71,7 +74,10 @@ public class GenericOpenAiProviderFactory implements AgentChatModelProvider {
                         agentConfig.timeout(),
                         agentConfig.maxRetries(),
                         agentConfig.temperature(),
-                        agentConfig.logHttp()));
+                        agentConfig.logHttp(),
+                        ChatModelFactory.mergeCustomParameters(
+                                ChatModelFactory.deepSeekWorkaroundParams(m),
+                                ChatModelFactory.parseExtraBody(extraBody.orElse("")))));
         if (entries.size() == 1) {
             return entries.get(0).model();
         }

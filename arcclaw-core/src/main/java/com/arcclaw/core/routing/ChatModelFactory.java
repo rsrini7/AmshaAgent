@@ -8,11 +8,15 @@ import dev.langchain4j.model.openai.OpenAiChatRequestParameters;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.BiFunction;
 
+import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.core.agent.reasoning.StructuredOutputMode;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.jboss.logging.Logger;
 
@@ -23,6 +27,8 @@ import org.jboss.logging.Logger;
  * New providers should use these methods instead of repeating builder calls.
  */
 public final class ChatModelFactory {
+
+    private static final Logger LOG = Logger.getLogger(ChatModelFactory.class);
 
     private ChatModelFactory() {}
 
@@ -96,7 +102,7 @@ public final class ChatModelFactory {
             int maxRetries,
             double temperature,
             boolean logHttp) {
-        return createOpenAi(baseUrl, apiKey, modelName, maxTokens, timeout, maxRetries, temperature, logHttp, null);
+        return createOpenAi(baseUrl, apiKey, modelName, maxTokens, timeout, maxRetries, temperature, logHttp, Map.of());
     }
 
     /**
@@ -115,7 +121,7 @@ public final class ChatModelFactory {
             Map<String, Object> customParameters) {
         var builder = openAiBuilder(
                 baseUrl, apiKey, modelName, maxTokens, timeout, maxRetries, temperature, logHttp, logHttp);
-        if (customParameters != null && !customParameters.isEmpty()) {
+        if (!customParameters.isEmpty()) {
             builder.defaultRequestParameters(OpenAiChatRequestParameters.builder()
                     .customParameters(customParameters)
                     .build());
@@ -129,6 +135,62 @@ public final class ChatModelFactory {
     public static OpenAiChatModel.OpenAiChatModelBuilder withOpenRouterHeaders(
             OpenAiChatModel.OpenAiChatModelBuilder builder, String siteUrl, String appName) {
         return builder.customHeaders(Map.of("HTTP-Referer", siteUrl, "X-Title", appName));
+    }
+
+    /**
+     * Check if the model name is a DeepSeek thinking-capable model that defaults to
+     * thinking mode and returns {@code reasoning_content}.
+     *
+     * <p>DeepSeek v4 and r1 series default to thinking mode. This causes 400 errors
+     * in OpenAI-compatible clients that do not passthrough {@code reasoning_content}.
+     */
+    public static boolean isDeepSeekThinkingModel(String modelName) {
+        if (modelName == null || modelName.isBlank()) return false;
+        String lower = modelName.trim().toLowerCase();
+        return lower.contains("deepseek-v") || lower.contains("deepseek-r");
+    }
+
+    /**
+     * Returns a map with DeepSeek thinking workaround ({@code thinking: {type: "disabled"}})
+     * if the model is a DeepSeek v4/thinking model, otherwise {@code null}.
+     */
+    public static Map<String, Object> deepSeekWorkaroundParams(String modelName) {
+        if (isDeepSeekThinkingModel(modelName)) {
+            return Map.of("thinking", Map.of("type", "disabled"));
+        }
+        return Map.of();
+    }
+
+    private static final ObjectMapper EXTRA_BODY_MAPPER = new ObjectMapper();
+
+    /**
+     * Parses a JSON string from {@code ARCCLAW_GENERIC_OPENAI_EXTRA_BODY} into a map.
+     * Returns {@code null} if blank or unparseable (logs a warning).
+     */
+    public static Map<String, Object> parseExtraBody(String json) {
+        if (json == null || json.isBlank()) return Map.of();
+        try {
+            return EXTRA_BODY_MAPPER.readValue(json.trim(), new TypeReference<Map<String, Object>>() {});
+        } catch (Exception e) {
+            LOG.warnf("Failed to parse ARCCLAW_GENERIC_OPENAI_EXTRA_BODY '%s': %s", json, LogUtil.rootMessage(e));
+            return Map.of();
+        }
+    }
+
+    /**
+     * Merges auto-detected custom parameters with user-supplied extra-body params.
+     * User values win on key collision. Returns an empty map when both inputs are empty.
+     */
+    public static Map<String, Object> mergeCustomParameters(Map<String, Object> auto, Map<String, Object> user) {
+        if (auto == null || auto.isEmpty()) {
+            return user == null ? Map.of() : user;
+        }
+        if (user == null || user.isEmpty()) {
+            return auto;
+        }
+        HashMap<String, Object> merged = new HashMap<>(auto);
+        merged.putAll(user);
+        return merged;
     }
 
     /**
