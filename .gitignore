@@ -91,4 +91,5 @@ autotest/logs/
 !.headroom/config/*.json
 .headroom/*.db
 
-.omm/
+.omm/*
+!.omm/config.yaml
