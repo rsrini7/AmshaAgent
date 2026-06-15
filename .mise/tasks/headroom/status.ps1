@@ -18,6 +18,42 @@ $PortMap = @{
     "llamacpp" = 8797;
 }
 
+function Get-ProcessEnvValue {
+    param([int]$ProcessId, [string]$VarName)
+    $raw = bash -c "ps eww $ProcessId 2>/dev/null | grep -o '${VarName}=[^ ]*' | head -1"
+    if ($raw -and $raw.StartsWith("${VarName}=")) {
+        return $raw.Substring("${VarName}=".Length)
+    }
+    return $null
+}
+
+function Get-HeadroomActualBackend {
+    param([int]$ProcessId, [string]$ProviderName)
+
+    # Some providers pass an explicit --backend flag.
+    $cmdline = bash -c "ps -p $ProcessId -o args= 2>/dev/null"
+    if ($cmdline -match '--backend\s+(\S+)') {
+        return $Matches[1]
+    }
+
+    # OpenAI-compatible providers set OPENAI_TARGET_API_URL instead.
+    $openaiUrl = Get-ProcessEnvValue -ProcessId $ProcessId -VarName 'OPENAI_TARGET_API_URL'
+    if ($openaiUrl) {
+        switch -Regex ($openaiUrl) {
+            'api\.openai\.com' { return 'openai' }
+            'api\.groq\.com' { return 'groq' }
+            'integrate\.api\.nvidia\.com' { return 'nvidia' }
+            'api\.cerebras\.ai' { return 'cerebras' }
+            'localhost:11434' { return 'ollama' }
+            '127\.0\.0\.1:8000' { return 'omlx' }
+            'localhost:9000' { return 'llamacpp' }
+            default { return 'openai-compatible' }
+        }
+    }
+
+    return $ProviderName
+}
+
 if (-not (Test-Path $PidsDir)) {
     Write-Host "No Headroom proxies have been started."
     Write-Host "  Start all: mise run headroom:start-all"
@@ -48,6 +84,40 @@ foreach ($file in $files) {
         $uptime = (Get-Date) - $proc.StartTime
         $uptimeStr = "{0:D2}h {1:D2}m {2:D2}s" -f $uptime.Hours, $uptime.Minutes, $uptime.Seconds
         Write-Host "  ✅ $name  PID $pidVal  port $port  uptime $uptimeStr"
+
+        $healthJson = bash -c "curl -sf http://127.0.0.1:$port/health 2>/dev/null || true"
+        if ($healthJson) {
+            try {
+                $health = $healthJson | ConvertFrom-Json
+                $version = $health.version ?? 'unknown'
+                $ready = $health.ready ?? $false
+                $actualBackend = Get-HeadroomActualBackend -ProcessId $pidVal -ProviderName $name
+                $openaiUrl = $health.config.openai_api_url
+                $upstreamUrl = $health.checks.upstream.url
+
+                $readyMark = if ($ready) { 'ready' } else { 'not ready' }
+                Write-Host "     version: $version | $readyMark | backend: $actualBackend"
+
+                $targetUrls = @()
+                if ($health.config.anthropic_api_url) { $targetUrls += "anthropic: $($health.config.anthropic_api_url)" }
+                if ($health.config.openai_api_url) { $targetUrls += "openai: $($health.config.openai_api_url)" }
+                if ($health.config.gemini_api_url) { $targetUrls += "gemini: $($health.config.gemini_api_url)" }
+                if ($health.config.cloudcode_api_url) { $targetUrls += "cloudcode: $($health.config.cloudcode_api_url)" }
+                foreach ($urlLine in $targetUrls) {
+                    Write-Host "     target $urlLine"
+                }
+            } catch {
+                Write-Host "     health: received non-JSON response"
+            }
+        } else {
+            Write-Host "     health: not reachable"
+        }
+
+        $embedderRuntime = Get-ProcessEnvValue -ProcessId $pidVal -VarName 'HEADROOM_EMBEDDER_RUNTIME'
+        if ($embedderRuntime) {
+            Write-Host "     runtime: HEADROOM_EMBEDDER_RUNTIME=$embedderRuntime"
+        }
+
         $running++
     } else {
         Write-Host "  ❌ $name  PID $pidVal  port $port  NOT RUNNING"
