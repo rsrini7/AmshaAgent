@@ -180,8 +180,6 @@ delegate to coordinator: ask parvati to adjust the tone of this response - "Your
 
 /cron delete all
 
-/halt
-
 what patterns have we discussed for error handling?
 
 search archival for "Quarkus" with limit 3
@@ -211,3 +209,7 @@ store this in archival memory: some fact. Type INVALID_TYPE
 what patterns do I prefer for error handling?
 
 read my core memory
+
+/halt
+
+check what we discussed after halt ??
