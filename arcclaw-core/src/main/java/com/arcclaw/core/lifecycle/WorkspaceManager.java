@@ -72,6 +72,18 @@ public class WorkspaceManager {
         HALTED_SESSIONS.remove(sessionId);
     }
 
+    /**
+     * Marks a session as halted so that subsequent submissions are rejected
+     * immediately by PreflightState. Unlike terminateSession(), this is a
+     * lightweight static call suitable for use from state-machine internals
+     * (e.g. when the global iteration budget is exhausted).
+     */
+    public static void haltSession(String sessionId) {
+        if (sessionId == null) return;
+        HALTED_SESSIONS.put(sessionId, System.currentTimeMillis());
+        log.infof("[Halt] Session %s marked as halted (budget exceeded)", sessionId);
+    }
+
     @Inject
     WorkspaceManager self;
 

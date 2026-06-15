@@ -60,6 +60,9 @@ public class PreflightState implements RunnerState {
             log.warnf(
                     "Global iteration budget (%d) exceeded for session %s — terminating",
                     WorkspaceContext.DEFAULT_GLOBAL_MAX_ITERATIONS, execCtx.sessionId());
+            // Mark session as halted so subsequent goal submissions are rejected
+            // immediately instead of entering the loop and failing again.
+            WorkspaceManager.haltSession(execCtx.sessionId());
             context.setFinalResult(AgentResult.loopExceeded(iteration, List.copyOf(context.history())));
             return services.failedState();
         }
