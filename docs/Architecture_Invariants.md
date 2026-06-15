@@ -99,6 +99,18 @@ These are NOT interchangeable.
 > per event (session scope), not the full workspace context. This is intentional and is
 > the only legitimate multi-session background binding pattern. See §5.17.
 
+### 2.8 Fallback session ID derivation
+
+`FallbackSessionIdResolver` MUST derive session IDs deterministically from the
+three-tuple `(channelType, channelId, userId)`.
+
+- The fallback key format is `{channelType}:{channelId}:{userId}`.
+- Multi-channel sessions are isolated by `channelType` — a Telegram user and a
+  WebSocket user with the same numeric ID MUST NOT share a session.
+- Cron sessions (`sessionId.startsWith("cron-")`) MUST be excluded from chat
+  approval routing to prevent cron checkpoints from appearing in user-facing
+  approval queues.
+
 ---
 
 ## 3. Runtime execution invariants
@@ -152,6 +164,50 @@ Storing system messages inflates context, corrupts compaction logic, and leaks t
 In `StructuredRetryLoop`, `assertWithinBudget()` threshold check MUST precede `compareAndSet()`.
 If CAS fires first at 79% budget, `warningSent` is permanently `true` - the real 80% boundary
 warning is forever suppressed. The ordering is: check → log → CAS, never CAS → check.
+
+## 3.8 Strict terminal finish rules
+
+The coordinator persona MUST emit a `FINISH` action immediately after any successful
+tool execution. No additional tool calls may follow a `FINISH` in the same turn.
+
+- `AgentStateMachineRunner` enforces a two-pass protocol: pass 1 sends tool results
+  with a terminal-mode hint; pass 2 sends a plain-text summary guidance.
+- The `finally` block in the finish handler MUST clean up history to prevent
+  residual system messages from corrupting subsequent turns.
+- Violation: Tool chaining after `FINISH` corrupts the state machine and produces
+  orphaned checkpoint states.
+
+## 3.9 Global budget halt
+
+`WorkspaceManager.haltSession()` provides a circuit-breaker for global budget
+exceedance with a 5-minute TTL.
+
+- `PreflightState` MUST check the global iteration budget before each loop iteration.
+- If the budget is exceeded, `haltSession(sessionId)` marks the session as halted.
+- Halted sessions reject new tool invocations until the TTL expires or an operator
+  explicitly unhalts the session.
+- MUST NOT allow tool execution while the session is in `HALTED` state.
+
+## 3.10 Telegram HITL notification flush
+
+Channel callback handlers that bypass `AbstractDecisionReflex` (e.g., Telegram
+inline keyboard approval callbacks) MUST call `flushPendingNotifications()`
+after processing approval decisions.
+
+- `TelegramCallbackHandler` injects `ApprovalNotificationService` and calls
+  `flushPendingNotifications()` in the callback path.
+- Without this flush, approval notifications may be silently dropped, leaving
+  the user without feedback after a HITL decision.
+
+## 3.11 GraalVM SecureRandom local instantiation
+
+Native-image builds MUST NOT hold `SecureRandom` in `static` or `static final` fields.
+
+- `SecureRandom` instances MUST be created locally per use with `new SecureRandom()`.
+- The byte array returned by `SecureRandom` MUST be zeroed in a `finally` block
+  after use (defense-in-depth against heap inspection).
+- Static fields cause `UnsupportedFeatureException` at native-image build time
+  because GraalVM attempts to snapshot the object into the image heap.
 
 ---
 
@@ -795,6 +851,20 @@ This is **3 archives × 3 binaries each = 9 binaries total** across all platform
 **Default binary (`arcclaw-sqlite` / `arcclaw-sqlite.exe`)** is always the SQLite variant — works out of the box with zero configuration. Users who want PostgreSQL or Filesystem use `arcclaw-pg` or `arcclaw-fs` respectively.
 
 **JVM mode is backend-agnostic:** The JAR distribution (`quarkus-run.jar`) includes all 3 backend jars. The user switches via `.env` at runtime — no separate JARs needed.
+
+---
+
+## 5.25 Checkpoint filter terminal statuses
+
+Checkpoint queries in the persistence layer MUST treat `DENIED` as a terminal
+status alongside `FAILED`, `COMPLETED`, `ARCHIVED`, and `COMPROMISED`.
+
+- `FsCheckpointStoreAdapter` MUST include `DENIED` in terminal status filters.
+- `isCheckpointExpired()` MUST narrow its check to `AWAITING_APPROVAL` only,
+  not all non-terminal statuses. A `DENIED` checkpoint is terminal and must
+  NOT be overwritten by expiration logic.
+- Violation: Treating `DENIED` as non-terminal causes spurious resume attempts
+  and corrupts the checkpoint lifecycle state machine.
 
 ---
 

@@ -79,6 +79,34 @@ import module java.base;  // JEP 511
 ### 1.7 Continuity Intent vs Follow-Up
 `isExplicitContinuity` (try again, retry, redo, proceed, continue) **restores old goal**. Execution follow-ups (`execute`, `run it`, `do it`, `run java`, `run python`, etc.) use the **new goal** — do NOT restore stale context. Enforcement: `IntentClassificationService.CONTINUITY_PATTERN`, `AgentDispatchHandler.resolveGoal()`, `TextPatternUtils.isFollowUpHeuristic()`.
 
+### 1.8 GraalVM SecureRandom Local Instantiation
+`SecureRandom` instances MUST be created locally per use with `new SecureRandom()`.
+MUST NOT hold `SecureRandom` in `static` or `static final` fields — GraalVM attempts
+to snapshot the object into the image heap, causing `UnsupportedFeatureException`.
+The byte array returned MUST be zeroed in a `finally` block after use
+(defense-in-depth against heap inspection).
+
+### 1.9 Strict Terminal Finish Rules
+The coordinator persona MUST emit a `FINISH` action immediately after any successful
+tool execution. No additional tool calls may follow a `FINISH` in the same turn.
+`AgentStateMachineRunner` enforces a two-pass protocol: pass 1 sends tool results
+with a terminal-mode hint; pass 2 sends a plain-text summary guidance. Violation:
+Tool chaining after `FINISH` corrupts the state machine and produces orphaned
+checkpoint states.
+
+### 1.10 Telegram HITL Notification Flush
+Channel callback handlers that bypass `AbstractDecisionReflex` (e.g., Telegram
+inline keyboard approval callbacks) MUST call `flushPendingNotifications()`
+after processing approval decisions. Without this flush, approval notifications
+may be silently dropped, leaving the user without feedback after a HITL decision.
+
+### 1.11 Fallback Session ID Derivation
+`FallbackSessionIdResolver` MUST derive session IDs deterministically from the
+three-tuple `(channelType, channelId, userId)`. Multi-channel sessions are isolated
+by `channelType` — a Telegram user and a WebSocket user with the same numeric ID
+MUST NOT share a session. Cron sessions (`sessionId.startsWith("cron-")`) MUST be
+excluded from chat approval routing.
+
 ---
 
 ## 2. Key Framework Components
@@ -121,6 +149,12 @@ Trusted roles (`requiresApproval=false`) skip non-sensitive policy checks. `NETW
 ### 2.10 EXECUTE_SHELL as Sensitive Op
 `EXECUTE_SHELL` (sandbox_exec) is classified alongside `NETWORK_OUTBOUND` as a sensitive operation — always requires HITL for trusted roles. Add new sensitive ops to `ToolGovernanceGuard.checkPolicy()`.
 
+### 2.11 Tool Guardrail Hardening
+`SmartWebFetchTool` now enforces 3 retry attempts with linear backoff and strict URL
+validation. The `url` parameter is mandatory for `browser_navigate` (Playwright).
+The researcher persona MUST NOT call `headroom_retrieve` — use `recall_memory_search`
+or `archival_memory_search` instead.
+
 ---
 
 ## 3. Code Conventions
@@ -150,6 +184,9 @@ On restart, auto-deny ALL stale `AWAITING_APPROVAL` checkpoints for all channel 
 
 ## 5. Adding a New LLM Provider
 
+Existing providers: `groq`, `openai`, `ollama`, `openrouter`, `claude-code`,
+`cerebras`, `gemini`, `nvidia`, `omlx`, `generic-openai`.
+
 1. **`RoutingChatModelProvider`** — `arcclaw-core/.../routing/<Name>LlmProviderFactory.java`
 2. **`AgentChatModelProvider`** — `arcclaw-core/.../agent/reasoning/<Name>ProviderFactory.java`
 3. **`LlmModelFactory.java`** — Add URL pattern to `URL_PROVIDER_MAP`
@@ -158,6 +195,11 @@ On restart, auto-deny ALL stale `AWAITING_APPROVAL` checkpoints for all channel 
 6. **`.env.example`** — Same additions
 7. **`arc-settings.ts`** + **`arc-onboarding-step2.ts`** — Add to `PROVIDERS`/`providers` arrays
 8. **Verify**: `./mvnw compile -q` + `cd arcclaw-ui && npm run build`
+
+**Generic OpenAI provider pattern:** Use `GenericOpenAiLlmProviderFactory.java` (routing)
+and `GenericOpenAiProviderFactory.java` (agent reasoning) as templates. The generic
+provider auto-detects `deepseek-reasoner` and injects `include_reasoning=true` workaround.
+Requires `ARCCLAW_GENERIC_OPENAI_BASE_URL` and `ARCCLAW_GENERIC_OPENAI_API_KEY`.
 
 ---
 

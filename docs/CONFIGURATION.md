@@ -11,7 +11,7 @@ Generate secrets: `openssl rand -base64 32` (Linux/macOS) or `[Convert]::ToBase6
 | Variable | Default | Description |
 |---|---|---|
 | `ARCCLAW_LLM_API_KEY` | — | LLM provider API key (Groq = `gsk_...`) |
-| `ARCCLAW_LLM_PROVIDER` | `groq` | Provider: groq, openai, ollama, openrouter, claude-code, cerebras, gemini, nvidia, omlx |
+| `ARCCLAW_LLM_PROVIDER` | `groq` | Provider: `groq`, `openai`, `ollama`, `openrouter`, `claude-code`, `cerebras`, `gemini`, `nvidia`, `omlx`, `generic-openai` |
 | `ARCCLAW_LLM_MAX_OUTPUT_TOKENS` | `8192` | Max output tokens per LLM call |
 | `ARCCLAW_LLM_MAX_RETRIES` | `3` | Max LLM retry attempts |
 | `ARCCLAW_LLM_TEMPERATURE` | `0.1` | LLM temperature |
@@ -19,8 +19,27 @@ Generate secrets: `openssl rand -base64 32` (Linux/macOS) or `[Convert]::ToBase6
 | `ARCCLAW_LLM_CONTEXT_WINDOW` | `128000` | Context window size (tokens) |
 | `ARCCLAW_LLM_LOG_HTTP` | `false` | Enable HTTP-level logging for LLM calls |
 | `ARCCLAW_LLM_COMPACT_PROMPT_ENABLED` | `false` | Use compact prompt format |
-| `ARCCLAW_LLM_STRUCTURED_OUTPUT_MODE` | `NATIVE` | Structured output mode (NATIVE/STRICT/LENIENT) |
+| `ARCCLAW_LLM_STRUCTURED_OUTPUT_MODE` | `NATIVE` | Structured output mode: `NATIVE`, `STRICT`, `LENIENT`, `PROMPT_DIRECTIVE`. `PROMPT_DIRECTIVE` forces JSON-only instructions (use when provider rejects native JSON mode with tools) |
 | `ARCCLAW_LLM_VAULT_PRIORITY` | `false` | Vault operations get priority LLM access |
+
+## Generic OpenAI Provider
+
+Generic OpenAI-compatible provider for custom endpoints (e.g., DeepSeek,
+self-hosted proxies, or any OpenAI API-compatible service). Auto-detected
+`deepseek-reasoner` model injects `include_reasoning=true` workaround.
+
+| Variable | Default | Description |
+|---|---|---|
+| `ARCCLAW_GENERIC_OPENAI_API_KEY` | — | API key for generic OpenAI provider |
+| `ARCCLAW_GENERIC_OPENAI_MODEL` | — | Model name (e.g., `deepseek-v4-flash`) |
+| `ARCCLAW_GENERIC_OPENAI_BASE_URL` | — | Base URL for generic OpenAI endpoint (e.g., `https://api.example.com/v1` or `http://localhost:8796/v1` via Headroom) |
+| `ARCCLAW_GENERIC_OPENAI_TARGET_URL` | — | Target upstream URL when proxying through Headroom |
+| `ARCCLAW_GENERIC_OPENAI_EXTRA_BODY` | — | Extra JSON body fields (e.g., `{"thinking": {"type": "disabled"}}`) |
+
+Compaction and classifier slots also support `generic-openai`:
+`ARCCLAW_COMPACTION_GENERIC_OPENAI_API_KEY`, `ARCCLAW_COMPACTION_GENERIC_OPENAI_MODEL`,
+`ARCCLAW_COMPACTION_GENERIC_OPENAI_BASE_URL` and `ARCCLAW_CLASSIFIER_GENERIC_OPENAI_*`
+vars. See Compaction and Intent Classification sections below.
 
 ## Compaction
 
@@ -36,17 +55,18 @@ provider in the list has its own slot with independent health tracking.
 | `ARCCLAW_COMPACTION_GROQ_MAX_RETRIES` | `3` | Max retries for the Groq compaction slot |
 | `ARCCLAW_COMPACTION_OLLAMA_MODEL` | `mistral-small:latest` | Ollama model for the compaction slot |
 | `ARCCLAW_COMPACTION_OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama base URL for compaction |
-| `ARCCLAW_COMPACTION_STRUCTURED_OUTPUT_MODE` | `NATIVE` | Compaction structured output mode |
+| `ARCCLAW_COMPACTION_STRUCTURED_OUTPUT_MODE` | `NATIVE` | Compaction structured output mode: `NATIVE`, `STRICT`, `LENIENT`, `PROMPT_DIRECTIVE` |
+| `ARCCLAW_COMPACTION_AWAIT_TIMEOUT_SECONDS` | `60` | Compaction loop await timeout (s) |
 
 For non-Groq providers, mirror the pattern with `ARCCLAW_COMPACTION_{PROVIDER}_{KEY}`.
 Available providers: `groq`, `openai`, `openrouter`, `cerebras`, `gemini`, `nvidia`,
-`omlx`, `ollama`. Local providers (`ollama`, `omlx`) do not require an API key.
+`omlx`, `ollama`, `generic-openai`. Local providers (`ollama`, `omlx`) do not require an API key.
+
+Generic OpenAI compaction variables:
+`ARCCLAW_COMPACTION_GENERIC_OPENAI_API_KEY`, `ARCCLAW_COMPACTION_GENERIC_OPENAI_MODEL`,
+`ARCCLAW_COMPACTION_GENERIC_OPENAI_BASE_URL`
 
 ## Intent Classification
-
-Intent classification uses a multi-slot infinite-loop failover. The primary
-`intent-classifier` ChatModel bean rotates through the listed providers; the
-`intent-classifier-fallback` ChatModel is a hard-coded Ollama safety net for
 when all slots are exhausted.
 
 | Variable | Default | Description |
@@ -58,7 +78,7 @@ when all slots are exhausted.
 | `ARCCLAW_CLASSIFIER_GROQ_MAX_RETRIES` | `3` | Max retries for the Groq classifier slot |
 | `ARCCLAW_CLASSIFIER_OLLAMA_MODEL` | `mistral-small:latest` | Ollama model for the classifier slot |
 | `ARCCLAW_CLASSIFIER_OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama base URL for classifier |
-| `ARCCLAW_INTENT_CLASSIFIER_STRUCTURED_OUTPUT_MODE` | `NATIVE` | Classifier structured output mode |
+| `ARCCLAW_INTENT_CLASSIFIER_STRUCTURED_OUTPUT_MODE` | `NATIVE` | Classifier structured output mode: `NATIVE`, `STRICT`, `LENIENT`, `PROMPT_DIRECTIVE` |
 
 For non-Groq providers, mirror the pattern with `ARCCLAW_CLASSIFIER_{PROVIDER}_{KEY}`.
 
@@ -90,6 +110,39 @@ the same cooldown timing.
 | `ARCCLAW_INFINITE_LOOP_COOLDOWN_MAX_SECONDS` | `300` | Max cooldown (s) |
 | `ARCCLAW_INFINITE_LOOP_COOLDOWN_TRANSIENT_SECONDS` | `5` | Transient error cooldown (s) |
 | `ARCCLAW_INFINITE_LOOP_MAX_LATENCY_MS` | `60000` | Max acceptable latency (ms) |
+
+For each provider in `ARCCLAW_INFINITE_LOOP_LLM_PROVIDERS`, the following per-provider
+variables are required (replace `{PROVIDER}` with the provider name, e.g., `GROQ`, `OPENROUTER`, `GEMINI`):
+| Variable | Default | Description |
+|---|---|---|
+| `ARCCLAW_GROQ_API_KEY` | — | Groq API key for the main LLM slot |
+| `ARCCLAW_GROQ_MODEL` | — | Groq model for the main LLM slot |
+| `ARCCLAW_GEMINI_MODEL` | — | Gemini model for the main LLM slot |
+| `ARCCLAW_OPENROUTER_API_KEY` | — | OpenRouter API key for the main LLM slot |
+| `ARCCLAW_OPENROUTER_MODEL` | — | OpenRouter model for the main LLM slot |
+
+## Headroom
+
+Headroom is an optional LLM context compression proxy (v0.25.0) that sits
+between ArcClaw and remote providers, reducing token costs by 30–60%. Each
+provider gets its own proxy instance on a dedicated port. Managed via
+`.mise/tasks/headroom/` PowerShell scripts.
+
+| Variable | Default | Description |
+|---|---|---|
+| `ARCCLAW_HEADROOM_ENABLED` | `false` | Enable Headroom context compression proxies |
+| `ARCCLAW_HEADROOM_OPENROUTER_PORT` | `8788` | Headroom proxy port for OpenRouter |
+| `ARCCLAW_HEADROOM_GROQ_PORT` | `8789` | Headroom proxy port for Groq |
+| `ARCCLAW_HEADROOM_NVIDIA_PORT` | `8790` | Headroom proxy port for NVIDIA |
+| `ARCCLAW_HEADROOM_CEREBRAS_PORT` | `8791` | Headroom proxy port for Cerebras |
+| `ARCCLAW_HEADROOM_GEMINI_PORT` | `8792` | Headroom proxy port for Gemini |
+| `ARCCLAW_HEADROOM_OPENAI_PORT` | `8793` | Headroom proxy port for OpenAI |
+| `ARCCLAW_HEADROOM_OLLAMA_PORT` | `8794` | Headroom proxy port for Ollama |
+| `ARCCLAW_HEADROOM_OMLX_PORT` | `8795` | Headroom proxy port for OmniMLX |
+| `ARCCLAW_HEADROOM_GENERIC_OPENAI_PORT` | `8796` | Headroom proxy port for Generic OpenAI |
+| `ARCCLAW_HEADROOM_LLAMACPP_PORT` | `8797` | Headroom proxy port for llama.cpp |
+
+See `.mise/tasks/headroom/README.md` for setup and usage.
 
 ## Security & Vault
 
@@ -197,6 +250,7 @@ schema) and must match the model used by every active provider.
 | `ARCCLAW_TOOLS_SERPER_API_KEY` | `none` | Serper Google Search API key |
 | `ARCCLAW_TOOLS_GITHUB_TOKEN` | — | GitHub personal access token |
 | `ARCCLAW_TOOLS_PLAYWRIGHT_ENABLED` | `false` | Enable Playwright CLI tool |
+| `ARCCLAW_TOOLS_PLAYWRIGHT_SKIP_INSTALL` | `false` | Skip Playwright browser installation on startup |
 | `ARCCLAW_TOOLS_PLAYWRIGHT_HEADLESS` | `true` | Run Playwright headless |
 | `ARCCLAW_TOOLS_PLAYWRIGHT_MCP_ENABLED` | `false` | Enable Playwright MCP Server |
 | `ARCCLAW_TOOLS_PLAYWRIGHT_MCP_HEADLESS` | `true` | MCP browser headless mode |
