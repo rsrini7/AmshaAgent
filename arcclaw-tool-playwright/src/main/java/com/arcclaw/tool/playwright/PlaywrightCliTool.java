@@ -153,6 +153,7 @@ public class PlaywrightCliTool implements AgentTool {
                         "script",
                         "JavaScript expression to evaluate (used with action=eval). Example: 'document.title', 'document.querySelectorAll(\"a\").length'.")
                 .addIntegerProperty("timeoutMs", "Timeout in milliseconds for wait action (default: 5000).")
+                .required("url")
                 .build();
     }
 

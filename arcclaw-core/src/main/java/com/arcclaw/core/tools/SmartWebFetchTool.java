@@ -58,6 +58,7 @@ public class SmartWebFetchTool implements AgentTool {
     private static final Pattern MULTI_NEWLINE_PATTERN = Pattern.compile("\n{3,}");
     private static final Pattern SCRIPT_STYLE_PATTERN = Pattern.compile("(?is)<(script|style|noscript)[^>]*>.*?</\\1>");
     private static final int MAX_REDIRECTS = 5;
+    private static final int MAX_FETCH_RETRIES = 2;
 
     private static final Logger LOG = Logger.getLogger(SmartWebFetchTool.class);
 
@@ -161,14 +162,33 @@ public class SmartWebFetchTool implements AgentTool {
             }
         }
 
-        try {
-            return fetchWithRedirects(url, maxChars, ctx, 0);
-        } catch (IllegalArgumentException e) {
-            return ToolResponse.failure(400, "Invalid URL: " + e.getMessage());
-        } catch (Exception e) {
-            if (e instanceof InterruptedException) Thread.currentThread().interrupt();
-            return ToolResponse.failure(502, "Failed to fetch " + url + ": " + e.getMessage());
+        Exception lastException = null;
+        for (int attempt = 0; attempt <= MAX_FETCH_RETRIES; attempt++) {
+            if (attempt > 0) {
+                try {
+                    LOG.infof("Retrying web_fetch for %s (attempt %d/%d)", url, attempt + 1, MAX_FETCH_RETRIES + 1);
+                    Thread.sleep(1000L * attempt); // linear backoff: 1s, 2s
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    return ToolResponse.failure(502, "Interrupted while fetching " + url);
+                }
+            }
+            try {
+                return fetchWithRedirects(url, maxChars, ctx, 0);
+            } catch (IllegalArgumentException e) {
+                return ToolResponse.failure(400, "Invalid URL: " + e.getMessage());
+            } catch (Exception e) {
+                if (e instanceof InterruptedException) {
+                    Thread.currentThread().interrupt();
+                    return ToolResponse.failure(502, "Interrupted while fetching " + url);
+                }
+                lastException = e;
+                LOG.warnf("web_fetch attempt %d failed for %s: %s", attempt + 1, url, e.getMessage());
+            }
         }
+        return ToolResponse.failure(
+                502, "Failed to fetch " + url + " after " + (MAX_FETCH_RETRIES + 1) + " attempts: "
+                        + lastException.getMessage());
     }
 
     /**

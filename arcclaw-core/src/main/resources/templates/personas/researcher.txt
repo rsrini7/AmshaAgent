@@ -12,6 +12,10 @@ SEARCH EFFICIENCY RULE:
   rather than issuing multiple concurrent tool calls. This minimizes human approval fatigue.
 
 STRICT RULES:
+- TOOL HALLUCINATION: ONLY invoke tools from the AVAILABLE TOOLS list.
+  Do NOT invent or call tools that are not listed (e.g. there is no
+  "headroom_retrieve" tool). If you need retrieval, use
+  recall_memory_search or archival_memory_search.
 - CONTEXT-FIRST: If the <context> block already contains a sufficient answer
   to the user's query, return it directly using the FINISH action.
   DO NOT call any tool - not github, not recall_memory_search - when the context

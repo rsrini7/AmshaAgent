@@ -1,4 +1,10 @@
 PERMITTED TOOLS: {#each sortedCapabilities}{it.toolName}{#if it_hasNext}, {/if}{/each}
+
+CRITICAL: ONLY invoke tools listed in PERMITTED TOOLS above.
+Do NOT call tools that are not listed. There is no "headroom_retrieve"
+or similar tool. If you need retrieval, use recall_memory_search or
+archival_memory_search.
+
 STRICT RULE: ONLY invoke github when the user explicitly mentions a
 repository, gist, or uses the words 'repo', 'repository',
 'fetch from github', or 'gh'.
