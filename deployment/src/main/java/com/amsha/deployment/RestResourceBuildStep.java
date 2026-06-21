@@ -25,7 +25,7 @@ public class RestResourceBuildStep {
     private static final DotName JAX_RS_PATH = DotName.createSimple("jakarta.ws.rs.Path");
     private static final DotName RUN_ON_VIRTUAL_THREAD =
             DotName.createSimple("io.smallrye.common.annotation.RunOnVirtualThread");
-    private static final String ARCLAW_PACKAGE = "com.amsha.";
+    private static final String AMSHA_PACKAGE = "com.amsha.";
 
     @BuildStep
     void enforceVirtualThreadOnRestResources(
@@ -37,7 +37,7 @@ public class RestResourceBuildStep {
             ClassInfo classInfo = pathAnnotation.target().asClass();
 
             // Only enforce for Amsha Agent's own REST resources (skip third-party libs)
-            if (!classInfo.name().toString().startsWith(ARCLAW_PACKAGE)) continue;
+            if (!classInfo.name().toString().startsWith(AMSHA_PACKAGE)) continue;
 
             if (!classInfo.hasAnnotation(RUN_ON_VIRTUAL_THREAD)) {
                 errors.produce(new ValidationErrorBuildItem(new RuntimeException("REST resource " + classInfo.name()

@@ -92,7 +92,7 @@ schedule to write a bash script that echoes hello world and run it every 2 minut
 
 wait 3 min then check if recurring cron fired again
 
-/github view rsrini7/ArcClawInternal readme
+/github view rsrini7/AmshaAgentInternal readme
 
 /github list rsrini7 repos
 
