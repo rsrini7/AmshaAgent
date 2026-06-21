@@ -4,6 +4,6 @@
 $ErrorActionPreference = 'Stop'
 Write-Host '▶   Building quarkus-run.jar for SQLite backend...'
 $mvnw = if ($IsWindows) { '.\mvnw.cmd' } else { './mvnw' }
-& $mvnw 'package' '-pl' 'amsha-app' '-am' '-DskipTests' '-q'
+& $mvnw 'package' '-pl' 'app' '-am' '-DskipTests' '-q'
 if ($LASTEXITCODE -ne 0) { Write-Host "❌  Build failed."; exit $LASTEXITCODE }
 Write-Host '✅  SQLite JAR ready.'

@@ -665,7 +665,7 @@ export MAVEN_OPTS="--add-opens=java.base/java.nio=ALL-UNNAMED \
 mv .env.build-backup .env
 ```
 
-Output: `app/target/app-1.0.0-SNAPSHOT-runner`
+Output: `app/target/app-0.1.0-SNAPSHOT-runner`
 
 ### 10.2 Build - Local GraalVM (No Container)
 
@@ -702,7 +702,7 @@ export LD_PRELOAD=/lib/x86_64-linux-gnu/libm.so.6
 export AMSHA_RAG_VEC_PATH=./lib/vec0
 export AMSHA_DATA_DIR=./data
 
-./app/target/app-1.0.0-SNAPSHOT-runner serve
+./app/target/app-0.1.0-SNAPSHOT-runner serve
 # or: chat | attach | ask "your goal"
 ```
 
@@ -712,7 +712,7 @@ export AMSHA_DATA_DIR=./data
 export AMSHA_RAG_VEC_PATH=./lib/vec0
 export AMSHA_DATA_DIR=./data
 
-./app/target/app-1.0.0-SNAPSHOT-runner serve
+./app/target/app-0.1.0-SNAPSHOT-runner serve
 ```
 
 #### Windows PowerShell
@@ -721,13 +721,13 @@ export AMSHA_DATA_DIR=./data
 $env:AMSHA_RAG_VEC_PATH = './lib/vec0'
 $env:AMSHA_DATA_DIR = './data'
 
-.\app\target\app-1.0.0-SNAPSHOT-runner.exe serve
+.\app\target\app-0.1.0-SNAPSHOT-runner.exe serve
 ```
 
 #### Role Flag (All Platforms)
 
 ```bash
-./app/target/app-1.0.0-SNAPSHOT-runner ask "your goal" --role researcher
+./app/target/app-0.1.0-SNAPSHOT-runner ask "your goal" --role researcher
 ```
 
 ---
@@ -741,7 +741,7 @@ Manually assemble a `dist/` folder containing the binary, launchers, and vec0 ex
 mkdir -p dist/lib
 
 # Copy binary
-cp app/target/app-1.0.0-SNAPSHOT-runner dist/
+cp app/target/app-0.1.0-SNAPSHOT-runner dist/
 
 # Copy .env.example
 cp .env.example dist/.env.example
@@ -755,7 +755,7 @@ cp .env.example dist/.env.example
 ```powershell
 # Windows PowerShell
 New-Item -ItemType Directory -Force dist/lib | Out-Null
-Copy-Item app/target/app-1.0.0-SNAPSHOT-runner.exe dist/
+Copy-Item app/target/app-0.1.0-SNAPSHOT-runner.exe dist/
 Copy-Item .env.example dist/.env.example
 if (Test-Path lib/vec0.dll)   { Copy-Item lib/vec0.dll   dist/lib/ }
 if (Test-Path lib/vec0.so)    { Copy-Item lib/vec0.so    dist/lib/ }
@@ -768,14 +768,14 @@ if (Test-Path lib/vec0.dylib) { Copy-Item lib/vec0.dylib dist/lib/ }
 # Linux archive
 mkdir -p dist/release
 cd dist
-tar -czf release/amsha-1.0.0-linux-x64.tar.gz \
-  amsha-app-1.0.0-SNAPSHOT-runner .env.example lib/
+tar -czf release/amsha-0.1.0-linux-x64.tar.gz \
+  amsha-app-0.1.0-SNAPSHOT-runner .env.example lib/
 cd ..
 ```
 
 ```powershell
 # Windows archive
-Compress-Archive -Path dist/* -DestinationPath dist/release/amsha-1.0.0-windows-x64.zip -Force
+Compress-Archive -Path dist/* -DestinationPath dist/release/amsha-0.1.0-windows-x64.zip -Force
 ```
 
 ---
@@ -1072,7 +1072,7 @@ podman machine start
 
 ```bash
 export LD_PRELOAD=/lib/x86_64-linux-gnu/libm.so.6
-./app/target/app-1.0.0-SNAPSHOT-runner serve
+./app/target/app-0.1.0-SNAPSHOT-runner serve
 ```
 
 ### vector search disabled at runtime
@@ -1126,4 +1126,4 @@ The `init-perms` service in `docker-compose.yaml` handles this automatically by 
 
 ---
 
-*Last updated: Amsha Agent V1.0.0 · Quarkus 3.27.2 · JDK 25*
+*Last updated: Amsha Agent V0.1.0 · Quarkus 3.27.2 · JDK 25*

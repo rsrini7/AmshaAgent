@@ -113,7 +113,7 @@ class FsAuditEventStoreAdapterDeepTest {
                 BigDecimal.valueOf(0.01),
                 Instant.now(),
                 5,
-                "1.0.0",
+                "0.1.0",
                 "idem-key-" + sequence,
                 sequence,
                 "hmac-hash",

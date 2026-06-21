@@ -159,7 +159,7 @@ class AuditResourceTest {
                 BigDecimal.ZERO,
                 Instant.now(),
                 1,
-                "1.0.0",
+                "0.1.0",
                 "idem-key",
                 1L,
                 "hmac",

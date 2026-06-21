@@ -45,16 +45,16 @@ try {
     $env:JAVA_HOME = $graalPath
 
     $env:MAVEN_OPTS = '--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow'
-    & $mvnw clean package -Pnative -pl amsha-app -am -DskipTests "-Damsha.build.backend=fs" "-Damsha.persistence.backend=fs" "-Dquarkus.profile=prod,filesystem" '-Dquarkus.native.container-build=false' "-Dquarkus.native.native-image-xmx=${targetGB}g"
+    & $mvnw clean package -Pnative -pl app -am -DskipTests "-Damsha.build.backend=fs" "-Damsha.persistence.backend=fs" "-Dquarkus.profile=prod,filesystem" '-Dquarkus.native.container-build=false' "-Dquarkus.native.native-image-xmx=${targetGB}g"
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-    Write-Host "✅  Filesystem native build complete: app/target/app-1.0.0-SNAPSHOT$suffix"
+    Write-Host "✅  Filesystem native build complete: app/target/amsha-app-0.1.0-SNAPSHOT$suffix"
     Write-Host '▶   Copying to dist/amsha-fs...'
     if (-not (Test-Path 'dist')) { New-Item -ItemType Directory -Path 'dist' -Force | Out-Null }
     # Clean up any old -runner files first
     $fsRunner = if ($IsWindows) { "dist/amsha-fs-runner.exe" } else { "dist/amsha-fs-runner" }
     $fsBinary = if ($IsWindows) { "dist/amsha-fs.exe" } else { "dist/amsha-fs" }
     if (Test-Path $fsRunner) { Remove-Item $fsRunner -Force }
-    Copy-Item "app/target/app-1.0.0-SNAPSHOT$suffix" $fsBinary -Force
+    Copy-Item "app/target/amsha-app-0.1.0-SNAPSHOT$suffix" $fsBinary -Force
     # Create .env for the Filesystem backend (activates %filesystem profile at runtime)
     $envContent = @"
 # Amsha Agent Filesystem backend configuration.

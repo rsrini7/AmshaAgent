@@ -41,7 +41,7 @@ class PostgresAuditEventStoreAdapterTest {
                 new BigDecimal("0.001"),
                 Instant.now(),
                 1,
-                "1.0.0",
+                "0.1.0",
                 "idemp-key-123",
                 1L,
                 "hmac",

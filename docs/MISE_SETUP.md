@@ -232,8 +232,8 @@ Amsha Agent/
 └── app/
     └── target/
         ├── quarkus-app/quarkus-run.jar           ← produced by: mise run build-app
-        ├── amsha-app-1.0.0-SNAPSHOT-runner      ← Linux/macOS native
-        └── amsha-app-1.0.0-SNAPSHOT-runner.exe  ← Windows native
+        ├── amsha-app-0.1.0-SNAPSHOT-runner      ← Linux/macOS native
+        └── amsha-app-0.1.0-SNAPSHOT-runner.exe  ← Windows native
 ```
 
 > `mise.bash.toml`, `mise.pwsh.toml`, `scripts/windows/`, and `mise-tasks/` are **no longer needed** - safe to delete.
@@ -430,8 +430,8 @@ Produces:
 
 ```
 dist/
-  amsha-app-1.0.0-SNAPSHOT-runner      (Linux/macOS)
-  amsha-app-1.0.0-SNAPSHOT-runner.exe  (Windows)
+  amsha-app-0.1.0-SNAPSHOT-runner      (Linux/macOS)
+  amsha-app-0.1.0-SNAPSHOT-runner.exe  (Windows)
 ```
 
 ### Using the launchers
@@ -478,9 +478,9 @@ Output:
 
 ```
 dist/release/
-  amsha-1.0.0-linux-x64.tar.gz
-  amsha-1.0.0-macos-aarch64.tar.gz
-  amsha-1.0.0-windows-x64.zip
+  amsha-0.1.0-linux-x64.tar.gz
+  amsha-0.1.0-macos-aarch64.tar.gz
+  amsha-0.1.0-windows-x64.zip
 ```
 
 ***
@@ -659,7 +659,7 @@ mise run setup:env-check
 ```powershell
 mise run native:serve    # or: native:chat / native:attach
 # or directly:
-.\app\target\app-1.0.0-SNAPSHOT-runner.exe serve
+.\app\target\app-0.1.0-SNAPSHOT-runner.exe serve
 ```
 
 ### `.env` `source` fails with syntax error near `<`
@@ -668,5 +668,5 @@ The `.env` file has placeholder values like `key-<random>`. The `amsha` launcher
 
 ***
 
-*Amsha Agent V1.0.0 · Quarkus 3.27.2 · JDK 25 · mise · Temurin 25 + GraalVM Community 25.0.2*
+*Amsha Agent V0.1.0 · Quarkus 3.27.2 · JDK 25 · mise · Temurin 25 + GraalVM Community 25.0.2*
 *One config · All platforms · PowerShell everywhere*

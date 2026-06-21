@@ -828,17 +828,17 @@ mise run build:native-local-all      # All 3 variants → dist/amsha, dist/amsha
 Each OS-specific release archive contains **all 3 backend variants**:
 
 ```
-amsha-1.0.0-linux-x64.tar.gz
+amsha-0.1.0-linux-x64.tar.gz
   ├── amsha-sqlite     # SQLite (default)
   ├── amsha-pg         # PostgreSQL
   └── amsha-fs         # Filesystem
 
-amsha-1.0.0-macos-aarch64.tar.gz
+amsha-0.1.0-macos-aarch64.tar.gz
   ├── amsha-sqlite     # SQLite (default)
   ├── amsha-pg         # PostgreSQL
   └── amsha-fs         # Filesystem
 
-amsha-1.0.0-windows-x64.zip
+amsha-0.1.0-windows-x64.zip
   ├── amsha-sqlite.exe # SQLite (default)
   ├── amsha-pg.exe     # PostgreSQL
   └── amsha-fs.exe     # Filesystem

@@ -1,7 +1,7 @@
 # Amsha Agent REST HTTP Test Suite
 
 > **Tool**: [REST Client](https://marketplace.visualstudio.com/items?itemName=humao.rest-client) for VS Code  
-> **Version**: V1.0.0 (current)  
+> **Version**: V0.1.0 (current)  
 > **Base URL**: `http://localhost:8080`
 
 This directory contains 17 `.http` files covering every REST API surface of Amsha Agent. Run them in the order listed below - health and auth first, then the feature-specific flows, and the Phase 64 regression suite last.

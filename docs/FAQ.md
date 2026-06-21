@@ -1,4 +1,4 @@
-# Amsha Agent V1.0.0 - Frequently Asked Questions (FAQ)
+# Amsha Agent V0.1.0 - Frequently Asked Questions (FAQ)
 
 ---
 
@@ -170,7 +170,7 @@ Spring AI is a strong alternative but is more opinionated toward the Spring ecos
 
 ### Q: Why Groq as the default LLM provider instead of OpenAI or a local model?
 
-Groq's LPU (Language Processing Unit) inference delivers the lowest token/second latency of any hosted API, which directly reduces agent loop iteration time. For a ReAct-style agent that may call the LLM 5–7 times per task, a 3× latency advantage over OpenAI's standard API compounds significantly. Amsha Agent V1.0.0 defaults to `meta-llama/llama-4-scout-17b-16e-instruct` for reasoning and `llama-3.1-8b-instant` for intent classification and compaction - both available on Groq.
+Groq's LPU (Language Processing Unit) inference delivers the lowest token/second latency of any hosted API, which directly reduces agent loop iteration time. For a ReAct-style agent that may call the LLM 5–7 times per task, a 3× latency advantage over OpenAI's standard API compounds significantly. Amsha Agent V0.1.0 defaults to `meta-llama/llama-4-scout-17b-16e-instruct` for reasoning and `llama-3.1-8b-instant` for intent classification and compaction - both available on Groq.
 
 Ollama is still provisioned in `docker-compose.yaml` (disabled by default) for fully air-gapped deployments. Switching is a two-line change in `application.yaml`.
 

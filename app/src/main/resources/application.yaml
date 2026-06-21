@@ -1,5 +1,5 @@
 # =============================================================================
-# Amsha Agent V1.0.0 - Full Application Configuration
+# Amsha Agent V0.1.0 - Full Application Configuration
 # Never hardcode secrets here. Use env vars or Kubernetes Secrets.
 # =============================================================================
 
@@ -19,7 +19,7 @@ quarkus:
 
   application:
     name: amsha
-    version: "1.0.0"
+    version: "0.1.0"
   
   banner:
     enabled: true
@@ -196,7 +196,7 @@ smallrye:
   # ---------------------------------------------------------------------------
   smallrye-openapi:
     info-title: "Amsha Agent API"
-    info-version: "1.0.0"
+    info-version: "0.1.0"
     info-description: "Autonomous multi-agent framework - Java 21 + Quarkus + LangChain4J"
     store-schema-directory: target
     schema-filename: openapi

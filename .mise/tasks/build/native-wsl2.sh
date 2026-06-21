@@ -150,7 +150,7 @@ echo "🧠 Allocating ${TARGET_GB}G for native-image (80% of WSL2 RAM)..."
 
 export MAVEN_OPTS="--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow"
 
-./mvnw clean package -P$PROFILES $SLIM_PROP -pl amsha-app -am -DskipTests $CONTAINER_FLAG -Dquarkus.profile=prod -Dquarkus.native.native-image-xmx=${TARGET_GB}g
+./mvnw clean package -P$PROFILES $SLIM_PROP -pl app -am -DskipTests $CONTAINER_FLAG -Dquarkus.profile=prod -Dquarkus.native.native-image-xmx=${TARGET_GB}g
 
 # 4. Copy ALL compiled artifacts directly back to Windows target/ AND dist/
 echo "🚚 Bringing build artifacts back to Windows..."
@@ -171,7 +171,7 @@ mise run dist:dist
 WIN_DIST_PATH=$(wslpath -w "$OLDPWD/dist")
 echo "✅ WSL2 Build complete! Linux binary is waiting in $WIN_DIST_PATH"
 
-echo "✅  Native build complete [wsl2]: app/target/app-1.0.0-SNAPSHOT-runner"
+echo "✅  Native build complete [wsl2]: app/target/amsha-app-0.1.0-SNAPSHOT-runner"
 echo ""
 echo "▶   Run with one of:"
 echo "      mise run native:serve                → HTTP + MCP server on :8080"

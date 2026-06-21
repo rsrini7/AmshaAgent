@@ -44,7 +44,7 @@ quarkus:
       - com.amsha.channel.web.*
   application:
     name: amsha
-    version: "1.0.0"
+    version: "0.1.0"
   langchain4j:
     timeout: 10s
     chat-model:

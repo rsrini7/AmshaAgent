@@ -76,7 +76,7 @@ List<Future<AgentResult>> futures = tasks.stream()
 ```json
 {
   "name": "amsha-instance-1",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "a2aEndpoint": "https://host/a2a",
   "mcpEndpoint": "https://host/mcp",
   "capabilities": ["code-reviewer", "researcher"],

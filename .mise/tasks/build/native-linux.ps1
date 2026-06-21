@@ -95,7 +95,7 @@ if ($strategy -eq 'container') {
         Write-Host "🧠 Allocating ${targetGB}G for native-image (VM ${vmMemMB}MB - ${overheadGB}GB overhead)..."
 
         $env:MAVEN_OPTS = $mOpts
-        & $mvnw clean package -Pnative -pl amsha-app -am -DskipTests "-Damsha.persistence.backend=sqlite" "-Dquarkus.profile=prod" "-Dquarkus.native.native-image-xmx=${targetGB}g" $containerFlag
+        & $mvnw clean package -Pnative -pl app -am -DskipTests "-Damsha.persistence.backend=sqlite" "-Dquarkus.profile=prod" "-Dquarkus.native.native-image-xmx=${targetGB}g" $containerFlag
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
         Write-Host '▶   Assembling dist/ folder...'
         mise run dist
@@ -120,7 +120,7 @@ if ($strategy -eq 'container') {
 
         mise use --path mise.toml java@graalvm-community-25.0.2
         $env:MAVEN_OPTS = $mOpts
-        & $mvnw clean package -Pnative -pl amsha-app -am -DskipTests "-Damsha.persistence.backend=sqlite" "-Dquarkus.profile=prod" "-Dquarkus.native.native-image-xmx=${targetGB}g" $containerFlag
+        & $mvnw clean package -Pnative -pl app -am -DskipTests "-Damsha.persistence.backend=sqlite" "-Dquarkus.profile=prod" "-Dquarkus.native.native-image-xmx=${targetGB}g" $containerFlag
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
         Write-Host '▶   Assembling dist/ folder...'
         mise run dist
@@ -131,7 +131,7 @@ if ($strategy -eq 'container') {
         Write-Host '✅  Switched back to Temurin 25.'
     }
 }
-Write-Host "✅  Native build complete [$strategy]: app/target/app-1.0.0-SNAPSHOT$suffix"
+Write-Host "✅  Native build complete [$strategy]: app/target/amsha-app-0.1.0-SNAPSHOT$suffix"
 Write-Host ''
 Write-Host '▶   Run with one of:'
 Write-Host '      mise run native:serve                → HTTP + MCP server on :8080'

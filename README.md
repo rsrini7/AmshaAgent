@@ -1,5 +1,5 @@
 <div align="center">
-  <h1>🛡️ Amsha Agent V1.0.0</h1>
+  <h1>🛡️ Amsha Agent V0.1.0</h1>
   <p><strong>A secure, stateful, and financially governed multi-agent AI kernel designed for enterprise deployment.</strong></p>
 
   ![JDK 25](https://img.shields.io/badge/JDK-25-red.svg?style=flat&logo=java)
@@ -190,4 +190,4 @@ ui/                   ← Lit 3.x + TypeScript web frontend
 
 ---
 
-> **Last updated**: Amsha Agent V1.0.0 · Quarkus 3.27.2 · JDK 25 · 17 modules · 21 tools · 17 reflexes · 11 LLM providers
+> **Last updated**: Amsha Agent V0.1.0 · Quarkus 3.27.2 · JDK 25 · 17 modules · 21 tools · 17 reflexes · 11 LLM providers

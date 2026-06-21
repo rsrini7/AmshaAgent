@@ -46,13 +46,13 @@ try {
     $env:JAVA_HOME = $graalPath
 
     $env:MAVEN_OPTS = '--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow'
-    & $mvnw clean package -Pnative -pl amsha-app -am -DskipTests `
+    & $mvnw clean package -Pnative -pl app -am -DskipTests `
         "-Damsha.persistence.backend=sqlite" `
         "-Dquarkus.profile=prod" `
         '-Dquarkus.native.container-build=false' `
         "-Dquarkus.native.native-image-xmx=${targetGB}g"
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-    Write-Host "✅  Native lowmem build complete [local]: app/target/app-1.0.0-SNAPSHOT$suffix"
+    Write-Host "✅  Native lowmem build complete [local]: app/target/amsha-app-0.1.0-SNAPSHOT$suffix"
     Write-Host '▶   Assembling dist/ folder...'
     mise run dist:dist
 } finally {

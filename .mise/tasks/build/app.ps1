@@ -34,7 +34,7 @@ try {
     $env:MAVEN_OPTS = "$mOpts -Xmx${jitGB}g -Xms${jitGB}g"
 
     # Phase 1: Build Maven backend first (generates OpenAPI spec)
-    & $mvnw clean install -pl amsha-app -am -DskipTests --no-transfer-progress -T $threads
+    & $mvnw clean install -pl app -am -DskipTests --no-transfer-progress -T $threads
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     Write-Host '✅  Maven build complete. OpenAPI spec generated.'
 

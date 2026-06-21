@@ -42,7 +42,7 @@ class TelemetryAuditServiceTest {
     @Test
     void testRecordIsTelemetryTier() {
         doNothing().when(persistenceEngine).submitTelemetry(any());
-        when(registry.getAppVersion()).thenReturn("1.0.0");
+        when(registry.getAppVersion()).thenReturn("0.1.0");
 
         telemetryAuditService.record("ses-4", "u1", "researcher", SecurityEventType.REFLEX_COMMAND, "halt");
 
@@ -54,7 +54,7 @@ class TelemetryAuditServiceTest {
         ArgumentCaptor<AuditEvent> eventCaptor = ArgumentCaptor.forClass(AuditEvent.class);
         captor.getValue().getDbAction().execute(); // Execute the lambda (no null arg)
         verify(auditEventRecorder).record(eventCaptor.capture());
-        assertEquals("1.0.0", eventCaptor.getValue().getAppVersion());
+        assertEquals("0.1.0", eventCaptor.getValue().getAppVersion());
     }
 
     @Test

@@ -19,7 +19,7 @@ class SystemInfoResourceTest {
                 .then()
                 .statusCode(200)
                 .body("name", is("amsha"))
-                .body("version", is("1.0.0"))
+                .body("version", is("0.1.0"))
                 .body("environment", anyOf(is("dev"), is("test"), is("prod")))
                 .body("startedAt", notNullValue());
     }

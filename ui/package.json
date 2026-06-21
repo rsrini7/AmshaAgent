@@ -1,7 +1,7 @@
 {
   "name": "amsha-ui",
   "private": true,
-  "version": "1.0.0",
+  "version": "0.1.0",
   "type": "module",
   "scripts": {
     "generate-dto": "mvn -f ../app/pom.xml package -Pts-dto -DskipTests -q",

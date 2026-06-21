@@ -45,16 +45,16 @@ try {
     $env:JAVA_HOME = $graalPath
 
     $env:MAVEN_OPTS = '--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow'
-    & $mvnw clean package -Pnative -pl amsha-app -am -DskipTests "-Damsha.build.backend=postgres" "-Damsha.persistence.backend=postgres" "-Dquarkus.profile=prod,postgresql" '-Dquarkus.native.container-build=false' "-Dquarkus.native.native-image-xmx=${targetGB}g"
+    & $mvnw clean package -Pnative -pl app -am -DskipTests "-Damsha.build.backend=postgres" "-Damsha.persistence.backend=postgres" "-Dquarkus.profile=prod,postgresql" '-Dquarkus.native.container-build=false' "-Dquarkus.native.native-image-xmx=${targetGB}g"
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-    Write-Host "✅  PostgreSQL native build complete: app/target/app-1.0.0-SNAPSHOT$suffix"
+    Write-Host "✅  PostgreSQL native build complete: app/target/amsha-app-0.1.0-SNAPSHOT$suffix"
     Write-Host '▶   Copying to dist/amsha-pg...'
     if (-not (Test-Path 'dist')) { New-Item -ItemType Directory -Path 'dist' -Force | Out-Null }
     # Clean up any old -runner files first
     $pgRunner = if ($IsWindows) { "dist/amsha-pg-runner.exe" } else { "dist/amsha-pg-runner" }
     $pgBinary = if ($IsWindows) { "dist/amsha-pg.exe" } else { "dist/amsha-pg" }
     if (Test-Path $pgRunner) { Remove-Item $pgRunner -Force }
-    Copy-Item "app/target/app-1.0.0-SNAPSHOT$suffix" $pgBinary -Force
+    Copy-Item "app/target/amsha-app-0.1.0-SNAPSHOT$suffix" $pgBinary -Force
     # Create .env for the PostgreSQL backend (activates %postgresql profile at runtime)
     $envContent = @"
 # Amsha Agent PostgreSQL backend configuration.

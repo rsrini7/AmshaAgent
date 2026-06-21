@@ -234,7 +234,7 @@ curl -s http://localhost:8080/api/v1/info | jq .
 ```json
 {
   "name": "amsha",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "environment": "dev",
   "startedAt": "2026-05-16T10:00:00Z"
 }
@@ -1896,7 +1896,7 @@ curl -s http://localhost:8080/api/v1/info | jq .
 
 **Validated fields:**
 - `name: "amsha"` - application name
-- `version: "1.0.0"` - must match `pom.xml`
+- `version: "0.1.0"` - must match `pom.xml`
 - `environment` matches active profile (`dev`, `test`, or `prod`)
 - `startedAt` is a valid ISO-8601 timestamp
 
@@ -2025,7 +2025,7 @@ Run after any significant code change. Combine automated + manual.
 | # | Test | Expected |
 |---|---|---|
 | 1 | `GET /q/health/ready` | `200 UP` - all checks green |
-| 2 | `GET /api/v1/info` | `name=amsha`, `version=1.0.0`, `environment` set, `startedAt` populated |
+| 2 | `GET /api/v1/info` | `name=amsha`, `version=0.1.0`, `environment` set, `startedAt` populated |
 | 3 | Agent run: `What is 2+2?` | `COMPLETED`, answer=4 |
 | 4 | Coder role, code question | `COMPLETED`, no TOOL_INVOKED audit event |
 | 5 | Debugger role, github task → AWAITING_APPROVAL | Approval prompt appears (debugger HAS github) |
@@ -2142,4 +2142,4 @@ For `AMSHA_VAULT_PEPPER` and `AMSHA_AUDIT_HMAC_KEY`, use stable 32+ character va
 
 ---
 
-*Last updated: Amsha Agent V1.0.0 · Quarkus 3.27.2 · JDK 25 · 1664 tests · 17 modules · 15 tools · 10 LLM providers · Tiered Memory · Answer Quality Guard*
+*Last updated: Amsha Agent V0.1.0 · Quarkus 3.27.2 · JDK 25 · 1664 tests · 17 modules · 15 tools · 10 LLM providers · Tiered Memory · Answer Quality Guard*
