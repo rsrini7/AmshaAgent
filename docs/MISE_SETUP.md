@@ -14,7 +14,7 @@
 3. [First-Time Bootstrap](#3-first-time-bootstrap)
 4. [Trust the Config File](#4-trust-the-config-file)
 5. [Repository Layout](#5-repository-layout)
-6. [JDK Management - Temurin vs GraalVM](#6-jdk-management--temurin-vs-graalvm)
+6. [JDK Management - Temurin vs GraalVM](#6-jdk-management---temurin-vs-graalvm)
 7. [All Tasks at a Glance](#7-all-tasks-at-a-glance)
 8. [Build Tasks](#8-build-tasks)
 9. [Dev Mode Tasks (hot reload)](#9-dev-mode-tasks-hot-reload)
@@ -329,7 +329,6 @@ mise run help    # or: mise tasks
 
 ## 8. Build Tasks
 
-```bash
 ```bash
 mise run build:app              # JVM build, skip tests → quarkus-run.jar
 mise run build:full             # all modules (after branch switch), skip tests

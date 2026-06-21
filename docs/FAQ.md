@@ -4,22 +4,22 @@
 
 ## 📑 Table of Contents
 
-1. [Architecture & Design](#-architecture--design)
-2. [Podman vs Docker](#-podman-vs-docker)
-3. [Language & Framework Choices](#-language--framework-choices)
-4. [AI & Agent Logic](#-ai--agent-logic)
-5. [The Reflex System](#-the-reflex-system)
-6. [Skills System](#-skills-system)
-7. [MCP Integration](#-mcp-integration)
-8. [Memory, Compaction & Long-Term Context](#-memory-compaction--long-term-context)
-9. [RAG & Vector Search](#-rag--vector-search)
-10. [Structured Output Engine](#-structured-output-engine)
-11. [Cron Scheduler & Autonomous Tasks](#-cron-scheduler--autonomous-tasks)
-12. [Security & Secrets](#-security--secrets)
-13. [Extending Amsha Agent - Tools, Personas & Reflexes](#-extending-amsha--tools-personas--reflexes)
-14. [Channels & Telegram Integration](#-channels--telegram-integration)
-15. [Runtime & Operations](#-runtime--operations)
-16. [Testing](#-testing)
+1. [Architecture & Design](#architecture--design)
+2. [Podman vs Docker](#podman-vs-docker)
+3. [Language & Framework Choices](#language--framework-choices)
+4. [AI & Agent Logic](#ai--agent-logic)
+5. [The Reflex System](#the-reflex-system)
+6. [Skills System](#skills-system)
+7. [MCP Integration](#mcp-integration)
+8. [Memory, Compaction & Long-Term Context](#memory-compaction--long-term-context)
+9. [RAG & Vector Search](#rag--vector-search)
+10. [Structured Output Engine](#structured-output-engine)
+11. [Cron Scheduler & Autonomous Tasks](#cron-scheduler--autonomous-tasks)
+12. [Security & Secrets](#security--secrets)
+13. [Extending Amsha Agent - Tools, Personas & Reflexes](#extending-amsha-agent---tools-personas--reflexes)
+14. [Channels & Telegram Integration](#channels--telegram-integration)
+15. [Runtime & Operations](#runtime--operations)
+16. [Testing](#testing)
 
 ---
 

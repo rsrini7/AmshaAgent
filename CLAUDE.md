@@ -14,6 +14,7 @@
 * **Zombie recovery**: Auto-deny ALL stale approvals across all channels. §3.3
 * **Saraswati disabled**: `requiresApproval=false` — no delegation to researcher. §3.4
 * **Import alignment**: `python3 ./fix_fqns.py && ./mvnw spotless:apply -q`
+* **Doc verification**: `python3 ./verify_docs.py` after editing `.md` files.
 * **SonarQube**: `mise run sonar:issues` before committing. Fix BLOCKERs.
 
 ## ReplyNode Pattern

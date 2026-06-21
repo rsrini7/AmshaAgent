@@ -133,7 +133,7 @@ The `AgentTool` interface provides several optional lifecycle and configuration 
 
 ## 2. Define a New Agent Persona
 
-> **For the complete 14-step checklist with all required touchpoints, see [`AGENTS.md` Section 6](../AGENTS.md#6-adding-a-new-persona-agent-role).**
+> **For the complete 14-step checklist with all required touchpoints, see [`AGENTS.md` Section 7](../AGENTS.md#7-adding-a-new-persona-agent-role).**
 
 ### Step 1 - Add enum entries
 

@@ -23,7 +23,7 @@
 8. [Dev Mode (Hot Reload)](#8-dev-mode-hot-reload)
 9. [JAR Run Modes](#9-jar-run-modes)
 10. [Native Binary Build & Run](#10-native-binary-build--run)
-11. [Dist - Assemble Release Folder](#11-dist--assemble-release-folder)
+11. [Dist - Assemble Release Folder](#11-dist---assemble-release-folder)
 12. [Docker Compose Stack](#12-docker-compose-stack)
 13. [JDK Management](#13-jdk-management)
 14. [Database Helpers](#14-database-helpers)
@@ -535,7 +535,7 @@ jps -l | Where-Object { $_ -match 'quarkus-run|QuarkusDevModeMain' } | ForEach-O
 
 ## 9. JAR Run Modes
 
-Run the packaged `quarkus-run.jar` directly. Build first with [Section 7.1](#71-standard-jvm-build-fast--recommended-for-development).
+Run the packaged `quarkus-run.jar` directly. Build first with [Section 7.1](#71-standard-jvm-build-fast---recommended-for-development).
 
 ### JVM Args for JAR Mode
 

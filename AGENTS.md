@@ -5,6 +5,7 @@
 ---
 
 * **Import Alignment**: After editing Java, run `python3 ./fix_fqns.py && ./mvnw spotless:apply -q`
+* **Documentation Verification**: After modifying any markdown (`.md`) files, run `python3 ./verify_docs.py` to check for broken links and anchor integrity.
 * **SonarQube Gate**: Before committing, run `mise run sonar:issues` (all BLOCKER+CRITICAL) or `mise run sonar:issues -- -severity BLOCKER`
 
 ---
