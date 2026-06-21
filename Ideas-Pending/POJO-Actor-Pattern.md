@@ -43,43 +43,43 @@ Five actors cooperate:
 
 ***
 
-## Ideas for ArcClaw
+## Ideas for Amsha Agent
 
 ### 1. Adopt the POJO Actor Pattern for Agent Isolation
-ArcClaw's agents (planner, executor, reviewer, etc.) could each become a POJO actor using the same `pojo-actor` library. This gives you per-agent state isolation with zero synchronization overhead. The sequential mailbox guarantees eliminate the concurrent-modification bugs that are common in long-running agent workflows. Each agent can safely own its own history, busy flag, and task queue as plain fields.
+Amsha Agent's agents (planner, executor, reviewer, etc.) could each become a POJO actor using the same `pojo-actor` library. This gives you per-agent state isolation with zero synchronization overhead. The sequential mailbox guarantees eliminate the concurrent-modification bugs that are common in long-running agent workflows. Each agent can safely own its own history, busy flag, and task queue as plain fields.
 
-### 2. Port the `QueueActor` 3-Mode Design to ArcClaw's Scheduler
-Your current Quarkus scheduler could grow `cancelandsend`, `queue`, and `wait` modes exactly as implemented here. The `wait` mode with timeout-based cancellation is particularly powerful - when ArcClaw receives a priority task via Telegram, it can use `wait(30s)` to gracefully preempt the current run instead of hard-cancelling. The `clearMcpMessages()` pattern (clear machine-submitted tasks but preserve human-submitted ones) maps directly to your human-vs-agent task separation in ArcClaw. 
+### 2. Port the `QueueActor` 3-Mode Design to Amsha Agent's Scheduler
+Your current Quarkus scheduler could grow `cancelandsend`, `queue`, and `wait` modes exactly as implemented here. The `wait` mode with timeout-based cancellation is particularly powerful - when Amsha Agent receives a priority task via Telegram, it can use `wait(30s)` to gracefully preempt the current run instead of hard-cancelling. The `clearMcpMessages()` pattern (clear machine-submitted tasks but preserve human-submitted ones) maps directly to your human-vs-agent task separation in Amsha Agent. 
 
-### 3. BtwActor → ArcClaw "Probe" Pattern
-The `BtwActor` concept - a completely isolated side-channel LLM call that doesn't disturb the main agent's state - is extremely applicable to ArcClaw. You could implement an `AgentProbeActor` that lets you query an agent's current reasoning or status mid-run via Telegram without interrupting execution. This is essentially "interrupt-safe introspection."
+### 3. BtwActor → Amsha Agent "Probe" Pattern
+The `BtwActor` concept - a completely isolated side-channel LLM call that doesn't disturb the main agent's state - is extremely applicable to Amsha Agent. You could implement an `AgentProbeActor` that lets you query an agent's current reasoning or status mid-run via Telegram without interrupting execution. This is essentially "interrupt-safe introspection."
 
 ### 4. WatchdogActor for Agent Stall Detection
-ArcClaw's long-running tasks are prime candidates for a stall detector. Wrap each agent execution in a watchdog that fires a Telegram alert if no progress event is emitted within a configurable threshold (e.g., 5 minutes). The recovery detection pattern (`stallRecovered` tracking) is also valuable - notify when an agent resumes after a stall so you know the session wasn't lost. 
+Amsha Agent's long-running tasks are prime candidates for a stall detector. Wrap each agent execution in a watchdog that fires a Telegram alert if no progress event is emitted within a configurable threshold (e.g., 5 minutes). The recovery detection pattern (`stallRecovered` tracking) is also valuable - notify when an agent resumes after a stall so you know the session wasn't lost. 
 
 ### 5. Typed `ChatEvent`-Style Event Bus
-Replace ArcClaw's ad-hoc logging/notification with a typed event record (`type`, `content`, `sessionId`, `durationMs`, `model`, `busy`, etc.). This gives you a consistent schema for SSE streaming, Telegram forwarding, and SQLite audit logging - all from one event shape. The `thinking` event type maps well to ArcClaw's in-progress reasoning steps. 
+Replace Amsha Agent's ad-hoc logging/notification with a typed event record (`type`, `content`, `sessionId`, `durationMs`, `model`, `busy`, etc.). This gives you a consistent schema for SSE streaming, Telegram forwarding, and SQLite audit logging - all from one event shape. The `thinking` event type maps well to Amsha Agent's in-progress reasoning steps. 
 
-### 6. MCP Gateway Registration for ArcClaw Orchestration
-The `GatewayRegistrar` pattern (POST to a gateway with `name`, `url`, `description`, `port` at startup) is a low-ceremony way to make ArcClaw instances discoverable. If ArcClaw ever runs multiple sub-agents as separate processes, they can self-register with a coordinator. The `buildEnrichedPrompt()` (inject self-URL, caller identity, and reply instructions into the prompt) is a great copy-paste pattern for ArcClaw's inter-agent messaging. 
+### 6. MCP Gateway Registration for Amsha Agent Orchestration
+The `GatewayRegistrar` pattern (POST to a gateway with `name`, `url`, `description`, `port` at startup) is a low-ceremony way to make Amsha Agent instances discoverable. If Amsha Agent ever runs multiple sub-agents as separate processes, they can self-register with a coordinator. The `buildEnrichedPrompt()` (inject self-URL, caller identity, and reply instructions into the prompt) is a great copy-paste pattern for Amsha Agent's inter-agent messaging. 
 
 ### 7. Log Ring Buffer → Live Log Streaming to Telegram
-The `publishLog()` + circular ring buffer (500 entries) + SSE forwarding pattern in `ChatActor` is a clean design to adopt for ArcClaw. You could stream live logs to your Telegram bot in real time (bounded to avoid flood), with configurable log levels, and replay recent entries on reconnect without re-running anything. 
+The `publishLog()` + circular ring buffer (500 entries) + SSE forwarding pattern in `ChatActor` is a clean design to adopt for Amsha Agent. You could stream live logs to your Telegram bot in real time (bounded to avoid flood), with configurable log levels, and replay recent entries on reconnect without re-running anything. 
 
-### 8. `ProviderCapabilities` Feature Flags for ArcClaw Tools
-Model the capabilities of each agent or LLM in ArcClaw as a `ProviderCapabilities`-style record with boolean flags (`supportsCodeExecution`, `supportsFileWrite`, `supportsWebSearch`, etc.). This lets your orchestrator query what an agent can do at runtime and conditionally wire watchdogs, approval prompts, or tool restrictions - exactly what this project does with `supportsWatchdog` and `supportsInteractivePrompts`. 
+### 8. `ProviderCapabilities` Feature Flags for Amsha Agent Tools
+Model the capabilities of each agent or LLM in Amsha Agent as a `ProviderCapabilities`-style record with boolean flags (`supportsCodeExecution`, `supportsFileWrite`, `supportsWebSearch`, etc.). This lets your orchestrator query what an agent can do at runtime and conditionally wire watchdogs, approval prompts, or tool restrictions - exactly what this project does with `supportsWatchdog` and `supportsInteractivePrompts`. 
 
 ### 9. Source-Tagged Task Queue (`source = "human" | "agent"`)
-The `QueueItem.source` field (human vs. mcp) is a simple but powerful pattern. In ArcClaw, tag every queued task with its origin: `human` (Telegram/UI), `scheduled` (cron), or `agent` (automated sub-task). This makes it trivial to implement priority rules - e.g., human tasks always preempt agent-originated ones, and you can drain only agent tasks on cancel. 
+The `QueueItem.source` field (human vs. mcp) is a simple but powerful pattern. In Amsha Agent, tag every queued task with its origin: `human` (Telegram/UI), `scheduled` (cron), or `agent` (automated sub-task). This makes it trivial to implement priority rules - e.g., human tasks always preempt agent-originated ones, and you can drain only agent tasks on cancel. 
 
-### 10. Playwright E2E Tests for ArcClaw UI
-The E2E test suite (queue persistence, theme switching, keyboard shortcuts, SSE connection) uses Playwright + Quarkus failsafe plugin with a real running server. You could adopt the same `E2eTestBase` + `exec-maven-plugin` pattern to start ArcClaw in a test profile and validate your approval workflows, queue UI, and Telegram webhook stubs end-to-end. 
+### 10. Playwright E2E Tests for Amsha Agent UI
+The E2E test suite (queue persistence, theme switching, keyboard shortcuts, SSE connection) uses Playwright + Quarkus failsafe plugin with a real running server. You could adopt the same `E2eTestBase` + `exec-maven-plugin` pattern to start Amsha Agent in a test profile and validate your approval workflows, queue UI, and Telegram webhook stubs end-to-end. 
 
 ---
 
 [https://scivicslab.com/blog/2026-04-05-pojo-actor-llm-conversation/](https://scivicslab.com/blog/2026-04-05-pojo-actor-llm-conversation/) further reading
 
-This post is the official design writeup for the codebase you already analyzed - here's a distilled summary of the key insights and their direct implications for ArcClaw.
+This post is the official design writeup for the codebase you already analyzed - here's a distilled summary of the key insights and their direct implications for Amsha Agent.
 
 ## Core Design Principle: State Guardian + I/O Worker Split
 
@@ -87,20 +87,20 @@ The central idea is a clean two-role split: the **actor is the state guardian**,
 
 ## The `volatile Thread activeThread` Trick
 
-`activeThread` is `volatile` for one specific reason: `cancel()` is called via `tellNow()`, which runs on a **different virtual thread** than the actor's own queue thread . Without `volatile`, the write from `startPrompt()` might not be visible to the `cancel()` read across that thread boundary. This is a small but non-obvious detail that's directly applicable to ArcClaw - any actor field that is written by the actor thread but read from a `tellNow()` path needs `volatile`.
+`activeThread` is `volatile` for one specific reason: `cancel()` is called via `tellNow()`, which runs on a **different virtual thread** than the actor's own queue thread . Without `volatile`, the write from `startPrompt()` might not be visible to the `cancel()` read across that thread boundary. This is a small but non-obvious detail that's directly applicable to Amsha Agent - any actor field that is written by the actor thread but read from a `tellNow()` path needs `volatile`.
 
 ## `tell()` vs `tellNow()` - Semantics Matter
 
-The blog makes a nuanced point: using `tell(cancel)` would actually work in practice here because `startPrompt()` returns immediately and leaves the queue empty . But `tellNow()` is used anyway because it communicates **intent** - "cancel NOW" rather than "cancel when it's your turn." For ArcClaw's Telegram-triggered cancellations or priority interruptions, this semantic distinction is worth adopting explicitly.
+The blog makes a nuanced point: using `tell(cancel)` would actually work in practice here because `startPrompt()` returns immediately and leaves the queue empty . But `tellNow()` is used anyway because it communicates **intent** - "cancel NOW" rather than "cancel when it's your turn." For Amsha Agent's Telegram-triggered cancellations or priority interruptions, this semantic distinction is worth adopting explicitly.
 
 ## BtwActor: The "Don't Touch Shared State" Rule
 
-The most important thread-safety insight in the post is about `BtwActor` sharing a `LlmProvider` instance with `ChatActor` . `BtwActor` deliberately does **not** call `provider.setModel()` before `sendPrompt()`, because `setModel()` mutates shared state that `ChatActor` is also relying on mid-stream. Instead, the model is passed directly as a parameter. For ArcClaw, this rule generalizes: when two actors share a service or client, any **stateful mutation** (setting model, setting session, setting auth) must be owned by exactly one actor - parallel actors pass parameters instead of mutating shared fields.
+The most important thread-safety insight in the post is about `BtwActor` sharing a `LlmProvider` instance with `ChatActor` . `BtwActor` deliberately does **not** call `provider.setModel()` before `sendPrompt()`, because `setModel()` mutates shared state that `ChatActor` is also relying on mid-stream. Instead, the model is passed directly as a parameter. For Amsha Agent, this rule generalizes: when two actors share a service or client, any **stateful mutation** (setting model, setting session, setting auth) must be owned by exactly one actor - parallel actors pass parameters instead of mutating shared fields.
 
 ## The Actor Structure as a Scalable Pattern
 
-The four-actor hierarchy (`ChatActor → QueueActor`, `BtwActor`, `WatchdogActor`) is explicitly described as a pattern that scales by **adding actors without changing existing ones** . `BtwActor` is 30 lines. `WatchdogActor` plugs in without modifying `ChatActor`. For ArcClaw, this means each new capability (a `TelegramNotifierActor`, a `GitActor`, an `ApprovalActor`) should be a new POJO wired into `LlmConsoleActorSystem`-equivalent, not a feature bolted onto an existing actor.
+The four-actor hierarchy (`ChatActor → QueueActor`, `BtwActor`, `WatchdogActor`) is explicitly described as a pattern that scales by **adding actors without changing existing ones** . `BtwActor` is 30 lines. `WatchdogActor` plugs in without modifying `ChatActor`. For Amsha Agent, this means each new capability (a `TelegramNotifierActor`, a `GitActor`, an `ApprovalActor`) should be a new POJO wired into `LlmConsoleActorSystem`-equivalent, not a feature bolted onto an existing actor.
 
 ## What's Coming Next
 
-The blog mentions a **Part 3** on "Scaling Multi-Agent Communication with MCP Gateway" is coming soon  - that will likely cover the `GatewayRegistrar` + `McpTools` + multi-agent discovery architecture in depth, which is highly relevant to ArcClaw's orchestration layer. Worth watching for.
+The blog mentions a **Part 3** on "Scaling Multi-Agent Communication with MCP Gateway" is coming soon  - that will likely cover the `GatewayRegistrar` + `McpTools` + multi-agent discovery architecture in depth, which is highly relevant to Amsha Agent's orchestration layer. Worth watching for.

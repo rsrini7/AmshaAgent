@@ -28,12 +28,12 @@ $sonarUrl = if ($env:SONAR_API_URL) { $env:SONAR_API_URL } else { 'http://localh
 
 # Build arguments as array to avoid PowerShell parsing -D as parameter
 $args = @(
-    "-Dsonar.projectKey=arcclaw",
+    "-Dsonar.projectKey=amsha",
     "-Dsonar.sources=.",
     "-Dsonar.host.url=$sonarUrl",
     "-Dsonar.token=$env:SONAR_TOKEN",
     "-Dsonar.java.binaries=**/target/classes",
-    "-Dsonar.exclusions=**/target/**,**/node_modules/**,arcclaw-ui/**",
+    "-Dsonar.exclusions=**/target/**,**/node_modules/**,ui/**",
     "-Dsonar.coverage.jacoco.xmlReportPaths=**/target/jacoco-report/jacoco.xml,**/target/site/jacoco/jacoco.xml"
 )
 & sonar-scanner $args

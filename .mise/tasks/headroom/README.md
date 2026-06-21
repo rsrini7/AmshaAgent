@@ -23,7 +23,7 @@ mise run headroom:start-groq      # Start a single provider
 | openai | 8793 | openai-compatible | `https://api.openai.com/v1` |
 | ollama | 8794 | openai-compatible | `http://localhost:11434` |
 | omlx | 8795 | openai-compatible | `http://127.0.0.1:8000/v1` |
-| generic-openai | 8796 | openai-compatible | `$ARCCLAW_GENERIC_OPENAI_TARGET_URL` |
+| generic-openai | 8796 | openai-compatible | `$AMSHA_GENERIC_OPENAI_TARGET_URL` |
 | llamacpp | 8797 | openai-compatible | `http://localhost:9000/v1` |
 
 ## Architecture
@@ -155,7 +155,7 @@ Controlled by `HEADROOM_PROXY_AUTH_MODE_POLICY_ENFORCEMENT` env var (default: en
 | `HEADROOM_CONFIG_DIR` | `.headroom/config` | Headroom config directory |
 | `HEADROOM_MODEL_LIMITS` | `.headroom/config/models.json` | Per-model context limits |
 | `OPENAI_TARGET_API_URL` | per-provider | Upstream OpenAI-compatible endpoint |
-| `ARCCLAW_GENERIC_OPENAI_TARGET_URL` | — | Required for generic-openai provider |
+| `AMSHA_GENERIC_OPENAI_TARGET_URL` | — | Required for generic-openai provider |
 
 ## Troubleshooting
 

@@ -1,10 +1,10 @@
-# ArcClaw REST HTTP Test Suite
+# Amsha Agent REST HTTP Test Suite
 
 > **Tool**: [REST Client](https://marketplace.visualstudio.com/items?itemName=humao.rest-client) for VS Code  
 > **Version**: V1.0.0 (current)  
 > **Base URL**: `http://localhost:8080`
 
-This directory contains 17 `.http` files covering every REST API surface of ArcClaw. Run them in the order listed below - health and auth first, then the feature-specific flows, and the Phase 64 regression suite last.
+This directory contains 17 `.http` files covering every REST API surface of Amsha Agent. Run them in the order listed below - health and auth first, then the feature-specific flows, and the Phase 64 regression suite last.
 
 ---
 
@@ -14,20 +14,20 @@ This directory contains 17 `.http` files covering every REST API surface of ArcC
 
 ```bash
 # Serve mode (REST + no Telegram)
-./mvnw quarkus:dev -pl arcclaw-app -am \
+./mvnw quarkus:dev -pl amsha-app -am \
   "-Dquarkus.args=serve" \
-  "-Darcclaw.rag.vec-extension-path=../lib/vec0"
+  "-Damsha.rag.vec-extension-path=../lib/vec0"
 ```
 
 ### Required `.env` values
 
 ```env
-ARCCLAW_LLM_API_KEY=gsk_...
-ARCCLAW_API_KEYS_INTERNAL=key-internal-changeme
-ARCCLAW_API_KEYS_CI=key-ci-changeme
-ARCCLAW_VAULT_PEPPER=<32+ char string>
-ARCCLAW_AUDIT_HMAC_KEY=<32+ char string>
-ARCCLAW_RAG_VEC_PATH=../lib/vec0         # dev mode
+AMSHA_LLM_API_KEY=gsk_...
+AMSHA_API_KEYS_INTERNAL=key-internal-changeme
+AMSHA_API_KEYS_CI=key-ci-changeme
+AMSHA_VAULT_PEPPER=<32+ char string>
+AMSHA_AUDIT_HMAC_KEY=<32+ char string>
+AMSHA_RAG_VEC_PATH=../lib/vec0         # dev mode
 ```
 
 ### Optional (for tool tests)
@@ -53,21 +53,21 @@ GITHUB_TOKEN=ghp_...    # required for GithubTool tests in 04, 05, 09, 12
 |---|---|---|---|---|
 | 1 | `01_system_health.http` | Health endpoints, startup log assertions, metrics, E2E SQLite smoke test | Server up | B1: HMAC chain under concurrency |
 | 2 | `02_auth_security.http` | API key auth, public bypasses, rate limiting per key | Server up | B2: DevSecretSeeder absent in prod |
-| 3 | `03_session_lifecycle.http` | Full session CRUD, sync/async run, multi-turn memory, isolation | ARCCLAW_LLM_API_KEY | B3: random UUID via SessionRegistry |
-| 4a | `04_agent_delegation.http` | Agent delegation flows, sub-agent spawning, depth limits | ARCCLAW_LLM_API_KEY | Post-Phase 64 |
-| 4b | `04_agent_roles.http` | All 6 roles + deity aliases, tool schema structural guarantees | ARCCLAW_LLM_API_KEY | A2: FULL autonomy not downgraded |
-| 5 | `05_hitl_governance.http` | HITL approve/deny flows (REST + goal-string), timeout | ARCCLAW_LLM_API_KEY, GITHUB_TOKEN | A2: FULL session skips approval |
+| 3 | `03_session_lifecycle.http` | Full session CRUD, sync/async run, multi-turn memory, isolation | AMSHA_LLM_API_KEY | B3: random UUID via SessionRegistry |
+| 4a | `04_agent_delegation.http` | Agent delegation flows, sub-agent spawning, depth limits | AMSHA_LLM_API_KEY | Post-Phase 64 |
+| 4b | `04_agent_roles.http` | All 6 roles + deity aliases, tool schema structural guarantees | AMSHA_LLM_API_KEY | A2: FULL autonomy not downgraded |
+| 5 | `05_hitl_governance.http` | HITL approve/deny flows (REST + goal-string), timeout | AMSHA_LLM_API_KEY, GITHUB_TOKEN | A2: FULL session skips approval |
 | 6 | `06_reflex_commands.http` | All reflexes: /status /reset /halt /history /crons /skills /mcp store | Server up | None (existing behaviour) |
-| 7 | `07_pii_prompt_injection.http` | PII redaction (8 types), store bypass, injection blocking (4 categories) | ARCCLAW_LLM_API_KEY | A3: non-ASCII FTS5 fix (store path) |
-| 8 | `08_audit_log.http` | WORM audit log, HMAC chain verify, tamper detection, all event types | ARCCLAW_LLM_API_KEY | B1: concurrent chain integrity |
-| 9 | `09_cron_scheduler.http` | Schedule/list/delete crons, safeguards, wait for CRONFIRED | ARCCLAW_LLM_API_KEY | C2: ChannelCronNotificationDispatcher |
-| 10 | `10_memory_compaction.http` | Multi-turn memory, rolling window pruning, compaction, memory search | ARCCLAW_LLM_API_KEY | A3, A6, C3, D1 |
-| 11 | `11_skill.http` | Skill CRUD, skill routing (bypasses LLM), upsert, error cases | ARCCLAW_LLM_API_KEY | D7: SANDBOX_EXEC removed |
+| 7 | `07_pii_prompt_injection.http` | PII redaction (8 types), store bypass, injection blocking (4 categories) | AMSHA_LLM_API_KEY | A3: non-ASCII FTS5 fix (store path) |
+| 8 | `08_audit_log.http` | WORM audit log, HMAC chain verify, tamper detection, all event types | AMSHA_LLM_API_KEY | B1: concurrent chain integrity |
+| 9 | `09_cron_scheduler.http` | Schedule/list/delete crons, safeguards, wait for CRONFIRED | AMSHA_LLM_API_KEY | C2: ChannelCronNotificationDispatcher |
+| 10 | `10_memory_compaction.http` | Multi-turn memory, rolling window pruning, compaction, memory search | AMSHA_LLM_API_KEY | A3, A6, C3, D1 |
+| 11 | `11_skill.http` | Skill CRUD, skill routing (bypasses LLM), upsert, error cases | AMSHA_LLM_API_KEY | D7: SANDBOX_EXEC removed |
 | 12 | `12_mcp.http` | MCP server protocol, MCP client (self-connect), admin API | Server up | D7: sandbox_exec → allowlist error |
-| 13 | `13_rag.http` | RAG ingest → approve → recall, RRF dual-tier, isolation | ARCCLAW_LLM_API_KEY | C3: rag_chunk table |
-| 14 | `14_budget_governance.http` | Budget soft/hard limits, SUPERVISED/FULL/READONLY autonomy | ARCCLAW_LLM_API_KEY | A1, A2 |
-| 15 | `15_phase64_regression.http` | Full regression suite for all Phase 64 fixes A1–A7, B1–B3, C1–C3, D smoke | ARCCLAW_LLM_API_KEY | All tiers |
-| 16 | `16_ui_settings_onboarding.http` | UI status/SSE streams, settings CRUD, onboarding wizard, HITL task-id approval, WS token | ARCCLAW_LLM_API_KEY | Post-Phase 64 |
+| 13 | `13_rag.http` | RAG ingest → approve → recall, RRF dual-tier, isolation | AMSHA_LLM_API_KEY | C3: rag_chunk table |
+| 14 | `14_budget_governance.http` | Budget soft/hard limits, SUPERVISED/FULL/READONLY autonomy | AMSHA_LLM_API_KEY | A1, A2 |
+| 15 | `15_phase64_regression.http` | Full regression suite for all Phase 64 fixes A1–A7, B1–B3, C1–C3, D smoke | AMSHA_LLM_API_KEY | All tiers |
+| 16 | `16_ui_settings_onboarding.http` | UI status/SSE streams, settings CRUD, onboarding wizard, HITL task-id approval, WS token | AMSHA_LLM_API_KEY | Post-Phase 64 |
 
 ---
 
@@ -119,7 +119,7 @@ GITHUB_TOKEN=ghp_...    # required for GithubTool tests in 04, 05, 09, 12
 # @name mySession
 POST {{baseUrl}}/api/v1/sessions
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ### Use the session
 POST {{baseUrl}}/api/v1/sessions/{{mySession.response.body.sessionId}}/run
@@ -141,14 +141,14 @@ POST {{mcpBase}}/mcp
 
 ```http
 GET {{baseUrl}}/api/v1/audit/session/{{mySession.response.body.sessionId}}
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 ```
 
 ### Verifying HMAC chain
 
 ```http
 GET {{baseUrl}}/api/v1/audit/{{mySession.response.body.sessionId}}/verify
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 # Expect: {"valid":true,"brokenAtId":null,"totalRows":N}
 ```
 
@@ -156,7 +156,7 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ## HTTP Response Codes Reference
 
-| Code | Meaning in ArcClaw |
+| Code | Meaning in Amsha Agent |
 |---|---|
 | `200` | Success (also used for JSON-RPC errors per spec) |
 | `201` | Session or skill created |
@@ -206,10 +206,10 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ```bash
 # Standard database path (serve/jar mode)
-sqlite3 ./data/arcclaw-meta.db
+sqlite3 ./data/amsha-meta.db
 
-# Dev mode (run from arcclaw-app/)
-sqlite3 ../data/arcclaw-meta.db
+# Dev mode (run from app/)
+sqlite3 ../data/amsha-meta.db
 
 # Useful queries
 .tables
@@ -261,7 +261,7 @@ FROM session_registry ORDER BY created_at DESC LIMIT 10;
 ## Running a Full Regression Pass
 
 ```bash
-# 1. Start ArcClaw in serve mode (see Prerequisites above)
+# 1. Start Amsha Agent in serve mode (see Prerequisites above)
 
 # 2. Run files in order using VS Code REST Client
 #    Open each file, Ctrl+Alt+R on each ### block, or "Run All Requests"
@@ -285,6 +285,6 @@ FROM session_registry ORDER BY created_at DESC LIMIT 10;
 
 - **08_audit_log.http tamper test**: Requires dropping the SQLite WORM trigger manually and restarting the app. Cannot be automated - follow the inline instructions.
 
-- **07_pii_prompt_injection.http BLOCK_AND_NOTIFY**: Commented out by default. Requires `arcclaw.pii.mode=BLOCK_AND_NOTIFY` in config and a restart to test.
+- **07_pii_prompt_injection.http BLOCK_AND_NOTIFY**: Commented out by default. Requires `amsha.pii.mode=BLOCK_AND_NOTIFY` in config and a restart to test.
 
 - **Session IDs in 15_phase64_regression.http**: Some Phase 64 verifications reference specific database state (e.g. `session_registry` table contents) that must be verified via SQLite CLI, not via HTTP. The HTTP tests confirm the behaviour indirectly through status codes and audit events.

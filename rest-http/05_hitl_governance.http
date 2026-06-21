@@ -23,7 +23,7 @@
 ###   Sessions created with FULL autonomy no longer need approval for
 ###   NETWORK_OUTBOUND tools. See 14_budget_governance.http FLOW D.
 ###
-### Prerequisites: ArcClaw serve mode, ARCCLAW_LLM_API_KEY + GITHUB_TOKEN set.
+### Prerequisites: Amsha Agent serve mode, AMSHA_LLM_API_KEY + GITHUB_TOKEN set.
 ###   GithubTool is the only built-in tool with ToolOperation=NETWORK_OUTBOUND.
 ### ═══════════════════════════════════════════════════════════════
 
@@ -39,7 +39,7 @@
 # @name approveSession
 POST {{baseUrl}}/api/v1/sessions
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
@@ -50,7 +50,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # Expect: 202 {"toolName":"github","paramsJson":"{...}","sessionId":"..."}
 POST {{baseUrl}}/api/v1/sessions/{{approveSession.response.body.sessionId}}/run-async
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "List the public repositories of GitHub user rsrini7 using the github tool.",
@@ -64,7 +64,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # Run immediately after HITL-2, before approving.
 # Expect: {"sessionId":"...","status":"AWAITING_APPROVAL","steps":[...],"failReason":null}
 GET {{baseUrl}}/api/v1/sessions/{{approveSession.response.body.sessionId}}/status/coordinator
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
@@ -75,19 +75,19 @@ X-ArcClaw-API-Key: {{validKey}}
 # Expect: 200 {"answer":"...","totalInputTokens":N,"totalOutputTokens":N}
 POST {{baseUrl}}/api/v1/sessions/{{approveSession.response.body.sessionId}}/approve?agentRole=coordinator
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
 ### [HITL-5] Poll status after approve - should now be COMPLETED
 # Expect: {"sessionId":"...","status":"COMPLETED","steps":[...],"failReason":null}
 GET {{baseUrl}}/api/v1/sessions/{{approveSession.response.body.sessionId}}/status/coordinator
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
 DELETE {{baseUrl}}/api/v1/sessions/{{approveSession.response.body.sessionId}}
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
@@ -103,7 +103,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # @name denySession
 POST {{baseUrl}}/api/v1/sessions
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
@@ -111,7 +111,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # Expect: 202 (agent paused pending approval)
 POST {{baseUrl}}/api/v1/sessions/{{denySession.response.body.sessionId}}/run-async
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "List the public repositories of GitHub user rsrini7 using the github tool.",
@@ -124,7 +124,7 @@ X-ArcClaw-API-Key: {{validKey}}
 ### [HITL-7a] Optional: Poll status to confirm AWAITING_APPROVAL before denying
 # Expect: status = AWAITING_APPROVAL
 GET {{baseUrl}}/api/v1/sessions/{{denySession.response.body.sessionId}}/status/coordinator
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
@@ -135,19 +135,19 @@ X-ArcClaw-API-Key: {{validKey}}
 # Expect: 200 {"status":"DENIED","session":"..."}
 POST {{baseUrl}}/api/v1/sessions/{{denySession.response.body.sessionId}}/deny?agentRole=coordinator
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
 ### [HITL-9] Status after deny - should be FAILED
 # Expect: {"sessionId":"...","status":"FAILED","failReason":"Human denied via REST"}
 GET {{baseUrl}}/api/v1/sessions/{{denySession.response.body.sessionId}}/status/coordinator
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
 DELETE {{baseUrl}}/api/v1/sessions/{{denySession.response.body.sessionId}}
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
@@ -162,14 +162,14 @@ X-ArcClaw-API-Key: {{validKey}}
 # @name denyGoalSession
 POST {{baseUrl}}/api/v1/sessions
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
 ### [HITL-8b] Trigger AWAITING_APPROVAL
 POST {{baseUrl}}/api/v1/sessions/{{denyGoalSession.response.body.sessionId}}/run-async
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "List the public repositories of GitHub user rsrini7 using the github tool.",
@@ -184,7 +184,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # Functionally identical to the REST /deny endpoint.
 POST {{baseUrl}}/api/v1/sessions/{{denyGoalSession.response.body.sessionId}}/run-async
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "/deny",
@@ -195,13 +195,13 @@ X-ArcClaw-API-Key: {{validKey}}
 ###
 
 GET {{baseUrl}}/api/v1/sessions/{{denyGoalSession.response.body.sessionId}}/status/coordinator
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 
 ###
 
 DELETE {{baseUrl}}/api/v1/sessions/{{denyGoalSession.response.body.sessionId}}
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
@@ -215,17 +215,17 @@ X-ArcClaw-API-Key: {{validKey}}
 # @name goalApproveSession
 POST {{baseUrl}}/api/v1/sessions
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
 ### [HITL-11] Trigger AWAITING_APPROVAL
 POST {{baseUrl}}/api/v1/sessions/{{goalApproveSession.response.body.sessionId}}/run-async
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
-    "goal": "View the rsrini7/arcclaw repository using the github tool.",
+    "goal": "View the rsrini7/amsha repository using the github tool.",
     "agentRole": "coordinator",
     "maxIterations": 3
 }
@@ -234,7 +234,7 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ### [HITL-11a] Poll status - confirm AWAITING_APPROVAL before approving
 GET {{baseUrl}}/api/v1/sessions/{{goalApproveSession.response.body.sessionId}}/status/coordinator
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
@@ -243,7 +243,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # for the resume. Expect: agent resumes and completes.
 POST {{baseUrl}}/api/v1/sessions/{{goalApproveSession.response.body.sessionId}}/run-async
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "/approve",
@@ -254,21 +254,21 @@ X-ArcClaw-API-Key: {{validKey}}
 ###
 
 GET {{baseUrl}}/api/v1/sessions/{{goalApproveSession.response.body.sessionId}}/status/coordinator
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 
 
 ###
 
 DELETE {{baseUrl}}/api/v1/sessions/{{goalApproveSession.response.body.sessionId}}
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
 
 # ─────────────────────────────────────────────────────────────────
 # FLOW D: APPROVAL TIMEOUT (manual observation)
-# arcclaw.governance.approval-timeout-seconds (default: 300)
+# amsha.governance.approval-timeout-seconds (default: 300)
 # After the timeout, ApprovalTimeoutNotifier fires and marks FAILED.
 # After Phase 64-C2: ChannelApprovalTimeoutDispatcher routes to correct channel.
 # ─────────────────────────────────────────────────────────────────
@@ -277,13 +277,13 @@ X-ArcClaw-API-Key: {{validKey}}
 # @name timeoutSession
 POST {{baseUrl}}/api/v1/sessions
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
 POST {{baseUrl}}/api/v1/sessions/{{timeoutSession.response.body.sessionId}}/run-async
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "List the public repositories of GitHub user rsrini7 using the github tool.",
@@ -299,12 +299,12 @@ X-ArcClaw-API-Key: {{validKey}}
 ### Audit event: CHECKPOINT_FAILED with reason "Approval timeout"
 
 GET {{baseUrl}}/api/v1/sessions/{{timeoutSession.response.body.sessionId}}/status/coordinator
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
 DELETE {{baseUrl}}/api/v1/sessions/{{timeoutSession.response.body.sessionId}}
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
@@ -317,7 +317,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # AgentSessionService.approve() returns 409 if no AWAITING_APPROVAL checkpoint found.
 POST {{baseUrl}}/api/v1/sessions/00000000-dead-beef-0000-000000000000/approve?agentRole=coordinator
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
@@ -325,7 +325,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # No pending approval checkpoint - approve has nothing to resume.
 POST {{baseUrl}}/api/v1/sessions/{{approveSession.response.body.sessionId}}/approve?agentRole=coordinator
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
@@ -344,13 +344,13 @@ Content-Type: application/json
 ### [HITL-18] Deny on non-existent session → expect 409 CONFLICT or 404
 POST {{baseUrl}}/api/v1/sessions/00000000-dead-beef-0000-000000000000/deny?agentRole=coordinator
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
 ### [HITL-19] Rate limit probe - this endpoint always returns 200 with valid key
 # Useful for confirming the rate limiter does not block valid repeated requests
 GET {{baseUrl}}/api/v1/sessions
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###

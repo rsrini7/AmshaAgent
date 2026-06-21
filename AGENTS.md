@@ -1,4 +1,4 @@
-# ArcClaw Agent Developer Guide (AGENTS.md)
+# Amsha Agent Developer Guide (AGENTS.md)
 
 **All AI coding agents MUST adhere to these rules when editing this codebase.**
 
@@ -28,16 +28,16 @@ Every Flyway migration **MUST** have a matching migration in the other backend w
 | Boolean | `BOOLEAN DEFAULT FALSE` | `BOOLEAN NOT NULL DEFAULT FALSE` |
 | Unique constraint | `UNIQUE(col1, col2)` | `UNIQUE(col1, col2)` (same) |
 
-**Locations**: `arcclaw-persistence-sqlite/src/main/resources/db/migration/sqlite/` / `arcclaw-persistence-postgres/src/main/resources/db/migration/postgresql/`
+**Locations**: `persistence-sqlite/src/main/resources/db/migration/sqlite/` / `persistence-postgres/src/main/resources/db/migration/postgresql/`
 
 ### 1.3.1 Persistence Backend Selection
-Each adapter uses `@IfBuildProperty(name = "arcclaw.persistence.backend", stringValue = "sqlite"|"postgres"|"fs")`. SQLite is default (`enableIfMissing = true`). **JVM mode**: set `ARCCLAW_PERSISTENCE_BACKEND` in `.env` — no rebuild. **Native image**: baked at build time, must rebuild. Tiered memory backend (`arcclaw.memory.tiered.backend`) is a separate property and can differ. See `docs/Architecture_Invariants.md` §5.24 for full details.
+Each adapter uses `@IfBuildProperty(name = "amsha.persistence.backend", stringValue = "sqlite"|"postgres"|"fs")`. SQLite is default (`enableIfMissing = true`). **JVM mode**: set `AMSHA_PERSISTENCE_BACKEND` in `.env` — no rebuild. **Native image**: baked at build time, must rebuild. Tiered memory backend (`amsha.memory.tiered.backend`) is a separate property and can differ. See `docs/Architecture_Invariants.md` §5.24 for full details.
 
 | Binary | Backend | Build command |
 |---|---|---|
-| `arcclaw-sqlite` | SQLite (default) | `./mvnw package -Dnative` |
-| `arcclaw-pg` | PostgreSQL | `./mvnw package -Dnative -Darcclaw.persistence.backend=postgres` |
-| `arcclaw-fs` | Filesystem | `./mvnw package -Dnative -Darcclaw.persistence.backend=fs` |
+| `amsha-sqlite` | SQLite (default) | `./mvnw package -Dnative` |
+| `amsha-pg` | PostgreSQL | `./mvnw package -Dnative -Damsha.persistence.backend=postgres` |
+| `amsha-fs` | Filesystem | `./mvnw package -Dnative -Damsha.persistence.backend=fs` |
 
 JVM mode is backend-agnostic: one JAR, switch via `.env`. Native builds need separate binaries per backend. Release archives contain all 3 per OS.
 
@@ -130,7 +130,7 @@ When adding `@ConfigProperty`, update ALL of: `application.yaml` (`${ENV_VAR:def
 For beans from optional Maven deps, use `BeanManager.getBeans(Object.class)` — NOT `Instance<Object>` or `@Any Instance<Object>`. Iterate set, check `bean.getBeanClass().getName()`, resolve via `beanManager.getReference()`, verify `getMethod()` before use. Verify: app log shows `[MCP] BeanManager returned N beans total` with N ≥ 10.
 
 ### 2.7 Filesystem Backend + Lucene
-`arcclaw-persistence-fs` uses Lucene (`LuceneIndexManager`) for BM25 + optional vector kNN. JSON files under `{dataDir}/memory-index/` are source of truth; Lucene index under `{dataDir}/lucene-index/` is rebuilt from JSON on startup. Degrades to BM25-only if `EmbeddingModel` bean unavailable. Hybrid search merges via RRF (k=60). Config: `arcclaw.fs.data-dir`, `arcclaw.fs.lucene-index-dir`, `arcclaw.fs.vector-dimension`.
+`amsha-persistence-fs` uses Lucene (`LuceneIndexManager`) for BM25 + optional vector kNN. JSON files under `{dataDir}/memory-index/` are source of truth; Lucene index under `{dataDir}/lucene-index/` is rebuilt from JSON on startup. Degrades to BM25-only if `EmbeddingModel` bean unavailable. Hybrid search merges via RRF (k=60). Config: `amsha.fs.data-dir`, `amsha.fs.lucene-index-dir`, `amsha.fs.vector-dimension`.
 
 **Lucene Document Schema**: `id` (`StringField`, stored), `content` (`TextField`, stored + indexed), `metadata_json` (`StoredField`), `timestamp` (`LongPoint` + `StoredField`), `embedding` (`KnnFloatVectorField`, COSINE — optional).
 
@@ -160,7 +160,7 @@ or `archival_memory_search` instead.
 ## 3. Code Conventions
 
 ### 3.1 No Hardcoded Tool Name Strings
-Use `ToolCapability.ENUM.toolName()` instead of `"sandbox_exec"`, `"github"`, etc. Exceptions (not refactorable): `@ToolMetadata`/`@Tool` annotation attributes, `@WithDefault` defaults, Javadoc examples, user-input pattern matching, LLM prompt instructions. Cross-module: `ToolCapability` lives in `arcclaw-core` — modules without that dependency (e.g. `arcclaw-channel-api`) must keep hardcoded strings.
+Use `ToolCapability.ENUM.toolName()` instead of `"sandbox_exec"`, `"github"`, etc. Exceptions (not refactorable): `@ToolMetadata`/`@Tool` annotation attributes, `@WithDefault` defaults, Javadoc examples, user-input pattern matching, LLM prompt instructions. Cross-module: `ToolCapability` lives in `amsha-core` — modules without that dependency (e.g. `amsha-channel-api`) must keep hardcoded strings.
 
 ### 3.2 Telegram Garbled Line Stripping
 All outbound Telegram messages **MUST** pass through `stripGarbledLines()` before sending. Filters lines where >80% of non-space chars are `?`, `…`, em-dashes, `OTHER_PUNCTUATION`. Called in `TelegramChannelSender.sendMessageInternal()`.
@@ -187,19 +187,19 @@ On restart, auto-deny ALL stale `AWAITING_APPROVAL` checkpoints for all channel 
 Existing providers: `groq`, `openai`, `ollama`, `openrouter`, `claude-code`,
 `cerebras`, `gemini`, `nvidia`, `omlx`, `generic-openai`.
 
-1. **`RoutingChatModelProvider`** — `arcclaw-core/.../routing/<Name>LlmProviderFactory.java`
-2. **`AgentChatModelProvider`** — `arcclaw-core/.../agent/reasoning/<Name>ProviderFactory.java`
+1. **`RoutingChatModelProvider`** — `core/.../routing/<Name>LlmProviderFactory.java`
+2. **`AgentChatModelProvider`** — `core/.../agent/reasoning/<Name>ProviderFactory.java`
 3. **`LlmModelFactory.java`** — Add URL pattern to `URL_PROVIDER_MAP`
 4. **`OnboardingResource.java`** — Add default model to `DEFAULT_MODELS`
-5. **`.env`** — Add `ARCCLAW_<NAME>_BASE_URL`, `ARCCLAW_<NAME>_MODEL`, add to `ARCCLAW_INFINITE_LOOP_LLM_PROVIDERS`
+5. **`.env`** — Add `AMSHA_<NAME>_BASE_URL`, `AMSHA_<NAME>_MODEL`, add to `AMSHA_INFINITE_LOOP_LLM_PROVIDERS`
 6. **`.env.example`** — Same additions
 7. **`arc-settings.ts`** + **`arc-onboarding-step2.ts`** — Add to `PROVIDERS`/`providers` arrays
-8. **Verify**: `./mvnw compile -q` + `cd arcclaw-ui && npm run build`
+8. **Verify**: `./mvnw compile -q` + `cd ui && npm run build`
 
 **Generic OpenAI provider pattern:** Use `GenericOpenAiLlmProviderFactory.java` (routing)
 and `GenericOpenAiProviderFactory.java` (agent reasoning) as templates. The generic
 provider auto-detects `deepseek-reasoner` and injects `include_reasoning=true` workaround.
-Requires `ARCCLAW_GENERIC_OPENAI_BASE_URL` and `ARCCLAW_GENERIC_OPENAI_API_KEY`.
+Requires `AMSHA_GENERIC_OPENAI_BASE_URL` and `AMSHA_GENERIC_OPENAI_API_KEY`.
 
 ---
 
@@ -234,9 +234,9 @@ This project is babysitter-enabled for complex workflow orchestration.
 9. **`templates/prompts/delegate-to-agent-rules.txt`** — Add to "Available Specialists"
 10. **`PersonaEscalationService.java`** — Add escalation paths in `determineNewPersonaEscalation()`
 11. **`PromptInstructionLibrary.java`** — Add to system capabilities
-12. **`application.yaml`** — Add role entry under `arcclaw.agents.roles`
+12. **`application.yaml`** — Add role entry under `amsha.agents.roles`
 13. **Verify**: `./mvnw compile -q`, run `AgentRoleTest` + `PersonaEscalationServiceTest`
-14. Update `telegram-test-arcclaw.txt`
+14. Update `telegram-test-amsha.txt`
 
 **⚠ WARNING**: Items 7-9 are static lists/annotations — no compile-time safety. Always verify manually.
 
@@ -256,9 +256,9 @@ This project is babysitter-enabled for complex workflow orchestration.
 | Enums, `@ConfigMapping`, `@Qualifier` | NO |
 
 **Module config files** (add to the module's `*ReflectionConfig.java`):
-`arcclaw-persistence-api` → `TieredMemoryReflectionConfig`, `arcclaw-persistence-sqlite` → `SqlitePersistenceReflectionConfig`, `arcclaw-persistence-postgres` → `PostgresPersistenceReflectionConfig`, `arcclaw-persistence-fs` → `FsReflectionConfig`, `arcclaw-core` → `CoreReflectionConfig`, `arcclaw-app` → `AppReflectionConfig`/`ChannelReflectionConfig`, `arcclaw-channel-telegram` → `TelegramReflectionConfig`, `arcclaw-onboarding` → `OnboardingReflectionConfig`, `arcclaw-mcp` → `McpReflectionConfig`, `arcclaw-rag` → `RagReflectionConfig`.
+`amsha-persistence-api` → `TieredMemoryReflectionConfig`, `amsha-persistence-sqlite` → `SqlitePersistenceReflectionConfig`, `amsha-persistence-postgres` → `PostgresPersistenceReflectionConfig`, `amsha-persistence-fs` → `FsReflectionConfig`, `amsha-core` → `CoreReflectionConfig`, `amsha-app` → `AppReflectionConfig`/`ChannelReflectionConfig`, `amsha-channel-telegram` → `TelegramReflectionConfig`, `amsha-onboarding` → `OnboardingReflectionConfig`, `amsha-mcp` → `McpReflectionConfig`, `amsha-rag` → `RagReflectionConfig`.
 
-**Native-image runtime init** (`native-image.properties` in `arcclaw-app`):
+**Native-image runtime init** (`native-image.properties` in `amsha-app`):
 Libs using FFM/MethodHandle/native access need `--initialize-at-run-time=<package>`. **Mark the ENTIRE package** (e.g. `org.apache.lucene`), not individual classes — GraalVM embeds static fields from build-time classes into the image heap, causing whack-a-mole errors when marking classes individually. Also mark CDI beans with `@PostConstruct` that trigger the library. Do NOT use `pom.xml additional-build-args` (Quarkus splits on commas breaking the arg).
 ```properties
 # ✅ CORRECT — marks entire package + sub-packages

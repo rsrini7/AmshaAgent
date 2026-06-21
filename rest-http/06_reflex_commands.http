@@ -22,7 +22,7 @@
 ###
 ### PiiScanReflex and PromptInjectionReflex are covered in 07_pii_prompt_injection.http
 ###
-### Prerequisites: ArcClaw serve mode
+### Prerequisites: Amsha Agent serve mode
 ### ═══════════════════════════════════════════════════════════════
 
 # @baseUrl  = http://localhost:8080
@@ -36,7 +36,7 @@
 # @name reflexSession
 POST {{baseUrl}}/api/v1/sessions
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
@@ -49,7 +49,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # Expect 200: "No active session found" or budget=$0.00
 POST {{baseUrl}}/api/v1/sessions/{{reflexSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "/status",
@@ -62,7 +62,7 @@ X-ArcClaw-API-Key: {{validKey}}
 ### Run a quick agent task first so /status has something to show
 POST {{baseUrl}}/api/v1/sessions/{{reflexSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "What is 1 + 1?",
@@ -77,7 +77,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # Phase 64-A A1: budget tracking now correct (hard limit before soft warning).
 POST {{baseUrl}}/api/v1/sessions/{{reflexSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "/status",
@@ -96,7 +96,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # History is session-scoped - you only see your own messages.
 POST {{baseUrl}}/api/v1/sessions/{{reflexSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "/history",
@@ -115,7 +115,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # ReAct checkpoint is CLEARED. ChatMemoryStore is PRESERVED.
 POST {{baseUrl}}/api/v1/sessions/{{reflexSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "/reset",
@@ -129,7 +129,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # Expect 200: NO_ACTIVE_STATE (checkpoint wiped) but cost > $0 (budget survives reset).
 POST {{baseUrl}}/api/v1/sessions/{{reflexSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "/status",
@@ -143,7 +143,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # The fact from before /reset must still be recalled.
 POST {{baseUrl}}/api/v1/sessions/{{reflexSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "What was the first math question I asked you in this session?",
@@ -155,7 +155,7 @@ X-ArcClaw-API-Key: {{validKey}}
 
 POST {{baseUrl}}/api/v1/sessions/{{reflexSession.response.body.sessionId}}/run-async
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "/approve",
@@ -174,7 +174,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # @name cronRefSession
 POST {{baseUrl}}/api/v1/sessions
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
@@ -182,7 +182,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # Expect 200: "No scheduled tasks found." or formatted list with IDs
 POST {{baseUrl}}/api/v1/sessions/{{cronRefSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "/crons",
@@ -195,7 +195,7 @@ X-ArcClaw-API-Key: {{validKey}}
 ### [REFLEX-7] /cron - alias 2 (identical behaviour)
 POST {{baseUrl}}/api/v1/sessions/{{cronRefSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "/cron",
@@ -208,7 +208,7 @@ X-ArcClaw-API-Key: {{validKey}}
 ### [REFLEX-8] /list crons - natural language alias (identical behaviour)
 POST {{baseUrl}}/api/v1/sessions/{{cronRefSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "/list crons",
@@ -228,7 +228,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # Expect 200: "❌ Cron job 00000000-dead-beef-0000-000000000000 not found."
 POST {{baseUrl}}/api/v1/sessions/{{cronRefSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "deletecron 00000000-dead-beef-0000-000000000000",
@@ -247,7 +247,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # "No skills currently loaded" if SkillRegistry is empty.
 POST {{baseUrl}}/api/v1/sessions/{{cronRefSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "/skills",
@@ -267,7 +267,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # After connecting a server via 12_mcp.http, dynamic tools appear here.
 POST {{baseUrl}}/api/v1/sessions/{{cronRefSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "/mcp",
@@ -289,7 +289,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # Confirm in logs: NO [PII-REDACTED] line for this message.
 POST {{baseUrl}}/api/v1/sessions/{{cronRefSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "store TEST_KEY=test_value_abc123",
@@ -303,7 +303,7 @@ X-ArcClaw-API-Key: {{validKey}}
 
 POST {{baseUrl}}/api/v1/sessions/{{cronRefSession.response.body.sessionId}}/run-async
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "/approve",
@@ -320,7 +320,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # Expect: "✅ Secret 'JWT_TOKEN' stored securely." - NO redaction.
 POST {{baseUrl}}/api/v1/sessions/{{cronRefSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "store JWT_TOKEN=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ0ZXN0In0.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c",
@@ -333,7 +333,7 @@ X-ArcClaw-API-Key: {{validKey}}
 
 POST {{baseUrl}}/api/v1/sessions/{{cronRefSession.response.body.sessionId}}/run-async
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "/approve",
@@ -356,7 +356,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # WARNING: cronRefSession is now terminated - do not reuse it.
 POST {{baseUrl}}/api/v1/sessions/{{cronRefSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "/halt",
@@ -369,7 +369,7 @@ X-ArcClaw-API-Key: {{validKey}}
 ### [REFLEX-14] Status after halt → SESSION_NOT_FOUND
 # Workspace is wiped. Checkpoint lookup finds nothing.
 GET {{baseUrl}}/api/v1/sessions/{{cronRefSession.response.body.sessionId}}/status/coordinator
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
@@ -377,13 +377,13 @@ X-ArcClaw-API-Key: {{validKey}}
 # @name postHaltSession
 POST {{baseUrl}}/api/v1/sessions
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
 POST {{baseUrl}}/api/v1/sessions/{{postHaltSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "Say: System fully operational after halt.",
@@ -394,7 +394,7 @@ X-ArcClaw-API-Key: {{validKey}}
 ###
 
 DELETE {{baseUrl}}/api/v1/sessions/{{postHaltSession.response.body.sessionId}}
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
@@ -410,7 +410,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # (Not 500 - the reflex handles missing state gracefully.)
 POST {{baseUrl}}/api/v1/sessions/{{reflexSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "/approve",
@@ -423,7 +423,7 @@ X-ArcClaw-API-Key: {{validKey}}
 ### [REFLEX-17] /deny on session with no pending approval → error response
 POST {{baseUrl}}/api/v1/sessions/{{reflexSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "/deny",
@@ -438,6 +438,6 @@ X-ArcClaw-API-Key: {{validKey}}
 # ─────────────────────────────────────────────────────────────────
 
 DELETE {{baseUrl}}/api/v1/sessions/{{reflexSession.response.body.sessionId}}
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###

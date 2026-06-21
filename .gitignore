@@ -57,17 +57,17 @@ dist-ssr/
 node/
 npm/
 *.tsbuildinfo
-arcclaw-app/src/main/resources/META-INF/resources
-arcclaw-app/src/main/resources/env-example
+app/src/main/resources/META-INF/resources
+app/src/main/resources/env-example
 
 .playwright-browsers/
 .playwright-driver/
 .playwright-cli/
 .playwright-mcp/
 
-# ArcClaw
-arcclaw-source.zip
-arcclaw-source.7z
+# Amsha Agent
+amsha-source.zip
+amsha-source.7z
 
 # Test artifacts
 tool-contracts.json

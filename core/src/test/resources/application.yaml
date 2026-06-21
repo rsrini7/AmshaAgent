@@ -1,0 +1,88 @@
+AMSHA_LLM_API_KEY: "dummy-test-key"
+
+amsha:
+  data-dir: "./target"
+  workspace:
+    root-dir: "./target/workspaces"
+  auto-seed-secrets: false
+  vault:
+    pepper: "test-pepper-value-not-used-in-tests"
+    master-key: "test-master-key-32-chars-padded!"
+  channel:
+    telegram:
+      bot-token: "test-bot-token"
+  policy:
+    destructive-vocabulary:
+      patterns:
+        - "(?i)\\b(delete|remove|purge|drop|chmod|truncate|wipe|erase|destroy|archive|rename)\\b"
+        - "(?i)\\brm\\s*-?\\s*rf\\b"
+      exempt-roles:
+        - debugger
+      sandbox-only-roles:
+        - coder
+      override-role: coordinator
+    governance:
+      hitl-exempt-tools:
+        - schedule_task
+        - manage_schedule
+      supervised-salvage-operations:
+        - NETWORK_OUTBOUND
+        - VAULT_ACCESS
+        - EXECUTE_SHELL
+        - WRITE_MEMORY
+        - DELEGATE_AUTONOMOUS
+        - WRITE_FS
+  cron:
+    max-lookback-window: PT999H
+
+quarkus:
+  http:
+    test-port: 0
+  arc:
+    exclude-types:
+      - com.amsha.channel.telegram.*
+      - com.amsha.channel.web.*
+  application:
+    name: amsha
+    version: "1.0.0"
+  langchain4j:
+    timeout: 10s
+    chat-model:
+      provider: openai
+    openai:
+      api-key: "dummy-test-key"
+      base-url: "http://localhost:9999"
+      chat-model:
+        model-name: "gpt-4o-mini"
+  rest:
+    path: /api/v1
+  otel:
+    sdk:
+      disabled: true
+  scheduler:
+    enabled: false
+  log:
+    level: INFO
+    category:
+      "com.amsha.core.agent":
+        level: "OFF"
+      "com.amsha.core.tools":
+        level: "OFF"
+      "com.amsha.core.governance":
+        level: "OFF"
+      "com.amsha.core.scope":
+        level: "OFF"
+      "com.amsha.core.agent.loop.AgentStateMachineRunner":
+        level: "OFF"
+      "com.amsha.core.agent.loop.ToolInvoker":
+        level: "OFF"
+      "com.amsha.core.pipeline.MessagePipeline":
+        level: "OFF"
+      "com.amsha.app.scheduler.CronResultHandler":
+        level: "OFF"
+      "org.jboss.threads.errors":
+        level: "OFF"
+      "com.amsha.app.session.SessionRegistry":
+        level: "WARN"
+  native:
+    additional-build-args: --enable-native-access=ALL-UNNAMED

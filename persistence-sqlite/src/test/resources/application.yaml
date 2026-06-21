@@ -1,0 +1,81 @@
+amsha:
+  data-dir: "./target"
+  workspace:
+    root-dir: "./target/workspaces"
+  auto-seed-secrets: false
+  audit:
+    hmac-key: "dev-audit-hmac-key-min-32-bytes-00000"
+  vault:
+    pepper: "test-pepper"
+    master-key: "test-master-key-32-chars-padded!"
+
+quarkus:
+  application:
+    name: amsha-persistence-sqlite-test
+
+  arc:
+    exclude-types:
+      # Exclude channel impl beans - their test suites run separately
+      - com.amsha.channel.telegram.*
+      - com.amsha.channel.web.*
+      # Exclude the template-based producers that need Qute templates on classpath
+      - com.amsha.core.agent.reasoning.PromptTemplateEngine
+      - com.amsha.core.agent.persona.AgentProducer
+      # Exclude LLM model factories that need provider-specific config
+      - com.amsha.core.agent.reasoning.ChatModelProducer
+      - com.amsha.core.agent.reasoning.LangChainReasoningEngine
+      - com.amsha.core.routing.IntentDetectorModelProducer
+      - com.amsha.core.routing.LlmModelFactory
+
+  index-dependency:
+    amsha-core:
+      group-id: com.amsha
+      artifact-id: amsha-core
+    amsha-channel-api:
+      group-id: com.amsha
+      artifact-id: amsha-channel-api
+
+  opentelemetry:
+    enabled: false
+  smallrye-fault-tolerance:
+    enabled: false
+  otel:
+    sdk:
+      disabled: true
+
+  scheduler:
+    enabled: false
+
+  datasource:
+    db-kind: sqlite
+    jdbc:
+      url: "jdbc:sqlite:./target/sqlite-integration-test.db?busy_timeout=60000&journal_mode=WAL&transaction_mode=IMMEDIATE"
+      additional-jdbc-url-properties: "journal_mode=WAL&synchronous=FULL&busy_timeout=60000&transaction_mode=IMMEDIATE"
+      min-size: 1
+      max-size: 1
+      initial-size: 1
+      acquisition-timeout: 10s
+
+  flyway:
+    migrate-at-start: true
+    locations: classpath:db/migration/sqlite
+
+  langchain4j:
+    openai:
+      api-key: "demo-key"
+      model-name: "gpt-4o"
+    ollama:
+      base-url: "http://localhost:11434"
+      model-name: "mistral-small:latest"
+
+  log:
+    level: INFO
+    category:
+      "com.amsha.core.agent":
+        level: "OFF"
+      "com.amsha.core.tools":
+        level: "OFF"
+      "com.amsha.core.governance":
+        level: "OFF"
+      "com.amsha.app.session.SessionRegistry":
+        level: "WARN"

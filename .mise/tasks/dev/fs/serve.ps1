@@ -1,14 +1,14 @@
 #!/usr/bin/env pwsh
 #MISE shell = "pwsh -NonInteractive -Command"
 #MISE description = "Dev mode with filesystem persistence backend (no database needed)"
-#MISE dir = "{{config_root}}/arcclaw-app"
+#MISE dir = "{{config_root}}/app"
 $ErrorActionPreference = 'Stop'
 $envCopied = $false
 try {
     if (-not (Test-Path '.env') -and (Test-Path '../.env')) {
         Copy-Item -Path '../.env' -Destination '.env'
         $envCopied = $true
-        Write-Host '[dev:fs] Copied ../.env -> arcclaw-app/.env'
+        Write-Host '[dev:fs] Copied ../.env -> app/.env'
     }
     $mvnw    = if ($IsWindows) { '..\mvnw.cmd' } else { '../mvnw' }
     $jvmArgs = '--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow -Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8'
@@ -19,8 +19,8 @@ try {
         '-Dquarkus.profile=dev,filesystem' `
         '-Dquarkus.datasource.enabled=false' `
         '-Dquarkus.flyway.enabled=false' `
-        '-Darcclaw.persistence.backend=fs' `
-        '-Darcclaw.data-dir=../data' `
+        '-Damsha.persistence.backend=fs' `
+        '-Damsha.data-dir=../data' `
         '-Ddebug=false'
     $script:exitCode = $LASTEXITCODE
 } finally {

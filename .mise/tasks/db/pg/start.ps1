@@ -28,7 +28,7 @@ if ($LASTEXITCODE -ne 0) {
     }
 }
 
-$container = 'arcclaw-pg'
+$container = 'amsha-pg'
 $existing = podman ps -a --filter name=$container --no-trunc 2>&1 | Select-String $container
 if ($existing) {
     $status = podman ps --filter name=$container --no-trunc 2>&1 | Select-String $container
@@ -44,11 +44,11 @@ if ($existing) {
 }
 Write-Host "▶   Creating PostgreSQL container '$container'..."
 podman run -d --name $container `
-    -e POSTGRES_DB=arcclaw `
-    -e POSTGRES_USER=arcclaw `
+    -e POSTGRES_DB=amsha `
+    -e POSTGRES_USER=amsha `
     -e POSTGRES_PASSWORD=changeme `
     -p 5432:5432 `
-    --health-cmd='pg_isready -U arcclaw' `
+    --health-cmd='pg_isready -U amsha' `
     --health-interval=3s `
     --health-timeout=2s `
     --health-retries=5 `

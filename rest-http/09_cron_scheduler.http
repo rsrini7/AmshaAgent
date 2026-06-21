@@ -1,7 +1,7 @@
 ### ═══════════════════════════════════════════════════════════════
 ### 09 - AUTONOMOUS CRON SCHEDULER
 ###
-### ArcClaw supports scheduling future agent tasks via the cron
+### Amsha Agent supports scheduling future agent tasks via the cron
 ### scheduler. Agents schedule tasks via ScheduleTaskTool and list/
 ### manage them via ManageScheduleTool or zero-token reflexes.
 ###
@@ -32,7 +32,7 @@
 ###   CRONFAILED  (mandatory) → job execution threw an error
 ###   CRONDELETED (non-mandatory) → job deleted
 ###
-### Prerequisites: ArcClaw serve mode, ARCCLAW_LLM_API_KEY set
+### Prerequisites: Amsha Agent serve mode, AMSHA_LLM_API_KEY set
 ### ═══════════════════════════════════════════════════════════════
 
 # @baseUrl  = http://localhost:8080
@@ -46,7 +46,7 @@
 # @name cronSession
 POST {{baseUrl}}/api/v1/sessions
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
@@ -60,7 +60,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # Audit event: CRONCREATED
 POST {{baseUrl}}/api/v1/sessions/{{cronSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "Schedule a task to run every minute that answers: What is the current JVM uptime in seconds?",
@@ -75,10 +75,10 @@ X-ArcClaw-API-Key: {{validKey}}
 # Expect 200: confirmation with runOnce indicated
 POST {{baseUrl}}/api/v1/sessions/{{cronSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
-    "goal": "Schedule a one-time task to run in 2 minutes that prints: ArcClaw cron job executed successfully.",
+    "goal": "Schedule a one-time task to run in 2 minutes that prints: Amsha Agent cron job executed successfully.",
     "agentRole": "coordinator",
     "maxIterations": 5
 }
@@ -89,7 +89,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # Expect: timezone=Asia/Kolkata in ScheduleTaskTool params
 POST {{baseUrl}}/api/v1/sessions/{{cronSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "Schedule a task to run every day at 9 AM IST (Asia/Kolkata timezone) that summarizes: Daily health check complete.",
@@ -107,7 +107,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # Expect 200: formatted list of all cron jobs with IDs
 POST {{baseUrl}}/api/v1/sessions/{{cronSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "/crons",
@@ -120,7 +120,7 @@ X-ArcClaw-API-Key: {{validKey}}
 ### [CRON-5] /list crons - natural language alias
 POST {{baseUrl}}/api/v1/sessions/{{cronSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "/list crons",
@@ -135,7 +135,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # Expect 200: same list as /crons
 POST {{baseUrl}}/api/v1/sessions/{{cronSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "Using the manage schedule tool, list all my scheduled tasks.",
@@ -148,7 +148,7 @@ X-ArcClaw-API-Key: {{validKey}}
 ### [CRON-6a] Session status check after cron creation
 # Expect 200: COMPLETED (cron creation tasks all finished)
 GET {{baseUrl}}/api/v1/sessions/{{cronSession.response.body.sessionId}}/status/coordinator
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
@@ -158,7 +158,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # Goal uses CRON: prefix to prevent fork-bomb nesting.
 POST {{baseUrl}}/api/v1/sessions/{{cronSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "Schedule a task to run in 1 minute that lists the public repos of GitHub user rsrini7.",
@@ -179,7 +179,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # Audit event: CRONDELETED
 POST {{baseUrl}}/api/v1/sessions/{{cronSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "deletecron REPLACE_WITH_ACTUAL_CRON_ID_FROM_CRON4",
@@ -193,7 +193,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # Coordinator invokes ManageScheduleTool with action=delete, cronId=<id>
 POST {{baseUrl}}/api/v1/sessions/{{cronSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "Using the manage schedule tool, delete cron job with ID REPLACE_WITH_ACTUAL_CRON_ID.",
@@ -207,7 +207,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # maxIterations=1 - this is a reflex, no LLM needed
 POST {{baseUrl}}/api/v1/sessions/{{cronSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "deletecron 00000000-dead-beef-0000-000000000000",
@@ -223,7 +223,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # Expect 200: agent explains it cannot create schedules (no tool available).
 POST {{baseUrl}}/api/v1/sessions/{{cronSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "Schedule a task to run every morning at 8 AM to print hello.",
@@ -236,7 +236,7 @@ X-ArcClaw-API-Key: {{validKey}}
 ### [CRON-12] Researcher CANNOT schedule - no scheduletask in schema
 POST {{baseUrl}}/api/v1/sessions/{{cronSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "Schedule a daily research task.",
@@ -252,7 +252,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # Simulate by sending CRON: prefix explicitly.
 POST {{baseUrl}}/api/v1/sessions/{{cronSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "CRON: schedule another task every minute",
@@ -270,9 +270,9 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ### [CRON-14] Check audit for CRONFIRED event (run after ~90 seconds)
 # Expect: eventType=CRONFIRED in the audit list
-# If CRONFAILED appears instead: check ARCCLAW_LLM_API_KEY and agent loop logs.
+# If CRONFAILED appears instead: check AMSHA_LLM_API_KEY and agent loop logs.
 GET {{baseUrl}}/api/v1/audit/session/{{cronSession.response.body.sessionId}}
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
@@ -281,7 +281,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # Expect: the one-shot job no longer appears in /crons.
 POST {{baseUrl}}/api/v1/sessions/{{cronSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "/crons",
@@ -295,7 +295,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # CRONFIRED is a mandatory event - it must be in the chain.
 # Expect: {"valid":true,"brokenAtId":null,"totalRows":N}
 GET {{baseUrl}}/api/v1/audit/{{cronSession.response.body.sessionId}}/verify
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
@@ -307,7 +307,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # @name synthCronSession
 POST {{baseUrl}}/api/v1/sessions
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
@@ -315,7 +315,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # Dattatreya has scheduletask + manage_schedule in its tool schema.
 POST {{baseUrl}}/api/v1/sessions/{{synthCronSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "Schedule a one-time task to run in 1 minute that performs a cross-domain summary: what are the key JVM metrics an AI agent kernel should monitor for memory, throughput, and garbage collection?",
@@ -327,7 +327,7 @@ X-ArcClaw-API-Key: {{validKey}}
 
 POST {{baseUrl}}/api/v1/sessions/{{synthCronSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "/crons",
@@ -346,7 +346,7 @@ X-ArcClaw-API-Key: {{validKey}}
 ### Delete all remaining cron jobs (run /crons first to get IDs, then deletecron each)
 POST {{baseUrl}}/api/v1/sessions/{{cronSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "Using the manage schedule tool, list all scheduled tasks and delete each one.",
@@ -357,11 +357,11 @@ X-ArcClaw-API-Key: {{validKey}}
 ###
 
 DELETE {{baseUrl}}/api/v1/sessions/{{cronSession.response.body.sessionId}}
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
 DELETE {{baseUrl}}/api/v1/sessions/{{synthCronSession.response.body.sessionId}}
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###

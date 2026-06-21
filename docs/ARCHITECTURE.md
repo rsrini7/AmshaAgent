@@ -1,4 +1,4 @@
-# ArcClaw Architecture
+# Amsha Agent Architecture
 
 > For **mandatory architecture invariants** (transaction rules, native-image, persistence contracts), see [Architecture_Invariants.md](./Architecture_Invariants.md).
 
@@ -8,27 +8,27 @@
 
 | Module | Role |
 |---|---|
-| `arcclaw-app` | Main deployable: CLI (Picocli), REST endpoints, scheduler wiring, security, channel routing |
-| `arcclaw-core` | Agent loop, state machine, tools, audit, governance, SSE, skill system, routing, sandbox |
-| `arcclaw-channel-api` | Channel SPI — sealed interfaces and plugin contracts |
-| `arcclaw-channel-telegram` | Apache Camel–backed Telegram bot with HITL inline keyboards |
-| `arcclaw-channel-web` | WebSocket channel + Lit TypeScript frontend |
-| `arcclaw-deployment` | Build-time: custom CDI scope, MCP reflection, REST enforcement |
-| `arcclaw-persistence-api` | Hexagonal port interfaces (CheckpointStorePort, ChatMemoryStorePort, CronStorePort, etc.) |
-| `arcclaw-persistence-common` | Shared JDBI records/DTOs |
-| `arcclaw-persistence-sqlite` | SQLite adapter (WAL + FTS5 + vec0) |
-| `arcclaw-persistence-postgres` | PostgreSQL adapter |
-| `arcclaw-persistence-fs` | Filesystem-based adapter (Lucene BM25) |
-| `arcclaw-rag` | Two-tier vector (vec0) + FTS5 RAG memory |
-| `arcclaw-mcp` | MCP server bridge + dynamic client tool loading |
-| `arcclaw-onboarding` | 5-step setup wizard REST API + /complete |
-| `arcclaw-tool-playwright` | Playwright browser automation tool |
-| `arcclaw-common` | Shared utilities (LogUtil, constants) |
-| `arcclaw-ui` | Lit 3.x + TypeScript web frontend |
+| `amsha-app` | Main deployable: CLI (Picocli), REST endpoints, scheduler wiring, security, channel routing |
+| `amsha-core` | Agent loop, state machine, tools, audit, governance, SSE, skill system, routing, sandbox |
+| `amsha-channel-api` | Channel SPI — sealed interfaces and plugin contracts |
+| `amsha-channel-telegram` | Apache Camel–backed Telegram bot with HITL inline keyboards |
+| `amsha-channel-web` | WebSocket channel + Lit TypeScript frontend |
+| `amsha-deployment` | Build-time: custom CDI scope, MCP reflection, REST enforcement |
+| `amsha-persistence-api` | Hexagonal port interfaces (CheckpointStorePort, ChatMemoryStorePort, CronStorePort, etc.) |
+| `amsha-persistence-common` | Shared JDBI records/DTOs |
+| `amsha-persistence-sqlite` | SQLite adapter (WAL + FTS5 + vec0) |
+| `amsha-persistence-postgres` | PostgreSQL adapter |
+| `amsha-persistence-fs` | Filesystem-based adapter (Lucene BM25) |
+| `amsha-rag` | Two-tier vector (vec0) + FTS5 RAG memory |
+| `amsha-mcp` | MCP server bridge + dynamic client tool loading |
+| `amsha-onboarding` | 5-step setup wizard REST API + /complete |
+| `amsha-tool-playwright` | Playwright browser automation tool |
+| `amsha-common` | Shared utilities (LogUtil, constants) |
+| `ui` | Lit 3.x + TypeScript web frontend |
 
-**Dependency flow:** `arcclaw-app` → `arcclaw-core` → `arcclaw-channel-api` ← `arcclaw-channel-telegram`, `arcclaw-channel-web`. `arcclaw-deployment` is build-time only (not in runtime fat-jar). `arcclaw-rag`, `arcclaw-mcp`, and `arcclaw-tool-playwright` are optional runtime modules discovered via CDI. Persistence follows hexagonal architecture: `arcclaw-persistence-api` defines ports, `arcclaw-persistence-common` holds shared entities, three adapters (sqlite, postgres, fs) implement ports.
+**Dependency flow:** `amsha-app` → `amsha-core` → `amsha-channel-api` ← `amsha-channel-telegram`, `amsha-channel-web`. `amsha-deployment` is build-time only (not in runtime fat-jar). `amsha-rag`, `amsha-mcp`, and `amsha-tool-playwright` are optional runtime modules discovered via CDI. Persistence follows hexagonal architecture: `amsha-persistence-api` defines ports, `amsha-persistence-common` holds shared entities, three adapters (sqlite, postgres, fs) implement ports.
 
-![Module Architecture](./assets/arcclaw_module_architecture.svg)
+![Module Architecture](./assets/amsha_module_architecture.svg)
 
 ---
 
@@ -76,13 +76,13 @@ Telegram Bot API → Apache Camel long-poll
 ```
 ws://host/ws/chat
   → WebChatEndpoint.onOpen()
-  → API key validation (X-ArcClaw-API-Key header or Sec-WebSocket-Protocol)
+  → API key validation (X-Amsha-API-Key header or Sec-WebSocket-Protocol)
   → ChannelMessage.WebSocketMessage → ChannelServices.processAsync(msg)
 ```
 
 **Cron:**
 ```
-@Scheduled(every="${arcclaw.cron.poll-interval:30s}")
+@Scheduled(every="${amsha.cron.poll-interval:30s}")
   → AgentCronScheduler.pollAndDispatch()
   → cronRepository.reclaimStaleCrons(cutoff) → findDueCrons()
   → Atomic CAS claim → Semaphore.tryAcquire() (max 10 concurrent)
@@ -90,7 +90,7 @@ ws://host/ws/chat
   → WorkspaceContext.run() → AgentLoop.run() + CRON CONSTRAINT directive
 ```
 
-![Message Pipeline](./assets/arcclaw_message_pipeline.svg)
+![Message Pipeline](./assets/amsha_message_pipeline.svg)
 
 ---
 
@@ -108,7 +108,7 @@ Build system prompt → LLM reasoning call → Parse ReasoningStep
        → ChatMemoryWriter → next iteration (loop)
 ```
 
-![Agent Loop](./assets/arcclaw_agent_loop.svg)
+![Agent Loop](./assets/amsha_agent_loop.svg)
 
 ### Agent Loop Lifecycle (`AgentLoop.run`)
 
@@ -283,7 +283,7 @@ All 12 roles have `garuda` for delegation. Tool schemas dynamically assembled vi
 
 ### Hexagonal Architecture
 
-Port interfaces in `arcclaw-persistence-api`, three adapter implementations:
+Port interfaces in `amsha-persistence-api`, three adapter implementations:
 
 | Backend | Storage | Best For |
 |---|---|---|
@@ -307,7 +307,7 @@ Retrieval merges FTS5 keyword search + sqlite-vec vector search via Reciprocal R
 
 **Retrieval** (`RagContextEnricher.enrich()`): Embeds current goal, searches via `TwoTierMemoryService.search()` (session KB in-memory ANN + global KB vec0 KNN), applies adaptive thresholding, deduplicates by `chunkId`, injects top-N as `## Retrieved Rag Context` block.
 
-**Embedding provider:** `InfiniteLoopEmbeddingModelProvider` produces an `InfiniteLoopEmbeddingModel` that rotates through the providers listed in `arcclaw.infinite-loop.embedding.providers` (ollama / openai / jina) with health tracking and exponential-backoff cooldown.
+**Embedding provider:** `InfiniteLoopEmbeddingModelProvider` produces an `InfiniteLoopEmbeddingModel` that rotates through the providers listed in `amsha.infinite-loop.embedding.providers` (ollama / openai / jina) with health tracking and exponential-backoff cooldown.
 
 ### Context Compaction
 
@@ -498,13 +498,13 @@ Roles with `requiresApproval=false` in their `RoleDefinition` skip non-sensitive
 
 ```bash
 # Default: SQLite (zero config)
-arcclaw chat
+amsha chat
 
 # PostgreSQL (JVM mode — no rebuild)
-ARCCLAW_PERSISTENCE_BACKEND=postgres arcclaw serve
+AMSHA_PERSISTENCE_BACKEND=postgres amsha serve
 
 # Filesystem
-ARCCLAW_PERSISTENCE_BACKEND=fs arcclaw serve
+AMSHA_PERSISTENCE_BACKEND=fs amsha serve
 ```
 
 See [SETUP.md](./SETUP.md) for detailed backend switching instructions.
@@ -533,13 +533,13 @@ The **compaction model** is separate — always a lighter/cheaper model regardle
 
 ## Bootstrap & Startup
 
-### Pre-CDI Steps (in `ArcClawCli.main()`)
+### Pre-CDI Steps (in `AmshaCli.main()`)
 
 Runs **before** Quarkus CDI container boots:
 1. **Bootstrap** — `AppBootstrap.bootstrap(args)` → `BootstrapOrchestrator`: resolves binary dir, drains input buffer, extracts .env, handles LD_PRELOAD re-exec, loads .env, normalizes Playwright path, installs Playwright CLI, ensures fallback LLM defaults, validates security keys, validates config, runs interactive setup wizard, provisions data directory and native libs (including Vec0).
 2. **Env-var validation** — `CliUtils.validateRequiredEnvVars()` hard-exits with setup guide if any required vars absent.
 3. **Args check** — If `args.length == 0`, prints usage and exits.
-4. **Quarkus boot** — `Quarkus.run(ArcClawCli.class, args)` starts CDI container, Agroal pool, extensions.
+4. **Quarkus boot** — `Quarkus.run(AmshaCli.class, args)` starts CDI container, Agroal pool, extensions.
 
 ### CDI Startup Observers (priority order)
 
@@ -554,9 +554,9 @@ Runs **before** Quarkus CDI container boots:
 
 Note: `session_registry` table is created by Flyway baseline migration (`V1__baseline.sql`), not a CDI observer.
 
-### Build-Time Processors (`arcclaw-deployment`)
+### Build-Time Processors (`amsha-deployment`)
 
-`WorkspaceScopeProcessor` registers `@WorkspaceScoped` as custom CDI scope at build time. `RestResourceBuildStep` enforces `@RunOnVirtualThread` on JAX-RS resources injecting `EntityManager`. **Note:** This guard catches third-party langchain4j REST APIs (Gemini, Anthropic, OpenAI) that still use JPA internally — ArcClaw's own code has zero JPA/EntityManager usage. `AgentFunctionProcessor` processes `@AgentFunction` interfaces and generates JSON schemas from SAM return types at build time.
+`WorkspaceScopeProcessor` registers `@WorkspaceScoped` as custom CDI scope at build time. `RestResourceBuildStep` enforces `@RunOnVirtualThread` on JAX-RS resources injecting `EntityManager`. **Note:** This guard catches third-party langchain4j REST APIs (Gemini, Anthropic, OpenAI) that still use JPA internally — Amsha Agent's own code has zero JPA/EntityManager usage. `AgentFunctionProcessor` processes `@AgentFunction` interfaces and generates JSON schemas from SAM return types at build time.
 
 ---
 
@@ -566,10 +566,10 @@ Four leaf subcommands all converge on `AgentLoop.run()`:
 
 | Mode | Command | Behaviour |
 |---|---|---|
-| `serve` | `arcclaw serve` | Quarkus HTTP server on port 8080; Telegram route self-registers via `@StartupEvent` |
-| `ask` | `arcclaw ask "goal"` | UUID session → `AgentLoop.run()` → print answer → terminate |
-| `chat` | `arcclaw chat` | Interactive REPL; input passes through `ReflexRegistry.processIfReflex()` first |
-| `attach` | `arcclaw attach <channel>` | Discovers matching `ChannelDaemon` CDI bean by `channelId()` → `daemon.start()` |
+| `serve` | `amsha serve` | Quarkus HTTP server on port 8080; Telegram route self-registers via `@StartupEvent` |
+| `ask` | `amsha ask "goal"` | UUID session → `AgentLoop.run()` → print answer → terminate |
+| `chat` | `amsha chat` | Interactive REPL; input passes through `ReflexRegistry.processIfReflex()` first |
+| `attach` | `amsha attach <channel>` | Discovers matching `ChannelDaemon` CDI bean by `channelId()` → `daemon.start()` |
 
 ---
 
@@ -651,11 +651,11 @@ Database skills override classpath skills by name. `SkillResource` (REST CRUD at
 
 ## MCP (Model Context Protocol) Integration
 
-### ArcClaw as MCP Server
+### Amsha Agent as MCP Server
 
-`McpAdminResource` (`GET /mcp/tools`) exposes ArcClaw's internal tools as MCP-compatible descriptors. `AgentFunctionProcessor` (build-time) generates JSON schemas from `@AgentFunction`-annotated SAM interfaces.
+`McpAdminResource` (`GET /mcp/tools`) exposes Amsha Agent's internal tools as MCP-compatible descriptors. `AgentFunctionProcessor` (build-time) generates JSON schemas from `@AgentFunction`-annotated SAM interfaces.
 
-### ArcClaw as MCP Client (Dynamic Tool Loading)
+### Amsha Agent as MCP Client (Dynamic Tool Loading)
 
 ```
 POST /api/v1/mcp/connect  {name, url}
@@ -667,7 +667,7 @@ POST /api/v1/mcp/connect  {name, url}
   → Available as tools in agent roles at next invocation
 ```
 
-Self-connect smoke test: connecting to `http://localhost:8080/mcp` makes ArcClaw's own tools discoverable as dynamic tools.
+Self-connect smoke test: connecting to `http://localhost:8080/mcp` makes Amsha Agent's own tools discoverable as dynamic tools.
 
 ---
 
@@ -696,7 +696,7 @@ Brahma (coder) → sandbox_exec → FAIL
   → On success: continues loop. On failure after max attempts: returns error.
 ```
 
-Config: `arcclaw.agent.auto-heal.enabled` (default `true`), `arcclaw.agent.auto-heal.max-attempts` (default `2`). Session sentinel: `:heal:`.
+Config: `amsha.agent.auto-heal.enabled` (default `true`), `amsha.agent.auto-heal.max-attempts` (default `2`). Session sentinel: `:heal:`.
 
 ### Cross-Persona Escalation
 
@@ -715,7 +715,7 @@ Config: `arcclaw.agent.auto-heal.enabled` (default `true`), `arcclaw.agent.auto-
 | Brihaspati (architect) | Brahma (coder) | Architecture decided, needs coding |
 | Brihaspati (architect) | Saraswati (researcher) | Needs external research |
 
-Config: `arcclaw.agent.escalation.enabled` (default `true`), `arcclaw.agent.escalation.max-depth` (default `2`). Session sentinel: `:escalate:`. Circuit breaker: `isPingPong()` detects A→B→A→B loops in last 4 entries.
+Config: `amsha.agent.escalation.enabled` (default `true`), `amsha.agent.escalation.max-depth` (default `2`). Session sentinel: `:escalate:`. Circuit breaker: `isPingPong()` detects A→B→A→B loops in last 4 entries.
 
 ### Delegation & Escalation Flow
 
@@ -776,10 +776,10 @@ AuditService.record(sessionId, userId, agentRole, SecurityEventType, detail)
 ### OpenTelemetry
 
 Spans at three levels parented under session root span:
-- **Session span** (`arcclaw.session`): cumulative prompt + completion tokens
-- **Iteration span** (`arcclaw.agent.iteration`): one per loop iteration; carries session ID, role, iteration number
-- **Tool span** (`arcclaw.tool.call`): one per `ToolInvoker.invoke()`; carries tool name, operation
-- **Reflex span** (`arcclaw.reflex.execute`): one per matched reflex
+- **Session span** (`amsha.session`): cumulative prompt + completion tokens
+- **Iteration span** (`amsha.agent.iteration`): one per loop iteration; carries session ID, role, iteration number
+- **Tool span** (`amsha.tool.call`): one per `ToolInvoker.invoke()`; carries tool name, operation
+- **Reflex span** (`amsha.reflex.execute`): one per matched reflex
 
 Exported to Jaeger via OTLP at `http://localhost:4317`.
 
@@ -988,7 +988,7 @@ graph TD
 |---|---|
 | [Architecture_Invariants.md](./Architecture_Invariants.md) | Mandatory architecture rules (40+ invariants) |
 | [FAQ.md](./FAQ.md) | Architecture Q&A, design rationale, operational guidance |
-| [ARCCLAW_EXTENSION.md](./ARCCLAW_EXTENSION.md) | Adding tools, personas, reflexes, channels, skills, LLM providers |
+| [AMSHA_EXTENSION.md](./AMSHA_EXTENSION.md) | Adding tools, personas, reflexes, channels, skills, LLM providers |
 | [CONFIGURATION.md](./CONFIGURATION.md) | All environment variables reference |
 | [SECURITY.md](./SECURITY.md) | Vault, sandbox, audit chain, 10 guard layers |
 | [TESTING_GUIDE.md](./TESTING_GUIDE.md) | REST API testing, regression checklists |

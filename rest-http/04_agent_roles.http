@@ -1,7 +1,7 @@
 ### ═══════════════════════════════════════════════════════════════
 ### 04 - ALL TWELVE AGENT ROLES
 ###
-### ArcClaw ships twelve persona-based agents. Each has a distinct
+### Amsha Agent ships twelve persona-based agents. Each has a distinct
 ### system prompt, tool schema, and maxIterations constraint.
 ###
 ### Role → Deity        → Tools available
@@ -39,7 +39,7 @@
 ###   "kali"       → PURIFIER
 ###   "parvati" or "uma" → NURTURER
 ###
-### Prerequisites: ArcClaw serve mode, ARCCLAW_LLM_API_KEY set.
+### Prerequisites: Amsha Agent serve mode, AMSHA_LLM_API_KEY set.
 ###   GitHub tool tests additionally require GITHUB_TOKEN in vault.
 ### ═══════════════════════════════════════════════════════════════
 
@@ -54,7 +54,7 @@
 # @name coordSession
 POST {{baseUrl}}/api/v1/sessions
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
@@ -62,7 +62,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # Expect 200 Finished: Vishnu's answer - short, clear, coordinating tone.
 POST {{baseUrl}}/api/v1/sessions/{{coordSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "Explain what a ReAct agent loop is in exactly 2 sentences.",
@@ -73,7 +73,7 @@ X-ArcClaw-API-Key: {{validKey}}
 ###
 
 DELETE {{baseUrl}}/api/v1/sessions/{{coordSession.response.body.sessionId}}
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
@@ -86,7 +86,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # @name researchSession
 POST {{baseUrl}}/api/v1/sessions
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
@@ -95,7 +95,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # Logs: role='researcher', no tool invocation.
 POST {{baseUrl}}/api/v1/sessions/{{researchSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "What is the difference between AES-GCM and AES-GCM-SIV encryption modes?",
@@ -106,7 +106,7 @@ X-ArcClaw-API-Key: {{validKey}}
 ###
 
 DELETE {{baseUrl}}/api/v1/sessions/{{researchSession.response.body.sessionId}}
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
@@ -121,7 +121,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # @name coderSession
 POST {{baseUrl}}/api/v1/sessions
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
@@ -129,7 +129,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # Expect 200 Finished: Java code from Brahma. No tool calls attempted.
 POST {{baseUrl}}/api/v1/sessions/{{coderSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "Write a Java 25 method that takes a list of integers and returns the top 3 distinct values in descending order using streams.",
@@ -145,7 +145,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # Confirm in audit: NO TOOL_INVOKED event appears for this session.
 POST {{baseUrl}}/api/v1/sessions/{{coderSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "Using the github tool, list the topics of the rsrini7/mermaid2gif repository.",
@@ -159,7 +159,7 @@ X-ArcClaw-API-Key: {{validKey}}
 
 POST {{baseUrl}}/api/v1/sessions/{{coderSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "Using the github tool, list the topics of the rsrini7/private repository.",
@@ -172,7 +172,7 @@ X-ArcClaw-API-Key: {{validKey}}
 ### [ROLE-6b] Verify NO TOOL_INVOKED in coder session audit
 # Expect: audit list contains NO eventType=TOOL_INVOKED
 GET {{baseUrl}}/api/v1/audit/session/{{coderSession.response.body.sessionId}}
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
@@ -181,7 +181,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # Uses the same coderSession.
 POST {{baseUrl}}/api/v1/sessions/{{coderSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "What is Big-O complexity of QuickSort in the average case? Show the proof.",
@@ -192,7 +192,7 @@ X-ArcClaw-API-Key: {{validKey}}
 ###
 
 DELETE {{baseUrl}}/api/v1/sessions/{{coderSession.response.body.sessionId}}
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
@@ -206,7 +206,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # @name debugSession
 POST {{baseUrl}}/api/v1/sessions
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
@@ -215,7 +215,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # Contrarian response - challenges your assumptions about the cause.
 POST {{baseUrl}}/api/v1/sessions/{{debugSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "Analyze this stack trace:\njava.lang.NullPointerException: Cannot invoke method on null object\n  at com.example.UserService.getUser(UserService.java:42)\n  at com.example.UserController.handleRequest(UserController.java:18)",
@@ -231,7 +231,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # This would NOT happen for coder (empty schema = no tool attempt at all).
 POST {{baseUrl}}/api/v1/sessions/{{debugSession.response.body.sessionId}}/run-async
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "Check the rsrini7/mermaid2gif GitHub repository for any recent commits related to null handling.",
@@ -244,12 +244,12 @@ X-ArcClaw-API-Key: {{validKey}}
 ### [ROLE-9b] Cancel the github call (not under test - just cleanup)
 POST {{baseUrl}}/api/v1/sessions/{{debugSession.response.body.sessionId}}/deny?agentRole=debugger
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
 DELETE {{baseUrl}}/api/v1/sessions/{{debugSession.response.body.sessionId}}
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
@@ -263,7 +263,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # @name archSession
 POST {{baseUrl}}/api/v1/sessions
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
@@ -272,7 +272,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # ADR-style response with structured trade-offs. No production code.
 POST {{baseUrl}}/api/v1/sessions/{{archSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "Evaluate the architectural trade-offs of using SQLite WAL mode vs PostgreSQL for an AI agent kernel handling concurrent sessions. Consider: ACID guarantees, operational complexity, portability, and latency.",
@@ -288,7 +288,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # Confirm in audit: NO CRONCREATED event.
 POST {{baseUrl}}/api/v1/sessions/{{archSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "Schedule a daily task to run architecture health checks at 9 AM.",
@@ -299,7 +299,7 @@ X-ArcClaw-API-Key: {{validKey}}
 ###
 
 DELETE {{baseUrl}}/api/v1/sessions/{{archSession.response.body.sessionId}}
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
@@ -313,7 +313,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # @name synthSession
 POST {{baseUrl}}/api/v1/sessions
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
@@ -322,7 +322,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # Response should synthesize multiple specialist viewpoints.
 POST {{baseUrl}}/api/v1/sessions/{{synthSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "A Java service is experiencing high memory under load. Diagnose whether the root cause is a code defect (Brahma's domain), a design flaw (Brihaspati's domain), or known JVM behavior (Saraswati's domain). Synthesize a unified recommendation.",
@@ -333,7 +333,7 @@ X-ArcClaw-API-Key: {{validKey}}
 ###
 
 DELETE {{baseUrl}}/api/v1/sessions/{{synthSession.response.body.sessionId}}
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
@@ -347,14 +347,14 @@ X-ArcClaw-API-Key: {{validKey}}
 # @name aliasSession
 POST {{baseUrl}}/api/v1/sessions
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
 ### "vishnu" → coordinator persona
 POST {{baseUrl}}/api/v1/sessions/{{aliasSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "Say exactly: I am Vishnu, the Coordinator.",
@@ -367,7 +367,7 @@ X-ArcClaw-API-Key: {{validKey}}
 ### "saraswati" → researcher persona
 POST {{baseUrl}}/api/v1/sessions/{{aliasSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "Say exactly: I am Saraswati, the Researcher.",
@@ -380,7 +380,7 @@ X-ArcClaw-API-Key: {{validKey}}
 ### "shiva" → debugger persona
 POST {{baseUrl}}/api/v1/sessions/{{aliasSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "Say exactly: I am Shiva, the Debugger.",
@@ -393,7 +393,7 @@ X-ArcClaw-API-Key: {{validKey}}
 ### "brihaspati" → architect persona (was missing in original)
 POST {{baseUrl}}/api/v1/sessions/{{aliasSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "Say exactly: I am Brihaspati, the Architect.",
@@ -406,7 +406,7 @@ X-ArcClaw-API-Key: {{validKey}}
 ### "dattatreya" → synthesizer persona
 POST {{baseUrl}}/api/v1/sessions/{{aliasSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "Say exactly: I am Dattatreya, the Synthesizer.",
@@ -419,7 +419,7 @@ X-ArcClaw-API-Key: {{validKey}}
 ### "datta" → synthesizer persona (short alias)
 POST {{baseUrl}}/api/v1/sessions/{{aliasSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "Say exactly: datta alias works.",
@@ -432,7 +432,7 @@ X-ArcClaw-API-Key: {{validKey}}
 ### "brahma" → coder persona
 POST {{baseUrl}}/api/v1/sessions/{{aliasSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "Say exactly: I am Brahma, the Coder.",
@@ -445,7 +445,7 @@ X-ArcClaw-API-Key: {{validKey}}
 ### Unknown agentRole → expect 400 or fallback (document behavior)
 POST {{baseUrl}}/api/v1/sessions/{{aliasSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "Hello.",
@@ -456,6 +456,6 @@ X-ArcClaw-API-Key: {{validKey}}
 ###
 
 DELETE {{baseUrl}}/api/v1/sessions/{{aliasSession.response.body.sessionId}}
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###

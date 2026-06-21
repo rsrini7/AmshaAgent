@@ -43,7 +43,7 @@
 ###   "kali"        → PURIFIER
 ###   "parvati" / "uma" → NURTURER
 ###
-### Prerequisites: ArcClaw serve mode, ARCCLAW_LLM_API_KEY set.
+### Prerequisites: Amsha Agent serve mode, AMSHA_LLM_API_KEY set.
 ###   GitHub tool tests additionally require GITHUB_TOKEN in vault.
 ### ═══════════════════════════════════════════════════════════════
 
@@ -62,7 +62,7 @@
 # @name delSession
 POST {{baseUrl}}/api/v1/sessions
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
@@ -72,7 +72,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # inner checkpoint keyed on {sessionId}:d:debugger:{uuid}.
 POST {{baseUrl}}/api/v1/sessions/{{delSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "Delegate to shiva: analyze this NullPointerException and give the most likely root cause.\njava.lang.NullPointerException: Cannot invoke String.length() because str is null\n  at com.example.OrderService.processOrder(OrderService.java:88)\n  at com.example.OrderController.submit(OrderController.java:34)",
@@ -83,13 +83,13 @@ X-ArcClaw-API-Key: {{validKey}}
 ###
 
 GET {{baseUrl}}/api/v1/sessions/{{delSession.response.body.sessionId}}/status/coordinator
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
 POST {{baseUrl}}/api/v1/sessions/{{delSession.response.body.sessionId}}/approve?agentRole=coordinator
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
@@ -98,7 +98,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # Logs: TOOL_INVOKED(garuda), inner checkpoint ":d:coder:".
 POST {{baseUrl}}/api/v1/sessions/{{delSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "Delegate to brahma: write a Java 21 record class named 'UserProfile' with fields id (UUID), username (String), and createdAt (Instant). Include a static factory method 'of'.",
@@ -113,7 +113,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # Logs: TOOL_INVOKED(garuda), inner checkpoint ":d:researcher:".
 POST {{baseUrl}}/api/v1/sessions/{{delSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "Delegate to saraswati: what is the factual difference between Quarkus @ApplicationScoped and @Singleton CDI scopes? Focus on proxy behavior and lifecycle.",
@@ -128,7 +128,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # Logs: TOOL_INVOKED(garuda), inner checkpoint ":d:architect:".
 POST {{baseUrl}}/api/v1/sessions/{{delSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "Delegate to brihaspati: write an ADR evaluating event-driven architecture (CDI events + observers) vs direct method calls for intra-service communication in a Quarkus monolith. Include: context, decision, consequences.",
@@ -143,7 +143,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # Logs: TOOL_INVOKED(garuda), inner checkpoint ":d:synthesizer:".
 POST {{baseUrl}}/api/v1/sessions/{{delSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "Delegate to dattatreya: a Quarkus service leaks memory under high load. Simultaneously diagnose whether this is a code defect (coder domain), a JVM tuning issue (researcher domain), or an architectural problem (architect domain). Produce a unified recommendation.",
@@ -154,7 +154,7 @@ X-ArcClaw-API-Key: {{validKey}}
 ###
 
 DELETE {{baseUrl}}/api/v1/sessions/{{delSession.response.body.sessionId}}
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
@@ -168,7 +168,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # @name aliasDelSession
 POST {{baseUrl}}/api/v1/sessions
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
@@ -176,7 +176,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # Expect 200 Finished: Shiva's answer propagated.
 POST {{baseUrl}}/api/v1/sessions/{{aliasDelSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "Use garuda with agent='shiva' and goal='Explain what the Java keyword volatile guarantees and when to prefer AtomicInteger instead.'",
@@ -188,7 +188,7 @@ X-ArcClaw-API-Key: {{validKey}}
 
 POST {{baseUrl}}/api/v1/sessions/{{aliasDelSession.response.body.sessionId}}/approve?agentRole=coordinator
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
@@ -196,7 +196,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # Expect 200 Finished: Brahma's code propagated.
 POST {{baseUrl}}/api/v1/sessions/{{aliasDelSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "Use garuda with agent='brahma' and goal='Write a Java method that validates an email address using a regex pattern. Return true if valid, false otherwise.'",
@@ -211,7 +211,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # Expect 200 Finished: Brihaspati's architectural answer propagated.
 POST {{baseUrl}}/api/v1/sessions/{{aliasDelSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "Use garuda with agent='brahaspati' and goal='What are the key principles of Hexagonal Architecture (Ports and Adapters)?'",
@@ -225,7 +225,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # Expect 200 Finished: Dattatreya's cross-domain answer propagated.
 POST {{baseUrl}}/api/v1/sessions/{{aliasDelSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "Use garuda with agent='datta' and goal='Compare JVM thread-per-request vs virtual threads (Project Loom) for high-concurrency Quarkus services. Cover latency, memory, and migration risk.'",
@@ -236,7 +236,7 @@ X-ArcClaw-API-Key: {{validKey}}
 ###
 
 DELETE {{baseUrl}}/api/v1/sessions/{{aliasDelSession.response.body.sessionId}}
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
@@ -253,7 +253,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # @name intentSession
 POST {{baseUrl}}/api/v1/sessions
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
@@ -262,7 +262,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # coordinator calls garuda(agent="shiva").
 POST {{baseUrl}}/api/v1/sessions/{{intentSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "Ask shiva to explain why a ConcurrentModificationException occurs in Java and how to fix it.",
@@ -275,7 +275,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # Expect 200: routed to coordinator via fast-path, delegates to coder.
 POST {{baseUrl}}/api/v1/sessions/{{intentSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "Tell brahma to write a Quarkus REST endpoint that returns a paginated list of users from a JPA repository.",
@@ -288,7 +288,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # Expect 200: routed to coordinator, delegates to researcher.
 POST {{baseUrl}}/api/v1/sessions/{{intentSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "Delegate to saraswati: research the CAP theorem and explain which guarantees SQLite provides in WAL mode.",
@@ -303,7 +303,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # Expect 200: routed to coordinator, delegates to synthesizer.
 POST {{baseUrl}}/api/v1/sessions/{{intentSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "Have the synthesizer look at this: our Quarkus app has high CPU during startup - could this be CDI bean scanning, native image config, or a threading issue?",
@@ -316,7 +316,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # Expect 200: routed to coordinator, delegates to architect.
 POST {{baseUrl}}/api/v1/sessions/{{intentSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "Instruct brihaspati to write an ADR for choosing between Flyway and Liquibase for schema migrations in a Quarkus microservice.",
@@ -330,7 +330,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # Expect 200: routed to coordinator, delegates to debugger.
 POST {{baseUrl}}/api/v1/sessions/{{intentSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "Get the debugger to find the bug in this code: public int divide(int a, int b) { return a / b; }",
@@ -340,7 +340,7 @@ X-ArcClaw-API-Key: {{validKey}}
 ###
 
 DELETE {{baseUrl}}/api/v1/sessions/{{intentSession.response.body.sessionId}}
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
@@ -355,7 +355,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # @name guardSession
 POST {{baseUrl}}/api/v1/sessions
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
@@ -365,7 +365,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # Logs: TOOL_INVOKED(garuda), exitCode=400 in tool response.
 POST {{baseUrl}}/api/v1/sessions/{{guardSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "Use the garuda tool with agent='coordinator' and goal='write a hello world program'.",
@@ -376,13 +376,13 @@ X-ArcClaw-API-Key: {{validKey}}
 ###
 
 GET {{baseUrl}}/api/v1/sessions/{{guardSession.response.body.sessionId}}/status/coordinator
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
 POST {{baseUrl}}/api/v1/sessions/{{guardSession.response.body.sessionId}}/approve?agentRole=coordinator
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
@@ -391,7 +391,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # Expect 200: same "Cannot delegate to yourself" error propagated.
 POST {{baseUrl}}/api/v1/sessions/{{guardSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "Use the garuda tool with agent='vishnu' and goal='explain the ReAct loop'.",
@@ -405,7 +405,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # Expect 200: "Unknown agent 'gandalf'. Valid agents: brahma, shiva, saraswati, brihaspati, dattatreya."
 POST {{baseUrl}}/api/v1/sessions/{{guardSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "Use the garuda tool with agent='gandalf' and goal='you shall not pass'.",
@@ -419,7 +419,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # Expect 200: "Parameter 'agent' is required."
 POST {{baseUrl}}/api/v1/sessions/{{guardSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "Use the garuda tool but do not provide the agent parameter. Only provide goal='debug something'.",
@@ -433,7 +433,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # Expect 200: "Parameter 'goal' is required."
 POST {{baseUrl}}/api/v1/sessions/{{guardSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "Use the garuda tool with agent='shiva' but provide no goal parameter.",
@@ -444,7 +444,7 @@ X-ArcClaw-API-Key: {{validKey}}
 ###
 
 DELETE {{baseUrl}}/api/v1/sessions/{{guardSession.response.body.sessionId}}
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
@@ -459,7 +459,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # @name capSession
 POST {{baseUrl}}/api/v1/sessions
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
@@ -470,7 +470,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # Audit: TOOL_BLOCKED event (NOT TOOL_INVOKED) for this session.
 POST {{baseUrl}}/api/v1/sessions/{{capSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "Use the garuda tool with agent='shiva' and goal='debug the NPE in line 42'.",
@@ -485,7 +485,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # Audit: TOOL_BLOCKED for this session.
 POST {{baseUrl}}/api/v1/sessions/{{capSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "Use the garuda tool with agent='brahma' and goal='write the fix code'.",
@@ -499,7 +499,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # Audit: TOOL_BLOCKED for this session.
 POST {{baseUrl}}/api/v1/sessions/{{capSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "Use the garuda tool with agent='brihaspati' and goal='design the service layer'.",
@@ -513,7 +513,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # Audit: TOOL_BLOCKED for this session.
 POST {{baseUrl}}/api/v1/sessions/{{capSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "Use the garuda tool with agent='shiva' and goal='find the bug'.",
@@ -527,12 +527,12 @@ X-ArcClaw-API-Key: {{validKey}}
 # Expect: TOOL_BLOCKED events with reasonCode=ROLE_CAPABILITY_MISMATCH.
 # Confirm: zero TOOL_INVOKED(garuda) events in this session.
 GET {{baseUrl}}/api/v1/audit/session/{{capSession.response.body.sessionId}}
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
 DELETE {{baseUrl}}/api/v1/sessions/{{capSession.response.body.sessionId}}
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
@@ -548,7 +548,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # @name ghGuardSession
 POST {{baseUrl}}/api/v1/sessions
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
@@ -558,7 +558,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # or uses FINISH. Logs: "goal contains no GitHub repository or resource".
 POST {{baseUrl}}/api/v1/sessions/{{ghGuardSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "Look up whether Java records support inheritance.",
@@ -574,7 +574,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # Logs: no guard redirect, github tool call attempted.
 POST {{baseUrl}}/api/v1/sessions/{{ghGuardSession.response.body.sessionId}}/run-async
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "Check the rsrini7/mermaid2gif repository for its latest commit message.",
@@ -587,7 +587,7 @@ X-ArcClaw-API-Key: {{validKey}}
 ### [DEL-32a] Deny the github AWAITING_APPROVAL (cleanup)
 POST {{baseUrl}}/api/v1/sessions/{{ghGuardSession.response.body.sessionId}}/deny?agentRole=coordinator
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
@@ -595,7 +595,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # Expect: github call permitted, guard does not fire.
 POST {{baseUrl}}/api/v1/sessions/{{ghGuardSession.response.body.sessionId}}/run-async
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "Summarize the README at https://github.com/rsrini7/mermaid2gif",
@@ -608,7 +608,7 @@ X-ArcClaw-API-Key: {{validKey}}
 ### [DEL-33a] Deny (cleanup)
 POST {{baseUrl}}/api/v1/sessions/{{ghGuardSession.response.body.sessionId}}/deny?agentRole=coordinator
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
@@ -619,7 +619,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # Expect 200 Finished: answer without TOOL_INVOKED(github).
 POST {{baseUrl}}/api/v1/sessions/{{ghGuardSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "Give me the gist of how Quarkus CDI scopes work.",
@@ -630,7 +630,7 @@ X-ArcClaw-API-Key: {{validKey}}
 ###
 
 DELETE {{baseUrl}}/api/v1/sessions/{{ghGuardSession.response.body.sessionId}}
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
@@ -645,7 +645,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # @name isoSession
 POST {{baseUrl}}/api/v1/sessions
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
@@ -655,7 +655,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # Inner session row exists under {outerSessionId}:d:coder:{uuid} key.
 POST {{baseUrl}}/api/v1/sessions/{{isoSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "Delegate to brahma: write a Java method isPrime(int n) that returns true if n is a prime number.",
@@ -669,14 +669,14 @@ X-ArcClaw-API-Key: {{validKey}}
 # Inner session row must NOT overwrite or merge with this outer row.
 # Expect: status=COMPLETED, agentRole=coordinator.
 GET {{baseUrl}}/api/v1/sessions/{{isoSession.response.body.sessionId}}/status
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
 ### [DEL-38] Check outer coordinator audit - must contain TOOL_INVOKED(garuda)
 # Must NOT contain sandboxexec or inner-agent tool events (those are inner session).
 GET {{baseUrl}}/api/v1/audit/session/{{isoSession.response.body.sessionId}}
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
@@ -694,7 +694,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # and produce incorrect/merged output - watch for that regression.
 POST {{baseUrl}}/api/v1/sessions/{{isoSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "Delegate to brahma again: write a completely separate Java method fibonacci(int n) that returns the nth Fibonacci number using iteration (not recursion).",
@@ -705,7 +705,7 @@ X-ArcClaw-API-Key: {{validKey}}
 ###
 
 DELETE {{baseUrl}}/api/v1/sessions/{{isoSession.response.body.sessionId}}
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
@@ -720,7 +720,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # @name budgetSession
 POST {{baseUrl}}/api/v1/sessions
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
@@ -731,7 +731,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # "The agent exceeded its iteration budget. Try simplifying the goal."
 POST {{baseUrl}}/api/v1/sessions/{{budgetSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "Delegate to shiva: perform a full security audit of every Java CVE from 2010 to 2026, cross-reference all Spring Boot and Quarkus vulnerabilities, trace each to its root commit in GitHub, and produce a prioritized remediation plan with code patches.",
@@ -742,7 +742,7 @@ X-ArcClaw-API-Key: {{validKey}}
 ###
 
 DELETE {{baseUrl}}/api/v1/sessions/{{budgetSession.response.body.sessionId}}
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
@@ -759,7 +759,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # @name goalQualitySession
 POST {{baseUrl}}/api/v1/sessions
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
@@ -767,7 +767,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # This primes the conversation history with a concrete bug description.
 POST {{baseUrl}}/api/v1/sessions/{{goalQualitySession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "We have a NullPointerException in UserService.java at line 42. The variable 'userRepository' is null because @Inject was missing on the field declaration.",
@@ -785,7 +785,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # Logs: TOOL_INVOKED(garuda) goal param must be fully described.
 POST {{baseUrl}}/api/v1/sessions/{{goalQualitySession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "Ask shiva to fix it.",
@@ -796,7 +796,7 @@ X-ArcClaw-API-Key: {{validKey}}
 ###
 
 DELETE {{baseUrl}}/api/v1/sessions/{{goalQualitySession.response.body.sessionId}}
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
@@ -810,7 +810,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # @name negRouteSession
 POST {{baseUrl}}/api/v1/sessions
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
@@ -819,7 +819,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # Expect: role=debugger in logs. No TOOL_INVOKED(garuda).
 POST {{baseUrl}}/api/v1/sessions/{{negRouteSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "Fix the NPE in Main.java",
@@ -833,7 +833,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # DelegationRoutingProvider must NOT match. Routes to researcher/coordinator.
 POST {{baseUrl}}/api/v1/sessions/{{negRouteSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "Ask me how a Java WeakReference differs from a SoftReference.",
@@ -848,10 +848,10 @@ X-ArcClaw-API-Key: {{validKey}}
 # Expect: normal coordinator routing, NO delegation fast-path triggered.
 POST {{baseUrl}}/api/v1/sessions/{{negRouteSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
-    "goal": "Ask vishnu to explain the coordinator's role in ArcClaw.",
+    "goal": "Ask vishnu to explain the coordinator's role in Amsha Agent.",
     "maxIterations": 3
 }
 
@@ -863,7 +863,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # Must NOT trigger the delegation fast-path and create an inner session.
 POST {{baseUrl}}/api/v1/sessions/{{negRouteSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "Tell the coordinator to remind me to review the PR at 9 AM tomorrow.",
@@ -873,6 +873,6 @@ X-ArcClaw-API-Key: {{validKey}}
 ###
 
 DELETE {{baseUrl}}/api/v1/sessions/{{negRouteSession.response.body.sessionId}}
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###

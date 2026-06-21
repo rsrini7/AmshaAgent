@@ -1,4 +1,4 @@
-Here is the complete picture - what ONNX is, all relevant ArcClaw use cases, and exactly how to integrate it.
+Here is the complete picture - what ONNX is, all relevant Amsha Agent use cases, and exactly how to integrate it.
 
 ***
 
@@ -14,7 +14,7 @@ Export to .onnx via Optimum CLI         Run inference via ORT Java API
                                         No Python. No cloud. No API call.
 ```
 
-Key properties relevant to ArcClaw: [the-main-thread](https://www.the-main-thread.com/p/quarkus-onnx-pgvector-image-search-tutorial)
+Key properties relevant to Amsha Agent: [the-main-thread](https://www.the-main-thread.com/p/quarkus-onnx-pgvector-image-search-tutorial)
 - Pure JVM inference - no Python runtime at all in production
 - CPU inference works out of the box, GPU optional via execution providers
 - Native image compatible (ships native `.so` bundled in the JAR, loaded via JNI)
@@ -23,7 +23,7 @@ Key properties relevant to ArcClaw: [the-main-thread](https://www.the-main-threa
 
 ***
 
-## ArcClaw-Specific Use Cases
+## Amsha Agent-Specific Use Cases
 
 ### Use Case 1 - Local Intent Classification (replaces LLM call)
 
@@ -41,7 +41,7 @@ Export: `all-MiniLM-L6-v2` fine-tuned on your own intent labels (`coder`, `coord
 
 ### Use Case 2 - Local Embeddings for RAG (replaces remote embedding API)
 
-ArcClaw uses SQLite for memory storage. Embeddings currently go through Jina's embedding API - every `recall_memory_search` or `ingest_document` call costs a remote round trip. [milvus](https://milvus.io/blog/no-python-no-problem-model-inference-with-onnx-in-java-or-any-other-language.md)
+Amsha Agent uses SQLite for memory storage. Embeddings currently go through Jina's embedding API - every `recall_memory_search` or `ingest_document` call costs a remote round trip. [milvus](https://milvus.io/blog/no-python-no-problem-model-inference-with-onnx-in-java-or-any-other-language.md)
 
 ```
 With ONNX: sentence-transformers/all-MiniLM-L6-v2 → .onnx
@@ -82,7 +82,7 @@ optimum-cli export onnx \
   ./models/embeddings/
 ```
 
-This is 384-dim but multilingual - if ArcClaw only handles English, `all-MiniLM-L6-v2` is faster and sufficient. Everything else in Step 3 of the integration stays exactly the same.
+This is 384-dim but multilingual - if Amsha Agent only handles English, `all-MiniLM-L6-v2` is faster and sufficient. Everything else in Step 3 of the integration stays exactly the same.
 
 ***
 
@@ -94,7 +94,7 @@ Your `DestructiveVocabularyFilter` in the pipeline is likely keyword-based today
 
 ### Use Case 4 - Response Quality Scoring before Delivery
 
-Before ArcClaw sends an answer to Telegram, an ONNX sentiment/confidence classifier can flag responses that are:
+Before Amsha Agent sends an answer to Telegram, an ONNX sentiment/confidence classifier can flag responses that are:
 - Suspiciously short/vague (augmenting your existing `SUSPICIOUSLY_SHORT` pattern)
 - Negative sentiment that shouldn't be delivered directly
 - Low-confidence hallucinations to route back for retry
@@ -261,7 +261,7 @@ The `onnxruntime` JAR bundles platform native libs (`.so`/`.dylib`/`.dll`) which
 
 ***
 
-## Benefit Summary for ArcClaw
+## Benefit Summary for Amsha Agent
 
 | Benefit | Impact |
 |---|---|
@@ -293,7 +293,7 @@ optimum-cli export onnx \
 
 `all-mpnet-base-v2` is the standard recommendation for 768-dim free embeddings - consistently outperforms Jina v2 base on most MTEB benchmarks and is ~420MB on disk. [milvus](https://milvus.io/blog/no-python-no-problem-model-inference-with-onnx-in-java-or-any-other-language.md)
 
-## Swap Checklist for ArcClaw
+## Swap Checklist for Amsha Agent
 
 **1. Export model** (one time, Python dev machine):
 ```bash
@@ -333,7 +333,7 @@ Clean design - use Quarkus CDI with a config-driven selector. Here's the complet
 
 ```properties
 # User chooses: jina | onnx
-arcclaw.embedding.provider=onnx
+amsha.embedding.provider=onnx
 ```
 
 ***
@@ -378,7 +378,7 @@ public class OnnxEmbeddingModel implements EmbeddingModel {
 @ApplicationScoped
 public class EmbeddingModelSelector {
 
-    @ConfigProperty(name = "arcclaw.embedding.provider", defaultValue = "jina")
+    @ConfigProperty(name = "amsha.embedding.provider", defaultValue = "jina")
     String provider;
 
     @Inject @EmbeddingProvider("jina")
@@ -429,7 +429,7 @@ If binary size is a concern later, you can use `@IfBuildProperty` to conditional
 ```java
 @ApplicationScoped
 @EmbeddingProvider("onnx")
-@IfBuildProperty(name = "arcclaw.embedding.provider", stringValue = "onnx")
+@IfBuildProperty(name = "amsha.embedding.provider", stringValue = "onnx")
 public class OnnxEmbeddingModel implements EmbeddingModel { ... }
 ```
 

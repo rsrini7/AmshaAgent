@@ -12,7 +12,7 @@ if ! uname -r | grep -qi 'microsoft'; then
 fi
 
 echo "🚀 Starting Ephemeral WSL2 Build..."
-BUILD_DIR="$HOME/.cache/arcclaw-wsl-build"
+BUILD_DIR="$HOME/.cache/amsha-wsl-build"
 
 # ── Safety Guard ────────────────────────────────────────────────────
 if [ -z "$BUILD_DIR" ] || [ "$BUILD_DIR" = "/" ] || [ "$BUILD_DIR" = "$HOME" ]; then
@@ -61,7 +61,7 @@ rsync -a --delete \
     ./ "$BUILD_DIR/"
 
 # Extra safety: remove any legacy .env that might have survived in the cache
-rm -f "$BUILD_DIR/.env" "$BUILD_DIR/arcclaw-app/.env"
+rm -f "$BUILD_DIR/.env" "$BUILD_DIR/app/.env"
 
 # ── build.env fallback (mirrors Windows build:native behavior) ──────────────
 # If build.env exists and no .env was shielded, activate it for the build
@@ -73,15 +73,15 @@ fi
 # ── Resolve build strategy ──────────────────────────────────────────
 # Check for --local flag in any position
 STRATEGY="container"
-if [[ "$*" == *"--local"* ]] || [ "$ARCCLAW_NATIVE_BUILD" = "local" ]; then
+if [[ "$*" == *"--local"* ]] || [ "$AMSHA_NATIVE_BUILD" = "local" ]; then
     echo "ℹ️   Strategy: local GraalVM (forced)."
     STRATEGY="local"
-elif [ "$ARCCLAW_NATIVE_BUILD" = "container" ]; then
+elif [ "$AMSHA_NATIVE_BUILD" = "container" ]; then
     if command -v podman >/dev/null 2>&1; then
         echo "ℹ️   Strategy: Podman container (forced)."
         STRATEGY="container"
     else
-        echo "❌  FATAL: ARCCLAW_NATIVE_BUILD=container but podman not found in WSL2."
+        echo "❌  FATAL: AMSHA_NATIVE_BUILD=container but podman not found in WSL2."
         exit 1
     fi
 else
@@ -150,15 +150,15 @@ echo "🧠 Allocating ${TARGET_GB}G for native-image (80% of WSL2 RAM)..."
 
 export MAVEN_OPTS="--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow"
 
-./mvnw clean package -P$PROFILES $SLIM_PROP -pl arcclaw-app -am -DskipTests $CONTAINER_FLAG -Dquarkus.profile=prod -Dquarkus.native.native-image-xmx=${TARGET_GB}g
+./mvnw clean package -P$PROFILES $SLIM_PROP -pl amsha-app -am -DskipTests $CONTAINER_FLAG -Dquarkus.profile=prod -Dquarkus.native.native-image-xmx=${TARGET_GB}g
 
 # 4. Copy ALL compiled artifacts directly back to Windows target/ AND dist/
 echo "🚚 Bringing build artifacts back to Windows..."
 
-mkdir -p "$OLDPWD/arcclaw-app/target/"
+mkdir -p "$OLDPWD/app/target/"
 
 # Sync the ENTIRE target folder back to Windows (classes, jars, and the native runner)
-rsync -a "$BUILD_DIR/arcclaw-app/target/" "$OLDPWD/arcclaw-app/target/"
+rsync -a "$BUILD_DIR/app/target/" "$OLDPWD/app/target/"
 
 
 # Return to the Windows mount directory
@@ -171,7 +171,7 @@ mise run dist:dist
 WIN_DIST_PATH=$(wslpath -w "$OLDPWD/dist")
 echo "✅ WSL2 Build complete! Linux binary is waiting in $WIN_DIST_PATH"
 
-echo "✅  Native build complete [wsl2]: arcclaw-app/target/arcclaw-app-1.0.0-SNAPSHOT-runner"
+echo "✅  Native build complete [wsl2]: app/target/app-1.0.0-SNAPSHOT-runner"
 echo ""
 echo "▶   Run with one of:"
 echo "      mise run native:serve                → HTTP + MCP server on :8080"

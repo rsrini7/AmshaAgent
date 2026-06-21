@@ -3,8 +3,8 @@
 #MISE description = "One-time: write mise activate + completion to your shell profile"
 $ErrorActionPreference = 'Stop'
 
-$commentActivate   = '# mise - ArcClaw: activate (added by setup:profile)'
-$commentCompletion = '# mise - ArcClaw: tab completion (added by setup:profile)'
+$commentActivate   = '# mise - Amsha Agent: activate (added by setup:profile)'
+$commentCompletion = '# mise - Amsha Agent: tab completion (added by setup:profile)'
 
 if ($IsWindows) {
     # ── Windows: write to $PROFILE ────────────────────────────────────────────
@@ -49,7 +49,7 @@ if ($IsWindows) {
     Write-Host ""
     Write-Host "Next steps:"
     Write-Host "  1. Reload:  . `$PROFILE"
-    Write-Host "  2. Run:     mise tasks          <- shows all ArcClaw tasks"
+    Write-Host "  2. Run:     mise tasks          <- shows all Amsha Agent tasks"
     Write-Host "              mise run <TAB>       <- tab completion works"
 
 } else {
@@ -91,6 +91,6 @@ if ($IsWindows) {
     Write-Host ""
     Write-Host "Next steps:"
     Write-Host "  1. Reload:  source $rcFile"
-    Write-Host "  2. Run:     mise tasks          <- shows all ArcClaw tasks"
+    Write-Host "  2. Run:     mise tasks          <- shows all Amsha Agent tasks"
     Write-Host "              mise run <TAB>       <- tab completion works"
 }

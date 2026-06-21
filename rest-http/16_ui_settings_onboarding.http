@@ -33,7 +33,7 @@
 ###       For VS Code REST Client, SSE responses stream until timeout.
 ###       WebSocket (/ws/chat) cannot be tested via .http files.
 ###
-### Prerequisites: ArcClaw running in serve mode, API key configured
+### Prerequisites: Amsha Agent running in serve mode, API key configured
 ### ═══════════════════════════════════════════════════════════════
 
 @baseUrl = http://localhost:8080
@@ -45,13 +45,13 @@
 
 ### [UI-1] List all agent statuses (empty on cold start)
 GET {{baseUrl}}/api/v1/agents
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
 ### [UI-2] Get active sessions
 GET {{baseUrl}}/api/v1/sessions/active
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
@@ -59,7 +59,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # @name uiSession
 POST {{baseUrl}}/api/v1/sessions
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
   "agentRole": "coordinator"
@@ -70,42 +70,42 @@ X-ArcClaw-API-Key: {{validKey}}
 ### [UI-4] Chat stream SSE - streams agent events + 20s heartbeat
 ### Note: This will stream until timeout. Use curl --no-buffer for CLI testing.
 GET {{baseUrl}}/api/v1/chat/stream?sessionId={{uiSession.response.body.sessionId}}
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
 ### [UI-5] Chat stream history - returns past messages for a session
 GET {{baseUrl}}/api/v1/chat/stream/history/{{uiSession.response.body.sessionId}}
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
 ### [UI-6] Agent events SSE - live agent state changes
 GET {{baseUrl}}/api/v1/agents/events?sessionId={{uiSession.response.body.sessionId}}
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
 ### [UI-7] List pending HITL approvals (paginated)
 GET {{baseUrl}}/api/v1/hitl?page=0&size=20
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
 ### [UI-8] HITL events SSE - live approval requests
 GET {{baseUrl}}/api/v1/hitl/events?sessionId={{uiSession.response.body.sessionId}}
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
 ### [UI-9] Get WebSocket auth token
 POST {{baseUrl}}/api/v1/chat/ws-token
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
 DELETE {{baseUrl}}/api/v1/sessions/{{uiSession.response.body.sessionId}}
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ### ═══════════════════════════════════════════════════════════════
 ### B. SETTINGS ENDPOINTS
@@ -113,20 +113,20 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ### [SETTINGS-1] Get current settings
 GET {{baseUrl}}/api/v1/settings
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
 ### [SETTINGS-2] Get current system prompt
 GET {{baseUrl}}/api/v1/settings/prompt
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
 ### [SETTINGS-3] Update LLM provider
 PATCH {{baseUrl}}/api/v1/settings/provider
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
   "provider": "groq",
@@ -138,7 +138,7 @@ X-ArcClaw-API-Key: {{validKey}}
 ### [SETTINGS-4] Update system prompt
 PATCH {{baseUrl}}/api/v1/settings/prompt
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
   "systemPrompt": "You are a helpful AI assistant."
@@ -148,7 +148,7 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ### [SETTINGS-5] Reset settings to defaults
 POST {{baseUrl}}/api/v1/settings/reset
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
@@ -228,7 +228,7 @@ GET {{baseUrl}}/api/v1/onboarding/complete
 # @name hitlTaskSession
 POST {{baseUrl}}/api/v1/sessions
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
   "agentRole": "coordinator"
@@ -239,7 +239,7 @@ X-ArcClaw-API-Key: {{validKey}}
 ### [HITL-TASK-2] Run async to trigger AWAITING_APPROVAL
 POST {{baseUrl}}/api/v1/sessions/{{hitlTaskSession.response.body.sessionId}}/run-async
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
   "goal": "Look at the GitHub repository octocat/Hello-World and tell me what languages it uses",
@@ -250,14 +250,14 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ### [HITL-TASK-3] List pending approvals to get taskId
 GET {{baseUrl}}/api/v1/hitl?page=0&size=20
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
 ### [HITL-TASK-4] Approve by taskId (replace TASK_ID with actual value from HITL-TASK-3)
 ### POST {{baseUrl}}/api/v1/hitl/TASK_ID/approve
 ### Content-Type: application/json
-### X-ArcClaw-API-Key: {{validKey}}
+### X-Amsha-API-Key: {{validKey}}
 ###
 ### {}
 
@@ -266,13 +266,13 @@ X-ArcClaw-API-Key: {{validKey}}
 ### [HITL-TASK-5] Reject by taskId (replace TASK_ID with actual value)
 ### POST {{baseUrl}}/api/v1/hitl/TASK_ID/reject
 ### Content-Type: application/json
-### X-ArcClaw-API-Key: {{validKey}}
+### X-Amsha-API-Key: {{validKey}}
 ###
 ### {}
 
 ###
 
 DELETE {{baseUrl}}/api/v1/sessions/{{hitlTaskSession.response.body.sessionId}}
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###

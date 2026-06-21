@@ -1,0 +1,532 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+                             https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>com.amsha</groupId>
+    <artifactId>amsha-parent</artifactId>
+    <version>1.0.0-SNAPSHOT</version>
+  </parent>
+
+  <artifactId>amsha-app</artifactId>
+
+  <dependencies>
+    <dependency>
+      <groupId>com.amsha</groupId>
+      <artifactId>amsha-channel-api</artifactId>
+    </dependency>
+
+    <dependency>
+      <groupId>com.amsha</groupId>
+      <artifactId>amsha-mcp</artifactId>
+    </dependency>
+
+    <!-- Runtime module only - NOT deployment -->
+    <dependency>
+      <groupId>com.amsha</groupId>
+      <artifactId>amsha-core</artifactId>
+    </dependency>
+
+    <!-- SQLite adapter (persistence backend) -->
+    <dependency>
+      <groupId>com.amsha</groupId>
+      <artifactId>amsha-persistence-sqlite</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+
+    <!-- Filesystem adapter (persistence backend) -->
+    <dependency>
+      <groupId>com.amsha</groupId>
+      <artifactId>amsha-persistence-fs</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+
+    <!-- PostgreSQL adapter (persistence backend) -->
+    <dependency>
+      <groupId>com.amsha</groupId>
+      <artifactId>amsha-persistence-postgres</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+
+    <dependency>
+      <groupId>com.amsha</groupId>
+      <artifactId>amsha-rag</artifactId>
+    </dependency>
+
+    <!-- Test -->
+    <dependency>
+      <groupId>io.quarkus</groupId>
+      <artifactId>quarkus-junit5</artifactId>
+      <version>${quarkus.version}</version>
+      <scope>test</scope>
+    </dependency>
+
+    <dependency>
+      <groupId>io.rest-assured</groupId>
+      <artifactId>rest-assured</artifactId>
+      <scope>test</scope>
+    </dependency>
+
+    <dependency>
+      <groupId>io.quarkus</groupId>
+      <artifactId>quarkus-opentelemetry-deployment</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>io.quarkus</groupId>
+      <artifactId>quarkus-junit5-mockito</artifactId>
+      <version>${quarkus.version}</version>
+      <scope>test</scope>
+    </dependency>
+    <!-- JaCoCo coverage for Quarkus forked test JVMs (auto-configures agent + report) -->
+    <dependency>
+      <groupId>io.quarkus</groupId>
+      <artifactId>quarkus-jacoco</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <!-- JUnit 4 removed — all tests use JUnit 5 Jupiter. Re-add if DevMode ClassNotFoundException returns. -->
+    <!-- Force local deployment module onto test classpath -->
+    <dependency>
+      <groupId>com.amsha</groupId>
+      <artifactId>amsha-deployment</artifactId>
+      <version>${project.version}</version>
+      <scope>test</scope>
+    </dependency>
+
+    <dependency>
+      <groupId>com.tngtech.archunit</groupId>
+      <artifactId>archunit-junit5</artifactId>
+      <scope>test</scope>
+    </dependency>
+
+    <!-- Playwright Browser Tool -->
+    <dependency>
+      <groupId>com.amsha</groupId>
+      <artifactId>amsha-tool-playwright</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+
+    <!-- Explicitly add quarkus-rest for HTTP endpoints -->
+    <dependency>
+      <groupId>io.quarkus</groupId>
+      <artifactId>quarkus-rest</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>io.quarkus</groupId>
+      <artifactId>quarkus-caffeine</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>io.quarkiverse.jdbi</groupId>
+      <artifactId>quarkus-jdbi</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>io.quarkus</groupId>
+      <artifactId>quarkus-rest-jackson</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>io.quarkus</groupId>
+      <artifactId>quarkus-hibernate-validator</artifactId>
+    </dependency>
+
+    <!-- Explicitly add langchain4j extensions so beans are generated -->
+    <dependency>
+      <groupId>io.quarkiverse.langchain4j</groupId>
+      <artifactId>quarkus-langchain4j-core</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>io.quarkiverse.langchain4j</groupId>
+      <artifactId>quarkus-langchain4j-ollama</artifactId>
+      <exclusions>
+        <exclusion>
+          <groupId>dev.langchain4j</groupId>
+          <artifactId>langchain4j-http-client-jdk</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>io.quarkus</groupId>
+          <artifactId>quarkus-hibernate-orm</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>io.quarkus</groupId>
+          <artifactId>quarkus-hibernate-orm-panache</artifactId>
+        </exclusion>
+      </exclusions>      
+    </dependency>
+    <dependency>
+      <groupId>io.quarkiverse.langchain4j</groupId>
+      <artifactId>quarkus-langchain4j-openai</artifactId>
+      <exclusions>
+        <exclusion>
+          <groupId>dev.langchain4j</groupId>
+          <artifactId>langchain4j-http-client-jdk</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>io.quarkus</groupId>
+          <artifactId>quarkus-hibernate-orm</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>io.quarkus</groupId>
+          <artifactId>quarkus-hibernate-orm-panache</artifactId>
+        </exclusion>
+      </exclusions>
+    </dependency>
+
+    <dependency>
+      <groupId>io.quarkiverse.langchain4j</groupId>
+      <artifactId>quarkus-langchain4j-anthropic</artifactId>
+      <exclusions>
+        <exclusion>
+          <groupId>dev.langchain4j</groupId>
+          <artifactId>langchain4j-http-client-jdk</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>io.quarkus</groupId>
+          <artifactId>quarkus-hibernate-orm</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>io.quarkus</groupId>
+          <artifactId>quarkus-hibernate-orm-panache</artifactId>
+        </exclusion>
+      </exclusions>
+    </dependency>
+
+    <dependency>
+      <groupId>io.quarkiverse.langchain4j</groupId>
+      <artifactId>quarkus-langchain4j-ai-gemini</artifactId>
+      <exclusions>
+        <exclusion>
+          <groupId>dev.langchain4j</groupId>
+          <artifactId>langchain4j-http-client-jdk</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>io.quarkus</groupId>
+          <artifactId>quarkus-hibernate-orm</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>io.quarkus</groupId>
+          <artifactId>quarkus-hibernate-orm-panache</artifactId>
+        </exclusion>
+      </exclusions>
+    </dependency>
+
+    <!-- Explicit Jackson dependency for LangChain4J guardrails -->
+    <dependency>
+      <groupId>io.quarkus</groupId>
+      <artifactId>quarkus-jackson</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>io.quarkus</groupId>
+      <artifactId>quarkus-smallrye-health</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>io.quarkus</groupId>
+      <artifactId>quarkus-opentelemetry</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>io.quarkus</groupId>
+      <artifactId>quarkus-smallrye-openapi</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>io.quarkiverse.jdbc</groupId>
+      <artifactId>quarkus-jdbc-sqlite</artifactId>
+    </dependency>
+
+    <!-- PostgreSQL JDBC driver (for %postgresql profile) -->
+    <dependency>
+      <groupId>io.quarkus</groupId>
+      <artifactId>quarkus-jdbc-postgresql</artifactId>
+    </dependency>
+
+    <!-- Flyway schema migration -->
+    <dependency>
+      <groupId>io.quarkus</groupId>
+      <artifactId>quarkus-flyway</artifactId>
+    </dependency>
+
+    <!-- Rate Limiting -->
+    <dependency>
+      <groupId>com.bucket4j</groupId>
+      <artifactId>bucket4j_jdk17-core</artifactId>
+    </dependency>
+
+    <!-- CLI dual-mode: picocli subcommand routing -->
+    <dependency>
+      <groupId>io.quarkus</groupId>
+      <artifactId>quarkus-picocli</artifactId>
+    </dependency>
+
+    <!-- JLine3: line editing, history, tab completion for interactive CLI -->
+    <dependency>
+      <groupId>org.jline</groupId>
+      <artifactId>jline-terminal-jansi</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.jline</groupId>
+      <artifactId>jline-reader</artifactId>
+    </dependency>
+    <!-- Pin Jansi to 2.4.3 — overrides transitive 2.4.0 from jline-terminal-jansi -->
+    <dependency>
+      <groupId>org.fusesource.jansi</groupId>
+      <artifactId>jansi</artifactId>
+    </dependency>
+
+    <dependency>
+      <groupId>io.quarkus</groupId>
+      <artifactId>quarkus-scheduler</artifactId>
+    </dependency>
+
+    <!-- Channels -->
+    <dependency>
+      <groupId>com.amsha</groupId>
+      <artifactId>amsha-channel-telegram</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.amsha</groupId>
+      <artifactId>amsha-channel-web</artifactId>
+    </dependency>
+
+    <!-- Onboarding wizard REST API -->
+    <dependency>
+      <groupId>com.amsha</groupId>
+      <artifactId>amsha-onboarding</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.camel.quarkus</groupId>
+      <artifactId>camel-quarkus-core</artifactId>
+    </dependency>
+    <dependency>
+        <groupId>org.apache.camel.quarkus</groupId>
+        <artifactId>camel-quarkus-junit5</artifactId>
+        <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>io.quarkus</groupId>
+      <artifactId>quarkus-micrometer-registry-prometheus</artifactId>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <pluginManagement>
+      <plugins>
+        <!-- Ignore maven-antrun-plugin in m2e (VS Code/Eclipse) to prevent IDE lifecycle errors -->
+        <plugin>
+          <groupId>org.eclipse.m2e</groupId>
+          <artifactId>lifecycle-mapping</artifactId>
+          <version>1.0.0</version>
+          <configuration>
+            <lifecycleMappingMetadata>
+              <pluginExecutions>
+                <pluginExecution>
+                  <pluginExecutionFilter>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-antrun-plugin</artifactId>
+                    <versionRange>[1.0.0,)</versionRange>
+                    <goals>
+                      <goal>run</goal>
+                    </goals>
+                  </pluginExecutionFilter>
+                  <action>
+                    <ignore/>
+                  </action>
+                </pluginExecution>
+              </pluginExecutions>
+            </lifecycleMappingMetadata>
+          </configuration>
+        </plugin>
+      </plugins>
+    </pluginManagement>
+    <plugins>
+      <plugin>
+        <groupId>io.quarkus.platform</groupId>
+        <artifactId>quarkus-maven-plugin</artifactId>
+        <version>${quarkus.version}</version>
+        <extensions>true</extensions>
+        <executions>
+          <execution>
+            <goals>
+              <goal>build</goal>
+              <goal>generate-code</goal>
+              <goal>generate-code-tests</goal>
+            </goals>
+          </execution>
+        </executions>
+        <configuration>
+            <!-- Netty requires sun.misc.Unsafe Memory Access which is restricted default in JDK 22/25 (JEP 471) -->
+            <!-- JBoss Threads requires java.lang opens for thread-local-reset in JDK 24+ -->
+            <!-- ByteBuddy requires experimental flag for JDK 25 bytecode proxy generation -->
+            <jvmArgs>--add-opens java.base/java.nio=ALL-UNNAMED --add-opens java.base/jdk.internal.misc=ALL-UNNAMED --add-opens java.base/java.lang=ALL-UNNAMED --sun-misc-unsafe-memory-access=allow -Dnet.bytebuddy.experimental=true --enable-native-access=ALL-UNNAMED</jvmArgs>
+            <warnIfBuildGoalMissing>false</warnIfBuildGoalMissing>
+            <debug>false</debug>        <!-- disables JDWP in quarkus:dev -->
+            <!-- OR keep debug but force suspend=n explicitly: -->
+            <!-- <debugHost>localhost</debugHost> -->
+            <!-- <suspend>false</suspend> -->
+        </configuration>
+      </plugin>
+      <plugin>
+        <groupId>io.smallrye</groupId>
+        <artifactId>jandex-maven-plugin</artifactId>
+        <version>3.5.3</version>
+        <executions>
+          <execution>
+            <id>make-index</id>
+            <goals>
+              <goal>jandex</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-failsafe-plugin</artifactId>
+        <version>3.5.5</version>
+        <executions>
+          <execution>
+            <goals>
+              <goal>integration-test</goal>
+              <goal>verify</goal>
+            </goals>
+            <configuration>
+              <systemPropertyVariables>
+                <native.image.path>
+                  ${project.build.directory}/${project.build.finalName}-runner
+                </native.image.path>
+              </systemPropertyVariables>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+      <plugin>
+        <artifactId>maven-antrun-plugin</artifactId>
+        <version>3.1.0</version>
+        <executions>
+          <execution>
+            <id>bake-build-backend</id>
+            <phase>process-resources</phase>
+            <goals><goal>run</goal></goals>
+            <configuration>
+              <target>
+                <echo file="${project.build.outputDirectory}/build-info.properties"
+                      message="quarkus.amsha.build.backend=${amsha.build.backend}${line.separator}"/>
+              </target>
+            </configuration>
+          </execution>
+          <execution>
+            <id>sync-env-example</id>
+            <phase>generate-resources</phase>
+            <goals><goal>run</goal></goals>
+            <configuration>
+              <target>
+                <copy file="${project.basedir}/../.env.example"
+                      tofile="${project.basedir}/src/main/resources/env-example"
+                      overwrite="true"/>
+              </target>
+            </configuration>
+          </execution>
+          <execution>
+            <id>copy-ui-assets</id>
+            <phase>process-resources</phase>
+            <goals>
+              <goal>run</goal>
+            </goals>
+            <configuration>
+              <target>
+                <copy todir="${project.build.outputDirectory}/META-INF/resources">
+                  <fileset dir="${project.parent.basedir}/ui/dist" erroronmissingdir="false"/>
+                </copy>
+              </target>
+            </configuration>
+          </execution>
+          <execution>
+            <id>ensure-openapi-yaml</id>
+            <phase>prepare-package</phase>
+            <goals>
+              <goal>run</goal>
+            </goals>
+            <configuration>
+              <target>
+                <echo file="${project.build.directory}/openapi.yaml" append="false">openapi: 3.0.3
+info:
+  title: Amsha Agent API
+  version: 1.0.0
+paths: {}</echo>
+              </target>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
+
+  <profiles>
+    <profile>
+      <id>ts-dto</id>
+      <activation>
+        <property><name>ts-dto</name></property>
+      </activation>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.openapitools</groupId>
+            <artifactId>openapi-generator-maven-plugin</artifactId>
+            <version>7.11.0</version>
+            <executions>
+              <execution>
+                <id>generate-ts-dto</id>
+                <phase>package</phase>
+                <goals>
+                  <goal>generate</goal>
+                </goals>
+                <configuration>
+                  <inputSpec>${project.basedir}/target/openapi.yaml</inputSpec>
+                  <generatorName>typescript-fetch</generatorName>
+                  <output>${project.basedir}/../ui/src/api/generated</output>
+                  <configOptions>
+                    <modelPropertyNaming>original</modelPropertyNaming>
+                    <supportsES6>true</supportsES6>
+                    <typescriptThreePlus>true</typescriptThreePlus>
+                  </configOptions>
+                  <skipIfSpecIsUnchanged>true</skipIfSpecIsUnchanged>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+    <profile>
+      <id>native</id>
+      <activation>
+        <property><name>native</name></property>
+      </activation>
+      <properties>
+        <skipITs>false</skipITs>
+        <quarkus.native.enabled>true</quarkus.native.enabled>
+        <quarkus.native.container-build>true</quarkus.native.container-build>
+        <quarkus.native.container-runtime>podman</quarkus.native.container-runtime>
+        <quarkus.native.builder-image>
+          quay.io/quarkus/ubi-quarkus-mandrel-builder-image:jdk-25
+        </quarkus.native.builder-image>
+        <quarkus.native.additional-build-args>-H:+ReportExceptionStackTraces</quarkus.native.additional-build-args>
+        <quarkus.native.resources.includes>
+          native/vec0/*,
+          templates/**,
+          prompts/**,
+          skills/**
+        </quarkus.native.resources.includes>
+      </properties>
+    </profile>
+
+    <!-- Simplified Slim Profile: Uses automatic OS detection from parent POM -->
+    <profile>
+      <id>jvm</id>
+      <activation><activeByDefault>true</activeByDefault></activation>
+      <properties>
+        <quarkus.package.jar.type>fast-jar</quarkus.package.jar.type>
+        <quarkus.package.jar.enabled>true</quarkus.package.jar.enabled>
+      </properties>
+    </profile>
+  </profiles>
+</project>

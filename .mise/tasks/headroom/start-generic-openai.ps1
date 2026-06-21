@@ -4,11 +4,11 @@
 
 . "$PSScriptRoot/headroom-common.ps1"
 
-$TargetUrl = $env:ARCCLAW_GENERIC_OPENAI_TARGET_URL
+$TargetUrl = $env:AMSHA_GENERIC_OPENAI_TARGET_URL
 if (-not $TargetUrl) {
-    Write-Host "⚠️  ARCCLAW_GENERIC_OPENAI_TARGET_URL not set."
+    Write-Host "⚠️  AMSHA_GENERIC_OPENAI_TARGET_URL not set."
     Write-Host "    Set it to the real OpenAI-compatible endpoint URL in .env before starting headroom:"
-    Write-Host "      ARCCLAW_GENERIC_OPENAI_TARGET_URL=https://opencode.ai/zen/go/v1"
+    Write-Host "      AMSHA_GENERIC_OPENAI_TARGET_URL=https://opencode.ai/zen/go/v1"
     exit 1
 }
 

@@ -1,4 +1,4 @@
-# ArcClaw - mise Task Runner Guide
+# Amsha Agent - mise Task Runner Guide
 
 > **Stack**: JDK 25 · Quarkus 3.27.2 · LangChain4J 1.x · SQLite · Podman (rootless) · Groq Cloud
 >
@@ -34,7 +34,7 @@
 Instead of remembering:
 
 ```bash
-./mvnw quarkus:dev -pl arcclaw-app -am -Dquarkus.args=serve -Darcclaw.rag.vec-extension-path=../lib/vec0 ...
+./mvnw quarkus:dev -pl amsha-app -am -Dquarkus.args=serve -Damsha.rag.vec-extension-path=../lib/vec0 ...
 ```
 
 You just type:
@@ -114,8 +114,8 @@ mise doctor       # diagnoses common setup issues
 
 ```bash
 # 1. Clone and enter
-git clone https://github.com/rsrini7/ArcClaw.git
-cd ArcClaw
+git clone https://github.com/rsrini7/Amsha Agent.git
+cd Amsha Agent
 
 # 2. Trust the config file
 mise trust --all
@@ -187,7 +187,7 @@ After reloading: `mise run <TAB>` shows all tasks with tab completion.
 1. `setup:chmod-tasks` — makes all .mise/task scripts executable
 2. `setup:wsl-crlf` — fixes CRLF line endings in WSL2 (no-op on other platforms)
 
-> **Note:** `.env` creation and JDK installation are now split into `mise run arcclaw:setup`.
+> **Note:** `.env` creation and JDK installation are now split into `mise run amsha:setup`.
 ***
 
 ## 4. Trust the Config File
@@ -195,7 +195,7 @@ After reloading: `mise run <TAB>` shows all tasks with tab completion.
 After cloning, mise shows this on first use:
 
 ```
-mise ERROR Config files in ~/Ws/ArcClaw/mise.toml are not trusted.
+mise ERROR Config files in ~/Ws/Amsha Agent/mise.toml are not trusted.
 ```
 
 This is **expected** - supply-chain protection. Trust once:
@@ -221,7 +221,7 @@ trust_all = true
 ## 5. Repository Layout
 
 ```
-ArcClaw/
+Amsha Agent/
 ├── mise.toml            ← single unified config - all tasks, all platforms (pwsh)
 ├── mvnw / mvnw.cmd
 ├── lib/
@@ -229,24 +229,24 @@ ArcClaw/
 │   ├── vec0.so          ← Linux    (Auto-installed on first boot)
 │   └── vec0.dylib       ← macOS    (Auto-installed on first boot)
 ├── dist/                ← produced by: mise run dist:dist  (gitignored)
-└── arcclaw-app/
+└── app/
     └── target/
         ├── quarkus-app/quarkus-run.jar           ← produced by: mise run build-app
-        ├── arcclaw-app-1.0.0-SNAPSHOT-runner      ← Linux/macOS native
-        └── arcclaw-app-1.0.0-SNAPSHOT-runner.exe  ← Windows native
+        ├── amsha-app-1.0.0-SNAPSHOT-runner      ← Linux/macOS native
+        └── amsha-app-1.0.0-SNAPSHOT-runner.exe  ← Windows native
 ```
 
 > `mise.bash.toml`, `mise.pwsh.toml`, `scripts/windows/`, and `mise-tasks/` are **no longer needed** - safe to delete.
 
 > **JDK default**: `temurin-25` is active for everything except `build:native`, `build:native-local`, and `build:native-lowmem`, which auto-switch to `graalvm-community-25.0.2` and back.
 
-> **vec/data paths**: `dev*` tasks pass `../lib/vec0` and `../data` because `quarkus:dev` forks Maven inside `arcclaw-app/`. All other tasks use `./lib/vec0` and `./data`.
+> **vec/data paths**: `dev*` tasks pass `../lib/vec0` and `../data` because `quarkus:dev` forks Maven inside `app/`. All other tasks use `./lib/vec0` and `./data`.
 
 ***
 
 ## 6. JDK Management - Temurin vs GraalVM
 
-ArcClaw uses **two JDKs** managed entirely by mise:
+Amsha Agent uses **two JDKs** managed entirely by mise:
 
 | JDK | Version | Used for |
 |---|---|---|
@@ -311,15 +311,15 @@ mise run help    # or: mise tasks
 | `mise run compose:up` | Full observability stack up |
 | `mise run compose:down` | Stop stack, keep volumes |
 | `mise run compose:down-clean` | Stop stack + delete volumes (prompts YES) |
-| `mise run compose:logs` | Follow arcclaw container logs |
-| `mise run compose:restart` | Restart only arcclaw service |
+| `mise run compose:logs` | Follow amsha container logs |
+| `mise run compose:restart` | Restart only amsha service |
 | `mise run podman:sandbox-check` | Verify tool-runner image exists |
 | `mise run podman:init` | macOS: init Podman VM (6 GB RAM, 4 CPUs) |
 | `mise run podman:start` | macOS: start Podman VM |
 | `mise run podman:stop` | macOS: stop Podman VM |
 | `mise run podman:socket` | WSL2/Linux: enable Podman user socket |
 | `mise run podman:status` | Podman + image status |
-| `mise run db:sqlite:inspect` | Open `arcclaw-meta.db` in sqlite3 |
+| `mise run db:sqlite:inspect` | Open `amsha-meta.db` in sqlite3 |
 | `mise run db:sqlite:fts-check` | Verify FTS5 available |
 | `mise run db:sqlite:vec-check` | Check `lib/vec0` extension for current platform |
 | `mise run info` | Print Java, Podman, Docker versions |
@@ -354,8 +354,8 @@ build:native
 `build:native` resolves in this order:
 
 1. **Windows** → always local GraalVM (container build produces Linux ELF)
-2. **`ARCCLAW_NATIVE_BUILD=local`** → force local GraalVM
-3. **`ARCCLAW_NATIVE_BUILD=container`** → force Podman
+2. **`AMSHA_NATIVE_BUILD=local`** → force local GraalVM
+3. **`AMSHA_NATIVE_BUILD=container`** → force Podman
 4. **Podman detected and running** → container build (recommended on Linux/macOS)
 5. **Podman not found/running** → local GraalVM + hint
 
@@ -365,8 +365,8 @@ mise run build:native-local     # always local GraalVM
 mise run build:native-lowmem    # local GraalVM, 6 GB heap cap
 
 # Force strategies
-$env:ARCCLAW_NATIVE_BUILD = 'container'   # pwsh
-export ARCCLAW_NATIVE_BUILD=container     # bash
+$env:AMSHA_NATIVE_BUILD = 'container'   # pwsh
+export AMSHA_NATIVE_BUILD=container     # bash
 mise run build:native
 ```
 
@@ -374,7 +374,7 @@ mise run build:native
 
 ## 9. Dev Mode Tasks (hot reload)
 
-All `dev*` tasks use Temurin 25 and pass paths `../lib/vec0` / `../data` (because `quarkus:dev` forks Maven inside `arcclaw-app/`). No Podman needed - sandbox strategy is `NONE`.
+All `dev*` tasks use Temurin 25 and pass paths `../lib/vec0` / `../data` (because `quarkus:dev` forks Maven inside `app/`). No Podman needed - sandbox strategy is `NONE`.
 
 ```bash
 mise run dev           # serve on :8080 · hot reload · Dev UI at /q/dev-ui
@@ -384,7 +384,7 @@ mise run dev:attach    # Telegram daemon (TELEGRAM_BOT_TOKEN required in .env)
 mise run dev:kill      # kill any lingering Quarkus processes
 
 # One-shot ask
-$env:GOAL = "Analyze the ArcClaw architecture"; mise run dev:ask
+$env:GOAL = "Analyze the Amsha Agent architecture"; mise run dev:ask
 $env:ROLE = "researcher"; $env:GOAL = "Review auth flow"; mise run dev:ask
 ```
 
@@ -431,25 +431,25 @@ Produces:
 
 ```
 dist/
-  arcclaw-app-1.0.0-SNAPSHOT-runner      (Linux/macOS)
-  arcclaw-app-1.0.0-SNAPSHOT-runner.exe  (Windows)
+  amsha-app-1.0.0-SNAPSHOT-runner      (Linux/macOS)
+  amsha-app-1.0.0-SNAPSHOT-runner.exe  (Windows)
 ```
 
 ### Using the launchers
 
-Both `arcclaw.exe` and `arcclaw` handle first-run `.env` setup automatically - generating secret keys, prompting for API keys, and configuring Telegram if needed.
+Both `amsha.exe` and `amsha` handle first-run `.env` setup automatically - generating secret keys, prompting for API keys, and configuring Telegram if needed.
 
 ```bash
 # Linux/macOS
-cd dist && ./arcclaw serve
+cd dist && ./amsha serve
 
 # Windows
-cd dist; ./arcclaw.exe serve
+cd dist; ./amsha.exe serve
 ```
 
 ### sqlite-vec (vec0) - auto-install
 
-ArcClaw **auto-installs** the correct `vec0` native extension for your platform (Linux, macOS, Windows) from internal resources on first boot. The binary is extracted to `./lib/vec0` (configurable via `ARCCLAW_RAG_VEC_PATH`).
+Amsha Agent **auto-installs** the correct `vec0` native extension for your platform (Linux, macOS, Windows) from internal resources on first boot. The binary is extracted to `./lib/vec0` (configurable via `AMSHA_RAG_VEC_PATH`).
 
 Manual download is **no longer required**, but you can override the auto-installed binary by placing your own build in `lib/`.
 
@@ -479,9 +479,9 @@ Output:
 
 ```
 dist/release/
-  arcclaw-1.0.0-linux-x64.tar.gz
-  arcclaw-1.0.0-macos-aarch64.tar.gz
-  arcclaw-1.0.0-windows-x64.zip
+  amsha-1.0.0-linux-x64.tar.gz
+  amsha-1.0.0-macos-aarch64.tar.gz
+  amsha-1.0.0-windows-x64.zip
 ```
 
 ***
@@ -491,14 +491,14 @@ dist/release/
 **Prerequisite:** `mise run build:native`
 
 ```bash
-mise run compose:up          # ArcClaw + Ollama + OTel + Jaeger + Prometheus
-# ArcClaw:    http://localhost:8080
+mise run compose:up          # Amsha Agent + Ollama + OTel + Jaeger + Prometheus
+# Amsha Agent:    http://localhost:8080
 # Jaeger:     http://localhost:16686
 # Prometheus: http://localhost:9090
 # Ollama:     http://localhost:11434
 
 mise run compose:logs        # follow logs
-mise run compose:restart     # restart arcclaw only
+mise run compose:restart     # restart amsha only
 mise run compose:down        # stop, keep volumes
 mise run compose:down-clean  # stop + delete volumes (prompts YES)
 ```
@@ -533,7 +533,7 @@ Use [Podman Desktop](https://podman-desktop.io/) or Docker Desktop.
 ## 15. Database Helpers
 
 ```bash
-mise run db:sqlite:inspect     # sqlite3 interactive CLI on arcclaw-meta.db
+mise run db:sqlite:inspect     # sqlite3 interactive CLI on amsha-meta.db
 mise run db:sqlite:fts-check   # verify FTS5
 mise run db:sqlite:vec-check   # verify lib/vec0 extension for your platform
 ```
@@ -545,19 +545,19 @@ mise run db:sqlite:vec-check   # verify lib/vec0 extension for your platform
 | Variable | Source | Notes |
 |---|---|---|
 | All `.env` vars | `_.file = ".env"` | Auto-loaded by mise |
-| `ARCCLAW_LLM_API_KEY` | `.env` | Required, starts with `gsk_` |
-| `ARCCLAW_VAULT_PEPPER` | `.env` | ≥32 bytes, never change after first boot |
-| `ARCCLAW_AUDIT_HMAC_KEY` | `.env` | ≥32 bytes, never change after first boot |
-| `ARCCLAW_API_KEYS_INTERNAL` | `.env` | Bearer token for REST API |
-| `ARCCLAW_API_KEYS_CI` | `.env` | CI/CD read-only key |
-| `ARCCLAW_INFINITE_LOOP_EMBEDDING_PROVIDERS` | `.env` | Comma-separated embedding providers (default `ollama`). |
-| `ARCCLAW_EMBEDDING_<PROVIDER>_API_KEY` | `.env` | Per-provider embedding key (e.g. `ARCCLAW_EMBEDDING_JINA_API_KEY`). Required for non-local providers. |
+| `AMSHA_LLM_API_KEY` | `.env` | Required, starts with `gsk_` |
+| `AMSHA_VAULT_PEPPER` | `.env` | ≥32 bytes, never change after first boot |
+| `AMSHA_AUDIT_HMAC_KEY` | `.env` | ≥32 bytes, never change after first boot |
+| `AMSHA_API_KEYS_INTERNAL` | `.env` | Bearer token for REST API |
+| `AMSHA_API_KEYS_CI` | `.env` | CI/CD read-only key |
+| `AMSHA_INFINITE_LOOP_EMBEDDING_PROVIDERS` | `.env` | Comma-separated embedding providers (default `ollama`). |
+| `AMSHA_EMBEDDING_<PROVIDER>_API_KEY` | `.env` | Per-provider embedding key (e.g. `AMSHA_EMBEDDING_JINA_API_KEY`). Required for non-local providers. |
 | `TELEGRAM_BOT_TOKEN` | `.env` | Only for `attach` mode |
 | `GOAL` | shell env | Goal string for `jar:ask`, `dev:ask`, `native:ask` |
 | `ROLE` | shell env | Optional role override for `ask` tasks |
-| `ARCCLAW_NATIVE_BUILD` | shell env / `.env` | `local` or `container` - overrides `build:native` auto-detection |
+| `AMSHA_NATIVE_BUILD` | shell env / `.env` | `local` or `container` - overrides `build:native` auto-detection |
 
-> **`ARCCLAW_VEC_EXT`** and **`ARCCLAW_DATA_DIR`** are not set as global env vars.
+> **`AMSHA_VEC_EXT`** and **`AMSHA_DATA_DIR`** are not set as global env vars.
 > `dev*` tasks pass `../lib/vec0` and `../data`; all other tasks pass `./lib/vec0` and `./data`.
 
 > **`JDK_JAVA_OPTIONS`** is intentionally not set. Dev tasks use `-Djvm.args=...`; build tasks set `MAVEN_OPTS` inline.
@@ -610,7 +610,7 @@ You have `JDK_JAVA_OPTIONS` set globally. Remove it - each task sets `MAVEN_OPTS
 ### `sandboxStrategy=NONE` when you expect `PODMAN`
 
 - `mise run dev`? Dev mode always uses `NONE`. Use `mise run jar:serve` or `mise run compose:up`.
-- Podman not running? `mise run podman:start` then restart ArcClaw.
+- Podman not running? `mise run podman:start` then restart Amsha Agent.
 
 ### `NullPointerException` in Quarkus Dev Console
 
@@ -653,21 +653,21 @@ mise run setup:env-check
 1. Check logs for "Vec0 binary installed to [...]" or "Vec0 binary already present".
 2. If failed, manually place the extension: `lib/vec0.so` (Linux), `lib/vec0.dylib` (macOS), `lib/vec0.dll` (Windows).
 3. Verify FTS5 is available: `mise run db:sqlite:fts-check`.
-4. Then restart ArcClaw - vec0 is loaded at boot, not lazily.
+4. Then restart Amsha Agent - vec0 is loaded at boot, not lazily.
 
 ### Native exe exits immediately (Windows)
 
 ```powershell
 mise run native:serve    # or: native:chat / native:attach
 # or directly:
-.\arcclaw-app\target\arcclaw-app-1.0.0-SNAPSHOT-runner.exe serve
+.\app\target\app-1.0.0-SNAPSHOT-runner.exe serve
 ```
 
 ### `.env` `source` fails with syntax error near `<`
 
-The `.env` file has placeholder values like `key-<random>`. The `arcclaw` launcher uses a safe line-by-line loader that never shell-evaluates values - this error only occurs if you `source .env` manually. Use the launcher instead.
+The `.env` file has placeholder values like `key-<random>`. The `amsha` launcher uses a safe line-by-line loader that never shell-evaluates values - this error only occurs if you `source .env` manually. Use the launcher instead.
 
 ***
 
-*ArcClaw V1.0.0 · Quarkus 3.27.2 · JDK 25 · mise · Temurin 25 + GraalVM Community 25.0.2*
+*Amsha Agent V1.0.0 · Quarkus 3.27.2 · JDK 25 · mise · Temurin 25 + GraalVM Community 25.0.2*
 *One config · All platforms · PowerShell everywhere*

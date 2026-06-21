@@ -7,8 +7,8 @@ In Windows, do not use `dir /s /b` or `grep` (which are prone to failure).
 * Do not use `cat -n`; instead use powershell equivalent if running inside a Windows terminal.
 
 ## 2. SQLite Database Diagnostics
-* **Metadata db**: `sqlite3 data/arcclaw-meta.db ".tables"`
-* **Search / Vector db**: `sqlite3 data/arcclaw-fts.db ".tables"`
+* **Metadata db**: `sqlite3 data/amsha-meta.db ".tables"`
+* **Search / Vector db**: `sqlite3 data/amsha-fts.db ".tables"`
 * Query directly to inspect database structures and states.
 
 ## 3. Project Architectural Invariants & Patterns

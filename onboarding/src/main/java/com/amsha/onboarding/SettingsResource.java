@@ -1,0 +1,247 @@
+package com.amsha.onboarding;
+
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+import jakarta.ws.rs.Consumes;
+import jakarta.ws.rs.GET;
+import jakarta.ws.rs.HeaderParam;
+import jakarta.ws.rs.PATCH;
+import jakarta.ws.rs.POST;
+import jakarta.ws.rs.Path;
+import jakarta.ws.rs.Produces;
+import jakarta.ws.rs.WebApplicationException;
+import jakarta.ws.rs.core.Context;
+import jakarta.ws.rs.core.Cookie;
+import jakarta.ws.rs.core.HttpHeaders;
+import jakarta.ws.rs.core.MediaType;
+import jakarta.ws.rs.core.NewCookie;
+import jakarta.ws.rs.core.Response;
+
+import java.nio.charset.StandardCharsets;
+import java.util.Map;
+
+import com.amsha.core.api.dto.AmshaErrorResponse;
+import com.amsha.core.audit.AuditService;
+import com.amsha.core.audit.SecurityEventType;
+import com.amsha.core.config.ConfigurationChangedEvent;
+import com.amsha.core.event.DomainEventBus;
+import com.amsha.core.event.EventTypeCatalog;
+import com.amsha.core.llm.LlmValidationGateway;
+import com.amsha.core.security.SecretVault;
+import com.amsha.core.security.VaultConstants;
+import com.amsha.core.security.VaultKey;
+import com.amsha.core.util.HttpConstants;
+import com.amsha.onboarding.dto.PromptUpdateRequest;
+import com.amsha.onboarding.dto.ProviderUpdateRequest;
+import com.amsha.onboarding.dto.SettingsDto;
+
+import org.eclipse.microprofile.config.inject.ConfigProperty;
+import org.eclipse.microprofile.openapi.annotations.Operation;
+
+import io.smallrye.common.annotation.RunOnVirtualThread;
+
+@Path("/settings")
+@Produces(MediaType.APPLICATION_JSON)
+@ApplicationScoped
+@RunOnVirtualThread
+public class SettingsResource {
+
+    @Inject
+    SecretVault vault;
+
+    @Inject
+    LlmValidationGateway llmValidationGateway;
+
+    @Inject
+    OnboardingSessionRegistry registry;
+
+    @Inject
+    DomainEventBus eventBus;
+
+    @Inject
+    AuditService auditService;
+
+    @ConfigProperty(name = "quarkus.application.version", defaultValue = "dev")
+    String appVersion;
+
+    @ConfigProperty(name = "amsha.api.keys.internal", defaultValue = "dev-key")
+    String internalApiKey;
+
+    @Context
+    HttpHeaders httpHeaders;
+
+    private String resolveKey(String headerKey) {
+        if (headerKey != null && !headerKey.isBlank()) return headerKey;
+        Cookie apiCookie = httpHeaders.getCookies().get(HttpConstants.COOKIE_AMSHA_API_KEY);
+        if (apiCookie != null) return apiCookie.getValue();
+        return null;
+    }
+
+    private void checkAuth(String key) {
+        String resolved = resolveKey(key);
+        if (resolved == null || !resolved.equals(internalApiKey)) {
+            throw new WebApplicationException(Response.status(Response.Status.UNAUTHORIZED)
+                    .entity(new AmshaErrorResponse("Unauthorized", "Invalid or missing API Key"))
+                    .build());
+        }
+    }
+
+    @GET
+    @Operation(summary = "Get current system settings and LLM configuration")
+    public SettingsDto getSettings(@HeaderParam("X-Amsha-API-Key") String key) {
+        checkAuth(key);
+        String provider = readVaultString(VaultConstants.LLM_PROVIDER_KEY, "");
+        String model = readVaultString(VaultConstants.LLM_MODEL_KEY, "");
+        String prompt = readVaultString(VaultConstants.SYSTEM_PROMPT_KEY, "");
+        boolean hasKey = vault.systemKeyExists(VaultConstants.LLM_API_KEY);
+
+        String displayPrompt = prompt.length() > 200 ? prompt.substring(0, 199) + "…" : prompt;
+
+        return new SettingsDto(provider, model, displayPrompt, hasKey, appVersion);
+    }
+
+    @GET
+    @Path("/prompt")
+    @Operation(summary = "Get the full system prompt from vault")
+    public Response getPrompt(@HeaderParam("X-Amsha-API-Key") String key) {
+        checkAuth(key);
+        String prompt = readVaultString(VaultConstants.SYSTEM_PROMPT_KEY, "");
+        return Response.ok(Map.of("systemPrompt", prompt)).build();
+    }
+
+    @PATCH
+    @Path("/provider")
+    @Consumes(MediaType.APPLICATION_JSON)
+    @Operation(summary = "Update LLM provider and validate credentials")
+    public Response updateProvider(@HeaderParam("X-Amsha-API-Key") String key, ProviderUpdateRequest req) {
+        checkAuth(key);
+        if (req.provider() == null || req.provider().isBlank()) {
+            return Response.status(400)
+                    .entity(new AmshaErrorResponse("provider is required"))
+                    .build();
+        }
+
+        boolean isClaudeCode = "claude-code".equals(req.provider());
+        boolean isOllama = "ollama".equals(req.provider());
+        boolean isOmlx = "omlx".equals(req.provider());
+
+        if (!isClaudeCode && !isOllama && !isOmlx) {
+            if (req.apiKey() == null || req.apiKey().isBlank()) {
+                return Response.status(400)
+                        .entity(new AmshaErrorResponse("apiKey is required for " + req.provider()))
+                        .build();
+            }
+            try {
+                boolean valid = llmValidationGateway.validate(req.provider(), req.model(), req.apiKey());
+                if (!valid) {
+                    return Response.status(422)
+                            .entity(new AmshaErrorResponse("API key validation failed", "provider: " + req.provider()))
+                            .build();
+                }
+            } catch (Exception e) {
+                return Response.status(422)
+                        .entity(new AmshaErrorResponse("Validation error", e.getMessage()))
+                        .build();
+            }
+        }
+
+        vault.storeSystemKey(VaultConstants.LLM_PROVIDER_KEY, req.provider().getBytes(StandardCharsets.UTF_8));
+        vault.storeSystemKey(
+                VaultConstants.LLM_MODEL_KEY,
+                (req.model() != null ? req.model() : "").getBytes(StandardCharsets.UTF_8));
+        if (!isClaudeCode && req.apiKey() != null) {
+            vault.storeSystemKey(VaultConstants.LLM_API_KEY, req.apiKey().getBytes(StandardCharsets.UTF_8));
+        }
+
+        eventBus.publish(
+                EventTypeCatalog.CONFIGURATION_CHANGED,
+                ConfigurationChangedEvent.of(
+                        "settings/provider",
+                        Map.of("provider", req.provider(), "model", req.model() != null ? req.model() : "")));
+
+        auditService.recordMandatory(
+                "settings",
+                key != null ? key : "unknown",
+                "system",
+                SecurityEventType.SETTINGS_CHANGED,
+                "field=provider provider=" + req.provider() + " model=" + (req.model() != null ? req.model() : ""));
+
+        return Response.ok(Map.of("updated", true)).build();
+    }
+
+    @PATCH
+    @Path("/prompt")
+    @Consumes(MediaType.APPLICATION_JSON)
+    @Operation(summary = "Update the global system prompt")
+    public Response updatePrompt(@HeaderParam("X-Amsha-API-Key") String key, PromptUpdateRequest req) {
+        checkAuth(key);
+        if (req.systemPrompt() == null || req.systemPrompt().isBlank()) {
+            return Response.status(400)
+                    .entity(new AmshaErrorResponse("systemPrompt is required"))
+                    .build();
+        }
+        vault.storeSystemKey(
+                VaultConstants.SYSTEM_PROMPT_KEY, req.systemPrompt().getBytes(StandardCharsets.UTF_8));
+
+        eventBus.publish(
+                EventTypeCatalog.CONFIGURATION_CHANGED,
+                ConfigurationChangedEvent.of("settings/prompt", Map.of("systemPrompt", "(updated)")));
+
+        auditService.recordMandatory(
+                "settings",
+                key != null ? key : "unknown",
+                "system",
+                SecurityEventType.SETTINGS_CHANGED,
+                "field=prompt length=" + req.systemPrompt().length());
+
+        return Response.ok(Map.of("updated", true)).build();
+    }
+
+    @POST
+    @Path("/reset")
+    @Operation(summary = "Nuke all settings and keys to force re-onboarding")
+    public Response reset(@HeaderParam("X-Amsha-API-Key") String key) {
+        checkAuth(key);
+
+        auditService.recordMandatory(
+                "settings",
+                key != null ? key : "unknown",
+                "system",
+                SecurityEventType.SETTINGS_RESET,
+                "keys=LLM_PROVIDER_KEY,LLM_MODEL_KEY,LLM_API_KEY,SYSTEM_PROMPT_KEY");
+
+        registry.invalidateAll();
+
+        // Clear all LLM related keys to force re-onboarding (§reset-fix)
+        vault.removeSystemKey(VaultConstants.LLM_PROVIDER_KEY);
+        vault.removeSystemKey(VaultConstants.LLM_MODEL_KEY);
+        vault.removeSystemKey(VaultConstants.LLM_API_KEY);
+        vault.removeSystemKey(VaultConstants.SYSTEM_PROMPT_KEY);
+
+        return Response.ok(Map.of(
+                        "reset",
+                        true,
+                        "message",
+                        "Onboarding sessions cleared. Cache cleared. Refresh to re-run the wizard."))
+                .cookie(new NewCookie.Builder(HttpConstants.COOKIE_AMSHA_API_KEY)
+                        .value("")
+                        .path("/")
+                        .maxAge(0)
+                        .httpOnly(true)
+                        .sameSite(NewCookie.SameSite.STRICT)
+                        .build())
+                .build();
+    }
+
+    private String readVaultString(String key, String fallback) {
+        return vault.retrieveSystemKey(key)
+                .map(vk -> {
+                    try (VaultKey k = vk) {
+                        return new String(k.get(), StandardCharsets.UTF_8);
+                    } catch (Exception e) {
+                        return fallback;
+                    }
+                })
+                .orElse(fallback);
+    }
+}

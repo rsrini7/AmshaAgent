@@ -1,10 +1,10 @@
 # Channel SPI Documentation
 
-Adding a new channel (Discord, Slack, WhatsApp) to ArcClaw requires zero changes to the core engine. You just need to create a new module that implements the 6-interface contract and registers it as an `@ApplicationScoped` CDI bean.
+Adding a new channel (Discord, Slack, WhatsApp) to Amsha Agent requires zero changes to the core engine. You just need to create a new module that implements the 6-interface contract and registers it as an `@ApplicationScoped` CDI bean.
 
 ## The 6-Interface Contract
 
-All interfaces live in `arcclaw-channel-api`. The core and app modules depend on these contracts, never on concrete implementations.
+All interfaces live in `amsha-channel-api`. The core and app modules depend on these contracts, never on concrete implementations.
 
 | Interface | Responsibility | Required |
 |---|---|---|
@@ -127,12 +127,12 @@ The `ChannelPluginRegistry` discovers all `ChannelPlugin` implementations via CD
 
 ### Step 1: Create the Maven module
 
-Create `arcclaw-channel-discord/` with a dependency on `arcclaw-channel-api`:
+Create `amsha-channel-discord/` with a dependency on `amsha-channel-api`:
 
 ```xml
 <dependency>
-    <groupId>com.arcclaw</groupId>
-    <artifactId>arcclaw-channel-api</artifactId>
+    <groupId>com.amsha</groupId>
+    <artifactId>amsha-channel-api</artifactId>
 </dependency>
 ```
 
@@ -141,9 +141,9 @@ Add the module to the root `pom.xml` `<modules>` list.
 ### Step 2: Add configuration properties
 
 ```properties
-arcclaw.channel.discord.enabled=true
-arcclaw.channel.discord.token=your-bot-token
-arcclaw.channel.discord.allowed-user-ids=123456789,987654321
+amsha.channel.discord.enabled=true
+amsha.channel.discord.token=your-bot-token
+amsha.channel.discord.allowed-user-ids=123456789,987654321
 ```
 
 ### Step 3: Implement `ChannelAllowlist`
@@ -152,7 +152,7 @@ arcclaw.channel.discord.allowed-user-ids=123456789,987654321
 @ApplicationScoped
 public class DiscordAllowlist implements ChannelAllowlist {
 
-    @ConfigProperty(name = "arcclaw.channel.discord.allowed-user-ids")
+    @ConfigProperty(name = "amsha.channel.discord.allowed-user-ids")
     Optional<String> allowedUserIds;
 
     @Override
@@ -271,7 +271,7 @@ public class DiscordJobNotifier implements ChannelJobNotifier {
 @ApplicationScoped
 public class DiscordDaemon implements ChannelDaemon {
 
-    @ConfigProperty(name = "arcclaw.channel.discord.token")
+    @ConfigProperty(name = "amsha.channel.discord.token")
     Optional<String> token;
 
     @Inject MessagePipeline pipeline;
@@ -315,28 +315,28 @@ public class DiscordChannelPlugin implements ChannelPlugin {
 
 Add to root `pom.xml`:
 ```xml
-<module>arcclaw-channel-discord</module>
+<module>amsha-channel-discord</module>
 ```
 
-That's it. `ChannelPluginRegistry` will discover `DiscordChannelPlugin` via CDI at startup. No changes to `arcclaw-core` or `arcclaw-app` are required.
+That's it. `ChannelPluginRegistry` will discover `DiscordChannelPlugin` via CDI at startup. No changes to `amsha-core` or `amsha-app` are required.
 
 ---
 
 ## Key Config Pattern
 
-Gate the channel via configuration properties. In your `ChannelDaemon.isConfigured()`, return `false` if the token isn't present — this prevents the plugin from crashing ArcClaw startup:
+Gate the channel via configuration properties. In your `ChannelDaemon.isConfigured()`, return `false` if the token isn't present — this prevents the plugin from crashing Amsha Agent startup:
 
 ```properties
-arcclaw.channel.discord.enabled=true
-arcclaw.channel.discord.token=your-bot-token
+amsha.channel.discord.enabled=true
+amsha.channel.discord.token=your-bot-token
 ```
 
 ## Reference Implementations
 
 | Channel | Module | Key Classes |
 |---|---|---|
-| Telegram | `arcclaw-channel-telegram` | `TelegramChannelPlugin`, `TelegramChannelSender`, `TelegramMarkdownV2Renderer`, `TelegramAllowlistGuard`, `TelegramJobNotifier`, `TelegramChannelDaemon`, `TelegramChannelRoute`, `TelegramAgentHandler`, `TelegramCallbackHandler` |
-| WebSocket | `arcclaw-channel-web` | `WebChannelPlugin`, `WebChatEndpoint`, `WebChannelSender`, `WebReplyRenderer`, `WebAllowlist`, `WebChannelDaemon` |
+| Telegram | `amsha-channel-telegram` | `TelegramChannelPlugin`, `TelegramChannelSender`, `TelegramMarkdownV2Renderer`, `TelegramAllowlistGuard`, `TelegramJobNotifier`, `TelegramChannelDaemon`, `TelegramChannelRoute`, `TelegramAgentHandler`, `TelegramCallbackHandler` |
+| WebSocket | `amsha-channel-web` | `WebChannelPlugin`, `WebChatEndpoint`, `WebChannelSender`, `WebReplyRenderer`, `WebAllowlist`, `WebChannelDaemon` |
 
 ## Testing Your Plugin
 

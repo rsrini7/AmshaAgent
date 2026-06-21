@@ -46,9 +46,9 @@ if (Test-Path '.env') {
         $env:JAVA_HOME = $graalPath
 
         $env:MAVEN_OPTS = '--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow'
-        & $mvnw clean package -Pnative -pl arcclaw-app -am -DskipTests "-Darcclaw.build.backend=sqlite" "-Darcclaw.persistence.backend=sqlite" "-Dquarkus.profile=prod" '-Dquarkus.native.container-build=false' "-Dquarkus.native.native-image-xmx=${targetGB}g"
+        & $mvnw clean package -Pnative -pl amsha-app -am -DskipTests "-Damsha.build.backend=sqlite" "-Damsha.persistence.backend=sqlite" "-Dquarkus.profile=prod" '-Dquarkus.native.container-build=false' "-Dquarkus.native.native-image-xmx=${targetGB}g"
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-    Write-Host "✅  Native build complete [local]: arcclaw-app/target/arcclaw-app-1.0.0-SNAPSHOT$suffix"
+    Write-Host "✅  Native build complete [local]: app/target/app-1.0.0-SNAPSHOT$suffix"
     Write-Host '▶   Assembling dist/ folder...'
     mise run dist:dist
 } finally {

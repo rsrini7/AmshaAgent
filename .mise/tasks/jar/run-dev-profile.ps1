@@ -3,7 +3,7 @@
 #MISE dir = "{{config_root}}"
 #MISE shell = "pwsh -NonInteractive -Command"
 $ErrorActionPreference = 'Stop'
-$jar = 'arcclaw-app/target/quarkus-app/quarkus-run.jar'
+$jar = 'app/target/quarkus-app/quarkus-run.jar'
 if (-not (Test-Path $jar)) { Write-Host '❌  JAR not found. Run: mise run build-app'; exit 1 }
 $cmd = if ($args.Count -gt 0 -and $args[0]) { $args[0] } else { 'serve' }
 if ($cmd -eq 'attach' -and -not $env:TELEGRAM_BOT_TOKEN) {
@@ -20,14 +20,14 @@ $jvmArgs = @(
     '-Dfile.encoding=UTF-8', '-Dstdout.encoding=UTF-8',
     '-Dsun.stdout.encoding=UTF-8', '-Dsun.stderr.encoding=UTF-8',
     '-Dquarkus.profile=dev',
-    '-Darcclaw.rag.vec-extension-path=./lib/vec0',
-    '-Darcclaw.data-dir=./data'
+    '-Damsha.rag.vec-extension-path=./lib/vec0',
+    '-Damsha.data-dir=./data'
 )
 if ($cmd -in @('chat','ask')) {
     $jvmArgs += '-Dquarkus.mcp.server.stdio.enabled=false'
-    $jvmArgs += '-Darcclaw.telegram.enabled=false'
+    $jvmArgs += '-Damsha.telegram.enabled=false'
 }
-if ($cmd -eq 'attach') { $jvmArgs += '-Darcclaw.telegram.enabled=true' }
+if ($cmd -eq 'attach') { $jvmArgs += '-Damsha.telegram.enabled=true' }
 Write-Host "▶   Starting JAR in dev profile - mode: $cmd"
 try {
     & java @jvmArgs -jar $jar $cmd

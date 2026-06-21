@@ -1,7 +1,7 @@
 ### ═══════════════════════════════════════════════════════════════
 ### 14 - BUDGET GOVERNANCE & AUTONOMY LEVEL
 ###
-### ArcClaw enforces a per-session USD budget cap via GovernanceLayer.
+### Amsha Agent enforces a per-session USD budget cap via GovernanceLayer.
 ###
 ### Budget enforcement (post Phase 64-A):
 ###   80% of max → BudgetWarningException (soft signal, logged, NOT thrown to user)
@@ -24,7 +24,7 @@
 ###   After the fix, the stored autonomy level is correctly passed to
 ###   WorkspaceContext.run() via MessageContext.
 ###
-### Prerequisites: ArcClaw serve mode, ARCCLAW_LLM_API_KEY, GITHUB_TOKEN set
+### Prerequisites: Amsha Agent serve mode, AMSHA_LLM_API_KEY, GITHUB_TOKEN set
 ### ═══════════════════════════════════════════════════════════════
 
 # @baseUrl  = http://localhost:8080
@@ -38,7 +38,7 @@
 # @name budgetWarnSession
 POST {{baseUrl}}/api/v1/sessions
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
@@ -50,7 +50,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # will NOT fire again for this session (AtomicBoolean CAS, Nuance #28).
 POST {{baseUrl}}/api/v1/sessions/{{budgetWarnSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "Write a 500-word technical analysis of Java Virtual Threads vs OS threads, covering scheduling, memory overhead, and Quarkus integration patterns.",
@@ -67,7 +67,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # Expect 200: "No active session found" or budget=$0.00
 POST {{baseUrl}}/api/v1/sessions/{{budgetWarnSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "/status",
@@ -81,7 +81,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # Inspect usdCost field in the response or call /status reflex
 POST {{baseUrl}}/api/v1/sessions/{{budgetWarnSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "/status",
@@ -94,12 +94,12 @@ X-ArcClaw-API-Key: {{validKey}}
 ### [BUDGET-4] Check audit for BUDGET_EXCEEDED event at 80% threshold
 # Expect: one BUDGET_EXCEEDED event with detail containing "80%" or "warning"
 GET {{baseUrl}}/api/v1/audit/session/{{budgetWarnSession.response.body.sessionId}}
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
 DELETE {{baseUrl}}/api/v1/sessions/{{budgetWarnSession.response.body.sessionId}}
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
@@ -118,7 +118,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # @name budgetHardSession
 POST {{baseUrl}}/api/v1/sessions
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
@@ -128,7 +128,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # Keep running tasks until the session exhausts its limit.
 POST {{baseUrl}}/api/v1/sessions/{{budgetHardSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "Write a comprehensive 1000-word guide to Quarkus CDI scopes including WorkspaceScoped custom CDI scope, @ApplicationScoped, @RequestScoped, and @SessionScoped with comparison tables.",
@@ -144,7 +144,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # The session is blocked - no tokens consumed by this call.
 POST {{baseUrl}}/api/v1/sessions/{{budgetHardSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "What is 1 + 1?",
@@ -158,7 +158,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # The LOOP_BUDGET_EXCEEDED audit event is mandatory - agent halts if write fails.
 # Expect: eventType=LOOP_BUDGET_EXCEEDED in the audit list
 GET {{baseUrl}}/api/v1/audit/session/{{budgetHardSession.response.body.sessionId}}
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
@@ -167,12 +167,12 @@ X-ArcClaw-API-Key: {{validKey}}
 # must still form an unbroken HMAC chain.
 # Expect: {"valid": true, "brokenAtId": null, "totalRows": N}
 GET {{baseUrl}}/api/v1/audit/{{budgetHardSession.response.body.sessionId}}/verify
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
 DELETE {{baseUrl}}/api/v1/sessions/{{budgetHardSession.response.body.sessionId}}
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
@@ -187,7 +187,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # @name supervisedSession
 POST {{baseUrl}}/api/v1/sessions
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
@@ -196,7 +196,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # → throws RequiresApprovalException → 202 AWAITING_APPROVAL
 POST {{baseUrl}}/api/v1/sessions/{{supervisedSession.response.body.sessionId}}/run-async
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "List the public repositories of GitHub user rsrini7.",
@@ -209,19 +209,19 @@ X-ArcClaw-API-Key: {{validKey}}
 ### [AUTO-3] Confirm AWAITING_APPROVAL state
 # Expect: status = AWAITING_APPROVAL (tool paused pending human decision)
 GET {{baseUrl}}/api/v1/sessions/{{supervisedSession.response.body.sessionId}}/status/coordinator
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
 ### [AUTO-4] Cancel - deny the tool call
 POST {{baseUrl}}/api/v1/sessions/{{supervisedSession.response.body.sessionId}}/deny?agentRole=coordinator
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
 DELETE {{baseUrl}}/api/v1/sessions/{{supervisedSession.response.body.sessionId}}
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
@@ -243,7 +243,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # The FULL autonomy level is stored in the session/checkpoint record.
 POST {{baseUrl}}/api/v1/sessions
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "autonomyLevel": "FULL"
@@ -258,7 +258,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # Confirm logs: "AutonomyLevel for session <uuid> = FULL"
 POST {{baseUrl}}/api/v1/sessions/{{fullAutoSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "List the public repositories of GitHub user rsrini7.",
@@ -273,12 +273,12 @@ X-ArcClaw-API-Key: {{validKey}}
 # the autonomy level was silently downgraded to SUPERVISED.
 # Expect: status = COMPLETED
 GET {{baseUrl}}/api/v1/sessions/{{fullAutoSession.response.body.sessionId}}/status/coordinator
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
 DELETE {{baseUrl}}/api/v1/sessions/{{fullAutoSession.response.body.sessionId}}
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
@@ -292,7 +292,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # @name readonlySession
 POST {{baseUrl}}/api/v1/sessions
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "autonomyLevel": "READONLY"
@@ -306,7 +306,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # Expect: 200 Finished - with agent explaining it cannot execute tools
 POST {{baseUrl}}/api/v1/sessions/{{readonlySession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "List the public repositories of GitHub user rsrini7.",
@@ -319,12 +319,12 @@ X-ArcClaw-API-Key: {{validKey}}
 ### [AUTO-10] Verify tool was NOT invoked - no TOOL_INVOKED in audit
 # Expect: audit list does NOT contain eventType=TOOL_INVOKED
 GET {{baseUrl}}/api/v1/audit/session/{{readonlySession.response.body.sessionId}}
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
 DELETE {{baseUrl}}/api/v1/sessions/{{readonlySession.response.body.sessionId}}
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
@@ -336,7 +336,7 @@ X-ArcClaw-API-Key: {{validKey}}
 ### [BUDGET-ERR-1] Create session with invalid autonomy level → expect 400
 POST {{baseUrl}}/api/v1/sessions
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "autonomyLevel": "TURBO_MODE_YOLO"
@@ -347,7 +347,7 @@ X-ArcClaw-API-Key: {{validKey}}
 ### [BUDGET-ERR-2] Run on expired/deleted session → expect 404 or empty state
 POST {{baseUrl}}/api/v1/sessions/00000000-dead-beef-0000-000000000000/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "Hello",

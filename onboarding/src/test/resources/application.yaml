@@ -1,0 +1,82 @@
+AMSHA_LLM_API_KEY: "dummy-test-key"
+
+quarkiverse:
+  mcp:
+    server:
+      http:
+        enabled: false
+      stdio:
+        enabled: false
+
+amsha:
+  auto-seed-secrets: false
+  api:
+    keys:
+      internal: "key-internal-changeme"
+  vault:
+    pepper: "test-pepper-value-not-used-in-tests"
+    master-key: "test-master-key-32-chars-padded!"
+  data-dir: "./target"
+  workspace:
+    root-dir: "./target/workspaces"
+  channel:
+    telegram:
+      bot-token: "test-bot-token"
+  cron:
+    max-lookback-window: PT999H
+  mcp:
+    server-enabled: false
+quarkus:
+  langchain4j:
+    openai:
+      timeout: 30s
+      embedding-model:
+        enabled: false
+        model-name: "text-embedding-3-small"
+  application:
+    name: amsha-onboarding-test
+  index-dependency:
+    amsha-core:
+      group-id: com.amsha
+      artifact-id: amsha-core
+    amsha-persistence-sqlite:
+      group-id: com.amsha
+      artifact-id: amsha-persistence-sqlite
+    amsha-mcp:
+      group-id: com.amsha
+      artifact-id: amsha-mcp
+  otel:
+    sdk:
+      disabled: true
+  thread-pool:
+    shutdown-timeout: 3
+    shutdown-interrupt-timeout: 2
+  transaction-manager:
+    enable-recovery: false
+    object-store-directory: target/tx-object-store
+    default-transaction-timeout: 10
+  shutdown:
+    timeout: 5S
+  scheduler:
+    enabled: false
+  datasource:
+    db-kind: sqlite
+    jdbc:
+      url: "jdbc:sqlite:./target/onboarding-test.db?busy_timeout=20000&journal_mode=WAL&transaction_mode=IMMEDIATE"
+      additional-jdbc-url-properties: "journal_mode=WAL&synchronous=NORMAL&busy_timeout=20000&transaction_mode=IMMEDIATE"
+      min-size: 1
+      max-size: 4
+      initial-size: 1
+      acquisition-timeout: 10s
+  flyway:
+    migrate-at-start: true
+    locations: classpath:db/migration/sqlite
+  log:
+    level: INFO
+    category:
+      "com.arjuna":
+        level: ERROR
+      "org.jboss.threads.errors":
+        level: "OFF"
+      "com.amsha.app.session.SessionRegistry":
+        level: "WARN"

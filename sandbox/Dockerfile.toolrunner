@@ -1,6 +1,6 @@
 # sandbox/Dockerfile.toolrunner
-# ArcClaw secure tool-runner sandbox image.
-# Build: podman build --no-cache -t arcclaw-tool-runner -f ./sandbox/Dockerfile.toolrunner .
+# Amsha Agent secure tool-runner sandbox image.
+# Build: podman build --no-cache -t amsha-tool-runner -f ./sandbox/Dockerfile.toolrunner .
 FROM alpine:3.21
 
 # ── System base - tiny, never changes ────────────────────────────────────────

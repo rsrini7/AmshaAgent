@@ -1,7 +1,7 @@
 ### ═══════════════════════════════════════════════════════════════
 ### 13 - RAG (RETRIEVAL-AUGMENTED GENERATION)
 ###
-### ArcClaw provides dual-tier semantic retrieval:
+### Amsha Agent provides dual-tier semantic retrieval:
 ###
 ###   Tier 1 (FTS5):  SQLite full-text search on compaction_summary_fts
 ###   Tier 2 (vec0):  sqlite-vec vector similarity on vec_global
@@ -30,7 +30,7 @@
 ###   After ingestion, the rag_chunk table must have the new row.
 ###   After Phase 64-C3, compaction_summary must NOT have "rag:" prefixed rows.
 ###
-### Prerequisites: ArcClaw serve mode, ARCCLAW_LLM_API_KEY set
+### Prerequisites: Amsha Agent serve mode, AMSHA_LLM_API_KEY set
 ###   sqlite-vec (vec0) binary optional - FTS5 works without it
 ### ═══════════════════════════════════════════════════════════════
 
@@ -47,7 +47,7 @@
 # Expect 201: {"sessionId": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"}
 POST {{baseUrl}}/api/v1/sessions
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
@@ -56,10 +56,10 @@ X-ArcClaw-API-Key: {{validKey}}
 # Expect: 202 AWAITING_APPROVAL with toolName=ingest_document
 POST {{baseUrl}}/api/v1/sessions/{{ragSession.response.body.sessionId}}/run-async
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
-    "goal": "Ingest this document: ArcClaw is a production-grade AI agent kernel built with Java 25, Quarkus 3.27.2, and LangChain4j 1.5. It uses SQLite WAL mode for all persistence, Podman containers for sandboxed tool execution, and AES-GCM-SIV with Argon2id for secret storage.",
+    "goal": "Ingest this document: Amsha Agent is a production-grade AI agent kernel built with Java 25, Quarkus 3.27.2, and LangChain4j 1.5. It uses SQLite WAL mode for all persistence, Podman containers for sandboxed tool execution, and AES-GCM-SIV with Argon2id for secret storage.",
     "agentRole": "coordinator",
     "maxIterations": 2
 }
@@ -70,7 +70,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # Run immediately after RAG-1.
 # Expect: status = AWAITING_APPROVAL, toolName = ingest_document
 GET {{baseUrl}}/api/v1/sessions/{{ragSession.response.body.sessionId}}/status/coordinator
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
@@ -80,26 +80,26 @@ X-ArcClaw-API-Key: {{validKey}}
 # Expect: 200 with agent confirmation message ("Document ingested successfully")
 POST {{baseUrl}}/api/v1/sessions/{{ragSession.response.body.sessionId}}/approve?agentRole=coordinator
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
 ### [RAG-4] Poll status after approval - should be COMPLETED
 # Expect: status = COMPLETED
 GET {{baseUrl}}/api/v1/sessions/{{ragSession.response.body.sessionId}}/status/coordinator
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
 ### [RAG-5] Search for ingested content via RecallMemorySearchTool
 # The agent uses recall_memory_search to retrieve the ingested chunk.
-# Expect: response references ArcClaw, Quarkus 3.27.2, SQLite WAL, Podman, AES-GCM-SIV.
+# Expect: response references Amsha Agent, Quarkus 3.27.2, SQLite WAL, Podman, AES-GCM-SIV.
 POST {{baseUrl}}/api/v1/sessions/{{ragSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
-    "goal": "What do you know about ArcClaw's security and persistence approach?",
+    "goal": "What do you know about Amsha Agent's security and persistence approach?",
     "agentRole": "coordinator",
     "maxIterations": 2
 }
@@ -111,7 +111,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # Expect: response mentions "Argon2id" and "AES-GCM-SIV"
 POST {{baseUrl}}/api/v1/sessions/{{ragSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "Search your memory for anything related to secret storage encryption.",
@@ -125,7 +125,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # Expect: LOOP_AWAITING_APPROVAL → APPROVAL_GRANTED → TOOL_INVOKED (ingest)
 #         → LOOP_FINISH → TOOL_INVOKED (recall_memory_search) → LOOP_FINISH
 GET {{baseUrl}}/api/v1/audit/session/{{ragSession.response.body.sessionId}}
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
@@ -139,10 +139,10 @@ X-ArcClaw-API-Key: {{validKey}}
 ### [RAG-8] Ingest second document (async)
 POST {{baseUrl}}/api/v1/sessions/{{ragSession.response.body.sessionId}}/run-async
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
-    "goal": "Ingest this: The Trimurti agent model in ArcClaw has six roles: Vishnu (coordinator), Brahma (coder), Shiva (debugger), Saraswati (researcher), Brihaspati (architect), and Dattatreya (synthesizer). Each role has a distinct persona and tool set.",
+    "goal": "Ingest this: The Trimurti agent model in Amsha Agent has six roles: Vishnu (coordinator), Brahma (coder), Shiva (debugger), Saraswati (researcher), Brihaspati (architect), and Dattatreya (synthesizer). Each role has a distinct persona and tool set.",
     "agentRole": "coordinator",
     "maxIterations": 2
 }
@@ -152,7 +152,7 @@ X-ArcClaw-API-Key: {{validKey}}
 ### [RAG-9] Approve second ingest
 POST {{baseUrl}}/api/v1/sessions/{{ragSession.response.body.sessionId}}/approve?agentRole=coordinator
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
@@ -161,11 +161,11 @@ X-ArcClaw-API-Key: {{validKey}}
 # Expect: response mentions both architectural info and agent role info.
 POST {{baseUrl}}/api/v1/sessions/{{ragSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-K: {{validKey}}
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-K: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
-    "goal": "Tell me what you know about ArcClaw's agent roles and its infrastructure stack.",
+    "goal": "Tell me what you know about Amsha Agent's agent roles and its infrastructure stack.",
     "agentRole": "coordinator",
     "maxIterations": 3
 }
@@ -183,14 +183,14 @@ X-ArcClaw-API-Key: {{validKey}}
 # @name ragSession2
 POST {{baseUrl}}/api/v1/sessions
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
 ### [RAG-12] Ingest unique content in session 2
 POST {{baseUrl}}/api/v1/sessions/{{ragSession2.response.body.sessionId}}/run-async
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "Ingest this: SECRET-ISOLATION-MARKER-BRAVO. The Phase 64-C3 test confirms rag_chunk table isolation.",
@@ -203,7 +203,7 @@ X-ArcClaw-API-Key: {{validKey}}
 ### [RAG-13] Approve ingest for session 2
 POST {{baseUrl}}/api/v1/sessions/{{ragSession2.response.body.sessionId}}/approve?agentRole=coordinator
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
@@ -213,7 +213,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # (this is a feature, not a bug). The isolation being tested here is cross-USER.
 POST {{baseUrl}}/api/v1/sessions/{{ragSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "Search your memory for SECRET-ISOLATION-MARKER-BRAVO.",
@@ -232,7 +232,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # ─────────────────────────────────────────────────────────────────
 
 ### [RAG-C3-VERIFY-NOTE]
-# Run this SQL in sqlite3 ./data/arcclaw-meta.db after the above tests:
+# Run this SQL in sqlite3 ./data/amsha-meta.db after the above tests:
 #
 #   SELECT COUNT(*) FROM compaction_summary WHERE session_id LIKE 'rag:%';
 #   -- Must return: 0
@@ -252,16 +252,16 @@ X-ArcClaw-API-Key: {{validKey}}
 # ─────────────────────────────────────────────────────────────────
 
 ### [RAG-VEC-1] Confirm FTS5-only mode (only if vec0 binary is absent)
-# Start ArcClaw WITHOUT the vec0 library. Watch logs for:
+# Start Amsha Agent WITHOUT the vec0 library. Watch logs for:
 #   "sqlite-vec extension not found - vector search disabled, FTS5 only"
 # Then run a memory search - it must still return results via FTS5.
 # Expect: agent returns FTS5 results with no error or exception.
 POST {{baseUrl}}/api/v1/sessions/{{ragSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
-    "goal": "Search your memory for ArcClaw persistence layer.",
+    "goal": "Search your memory for Amsha Agent persistence layer.",
     "agentRole": "researcher",
     "maxIterations": 2
 }
@@ -274,11 +274,11 @@ X-ArcClaw-API-Key: {{validKey}}
 # ─────────────────────────────────────────────────────────────────
 
 DELETE {{baseUrl}}/api/v1/sessions/{{ragSession.response.body.sessionId}}
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
 DELETE {{baseUrl}}/api/v1/sessions/{{ragSession2.response.body.sessionId}}
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###

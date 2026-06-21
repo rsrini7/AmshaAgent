@@ -1,7 +1,7 @@
 #!/usr/bin/env pwsh
 #MISE shell = "pwsh -NonInteractive -Command"
 #MISE description = "Dev mode - Telegram daemon with hot reload (requires TELEGRAM_BOT_TOKEN in .env)"
-#MISE dir = "{{config_root}}/arcclaw-app"
+#MISE dir = "{{config_root}}/app"
 $ErrorActionPreference = 'Stop'
 
 if ($IsWindows -and -not ([System.Management.Automation.PSTypeName]'WinCon').Type) {
@@ -19,7 +19,7 @@ try {
     if (-not (Test-Path '.env') -and (Test-Path '../.env')) {
         Copy-Item -Path '../.env' -Destination '.env'
         $envCopied = $true
-        Write-Host '[dev:attach] Copied ../.env -> arcclaw-app/.env for this session'
+        Write-Host '[dev:attach] Copied ../.env -> app/.env for this session'
     }
 
     if (-not $env:TELEGRAM_BOT_TOKEN) {
@@ -35,8 +35,8 @@ try {
         "-Djvm.args=$jvmArgs" `
         '-Dquarkus.args=attach' `
         '-Dquarkus.profile=dev' `
-        '-Darcclaw.rag.vec-extension-path=../lib/vec0' `
-        '-Darcclaw.data-dir=../data' `
+        '-Damsha.rag.vec-extension-path=../lib/vec0' `
+        '-Damsha.data-dir=../data' `
         '-Ddebug=false'
     $script:exitCode = $LASTEXITCODE
 
@@ -55,7 +55,7 @@ try {
 
     if ($envCopied) {
         Remove-Item -Path '.env' -Force -ErrorAction SilentlyContinue
-        Write-Host '[dev:attach] Cleaned up temporary arcclaw-app/.env'
+        Write-Host '[dev:attach] Cleaned up temporary app/.env'
     }
 
     Write-Host '[dev:attach] Terminal restored. Press Enter if cursor is missing.'

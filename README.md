@@ -1,5 +1,5 @@
 <div align="center">
-  <h1>🛡️ ArcClaw V1.0.0</h1>
+  <h1>🛡️ Amsha Agent V1.0.0</h1>
   <p><strong>A secure, stateful, and financially governed multi-agent AI kernel designed for enterprise deployment.</strong></p>
 
   ![JDK 25](https://img.shields.io/badge/JDK-25-red.svg?style=flat&logo=java)
@@ -25,19 +25,19 @@
 
 ```bash
 # Prerequisites: JDK 25, Docker/Podman (optional for sandbox)
-git clone https://github.com/your-org/arcclaw
-cd arcclaw
+git clone https://github.com/your-org/amsha
+cd amsha
 
 # Copy and edit .env (see docs/CONFIGURATION.md for all variables)
 cp .env.example .env
-# At minimum: ARCCLAW_LLM_API_KEY=gsk_... (Groq), ARCCLAW_VAULT_PEPPER=<random>
+# At minimum: AMSHA_LLM_API_KEY=gsk_... (Groq), AMSHA_VAULT_PEPPER=<random>
 
 # Dev mode (hot reload, no sandbox isolation)
-./mvnw quarkus:dev -pl arcclaw-app -am "-Dquarkus.args=chat"
+./mvnw quarkus:dev -pl amsha-app -am "-Dquarkus.args=chat"
 
 # Or build and run a packaged JAR
 ./mvnw clean package -DskipTests
-java --enable-native-access=ALL-UNNAMED -jar arcclaw-app/target/quarkus-app/quarkus-run.jar chat
+java --enable-native-access=ALL-UNNAMED -jar app/target/quarkus-app/quarkus-run.jar chat
 ```
 
 See [docs/QUICK_START.md](./docs/QUICK_START.md) for detailed setup options.
@@ -68,12 +68,12 @@ See [docs/QUICK_START.md](./docs/QUICK_START.md) for detailed setup options.
 |-----------|---------|
 | `docs/` | All documentation — architecture, setup, config, security, testing, extension guides |
 | `docs/assets/` | Architecture diagrams (SVG) — referenced from README + ARCHITECTURE.md |
-| `arcclaw-app/` | Main deployable: CLI, REST, security, wiring |
-| `arcclaw-core/` | Agent loop, tools, audit, governance, sandbox, reflexes |
-| `arcclaw-persistence-*/` | Hexagonal persistence: API ports + SQLite / PostgreSQL / FS adapters |
-| `arcclaw-channel-*/` | Channel adapters: Telegram, WebSocket |
-| `arcclaw-ui/` | Lit 3.x + TypeScript web frontend |
-| `arcclaw-mcp/`, `arcclaw-rag/`, `arcclaw-tool-playwright/` | Optional runtime modules |
+| `app/` | Main deployable: CLI, REST, security, wiring |
+| `core/` | Agent loop, tools, audit, governance, sandbox, reflexes |
+| `amsha-persistence-*/` | Hexagonal persistence: API ports + SQLite / PostgreSQL / FS adapters |
+| `amsha-channel-*/` | Channel adapters: Telegram, WebSocket |
+| `ui/` | Lit 3.x + TypeScript web frontend |
+| `mcp/`, `rag/`, `tool-playwright/` | Optional runtime modules |
 
 ---
 
@@ -101,29 +101,29 @@ All roles have `garuda` for delegation. Tool schemas assembled dynamically at ru
 ## Module Reference
 
 ```
-arcclaw-parent/               ← Root POM: Java 25, Quarkus 3.27.2, BouncyCastle
+amsha-parent/               ← Root POM: Java 25, Quarkus 3.27.2, BouncyCastle
 │
-arcclaw-app/                  ← Main deployable: CLI, REST, scheduler, security
-arcclaw-core/                 ← Agent loop, state machine, tools, audit, governance
-arcclaw-common/               ← Shared utilities (LogUtil, constants)
+app/                  ← Main deployable: CLI, REST, scheduler, security
+core/                 ← Agent loop, state machine, tools, audit, governance
+common/               ← Shared utilities (LogUtil, constants)
 │
-arcclaw-channel-api/          ← Channel SPI: sealed interfaces and plugin contracts
-arcclaw-channel-telegram/     ← Apache Camel Telegram bot + HITL inline keyboards
-arcclaw-channel-web/          ← WebSocket channel + Lit TypeScript frontend
+channel-api/          ← Channel SPI: sealed interfaces and plugin contracts
+channel-telegram/     ← Apache Camel Telegram bot + HITL inline keyboards
+channel-web/          ← WebSocket channel + Lit TypeScript frontend
 │
-arcclaw-persistence-api/      ← Hexagonal port interfaces (stores, ports)
-arcclaw-persistence-common/   ← Shared JDBI records/DTOs
-arcclaw-persistence-sqlite/   ← SQLite adapter (WAL + FTS5 + vec0)
-arcclaw-persistence-postgres/ ← PostgreSQL adapter
-arcclaw-persistence-fs/       ← Filesystem adapter (Lucene BM25)
+persistence-api/      ← Hexagonal port interfaces (stores, ports)
+persistence-common/   ← Shared JDBI records/DTOs
+persistence-sqlite/   ← SQLite adapter (WAL + FTS5 + vec0)
+persistence-postgres/ ← PostgreSQL adapter
+persistence-fs/       ← Filesystem adapter (Lucene BM25)
 │
-arcclaw-rag/                  ← Two-tier vector (vec0) + FTS5 RAG memory
-arcclaw-mcp/                  ← MCP server bridge + dynamic client tool loading
-arcclaw-onboarding/           ← 6-step setup wizard REST API
-arcclaw-tool-playwright/      ← Playwright browser automation tool
-arcclaw-deployment/           ← Build-time: custom CDI scope, MCP reflection
+rag/                  ← Two-tier vector (vec0) + FTS5 RAG memory
+mcp/                  ← MCP server bridge + dynamic client tool loading
+onboarding/           ← 6-step setup wizard REST API
+tool-playwright/      ← Playwright browser automation tool
+deployment/           ← Build-time: custom CDI scope, MCP reflection
 │
-arcclaw-ui/                   ← Lit 3.x + TypeScript web frontend
+ui/                   ← Lit 3.x + TypeScript web frontend
 ```
 
 ---
@@ -131,13 +131,13 @@ arcclaw-ui/                   ← Lit 3.x + TypeScript web frontend
 ## Architecture at a Glance
 
 ### Module Architecture
-<img src="./docs/assets/arcclaw_module_architecture.svg" alt="Module Architecture" width="100%">
+<img src="./docs/assets/amsha_module_architecture.svg" alt="Module Architecture" width="100%">
 
 ### Message Pipeline
-<img src="./docs/assets/arcclaw_message_pipeline.svg" alt="Message Pipeline" width="100%">
+<img src="./docs/assets/amsha_message_pipeline.svg" alt="Message Pipeline" width="100%">
 
 ### Agent Loop
-<img src="./docs/assets/arcclaw_agent_loop.svg" alt="Agent Loop" width="100%">
+<img src="./docs/assets/amsha_agent_loop.svg" alt="Agent Loop" width="100%">
 
 > Detailed flows (HITL approval, delegation, security layers, data flow) with Mermaid diagrams in [ARCHITECTURE.md](./docs/ARCHITECTURE.md).
 
@@ -164,7 +164,7 @@ arcclaw-ui/                   ← Lit 3.x + TypeScript web frontend
 
 | Doc | What it covers |
 |-----|---------------|
-| [ARCCLAW_EXTENSION.md](./docs/ARCCLAW_EXTENSION.md) | Adding tools, personas, reflexes, channels, skills, LLM providers, guards |
+| [AMSHA_EXTENSION.md](./docs/AMSHA_EXTENSION.md) | Adding tools, personas, reflexes, channels, skills, LLM providers, guards |
 | [CHANNEL_SPI.md](./docs/CHANNEL_SPI.md) | Adding a new channel (Discord, Slack, etc.) via the 6-interface SPI |
 
 ### 🔒 Security
@@ -190,4 +190,4 @@ arcclaw-ui/                   ← Lit 3.x + TypeScript web frontend
 
 ---
 
-> **Last updated**: ArcClaw V1.0.0 · Quarkus 3.27.2 · JDK 25 · 17 modules · 21 tools · 17 reflexes · 11 LLM providers
+> **Last updated**: Amsha Agent V1.0.0 · Quarkus 3.27.2 · JDK 25 · 17 modules · 21 tools · 17 reflexes · 11 LLM providers

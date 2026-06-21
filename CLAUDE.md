@@ -31,10 +31,10 @@ Never call methods on the base `ReplyNode` — concrete methods live on the subt
 Max: 500 lines/file · 80 lines/method · cognitive complexity ≤ 15.
 
 ## SQLite Diagnostics
-`sqlite3 data/arcclaw-meta.db ".tables"` · `sqlite3 data/arcclaw-fts.db ".tables"`
+`sqlite3 data/amsha-meta.db ".tables"` · `sqlite3 data/amsha-fts.db ".tables"`
 
 ## Babysitter
-ArcClaw is babysitter-enabled. Use `/skill:babysit` to orchestrate complex workflows via babysitter runs.
+Amsha Agent is babysitter-enabled. Use `/skill:babysit` to orchestrate complex workflows via babysitter runs.
 
 **Recommended processes** for this project:
 - `gsd` — day-to-day development workflow for Pxxx phase-based work

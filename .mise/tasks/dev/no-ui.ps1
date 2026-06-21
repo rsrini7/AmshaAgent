@@ -1,7 +1,7 @@
 #!/usr/bin/env pwsh
 #MISE shell = "pwsh -NonInteractive -Command"
 #MISE description = "Dev mode - serve with Dev UI + console disabled (NPE workaround in Quarkus dev console)"
-#MISE dir = "{{config_root}}/arcclaw-app"
+#MISE dir = "{{config_root}}/app"
 $ErrorActionPreference = 'Stop'
 
 if ($IsWindows -and -not ([System.Management.Automation.PSTypeName]'WinCon').Type) {
@@ -19,7 +19,7 @@ try {
     if (-not (Test-Path '.env') -and (Test-Path '../.env')) {
         Copy-Item -Path '../.env' -Destination '.env'
         $envCopied = $true
-        Write-Host '[dev:no-ui] Copied ../.env -> arcclaw-app/.env for this session'
+        Write-Host '[dev:no-ui] Copied ../.env -> app/.env for this session'
     }
 
     $mvnw    = if ($IsWindows) { '..\mvnw.cmd' } else { '../mvnw' }
@@ -32,8 +32,8 @@ try {
         '-Dquarkus.profile=dev' `
         '-Dquarkus.console.enabled=false' `
         '-Dquarkus.devui.enabled=false' `
-        '-Darcclaw.rag.vec-extension-path=../lib/vec0' `
-        '-Darcclaw.data-dir=../data' `
+        '-Damsha.rag.vec-extension-path=../lib/vec0' `
+        '-Damsha.data-dir=../data' `
         '-Ddebug=false'
     $script:exitCode = $LASTEXITCODE
 
@@ -52,7 +52,7 @@ try {
 
     if ($envCopied) {
         Remove-Item -Path '.env' -Force -ErrorAction SilentlyContinue
-        Write-Host '[dev:no-ui] Cleaned up temporary arcclaw-app/.env'
+        Write-Host '[dev:no-ui] Cleaned up temporary app/.env'
     }
 
     Write-Host '[dev:no-ui] Terminal restored. Press Enter if cursor is missing.'

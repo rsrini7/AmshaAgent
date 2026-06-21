@@ -4,7 +4,7 @@
 -- ═══════════════════════════════════════════════════════════════════
 
 -- 1. Attach the FTS database if running manually
--- ATTACH DATABASE './data/arcclaw-fts.db' AS fts;
+-- ATTACH DATABASE './data/amsha-fts.db' AS fts;
 
 -- 2. Backfill userId from audit_event (existing compaction_summary rows)
 UPDATE compaction_summary

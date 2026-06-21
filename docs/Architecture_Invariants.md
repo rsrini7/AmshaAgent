@@ -1,8 +1,8 @@
-# ArcClaw Architecture Invariants
+# Amsha Agent Architecture Invariants
 
 ## Purpose
 
-This document defines the architecture rules that MUST hold across ArcClaw.
+This document defines the architecture rules that MUST hold across Amsha Agent.
 These are not suggestions, style preferences, or historical notes.
 If a rule here is violated, the code is considered incorrect even if tests appear to pass.
 
@@ -25,17 +25,17 @@ If a rule here is violated, the code is considered incorrect even if tests appea
 ## 1. Module boundaries
 
 ### 1.1 Deployment module
-- `arcclaw-deployment` is build-time only.
+- `amsha-deployment` is build-time only.
 - MUST NOT place runtime business logic, request handling, persistence, tool logic, or channel behavior there.
 - Build steps may generate metadata/resources only.
 
 ### 1.2 Core module
-- `arcclaw-core` owns agent runtime, workspace/session lifecycle, governance, persistence, skills, structured output, reflexes, audit, sandbox contracts, and generic pipeline behavior.
-- `arcclaw-core` MUST NOT depend on Telegram-specific behavior or any single channel assumption.
-- **Persistence boundary:** `arcclaw-core` MUST NOT contain JDBI `Handle`/`Jdbi` references or raw SQL strings. All database access MUST be delegated to pure Port interfaces defined in `arcclaw-persistence-api`. (Enforced by `ArchitectureBoundaryTest`).
+- `amsha-core` owns agent runtime, workspace/session lifecycle, governance, persistence, skills, structured output, reflexes, audit, sandbox contracts, and generic pipeline behavior.
+- `amsha-core` MUST NOT depend on Telegram-specific behavior or any single channel assumption.
+- **Persistence boundary:** `amsha-core` MUST NOT contain JDBI `Handle`/`Jdbi` references or raw SQL strings. All database access MUST be delegated to pure Port interfaces defined in `amsha-persistence-api`. (Enforced by `ArchitectureBoundaryTest`).
 
 ### 1.3 App module
-- `arcclaw-app` owns application wiring, REST resources, startup bootstrap, config producers, and current adapter registration.
+- `amsha-app` owns application wiring, REST resources, startup bootstrap, config producers, and current adapter registration.
 - App-layer code SHOULD stay thin.
 - Business rules belong in core unless they are truly transport/framework specific.
 
@@ -43,11 +43,11 @@ If a rule here is violated, the code is considered incorrect even if tests appea
 - Channel-neutral flows MUST NOT default missing channel metadata to a specific channel implementation.
 - New channels must fit the channel SPI without changing core engine behavior.
 - Any fallback to Telegram is LEGACY and should be removed, not copied.
-- **P82-85 SPI Enforcement:** Channel modules (e.g., `arcclaw-channel-telegram`, `arcclaw-channel-web`) MUST NOT import `com.arcclaw.core.*` directly. 
-  - Interaction with core HITL state MUST flow through the `com.arcclaw.channel.api.hitl.ApprovalGateway` SPI.
-  - Querying pending HITL approval state MUST flow through the `com.arcclaw.channel.api.hitl.PendingApprovalChecker` SPI.
-  - Identity validation (API keys) MUST flow through `com.arcclaw.channel.api.ChannelServices.isValidIdentity()`. 
-  - Direct injection of core classes like `com.arcclaw.core.security.SessionOwnerResolver` or `com.arcclaw.core.state.StatefulAgentStore` in channel modules is FORBIDDEN as it violates architectural boundaries and fails CDI resolution in module-level tests.
+- **P82-85 SPI Enforcement:** Channel modules (e.g., `amsha-channel-telegram`, `amsha-channel-web`) MUST NOT import `com.amsha.core.*` directly. 
+  - Interaction with core HITL state MUST flow through the `com.amsha.channel.api.hitl.ApprovalGateway` SPI.
+  - Querying pending HITL approval state MUST flow through the `com.amsha.channel.api.hitl.PendingApprovalChecker` SPI.
+  - Identity validation (API keys) MUST flow through `com.amsha.channel.api.ChannelServices.isValidIdentity()`. 
+  - Direct injection of core classes like `com.amsha.core.security.SessionOwnerResolver` or `com.amsha.core.state.StatefulAgentStore` in channel modules is FORBIDDEN as it violates architectural boundaries and fails CDI resolution in module-level tests.
 
 
 ### 1.5 Channel type policy
@@ -62,7 +62,7 @@ If a rule here is violated, the code is considered incorrect even if tests appea
 - MUST NOT store per-session mutable state in `@ApplicationScoped` fields.
 
 ### 2.2 Two context layers
-ArcClaw has two distinct binding layers:
+Amsha Agent has two distinct binding layers:
 
 1. `WorkspaceContext`
    - Used for tool execution, agent loop, business logic, and runtime execution path.
@@ -269,7 +269,7 @@ parameter schema, not the output schema, and produces silent wrong behavior in n
 `DelegateToAgentTool` MUST validate that the target role's capabilities are a subset of the delegating role's capabilities before constructing the sub-agent loop. Delegation that would grant the sub-agent capabilities the parent role does not have MUST be rejected with a descriptive tool observation. Transitive capability escalation via delegation chains is FORBIDDEN.
 
 ### 4.10.1 Sub-Session Governance Level (§Invariant-Sub-Governance)
-Sub-sessions spawned by `DelegateToAgentTool` MUST inherit `READONLY` from the parent if the parent is `READONLY`. `SUPERVISED` and `FULL` both resolve to `FULL` to prevent unresumable synchronous HITL checkpoints inside the delegation chain. Max delegation depth is governed by `arcclaw.delegation.max-depth` (default 2).
+Sub-sessions spawned by `DelegateToAgentTool` MUST inherit `READONLY` from the parent if the parent is `READONLY`. `SUPERVISED` and `FULL` both resolve to `FULL` to prevent unresumable synchronous HITL checkpoints inside the delegation chain. Max delegation depth is governed by `amsha.delegation.max-depth` (default 2).
 
 - The scheduling tools (`schedule-cron`, `delete-cron`, `list-crons`) are EXEMPT from
   HITL approval checks regardless of the delegating role's autonomy level, because
@@ -331,13 +331,13 @@ inline - use static final Pattern per §9.1.
 
 ### 5.3 Repository style
 - Core repositories MUST NOT use JDBI `Handle`/`Jdbi` directly (§1.2).
-- All database operations in `arcclaw-core` MUST flow through Port interfaces defined in `arcclaw-persistence-api`.
-- Implementations (Adapters) reside in specialized modules (e.g. `arcclaw-persistence-sqlite`, `arcclaw-persistence-postgres`).
+- All database operations in `amsha-core` MUST flow through Port interfaces defined in `amsha-persistence-api`.
+- Implementations (Adapters) reside in specialized modules (e.g. `amsha-persistence-sqlite`, `amsha-persistence-postgres`).
 
 ### 5.4 JDBI Transaction Behavior (SQLite)
 - JDBI manages its own connections and transactions — do NOT wrap JDBI operations in Jakarta `@Transactional`. Let JDBI handle transaction boundaries via `jdbi.useTransaction()` / `jdbi.inTransaction()`.
-- The adapters in `arcclaw-persistence-sqlite` use `jdbi.useTransaction()` for write operations and obtain handles via `jdbi.withExtension()` / `jdbi.withHandle()`.
-- `@Transactional` annotations in `arcclaw-core` beans (e.g., `AuditEventRecorder`) remain for JTA compliance but are effectively no-ops for JDBI-backed stores — the actual database write is managed by JDBI's own handle lifecycle.
+- The adapters in `amsha-persistence-sqlite` use `jdbi.useTransaction()` for write operations and obtain handles via `jdbi.withExtension()` / `jdbi.withHandle()`.
+- `@Transactional` annotations in `amsha-core` beans (e.g., `AuditEventRecorder`) remain for JTA compliance but are effectively no-ops for JDBI-backed stores — the actual database write is managed by JDBI's own handle lifecycle.
 
 ### 5.5 Read visibility in tests
 - Test writes must be committed before REST assertions that depend on them.
@@ -345,7 +345,7 @@ inline - use static final Pattern per §9.1.
 
 ### 5.6 Identity / schema (JDBI + Flyway — Hibernate removed)
 - All schemas (SQLite and PostgreSQL) are managed via Flyway migrations in their respective adapter modules.
-- The custom Hibernate SQLite dialect (`ArcClawSQLiteDialect`) and all JPA entity classes have been removed.
+- The custom Hibernate SQLite dialect (`AmshaSQLiteDialect`) and all JPA entity classes have been removed.
 - Identity columns use `INTEGER PRIMARY KEY AUTOINCREMENT` (SQLite) or `BIGSERIAL` (PostgreSQL) in DDL.
 - `@Version` optimistic locking is not used — JDBI-based adapters manage concurrency via explicit SQL conditions (e.g., `WHERE status = :expectedStatus` in status transitions).
 
@@ -566,9 +566,9 @@ Do not simplify this check to a single `e.getMessage()` string comparison.
 ### 5.14.1 Retry Encapsulation After Storage Extraction (P95 Amendment – 2026-04-13)
 
 After the C1 storage port extraction, retry logic MUST be encapsulated **inside** the
-`arcclaw-persistence-sqlite` adapter module.
+`amsha-persistence-sqlite` adapter module.
 
-**MUST NOT expose a `PersistenceRetryPort` interface to `arcclaw-core`.**
+**MUST NOT expose a `PersistenceRetryPort` interface to `amsha-core`.**
 
 **Rationale:**
 * Retry-on-BUSY is a SQLite-specific infrastructure concern. Core should call `CheckpointStorePort.save()` and the adapter handles retries transparently via `JdbiRetryWrapper`.
@@ -576,7 +576,7 @@ After the C1 storage port extraction, retry logic MUST be encapsulated **inside*
 * `StatefulAgentStoreImpl` previously wrapped every `self.doXxx()` call with `withRetry()`. After extraction, the `SqliteCheckpointStoreAdapter` absorbs both the transaction boundary and the retry loop – the `withRetry` wrapper in `StatefulAgentStoreImpl` was deleted.
 * `WorkspaceManager.markCheckpointsFailed()` delegates to `CheckpointStorePort.markFailed(sessionId)`. The SQLite adapter wraps its own retry internally via `JdbiRetryWrapper`.
 
-**Port interface (`arcclaw-persistence-api`) MUST contain only:**
+**Port interface (`amsha-persistence-api`) MUST contain only:**
 * `CheckpointStorePort` – checkpoint CRUD + status transitions
 * `MemoryRetrievalPort` – search + index
 * `BackendCapabilities` – feature flags (FTS, vector, advisory locks)
@@ -630,8 +630,8 @@ for the entire GC sweep duration (potentially scanning many sessions).
 
 ## 5.17 `AsyncPersistenceEngine` Context Binding Rule
 
-`AsyncPersistenceEngine` runs two virtual drain threads (`arcclaw-audit-critical-drain`,
-`arcclaw-audit-telemetry-drain`). These are NOT CDI-managed threads.
+`AsyncPersistenceEngine` runs two virtual drain threads (`amsha-audit-critical-drain`,
+`amsha-audit-telemetry-drain`). These are NOT CDI-managed threads.
 
 **MUST:**
 - Bind `WorkspaceScopeHolder.run(event.getSessionId(), ...)` **per event** inside the
@@ -709,11 +709,11 @@ JPA's `@Column(columnDefinition=...)` is no longer present — Hibernate has bee
 All DDL is expressed in per-adapter Flyway migration SQL files only.
 
 ## 5.23 SessionSchemaEnforcer DDL Isolation (§5.23 INVARIANT)
-All raw DDL `CREATE TABLE` and similar schema emission statements are adapter-specific and must never live in `arcclaw-core` or `arcclaw-app`. Each persistence adapter module (e.g. `arcclaw-persistence-sqlite`) owns its specific programmatic DDL (like `AUTOINCREMENT` mapping) completely isolated from core domain code.
+All raw DDL `CREATE TABLE` and similar schema emission statements are adapter-specific and must never live in `amsha-core` or `amsha-app`. Each persistence adapter module (e.g. `amsha-persistence-sqlite`) owns its specific programmatic DDL (like `AUTOINCREMENT` mapping) completely isolated from core domain code.
 
 ## 5.24 Persistence Backend Selection (§5.24 INVARIANT)
 
-The persistence backend is controlled by a single build property: **`arcclaw.persistence.backend`**.
+The persistence backend is controlled by a single build property: **`amsha.persistence.backend`**.
 
 ### How It Works
 
@@ -721,42 +721,42 @@ Every persistence adapter bean uses Quarkus `@IfBuildProperty` to conditionally 
 
 ```java
 // SQLite — DEFAULT (enableIfMissing = true means: if property is unset, SQLite activates)
-@IfBuildProperty(name = "arcclaw.persistence.backend", stringValue = "sqlite", enableIfMissing = true)
+@IfBuildProperty(name = "amsha.persistence.backend", stringValue = "sqlite", enableIfMissing = true)
 
 // PostgreSQL — opt-in only (no enableIfMissing)
-@IfBuildProperty(name = "arcclaw.persistence.backend", stringValue = "postgres")
+@IfBuildProperty(name = "amsha.persistence.backend", stringValue = "postgres")
 
 // Filesystem — opt-in only
-@IfBuildProperty(name = "arcclaw.persistence.backend", stringValue = "fs")
+@IfBuildProperty(name = "amsha.persistence.backend", stringValue = "fs")
 ```
 
 ### When Backend Selection Happens
 
 | Mode | When `@IfBuildProperty` is evaluated | Switching backend |
 |------|--------------------------------------|-------------------|
-| **JVM** (`arcclaw serve`) | At **app startup** (runtime) | Set `ARCCLAW_PERSISTENCE_BACKEND` in `.env` — **no rebuild needed** |
-| **Native image** (`arcclaw-native`) | At **build time** (GraalVM compile) | Must **rebuild** the native binary with the new property set during build |
+| **JVM** (`amsha serve`) | At **app startup** (runtime) | Set `AMSHA_PERSISTENCE_BACKEND` in `.env` — **no rebuild needed** |
+| **Native image** (`amsha-native`) | At **build time** (GraalVM compile) | Must **rebuild** the native binary with the new property set during build |
 
 ### How to Switch Backend (JVM mode)
 
 ```bash
 # 1. Set in .env (before starting the app)
-echo "ARCCLAW_PERSISTENCE_BACKEND=postgres" >> .env
+echo "AMSHA_PERSISTENCE_BACKEND=postgres" >> .env
 
 # 2. Also set connection details for the target backend:
-echo "QUARKUS_DATASOURCE_JDBC_URL=jdbc:postgresql://localhost:5432/arcclaw" >> .env
-echo "QUARKUS_DATASOURCE_USERNAME=arcclaw" >> .env
+echo "QUARKUS_DATASOURCE_JDBC_URL=jdbc:postgresql://localhost:5432/amsha" >> .env
+echo "QUARKUS_DATASOURCE_USERNAME=amsha" >> .env
 echo "QUARKUS_DATASOURCE_PASSWORD=<password>" >> .env
 
 # 3. Start the app — no rebuild needed
-arcclaw serve
+amsha serve
 ```
 
 ### How to Switch Backend (Native image)
 
 ```bash
 # Must rebuild — @IfBuildProperty is baked into the native image at compile time
-export ARCCLAW_PERSISTENCE_BACKEND=postgres
+export AMSHA_PERSISTENCE_BACKEND=postgres
 ./mvnw package -Dnative
 ```
 
@@ -764,9 +764,9 @@ export ARCCLAW_PERSISTENCE_BACKEND=postgres
 
 | Backend | `.env` variables needed | Notes |
 |---------|------------------------|-------|
-| **SQLite** (default) | None — zero config | Data stored in `./arcclaw-data/` by default |
+| **SQLite** (default) | None — zero config | Data stored in `./amsha-data/` by default |
 | **PostgreSQL** | `QUARKUS_DATASOURCE_JDBC_URL`, `QUARKUS_DATASOURCE_USERNAME`, `QUARKUS_DATASOURCE_PASSWORD` | Flyway auto-creates schema on startup |
-| **Filesystem** | `ARCCLAW_FS_DATA_DIR` (optional, default `./data/fs`) | Uses Lucene index for BM25 search |
+| **Filesystem** | `AMSHA_FS_DATA_DIR` (optional, default `./data/fs`) | Uses Lucene index for BM25 search |
 
 ### Why SQLite Is the Default
 
@@ -777,8 +777,8 @@ export ARCCLAW_PERSISTENCE_BACKEND=postgres
 ### Flyway Migration Parity
 
 Every Flyway migration must exist in both backends with the same version number:
-- SQLite: `arcclaw-persistence-sqlite/src/main/resources/db/migration/sqlite/V<n>__<name>.sql`
-- PostgreSQL: `arcclaw-persistence-postgres/src/main/resources/db/migration/postgresql/V<n>__<name>.sql`
+- SQLite: `persistence-sqlite/src/main/resources/db/migration/sqlite/V<n>__<name>.sql`
+- PostgreSQL: `persistence-postgres/src/main/resources/db/migration/postgresql/V<n>__<name>.sql`
 
 Flyway runs automatically on startup — the user does not need to manually create tables.
 
@@ -786,13 +786,13 @@ Flyway runs automatically on startup — the user does not need to manually crea
 
 The tiered memory subsystem has its own separate backend selection:
 ```yaml
-arcclaw:
+amsha:
   memory:
     tiered:
-      backend: ${ARCCLAW_MEMORY_TIERED_BACKEND:sqlite}
+      backend: ${AMSHA_MEMORY_TIERED_BACKEND:sqlite}
 ```
 
-This is a **different property** from `arcclaw.persistence.backend`. The tiered memory backend can be different from the main persistence backend (e.g., main DB on Postgres, tiered memory on SQLite). Both default to `sqlite`.
+This is a **different property** from `amsha.persistence.backend`. The tiered memory backend can be different from the main persistence backend (e.g., main DB on Postgres, tiered memory on SQLite). Both default to `sqlite`.
 
 ### Native Image Binary Naming Convention (§5.24.1)
 
@@ -800,25 +800,25 @@ Since `@IfBuildProperty` is baked at build time, each persistence backend requir
 
 | Binary | Backend | Property value | Description |
 |--------|---------|---------------|-------------|
-| `arcclaw-sqlite` | SQLite | `sqlite` (default) | Zero-config, embedded database |
-| `arcclaw-pg` | PostgreSQL | `postgres` | Requires running PG instance |
-| `arcclaw-fs` | Filesystem | `fs` | Lucene-based, no SQL database |
+| `amsha-sqlite` | SQLite | `sqlite` (default) | Zero-config, embedded database |
+| `amsha-pg` | PostgreSQL | `postgres` | Requires running PG instance |
+| `amsha-fs` | Filesystem | `fs` | Lucene-based, no SQL database |
 
 **Build approach:** Use `mise run` tasks (recommended) or raw Maven commands:
 
 ```bash
 # Recommended: mise tasks (auto-switch JDK, copy to dist/)
-mise run build:native-local          # SQLite (default) → dist/arcclaw
-mise run build:native-local-pg       # PostgreSQL → dist/arcclaw-pg
-mise run build:native-local-fs       # Filesystem → dist/arcclaw-fs
-mise run build:native-local-all      # All 3 variants → dist/arcclaw, dist/arcclaw-pg, dist/arcclaw-fs
+mise run build:native-local          # SQLite (default) → dist/amsha
+mise run build:native-local-pg       # PostgreSQL → dist/amsha-pg
+mise run build:native-local-fs       # Filesystem → dist/amsha-fs
+mise run build:native-local-all      # All 3 variants → dist/amsha, dist/amsha-pg, dist/amsha-fs
 ```
 
 **What mise tasks do:**
 1. Auto-switch JDK to GraalVM Community 25 (via `mise use java@graalvm-community-25.0.2`)
-2. Bake `quarkus.arcclaw.build.backend` property into `build-info.properties`
+2. Bake `quarkus.amsha.build.backend` property into `build-info.properties`
 3. Build native image with memory auto-tuning (85% of available RAM)
-4. Copy final binary to `dist/` with correct name (`arcclaw`, `arcclaw-pg`, `arcclaw-fs`)
+4. Copy final binary to `dist/` with correct name (`amsha`, `amsha-pg`, `amsha-fs`)
 5. Switch JDK back to Temurin 25 after build
 
 **Why use mise tasks:** Raw Maven commands require manual JDK switching, manual binary renaming, and don't auto-tune memory. Mise tasks handle all of this automatically.
@@ -828,27 +828,27 @@ mise run build:native-local-all      # All 3 variants → dist/arcclaw, dist/arc
 Each OS-specific release archive contains **all 3 backend variants**:
 
 ```
-arcclaw-1.0.0-linux-x64.tar.gz
-  ├── arcclaw-sqlite     # SQLite (default)
-  ├── arcclaw-pg         # PostgreSQL
-  └── arcclaw-fs         # Filesystem
+amsha-1.0.0-linux-x64.tar.gz
+  ├── amsha-sqlite     # SQLite (default)
+  ├── amsha-pg         # PostgreSQL
+  └── amsha-fs         # Filesystem
 
-arcclaw-1.0.0-macos-aarch64.tar.gz
-  ├── arcclaw-sqlite     # SQLite (default)
-  ├── arcclaw-pg         # PostgreSQL
-  └── arcclaw-fs         # Filesystem
+amsha-1.0.0-macos-aarch64.tar.gz
+  ├── amsha-sqlite     # SQLite (default)
+  ├── amsha-pg         # PostgreSQL
+  └── amsha-fs         # Filesystem
 
-arcclaw-1.0.0-windows-x64.zip
-  ├── arcclaw-sqlite.exe # SQLite (default)
-  ├── arcclaw-pg.exe     # PostgreSQL
-  └── arcclaw-fs.exe     # Filesystem
+amsha-1.0.0-windows-x64.zip
+  ├── amsha-sqlite.exe # SQLite (default)
+  ├── amsha-pg.exe     # PostgreSQL
+  └── amsha-fs.exe     # Filesystem
 ```
 
 This is **3 archives × 3 binaries each = 9 binaries total** across all platforms.
 
 **Why all 3 in one archive:** The user downloads one file for their OS and picks the binary matching their database. No separate downloads per backend.
 
-**Default binary (`arcclaw-sqlite` / `arcclaw-sqlite.exe`)** is always the SQLite variant — works out of the box with zero configuration. Users who want PostgreSQL or Filesystem use `arcclaw-pg` or `arcclaw-fs` respectively.
+**Default binary (`amsha-sqlite` / `amsha-sqlite.exe`)** is always the SQLite variant — works out of the box with zero configuration. Users who want PostgreSQL or Filesystem use `amsha-pg` or `amsha-fs` respectively.
 
 **JVM mode is backend-agnostic:** The JAR distribution (`quarkus-run.jar`) includes all 3 backend jars. The user switches via `.env` at runtime — no separate JARs needed.
 
@@ -886,20 +886,20 @@ status alongside `FAILED`, `COMPLETED`, `ARCHIVED`, and `COMPROMISED`.
 
 ## 6.5 @RunOnVirtualThread enforcement (Revised — Post-JDBI)
 
-`RestResourceBuildStep` was NOT removed — it was restructured to enforce `@RunOnVirtualThread` on ALL `com.arcclaw` REST resource classes, not just those with `EntityManager` injection. The build step validates that every `@Path`-annotated class carries the `@RunOnVirtualThread` annotation, failing the build if any resource lacks it.
+`RestResourceBuildStep` was NOT removed — it was restructured to enforce `@RunOnVirtualThread` on ALL `com.amsha` REST resource classes, not just those with `EntityManager` injection. The build step validates that every `@Path`-annotated class carries the `@RunOnVirtualThread` annotation, failing the build if any resource lacks it.
 
 ### 6.6 Static run-time objects
 - MUST NOT store JDK or library objects that require run-time initialization (e.g. `java.net.http.HttpClient`, `java.lang.Thread`, or descriptors) in `static` or `static final` fields when building for native-image.
 - GraalVM attempts to store these objects in the "image heap" at build time, leading to `UnsupportedFeatureException` (An object of type ... was found in the image heap).
 - Use `@ApplicationScoped` instance fields or `@PostConstruct` lazy initialization to ensure these objects are created at run-time.
 - **6.7 Module-specific Reflection Config**: New modules that introduce CDI beans, DTOs (for JSON/REST), or external libraries that use reflection MUST include a dedicated `*ReflectionConfig` class annotated with `@RegisterForReflection` in a `.config` subpackage. This centralizes reachability for GraalVM and prevents dead-code elimination of critical runtime components across module boundaries. JVM-mode success is NOT evidence that these registrations are unnecessary. See [AGENTS.md §7](../AGENTS.md#7-graalvm-native-image-reflection-registration) for the complete checklist of what needs registration (records: YES, enums: NO, CDI beans: only in persistence modules, JDBI DAOs: YES).
-- **6.8 Native-Image Runtime Initialization**: Libraries using Foreign Function & Memory (FFM) API, `MethodHandle`, or native access (e.g., Lucene 10.x `PosixNativeAccess`) MUST be marked for run-time initialization in `arcclaw-app/src/main/resources/META-INF/native-image/com.arcclaw/arcclaw-app/native-image.properties`. Mark the **entire package** (`--initialize-at-run-time=org.apache.lucene`), not individual classes — GraalVM embeds static fields from build-time classes into the image heap, causing whack-a-mole errors when marking classes individually. Also mark any CDI beans with `@PostConstruct` that trigger the library. Do NOT use `pom.xml` `additional-build-args` for this — Quarkus splits on commas, breaking args that contain commas. See [AGENTS.md §7.5](../AGENTS.md#75-native-image-runtime-initialization-native-imageproperties) for detailed guidance.
+- **6.8 Native-Image Runtime Initialization**: Libraries using Foreign Function & Memory (FFM) API, `MethodHandle`, or native access (e.g., Lucene 10.x `PosixNativeAccess`) MUST be marked for run-time initialization in `app/src/main/resources/META-INF/native-image/com.amsha/app/native-image.properties`. Mark the **entire package** (`--initialize-at-run-time=org.apache.lucene`), not individual classes — GraalVM embeds static fields from build-time classes into the image heap, causing whack-a-mole errors when marking classes individually. Also mark any CDI beans with `@PostConstruct` that trigger the library. Do NOT use `pom.xml` `additional-build-args` for this — Quarkus splits on commas, breaking args that contain commas. See [AGENTS.md §7.5](../AGENTS.md#75-native-image-runtime-initialization-native-imageproperties) for detailed guidance.
 
 ### 6.9 Lucene `TestSecrets` Class.forName Registration (§6.9 INVARIANT)
 
 Lucene 10.x ships `org.apache.lucene.internal.tests.TestSecrets` in the **production** `lucene-core` jar. Its static initializer calls `Class.forName("org.apache.lucene.index.ConcurrentMergeScheduler")` at runtime. In native-image, GraalVM's static analysis removes `ConcurrentMergeScheduler` because nothing directly references it — but `Class.forName()` is a runtime reflective call that cannot be analyzed at build time, resulting in `ClassNotFoundException` → `ExceptionInInitializerError` → crash on startup.
 
-**Fix:** Add a `reflect-config.json` to the module that depends on `lucene-core` (currently `arcclaw-persistence-fs`):
+**Fix:** Add a `reflect-config.json` to the module that depends on `lucene-core` (currently `amsha-persistence-fs`):
 
 ```json
 [
@@ -969,7 +969,7 @@ The `embedding vector(768)` column and HNSW index MUST be similarly guarded with
 
 ### 7.5 WebSocket channel invariants
 
-- `arcclaw-channel-web` MUST NOT import `com.arcclaw.core.*` directly (enforced by `ArchitectureBoundaryTest`).
+- `amsha-channel-web` MUST NOT import `com.amsha.core.*` directly (enforced by `ArchitectureBoundaryTest`).
 - WebSocket session state (`WebSocketSessionStore`) MUST be `@ApplicationScoped` with `ConcurrentHashMap` — no per-session CDI scopes for WebSocket connections.
 - HITL sessions MUST survive WebSocket disconnects — `WebChatEndpoint.onClose()` MUST check for `AWAITING_APPROVAL` before terminating the session.
 - The WebSocket endpoint path is `/ws/chat` (sessionId is in the message or query parameter, not in the URL path).
@@ -1057,11 +1057,11 @@ The `embedding vector(768)` column and HNSW index MUST be similarly guarded with
      to execution normally.
 
 7.16 SHOULD: Each parallel tool execution MUST time out after
-     arcclaw.parallel.tool-timeout-seconds (default: 60). A timed-out
+     amsha.parallel.tool-timeout-seconds (default: 60). A timed-out
      tool returns withResult("Tool timed out after Xs", false) and
      does not block the rest of the batch.
 
-7.17 MUST: Metrics counters arcclaw.agent.tool.calls MUST reflect
+7.17 MUST: Metrics counters amsha.agent.tool.calls MUST reflect
      individual tool names in a parallel batch - not the __parallel__
      sentinel. The MetricsAgentObserver already receives individual
      onStepComplete() calls from ParallelToolStepExecutor (one per
@@ -1115,7 +1115,7 @@ The `embedding vector(768)` column and HNSW index MUST be similarly guarded with
 
 
 7.26 MUST: AWAITING_APPROVAL checkpoints older than
-     arcclaw.hitl.timeout-hours (default: 24) MUST be auto-denied
+     amsha.hitl.timeout-hours (default: 24) MUST be auto-denied
      by the SessionReaper scheduled sweep. The user MUST receive a
      Telegram notification that their approval window expired.
 
@@ -1146,17 +1146,17 @@ The `embedding vector(768)` column and HNSW index MUST be similarly guarded with
 
 §7.30 INVARIANT: Within a parallel batch, tools whose autonomy level permits execution WITHOUT human approval (autonomy >= FULL) MUST be pre-executed before the HITL pause. Their results MUST be stored in AgentCheckpoint.preExecutedResults (TEXT, JSON) as toolName → ToolResponse. On resume, CheckpointResumeHandler MUST use pre-stored results instead of re-executing those tools.
 
-§7.31 INVARIANT: A tool is considered "pre-executable" if and only if: (a) the current session's autonomy level is FULL_AUTONOMY, OR (b) the tool name appears in arcclaw.hitl.pre-executable-tools config list. Safe tools are never automatically inferred - they must be explicitly configured. This prevents accidental side effects from misclassification.
+§7.31 INVARIANT: A tool is considered "pre-executable" if and only if: (a) the current session's autonomy level is FULL_AUTONOMY, OR (b) the tool name appears in amsha.hitl.pre-executable-tools config list. Safe tools are never automatically inferred - they must be explicitly configured. This prevents accidental side effects from misclassification.
 
 §7.32 MUST: The HITL pause message shown to the user MUST list ONLY the tools that still require approval. Pre-executed tools MUST NOT appear in the keyboard or the approval text. The Approve All / Deny All buttons operate only on the PENDING tools.
 
-§7.33 INVARIANT: Approval delegation is scoped to a single session. An admin (user listed in arcclaw.hitl.delegate-approver-ids) may issue /approve or /deny for ANY active AWAITING_APPROVAL session by providing the sessionId: "/approve <sessionId>". The delegate action is audit-logged with both the admin userId and the original session owner's userId. Delegation MUST NOT bypass per-tool granularity - /approve <sessionId> <toolName> is also valid.
+§7.33 INVARIANT: Approval delegation is scoped to a single session. An admin (user listed in amsha.hitl.delegate-approver-ids) may issue /approve or /deny for ANY active AWAITING_APPROVAL session by providing the sessionId: "/approve <sessionId>". The delegate action is audit-logged with both the admin userId and the original session owner's userId. Delegation MUST NOT bypass per-tool granularity - /approve <sessionId> <toolName> is also valid.
 
 §7.34 MUST: Web UI tool approval MUST be per-tool granular. The REST HITL endpoint MUST accept toolName as a parameter (in the JSON request body via CheckpointApprovalRequest). Passing no toolName is valid only for bulk Approve All / Deny All operations.
 
-§7.35 TelegramCallbackHandler MUST reject any callback whose sessionId maps to a checkpoint older than arcclaw.hitl.timeout-hours before routing to any reflex. This guard is independent of and complementary to the WorkspaceManager GC auto-deny scheduler (§7.26).
+§7.35 TelegramCallbackHandler MUST reject any callback whose sessionId maps to a checkpoint older than amsha.hitl.timeout-hours before routing to any reflex. This guard is independent of and complementary to the WorkspaceManager GC auto-deny scheduler (§7.26).
 
-§7.36 MUST: The `ApprovalStateMachine` in `arcclaw-core` is the single source of truth for HITL state transitions. It MUST implement the `ApprovalGateway` SPI and enforce idempotency (ALREADY_DECIDED) at the core layer. Channels delegate callbacks directly to this gateway without local state checks.
+§7.36 MUST: The `ApprovalStateMachine` in `amsha-core` is the single source of truth for HITL state transitions. It MUST implement the `ApprovalGateway` SPI and enforce idempotency (ALREADY_DECIDED) at the core layer. Channels delegate callbacks directly to this gateway without local state checks.
 
 ---
 
@@ -1192,7 +1192,7 @@ Both patterns are valid. Tools that check `vault.systemKeyExists()` for `isEnabl
 
 ### 8.7 LLM Guardrail Layer (Layer 7 — PreLlmGuard / PostLlmGuard)
 
-The guardrail layer sits between the existing reflex pipeline (Layers 2–3 via `ReflexRegistry`) and the LLM provider call. It uses ArcClaw-native guard interfaces — NOT LangChain4j's experimental `InputGuardrail`/`OutputGuardrail` — to avoid coupling to an evolving framework API.
+The guardrail layer sits between the existing reflex pipeline (Layers 2–3 via `ReflexRegistry`) and the LLM provider call. It uses Amsha Agent-native guard interfaces — NOT LangChain4j's experimental `InputGuardrail`/`OutputGuardrail` — to avoid coupling to an evolving framework API.
 
 **Architecture rules:**
 
@@ -1222,13 +1222,13 @@ The guardrail layer sits between the existing reflex pipeline (Layers 2–3 via 
 
 7. **Streamed responses** MUST be fully accumulated before `PostLlmGuard` runs. The guard layer operates on the complete response, not partial chunks.
 
-8. **Dependency rule:** `arcclaw-core` MUST NOT depend on `dev.langchain4j:langchain4j-guardrails`. The LC4J guardrails module is optional and may be added as a separate adapter only if built-in guardrail implementations (e.g., `MessageModeratorInputGuardrail`) are needed later.
+8. **Dependency rule:** `amsha-core` MUST NOT depend on `dev.langchain4j:langchain4j-guardrails`. The LC4J guardrails module is optional and may be added as a separate adapter only if built-in guardrail implementations (e.g., `MessageModeratorInputGuardrail`) are needed later.
 
 ### 8.8 Browser automation (PlaywrightCliTool)
 
 - `PlaywrightCliTool` MUST validate URLs against `SAFE_URL_PATTERN` (`^https?://.*`) before navigation. File://, javascript:, and data: URLs are FORBIDDEN.
 - Content extraction MUST be capped at `MAX_CONTENT_CHARS` (9092).
-- The tool MUST be disabled by default (`arcclaw.tools.playwright.enabled=false`).
+- The tool MUST be disabled by default (`amsha.tools.playwright.enabled=false`).
 - Browser automation MUST NOT execute in `READONLY` autonomy level.
 
 ## 8.9 Sandbox tool exception contract
@@ -1237,7 +1237,7 @@ The guardrail layer sits between the existing reflex pipeline (Layers 2–3 via 
 - `BudgetExceededException` - MUST propagate (not catch); `AgentStateMachineRunner` handles it.
 - `ToolExecutionException`, `TimeoutException`, `SecurityException`, `IOException` - MUST catch
   and return `ToolResponse.failure(message)`. Never propagate to `ToolInvoker`.
-- Output exceeding arcclaw.sandbox.max-output-chars (default 8192) MUST be truncated at that limit with suffix
+- Output exceeding amsha.sandbox.max-output-chars (default 8192) MUST be truncated at that limit with suffix
   `[output truncated at max output chars limit]`. Never include raw Java stack traces in tool output.
 
 
@@ -1283,7 +1283,7 @@ The guardrail layer sits between the existing reflex pipeline (Layers 2–3 via 
 ## 10.4 Test profile skill reload
 
 The test profile MUST explicitly set:
-  arcclaw.skills.hot-reload: false
+  amsha.skills.hot-reload: false
 
 Omitting this causes `SkillRegistry` to watch the filesystem during tests, producing
 flaky failures when skill YAML files are rewritten by concurrent Maven forks.
@@ -1362,24 +1362,24 @@ Every non-app, non-deployment Maven module that contains CDI beans MUST:
 
 Without Jandex, `@ApplicationScoped` beans in library modules are **silently invisible**
 to the Quarkus CDI container - no error, no warning, just missing beans.
-This applies to every `arcclaw-channel-*` module added in P67 and beyond.
+This applies to every `amsha-channel-*` module added in P67 and beyond.
 
 ---
 
 ## 16. New Module Creation
 
 ### 16.1 Dependency Cycle Prevention
-- NEW modules MUST NOT depend on `arcclaw-app`. 
-- `arcclaw-app` is the "leaf" of the dependency tree for runtime features.
-- If a new module needs logic from `arcclaw-app` (e.g., `LlmModelFactory`), that logic MUST be extracted into an SPI/Gateway in `arcclaw-core`.
-- The new module depends only on the SPI interface; `arcclaw-app` provides the `@ApplicationScoped` implementation.
+- NEW modules MUST NOT depend on `amsha-app`. 
+- `amsha-app` is the "leaf" of the dependency tree for runtime features.
+- If a new module needs logic from `amsha-app` (e.g., `LlmModelFactory`), that logic MUST be extracted into an SPI/Gateway in `amsha-core`.
+- The new module depends only on the SPI interface; `amsha-app` provides the `@ApplicationScoped` implementation.
 
 ### 16.2 Test Configuration Boilerplate
 - EVERY new module MUST include `src/test/resources/application.yaml`.
 - The test configuration MUST provide dummy values for core properties required by scanned beans:
-  - `arcclaw.vault.pepper`: "mock-pepper"
+  - `amsha.vault.pepper`: "mock-pepper"
   - `quarkus.langchain4j.openai.timeout`: "30s"
-  - `arcclaw.data-dir`: "target/data"
+  - `amsha.data-dir`: "target/data"
 - The project uses **JDBI**, not Hibernate. Do NOT add `quarkus-hibernate-orm` dependency.
   Set `quarkus.hibernate-orm.enabled: false` in test config and omit any `hibernate-orm.packages` config.
 
@@ -1388,7 +1388,7 @@ This applies to every `arcclaw-channel-*` module added in P67 and beyond.
 - Without Jandex, internal beans will be **silently ignored** when the module is consumed.
 
 ### 16.4 Session Management (§16.4 INVARIANT)
-- ArcClaw primarily uses RESTEasy Reactive (`quarkus-rest`).
+- Amsha Agent primarily uses RESTEasy Reactive (`quarkus-rest`).
 - Since RESTEasy Reactive does NOT support CDI `@SessionScoped` by default (due to bypassing the Servlet layer), wizard state (like onboarding) MUST use `@ApplicationScoped` if session-isolated state is not strictly required by the multi-user runtime model.
 - If true session isolation is required in a Reactive module, implement a manual session registry keyed by a `UUID` stored in a secure Cookie.
 
@@ -1399,7 +1399,7 @@ This applies to every `arcclaw-channel-*` module added in P67 and beyond.
   - `ChatModel` with `@Identifier("compaction")` (satisfies `CompactionService`)
 
 ### 16.6 JVM Shutdown Hang in Tests (§16.6 INVARIANT)
-- Some Quarkus modules (especially those with `arcclaw-mcp` or `AsyncPersistenceEngine`) may hang for 30+ seconds during JVM shutdown in tests because of non-daemon background threads.
+- Some Quarkus modules (especially those with `amsha-mcp` or `AsyncPersistenceEngine`) may hang for 30+ seconds during JVM shutdown in tests because of non-daemon background threads.
 - DO NOT rely on default Surefire timeouts. EVERY new module MUST configure the `maven-surefire-plugin` with:
   - `<forkCount>1</forkCount>` (Avoid forkCount=0 due to Quarkus classloader conflicts)
   - `<reuseForks>true</reuseForks>`
@@ -1411,7 +1411,7 @@ This applies to every `arcclaw-channel-*` module added in P67 and beyond.
   - `quarkus.shutdown.timeout: 5S`
 
 ### 16.7 App Indexing contract
-- For any new module providing CDI beans consumed by the main application, the module MUST be added to the `quarkus.index-dependency` section of `arcclaw-app/src/main/resources/application.yaml`.
+- For any new module providing CDI beans consumed by the main application, the module MUST be added to the `quarkus.index-dependency` section of `app/src/main/resources/application.yaml`.
 - Failure to do so may trigger `jakarta.enterprise.inject.UnsatisfiedResolutionException` for core beans (e.g. `DevSecretSeeder`) during the application's build validation phase, as the container boundary for bean discovery becomes inconsistent.
 
 ### 16.8 Assertion and Assumption Standards
@@ -1420,7 +1420,7 @@ This applies to every `arcclaw-channel-*` module added in P67 and beyond.
 - This ensures consistency and reduces classpath bloat in the final native binary.
 
 ### 16.9 beans.xml Schema Mapping
-- New modules MUST use the Jakarta EE 10 (version 4.0) schema for `src/main/resources/META-INF/beans.xml` to ensure consistency with `arcclaw-core`.
+- New modules MUST use the Jakarta EE 10 (version 4.0) schema for `src/main/resources/META-INF/beans.xml` to ensure consistency with `amsha-core`.
 - Example header: `<beans xmlns="https://jakarta.ee/xml/ns/jakartaee" version="4.0" bean-discovery-mode="annotated">`
 
 ### 16.10 ToolResponse API
@@ -1431,13 +1431,13 @@ This applies to every `arcclaw-channel-*` module added in P67 and beyond.
 
 ### 16.11 Bootstrap and Setup Integration (§16.11 INVARIANT)
 - New modules with required or optional user settings (API keys, toggles, binary paths) MUST be integrated into the interactive setup wizard in `BinaryBootstrap`.
-- Update `com.arcclaw.app.util.CliUtils.getMissingVarSpecs()` in `arcclaw-app` to include the `VarSpec` for these variables.
+- Update `com.amsha.app.util.CliUtils.getMissingVarSpecs()` in `amsha-app` to include the `VarSpec` for these variables.
 - If the module requires binary dependencies (e.g., Chromium, specialized tools), implement an idempotent `*Installer` utility that:
   - Uses `ProcessBuilder.inheritIO()` to stream progress to the user's terminal.
   - Prefers `mvnw exec:java` if in a source tree, falling back to `java -cp` for binary distributions.
   - Detects existing binaries to avoid redundant downloads.
 - **Interactive UI:** All bootstrap prompts MUST use `readLineWithFallback(System.console(), prompt)` to support environment-redirected terminals (e.g., `mise`, `podman exec`).
-- **Dependency Constraint:** Per §16.1, the new module MUST NOT depend on `arcclaw-app`. The integration logic is owned by `arcclaw-app` in `BinaryBootstrap`.
+- **Dependency Constraint:** Per §16.1, the new module MUST NOT depend on `amsha-app`. The integration logic is owned by `amsha-app` in `BinaryBootstrap`.
 
 
 ## 17. General Java Guards
@@ -1472,7 +1472,7 @@ Run this checklist mentally before every major refactor touching persistence, ap
 - [ ] Is `AgentCronScheduler.pollAndDispatch()` still NOT_SUPPORTED with `reclaimStaleCrons` isolated? (§5.12)
 - [ ] Does Agroal config still have `background-validation=true` and `max-size≥3`? (§5.13)
 - [ ] Is `JdbiRetryWrapper` only called from a non-transactional or JDBI-managed transaction context (§5.14)
-- [ ] After storage extraction: is retry logic encapsulated inside `arcclaw-persistence-sqlite`? No `PersistenceRetryPort` in core. (§5.14.1)
+- [ ] After storage extraction: is retry logic encapsulated inside `amsha-persistence-sqlite`? No `PersistenceRetryPort` in core. (§5.14.1)
 - [ ] After storage extraction: are `NOT_SUPPORTED` annotations still on `CheckpointApprovalService`, NOT moved to adapters? (§5.10.1)
 - [ ] Does any new `CheckpointStatus` terminal value need to be added to `doMarkCheckpointsFailedRequiresNew`? (§5.18)
 - [ ] Does any new checkpoint query include `ORDER BY c.id DESC`? (§5.19)
@@ -1483,14 +1483,14 @@ Run this checklist mentally before every major refactor touching persistence, ap
 ## 20. Routing and Classification Consolidation
 
 ### 20.1 Implementation Proximity
-- Interface implementations for core SPIs (e.g. IntentDetector) SHOULD reside in the same module as their primary injection points (e.g. IntentClassificationHandler in arcclaw-core).
-- **Rationale:** Placing the only implementation of a required core bean in a downstream module (like arcclaw-app) frequently triggers jakarta.enterprise.inject.UnsatisfiedResolutionException during the validation phase of the upstream module's build, especially in native-image compilation.
-- Consolidated IntentDetectorModelProducer, SkillAwareIntentDetector, and their associated LlmModelFactory into arcclaw-core to ensure reliable CDI resolution and build stability.
+- Interface implementations for core SPIs (e.g. IntentDetector) SHOULD reside in the same module as their primary injection points (e.g. IntentClassificationHandler in amsha-core).
+- **Rationale:** Placing the only implementation of a required core bean in a downstream module (like amsha-app) frequently triggers jakarta.enterprise.inject.UnsatisfiedResolutionException during the validation phase of the upstream module's build, especially in native-image compilation.
+- Consolidated IntentDetectorModelProducer, SkillAwareIntentDetector, and their associated LlmModelFactory into amsha-core to ensure reliable CDI resolution and build stability.
 
 ### 20.2 LLM Provider Dependencies
-- When moving routing logic into arcclaw-core, all required LLM provider extensions (e.g. quarkus-langchain4j-anthropic) MUST also be added to arcclaw-core.
+- When moving routing logic into amsha-core, all required LLM provider extensions (e.g. quarkus-langchain4j-anthropic) MUST also be added to amsha-core.
 - Failure to do so leads to ClassNotFoundException or unresolved imports in the routing factories (e.g. ClaudeCodeProviderFactory).
-- T1-2 boundary is an abstraction seam within `arcclaw-core`, not a Maven module split. `LangChain4jLlmAdapter` MUST remain in `arcclaw-core` per §20.1.
+- T1-2 boundary is an abstraction seam within `amsha-core`, not a Maven module split. `LangChain4jLlmAdapter` MUST remain in `amsha-core` per §20.1.
 
 ---
 
@@ -1502,7 +1502,7 @@ Run this checklist mentally before every major refactor touching persistence, ap
 - MUST use **TypeScript** in `strict` mode for all frontend code.
 
 ### 21.2 Component Communication & State
-- MUST use **`@lit/context`** for sharing application-wide state (e.g., `arcclawSessionId`, user profile) between nested components.
+- MUST use **`@lit/context`** for sharing application-wide state (e.g., `amshaSessionId`, user profile) between nested components.
 - Direct `window` object state-sharing or global mutable stores SHOULD be avoided in favor of the context provider pattern.
 
 ### 21.3 Security & Sanitization
@@ -1519,8 +1519,8 @@ Run this checklist mentally before every major refactor touching persistence, ap
 - Aim for a premium, responsive design with smooth transitions and micro-animations.
 
 ### 21.6 Packaging & Deployment
-- The UI build process MUST output to `arcclaw-ui/dist/`.
-- The `mise build:ui-copy` task is the authoritative mechanism for moving the bundled UI into the `arcclaw-app` `META-INF/resources` directory for production packaging.
+- The UI build process MUST output to `ui/dist/`.
+- The `mise build:ui-copy` task is the authoritative mechanism for moving the bundled UI into the `amsha-app` `META-INF/resources` directory for production packaging.
 - Do NOT commit the `dist/` folder to version control.
 
 ### 21.7 Accessibility (a11y)
@@ -1531,8 +1531,8 @@ Run this checklist mentally before every major refactor touching persistence, ap
 - Components establishing long-lived connections (WebSockets, SSE) MUST explicitly close/clean them up in `disconnectedCallback()` to prevent memory leaks and "ghost" sessions.
 
 ### 21.9 UI Secret Handling
-- Sensitive credentials (API keys) MUST NOT be passed in URL query parameters where HTTP headers are supported (e.g. REST, SSE); prefer `X-ARCCLAW-API-KEY` or secure Cookies.
-- **Architectural Trade-off**: The use of **`localStorage`** for API keys is explicitly allowed to support persistent developer sessions across browser restarts/tab closures. This is an intentional choice for productivity given ArcClaw's primary usage as a local developer tool.
+- Sensitive credentials (API keys) MUST NOT be passed in URL query parameters where HTTP headers are supported (e.g. REST, SSE); prefer `X-AMSHA-API-KEY` or secure Cookies.
+- **Architectural Trade-off**: The use of **`localStorage`** for API keys is explicitly allowed to support persistent developer sessions across browser restarts/tab closures. This is an intentional choice for productivity given Amsha Agent's primary usage as a local developer tool.
 - Non-secret transient data SHOULD prefer `sessionStorage`.
 
 ### 21.10 MCP Tenant Isolation

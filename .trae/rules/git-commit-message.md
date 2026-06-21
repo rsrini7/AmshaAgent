@@ -27,7 +27,7 @@ Use a lowercase keyword to define the exact nature of your commit. Avoid mixing 
 | **fix** | Bug fixes, transaction deadlocks, or logic errors. | `fix(core): resolve SQLITE_BUSY in resume path` |
 | **refactor** | Code restructuring (e.g. P95 storage extraction). | `refactor(persistence): extract SQLite port implementation` |
 | **perf** | LLM prompt optimization or DB query tuning. | `perf(rag): optimize vector search recall` |
-| **ui** | Frontend changes in `arcclaw-ui`. | `ui(chat): add websocket reconnect indicator` |
+| **ui** | Frontend changes in `ui`. | `ui(chat): add websocket reconnect indicator` |
 | **test** | Adding or updating unit/integration tests. | `test(hitl): add race condition test for approvals` |
 | **docs** | Updates to READMEs, ARCHITECTURE.md, or Tier docs. | `docs(Tire5): mark circuit breaker as completed` |
 | **chore** | Dependencies, Maven plugins, or minor config tweaks. | `chore(deps): bump langchain4j to 0.31.0` |

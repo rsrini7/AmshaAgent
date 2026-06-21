@@ -1,0 +1,135 @@
+amsha:
+  data-dir: "./target"
+  workspace:
+    root-dir: "./target/workspaces"
+  rag:
+    vec-extension-path: "./target/lib/vec0"
+  infinite-loop:
+    compaction:
+      providers: "groq"
+    classifier:
+      providers: "groq"
+    embedding:
+      providers: "ollama"
+  compaction:
+    groq:
+      api-key: "test-compaction-key"
+      model: "llama-3.1-8b-instant"
+      base-url: "https://api.groq.com/openai/v1"
+  classifier:
+    groq:
+      api-key: "test-classifier-key"
+      model: "llama-3.1-8b-instant"
+      base-url: "https://api.groq.com/openai/v1"
+  embedding:
+    ollama:
+      model: "nomic-embed-text:v1.5"
+      base-url: "http://localhost:11434"
+  skills:
+    hot-reload: false
+  auto-seed-secrets: false
+  api:
+    keys:
+      internal: "key-internal-changeme"
+      ci: "key-ci-changeme"
+  audit:
+    hmac-key: "${AMSHA_AUDIT_HMAC_KEY:dev-audit-hmac-key-min-32-bytes-00000}"
+  channel:
+    telegram:
+      enabled: false
+      bot-token: "mock-telegram-token"
+      allowed-user-ids: "12345"
+  tools:
+    playwright:
+      enabled: false
+  vault:
+    pepper: "test-pepper"
+    master-key: "test-master-key-32-chars-padded!"
+  cron:
+    max-lookback-window: PT999H
+      
+quarkus:
+  arc:
+    # Exclude channel impl beans from CDI during tests - their dependencies
+    # (ChannelServices, ApprovalGateway) live in amsha-core which is a Quarkus
+    # extension, and extension runtime beans aren't auto-discovered by Arc.
+    # These channel modules have their own test suites.
+    exclude-types:
+      - com.amsha.channel.telegram.TelegramAgentHandler
+      - com.amsha.channel.telegram.TelegramCallbackHandler
+      - com.amsha.channel.web.WebChatEndpoint
+  mcp:
+    server:
+      stdio:
+        enabled: false
+  opentelemetry:
+    enabled: false
+  smallrye-fault-tolerance:
+    enabled: false
+  index-dependency:
+    amsha-core:
+      group-id: com.amsha
+      artifact-id: amsha-core
+    amsha-channel-api:
+      group-id: com.amsha
+      artifact-id: amsha-channel-api
+  http:
+    host: "localhost"
+    port: 8081
+  management:
+    host: "localhost"
+    port: 9000
+    enabled: true
+  otel:
+    sdk:
+      disabled: true
+  native:
+    additional-build-args: --enable-native-access=ALL-UNNAMED
+  datasource:
+    jdbc:
+      url: "jdbc:sqlite:./target/app-test.db?busy_timeout=20000&journal_mode=WAL&transaction_mode=IMMEDIATE"
+      additional-jdbc-url-properties: "journal_mode=WAL&synchronous=NORMAL&busy_timeout=20000&transaction_mode=IMMEDIATE"
+      min-size: 1
+      max-size: 4
+      initial-size: 1
+      acquisition-timeout: 10s
+  scheduler:
+    enabled: false
+
+  langchain4j:
+    openai:
+      api-key: "demo-key"
+      model-name: "gpt-4o"
+    ollama:
+      base-url: "http://localhost:11434"
+      model-name: "mistral-small:latest"
+
+  log:
+    level: INFO
+    category:
+      "dev.langchain4j.model.chat.listener.ListenersUtil":
+        level: ERROR
+      "com.amsha.core.agent":
+        level: "OFF"
+      "com.amsha.core.tools":
+        level: "OFF"
+      "com.amsha.core.governance":
+        level: "OFF"
+      "com.amsha.core.scope":
+        level: "OFF"
+      "com.amsha.core.agent.loop.AgentStateMachineRunner":
+        level: "OFF"
+      "com.amsha.core.agent.loop.ToolInvoker":
+        level: "OFF"
+      "com.amsha.core.pipeline.MessagePipeline":
+        level: "OFF"
+      "com.amsha.app.scheduler.CronResultHandler":
+        level: "OFF"
+      "org.jboss.threads.errors":
+        level: "OFF"
+      "org.apache.camel.component.telegram.TelegramConsumer":
+        level: "OFF"
+      "com.amsha.app.channel.telegram.TelegramAgentHandler":
+        level: "OFF"
+      "com.amsha.app.session.SessionRegistry":
+        level: "WARN"
