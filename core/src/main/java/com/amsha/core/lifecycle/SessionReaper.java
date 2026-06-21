@@ -24,12 +24,17 @@ import com.amsha.core.audit.SecurityEventType;
 import com.amsha.core.audit.SessionAuditSequencer;
 import com.amsha.core.compaction.CompactionInFlightFlag;
 import com.amsha.core.domain.model.AgentCheckpoint;
+import com.amsha.core.domain.model.AgentCronRecord;
 import com.amsha.core.state.CheckpointStatus;
 import com.amsha.core.state.StatefulAgentStore;
 import com.amsha.core.state.ToolDecision;
 import com.amsha.core.util.BatchDecisionUtil;
+import com.amsha.core.util.CronScheduleUtil;
 import com.amsha.persistence.api.CheckpointDto;
 import com.amsha.persistence.api.CheckpointStorePort;
+import com.amsha.persistence.api.CronRunDto;
+import com.amsha.persistence.api.CronRunStorePort;
+import com.amsha.persistence.api.CronStorePort;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
@@ -80,6 +85,12 @@ public class SessionReaper {
 
     @Inject
     CheckpointStorePort checkpointStore;
+
+    @Inject
+    CronStorePort cronStore;
+
+    @Inject
+    CronRunStorePort cronRunStore;
 
     @Inject
     CompactionInFlightFlag compactionInFlight;
@@ -135,8 +146,10 @@ public class SessionReaper {
                 checkpointStore.recoverInProgressZombies(inProgressCutoff, "JVM crash recovery - orphaned at startup");
         if (!failed.isEmpty()) {
             log.warnf("Zombie recovery: found and failed %d orphaned IN_PROGRESS checkpoint(s).", failed.size());
-            failed.forEach(dto ->
-                    log.infof("  Marked FAILED: id=%d session=%s role=%s", dto.id(), dto.sessionId(), dto.agentRole()));
+            failed.forEach(dto -> {
+                log.infof("  Marked FAILED: id=%d session=%s role=%s", dto.id(), dto.sessionId(), dto.agentRole());
+                cleanupCronOnFailure(dto.sessionId(), "JVM crash recovery - orphaned at startup");
+            });
         } else {
             log.info("Zombie recovery: no orphaned IN_PROGRESS checkpoints found.");
         }
@@ -170,6 +183,7 @@ public class SessionReaper {
                         ApprovalDecision.REJECT,
                         ApprovalOutcome.EXPIRED));
                 agentSseService.complete(dto.sessionId());
+                cleanupCronOnFailure(dto.sessionId(), "JVM crash recovery - orphaned stale approval");
             }
         } else {
             log.info("Zombie recovery: no orphaned AWAITING_APPROVAL checkpoints found.");
@@ -307,6 +321,61 @@ public class SessionReaper {
         workspaceManager.terminateSession(cp.getSessionId());
         heartbeatTracker.removeHeartbeat(cp.getSessionId());
         auditSequencer.releaseStaleSession(cp.getSessionId());
+
+        cleanupCronOnFailure(cp.getSessionId(), "Approval timed out after " + hitlTimeoutHours + " hours.");
+    }
+
+    private void cleanupCronOnFailure(String sessionId, String reason) {
+        if (sessionId != null && sessionId.startsWith("cron-")) {
+            String sub = sessionId.substring("cron-".length());
+            if (sub.length() >= 36) {
+                String jobId = sub.substring(0, 36);
+                String executionId = sub.substring(37);
+                try {
+                    cronRunStore.findById(executionId).ifPresent(existing -> {
+                        CronRunDto updated = new CronRunDto(
+                                existing.id(),
+                                existing.cronId(),
+                                existing.sessionId(),
+                                "FAILED",
+                                existing.startedAt(),
+                                Instant.now(),
+                                reason,
+                                existing.iterationsUsed(),
+                                existing.inputTokens(),
+                                existing.outputTokens(),
+                                existing.usdCost(),
+                                existing.createdAt());
+                        cronRunStore.save(updated);
+                    });
+                } catch (Exception e) {
+                    log.warnf(
+                            "Failed to update cron run status on failure for run %s: %s",
+                            executionId, LogUtil.rootMessage(e));
+                }
+
+                try {
+                    var dto = cronStore.findById(jobId).orElse(null);
+                    if (dto != null) {
+                        var cron = AgentCronRecord.fromDto(dto);
+                        if (!cron.isRunOnce()
+                                && cron.getCronExpression() != null
+                                && !cron.getCronExpression().isBlank()) {
+                            Instant next = CronScheduleUtil.computeNext(cron.getCronExpression(), cron.getTimezone());
+                            cronStore.markFired(jobId, Instant.now(), next);
+                            log.infof(
+                                    "CRON-REAP-RETRY recurring cronId=%s failed/timed out (rescheduled for %s)",
+                                    jobId, next);
+                        } else {
+                            cronStore.markFailed(jobId, reason);
+                            log.warnf("CRON-REAP-FAILED one-shot cronId=%s failed/timed out", jobId);
+                        }
+                    }
+                } catch (Exception e) {
+                    log.warnf("Failed to update cron status on failure for job %s: %s", jobId, LogUtil.rootMessage(e));
+                }
+            }
+        }
     }
 
     // CHAT HISTORY RETENTION SWEEP - purges chat_memory rows for old sessions

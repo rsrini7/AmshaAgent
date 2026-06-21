@@ -64,7 +64,24 @@ public final class ChatModelFactory {
      */
     public static void applyJsonResponseFormat(
             OpenAiChatModel.OpenAiChatModelBuilder builder, StructuredOutputMode mode, boolean toolless) {
+        applyJsonResponseFormat(builder, mode, toolless, null);
+    }
+
+    /**
+     * Applies {@link ResponseFormat#JSON} when the model supports native structured output
+     * and no tools are needed (toolless mode). Used by intent-classifier and compaction models.
+     * Bypasses JSON mode if the base URL routes through Headroom proxy.
+     */
+    public static void applyJsonResponseFormat(
+            OpenAiChatModel.OpenAiChatModelBuilder builder,
+            StructuredOutputMode mode,
+            boolean toolless,
+            String baseUrl) {
         if (mode == StructuredOutputMode.NATIVE && toolless) {
+            if (baseUrl != null && (baseUrl.contains(":8789") || baseUrl.contains("headroom"))) {
+                LOG.info("Bypassing native JSON response format due to Headroom proxy routing: " + baseUrl);
+                return;
+            }
             builder.responseFormat(ResponseFormat.JSON);
         }
     }

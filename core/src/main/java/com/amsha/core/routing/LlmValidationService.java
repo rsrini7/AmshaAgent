@@ -8,6 +8,7 @@ import jakarta.inject.Inject;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Locale;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ExecutionException;
@@ -31,8 +32,8 @@ public class LlmValidationService implements LlmValidationGateway {
     @Inject
     LlmModelFactory modelFactory;
 
-    @ConfigProperty(name = "AMSHA_GENERIC_OPENAI_BASE_URL", defaultValue = "")
-    String genericOpenAiBaseUrl;
+    @ConfigProperty(name = "AMSHA_GENERIC_OPENAI_BASE_URL")
+    Optional<String> genericOpenAiBaseUrl;
 
     @Override
     public boolean validate(String provider, String model, String apiKey) throws LlmValidationException {
@@ -51,7 +52,7 @@ public class LlmValidationService implements LlmValidationGateway {
                         case "nvidia" -> "https://integrate.api.nvidia.com/v1";
                         case "omlx" -> "http://127.0.0.1:8000/v1";
                         case "llamacpp" -> "http://127.0.0.1:9000/v1";
-                        case "generic-openai" -> genericOpenAiBaseUrl;
+                        case "generic-openai" -> genericOpenAiBaseUrl.orElse("");
                         default -> "";
                     };
 

@@ -33,7 +33,8 @@ public class GroqLlmProviderFactory implements RoutingChatModelProvider {
                 false,
                 false);
 
-        ChatModelFactory.applyJsonResponseFormat(builder, config.structuredOutputMode(), config.toolless());
+        ChatModelFactory.applyJsonResponseFormat(
+                builder, config.structuredOutputMode(), config.toolless(), config.baseUrl());
 
         return builder.build();
     }

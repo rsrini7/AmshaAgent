@@ -69,6 +69,9 @@ public class IntentDetectorService implements IntentDetector {
     @ConfigProperty(name = "amsha.routing.intent-classifier.sla-timeout-ms", defaultValue = "5000")
     long slaTimeoutMs;
 
+    @ConfigProperty(name = "amsha.routing.intent-classifier.ollama-fallback.enabled", defaultValue = "false")
+    boolean ollamaFallbackEnabled;
+
     @Inject
     ManagedExecutor managedExecutor;
 
@@ -202,7 +205,7 @@ public class IntentDetectorService implements IntentDetector {
     }
 
     private String tryFallbackOrHeuristic(String prompt, String userMessage) {
-        if (fallbackModel != null && fallbackModel.isResolvable()) {
+        if (ollamaFallbackEnabled && fallbackModel != null && fallbackModel.isResolvable()) {
             try {
                 return CompletableFuture.supplyAsync(() -> fallbackModel.get().chat(prompt), managedExecutor)
                         .get(1500, TimeUnit.MILLISECONDS);

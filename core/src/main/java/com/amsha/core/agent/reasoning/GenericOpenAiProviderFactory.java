@@ -28,11 +28,11 @@ public class GenericOpenAiProviderFactory implements AgentChatModelProvider {
     @ConfigProperty(name = "AMSHA_GENERIC_OPENAI_API_KEY")
     Optional<String> apiKey;
 
-    @ConfigProperty(name = "AMSHA_GENERIC_OPENAI_BASE_URL", defaultValue = "")
-    String baseUrl;
+    @ConfigProperty(name = "AMSHA_GENERIC_OPENAI_BASE_URL")
+    Optional<String> baseUrl;
 
-    @ConfigProperty(name = "AMSHA_GENERIC_OPENAI_MODEL", defaultValue = "")
-    String modelName;
+    @ConfigProperty(name = "AMSHA_GENERIC_OPENAI_MODEL")
+    Optional<String> modelName;
 
     @ConfigProperty(name = "AMSHA_GENERIC_OPENAI_EXTRA_BODY")
     Optional<String> extraBody;
@@ -49,25 +49,27 @@ public class GenericOpenAiProviderFactory implements AgentChatModelProvider {
 
     @Override
     public String baseUrl() {
-        return baseUrl;
+        return baseUrl.orElse("");
     }
 
     @Override
     public ChatModel create() {
-        if (baseUrl.isBlank()) {
+        String resolvedBaseUrl = baseUrl.orElse("");
+        if (resolvedBaseUrl.isBlank()) {
             throw new IllegalStateException("generic-openai requires AMSHA_GENERIC_OPENAI_BASE_URL");
         }
         String key = apiKey.orElseThrow(
                 () -> new IllegalStateException("generic-openai requires AMSHA_GENERIC_OPENAI_API_KEY"));
-        if (modelName.isBlank()) {
+        String resolvedModel = modelName.orElse("");
+        if (resolvedModel.isBlank()) {
             throw new IllegalStateException("generic-openai requires AMSHA_GENERIC_OPENAI_MODEL");
         }
         List<MultiModelChatModel.ModelEntry> entries = ChatModelFactory.buildMultiModelEntries(
                 key,
-                modelName,
+                resolvedModel,
                 "generic-openai",
                 (k, m) -> ChatModelFactory.createOpenAi(
-                        baseUrl,
+                        resolvedBaseUrl,
                         k,
                         m,
                         agentConfig.maxTokens(),

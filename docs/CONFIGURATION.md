@@ -79,6 +79,7 @@ when all slots are exhausted.
 | `AMSHA_CLASSIFIER_OLLAMA_MODEL` | `mistral-small:latest` | Ollama model for the classifier slot |
 | `AMSHA_CLASSIFIER_OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama base URL for classifier |
 | `AMSHA_INTENT_CLASSIFIER_STRUCTURED_OUTPUT_MODE` | `NATIVE` | Classifier structured output mode: `NATIVE`, `STRICT`, `LENIENT`, `PROMPT_DIRECTIVE` |
+| `AMSHA_INTENT_CLASSIFIER_OLLAMA_FALLBACK_ENABLED` | `false` | Enable Ollama fallback for intent classification (avoids latency when Ollama is offline) |
 
 For non-Groq providers, mirror the pattern with `AMSHA_CLASSIFIER_{PROVIDER}_{KEY}`.
 

@@ -379,6 +379,8 @@ amsha:
     intent-classifier:
       ollama-model: ${AMSHA_INTENT_CLASSIFIER_OLLAMA_MODEL:mistral-small:latest}
       structured-output-mode: ${AMSHA_INTENT_CLASSIFIER_STRUCTURED_OUTPUT_MODE:NATIVE}
+      ollama-fallback:
+        enabled: ${AMSHA_INTENT_CLASSIFIER_OLLAMA_FALLBACK_ENABLED:false}
       sla-warn-ms: 2000
   memory:
     compaction:
