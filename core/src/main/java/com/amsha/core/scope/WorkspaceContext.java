@@ -47,6 +47,13 @@ public final class WorkspaceContext {
         return current <= DEFAULT_GLOBAL_MAX_ITERATIONS;
     }
 
+    /** Resets the global iteration counter to 0 (used by /reset to un-brick sessions). */
+    public static void resetGlobalIterations() {
+        if (GLOBAL_ITERATION_COUNT.isBound()) {
+            GLOBAL_ITERATION_COUNT.get().set(0);
+        }
+    }
+
     /** Returns the current global iteration count, or 0 if not tracking. */
     public static int globalIterationCount() {
         return GLOBAL_ITERATION_COUNT.isBound() ? GLOBAL_ITERATION_COUNT.get().get() : 0;

@@ -12,6 +12,7 @@ import com.amsha.core.agent.role.AgentRoleEnum;
 import com.amsha.core.lifecycle.WorkspaceManager;
 import com.amsha.core.message.UserMessages;
 import com.amsha.core.pipeline.MessageContext;
+import com.amsha.core.scope.WorkspaceContext;
 import com.amsha.core.state.CheckpointStatus;
 import com.amsha.core.state.StatefulAgentStore;
 import com.amsha.persistence.api.CompactionStorePort;
@@ -67,6 +68,9 @@ public class ResetReflex implements AgentReflex {
         // 0. Clear halted flag — allows fresh start after /halt
         WorkspaceManager.clearHalted(sessionId);
 
+        // 0b. Reset global iteration budget — un-brick sessions that exceeded budget
+        WorkspaceContext.resetGlobalIterations();
+
         // 1. Soft workspace reset - clears memory, workspace dir, CDI scope
         //    Does NOT remove heartbeat. Does NOT clear governance budget.
         workspaceManager.resetSessionState(sessionId);
@@ -99,7 +103,7 @@ public class ResetReflex implements AgentReflex {
         String logStatus = isHardReset ? "chat history cleared" : "Chat memory retained";
         log.infof(
                 "[ResetReflex] Session %s reset - workspace, checkpoints, "
-                        + "compaction, %d cron job(s) cleared. %s. Heartbeat and budget retained.",
+                        + "compaction, %d cron job(s) cleared. %s. Heartbeat retained, global budget reset.",
                 sessionId, deletedCrons, logStatus);
 
         String replyMessage = isHardReset
