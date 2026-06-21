@@ -2,7 +2,7 @@ global:
   scrape_interval: 5s # Fast scrape for development feedback
 
 scrape_configs:
-  - job_name: 'arcclaw'
+  - job_name: 'amsha'
     metrics_path: '/q/metrics'
     static_configs:
       # host.docker.internal allows the container to see Quarkus running on the host OS

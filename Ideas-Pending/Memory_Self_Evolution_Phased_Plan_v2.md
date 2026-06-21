@@ -28,18 +28,18 @@ These corrections prevent race conditions, search pollution, prompt bloat, datab
 | ISP | God-port split into `CoreMemoryStorePort`, `RecallMemoryStorePort`, `ArchivalMemoryStorePort` | Phase 0 code review | Backends implement only tiers they support; no `UnsupportedOperationException` stubs |
 | QO | `RecallSearchQuery` and `ArchivalSearchQuery` records introduced | Phase 0 code review | Eliminates 7-parameter method anti-pattern; prevents boolean blindness |
 | CDI | `TieredMemoryBackendSelector` replaced by `TieredMemoryProducer` with `@Produces` | Phase 0 code review | Zero CDI lookup overhead on hot path; resolves backends once at startup |
-| RFL | `TieredMemoryReflectionConfig` placed in `arcclaw-persistence-api` | Phase 0 code review | GraalVM registration lives where DTOs are defined; avoids cross-module compilation issues |
+| RFL | `TieredMemoryReflectionConfig` placed in `amsha-persistence-api` | Phase 0 code review | GraalVM registration lives where DTOs are defined; avoids cross-module compilation issues |
 
 ---
 
 ## Executive Summary
 
-This document replaces the original 5-phase plan with a **13-phase (0-12) incremental implementation** based on detailed codebase review. The critical insight: **ArcClaw already has the right seams** (`CompactionService`, `CompactionEventBridge`, `PersistentChatMemoryStore`, `ChatHistoryAssembler`, `ReasoningMessageAssembler`, `MemorySearchTool`, `MemoryRetrievalPort`) — we refactor rather than rewrite.
+This document replaces the original 5-phase plan with a **13-phase (0-12) incremental implementation** based on detailed codebase review. The critical insight: **Amsha Agent already has the right seams** (`CompactionService`, `CompactionEventBridge`, `PersistentChatMemoryStore`, `ChatHistoryAssembler`, `ReasoningMessageAssembler`, `MemorySearchTool`, `MemoryRetrievalPort`) — we refactor rather than rewrite.
 
 **Phase 0 Status:** ✅ COMPLETE (24 files, 3 ISP-compliant ports, CDI `@Produces`, GraalVM reflection, 22 config keys all defaulting to `false`). See §3 for full implementation details.
 
 **Core Principles:**
-1. **No migration required** — ArcClaw is in development; storage can be dropped/recreated
+1. **No migration required** — Amsha Agent is in development; storage can be dropped/recreated
 2. **Workflow preservation** — existing agent loop, compaction, and tool execution remain functional throughout
 3. **Read-before-write** — stabilize retrieval paths before exposing mutation tools
 4. **Persistence-before-search** — stop data loss first (Phase 2), make searchable later (Phase 3)
@@ -188,24 +188,24 @@ The plan originally specified a single `TieredMemoryStorePort` (107-line god-int
 
 | Component | Module | File |
 |---|---|---|
-| `CoreMemoryBlockDto` | `arcclaw-persistence-api` | record |
-| `RecallMessageDto` | `arcclaw-persistence-api` | record (documented fields: `contentHash`, `messageType`, `metadataJson`) |
-| `ArchivalChunkDto` | `arcclaw-persistence-api` | record (documented fields: `chunkType`, `tags`, `confidence`, `accessCount`) |
-| `TieredMemoryHealthDto` | `arcclaw-persistence-api` | record |
-| `RecallSearchQuery` | `arcclaw-persistence-api` | record |
-| `ArchivalSearchQuery` | `arcclaw-persistence-api` | record |
-| `VersionConflictException` | `arcclaw-persistence-api` | CAS version-conflict with `blockKey`, `expectedVersion`, `actualVersion` |
-| `TieredMemoryReflectionConfig` | `arcclaw-persistence-api` | GraalVM `@RegisterForReflection` for 10 types |
-| `TieredBackend` | `arcclaw-core` | CDI `@Qualifier` annotation |
-| `TieredBackendLiteral` | `arcclaw-core` | `AnnotationLiteral` for programmatic selection |
-| `TieredMemoryBackend` | `arcclaw-core` | Typed enum (`SQLITE`, `POSTGRES`, `FILESYSTEM`) with `fromId()` |
-| `TieredMemoryProducer` | `arcclaw-core` | `@Produces @ApplicationScoped` — resolves each port once at startup |
-| `NoOpCoreMemoryStore` | `arcclaw-core` | Safe default when tier disabled |
-| `NoOpRecallMemoryStore` | `arcclaw-core` | Safe default when tier disabled |
-| `NoOpArchivalMemoryStore` | `arcclaw-core` | Safe default when tier disabled |
-| `TieredMemoryConfig` | `arcclaw-core` | `@ConfigMapping(prefix = "arcclaw.memory.tiered")` |
-| `MemoryPromptBudgetConfig` | `arcclaw-core` | `@ConfigMapping(prefix = "arcclaw.memory.prompt-budget")` |
-| `SelfEvolveConfig` | `arcclaw-core` | `@ConfigMapping(prefix = "arcclaw.self-evolve")` |
+| `CoreMemoryBlockDto` | `amsha-persistence-api` | record |
+| `RecallMessageDto` | `amsha-persistence-api` | record (documented fields: `contentHash`, `messageType`, `metadataJson`) |
+| `ArchivalChunkDto` | `amsha-persistence-api` | record (documented fields: `chunkType`, `tags`, `confidence`, `accessCount`) |
+| `TieredMemoryHealthDto` | `amsha-persistence-api` | record |
+| `RecallSearchQuery` | `amsha-persistence-api` | record |
+| `ArchivalSearchQuery` | `amsha-persistence-api` | record |
+| `VersionConflictException` | `amsha-persistence-api` | CAS version-conflict with `blockKey`, `expectedVersion`, `actualVersion` |
+| `TieredMemoryReflectionConfig` | `amsha-persistence-api` | GraalVM `@RegisterForReflection` for 10 types |
+| `TieredBackend` | `amsha-core` | CDI `@Qualifier` annotation |
+| `TieredBackendLiteral` | `amsha-core` | `AnnotationLiteral` for programmatic selection |
+| `TieredMemoryBackend` | `amsha-core` | Typed enum (`SQLITE`, `POSTGRES`, `FILESYSTEM`) with `fromId()` |
+| `TieredMemoryProducer` | `amsha-core` | `@Produces @ApplicationScoped` — resolves each port once at startup |
+| `NoOpCoreMemoryStore` | `amsha-core` | Safe default when tier disabled |
+| `NoOpRecallMemoryStore` | `amsha-core` | Safe default when tier disabled |
+| `NoOpArchivalMemoryStore` | `amsha-core` | Safe default when tier disabled |
+| `TieredMemoryConfig` | `amsha-core` | `@ConfigMapping(prefix = "amsha.memory.tiered")` |
+| `MemoryPromptBudgetConfig` | `amsha-core` | `@ConfigMapping(prefix = "amsha.memory.prompt-budget")` |
+| `SelfEvolveConfig` | `amsha-core` | `@ConfigMapping(prefix = "amsha.self-evolve")` |
 
 ### 3.4 CDI Producer Pattern (Zero Hot-Path Overhead)
 
@@ -220,45 +220,45 @@ Services inject ports directly — resolved once at startup, no lookup on the ho
 ### 3.5 Config Keys (Actual — matches Phase 0 implementation)
 
 ```yaml
-arcclaw:
+amsha:
   memory:
     tiered:
-      enabled: ${ARCCLAW_MEMORY_TIERED_ENABLED:false}
-      backend: ${ARCCLAW_MEMORY_TIERED_BACKEND:sqlite}
+      enabled: ${AMSHA_MEMORY_TIERED_ENABLED:false}
+      backend: ${AMSHA_MEMORY_TIERED_BACKEND:sqlite}
       core-memory:
-        enabled: ${ARCCLAW_MEMORY_CORE_ENABLED:false}
-        max-blocks-per-user: ${ARCCLAW_MEMORY_CORE_MAX_BLOCKS_PER_USER:20}
-        max-chars-per-block: ${ARCCLAW_MEMORY_CORE_MAX_CHARS_PER_BLOCK:2000}
+        enabled: ${AMSHA_MEMORY_CORE_ENABLED:false}
+        max-blocks-per-user: ${AMSHA_MEMORY_CORE_MAX_BLOCKS_PER_USER:20}
+        max-chars-per-block: ${AMSHA_MEMORY_CORE_MAX_CHARS_PER_BLOCK:2000}
       recall:
-        enabled: ${ARCCLAW_MEMORY_RECALL_ENABLED:false}
-        retention-days: ${ARCCLAW_MEMORY_RECALL_RETENTION_DAYS:90}
-        max-search-results: ${ARCCLAW_MEMORY_RECALL_MAX_SEARCH_RESULTS:10}
-        cross-session-search: ${ARCCLAW_MEMORY_RECALL_CROSS_SESSION:true}
+        enabled: ${AMSHA_MEMORY_RECALL_ENABLED:false}
+        retention-days: ${AMSHA_MEMORY_RECALL_RETENTION_DAYS:90}
+        max-search-results: ${AMSHA_MEMORY_RECALL_MAX_SEARCH_RESULTS:10}
+        cross-session-search: ${AMSHA_MEMORY_RECALL_CROSS_SESSION:true}
       archival:
-        enabled: ${ARCCLAW_MEMORY_ARCHIVAL_ENABLED:false}
-        max-search-results: ${ARCCLAW_MEMORY_ARCHIVAL_MAX_SEARCH_RESULTS:8}
-        hybrid-search-k: ${ARCCLAW_MEMORY_ARCHIVAL_HYBRID_K:60}
+        enabled: ${AMSHA_MEMORY_ARCHIVAL_ENABLED:false}
+        max-search-results: ${AMSHA_MEMORY_ARCHIVAL_MAX_SEARCH_RESULTS:8}
+        hybrid-search-k: ${AMSHA_MEMORY_ARCHIVAL_HYBRID_K:60}
         eviction:
-          low-confidence-days: ${ARCCLAW_MEMORY_ARCHIVAL_LOW_CONFIDENCE_DAYS:60}
-          low-confidence-threshold: ${ARCCLAW_MEMORY_ARCHIVAL_LOW_CONFIDENCE_THRESHOLD:0.5}
-          lru-min-access-count: ${ARCCLAW_MEMORY_ARCHIVAL_LRU_MIN_ACCESS_COUNT:1}
-          lru-max-age-days: ${ARCCLAW_MEMORY_ARCHIVAL_LRU_MAX_AGE_DAYS:90}
+          low-confidence-days: ${AMSHA_MEMORY_ARCHIVAL_LOW_CONFIDENCE_DAYS:60}
+          low-confidence-threshold: ${AMSHA_MEMORY_ARCHIVAL_LOW_CONFIDENCE_THRESHOLD:0.5}
+          lru-min-access-count: ${AMSHA_MEMORY_ARCHIVAL_LRU_MIN_ACCESS_COUNT:1}
+          lru-max-age-days: ${AMSHA_MEMORY_ARCHIVAL_LRU_MAX_AGE_DAYS:90}
     prompt-budget:
-      max-core-memory-tokens: ${ARCCLAW_MEMORY_PROMPT_BUDGET_CORE_TOKENS:800}
-      max-compaction-summary-tokens: ${ARCCLAW_MEMORY_PROMPT_BUDGET_COMPACTION_TOKENS:1200}
-      max-prefetched-archival-results: ${ARCCLAW_MEMORY_PROMPT_BUDGET_ARCHIVAL_RESULTS:3}
-      max-directives: ${ARCCLAW_MEMORY_PROMPT_BUDGET_DIRECTIVES:5}
-      total-non-conversation-tokens: ${ARCCLAW_MEMORY_PROMPT_BUDGET_TOTAL_TOKENS:2500}
+      max-core-memory-tokens: ${AMSHA_MEMORY_PROMPT_BUDGET_CORE_TOKENS:800}
+      max-compaction-summary-tokens: ${AMSHA_MEMORY_PROMPT_BUDGET_COMPACTION_TOKENS:1200}
+      max-prefetched-archival-results: ${AMSHA_MEMORY_PROMPT_BUDGET_ARCHIVAL_RESULTS:3}
+      max-directives: ${AMSHA_MEMORY_PROMPT_BUDGET_DIRECTIVES:5}
+      total-non-conversation-tokens: ${AMSHA_MEMORY_PROMPT_BUDGET_TOTAL_TOKENS:2500}
   self-evolve:
-    enabled: ${ARCCLAW_SELF_EVOLVE_ENABLED:false}
-    backend: ${ARCCLAW_SELF_EVOLVE_BACKEND:sqlite}
-    buffer-size: ${ARCCLAW_SELF_EVOLVE_BUFFER_SIZE:50}
-    default-search-limit: ${ARCCLAW_SELF_EVOLVE_DEFAULT_SEARCH_LIMIT:8}
-    directives-enabled: ${ARCCLAW_SELF_EVOLVE_DIRECTIVES_ENABLED:true}
-    synthesis-trigger: "${ARCCLAW_SELF_EVOLVE_SYNTHESIS_TRIGGER:manual}"
+    enabled: ${AMSHA_SELF_EVOLVE_ENABLED:false}
+    backend: ${AMSHA_SELF_EVOLVE_BACKEND:sqlite}
+    buffer-size: ${AMSHA_SELF_EVOLVE_BUFFER_SIZE:50}
+    default-search-limit: ${AMSHA_SELF_EVOLVE_DEFAULT_SEARCH_LIMIT:8}
+    directives-enabled: ${AMSHA_SELF_EVOLVE_DIRECTIVES_ENABLED:true}
+    synthesis-trigger: "${AMSHA_SELF_EVOLVE_SYNTHESIS_TRIGGER:manual}"
     flush:
-      max-events: ${ARCCLAW_SELF_EVOLVE_FLUSH_MAX_EVENTS:12}
-      idle-ms: ${ARCCLAW_SELF_EVOLVE_FLUSH_IDLE_MS:300000}
+      max-events: ${AMSHA_SELF_EVOLVE_FLUSH_MAX_EVENTS:12}
+      idle-ms: ${AMSHA_SELF_EVOLVE_FLUSH_IDLE_MS:300000}
 ```
 
 ### 3.6 Files Removed from Original Plan
@@ -272,11 +272,11 @@ arcclaw:
 
 ```bash
 # Config boot tests
-./mvnw test -pl arcclaw-core -Dtest="TieredMemoryConfigTest"
+./mvnw test -pl amsha-core -Dtest="TieredMemoryConfigTest"
 # Producer tests (one backend resolves, NoOp returned when disabled)
-./mvnw test -pl arcclaw-core -Dtest="TieredMemoryProducerTest"
+./mvnw test -pl amsha-core -Dtest="TieredMemoryProducerTest"
 # DTO validation tests
-./mvnw test -pl arcclaw-persistence-api -Dtest="MemoryDtoValidationTest"
+./mvnw test -pl amsha-persistence-api -Dtest="MemoryDtoValidationTest"
 ```
 
 ### 3.8 Exit Criteria
@@ -297,10 +297,10 @@ arcclaw:
 
 | Component | Location | Description |
 |---|---|---|
-| `CoreMemoryService` impl | `arcclaw-core` | CRUD + version conflict handling |
-| Backend storage | `arcclaw-persistence-*` | `core_memory_blocks` table / JSON file |
-| `CoreMemoryPromptRenderer` | `arcclaw-core` | Renders `[USER CONTEXT]` block |
-| Admin API | `arcclaw-app` | `GET/PUT /admin/memory/core` |
+| `CoreMemoryService` impl | `amsha-core` | CRUD + version conflict handling |
+| Backend storage | `amsha-persistence-*` | `core_memory_blocks` table / JSON file |
+| `CoreMemoryPromptRenderer` | `amsha-core` | Renders `[USER CONTEXT]` block |
+| Admin API | `amsha-app` | `GET/PUT /admin/memory/core` |
 
 ### 4.2 Change Points
 
@@ -333,11 +333,11 @@ messages.addAll(historyMessages);
 
 ```bash
 # CRUD tests
-./mvnw test -pl arcclaw-core -Dtest="CoreMemoryServiceTest"
+./mvnw test -pl amsha-core -Dtest="CoreMemoryServiceTest"
 # Prompt assembly test (USER CONTEXT appears first)
-./mvnw test -pl arcclaw-core -Dtest="ChatHistoryAssemblerCoreMemoryTest"
+./mvnw test -pl amsha-core -Dtest="ChatHistoryAssemblerCoreMemoryTest"
 # Admin API integration test
-./mvnw test -pl arcclaw-app -Dtest="AdminMemoryResourceTest"
+./mvnw test -pl amsha-app -Dtest="AdminMemoryResourceTest"
 ```
 
 ### 4.5 Exit Criteria
@@ -357,10 +357,10 @@ messages.addAll(historyMessages);
 
 | Component | Location | Description |
 |---|---|---|
-| `RecallMemoryService` | `arcclaw-core` | `insert()`, `insertBatch()`, `insertCompactionSummary()` |
-| `RecallMessage` mapper | `arcclaw-core` | `ChatMessage` → `RecallMessage` conversion |
-| Idempotency layer | `arcclaw-core` | Dedupe by `(session_id, turn_number, content_hash)` |
-| Backend storage | `arcclaw-persistence-*` | `recall_messages` table + FTS5 virtual table |
+| `RecallMemoryService` | `amsha-core` | `insert()`, `insertBatch()`, `insertCompactionSummary()` |
+| `RecallMessage` mapper | `amsha-core` | `ChatMessage` → `RecallMessage` conversion |
+| Idempotency layer | `amsha-core` | Dedupe by `(session_id, turn_number, content_hash)` |
+| Backend storage | `amsha-persistence-*` | `recall_messages` table + FTS5 virtual table |
 
 ### 5.2 Change Points
 
@@ -430,16 +430,16 @@ public void insertRecallMessage(RecallMessage msg) {
 
 ```bash
 # DB uniqueness / insert-ignore test
-./mvnw test -pl arcclaw-persistence-sqlite -Dtest="RecallInsertOrIgnoreTest"
+./mvnw test -pl amsha-persistence-sqlite -Dtest="RecallInsertOrIgnoreTest"
 
 # Concurrent dual-write race test
-./mvnw test -pl arcclaw-core -Dtest="RecallConcurrentDualWriteRaceTest"
+./mvnw test -pl amsha-core -Dtest="RecallConcurrentDualWriteRaceTest"
 
 # Integration: compacted text preserved in Recall
-./mvnw test -pl arcclaw-core -Dtest="CompactionRecallPreservationTest"
+./mvnw test -pl amsha-core -Dtest="CompactionRecallPreservationTest"
 
 # Dual-write prevention test (DB-enforced, not app-level)
-./mvnw test -pl arcclaw-core -Dtest="RecallDualWritePreventionTest"
+./mvnw test -pl amsha-core -Dtest="RecallDualWritePreventionTest"
 ```
 
 ### 5.6 Exit Criteria
@@ -460,10 +460,10 @@ public void insertRecallMessage(RecallMessage msg) {
 
 | Component | Location | Description |
 |---|---|---|
-| `RecallMemorySearchTool` | `arcclaw-core` | FTS5 exact-history search |
-| `RecallSearchQuery` DTO | `arcclaw-core` | Session-scoped + cross-session filters |
-| Backend search methods | `arcclaw-persistence-*` | FTS5 session/cross-session queries |
-| Deprecation wrapper | `arcclaw-core` | Old `MemorySearchTool` routes to new tools |
+| `RecallMemorySearchTool` | `amsha-core` | FTS5 exact-history search |
+| `RecallSearchQuery` DTO | `amsha-core` | Session-scoped + cross-session filters |
+| Backend search methods | `amsha-persistence-*` | FTS5 session/cross-session queries |
+| Deprecation wrapper | `amsha-core` | Old `MemorySearchTool` routes to new tools |
 
 ### 6.2 Change Points
 
@@ -530,16 +530,16 @@ public enum RecallMessageType {
 
 ```bash
 # Search exact code snippets after compaction (excludes summaries)
-./mvnw test -pl arcclaw-core -Dtest="RecallSearchCodeSnippetNoSummaryPollutionTest"
+./mvnw test -pl amsha-core -Dtest="RecallSearchCodeSnippetNoSummaryPollutionTest"
 
 # Search exact error messages by session (excludes summaries)
-./mvnw test -pl arcclaw-core -Dtest="RecallSearchErrorTraceNoSummaryPollutionTest"
+./mvnw test -pl amsha-core -Dtest="RecallSearchErrorTraceNoSummaryPollutionTest"
 
 # Optional include-summaries mode test
-./mvnw test -pl arcclaw-core -Dtest="RecallSearchIncludeSummariesModeTest"
+./mvnw test -pl amsha-core -Dtest="RecallSearchIncludeSummariesModeTest"
 
 # Tenant/user scoping tests
-./mvnw test -pl arcclaw-core -Dtest="RecallSearchTenantIsolationTest"
+./mvnw test -pl amsha-core -Dtest="RecallSearchTenantIsolationTest"
 ```
 
 ### 6.6 Exit Criteria
@@ -562,9 +562,9 @@ public enum RecallMessageType {
 
 | Component | Location | Description |
 |---|---|---|
-| `MemoryPromptBudgetPolicy` | `arcclaw-core` | Injection order + size caps |
+| `MemoryPromptBudgetPolicy` | `amsha-core` | Injection order + size caps |
 | Config properties | `application.yaml` | Budget limits per section |
-| Trimming helpers | `arcclaw-core` | Deterministic overflow clipping |
+| Trimming helpers | `amsha-core` | Deterministic overflow clipping |
 
 ### 7.2 Change Points
 
@@ -588,7 +588,7 @@ public enum RecallMessageType {
 ### 7.4 Budget Config
 
 ```yaml
-arcclaw:
+amsha:
   memory:
     prompt-budget:
       max-core-memory-tokens: 800
@@ -604,19 +604,19 @@ arcclaw:
 
 ```bash
 # Prompt section ordering tests
-./mvnw test -pl arcclaw-core -Dtest="PromptSectionOrderingTest"
+./mvnw test -pl amsha-core -Dtest="PromptSectionOrderingTest"
 
 # Overflow clipping tests
-./mvnw test -pl arcclaw-core -Dtest="MemoryPromptOverflowTest"
+./mvnw test -pl amsha-core -Dtest="MemoryPromptOverflowTest"
 
 # Regression: compaction sentinel still works
-./mvnw test -pl arcclaw-core -Dtest="CompactionSentinelRegressionTest"
+./mvnw test -pl amsha-core -Dtest="CompactionSentinelRegressionTest"
 
 # v2.1: ChatHistoryAssembler does not trigger archival retrieval I/O
-./mvnw test -pl arcclaw-core -Dtest="ChatHistoryAssemblerNoArchivalIoTest"
+./mvnw test -pl amsha-core -Dtest="ChatHistoryAssemblerNoArchivalIoTest"
 
 # v2.1: Prompt budget consumes only pre-fetched archival context
-./mvnw test -pl arcclaw-core -Dtest="PromptBudgetPrefetchedArchivalOnlyTest"
+./mvnw test -pl amsha-core -Dtest="PromptBudgetPrefetchedArchivalOnlyTest"
 ```
 
 ### 7.6 Exit Criteria
@@ -636,11 +636,11 @@ arcclaw:
 
 | Component | Location | Description |
 |---|---|---|
-| `ArchivalMemoryService` | `arcclaw-core` | Search + manual insert (no auto-promotion yet) |
-| `ArchivalChunk` DTO | `arcclaw-persistence-api` | Typed chunks with provenance |
-| Schema enrichment | `arcclaw-persistence-*` | `chunk_type`, `confidence`, `access_count` fields |
-| Backend degradation | `arcclaw-persistence-*` | Fallback when vector unavailable |
-| **`VectorIngestionService`** | `arcclaw-persistence-sqlite` | **v2.1: Serialized ingestion queue for SQLite vector writes** |
+| `ArchivalMemoryService` | `amsha-core` | Search + manual insert (no auto-promotion yet) |
+| `ArchivalChunk` DTO | `amsha-persistence-api` | Typed chunks with provenance |
+| Schema enrichment | `amsha-persistence-*` | `chunk_type`, `confidence`, `access_count` fields |
+| Backend degradation | `amsha-persistence-*` | Fallback when vector unavailable |
+| **`VectorIngestionService`** | `amsha-persistence-sqlite` | **v2.1: Serialized ingestion queue for SQLite vector writes** |
 
 ### 8.2 Change Points
 
@@ -729,19 +729,19 @@ public class VectorIngestionService {
 
 ```bash
 # Manual insert/search tests
-./mvnw test -pl arcclaw-core -Dtest="ArchivalManualInsertSearchTest"
+./mvnw test -pl amsha-core -Dtest="ArchivalManualInsertSearchTest"
 
 # Vector-unavailable fallback tests
-./mvnw test -pl arcclaw-persistence-sqlite -Dtest="SqliteArchivalFallbackTest"
+./mvnw test -pl amsha-persistence-sqlite -Dtest="SqliteArchivalFallbackTest"
 
 # Provenance persistence tests
-./mvnw test -pl arcclaw-core -Dtest="ArchivalProvenanceTest"
+./mvnw test -pl amsha-core -Dtest="ArchivalProvenanceTest"
 
 # v2.1: Serialized sqlite-vec ingestion test
-./mvnw test -pl arcclaw-persistence-sqlite -Dtest="VectorIngestionSerializationTest"
+./mvnw test -pl amsha-persistence-sqlite -Dtest="VectorIngestionSerializationTest"
 
 # v2.1: Concurrent ingestion safety test (no corruption, no SQLITE_BUSY)
-./mvnw test -pl arcclaw-persistence-sqlite -Dtest="VectorIngestionConcurrentSafetyTest"
+./mvnw test -pl amsha-persistence-sqlite -Dtest="VectorIngestionConcurrentSafetyTest"
 ```
 
 ### 8.6 Exit Criteria
@@ -761,9 +761,9 @@ public class VectorIngestionService {
 
 | Component | Location | Description |
 |---|---|---|
-| `ArchivalMemorySearchTool` | `arcclaw-core` | Semantic search tool |
-| `ArchivalResultFormatter` | `arcclaw-core` | Compact injection format |
-| Relevance filter | `arcclaw-core` | Goal-matching + confidence threshold |
+| `ArchivalMemorySearchTool` | `amsha-core` | Semantic search tool |
+| `ArchivalResultFormatter` | `amsha-core` | Compact injection format |
+| Relevance filter | `amsha-core` | Goal-matching + confidence threshold |
 
 ### 9.2 Change Points
 
@@ -810,19 +810,19 @@ public String search(String query) {
 
 ```bash
 # Goal-matching tests
-./mvnw test -pl arcclaw-core -Dtest="ArchivalGoalMatchingTest"
+./mvnw test -pl amsha-core -Dtest="ArchivalGoalMatchingTest"
 
 # Confidence threshold tests
-./mvnw test -pl arcclaw-core -Dtest="ArchivalConfidenceThresholdTest"
+./mvnw test -pl amsha-core -Dtest="ArchivalConfidenceThresholdTest"
 
 # Injection sparsity tests (no prompt spam)
-./mvnw test -pl arcclaw-core -Dtest="ArchivalInjectionSparsityTest"
+./mvnw test -pl amsha-core -Dtest="ArchivalInjectionSparsityTest"
 
 # v2.1: Tool-first path test (archival_memory_search populates cache)
-./mvnw test -pl arcclaw-core -Dtest="ArchivalToolFirstPathTest"
+./mvnw test -pl amsha-core -Dtest="ArchivalToolFirstPathTest"
 
 # v2.1: ChatHistoryAssembler O(1) cache lookup test (no I/O)
-./mvnw test -pl arcclaw-core -Dtest="ArchivalCacheLookupNoIoTest"
+./mvnw test -pl amsha-core -Dtest="ArchivalCacheLookupNoIoTest"
 ```
 
 ### 9.5 Exit Criteria
@@ -845,11 +845,11 @@ public String search(String query) {
 
 | Component | Location | Description |
 |---|---|---|
-| `CoreMemoryReadTool` | `arcclaw-core` | Read core blocks |
-| `CoreMemoryAppendTool` | `arcclaw-core` | Append with CAS versioning |
-| `CoreMemoryReplaceTool` | `arcclaw-core` | Replace with CAS versioning |
-| `ArchivalMemoryInsertTool` | `arcclaw-core` | Manual insert (approval-gated) |
-| `MemoryWriteGovernance` | `arcclaw-core` | Central rate limiting + audit |
+| `CoreMemoryReadTool` | `amsha-core` | Read core blocks |
+| `CoreMemoryAppendTool` | `amsha-core` | Append with CAS versioning |
+| `CoreMemoryReplaceTool` | `amsha-core` | Replace with CAS versioning |
+| `ArchivalMemoryInsertTool` | `amsha-core` | Manual insert (approval-gated) |
+| `MemoryWriteGovernance` | `amsha-core` | Central rate limiting + audit |
 
 ### 10.2 Change Points
 
@@ -883,13 +883,13 @@ Set<String> ALLOWED_BLOCK_KEYS = Set.of(
 
 ```bash
 # CAS conflict tests
-./mvnw test -pl arcclaw-core -Dtest="CoreMemoryCasConflictTest"
+./mvnw test -pl amsha-core -Dtest="CoreMemoryCasConflictTest"
 # Rate limit tests
-./mvnw test -pl arcclaw-core -Dtest="MemoryWriteRateLimitTest"
+./mvnw test -pl amsha-core -Dtest="MemoryWriteRateLimitTest"
 # Approval-gating tests
-./mvnw test -pl arcclaw-app -Dtest="ArchivalInsertApprovalTest"
+./mvnw test -pl amsha-app -Dtest="ArchivalInsertApprovalTest"
 # Content-size validation tests
-./mvnw test -pl arcclaw-core -Dtest="MemoryWriteContentCapTest"
+./mvnw test -pl amsha-core -Dtest="MemoryWriteContentCapTest"
 ```
 
 ### 10.6 Exit Criteria
@@ -909,12 +909,12 @@ Set<String> ALLOWED_BLOCK_KEYS = Set.of(
 
 | Component | Location | Description |
 |---|---|---|
-| `arcclaw-self-evolve` module | New module | Separate from core memory |
-| `EvolutionEvent` DTO | `arcclaw-self-evolve/api` | Typed events |
-| `ConversationBuffer` | `arcclaw-self-evolve/buffer` | In-memory per-session accumulation |
-| `SelfEvolveService.append()` | `arcclaw-self-evolve/runtime` | Event ingestion |
-| Flush triggers | `arcclaw-self-evolve/runtime` | Session end, threshold, idle timeout |
-| Event store SPI | `arcclaw-self-evolve/store` | SQLite/Postgres/FS backend |
+| `amsha-self-evolve` module | New module | Separate from core memory |
+| `EvolutionEvent` DTO | `amsha-self-evolve/api` | Typed events |
+| `ConversationBuffer` | `amsha-self-evolve/buffer` | In-memory per-session accumulation |
+| `SelfEvolveService.append()` | `amsha-self-evolve/runtime` | Event ingestion |
+| Flush triggers | `amsha-self-evolve/runtime` | Session end, threshold, idle timeout |
+| Event store SPI | `amsha-self-evolve/store` | SQLite/Postgres/FS backend |
 
 ### 11.2 Change Points
 
@@ -953,11 +953,11 @@ public enum EvolutionEventType {
 
 ```bash
 # Event emission sequence tests
-./mvnw test -pl arcclaw-self-evolve -Dtest="EvolutionEventEmissionTest"
+./mvnw test -pl amsha-self-evolve -Dtest="EvolutionEventEmissionTest"
 # Flush-on-threshold tests
-./mvnw test -pl arcclaw-self-evolve -Dtest="ConversationBufferFlushThresholdTest"
+./mvnw test -pl amsha-self-evolve -Dtest="ConversationBufferFlushThresholdTest"
 # Disabled-feature no-op tests
-./mvnw test -pl arcclaw-self-evolve -Dtest="SelfEvolveDisabledNoOpTest"
+./mvnw test -pl amsha-self-evolve -Dtest="SelfEvolveDisabledNoOpTest"
 ```
 
 ### 11.6 Exit Criteria
@@ -977,10 +977,10 @@ public enum EvolutionEventType {
 
 | Component | Location | Description |
 |---|---|---|
-| `MemoryExtractorLite` | `arcclaw-self-evolve/extract` | Rule-based pattern matching |
-| Extracted record DTOs | `arcclaw-self-evolve/api` | Typed records |
-| SIMPLE retrieval | `arcclaw-self-evolve/retrieve` | FTS5 over extracted records |
-| Deduplication layer | `arcclaw-self-evolve/internal` | Prevent duplicate extractions |
+| `MemoryExtractorLite` | `amsha-self-evolve/extract` | Rule-based pattern matching |
+| Extracted record DTOs | `amsha-self-evolve/api` | Typed records |
+| SIMPLE retrieval | `amsha-self-evolve/retrieve` | FTS5 over extracted records |
+| Deduplication layer | `amsha-self-evolve/internal` | Prevent duplicate extractions |
 
 ### 12.2 Record Types
 
@@ -992,7 +992,7 @@ public enum MemoryRecordType {
     RESOLUTION_PATTERN,   // "Running ./mvnw compile fixed the issue"
     FAILURE_PATTERN,      // "NullPointerException in line 42"
     TOOL_HINT,            // "github tool works best with explicit repo"
-    PROJECT_CONTEXT,      // "ArcClaw has 12 persona roles"
+    PROJECT_CONTEXT,      // "Amsha Agent has 12 persona roles"
     DIRECTIVE,            // "Always run fix_fqns.py after Java edits"
     SUMMARY,              // Session summary
     FACT,                 // General knowledge
@@ -1025,11 +1025,11 @@ if (event.type == RESOLUTION && priorToolSuccess) {
 
 ```bash
 # Rule extraction tests from real traces
-./mvnw test -pl arcclaw-self-evolve -Dtest="MemoryExtractorRuleTest"
+./mvnw test -pl amsha-self-evolve -Dtest="MemoryExtractorRuleTest"
 # Deduplication tests
-./mvnw test -pl arcclaw-self-evolve -Dtest="ExtractedMemoryDedupeTest"
+./mvnw test -pl amsha-self-evolve -Dtest="ExtractedMemoryDedupeTest"
 # SIMPLE retrieval tests
-./mvnw test -pl arcclaw-self-evolve -Dtest="SimpleRetrievalTest"
+./mvnw test -pl amsha-self-evolve -Dtest="SimpleRetrievalTest"
 ```
 
 ### 12.5 Exit Criteria
@@ -1049,11 +1049,11 @@ if (event.type == RESOLUTION && priorToolSuccess) {
 
 | Component | Location | Description |
 |---|---|---|
-| `InteractionPolicySynthesizer` | `arcclaw-self-evolve/policy` | LLM-driven directive generation |
-| `DirectiveBundle` | `arcclaw-self-evolve/api` | Synthesized directives with lifecycle state |
-| `SelfEvolveReflectTool` | `arcclaw-self-evolve` | On-demand synthesis trigger |
-| Directive storage | `arcclaw-self-evolve/store` | As `DIRECTIVE` archival chunks or typed records |
-| **Lifecycle manager** | `arcclaw-self-evolve/policy` | **v2.1: CANDIDATE → SHADOW → ACTIVE → DISABLED state machine** |
+| `InteractionPolicySynthesizer` | `amsha-self-evolve/policy` | LLM-driven directive generation |
+| `DirectiveBundle` | `amsha-self-evolve/api` | Synthesized directives with lifecycle state |
+| `SelfEvolveReflectTool` | `amsha-self-evolve` | On-demand synthesis trigger |
+| Directive storage | `amsha-self-evolve/store` | As `DIRECTIVE` archival chunks or typed records |
+| **Lifecycle manager** | `amsha-self-evolve/policy` | **v2.1: CANDIDATE → SHADOW → ACTIVE → DISABLED state machine** |
 
 ### 13.2 Change Points
 
@@ -1130,28 +1130,28 @@ if (directivesEnabled) {
 
 ```bash
 # Confidence threshold tests
-./mvnw test -pl arcclaw-self-evolve -Dtest="DirectiveConfidenceThresholdTest"
+./mvnw test -pl amsha-self-evolve -Dtest="DirectiveConfidenceThresholdTest"
 
 # Low-confidence suppression tests
-./mvnw test -pl arcclaw-self-evolve -Dtest="LowConfidenceDirectiveSuppressionTest"
+./mvnw test -pl amsha-self-evolve -Dtest="LowConfidenceDirectiveSuppressionTest"
 
 # Admin delete/disable tests
-./mvnw test -pl arcclaw-app -Dtest="DirectiveAdminDisableTest"
+./mvnw test -pl amsha-app -Dtest="DirectiveAdminDisableTest"
 
 # Prompt injection cap tests
-./mvnw test -pl arcclaw-core -Dtest="DirectiveInjectionCapTest"
+./mvnw test -pl amsha-core -Dtest="DirectiveInjectionCapTest"
 
 # v2.1: New directives start in SHADOW or CANDIDATE
-./mvnw test -pl arcclaw-self-evolve -Dtest="DirectiveShadowLifecycleStartTest"
+./mvnw test -pl amsha-self-evolve -Dtest="DirectiveShadowLifecycleStartTest"
 
 # v2.1: Shadow directives injected with evaluation labeling only
-./mvnw test -pl arcclaw-core -Dtest="ShadowDirectiveEvaluationLabelingTest"
+./mvnw test -pl amsha-core -Dtest="ShadowDirectiveEvaluationLabelingTest"
 
 # v2.1: Promotion criteria test (SHADOW → ACTIVE)
-./mvnw test -pl arcclaw-self-evolve -Dtest="DirectivePromotionCriteriaTest"
+./mvnw test -pl amsha-self-evolve -Dtest="DirectivePromotionCriteriaTest"
 
 # v2.1: Faulty directive quarantine/disable test
-./mvnw test -pl arcclaw-self-evolve -Dtest="FaultyDirectiveQuarantineTest"
+./mvnw test -pl amsha-self-evolve -Dtest="FaultyDirectiveQuarantineTest"
 ```
 
 ### 13.6 Exit Criteria
@@ -1175,10 +1175,10 @@ if (directivesEnabled) {
 
 | Component | Location | Description |
 |---|---|---|
-| `PostgresTieredMemoryStore` | `arcclaw-persistence-postgres` | Single class implements all three segregated ports; annotated `@TieredBackend("postgres")` |
-| `FsTieredMemoryStore` | `arcclaw-persistence-fs` | Single class implements all three segregated ports; annotated `@TieredBackend("fs")` |
-| Self-evolve backends | `arcclaw-self-evolve/store/*` | SQLite/Postgres/FS providers |
-| Capability declarations | `arcclaw-persistence-api` | Explicit feature matrix |
+| `PostgresTieredMemoryStore` | `amsha-persistence-postgres` | Single class implements all three segregated ports; annotated `@TieredBackend("postgres")` |
+| `FsTieredMemoryStore` | `amsha-persistence-fs` | Single class implements all three segregated ports; annotated `@TieredBackend("fs")` |
+| Self-evolve backends | `amsha-self-evolve/store/*` | SQLite/Postgres/FS providers |
+| Capability declarations | `amsha-persistence-api` | Explicit feature matrix |
 
 **Backend Implementation Pattern:** Each backend is a single `@ApplicationScoped` CDI bean implementing all three segregated port interfaces. The `@TieredBackend` qualifier identifies the backend. The `TieredMemoryProducer` resolves each port independently, but at runtime they reference the same bean instance:
 
@@ -1209,13 +1209,13 @@ public class SqliteTieredMemoryStore implements CoreMemoryStorePort, RecallMemor
 
 ```bash
 # SQLite without sqlite-vec
-./mvnw test -pl arcclaw-persistence-sqlite -Dtest="SqliteVectorFallbackTest"
+./mvnw test -pl amsha-persistence-sqlite -Dtest="SqliteVectorFallbackTest"
 
 # PostgreSQL without pgvector/GIN
-./mvnw test -pl arcclaw-persistence-postgres -Dtest="PostgresVectorFallbackTest"
+./mvnw test -pl amsha-persistence-postgres -Dtest="PostgresVectorFallbackTest"
 
 # Filesystem without embeddings
-./mvnw test -pl arcclaw-persistence-fs -Dtest="FsEmbeddingFallbackTest"
+./mvnw test -pl amsha-persistence-fs -Dtest="FsEmbeddingFallbackTest"
 ```
 
 ### 14.4 Exit Criteria
@@ -1235,10 +1235,10 @@ public class SqliteTieredMemoryStore implements CoreMemoryStorePort, RecallMemor
 
 | Component | Location | Description |
 |---|---|---|
-| Admin APIs | `arcclaw-app` | `/admin/memory/*` endpoints |
-| Observability metrics | `arcclaw-core`, `arcclaw-self-evolve` | Latency, hit rates, confidence distribution |
-| Retention/eviction jobs | `arcclaw-core` | Scheduled cleanup tasks |
-| Deprecation notices | `arcclaw-core` | `@Deprecated` on old tools |
+| Admin APIs | `amsha-app` | `/admin/memory/*` endpoints |
+| Observability metrics | `amsha-core`, `amsha-self-evolve` | Latency, hit rates, confidence distribution |
+| Retention/eviction jobs | `amsha-core` | Scheduled cleanup tasks |
+| Deprecation notices | `amsha-core` | `@Deprecated` on old tools |
 | Documentation | `AGENTS.md`, module READMEs | Architecture + config docs |
 
 ### 15.2 Change Points
@@ -1271,16 +1271,16 @@ DistributionSummary archivalResultConfidence = DistributionSummary.builder("memo
 
 ```bash
 # p95 latency tests
-./mvnw test -pl arcclaw-core -Dtest="MemoryLatencyP95Test"
+./mvnw test -pl amsha-core -Dtest="MemoryLatencyP95Test"
 
 # Concurrency tests
-./mvnw test -pl arcclaw-core -Dtest="MemoryConcurrencyTest"
+./mvnw test -pl amsha-core -Dtest="MemoryConcurrencyTest"
 
 # Rollback/disable regression tests
-./mvnw test -pl arcclaw-app -Dtest="TieredMemoryDisableRegressionTest"
+./mvnw test -pl amsha-app -Dtest="TieredMemoryDisableRegressionTest"
 
 # End-to-end sessions (old behavior intact when off)
-./mvnw test -pl arcclaw-app -Dtest="EndToEndDisabledBehaviorTest"
+./mvnw test -pl amsha-app -Dtest="EndToEndDisabledBehaviorTest"
 ```
 
 ### 15.5 Exit Criteria
@@ -1459,7 +1459,7 @@ public List<RecallMessage> search(String userId, String query, boolean crossSess
 **Mitigation:**
 ```yaml
 # Config default
-arcclaw:
+amsha:
   self-evolve:
     synthesis:
       enabled: false  # Must be explicitly enabled
@@ -1474,18 +1474,18 @@ arcclaw:
 
 | Module | New Packages | Description |
 |---|---|---|
-| `arcclaw-persistence-api` | `com.arcclaw.persistence.api` | 3 segregated `*StorePort` interfaces, DTOs, query objects, `VersionConflictException`, `TieredMemoryReflectionConfig` |
-| `arcclaw-persistence-sqlite` | `com.arcclaw.persistence.sqlite.tiered` | SQLite implementations of segregated ports |
-| `arcclaw-persistence-postgres` | `com.arcclaw.persistence.postgres.tiered` | Postgres implementations of segregated ports |
-| `arcclaw-persistence-fs` | `com.arcclaw.persistence.fs.tiered` | Filesystem implementations of segregated ports |
-| `arcclaw-core` | `com.arcclaw.core.memory.tiered` | `TieredMemoryProducer`, `@TieredBackend`, `TieredBackendLiteral`, `TieredMemoryBackend`, NoOp stores |
-| `arcclaw-core` | `com.arcclaw.core.config` | `TieredMemoryConfig`, `MemoryPromptBudgetConfig`, `SelfEvolveConfig` |
+| `amsha-persistence-api` | `com.amsha.persistence.api` | 3 segregated `*StorePort` interfaces, DTOs, query objects, `VersionConflictException`, `TieredMemoryReflectionConfig` |
+| `amsha-persistence-sqlite` | `com.amsha.persistence.sqlite.tiered` | SQLite implementations of segregated ports |
+| `amsha-persistence-postgres` | `com.amsha.persistence.postgres.tiered` | Postgres implementations of segregated ports |
+| `amsha-persistence-fs` | `com.amsha.persistence.fs.tiered` | Filesystem implementations of segregated ports |
+| `amsha-core` | `com.amsha.core.memory.tiered` | `TieredMemoryProducer`, `@TieredBackend`, `TieredBackendLiteral`, `TieredMemoryBackend`, NoOp stores |
+| `amsha-core` | `com.amsha.core.config` | `TieredMemoryConfig`, `MemoryPromptBudgetConfig`, `SelfEvolveConfig` |
 
-### 17.2 arcclaw-self-evolve Module Structure
+### 17.2 amsha-self-evolve Module Structure
 
 ```
-arcclaw-self-evolve/
-└── src/main/java/com/arcclaw/selfevolve/
+amsha-self-evolve/
+└── src/main/java/com/amsha/selfevolve/
     ├── api/                    # Public DTOs (EvolutionEvent, MemoryRecord, DirectiveBundle)
     ├── buffer/                 # ConversationBuffer, InMemoryConversationBuffer
     ├── extract/                # MemoryExtractorLite, ExtractedMemory
@@ -1499,19 +1499,19 @@ arcclaw-self-evolve/
 ### 17.3 Dependencies
 
 ```xml
-<!-- arcclaw-self-evolve/pom.xml -->
+<!-- amsha-self-evolve/pom.xml -->
 <dependencies>
     <dependency>
-        <groupId>com.arcclaw</groupId>
-        <artifactId>arcclaw-core</artifactId>
+        <groupId>com.amsha</groupId>
+        <artifactId>amsha-core</artifactId>
         <scope>provided</scope>  <!-- For AgentTool, ToolCapability -->
     </dependency>
     <dependency>
-        <groupId>com.arcclaw</groupId>
-        <artifactId>arcclaw-persistence-api</artifactId>
+        <groupId>com.amsha</groupId>
+        <artifactId>amsha-persistence-api</artifactId>
         <scope>provided</scope>  <!-- For store ports -->
     </dependency>
-    <!-- NO dependency on arcclaw-app (avoid circular) -->
+    <!-- NO dependency on amsha-app (avoid circular) -->
 </dependencies>
 ```
 
@@ -1543,14 +1543,14 @@ arcclaw-self-evolve/
 # After each phase:
 ./mvnw compile -DskipTests -q          # Compilation passes
 python3 ./fix_fqns.py                   # Imports aligned
-./mvnw test -pl arcclaw-core            # Core tests pass
+./mvnw test -pl amsha-core            # Core tests pass
 
 # Feature flag verification:
-grep "ARCCLAW_MEMORY_" .env.example arcclaw-app/src/main/resources/application.yaml
-grep "ARCCLAW_SELF_EVOLVE_" .env.example arcclaw-app/src/main/resources/application.yaml
+grep "AMSHA_MEMORY_" .env.example app/src/main/resources/application.yaml
+grep "AMSHA_SELF_EVOLVE_" .env.example app/src/main/resources/application.yaml
 
 # End-to-end (Phase 12):
-./mvnw test -pl arcclaw-app -Dtest="EndToEndTieredMemoryTest"
+./mvnw test -pl amsha-app -Dtest="EndToEndTieredMemoryTest"
 ```
 
 ### 18.3 Latency Targets
@@ -1673,7 +1673,7 @@ Pre-Phase-8 cleanup to remove deprecated `memory_search` artifacts and ensure `a
 
 | Change | Files | Rationale |
 |---|---|---|
-| **Deleted `MemorySearchTool.java`** | `arcclaw-core/.../tools/MemorySearchTool.java` | Deprecated since Phase 3; replaced by `RecallMemorySearchTool` + `ArchivalMemorySearchTool` |
+| **Deleted `MemorySearchTool.java`** | `core/.../tools/MemorySearchTool.java` | Deprecated since Phase 3; replaced by `RecallMemorySearchTool` + `ArchivalMemorySearchTool` |
 | **Removed `MEMORY_SEARCH` enum** | `ToolCapability.java` | No live tool backing it; `fromToolName("memory_search")` returns null |
 | **Updated `FinishOutcomeProcessor`** | `FinishOutcomeProcessor.java` | Synthesis detection now checks both `RECALL_MEMORY_SEARCH` and `ARCHIVAL_MEMORY_SEARCH` |
 | **Updated `ReasoningStepParser`** | `ReasoningStepParser.java` | Garbled query fix applies to both new tools |
@@ -1768,9 +1768,9 @@ AND (:includeSummaries = true OR message_type != 'COMPACTION_SUMMARY')
 
 ```
 Total Tests: 1,451
-  - arcclaw-core:        963 tests (960 base + 3 Phase 3)
-  - arcclaw-app:         145 tests
-  - arcclaw-persistence: 343 tests
+  - amsha-core:        963 tests (960 base + 3 Phase 3)
+  - amsha-app:         145 tests
+  - amsha-persistence: 343 tests
 Failures: 0
 Errors:   0
 Skipped:  1
@@ -1829,11 +1829,11 @@ Skipped:  1
 
 | Component | File | Role |
 |---|---|---|
-| `SqliteArchivalMemoryStore` | `arcclaw-persistence-sqlite` | `@TieredBackend("sqlite")`, FTS5 BM25 search, INSERT OR REPLACE upsert |
-| `PostgresArchivalMemoryStore` | `arcclaw-persistence-postgres` | `@TieredBackend("postgres")`, tsvector/tsquery BM25 search |
-| `ArchivalMemoryJdbiDao` (SQLite) | `arcclaw-persistence-sqlite/jdbi` | JDBI SQL Object with FTS5 MATCH queries |
-| `ArchivalMemoryJdbiDao` (Postgres) | `arcclaw-persistence-postgres/jdbi` | JDBI SQL Object with plainto_tsquery |
-| `ArchivalMemoryService` | `arcclaw-core` | `@ApplicationScoped` thin domain service, delegates to port |
+| `SqliteArchivalMemoryStore` | `amsha-persistence-sqlite` | `@TieredBackend("sqlite")`, FTS5 BM25 search, INSERT OR REPLACE upsert |
+| `PostgresArchivalMemoryStore` | `amsha-persistence-postgres` | `@TieredBackend("postgres")`, tsvector/tsquery BM25 search |
+| `ArchivalMemoryJdbiDao` (SQLite) | `persistence-sqlite/jdbi` | JDBI SQL Object with FTS5 MATCH queries |
+| `ArchivalMemoryJdbiDao` (Postgres) | `persistence-postgres/jdbi` | JDBI SQL Object with plainto_tsquery |
+| `ArchivalMemoryService` | `amsha-core` | `@ApplicationScoped` thin domain service, delegates to port |
 
 **Schema:**
 - `archival_chunks` table with `UNIQUE(chunk_id)` for INSERT OR REPLACE
@@ -1845,9 +1845,9 @@ Skipped:  1
 
 | Component | File | Role |
 |---|---|---|
-| `ArchivalVecSchemaInitializer` | `arcclaw-persistence-sqlite` | `@Priority(200)`, guards on `isVectorSearchEnabled()`, creates `vec_archival` virtual table |
-| `VectorIngestionService` | `arcclaw-persistence-sqlite` | Platform thread executor, serialized writes, `@PreDestroy` with 5s drain |
-| `FtsCleanCallback` (updated) | `arcclaw-persistence-sqlite` | Drops `vec_archival` before Flyway clean (vec0 shadow tables) |
+| `ArchivalVecSchemaInitializer` | `amsha-persistence-sqlite` | `@Priority(200)`, guards on `isVectorSearchEnabled()`, creates `vec_archival` virtual table |
+| `VectorIngestionService` | `amsha-persistence-sqlite` | Platform thread executor, serialized writes, `@PreDestroy` with 5s drain |
+| `FtsCleanCallback` (updated) | `amsha-persistence-sqlite` | Drops `vec_archival` before Flyway clean (vec0 shadow tables) |
 
 **Key Decisions:**
 
@@ -1875,7 +1875,7 @@ vec0 absent     → graceful fallback to BM25 with one-time warn log
 
 | Component | File | Role |
 |---|---|---|
-| `PromptBudgetManager` | `arcclaw-core/.../memory/tiered/PromptBudgetManager.java` | `@ApplicationScoped` CDI bean — two-pass hierarchical enforcement |
+| `PromptBudgetManager` | `core/.../memory/tiered/PromptBudgetManager.java` | `@ApplicationScoped` CDI bean — two-pass hierarchical enforcement |
 | `BudgetEnforcedSections` | Inner record of `PromptBudgetManager` | Return type with truncation flags |
 | `CoreMemoryPromptRenderer` | Modified — removed truncation logic | Pure formatting only (budget enforcement moved to manager) |
 | `ChatHistoryAssembler` | Modified — wires `PromptBudgetManager` | Raw text → enforce → SystemMessage with conditional markers |
@@ -1969,9 +1969,9 @@ static String truncateSafely(String text, int maxChars) {
 
 ```
 Total Tests: ~1,079 (core + persistence-sqlite)
-  - arcclaw-core:        ~1,022 tests (963 base + 9 PromptBudget + 4 ArchivalMemory + 19 Phase 6 + 27 Phase 7 + 1 skip)
-  - arcclaw-app:         145 tests
-  - arcclaw-persistence: 57 tests (sqlite module)
+  - amsha-core:        ~1,022 tests (963 base + 9 PromptBudget + 4 ArchivalMemory + 19 Phase 6 + 27 Phase 7 + 1 skip)
+  - amsha-app:         145 tests
+  - amsha-persistence: 57 tests (sqlite module)
 Failures: 0
 Errors:   0
 Skipped:  1
@@ -1983,8 +1983,8 @@ Skipped:  1
 
 | Component | File | Role |
 |---|---|---|
-| `ArchivalMemorySearchTool` | `arcclaw-core/.../tools/memory/ArchivalMemorySearchTool.java` | `@ApplicationScoped` AgentTool — semantic archival search with optional vector hybrid |
-| `ArchivalContextCache` | `arcclaw-core/.../agent/reasoning/ArchivalContextCache.java` | `@WorkspaceScoped` — pre-fetched result cache for O(1) prompt injection |
+| `ArchivalMemorySearchTool` | `core/.../tools/memory/ArchivalMemorySearchTool.java` | `@ApplicationScoped` AgentTool — semantic archival search with optional vector hybrid |
+| `ArchivalContextCache` | `core/.../agent/reasoning/ArchivalContextCache.java` | `@WorkspaceScoped` — pre-fetched result cache for O(1) prompt injection |
 | `ChatHistoryAssembler` | Modified — wires `ArchivalContextCache` | Injects `[RELEVANT KNOWLEDGE]` section from pre-fetched cache |
 | `SqliteArchivalMemoryStore` | Modified — `hybridSearch()` activated | RRF merge with `VectorIngestionService.searchVector()` when embedding provided |
 | `ArchivalSearchQuery` | Modified — `float[] queryEmbedding` field added | Passes embedding from tool to store for hybrid search |
@@ -2047,13 +2047,13 @@ return mergeRrf(bm25Results, vectorChunks, query.limit());
 #### Config Additions
 
 ```yaml
-# application.yaml — under arcclaw.memory.tiered.archival
-confidence-threshold: ${ARCCLAW_MEMORY_ARCHIVAL_CONFIDENCE_THRESHOLD:0.6}
+# application.yaml — under amsha.memory.tiered.archival
+confidence-threshold: ${AMSHA_MEMORY_ARCHIVAL_CONFIDENCE_THRESHOLD:0.6}
 ```
 
 ```bash
 # .env.example
-# ARCCLAW_MEMORY_ARCHIVAL_CONFIDENCE_THRESHOLD=0.6
+# AMSHA_MEMORY_ARCHIVAL_CONFIDENCE_THRESHOLD=0.6
 ```
 
 #### Key Design Decisions
@@ -2063,7 +2063,7 @@ confidence-threshold: ${ARCCLAW_MEMORY_ARCHIVAL_CONFIDENCE_THRESHOLD:0.6}
 | **ArchivalContextCache** | `@WorkspaceScoped`, `AtomicReference<CacheState>` | Immutable snapshot eliminates split-brain from two separate volatile fields |
 | **Null-safe archival check** | `tieredMemoryConfig.archival() != null` | Prevents NPE when `TieredMemoryConfig` is mocked in tests |
 | **Access count increment** | `incrementAccessCounts(List<String>)` via `@SqlBatch` | Single SQL statement instead of N individual updates |
-| **Embedding in tool, not store** | Tool injects `Instance<EmbeddingModel>` | `arcclaw-core` has access to `arcclaw-rag` via Maven; avoids coupling store to embedding provider |
+| **Embedding in tool, not store** | Tool injects `Instance<EmbeddingModel>` | `amsha-core` has access to `amsha-rag` via Maven; avoids coupling store to embedding provider |
 | **Confidence threshold in config** | Separate from eviction threshold | Search-time filtering (0.6) vs. eviction (0.5) are different concerns |
 | **Empty results not cached** | Tool skips `cache.put()` on empty results | Prevents wasting prompt budget on "No relevant knowledge found" |
 | **Vector chunk resolution** | `getByIds(@BindList)` batch query | Single SQL query preserves vector rank order for RRF |
@@ -2085,21 +2085,21 @@ confidence-threshold: ${ARCCLAW_MEMORY_ARCHIVAL_CONFIDENCE_THRESHOLD:0.6}
 
 | File | Action | Lines |
 |---|---|---|
-| `arcclaw-core/.../role/ToolCapability.java` | ADD `ARCHIVAL_MEMORY_SEARCH` enum entry | +3 |
-| `arcclaw-persistence-api/.../ArchivalSearchQuery.java` | ADD `float[] queryEmbedding` field | +1 |
-| `arcclaw-persistence-api/.../ArchivalMemoryStorePort.java` | ADD `incrementAccessCounts(List<String>)` | +2 |
-| `arcclaw-core/.../config/TieredMemoryConfig.java` | ADD `confidenceThreshold()` to `ArchivalConfig` | +3 |
-| `arcclaw-app/.../application.yaml` | ADD `confidence-threshold` key | +1 |
-| `.env.example` | ADD `ARCCLAW_MEMORY_ARCHIVAL_CONFIDENCE_THRESHOLD` | +1 |
-| `arcclaw-persistence-sqlite/.../SqliteArchivalMemoryStore.java` | MODIFY `hybridSearch()` batch fetch + `incrementAccessCounts` | ~35 lines changed |
-| `arcclaw-persistence-sqlite/.../jdbi/ArchivalMemoryJdbiDao.java` | ADD `getByIds`, `incrementAccessCounts` | +15 |
-| `arcclaw-persistence-postgres/.../PostgresArchivalMemoryStore.java` | ADD `incrementAccessCounts` | +7 |
-| `arcclaw-persistence-postgres/.../jdbi/ArchivalMemoryJdbiDao.java` | ADD `getByIds`, `incrementAccessCounts` | +15 |
-| `arcclaw-core/.../memory/tiered/NoOpArchivalMemoryStore.java` | ADD `incrementAccessCounts` no-op | +5 |
-| `arcclaw-core/.../agent/reasoning/ArchivalContextCache.java` | NEW — `AtomicReference<CacheState>` pattern | ~55 lines |
-| `arcclaw-core/.../tools/memory/ArchivalMemorySearchTool.java` | NEW — archival search AgentTool | ~220 lines |
-| `arcclaw-core/.../agent/reasoning/ChatHistoryAssembler.java` | MODIFY — inject ArchivalContextCache + [RELEVANT KNOWLEDGE] | +15 lines |
-| `arcclaw-core/src/test/.../ArchivalMemoryServiceTest.java` | FIX — add null for new `queryEmbedding` param | +1 line |
+| `core/.../role/ToolCapability.java` | ADD `ARCHIVAL_MEMORY_SEARCH` enum entry | +3 |
+| `persistence-api/.../ArchivalSearchQuery.java` | ADD `float[] queryEmbedding` field | +1 |
+| `persistence-api/.../ArchivalMemoryStorePort.java` | ADD `incrementAccessCounts(List<String>)` | +2 |
+| `core/.../config/TieredMemoryConfig.java` | ADD `confidenceThreshold()` to `ArchivalConfig` | +3 |
+| `app/.../application.yaml` | ADD `confidence-threshold` key | +1 |
+| `.env.example` | ADD `AMSHA_MEMORY_ARCHIVAL_CONFIDENCE_THRESHOLD` | +1 |
+| `persistence-sqlite/.../SqliteArchivalMemoryStore.java` | MODIFY `hybridSearch()` batch fetch + `incrementAccessCounts` | ~35 lines changed |
+| `persistence-sqlite/.../jdbi/ArchivalMemoryJdbiDao.java` | ADD `getByIds`, `incrementAccessCounts` | +15 |
+| `persistence-postgres/.../PostgresArchivalMemoryStore.java` | ADD `incrementAccessCounts` | +7 |
+| `persistence-postgres/.../jdbi/ArchivalMemoryJdbiDao.java` | ADD `getByIds`, `incrementAccessCounts` | +15 |
+| `core/.../memory/tiered/NoOpArchivalMemoryStore.java` | ADD `incrementAccessCounts` no-op | +5 |
+| `core/.../agent/reasoning/ArchivalContextCache.java` | NEW — `AtomicReference<CacheState>` pattern | ~55 lines |
+| `core/.../tools/memory/ArchivalMemorySearchTool.java` | NEW — archival search AgentTool | ~220 lines |
+| `core/.../agent/reasoning/ChatHistoryAssembler.java` | MODIFY — inject ArchivalContextCache + [RELEVANT KNOWLEDGE] | +15 lines |
+| `core/src/test/.../ArchivalMemoryServiceTest.java` | FIX — add null for new `queryEmbedding` param | +1 line |
 | 5 new test classes | ArchivalGoalMatchingTest, ArchivalConfidenceThresholdTest, ArchivalInjectionSparsityTest, ArchivalToolFirstPathTest, ArchivalCacheLookupNoIoTest | ~400 lines |
 
 ### A.13 Phase 7: Controlled Write Paths (Implementation Details)
@@ -2108,11 +2108,11 @@ confidence-threshold: ${ARCCLAW_MEMORY_ARCHIVAL_CONFIDENCE_THRESHOLD:0.6}
 
 | Component | File | Role |
 |---|---|---|
-| `CoreMemoryReadTool` | `arcclaw-core/.../tools/memory/CoreMemoryReadTool.java` | `@ApplicationScoped` — read all or specific block by key |
-| `CoreMemoryAppendTool` | `arcclaw-core/.../tools/memory/CoreMemoryAppendTool.java` | `@ApplicationScoped` — atomic append via `CoreMemoryService.append()` |
-| `CoreMemoryReplaceTool` | `arcclaw-core/.../tools/memory/CoreMemoryReplaceTool.java` | `@ApplicationScoped` — full content replacement via `CoreMemoryService.upsert()` |
-| `ArchivalMemoryInsertTool` | `arcclaw-core/.../tools/memory/ArchivalMemoryInsertTool.java` | `@ApplicationScoped` — `requiresManualApproval()=true`, 4000 char cap |
-| `MemoryWriteGovernance` | `arcclaw-core/.../memory/tiered/MemoryWriteGovernance.java` | `@ApplicationScoped` — token bucket rate limiter (node-local, in-memory) |
+| `CoreMemoryReadTool` | `core/.../tools/memory/CoreMemoryReadTool.java` | `@ApplicationScoped` — read all or specific block by key |
+| `CoreMemoryAppendTool` | `core/.../tools/memory/CoreMemoryAppendTool.java` | `@ApplicationScoped` — atomic append via `CoreMemoryService.append()` |
+| `CoreMemoryReplaceTool` | `core/.../tools/memory/CoreMemoryReplaceTool.java` | `@ApplicationScoped` — full content replacement via `CoreMemoryService.upsert()` |
+| `ArchivalMemoryInsertTool` | `core/.../tools/memory/ArchivalMemoryInsertTool.java` | `@ApplicationScoped` — `requiresManualApproval()=true`, 4000 char cap |
+| `MemoryWriteGovernance` | `core/.../memory/tiered/MemoryWriteGovernance.java` | `@ApplicationScoped` — token bucket rate limiter (node-local, in-memory) |
 | `CoreMemoryService.append()` | Modified — atomic read-modify-write | CAS retry loop reads fresh content on each attempt |
 | `ToolCapability` | Modified — 4 new enum entries | `CORE_MEMORY_READ`, `CORE_MEMORY_APPEND`, `CORE_MEMORY_REPLACE`, `ARCHIVAL_MEMORY_INSERT` |
 | `SecurityEventType.MEMORY_WRITE_MUTATED` | Modified — new enum constant | Mandatory audit for all memory writes |
@@ -2133,11 +2133,11 @@ coreMemoryService.append(userId, blockKey, content);
 
 ```yaml
 # application.yaml — node-local, in-memory token buckets
-arcclaw:
+amsha:
   memory:
     governance:
-      core-writes-per-minute: ${ARCCLAW_MEMORY_GOVERNANCE_CORE_WRITES_PER_MINUTE:5}
-      archival-writes-per-hour: ${ARCCLAW_MEMORY_GOVERNANCE_ARCHIVAL_WRITES_PER_HOUR:10}
+      core-writes-per-minute: ${AMSHA_MEMORY_GOVERNANCE_CORE_WRITES_PER_MINUTE:5}
+      archival-writes-per-hour: ${AMSHA_MEMORY_GOVERNANCE_ARCHIVAL_WRITES_PER_HOUR:10}
 ```
 
 **Scope:** Node-local, in-memory. Rate limits reset on restart, not cluster-wide. Intentional agent-side guardrail.
@@ -2158,18 +2158,18 @@ Verified by 3 tests in `ToolInvocationGuardTest`: approval at SUPERVISED, bypass
 
 | File | Action |
 |---|---|
-| `arcclaw-core/.../role/ToolCapability.java` | ADD 4 enum entries |
-| `arcclaw-core/.../audit/SecurityEventType.java` | ADD `MEMORY_WRITE_MUTATED` |
-| `arcclaw-core/.../memory/tiered/MemoryWriteGovernance.java` | NEW — token bucket rate limiter |
-| `arcclaw-core/.../memory/tiered/CoreMemoryService.java` | ADD `append()` atomic method |
-| `arcclaw-core/.../tools/memory/CoreMemoryReadTool.java` | NEW |
-| `arcclaw-core/.../tools/memory/CoreMemoryAppendTool.java` | NEW |
-| `arcclaw-core/.../tools/memory/CoreMemoryReplaceTool.java` | NEW |
-| `arcclaw-core/.../tools/memory/ArchivalMemoryInsertTool.java` | NEW |
-| `arcclaw-app/.../application.yaml` | ADD governance config |
+| `core/.../role/ToolCapability.java` | ADD 4 enum entries |
+| `core/.../audit/SecurityEventType.java` | ADD `MEMORY_WRITE_MUTATED` |
+| `core/.../memory/tiered/MemoryWriteGovernance.java` | NEW — token bucket rate limiter |
+| `core/.../memory/tiered/CoreMemoryService.java` | ADD `append()` atomic method |
+| `core/.../tools/memory/CoreMemoryReadTool.java` | NEW |
+| `core/.../tools/memory/CoreMemoryAppendTool.java` | NEW |
+| `core/.../tools/memory/CoreMemoryReplaceTool.java` | NEW |
+| `core/.../tools/memory/ArchivalMemoryInsertTool.java` | NEW |
+| `app/.../application.yaml` | ADD governance config |
 | `.env.example` | ADD governance env vars |
-| `arcclaw-core/src/test/.../MemoryWriteGovernanceTest.java` | NEW — rate limiter tests |
-| `arcclaw-core/src/test/.../CoreMemoryWriteToolsTest.java` | NEW — read/append/replace tests |
-| `arcclaw-core/src/test/.../ArchivalMemoryInsertToolTest.java` | NEW — insert + approval tests |
-| `arcclaw-core/src/test/.../ToolInvocationGuardTest.java` | ADD 3 approval gate tests |
-| `arcclaw-app/src/test/.../ChatCommandApprovalTest.java` | FIX — `@Disabled` for JLine3 hang |
+| `core/src/test/.../MemoryWriteGovernanceTest.java` | NEW — rate limiter tests |
+| `core/src/test/.../CoreMemoryWriteToolsTest.java` | NEW — read/append/replace tests |
+| `core/src/test/.../ArchivalMemoryInsertToolTest.java` | NEW — insert + approval tests |
+| `core/src/test/.../ToolInvocationGuardTest.java` | ADD 3 approval gate tests |
+| `app/src/test/.../ChatCommandApprovalTest.java` | FIX — `@Disabled` for JLine3 hang |

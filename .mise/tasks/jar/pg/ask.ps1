@@ -4,7 +4,7 @@
 $ErrorActionPreference = 'Stop'
 $goal = if ($env:GOAL) { $env:GOAL } else { '' }
 if (-not $goal) { Write-Host 'Usage: $env:GOAL="..."; mise run jar:pg:ask'; exit 1 }
-$jar = 'arcclaw-app/target/quarkus-app/quarkus-run.jar'
+$jar = 'app/target/quarkus-app/quarkus-run.jar'
 if (-not (Test-Path $jar)) { Write-Host '❌  JAR not found. Run: mise run build:pg'; exit 1 }
 [console]::InputEncoding = [console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $jvmArgs = @(
@@ -16,7 +16,7 @@ $jvmArgs = @(
     '-Dsun.misc.unsafe.memory.access=allow',
     '-Dfile.encoding=UTF-8', '-Dstdout.encoding=UTF-8',
     '-Dquarkus.profile=postgresql',
-    '-Darcclaw.data-dir=./data'
+    '-Damsha.data-dir=./data'
 )
 $cmdArgs = @('ask', $goal)
 if ($env:ROLE) { $cmdArgs += '--role', $env:ROLE }

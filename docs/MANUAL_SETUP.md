@@ -1,4 +1,4 @@
-# ArcClaw - Manual Setup Guide
+# Amsha Agent - Manual Setup Guide
 
 > **Stack**: JDK 25 · Quarkus 3.27.2 · LangChain4J 1.x · SQLite (WAL + FTS5 + sqlite-vec) · Podman (rootless) · Groq Cloud
 >
@@ -225,8 +225,8 @@ Not needed on Windows - use `mvnw.cmd` instead of `./mvnw`.
 ### 5.1 Clone the Repository
 
 ```bash
-git clone https://github.com/rsrini7/ArcClaw.git
-cd ArcClaw
+git clone https://github.com/rsrini7/Amsha Agent.git
+cd Amsha Agent
 ```
 
 ### 5.2 Create .env
@@ -257,10 +257,10 @@ openssl rand -base64 32   # run 3 times: VAULT_PEPPER, AUDIT_HMAC_KEY, API_KEY_I
 Set in `.env`:
 
 ```env
-ARCCLAW_VAULT_PEPPER=<generated>        # immutable - do not change after first boot
-ARCCLAW_AUDIT_HMAC_KEY=<generated>      # immutable - do not change after first boot
-ARCCLAW_API_KEYS_INTERNAL=<generated>
-ARCCLAW_API_KEYS_CI=<generated>          # optional, for CI smoke tests
+AMSHA_VAULT_PEPPER=<generated>        # immutable - do not change after first boot
+AMSHA_AUDIT_HMAC_KEY=<generated>      # immutable - do not change after first boot
+AMSHA_API_KEYS_INTERNAL=<generated>
+AMSHA_API_KEYS_CI=<generated>          # optional, for CI smoke tests
 ```
 
 ### 5.4 Set Required API Keys
@@ -269,34 +269,34 @@ Edit `.env`:
 
 ```env
 # LLM - required
-ARCCLAW_LLM_API_KEY=gsk_your_key_here          # get from console.groq.com
+AMSHA_LLM_API_KEY=gsk_your_key_here          # get from console.groq.com
 
 # Embedding - multi-slot infinite-loop (Ollama local by default)
-ARCCLAW_INFINITE_LOOP_EMBEDDING_PROVIDERS=ollama,jina
-ARCCLAW_EMBEDDING_OLLAMA_MODEL=nomic-embed-text:v1.5
-ARCCLAW_EMBEDDING_OLLAMA_BASE_URL=http://localhost:11434
-ARCCLAW_EMBEDDING_JINA_API_KEY=jina_your_key     # get from jina.ai
-ARCCLAW_EMBEDDING_JINA_MODEL=jina-embeddings-v5-text-nano
-ARCCLAW_EMBEDDING_JINA_BASE_URL=https://api.jina.ai/v1/
-ARCCLAW_EMBED_DIMENSIONS=768
+AMSHA_INFINITE_LOOP_EMBEDDING_PROVIDERS=ollama,jina
+AMSHA_EMBEDDING_OLLAMA_MODEL=nomic-embed-text:v1.5
+AMSHA_EMBEDDING_OLLAMA_BASE_URL=http://localhost:11434
+AMSHA_EMBEDDING_JINA_API_KEY=jina_your_key     # get from jina.ai
+AMSHA_EMBEDDING_JINA_MODEL=jina-embeddings-v5-text-nano
+AMSHA_EMBEDDING_JINA_BASE_URL=https://api.jina.ai/v1/
+AMSHA_EMBED_DIMENSIONS=768
 
 # GitHub - optional, needed for researcher role GitHub tool
 GITHUB_TOKEN=ghp_your_token
 
 # Auto-seed vault from .env on boot
-ARCCLAW_AUTO_SEED_SECRETS=true
+AMSHA_AUTO_SEED_SECRETS=true
 ```
 
 ### 5.5 Telegram (Required Only for attach Mode)
 
 ```env
-ARCCLAW_TELEGRAM_ENABLED=true
+AMSHA_TELEGRAM_ENABLED=true
 TELEGRAM_BOT_TOKEN=123456789:ABCdefGHIjklmNOPQrsTUVwxyz
-ARCCLAW_TELEGRAM_ALLOWED_USER_IDS=123456789          # numeric IDs from @userinfobot
-ARCCLAW_TELEGRAM_ALLOWED_USERS=yourusername          # without @
+AMSHA_TELEGRAM_ALLOWED_USER_IDS=123456789          # numeric IDs from @userinfobot
+AMSHA_TELEGRAM_ALLOWED_USERS=yourusername          # without @
 ```
 
-If not using Telegram, comment these out or set `ARCCLAW_TELEGRAM_ENABLED=false` - leaving placeholder values causes Quarkus to fail on startup (it tries to parse `<telegram-user-id>` as a long).
+If not using Telegram, comment these out or set `AMSHA_TELEGRAM_ENABLED=false` - leaving placeholder values causes Quarkus to fail on startup (it tries to parse `<telegram-user-id>` as a long).
 
 ### 5.6 Validate .env
 
@@ -314,12 +314,12 @@ Select-String -Path .env -Pattern 'changeme|<[^>]+>' | ForEach-Object { $_.Line 
 
 ### 5.7 Understand the Data Directory
 
-`ARCCLAW_DATA_DIR=./data` (default). ArcClaw creates at runtime:
+`AMSHA_DATA_DIR=./data` (default). Amsha Agent creates at runtime:
 
 ```
 data/
-├── arcclaw-meta.db     # Main SQLite WAL database (memory, audit, vault, skills, sessions)
-├── arcclaw-fts.db      # FTS5 full-text search index
+├── amsha-meta.db     # Main SQLite WAL database (memory, audit, vault, skills, sessions)
+├── amsha-fts.db      # FTS5 full-text search index
 └── workspaces/         # Per-session ephemeral sandbox directories
 ```
 
@@ -336,10 +336,10 @@ Required before running in prod mode. Without it, `PodmanImageHealthCheck` fails
 docker compose build tool-runner
 
 # Or directly via Podman
-podman build -t arcclaw-tool-runner:latest -f sandbox/Dockerfile.toolrunner sandbox/
+podman build -t amsha-tool-runner:latest -f sandbox/Dockerfile.toolrunner sandbox/
 
 # Verify
-podman images | grep arcclaw-tool-runner
+podman images | grep amsha-tool-runner
 ```
 
 ### 6.2 Sandbox Tier Behaviour
@@ -354,7 +354,7 @@ podman images | grep arcclaw-tool-runner
 
 ### 6.3 sqlite-vec Extension (RAG Vector Search)
 
-ArcClaw **auto-installs** the correct `vec0` native extension for your platform (Linux, macOS, Windows) from internal resources on first boot. The binary is extracted to `./lib/vec0` (configurable via `ARCCLAW_RAG_VEC_PATH`).
+Amsha Agent **auto-installs** the correct `vec0` native extension for your platform (Linux, macOS, Windows) from internal resources on first boot. The binary is extracted to `./lib/vec0` (configurable via `AMSHA_RAG_VEC_PATH`).
 
 You can manually override this by placing your own build in `lib/`:
 
@@ -365,9 +365,9 @@ You can manually override this by placing your own build in `lib/`:
 | Windows | `lib/vec0.dll` | `sqlite-vec-0.1.6-loadable-windows-x86_64.tar.gz` |
 
 SQLite appends the platform suffix automatically - always pass the path **without** extension:
-`ARCCLAW_RAG_VEC_PATH=./lib/vec0`
+`AMSHA_RAG_VEC_PATH=./lib/vec0`
 
-If the extension is missing from resources and the filesystem, ArcClaw degrades gracefully to FTS5-only search.
+If the extension is missing from resources and the filesystem, Amsha Agent degrades gracefully to FTS5-only search.
 
 ---
 
@@ -396,13 +396,13 @@ $env:MAVEN_OPTS = "--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.b
 
 ```bash
 # macOS / WSL2 / Linux
-./mvnw clean install -pl arcclaw-app -am -DskipTests
+./mvnw clean install -pl amsha-app -am -DskipTests
 
 # Windows PowerShell
-.\mvnw.cmd clean install -pl arcclaw-app -am -DskipTests
+.\mvnw.cmd clean install -pl amsha-app -am -DskipTests
 ```
 
-Output: `arcclaw-app/target/quarkus-app/quarkus-run.jar`
+Output: `app/target/quarkus-app/quarkus-run.jar`
 
 ### 7.2 Full Build - All Modules
 
@@ -455,23 +455,23 @@ Dev mode uses the `%dev` profile: no container isolation, live code reload, Quar
 
 ```bash
 # macOS / WSL2 / Linux
-./mvnw quarkus:dev -pl arcclaw-app -am \
+./mvnw quarkus:dev -pl amsha-app -am \
   "-Djvm.args=--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow -Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dsun.stdout.encoding=UTF-8 -Dsun.stderr.encoding=UTF-8" \
   "-Dquarkus.args=serve" \
   "-Dquarkus.profile=dev" \
-  "-Darcclaw.rag.vec-extension-path=../lib/vec0" \
-  "-Darcclaw.data-dir=../data"
+  "-Damsha.rag.vec-extension-path=../lib/vec0" \
+  "-Damsha.data-dir=../data"
 ```
 
 ```powershell
 # Windows PowerShell
 $jvmArgs = "--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow -Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dsun.stdout.encoding=UTF-8 -Dsun.stderr.encoding=UTF-8"
-.\mvnw.cmd quarkus:dev -pl arcclaw-app -am `
+.\mvnw.cmd quarkus:dev -pl amsha-app -am `
   "-Djvm.args=$jvmArgs" `
   "-Dquarkus.args=serve" `
   "-Dquarkus.profile=dev" `
-  "-Darcclaw.rag.vec-extension-path=../lib/vec0" `
-  "-Darcclaw.data-dir=../data"
+  "-Damsha.rag.vec-extension-path=../lib/vec0" `
+  "-Damsha.data-dir=../data"
 ```
 
 ### 8.2 Dev: chat (Interactive REPL)
@@ -488,22 +488,22 @@ Requires `TELEGRAM_BOT_TOKEN` set in `.env`.
 
 ```bash
 # macOS / WSL2 / Linux
-./mvnw quarkus:dev -pl arcclaw-app -am \
+./mvnw quarkus:dev -pl amsha-app -am \
   "-Djvm.args=..." \
   "-Dquarkus.args=ask your goal here --role coordinator" \
   "-Dquarkus.profile=dev" \
-  "-Darcclaw.rag.vec-extension-path=../lib/vec0" \
-  "-Darcclaw.data-dir=../data"
+  "-Damsha.rag.vec-extension-path=../lib/vec0" \
+  "-Damsha.data-dir=../data"
 ```
 
 ```powershell
 # Windows PowerShell
-.\mvnw.cmd quarkus:dev -pl arcclaw-app -am `
+.\mvnw.cmd quarkus:dev -pl amsha-app -am `
   "-Djvm.args=$jvmArgs" `
   "-Dquarkus.args=ask your goal here --role coordinator" `
   "-Dquarkus.profile=dev" `
-  "-Darcclaw.rag.vec-extension-path=../lib/vec0" `
-  "-Darcclaw.data-dir=../data"
+  "-Damsha.rag.vec-extension-path=../lib/vec0" `
+  "-Damsha.data-dir=../data"
 ```
 
 ### 8.5 Dev: No UI (Suppress Dev Console)
@@ -552,8 +552,8 @@ These apply to all `java -jar` commands below:
 -Dsun.stdout.encoding=UTF-8
 -Dsun.stderr.encoding=UTF-8
 -Dquarkus.profile=cli
--Darcclaw.rag.vec-extension-path=./lib/vec0
--Darcclaw.data-dir=./data
+-Damsha.rag.vec-extension-path=./lib/vec0
+-Damsha.data-dir=./data
 ```
 
 ### 9.1 serve - HTTP + MCP Daemon on :8080
@@ -570,15 +570,15 @@ java \
   -Dsun.stdout.encoding=UTF-8 -Dsun.stderr.encoding=UTF-8 \
   -Dquarkus.profile=cli \
   -Dquarkus.mcp.server.stdio.enabled=true \
-  -Darcclaw.telegram.enabled=true \
-  -Darcclaw.rag.vec-extension-path=./lib/vec0 \
-  -Darcclaw.data-dir=./data \
-  -jar arcclaw-app/target/quarkus-app/quarkus-run.jar serve
+  -Damsha.telegram.enabled=true \
+  -Damsha.rag.vec-extension-path=./lib/vec0 \
+  -Damsha.data-dir=./data \
+  -jar app/target/quarkus-app/quarkus-run.jar serve
 ```
 
 ```powershell
 # Windows PowerShell
-$jar = 'arcclaw-app/target/quarkus-app/quarkus-run.jar'
+$jar = 'app/target/quarkus-app/quarkus-run.jar'
 $jvmArgs = @(
     '--add-opens=java.base/java.nio=ALL-UNNAMED',
     '--add-opens=java.base/jdk.internal.misc=ALL-UNNAMED',
@@ -589,16 +589,16 @@ $jvmArgs = @(
     '-Dsun.stdout.encoding=UTF-8', '-Dsun.stderr.encoding=UTF-8',
     '-Dquarkus.profile=cli',
     '-Dquarkus.mcp.server.stdio.enabled=true',
-    '-Darcclaw.telegram.enabled=true',
-    '-Darcclaw.rag.vec-extension-path=./lib/vec0',
-    '-Darcclaw.data-dir=./data'
+    '-Damsha.telegram.enabled=true',
+    '-Damsha.rag.vec-extension-path=./lib/vec0',
+    '-Damsha.data-dir=./data'
 )
 & java @jvmArgs -jar $jar serve
 ```
 
 ### 9.2 chat - Interactive REPL
 
-Same as serve but replace `serve` with `chat` at the end. Remove `-Dquarkus.mcp.server.stdio.enabled=true` and `-Darcclaw.telegram.enabled=true`.
+Same as serve but replace `serve` with `chat` at the end. Remove `-Dquarkus.mcp.server.stdio.enabled=true` and `-Damsha.telegram.enabled=true`.
 
 ### 9.3 attach - Telegram Daemon
 
@@ -617,15 +617,15 @@ java \
   -Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 \
   -Dsun.stdout.encoding=UTF-8 -Dsun.stderr.encoding=UTF-8 \
   -Dquarkus.profile=cli \
-  -Darcclaw.rag.vec-extension-path=./lib/vec0 \
-  -Darcclaw.data-dir=./data \
-  -jar arcclaw-app/target/quarkus-app/quarkus-run.jar \
-  ask "Analyse the ArcClaw repository" --role coordinator
+  -Damsha.rag.vec-extension-path=./lib/vec0 \
+  -Damsha.data-dir=./data \
+  -jar app/target/quarkus-app/quarkus-run.jar \
+  ask "Analyse the Amsha Agent repository" --role coordinator
 ```
 
 ```powershell
 # Windows PowerShell
-& java @jvmArgs -jar $jar ask "Analyse the ArcClaw repository" --role coordinator
+& java @jvmArgs -jar $jar ask "Analyse the Amsha Agent repository" --role coordinator
 ```
 
 ### 9.5 JAR with Dev Profile
@@ -658,14 +658,14 @@ export MAVEN_OPTS="--add-opens=java.base/java.nio=ALL-UNNAMED \
   --enable-native-access=ALL-UNNAMED \
   -Dsun.misc.unsafe.memory.access=allow"
 
-./mvnw clean package -Pnative -pl arcclaw-app -am -DskipTests \
+./mvnw clean package -Pnative -pl amsha-app -am -DskipTests \
   -Dquarkus.native.container-build=true
 
 # Restore .env
 mv .env.build-backup .env
 ```
 
-Output: `arcclaw-app/target/arcclaw-app-1.0.0-SNAPSHOT-runner`
+Output: `app/target/app-1.0.0-SNAPSHOT-runner`
 
 ### 10.2 Build - Local GraalVM (No Container)
 
@@ -673,11 +673,11 @@ Switch to GraalVM first (see [Section 13](#13-jdk-management)), then:
 
 ```bash
 # macOS / WSL2 / Linux
-./mvnw clean package -Pnative -pl arcclaw-app -am -DskipTests \
+./mvnw clean package -Pnative -pl amsha-app -am -DskipTests \
   -Dquarkus.native.container-build=false
 
 # Windows PowerShell
-.\mvnw.cmd clean package -Pnative -pl arcclaw-app -am -DskipTests `
+.\mvnw.cmd clean package -Pnative -pl amsha-app -am -DskipTests `
   "-Dquarkus.native.container-build=false"
 ```
 
@@ -686,7 +686,7 @@ Switch back to Temurin after (see [Section 13](#13-jdk-management)).
 ### 10.3 Build - Low Memory (6 GB Heap Cap)
 
 ```bash
-./mvnw clean package -Pnative -pl arcclaw-app -am -DskipTests \
+./mvnw clean package -Pnative -pl amsha-app -am -DskipTests \
   -Dquarkus.native.container-build=false \
   "-Dquarkus.native.additional-build-args=-J-Xmx6g"
 ```
@@ -699,35 +699,35 @@ Switch back to Temurin after (see [Section 13](#13-jdk-management)).
 
 ```bash
 export LD_PRELOAD=/lib/x86_64-linux-gnu/libm.so.6
-export ARCCLAW_RAG_VEC_PATH=./lib/vec0
-export ARCCLAW_DATA_DIR=./data
+export AMSHA_RAG_VEC_PATH=./lib/vec0
+export AMSHA_DATA_DIR=./data
 
-./arcclaw-app/target/arcclaw-app-1.0.0-SNAPSHOT-runner serve
+./app/target/app-1.0.0-SNAPSHOT-runner serve
 # or: chat | attach | ask "your goal"
 ```
 
 #### macOS
 
 ```bash
-export ARCCLAW_RAG_VEC_PATH=./lib/vec0
-export ARCCLAW_DATA_DIR=./data
+export AMSHA_RAG_VEC_PATH=./lib/vec0
+export AMSHA_DATA_DIR=./data
 
-./arcclaw-app/target/arcclaw-app-1.0.0-SNAPSHOT-runner serve
+./app/target/app-1.0.0-SNAPSHOT-runner serve
 ```
 
 #### Windows PowerShell
 
 ```powershell
-$env:ARCCLAW_RAG_VEC_PATH = './lib/vec0'
-$env:ARCCLAW_DATA_DIR = './data'
+$env:AMSHA_RAG_VEC_PATH = './lib/vec0'
+$env:AMSHA_DATA_DIR = './data'
 
-.\arcclaw-app\target\arcclaw-app-1.0.0-SNAPSHOT-runner.exe serve
+.\app\target\app-1.0.0-SNAPSHOT-runner.exe serve
 ```
 
 #### Role Flag (All Platforms)
 
 ```bash
-./arcclaw-app/target/arcclaw-app-1.0.0-SNAPSHOT-runner ask "your goal" --role researcher
+./app/target/app-1.0.0-SNAPSHOT-runner ask "your goal" --role researcher
 ```
 
 ---
@@ -741,7 +741,7 @@ Manually assemble a `dist/` folder containing the binary, launchers, and vec0 ex
 mkdir -p dist/lib
 
 # Copy binary
-cp arcclaw-app/target/arcclaw-app-1.0.0-SNAPSHOT-runner dist/
+cp app/target/app-1.0.0-SNAPSHOT-runner dist/
 
 # Copy .env.example
 cp .env.example dist/.env.example
@@ -755,7 +755,7 @@ cp .env.example dist/.env.example
 ```powershell
 # Windows PowerShell
 New-Item -ItemType Directory -Force dist/lib | Out-Null
-Copy-Item arcclaw-app/target/arcclaw-app-1.0.0-SNAPSHOT-runner.exe dist/
+Copy-Item app/target/app-1.0.0-SNAPSHOT-runner.exe dist/
 Copy-Item .env.example dist/.env.example
 if (Test-Path lib/vec0.dll)   { Copy-Item lib/vec0.dll   dist/lib/ }
 if (Test-Path lib/vec0.so)    { Copy-Item lib/vec0.so    dist/lib/ }
@@ -768,21 +768,21 @@ if (Test-Path lib/vec0.dylib) { Copy-Item lib/vec0.dylib dist/lib/ }
 # Linux archive
 mkdir -p dist/release
 cd dist
-tar -czf release/arcclaw-1.0.0-linux-x64.tar.gz \
-  arcclaw-app-1.0.0-SNAPSHOT-runner .env.example lib/
+tar -czf release/amsha-1.0.0-linux-x64.tar.gz \
+  amsha-app-1.0.0-SNAPSHOT-runner .env.example lib/
 cd ..
 ```
 
 ```powershell
 # Windows archive
-Compress-Archive -Path dist/* -DestinationPath dist/release/arcclaw-1.0.0-windows-x64.zip -Force
+Compress-Archive -Path dist/* -DestinationPath dist/release/amsha-1.0.0-windows-x64.zip -Force
 ```
 
 ---
 
 ## 12. Docker Compose Stack
 
-The full observability stack: ArcClaw native binary + Ollama + OTel Collector + Jaeger + Prometheus.
+The full observability stack: Amsha Agent native binary + Ollama + OTel Collector + Jaeger + Prometheus.
 
 > Requires the native binary to be built first ([Section 10](#10-native-binary-build--run)).
 
@@ -794,7 +794,7 @@ docker compose up -d
 
 | Service | Port | Notes |
 |---|---|---|
-| `arcclaw` | `8080` | Native binary, `QUARKUS_PROFILE=prod` |
+| `amsha` | `8080` | Native binary, `QUARKUS_PROFILE=prod` |
 | `ollama` | `11434` | Local LLM (disabled by default in `application.yaml`) |
 | `otel-collector` | `4317`, `4318` | OTLP receiver → Jaeger |
 | `jaeger` | `16686` | Distributed trace UI |
@@ -812,20 +812,20 @@ docker compose down -v
 ### 12.3 Follow Logs
 
 ```bash
-docker compose logs -f arcclaw
+docker compose logs -f amsha
 ```
 
-### 12.4 Restart arcclaw Only
+### 12.4 Restart amsha Only
 
 ```bash
-docker compose restart arcclaw
+docker compose restart amsha
 ```
 
 ---
 
 ## 13. JDK Management
 
-ArcClaw uses two JDKs: **Temurin 25** for all dev/build/jar tasks, and **GraalVM Community 25.0.2** only for native builds.
+Amsha Agent uses two JDKs: **Temurin 25** for all dev/build/jar tasks, and **GraalVM Community 25.0.2** only for native builds.
 
 ### 13.1 Switch to GraalVM (for native builds)
 
@@ -888,10 +888,10 @@ java -version
 
 ```bash
 # macOS / WSL2 / Linux
-sqlite3 data/arcclaw-meta.db
+sqlite3 data/amsha-meta.db
 
 # Windows PowerShell
-sqlite3 data/arcclaw-meta.db
+sqlite3 data/amsha-meta.db
 ```
 
 ### 14.2 Verify FTS5 Available
@@ -921,34 +921,34 @@ if (Test-Path lib/vec0.dll) { Write-Host "OK: lib/vec0.dll" } else { Write-Host 
 
 | Variable | Required | Default | Notes |
 |---|---|---|---|
-| `ARCCLAW_LLM_API_KEY` | ✅ | - | Starts with `gsk_`. Get from [console.groq.com](https://console.groq.com). |
-| `ARCCLAW_VAULT_PEPPER` | ✅ | - | Min 32 bytes. **Immutable after first boot.** |
-| `ARCCLAW_AUDIT_HMAC_KEY` | ✅ | - | Min 32 bytes. **Immutable after first boot.** |
-| `ARCCLAW_API_KEYS_INTERNAL` | ✅ | - | Bearer token for REST API (`Authorization: Bearer`). |
-| `ARCCLAW_API_KEYS_CI` | Optional | - | CI/CD read-only API key. |
-| `ARCCLAW_INFINITE_LOOP_EMBEDDING_PROVIDERS` | Optional | `ollama` | Comma-separated embedding providers (ollama, openai, jina, ...). |
-| `ARCCLAW_EMBEDDING_<PROVIDER>_API_KEY` | Required for non-local providers | - | Per-provider embedding key (e.g. `ARCCLAW_EMBEDDING_JINA_API_KEY`). |
-| `ARCCLAW_EMBEDDING_<PROVIDER>_MODEL` | Optional | (per provider) | Per-provider embedding model (e.g. `ARCCLAW_EMBEDDING_JINA_MODEL`). |
-| `ARCCLAW_EMBEDDING_<PROVIDER>_BASE_URL` | Optional | (per provider) | Per-provider base URL (e.g. `ARCCLAW_EMBEDDING_OLLAMA_BASE_URL`). |
-| `ARCCLAW_INFINITE_LOOP_COMPACTION_PROVIDERS` | Optional | `groq,ollama` | Comma-separated compaction providers. |
-| `ARCCLAW_COMPACTION_<PROVIDER>_API_KEY` | Required for non-local providers | - | Per-provider compaction key (e.g. `ARCCLAW_COMPACTION_GROQ_API_KEY`). |
-| `ARCCLAW_INFINITE_LOOP_CLASSIFIER_PROVIDERS` | Optional | `groq,ollama` | Comma-separated classifier providers. |
-| `ARCCLAW_CLASSIFIER_<PROVIDER>_API_KEY` | Required for non-local providers | - | Per-provider classifier key (e.g. `ARCCLAW_CLASSIFIER_GROQ_API_KEY`). |
-| `ARCCLAW_EMBED_DIMENSIONS` | Optional | `768` | Must match model. Jina nano = 768, OpenAI 3-small = 1536. |
-| `ARCCLAW_AUTO_SEED_SECRETS` | Optional | `false` | Set `true` to seed vault from env on boot. |
+| `AMSHA_LLM_API_KEY` | ✅ | - | Starts with `gsk_`. Get from [console.groq.com](https://console.groq.com). |
+| `AMSHA_VAULT_PEPPER` | ✅ | - | Min 32 bytes. **Immutable after first boot.** |
+| `AMSHA_AUDIT_HMAC_KEY` | ✅ | - | Min 32 bytes. **Immutable after first boot.** |
+| `AMSHA_API_KEYS_INTERNAL` | ✅ | - | Bearer token for REST API (`Authorization: Bearer`). |
+| `AMSHA_API_KEYS_CI` | Optional | - | CI/CD read-only API key. |
+| `AMSHA_INFINITE_LOOP_EMBEDDING_PROVIDERS` | Optional | `ollama` | Comma-separated embedding providers (ollama, openai, jina, ...). |
+| `AMSHA_EMBEDDING_<PROVIDER>_API_KEY` | Required for non-local providers | - | Per-provider embedding key (e.g. `AMSHA_EMBEDDING_JINA_API_KEY`). |
+| `AMSHA_EMBEDDING_<PROVIDER>_MODEL` | Optional | (per provider) | Per-provider embedding model (e.g. `AMSHA_EMBEDDING_JINA_MODEL`). |
+| `AMSHA_EMBEDDING_<PROVIDER>_BASE_URL` | Optional | (per provider) | Per-provider base URL (e.g. `AMSHA_EMBEDDING_OLLAMA_BASE_URL`). |
+| `AMSHA_INFINITE_LOOP_COMPACTION_PROVIDERS` | Optional | `groq,ollama` | Comma-separated compaction providers. |
+| `AMSHA_COMPACTION_<PROVIDER>_API_KEY` | Required for non-local providers | - | Per-provider compaction key (e.g. `AMSHA_COMPACTION_GROQ_API_KEY`). |
+| `AMSHA_INFINITE_LOOP_CLASSIFIER_PROVIDERS` | Optional | `groq,ollama` | Comma-separated classifier providers. |
+| `AMSHA_CLASSIFIER_<PROVIDER>_API_KEY` | Required for non-local providers | - | Per-provider classifier key (e.g. `AMSHA_CLASSIFIER_GROQ_API_KEY`). |
+| `AMSHA_EMBED_DIMENSIONS` | Optional | `768` | Must match model. Jina nano = 768, OpenAI 3-small = 1536. |
+| `AMSHA_AUTO_SEED_SECRETS` | Optional | `false` | Set `true` to seed vault from env on boot. |
 | `GITHUB_TOKEN` | Optional | - | Required for GitHub tool (researcher role). |
-| `ARCCLAW_DATA_DIR` | Optional | `./data` | Path to SQLite databases and workspaces. |
-| `ARCCLAW_CORS_ORIGINS` | Optional | `http://localhost:3000` | Comma-separated CORS origins. |
-| `ARCCLAW_TELEGRAM_ENABLED` | Optional | `true` | Set `false` if not using Telegram. |
+| `AMSHA_DATA_DIR` | Optional | `./data` | Path to SQLite databases and workspaces. |
+| `AMSHA_CORS_ORIGINS` | Optional | `http://localhost:3000` | Comma-separated CORS origins. |
+| `AMSHA_TELEGRAM_ENABLED` | Optional | `true` | Set `false` if not using Telegram. |
 | `TELEGRAM_BOT_TOKEN` | attach only | - | From @BotFather. |
-| `ARCCLAW_TELEGRAM_ALLOWED_USER_IDS` | attach only | - | Comma-separated numeric IDs. |
-| `ARCCLAW_TELEGRAM_ALLOWED_USERS` | attach only | - | Comma-separated usernames (no @). |
+| `AMSHA_TELEGRAM_ALLOWED_USER_IDS` | attach only | - | Comma-separated numeric IDs. |
+| `AMSHA_TELEGRAM_ALLOWED_USERS` | attach only | - | Comma-separated usernames (no @). |
 | `QUARKUS_PROFILE` | Optional | `prod` | `dev` \| `test` \| `prod` \| `cli` |
-| `ARCCLAW_RAG_VEC_PATH` | Optional | `./lib/vec0` | Path to vec0 extension (no suffix). |
+| `AMSHA_RAG_VEC_PATH` | Optional | `./lib/vec0` | Path to vec0 extension (no suffix). |
 | `QUARKUS_OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` | Optional | `http://localhost:4317` | OTLP trace endpoint. |
-| `ARCCLAW_LLM_LOG_HTTP` | Optional | `false` | Log full LLM request/response. Do NOT enable in prod. |
-| `ARCCLAW_SANDBOX_ENABLED` | Optional | `true` | Enable Podman sandbox. |
-| `ARCCLAW_SANDBOX_STRATEGY` | Optional | `PODMAN` | `PODMAN` \| `NONE` |
+| `AMSHA_LLM_LOG_HTTP` | Optional | `false` | Log full LLM request/response. Do NOT enable in prod. |
+| `AMSHA_SANDBOX_ENABLED` | Optional | `true` | Enable Podman sandbox. |
+| `AMSHA_SANDBOX_STRATEGY` | Optional | `PODMAN` | `PODMAN` \| `NONE` |
 
 > **Security rules**: Never commit `.env`. `VAULT_PEPPER` and `AUDIT_HMAC_KEY` must never change after first boot - doing so corrupts the vault and audit chain.
 
@@ -964,9 +964,9 @@ Windows CRLF in the Maven wrapper:
 sudo apt install dos2unix -y && dos2unix mvnw && chmod +x mvnw
 ```
 
-### `FATAL: arcclaw-audit-hmac-key is not present in SecretVault`
+### `FATAL: amsha-audit-hmac-key is not present in SecretVault`
 
-`ARCCLAW_AUTO_SEED_SECRETS=true` must be set in `.env` so `DevSecretSeeder` reads `ARCCLAW_AUDIT_HMAC_KEY` from config and seeds the vault before `StartupSecurityValidator` checks it. Verify:
+`AMSHA_AUTO_SEED_SECRETS=true` must be set in `.env` so `DevSecretSeeder` reads `AMSHA_AUDIT_HMAC_KEY` from config and seeds the vault before `StartupSecurityValidator` checks it. Verify:
 
 ```bash
 grep -E 'AUDIT_HMAC|AUTO_SEED' .env
@@ -981,16 +981,16 @@ Placeholder value left in `.env`. Comment out all Telegram keys or set real valu
 ```bash
 # macOS / WSL2
 sed -i.bak 's|^TELEGRAM_BOT_TOKEN=.*|# TELEGRAM_BOT_TOKEN=|' .env
-sed -i.bak 's|^ARCCLAW_TELEGRAM_ALLOWED_USER_IDS=.*|# ARCCLAW_TELEGRAM_ALLOWED_USER_IDS=|' .env
-sed -i.bak 's|^ARCCLAW_TELEGRAM_ALLOWED_USERS=.*|# ARCCLAW_TELEGRAM_ALLOWED_USERS=|' .env
+sed -i.bak 's|^AMSHA_TELEGRAM_ALLOWED_USER_IDS=.*|# AMSHA_TELEGRAM_ALLOWED_USER_IDS=|' .env
+sed -i.bak 's|^AMSHA_TELEGRAM_ALLOWED_USERS=.*|# AMSHA_TELEGRAM_ALLOWED_USERS=|' .env
 ```
 
 ```powershell
 # Windows PowerShell
 $c = [System.IO.File]::ReadAllText('.env')
 $c = $c -replace '(?m)^TELEGRAM_BOT_TOKEN=.*',                '# TELEGRAM_BOT_TOKEN='
-$c = $c -replace '(?m)^ARCCLAW_TELEGRAM_ALLOWED_USER_IDS=.*', '# ARCCLAW_TELEGRAM_ALLOWED_USER_IDS='
-$c = $c -replace '(?m)^ARCCLAW_TELEGRAM_ALLOWED_USERS=.*',    '# ARCCLAW_TELEGRAM_ALLOWED_USERS='
+$c = $c -replace '(?m)^AMSHA_TELEGRAM_ALLOWED_USER_IDS=.*', '# AMSHA_TELEGRAM_ALLOWED_USER_IDS='
+$c = $c -replace '(?m)^AMSHA_TELEGRAM_ALLOWED_USERS=.*',    '# AMSHA_TELEGRAM_ALLOWED_USERS='
 [System.IO.File]::WriteAllText('.env', $c)
 ```
 
@@ -1013,11 +1013,11 @@ done < .env
 Disable the Dev UI and console:
 
 ```bash
-./mvnw quarkus:dev -pl arcclaw-app -am \
+./mvnw quarkus:dev -pl amsha-app -am \
   "-Dquarkus.args=serve" \
   "-Dquarkus.console.enabled=false" \
   "-Dquarkus.devui.enabled=false" \
-  "-Darcclaw.rag.vec-extension-path=../lib/vec0"
+  "-Damsha.rag.vec-extension-path=../lib/vec0"
 ```
 
 ### Podman Socket Not Found / `docker ps` Fails (WSL2)
@@ -1046,7 +1046,7 @@ Or enable Docker API compatibility in Podman Desktop → Settings → General.
 ### Sandbox Strategy is `NONE` When You Expect `PODMAN`
 
 1. `quarkus:dev` always uses `NONE`. Package the jar and run with `QUARKUS_PROFILE=prod`.
-2. Was Podman running when ArcClaw started? The circuit breaker evaluates at boot - restart ArcClaw after starting Podman.
+2. Was Podman running when Amsha Agent started? The circuit breaker evaluates at boot - restart Amsha Agent after starting Podman.
 3. On Windows, the OS check bypasses Linux namespaces - run inside WSL2.
 
 ### `InaccessibleObjectException` / Unsafe Memory Warnings
@@ -1057,7 +1057,7 @@ Expected with Netty on JDK 22+. Ensure all `--add-opens` and `-Dsun.misc.unsafe.
 
 ```bash
 # Reduce heap cap (default is 8 GB)
-./mvnw clean package -Pnative -pl arcclaw-app -am -DskipTests \
+./mvnw clean package -Pnative -pl amsha-app -am -DskipTests \
   "-Dquarkus.native.additional-build-args=-J-Xmx6g"
 
 # Or increase Podman machine memory before building
@@ -1072,16 +1072,16 @@ podman machine start
 
 ```bash
 export LD_PRELOAD=/lib/x86_64-linux-gnu/libm.so.6
-./arcclaw-app/target/arcclaw-app-1.0.0-SNAPSHOT-runner serve
+./app/target/app-1.0.0-SNAPSHOT-runner serve
 ```
 
 ### vector search disabled at runtime
 
 1. Verify the correct extension exists: `lib/vec0.so` (Linux), `lib/vec0.dylib` (macOS), `lib/vec0.dll` (Windows).
-2. Pass path **without suffix**: `-Darcclaw.rag.vec-extension-path=./lib/vec0` (not `./lib/vec0.so`).
+2. Pass path **without suffix**: `-Damsha.rag.vec-extension-path=./lib/vec0` (not `./lib/vec0.so`).
 3. On Linux native: ensure `LD_PRELOAD` is set (see above).
 
-ArcClaw degrades to FTS5-only search - no crash, just a `WARN` in logs.
+Amsha Agent degrades to FTS5-only search - no crash, just a `WARN` in logs.
 
 ### FTS5 Not Available
 
@@ -1101,7 +1101,7 @@ ollama:
     - "11435:11434"
 ```
 
-### `lstat /arcclaw-app/target: no such file or directory` (Docker Compose)
+### `lstat /app/target: no such file or directory` (Docker Compose)
 
 Build the native binary ([Section 10](#10-native-binary-build--run)) before running `docker compose up --build`.
 
@@ -1119,11 +1119,11 @@ The `init-perms` service in `docker-compose.yaml` handles this automatically by 
 | [`MISE_SETUP.md`](./MISE_SETUP.md) | Automated setup via mise task runner (recommended) |
 | [`TESTING_GUIDE.md`](./TESTING_GUIDE.md) | End-to-end testing (19 sections) |
 | [`TELEGRAM_TESTING.md`](./TELEGRAM_TESTING.md) | Telegram bot end-to-end testing |
-| [`ARCCLAW_EXTENSION.md`](./ARCCLAW_EXTENSION.md) | Extension guide: 15 SPIs for tools, reflexes, channels, routing, persistence |
+| [`AMSHA_EXTENSION.md`](./AMSHA_EXTENSION.md) | Extension guide: 15 SPIs for tools, reflexes, channels, routing, persistence |
 | [`CHANNEL_SPI.md`](./CHANNEL_SPI.md) | Adding new channels (Discord, Slack, etc.) via 6-interface SPI |
 | [`FAQ.md`](./FAQ.md) | Architecture Q&A, security rationale, operational guidance |
 | [`rest-http/`](../rest-http/) | IntelliJ / VSCode REST Client files |
 
 ---
 
-*Last updated: ArcClaw V1.0.0 · Quarkus 3.27.2 · JDK 25*
+*Last updated: Amsha Agent V1.0.0 · Quarkus 3.27.2 · JDK 25*

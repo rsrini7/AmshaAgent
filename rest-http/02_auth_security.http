@@ -2,15 +2,15 @@
 ### 02 - API KEY AUTHENTICATION & RATE LIMITING
 ###
 ### All /api/v1/* endpoints (except /api/v1/info) require:
-###   X-ArcClaw-API-Key: <key>
+###   X-Amsha-API-Key: <key>
 ###
 ### Default keys from .env.example / DevSecretSeeder (dev mode):
 ###   internal key : key-internal-changeme    (name: "internal")
 ###   CI key       : key-ci-changeme          (name: "ci")
 ###
 ### In production, override via:
-###   ARCCLAW_API_KEYS_INTERNAL=<your-key>
-###   ARCCLAW_API_KEYS_CI=<your-key>
+###   AMSHA_API_KEYS_INTERNAL=<your-key>
+###   AMSHA_API_KEYS_CI=<your-key>
 ###
 ### Rate limit: sliding window, 20 requests/minute PER KEY.
 ###   21st request within 60 seconds → HTTP 429
@@ -21,7 +21,7 @@
 ###   In prod/staging, the dev seeder bean is absent from CDI entirely.
 ###   The keys listed above only exist in dev/test deployments.
 ###
-### Prerequisites: ArcClaw running in serve mode
+### Prerequisites: Amsha Agent running in serve mode
 ### ═══════════════════════════════════════════════════════════════
 
 # @baseUrl    = http://localhost:8080
@@ -43,14 +43,14 @@ Content-Type: application/json
 ### [AUTH-2] Invalid API key → expect 401
 POST {{baseUrl}}/api/v1/sessions
 Content-Type: application/json
-X-ArcClaw-API-Key: {{invalidKey}}
+X-Amsha-API-Key: {{invalidKey}}
 
 ###
 
 ### [AUTH-3] Empty API key value → expect 401
 POST {{baseUrl}}/api/v1/sessions
 Content-Type: application/json
-X-ArcClaw-API-Key:
+X-Amsha-API-Key:
 
 ###
 
@@ -61,7 +61,7 @@ GET {{baseUrl}}/api/v1/audit/session/00000000-0000-0000-0000-000000000000
 
 ### [AUTH-5] Audit endpoint with invalid key → expect 401
 GET {{baseUrl}}/api/v1/audit/session/00000000-0000-0000-0000-000000000000
-X-ArcClaw-API-Key: {{invalidKey}}
+X-Amsha-API-Key: {{invalidKey}}
 
 ###
 
@@ -109,7 +109,7 @@ GET {{baseUrl}}/api/v1/info
 # @name authInternalSession
 POST {{baseUrl}}/api/v1/sessions
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
@@ -117,14 +117,14 @@ X-ArcClaw-API-Key: {{validKey}}
 # @name authCiSession
 POST {{baseUrl}}/api/v1/sessions
 Content-Type: application/json
-X-ArcClaw-API-Key: {{ciKey}}
+X-Amsha-API-Key: {{ciKey}}
 
 ###
 
 ### [AUTH-14] Run a simple agent task with internal key - verifies auth flows through pipeline
 POST {{baseUrl}}/api/v1/sessions/{{authInternalSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "What is 1 + 1?",
@@ -138,7 +138,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # Sessions are associated with the creating key. Another key cannot access them.
 # (Only if the API enforces per-key session isolation - verify this behavior.)
 GET {{baseUrl}}/api/v1/sessions/{{authInternalSession.response.body.sessionId}}/status/coordinator
-X-ArcClaw-API-Key: {{ciKey}}
+X-Amsha-API-Key: {{ciKey}}
 
 ###
 
@@ -163,7 +163,7 @@ X-ArcClaw-API-Key: {{ciKey}}
 ### [AUTH-16] Rate limit probe for internal key - run this 21 times rapidly
 # Expect: HTTP 200 for requests 1–20, HTTP 429 on request 21.
 GET {{baseUrl}}/api/v1/sessions/{{authInternalSession.response.body.sessionId}}/status/coordinator
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
@@ -171,7 +171,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # After AUTH-16 is rate-limited, this CI key request must succeed (200).
 # The two keys do NOT share a rate limit counter.
 GET {{baseUrl}}/api/v1/sessions/{{authCiSession.response.body.sessionId}}/status/coordinator
-X-ArcClaw-API-Key: {{ciKey}}
+X-Amsha-API-Key: {{ciKey}}
 
 ###
 
@@ -181,12 +181,12 @@ X-ArcClaw-API-Key: {{ciKey}}
 
 ### [AUTH-18] Cleanup internal session
 DELETE {{baseUrl}}/api/v1/sessions/{{authInternalSession.response.body.sessionId}}
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
 ### [AUTH-19] Cleanup CI session
 DELETE {{baseUrl}}/api/v1/sessions/{{authCiSession.response.body.sessionId}}
-X-ArcClaw-API-Key: {{ciKey}}
+X-Amsha-API-Key: {{ciKey}}
 
 ###

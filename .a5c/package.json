@@ -1,9 +1,0 @@
-{
-  "name": "arcclaw-a5c",
-  "version": "1.0.0",
-  "private": true,
-  "type": "module",
-  "dependencies": {
-    "@a5c-ai/babysitter-sdk": "latest"
-  }
-}

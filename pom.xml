@@ -4,32 +4,32 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
   <modelVersion>4.0.0</modelVersion>
 
-  <groupId>com.arcclaw</groupId>
-  <artifactId>arcclaw-parent</artifactId>
+  <groupId>com.amsha</groupId>
+  <artifactId>amsha-parent</artifactId>
   <version>1.0.0-SNAPSHOT</version>
   <packaging>pom</packaging>
 
-  <name>arcclaw-parent</name>
-  <description>ArcClaw Multi-Agent Framework - Root Parent</description>
+  <name>amsha-parent</name>
+  <description>Amsha Agent Multi-Agent Framework - Root Parent</description>
 
   <modules>
-    <module>arcclaw-channel-api</module>
-    <module>arcclaw-persistence-api</module>
-    <module>arcclaw-persistence-common</module>
-    <module>arcclaw-common</module>
-    <module>arcclaw-core</module>
-    <module>arcclaw-persistence-sqlite</module>
-    <module>arcclaw-persistence-fs</module>
-    <module>arcclaw-persistence-postgres</module>
-    <module>arcclaw-rag</module>
-    <module>arcclaw-mcp</module>
-    <module>arcclaw-onboarding</module>
-    <module>arcclaw-channel-web</module>
-    <module>arcclaw-channel-telegram</module>
-    <module>arcclaw-tool-playwright</module>
-    <module>arcclaw-deployment</module>
-    <module>arcclaw-ui</module>
-    <module>arcclaw-app</module>
+    <module>channel-api</module>
+    <module>persistence-api</module>
+    <module>persistence-common</module>
+    <module>common</module>
+    <module>core</module>
+    <module>persistence-sqlite</module>
+    <module>persistence-fs</module>
+    <module>persistence-postgres</module>
+    <module>rag</module>
+    <module>mcp</module>
+    <module>onboarding</module>
+    <module>channel-web</module>
+    <module>channel-telegram</module>
+    <module>tool-playwright</module>
+    <module>deployment</module>
+    <module>ui</module>
+    <module>app</module>
   </modules>
 
   <properties>
@@ -49,8 +49,8 @@
     <quarkus-jdbc-sqlite.version>3.0.11</quarkus-jdbc-sqlite.version>
     <lucene.version>10.4.0</lucene.version>
     <!-- Baked into build-info.properties. "default" = JVM mode (BackendValidator skips).
-         Native builds explicitly pass -Darcclaw.build.backend=sqlite|postgres|fs. -->
-    <arcclaw.build.backend>default</arcclaw.build.backend>
+         Native builds explicitly pass -Damsha.build.backend=sqlite|postgres|fs. -->
+    <amsha.build.backend>default</amsha.build.backend>
     <commonmark.version>0.24.0</commonmark.version>
     <commons-lang3.version>3.18.0</commons-lang3.version>
     <commons-text.version>1.15.0</commons-text.version>
@@ -93,53 +93,53 @@
  
       <!-- Internal Modules -->
       <dependency>
-        <groupId>com.arcclaw</groupId>
-        <artifactId>arcclaw-channel-api</artifactId>
+        <groupId>com.amsha</groupId>
+        <artifactId>amsha-channel-api</artifactId>
         <version>${project.version}</version>
       </dependency>
       <dependency>
-        <groupId>com.arcclaw</groupId>
-        <artifactId>arcclaw-persistence-api</artifactId>
+        <groupId>com.amsha</groupId>
+        <artifactId>amsha-persistence-api</artifactId>
         <version>${project.version}</version>
       </dependency>
       <dependency>
-        <groupId>com.arcclaw</groupId>
-        <artifactId>arcclaw-common</artifactId>
+        <groupId>com.amsha</groupId>
+        <artifactId>amsha-common</artifactId>
         <version>${project.version}</version>
       </dependency>
       <dependency>
-        <groupId>com.arcclaw</groupId>
-        <artifactId>arcclaw-core</artifactId>
+        <groupId>com.amsha</groupId>
+        <artifactId>amsha-core</artifactId>
         <version>${project.version}</version>
       </dependency>
       <dependency>
-        <groupId>com.arcclaw</groupId>
-        <artifactId>arcclaw-persistence-common</artifactId>
+        <groupId>com.amsha</groupId>
+        <artifactId>amsha-persistence-common</artifactId>
         <version>${project.version}</version>
       </dependency>
       <dependency>
-        <groupId>com.arcclaw</groupId>
-        <artifactId>arcclaw-persistence-fs</artifactId>
+        <groupId>com.amsha</groupId>
+        <artifactId>amsha-persistence-fs</artifactId>
         <version>${project.version}</version>
       </dependency>
       <dependency>
-        <groupId>com.arcclaw</groupId>
-        <artifactId>arcclaw-mcp</artifactId>
+        <groupId>com.amsha</groupId>
+        <artifactId>amsha-mcp</artifactId>
         <version>${project.version}</version>
       </dependency>
       <dependency>
-        <groupId>com.arcclaw</groupId>
-        <artifactId>arcclaw-rag</artifactId>
+        <groupId>com.amsha</groupId>
+        <artifactId>amsha-rag</artifactId>
         <version>${project.version}</version>
       </dependency>
       <dependency>
-        <groupId>com.arcclaw</groupId>
-        <artifactId>arcclaw-channel-telegram</artifactId>
+        <groupId>com.amsha</groupId>
+        <artifactId>amsha-channel-telegram</artifactId>
         <version>${project.version}</version>
       </dependency>
       <dependency>
-        <groupId>com.arcclaw</groupId>
-        <artifactId>arcclaw-channel-web</artifactId>
+        <groupId>com.amsha</groupId>
+        <artifactId>amsha-channel-web</artifactId>
         <version>${project.version}</version>
       </dependency>
  
@@ -364,7 +364,7 @@
           <includeTests>false</includeTests>
           <javaLanguageVersion>25</javaLanguageVersion>
           <rulesets>
-            <ruleset>${maven.multiModuleProjectDirectory}/src/main/resources/rulesets/java/arcclaw-rules.xml</ruleset>
+            <ruleset>${maven.multiModuleProjectDirectory}/src/main/resources/rulesets/java/amsha-rules.xml</ruleset>
           </rulesets>
         </configuration>
         <executions>

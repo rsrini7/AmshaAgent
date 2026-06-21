@@ -1,5 +1,5 @@
 # Tiered Memory Architecture — End-to-End Test Guide
-# Phases 0-7: Manual verification via CLI (arcclaw chat)
+# Phases 0-7: Manual verification via CLI (amsha chat)
 # Copy-paste each line as a message to the agent. Expected outcomes noted as comments.
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -8,7 +8,7 @@
 # Verify: Tiered memory boots without errors.
 # Check logs for: "ArchivalVecSchemaInitializer: vec_archival ensured"
 # Check logs for: "ToolDiscoveryService: Indexing complete. Total tools: 19"
-# Config keys in application.yaml under arcclaw.memory.tiered.*
+# Config keys in application.yaml under amsha.memory.tiered.*
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # PHASE 1: Core Memory CRUD (admin API + prompt injection)
@@ -130,14 +130,14 @@ remember A. remember B. remember C. remember D. remember E. remember F.
 # ═══════════════════════════════════════════════════════════════════════════════
 
 # Flow A: Write → Read → Verify
-# 1. remember that I'm building ArcClaw, an AI agent framework
+# 1. remember that I'm building Amsha Agent, an AI agent framework
 # 2. read my core memory
 # 3. Expected: "user_profile" or appropriate block contains the fact
 
 # Flow B: Insert → Search → Inject
-# 1. store this in archival memory: ArcClaw uses Quarkus with SQLite WAL mode. Type: FACT
+# 1. store this in archival memory: Amsha Agent uses Quarkus with SQLite WAL mode. Type: FACT
 # 2. (approve the insertion)
-# 3. what database does ArcClaw use?
+# 3. what database does Amsha Agent use?
 # 4. Expected: archival_memory_search finds the chunk → [RELEVANT KNOWLEDGE] injected
 
 # Flow C: Compaction → Recall Search

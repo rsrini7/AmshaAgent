@@ -34,13 +34,13 @@ try {
     $env:MAVEN_OPTS = "$mOpts -Xmx${jitGB}g -Xms${jitGB}g"
 
     # Phase 1: Build Maven backend first (generates OpenAPI spec)
-    & $mvnw clean install -pl arcclaw-app -am -DskipTests --no-transfer-progress -T $threads
+    & $mvnw clean install -pl amsha-app -am -DskipTests --no-transfer-progress -T $threads
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     Write-Host '✅  Maven build complete. OpenAPI spec generated.'
 
     # Phase 2: Build UI (prebuild auto-generates TypeScript DTOs from OpenAPI spec)
     try {
-        Push-Location arcclaw-ui
+        Push-Location ui
         npm install
         npm run build
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -50,12 +50,12 @@ try {
     }
 
     # Phase 3: Copy UI dist to Quarkus resources
-    $target = "arcclaw-app/src/main/resources/META-INF/resources"
+    $target = "app/src/main/resources/META-INF/resources"
     if (-not (Test-Path $target)) { New-Item -ItemType Directory -Path $target -Force | Out-Null }
-    Copy-Item -Path "arcclaw-ui/dist/*" -Destination $target -Recurse -Force
+    Copy-Item -Path "ui/dist/*" -Destination $target -Recurse -Force
     Write-Host '✅  UI copied to Quarkus resources.'
 
-    Write-Host '✅  Build complete: arcclaw-app/target/quarkus-app/quarkus-run.jar'
+    Write-Host '✅  Build complete: app/target/quarkus-app/quarkus-run.jar'
 } finally {
     if ($envBackup -and (Test-Path '.env.build-backup')) {
         Rename-Item '.env.build-backup' '.env'

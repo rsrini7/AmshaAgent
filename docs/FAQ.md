@@ -1,4 +1,4 @@
-# ArcClaw V1.0.0 - Frequently Asked Questions (FAQ)
+# Amsha Agent V1.0.0 - Frequently Asked Questions (FAQ)
 
 ---
 
@@ -16,7 +16,7 @@
 10. [Structured Output Engine](#-structured-output-engine)
 11. [Cron Scheduler & Autonomous Tasks](#-cron-scheduler--autonomous-tasks)
 12. [Security & Secrets](#-security--secrets)
-13. [Extending ArcClaw - Tools, Personas & Reflexes](#-extending-arcclaw--tools-personas--reflexes)
+13. [Extending Amsha Agent - Tools, Personas & Reflexes](#-extending-amsha--tools-personas--reflexes)
 14. [Channels & Telegram Integration](#-channels--telegram-integration)
 15. [Runtime & Operations](#-runtime--operations)
 16. [Testing](#-testing)
@@ -25,50 +25,50 @@
 
 ## 🏛️ Architecture & Design
 
-### Q: Why is ArcClaw structured as a multi-module Maven reactor instead of a single application?
+### Q: Why is Amsha Agent structured as a multi-module Maven reactor instead of a single application?
 
 The reactor enforces strict architectural separation that prevents accidental dependency creep. The 17 modules are:
 
-- **`arcclaw-channel-api`** - Channel SPI contracts (6 interfaces: `ChannelPlugin`, `ChannelSender`, `ReplyRenderer`, `ChannelAllowlist`, `ChannelJobNotifier`, `ChannelDaemon`) plus structured output types. Zero implementation — allows `arcclaw-core` to reference channel concepts without coupling to any specific adapter.
-- **`arcclaw-persistence-api`** - Hexagonal architecture port interfaces (`CheckpointStorePort`, `ChatMemoryStorePort`, `CronStorePort`, `SecretStorePort`, `SkillStorePort`, `AuditEventStorePort`, `AuditSchemaPort`, `CompactionStorePort`, `MemoryRetrievalPort`, `AdvisoryLockPort`, `PersistenceAdapterPort`). Core depends on ports, not implementations.
-- **`arcclaw-persistence-common`** - Shared JDBI records/DTOs and `SessionKnowledgeBase` (in-memory embedding store) used by all persistence adapters.
-- **`arcclaw-core`** - Agent runtime kernel. Domain logic, tools, reflexes, governance, sandbox, pipeline, and CDI interfaces. Has zero awareness of REST, Telegram, or CLI.
-- **`arcclaw-persistence-sqlite`** - SQLite adapter implementing all persistence ports. Contains `GlobalKnowledgeBase`, `SessionKnowledgeBase`, WAL configuration, FTS5 setup, and `RagSchemaInitializer`.
-- **`arcclaw-persistence-fs`** - Filesystem-based persistence adapter for environments without SQLite.
-- **`arcclaw-persistence-postgres`** - PostgreSQL adapter (partial: checkpoint, cron, and audit operations only).
-- **`arcclaw-mcp`** - MCP server/client logic. Exposes `DynamicToolLookupImpl` behind the `DynamicToolLookup` interface defined in `arcclaw-core`. Keeping it separate means the kernel has no compile-time dependency on MCP transport code.
-- **`arcclaw-rag`** - Two-tier RAG memory (sqlite-vec). The `vec0.so` native extension has platform-specific native image metadata. Isolating it prevents this from polluting the core module.
-- **`arcclaw-onboarding`** - First-run setup wizard. Isolated so it can be excluded from headless/CI deployments.
-- **`arcclaw-channel-web`** - WebSocket-based web channel. Can be excluded for Telegram-only or API-only deployments.
-- **`arcclaw-channel-telegram`** - Full Telegram channel implementation with its own test suite. Can be excluded for non-Telegram deployments.
-- **`arcclaw-tool-playwright`** - Playwright browser automation tool. Optional; requires Playwright CLI binary.
-- **`arcclaw-deployment`** - Quarkus build-time processors. Contains the `@BuildStep` logic that wires up `@WorkspaceScoped`, `AgentFunctionProcessor`, `RestResourceBuildStep`, MCP build steps, and RAG resource steps.
-- **`arcclaw-ui`** - Frontend (Lit 3.x Web Components + TypeScript + Vite). No Java source; excluded from Maven build.
-- **`arcclaw-app`** - the entry point. Owns all application-layer concerns: REST resources, Telegram routes, CLI commands, scheduler, security filters. It depends on all other modules but **no module depends on `arcclaw-app`**.
+- **`amsha-channel-api`** - Channel SPI contracts (6 interfaces: `ChannelPlugin`, `ChannelSender`, `ReplyRenderer`, `ChannelAllowlist`, `ChannelJobNotifier`, `ChannelDaemon`) plus structured output types. Zero implementation — allows `amsha-core` to reference channel concepts without coupling to any specific adapter.
+- **`amsha-persistence-api`** - Hexagonal architecture port interfaces (`CheckpointStorePort`, `ChatMemoryStorePort`, `CronStorePort`, `SecretStorePort`, `SkillStorePort`, `AuditEventStorePort`, `AuditSchemaPort`, `CompactionStorePort`, `MemoryRetrievalPort`, `AdvisoryLockPort`, `PersistenceAdapterPort`). Core depends on ports, not implementations.
+- **`amsha-persistence-common`** - Shared JDBI records/DTOs and `SessionKnowledgeBase` (in-memory embedding store) used by all persistence adapters.
+- **`amsha-core`** - Agent runtime kernel. Domain logic, tools, reflexes, governance, sandbox, pipeline, and CDI interfaces. Has zero awareness of REST, Telegram, or CLI.
+- **`amsha-persistence-sqlite`** - SQLite adapter implementing all persistence ports. Contains `GlobalKnowledgeBase`, `SessionKnowledgeBase`, WAL configuration, FTS5 setup, and `RagSchemaInitializer`.
+- **`amsha-persistence-fs`** - Filesystem-based persistence adapter for environments without SQLite.
+- **`amsha-persistence-postgres`** - PostgreSQL adapter (partial: checkpoint, cron, and audit operations only).
+- **`amsha-mcp`** - MCP server/client logic. Exposes `DynamicToolLookupImpl` behind the `DynamicToolLookup` interface defined in `amsha-core`. Keeping it separate means the kernel has no compile-time dependency on MCP transport code.
+- **`amsha-rag`** - Two-tier RAG memory (sqlite-vec). The `vec0.so` native extension has platform-specific native image metadata. Isolating it prevents this from polluting the core module.
+- **`amsha-onboarding`** - First-run setup wizard. Isolated so it can be excluded from headless/CI deployments.
+- **`amsha-channel-web`** - WebSocket-based web channel. Can be excluded for Telegram-only or API-only deployments.
+- **`amsha-channel-telegram`** - Full Telegram channel implementation with its own test suite. Can be excluded for non-Telegram deployments.
+- **`amsha-tool-playwright`** - Playwright browser automation tool. Optional; requires Playwright CLI binary.
+- **`amsha-deployment`** - Quarkus build-time processors. Contains the `@BuildStep` logic that wires up `@WorkspaceScoped`, `AgentFunctionProcessor`, `RestResourceBuildStep`, MCP build steps, and RAG resource steps.
+- **`ui`** - Frontend (Lit 3.x Web Components + TypeScript + Vite). No Java source; excluded from Maven build.
+- **`amsha-app`** - the entry point. Owns all application-layer concerns: REST resources, Telegram routes, CLI commands, scheduler, security filters. It depends on all other modules but **no module depends on `amsha-app`**.
 
-The rule is: **kernel logic never imports application-layer code**. This makes `arcclaw-core` independently testable with zero Quarkus startup overhead.
+The rule is: **kernel logic never imports application-layer code**. This makes `amsha-core` independently testable with zero Quarkus startup overhead.
 
 ---
 
-### Q: Why does ArcClaw use SQLite instead of a scalable database like PostgreSQL?
+### Q: Why does Amsha Agent use SQLite instead of a scalable database like PostgreSQL?
 
-ArcClaw relies on `StatefulAgentStore` to checkpoint the LLM's `ReasoningStep` history at every iteration. There are three reasons SQLite is the right tool:
+Amsha Agent relies on `StatefulAgentStore` to checkpoint the LLM's `ReasoningStep` history at every iteration. There are three reasons SQLite is the right tool:
 
 1. **Zero-latency:** Writing to a local SQLite file avoids network round-trips during the high-speed Agent Loop. Each checkpoint is a single write; adding a network hop would double iteration latency.
-2. **Concurrency:** SQLite's WAL (Write-Ahead Logging) mode allows concurrent readers while a single writer commits. ArcClaw's `AsyncPersistenceEngine` serializes all writes through a `LinkedBlockingQueue` backed by a single virtual thread, eliminating WAL contention entirely.
-3. **Portability:** ArcClaw deploys as a single, self-contained binary (118 MB) with no external service dependencies. A PostgreSQL sidecar would eliminate that advantage.
+2. **Concurrency:** SQLite's WAL (Write-Ahead Logging) mode allows concurrent readers while a single writer commits. Amsha Agent's `AsyncPersistenceEngine` serializes all writes through a `LinkedBlockingQueue` backed by a single virtual thread, eliminating WAL contention entirely.
+3. **Portability:** Amsha Agent deploys as a single, self-contained binary (118 MB) with no external service dependencies. A PostgreSQL sidecar would eliminate that advantage.
 
-The dual-database design (`arcclaw-meta.db` for structured state, `arcclaw-fts.db` for FTS5 full-text search) keeps the schema clean and prevents FTS index operations from locking the primary checkpoint tables.
+The dual-database design (`amsha-meta.db` for structured state, `amsha-fts.db` for FTS5 full-text search) keeps the schema clean and prevents FTS index operations from locking the primary checkpoint tables.
 
 ---
 
 ### Q: What is the hexagonal persistence architecture?
 
-ArcClaw uses a port/adapter (hexagonal) architecture for persistence. The `arcclaw-persistence-api` module defines **port interfaces** (e.g., `CheckpointStorePort`, `ChatMemoryStorePort`, `CronStorePort`, `SecretStorePort`, `AuditEventStorePort`, `CompactionStorePort`, `MemoryRetrievalPort`, `SkillStorePort`, `AdvisoryLockPort`) that the core module depends on. Three adapter modules implement these ports:
+Amsha Agent uses a port/adapter (hexagonal) architecture for persistence. The `amsha-persistence-api` module defines **port interfaces** (e.g., `CheckpointStorePort`, `ChatMemoryStorePort`, `CronStorePort`, `SecretStorePort`, `AuditEventStorePort`, `CompactionStorePort`, `MemoryRetrievalPort`, `SkillStorePort`, `AdvisoryLockPort`) that the core module depends on. Three adapter modules implement these ports:
 
-- **`arcclaw-persistence-sqlite`** — Full implementation of all ports. Default backend.
-- **`arcclaw-persistence-fs`** — Filesystem-based implementation. Alternative for environments without SQLite.
-- **`arcclaw-persistence-postgres`** — Partial implementation (checkpoint, cron, audit only). For production deployments requiring a server database.
+- **`amsha-persistence-sqlite`** — Full implementation of all ports. Default backend.
+- **`amsha-persistence-fs`** — Filesystem-based implementation. Alternative for environments without SQLite.
+- **`amsha-persistence-postgres`** — Partial implementation (checkpoint, cron, audit only). For production deployments requiring a server database.
 
 Swapping backends requires zero core changes — the CDI container discovers the active adapter at runtime. `PersistenceAdapterPort` is the composite interface that aggregates all individual ports.
 
@@ -86,7 +86,7 @@ Vert.x reactive code is non-blocking by design but is **collaborative**: if any 
 
 Standard CDI scopes (`@RequestScoped`, `@SessionScoped`) are tied to HTTP lifecycle events. Agent runs on virtual threads - especially async runs and cron jobs - have no HTTP request context. Without a custom scope, any bean holding per-session state would either be shared globally (`@ApplicationScoped`) or lost across thread boundaries.
 
-`@WorkspaceScoped` is a CDI scope keyed on `sessionId`. The `WorkspaceScopeHolder` uses Java 21 `ScopedValue` (not `ThreadLocal`) to bind a workspace context to the logical execution - it propagates correctly across virtual threads, CDI-managed executors, and Camel routes without leaking state between sessions. The `arcclaw-deployment` module wires this scope up at Quarkus build time via `@BuildStep`.
+`@WorkspaceScoped` is a CDI scope keyed on `sessionId`. The `WorkspaceScopeHolder` uses Java 21 `ScopedValue` (not `ThreadLocal`) to bind a workspace context to the logical execution - it propagates correctly across virtual threads, CDI-managed executors, and Camel routes without leaking state between sessions. The `amsha-deployment` module wires this scope up at Quarkus build time via `@BuildStep`.
 
 ---
 
@@ -99,33 +99,33 @@ Standard CDI scopes (`@RequestScoped`, `@SessionScoped`) are tied to HTTP lifecy
 | `serve` | `serve` | Long-running REST daemon on port 8080. No channel adapters; for direct API access. |
 | `attach` | `attach telegram` | Long-running daemon with channel adapters active. Cron scheduler runs in this mode. |
 
-The `%cli` profile is forced by `arcclaw-cli.ps1` and silences all Quarkus banners and `INFO` logs so terminal output only shows agent reasoning.
+The `%cli` profile is forced by `amsha-cli.ps1` and silences all Quarkus banners and `INFO` logs so terminal output only shows agent reasoning.
 
 ---
 
-### Q: Why does `docker-compose.yaml` need `privileged: true` for the arcclaw container?
+### Q: Why does `docker-compose.yaml` need `privileged: true` for the amsha container?
 
-ArcClaw runs **Podman inside a Docker container** (nested containerization). For rootless Podman to create user namespaces and cgroup hierarchies inside a Docker container, it needs permission to call `unshare()` and `newuidmap`. Docker restricts these syscalls by default. The `privileged: true` flag grants the container the full Linux capability set so Podman can manage nested namespaces correctly. This is a known requirement for container-in-container architectures and is documented in the Podman community as the standard approach for CI/CD environments.
+Amsha Agent runs **Podman inside a Docker container** (nested containerization). For rootless Podman to create user namespaces and cgroup hierarchies inside a Docker container, it needs permission to call `unshare()` and `newuidmap`. Docker restricts these syscalls by default. The `privileged: true` flag grants the container the full Linux capability set so Podman can manage nested namespaces correctly. This is a known requirement for container-in-container architectures and is documented in the Podman community as the standard approach for CI/CD environments.
 
 ---
 
 ## 🐳 Podman vs Docker
 
-### Q: Why does ArcClaw use Podman instead of Docker for the tool sandbox?
+### Q: Why does Amsha Agent use Podman instead of Docker for the tool sandbox?
 
-ArcClaw executes AI-generated shell commands inside isolated containers. The threat model is: *an LLM has crafted a tool invocation that may contain adversarial input*. The sandbox's job is to contain the blast radius. Podman is the right tool for three reasons:
+Amsha Agent executes AI-generated shell commands inside isolated containers. The threat model is: *an LLM has crafted a tool invocation that may contain adversarial input*. The sandbox's job is to contain the blast radius. Podman is the right tool for three reasons:
 
-**1. No privileged daemon socket.** Docker requires mounting `/var/run/docker.sock` into the ArcClaw container to spawn child containers. Owning that socket grants root-equivalent access to the entire host. Podman is daemonless - containers are direct child processes of the `arcclaw` user process, with no socket exposure.
+**1. No privileged daemon socket.** Docker requires mounting `/var/run/docker.sock` into the Amsha Agent container to spawn child containers. Owning that socket grants root-equivalent access to the entire host. Podman is daemonless - containers are direct child processes of the `amsha` user process, with no socket exposure.
 
-**2. Rootless by default.** Podman containers run with the calling user's UID (UID 1000 for `arcclaw`). Even if a sandboxed tool escapes the container, it runs as an unprivileged user on the host. Docker's rootless mode requires manual setup and has limitations around cgroup v2 and storage drivers.
+**2. Rootless by default.** Podman containers run with the calling user's UID (UID 1000 for `amsha`). Even if a sandboxed tool escapes the container, it runs as an unprivileged user on the host. Docker's rootless mode requires manual setup and has limitations around cgroup v2 and storage drivers.
 
-**3. SELinux-native.** ArcClaw's `Dockerfile.native` is built on UBI 9 (RHEL lineage), where Podman's SELinux label propagation works seamlessly. Docker on the same base often requires manual `--security-opt` overrides.
+**3. SELinux-native.** Amsha Agent's `Dockerfile.native` is built on UBI 9 (RHEL lineage), where Podman's SELinux label propagation works seamlessly. Docker on the same base often requires manual `--security-opt` overrides.
 
 ### Q: Can I swap Podman for Docker in development?
 
-Yes. Set `arcclaw.sandbox.strategy=NONE` in your local `application.yaml` (the `%dev` default) to bypass container isolation entirely and run tools directly on the host PATH. For production-like testing on a machine without Podman, the three-tier degradation in `ProcessIsolationExecutor` will fall through to Linux `unshare` namespaces as a middle-ground option.
+Yes. Set `amsha.sandbox.strategy=NONE` in your local `application.yaml` (the `%dev` default) to bypass container isolation entirely and run tools directly on the host PATH. For production-like testing on a machine without Podman, the three-tier degradation in `ProcessIsolationExecutor` will fall through to Linux `unshare` namespaces as a middle-ground option.
 
-### Q: When does ArcClaw's sandbox circuit breaker trip?
+### Q: When does Amsha Agent's sandbox circuit breaker trip?
 
 `SandboxCircuitBreaker` trips to `OPEN` state after **3 consecutive Podman failures**. Once open, `ProcessIsolationExecutor` falls through to the Linux namespace executor (`NamespaceExecutor`) rather than retrying Podman. After a configurable half-open window, it probes Podman again. This means a transient Podman daemon restart or image pull failure doesn't crash every concurrent agent session.
 
@@ -146,7 +146,7 @@ Yes. Set `arcclaw.sandbox.strategy=NONE` in your local `application.yaml` (the `
 
 ### Q: Why Java 25 / Quarkus instead of Python (LangChain / LangGraph) or Go?
 
-ArcClaw's design requirements - a custom CDI scope, native image compilation, virtual threads, SQLite WAL concurrency, and Podman process spawning - all land in a sweet spot where Java 25 + Quarkus excels. The specific choices:
+Amsha Agent's design requirements - a custom CDI scope, native image compilation, virtual threads, SQLite WAL concurrency, and Podman process spawning - all land in a sweet spot where Java 25 + Quarkus excels. The specific choices:
 
 **Java over Python:** Python's async model (asyncio/gevent) is cooperative and brittle under sustained I/O load from LLM calls. Java 25 Virtual Threads are preemptive, JVM-managed, and trivially composable with existing blocking libraries (JDBC, ProcessBuilder). The JVM's JIT also gives significantly lower latency on repeated agent-loop iterations after warm-up. Native image compilation via GraalVM further brings startup time to under 100 ms - impossible with a Python interpreter.
 
@@ -161,28 +161,28 @@ ArcClaw's design requirements - a custom CDI scope, native image compilation, vi
 LangChain4J provides three things that would require significant custom code otherwise:
 
 1. **Typed tool calling.** LangChain4J's `JsonObjectSchema` builder generates the tool specification JSON the LLM expects and parses the tool invocation JSON the LLM returns. Writing this correctly (including nullable/required field semantics) by hand is error-prone.
-2. **`ChatMemoryStore` abstraction.** ArcClaw plugs `PersistentChatMemoryStore` (backed by SQLite) directly into LangChain4J's memory contract. This gives windowed rolling history with zero custom serialization code.
+2. **`ChatMemoryStore` abstraction.** Amsha Agent plugs `PersistentChatMemoryStore` (backed by SQLite) directly into LangChain4J's memory contract. This gives windowed rolling history with zero custom serialization code.
 3. **Provider portability.** Swapping from Groq → Ollama → OpenAI is a single `application.yaml` change. The reasoning engine code does not change.
 
-Spring AI is a strong alternative but is more opinionated toward the Spring ecosystem. Since ArcClaw is Quarkus-native, LangChain4J's CDI-friendly design avoids unnecessary Spring context overhead.
+Spring AI is a strong alternative but is more opinionated toward the Spring ecosystem. Since Amsha Agent is Quarkus-native, LangChain4J's CDI-friendly design avoids unnecessary Spring context overhead.
 
 ---
 
 ### Q: Why Groq as the default LLM provider instead of OpenAI or a local model?
 
-Groq's LPU (Language Processing Unit) inference delivers the lowest token/second latency of any hosted API, which directly reduces agent loop iteration time. For a ReAct-style agent that may call the LLM 5–7 times per task, a 3× latency advantage over OpenAI's standard API compounds significantly. ArcClaw V1.0.0 defaults to `meta-llama/llama-4-scout-17b-16e-instruct` for reasoning and `llama-3.1-8b-instant` for intent classification and compaction - both available on Groq.
+Groq's LPU (Language Processing Unit) inference delivers the lowest token/second latency of any hosted API, which directly reduces agent loop iteration time. For a ReAct-style agent that may call the LLM 5–7 times per task, a 3× latency advantage over OpenAI's standard API compounds significantly. Amsha Agent V1.0.0 defaults to `meta-llama/llama-4-scout-17b-16e-instruct` for reasoning and `llama-3.1-8b-instant` for intent classification and compaction - both available on Groq.
 
 Ollama is still provisioned in `docker-compose.yaml` (disabled by default) for fully air-gapped deployments. Switching is a two-line change in `application.yaml`.
 
 ### Q: What is OMLX and when should I use it?
 
-OMLX is a provider for local MLX-based OpenAI-compatible inference servers (e.g., `mlx-lm` serving quantized models on Apple Silicon). It defaults to `http://127.0.0.1:8000/v1` and requires no API key (`api-key=not-needed`). Use OMLX when you want fully local, air-gapped inference with models like `mlx-community/Qwen3.6-35B-A3B-4bit`. It implements both `AgentChatModelProvider` (reasoning) and `RoutingChatModelProvider` (intent classification + compaction), so it can serve as a complete end-to-end provider. Set `ARCCLAW_LLM_PROVIDER=omlx` to activate.
+OMLX is a provider for local MLX-based OpenAI-compatible inference servers (e.g., `mlx-lm` serving quantized models on Apple Silicon). It defaults to `http://127.0.0.1:8000/v1` and requires no API key (`api-key=not-needed`). Use OMLX when you want fully local, air-gapped inference with models like `mlx-community/Qwen3.6-35B-A3B-4bit`. It implements both `AgentChatModelProvider` (reasoning) and `RoutingChatModelProvider` (intent classification + compaction), so it can serve as a complete end-to-end provider. Set `AMSHA_LLM_PROVIDER=omlx` to activate.
 
 ---
 
 ### Q: Why Apache Camel for the Telegram adapter instead of the Bot4J or TelegramBots library?
 
-Apache Camel's `camel-telegram` component handles the long-polling lifecycle, graceful shutdown, and retry logic for the Telegram Bot API automatically. More importantly, Camel's `ManagedExecutor` handoff lets ArcClaw bridge the Vert.x event loop thread (where Camel routes run) to a Quarkus-managed virtual thread (where the CDI context and `@WorkspaceScoped` beans live) in a single line. Writing the same handoff with a raw Telegram library would require explicit thread pool management and careful CDI context propagation - all code that Camel handles transparently.
+Apache Camel's `camel-telegram` component handles the long-polling lifecycle, graceful shutdown, and retry logic for the Telegram Bot API automatically. More importantly, Camel's `ManagedExecutor` handoff lets Amsha Agent bridge the Vert.x event loop thread (where Camel routes run) to a Quarkus-managed virtual thread (where the CDI context and `@WorkspaceScoped` beans live) in a single line. Writing the same handoff with a raw Telegram library would require explicit thread pool management and careful CDI context propagation - all code that Camel handles transparently.
 
 ---
 
@@ -227,7 +227,7 @@ Three layers of protection:
 
 1. **`maxIterations`** cap: configurable per-request (default 5 for REST, 2 for cron jobs). If reached, the loop terminates with `FAILED`.
 2. **`AgentSentinels`**: pattern-matching guards inside `AgentStateMachineRunner` that detect stuck states (e.g., repeated identical tool calls, circular reasoning).
-3. **Budget cap**: `GovernanceLayer` tracks cumulative USD cost per session. At 80% of `arcclaw.governance.budget-usd`, it raises a soft `BudgetWarningException`. At 100%, it throws `BudgetExceededException` and transitions the session to `READONLY`, blocking further tool calls.
+3. **Budget cap**: `GovernanceLayer` tracks cumulative USD cost per session. At 80% of `amsha.governance.budget-usd`, it raises a soft `BudgetWarningException`. At 100%, it throws `BudgetExceededException` and transitions the session to `READONLY`, blocking further tool calls.
 
 ---
 
@@ -235,13 +235,13 @@ Three layers of protection:
 
 When the `ToolRegistry` encounters a tool call that requires `SUPERVISED` autonomy and the current autonomy level is `SUPERVISED`, it throws `RequiresApprovalException` instead of executing the tool. The `AgentLoop` catches this, saves the complete reasoning state to SQLite with status `AWAITING_APPROVAL`, and returns a message asking for `/approve` or `/deny`.
 
-When the user sends `/approve`, the `ApproveReflex` loads the checkpoint from SQLite, elevates autonomy to `FULL` for that single invocation, and resumes the loop from the exact iteration where it paused. The approval has a configurable timeout (`arcclaw.governance.approval-timeout-minutes`, default 60 minutes); expired approvals are reaped by `SessionReaper`.
+When the user sends `/approve`, the `ApproveReflex` loads the checkpoint from SQLite, elevates autonomy to `FULL` for that single invocation, and resumes the loop from the exact iteration where it paused. The approval has a configurable timeout (`amsha.governance.approval-timeout-minutes`, default 60 minutes); expired approvals are reaped by `SessionReaper`.
 
 ---
 
 ### Q: What is "Task Amnesia" and why is it desirable?
 
-After a checkpoint reaches `COMPLETED` or `FAILED`, ArcClaw performs a **Soft Reset**: the internal ReAct loop state (tool call history, reasoning step sequence) is wiped, but the LangChain4J `ChatMemoryStore` (the conversational history visible to the LLM) is preserved.
+After a checkpoint reaches `COMPLETED` or `FAILED`, Amsha Agent performs a **Soft Reset**: the internal ReAct loop state (tool call history, reasoning step sequence) is wiped, but the LangChain4J `ChatMemoryStore` (the conversational history visible to the LLM) is preserved.
 
 Without this reset, a "ghost" tool trigger from a previous task can contaminate the next request - the LLM sees a prior `ToolExecutionResultMessage` in context and incorrectly assumes it is still mid-task. The soft reset eliminates this poisoning while keeping the conversation flowing naturally.
 
@@ -251,7 +251,7 @@ Without this reset, a "ghost" tool trigger from a previous task can contaminate 
 
 When the LLM requests multiple tools in a single reasoning step, `ParallelToolStepExecutor` splits the batch into two categories:
 
-1. **Pre-executable tools**: Tools that can run immediately (configured via `arcclaw.hitl.pre-executable-tools` or in `FULL` autonomy mode). These execute concurrently using `CompletableFuture.allOf()`.
+1. **Pre-executable tools**: Tools that can run immediately (configured via `amsha.hitl.pre-executable-tools` or in `FULL` autonomy mode). These execute concurrently using `CompletableFuture.allOf()`.
 2. **HITL-pending tools**: Tools requiring human approval. These are held until the user approves them.
 
 The results from both categories are merged before the next iteration. In Telegram, `BatchHitlKeyboardBuilder` generates an inline keyboard with one row per pending tool — the user can approve/deny individually or use "Approve All" / "Deny All" buttons.
@@ -264,7 +264,7 @@ Any agent role can use the `garuda` tool to spawn a sub-agent loop for specialis
 
 Key constraints:
 - **Non-coordinators** are restricted from delegating to roles they lack capabilities for (e.g., a `researcher` cannot delegate to `coder`).
-- **Delegation depth** is capped by `arcclaw.delegation.max-depth` (default: 2) to prevent infinite delegation chains.
+- **Delegation depth** is capped by `amsha.delegation.max-depth` (default: 2) to prevent infinite delegation chains.
 - Sub-agents run with their own isolated context and report results back to the parent agent as an observation.
 
 ---
@@ -285,7 +285,7 @@ This matters for three reasons:
 
 ### Q: How does `PiiScanReflex` work and can I change its behaviour?
 
-`PiiScanReflex` runs on every message (via the `sanitize()` hook in `ReflexRegistry`) using a set of compiled `Pattern` objects that detect emails, phone numbers, Aadhaar, PAN, credit card numbers, US SSNs, IP addresses, and JWT tokens. It has two modes, controlled by `arcclaw.pii.mode`:
+`PiiScanReflex` runs on every message (via the `sanitize()` hook in `ReflexRegistry`) using a set of compiled `Pattern` objects that detect emails, phone numbers, Aadhaar, PAN, credit card numbers, US SSNs, IP addresses, and JWT tokens. It has two modes, controlled by `amsha.pii.mode`:
 
 - **`REDACT_AND_FORWARD`** (default): Replaces detected PII with placeholder tokens (e.g., `[EMAIL]`, `[PHONE]`) and passes the sanitized message to the LLM. The user sees no interruption.
 - **`BLOCK_AND_NOTIFY`**: Rejects the message outright and returns an error. Use this in regulated environments where PII must never touch the LLM API.
@@ -356,7 +356,7 @@ To deploy dynamically (no rebuild):
 
 ```bash
 curl -X POST http://localhost:8080/api/v1/skills \
-  -H "X-ArcClaw-API-Key: $API_KEY" \
+  -H "X-Amsha-API-Key: $API_KEY" \
   -H "Content-Type: text/plain" \
   --data-binary @my-skill.md
 ```
@@ -381,7 +381,7 @@ To deploy as built-in (requires rebuild): place the `.md` file in `src/main/reso
 
 ```bash
 curl -s http://localhost:8080/api/v1/skills/refresh \
-  -H "X-ArcClaw-API-Key: $API_KEY"
+  -H "X-Amsha-API-Key: $API_KEY"
 ```
 
 This reloads both classpath built-in skills and database-tier skills without restarting the application.
@@ -390,16 +390,16 @@ This reloads both classpath built-in skills and database-tier skills without res
 
 ## 🌐 MCP Integration
 
-### Q: What is the Model Context Protocol (MCP) and how does ArcClaw implement it?
+### Q: What is the Model Context Protocol (MCP) and how does Amsha Agent implement it?
 
-MCP is an open protocol for LLM tool interoperability over JSON-RPC. ArcClaw implements it in both directions:
+MCP is an open protocol for LLM tool interoperability over JSON-RPC. Amsha Agent implements it in both directions:
 
-- **Inbound MCP server**: External MCP clients (e.g. Claude Desktop, other agents) can connect to ArcClaw's `/mcp` endpoint and call its `github`, `recall_memory_search`, and `archival_memory_search` tools via JSON-RPC over HTTP-SSE.
-- **Outbound MCP client**: ArcClaw can connect to any external MCP server (`POST /api/v1/mcp/connect`). The connected server's tools are registered as `ExternalMcpToolAdapter` instances, becoming natively available to agent roles in the tool schema.
+- **Inbound MCP server**: External MCP clients (e.g. Claude Desktop, other agents) can connect to Amsha Agent's `/mcp` endpoint and call its `github`, `recall_memory_search`, and `archival_memory_search` tools via JSON-RPC over HTTP-SSE.
+- **Outbound MCP client**: Amsha Agent can connect to any external MCP server (`POST /api/v1/mcp/connect`). The connected server's tools are registered as `ExternalMcpToolAdapter` instances, becoming natively available to agent roles in the tool schema.
 
 ---
 
-### Q: Which internal tools does ArcClaw expose as an MCP server?
+### Q: Which internal tools does Amsha Agent expose as an MCP server?
 
 By default, `github`, `recall_memory_search`, and `archival_memory_search` are exposed. The `McpToolAllowlist` configuration controls this allowlist. Disallowed tool names return a JSON-RPC error with a descriptive message rather than executing.
 
@@ -420,17 +420,17 @@ Always run `GET /api/v1/mcp/status` before starting the protocol sequence to con
 
 ### Q: How do dynamic MCP tools appear to agents?
 
-After connecting an external MCP server, `DynamicToolCapabilityRegistry` registers each of its tools as a `DynamicToolCapability`. `DynamicToolLookupImpl` (in `arcclaw-mcp`) provides the `DynamicToolLookup` implementation used by `ToolRegistry`. The tool then appears in the LLM's tool schema for roles that permit dynamic tools - the LLM invokes them exactly like built-in tools, and `ExternalMcpToolAdapter` dispatches the call to the remote server via `McpClientService`.
+After connecting an external MCP server, `DynamicToolCapabilityRegistry` registers each of its tools as a `DynamicToolCapability`. `DynamicToolLookupImpl` (in `amsha-mcp`) provides the `DynamicToolLookup` implementation used by `ToolRegistry`. The tool then appears in the LLM's tool schema for roles that permit dynamic tools - the LLM invokes them exactly like built-in tools, and `ExternalMcpToolAdapter` dispatches the call to the remote server via `McpClientService`.
 
 ---
 
 ### Q: What is the self-connect smoke test?
 
-Connect ArcClaw to its own `/mcp` endpoint:
+Connect Amsha Agent to its own `/mcp` endpoint:
 
 ```bash
 curl -X POST http://localhost:8080/api/v1/mcp/connect \
-  -H "X-ArcClaw-API-Key: $API_KEY" \
+  -H "X-Amsha-API-Key: $API_KEY" \
   -H "Content-Type: application/json" \
   -d '{"url":"http://localhost:8080/mcp","name":"self"}'
 ```
@@ -443,9 +443,9 @@ After this, `GET /api/v1/mcp/tools` should show `registeredDynamicTools` with 2 
 
 ### Q: What happens when a conversation gets very long?
 
-ArcClaw uses a rolling window `ChatMemoryStore` capped at `arcclaw.chat-memory.max-messages` (default 20). When the window fills, the `CompactionHandler` in the message pipeline triggers `ContextCompactionService` if the message count exceeds `arcclaw.memory.compaction.threshold` (default 5 above the keep-recent count).
+Amsha Agent uses a rolling window `ChatMemoryStore` capped at `amsha.chat-memory.max-messages` (default 20). When the window fills, the `CompactionHandler` in the message pipeline triggers `ContextCompactionService` if the message count exceeds `amsha.memory.compaction.threshold` (default 5 above the keep-recent count).
 
-Compaction uses `llama-3.1-8b-instant` to summarize the oldest messages into a `CompactionSummaryDto`, discards the originals from the rolling window, and preserves the most recent `keep-recent` (default 5) messages verbatim. The summary is also written into the FTS5 database (`arcclaw-fts.db`) so it can be recalled later via `MemorySearchTool`.
+Compaction uses `llama-3.1-8b-instant` to summarize the oldest messages into a `CompactionSummaryDto`, discards the originals from the rolling window, and preserves the most recent `keep-recent` (default 5) messages verbatim. The summary is also written into the FTS5 database (`amsha-fts.db`) so it can be recalled later via `MemorySearchTool`.
 
 ---
 
@@ -469,18 +469,18 @@ It is a **one-time migration script** to be run after deploying the Phase 45 FTS
 
 ### Q: What is the two-tier RAG architecture?
 
-ArcClaw's `TwoTierMemoryService` merges results from two sources using **Reciprocal Rank Fusion (RRF)**:
+Amsha Agent's `TwoTierMemoryService` merges results from two sources using **Reciprocal Rank Fusion (RRF)**:
 
-- **Tier 1 - FTS5 (keyword)**: `CompactionSummaryRepository` queries `arcclaw-fts.db` using SQLite's FTS5 full-text search. Results are ranked by keyword relevance.
+- **Tier 1 - FTS5 (keyword)**: `CompactionSummaryRepository` queries `amsha-fts.db` using SQLite's FTS5 full-text search. Results are ranked by keyword relevance.
 - **Tier 2 - Vector (semantic)**: `GlobalKnowledgeBase` (application-scoped, always active) and `SessionKnowledgeBase` (`@WorkspaceScoped`, active only when a workspace is live) store embedded chunks. Queries use cosine similarity via sqlite-vec.
 
 **RRF merge formula**: `score(d) = Σ 1.0 / (60 + rank)` across both ranked lists. This outperforms either method alone on mixed-domain queries.
 
 ---
 
-### Q: What is sqlite-vec and how does ArcClaw use it?
+### Q: What is sqlite-vec and how does Amsha Agent use it?
 
-`sqlite-vec` (the `vec0.so` extension) adds vector similarity search to SQLite as a virtual table extension. ArcClaw uses it for the second tier of RAG. The extension is loaded at runtime by `FtsConnectionInterceptor` using `arcclaw.rag.vec-extension-path` (default: `./lib/vec0`, native Docker: `/app/lib/vec0`). The `FtsConnectionInterceptor` automatically performs a recursive parent-directory lookup (up to 4 levels) to resolve the extension's absolute path if executing inside a submodule directory during testing or local development.
+`sqlite-vec` (the `vec0.so` extension) adds vector similarity search to SQLite as a virtual table extension. Amsha Agent uses it for the second tier of RAG. The extension is loaded at runtime by `FtsConnectionInterceptor` using `amsha.rag.vec-extension-path` (default: `./lib/vec0`, native Docker: `/app/lib/vec0`). The `FtsConnectionInterceptor` automatically performs a recursive parent-directory lookup (up to 4 levels) to resolve the extension's absolute path if executing inside a submodule directory during testing or local development.
 
 **Native image requirement**: `vec0.so` links against `libm.so.6` for math functions (`sqrtf`). GraalVM native image does not statically link `libm`, so `LD_PRELOAD=/lib64/libm.so.6` must be set before the native binary starts. Without it, `dlopen(vec0.so)` fails with `undefined symbol: sqrtf` and vector search degrades silently to FTS5-only.
 
@@ -523,7 +523,7 @@ LLMs frequently produce JSON with minor formatting errors: trailing commas, sing
 
 ### Q: What is the `@AgentFunction` annotation?
 
-`@AgentFunction` marks a SAM interface as a BAML-style typed agent function. The build-time `AgentFunctionProcessor` (in `arcclaw-deployment`) generates a JSON schema from the interface's return type at compile time. This schema is embedded in the system prompt to constrain the LLM's output format, making extraction reliable without prompt engineering per-call.
+`@AgentFunction` marks a SAM interface as a BAML-style typed agent function. The build-time `AgentFunctionProcessor` (in `amsha-deployment`) generates a JSON schema from the interface's return type at compile time. This schema is embedded in the system prompt to constrain the LLM's output format, making extraction reliable without prompt engineering per-call.
 
 Built-in examples: `SynthesisFunction` returns `SynthesisResult` (synthesizer's final answer), which may reference `AgentContribution` (per-agent findings) and `ConflictSummary` (structured conflict description between agents).
 
@@ -535,8 +535,8 @@ Built-in examples: `SynthesisFunction` returns `SynthesisResult` (synthesizer's 
 
 1. A user asks an agent to schedule a future task. The `coordinator` or `synthesizer` persona invokes `ScheduleTaskTool` with a 5-field UNIX cron expression, a self-contained goal, an optional timezone, and a `runOnce` flag.
 2. The tool validates the cron expression (via `cron-utils`), computes `nextFireTime`, and writes an `AgentCronDto` with status `PENDING` to the `agent_cron` SQLite table.
-3. `AgentCronScheduler` polls every 30 seconds (`arcclaw.cron.poll-interval`). It picks up `PENDING` jobs whose `nextFireTime ≤ now()` and hands them to `CronJobRunner`.
-4. `CronJobRunner` executes an agent loop (capped at `arcclaw.cron.max-iterations`, default 2) for the cron goal. On completion, it fires a CDI `AgentJobCompleted` event.
+3. `AgentCronScheduler` polls every 30 seconds (`amsha.cron.poll-interval`). It picks up `PENDING` jobs whose `nextFireTime ≤ now()` and hands them to `CronJobRunner`.
+4. `CronJobRunner` executes an agent loop (capped at `amsha.cron.max-iterations`, default 2) for the cron goal. On completion, it fires a CDI `AgentJobCompleted` event.
 5. `TelegramCronNotificationObserver` (or `CliCronNotificationObserver`) observes the event and delivers the result to the originating chat.
 
 ---
@@ -556,13 +556,13 @@ Three ways:
 
 - **Telegram / CLI:** Send `/crons` or `/list crons` to get a formatted list. Send `deletecron <id>` to cancel by ID. These are zero-token reflexes.
 - **Agent tool:** Ask the coordinator agent "list my scheduled tasks" - it will invoke `ManageScheduleTool` with `action=list`. Ask it to "delete cron job abc-123" to invoke `action=delete`.
-- **Direct SQL (admin):** `UPDATE agent_cron SET status = 'CANCELLED' WHERE id = 'abc-123';` on `arcclaw-meta.db`.
+- **Direct SQL (admin):** `UPDATE agent_cron SET status = 'CANCELLED' WHERE id = 'abc-123';` on `amsha-meta.db`.
 
 ---
 
 ## 🔒 Security & Secrets
 
-### Q: How does ArcClaw store and protect secrets (e.g., `GITHUB_TOKEN`)?
+### Q: How does Amsha Agent store and protect secrets (e.g., `GITHUB_TOKEN`)?
 
 Secrets are stored in the `encrypted_secret` SQLite table encrypted with AES-256-GCM-SIV. The key derivation chain is:
 
@@ -574,7 +574,7 @@ server pepper (env var) + user password
         → stored ciphertext + salt + version tag
 ```
 
-When a sandboxed tool needs a secret, `SandboxSecretResolver` decrypts it from the vault, passes the raw bytes (never a String) to `TmpfsSecretTransport`, which writes them to a `mode=600` tmpfs-backed env-file under `/run/arcclaw/secrets/`. Podman receives `--env-file <path>`. After the container exits, `TmpfsSecretTransport.close()` overwrites the byte array with zeros and unlinks the tmpfs file.
+When a sandboxed tool needs a secret, `SandboxSecretResolver` decrypts it from the vault, passes the raw bytes (never a String) to `TmpfsSecretTransport`, which writes them to a `mode=600` tmpfs-backed env-file under `/run/amsha/secrets/`. Podman receives `--env-file <path>`. After the container exits, `TmpfsSecretTransport.close()` overwrites the byte array with zeros and unlinks the tmpfs file.
 
 Secrets **never** appear in process arguments, JVM heap Strings, or on-disk files.
 
@@ -582,7 +582,7 @@ Secrets **never** appear in process arguments, JVM heap Strings, or on-disk file
 
 ### Q: Why use AES-GCM-SIV instead of standard AES-GCM?
 
-Standard AES-GCM is catastrophically broken if a nonce is ever reused with the same key (nonce-misuse attack). In a multi-threaded server under key rotation, guaranteeing nonce uniqueness requires a synchronized counter or random 96-bit nonces with collision risk at high call volumes. AES-GCM-SIV (RFC 8452) is nonce-misuse-resistant: a nonce collision degrades to revealing that two plaintexts are identical, rather than leaking the key. This makes it safe for ArcClaw's deterministic nonce derivation strategy (`key + salt → HKDF → nonce`) without a global counter.
+Standard AES-GCM is catastrophically broken if a nonce is ever reused with the same key (nonce-misuse attack). In a multi-threaded server under key rotation, guaranteeing nonce uniqueness requires a synchronized counter or random 96-bit nonces with collision risk at high call volumes. AES-GCM-SIV (RFC 8452) is nonce-misuse-resistant: a nonce collision degrades to revealing that two plaintexts are identical, rather than leaking the key. This makes it safe for Amsha Agent's deterministic nonce derivation strategy (`key + salt → HKDF → nonce`) without a global counter.
 
 ---
 
@@ -602,15 +602,15 @@ This fail-fast pattern ensures misconfigured production deployments are caught a
 
 ### Q: How does the API rate limiter work?
 
-`ApiKeyAuthFilter` extracts the `Authorization: Bearer <key>` header and validates it against `ApiKeyRegistry` using constant-time comparison (preventing timing attacks). Each valid key is tracked in a per-key sliding window. If a key exceeds `arcclaw.api.rate-limit.requests-per-minute` (default 20), the filter returns `HTTP 429` with a `Retry-After` header. The implementation uses `AtomicLong` counters and does not require a Redis sidecar.
+`ApiKeyAuthFilter` extracts the `Authorization: Bearer <key>` header and validates it against `ApiKeyRegistry` using constant-time comparison (preventing timing attacks). Each valid key is tracked in a per-key sliding window. If a key exceeds `amsha.api.rate-limit.requests-per-minute` (default 20), the filter returns `HTTP 429` with a `Retry-After` header. The implementation uses `AtomicLong` counters and does not require a Redis sidecar.
 
 ---
 
-## 🔧 Extending ArcClaw - Tools, Personas & Reflexes
+## 🔧 Extending Amsha Agent - Tools, Personas & Reflexes
 
 ### Q: What is the minimal contract for adding a new tool?
 
-Implement `AgentTool`, annotate the class `@ApplicationScoped`, and ArcClaw discovers it automatically via CDI `Instance<AgentTool>`. The required methods:
+Implement `AgentTool`, annotate the class `@ApplicationScoped`, and Amsha Agent discovers it automatically via CDI `Instance<AgentTool>`. The required methods:
 
 ```java
 @ApplicationScoped
@@ -643,7 +643,7 @@ Per Architecture Invariant §4.4, agent personas are **data-driven via Qute temp
 1. Add the role to `AgentRoleEnum` with a `RoleDefinition` specifying `maxIterations`, `requiresApproval`, `codeCapable`, and capabilities. Tool capabilities are dynamically assembled at startup via `@ToolMetadata` annotations on tool classes — you don't need to list them in `RoleDefinition`.
 2. Create a Qute system prompt template under `src/main/resources/templates/prompts/role-<name>.txt`. The template engine injects `sortedCapabilities`, `roleDef`, and safety/compaction includes automatically.
 3. Tools grant themselves to roles via `@ToolMetadata(defaultRoles = {"your_role", ...})`. Add a case to every exhaustive switch over `AgentRoleEnum` — the compiler will flag missing cases.
-4. Optionally register the role in `application.yaml` under `arcclaw.agents.roles` for REST API description and intent classifier hints.
+4. Optionally register the role in `application.yaml` under `amsha.agents.roles` for REST API description and intent classifier hints.
 
 The new persona is immediately available via `--role your_role` on the CLI and `agentRole: "your_role"` in the REST API.
 
@@ -662,7 +662,7 @@ If your reflex needs to sanitize input before the LLM sees it (like `PiiScanRefl
 
 ### Q: Can I add a new channel adapter (e.g., Discord, Slack)?
 
-Yes. The `arcclaw-channel-api` module defines a **6-interface SPI contract**. To add a channel, implement all six interfaces and wire them in a `ChannelPlugin` composite bean:
+Yes. The `amsha-channel-api` module defines a **6-interface SPI contract**. To add a channel, implement all six interfaces and wire them in a `ChannelPlugin` composite bean:
 
 1. **`ChannelPlugin`** — composite registration bean wiring all 5 components together.
 2. **`ChannelSender`** — sends `List<ReplyNode>` to the channel (handling the split into `ContentNode` and `InteractionNode` with chunking, edit support, etc.).
@@ -679,23 +679,23 @@ The entire reflex system, skill routing, intent classification, session routing,
 
 ### Q: How does session continuity work across Telegram bot restarts?
 
-Sessions are identified using `UUID.nameUUIDFromBytes(chatId + ":" + userId)`. This is a **deterministic** UUID derived from the Telegram chat and user identity - it produces the same session ID every time for the same user, whether the bot has been restarted, redeployed, or migrated. As long as `arcclaw-meta.db` is mounted from a persistent volume, the user's conversation history and pending checkpoints survive any JVM restart.
+Sessions are identified using `UUID.nameUUIDFromBytes(chatId + ":" + userId)`. This is a **deterministic** UUID derived from the Telegram chat and user identity - it produces the same session ID every time for the same user, whether the bot has been restarted, redeployed, or migrated. As long as `amsha-meta.db` is mounted from a persistent volume, the user's conversation history and pending checkpoints survive any JVM restart.
 
 ---
 
 ### Q: What does `TelegramMarkdownV2Renderer` do?
 
-Telegram's MarkdownV2 format requires escaping every special character (`_`, `*`, `[`, `]`, `(`, `)`, `~`, `` ` ``, `>`, `#`, `+`, `-`, `=`, `|`, `{`, `}`, `.`, `!`) that appears outside of formatting syntax. Raw LLM output routinely contains these characters. `TelegramMarkdownV2Renderer` traverses ArcClaw's custom `ReplyNode` tree and correctly escapes all plain-text content while preserving bold, italic, code, and link formatting. Without this renderer, Telegram rejects messages with a `Bad Request: can't parse entities` error.
+Telegram's MarkdownV2 format requires escaping every special character (`_`, `*`, `[`, `]`, `(`, `)`, `~`, `` ` ``, `>`, `#`, `+`, `-`, `=`, `|`, `{`, `}`, `.`, `!`) that appears outside of formatting syntax. Raw LLM output routinely contains these characters. `TelegramMarkdownV2Renderer` traverses Amsha Agent's custom `ReplyNode` tree and correctly escapes all plain-text content while preserving bold, italic, code, and link formatting. Without this renderer, Telegram rejects messages with a `Bad Request: can't parse entities` error.
 
 ---
 
 ### Q: What happens when a Telegram user I have not allowlisted sends a message?
 
-`TelegramAllowlistGuard` is evaluated in the `AllowlistHandler` at the start of the `MessagePipeline`. If the user's Telegram user ID or username is not in `ARCCLAW_TELEGRAM_ALLOWED_USER_IDS` / `ARCCLAW_TELEGRAM_ALLOWED_USERS`, the message is rejected before it reaches the intent classifier or agent loop.
+`TelegramAllowlistGuard` is evaluated in the `AllowlistHandler` at the start of the `MessagePipeline`. If the user's Telegram user ID or username is not in `AMSHA_TELEGRAM_ALLOWED_USER_IDS` / `AMSHA_TELEGRAM_ALLOWED_USERS`, the message is rejected before it reaches the intent classifier or agent loop.
 
-If `arcclaw.channel.telegram.silent-block=false` (default), the user receives the configured `block-response` message (default: `⛔ Access denied.`). If `silent-block=true`, the message is dropped silently with no reply - useful when you do not want to reveal that the bot is running.
+If `amsha.channel.telegram.silent-block=false` (default), the user receives the configured `block-response` message (default: `⛔ Access denied.`). If `silent-block=true`, the message is dropped silently with no reply - useful when you do not want to reveal that the bot is running.
 
-An empty allowlist (`ARCCLAW_TELEGRAM_ALLOWED_USERS=`) allows all users - this is the open-access mode used in development.
+An empty allowlist (`AMSHA_TELEGRAM_ALLOWED_USERS=`) allows all users - this is the open-access mode used in development.
 
 ---
 
@@ -703,15 +703,15 @@ An empty allowlist (`ARCCLAW_TELEGRAM_ALLOWED_USERS=`) allows all users - this i
 
 ### Q: What happens if a Sandbox tool returns a massive payload (e.g., a 10,000-line file)?
 
-ArcClaw applies **defensive truncation** via `ToolObservationSanitizer`. Tool observations exceeding 16 KiB (16,384 bytes) are truncated before being appended to the LLM's reasoning history. Feeding a 10k-line file directly into the context would exceed the model's token limit and cause an unrecoverable API error. The truncation is logged at `WARN` level so you can identify over-verbose tools.
+Amsha Agent applies **defensive truncation** via `ToolObservationSanitizer`. Tool observations exceeding 16 KiB (16,384 bytes) are truncated before being appended to the LLM's reasoning history. Feeding a 10k-line file directly into the context would exceed the model's token limit and cause an unrecoverable API error. The truncation is logged at `WARN` level so you can identify over-verbose tools.
 
 In addition, `ToolObservationSanitizer` also runs prompt injection redaction and PII scrubbing on tool output before it reaches the LLM.
 
 ---
 
-### Q: I am getting `Permission denied` when SQLite tries to write to the `arcclaw_data` Docker volume. Why?
+### Q: I am getting `Permission denied` when SQLite tries to write to the `amsha_data` Docker volume. Why?
 
-Docker creates named volumes as `root:root`. ArcClaw runs as `arcclaw` (UID 1000) inside the container. The fix is the **Init-Container pattern**: the `init-perms` service in `docker-compose.yaml` briefly boots as root, runs `chown -R 1000:1000 /app/data`, and exits before the main `arcclaw` container starts (`depends_on: init-perms: condition: service_completed_successfully`).
+Docker creates named volumes as `root:root`. Amsha Agent runs as `amsha` (UID 1000) inside the container. The fix is the **Init-Container pattern**: the `init-perms` service in `docker-compose.yaml` briefly boots as root, runs `chown -R 1000:1000 /app/data`, and exits before the main `amsha` container starts (`depends_on: init-perms: condition: service_completed_successfully`).
 
 ---
 
@@ -727,19 +727,19 @@ These are generated by the `maven-compiler-plugin` inside `target/maven-status/`
 
 ---
 
-### Q: Why does `arcclaw-cli.ps1` not prompt to rebuild before running?
+### Q: Why does `amsha-cli.ps1` not prompt to rebuild before running?
 
 The rebuild prompt (`Read-Host "Rebuild/Package application before running? (y/N)"`) is commented out in the shipping version. This is intentional - the wrapper is designed for day-to-day usage where you have already built the JAR. Uncomment the block if you want the interactive rebuild prompt during active development cycles.
 
 ---
 
-### Q: What Quarkus profiles does ArcClaw define and when are they active?
+### Q: What Quarkus profiles does Amsha Agent define and when are they active?
 
 | Profile | When Active | Key Differences |
 |---|---|---|
 | `%dev` | `quarkus:dev` | Sandbox `strategy=NONE`, verbose LLM logging, hot reload, budget=$999 |
 | `%test` | `mvn verify` | In-memory SQLite (`target/`), Telegram disabled, compaction disabled, vault with test pepper |
-| `%cli` | `arcclaw-cli.ps1` wrapper | All banners and INFO logs silenced; OTEL SDK disabled |
+| `%cli` | `amsha-cli.ps1` wrapper | All banners and INFO logs silenced; OTEL SDK disabled |
 | `%staging` | Manual `-Dquarkus.profile=staging` | Sandbox=PODMAN, budget=$50, supervised autonomy |
 | `%prod` | Docker Compose (`QUARKUS_PROFILE=prod`) | Sandbox=PODMAN, startup security validation strict, console color off |
 
@@ -751,8 +751,8 @@ The rebuild prompt (`Read-Host "Rebuild/Package application before running? (y/N
 
 Tests live in two modules:
 
-- **`arcclaw-core/src/test`** - pure unit and integration tests with zero Quarkus startup. Covers agent loop state machines, reasoning engine, reflex system, sandbox circuit breaker, secret vault, context compaction, FTS5 search, audit HMAC, governance budget, workspace lifecycle, and tool implementations.
-- **`arcclaw-app/src/test`** - `@QuarkusTest` integration tests that start the full CDI context. Covers REST API end-to-end (`AgentResourceTest`), Telegram route startup and routing, API key auth, rate limiting, security validators, and scheduler concurrency.
+- **`core/src/test`** - pure unit and integration tests with zero Quarkus startup. Covers agent loop state machines, reasoning engine, reflex system, sandbox circuit breaker, secret vault, context compaction, FTS5 search, audit HMAC, governance budget, workspace lifecycle, and tool implementations.
+- **`app/src/test`** - `@QuarkusTest` integration tests that start the full CDI context. Covers REST API end-to-end (`AgentResourceTest`), Telegram route startup and routing, API key auth, rate limiting, security validators, and scheduler concurrency.
 
 Both test modules use an **in-memory SQLite** database (`target/`) so no file cleanup is required between tests.
 
@@ -760,22 +760,22 @@ Both test modules use an **in-memory SQLite** database (`target/`) so no file cl
 
 ### Q: Why does the test suite require `--add-opens` JVM flags?
 
-Mockito's inline mock agent (used for mocking final classes and static methods) requires reflective access to JVM internals that Java 17+ restricts by default. The `--add-opens` flags in `arcclaw-app/pom.xml` grant Mockito the access it needs to attach the byte-buddy agent. These flags are scoped to `<argLine>` in the Surefire plugin and do not affect production code.
+Mockito's inline mock agent (used for mocking final classes and static methods) requires reflective access to JVM internals that Java 17+ restricts by default. The `--add-opens` flags in `app/pom.xml` grant Mockito the access it needs to attach the byte-buddy agent. These flags are scoped to `<argLine>` in the Surefire plugin and do not affect production code.
 
 ---
 
 ### Q: How do I run only a specific test module without rebuilding everything?
 
 ```bash
-# Run only arcclaw-core tests
-mvn test -pl arcclaw-core
+# Run only amsha-core tests
+mvn test -pl amsha-core
 
-# Run only arcclaw-app integration tests
-mvn verify -pl arcclaw-app -am
+# Run only amsha-app integration tests
+mvn verify -pl amsha-app -am
 
 # Run a single test class
-mvn test -pl arcclaw-core -Dtest=SandboxCircuitBreakerTest
+mvn test -pl amsha-core -Dtest=SandboxCircuitBreakerTest
 
 # Run with LLM debug logging enabled
-mvn verify -pl arcclaw-app -am -Darcclaw.debug.llm=true
+mvn verify -pl amsha-app -am -Damsha.debug.llm=true
 ```

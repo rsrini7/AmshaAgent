@@ -1,7 +1,7 @@
-# ArcClaw - Telegram Testing Guide
+# Amsha Agent - Telegram Testing Guide
 
-> **Prerequisites**: ArcClaw is running in `attach telegram` mode with a valid `TELEGRAM_BOT_TOKEN`
-> and your user ID in `ARCCLAW_TELEGRAM_ALLOWED_USER_IDS`. See [MANUAL_SETUP.md §5.5](./MANUAL_SETUP.md#55-telegram-required-only-for-attach-mode) for Telegram setup.
+> **Prerequisites**: Amsha Agent is running in `attach telegram` mode with a valid `TELEGRAM_BOT_TOKEN`
+> and your user ID in `AMSHA_TELEGRAM_ALLOWED_USER_IDS`. See [MANUAL_SETUP.md §5.5](./MANUAL_SETUP.md#55-telegram-required-only-for-attach-mode) for Telegram setup.
 
 > **Docs**: [README](../README.md) · [ARCHITECTURE.md](./ARCHITECTURE.md) · [CONFIGURATION.md](./CONFIGURATION.md) · [Setup](./SETUP.md) · [FAQ](./FAQ.md)
 
@@ -40,7 +40,7 @@
 
 ## Quick Smoke Test (10 minutes)
 
-For rapid regression, use `telegram-test-arcclaw.txt` — a numbered list of 146 messages covering all major features. Paste messages into Telegram sequentially and verify responses match expectations.
+For rapid regression, use `telegram-test-amsha.txt` — a numbered list of 146 messages covering all major features. Paste messages into Telegram sequentially and verify responses match expectations.
 
 **What it covers:**
 - Identity extraction and memory (messages 1-9, 57-66)
@@ -63,14 +63,14 @@ For detailed verification of *each* feature (expected log patterns, audit events
 ### Required `.env` Variables
 
 ```env
-ARCCLAW_TELEGRAM_ENABLED=true
+AMSHA_TELEGRAM_ENABLED=true
 TELEGRAM_BOT_TOKEN=<token from @BotFather>
-ARCCLAW_TELEGRAM_ALLOWED_USER_IDS=<your numeric Telegram user ID>
-ARCCLAW_TELEGRAM_ALLOWED_USERS=<your @username without @>
-ARCCLAW_API_KEYS_INTERNAL=key-internal-changeme   # or your custom key
-ARCCLAW_LLM_API_KEY=<your groq key>                     # must start with gsk_
-ARCCLAW_VAULT_PEPPER=<32+ char random string>
-ARCCLAW_AUDIT_HMAC_KEY=<32+ char random string>
+AMSHA_TELEGRAM_ALLOWED_USER_IDS=<your numeric Telegram user ID>
+AMSHA_TELEGRAM_ALLOWED_USERS=<your @username without @>
+AMSHA_API_KEYS_INTERNAL=key-internal-changeme   # or your custom key
+AMSHA_LLM_API_KEY=<your groq key>                     # must start with gsk_
+AMSHA_VAULT_PEPPER=<32+ char random string>
+AMSHA_AUDIT_HMAC_KEY=<32+ char random string>
 ```
 
 ### Starting the Bot
@@ -78,9 +78,9 @@ ARCCLAW_AUDIT_HMAC_KEY=<32+ char random string>
 **Dev mode (hot reload, no Podman isolation):**
 
 ```bash
-./mvnw quarkus:dev -pl arcclaw-app -am \
+./mvnw quarkus:dev -pl amsha-app -am \
   "-Dquarkus.args=attach" \
-  "-Darcclaw.rag.vec-extension-path=../lib/vec0"
+  "-Damsha.rag.vec-extension-path=../lib/vec0"
 ```
 
 > **Dev mode note**: `camelContext.disableJMX()` is a silent no-op in dev mode (Quarkus fires
@@ -97,8 +97,8 @@ java \
   --add-opens=java.base/java.lang=ALL-UNNAMED \
   --enable-native-access=ALL-UNNAMED \
   "-Dsun.misc.unsafe.memory.access=allow" \
-  "-Darcclaw.rag.vec-extension-path=./lib/vec0" \
-  -jar arcclaw-app/target/quarkus-app/quarkus-run.jar attach telegram
+  "-Damsha.rag.vec-extension-path=./lib/vec0" \
+  -jar app/target/quarkus-app/quarkus-run.jar attach telegram
 ```
 
 **Verify startup in logs:**
@@ -123,8 +123,8 @@ Before running any section of this guide, confirm:
 
 - [ ] Bot responds to a simple `Hello` message within a few seconds
 - [ ] Logs show `Resolved session <uuid> for chat <chatId>` for your chat
-- [ ] `ARCCLAW_TELEGRAM_ALLOWED_USER_IDS` contains your numeric user ID
-- [ ] `ARCCLAW_LLM_API_KEY` is set and valid (key starts with `gsk_`)
+- [ ] `AMSHA_TELEGRAM_ALLOWED_USER_IDS` contains your numeric user ID
+- [ ] `AMSHA_LLM_API_KEY` is set and valid (key starts with `gsk_`)
 - [ ] Boot logs show `WORM triggers installed on audit_event`
 - [ ] Boot logs show `FTS5 memory index and triggers verified`
 - [ ] Boot logs show `sqlite-vec extension loaded` OR `vector search disabled, FTS5 only`
@@ -148,7 +148,7 @@ DEBUG [SessionResolutionHandler] Resolved session <uuid> for chat <chatId>
 **From SQLite (after Phase 64-B):**
 
 ```sql
--- In sqlite3 ./data/arcclaw-meta.db
+-- In sqlite3 ./data/amsha-meta.db
 SELECT session_id FROM session_registry
 WHERE channel_type='TELEGRAM' AND channel_id='<your chatId>' AND user_id='<your userId>';
 ```
@@ -249,7 +249,7 @@ What is 2 + 2?
 
 **Send in sequence:**
 ```
-Remember this: my project is ArcClaw and it uses Quarkus 3.27.2.
+Remember this: my project is Amsha Agent and it uses Quarkus 3.27.2.
 ```
 
 Then:
@@ -257,7 +257,7 @@ Then:
 What was the project name I told you about?
 ```
 
-**Expect:** Bot recalls "ArcClaw" and "Quarkus 3.27.2" without needing to be told again.
+**Expect:** Bot recalls "Amsha Agent" and "Quarkus 3.27.2" without needing to be told again.
 
 > The chat memory store (rolling window = 20 messages) is backed by `PersistentChatMemoryStore`
 > in SQLite WAL mode. `SystemMessage` objects are never stored - only `UserMessage` and
@@ -508,7 +508,7 @@ store GITHUB_TOKEN=ghp_your_actual_token_here
 After storing, send a task requiring GitHub access:
 
 ```
-List the topics of the rsrini7/arcclaw repository.
+List the topics of the rsrini7/amsha repository.
 ```
 
 **Expect:** Bot shows `⏳ Approval Required` (SUPERVISED mode), then after `/approve`,
@@ -563,14 +563,14 @@ Both paths share the same `StatefulAgentStore` checkpoint.
 
 **Send:**
 ```
-Fetch the rsrini7/arcclaw repository info using the github tool.
+Fetch the rsrini7/amsha repository info using the github tool.
 ```
 
 **Expect:**
 ```
 ⏳ Approval Required - The agent wants to execute:
 Tool: github
-Parameters: {"command": "view", "repo": "rsrini7/arcclaw"}
+Parameters: {"command": "view", "repo": "rsrini7/amsha"}
 
 Reply /approve to proceed or /deny to cancel.
 ```
@@ -625,7 +625,7 @@ Start a new task requiring GitHub. When approval prompt appears:
 
 ### 8.5 Approval timeout
 
-If the approval prompt sits unanswered for `arcclaw.governance.approval-timeout-seconds` (default
+If the approval prompt sits unanswered for `amsha.governance.approval-timeout-seconds` (default
 300s), the `ApprovalTimeoutNotifier` fires. The session transitions to `FAILED`.
 
 **Send:** Wait 5+ minutes without approving/denying after an approval request.
@@ -730,14 +730,14 @@ educational question about the topic must pass through.
 
 ## 11. Allowlist Access Control
 
-`TelegramAllowlistGuard` checks incoming messages against `ARCCLAW_TELEGRAM_ALLOWED_USER_IDS`
-(numeric IDs) and `ARCCLAW_TELEGRAM_ALLOWED_USERS` (usernames) before any session is created.
+`TelegramAllowlistGuard` checks incoming messages against `AMSHA_TELEGRAM_ALLOWED_USER_IDS`
+(numeric IDs) and `AMSHA_TELEGRAM_ALLOWED_USERS` (usernames) before any session is created.
 
 ---
 
 ### 11.1 Blocked user test
 
-To test, temporarily remove your user ID from `ARCCLAW_TELEGRAM_ALLOWED_USER_IDS` in `.env`
+To test, temporarily remove your user ID from `AMSHA_TELEGRAM_ALLOWED_USER_IDS` in `.env`
 and restart. Send any message.
 
 **Expect:** No response at all. Logs show:
@@ -752,7 +752,7 @@ No audit event, no session, no LLM call.
 
 ### 11.2 Open access mode
 
-If `ARCCLAW_TELEGRAM_ALLOWED_USER_IDS` is empty (not set), the allowlist guard is disabled
+If `AMSHA_TELEGRAM_ALLOWED_USER_IDS` is empty (not set), the allowlist guard is disabled
 and all users can interact. Confirm in logs:
 
 ```
@@ -876,7 +876,7 @@ INFO  [CronJobRunner] Cron job fired: id=abc-1234 goal=CRON:What is the current 
 
 **Send:**
 ```
-Schedule a one-time task to run in 2 minutes that says: ArcClaw cron test passed.
+Schedule a one-time task to run in 2 minutes that says: Amsha Agent cron test passed.
 ```
 
 **Expect:** `runOnce=true` is set. After firing, the job row is deleted automatically.
@@ -944,7 +944,7 @@ From logs or `session_registry` table (see Section 3).
 
 ```http
 GET http://localhost:8080/api/v1/audit/session/<your-session-uuid>
-X-ArcClaw-API-Key: key-internal-changeme
+X-Amsha-API-Key: key-internal-changeme
 ```
 
 **Expect:** Ordered list of all events for your session. Verify the `eventType` sequence matches
@@ -954,7 +954,7 @@ expected flow.
 
 ```http
 GET http://localhost:8080/api/v1/audit/<your-session-uuid>/verify
-X-ArcClaw-API-Key: key-internal-changeme
+X-Amsha-API-Key: key-internal-changeme
 ```
 
 **Expect:** `{"valid": true, "brokenAtId": null, "totalRows": N}`
@@ -1000,14 +1000,14 @@ Sending a new message on the same session works - the agent starts fresh.
 
 ## 17. OTel & Observability Verification
 
-ArcClaw exports OpenTelemetry spans to Jaeger (or any OTLP-compatible collector).
+Amsha Agent exports OpenTelemetry spans to Jaeger (or any OTLP-compatible collector).
 
 **Setup:** Start the observability stack: `mise run compose:up` (or `docker compose up -d`)
 
 **Test:**
 1. Send any message that triggers the agent
 2. Open Jaeger UI: `http://localhost:16686`
-3. Search for service: `arcclaw`
+3. Search for service: `amsha`
 
 **Expect spans:**
 - `agent.loop` - root span for the full agent loop
@@ -1033,7 +1033,7 @@ the system prompt and tool caps for a matching session.
 
 ```http
 POST http://localhost:8080/api/v1/skills
-X-ArcClaw-API-Key: key-internal-changeme
+X-Amsha-API-Key: key-internal-changeme
 Content-Type: text/plain
 
 ---
@@ -1107,7 +1107,7 @@ List all GitHub repositories for user rsrini7.
 
 ### 20.1 Observe soft budget warning (80% threshold)
 
-Budget is per-session. The warning fires at 80% of `arcclaw.governance.max-budget-usd`.
+Budget is per-session. The warning fires at 80% of `amsha.governance.max-budget-usd`.
 Default is typically `$0.10`.
 
 1. Run several complex multi-step tasks until the session has consumed ~80% of the budget.
@@ -1171,7 +1171,7 @@ Any message sent via Telegram uses `SUPERVISED` mode by default. When the agent 
    ```http
    POST http://localhost:8080/api/v1/sessions
    Content-Type: application/json
-   X-ArcClaw-API-Key: key-internal-changeme
+   X-Amsha-API-Key: key-internal-changeme
    {"autonomyLevel": "FULL"}
    ```
 2. Note the session UUID.
@@ -1204,7 +1204,7 @@ operation is not permitted.
 
 **Send:**
 ```
-Ingest this: ArcClaw is a production-grade AI agent kernel built with Java 25, Quarkus 3.27.2, and LangChain4j. It uses SQLite WAL mode for persistence and Podman for tool sandboxing.
+Ingest this: Amsha Agent is a production-grade AI agent kernel built with Java 25, Quarkus 3.27.2, and LangChain4j. It uses SQLite WAL mode for persistence and Podman for tool sandboxing.
 ```
 
 **Expect:** Agent invokes `ingest_document` tool (requires approval in SUPERVISED mode).
@@ -1218,7 +1218,7 @@ After approval: `✅ Document ingested.`
 
 **Send:**
 ```
-What do you know about ArcClaw's persistence layer?
+What do you know about Amsha Agent's persistence layer?
 ```
 
 **Expect:** Agent uses `recall_memory_search` and returns information about SQLite WAL mode from the
@@ -1249,7 +1249,7 @@ Ingest a document in session A. Switch to session B (create a new one via REST).
 
 **Send on session B:**
 ```
-Search memory for ArcClaw architecture details.
+Search memory for Amsha Agent architecture details.
 ```
 
 **Expect:** Session B does NOT return results from session A's ingested documents. Memory search
@@ -1284,10 +1284,10 @@ The query must not silently return an empty list.
 
 **Send:**
 ```
-ابحث في ذاكرتك عن معلومات حول بنية ArcClaw.
+ابحث في ذاكرتك عن معلومات حول بنية Amsha Agent.
 ```
 
-(Arabic: "Search your memory for information about ArcClaw architecture.")
+(Arabic: "Search your memory for information about Amsha Agent architecture.")
 
 **Expect:** Non-empty results. No silent empty return due to character stripping.
 
@@ -1297,7 +1297,7 @@ The query must not silently return an empty list.
 
 **Send:**
 ```
-Search for "ArcClaw*" architecture notes.
+Search for "Amsha Agent*" architecture notes.
 ```
 
 **Expect:** The `*` is properly escaped to `\*` before hitting FTS5, so no FTS5 syntax error.
@@ -1342,7 +1342,7 @@ Run this checklist after deploying all Phase 64 fixes to confirm nothing is brok
       tasks on the same session (open two HTTP files simultaneously). Verify HMAC chain after:
       `GET /api/v1/audit/<sessionId>/verify` → `valid: true`.
 
-- [ ] **B2 - DevSecretSeeder absent in production**: Start ArcClaw in `prod` profile. Confirm
+- [ ] **B2 - DevSecretSeeder absent in production**: Start Amsha Agent in `prod` profile. Confirm
       no `DevSecretSeeder` log lines appear. The bean must be absent from the CDI container.
 
 - [ ] **B3 - Session IDs are random UUIDs (not MD5)**: Send a message and note the session UUID.
@@ -1370,11 +1370,11 @@ Run this checklist after deploying all Phase 64 fixes to confirm nothing is brok
 
 Run this after any significant change. Work top-to-bottom.
 
-1. Start fresh: `./data/arcclaw-meta.db` deleted, app restarted
+1. Start fresh: `./data/amsha-meta.db` deleted, app restarted
 2. Send `Hello` → bot responds ✅
 3. Send `Write a Java method to reverse a list` → coder role, code returned ✅
 4. Send `store GITHUB_TOKEN=<real token>` → vault stored ✅
-5. Send `Fetch rsrini7/arcclaw repo info` → approval prompt appears ✅
+5. Send `Fetch rsrini7/amsha repo info` → approval prompt appears ✅
 6. Send `/approve` → GitHub data returned ✅
 7. Send `/status` → shows COMPLETED with cost > $0 ✅
 8. Send `/reset` → soft reset ✅

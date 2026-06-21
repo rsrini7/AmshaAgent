@@ -1,0 +1,130 @@
+package com.amsha.core.agent.loop;
+
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+import jakarta.enterprise.inject.Instance;
+
+import java.lang.reflect.Field;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+
+import com.amsha.core.agent.reasoning.ParallelToolCall;
+import com.amsha.core.agent.reasoning.ReasoningStep;
+import com.amsha.core.agent.reasoning.StructuredOutputMode;
+import com.amsha.core.governance.ApprovalFrame;
+import com.amsha.core.governance.GovernanceStrategy;
+import com.amsha.core.governance.RateLimitTracker;
+import com.amsha.core.observability.AgentObserver;
+import com.amsha.core.security.AutonomyLevel;
+import com.amsha.core.tools.ToolResponse;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+@ExtendWith(MockitoExtension.class)
+@SuppressWarnings("java:S1192")
+class ParallelToolStepExecutorPreExecTest {
+
+    @Mock
+    ToolInvocationGuard guard;
+
+    @Mock
+    ToolInvoker toolInvoker;
+
+    @Mock
+    ApprovalCheckpointManager checkpointManager;
+
+    @Mock
+    GovernanceStrategy governanceLayer;
+
+    @Mock
+    RateLimitTracker rateLimitTracker;
+
+    @Mock
+    Instance<AgentObserver> observers;
+
+    ObjectMapper objectMapper = new ObjectMapper();
+
+    ParallelToolStepExecutor executor;
+
+    @BeforeEach
+    void setup() throws Exception {
+        executor = new ParallelToolStepExecutor();
+        setField(executor, "objectMapper", objectMapper);
+        setField(executor, "guard", guard);
+        setField(executor, "checkpointManager", checkpointManager);
+        setField(executor, "governanceLayer", governanceLayer);
+        setField(executor, "rateLimitTracker", rateLimitTracker);
+        setField(executor, "observers", observers);
+        setField(executor, "preExecutableTools", Optional.of(List.of("safe_read")));
+
+        SequentialToolExecutor sequentialToolExecutor = new SequentialToolExecutor();
+        setField(sequentialToolExecutor, "toolInvoker", toolInvoker);
+        setField(sequentialToolExecutor, "guard", guard);
+        setField(executor, "sequentialToolExecutor", sequentialToolExecutor);
+    }
+
+    private void setField(Object target, String name, Object value) throws Exception {
+        Field field = target.getClass().getDeclaredField(name);
+        field.setAccessible(true);
+        field.set(target, value);
+    }
+
+    @Test
+    void executeWithMixedTools_PreExecutesSafeTool() {
+        String sessionId = "123-456";
+        String agentRole = "COORDINATOR";
+
+        AgentExecutionContext context = new AgentExecutionContext(
+                sessionId,
+                "user1",
+                "chat1",
+                agentRole,
+                "goal",
+                AutonomyLevel.SUPERVISED,
+                StructuredOutputMode.NATIVE,
+                5,
+                0,
+                null,
+                null,
+                null,
+                null);
+
+        var calls = List.of(
+                new ParallelToolCall("c1", "safe_read", Map.of(), "{}", null, true),
+                new ParallelToolCall("c2", "unsafe_write", Map.of(), "{}", null, true));
+
+        ReasoningStep batchStep = ReasoningStep.parallelBatch("thought", Map.of("batch", calls), 0, 0)
+                .withObservation("");
+
+        // First tool triggers HITL
+        when(guard.evaluate(any(), any(), any(), eq("safe_read"), any(), any(), any(), any()))
+                .thenReturn(new ToolInvocationGuard.GuardDecision.Allow());
+
+        when(guard.evaluate(any(), any(), any(), eq("unsafe_write"), any(), any(), any(), any()))
+                .thenReturn(new ToolInvocationGuard.GuardDecision.PauseForApproval(
+                        new ApprovalFrame("unsafe_write", Map.of(), ApprovalFrame.RiskLevel.MEDIUM)));
+
+        // Mock safe tool invocation
+        when(toolInvoker.invoke(eq("safe_read"), any(), eq(sessionId)))
+                .thenReturn(ToolResponse.success("pre-exec-data"));
+
+        executor.execute(context, Collections.emptyList(), batchStep, 0);
+
+        // Verify pre-execution happened
+        verify(toolInvoker, times(1)).invoke(eq("safe_read"), any(), any());
+
+        verify(checkpointManager).persistBatchWithPreExecuted(eq(context), anyList(), any(), anyList(), any(), any());
+    }
+}

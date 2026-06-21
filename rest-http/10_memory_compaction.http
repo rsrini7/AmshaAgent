@@ -1,16 +1,16 @@
 ### ═══════════════════════════════════════════════════════════════
 ### 10 - MEMORY, COMPACTION & LONG-TERM CONTEXT SEARCH
 ###
-### ArcClaw uses a dual-SQLite memory system:
+### Amsha Agent uses a dual-SQLite memory system:
 ###
-###   arcclaw-meta.db (primary WAL)
+###   amsha-meta.db (primary WAL)
 ###     └─ chat_memory            - rolling LangChain4J chat window (max 100 msgs)
 ###     └─ compaction_summary     - summaries from ContextCompactionService runs
 ###     └─ agent_checkpoint       - per-session ReAct state
 ###     └─ rag_chunk              - RAG document chunks (Phase 64-C3+)
 ###     └─ session_registry       - (channelType, channelId, userId) → sessionId (Phase 64-B3+)
 ###
-###   arcclaw-fts.db (FTS5)
+###   amsha-fts.db (FTS5)
 ###     └─ compaction_summary_fts - full-text indexed summaries, queryable via MemorySearchTool
 ###
 ### SystemMessage objects are NEVER stored in chat_memory (Nuance #1).
@@ -39,7 +39,7 @@
 ###   Chat memory (ChatMemoryStore) is NOT wiped on session soft-reset (/reset).
 ###   Only the ReAct checkpoint state is cleared. LLM retains conversational context.
 ###
-### Prerequisites: ArcClaw serve mode, ARCCLAW_LLM_API_KEY set
+### Prerequisites: Amsha Agent serve mode, AMSHA_LLM_API_KEY set
 ### ═══════════════════════════════════════════════════════════════
 
 # @baseUrl  = http://localhost:8080
@@ -55,19 +55,19 @@
 # @name memSession
 POST {{baseUrl}}/api/v1/sessions
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
 ### [MEM-1] First message - establish a fact
-# NOTE: ArcClaw is on Quarkus 3.27.2 (Phase 60.1 migration).
+# NOTE: Amsha Agent is on Quarkus 3.27.2 (Phase 60.1 migration).
 # Do NOT use 3.23.0 here - that is the pre-migration version.
 POST {{baseUrl}}/api/v1/sessions/{{memSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
-    "goal": "Remember this: my project is called ArcClaw and it uses Quarkus 3.27.2.",
+    "goal": "Remember this: my project is called Amsha Agent and it uses Quarkus 3.27.2.",
     "agentRole": "coordinator",
     "maxIterations": 1
 }
@@ -76,10 +76,10 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ### [MEM-2] Second message - recall from chat memory (no tools needed)
 # The LLM sees the prior turn in its rolling window (PersistentChatMemoryStore).
-# Expect: agent replies with "ArcClaw" and "Quarkus 3.27.2"
+# Expect: agent replies with "Amsha Agent" and "Quarkus 3.27.2"
 POST {{baseUrl}}/api/v1/sessions/{{memSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "What was the project name I told you about, and which framework does it use?",
@@ -91,7 +91,7 @@ X-ArcClaw-API-Key: {{validKey}}
 ###
 
 GET {{baseUrl}}/api/v1/sessions/{{memSession.response.body.sessionId}}/status/coordinator
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 
 ###
@@ -99,7 +99,7 @@ X-ArcClaw-API-Key: {{validKey}}
 
 POST {{baseUrl}}/api/v1/sessions/{{memSession.response.body.sessionId}}/run-async
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "/approve",
@@ -111,13 +111,13 @@ X-ArcClaw-API-Key: {{validKey}}
 ###
 
 ### [MEM-3] Third turn - build on the context
-# ArcClaw uses Quarkus 3.27.2 (LTS, released 2025).
+# Amsha Agent uses Quarkus 3.27.2 (LTS, released 2025).
 # Quarkus 3.27.2 requires JDK 17+ (or 21+ for Virtual Threads) minimum;
-# ArcClaw itself uses JDK 25 (as per mise.toml: java = "temurin-25").
+# Amsha Agent itself uses JDK 25 (as per mise.toml: java = "temurin-25").
 # Expect: agent recalls Quarkus 3.27.2 and can discuss its JVM requirements.
 POST {{baseUrl}}/api/v1/sessions/{{memSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "Given what you know about my project, what JVM version does Quarkus 3.27.2 require?",
@@ -128,7 +128,7 @@ X-ArcClaw-API-Key: {{validKey}}
 ###
 
 DELETE {{baseUrl}}/api/v1/sessions/{{memSession.response.body.sessionId}}
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
@@ -142,14 +142,14 @@ X-ArcClaw-API-Key: {{validKey}}
 # @name resetMemSession
 POST {{baseUrl}}/api/v1/sessions
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
 ### Establish a fact
 POST {{baseUrl}}/api/v1/sessions/{{resetMemSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "My favourite language is Kotlin.",
@@ -162,7 +162,7 @@ X-ArcClaw-API-Key: {{validKey}}
 ### Soft reset - wipes checkpoint, preserves chat memory
 POST {{baseUrl}}/api/v1/sessions/{{resetMemSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "/reset",
@@ -176,7 +176,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # Expect: agent responds with "Kotlin" (from the preserved chat window)
 POST {{baseUrl}}/api/v1/sessions/{{resetMemSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "What is my favourite programming language?",
@@ -187,15 +187,15 @@ X-ArcClaw-API-Key: {{validKey}}
 ###
 
 DELETE {{baseUrl}}/api/v1/sessions/{{resetMemSession.response.body.sessionId}}
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
 
 # ─────────────────────────────────────────────────────────────────
 # ROLLING WINDOW PRUNING
-# Chat window max: 100 messages (arcclaw.chat-memory.max-messages).
-# Compaction threshold: 10 messages (arcclaw.memory.compaction.threshold).
+# Chat window max: 100 messages (amsha.chat-memory.max-messages).
+# Compaction threshold: 10 messages (amsha.memory.compaction.threshold).
 # Keep-recent: 5 messages preserved verbatim after compaction.
 # Send 12+ sequential messages to trigger compaction.
 # Watch logs for: [CompactionService] compaction triggered session=...
@@ -205,7 +205,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # @name pruneSession
 POST {{baseUrl}}/api/v1/sessions
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
@@ -215,7 +215,7 @@ X-ArcClaw-API-Key: {{validKey}}
 
 POST {{baseUrl}}/api/v1/sessions/{{pruneSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "Msg 1: What is virtual threading?", 
@@ -227,7 +227,7 @@ X-ArcClaw-API-Key: {{validKey}}
 ###
 
 GET {{baseUrl}}/api/v1/sessions/{{pruneSession.response.body.sessionId}}/status/coordinator
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 
 ###
@@ -235,7 +235,7 @@ X-ArcClaw-API-Key: {{validKey}}
 
 POST {{baseUrl}}/api/v1/sessions/{{pruneSession.response.body.sessionId}}/run-async
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "/approve",
@@ -248,7 +248,7 @@ X-ArcClaw-API-Key: {{validKey}}
 
 POST {{baseUrl}}/api/v1/sessions/{{pruneSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "Msg 2: What is SQLite WAL mode?", 
@@ -260,7 +260,7 @@ X-ArcClaw-API-Key: {{validKey}}
 
 POST {{baseUrl}}/api/v1/sessions/{{pruneSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "Msg 3: What is Podman?", 
@@ -272,7 +272,7 @@ X-ArcClaw-API-Key: {{validKey}}
 
 POST {{baseUrl}}/api/v1/sessions/{{pruneSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "Msg 4: What is LangChain4j?", 
@@ -284,7 +284,7 @@ X-ArcClaw-API-Key: {{validKey}}
 
 POST {{baseUrl}}/api/v1/sessions/{{pruneSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "Msg 5: What is a ReAct agent loop?", 
@@ -296,7 +296,7 @@ X-ArcClaw-API-Key: {{validKey}}
 
 POST {{baseUrl}}/api/v1/sessions/{{pruneSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "Msg 6: What is AES-GCM-SIV?", 
@@ -308,7 +308,7 @@ X-ArcClaw-API-Key: {{validKey}}
 
 POST {{baseUrl}}/api/v1/sessions/{{pruneSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "Msg 7: What is Argon2id?", 
@@ -320,7 +320,7 @@ X-ArcClaw-API-Key: {{validKey}}
 
 POST {{baseUrl}}/api/v1/sessions/{{pruneSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "Msg 8: What is GraalVM native image?", 
@@ -332,7 +332,7 @@ X-ArcClaw-API-Key: {{validKey}}
 
 POST {{baseUrl}}/api/v1/sessions/{{pruneSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "Msg 9: What is Apache Camel?", 
@@ -344,7 +344,7 @@ X-ArcClaw-API-Key: {{validKey}}
 
 POST {{baseUrl}}/api/v1/sessions/{{pruneSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "Msg 10: What is a CDI scope in Quarkus?", 
@@ -356,7 +356,7 @@ X-ArcClaw-API-Key: {{validKey}}
 
 POST {{baseUrl}}/api/v1/sessions/{{pruneSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "Msg 11: What is MicroProfile Config?", 
@@ -372,7 +372,7 @@ X-ArcClaw-API-Key: {{validKey}}
 ### Audit event: CONTEXT_COMPACTED
 POST {{baseUrl}}/api/v1/sessions/{{pruneSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "Msg 12: What is OpenTelemetry?", 
@@ -384,7 +384,7 @@ X-ArcClaw-API-Key: {{validKey}}
 
 POST {{baseUrl}}/api/v1/sessions/{{pruneSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "Msg 13: What is Jaeger?", 
@@ -396,7 +396,7 @@ X-ArcClaw-API-Key: {{validKey}}
 
 POST {{baseUrl}}/api/v1/sessions/{{pruneSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "Msg 14: What is Prometheus?", 
@@ -408,7 +408,7 @@ X-ArcClaw-API-Key: {{validKey}}
 
 POST {{baseUrl}}/api/v1/sessions/{{pruneSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "Msg 15: What is Micrometer?", 
@@ -420,7 +420,7 @@ X-ArcClaw-API-Key: {{validKey}}
 
 POST {{baseUrl}}/api/v1/sessions/{{pruneSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "Msg 16: What is Hibernate ORM 7?", 
@@ -432,7 +432,7 @@ X-ArcClaw-API-Key: {{validKey}}
 
 POST {{baseUrl}}/api/v1/sessions/{{pruneSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "Msg 17: What is JOOQ?", 
@@ -444,7 +444,7 @@ X-ArcClaw-API-Key: {{validKey}}
 
 POST {{baseUrl}}/api/v1/sessions/{{pruneSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "Msg 18: What is Redis?", 
@@ -456,7 +456,7 @@ X-ArcClaw-API-Key: {{validKey}}
 
 POST {{baseUrl}}/api/v1/sessions/{{pruneSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "Msg 19: What is Kafka?", 
@@ -468,7 +468,7 @@ X-ArcClaw-API-Key: {{validKey}}
 
 POST {{baseUrl}}/api/v1/sessions/{{pruneSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "Msg 20: What is gRPC?", 
@@ -480,7 +480,7 @@ X-ArcClaw-API-Key: {{validKey}}
 
 POST {{baseUrl}}/api/v1/sessions/{{pruneSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "Msg 21: What is GraphQL?", 
@@ -494,7 +494,7 @@ X-ArcClaw-API-Key: {{validKey}}
 ### Watch logs for: "pruned N messages session=..."
 POST {{baseUrl}}/api/v1/sessions/{{pruneSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "Msg 22: What is REST vs GraphQL?", 
@@ -509,7 +509,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # But if compaction has run, the summary may still be retrievable via recall_memory_search.
 POST {{baseUrl}}/api/v1/sessions/{{pruneSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "Do you still have the very first message we sent in this session?",
@@ -521,12 +521,12 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ### [MEM-6] Confirm audit shows CONTEXT_COMPACTED event
 GET {{baseUrl}}/api/v1/audit/session/{{pruneSession.response.body.sessionId}}
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
 DELETE {{baseUrl}}/api/v1/sessions/{{pruneSession.response.body.sessionId}}
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
@@ -540,7 +540,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # @name compactSession
 POST {{baseUrl}}/api/v1/sessions
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
@@ -549,7 +549,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # Expect: results referencing topics from the pruned messages above (if same user).
 POST {{baseUrl}}/api/v1/sessions/{{compactSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "Search your memory for any previous discussions about Argon2id or AES-GCM-SIV.",
@@ -561,7 +561,7 @@ X-ArcClaw-API-Key: {{validKey}}
 ###
 
 GET {{baseUrl}}/api/v1/sessions/{{compactSession.response.body.sessionId}}/status/researcher
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 
 ###
@@ -569,7 +569,7 @@ X-ArcClaw-API-Key: {{validKey}}
 
 POST {{baseUrl}}/api/v1/sessions/{{compactSession.response.body.sessionId}}/run-async
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "/approve",
@@ -585,7 +585,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # First seed some content in a different language, then search for it.
 POST {{baseUrl}}/api/v1/sessions/{{compactSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "Explain this: 機械学習 (machine learning) is a subset of 人工知能 (AI).",
@@ -597,7 +597,7 @@ X-ArcClaw-API-Key: {{validKey}}
 
 POST {{baseUrl}}/api/v1/sessions/{{compactSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "Search memory for 機械学習.",
@@ -613,7 +613,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # Send content with emoji that would be in a long compaction summary.
 POST {{baseUrl}}/api/v1/sessions/{{compactSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "Summarise the following 🤖 AI topics: deep learning 🧠, neural networks 🔬, transformers ⚡, embeddings 📊, and RAG 🗂️ retrieval-augmented generation for enterprise Java.",
@@ -624,7 +624,7 @@ X-ArcClaw-API-Key: {{validKey}}
 ###
 
 DELETE {{baseUrl}}/api/v1/sessions/{{compactSession.response.body.sessionId}}
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
@@ -639,16 +639,16 @@ X-ArcClaw-API-Key: {{validKey}}
 # @name isoSessionA
 POST {{baseUrl}}/api/v1/sessions
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
 POST {{baseUrl}}/api/v1/sessions/{{isoSessionA.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
-    "goal": "Remember this unique fact: the secret code is ARCCLAW-ISOLATION-TEST-ALPHA.",
+    "goal": "Remember this unique fact: the secret code is AMSHA-ISOLATION-TEST-ALPHA.",
     "agentRole": "coordinator",
     "maxIterations": 1
 }
@@ -659,7 +659,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # @name isoSessionB
 POST {{baseUrl}}/api/v1/sessions
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
@@ -667,10 +667,10 @@ X-ArcClaw-API-Key: {{validKey}}
 ### MemorySearchTool is userId-scoped - returns only the caller's compaction summaries.
 POST {{baseUrl}}/api/v1/sessions/{{isoSessionB.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
-    "goal": "Search memory for ARCCLAW-ISOLATION-TEST-ALPHA.",
+    "goal": "Search memory for AMSHA-ISOLATION-TEST-ALPHA.",
     "agentRole": "coordinator",
     "maxIterations": 2
 }
@@ -678,11 +678,11 @@ X-ArcClaw-API-Key: {{validKey}}
 ###
 
 DELETE {{baseUrl}}/api/v1/sessions/{{isoSessionA.response.body.sessionId}}
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
 DELETE {{baseUrl}}/api/v1/sessions/{{isoSessionB.response.body.sessionId}}
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###

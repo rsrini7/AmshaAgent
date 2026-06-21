@@ -14,8 +14,8 @@
 ###   GET /api/v1/mcp/status→ MCP server enabled flag (auth required)
 ###
 ### Health check components (in /q/health/ready):
-###   ArcClaw Podman Health  → podman socket reachable
-###   ArcClaw Podman Image   → arcclaw-tool-runner image exists
+###   Amsha Agent Podman Health  → podman socket reachable
+###   Amsha Agent Podman Image   → amsha-tool-runner image exists
 ###   database               → SQLite WAL connection pool live
 ###   sqlite-vec             → vec0 loaded (graceful degradation if absent)
 ###
@@ -28,7 +28,7 @@
 ###   (attach telegram mode only):
 ###   INFO  [TelegramChannelRoute] routeStatus=Started
 ###
-### Prerequisites: ArcClaw running (serve or attach mode)
+### Prerequisites: Amsha Agent running (serve or attach mode)
 ### ═══════════════════════════════════════════════════════════════
 
 # @baseUrl  = http://localhost:8080
@@ -65,7 +65,7 @@ GET {{baseUrl}}/q/health/ready
 # ─────────────────────────────────────────────────────────────────
 
 ### [HEALTH-4] Application info - version, profile, build metadata
-# Expect 200: {"name":"arcclaw","version":"...","profile":"dev|prod",...}
+# Expect 200: {"name":"amsha","version":"...","profile":"dev|prod",...}
 # ApiKeyAuthFilter explicitly bypasses paths starting with /api/v1/info.
 GET {{baseUrl}}/api/v1/info
 
@@ -77,12 +77,12 @@ GET {{baseUrl}}/api/v1/info
 
 ### [HEALTH-5] Prometheus metrics scrape
 # Expect 200: text/plain with Prometheus metric lines.
-# After any agent run, look for ArcClaw-specific counters:
-#   arcclaw_agent_runs_total
-#   arcclaw_tokens_input_total / arcclaw_tokens_output_total
-#   arcclaw_reflex_invocations_total
-#   arcclaw_budget_warnings_total
-#   arcclaw_audit_drop_total  ← must be 0 in normal operation
+# After any agent run, look for Amsha Agent-specific counters:
+#   amsha_agent_runs_total
+#   amsha_tokens_input_total / amsha_tokens_output_total
+#   amsha_reflex_invocations_total
+#   amsha_budget_warnings_total
+#   amsha_audit_drop_total  ← must be 0 in normal operation
 GET {{baseUrl}}/q/metrics
 
 
@@ -91,26 +91,26 @@ GET {{baseUrl}}/q/metrics
 ### [HEALTH-4.0] Tools endpoint
 GET {{baseUrl}}/api/v1/tools
 Accept: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ### [HEALTH-4.1] Agent status endpoint (empty on cold start)
 GET {{baseUrl}}/api/v1/agents
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 
 ### [HEALTH-4.2] HITL pending approvals (empty on cold start)
 GET {{baseUrl}}/api/v1/hitl
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ### [HEALTH-4.3] Agent status endpoint (non-empty when agent is running)
 # While an agent is running (between SSE `active` and `idle` events)
 GET {{baseUrl}}/api/v1/agents
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ### Step 1 - List pending approvals
 # @name hitlPending
 GET {{baseUrl}}/api/v1/hitl
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 Accept: application/json
 
 # use Websocket to test real approval and deny flow.
@@ -123,10 +123,10 @@ Accept: application/json
 
 ### [HEALTH-6] MCP server status
 # Expect 200: {"serverEnabled":true,"dynamicToolCount":0}
-# 404 → arcclaw.mcp.server-enabled=false in config.
+# 404 → amsha.mcp.server-enabled=false in config.
 GET {{baseUrl}}/api/v1/mcp/status
 Accept: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
@@ -142,7 +142,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # Failure here = SQLite WAL unreachable or Hibernate DDL failed at startup.
 POST {{baseUrl}}/api/v1/sessions
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
@@ -150,10 +150,10 @@ X-ArcClaw-API-Key: {{validKey}}
 # Expect 200: {"answer":"4",...}
 # Exercises: SessionRegistry (Phase 64-B3), AgentLoop, GovernanceLayer,
 # LLM API (Groq), AuditService, HMAC chain.
-# Requires: ARCCLAW_LLM_API_KEY valid (starts with gsk_).
+# Requires: AMSHA_LLM_API_KEY valid (starts with gsk_).
 POST {{baseUrl}}/api/v1/sessions/{{smokeSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "What is 2 + 2?",
@@ -167,22 +167,22 @@ X-ArcClaw-API-Key: {{validKey}}
 # Expect 200: non-empty array with CHECKPOINT_CREATED + LOOP_FINISH.
 # Empty array = AsyncPersistenceEngine dropped events or AuditService failed.
 GET {{baseUrl}}/api/v1/audit/session/{{smokeSession.response.body.sessionId}}
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
 ### [HEALTH-10] Verify HMAC chain integrity
 # Expect 200: {"valid":true,"brokenAtId":null,"totalRows":N}
-# valid:false = WORM trigger missing or ARCCLAW_AUDIT_HMAC_KEY wrong.
+# valid:false = WORM trigger missing or AMSHA_AUDIT_HMAC_KEY wrong.
 # After Phase 64-B1: concurrent writes protected by SessionAuditSequencer.
 GET {{baseUrl}}/api/v1/audit/{{smokeSession.response.body.sessionId}}/verify
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
 ### [HEALTH-11] Cleanup smoke session
 DELETE {{baseUrl}}/api/v1/sessions/{{smokeSession.response.body.sessionId}}
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
@@ -191,13 +191,13 @@ X-ArcClaw-API-Key: {{validKey}}
 # ─────────────────────────────────────────────────────────────────
 
 ### [HEALTH-12] Jaeger UI reachable
-# Expect 200: HTML. Open http://localhost:16686, search service="arcclaw".
+# Expect 200: HTML. Open http://localhost:16686, search service="amsha".
 GET http://localhost:16686
 
 ###
 
 ### [HEALTH-13] Prometheus targets page
-# Expect 200: HTML. Open http://localhost:9090/targets - "arcclaw" must be UP.
+# Expect 200: HTML. Open http://localhost:9090/targets - "amsha" must be UP.
 GET http://localhost:9090/targets
 
 ###
@@ -219,7 +219,7 @@ GET http://localhost:9090/targets
 #  ❌ NullPointerException in TelegramChannelRoute
 #       → Camel JMX disableJMX() silent no-op not fixed (Nuance #24)
 #  ❌ ERROR in Hibernate schema validation involving "identity column"
-#       → ArcClawSQLiteDialect not registered (Nuance #30)
+#       → AmshaSQLiteDialect not registered (Nuance #30)
 #  ❌ DevSecretSeeder log lines in prod/staging profile
 #       → Phase 64-B2 fix: @IfBuildProfile("dev") must exclude the bean
 # ─────────────────────────────────────────────────────────────────

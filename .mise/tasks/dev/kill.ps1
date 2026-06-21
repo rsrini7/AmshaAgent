@@ -8,7 +8,7 @@ if (-not $jps) { Write-Host '❌  jps not found - is a JDK active? Run: mise run
 $procs = & jps -l 2>&1 | Where-Object { $_ -match 'quarkus-run\.jar|quarkus\.jar|QuarkusDevModeMain' }
 
 # Also scan for native binaries (§Cosmetic-Fix)
-$nativeProcs = Get-Process -Name "arcclaw" -ErrorAction SilentlyContinue
+$nativeProcs = Get-Process -Name "amsha" -ErrorAction SilentlyContinue
 if ($nativeProcs) {
     Write-Host "ℹ️   Found running native processes: $($nativeProcs.Name)"
     $nativeProcs | Stop-Process -Force

@@ -1,0 +1,33 @@
+package com.amsha.core.util;
+
+import org.jboss.logging.MDC;
+
+/**
+ * Standard utility for clearing diagnostic context in finally blocks.
+ * Ensures that thread-local logging metadata does not leak across requests.
+ * §8.1
+ */
+public final class MdcCleaner {
+
+    private MdcCleaner() {}
+
+    /**
+     * Exhaustively clears all known MDC keys defined in MdcKeys.
+     */
+    public static void clearAll() {
+        MdcKeys.ALL_KEYS.forEach(MDC::remove);
+    }
+
+    /**
+     * Removes a specific subset of MDC keys.
+     * Use when clearing ALL would be too broad (e.g. nested scopes
+     * where outer context keys must be preserved).
+     */
+    public static void clear(String... keys) {
+        if (keys != null) {
+            for (String key : keys) {
+                MDC.remove(key);
+            }
+        }
+    }
+}

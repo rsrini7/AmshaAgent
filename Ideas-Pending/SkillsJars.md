@@ -30,11 +30,11 @@ The only **framework-native integration** documented is **Spring AI** via `sprin
 ./mvnw skillsjars:extract -Ddir=.kiro/skills
 ```
 
-## What This Means for ArcClaw
+## What This Means for Amsha Agent
 
-SkillsJars has **no native Quarkus/LangChain4j integration**. For ArcClaw, the practical options are:
+SkillsJars has **no native Quarkus/LangChain4j integration**. For Amsha Agent, the practical options are:
 
 1. **Use the extraction plugin** - extract `SKILL.md` files to `src/main/resources/skills/` at build time, and your existing `ClasspathSkillProvider` picks them up natively (since it already reads `.md` files with YAML frontmatter from the classpath)
 2. **Read directly from classpath** - since the skill JARs are on the classpath, write a new `SkillsJarClasspathProvider` that scans `META-INF/skills/**/SKILL.md` resources and feeds them into `SkillLoader` - no extraction step, pure classpath scanning
 
-Option 2 is the cleaner fit for ArcClaw's CDI architecture. Would you like me to design that `SkillsJarClasspathProvider` implementation specifically for ArcClaw's existing `SkillLoader` pipeline?
+Option 2 is the cleaner fit for Amsha Agent's CDI architecture. Would you like me to design that `SkillsJarClasspathProvider` implementation specifically for Amsha Agent's existing `SkillLoader` pipeline?

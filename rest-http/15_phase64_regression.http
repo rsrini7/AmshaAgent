@@ -34,8 +34,8 @@
 ###     D6: LangChainReasoningEngine - BudgetWarning not swallowed in structured output
 ###     D7: Dead code removed (SANDBOX_EXEC, RATE_LIMIT, System.out.println)
 ###
-### Prerequisites: ArcClaw serve mode, all Phase 64 fixes deployed,
-###   ARCCLAW_LLM_API_KEY + GITHUB_TOKEN set
+### Prerequisites: Amsha Agent serve mode, all Phase 64 fixes deployed,
+###   AMSHA_LLM_API_KEY + GITHUB_TOKEN set
 ### ═══════════════════════════════════════════════════════════════
 
 # @baseUrl  = http://localhost:8080
@@ -55,7 +55,7 @@
 # @name a1Session
 POST {{baseUrl}}/api/v1/sessions
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
@@ -66,7 +66,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # After the fix, LOOP_BUDGET_EXCEEDED appears on the call that crossed the limit.
 POST {{baseUrl}}/api/v1/sessions/{{a1Session.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "Write an exhaustive 800-word essay on Quarkus reactive programming model, covering Mutiny, RESTEasy Reactive, SmallRye Fault Tolerance, and integration with Hibernate Reactive.",
@@ -80,12 +80,12 @@ X-ArcClaw-API-Key: {{validKey}}
 # Expect: eventType=LOOP_BUDGET_EXCEEDED present in audit events
 # If NOT present yet (budget not reached), run A1-TEST again.
 GET {{baseUrl}}/api/v1/audit/session/{{a1Session.response.body.sessionId}}
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
 DELETE {{baseUrl}}/api/v1/sessions/{{a1Session.response.body.sessionId}}
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
@@ -98,7 +98,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # @name a2Session
 POST {{baseUrl}}/api/v1/sessions
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "autonomyLevel": "FULL"
@@ -114,7 +114,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # Expect: 200 Finished (answer contains GitHub data)
 POST {{baseUrl}}/api/v1/sessions/{{a2Session.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "List the public repositories of GitHub user rsrini7.",
@@ -127,7 +127,7 @@ X-ArcClaw-API-Key: {{validKey}}
 ### [A2-VERIFY] Status must be COMPLETED, never AWAITING_APPROVAL
 # If this returns AWAITING_APPROVAL - the fix was not applied.
 GET {{baseUrl}}/api/v1/sessions/{{a2Session.response.body.sessionId}}/status/coordinator
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
@@ -135,12 +135,12 @@ X-ArcClaw-API-Key: {{validKey}}
 # FULL autonomy: tool runs directly, no approval event needed.
 # Expect: TOOL_INVOKED present, APPROVAL_GRANTED absent.
 GET {{baseUrl}}/api/v1/audit/session/{{a2Session.response.body.sessionId}}
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
 DELETE {{baseUrl}}/api/v1/sessions/{{a2Session.response.body.sessionId}}
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
@@ -155,7 +155,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # @name a3Session
 POST {{baseUrl}}/api/v1/sessions
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
@@ -163,7 +163,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # Message 1: establish terminology in multiple languages
 POST {{baseUrl}}/api/v1/sessions/{{a3Session.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "Explain machine learning (機械学習) in Java, focusing on neural networks (ニューラルネットワーク) and deep learning (深層学習).",
@@ -179,7 +179,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # Expect: non-empty result referencing machine learning content.
 POST {{baseUrl}}/api/v1/sessions/{{a3Session.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "Search your memory for anything related to 機械学習.",
@@ -195,10 +195,10 @@ X-ArcClaw-API-Key: {{validKey}}
 # Expect: no exception, results or empty array
 POST {{baseUrl}}/api/v1/sessions/{{a3Session.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
-    "goal": "Search memory for 'ArcClaw*' notes.",
+    "goal": "Search memory for 'Amsha Agent*' notes.",
     "agentRole": "coordinator",
     "maxIterations": 2
 }
@@ -206,7 +206,7 @@ X-ArcClaw-API-Key: {{validKey}}
 ###
 
 DELETE {{baseUrl}}/api/v1/sessions/{{a3Session.response.body.sessionId}}
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
@@ -222,7 +222,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # @name a4Session
 POST {{baseUrl}}/api/v1/sessions
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
@@ -231,7 +231,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # REST response contains raw text - look for sections that would be headings.
 POST {{baseUrl}}/api/v1/sessions/{{a4Session.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "Provide a structured overview of Quarkus native image compilation with sections: Overview, Prerequisites, Build Process, and Known Limitations.",
@@ -242,7 +242,7 @@ X-ArcClaw-API-Key: {{validKey}}
 ###
 
 DELETE {{baseUrl}}/api/v1/sessions/{{a4Session.response.body.sessionId}}
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
@@ -258,7 +258,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # @name a5Session
 POST {{baseUrl}}/api/v1/sessions
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
@@ -267,7 +267,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # Log line to look for: "JSON parse error for session ... - retry"
 POST {{baseUrl}}/api/v1/sessions/{{a5Session.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "Synthesize a comparison of three Java concurrency models: virtual threads, reactive (Mutiny), and traditional thread pools. Return as a structured analysis.",
@@ -278,7 +278,7 @@ X-ArcClaw-API-Key: {{validKey}}
 ###
 
 DELETE {{baseUrl}}/api/v1/sessions/{{a5Session.response.body.sessionId}}
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
@@ -296,7 +296,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # @name a6Session
 POST {{baseUrl}}/api/v1/sessions
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
@@ -306,7 +306,7 @@ X-ArcClaw-API-Key: {{validKey}}
 ### Turn 1
 POST {{baseUrl}}/api/v1/sessions/{{a6Session.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 {"goal": "What is a virtual thread?", "agentRole": "coordinator", "maxIterations": 1}
 
 ###
@@ -314,7 +314,7 @@ X-ArcClaw-API-Key: {{validKey}}
 ### Turn 2
 POST {{baseUrl}}/api/v1/sessions/{{a6Session.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 {"goal": "What is SQLite WAL mode?", "agentRole": "coordinator", "maxIterations": 1}
 
 ###
@@ -322,7 +322,7 @@ X-ArcClaw-API-Key: {{validKey}}
 ### Turn 3
 POST {{baseUrl}}/api/v1/sessions/{{a6Session.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 {"goal": "What is Podman?", "agentRole": "coordinator", "maxIterations": 1}
 
 ###
@@ -330,7 +330,7 @@ X-ArcClaw-API-Key: {{validKey}}
 ### Turn 4
 POST {{baseUrl}}/api/v1/sessions/{{a6Session.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 {"goal": "What is Argon2id?", "agentRole": "coordinator", "maxIterations": 1}
 
 ###
@@ -338,7 +338,7 @@ X-ArcClaw-API-Key: {{validKey}}
 ### Turn 5
 POST {{baseUrl}}/api/v1/sessions/{{a6Session.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 {"goal": "What is AES-GCM-SIV?", "agentRole": "coordinator", "maxIterations": 1}
 
 ###
@@ -346,7 +346,7 @@ X-ArcClaw-API-Key: {{validKey}}
 ### Turn 6
 POST {{baseUrl}}/api/v1/sessions/{{a6Session.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 {"goal": "What is LangChain4j?", "agentRole": "coordinator", "maxIterations": 1}
 
 ###
@@ -354,7 +354,7 @@ X-ArcClaw-API-Key: {{validKey}}
 ### Turn 7
 POST {{baseUrl}}/api/v1/sessions/{{a6Session.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 {"goal": "What is Quarkus reactive?", "agentRole": "coordinator", "maxIterations": 1}
 
 ###
@@ -362,7 +362,7 @@ X-ArcClaw-API-Key: {{validKey}}
 ### Turn 8
 POST {{baseUrl}}/api/v1/sessions/{{a6Session.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 {"goal": "What is OpenTelemetry?", "agentRole": "coordinator", "maxIterations": 1}
 
 ###
@@ -370,7 +370,7 @@ X-ArcClaw-API-Key: {{validKey}}
 ### Turn 9
 POST {{baseUrl}}/api/v1/sessions/{{a6Session.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 {"goal": "What is GraalVM native image?", "agentRole": "coordinator", "maxIterations": 1}
 
 ###
@@ -382,19 +382,19 @@ X-ArcClaw-API-Key: {{validKey}}
 # Then: second trigger MUST also fire (lock was released).
 POST {{baseUrl}}/api/v1/sessions/{{a6Session.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 {"goal": "What is Apache Camel?", "agentRole": "coordinator", "maxIterations": 1}
 
 ###
 
 ### [A6-VERIFY] Confirm CONTEXT_COMPACTED in audit (compaction ran successfully)
 GET {{baseUrl}}/api/v1/audit/session/{{a6Session.response.body.sessionId}}
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
 DELETE {{baseUrl}}/api/v1/sessions/{{a6Session.response.body.sessionId}}
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
@@ -411,13 +411,13 @@ X-ArcClaw-API-Key: {{validKey}}
 # @name a7Session
 POST {{baseUrl}}/api/v1/sessions
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
 POST {{baseUrl}}/api/v1/sessions/{{a7Session.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "What is 2 + 2?",
@@ -428,7 +428,7 @@ X-ArcClaw-API-Key: {{validKey}}
 ###
 
 DELETE {{baseUrl}}/api/v1/sessions/{{a7Session.response.body.sessionId}}
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
@@ -450,7 +450,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # @name b1Session
 POST {{baseUrl}}/api/v1/sessions
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
@@ -460,21 +460,21 @@ X-ArcClaw-API-Key: {{validKey}}
 
 POST {{baseUrl}}/api/v1/sessions/{{b1Session.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 {"goal": "What is 1+1?", "agentRole": "coordinator", "maxIterations": 1}
 
 ###
 
 POST {{baseUrl}}/api/v1/sessions/{{b1Session.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 {"goal": "What is 2+2?", "agentRole": "coordinator", "maxIterations": 1}
 
 ###
 
 POST {{baseUrl}}/api/v1/sessions/{{b1Session.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 {"goal": "What is 3+3?", "agentRole": "coordinator", "maxIterations": 1}
 
 ###
@@ -484,19 +484,19 @@ X-ArcClaw-API-Key: {{validKey}}
 # breaking the chain. After fix: SessionAuditSequencer serialises per-session.
 # Expect: {"valid": true, "brokenAtId": null, "totalRows": N}
 GET {{baseUrl}}/api/v1/audit/{{b1Session.response.body.sessionId}}/verify
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
 ### [B1-LIST] Verify no duplicate sequence numbers in audit rows
 # All sequence values must be unique and consecutive starting from 1.
 GET {{baseUrl}}/api/v1/audit/session/{{b1Session.response.body.sessionId}}
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
 DELETE {{baseUrl}}/api/v1/sessions/{{b1Session.response.body.sessionId}}
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
@@ -512,7 +512,7 @@ X-ArcClaw-API-Key: {{validKey}}
 ### [B2-SMOKE] Confirm app starts and responds in any profile
 # If DevSecretSeeder was broken (not just absent), app would fail to start.
 GET {{baseUrl}}/q/health
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
@@ -529,14 +529,14 @@ X-ArcClaw-API-Key: {{validKey}}
 # @name b3Session
 POST {{baseUrl}}/api/v1/sessions
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
 ### [B3-TEST] Run a simple task to verify session works with new UUID format
 POST {{baseUrl}}/api/v1/sessions/{{b3Session.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "Confirm the session UUID is a random UUID (version 4), not an MD5-based UUID (version 3).",
@@ -547,7 +547,7 @@ X-ArcClaw-API-Key: {{validKey}}
 ###
 
 DELETE {{baseUrl}}/api/v1/sessions/{{b3Session.response.body.sessionId}}
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
@@ -569,14 +569,14 @@ X-ArcClaw-API-Key: {{validKey}}
 # @name c1SessionA
 POST {{baseUrl}}/api/v1/sessions
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
 # @name c1SessionB
 POST {{baseUrl}}/api/v1/sessions
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
@@ -586,14 +586,14 @@ X-ArcClaw-API-Key: {{validKey}}
 
 POST {{baseUrl}}/api/v1/sessions/{{c1SessionA.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 {"goal": "My session is A.", "agentRole": "coordinator", "maxIterations": 1}
 
 ###
 
 POST {{baseUrl}}/api/v1/sessions/{{c1SessionB.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 {"goal": "My session is B.", "agentRole": "coordinator", "maxIterations": 1}
 
 ###
@@ -601,18 +601,18 @@ X-ArcClaw-API-Key: {{validKey}}
 ### Session A must NOT see Session B's context
 POST {{baseUrl}}/api/v1/sessions/{{c1SessionA.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 {"goal": "What session letter am I in?", "agentRole": "coordinator", "maxIterations": 1}
 
 ###
 
 DELETE {{baseUrl}}/api/v1/sessions/{{c1SessionA.response.body.sessionId}}
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
 DELETE {{baseUrl}}/api/v1/sessions/{{c1SessionB.response.body.sessionId}}
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
@@ -630,13 +630,13 @@ X-ArcClaw-API-Key: {{validKey}}
 # @name c2Session
 POST {{baseUrl}}/api/v1/sessions
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
 POST {{baseUrl}}/api/v1/sessions/{{c2Session.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "Schedule a one-time task to run in 1 minute that says: Phase 64-C2 notification test.",
@@ -647,12 +647,12 @@ X-ArcClaw-API-Key: {{validKey}}
 ###
 
 GET {{baseUrl}}/api/v1/audit/session/{{c2Session.response.body.sessionId}}
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
 DELETE {{baseUrl}}/api/v1/sessions/{{c2Session.response.body.sessionId}}
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
@@ -667,7 +667,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # @name c3Session
 POST {{baseUrl}}/api/v1/sessions
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
@@ -676,10 +676,10 @@ X-ArcClaw-API-Key: {{validKey}}
 # compaction_summary must NOT gain a row with sessionId LIKE 'rag:%'.
 POST {{baseUrl}}/api/v1/sessions/{{c3Session.response.body.sessionId}}/run-async
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
-    "goal": "Ingest this document: ArcClaw Phase 64 introduces rag_chunk table, SessionRegistry, ChannelCronNotificationDispatcher, and fixes budget enforcement ordering.",
+    "goal": "Ingest this document: Amsha Agent Phase 64 introduces rag_chunk table, SessionRegistry, ChannelCronNotificationDispatcher, and fixes budget enforcement ordering.",
     "agentRole": "coordinator",
     "maxIterations": 3
 }
@@ -689,14 +689,14 @@ X-ArcClaw-API-Key: {{validKey}}
 ### [C3-APPROVE] Approve the ingest tool call
 POST {{baseUrl}}/api/v1/sessions/{{c3Session.response.body.sessionId}}/approve?agentRole=coordinator
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
 ### [C3-SEARCH] Recall from RAG - confirm it works after table change
 POST {{baseUrl}}/api/v1/sessions/{{c3Session.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "Search your memory for Phase 64 changes.",
@@ -709,12 +709,12 @@ X-ArcClaw-API-Key: {{validKey}}
 ### [C3-VERIFY] Confirm TOOL_INVOKED for ingest_document in audit
 # The audit chain must be intact after the ingestion flow.
 GET {{baseUrl}}/api/v1/audit/session/{{c3Session.response.body.sessionId}}
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
 DELETE {{baseUrl}}/api/v1/sessions/{{c3Session.response.body.sessionId}}
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
@@ -729,13 +729,13 @@ X-ArcClaw-API-Key: {{validKey}}
 # @name dSmokeSession
 POST {{baseUrl}}/api/v1/sessions
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
 POST {{baseUrl}}/api/v1/sessions/{{dSmokeSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "Discuss these topics: 日本語 (Japanese NLP) 🤖 AI tools, 한국어 (Korean ML), and ＡＩ（人工知能）in enterprise Java.",
@@ -751,7 +751,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # to a message containing MarkdownV2 special chars without error.
 POST {{baseUrl}}/api/v1/sessions/{{dSmokeSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "Explain the following: user_name.field, (method), [array], *pointer, and the ~tilde~ operator.",
@@ -769,7 +769,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # POST {{baseUrl}}/mcp
 # Content-Type: application/json
 # Accept: application/json, text/event-stream
-# X-ArcClaw-API-Key: {{validKey}}
+# X-Amsha-API-Key: {{validKey}}
 # {
 #   "jsonrpc": "2.0",
 #   "id": 99,
@@ -780,7 +780,7 @@ X-ArcClaw-API-Key: {{validKey}}
 ###
 
 DELETE {{baseUrl}}/api/v1/sessions/{{dSmokeSession.response.body.sessionId}}
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
@@ -792,17 +792,17 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ### System health - all checks must pass
 GET {{baseUrl}}/q/health/ready
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
 GET {{baseUrl}}/q/health/live
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
 ### Session list - proves REST layer is up
 GET {{baseUrl}}/api/v1/sessions
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###

@@ -1,0 +1,60 @@
+package com.amsha.app.cli;
+
+import picocli.CommandLine;
+
+import jakarta.enterprise.inject.Any;
+import jakarta.enterprise.inject.Instance;
+import jakarta.inject.Inject;
+
+import java.util.Locale;
+import java.util.Optional;
+import java.util.stream.Collectors;
+
+import com.amsha.channel.api.ChannelDaemon;
+
+/**
+ * Attach command - keeps Amsha Agent running as a background daemon for a specific channel.
+ * <p>
+ * Telegram route lifecycle is now managed by TelegramChannelRoute.onStart()
+ * which self-registers the route via the Quarkus StartupEvent observer.
+ */
+@CommandLine.Command(
+        name = "attach",
+        description = "Keep Amsha Agent running as a background daemon for channel adapters")
+public class AttachCommand implements Runnable {
+
+    @CommandLine.Parameters(paramLabel = "<channel>", description = "Channel to service: telegram, discord")
+    String channel;
+
+    @Inject
+    @Any
+    Instance<ChannelDaemon> daemons;
+
+    @Override
+    public void run() {
+        String target = channel.toLowerCase(Locale.ROOT);
+        Optional<ChannelDaemon> daemon = daemons.stream()
+                .filter(d -> d.channelId().equalsIgnoreCase(target))
+                .findFirst();
+
+        if (daemon.isEmpty()) {
+            System.out.printf(
+                    "❌ Unknown channel '%s'. Available: %s%n",
+                    channel, daemons.stream().map(ChannelDaemon::channelId).collect(Collectors.joining(", ")));
+            return;
+        }
+
+        if (!daemon.get().isConfigured()) {
+            System.out.printf("⚠️ Channel '%s' is not configured. Check required environment variables.%n", channel);
+            return;
+        }
+
+        try {
+            System.out.printf("🔗 Amsha Agent daemon starting for %s...%n", channel);
+            System.out.println("   Press Ctrl+C to shutdown.");
+            daemon.get().start();
+        } catch (Exception e) {
+            System.err.printf("❌ Channel daemon '%s' failed: %s%n", channel, e.getMessage());
+        }
+    }
+}

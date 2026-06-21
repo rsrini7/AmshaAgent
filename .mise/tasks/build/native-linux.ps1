@@ -16,14 +16,14 @@ if ($IsMacOS -or $IsWindows) {
 $strategy = 'local'
 if ($IsWindows) {
     Write-Host 'ℹ️   Windows: using local GraalVM (container build produces Linux ELF - unusable on Windows).'
-} elseif ($env:ARCCLAW_NATIVE_BUILD -eq 'local') {
-    Write-Host 'ℹ️   ARCCLAW_NATIVE_BUILD=local: using local GraalVM.'
-} elseif ($env:ARCCLAW_NATIVE_BUILD -eq 'container') {
+} elseif ($env:AMSHA_NATIVE_BUILD -eq 'local') {
+    Write-Host 'ℹ️   AMSHA_NATIVE_BUILD=local: using local GraalVM.'
+} elseif ($env:AMSHA_NATIVE_BUILD -eq 'container') {
     if (Get-Command podman -ErrorAction SilentlyContinue) {
-        Write-Host 'ℹ️   ARCCLAW_NATIVE_BUILD=container: using Podman container build.'
+        Write-Host 'ℹ️   AMSHA_NATIVE_BUILD=container: using Podman container build.'
         $strategy = 'container'
     } else {
-        Write-Host '❌  ARCCLAW_NATIVE_BUILD=container but podman not found.'
+        Write-Host '❌  AMSHA_NATIVE_BUILD=container but podman not found.'
         Write-Host '    macOS:      mise run podman:init'
         Write-Host '    Linux/WSL2: sudo apt install podman  then  mise run podman:socket'
         exit 1
@@ -41,7 +41,7 @@ if ($IsWindows) {
     } else {
         Write-Host '⚠️   Podman not found → using local GraalVM build.'
         Write-Host '    macOS: mise run podman:init  /  Linux/WSL2: sudo apt install podman'
-        Write-Host '    To silence: set ARCCLAW_NATIVE_BUILD=local in .env'
+        Write-Host '    To silence: set AMSHA_NATIVE_BUILD=local in .env'
     }
 }
 $containerFlag = if ($strategy -eq 'container') { '-Dquarkus.native.container-build=true' } else { '-Dquarkus.native.container-build=false' }
@@ -95,7 +95,7 @@ if ($strategy -eq 'container') {
         Write-Host "🧠 Allocating ${targetGB}G for native-image (VM ${vmMemMB}MB - ${overheadGB}GB overhead)..."
 
         $env:MAVEN_OPTS = $mOpts
-        & $mvnw clean package -Pnative -pl arcclaw-app -am -DskipTests "-Darcclaw.persistence.backend=sqlite" "-Dquarkus.profile=prod" "-Dquarkus.native.native-image-xmx=${targetGB}g" $containerFlag
+        & $mvnw clean package -Pnative -pl amsha-app -am -DskipTests "-Damsha.persistence.backend=sqlite" "-Dquarkus.profile=prod" "-Dquarkus.native.native-image-xmx=${targetGB}g" $containerFlag
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
         Write-Host '▶   Assembling dist/ folder...'
         mise run dist
@@ -120,7 +120,7 @@ if ($strategy -eq 'container') {
 
         mise use --path mise.toml java@graalvm-community-25.0.2
         $env:MAVEN_OPTS = $mOpts
-        & $mvnw clean package -Pnative -pl arcclaw-app -am -DskipTests "-Darcclaw.persistence.backend=sqlite" "-Dquarkus.profile=prod" "-Dquarkus.native.native-image-xmx=${targetGB}g" $containerFlag
+        & $mvnw clean package -Pnative -pl amsha-app -am -DskipTests "-Damsha.persistence.backend=sqlite" "-Dquarkus.profile=prod" "-Dquarkus.native.native-image-xmx=${targetGB}g" $containerFlag
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
         Write-Host '▶   Assembling dist/ folder...'
         mise run dist
@@ -131,7 +131,7 @@ if ($strategy -eq 'container') {
         Write-Host '✅  Switched back to Temurin 25.'
     }
 }
-Write-Host "✅  Native build complete [$strategy]: arcclaw-app/target/arcclaw-app-1.0.0-SNAPSHOT$suffix"
+Write-Host "✅  Native build complete [$strategy]: app/target/app-1.0.0-SNAPSHOT$suffix"
 Write-Host ''
 Write-Host '▶   Run with one of:'
 Write-Host '      mise run native:serve                → HTTP + MCP server on :8080'

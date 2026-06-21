@@ -16,7 +16,7 @@ if (-not (Get-Command dos2unix -ErrorAction SilentlyContinue)) {
         Write-Host '⚠️  dos2unix not found and no known package manager available. Please install it manually.'
     }
 }
-foreach ($f in @('mvnw', 'mise.toml', 'arcclaw-ui/package.json')) {
+foreach ($f in @('mvnw', 'mise.toml', 'ui/package.json')) {
     if (Test-Path $f) { dos2unix $f }
 }
 if (Test-Path 'mvnw') { chmod +x mvnw }

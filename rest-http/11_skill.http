@@ -34,7 +34,7 @@
 ###
 ### SecurityEventType for skills: SKILL_LOADED, SKILL_REFRESHED (telemetry tier).
 ###
-### Prerequisites: ArcClaw serve mode
+### Prerequisites: Amsha Agent serve mode
 ### ═══════════════════════════════════════════════════════════════
 
 # @baseUrl  = http://localhost:8080
@@ -50,7 +50,7 @@
 # source="classpath" → bundled in JAR; source="database" → dynamic.
 GET {{baseUrl}}/api/v1/skills
 Accept: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
@@ -65,7 +65,7 @@ X-ArcClaw-API-Key: {{validKey}}
 #   → SkillReflex matches, NO Groq classification call, security-focused response.
 POST {{baseUrl}}/api/v1/skills
 Content-Type: text/plain
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ---
 name: code-reviewer
@@ -95,7 +95,7 @@ When reviewing code:
 # Expect 201: {"message":"Skill saved and registry reloaded: researcher"}
 POST {{baseUrl}}/api/v1/skills
 Content-Type: text/plain
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ---
 name: researcher
@@ -121,7 +121,7 @@ Never fabricate - only cite what you know or can verify.
 # Expect 200: array containing code-reviewer + researcher with source="database"
 GET {{baseUrl}}/api/v1/skills
 Accept: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
@@ -136,7 +136,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # After this, code-reviewer has 5 trigger patterns instead of 4.
 POST {{baseUrl}}/api/v1/skills
 Content-Type: text/plain
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ---
 name: code-reviewer
@@ -161,7 +161,7 @@ insecure deserialization, secrets in code. Then correctness. Then style.
 # Expect 200: code-reviewer appears ONCE with 5 triggerPatterns.
 GET {{baseUrl}}/api/v1/skills
 Accept: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
@@ -175,7 +175,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # @name skillSession
 POST {{baseUrl}}/api/v1/sessions
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
@@ -185,7 +185,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # Logs MUST NOT show: "IntentClassificationHandler" (no Groq call)
 POST {{baseUrl}}/api/v1/sessions/{{skillSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "review this code: public void processPayment(String card) { System.out.println(card); }",
@@ -200,7 +200,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # Logs: "SkillReflex matched skill:researcher"
 POST {{baseUrl}}/api/v1/sessions/{{skillSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "How does quicksort algorithm work?",
@@ -215,7 +215,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # No SkillReflex match - falls through to standard pipeline.
 POST {{baseUrl}}/api/v1/sessions/{{skillSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "What is the weather like on Mars?",
@@ -226,7 +226,7 @@ X-ArcClaw-API-Key: {{validKey}}
 ###
 
 DELETE {{baseUrl}}/api/v1/sessions/{{skillSession.response.body.sessionId}}
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
@@ -238,7 +238,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # Expect 200: {"message":"Deleted and reloaded: researcher"}
 DELETE {{baseUrl}}/api/v1/skills/researcher
 Accept: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
@@ -246,7 +246,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # Expect 200: only code-reviewer remains.
 GET {{baseUrl}}/api/v1/skills
 Accept: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
@@ -254,7 +254,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # @name postDeleteSession
 POST {{baseUrl}}/api/v1/sessions
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
@@ -262,7 +262,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # Logs: "IntentClassificationHandler" appears - LLM classifier runs.
 POST {{baseUrl}}/api/v1/sessions/{{postDeleteSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "How does the quicksort algorithm work?",
@@ -273,7 +273,7 @@ X-ArcClaw-API-Key: {{validKey}}
 ###
 
 DELETE {{baseUrl}}/api/v1/sessions/{{postDeleteSession.response.body.sessionId}}
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
@@ -287,7 +287,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # All classpath skills (source=classpath) reloaded alongside database ones.
 GET {{baseUrl}}/api/v1/skills/refresh
 Accept: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
@@ -300,7 +300,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # Expect: {"message":"Invalid skill definition: <parse error detail>"}
 POST {{baseUrl}}/api/v1/skills
 Content-Type: text/plain
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ---
 name: broken-skill
@@ -317,7 +317,7 @@ trigger-patterns:
 # Expect 201: {"message":"Skill saved and registry reloaded: bad-caps"}
 POST {{baseUrl}}/api/v1/skills
 Content-Type: text/plain
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ---
 name: bad-caps
@@ -338,7 +338,7 @@ You are a test skill. Your bad capability name is silently excluded.
 # Skills cannot override the per-session USD budget cap.
 POST {{baseUrl}}/api/v1/skills
 Content-Type: text/plain
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ---
 name: budget-override-attempt
@@ -354,7 +354,7 @@ This skill tries to override budget - it must be rejected or ignored.
 ### [SKILL-ERR-4] Delete non-existent skill → expect 404
 DELETE {{baseUrl}}/api/v1/skills/does-not-exist
 Accept: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
@@ -382,25 +382,25 @@ GET {{baseUrl}}/api/v1/skills
 ### Delete all test skills
 DELETE {{baseUrl}}/api/v1/skills/code-reviewer
 Accept: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
 DELETE {{baseUrl}}/api/v1/skills/bad-caps
 Accept: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
 DELETE {{baseUrl}}/api/v1/skills/budget-override-attempt
 Accept: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
 ### Final list - must be empty (or classpath-only skills)
 GET {{baseUrl}}/api/v1/skills
 Accept: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###

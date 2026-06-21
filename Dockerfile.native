@@ -9,28 +9,28 @@ RUN microdnf update -y && \
     microdnf install -y podman shadow-utils slirp4netns fuse-overlayfs iptables glibc && \
     microdnf clean all
 
-# Create 'arcclaw' user for rootless podman
-RUN useradd -m -s /bin/bash arcclaw
+# Create 'amsha' user for rootless podman
+RUN useradd -m -s /bin/bash amsha
 
 # Apply the custom containers.conf for vfs storage driver inside the container
 COPY containers.conf /etc/containers/containers.conf
 
 # Setup required Subuid/Subgid maps for rootless mode
-RUN echo "arcclaw:100000:65536" > /etc/subuid && \
-    echo "arcclaw:100000:65536" > /etc/subgid
+RUN echo "amsha:100000:65536" > /etc/subuid && \
+    echo "amsha:100000:65536" > /etc/subgid
 
 WORKDIR /app
 
 # Create internal mount points and assign ownership before dropping privileges
-RUN mkdir -p /home/arcclaw/.config/containers /home/arcclaw/.local/share/containers \
+RUN mkdir -p /home/amsha/.config/containers /home/amsha/.local/share/containers \
              /app/data /app/lib && \
-    chown -R arcclaw:arcclaw /app /home/arcclaw
+    chown -R amsha:amsha /app /home/amsha
 
 # Switch to standard user
-USER arcclaw
+USER amsha
 
 # Copy the Quarkus native binary
-COPY arcclaw-app/target/*-runner /app/application
+COPY app/target/*-runner /app/application
 
 # Copy the sqlite-vec native extension (Linux x86_64 .so only - the .dll and
 # .dylib are for Windows/macOS and have no use inside this Linux container)
@@ -40,7 +40,7 @@ COPY lib/vec0.so /app/lib/vec0.so
 USER root
 RUN chmod +x /app/application && \
     chmod 755 /app/lib/vec0.so
-USER arcclaw
+USER amsha
 
 # Preload libm so that dlopen(vec0.so) can resolve sqrtf and other math symbols.
 # GraalVM native-image statically links only reachable Java code - libm is excluded.
@@ -52,7 +52,7 @@ ENV LD_PRELOAD=/lib64/libm.so.6
 # Absolute path to the vec0 extension - no extension suffix needed, SQLite
 # appends .so automatically on Linux.
 # Must be absolute so it resolves correctly regardless of working directory.
-ENV ARCCLAW_RAG_VEC_PATH=/app/lib/vec0
+ENV AMSHA_RAG_VEC_PATH=/app/lib/vec0
 
 EXPOSE 8080
 

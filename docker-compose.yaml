@@ -5,11 +5,11 @@ services:
     # Explicitly create the workspaces directory before taking ownership
     command: sh -c "mkdir -p /app/data/workspaces && chown -R 1000:1000 /app/data"
     volumes:
-      - arcclaw_data:/app/data
+      - amsha_data:/app/data
     networks:
-      - arcclaw-net
+      - amsha-net
 
-  arcclaw:
+  amsha:
     build: 
       context: .
       dockerfile: Dockerfile.native
@@ -17,17 +17,17 @@ services:
       - "8080:8080"
     environment:
       - QUARKUS_PROFILE=prod
-      - ARCCLAW_DATA_DIR=/app/data
-      # Explicitly override the prod profile default (/var/arcclaw)
-      - ARCCLAW_SANDBOX_WORKSPACE_ROOT=/app/data/workspaces
+      - AMSHA_DATA_DIR=/app/data
+      # Explicitly override the prod profile default (/var/amsha)
+      - AMSHA_SANDBOX_WORKSPACE_ROOT=/app/data/workspaces
       - OLLAMA_BASE_URL=http://ollama:11434
       #- OLLAMA_MODEL=${OLLAMA_MODEL:-mistral-small:latest}
       # The OpenAI extension properly parses this dynamically at runtime!
       #- QUARKUS_LANGCHAIN4J_OPENAI_CHAT_MODEL_MODEL_NAME=${OLLAMA_MODEL:-mistral-small:latest}
       - QUARKUS_LANGCHAIN4J_OPENAI_CHAT_MODEL_MODEL_NAME=${GROQ_MODEL:-meta-llama/llama-4-scout-17b-16e-instruct}
-      - ARCCLAW_LLM_API_KEY=${ARCCLAW_LLM_API_KEY:-}
+      - AMSHA_LLM_API_KEY=${AMSHA_LLM_API_KEY:-}
       # Added Jina embedding key missing from previous env setups
-      - ARCCLAW_EMBED_API_KEY=${ARCCLAW_EMBED_API_KEY:-}
+      - AMSHA_EMBED_API_KEY=${AMSHA_EMBED_API_KEY:-}
       - QUARKUS_OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=http://otel-collector:4317
       # LangChain credentials
       - OPENAI_API_KEY=${OPENAI_API_KEY:-dummy-key-to-bypass-validation}
@@ -35,7 +35,7 @@ services:
       # GITHUB_TOKEN should be provided via .env file or environment
       - "GITHUB_TOKEN=${GITHUB_TOKEN:-}"
     volumes:
-      - arcclaw_data:/app/data
+      - amsha_data:/app/data
       - /var/run/docker.sock:/var/run/docker.sock # Optional fallback for process isolation
     depends_on:
       init-perms:
@@ -45,7 +45,7 @@ services:
       ollama-init:
         condition: service_completed_successfully
     networks:
-      - arcclaw-net
+      - amsha-net
     privileged: true # Required for nested rootless Podman to create namespaces
 
   ollama:
@@ -55,7 +55,7 @@ services:
     volumes:
       - ollama_data:/root/.ollama
     networks:
-      - arcclaw-net
+      - amsha-net
     # GPU deployment block moved here from ollama-init!
     # deploy:
     #   resources:
@@ -70,15 +70,15 @@ services:
     depends_on:
       - ollama
     networks:
-      - arcclaw-net
+      - amsha-net
     command: >
       sh -c "
         echo 'Waiting for Ollama API...' &&
         until curl -s http://ollama:11434/api/tags > /dev/null; do sleep 2; done &&
         echo 'Ollama is up, pulling models...' &&
         curl -X POST http://ollama:11434/api/pull -d '{\"name\": \"${OLLAMA_MODEL:-mistral-small:latest}\"}' &&
-        if [ \"${ARCCLAW_EMBED_PROVIDER:-ollama}\" = \"ollama\" ]; then
-          curl -X POST http://ollama:11434/api/pull -d '{\"name\": \"${ARCCLAW_EMBED_MODEL:-nomic-embed-text:v1.5}\"}';
+        if [ \"${AMSHA_EMBED_PROVIDER:-ollama}\" = \"ollama\" ]; then
+          curl -X POST http://ollama:11434/api/pull -d '{\"name\": \"${AMSHA_EMBED_MODEL:-nomic-embed-text:v1.5}\"}';
         fi &&
         echo '\nModel pull complete!'
       "
@@ -95,7 +95,7 @@ services:
       - jaeger
       - phoenix
     networks:
-      - arcclaw-net
+      - amsha-net
 
   jaeger:
     image: jaegertracing/all-in-one:1.54
@@ -105,14 +105,14 @@ services:
       - "16686:16686" # Web UI
       - "4317"        # OTLP gRPC port (internal)
     networks:
-      - arcclaw-net
+      - amsha-net
 
   phoenix:
     image: arizephoenix/phoenix:latest
     ports:
       - "6006:6006"   # Phoenix UI (only port exposed on host)
     networks:
-      - arcclaw-net
+      - amsha-net
 
   prometheus:
     image: prom/prometheus:latest
@@ -124,15 +124,15 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:
-      - arcclaw-net
+      - amsha-net
 
   # ---------------------------------------------------------------------------
-  # ARC-CLAW SANDBOX IMAGE (BUILD ONLY)
+  # AMSHA SANDBOX IMAGE (BUILD ONLY)
   # This service exists strictly to centralize the build configuration.
   # It is assigned to the "builder" profile so `compose up` ignores it.
   # ---------------------------------------------------------------------------
   tool-runner:
-    image: arcclaw-tool-runner:latest
+    image: amsha-tool-runner:latest
     build:
       context: ./sandbox
       dockerfile: Dockerfile.toolrunner
@@ -141,21 +141,21 @@ services:
 
   postgres:
     image: postgres:17-alpine
-    container_name: arcclaw-postgres
+    container_name: amsha-postgres
     environment:
-      - POSTGRES_DB=arcclaw
-      - POSTGRES_USER=arcclaw
-      - POSTGRES_PASSWORD=arcclawpassword
+      - POSTGRES_DB=amsha
+      - POSTGRES_USER=amsha
+      - POSTGRES_PASSWORD=amshapassword
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
-      - arcclaw-net
+      - amsha-net
 
   sonarqube:
     image: sonarqube:latest
-    container_name: arcclaw-sonarqube
+    container_name: amsha-sonarqube
     environment:
       - SONAR_ES_BOOTSTRAP_CHECKS_DISABLE=true
     ports:
@@ -165,10 +165,10 @@ services:
       - sonarqube_extensions:/opt/sonarqube/extensions
       - sonarqube_logs:/opt/sonarqube/logs
     networks:
-      - arcclaw-net
+      - amsha-net
 
 volumes:
-  arcclaw_data:
+  amsha_data:
   ollama_data:
   postgres_data:
   sonarqube_data:
@@ -176,5 +176,5 @@ volumes:
   sonarqube_logs:
 
 networks:
-  arcclaw-net:
+  amsha-net:
     driver: bridge

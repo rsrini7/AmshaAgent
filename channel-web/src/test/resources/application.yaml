@@ -1,0 +1,66 @@
+# =============================================================================
+# amsha-channel-web - Test Configuration
+# =============================================================================
+quarkus:
+  application:
+    name: amsha-web-test
+  
+  otel:
+    sdk:
+      disabled: true
+
+  datasource:
+    db-kind: sqlite
+    jdbc:
+      url: "jdbc:sqlite:./target/web-test.db?busy_timeout=20000&journal_mode=WAL&transaction_mode=IMMEDIATE"
+      additional-jdbc-url-properties: "journal_mode=WAL&synchronous=NORMAL&busy_timeout=20000&transaction_mode=IMMEDIATE"
+      min-size: 1
+      max-size: 3
+      initial-size: 1
+      acquisition-timeout: 10s
+
+  flyway:
+    migrate-at-start: true
+    locations: classpath:db/migration/sqlite
+
+  scheduler:
+    enabled: false
+
+  langchain4j:
+    timeout: 30s
+    chat-model:
+      provider: openai
+    embedding-model:
+      provider: openai
+    openai:
+      api-key: "dummy"
+      timeout: 30s
+      embedding-model:
+        enabled: true
+        model-name: "text-embedding-3-small"
+  
+  index-dependency:
+    amsha-core:
+      group-id: com.amsha
+      artifact-id: amsha-core
+    amsha-persistence-sqlite:
+      group-id: com.amsha
+      artifact-id: amsha-persistence-sqlite
+
+# Mock/Dummy config for core handlers that are bean-scanned
+amsha:
+  llm:
+    provider: mock
+    gemini:
+      api-key: "dummy-gemini-key"
+      model-name: "gemini-2.5-flash-lite"
+  channel:
+    telegram:
+      bot-token: "mock"
+  data-dir: "./target"
+  workspace:
+    root-dir: "./target/workspaces"  
+  vault:
+    pepper: "mock-pepper"
+  cron:
+    max-lookback-window: PT1M

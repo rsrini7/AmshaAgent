@@ -43,9 +43,9 @@ def is_in_line_comment_or_string(line, pos):
 def should_skip_import(fqn, current_path):
     """Block downward-dependency imports (api/core must not import app classes)."""
     module = 'unknown'
-    if 'arcclaw-channel-api' in current_path: module = 'api'
-    elif 'arcclaw-core' in current_path: module = 'core'
-    if module in ('api', 'core') and fqn.startswith('com.arcclaw.app.'):
+    if 'channel-api' in current_path: module = 'api'
+    elif 'core' in current_path: module = 'core'
+    if module in ('api', 'core') and fqn.startswith('com.amsha.app.'):
         return True
     return False
 

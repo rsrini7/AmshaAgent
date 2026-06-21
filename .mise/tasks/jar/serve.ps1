@@ -2,7 +2,7 @@
 #MISE shell = "pwsh -NonInteractive -Command"
 #MISE description = "Run packaged jar - REST daemon on :8080 (CLI profile)"
 $ErrorActionPreference = 'Stop'
-$jar = 'arcclaw-app/target/quarkus-app/quarkus-run.jar'
+$jar = 'app/target/quarkus-app/quarkus-run.jar'
 if (-not (Test-Path $jar)) { Write-Host '❌  JAR not found. Run: mise run build-app'; exit 1 }
 [console]::InputEncoding = [console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $jvmArgs = @(
@@ -16,9 +16,9 @@ $jvmArgs = @(
     '-Dsun.stdout.encoding=UTF-8', '-Dsun.stderr.encoding=UTF-8',
     '-Dquarkus.profile=cli',
     '-Dquarkus.mcp.server.stdio.enabled=true',
-    '-Darcclaw.telegram.enabled=true',
-    '-Darcclaw.rag.vec-extension-path=./lib/vec0',
-    '-Darcclaw.data-dir=./data'
+    '-Damsha.telegram.enabled=true',
+    '-Damsha.rag.vec-extension-path=./lib/vec0',
+    '-Damsha.data-dir=./data'
 )
 & java @jvmArgs -jar $jar serve
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

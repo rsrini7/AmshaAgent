@@ -1,17 +1,17 @@
 ### ═══════════════════════════════════════════════════════════════
 ### 12 - MCP SERVER + CLIENT TESTING
 ###
-### ArcClaw exposes TWO MCP surfaces and one admin API:
+### Amsha Agent exposes TWO MCP surfaces and one admin API:
 ###
-###   A) MCP SERVER (inbound - ArcClaw as server, external client calls it)
+###   A) MCP SERVER (inbound - Amsha Agent as server, external client calls it)
 ###      Endpoint: /mcp  (Quarkiverse MCP extension)
 ###      Protocol: JSON-RPC 2.0 over HTTP (supports SSE for streaming)
 ###      Session: Mcp-Session-Id header (captured from MCP-1 response)
 ###      Handshake: initialize → notifications/initialized → tools/list → tools/call
-###      Exposed tools: github, recall_memory_search, archival_memory_search (configured via arcclaw.mcp.exposed-tools)
-###      Allowlist: arcclaw.mcp.tool-allowlist controls which tools can be called
+###      Exposed tools: github, recall_memory_search, archival_memory_search (configured via amsha.mcp.exposed-tools)
+###      Allowlist: amsha.mcp.tool-allowlist controls which tools can be called
 ###
-###   B) MCP CLIENT (outbound - ArcClaw connects to remote MCP servers)
+###   B) MCP CLIENT (outbound - Amsha Agent connects to remote MCP servers)
 ###      POST   /api/v1/mcp/connect        → connect to remote server
 ###      DELETE /api/v1/mcp/connect/{name} → disconnect + deregister tools
 ###      GET    /api/v1/mcp/connect        → list connected servers
@@ -28,13 +28,13 @@
 ###   4. All subsequent requests include: Mcp-Session-Id: {{mcpSessionId}}
 ###
 ### Self-connect smoke test (FLOW D):
-###   MCP-CLIENT-1 connects ArcClaw to itself at http://localhost:8080/mcp.
-###   After success: ArcClaw now has its own tools registered as dynamic tools.
+###   MCP-CLIENT-1 connects Amsha Agent to itself at http://localhost:8080/mcp.
+###   After success: Amsha Agent now has its own tools registered as dynamic tools.
 ###   MCP-ADMIN-2 shows registeredDynamicTools with ≥1 entry.
 ###
 ### Telegram: /mcp reflex shows live MCP status (zero LLM tokens).
 ###
-### Prerequisites: ArcClaw running in serve mode, arcclaw.mcp.server-enabled=true (default)
+### Prerequisites: Amsha Agent running in serve mode, amsha.mcp.server-enabled=true (default)
 ### ═══════════════════════════════════════════════════════════════
 
 # @adminBase = http://localhost:8080/api/v1
@@ -48,10 +48,10 @@
 ### [MCP-ADMIN-1] Check MCP server status
 # @name mcpStatus
 # Expect 200: {"serverEnabled":true,"dynamicToolCount":0}
-# 404 → arcclaw.mcp.server-enabled=false in config.
+# 404 → amsha.mcp.server-enabled=false in config.
 GET {{adminBase}}/mcp/status
 Accept: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
@@ -64,12 +64,12 @@ X-ArcClaw-API-Key: {{validKey}}
 # }
 GET {{adminBase}}/mcp/tools
 Accept: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
 ### ════════════════════════════════════════════════════════════════
-### FLOW B - MCP PROTOCOL (ArcClaw as server, REST client as MCP client)
+### FLOW B - MCP PROTOCOL (Amsha Agent as server, REST client as MCP client)
 ### Run strictly in order: MCP-1 → MCP-2 → MCP-3 → MCP-4 → MCP-5
 ### The Mcp-Session-Id is captured from MCP-1 response and reused.
 ### ════════════════════════════════════════════════════════════════
@@ -81,7 +81,7 @@ X-ArcClaw-API-Key: {{validKey}}
 POST {{mcpBase}}/mcp
 Content-Type: application/json
 Accept: application/json, text/event-stream
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
   "jsonrpc": "2.0",
@@ -110,7 +110,7 @@ X-ArcClaw-API-Key: {{validKey}}
 POST {{mcpBase}}/mcp
 Content-Type: application/json
 Accept: application/json, text/event-stream
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 Mcp-Session-Id: {{mcpSessionId}}
 
 {
@@ -121,13 +121,13 @@ Mcp-Session-Id: {{mcpSessionId}}
 
 ###
 
-### [MCP-3] tools/list - discover what ArcClaw exposes
+### [MCP-3] tools/list - discover what Amsha Agent exposes
 # Expect 200: tools array containing "github" and "recall_memory_search"
-# These come from arcclaw.mcp.exposed-tools via McpToolBridge.
+# These come from amsha.mcp.exposed-tools via McpToolBridge.
 POST {{mcpBase}}/mcp
 Content-Type: application/json
 Accept: application/json, text/event-stream
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 Mcp-Session-Id: {{mcpSessionId}}
 
 {
@@ -147,7 +147,7 @@ Mcp-Session-Id: {{mcpSessionId}}
 POST {{mcpBase}}/mcp
 Content-Type: application/json
 Accept: application/json, text/event-stream
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 Mcp-Session-Id: {{mcpSessionId}}
 
 {
@@ -157,7 +157,7 @@ Mcp-Session-Id: {{mcpSessionId}}
   "params": {
     "name": "recall_memory_search",
     "arguments": {
-      "query": "ArcClaw architecture overview"
+      "query": "Amsha Agent architecture overview"
     }
   }
 }
@@ -171,7 +171,7 @@ Mcp-Session-Id: {{mcpSessionId}}
 POST {{mcpBase}}/mcp
 Content-Type: application/json
 Accept: application/json, text/event-stream
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 Mcp-Session-Id: {{mcpSessionId}}
 
 {
@@ -201,7 +201,7 @@ Mcp-Session-Id: {{mcpSessionId}}
 POST {{mcpBase}}/mcp
 Content-Type: application/json
 Accept: application/json, text/event-stream
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 Mcp-Session-Id: {{mcpSessionId}}
 
 {
@@ -222,7 +222,7 @@ Mcp-Session-Id: {{mcpSessionId}}
 POST {{mcpBase}}/mcp
 Content-Type: application/json
 Accept: application/json, text/event-stream
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
   "jsonrpc": "2.0",
@@ -238,7 +238,7 @@ X-ArcClaw-API-Key: {{validKey}}
 POST {{mcpBase}}/mcp
 Content-Type: application/json
 Accept: application/json, text/event-stream
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 Mcp-Session-Id: 00000000-dead-beef-0000-000000000000
 
 {
@@ -255,7 +255,7 @@ Mcp-Session-Id: 00000000-dead-beef-0000-000000000000
 POST {{mcpBase}}/mcp
 Content-Type: application/json
 Accept: application/json, text/event-stream
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 Mcp-Session-Id: {{mcpSessionId}}
 
 {
@@ -271,21 +271,21 @@ Mcp-Session-Id: {{mcpSessionId}}
 ###
 
 ### ════════════════════════════════════════════════════════════════
-### FLOW D - MCP CLIENT (ArcClaw connecting OUT to remote servers)
+### FLOW D - MCP CLIENT (Amsha Agent connecting OUT to remote servers)
 ###
 ### Self-connect smoke test - no external MCP server needed.
-### MCP-CLIENT-1 connects ArcClaw to itself at localhost:8080/mcp.
+### MCP-CLIENT-1 connects Amsha Agent to itself at localhost:8080/mcp.
 ### After success: dynamic tools are registered in DynamicToolCapabilityRegistry.
 ### ════════════════════════════════════════════════════════════════
 
-### [MCP-CLIENT-1] Self-connect - ArcClaw as client to itself
+### [MCP-CLIENT-1] Self-connect - Amsha Agent as client to itself
 # Expect 200: {"name":"self","url":"...","toolsRegistered":N,"status":"connected"}
-# N is the number of tools exposed (≥1, depends on arcclaw.mcp.exposed-tools config).
+# N is the number of tools exposed (≥1, depends on amsha.mcp.exposed-tools config).
 # Proves: McpConnectResource → McpClientService.connect() →
 #         MCP initialize handshake → tools/list → DynamicToolCapabilityRegistry.register()
 POST {{adminBase}}/mcp/connect
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
   "name": "self",
@@ -299,7 +299,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # Both with mcpServerName="self" and transport="HTTP_SSE"
 GET {{adminBase}}/mcp/tools
 Accept: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
@@ -307,7 +307,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # Expect 200: {"connectedServers":[{"name":"self","toolCount":N}],"totalDynamicTools":N}
 GET {{adminBase}}/mcp/connect
 Accept: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
@@ -317,16 +317,16 @@ X-ArcClaw-API-Key: {{validKey}}
 # @name mcpAgentSession
 POST {{adminBase}}/../api/v1/sessions
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
 POST http://localhost:8080/api/v1/sessions/{{mcpAgentSession.response.body.sessionId}}/run
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
-    "goal": "Search your memory for ArcClaw architecture details using the memory search tool.",
+    "goal": "Search your memory for Amsha Agent architecture details using the memory search tool.",
     "agentRole": "coordinator",
     "maxIterations": 3
 }
@@ -334,7 +334,7 @@ X-ArcClaw-API-Key: {{validKey}}
 ###
 
 DELETE http://localhost:8080/api/v1/sessions/{{mcpAgentSession.response.body.sessionId}}
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
@@ -343,7 +343,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # After this: MCP-ADMIN-2 shows registeredDynamicTools: []
 DELETE {{adminBase}}/mcp/connect/self
 Accept: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
@@ -351,14 +351,14 @@ X-ArcClaw-API-Key: {{validKey}}
 # Expect 200: registeredDynamicTools: []
 GET {{adminBase}}/mcp/tools
 Accept: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
 ### [MCP-CLIENT-7] Connect to an external MCP server (edit url and uncomment)
 # POST {{adminBase}}/mcp/connect
 # Content-Type: application/json
-# X-ArcClaw-API-Key: {{validKey}}
+# X-Amsha-API-Key: {{validKey}}
 #
 # {
 #   "name": "remote",
@@ -374,7 +374,7 @@ X-ArcClaw-API-Key: {{validKey}}
 ### [MCP-CLIENT-ERR-1] Connect with missing url → expect 400
 POST {{adminBase}}/mcp/connect
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
   "name": "no-url"
@@ -387,7 +387,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # McpConnectResource maps it to HTTP 502.
 POST {{adminBase}}/mcp/connect
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
   "name": "dead",
@@ -399,7 +399,7 @@ X-ArcClaw-API-Key: {{validKey}}
 ### [MCP-CLIENT-ERR-3] Disconnect server never connected → expect 404
 DELETE {{adminBase}}/mcp/connect/never-connected
 Accept: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
@@ -408,7 +408,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # Connecting when already connected should either overwrite or return 409 CONFLICT.
 POST {{adminBase}}/mcp/connect
 Content-Type: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 {
   "name": "self",
@@ -420,7 +420,7 @@ X-ArcClaw-API-Key: {{validKey}}
 ### Disconnect again (cleanup after ERR-4)
 DELETE {{adminBase}}/mcp/connect/self
 Accept: application/json
-X-ArcClaw-API-Key: {{validKey}}
+X-Amsha-API-Key: {{validKey}}
 
 ###
 

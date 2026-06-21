@@ -1,6 +1,6 @@
 #!/usr/bin/env pwsh
 #MISE shell = "pwsh -NonInteractive -Command"
-#MISE description = "Native binary for Filesystem/Lucene backend (arcclaw-fs) - local GraalVM, no container"
+#MISE description = "Native binary for Filesystem/Lucene backend (amsha-fs) - local GraalVM, no container"
 $ErrorActionPreference = 'Stop'
 $mvnw   = if ($IsWindows) { '.\mvnw.cmd' } else { './mvnw' }
 $suffix = if ($IsWindows) { '-runner.exe' } else { '-runner' }
@@ -45,23 +45,23 @@ try {
     $env:JAVA_HOME = $graalPath
 
     $env:MAVEN_OPTS = '--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow'
-    & $mvnw clean package -Pnative -pl arcclaw-app -am -DskipTests "-Darcclaw.build.backend=fs" "-Darcclaw.persistence.backend=fs" "-Dquarkus.profile=prod,filesystem" '-Dquarkus.native.container-build=false' "-Dquarkus.native.native-image-xmx=${targetGB}g"
+    & $mvnw clean package -Pnative -pl amsha-app -am -DskipTests "-Damsha.build.backend=fs" "-Damsha.persistence.backend=fs" "-Dquarkus.profile=prod,filesystem" '-Dquarkus.native.container-build=false' "-Dquarkus.native.native-image-xmx=${targetGB}g"
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-    Write-Host "✅  Filesystem native build complete: arcclaw-app/target/arcclaw-app-1.0.0-SNAPSHOT$suffix"
-    Write-Host '▶   Copying to dist/arcclaw-fs...'
+    Write-Host "✅  Filesystem native build complete: app/target/app-1.0.0-SNAPSHOT$suffix"
+    Write-Host '▶   Copying to dist/amsha-fs...'
     if (-not (Test-Path 'dist')) { New-Item -ItemType Directory -Path 'dist' -Force | Out-Null }
     # Clean up any old -runner files first
-    $fsRunner = if ($IsWindows) { "dist/arcclaw-fs-runner.exe" } else { "dist/arcclaw-fs-runner" }
-    $fsBinary = if ($IsWindows) { "dist/arcclaw-fs.exe" } else { "dist/arcclaw-fs" }
+    $fsRunner = if ($IsWindows) { "dist/amsha-fs-runner.exe" } else { "dist/amsha-fs-runner" }
+    $fsBinary = if ($IsWindows) { "dist/amsha-fs.exe" } else { "dist/amsha-fs" }
     if (Test-Path $fsRunner) { Remove-Item $fsRunner -Force }
-    Copy-Item "arcclaw-app/target/arcclaw-app-1.0.0-SNAPSHOT$suffix" $fsBinary -Force
+    Copy-Item "app/target/app-1.0.0-SNAPSHOT$suffix" $fsBinary -Force
     # Create .env for the Filesystem backend (activates %filesystem profile at runtime)
     $envContent = @"
-# ArcClaw Filesystem backend configuration.
+# Amsha Agent Filesystem backend configuration.
 # QUARKUS_PROFILE is baked into the binary; only add runtime overrides here.
 "@
     Set-Content -Path "dist/.env" -Value $envContent -NoNewline
-    Write-Host '✅  Filesystem binary: dist/arcclaw-fs'
+    Write-Host '✅  Filesystem binary: dist/amsha-fs'
 } finally {
     if ($envBackup -eq $true -and (Test-Path '.env.build-backup')) { Rename-Item '.env.build-backup' '.env'; Write-Host 'ℹ️   .env restored.' }
     elseif ($envBackup -eq 'build.env') { Remove-Item '.env' -ErrorAction SilentlyContinue; Write-Host 'ℹ️   Temporary build.env copy removed.' }

@@ -1,6 +1,6 @@
 # Security
 
-ArcClaw is built with a defense-in-depth security posture. This document covers the cryptographic vault, sandbox isolation, audit chain, and governance system. For the architectural overview (agent loop, message pipeline, tool governance decision tree), see [ARCHITECTURE.md](./ARCHITECTURE.md).
+Amsha Agent is built with a defense-in-depth security posture. This document covers the cryptographic vault, sandbox isolation, audit chain, and governance system. For the architectural overview (agent loop, message pipeline, tool governance decision tree), see [ARCHITECTURE.md](./ARCHITECTURE.md).
 
 ---
 
@@ -30,10 +30,10 @@ AES-256-GCM-SIV authenticated encryption with Argon2id key derivation.
 - **Key derivation**: `Argon2id` (memory-hard, salt per encryption)
 - **Cipher**: `AES/GCM-SIV/NoPadding` (misuse-resistant — nonce reuse does not break key)
 - **Key storage**: `char[]` + `byte[]` in `AutoCloseable` wrappers, aggressively overwritten with zeros on close
-- **Pepper**: Application-level secret (`ARCCLAW_VAULT_PEPPER`) mixed into key derivation — a database leak alone cannot decrypt secrets
+- **Pepper**: Application-level secret (`AMSHA_VAULT_PEPPER`) mixed into key derivation — a database leak alone cannot decrypt secrets
 - **Associated data (AAD)**: Bound to secret identity/key name — prevents ciphertext swapping attacks
 
-**Operational Key-Rotation Policy**: ArcClaw does not support automatic vault key rotation. In the event of a suspected compromise, wipe the `EncryptedSecret` table and re-provision all tenant secrets out-of-band.
+**Operational Key-Rotation Policy**: Amsha Agent does not support automatic vault key rotation. In the event of a suspected compromise, wipe the `EncryptedSecret` table and re-provision all tenant secrets out-of-band.
 
 ---
 
@@ -58,7 +58,7 @@ AuditService.record(sessionId, userId, agentRole, SecurityEventType, detail)
 
 | Strategy | Isolation Level | Requirements |
 |---|---|---|
-| `podman` (default) | Rootless container | Podman installed, `arcclaw-sandbox` image built |
+| `podman` (default) | Rootless container | Podman installed, `amsha-sandbox` image built |
 | `namespace` | Linux namespace | Linux host |
 | `direct` | None | No sandbox (development only) |
 | `none` | Disabled | Sandbox_exec tool unavailable |
@@ -66,7 +66,7 @@ AuditService.record(sessionId, userId, agentRole, SecurityEventType, detail)
 **Podman sandbox features:**
 - Ephemeral secret injection via RAM-backed tmpfs `.env` file — never as process arguments
 - Capped containers: 512MB memory, 120s timeout
-- Configurable network access (`ARCCLAW_SANDBOX_ALLOW_INTERNET`)
+- Configurable network access (`AMSHA_SANDBOX_ALLOW_INTERNET`)
 - Language runtimes: Python, Java, Node.js, Go, Bash
 
 **Secret transport**: Tool runtime secrets are resolved from `SecretVault` and injected into the sandbox container via a memory-wiped `.env` file on a tmpfs mount — they never appear in process arguments or environment variables visible to host processes.

@@ -1,5 +1,5 @@
 # =============================================================================
-# mise.toml - ArcClaw Agent Kernel  (unified, all platforms)
+# mise.toml - Amsha Agent Kernel  (unified, all platforms)
 # Docs: https://mise.jdx.dev
 # Platform: Windows · macOS · WSL2 · Linux
 #
@@ -34,18 +34,17 @@ sonar-scanner-cli = "latest"
 [env]
 _.file = ".env"
 
-[settings]
-trusted_config_paths = ["~/.cache/arcclaw-wsl-build"]
+# [settings]
 
 # Enable it with `mise settings experimental=true`
 # [hooks]
 # # Fires automatically after `mise install`
 # postinstall = "mise run <task-name>"
 
-# ARCCLAW_VEC_EXT and ARCCLAW_DATA_DIR are intentionally NOT set here.
-# quarkus:dev forks Maven inside arcclaw-app/ → needs ../lib/vec0 and ../data.
+# AMSHA_VEC_EXT and AMSHA_DATA_DIR are intentionally NOT set here.
+# quarkus:dev forks Maven inside app/ → needs ../lib/vec0 and ../data.
 # jar and native tasks run from project root → need ./lib/vec0 and ./data.
-# Each task passes -Darcclaw.rag.vec-extension-path and -Darcclaw.data-dir explicitly.
+# Each task passes -Damsha.rag.vec-extension-path and -Damsha.data-dir explicitly.
 
 # NOTE: JDK_JAVA_OPTIONS intentionally NOT set here.
 # Dev tasks pass JVM flags via -Djvm.args; build tasks set MAVEN_OPTS inline.
@@ -59,7 +58,7 @@ trusted_config_paths = ["~/.cache/arcclaw-wsl-build"]
 description = "New here? Run: mise install  then: mise run setup:profile  then: mise run setup"
 run = [
   "echo \"\"",
-  "echo   ArcClaw - mise Task Runner",
+  "echo   Amsha Agent - mise Task Runner",
   "echo   ===========================",
   "echo \"\"",
   "echo   BOOTSTRAP SEQUENCE",
@@ -150,8 +149,8 @@ Write-Host '-- Docker CLI ──────────────────
 $dv = docker --version 2>&1; if ($LASTEXITCODE -eq 0) { Write-Host "  $dv" } else { Write-Host '  docker CLI not installed' }
 Write-Host '-- DOCKER_HOST ──────────────────────────────────'
 Write-Host "  $($env:DOCKER_HOST ?? '(not set)')"
-Write-Host '-- ARCCLAW_VEC_EXT ──────────────────────────────'
-Write-Host "  $($env:ARCCLAW_VEC_EXT ?? '(not set)')"
+Write-Host '-- AMSHA_VEC_EXT ──────────────────────────────'
+Write-Host "  $($env:AMSHA_VEC_EXT ?? '(not set)')"
 """
 
 [tasks.help]
@@ -249,11 +248,11 @@ run = ["mise tasks"]
 # DOCKER COMPOSE TASKS
 # =============================================================================
 # Tasks are defined as .ps1 scripts in .mise/tasks/compose/ for cross-platform compatibility
-# - up.ps1          - Start full stack (ArcClaw + Ollama + OTel + Jaeger + Phoenix + Prometheus)
+# - up.ps1          - Start full stack (Amsha Agent + Ollama + OTel + Jaeger + Phoenix + Prometheus)
 # - down.ps1        - Stop stack (data volumes preserved)
 # - down-clean.ps1  - Stop stack and DELETE all data volumes (irreversible)
-# - logs.ps1        - Follow live arcclaw container logs
-# - restart.ps1     - Restart only the arcclaw service
+# - logs.ps1        - Follow live amsha container logs
+# - restart.ps1     - Restart only the amsha service
 
 # =============================================================================
 # OBSERVABILITY TASKS
@@ -274,7 +273,7 @@ run = ["mise tasks"]
 # - stop.ps1           - Stop the Podman machine (macOS)
 # - socket.ps1         - Enable Podman user socket (WSL2/Linux)
 # - status.ps1         - Print Podman version, containers, and image status
-# - sandbox-build.ps1  - Build the arcclaw-tool-runner image
+# - sandbox-build.ps1  - Build the amsha-tool-runner image
 # - sandbox-check.ps1  - Verify the sandbox image exists
 
 # =============================================================================
@@ -294,13 +293,13 @@ run = ["mise tasks"]
 # DATABASE HELPERS
 # =============================================================================
 # Tasks are defined as .ps1 scripts in .mise/tasks/db/ for cross-platform compatibility
-# - sqlite/inspect.ps1      - Open arcclaw-meta.db in sqlite3 interactive CLI
+# - sqlite/inspect.ps1      - Open amsha-meta.db in sqlite3 interactive CLI
 # - sqlite/fts-check.ps1    - Verify SQLite FTS5 is available
 # - sqlite/vec-check.ps1    - Check sqlite-vec extension exists
 # - pg/start.ps1            - Start PostgreSQL 16 container via Podman
 # - pg/stop.ps1             - Stop and remove PostgreSQL container
 # - pg/status.ps1           - Check PostgreSQL container health
-# - pg/reset.ps1            - Drop and recreate the arcclaw database (wipes all data)
+# - pg/reset.ps1            - Drop and recreate the amsha database (wipes all data)
 
 # =============================================================================
 # PERSISTENCE BACKEND TASKS

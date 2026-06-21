@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-ArcClaw Automated Test Harness v3.0
+Amsha Agent Automated Test Harness v3.0
 
 Fixes over v2.0:
   1. Response Ordering  — prompt fingerprinting via [ref:XXXXXXXX] appended to each sent prompt.
@@ -10,9 +10,9 @@ Fixes over v2.0:
                            (a) Hard reflex block → PASS(blocked) as before.
                            (b) LLM generated "unable to share" on a NON-security prompt → FAIL
                                with root cause message "system prompt instruction too aggressive".
-  3. Log-Based Correction — regex rewritten to match actual ArcClaw CLI log format:
-                            Searches harness output log for [Prompt #N] anchor + ArcClaw> response,
-                            and arcclaw-cli.log for StateMachine goal→CliResultBridge window.
+  3. Log-Based Correction — regex rewritten to match actual Amsha Agent CLI log format:
+                            Searches harness output log for [Prompt #N] anchor + Amsha Agent> response,
+                            and amsha-cli.log for StateMachine goal→CliResultBridge window.
   4. Post-/halt SKIP     — session_halted flag set IMMEDIATELY after /halt completes,
                            not after detecting the next prompt's timeout.
 """
@@ -135,7 +135,7 @@ _CAT_RULES: list[tuple[list[str], PromptCategory]] = [
       "priorities","full capablities","vishnu"], PromptCategory.COMMAND),
     (["vault "], PromptCategory.VAULT),
     (["search for","real time search","real search","current news","LTS version",
-      "japanese","\u6a5f\u68b0\u5b66\u4e60","\u65e5\u672c\u8a9e","b\u062dth","ArcClaw*","architecture notes",
+      "japanese","\u6a5f\u68b0\u5b66\u4e60","\u65e5\u672c\u8a9e","b\u062dth","Amsha Agent*","architecture notes",
       "hardcorded string","scan is there"], PromptCategory.KNOWLEDGE),
 ]
 
@@ -169,7 +169,7 @@ def build_assertion(prompt: str, cat: PromptCategory) -> AssertionRule:
         if "/crons" in p or p.strip() in ("/crons","crons"):
             return AssertionRule(must_contain=["ID","Goal","Status","Next"],    expect_approval=False)
         if "/history" in p or p == "history":
-            return AssertionRule(must_contain=["You","ArcClaw"],                expect_approval=False)
+            return AssertionRule(must_contain=["You","Amsha Agent"],                expect_approval=False)
         if "/commands" in p or p == "commands":
             return AssertionRule(must_contain=["approve","deny","reset"],       expect_approval=False)
         return AssertionRule(skip_assertion=True, expect_approval=False)
@@ -190,7 +190,7 @@ def build_assertion(prompt: str, cat: PromptCategory) -> AssertionRule:
         if "list" in p or "repos" in p or "gist" in p:
             return AssertionRule(must_contain=["ID","stars","rsrini7"],         expect_approval=True)
         if "readme" in p or "view" in p or "desc" in p:
-            return AssertionRule(must_contain=["ArcClaw","repository","Quarkus"],expect_approval=True)
+            return AssertionRule(must_contain=["Amsha Agent","repository","Quarkus"],expect_approval=True)
         return AssertionRule(expect_approval=True)
 
     if cat == PromptCategory.CRON:
@@ -330,8 +330,8 @@ def verify_response_from_log(log_path: str, prompt: str,
     """
     Three-strategy log search:
     A) Fingerprint search — find [ref:XXXXXXXX] in log, extract response after it
-    B) Harness output log — [Prompt #N] ... ArcClaw> <response> ... You>
-    C) arcclaw-cli.log  — StateMachine goal<PROMPT> ... CliResultBridge signaling
+    B) Harness output log — [Prompt #N] ... Amsha Agent> <response> ... You>
+    C) amsha-cli.log  — StateMachine goal<PROMPT> ... CliResultBridge signaling
     """
     if not os.path.exists(log_path):
         return None
@@ -342,9 +342,9 @@ def verify_response_from_log(log_path: str, prompt: str,
         # Strategy A: fingerprint-based search (most reliable)
         if fingerprint:
             fp_esc = re.escape(fingerprint)
-            # Find the fingerprint in the log, then capture the ArcClaw response
+            # Find the fingerprint in the log, then capture the Amsha Agent response
             pat_fp = (r"\[ref:" + fp_esc +
-                      r".*?ArcClaw>\s*(.*?)(?=You>|\[Prompt\s+#|\[ref:|\Z)")
+                      r".*?Amsha Agent>\s*(.*?)(?=You>|\[Prompt\s+#|\[ref:|\Z)")
             mf = re.search(pat_fp, content, re.DOTALL | re.IGNORECASE)
             if mf:
                 resp = mf.group(1).strip()
@@ -355,14 +355,14 @@ def verify_response_from_log(log_path: str, prompt: str,
 
         # Strategy B: harness output log format
         pat_b = (r"\[Prompt\s+#\d+\].*?" + prompt_esc +
-                 r".*?ArcClaw>\s*(.*?)(?=You>|\[Prompt\s+#|\Z)")
+                 r".*?Amsha Agent>\s*(.*?)(?=You>|\[Prompt\s+#|\Z)")
         mb = re.search(pat_b, content, re.DOTALL | re.IGNORECASE)
         if mb:
             resp = mb.group(1).strip()
             if resp and len(resp) > 10:
                 return resp
 
-        # Strategy C: arcclaw-cli.log format
+        # Strategy C: amsha-cli.log format
         pat_c = (r"StateMachine starting session\S+\s+goal" +
                  re.escape(prompt[:40]) +
                  r".*?CliResultBridge signaling active waiter")
@@ -571,7 +571,7 @@ def print_summary(results: list[TestResult], log_f):
 
     lines = [
         "\n" + "="*70,
-        " ArcClaw Autotest Summary  (v3.0)",
+        " Amsha Agent Autotest Summary  (v3.0)",
         f" Total: {total} | PASS: {passed} | FAIL: {failed} "
         f"| TIMEOUT: {timeout} | SKIP: {skipped} | ERROR: {errors}",
         "="*70,
@@ -609,18 +609,18 @@ def _log(msg: str, log_f):
 # ─── Main ──────────────────────────────────────────────────────────────────────
 def main():
     parser = argparse.ArgumentParser(
-        description="ArcClaw Automated Test Harness v3.0",
+        description="Amsha Agent Automated Test Harness v3.0",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=textwrap.dedent("""
         Examples:
-          python autotest.py -f telegram-test-arcclaw-2.txt
+          python autotest.py -f telegram-test-amsha-2.txt
           python autotest.py -r 14-30 -d 3 -v
           python autotest.py --skip-categories security,cron
           python autotest.py -j results.json -l run.log
           python autotest.py --autonomy full
         """))
 
-    parser.add_argument("-f","--file",           default="telegram-test-arcclaw-2.txt")
+    parser.add_argument("-f","--file",           default="telegram-test-amsha-2.txt")
     parser.add_argument("-d","--delay",          type=float, default=4.0)
     parser.add_argument("-a","--approval-delay", type=float, default=2.0)
     parser.add_argument("-t","--timeout",        type=float, default=120.0)
@@ -656,15 +656,15 @@ def main():
         print(f"\u26a0\ufe0f  No runnable test cases in range '{args.range}'."); sys.exit(0)
 
     log_f = open(args.log_file, "w", encoding="utf-8") if args.log_file else None
-    cli_log_path = os.environ.get("ARCCLAW_CLI_LOG", "arcclaw-cli.log")
+    cli_log_path = os.environ.get("AMSHA_CLI_LOG", "amsha-cli.log")
 
     backend = args.backend
     if backend == "pg":
-        cli_log_path = os.environ.get("ARCCLAW_CLI_LOG", "arcclaw-pg.log")
+        cli_log_path = os.environ.get("AMSHA_CLI_LOG", "amsha-pg.log")
     elif backend == "fs":
-        cli_log_path = os.environ.get("ARCCLAW_CLI_LOG", "arcclaw-fs.log")
+        cli_log_path = os.environ.get("AMSHA_CLI_LOG", "amsha-fs.log")
 
-    print(f"\u2726 ArcClaw Autotest v3.0")
+    print(f"\u2726 Amsha Agent Autotest v3.0")
     print(f"  File      : {args.file}")
     print(f"  Range     : {args.range} \u2192 {len(cases)} cases")
     print(f"  Backend   : {backend}")
@@ -705,12 +705,12 @@ def main():
     buf      = OutputBuffer(q, log_f, args.verbose)
     approver = ApprovalHandler(proc, buf, args.approval_delay, log_f)
 
-    _log("[Harness] Waiting for ArcClaw startup...", log_f)
+    _log("[Harness] Waiting for Amsha Agent startup...", log_f)
     found, _ = buf.wait_for([PROMPT_READY], timeout=120.0)
     if not found:
-        print("\u274c ArcClaw did not produce 'You>' within 120s. Aborting.")
+        print("\u274c Amsha Agent did not produce 'You>' within 120s. Aborting.")
         proc.terminate(); sys.exit(1)
-    _log("[Harness] ArcClaw ready.", log_f)
+    _log("[Harness] Amsha Agent ready.", log_f)
 
     results: list[TestResult] = []
     session_halted = False
@@ -761,7 +761,7 @@ def main():
     if log_f:
         log_f.write("\n\u2726 Autotest v3.0 Finished.\n"); log_f.close()
 
-    print("\n\u2726 ArcClaw Autotest v3.0 Finished.")
+    print("\n\u2726 Amsha Agent Autotest v3.0 Finished.")
     sys.exit(1 if any(r.outcome in (Outcome.FAIL, Outcome.TIMEOUT, Outcome.ERROR)
                       for r in results) else 0)
 

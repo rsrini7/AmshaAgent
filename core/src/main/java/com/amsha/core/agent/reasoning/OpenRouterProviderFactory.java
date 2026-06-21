@@ -1,0 +1,77 @@
+package com.amsha.core.agent.reasoning;
+
+import dev.langchain4j.model.chat.ChatModel;
+
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+
+import java.util.List;
+import java.util.Optional;
+
+import com.amsha.core.routing.ChatModelFactory;
+import com.amsha.core.routing.MultiModelChatModel;
+
+import org.eclipse.microprofile.config.inject.ConfigProperty;
+
+@ApplicationScoped
+public class OpenRouterProviderFactory implements AgentChatModelProvider {
+
+    @Inject
+    AgentLlmConfig agentConfig;
+
+    @ConfigProperty(name = "AMSHA_OPENROUTER_API_KEY")
+    Optional<String> apiKey;
+
+    @ConfigProperty(name = "AMSHA_OPENROUTER_BASE_URL", defaultValue = "https://openrouter.ai/api/v1")
+    String baseUrl;
+
+    @ConfigProperty(name = "AMSHA_OPENROUTER_MODEL", defaultValue = "openai/gpt-oss-20b:free")
+    String modelName;
+
+    @ConfigProperty(name = "amsha.llm.openrouter.site-url", defaultValue = "https://github.com/rsrini7/amsha")
+    String siteUrl;
+
+    @ConfigProperty(name = "amsha.llm.openrouter.app-name", defaultValue = "Amsha Agent")
+    String appName;
+
+    @Override
+    public String providerName() {
+        return "openrouter";
+    }
+
+    @Override
+    public StructuredOutputMode structuredOutputMode() {
+        return agentConfig.structuredOutputMode();
+    }
+
+    @Override
+    public String baseUrl() {
+        return baseUrl;
+    }
+
+    @Override
+    public ChatModel create() {
+        String key =
+                apiKey.orElseThrow(() -> new IllegalStateException("OpenRouter requires AMSHA_OPENROUTER_API_KEY"));
+        List<MultiModelChatModel.ModelEntry> entries = ChatModelFactory.buildMultiModelEntries(
+                key,
+                modelName,
+                "openrouter",
+                (k, m) -> ChatModelFactory.withOpenRouterHeaders(
+                                ChatModelFactory.openAiBuilder(
+                                        baseUrl,
+                                        k,
+                                        m,
+                                        agentConfig.maxTokens(),
+                                        agentConfig.timeout(),
+                                        agentConfig.maxRetries(),
+                                        agentConfig.temperature(),
+                                        agentConfig.logHttp(),
+                                        agentConfig.logHttp()),
+                                siteUrl,
+                                appName)
+                        .build());
+        if (entries.size() == 1) return entries.get(0).model();
+        return new MultiModelChatModel("openrouter", entries, 5);
+    }
+}

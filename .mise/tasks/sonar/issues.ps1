@@ -4,7 +4,7 @@
 # Fetches SonarQube issues in LLM-friendly format.
 # Usage: mise run sonar:issues                          # all BLOCKER + CRITICAL
 #        mise run sonar:issues -- -severity BLOCKER     # BLOCKER only
-#        mise run sonar:issues -component arcclaw-core  # one module
+#        mise run sonar:issues -component amsha-core  # one module
 #        mise run sonar:issues -resolved                # include resolved issues
 $ErrorActionPreference = 'Stop'
 
@@ -58,7 +58,7 @@ if ($resolved) { $status = 'OPEN,CONFIRMED,RESOLVED,CLOSED' }
 if ($component) {
     $url = "$sonarUrl/api/issues/search?componentKeys=$component&severities=$severity&statuses=$status&ps=$limit"
 } else {
-    $url = "$sonarUrl/api/issues/search?componentKeys=arcclaw&severities=$severity&statuses=$status&ps=$limit"
+    $url = "$sonarUrl/api/issues/search?componentKeys=amsha&severities=$severity&statuses=$status&ps=$limit"
 }
 
 # Fetch issues from SonarQube API
@@ -102,7 +102,7 @@ foreach ($group in $grouped) {
     Write-Host ""
 
     $group.Group | ForEach-Object {
-        $comp = $_.component -replace 'arcclaw:', ''
+        $comp = $_.component -replace 'amsha:', ''
         $line = if ($_.line) { $_.line } else { '?' }
         $rule = $_.rule
         $msg = $_.message
@@ -129,6 +129,6 @@ Write-Host ""
 # Summary by module
 Write-Host "## Summary by Module"
 Write-Host ""
-$issues | ForEach-Object { $_.component -replace 'arcclaw:', '' } | Group-Object | Sort-Object Count -Descending | ForEach-Object {
+$issues | ForEach-Object { $_.component -replace 'amsha:', '' } | Group-Object | Sort-Object Count -Descending | ForEach-Object {
     Write-Host "- $($_.Name): $($_.Count) issues"
 }

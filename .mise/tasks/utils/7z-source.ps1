@@ -1,12 +1,12 @@
 #!/usr/bin/env pwsh
 #MISE shell = "pwsh -NonInteractive -Command"
-#MISE description = "Generate source archive (7z). Usage: ARCCLAW_7Z_PASS=secret mise run utils:7z-source"
+#MISE description = "Generate source archive (7z). Usage: AMSHA_7Z_PASS=secret mise run utils:7z-source"
 $ErrorActionPreference = 'Stop'
 
-$argPass = $env:ARCCLAW_7Z_PASS
+$argPass = $env:AMSHA_7Z_PASS
 if ([string]::IsNullOrWhiteSpace($argPass)) {
     Write-Host "❌ ERROR: No password provided!" -ForegroundColor Red
-    Write-Host "Usage: ARCCLAW_7Z_PASS=secret mise run utils:7z-source"
+    Write-Host "Usage: AMSHA_7Z_PASS=secret mise run utils:7z-source"
     exit 1
 }
 
@@ -54,7 +54,7 @@ if (-not $zipPath) {
     exit 1
 }
 
-$out = 'arcclaw-source.7z'
+$out = 'amsha-source.7z'
 
 # ── Exclusion lists ───────────────────────────────────────────────────────────
 $script:root = (Get-Location).Path
@@ -73,12 +73,12 @@ $script:excludeExts = @(
 
 $script:excludeFiles = @(
     '.gitignore', '.gitattributes', 'build.env',
-    'arcclaw-source.zip', 'arcclaw-source.7z', '.env'
+    'amsha-source.zip', 'amsha-source.7z', '.env'
 )
 
 $script:excludeRelPaths = @(
-    'arcclaw-app/src/main/resources/META-INF/resources',
-    'arcclaw-app/src/main/resources/native',
+    'app/src/main/resources/META-INF/resources',
+    'app/src/main/resources/native',
     '.playwright-driver',
     '.mvn',
     'scratch'
@@ -90,7 +90,7 @@ $script:includeFiles = @(
 )
 
 $script:includeRelPaths = @(
-    'docs-test/arcclaw_rg_cheatsheet.md'
+    'docs-test/amsha_rg_cheatsheet.md'
 )
 
 function ShouldExclude($item, $relPath) {

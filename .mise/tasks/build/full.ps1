@@ -47,7 +47,7 @@ try {
 
     # Phase 2: Build UI (prebuild auto-generates TypeScript DTOs from OpenAPI spec)
     try {
-        Push-Location arcclaw-ui
+        Push-Location ui
         npm install
         npm run build
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -57,9 +57,9 @@ try {
     }
 
     # Phase 3: Copy UI dist to Quarkus resources
-    $target = "arcclaw-app/src/main/resources/META-INF/resources"
+    $target = "app/src/main/resources/META-INF/resources"
     if (-not (Test-Path $target)) { New-Item -ItemType Directory -Path $target -Force | Out-Null }
-    Copy-Item -Path "arcclaw-ui/dist/*" -Destination $target -Recurse -Force
+    Copy-Item -Path "ui/dist/*" -Destination $target -Recurse -Force
     Write-Host '✅  UI copied to Quarkus resources.'
 
     Write-Host '✅  Full build complete.'

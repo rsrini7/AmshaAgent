@@ -20,9 +20,9 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 # Create network if not exists
-podman network exists arcclaw-net
+podman network exists amsha-net
 if ($LASTEXITCODE -ne 0) {
-    podman network create arcclaw-net 2>&1 | Out-Null
+    podman network create amsha-net 2>&1 | Out-Null
 }
 
 # Start the container
@@ -34,7 +34,7 @@ $runArgs = @(
     '-v', 'sonarqube_data:/opt/sonarqube/data',
     '-v', 'sonarqube_extensions:/opt/sonarqube/extensions',
     '-v', 'sonarqube_logs:/opt/sonarqube/logs',
-    '--network', 'arcclaw-net',
+    '--network', 'amsha-net',
     'sonarqube:latest'
 )
 & podman $runArgs

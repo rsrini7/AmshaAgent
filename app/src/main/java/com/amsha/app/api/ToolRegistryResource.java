@@ -1,0 +1,31 @@
+package com.amsha.app.api;
+
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+import jakarta.ws.rs.GET;
+import jakarta.ws.rs.Path;
+import jakarta.ws.rs.Produces;
+import jakarta.ws.rs.core.MediaType;
+import jakarta.ws.rs.core.Response;
+
+import com.amsha.core.tools.ToolRegistry;
+
+import org.eclipse.microprofile.openapi.annotations.Operation;
+
+import io.smallrye.common.annotation.RunOnVirtualThread;
+
+@ApplicationScoped
+@Path("/tools")
+@Produces(MediaType.APPLICATION_JSON)
+@RunOnVirtualThread
+public class ToolRegistryResource {
+
+    @Inject
+    ToolRegistry toolRegistry;
+
+    @GET
+    @Operation(summary = "Retrieve JSON schemas and descriptors for all registered agent tools")
+    public Response listTools() {
+        return Response.ok(toolRegistry.listToolDescriptors()).build();
+    }
+}

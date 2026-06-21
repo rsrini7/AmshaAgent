@@ -2,7 +2,7 @@
 #MISE shell = "pwsh -NonInteractive -Command"
 #MISE description = "Ensure generated TypeScript DTOs exist (create stubs if missing)"
 $ErrorActionPreference = 'Stop'
-$modelsDir = "arcclaw-ui/src/api/generated/models"
+$modelsDir = "ui/src/api/generated/models"
 $stubFiles = @(
   "AgentStatusDto.ts",
   "AgentEvent.ts",
@@ -17,8 +17,8 @@ if (-not $missing) { Write-Host '✅  Generated DTOs already exist.'; exit 0 }
 
 Write-Host 'ℹ️   Generated DTOs missing — creating stubs from build output...'
 try {
-  if (-not (Test-Path 'arcclaw-ui')) { Write-Host '❌  arcclaw-ui/ not found.'; exit 1 }
-  Push-Location arcclaw-ui
+  if (-not (Test-Path 'ui')) { Write-Host '❌  ui/ not found.'; exit 1 }
+  Push-Location ui
   npm run generate-dto
 } finally {
   Pop-Location
