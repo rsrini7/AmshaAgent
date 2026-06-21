@@ -9,6 +9,7 @@ import com.arcclaw.core.agent.event.AgentStateChangedEvent;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.event.DomainEventBus;
 import com.arcclaw.core.event.EventTypeCatalog;
+
 import org.jboss.logging.Logger;
 
 /**
@@ -49,8 +50,9 @@ public class LoopExitPublisher {
         // Delegate sub-sessions skip start signals to avoid UI noise
         if (context.sessionId().contains(AgentSentinels.DELEGATE_SESSION_SENTINEL)) return;
 
-        eventBus.publish(EventTypeCatalog.AGENT_STATE_CHANGED, new AgentStateChangedEvent(
-                context.sessionId(), context.agentRole(), "active", context.goal()));
+        eventBus.publish(
+                EventTypeCatalog.AGENT_STATE_CHANGED,
+                new AgentStateChangedEvent(context.sessionId(), context.agentRole(), "active", context.goal()));
     }
 
     /**
@@ -65,27 +67,25 @@ public class LoopExitPublisher {
         signalBridgeIfCli(context, result);
     }
 
-
     // -------------------------------------------------------------------------
     // Private helpers
     // -------------------------------------------------------------------------
 
-    private void fireStateEvent(String sessionId, String agentRole,
-                                 String goal, AgentResult result) {
+    private void fireStateEvent(String sessionId, String agentRole, String goal, AgentResult result) {
         // Delegate sub-sessions have no UI observer - skip silently.
-        if (sessionId != null
-                && sessionId.contains(AgentSentinels.DELEGATE_SESSION_SENTINEL)) {
+        if (sessionId != null && sessionId.contains(AgentSentinels.DELEGATE_SESSION_SENTINEL)) {
             return;
         }
 
         String status = toWireStatus(result);
         try {
-            eventBus.publish(EventTypeCatalog.AGENT_STATE_CHANGED,
+            eventBus.publish(
+                    EventTypeCatalog.AGENT_STATE_CHANGED,
                     new AgentStateChangedEvent(sessionId, agentRole, status, goal));
         } catch (Exception e) {
             // CDI observer failures must never corrupt the result pipeline.
-            log.warnf("LoopExitPublisher: stateChangedEvent fire failed for session %s - %s",
-                    sessionId, e.getMessage());
+            log.warnf(
+                    "LoopExitPublisher: stateChangedEvent fire failed for session %s - %s", sessionId, e.getMessage());
         }
     }
 
@@ -107,11 +107,11 @@ public class LoopExitPublisher {
      */
     static String toWireStatus(AgentResult result) {
         return switch (result) {
-            case AgentResult.Finished _           -> "idle";
+            case AgentResult.Finished _ -> "idle";
             case AgentResult.StructuredFinished _ -> "idle";
-            case AgentResult.AwaitingApproval _   -> "waiting-approval";
-            case AgentResult.AwaitingRetry _      -> "waiting-retry";
-            default                               -> "error";
+            case AgentResult.AwaitingApproval _ -> "waiting-approval";
+            case AgentResult.AwaitingRetry _ -> "waiting-retry";
+            default -> "error";
         };
     }
 }

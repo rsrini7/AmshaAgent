@@ -1,15 +1,16 @@
 package com.arcclaw.channel.telegram;
 
-import java.util.List;
-import java.util.regex.Pattern;
-
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
+
+import java.util.List;
+import java.util.regex.Pattern;
 
 import com.arcclaw.channel.api.ChannelJobNotifier;
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ChannelUser;
 import com.arcclaw.common.util.LogUtil;
+
 import org.apache.camel.component.telegram.model.InlineKeyboardMarkup;
 import org.jboss.logging.Logger;
 
@@ -45,12 +46,14 @@ public class TelegramJobNotifier implements ChannelJobNotifier {
             ChannelUser user = new ChannelUser(recipient, recipient, "user", ChannelType.TELEGRAM);
             sender.sendRaw(user, renderedMessage);
         } catch (Exception e) {
-            log.errorf("CRON-NOTIFY-FAIL recipient=%s sessionId=%s:\n%s", recipient, sessionId, LogUtil.trimmedStack(e));
+            log.errorf(
+                    "CRON-NOTIFY-FAIL recipient=%s sessionId=%s:\n%s", recipient, sessionId, LogUtil.trimmedStack(e));
         }
     }
 
     @Override
-    public void notifyApprovalRequired(String recipient, String cronSessionId, String toolName, String renderedMessage) {
+    public void notifyApprovalRequired(
+            String recipient, String cronSessionId, String toolName, String renderedMessage) {
         if (recipient == null || !RECIPIENT_ID_PATTERN.matcher(recipient).matches()) {
             log.warnf("CRON-APPROVAL-NOTIFY skipped - chatId '%s' is not a valid Telegram ID", recipient);
             return;
@@ -62,7 +65,9 @@ public class TelegramJobNotifier implements ChannelJobNotifier {
             sender.sendWithKeyboard(user, escapeMdV2(renderedMessage), markup);
             log.infof("CRON-APPROVAL-NOTIFY sent to=%s session=%s tool=%s", recipient, cronSessionId, toolName);
         } catch (Exception e) {
-            log.errorf("CRON-APPROVAL-NOTIFY-FAIL recipient=%s session=%s:\n%s", recipient, cronSessionId, LogUtil.trimmedStack(e));
+            log.errorf(
+                    "CRON-APPROVAL-NOTIFY-FAIL recipient=%s session=%s:\n%s",
+                    recipient, cronSessionId, LogUtil.trimmedStack(e));
         }
     }
 

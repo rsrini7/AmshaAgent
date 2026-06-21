@@ -1,9 +1,9 @@
 package com.arcclaw.core.security;
 
+import jakarta.enterprise.context.ApplicationScoped;
+
 import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
-
-import jakarta.enterprise.context.ApplicationScoped;
 
 import org.bouncycastle.crypto.InvalidCipherTextException;
 import org.bouncycastle.crypto.engines.AESEngine;
@@ -54,11 +54,7 @@ public class AesGcmSivCipher {
         GCMSIVBlockCipher cipher = new GCMSIVBlockCipher(AESEngine.newInstance());
         byte[] aadBytes = aad.getBytes(StandardCharsets.UTF_8);
 
-        AEADParameters params = new AEADParameters(
-                new KeyParameter(key.get()),
-                MAC_SIZE_BITS,
-                nonce,
-                aadBytes);
+        AEADParameters params = new AEADParameters(new KeyParameter(key.get()), MAC_SIZE_BITS, nonce, aadBytes);
 
         cipher.init(true, params); // true = encrypt
 
@@ -91,11 +87,7 @@ public class AesGcmSivCipher {
         GCMSIVBlockCipher cipher = new GCMSIVBlockCipher(AESEngine.newInstance());
         byte[] aadBytes = aad.getBytes(StandardCharsets.UTF_8);
 
-        AEADParameters params = new AEADParameters(
-                new KeyParameter(key.get()),
-                MAC_SIZE_BITS,
-                nonce,
-                aadBytes);
+        AEADParameters params = new AEADParameters(new KeyParameter(key.get()), MAC_SIZE_BITS, nonce, aadBytes);
 
         cipher.init(false, params); // false = decrypt
 
@@ -117,6 +109,6 @@ public class AesGcmSivCipher {
     /**
      * Simple DTO to hold encryption output.
      */
-    public record CipherResult(byte[] ciphertext, byte[] nonce) {
-    }
+    @SuppressWarnings("ArrayRecordComponent") // byte[] for cryptographic data is correct
+    public record CipherResult(byte[] ciphertext, byte[] nonce) {}
 }

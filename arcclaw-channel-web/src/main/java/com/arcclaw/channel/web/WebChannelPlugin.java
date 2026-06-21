@@ -14,11 +14,20 @@ import com.arcclaw.channel.api.ReplyRenderer;
 @ApplicationScoped
 public class WebChannelPlugin implements ChannelPlugin {
 
-    @Inject WebChannelSender sender;
-    @Inject WebReplyRenderer renderer;
-    @Inject WebAllowlist allowlist;
-    @Inject WebJobNotifier jobNotifier;
-    @Inject WebChannelDaemon daemon;
+    @Inject
+    WebChannelSender sender;
+
+    @Inject
+    WebReplyRenderer renderer;
+
+    @Inject
+    WebAllowlist allowlist;
+
+    @Inject
+    WebJobNotifier jobNotifier;
+
+    @Inject
+    WebChannelDaemon daemon;
 
     @Override
     public ChannelType channelType() {

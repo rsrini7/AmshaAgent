@@ -2,6 +2,7 @@ package com.arcclaw.core.task;
 
 import java.time.Instant;
 import java.util.LinkedHashMap;
+import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -27,14 +28,7 @@ import java.util.Map;
  * @param updatedAt  When the task was last modified.
  * @param body       Markdown body content (after frontmatter).
  */
-public record TaskFile(
-    String id,
-    String name,
-    TaskState status,
-    Instant createdAt,
-    Instant updatedAt,
-    String body
-) {
+public record TaskFile(String id, String name, TaskState status, Instant createdAt, Instant updatedAt, String body) {
     public TaskFile withStatus(TaskState newStatus) {
         return new TaskFile(id, name, newStatus, createdAt, Instant.now(), body);
     }
@@ -50,7 +44,7 @@ public record TaskFile(
         Map<String, String> fm = new LinkedHashMap<>();
         fm.put("id", id);
         fm.put("name", name);
-        fm.put("status", status.name().toLowerCase());
+        fm.put("status", status.name().toLowerCase(Locale.ROOT));
         fm.put("createdAt", createdAt.toString());
         fm.put("updatedAt", updatedAt.toString());
         return fm;

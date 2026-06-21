@@ -11,9 +11,11 @@ import com.arcclaw.mcp.tool.DynamicToolCapabilityRegistry;
 import com.arcclaw.mcp.tool.McpTransportType;
 import com.arcclaw.mcp.transport.McpClientService;
 import com.arcclaw.mcp.transport.PodmanMcpTransport;
-import io.smallrye.mutiny.Uni;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+
+import io.smallrye.mutiny.Uni;
 
 class ExternalMcpToolAdapterTest {
 
@@ -38,9 +40,11 @@ class ExternalMcpToolAdapterTest {
 
     @Test
     void testInvokeStdioTool() {
-        DynamicToolCapability cap = new DynamicToolCapability("tool", "desc", "server", McpTransportType.STDIO, false, "{}");
+        DynamicToolCapability cap =
+                new DynamicToolCapability("tool", "desc", "server", McpTransportType.STDIO, false, "{}");
         when(mockRegistry.find("tool")).thenReturn(Optional.of(cap));
-        when(mockPodman.invoke("server", "tool", "{}")).thenReturn(Uni.createFrom().item("ok"));
+        when(mockPodman.invoke("server", "tool", "{}"))
+                .thenReturn(Uni.createFrom().item("ok"));
 
         String result = adapter.invoke("tool", "{}");
         assertEquals("ok", result);
@@ -48,7 +52,8 @@ class ExternalMcpToolAdapterTest {
 
     @Test
     void testInvokeHttpTool() {
-        DynamicToolCapability cap = new DynamicToolCapability("tool", "desc", "server", McpTransportType.HTTP_SSE, false, "{}");
+        DynamicToolCapability cap =
+                new DynamicToolCapability("tool", "desc", "server", McpTransportType.HTTP_SSE, false, "{}");
         when(mockRegistry.find("tool")).thenReturn(Optional.of(cap));
         when(mockClient.invoke("server", "tool", "{}")).thenReturn("http-ok");
 

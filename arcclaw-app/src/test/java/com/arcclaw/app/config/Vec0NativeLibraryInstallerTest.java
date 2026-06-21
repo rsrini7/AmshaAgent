@@ -24,14 +24,15 @@ class Vec0NativeLibraryInstallerTest {
     @Test
     void nativeExtensionMatchesOs() {
         String ext = Vec0NativeLibraryInstaller.nativeExtension();
-        assertTrue(ext.equals(".so") || ext.equals(".dll") || ext.equals(".dylib"), "ext must be one of .so, .dll, .dylib");
+        assertTrue(
+                ext.equals(".so") || ext.equals(".dll") || ext.equals(".dylib"),
+                "ext must be one of .so, .dll, .dylib");
     }
 
     @Test
     void resourceExistsInJarForCurrentPlatform() throws IOException {
-        String resourceName = "/native/vec0/vec0-" +
-            Vec0NativeLibraryInstaller.osArchKey() +
-            Vec0NativeLibraryInstaller.nativeExtension();
+        String resourceName = "/native/vec0/vec0-" + Vec0NativeLibraryInstaller.osArchKey()
+                + Vec0NativeLibraryInstaller.nativeExtension();
         try (InputStream in = Vec0NativeLibraryInstallerTest.class.getResourceAsStream(resourceName)) {
             assertNotNull(in, "Vec0 binary resource " + resourceName + " must exist in the JAR");
         }

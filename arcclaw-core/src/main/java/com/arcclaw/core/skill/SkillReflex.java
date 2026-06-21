@@ -1,11 +1,11 @@
 package com.arcclaw.core.skill;
 
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+
 import java.util.List;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
-
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
 
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.reflex.AgentReflex;
@@ -40,11 +40,14 @@ public class SkillReflex implements AgentReflex {
         }
 
         String list = activeSkills.stream()
-            .map(e -> String.format("- **%s**: %s (Routes: %d)",
-                e.definition().name(),
-                e.definition().description().isBlank() ? "No description" : e.definition().description(),
-                e.triggerPatterns().length))
-            .collect(Collectors.joining("\n"));
+                .map(e -> String.format(
+                        "- **%s**: %s (Routes: %d)",
+                        e.definition().name(),
+                        e.definition().description().isBlank()
+                                ? "No description"
+                                : e.definition().description(),
+                        e.triggerPatterns().size()))
+                .collect(Collectors.joining("\n"));
 
         return ReflexResult.respond("### Active Skills\n\n" + list, context);
     }

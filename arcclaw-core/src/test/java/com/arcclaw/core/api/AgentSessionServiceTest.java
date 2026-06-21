@@ -38,6 +38,7 @@ import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.util.MdcKeys;
+
 import org.jboss.logging.Logger;
 import org.jboss.logging.MDC;
 import org.junit.jupiter.api.AfterEach;
@@ -113,31 +114,38 @@ class AgentSessionServiceTest {
                 checkpointApprovalService,
                 auditService,
                 vThreads,
-                5
-        );
+                5);
 
         mockedScope = mockStatic(WorkspaceScopeHolder.class);
         mockedContext = mockStatic(WorkspaceContext.class);
 
-        mockedContext.when(() -> WorkspaceContext.run(anyString(), anyString(), anyString(), any(AutonomyLevel.class), anyString(), anyString(), any(Callable.class)))
+        mockedContext
+                .when(() -> WorkspaceContext.run(
+                        anyString(),
+                        anyString(),
+                        anyString(),
+                        any(AutonomyLevel.class),
+                        anyString(),
+                        anyString(),
+                        any(Callable.class)))
                 .thenAnswer(inv -> ((Callable<?>) inv.getArgument(6)).call());
 
-        mockedContext.when(WorkspaceContext::resolveUserId)
-                .thenAnswer(inv -> MDC.get(MdcKeys.USER_ID));
+        mockedContext.when(WorkspaceContext::resolveUserId).thenAnswer(inv -> MDC.get(MdcKeys.USER_ID));
 
-        mockedContext.when(WorkspaceContext::getUserIdOrUnknown)
-                .thenAnswer(inv -> {
-                    String uid = (String) MDC.get(MdcKeys.USER_ID);
-                    return (uid != null && !uid.isBlank()) ? uid : "unknown";
-                });
+        mockedContext.when(WorkspaceContext::getUserIdOrUnknown).thenAnswer(inv -> {
+            String uid = (String) MDC.get(MdcKeys.USER_ID);
+            return (uid != null && !uid.isBlank()) ? uid : "unknown";
+        });
 
-        mockedScope.when(() -> WorkspaceScopeHolder.run(anyString(), any(Runnable.class)))
+        mockedScope
+                .when(() -> WorkspaceScopeHolder.run(anyString(), any(Runnable.class)))
                 .thenAnswer(inv -> {
                     ((Runnable) inv.getArgument(1)).run();
                     return null;
                 });
 
-        mockedScope.when(() -> WorkspaceScopeHolder.call(anyString(), any(Callable.class)))
+        mockedScope
+                .when(() -> WorkspaceScopeHolder.call(anyString(), any(Callable.class)))
                 .thenAnswer(inv -> ((Callable<?>) inv.getArgument(1)).call());
 
         lenient().when(heartbeatTracker.exists(anyString())).thenReturn(true);
@@ -177,9 +185,10 @@ class AgentSessionServiceTest {
     void testRunSync_finished_returns200() {
         RunAgentRequest request = new RunAgentRequest("goal", "coordinator", 5);
         AgentResult result = mock(AgentResult.Finished.class);
-        when(agentLoop.run(anyString(), anyString(), anyString(), any(), anyInt(), any())).thenReturn(result);
-        AgentResponseMapper.MappedResult mapped = new AgentResponseMapper.MappedResult(
-            new AgentResponseMapper.AgentResponse("done", 10, 5), 200);
+        when(agentLoop.run(anyString(), anyString(), anyString(), any(), anyInt(), any()))
+                .thenReturn(result);
+        AgentResponseMapper.MappedResult mapped =
+                new AgentResponseMapper.MappedResult(new AgentResponseMapper.AgentResponse("done", 10, 5), 200);
         when(responseMapper.mapResult(any(), any(Boolean.class))).thenReturn(mapped);
 
         ServiceResult<Object> sr = service.runSync("sess1", TEST_USER, request);
@@ -192,9 +201,10 @@ class AgentSessionServiceTest {
     void testRunSync_complianceViolation_returns451() {
         RunAgentRequest request = new RunAgentRequest("goal", "coordinator", 5);
         AgentResult result = mock(AgentResult.Failed.class);
-        when(agentLoop.run(anyString(), anyString(), anyString(), any(), anyInt(), any())).thenReturn(result);
-        AgentResponseMapper.MappedResult mapped = new AgentResponseMapper.MappedResult(
-            new ArcClawErrorResponse("Violation"), 451);
+        when(agentLoop.run(anyString(), anyString(), anyString(), any(), anyInt(), any()))
+                .thenReturn(result);
+        AgentResponseMapper.MappedResult mapped =
+                new AgentResponseMapper.MappedResult(new ArcClawErrorResponse("Violation"), 451);
         when(responseMapper.mapResult(any(), any(Boolean.class))).thenReturn(mapped);
 
         ServiceResult<Object> sr = service.runSync("sess1", TEST_USER, request);
@@ -259,9 +269,11 @@ class AgentSessionServiceTest {
         when(checkpointApprovalService.denyAll(anyString(), anyString())).thenReturn(cp);
 
         Mockito.doAnswer(inv -> {
-            ((Runnable) inv.getArgument(0)).run();
-            return null;
-        }).when(vThreads).execute(any(Runnable.class));
+                    ((Runnable) inv.getArgument(0)).run();
+                    return null;
+                })
+                .when(vThreads)
+                .execute(any(Runnable.class));
 
         Consumer<ServiceResult<Object>> callback = Mockito.mock(Consumer.class);
         service.runAsync("sess1", TEST_USER, request, callback);
@@ -279,9 +291,11 @@ class AgentSessionServiceTest {
         when(checkpointApprovalService.approveAll(anyString(), anyString())).thenReturn(cp);
 
         Mockito.doAnswer(inv -> {
-            ((Runnable) inv.getArgument(0)).run();
-            return null;
-        }).when(vThreads).execute(any(Runnable.class));
+                    ((Runnable) inv.getArgument(0)).run();
+                    return null;
+                })
+                .when(vThreads)
+                .execute(any(Runnable.class));
 
         Consumer<ServiceResult<Object>> callback = Mockito.mock(Consumer.class);
         service.runAsync("sess1", TEST_USER, request, callback);
@@ -306,8 +320,12 @@ class AgentSessionServiceTest {
 
         Assertions.assertTrue(result.isPresent());
         assertEquals("SESSION_ACCESS_DENIED", result.get().errorCode());
-        verify(auditService).recordMandatory(
-            ArgumentMatchers.eq("sess-1"), ArgumentMatchers.eq("key-B"), any(),
-            ArgumentMatchers.eq(SecurityEventType.UNAUTHORIZED_ACCESS), any());
+        verify(auditService)
+                .recordMandatory(
+                        ArgumentMatchers.eq("sess-1"),
+                        ArgumentMatchers.eq("key-B"),
+                        any(),
+                        ArgumentMatchers.eq(SecurityEventType.UNAUTHORIZED_ACCESS),
+                        any());
     }
 }

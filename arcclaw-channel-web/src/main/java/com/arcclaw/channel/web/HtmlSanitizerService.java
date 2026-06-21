@@ -19,31 +19,63 @@ public class HtmlSanitizerService {
 
     public HtmlSanitizerService() {
         policyFactory = new HtmlPolicyBuilder()
-            .allowElements(
-                "p", "br", "strong", "em", "b", "i", "u",
-                "code", "pre", "span",
-                "ul", "ol", "li",
-                "a",
-                "h1", "h2", "h3", "h4", "h5", "h6",
-                "blockquote", "q", "cite",
-                "table", "thead", "tbody", "tr", "th", "td",
-                "img",
-                "sub", "sup",
-                "hr",
-                "div"
-            )
-            .allowAttributes("href").onElements("a")
-            .allowAttributes("target").onElements("a")
-            .allowAttributes("title").onElements("a", "abbr", "acronym", "img")
-            .allowAttributes("rel").onElements("a")
-            .allowAttributes("src").onElements("img")
-            .allowAttributes("alt").onElements("img")
-            .allowAttributes("class").onElements("code", "span", "div")
-            .allowAttributes("colspan", "rowspan").onElements("td", "th")
-            .allowAttributes("scope").onElements("th")
-            .allowAttributes("cite").onElements("blockquote", "q")
-            .allowStandardUrlProtocols()
-            .toFactory();
+                .allowElements(
+                        "p",
+                        "br",
+                        "strong",
+                        "em",
+                        "b",
+                        "i",
+                        "u",
+                        "code",
+                        "pre",
+                        "span",
+                        "ul",
+                        "ol",
+                        "li",
+                        "a",
+                        "h1",
+                        "h2",
+                        "h3",
+                        "h4",
+                        "h5",
+                        "h6",
+                        "blockquote",
+                        "q",
+                        "cite",
+                        "table",
+                        "thead",
+                        "tbody",
+                        "tr",
+                        "th",
+                        "td",
+                        "img",
+                        "sub",
+                        "sup",
+                        "hr",
+                        "div")
+                .allowAttributes("href")
+                .onElements("a")
+                .allowAttributes("target")
+                .onElements("a")
+                .allowAttributes("title")
+                .onElements("a", "abbr", "acronym", "img")
+                .allowAttributes("rel")
+                .onElements("a")
+                .allowAttributes("src")
+                .onElements("img")
+                .allowAttributes("alt")
+                .onElements("img")
+                .allowAttributes("class")
+                .onElements("code", "span", "div")
+                .allowAttributes("colspan", "rowspan")
+                .onElements("td", "th")
+                .allowAttributes("scope")
+                .onElements("th")
+                .allowAttributes("cite")
+                .onElements("blockquote", "q")
+                .allowStandardUrlProtocols()
+                .toFactory();
     }
 
     /**

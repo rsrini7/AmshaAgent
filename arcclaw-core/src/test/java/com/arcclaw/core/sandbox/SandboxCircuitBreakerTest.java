@@ -33,7 +33,7 @@ public class SandboxCircuitBreakerTest {
         circuitBreaker = new TestableSandboxCircuitBreaker();
         circuitBreaker.mockNanoTime = System.nanoTime();
         circuitBreaker.mockTimeMillis = System.currentTimeMillis();
-        
+
         // Default values usually injected by Quarkus, setting them manually for plain Mockito/JUnit
         circuitBreaker.podmanFailureThreshold = 3;
         circuitBreaker.resetTimeoutSeconds = 30;
@@ -56,10 +56,10 @@ public class SandboxCircuitBreakerTest {
     void testShouldAttemptPodman_openState_transitionsToHalfOpen_afterTimeout() {
         circuitBreaker.resetTimeoutSeconds = 1; // 1 second for fast test
         circuitBreaker.openCircuit();
-        
+
         // Advance monotonic time by 1.1 seconds
         circuitBreaker.mockNanoTime += TimeUnit.MILLISECONDS.toNanos(1100);
-        
+
         assertTrue(circuitBreaker.shouldAttemptPodman());
         assertEquals(SandboxCircuitBreaker.CircuitBreakerState.HALF_OPEN, circuitBreaker.getState());
     }
@@ -68,15 +68,17 @@ public class SandboxCircuitBreakerTest {
     void testShouldAttemptPodman_immuneToWallClockShifts() {
         circuitBreaker.resetTimeoutSeconds = 30;
         circuitBreaker.openCircuit();
-        
+
         // Simulate a system clock adjustment backwards by 1 hour (NTP sync, etc.)
         circuitBreaker.mockTimeMillis -= TimeUnit.HOURS.toMillis(1);
-        
+
         // Monotonic time correctly advances 31 seconds
         circuitBreaker.mockNanoTime += TimeUnit.SECONDS.toNanos(31);
-        
-        // Should STILL successfully transition to HALF_OPEN because we measure nanos, not millis! 
-        assertTrue(circuitBreaker.shouldAttemptPodman(), "Should reset based on monotonic time regardless of wall-clock shifts");
+
+        // Should STILL successfully transition to HALF_OPEN because we measure nanos, not millis!
+        assertTrue(
+                circuitBreaker.shouldAttemptPodman(),
+                "Should reset based on monotonic time regardless of wall-clock shifts");
         assertEquals(SandboxCircuitBreaker.CircuitBreakerState.HALF_OPEN, circuitBreaker.getState());
     }
 
@@ -99,7 +101,7 @@ public class SandboxCircuitBreakerTest {
         circuitBreaker.recordFailure(state); // 1
         circuitBreaker.recordFailure(state); // 2
         circuitBreaker.recordFailure(state); // 3 -> Opening
-        
+
         assertEquals(SandboxCircuitBreaker.CircuitBreakerState.OPEN, circuitBreaker.getState());
     }
 
@@ -109,11 +111,10 @@ public class SandboxCircuitBreakerTest {
         circuitBreaker.resetTimeoutSeconds = 1;
         circuitBreaker.mockNanoTime += TimeUnit.SECONDS.toNanos(2);
         circuitBreaker.shouldAttemptPodman();
-        
+
         assertEquals(SandboxCircuitBreaker.CircuitBreakerState.HALF_OPEN, circuitBreaker.getState());
-        
+
         circuitBreaker.recordFailure(SandboxCircuitBreaker.CircuitBreakerState.HALF_OPEN);
         assertEquals(SandboxCircuitBreaker.CircuitBreakerState.OPEN, circuitBreaker.getState());
     }
-
 }

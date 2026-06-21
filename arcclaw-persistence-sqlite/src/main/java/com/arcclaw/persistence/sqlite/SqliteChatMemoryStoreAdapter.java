@@ -1,18 +1,20 @@
 package com.arcclaw.persistence.sqlite;
 
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
-
 import com.arcclaw.persistence.api.ChatMemoryDto;
 import com.arcclaw.persistence.api.ChatMemoryStorePort;
 import com.arcclaw.persistence.sqlite.jdbi.ChatMemoryJdbiDao;
+
+import org.jdbi.v3.core.Jdbi;
+
 import io.quarkus.arc.Unremovable;
 import io.quarkus.arc.properties.IfBuildProperty;
-import org.jdbi.v3.core.Jdbi;
 
 @ApplicationScoped
 @Unremovable

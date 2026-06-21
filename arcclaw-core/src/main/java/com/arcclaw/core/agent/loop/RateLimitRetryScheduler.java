@@ -1,11 +1,5 @@
 package com.arcclaw.core.agent.loop;
 
-import java.time.Duration;
-import java.time.Instant;
-import java.time.temporal.ChronoUnit;
-import java.util.List;
-import java.util.concurrent.atomic.AtomicLong;
-
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -13,15 +7,23 @@ import jakarta.enterprise.context.control.ActivateRequestContext;
 import jakarta.enterprise.event.Observes;
 import jakarta.inject.Inject;
 
+import java.time.Duration;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
+import java.util.List;
+import java.util.concurrent.atomic.AtomicLong;
+
 import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.core.domain.model.AgentCheckpoint;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
+
+import org.eclipse.microprofile.config.inject.ConfigProperty;
+import org.jboss.logging.Logger;
+
 import io.micrometer.core.instrument.MeterRegistry;
 import io.quarkus.runtime.ShutdownEvent;
 import io.quarkus.scheduler.Scheduled;
-import org.eclipse.microprofile.config.inject.ConfigProperty;
-import org.jboss.logging.Logger;
 
 /**
  * Background scheduler that polls for sessions in AWAITING_RETRY state
@@ -64,7 +66,7 @@ public class RateLimitRetryScheduler {
 
     /**
      * Polls every 30 seconds for rate-limited sessions that are ready to resume.
-     * 
+     *
      * <p>
      * <strong>§5.9 (MUST):</strong> This method is transaction-free. Atomic state
      * transition is handled by {@link StatefulAgentStore#claimForRetry(Long)}.
@@ -78,7 +80,8 @@ public class RateLimitRetryScheduler {
 
         try {
             List<AgentCheckpoint> awaiting = agentStore.findByStatus(CheckpointStatus.AWAITING_RETRY);
-            log.tracef("RateLimitRetryScheduler: scanning for ready sessions (found %d in AWAITING_RETRY)",
+            log.tracef(
+                    "RateLimitRetryScheduler: scanning for ready sessions (found %d in AWAITING_RETRY)",
                     awaiting.size());
 
             if (awaiting.isEmpty()) {
@@ -90,19 +93,18 @@ public class RateLimitRetryScheduler {
             long maxAgeSec = 0;
 
             for (AgentCheckpoint cp : awaiting) {
-                if (shuttingDown)
-                    return;
-                if (cp.getUpdatedAt() == null)
-                    continue;
+                if (shuttingDown) return;
+                if (cp.getUpdatedAt() == null) continue;
 
-                long ageSec = Duration.between(cp.getUpdatedAt(), now).getSeconds();
+                long ageSec = Duration.between(cp.getUpdatedAt(), now).toSeconds();
                 maxAgeSec = Math.max(maxAgeSec, ageSec);
 
                 long retryAfterMs = cp.getRetryAfterMs() != null ? cp.getRetryAfterMs() : defaultRetryDelayMs;
                 Instant readyAt = cp.getUpdatedAt().plus(retryAfterMs, ChronoUnit.MILLIS);
 
                 if (now.isAfter(readyAt)) {
-                    log.infof("Resuming rate-limited session %s (retryAfterMs=%d, age=%ds)",
+                    log.infof(
+                            "Resuming rate-limited session %s (retryAfterMs=%d, age=%ds)",
                             cp.getSessionId(), retryAfterMs, ageSec);
 
                     // 🟢 ATOMIC CLAIM: Transition to IN_PROGRESS in a fresh transaction inside the
@@ -112,8 +114,9 @@ public class RateLimitRetryScheduler {
                             // Offload to background thread via AgentLoop.resume
                             agentLoop.resume(cp.getSessionId(), cp.getAgentRole(), cp.getOriginalGoal());
                         } catch (Exception e) {
-                            log.errorf("Failed to resume rate-limited session %s:\n%s", cp.getSessionId(),
-                                    LogUtil.trimmedStack(e));
+                            log.errorf(
+                                    "Failed to resume rate-limited session %s:\n%s",
+                                    cp.getSessionId(), LogUtil.trimmedStack(e));
                             agentStore.markFailed(cp.getId(), "Background retry failed: " + e.getMessage());
                         }
                     } else {
@@ -156,14 +159,14 @@ public class RateLimitRetryScheduler {
             Instant cutoff = Instant.now().minus(30, ChronoUnit.MINUTES);
 
             for (AgentCheckpoint cp : awaiting) {
-                if (shuttingDown)
-                    return;
+                if (shuttingDown) return;
                 if (cp.getUpdatedAt() != null && cp.getUpdatedAt().isBefore(cutoff)) {
-                    log.errorf("Checkpoint %d is STALE in AWAITING_RETRY (updatedAt=%s). Marking as ORPHANED.",
+                    log.errorf(
+                            "Checkpoint %d is STALE in AWAITING_RETRY (updatedAt=%s). Marking as ORPHANED.",
                             cp.getId(), cp.getUpdatedAt());
 
-                    agentStore.markOrphaned(cp.getId(),
-                            "Abandoned after 30 minutes in AWAITING_RETRY (potential scheduler outage)");
+                    agentStore.markOrphaned(
+                            cp.getId(), "Abandoned after 30 minutes in AWAITING_RETRY (potential scheduler outage)");
 
                     meterRegistry.counter("arcclaw.retry.orphaned.count").increment();
                 }

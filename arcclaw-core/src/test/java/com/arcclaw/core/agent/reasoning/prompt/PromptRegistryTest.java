@@ -3,9 +3,9 @@ package com.arcclaw.core.agent.reasoning.prompt;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
-import java.lang.reflect.Field;
-
 import jakarta.enterprise.inject.Instance;
+
+import java.lang.reflect.Field;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

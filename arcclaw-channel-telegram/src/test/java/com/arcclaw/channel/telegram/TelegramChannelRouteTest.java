@@ -3,17 +3,18 @@ package com.arcclaw.channel.telegram;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
-import java.util.Map;
-
 import jakarta.inject.Inject;
 
-import io.quarkus.test.junit.QuarkusTest;
-import io.quarkus.test.junit.QuarkusTestProfile;
-import io.quarkus.test.junit.TestProfile;
+import java.util.Map;
+
 import org.apache.camel.CamelContext;
 import org.apache.camel.Route;
 import org.apache.camel.builder.AdviceWith;
 import org.junit.jupiter.api.Test;
+
+import io.quarkus.test.junit.QuarkusTest;
+import io.quarkus.test.junit.QuarkusTestProfile;
+import io.quarkus.test.junit.TestProfile;
 
 @QuarkusTest
 @TestProfile(TelegramChannelRouteTest.TelegramEnabledProfile.class)
@@ -26,9 +27,8 @@ public class TelegramChannelRouteTest {
         @Override
         public Map<String, String> getConfigOverrides() {
             return Map.of(
-                "arcclaw.channel.telegram.enabled", "true",
-                "camel.component.telegram.authorization-token", "mock-token"
-            );
+                    "arcclaw.channel.telegram.enabled", "true",
+                    "camel.component.telegram.authorization-token", "mock-token");
         }
     }
 
@@ -39,8 +39,7 @@ public class TelegramChannelRouteTest {
             a.mockEndpointsAndSkip("telegram:*");
         });
 
-        assertNotNull(context.getRoute("telegram-bot"),
-            "Route 'telegram-bot' not found");
+        assertNotNull(context.getRoute("telegram-bot"), "Route 'telegram-bot' not found");
     }
 
     @Test
@@ -53,9 +52,7 @@ public class TelegramChannelRouteTest {
         Route route = context.getRoute("telegram-bot");
         assertNotNull(route, "Route 'telegram-bot' must be registered");
         String uri = route.getEndpoint().getEndpointUri();
-        assertFalse(uri.contains("authorizationToken"),
-            "Bot token must not appear in the Camel route URI");
-        assertFalse(uri.contains("bot-token"),
-            "Bot token config key must not appear in the Camel route URI");
+        assertFalse(uri.contains("authorizationToken"), "Bot token must not appear in the Camel route URI");
+        assertFalse(uri.contains("bot-token"), "Bot token config key must not appear in the Camel route URI");
     }
 }

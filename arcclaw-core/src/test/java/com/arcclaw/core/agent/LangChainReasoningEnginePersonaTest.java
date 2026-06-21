@@ -7,6 +7,12 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import dev.langchain4j.data.message.AiMessage;
+import dev.langchain4j.data.message.ChatMessage;
+import dev.langchain4j.data.message.SystemMessage;
+import dev.langchain4j.model.chat.request.ChatRequest;
+import dev.langchain4j.model.chat.response.ChatResponse;
+
 import java.util.Collections;
 import java.util.Set;
 
@@ -29,17 +35,14 @@ import com.arcclaw.core.observability.AgentOtelContext;
 import com.arcclaw.core.tools.ToolRegistry;
 import com.arcclaw.core.util.TextPatternUtils;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import dev.langchain4j.data.message.AiMessage;
-import dev.langchain4j.data.message.ChatMessage;
-import dev.langchain4j.data.message.SystemMessage;
-import dev.langchain4j.model.chat.request.ChatRequest;
-import dev.langchain4j.model.chat.response.ChatResponse;
-import io.micrometer.core.instrument.MeterRegistry;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.ArgumentMatchers;
 import org.mockito.Mockito;
+
+import io.micrometer.core.instrument.MeterRegistry;
 
 class LangChainReasoningEnginePersonaTest {
 
@@ -75,22 +78,33 @@ class LangChainReasoningEnginePersonaTest {
         when(mockResponse.aiMessage()).thenReturn(AiMessage.aiMessage("mock response"));
         when(mockLlmProviderPort.nextStep(any(ChatRequest.class))).thenReturn(mockResponse);
 
-        ReasoningStep expectedStep = ReasoningStep.pending("mock thought", ReasoningStep.FINISH, Collections.emptyMap(), 0, 0);
+        ReasoningStep expectedStep =
+                ReasoningStep.pending("mock thought", ReasoningStep.FINISH, Collections.emptyMap(), 0, 0);
         when(mockStepParser.parse(any(), any(), any())).thenReturn(expectedStep);
 
         // 3. Setup Collaborators
-        ReasoningMessageAssembler messageAssembler = new ReasoningMessageAssembler(mockHistoryAssembler, mockToolRegistry);
+        ReasoningMessageAssembler messageAssembler =
+                new ReasoningMessageAssembler(mockHistoryAssembler, mockToolRegistry);
         RecoveryProcessor recoveryProcessor = new RecoveryProcessor(new ObjectMapper(), new TextPatternUtils());
         ReasoningValidator reasoningValidator = new ReasoningValidator(mock(CompactionSummaryCache.class));
-        StructuredOutputProcessor structuredOutputProcessor = new StructuredOutputProcessor(mockPromptBuilder, mockLlmProviderPort, mockGovernanceLayer, mockOtelContext);
+        StructuredOutputProcessor structuredOutputProcessor = new StructuredOutputProcessor(
+                mockPromptBuilder, mockLlmProviderPort, mockGovernanceLayer, mockOtelContext);
 
         // 4. Instantiate engine using full constructor
         engine = new LangChainReasoningEngine(
-            mockLlmProviderPort, mockRoleRegistry, mockPromptBuilder,
-            mockRateLimitTracker, mockIntentDetector,
-            mockMeterRegistry, new TextPatternUtils(),
-            mockStepParser, messageAssembler, recoveryProcessor, structuredOutputProcessor, reasoningValidator, null
-        );
+                mockLlmProviderPort,
+                mockRoleRegistry,
+                mockPromptBuilder,
+                mockRateLimitTracker,
+                mockIntentDetector,
+                mockMeterRegistry,
+                new TextPatternUtils(),
+                mockStepParser,
+                messageAssembler,
+                recoveryProcessor,
+                structuredOutputProcessor,
+                reasoningValidator,
+                null);
 
         // 5. Inject otelContext via reflection (field injection, not constructor)
         try {
@@ -107,7 +121,8 @@ class LangChainReasoningEnginePersonaTest {
         // Arrange
         String expectedPrompt = "Custom test persona";
         // Use any() for all String arguments because sessionId might be null in mock context
-        when(mockPromptBuilder.build(any(), any(), any(), any(), ArgumentMatchers.anyBoolean())).thenReturn(expectedPrompt);
+        when(mockPromptBuilder.build(any(), any(), any(), any(), ArgumentMatchers.anyBoolean()))
+                .thenReturn(expectedPrompt);
 
         AgentExecutionContext context = mock(AgentExecutionContext.class);
         when(context.sessionId()).thenReturn("s1");
@@ -118,7 +133,7 @@ class LangChainReasoningEnginePersonaTest {
         // Assert
         ArgumentCaptor<ChatRequest> captor = ArgumentCaptor.forClass(ChatRequest.class);
         Mockito.verify(mockLlmProviderPort).nextStep(captor.capture());
-        
+
         String actualPrompt = findSystemMessageText(captor.getValue());
         assertTrue(expectedPrompt.equals(actualPrompt), "System prompt should match the one from builder");
     }
@@ -129,8 +144,9 @@ class LangChainReasoningEnginePersonaTest {
         String persona = "You are Vishnu, the Coordinator. You are the main orchestrator...";
         String architecture = "YOUR INTERNAL ARCHITECTURE (THE TRIMURTI...):";
         String prompt = persona + "\n\n" + architecture;
-        
-        when(mockPromptBuilder.build(any(), any(), any(), any(), ArgumentMatchers.anyBoolean())).thenReturn(prompt);
+
+        when(mockPromptBuilder.build(any(), any(), any(), any(), ArgumentMatchers.anyBoolean()))
+                .thenReturn(prompt);
 
         AgentExecutionContext context = mock(AgentExecutionContext.class);
         when(context.sessionId()).thenReturn("s1");
@@ -141,7 +157,7 @@ class LangChainReasoningEnginePersonaTest {
         // Assert
         ArgumentCaptor<ChatRequest> captor = ArgumentCaptor.forClass(ChatRequest.class);
         Mockito.verify(mockLlmProviderPort).nextStep(captor.capture());
-        
+
         String actualPrompt = findSystemMessageText(captor.getValue());
         assertTrue(actualPrompt != null && !actualPrompt.isBlank(), "Should have a non-blank system message");
         assertTrue(actualPrompt.contains("You are Vishnu"), "Should contain Vishnu persona");
@@ -152,7 +168,8 @@ class LangChainReasoningEnginePersonaTest {
     void testSpecialistPersonaDoesNotContainArchitectureContextByDefaultUnlessCoordinator() {
         // Arrange
         String persona = "You are Shiva, the Debugger and Code Analyst.";
-        when(mockPromptBuilder.build(any(), any(), any(), any(), ArgumentMatchers.anyBoolean())).thenReturn(persona);
+        when(mockPromptBuilder.build(any(), any(), any(), any(), ArgumentMatchers.anyBoolean()))
+                .thenReturn(persona);
 
         AgentExecutionContext context = mock(AgentExecutionContext.class);
         when(context.sessionId()).thenReturn("s1");
@@ -163,11 +180,13 @@ class LangChainReasoningEnginePersonaTest {
         // Assert
         ArgumentCaptor<ChatRequest> captor = ArgumentCaptor.forClass(ChatRequest.class);
         Mockito.verify(mockLlmProviderPort).nextStep(captor.capture());
-        
+
         String actualPrompt = findSystemMessageText(captor.getValue());
         assertTrue(actualPrompt != null && !actualPrompt.isBlank(), "Should have a non-blank system message");
         assertTrue(actualPrompt.contains("You are Shiva"), "Should contain Shiva persona");
-        assertFalse(actualPrompt.contains("THE TRIMURTI"), "Specialist should NOT receive architecture context unless explicitly added");
+        assertFalse(
+                actualPrompt.contains("THE TRIMURTI"),
+                "Specialist should NOT receive architecture context unless explicitly added");
     }
 
     private String findSystemMessageText(ChatRequest request) {

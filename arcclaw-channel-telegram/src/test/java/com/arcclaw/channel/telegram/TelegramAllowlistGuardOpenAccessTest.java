@@ -2,14 +2,15 @@ package com.arcclaw.channel.telegram;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import jakarta.inject.Inject;
+
 import java.util.Map;
 
-import jakarta.inject.Inject;
+import org.junit.jupiter.api.Test;
 
 import io.quarkus.test.junit.QuarkusTest;
 import io.quarkus.test.junit.QuarkusTestProfile;
 import io.quarkus.test.junit.TestProfile;
-import org.junit.jupiter.api.Test;
 
 @QuarkusTest
 @TestProfile(TelegramAllowlistGuardOpenAccessTest.Profile.class)
@@ -19,13 +20,13 @@ class TelegramAllowlistGuardOpenAccessTest {
         @Override
         public Map<String, String> getConfigOverrides() {
             return Map.of(
-                "arcclaw.auto-seed-secrets",                     "false",
-                "quarkus.profile",                               "test",
-                "arcclaw.vault.pepper",                          "safe-pepper-for-boot-000000000000",
-                "arcclaw.audit.hmac-key",                        "safe-hmac-key-for-boot-000000000",
-                "arcclaw.channel.telegram.allowed-user-ids",     "",   // ← explicitly clear
-                "arcclaw.channel.telegram.allowed-users",        ""    // ← explicitly clear
-            );
+                    "arcclaw.auto-seed-secrets", "false",
+                    "quarkus.profile", "test",
+                    "arcclaw.vault.pepper", "safe-pepper-for-boot-000000000000",
+                    "arcclaw.audit.hmac-key", "safe-hmac-key-for-boot-000000000",
+                    "arcclaw.channel.telegram.allowed-user-ids", "", // ← explicitly clear
+                    "arcclaw.channel.telegram.allowed-users", "" // ← explicitly clear
+                    );
         }
     }
 

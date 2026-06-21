@@ -2,21 +2,24 @@ package com.arcclaw.persistence.postgres;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import jakarta.inject.Inject;
+
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
-import jakarta.inject.Inject;
-
 import com.arcclaw.persistence.api.CheckpointDto;
 import com.arcclaw.persistence.api.CheckpointStorePort;
 import com.arcclaw.persistence.api.ReasoningStepDto;
+
+import org.junit.jupiter.api.Test;
+
 import io.quarkus.test.common.QuarkusTestResource;
 import io.quarkus.test.junit.QuarkusTest;
-import org.junit.jupiter.api.Test;
 
 @QuarkusTest
 @QuarkusTestResource(PostgresTestResource.class)
+@SuppressWarnings("java:S1192")
 class PostgresCheckpointStoreAdapterTest {
 
     @Inject
@@ -60,9 +63,8 @@ class PostgresCheckpointStoreAdapterTest {
     void testSaveCheckpointWithSteps() {
         CheckpointDto dto = createCheckpoint("cpt-steps-1", "IN_PROGRESS");
         List<ReasoningStepDto> steps = List.of(
-            new ReasoningStepDto("thought-1", "action-1", "{}", "obs-1", 100, 50, true, null, null, null),
-            new ReasoningStepDto("thought-2", "action-2", "{}", "obs-2", 200, 100, true, null, null, null)
-        );
+                new ReasoningStepDto("thought-1", "action-1", "{}", "obs-1", 100, 50, true, null, null, null),
+                new ReasoningStepDto("thought-2", "action-2", "{}", "obs-2", 200, 100, true, null, null, null));
         CheckpointDto saved = store.saveCheckpointWithSteps(dto, steps);
         List<ReasoningStepDto> loaded = store.loadSteps(saved.id());
         assertEquals(2, loaded.size());
@@ -86,9 +88,35 @@ class PostgresCheckpointStoreAdapterTest {
 
     @Test
     void testFindBySessionAndRole() {
-        store.save(new CheckpointDto(null, "cpt-sr-1", "primary", "IN_PROGRESS", "FULL", "{}",
-            "plat-1", "telegram", "goal", null, null, null, null, null, null, null,
-            null, 0, null, null, null, null, null, null, null, 0, Instant.now(), Instant.now()));
+        store.save(new CheckpointDto(
+                null,
+                "cpt-sr-1",
+                "primary",
+                "IN_PROGRESS",
+                "FULL",
+                "{}",
+                "plat-1",
+                "telegram",
+                "goal",
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                0,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                0,
+                Instant.now(),
+                Instant.now()));
         Optional<CheckpointDto> found = store.findBySessionAndRole("cpt-sr-1", "primary");
         assertTrue(found.isPresent());
     }
@@ -122,8 +150,34 @@ class PostgresCheckpointStoreAdapterTest {
     }
 
     private CheckpointDto createCheckpoint(String sessionId, String role, String status) {
-        return new CheckpointDto(null, sessionId, role, status, "FULL", "{}",
-            "plat-1", "telegram", "goal", null, null, null, null, null, null, null,
-            null, 0, null, null, null, null, null, null, null, 0, Instant.now(), Instant.now());
+        return new CheckpointDto(
+                null,
+                sessionId,
+                role,
+                status,
+                "FULL",
+                "{}",
+                "plat-1",
+                "telegram",
+                "goal",
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                0,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                0,
+                Instant.now(),
+                Instant.now());
     }
 }

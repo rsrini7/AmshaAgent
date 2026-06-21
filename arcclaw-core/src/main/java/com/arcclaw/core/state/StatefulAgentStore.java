@@ -14,11 +14,17 @@ import com.arcclaw.core.security.AutonomyLevel;
  * Contract for persisting and retrieving agent reasoning checkpoints.
  * <p>
  * Implementations handle Jackson serialization of {@code List<ReasoningStep>}
- * to/from the {@link AgentCheckpoint#stateJson} field.
+ * to/from the {@link AgentCheckpoint#getStateJson()} field.
  */
 public interface StatefulAgentStore extends PendingApprovalChecker {
 
-    AgentCheckpoint save(String sessionId, String agentRole, String userId, AutonomyLevel autonomy, List<ReasoningStep> steps, String goal);
+    AgentCheckpoint save(
+            String sessionId,
+            String agentRole,
+            String userId,
+            AutonomyLevel autonomy,
+            List<ReasoningStep> steps,
+            String goal);
 
     default AgentCheckpoint save(String sessionId, String agentRole, List<ReasoningStep> steps, String goal) {
         return save(sessionId, agentRole, "unknown", AutonomyLevel.FULL, steps, goal);
@@ -48,6 +54,7 @@ public interface StatefulAgentStore extends PendingApprovalChecker {
      * @return The list of reasoning steps.
      */
     List<ReasoningStep> deserializeSteps(AgentCheckpoint checkpoint);
+
     Map<String, Object> deserializeContextData(String json);
 
     /**
@@ -70,7 +77,7 @@ public interface StatefulAgentStore extends PendingApprovalChecker {
 
     /**
      * Mark a checkpoint as failed.
-     * 
+     *
      * @param checkpoint The checkpoint to mark as failed.
      * @param reason     Human-readable failure reason.
      */
@@ -97,6 +104,7 @@ public interface StatefulAgentStore extends PendingApprovalChecker {
      * @param checkpointId The checkpoint entity ID.
      */
     void markCompleted(Long checkpointId);
+
     void archive(Long checkpointId);
 
     /**
@@ -110,7 +118,7 @@ public interface StatefulAgentStore extends PendingApprovalChecker {
      * Save the final state of a checkpoint and mark it as completed or failed.
      * <p>
      * This creates/updates the {@link AgentCheckpoint} and persists all
-     * {@link ReasoningStepEntity} rows in a single atomic transaction.
+     * {@link ReasoningStepDto} rows in a single atomic transaction.
      *
      * @param sessionId   The workspace session ID.
      * @param agentRole   The agent role identifier.
@@ -121,13 +129,17 @@ public interface StatefulAgentStore extends PendingApprovalChecker {
      * @param goal        The original user goal for continuity tracking.
      * @return The finalized checkpoint.
      */
-    AgentCheckpoint saveAndFinalize(String sessionId, String agentRole, String userId, AutonomyLevel autonomy,
-                                    List<ReasoningStep> steps,
-                                    CheckpointStatus finalStatus,
-                                    String goal);
+    AgentCheckpoint saveAndFinalize(
+            String sessionId,
+            String agentRole,
+            String userId,
+            AutonomyLevel autonomy,
+            List<ReasoningStep> steps,
+            CheckpointStatus finalStatus,
+            String goal);
 
-    default AgentCheckpoint saveAndFinalize(String sessionId, String agentRole, List<ReasoningStep> steps,
-                                            CheckpointStatus finalStatus, String goal) {
+    default AgentCheckpoint saveAndFinalize(
+            String sessionId, String agentRole, List<ReasoningStep> steps, CheckpointStatus finalStatus, String goal) {
         return saveAndFinalize(sessionId, agentRole, "unknown", AutonomyLevel.FULL, steps, finalStatus, goal);
     }
 
@@ -155,9 +167,7 @@ public interface StatefulAgentStore extends PendingApprovalChecker {
      * @param decision    APPROVED or DENIED (§7.20)
      * @return true if the checkpoint was found and updated; false otherwise
      */
-    boolean updateBatchToolDecision(
-        String sessionId, String agentRole,
-        String toolName, String decision);
+    boolean updateBatchToolDecision(String sessionId, String agentRole, String toolName, String decision);
 
     /**
      * Returns true if all tools in the batchToolDecisions map have
@@ -204,7 +214,7 @@ public interface StatefulAgentStore extends PendingApprovalChecker {
      * @return true if successfully claimed
      */
     boolean claimForRetry(Long id);
- 
+
     /**
      * Returns true if the session is currently marked as RESUMING in-memory.
      * §7.29
@@ -278,6 +288,7 @@ public interface StatefulAgentStore extends PendingApprovalChecker {
      */
     boolean isSessionActive(String sessionId);
 
+    @Override
     boolean hasPendingApproval(String sessionId);
 
     boolean hasPendingApprovalForChat(String chatId);

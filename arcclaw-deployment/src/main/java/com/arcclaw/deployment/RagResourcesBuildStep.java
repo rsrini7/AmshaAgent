@@ -8,11 +8,13 @@ public class RagResourcesBuildStep {
     @BuildStep
     ReflectiveClassBuildItem registerRagClasses() {
         return ReflectiveClassBuildItem.builder(
-            "com.arcclaw.rag.ScoredChunk",
-            "com.arcclaw.rag.RagContextEnricher",
-            "com.arcclaw.rag.TwoTierMemoryService",
-            "com.arcclaw.rag.GlobalKnowledgeBase",
-            "com.arcclaw.rag.EmbeddingModelProducer"
-        ).methods(true).fields(true).build();
+                        "com.arcclaw.rag.ScoredChunk",
+                        "com.arcclaw.rag.RagContextEnricher",
+                        "com.arcclaw.rag.TwoTierMemoryService",
+                        "com.arcclaw.rag.GlobalKnowledgeBase",
+                        "com.arcclaw.rag.InfiniteLoopEmbeddingModelProvider")
+                .methods(true)
+                .fields(true)
+                .build();
     }
 }

@@ -11,10 +11,12 @@ import com.arcclaw.channel.api.ChannelSender;
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ChannelUser;
 import com.arcclaw.channel.api.ContentNode.Text;
-import io.micrometer.core.instrument.Counter;
-import io.micrometer.core.instrument.MeterRegistry;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 
 class NotificationRetryServiceTest {
 
@@ -60,8 +62,9 @@ class NotificationRetryServiceTest {
         when(registry.find("telegram")).thenReturn(Optional.of(mockPlugin));
         when(mockPlugin.sender()).thenReturn(mockSender);
         doThrow(new RuntimeException("First attempt failed"))
-            .doNothing()
-            .when(mockSender).sendRaw(recipient, "Hello");
+                .doNothing()
+                .when(mockSender)
+                .sendRaw(recipient, "Hello");
 
         service.sendRawWithRetry(recipient, "Hello");
 

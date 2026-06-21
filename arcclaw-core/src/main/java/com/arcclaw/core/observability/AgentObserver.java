@@ -11,7 +11,7 @@ public interface AgentObserver {
 
     /**
      * Record LLM token consumption for a reasoning step.
-     * 
+     *
      * @param sessionId    The workspace session ID.
      * @param inputTokens  The number of input tokens consumed.
      * @param outputTokens The number of output tokens generated.
@@ -32,8 +32,6 @@ public interface AgentObserver {
         // AgentOtelContext) are unaffected.
     }
 
-    default void onLoopComplete(String sessionId, String userId, String agentRole, String goalHash, AgentResult result){
-        
-    }
-
+    default void onLoopComplete(
+            String sessionId, String userId, String agentRole, String goalHash, AgentResult result) {}
 }

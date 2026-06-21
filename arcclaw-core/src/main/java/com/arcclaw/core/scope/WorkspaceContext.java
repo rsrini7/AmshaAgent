@@ -9,6 +9,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.util.MdcKeys;
+
 import org.jboss.logging.Logger;
 import org.jboss.logging.MDC;
 
@@ -19,8 +20,6 @@ import org.jboss.logging.MDC;
 public final class WorkspaceContext {
 
     private static final Logger log = Logger.getLogger(WorkspaceContext.class);
-
-
 
     public static final ScopedValue<String> SESSION_ID = ScopedValue.newInstance();
     public static final ScopedValue<String> USER_ID = ScopedValue.newInstance();
@@ -53,62 +52,72 @@ public final class WorkspaceContext {
         return GLOBAL_ITERATION_COUNT.isBound() ? GLOBAL_ITERATION_COUNT.get().get() : 0;
     }
 
-
     private WorkspaceContext() {
         // utility class
     }
 
-
-
-    public static <T> T run(String sessionId, String userId, String chatId,
-            AutonomyLevel autonomy, String role, Callable<T> task) throws Exception {
+    public static <T> T run(
+            String sessionId, String userId, String chatId, AutonomyLevel autonomy, String role, Callable<T> task)
+            throws Exception {
         // WorkspaceScopeHolder.call() binds WORKSPACE_ID first - required for
         // WorkspaceScopeContext.isActive() to return true, which enables
         // @WorkspaceScoped CDI beans (e.g. SessionKnowledgeBase) to resolve.
-        AtomicInteger globalCounter = GLOBAL_ITERATION_COUNT.isBound()
-                ? GLOBAL_ITERATION_COUNT.get()
-                : new AtomicInteger(0);
-        return WorkspaceScopeHolder.call(sessionId, userId, chatId, () ->
-            ScopedValue.where(SESSION_ID, sessionId)
-                .where(USER_ID, userId)
-                .where(CHAT_ID, chatId)
-                .where(AUTONOMY, autonomy)
-                .where(AGENT_ROLE, role)
-                .where(GLOBAL_ITERATION_COUNT, globalCounter)
-                .call(() -> task.call())
-        );
+        AtomicInteger globalCounter =
+                GLOBAL_ITERATION_COUNT.isBound() ? GLOBAL_ITERATION_COUNT.get() : new AtomicInteger(0);
+        return WorkspaceScopeHolder.call(
+                sessionId,
+                userId,
+                chatId,
+                () -> ScopedValue.where(SESSION_ID, sessionId)
+                        .where(USER_ID, userId)
+                        .where(CHAT_ID, chatId)
+                        .where(AUTONOMY, autonomy)
+                        .where(AGENT_ROLE, role)
+                        .where(GLOBAL_ITERATION_COUNT, globalCounter)
+                        .call(() -> task.call()));
     }
 
-
-    public static <T> T run(String sessionId, String userId, String chatId,
-            AutonomyLevel autonomy, String role, String channelType, String platformId, Callable<T> task) throws Exception {
-        AtomicInteger globalCounter = GLOBAL_ITERATION_COUNT.isBound()
-                ? GLOBAL_ITERATION_COUNT.get()
-                : new AtomicInteger(0);
-        return WorkspaceScopeHolder.call(sessionId, userId, chatId, () ->
-            ScopedValue.where(SESSION_ID, sessionId)
-                .where(USER_ID, userId)
-                .where(CHAT_ID, chatId)
-                .where(AUTONOMY, autonomy)
-                .where(AGENT_ROLE, role)
-                .where(CHANNEL_TYPE, channelType)
-                .where(CHANNEL_PLATFORM_ID, platformId)
-                .where(GLOBAL_ITERATION_COUNT, globalCounter)
-                .call(() -> task.call())
-        );
+    public static <T> T run(
+            String sessionId,
+            String userId,
+            String chatId,
+            AutonomyLevel autonomy,
+            String role,
+            String channelType,
+            String platformId,
+            Callable<T> task)
+            throws Exception {
+        AtomicInteger globalCounter =
+                GLOBAL_ITERATION_COUNT.isBound() ? GLOBAL_ITERATION_COUNT.get() : new AtomicInteger(0);
+        return WorkspaceScopeHolder.call(
+                sessionId,
+                userId,
+                chatId,
+                () -> ScopedValue.where(SESSION_ID, sessionId)
+                        .where(USER_ID, userId)
+                        .where(CHAT_ID, chatId)
+                        .where(AUTONOMY, autonomy)
+                        .where(AGENT_ROLE, role)
+                        .where(CHANNEL_TYPE, channelType)
+                        .where(CHANNEL_PLATFORM_ID, platformId)
+                        .where(GLOBAL_ITERATION_COUNT, globalCounter)
+                        .call(() -> task.call()));
     }
 
-
-
-    public static <T> T run(String sessionId, String userId, String chatId,
-            AutonomyLevel autonomy, String role, String channelType, Callable<T> task) throws Exception {
+    public static <T> T run(
+            String sessionId,
+            String userId,
+            String chatId,
+            AutonomyLevel autonomy,
+            String role,
+            String channelType,
+            Callable<T> task)
+            throws Exception {
         return run(sessionId, userId, chatId, autonomy, role, channelType, null, task);
     }
 
-
-
-    public static void run(String sessionId, String userId, String chatId,
-            AutonomyLevel autonomy, String role, Runnable task) {
+    public static void run(
+            String sessionId, String userId, String chatId, AutonomyLevel autonomy, String role, Runnable task) {
         try {
             run(sessionId, userId, chatId, autonomy, role, () -> {
                 task.run();
@@ -121,10 +130,15 @@ public final class WorkspaceContext {
         }
     }
 
-
-
-    public static void run(String sessionId, String userId, String chatId,
-            AutonomyLevel autonomy, String role, String channelType, String platformId, Runnable task) {
+    public static void run(
+            String sessionId,
+            String userId,
+            String chatId,
+            AutonomyLevel autonomy,
+            String role,
+            String channelType,
+            String platformId,
+            Runnable task) {
         try {
             run(sessionId, userId, chatId, autonomy, role, channelType, platformId, () -> {
                 task.run();
@@ -137,48 +151,57 @@ public final class WorkspaceContext {
         }
     }
 
-
-
-    public static void run(String sessionId, String userId, String chatId,
-            AutonomyLevel autonomy, String role, String channelType, Runnable task) {
+    public static void run(
+            String sessionId,
+            String userId,
+            String chatId,
+            AutonomyLevel autonomy,
+            String role,
+            String channelType,
+            Runnable task) {
         run(sessionId, userId, chatId, autonomy, role, channelType, null, task);
     }
 
-
-
-    public static <T> T runWithFullAutonomy(String sessionId, String userId,
-            String chatId, String role, Callable<T> task) throws Exception {
+    public static <T> T runWithFullAutonomy(
+            String sessionId, String userId, String chatId, String role, Callable<T> task) throws Exception {
         return run(sessionId, userId, chatId, AutonomyLevel.FULL, role, task);
     }
 
-
-    public static <T> T runWithFullAutonomy(String sessionId, String userId,
-            String chatId, String role, String channelType, Callable<T> task) throws Exception {
+    public static <T> T runWithFullAutonomy(
+            String sessionId, String userId, String chatId, String role, String channelType, Callable<T> task)
+            throws Exception {
         return run(sessionId, userId, chatId, AutonomyLevel.FULL, role, channelType, task);
     }
 
-
-    public static <T> T runWithFullAutonomy(String sessionId, String userId,
-            String chatId, String role, String channelType, String platformId, Callable<T> task) throws Exception {
+    public static <T> T runWithFullAutonomy(
+            String sessionId,
+            String userId,
+            String chatId,
+            String role,
+            String channelType,
+            String platformId,
+            Callable<T> task)
+            throws Exception {
         return run(sessionId, userId, chatId, AutonomyLevel.FULL, role, channelType, platformId, task);
     }
 
-
-
-    public static void runWithFullAutonomy(String sessionId, String userId,
-            String chatId, String role, Runnable task) {
+    public static void runWithFullAutonomy(String sessionId, String userId, String chatId, String role, Runnable task) {
         run(sessionId, userId, chatId, AutonomyLevel.FULL, role, task);
     }
 
-
-    public static void runWithFullAutonomy(String sessionId, String userId,
-            String chatId, String role, String channelType, Runnable task) {
+    public static void runWithFullAutonomy(
+            String sessionId, String userId, String chatId, String role, String channelType, Runnable task) {
         runWithFullAutonomy(sessionId, userId, chatId, role, channelType, null, task);
     }
 
-
-    public static void runWithFullAutonomy(String sessionId, String userId,
-            String chatId, String role, String channelType, String platformId, Runnable task) {
+    public static void runWithFullAutonomy(
+            String sessionId,
+            String userId,
+            String chatId,
+            String role,
+            String channelType,
+            String platformId,
+            Runnable task) {
         try {
             run(sessionId, userId, chatId, AutonomyLevel.FULL, role, channelType, platformId, () -> {
                 task.run();
@@ -191,7 +214,6 @@ public final class WorkspaceContext {
         }
     }
 
-
     // Currently not used anywhere, but need to check the usecase and use it during scenario based testing....
     public static AutonomyLevel requireAutonomy() {
         if (!AUTONOMY.isBound() || AUTONOMY.get() == null) {
@@ -199,7 +221,6 @@ public final class WorkspaceContext {
         }
         return AUTONOMY.get();
     }
-
 
     public static String resolveUserId() {
         try {
@@ -214,7 +235,6 @@ public final class WorkspaceContext {
             return "unknown";
         }
     }
-
 
     public static Optional<String> channelType() {
         if (CHANNEL_TYPE.isBound() && CHANNEL_TYPE.get() != null) {

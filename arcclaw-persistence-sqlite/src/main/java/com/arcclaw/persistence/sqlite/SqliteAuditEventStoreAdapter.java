@@ -1,21 +1,23 @@
 package com.arcclaw.persistence.sqlite;
 
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
-
 import com.arcclaw.core.util.TemporalUtils;
 import com.arcclaw.persistence.api.AuditEventDto;
 import com.arcclaw.persistence.api.AuditEventStorePort;
 import com.arcclaw.persistence.sqlite.jdbi.AuditJdbiDao;
-import io.quarkus.arc.Unremovable;
-import io.quarkus.arc.properties.IfBuildProperty;
+
 import org.jboss.logging.Logger;
 import org.jdbi.v3.core.Jdbi;
+
+import io.quarkus.arc.Unremovable;
+import io.quarkus.arc.properties.IfBuildProperty;
 
 @ApplicationScoped
 @Unremovable
@@ -39,31 +41,31 @@ public class SqliteAuditEventStoreAdapter implements AuditEventStorePort {
     public void save(AuditEventDto dto) {
         log.tracef("save event session=%s type=%s", dto.sessionId(), dto.eventType());
         jdbi.useHandle(handle -> handle.createUpdate(
-            "INSERT INTO audit_event (id, sessionId, userId, agentRole, goalHash, outcome, eventType, " +
-            "eventDetail, inputTokens, outputTokens, usdCost, timestamp, iterationsUsed, app_version, " +
-            "idempotency_key, sequence, hmacHash, prevHash) " +
-            "VALUES (:id, :sessionId, :userId, :agentRole, :goalHash, :outcome, :eventType, " +
-            ":eventDetail, :inputTokens, :outputTokens, :usdCost, :timestamp, :iterationsUsed, " +
-            ":appVersion, :idempotencyKey, :sequence, :hmacHash, :prevHash)")
-            .bind("id", dto.id())
-            .bind("sessionId", dto.sessionId())
-            .bind("userId", dto.userId())
-            .bind("agentRole", dto.agentRole())
-            .bind("goalHash", dto.goalHash())
-            .bind("outcome", dto.outcome())
-            .bind("eventType", dto.eventType())
-            .bind("eventDetail", dto.eventDetail())
-            .bind("inputTokens", dto.inputTokens())
-            .bind("outputTokens", dto.outputTokens())
-            .bind("usdCost", dto.usdCost())
-            .bind("timestamp", dto.timestamp())
-            .bind("iterationsUsed", dto.iterationsUsed())
-            .bind("appVersion", dto.appVersion())
-            .bind("idempotencyKey", dto.idempotencyKey())
-            .bind("sequence", dto.sequence())
-            .bind("hmacHash", dto.hmacHash())
-            .bind("prevHash", dto.prevHash())
-            .execute());
+                        "INSERT INTO audit_event (id, sessionId, userId, agentRole, goalHash, outcome, eventType, "
+                                + "eventDetail, inputTokens, outputTokens, usdCost, timestamp, iterationsUsed, app_version, "
+                                + "idempotency_key, sequence, hmacHash, prevHash) "
+                                + "VALUES (:id, :sessionId, :userId, :agentRole, :goalHash, :outcome, :eventType, "
+                                + ":eventDetail, :inputTokens, :outputTokens, :usdCost, :timestamp, :iterationsUsed, "
+                                + ":appVersion, :idempotencyKey, :sequence, :hmacHash, :prevHash)")
+                .bind("id", dto.id())
+                .bind("sessionId", dto.sessionId())
+                .bind("userId", dto.userId())
+                .bind("agentRole", dto.agentRole())
+                .bind("goalHash", dto.goalHash())
+                .bind("outcome", dto.outcome())
+                .bind("eventType", dto.eventType())
+                .bind("eventDetail", dto.eventDetail())
+                .bind("inputTokens", dto.inputTokens())
+                .bind("outputTokens", dto.outputTokens())
+                .bind("usdCost", dto.usdCost())
+                .bind("timestamp", dto.timestamp())
+                .bind("iterationsUsed", dto.iterationsUsed())
+                .bind("appVersion", dto.appVersion())
+                .bind("idempotencyKey", dto.idempotencyKey())
+                .bind("sequence", dto.sequence())
+                .bind("hmacHash", dto.hmacHash())
+                .bind("prevHash", dto.prevHash())
+                .execute());
     }
 
     @Override
@@ -98,21 +100,27 @@ public class SqliteAuditEventStoreAdapter implements AuditEventStorePort {
     }
 
     @Override
-    public List<AuditEventDto> findAll(String sessionId, String eventType, Instant from, Instant to, int offset, int limit) {
-        return jdbi.withExtension(AuditJdbiDao.class,
-            dao -> dao.findFiltered(
-                sessionId, eventType,
-                from != null ? TemporalUtils.formatIsoLex(from) : null,
-                to != null ? TemporalUtils.formatIsoLex(to) : null,
-                offset, limit));
+    public List<AuditEventDto> findAll(
+            String sessionId, String eventType, Instant from, Instant to, int offset, int limit) {
+        return jdbi.withExtension(
+                AuditJdbiDao.class,
+                dao -> dao.findFiltered(
+                        sessionId,
+                        eventType,
+                        from != null ? TemporalUtils.formatIsoLex(from) : null,
+                        to != null ? TemporalUtils.formatIsoLex(to) : null,
+                        offset,
+                        limit));
     }
 
     @Override
     public long countAll(String sessionId, String eventType, Instant from, Instant to) {
-        return jdbi.withExtension(AuditJdbiDao.class,
-            dao -> dao.countFiltered(
-                sessionId, eventType,
-                from != null ? TemporalUtils.formatIsoLex(from) : null,
-                to != null ? TemporalUtils.formatIsoLex(to) : null));
+        return jdbi.withExtension(
+                AuditJdbiDao.class,
+                dao -> dao.countFiltered(
+                        sessionId,
+                        eventType,
+                        from != null ? TemporalUtils.formatIsoLex(from) : null,
+                        to != null ? TemporalUtils.formatIsoLex(to) : null));
     }
 }

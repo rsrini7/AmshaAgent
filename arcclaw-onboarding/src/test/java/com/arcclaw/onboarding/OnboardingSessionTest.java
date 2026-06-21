@@ -2,6 +2,7 @@ package com.arcclaw.onboarding;
 
 import com.arcclaw.onboarding.OnboardingSessionRegistry.OnboardingState;
 import com.arcclaw.onboarding.OnboardingSessionRegistry.OnboardingState.Step;
+
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 

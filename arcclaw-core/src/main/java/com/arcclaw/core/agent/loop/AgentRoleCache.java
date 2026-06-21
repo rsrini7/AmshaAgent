@@ -1,11 +1,11 @@
 package com.arcclaw.core.agent.loop;
 
-import java.util.Optional;
-import java.util.concurrent.ConcurrentHashMap;
-
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
 import jakarta.inject.Inject;
+
+import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
 
 import com.arcclaw.core.agent.event.AgentStateChangedEvent;
 import com.arcclaw.core.state.StatefulAgentStore;
@@ -13,10 +13,10 @@ import com.arcclaw.core.state.StatefulAgentStore;
 @ApplicationScoped
 public class AgentRoleCache {
 
-    @Inject StatefulAgentStore stateStore;
+    @Inject
+    StatefulAgentStore stateStore;
 
-    private final ConcurrentHashMap<String, String> lastRoleBySession 
-        = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, String> lastRoleBySession = new ConcurrentHashMap<>();
 
     public void onStateChanged(@Observes AgentStateChangedEvent event) {
         if (event.sessionId() != null && event.agentName() != null) {

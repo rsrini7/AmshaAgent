@@ -1,16 +1,17 @@
 package com.arcclaw.core.reflex;
 
-import java.util.List;
-import java.util.regex.Pattern;
-
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Default;
 import jakarta.inject.Inject;
+
+import java.util.List;
+import java.util.regex.Pattern;
 
 import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.message.UserMessages;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.security.InputSanitizer;
+
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
@@ -28,40 +29,41 @@ public class PromptInjectionReflex implements AgentReflex, InputSanitizer {
 
     private static final Pattern HUMAN_APPROVED = Pattern.compile("(?i)human[\\s\\-]?approv(ed|al)");
     private static final Pattern AUTO_APPROVE = Pattern.compile("(?i)auto[\\s\\-]?approv(e|ed|al)");
-    private static final Pattern SKIP_APPROVAL = Pattern
-            .compile("(?i)(skip|bypass|ignore)\\s+(approval|confirmation|review|governance|security)");
-    private static final Pattern THIS_IS_APPROVED = Pattern
-            .compile("(?i)(this\\s+(has\\s+been|is)\\s+approved|already\\s+approved|pre[\\s\\-]?approved)");
+    private static final Pattern SKIP_APPROVAL =
+            Pattern.compile("(?i)(skip|bypass|ignore)\\s+(approval|confirmation|review|governance|security)");
+    private static final Pattern THIS_IS_APPROVED =
+            Pattern.compile("(?i)(this\\s+(has\\s+been|is)\\s+approved|already\\s+approved|pre[\\s\\-]?approved)");
 
     private static final Pattern REVEAL_PROMPT = Pattern.compile(
             "(?i)(reveal|print|show|output|display|repeat)\\s+(your\\s+|the\\s+)?(system\\s+prompt|instructions?|training|context|rules?)");
-    private static final Pattern WHAT_ARE_INSTRUCTIONS = Pattern
-            .compile("(?i)what\\s+(are|were)\\s+(your\\s+)?(instructions?|system\\s+prompt|rules?|training)");
-    private static final Pattern REPEAT_EVERYTHING = Pattern
-            .compile("(?i)repeat\\s+(everything|all|your\\s+(system|instructions?|prompt))");
+    private static final Pattern WHAT_ARE_INSTRUCTIONS =
+            Pattern.compile("(?i)what\\s+(are|were)\\s+(your\\s+)?(instructions?|system\\s+prompt|rules?|training)");
+    private static final Pattern REPEAT_EVERYTHING =
+            Pattern.compile("(?i)repeat\\s+(everything|all|your\\s+(system|instructions?|prompt))");
 
-    private static final Pattern YOU_ARE_NOW = Pattern
-            .compile("(?i)you\\s+are\\s+now\\s+(a|an|DAN|unrestricted|jailbroken|free)");
-    private static final Pattern YOU_ARE_NO_LONGER = Pattern
-            .compile("(?i)you\\s+are\\s+no\\s+longer\\s+(an?\\s+)?(AI|assistant|restricted|limited)");
-    private static final Pattern PRETEND = Pattern
-            .compile("(?i)pretend\\s+(you\\s+are|to\\s+be|you're)\\s+(a|an|not|unrestricted)");
-    private static final Pattern ACT_AS = Pattern.compile("(?i)\\bact\\s+as\\s+(if\\s+you\\s+(are|were)|a|an|dan|unrestricted)\\b");
+    private static final Pattern YOU_ARE_NOW =
+            Pattern.compile("(?i)you\\s+are\\s+now\\s+(a|an|DAN|unrestricted|jailbroken|free)");
+    private static final Pattern YOU_ARE_NO_LONGER =
+            Pattern.compile("(?i)you\\s+are\\s+no\\s+longer\\s+(an?\\s+)?(AI|assistant|restricted|limited)");
+    private static final Pattern PRETEND =
+            Pattern.compile("(?i)pretend\\s+(you\\s+are|to\\s+be|you're)\\s+(a|an|not|unrestricted)");
+    private static final Pattern ACT_AS =
+            Pattern.compile("(?i)\\bact\\s+as\\s+(if\\s+you\\s+(are|were)|a|an|dan|unrestricted)\\b");
     private static final Pattern DEVELOPER_MODE = Pattern.compile(
             "(?i)(switch|enable|activate|enter)\\s+(to\\s+)?(developer|jailbreak|DAN|unrestricted|god)\\s+mode");
-    private static final Pattern FROM_NOW_ON = Pattern
-            .compile("(?i)from\\s+now\\s+on\\s+(you|respond|act|behave|ignore)");
+    private static final Pattern FROM_NOW_ON =
+            Pattern.compile("(?i)from\\s+now\\s+on\\s+(you|respond|act|behave|ignore)");
 
-    private static final Pattern IGNORE_INSTRUCTIONS = Pattern
-            .compile("(?i)ignore\\s+(all\\s+)?(previous\\s+|prior\\s+|above\\s+|your\\s+|the\\s+)*instructions?");
-    private static final Pattern DISREGARD = Pattern
-            .compile("(?i)disregard\\s+(all\\s+)?(previous\\s+|prior\\s+|your\\s+|the\\s+)*instructions?");
-    private static final Pattern FORGET_TRAINING = Pattern
-            .compile("(?i)forget\\s+(everything|all|your\\s+training|your\\s+instructions)");
-    private static final Pattern NEW_INSTRUCTIONS = Pattern
-            .compile("(?i)(your\\s+new|new\\s+system)\\s+instructions?\\s+(are|is|follow)");
-    private static final Pattern OVERRIDE_PROMPT = Pattern
-            .compile("(?i)override\\s+(system|previous|all|the)\\s+(prompt|instructions?|context|rules?)");
+    private static final Pattern IGNORE_INSTRUCTIONS = Pattern.compile(
+            "(?i)ignore\\s+(all\\s+)?(previous\\s+|prior\\s+|above\\s+|your\\s+|the\\s+)*instructions?");
+    private static final Pattern DISREGARD =
+            Pattern.compile("(?i)disregard\\s+(all\\s+)?(previous\\s+|prior\\s+|your\\s+|the\\s+)*instructions?");
+    private static final Pattern FORGET_TRAINING =
+            Pattern.compile("(?i)forget\\s+(everything|all|your\\s+training|your\\s+instructions)");
+    private static final Pattern NEW_INSTRUCTIONS =
+            Pattern.compile("(?i)(your\\s+new|new\\s+system)\\s+instructions?\\s+(are|is|follow)");
+    private static final Pattern OVERRIDE_PROMPT =
+            Pattern.compile("(?i)override\\s+(system|previous|all|the)\\s+(prompt|instructions?|context|rules?)");
 
     // In PromptInjectionReflex, add to the role-override / context-wipe category:
     private static final Pattern CONTEXT_WIPE = Pattern.compile(
@@ -71,9 +73,9 @@ public class PromptInjectionReflex implements AgentReflex, InputSanitizer {
                     + "clear\\s+(your\\s+)?(memory|context|history))",
             Pattern.CASE_INSENSITIVE);
 
-    private record InjectionRule(Pattern pattern, String category) {
-    }
+    private record InjectionRule(Pattern pattern, String category) {}
 
+    @SuppressWarnings("java:S1192")
     private static final List<InjectionRule> RULES = List.of(
             // Category 3 - ArcClaw Governance Bypass (project-specific)
             new InjectionRule(HUMAN_APPROVED, "GOVERNANCE_BYPASS"),
@@ -106,10 +108,8 @@ public class PromptInjectionReflex implements AgentReflex, InputSanitizer {
 
     @Override
     public boolean matches(String input) {
-        if (!enabled)
-            return false;
-        if (input == null || input.isBlank())
-            return false;
+        if (!enabled) return false;
+        if (input == null || input.isBlank()) return false;
         for (InjectionRule rule : RULES) {
             if (rule.pattern().matcher(input).find()) {
                 return true;
@@ -147,7 +147,8 @@ public class PromptInjectionReflex implements AgentReflex, InputSanitizer {
         }
 
         int inputLength = input != null ? input.length() : 0;
-        log.warnf("[INJECTION-BLOCKED] session=%s user=%s category=%s input_length=%d",
+        log.warnf(
+                "[INJECTION-BLOCKED] session=%s user=%s category=%s input_length=%d",
                 sessionId, userId, matchedCategory, inputLength);
 
         String output = UserMessages.PROMPT_INJECTION_DETECTED;
@@ -161,11 +162,9 @@ public class PromptInjectionReflex implements AgentReflex, InputSanitizer {
     }
 
     public boolean containsInjection(String input) {
-        if (input == null || input.isBlank())
-            return false;
+        if (input == null || input.isBlank()) return false;
         for (InjectionRule rule : RULES) {
-            if (rule.pattern().matcher(input).find())
-                return true;
+            if (rule.pattern().matcher(input).find()) return true;
         }
         return false;
     }

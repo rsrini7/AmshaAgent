@@ -1,15 +1,16 @@
 package com.arcclaw.core.state;
 
-import java.time.Instant;
-
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
+
+import java.time.Instant;
 
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.domain.model.AgentCheckpoint;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.persistence.api.CheckpointStorePort;
+
 import org.jboss.logging.Logger;
 
 /**
@@ -57,12 +58,23 @@ public class CheckpointTransitionService {
      * @param checkpointId the new checkpoint ID
      * @param createdAt   the creation time
      */
-    public void emitCreated(String sessionId, String agentRole, String userId, AutonomyLevel autonomy,
-                            Long checkpointId, Instant createdAt) {
+    public void emitCreated(
+            String sessionId,
+            String agentRole,
+            String userId,
+            AutonomyLevel autonomy,
+            Long checkpointId,
+            Instant createdAt) {
         String idempotencyKey = "CP_CREATED:" + checkpointId + ":" + createdAt.toEpochMilli();
-        auditService.recordWithIdempotency(sessionId, userId, agentRole,
-                SecurityEventType.CHECKPOINT_CREATED, autonomy + " autonomy", idempotencyKey);
-        log.infof("Created checkpoint %d for session=%s, role=%s, autonomy=%s",
+        auditService.recordWithIdempotency(
+                sessionId,
+                userId,
+                agentRole,
+                SecurityEventType.CHECKPOINT_CREATED,
+                autonomy + " autonomy",
+                idempotencyKey);
+        log.infof(
+                "Created checkpoint %d for session=%s, role=%s, autonomy=%s",
                 checkpointId, sessionId, agentRole, autonomy);
     }
 
@@ -79,8 +91,8 @@ public class CheckpointTransitionService {
     }
 
     /** Marks a checkpoint FAILED with full diagnostic context. */
-    public void markFailed(AgentCheckpoint checkpoint, String reason,
-                           String errorCode, String traceId, String rootCauseClass) {
+    public void markFailed(
+            AgentCheckpoint checkpoint, String reason, String errorCode, String traceId, String rootCauseClass) {
         markFailed(checkpoint.getId(), reason, errorCode, traceId, rootCauseClass, "unknown");
     }
 
@@ -91,17 +103,21 @@ public class CheckpointTransitionService {
      * COMPLETED / ARCHIVED / COMPROMISED checkpoints. This method does not need
      * to re-check those statuses itself.
      */
-    public void markFailed(Long checkpointId, String reason,
-                           String errorCode, String traceId, String rootCauseClass, String userId) {
+    public void markFailed(
+            Long checkpointId, String reason, String errorCode, String traceId, String rootCauseClass, String userId) {
         storeAdapter.markFailed(checkpointId, reason, errorCode, traceId, rootCauseClass);
         storeAdapter.findById(checkpointId).ifPresent(dto -> {
-            String idempotencyKey = "CP_FAILED:" + checkpointId + ":" + dto.createdAt().toEpochMilli();
-            String details = String.format("reason=%s errorCode=%s traceId=%s",
-                    reason, errorCode, traceId);
-            auditService.recordWithIdempotency(dto.sessionId(), userId, dto.agentRole(),
-                    SecurityEventType.CHECKPOINT_FAILED, details, idempotencyKey);
-            log.warnf("Checkpoint %s/%s marked FAILED: %s",
-                    dto.sessionId(), dto.agentRole(), reason);
+            String idempotencyKey =
+                    "CP_FAILED:" + checkpointId + ":" + dto.createdAt().toEpochMilli();
+            String details = String.format("reason=%s errorCode=%s traceId=%s", reason, errorCode, traceId);
+            auditService.recordWithIdempotency(
+                    dto.sessionId(),
+                    userId,
+                    dto.agentRole(),
+                    SecurityEventType.CHECKPOINT_FAILED,
+                    details,
+                    idempotencyKey);
+            log.warnf("Checkpoint %s/%s marked FAILED: %s", dto.sessionId(), dto.agentRole(), reason);
         });
     }
 
@@ -113,11 +129,16 @@ public class CheckpointTransitionService {
     public void markOrphaned(Long checkpointId, String reason, String userId) {
         storeAdapter.markOrphaned(checkpointId, reason);
         storeAdapter.findById(checkpointId).ifPresent(dto -> {
-            String idempotencyKey = "CP_ORPHANED:" + checkpointId + ":" + dto.createdAt().toEpochMilli();
-            auditService.recordWithIdempotency(dto.sessionId(), userId, dto.agentRole(),
-                    SecurityEventType.CHECKPOINT_ORPHANED, reason, idempotencyKey);
-            log.warnf("Checkpoint %s/%s marked ORPHANED: %s",
-                    dto.sessionId(), dto.agentRole(), reason);
+            String idempotencyKey =
+                    "CP_ORPHANED:" + checkpointId + ":" + dto.createdAt().toEpochMilli();
+            auditService.recordWithIdempotency(
+                    dto.sessionId(),
+                    userId,
+                    dto.agentRole(),
+                    SecurityEventType.CHECKPOINT_ORPHANED,
+                    reason,
+                    idempotencyKey);
+            log.warnf("Checkpoint %s/%s marked ORPHANED: %s", dto.sessionId(), dto.agentRole(), reason);
         });
     }
 
@@ -129,11 +150,16 @@ public class CheckpointTransitionService {
     public void markCompleted(Long checkpointId, String userId) {
         storeAdapter.markCompleted(checkpointId);
         storeAdapter.findById(checkpointId).ifPresent(dto -> {
-            String idempotencyKey = "CP_COMPLETED:" + checkpointId + ":" + dto.createdAt().toEpochMilli();
-            auditService.recordWithIdempotency(dto.sessionId(), userId, dto.agentRole(),
-                    SecurityEventType.CHECKPOINT_COMPLETED, null, idempotencyKey);
-            log.infof("Checkpoint %d marked COMPLETED for session %s",
-                    checkpointId, dto.sessionId());
+            String idempotencyKey =
+                    "CP_COMPLETED:" + checkpointId + ":" + dto.createdAt().toEpochMilli();
+            auditService.recordWithIdempotency(
+                    dto.sessionId(),
+                    userId,
+                    dto.agentRole(),
+                    SecurityEventType.CHECKPOINT_COMPLETED,
+                    null,
+                    idempotencyKey);
+            log.infof("Checkpoint %d marked COMPLETED for session %s", checkpointId, dto.sessionId());
 
             storeAdapter.archive(checkpointId);
         });
@@ -155,13 +181,18 @@ public class CheckpointTransitionService {
      * @param checkpointId the persisted checkpoint ID (for the idempotency key)
      * @param createdAt   the creation time of the checkpoint
      */
-    public void emitFinalStatus(String sessionId, String agentRole, String userId,
-                                CheckpointStatus finalStatus, Long checkpointId, Instant createdAt) {
+    public void emitFinalStatus(
+            String sessionId,
+            String agentRole,
+            String userId,
+            CheckpointStatus finalStatus,
+            Long checkpointId,
+            Instant createdAt) {
         SecurityEventType eventType = finalStatus == CheckpointStatus.COMPLETED
                 ? SecurityEventType.CHECKPOINT_COMPLETED
                 : SecurityEventType.CHECKPOINT_FAILED;
-        String idempotencyKey = (finalStatus == CheckpointStatus.COMPLETED
-                ? "CP_COMPLETED:" : "CP_FAILED:") + checkpointId + ":" + createdAt.toEpochMilli();
+        String idempotencyKey = (finalStatus == CheckpointStatus.COMPLETED ? "CP_COMPLETED:" : "CP_FAILED:")
+                + checkpointId + ":" + createdAt.toEpochMilli();
         auditService.recordWithIdempotency(sessionId, userId, agentRole, eventType, null, idempotencyKey);
         if (finalStatus == CheckpointStatus.COMPLETED) {
             log.infof("Checkpoint %d finalized as COMPLETED for session %s", checkpointId, sessionId);

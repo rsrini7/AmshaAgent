@@ -13,27 +13,29 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import java.util.stream.Stream;
-
 import jakarta.enterprise.inject.Instance;
 import jakarta.enterprise.util.AnnotationLiteral;
+
+import java.util.stream.Stream;
 
 import com.arcclaw.mcp.tool.DynamicToolCapabilityRegistry;
 import com.arcclaw.mcp.tool.McpTransportType;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
-import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+
 import org.eclipse.microprofile.context.ManagedExecutor;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+
 class McpClientServiceTest {
 
     @RegisterExtension
     static WireMockExtension wireMock = WireMockExtension.newInstance()
-        .options(wireMockConfig().dynamicPort())
-        .build();
+            .options(wireMockConfig().dynamicPort())
+            .build();
 
     private McpClientService service;
     private DynamicToolCapabilityRegistry registry;
@@ -41,12 +43,12 @@ class McpClientServiceTest {
     @BeforeEach
     @SuppressWarnings("unchecked")
     void setUp() {
-        service          = new McpClientService();
-        registry         = new DynamicToolCapabilityRegistry();
+        service = new McpClientService();
+        registry = new DynamicToolCapabilityRegistry();
         service.registry = registry;
         service.objectMapper = new ObjectMapper();
         service.meterRegistry = new SimpleMeterRegistry();
-        
+
         service.managedExecutors = mock(Instance.class);
         ManagedExecutor mockExec = ManagedExecutor.builder().build();
         when(service.managedExecutors.select(any(Class.class))).thenReturn(service.managedExecutors);
@@ -59,26 +61,26 @@ class McpClientServiceTest {
 
     private void stubFullConnect(String sessionId) {
         wireMock.stubFor(post(urlEqualTo("/"))
-            .withRequestBody(containing("\"initialize\""))
-            .willReturn(aResponse()
-                .withStatus(200)
-                .withHeader("Content-Type", "application/json")
-                .withHeader("Mcp-Session-Id", sessionId)
-                .withBody("{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{" +
-                    "\"protocolVersion\":\"2024-11-05\",\"capabilities\":{}," +
-                    "\"serverInfo\":{\"name\":\"test\",\"version\":\"1.0\"}}}")));
+                .withRequestBody(containing("\"initialize\""))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withHeader("Mcp-Session-Id", sessionId)
+                        .withBody("{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{"
+                                + "\"protocolVersion\":\"2024-11-05\",\"capabilities\":{},"
+                                + "\"serverInfo\":{\"name\":\"test\",\"version\":\"1.0\"}}}")));
         wireMock.stubFor(post(urlEqualTo("/"))
-            .withRequestBody(containing("\"notifications/initialized\""))
-            .willReturn(aResponse().withStatus(200).withBody("")));
+                .withRequestBody(containing("\"notifications/initialized\""))
+                .willReturn(aResponse().withStatus(200).withBody("")));
         wireMock.stubFor(post(urlEqualTo("/"))
-            .withRequestBody(containing("\"tools/list\""))
-            .willReturn(aResponse()
-                .withStatus(200)
-                .withHeader("Content-Type", "application/json")
-                .withBody("{\"jsonrpc\":\"2.0\",\"id\":2,\"result\":{\"tools\":[" +
-                    "{\"name\":\"external_search\"," +
-                    " \"description\":\"Search the web\"," +
-                    " \"inputSchema\":{\"type\":\"object\"}}]}}")));
+                .withRequestBody(containing("\"tools/list\""))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody("{\"jsonrpc\":\"2.0\",\"id\":2,\"result\":{\"tools\":["
+                                + "{\"name\":\"external_search\","
+                                + " \"description\":\"Search the web\","
+                                + " \"inputSchema\":{\"type\":\"object\"}}]}}")));
     }
 
     @Test
@@ -97,13 +99,13 @@ class McpClientServiceTest {
     void testConnectStoresSessionIdAndSendsItOnToolsCall() {
         stubFullConnect("my-session-id-xyz");
         wireMock.stubFor(post(urlEqualTo("/"))
-            .withRequestBody(containing("\"tools/call\""))
-            .withHeader("Mcp-Session-Id", equalTo("my-session-id-xyz"))
-            .willReturn(aResponse()
-                .withStatus(200)
-                .withHeader("Content-Type", "application/json")
-                .withBody("{\"jsonrpc\":\"2.0\",\"id\":3,\"result\":{\"content\":" +
-                    "[{\"type\":\"text\",\"text\":\"search results here\"}]}}")));
+                .withRequestBody(containing("\"tools/call\""))
+                .withHeader("Mcp-Session-Id", equalTo("my-session-id-xyz"))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody("{\"jsonrpc\":\"2.0\",\"id\":3,\"result\":{\"content\":"
+                                + "[{\"type\":\"text\",\"text\":\"search results here\"}]}}")));
 
         service.connect("test-server", wireMock.baseUrl());
         String result = service.invoke("test-server", "external_search", "{\"query\":\"hello\"}");
@@ -112,28 +114,26 @@ class McpClientServiceTest {
 
     @Test
     void testInvokeThrowsWhenNoUrlRegistered() {
-        assertThrows(McpConnectionException.class,
-            () -> service.invoke("ghost-server", "some_tool", "{}"));
+        assertThrows(McpConnectionException.class, () -> service.invoke("ghost-server", "some_tool", "{}"));
     }
 
     @Test
     void testConnectThrowsMcpConnectionExceptionOnServerError() {
         wireMock.stubFor(post(urlEqualTo("/"))
-            .withRequestBody(containing("\"initialize\""))
-            .willReturn(aResponse().withStatus(500).withBody("Internal Server Error")));
+                .withRequestBody(containing("\"initialize\""))
+                .willReturn(aResponse().withStatus(500).withBody("Internal Server Error")));
 
-        assertThrows(McpConnectionException.class,
-            () -> service.connect("test-server", wireMock.baseUrl()));
+        assertThrows(McpConnectionException.class, () -> service.connect("test-server", wireMock.baseUrl()));
     }
 
     @Test
     void testConnectWithEmptyToolsListRegistersNothing() {
         stubFullConnect("session-empty");
         wireMock.stubFor(post(urlEqualTo("/"))
-            .withRequestBody(containing("\"tools/list\""))
-            .willReturn(aResponse()
-                .withStatus(200)
-                .withBody("{\"jsonrpc\":\"2.0\",\"id\":2,\"result\":{\"tools\":[]}}")));
+                .withRequestBody(containing("\"tools/list\""))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withBody("{\"jsonrpc\":\"2.0\",\"id\":2,\"result\":{\"tools\":[]}}")));
 
         service.connect("empty-server", wireMock.baseUrl());
         assertTrue(registry.getAll().isEmpty());

@@ -7,32 +7,27 @@ import org.junit.jupiter.api.Test;
 /**
  * Unit tests for {@link ChannelUser} compact constructor validation.
  */
+@SuppressWarnings("java:S1192")
 class ChannelUserTest {
 
     @Test
     void nullPlatformIdThrows() {
         IllegalArgumentException ex = assertThrows(
-                IllegalArgumentException.class,
-                () -> new ChannelUser(null, null, "TestUser", ChannelType.TELEGRAM)
-        );
+                IllegalArgumentException.class, () -> new ChannelUser(null, null, "TestUser", ChannelType.TELEGRAM));
         assertTrue(ex.getMessage().contains("platformId"));
     }
 
     @Test
     void nullChannelIdThrows() {
         IllegalArgumentException ex = assertThrows(
-                IllegalArgumentException.class,
-                () -> new ChannelUser("123", null, "TestUser", ChannelType.TELEGRAM)
-        );
+                IllegalArgumentException.class, () -> new ChannelUser("123", null, "TestUser", ChannelType.TELEGRAM));
         assertTrue(ex.getMessage().contains("channelId"));
     }
 
     @Test
     void nullChannelThrows() {
-        IllegalArgumentException ex = assertThrows(
-                IllegalArgumentException.class,
-                () -> new ChannelUser("123", "123", "TestUser", null)
-        );
+        IllegalArgumentException ex =
+                assertThrows(IllegalArgumentException.class, () -> new ChannelUser("123", "123", "TestUser", null));
         assertTrue(ex.getMessage().contains("channel"));
     }
 

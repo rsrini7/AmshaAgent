@@ -1,12 +1,12 @@
 package com.arcclaw.core.agent.reasoning;
 
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
 import java.util.List;
-
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
 
 import com.arcclaw.core.agent.loop.AgentExecutionContext;
 import com.arcclaw.core.agent.reasoning.prompt.PromptConstants;
@@ -16,10 +16,12 @@ import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.tools.AgentTool;
 import com.arcclaw.core.tools.ToolRegistry;
+
+import org.jboss.logging.Logger;
+
 import io.quarkus.qute.Engine;
 import io.quarkus.qute.Location;
 import io.quarkus.qute.Template;
-import org.jboss.logging.Logger;
 
 /**
  * Builds role-specific system prompt section using Qute templates.
@@ -109,7 +111,8 @@ public class PromptTemplateEngine {
     /**
      * Renders the system prompt section with full context data.
      */
-    public String buildSystemPrompt(AgentExecutionContext context, AgentRoleEnum role, String compactionSummary, Instant systemTimeUtc) {
+    public String buildSystemPrompt(
+            AgentExecutionContext context, AgentRoleEnum role, String compactionSummary, Instant systemTimeUtc) {
         if (role == null) {
             log.warn("buildSystemPrompt called with null role - returning fallback");
             return "PERMITTED TOOLS: None";
@@ -120,13 +123,14 @@ public class PromptTemplateEngine {
         // HARD FILTER: only include tools that are actually enabled in the registry.
         // This prevents hallucinations where the LLM tries to call a tool that lacks API keys.
         boolean isBackground = context != null && context.autonomyLevel() == AutonomyLevel.BACKGROUND;
-        List<ToolCapability> sortedCapabilities = role.definition().capabilities()
-                .stream()
-                .filter(cap -> toolRegistry.findTool(cap.toolName())
-                        .map(AgentTool::isEnabled).orElse(false))
-                .filter(cap -> !isBackground || 
-                        (!ToolCapability.SCHEDULE_TASK.toolName().equals(cap.toolName()) && 
-                         !ToolCapability.MANAGE_SCHEDULE.toolName().equals(cap.toolName())))
+        List<ToolCapability> sortedCapabilities = role.definition().capabilities().stream()
+                .filter(cap -> toolRegistry
+                        .findTool(cap.toolName())
+                        .map(AgentTool::isEnabled)
+                        .orElse(false))
+                .filter(cap -> !isBackground
+                        || (!ToolCapability.SCHEDULE_TASK.toolName().equals(cap.toolName())
+                                && !ToolCapability.MANAGE_SCHEDULE.toolName().equals(cap.toolName())))
                 .sorted((c1, c2) -> {
                     if (ToolCapability.BROWSER_NAVIGATE.toolName().equals(c1.toolName())) return -1;
                     if (ToolCapability.BROWSER_NAVIGATE.toolName().equals(c2.toolName())) return 1;
@@ -134,23 +138,28 @@ public class PromptTemplateEngine {
                 })
                 .toList();
 
-        log.debugf("Building system prompt for role %s. Enabled capabilities: %s", 
-                role.id(), sortedCapabilities.stream().map(ToolCapability::toolName).toList());
+        log.debugf(
+                "Building system prompt for role %s. Enabled capabilities: %s",
+                role.id(),
+                sortedCapabilities.stream().map(ToolCapability::toolName).toList());
 
         String timeString = "";
         if (systemTimeUtc != null) {
             ZonedDateTime zdt = systemTimeUtc.atZone(ZoneOffset.UTC);
             timeString = String.format(
-                "%04d-%02d-%02dT%02d:%02dZ (UTC hour=%d, minute=%d)",
-                zdt.getYear(), zdt.getMonthValue(), zdt.getDayOfMonth(),
-                zdt.getHour(), zdt.getMinute(),
-                zdt.getHour(), zdt.getMinute()
-            );
+                    "%04d-%02d-%02dT%02d:%02dZ (UTC hour=%d, minute=%d)",
+                    zdt.getYear(),
+                    zdt.getMonthValue(),
+                    zdt.getDayOfMonth(),
+                    zdt.getHour(),
+                    zdt.getMinute(),
+                    zdt.getHour(),
+                    zdt.getMinute());
         }
 
         boolean hasSandboxExec = sortedCapabilities.stream()
                 .anyMatch(c -> ToolCapability.SANDBOX_EXEC.toolName().equals(c.toolName()));
-                
+
         boolean hasBrowserNavigate = sortedCapabilities.stream()
                 .anyMatch(c -> ToolCapability.BROWSER_NAVIGATE.toolName().equals(c.toolName()));
 
@@ -176,20 +185,21 @@ public class PromptTemplateEngine {
         }
         return switch (role.id()) {
             case "coordinator" -> coordinatorTemplate;
-            case "researcher"  -> researcherTemplate;
-            case "coder"       -> coderTemplate;
-            case "debugger"    -> debuggerTemplate;
-            case "architect"   -> architectTemplate;
+            case "researcher" -> researcherTemplate;
+            case "coder" -> coderTemplate;
+            case "debugger" -> debuggerTemplate;
+            case "architect" -> architectTemplate;
             case "synthesizer" -> synthesizerTemplate;
-            case "healer"      -> healerTemplate;
-            case "optimizer"   -> optimizerTemplate;
-            case "sentinel"    -> sentinelTemplate;
-            case "protector"   -> protectorTemplate;
-            case "purifier"    -> purifierTemplate;
-            case "nurturer"    -> nurturerTemplate;
-            default -> throw new IllegalStateException(
-                "No Qute template registered for role '" + role.id() + "'. " +
-                "Create templates/prompts/role-" + role.id() + ".txt in arcclaw-core/src/main/resources to fix.");
+            case "healer" -> healerTemplate;
+            case "optimizer" -> optimizerTemplate;
+            case "sentinel" -> sentinelTemplate;
+            case "protector" -> protectorTemplate;
+            case "purifier" -> purifierTemplate;
+            case "nurturer" -> nurturerTemplate;
+            default ->
+                throw new IllegalStateException(
+                        "No Qute template registered for role '" + role.id() + "'. " + "Create templates/prompts/role-"
+                                + role.id() + ".txt in arcclaw-core/src/main/resources to fix.");
         };
     }
 }

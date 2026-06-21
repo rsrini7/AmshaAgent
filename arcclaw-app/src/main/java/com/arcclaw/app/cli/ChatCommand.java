@@ -1,18 +1,24 @@
 package com.arcclaw.app.cli;
 
-import java.time.Instant;
-import java.util.NoSuchElementException;
-import java.util.Scanner;
-import java.util.UUID;
-import java.util.concurrent.CancellationException;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
+import picocli.CommandLine;
 
 import jakarta.annotation.Priority;
 import jakarta.enterprise.context.control.ActivateRequestContext;
 import jakarta.enterprise.event.Observes;
 import jakarta.inject.Inject;
+
+import java.io.BufferedReader;
+import java.io.Console;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
+import java.time.Instant;
+import java.util.List;
+import java.util.UUID;
+import java.util.concurrent.CancellationException;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 import com.arcclaw.channel.api.ChannelMessage;
 import com.arcclaw.channel.api.ChannelType;
@@ -32,25 +38,55 @@ import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.util.TimeContextInjector;
-import io.quarkus.runtime.ShutdownEvent;
+
 import org.eclipse.microprofile.config.inject.ConfigProperty;
+import org.fusesource.jansi.AnsiConsole;
 import org.jboss.logging.Logger;
-import picocli.CommandLine;
+import org.jline.reader.EndOfFileException;
+import org.jline.reader.LineReader;
+import org.jline.reader.LineReaderBuilder;
+import org.jline.reader.UserInterruptException;
+import org.jline.reader.impl.history.DefaultHistory;
+import org.jline.terminal.Terminal;
+import org.jline.terminal.TerminalBuilder;
+
+import io.quarkus.runtime.ShutdownEvent;
 
 @CommandLine.Command(name = "chat", description = "Start an interactive chat session with ArcClaw")
+@SuppressWarnings("java:S1192")
 public class ChatCommand implements Runnable {
 
-    @CommandLine.Option(names = {"-r", "--role"}, defaultValue = "coordinator")
-    String role = "coordinator";
+    private static final String CLI_USER_ID = "cli-user";
+    private static final String CLI_CHAT_ID = "cli-chat";
 
-    @Inject Logger log;
-    @Inject AgentLoop agentLoop;
-    @Inject ReasoningEngine reasoningEngine;
-    @Inject WorkspaceManager workspaceManager;
-    @Inject SessionHeartbeatTracker heartbeatTracker;
-    @Inject ReflexRegistry reflexRegistry;
-    @Inject StatefulAgentStore statefulAgentStore;
-    @Inject CliResultBridge cliResultBridge;
+    @CommandLine.Option(
+            names = {"-r", "--role"},
+            defaultValue = AgentRoleEnum.COORDINATOR_ID)
+    String role = AgentRoleEnum.COORDINATOR_ID;
+
+    @Inject
+    Logger log;
+
+    @Inject
+    AgentLoop agentLoop;
+
+    @Inject
+    ReasoningEngine reasoningEngine;
+
+    @Inject
+    WorkspaceManager workspaceManager;
+
+    @Inject
+    SessionHeartbeatTracker heartbeatTracker;
+
+    @Inject
+    ReflexRegistry reflexRegistry;
+
+    @Inject
+    StatefulAgentStore statefulAgentStore;
+
+    @Inject
+    CliResultBridge cliResultBridge;
 
     private volatile String currentCliSessionId;
 
@@ -69,6 +105,9 @@ public class ChatCommand implements Runnable {
      */
     private volatile boolean hitlPending = false;
 
+    /** JLine3 line reader - exposed to HITL virtual thread for printAbove(). */
+    private volatile LineReader lineReader;
+
     @ConfigProperty(name = "arcclaw.agent.max-iterations", defaultValue = "5")
     int maxIterations;
 
@@ -84,6 +123,11 @@ public class ChatCommand implements Runnable {
         String sessionId = "cli-" + UUID.randomUUID();
         this.currentCliSessionId = sessionId;
 
+        // Install Jansi ANSI support — auto-detects terminal capabilities.
+        // Enables ANSI colors in CliReplyRenderer when connected to a terminal;
+        // disables them for piped output / CI logs.
+        AnsiConsole.systemInstall();
+
         System.out.println("✦ ArcClaw Interactive Terminal");
         System.out.println("   Session : " + sessionId);
         System.out.println("   Role    : " + role);
@@ -91,9 +135,8 @@ public class ChatCommand implements Runnable {
         System.out.println("-------------------------------------------------");
 
         try {
-            ScopedValue.where(WorkspaceContext.CHANNEL_TYPE, ChannelType.CLI.id()).run(
-                () -> runChatLoop(sessionId)
-            );
+            ScopedValue.where(WorkspaceContext.CHANNEL_TYPE, ChannelType.CLI.id())
+                    .run(() -> runChatLoop(sessionId));
         } catch (Exception e) {
             log.errorf("Fatal error in chat session %s:\n%s", sessionId, LogUtil.trimmedStack(e));
             System.err.println("❌ Fatal: " + e.getMessage());
@@ -102,6 +145,7 @@ public class ChatCommand implements Runnable {
                 this.currentCliSessionId = null;
                 workspaceManager.terminateSession(sessionId);
             }
+            AnsiConsole.systemUninstall();
         }
 
         System.out.println("\n[Terminated]");
@@ -131,33 +175,120 @@ public class ChatCommand implements Runnable {
         try {
             heartbeatTracker.recordHeartbeat(sessionId);
             WorkspaceContext.run(
-                sessionId, "cli-user", "cli-chat",
-                AutonomyLevel.SUPERVISED,
-                AgentRoleEnum.COORDINATOR.toScopedName(),
-                () -> {
-                    chatLoop(sessionId);
-                    return null;
-                }
-            );
+                    sessionId,
+                    CLI_USER_ID,
+                    CLI_CHAT_ID,
+                    AutonomyLevel.SUPERVISED,
+                    AgentRoleEnum.COORDINATOR.toScopedName(),
+                    () -> {
+                        chatLoop(sessionId);
+                        return null;
+                    });
         } catch (Exception e) {
             log.errorf("Error in WorkspaceContext for session %s:\n%s", sessionId, LogUtil.trimmedStack(e));
             System.err.println("❌ Session error: " + e.getMessage());
         }
     }
 
-    @SuppressWarnings("resource")
     private void chatLoop(String sessionId) {
-        Scanner scanner = new Scanner(System.in);
+        try (Terminal terminal = TerminalBuilder.builder().system(true).build()) {
 
+            List<String> slashCommands = extractSlashCommands();
+            SlashCommandCompleter completer = new SlashCommandCompleter(slashCommands);
+
+            LineReader reader = LineReaderBuilder.builder()
+                    .terminal(terminal)
+                    .completer(completer)
+                    .history(new DefaultHistory())
+                    .variable(LineReader.HISTORY_FILE, Path.of(System.getProperty("user.home"), ".arcclaw_history"))
+                    .build();
+
+            this.lineReader = reader;
+
+            chatLoopInner(sessionId, reader, terminal);
+
+        } catch (Exception e) {
+            log.warnf("JLine3 terminal init failed (%s), falling back to raw input", e.getMessage());
+            chatLoopFallback(sessionId);
+        } finally {
+            this.lineReader = null;
+        }
+    }
+
+    private void chatLoopInner(String sessionId, LineReader reader, Terminal terminal) {
         while (true) {
-            System.out.print("\nYou> ");
-            System.out.flush();
-            if (!scanner.hasNextLine()) break;
-
             String input;
             try {
-                input = scanner.nextLine().trim();
-            } catch (NoSuchElementException _) {
+                input = reader.readLine("\nYou> ");
+                if (input == null) break;
+                input = input.trim();
+            } catch (EndOfFileException _) {
+                break;
+            } catch (UserInterruptException _) {
+                // Ctrl+C during line editing - continue loop
+                continue;
+            }
+
+            if ("/exit".equalsIgnoreCase(input) || "/quit".equalsIgnoreCase(input)) {
+                terminal.writer().println("Goodbye.");
+                break;
+            }
+            if (input.isBlank()) continue;
+
+            if (!input.startsWith("/approve") && !input.startsWith("/deny")) {
+                if (hitlPending) {
+                    var _ = cliResultBridge.register(sessionId);
+                    terminal.writer()
+                            .println(
+                                    "\n▶ ArcClaw> ⏸ Approval pending - type /approve or /deny before sending new messages.");
+                    continue;
+                }
+            }
+
+            heartbeatTracker.recordHeartbeat(sessionId);
+
+            MessageContext context = createCliContext(sessionId, input);
+
+            TimeContextInjector.inject(context, input, defaultTimezone);
+
+            ReflexResult reflexResult =
+                    reflexRegistry.processIfReflex(sessionId, CLI_USER_ID, CLI_CHAT_ID, input, context);
+
+            if (reflexResult.commandResponse().isPresent()) {
+                String response = reflexResult.commandResponse().get();
+                if (!response.isBlank()) {
+                    hitlResultPrinted = true;
+                    if (input.startsWith("/approve") || input.startsWith("/deny")) {
+                        hitlPending = false;
+                    }
+                    terminal.writer().println("\n▶ ArcClaw> " + response);
+                }
+                continue;
+            }
+
+            dispatchToAgent(sessionId, reflexResult.sanitizedInput(), context);
+        }
+    }
+
+    /** Fallback for non-TTY environments (CI, piped stdin, Docker without -t). */
+    private void chatLoopFallback(String sessionId) {
+        Console console = System.console();
+        BufferedReader fallbackReader =
+                (console == null) ? new BufferedReader(new InputStreamReader(System.in, StandardCharsets.UTF_8)) : null;
+
+        while (true) {
+            String input;
+            try {
+                if (console != null) {
+                    input = console.readLine("\nYou> ");
+                } else {
+                    System.out.print("\nYou> ");
+                    System.out.flush();
+                    input = fallbackReader.readLine();
+                }
+                if (input == null) break;
+                input = input.trim();
+            } catch (Exception _) {
                 break;
             }
 
@@ -169,8 +300,9 @@ public class ChatCommand implements Runnable {
 
             if (!input.startsWith("/approve") && !input.startsWith("/deny")) {
                 if (hitlPending) {
-                    cliResultBridge.register(sessionId);
-                    System.out.println("\n▶ ArcClaw> ⏸ Approval pending - type /approve or /deny before sending new messages.");
+                    var _ = cliResultBridge.register(sessionId);
+                    System.out.println(
+                            "\n▶ ArcClaw> ⏸ Approval pending - type /approve or /deny before sending new messages.");
                     continue;
                 }
             }
@@ -181,15 +313,12 @@ public class ChatCommand implements Runnable {
 
             TimeContextInjector.inject(context, input, defaultTimezone);
 
-            ReflexResult reflexResult = reflexRegistry.processIfReflex(
-                sessionId, "cli-user", "cli-chat", input, context);
+            ReflexResult reflexResult =
+                    reflexRegistry.processIfReflex(sessionId, CLI_USER_ID, CLI_CHAT_ID, input, context);
 
             if (reflexResult.commandResponse().isPresent()) {
                 String response = reflexResult.commandResponse().get();
                 if (!response.isBlank()) {
-                    // Set flag BEFORE printing so the HITL virtual thread (if racing)
-                    // sees it and suppresses its own print - avoids double-print when
-                    // user types /approve while a virtual waiter thread is also active.
                     hitlResultPrinted = true;
                     if (input.startsWith("/approve") || input.startsWith("/deny")) {
                         hitlPending = false;
@@ -203,6 +332,25 @@ public class ChatCommand implements Runnable {
         }
     }
 
+    private List<String> extractSlashCommands() {
+        return List.of(
+                "/approve",
+                "/commands",
+                "/crons",
+                "/deletecron",
+                "/deny",
+                "/exit",
+                "/halt",
+                "/help",
+                "/history",
+                "/quit",
+                "/reset",
+                "/retry",
+                "/status",
+                "/store",
+                "/vault");
+    }
+
     private void dispatchToAgent(String sessionId, String input, MessageContext context) {
         try {
             System.out.println("⚡ Thinking...");
@@ -214,67 +362,78 @@ public class ChatCommand implements Runnable {
 
             hitlResultPrinted = false; // reset for this dispatch cycle
 
-            AgentResult result = agentLoop.run(
-                sessionId, role, input, reasoningEngine, maxIterations, context);
+            AgentResult result = agentLoop.run(sessionId, role, input, reasoningEngine, maxIterations, context);
 
-            String output = switch (result) {
-                case AgentResult.Finished f           -> f.answer();
-                case AgentResult.StructuredFinished sf -> sf.answer();
-                case AgentResult.Failed f             -> "❌ Error: " + f.reason();
-                case AgentResult.LoopExceeded l       -> "⏱ Timed out after " + l.maxIterations() + " steps.";
-                case AgentResult.AwaitingRetry r      -> "⏳ Rate limit hit. I'll automatically retry in " + (r.retryAfterMs() / 1000) + "s...";
-                case AgentResult.AwaitingApproval a   -> {
-                    hitlPending = true;
-                    heartbeatTracker.recordHeartbeat(sessionId);
-                    String truncatedParams = a.paramsJson() != null
-                            && a.paramsJson().length() > 200
-                            ? a.paramsJson().substring(0, 200) + "... [truncated]"
-                            : a.paramsJson();
+            String output =
+                    switch (result) {
+                        case AgentResult.Finished f -> f.answer();
+                        case AgentResult.StructuredFinished sf -> sf.answer();
+                        case AgentResult.Failed f -> "❌ Error: " + f.reason();
+                        case AgentResult.LoopExceeded l -> "⏱ Timed out after " + l.maxIterations() + " steps.";
+                        case AgentResult.AwaitingRetry r ->
+                            "⏳ Rate limit hit. I'll automatically retry in " + (r.retryAfterMs() / 1000) + "s...";
+                        case AgentResult.AwaitingApproval a -> {
+                            hitlPending = true;
+                            heartbeatTracker.recordHeartbeat(sessionId);
+                            String truncatedParams =
+                                    a.paramsJson() != null && a.paramsJson().length() > 200
+                                            ? a.paramsJson().substring(0, 200) + "... [truncated]"
+                                            : a.paramsJson();
 
-                    System.out.println("\n▶ ArcClaw> ⏸ Approval needed for tool: " + a.toolName() +
-                            "\n   Params: " + truncatedParams +
-                            "\n   Type /approve or /deny (or approve via REST/UI - result will appear automatically)");
+                            System.out.println(
+                                    "\n▶ ArcClaw> ⏸ Approval needed for tool: " + a.toolName() + "\n   Params: "
+                                            + truncatedParams
+                                            + "\n   Type /approve or /deny (or approve via REST/UI - result will appear automatically)");
 
-                    // Spawn a virtual thread that holds the pre-registered future directly.
-                    // This is race-safe: even if complete() fires before get() is called,
-                    // the future is already in COMPLETED state and get() returns immediately.
-                    Thread.ofVirtual()
-                        .name("hitl-waiter-" + sessionId)
-                        .start(() -> {
-                            try {
-                                AgentResult hitlResult = resultFuture.get(hitlTimeoutHours, TimeUnit.HOURS);
-                                if (hitlResult == null || hitlResultPrinted) return;
-                                hitlResultPrinted = true;
+                            // Spawn a virtual thread that holds the pre-registered future directly.
+                            // This is race-safe: even if complete() fires before get() is called,
+                            // the future is already in COMPLETED state and get() returns immediately.
+                            Thread.ofVirtual().name("hitl-waiter-" + sessionId).start(() -> {
+                                try {
+                                    AgentResult hitlResult = resultFuture.get(hitlTimeoutHours, TimeUnit.HOURS);
+                                    if (hitlResult == null || hitlResultPrinted) return;
+                                    hitlResultPrinted = true;
 
-                                String hitlOutput = switch (hitlResult) {
-                                    case AgentResult.Finished f            -> f.answer();
-                                    case AgentResult.StructuredFinished sf -> sf.answer();
-                                    case AgentResult.Failed f              -> "❌ Error: " + f.reason();
-                                    case AgentResult.LoopExceeded l        -> "⏱ Timed out after " + l.maxIterations() + " steps.";
-                                    case AgentResult.AwaitingRetry r       -> "⏳ Rate limit hit. Retry in " + (r.retryAfterMs() / 1000) + "s...";
-                                    default                                -> null;
-                                };
-                                if (hitlOutput != null) {
-                                    System.out.println("\n▶ ArcClaw> " + hitlOutput);
-                                    System.out.print("\nYou> "); // re-prompt so user sees the cursor
-                                    System.out.flush();
+                                    String hitlOutput =
+                                            switch (hitlResult) {
+                                                case AgentResult.Finished f -> f.answer();
+                                                case AgentResult.StructuredFinished sf -> sf.answer();
+                                                case AgentResult.Failed f -> "❌ Error: " + f.reason();
+                                                case AgentResult.LoopExceeded l ->
+                                                    "⏱ Timed out after " + l.maxIterations() + " steps.";
+                                                case AgentResult.AwaitingRetry r ->
+                                                    "⏳ Rate limit hit. Retry in " + (r.retryAfterMs() / 1000) + "s...";
+                                                default -> null;
+                                            };
+                                    if (hitlOutput != null) {
+                                        LineReader lr = lineReader;
+                                        if (lr != null) {
+                                            lr.printAbove("\n▶ ArcClaw> " + hitlOutput);
+                                        } else {
+                                            System.out.println("\n▶ ArcClaw> " + hitlOutput);
+                                            System.out.print("\nYou> ");
+                                            System.out.flush();
+                                        }
+                                    }
+                                } catch (CancellationException e) {
+                                    log.debugf("HITL waiter cancelled for session %s (shutdown or GC)", sessionId);
+                                } catch (TimeoutException e) {
+                                    log.debugf(
+                                            "HITL waiter timed out for session %s after %dh",
+                                            sessionId, hitlTimeoutHours);
+                                } catch (InterruptedException e) {
+                                    Thread.currentThread().interrupt();
+                                } catch (Exception e) {
+                                    log.warnf(
+                                            "HITL waiter error for session %s: %s", sessionId, LogUtil.rootMessage(e));
+                                } finally {
+                                    hitlPending = false;
                                 }
-                            } catch (CancellationException e) {
-                                log.debugf("HITL waiter cancelled for session %s (shutdown or GC)", sessionId);
-                            } catch (TimeoutException e) {
-                                log.debugf("HITL waiter timed out for session %s after %dh", sessionId, hitlTimeoutHours);
-                            } catch (InterruptedException e) {
-                                Thread.currentThread().interrupt();
-                            } catch (Exception e) {
-                                log.warnf("HITL waiter error for session %s: %s", sessionId, LogUtil.rootMessage(e));
-                            } finally {
-                                hitlPending = false;
-                            }
-                        });
+                            });
 
-                    yield null; // main thread returns to scanner.nextLine()
-                }
-            };
+                            yield null; // main thread returns to scanner.nextLine()
+                        }
+                    };
 
             // Cancel bridge state for all terminal results.
             // For AwaitingApproval we intentionally skip - the virtual thread owns cleanup.
@@ -293,8 +452,8 @@ public class ChatCommand implements Runnable {
     }
 
     private MessageContext createCliContext(String sessionId, String input) {
-        ChannelUser user = new ChannelUser("cli-user", "cli-user", "CLI User", ChannelType.CLI);
+        ChannelUser user = new ChannelUser(CLI_USER_ID, CLI_USER_ID, "CLI User", ChannelType.CLI);
         ChannelMessage msg = new ChannelMessage.CliMessage(user, input, sessionId, Instant.now());
-        return new MessageContext("cli-chat", user, msg);
+        return new MessageContext(CLI_CHAT_ID, user, msg);
     }
 }

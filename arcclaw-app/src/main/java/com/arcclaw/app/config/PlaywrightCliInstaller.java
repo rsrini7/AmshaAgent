@@ -1,11 +1,14 @@
 package com.arcclaw.app.config;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.concurrent.TimeUnit;
 
 import com.arcclaw.common.util.LogUtil;
+
 import org.jboss.logging.Logger;
 
 /**
@@ -41,8 +44,8 @@ public class PlaywrightCliInstaller {
     public static void ensureBrowsersInstalled() {
         if (!isPlaywrightCliAvailable()) return;
 
-        String skipInstall = System.getProperty("ARCCLAW_TOOLS_PLAYWRIGHT_SKIP_INSTALL",
-                System.getenv("ARCCLAW_TOOLS_PLAYWRIGHT_SKIP_INSTALL"));
+        String skipInstall = System.getProperty(
+                "ARCCLAW_TOOLS_PLAYWRIGHT_SKIP_INSTALL", System.getenv("ARCCLAW_TOOLS_PLAYWRIGHT_SKIP_INSTALL"));
         if ("true".equalsIgnoreCase(skipInstall)) {
             log.info("Playwright browser install skipped (ARCCLAW_TOOLS_PLAYWRIGHT_SKIP_INSTALL=true)");
             return;
@@ -100,7 +103,7 @@ public class PlaywrightCliInstaller {
                 return false;
             }
             if (p.exitValue() != 0) return false;
-            String ver = new String(p.getInputStream().readAllBytes()).trim();
+            String ver = new String(p.getInputStream().readAllBytes(), StandardCharsets.UTF_8).trim();
             return ver.startsWith("v") && Integer.parseInt(ver.substring(1, ver.indexOf('.'))) >= 20;
         } catch (Exception e) {
             return false;
@@ -126,7 +129,7 @@ public class PlaywrightCliInstaller {
             pb.redirectErrorStream(true);
             pb.environment().put("NPM_CONFIG_TIMEOUT", NPM_INSTALL_TIMEOUT_SEC);
             Process p = pb.start();
-            String output = new String(p.getInputStream().readAllBytes());
+            String output = new String(p.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
             int exit = p.waitFor();
 
             if (exit == 0) {
@@ -136,7 +139,8 @@ public class PlaywrightCliInstaller {
                 System.err.println("  ✗ npm install failed (exit " + exit + "):");
                 System.err.println("    " + output.trim());
                 System.err.println();
-                System.err.println("  Install manually: npm install -g @playwright/cli && playwright-cli install-browser chromium");
+                System.err.println(
+                        "  Install manually: npm install -g @playwright/cli && playwright-cli install-browser chromium");
             }
         } catch (Exception e) {
             System.err.println("  ✗ Failed to install @playwright/cli: " + e.getMessage());
@@ -159,13 +163,13 @@ public class PlaywrightCliInstaller {
         ProcessBuilder pb = new ProcessBuilder(platformCommand(cmd));
         pb.redirectErrorStream(true);
         Process p = pb.start();
-        String out = new String(p.getInputStream().readAllBytes());
+        String out = new String(p.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
         int exit = p.waitFor();
         if (exit != 0) throw new IOException("exit " + exit + ": " + out.trim());
         return out;
     }
 
     private static boolean isWindows() {
-        return System.getProperty("os.name", "").toLowerCase().contains("win");
+        return System.getProperty("os.name", "").toLowerCase(Locale.ROOT).contains("win");
     }
 }

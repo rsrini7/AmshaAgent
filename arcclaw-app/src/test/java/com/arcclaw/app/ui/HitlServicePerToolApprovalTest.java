@@ -12,6 +12,7 @@ import com.arcclaw.core.observability.AgentOtelContext;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.persistence.api.CheckpointDto;
 import com.fasterxml.jackson.databind.ObjectMapper;
+
 import org.jdbi.v3.core.Handle;
 import org.jdbi.v3.core.HandleCallback;
 import org.jdbi.v3.core.Jdbi;
@@ -28,18 +29,25 @@ public class HitlServicePerToolApprovalTest {
 
     @Mock
     Jdbi jdbi;
+
     @Mock
     Handle handle;
+
     @Mock
     Query query;
+
     @Mock
     CheckpointApprovalService checkpointApprovalService;
+
     @Mock
     AgentOtelContext otelContext;
+
     @Mock
     ObjectMapper objectMapper;
+
     @Mock
     SessionHeartbeatTracker heartbeatTracker;
+
     @InjectMocks
     HitlService hitlService;
 
@@ -63,9 +71,34 @@ public class HitlServicePerToolApprovalTest {
     @SuppressWarnings("unchecked")
     void test_resolve_perToolApprove_delegatesCorrectly() {
         CheckpointDto cp = new CheckpointDto(
-                1L, "s1", "default", CheckpointStatus.AWAITING_APPROVAL.name(),
-                null, null, null, null, null, null, null, null, null, null, null,
-                null, null, 0, null, null, null, null, null, null, null, 0, null, null);
+                1L,
+                "s1",
+                "default",
+                CheckpointStatus.AWAITING_APPROVAL.name(),
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                0,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                0,
+                null,
+                null);
 
         ResultIterable<CheckpointDto> resultIterable = mock(ResultIterable.class);
         when(query.mapTo(CheckpointDto.class)).thenReturn(resultIterable);
@@ -81,9 +114,34 @@ public class HitlServicePerToolApprovalTest {
     @SuppressWarnings("unchecked")
     void test_resolve_perToolDeny_delegatesCorrectly() {
         CheckpointDto cp = new CheckpointDto(
-                1L, "s1", "default", CheckpointStatus.AWAITING_APPROVAL.name(),
-                null, null, null, null, null, null, null, null, null, null, null,
-                null, null, 0, null, null, null, null, null, null, null, 0, null, null);
+                1L,
+                "s1",
+                "default",
+                CheckpointStatus.AWAITING_APPROVAL.name(),
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                0,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                0,
+                null,
+                null);
 
         ResultIterable<CheckpointDto> resultIterable = mock(ResultIterable.class);
         when(query.mapTo(CheckpointDto.class)).thenReturn(resultIterable);
@@ -99,9 +157,34 @@ public class HitlServicePerToolApprovalTest {
     @SuppressWarnings("unchecked")
     void test_resolve_bulkApprove_stillWorks() {
         CheckpointDto cp = new CheckpointDto(
-                1L, "s1", "default", CheckpointStatus.AWAITING_APPROVAL.name(),
-                null, null, null, null, null, null, null, null, null, null, null,
-                null, null, 0, null, null, null, null, null, null, null, 0, null, null);
+                1L,
+                "s1",
+                "default",
+                CheckpointStatus.AWAITING_APPROVAL.name(),
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                0,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                0,
+                null,
+                null);
 
         ResultIterable<CheckpointDto> resultIterable = mock(ResultIterable.class);
         when(query.mapTo(CheckpointDto.class)).thenReturn(resultIterable);

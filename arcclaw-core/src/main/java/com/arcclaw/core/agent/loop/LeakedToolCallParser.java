@@ -10,9 +10,11 @@ import java.util.stream.Collectors;
 
 import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.core.agent.loop.AnswerGuardStrategy.LeakedToolCall;
+import com.arcclaw.core.agent.reasoning.ToolCallJsonKeys;
 import com.arcclaw.core.tools.ToolRegistry;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+
 import org.jboss.logging.Logger;
 
 /**
@@ -34,15 +36,18 @@ public class LeakedToolCallParser {
     private static final Pattern NVIDIA_TOOL_NAME_PATTERN =
             Pattern.compile("TOOLCALLS\\s+([a-zA-Z_][a-zA-Z0-9_]*)", Pattern.CASE_INSENSITIVE);
 
+    // Extracts content from markdown code blocks (```lang\n...\n```)
+    private static final Pattern CODE_BLOCK_EXTRACT_PATTERN =
+            Pattern.compile("```(?:\\w+)?\\s*\\n([\\s\\S]*?)```", Pattern.MULTILINE);
+
     private final ToolRegistry toolRegistry;
     private final Pattern nakedFunctionCallPattern;
 
     public LeakedToolCallParser(ToolRegistry toolRegistry) {
         this.toolRegistry = toolRegistry;
         String toolNames = toolRegistry.listTools().stream().sorted().collect(Collectors.joining("|"));
-        this.nakedFunctionCallPattern = Pattern.compile(
-                "\\b(" + toolNames + ")\\s*\\(([^)]*)\\)",
-                Pattern.CASE_INSENSITIVE);
+        this.nakedFunctionCallPattern =
+                Pattern.compile("\\b(" + toolNames + ")\\s*\\(([^)]*)\\)", Pattern.CASE_INSENSITIVE);
     }
 
     public Optional<LeakedToolCall> extractLeakedToolCall(String answer) {
@@ -68,20 +73,31 @@ public class LeakedToolCallParser {
             ObjectMapper mapper = new ObjectMapper();
             String trimmed = stripMarkdownFences(answer.strip());
 
+            // If the full text doesn't start with {, try extracting JSON from embedded code blocks
+            if (!trimmed.startsWith("{")) {
+                String fromBlock = extractJsonFromCodeBlock(answer);
+                if (fromBlock != null) {
+                    trimmed = fromBlock;
+                }
+            }
+
             if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
                 Map<String, Object> parsed = mapper.readValue(trimmed, new TypeReference<>() {});
 
                 // Format: {"name":"tool","parameters":{...}}
                 Optional<LeakedToolCall> fromObj = parseJsonObjectFormat(parsed);
                 if (fromObj.isPresent()) {
-                    log.infof("Parsed JSON object format: tool=%s", fromObj.get().toolName());
+                    log.infof(
+                            "Parsed JSON object format: tool=%s", fromObj.get().toolName());
                     return fromObj;
                 }
 
                 // Format: {"tool_calls":[{"name":"tool","arguments":{...}}]}
                 Optional<LeakedToolCall> fromArray = parseToolCallsArray(parsed);
                 if (fromArray.isPresent()) {
-                    log.infof("Parsed tool_calls array format: tool=%s", fromArray.get().toolName());
+                    log.infof(
+                            "Parsed tool_calls array format: tool=%s",
+                            fromArray.get().toolName());
                     return fromArray;
                 }
 
@@ -113,10 +129,14 @@ public class LeakedToolCallParser {
     private Optional<LeakedToolCall> parseToolCallsArray(Map<String, Object> parsed) {
         Object calls = parsed.get("tool_calls");
         if (calls instanceof List<?> list && !list.isEmpty() && list.get(0) instanceof Map<?, ?> callMap) {
-            Object nameObj = callMap.containsKey("name") ? callMap.get("name") : callMap.get("function");
+            Object nameObj = callMap.containsKey(ToolCallJsonKeys.NAME)
+                    ? callMap.get(ToolCallJsonKeys.NAME)
+                    : callMap.get(ToolCallJsonKeys.FUNCTION);
             String callName = nameObj instanceof String s ? s : null;
             if (callName != null && toolRegistry.listTools().contains(callName)) {
-                Object argsObj = callMap.containsKey("arguments") ? callMap.get("arguments") : callMap.get("parameters");
+                Object argsObj = callMap.containsKey(ToolCallJsonKeys.ARGUMENTS)
+                        ? callMap.get(ToolCallJsonKeys.ARGUMENTS)
+                        : callMap.get(ToolCallJsonKeys.PARAMETERS);
                 @SuppressWarnings("unchecked")
                 Map<String, Object> callArgs = argsObj instanceof Map ? (Map<String, Object>) argsObj : Map.of();
                 return Optional.of(new LeakedToolCall(callName, callArgs));
@@ -142,7 +162,12 @@ public class LeakedToolCallParser {
     }
 
     private String extractToolName(Map<String, Object> parsed) {
-        for (String key : List.of("name", "tool_name", "tool", "action", "function")) {
+        for (String key : List.of(
+                ToolCallJsonKeys.NAME,
+                ToolCallJsonKeys.TOOL_NAME,
+                ToolCallJsonKeys.TOOL,
+                ToolCallJsonKeys.ACTION,
+                ToolCallJsonKeys.FUNCTION)) {
             Object val = parsed.get(key);
             if (val instanceof String s) return s;
         }
@@ -150,15 +175,27 @@ public class LeakedToolCallParser {
     }
 
     private Map<String, Object> extractParams(Map<String, Object> parsed) {
-        Object raw = parsed.get("parameters");
-        if (raw == null) raw = parsed.get("arguments");
+        Object raw = parsed.get(ToolCallJsonKeys.PARAMETERS);
+        if (raw == null) raw = parsed.get(ToolCallJsonKeys.ARGUMENTS);
+        // Small models (e.g., Groq llama-4-scout) use "params" as the wrapper key
+        if (raw == null) raw = parsed.get("params");
         if (raw == null) raw = parsed;
         if (!(raw instanceof Map<?, ?> m)) return Map.of();
 
         Map<String, Object> params = new HashMap<>();
         for (var entry : m.entrySet()) {
             if (entry.getKey() instanceof String k
-                    && !List.of("name", "tool_name", "tool", "action", "function", "type", "parameters", "arguments").contains(k)) {
+                    && !List.of(
+                                    ToolCallJsonKeys.NAME,
+                                    ToolCallJsonKeys.TOOL_NAME,
+                                    ToolCallJsonKeys.TOOL,
+                                    ToolCallJsonKeys.ACTION,
+                                    ToolCallJsonKeys.FUNCTION,
+                                    "type",
+                                    ToolCallJsonKeys.PARAMETERS,
+                                    ToolCallJsonKeys.ARGUMENTS,
+                                    "params")
+                            .contains(k)) {
                 params.put(k, entry.getValue());
             }
         }
@@ -176,6 +213,22 @@ public class LeakedToolCallParser {
         return text;
     }
 
+    /**
+     * Extracts JSON from markdown code blocks embedded in text.
+     * E.g., "some text\n```json\n{...}\n```\nmore text" → "{...}"
+     * Returns the first JSON object found in a code block, or null.
+     */
+    static String extractJsonFromCodeBlock(String text) {
+        Matcher m = CODE_BLOCK_EXTRACT_PATTERN.matcher(text);
+        while (m.find()) {
+            String candidate = m.group(1).strip();
+            if (candidate.startsWith("{") && candidate.endsWith("}")) {
+                return candidate;
+            }
+        }
+        return null;
+    }
+
     private Map<String, Object> parseJsonObject(String json) {
         try {
             return new ObjectMapper().readValue(json, new TypeReference<>() {});
@@ -187,7 +240,9 @@ public class LeakedToolCallParser {
     private Map<String, Object> parseNakedArgs(String argsBlock) {
         Map<String, Object> args = new HashMap<>();
         // Pattern 1: key="value" or key='value' (traditional naked format)
-        Matcher m = Pattern.compile("([a-zA-Z_][a-zA-Z0-9_]*)\\s*=\\s*(?:\"((?:[^\"\\\\]|\\\\.)*)\"|'((?:[^'\\\\]|\\\\.)*)')").matcher(argsBlock);
+        Matcher m = Pattern.compile(
+                        "([a-zA-Z_][a-zA-Z0-9_]*)\\s*=\\s*(?:\"((?:[^\"\\\\]|\\\\.)*)\"|'((?:[^'\\\\]|\\\\.)*)')")
+                .matcher(argsBlock);
         while (m.find()) {
             String key = m.group(1);
             String val = m.group(2) != null ? m.group(2) : m.group(3);
@@ -195,7 +250,8 @@ public class LeakedToolCallParser {
         }
         // Pattern 2: "key": "value" (JSON-style from Groq/other models)
         if (args.isEmpty()) {
-            Matcher jm = Pattern.compile("\"([a-zA-Z_][a-zA-Z0-9_]*)\"\\s*:\\s*\"((?:[^\"\\\\]|\\\\.)*)\"").matcher(argsBlock);
+            Matcher jm = Pattern.compile("\"([a-zA-Z_][a-zA-Z0-9_]*)\"\\s*:\\s*\"((?:[^\"\\\\]|\\\\.)*)\"")
+                    .matcher(argsBlock);
             while (jm.find()) {
                 args.put(jm.group(1), jm.group(2));
             }

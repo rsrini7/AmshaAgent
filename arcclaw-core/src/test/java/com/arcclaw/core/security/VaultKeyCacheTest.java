@@ -68,7 +68,7 @@ class VaultKeyCacheTest {
     void testConcurrencyWithVirtualThreads() throws InterruptedException {
         // We use an AtomicInteger to count actual invocations in the mock
         AtomicInteger derivationCount = new AtomicInteger(0);
-        
+
         when(derivation.deriveSessionKey(anyString())).thenAnswer(invocation -> {
             derivationCount.incrementAndGet();
             // Simulate some work to increase race condition probability
@@ -130,9 +130,7 @@ class VaultKeyCacheTest {
     void testGetOrDeriveAfterWipeRederives() {
         VaultKey key1 = new VaultKey(new byte[32]);
         VaultKey key2 = new VaultKey(new byte[32]);
-        when(derivation.deriveSessionKey(sessionId))
-                .thenReturn(key1)
-                .thenReturn(key2);
+        when(derivation.deriveSessionKey(sessionId)).thenReturn(key1).thenReturn(key2);
 
         VaultKey first = cache.getOrDerive(sessionId, derivation);
         assertSame(key1, first);
@@ -151,9 +149,7 @@ class VaultKeyCacheTest {
     void testSafetyFallbackIfKeyDestroyedExternally() {
         VaultKey key1 = new VaultKey(new byte[32]);
         VaultKey key2 = new VaultKey(new byte[32]);
-        when(derivation.deriveSessionKey(sessionId))
-                .thenReturn(key1)
-                .thenReturn(key2);
+        when(derivation.deriveSessionKey(sessionId)).thenReturn(key1).thenReturn(key2);
 
         VaultKey first = cache.getOrDerive(sessionId, derivation);
         assertSame(key1, first);
@@ -167,4 +163,3 @@ class VaultKeyCacheTest {
         verify(derivation, times(2)).deriveSessionKey(sessionId);
     }
 }
-

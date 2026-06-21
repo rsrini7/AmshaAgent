@@ -82,7 +82,7 @@ public enum CheckpointStatus {
     COMPROMISED,
 
     /**
-     * Agent loop is paused due to a rate limit hit. 
+     * Agent loop is paused due to a rate limit hit.
      * Transitions to {@link #IN_PROGRESS} after the retry delay has elapsed.
      */
     AWAITING_RETRY,
@@ -101,20 +101,20 @@ public enum CheckpointStatus {
      */
     APPROVED,
 
-     /**
-      * Terminal status set by AgentLoop when a fresh turn starts over an existing
-      * COMPLETED/FAILED/COMPROMISED checkpoint. Archived rows are excluded from
-      * all load() and findLatestAwaitingApproval() queries so they never shadow
-      * a newer AWAITING_APPROVAL row for the same (sessionId, agentRole) pair.
-      */
-     ARCHIVED,
+    /**
+     * Terminal status set by AgentLoop when a fresh turn starts over an existing
+     * COMPLETED/FAILED/COMPROMISED checkpoint. Archived rows are excluded from
+     * all load() and findLatestAwaitingApproval() queries so they never shadow
+     * a newer AWAITING_APPROVAL row for the same (sessionId, agentRole) pair.
+     */
+    ARCHIVED,
 
-     /**
-      * Terminal status for checkpoints that were abandoned in an active state (like AWAITING_RETRY)
-      * for an extended period (e.g., 30+ minutes) due to scheduler outages or process crashes.
-      * Flagged for manual intervention or cleanup.
-      */
-     ORPHANED;
+    /**
+     * Terminal status for checkpoints that were abandoned in an active state (like AWAITING_RETRY)
+     * for an extended period (e.g., 30+ minutes) due to scheduler outages or process crashes.
+     * Flagged for manual intervention or cleanup.
+     */
+    ORPHANED;
 
     /**
      * Set of statuses that represent an end-of-life state for a checkpoint.
@@ -124,9 +124,8 @@ public enum CheckpointStatus {
      * it acts as a distributed lock that MUST NOT be overwritten by bulk
      * cleanup or termination sweeps (§5.18).
      */
-    private static final Set<CheckpointStatus> TERMINAL_STATES = EnumSet.of(
-        COMPLETED, FAILED, LOOP_EXCEEDED, DENIED, COMPROMISED, ARCHIVED, ORPHANED, RESUMING
-    );
+    private static final Set<CheckpointStatus> TERMINAL_STATES =
+            EnumSet.of(COMPLETED, FAILED, LOOP_EXCEEDED, DENIED, COMPROMISED, ARCHIVED, ORPHANED, RESUMING);
 
     /**
      * @return true if this status represents an end-of-life state for a checkpoint.

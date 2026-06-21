@@ -48,7 +48,7 @@ class MdcManagedInterceptorTest {
         });
 
         assertThrows(RuntimeException.class, () -> interceptor.manageMdc(ctx));
-        
+
         assertNull(MDC.get(MdcKeys.SESSION_ID), "SESSION_ID must be cleared even after exception");
     }
 }

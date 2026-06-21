@@ -1,21 +1,24 @@
 package com.arcclaw.persistence.sqlite;
 
+import dev.langchain4j.data.embedding.Embedding;
+import dev.langchain4j.model.embedding.EmbeddingModel;
+
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
-
 import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.persistence.api.MemoryChunkDto;
-import dev.langchain4j.data.embedding.Embedding;
-import dev.langchain4j.model.embedding.EmbeddingModel;
-import io.quarkus.arc.properties.IfBuildProperty;
+
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 import org.jdbi.v3.core.Jdbi;
+
+import io.quarkus.arc.properties.IfBuildProperty;
 
 @ApplicationScoped
 @IfBuildProperty(name = "arcclaw.persistence.backend", stringValue = "sqlite", enableIfMissing = true)
@@ -23,9 +26,14 @@ public class GlobalKnowledgeBase {
 
     private static final Logger log = Logger.getLogger(GlobalKnowledgeBase.class);
 
-    @Inject Jdbi jdbi;
-    @Inject EmbeddingModel embeddingModel;
-    @Inject FtsConnectionInterceptor ftsInterceptor;
+    @Inject
+    Jdbi jdbi;
+
+    @Inject
+    EmbeddingModel embeddingModel;
+
+    @Inject
+    FtsConnectionInterceptor ftsInterceptor;
 
     @ConfigProperty(name = "arcclaw.rag.embed-dimensions", defaultValue = "768")
     int embedDimensions;
@@ -41,19 +49,18 @@ public class GlobalKnowledgeBase {
             float[] vector = embedding.vector();
 
             jdbi.useTransaction(handle -> {
-                handle.createUpdate(
-                    "INSERT OR REPLACE INTO fts.vec_global(chunk_id, embedding) VALUES (?, ?)")
-                    .bind(0, chunkId)
-                    .bind(1, floatArrayToJson(vector))
-                    .execute();
+                handle.createUpdate("INSERT OR REPLACE INTO fts.vec_global(chunk_id, embedding) VALUES (?, ?)")
+                        .bind(0, chunkId)
+                        .bind(1, floatArrayToJson(vector))
+                        .execute();
 
                 handle.createUpdate(
-                    "INSERT OR REPLACE INTO rag_chunk(chunk_id, text, source, created_at) VALUES (?, ?, ?, ?)")
-                    .bind(0, chunkId)
-                    .bind(1, text)
-                    .bind(2, "System")
-                    .bind(3, Instant.now().toString())
-                    .execute();
+                                "INSERT OR REPLACE INTO rag_chunk(chunk_id, text, source, created_at) VALUES (?, ?, ?, ?)")
+                        .bind(0, chunkId)
+                        .bind(1, text)
+                        .bind(2, "System")
+                        .bind(3, Instant.now().toString())
+                        .execute();
             });
 
             return chunkId;
@@ -73,26 +80,25 @@ public class GlobalKnowledgeBase {
 
             return jdbi.withHandle(handle -> {
                 List<Object[]> rows = handle.createQuery(
-                    "SELECT chunk_id, vec_distance_cosine(embedding, ?1) AS distance " +
-                    "FROM fts.vec_global " +
-                    "ORDER BY distance ASC " +
-                    "LIMIT ?2")
-                    .bind(0, floatArrayToJson(vector))
-                    .bind(1, topN)
-                    .map((rs, ctx) -> new Object[]{rs.getString("chunk_id"), rs.getDouble("distance")})
-                    .list();
+                                "SELECT chunk_id, vec_distance_cosine(embedding, ?1) AS distance "
+                                        + "FROM fts.vec_global "
+                                        + "ORDER BY distance ASC "
+                                        + "LIMIT ?2")
+                        .bind(0, floatArrayToJson(vector))
+                        .bind(1, topN)
+                        .map((rs, ctx) -> new Object[] {rs.getString("chunk_id"), rs.getDouble("distance")})
+                        .list();
 
                 List<MemoryChunkDto> results = new ArrayList<>();
                 for (Object[] row : rows) {
                     String chunkId = (String) row[0];
                     double score = 1.0 - ((Number) row[1]).doubleValue();
 
-                    String text = handle.createQuery(
-                        "SELECT text FROM rag_chunk WHERE chunk_id = ?")
-                        .bind(0, chunkId)
-                        .mapTo(String.class)
-                        .findOne()
-                        .orElse("");
+                    String text = handle.createQuery("SELECT text FROM rag_chunk WHERE chunk_id = ?")
+                            .bind(0, chunkId)
+                            .mapTo(String.class)
+                            .findOne()
+                            .orElse("");
 
                     results.add(new MemoryChunkDto(chunkId, text, score));
                 }

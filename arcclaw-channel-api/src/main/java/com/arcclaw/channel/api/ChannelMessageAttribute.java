@@ -27,9 +27,7 @@ public record ChannelMessageAttribute<T>(Class<T> type, String name) {
      */
     @Override
     public boolean equals(Object o) {
-        return o instanceof ChannelMessageAttribute<?> a
-            && name.equals(a.name)
-            && type.equals(a.type);
+        return o instanceof ChannelMessageAttribute<?> a && name.equals(a.name) && type.equals(a.type);
     }
 
     @Override

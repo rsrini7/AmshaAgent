@@ -1,10 +1,10 @@
 package com.arcclaw.core.reflex;
 
-import java.util.Optional;
-import java.util.function.BiConsumer;
-
 import jakarta.enterprise.context.Dependent;
 import jakarta.inject.Inject;
+
+import java.util.Optional;
+import java.util.function.BiConsumer;
 
 import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.agent.loop.AgentLoop;
@@ -23,11 +23,20 @@ import com.arcclaw.persistence.api.CronStorePort;
 @Dependent
 public class CronDecisionRouter {
 
-    @Inject StatefulAgentStore statefulAgentStore;
-    @Inject CronStorePort cronStore;
-    @Inject AgentLoop agentLoop;
-    @Inject ReasoningEngine reasoningEngine;
-    @Inject WorkspaceManager workspaceManager;
+    @Inject
+    StatefulAgentStore statefulAgentStore;
+
+    @Inject
+    CronStorePort cronStore;
+
+    @Inject
+    AgentLoop agentLoop;
+
+    @Inject
+    ReasoningEngine reasoningEngine;
+
+    @Inject
+    WorkspaceManager workspaceManager;
 
     public String execute(CronContext ctx) throws Exception {
         String cronId = ctx.cronId;
@@ -36,39 +45,13 @@ public class CronDecisionRouter {
             return null;
         }
 
-        String resolvedSessionId = cronId;
-        String segment = cronId;
-        if (cronId.startsWith(AgentSentinels.CRON_SESSION_PREFIX)) {
-            segment = cronId.substring(AgentSentinels.CRON_SESSION_PREFIX.length());
-        }
-        if (segment.length() >= 36) {
-            segment = segment.substring(0, 36);
-        }
-        Optional<AgentCheckpoint> segmentMatch = statefulAgentStore.findLatestAwaitingApprovalBySessionContaining(segment);
-        if (segmentMatch.isPresent()) {
-            resolvedSessionId = segmentMatch.get().getSessionId();
-        }
-
+        String resolvedSessionId = resolveSessionId(cronId);
 
         AgentCheckpoint pendingCheckpoint = ctx.applyDecisionToAll().apply(resolvedSessionId, ctx.reason);
         String cronSessionId = pendingCheckpoint.getSessionId();
         String cronRole = pendingCheckpoint.getAgentRole();
 
-        String resolvedJobId = cronId;
-        if (cronId.startsWith(AgentSentinels.CRON_SESSION_PREFIX)) {
-            String suffix = cronId.substring(AgentSentinels.CRON_SESSION_PREFIX.length());
-            if (suffix.length() >= 36) resolvedJobId = suffix.substring(0, 36);
-        }
-
-        AgentCron cron = cronStore.findById(resolvedJobId).map(AgentCronRecord::fromDto).orElse(null);
-        if (cron == null && cronSessionId.startsWith(AgentSentinels.CRON_SESSION_PREFIX)) {
-            String sub = cronSessionId.substring(AgentSentinels.CRON_SESSION_PREFIX.length());
-            if (sub.length() >= 36) {
-                resolvedJobId = sub.substring(0, 36);
-                cron = cronStore.findById(resolvedJobId).map(AgentCronRecord::fromDto).orElse(null);
-            }
-        }
-
+        AgentCron cron = resolveCronJob(cronId, cronSessionId);
         if (cron == null) return "❌ Cron task not found.";
 
         if (!statefulAgentStore.claimForResume(cronSessionId, cronRole)) {
@@ -82,12 +65,23 @@ public class CronDecisionRouter {
             ctx.context.setGoal(goal);
 
             int budget = pendingCheckpoint.getMaxIterations() != null
-                ? Math.max(3, pendingCheckpoint.getMaxIterations()) : 3;
+                    ? Math.max(3, pendingCheckpoint.getMaxIterations())
+                    : 3;
 
-            result = WorkspaceContext.run(cronSessionId, cron.getUserId(), cron.getChatId(),
-                AutonomyLevel.SUPERVISED, cronRole,
-                () -> agentLoop.run(cronSessionId, cronRole, goal,
-                    pendingCheckpoint.getSystemNote(), reasoningEngine, budget, ctx.context));
+            result = WorkspaceContext.run(
+                    cronSessionId,
+                    cron.getUserId(),
+                    cron.getChatId(),
+                    AutonomyLevel.SUPERVISED,
+                    cronRole,
+                    () -> agentLoop.run(
+                            cronSessionId,
+                            cronRole,
+                            goal,
+                            pendingCheckpoint.getSystemNote(),
+                            reasoningEngine,
+                            budget,
+                            ctx.context));
 
             if (result == null) {
                 return ctx.errorMsg().get();
@@ -99,43 +93,87 @@ public class CronDecisionRouter {
         } finally {
             statefulAgentStore.clearBatchResuming(cronSessionId);
             if (result != null && isTerminalResult(result)) {
-                try { workspaceManager.terminateSession(cronSessionId); } catch (Exception e) { /* best effort */ }
+                try {
+                    workspaceManager.terminateSession(cronSessionId);
+                } catch (Exception e) {
+                    /* best effort */
+                }
             }
         }
     }
 
     private boolean isTerminalResult(AgentResult result) {
-        return result instanceof AgentResult.Finished || result instanceof AgentResult.StructuredFinished
-            || result instanceof AgentResult.Failed || result instanceof AgentResult.LoopExceeded;
+        return result instanceof AgentResult.Finished
+                || result instanceof AgentResult.StructuredFinished
+                || result instanceof AgentResult.Failed
+                || result instanceof AgentResult.LoopExceeded;
+    }
+
+    private String resolveSessionId(String cronId) {
+        String segment = cronId;
+        if (cronId.startsWith(AgentSentinels.CRON_SESSION_PREFIX)) {
+            segment = cronId.substring(AgentSentinels.CRON_SESSION_PREFIX.length());
+        }
+        if (segment.length() >= 36) {
+            segment = segment.substring(0, 36);
+        }
+        Optional<AgentCheckpoint> match = statefulAgentStore.findLatestAwaitingApprovalBySessionContaining(segment);
+        return match.map(AgentCheckpoint::getSessionId).orElse(cronId);
+    }
+
+    private AgentCron resolveCronJob(String cronId, String cronSessionId) {
+        String jobId = extractJobId(cronId);
+        AgentCron cron = cronStore.findById(jobId).map(AgentCronRecord::fromDto).orElse(null);
+        if (cron == null && cronSessionId.startsWith(AgentSentinels.CRON_SESSION_PREFIX)) {
+            jobId = extractJobId(cronSessionId);
+            cron = cronStore.findById(jobId).map(AgentCronRecord::fromDto).orElse(null);
+        }
+        return cron;
+    }
+
+    private static String extractJobId(String id) {
+        String segment = id;
+        if (id.startsWith(AgentSentinels.CRON_SESSION_PREFIX)) {
+            segment = id.substring(AgentSentinels.CRON_SESSION_PREFIX.length());
+        }
+        return segment.length() >= 36 ? segment.substring(0, 36) : segment;
     }
 
     public record CronContext(
-        String cronId,
-        String userId,
-        String chatId,
-        String reason,
-        MessageContext context,
-        DecisionApplier applyDecisionToAll,
-        MessageProvider alreadyProcessingMsg,
-        GoalProvider cronResumeGoal,
-        PostDecisionHandler postProcessCronDecision,
-        ResultMessageProvider successResponse,
-        MessageProvider errorMsg,
-        BiConsumer<AgentCron, AgentResult> jobNotifier
-    ) {
-        @FunctionalInterface public interface DecisionApplier {
+            String cronId,
+            String userId,
+            String chatId,
+            String reason,
+            MessageContext context,
+            DecisionApplier applyDecisionToAll,
+            MessageProvider alreadyProcessingMsg,
+            GoalProvider cronResumeGoal,
+            PostDecisionHandler postProcessCronDecision,
+            ResultMessageProvider successResponse,
+            MessageProvider errorMsg,
+            BiConsumer<AgentCron, AgentResult> jobNotifier) {
+        @FunctionalInterface
+        public interface DecisionApplier {
             AgentCheckpoint apply(String sessionId, String reason);
         }
-        @FunctionalInterface public interface MessageProvider {
+
+        @FunctionalInterface
+        public interface MessageProvider {
             String get();
         }
-        @FunctionalInterface public interface GoalProvider {
+
+        @FunctionalInterface
+        public interface GoalProvider {
             String get(String cronSessionId, String cronRole);
         }
-        @FunctionalInterface public interface PostDecisionHandler {
+
+        @FunctionalInterface
+        public interface PostDecisionHandler {
             void accept(AgentCron cron, String reason, AgentResult result);
         }
-        @FunctionalInterface public interface ResultMessageProvider {
+
+        @FunctionalInterface
+        public interface ResultMessageProvider {
             String get(AgentResult result);
         }
     }

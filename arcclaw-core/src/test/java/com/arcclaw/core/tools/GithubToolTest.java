@@ -8,6 +8,7 @@ import java.util.Map;
 
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.security.AutonomyLevel;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -15,49 +16,50 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
+@SuppressWarnings("java:S1192")
 class GithubToolTest {
 
-    @Mock AuditService auditService;
-    @InjectMocks GithubTool tool;
+    @Mock
+    AuditService auditService;
+
+    @InjectMocks
+    GithubTool tool;
 
     @Test
     void testDeleteCommandBlocked() {
         Map<String, Object> params = Map.of(
-            "action", "repo",
-            "command", "delete",
-            "target", "rsrini7/arcclaw"
-        );
-        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> tool.sandboxCommand(ctx(), params));
+                "action", "repo",
+                "command", "delete",
+                "target", "rsrini7/arcclaw");
+        IllegalArgumentException exception =
+                assertThrows(IllegalArgumentException.class, () -> tool.sandboxCommand(ctx(), params));
         assertTrue(exception.getMessage().contains("not permitted"));
     }
 
     @Test
     void testArchiveCommandBlocked() {
         Map<String, Object> params = Map.of(
-            "action", "repo",
-            "command", "archive",
-            "target", "rsrini7/arcclaw"
-        );
+                "action", "repo",
+                "command", "archive",
+                "target", "rsrini7/arcclaw");
         assertThrows(IllegalArgumentException.class, () -> tool.sandboxCommand(ctx(), params));
     }
 
     @Test
     void testViewStillWorks() {
         Map<String, Object> params = Map.of(
-            "action", "repo",
-            "command", "view",
-            "target", "rsrini7/arcclaw"
-        );
+                "action", "repo",
+                "command", "view",
+                "target", "rsrini7/arcclaw");
         assertDoesNotThrow(() -> tool.sandboxCommand(ctx(), params));
     }
 
     @Test
     void testListStillWorks() {
         Map<String, Object> params = Map.of(
-            "action", "repo",
-            "command", "list",
-            "target", "rsrini7"
-        );
+                "action", "repo",
+                "command", "list",
+                "target", "rsrini7");
         var cmd = tool.sandboxCommand(ctx(), params);
         // cmd is ["gh", "api", "users/rsrini7/repos?per_page=30"]
         assertTrue(cmd.stream().anyMatch(s -> s.contains("rsrini7")));
@@ -66,38 +68,36 @@ class GithubToolTest {
     @Test
     void testGistListPreservesTarget() {
         Map<String, Object> params = Map.of(
-            "action", "gist",
-            "command", "list",
-            "target", "rsrini7"
-        );
+                "action", "gist",
+                "command", "list",
+                "target", "rsrini7");
         var cmd = tool.sandboxCommand(ctx(), params);
         assertTrue(cmd.contains("api"));
-        assertTrue(cmd.stream().anyMatch(s -> s.contains("rsrini7")), "gist list SHOULD contain username when targeting another user");
+        assertTrue(
+                cmd.stream().anyMatch(s -> s.contains("rsrini7")),
+                "gist list SHOULD contain username when targeting another user");
     }
 
     @Test
     void testGistViewRequiresTarget() {
         Map<String, Object> params = Map.of(
-            "action", "gist",
-            "command", "view"
-        );
+                "action", "gist",
+                "command", "view");
         assertThrows(IllegalArgumentException.class, () -> tool.sandboxCommand(ctx(), params));
     }
 
     @Test
     void testGistViewWithId() {
         Map<String, Object> params = Map.of(
-            "action", "gist",
-            "command", "view",
-            "target", "abc-123"
-        );
+                "action", "gist",
+                "command", "view",
+                "target", "abc-123");
         var cmd = tool.sandboxCommand(ctx(), params);
         assertTrue(cmd.contains("abc-123"));
     }
 
     private ToolExecutionContext ctx() {
         return new ToolExecutionContext(
-            "s1", "u1", "c1", "coder", AutonomyLevel.FULL, "t1", 
-            null, null, null, null, null, null);
+                "s1", "u1", "c1", "coder", AutonomyLevel.FULL, "t1", null, null, null, null, null, null);
     }
 }

@@ -1,12 +1,13 @@
 package com.arcclaw.core.agent.loop;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Set;
-
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
+import java.util.Set;
 
 import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.core.agent.AgentSentinels;
@@ -17,6 +18,7 @@ import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.tools.ToolResponse;
 import com.fasterxml.jackson.databind.ObjectMapper;
+
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
@@ -108,11 +110,18 @@ import org.jboss.logging.Logger;
 @ApplicationScoped
 public class PersonaEscalationService {
 
+    private static final String STR = "\n```\n\n";
+
     private static final Logger log = Logger.getLogger(PersonaEscalationService.class);
 
-    @Inject ReasoningEngine reasoningEngine;
-    @Inject Instance<AgentLoop> agentLoop;
-    @Inject ObjectMapper objectMapper;
+    @Inject
+    ReasoningEngine reasoningEngine;
+
+    @Inject
+    Instance<AgentLoop> agentLoop;
+
+    @Inject
+    ObjectMapper objectMapper;
 
     @ConfigProperty(name = "arcclaw.agent.escalation.enabled", defaultValue = "true")
     boolean escalationEnabled;
@@ -123,10 +132,12 @@ public class PersonaEscalationService {
     /**
      * Represents the result of an escalation attempt.
      */
-    public record EscalationResult(String targetPersona, String result, int depthUsed, boolean success, String errorIfFailed) {
+    public record EscalationResult(
+            String targetPersona, String result, int depthUsed, boolean success, String errorIfFailed) {
         public static EscalationResult success(String target, String result, int depth) {
             return new EscalationResult(target, result, depth, true, null);
         }
+
         public static EscalationResult failure(String error) {
             return new EscalationResult(null, null, 0, false, error);
         }
@@ -154,93 +165,181 @@ public class PersonaEscalationService {
             return null;
         }
 
-        String errorLower = errorOutput.toLowerCase();
-        String goalLower = originalGoal != null ? originalGoal.toLowerCase() : "";
+        String errorLower = errorOutput.toLowerCase(Locale.ROOT);
+        String goalLower = originalGoal != null ? originalGoal.toLowerCase(Locale.ROOT) : "";
 
-        // Brahma escalations
-        if (AgentRoleEnum.CODER.toScopedName().equals(sourceRole)) {
-            if (matchesAny(errorLower, goalLower, EscalationPatterns.UNKNOWN_API_PATTERNS)) {
-                return AgentRoleEnum.RESEARCHER.toScopedName();
-            }
-            if (matchesAny(errorLower, goalLower, EscalationPatterns.ARCHITECTURE_PATTERNS)) {
-                return AgentRoleEnum.ARCHITECT.toScopedName();
-            }
-        }
+        String target = escalateByRole(sourceRole, errorLower, goalLower);
+        if (target != null) return target;
 
-        // Shiva escalations
-        if (AgentRoleEnum.DEBUGGER.toScopedName().equals(sourceRole)) {
-            if (matchesAny(errorLower, goalLower, EscalationPatterns.RESEARCH_NEEDED_PATTERNS)) {
-                return AgentRoleEnum.RESEARCHER.toScopedName();
-            }
-            if (matchesAny(errorLower, goalLower, EscalationPatterns.REWRITE_NEEDED_PATTERNS)) {
-                return AgentRoleEnum.CODER.toScopedName();
-            }
-            // Ganesha (son of Shiva) - complex logic analysis
-            if (EscalationPatterns.containsAny(goalLower, "recursive", "complex logic", "algorithm", "obstacle")) {
-                return AgentRoleEnum.OPTIMIZER.toScopedName();
-            }
-            // Kartikeya (son of Shiva) - security analysis
-            if (EscalationPatterns.containsAny(goalLower, "security", "vulnerability", "injection", "malicious")) {
-                return AgentRoleEnum.SENTINEL.toScopedName();
-            }
-        }
+        target = EscalationPatterns.determineNewPersonaEscalation(sourceRole, goalLower);
+        if (target != null) return target;
 
-        // Brihaspati escalations
-        if (AgentRoleEnum.ARCHITECT.toScopedName().equals(sourceRole)) {
-            if (EscalationPatterns.containsAny(goalLower, "implement", "write code", "generate code", "create the")) {
-                return AgentRoleEnum.CODER.toScopedName();
-            }
-            if (EscalationPatterns.containsAny(goalLower, "research", "find information", "look up", "documentation")) {
-                return AgentRoleEnum.RESEARCHER.toScopedName();
-            }
-        }
-
-        // Saraswati escalations
-        if (AgentRoleEnum.RESEARCHER.toScopedName().equals(sourceRole)) {
-            if (EscalationPatterns.containsAny(goalLower, "implement", "write code", "execute", "run")) {
-                return AgentRoleEnum.CODER.toScopedName();
-            }
-        }
-
-        // New persona escalations (Ganesha, Kartikeya, Lakshmi, Durga, Kali, Parvati)
-        String newPersonaTarget = EscalationPatterns.determineNewPersonaEscalation(sourceRole, goalLower);
-        if (newPersonaTarget != null) {
-            return newPersonaTarget;
+        if (matchesSandboxCodeError(errorLower)) {
+            return AgentRoleEnum.DEBUGGER.toScopedName();
         }
 
         return null;
     }
 
+    private String escalateByRole(String sourceRole, String errorLower, String goalLower) {
+        if (AgentRoleEnum.CODER.toScopedName().equals(sourceRole)) {
+            return escalateFromCoder(errorLower, goalLower);
+        }
+        if (AgentRoleEnum.DEBUGGER.toScopedName().equals(sourceRole)) {
+            return escalateFromDebugger(errorLower, goalLower);
+        }
+        if (AgentRoleEnum.ARCHITECT.toScopedName().equals(sourceRole)) {
+            return escalateFromArchitect(goalLower);
+        }
+        if (AgentRoleEnum.RESEARCHER.toScopedName().equals(sourceRole)) {
+            return escalateFromResearcher(goalLower);
+        }
+        return null;
+    }
+
+    private String escalateFromCoder(String errorLower, String goalLower) {
+        if (matchesAny(errorLower, goalLower, EscalationPatterns.SANDBOX_FAILURE_PATTERNS)) {
+            return AgentRoleEnum.DEBUGGER.toScopedName();
+        }
+        if (matchesAny(errorLower, goalLower, EscalationPatterns.UNKNOWN_API_PATTERNS)) {
+            return AgentRoleEnum.RESEARCHER.toScopedName();
+        }
+        if (matchesAny(errorLower, goalLower, EscalationPatterns.ARCHITECTURE_PATTERNS)) {
+            return AgentRoleEnum.ARCHITECT.toScopedName();
+        }
+        return null;
+    }
+
+    private String escalateFromDebugger(String errorLower, String goalLower) {
+        if (matchesAny(errorLower, goalLower, EscalationPatterns.RESEARCH_NEEDED_PATTERNS)) {
+            return AgentRoleEnum.RESEARCHER.toScopedName();
+        }
+        if (matchesAny(errorLower, goalLower, EscalationPatterns.REWRITE_NEEDED_PATTERNS)) {
+            return AgentRoleEnum.CODER.toScopedName();
+        }
+        if (EscalationPatterns.containsAny(goalLower, "recursive", "complex logic", "algorithm", "obstacle")) {
+            return AgentRoleEnum.OPTIMIZER.toScopedName();
+        }
+        if (EscalationPatterns.containsAny(goalLower, "security", "vulnerability", "injection", "malicious")) {
+            return AgentRoleEnum.SENTINEL.toScopedName();
+        }
+        return null;
+    }
+
+    private String escalateFromArchitect(String goalLower) {
+        if (EscalationPatterns.containsAny(goalLower, "implement", "write code", "generate code", "create the")) {
+            return AgentRoleEnum.CODER.toScopedName();
+        }
+        if (EscalationPatterns.containsAny(goalLower, "research", "find information", "look up", "documentation")) {
+            return AgentRoleEnum.RESEARCHER.toScopedName();
+        }
+        return null;
+    }
+
+    private String escalateFromResearcher(String goalLower) {
+        if (EscalationPatterns.containsAny(goalLower, "implement", "write code", "execute", "run")) {
+            return AgentRoleEnum.CODER.toScopedName();
+        }
+        return null;
+    }
+
+    /**
+     * Returns true if the error output indicates a sandbox code error that Shiva can fix.
+     * Covers compilation errors, missing methods, syntax errors, and runtime exceptions.
+     */
+    private static boolean matchesSandboxCodeError(String errorLower) {
+        return errorLower.contains("can't find")
+                || errorLower.contains("cannot find")
+                || errorLower.contains("compilation error")
+                || errorLower.contains("compile error")
+                || errorLower.contains("syntax error")
+                || errorLower.contains("classnotfound")
+                || errorLower.contains("nosuchmethod")
+                || errorLower.contains("nullpointerexception")
+                || errorLower.contains("arrayindexoutofbounds")
+                || errorLower.contains("classcastexception")
+                || errorLower.contains("illegalargument")
+                || (errorLower.contains("error:") && errorLower.contains(".java"))
+                || errorLower.contains("exception in thread");
+    }
+
     /**
      * Attempts escalation by delegating to a more suitable persona.
      */
-    public EscalationResult attemptEscalation(String outerSessionId, String userId, String chatId,
-                                               String sourceRole, String targetRole,
-                                               String errorOutput, String originalGoal,
-                                               String originalCode, String language,
-                                               String channelType, String channelPlatformId) {
-        return attemptEscalation(outerSessionId, userId, chatId, sourceRole, targetRole,
-                errorOutput, originalGoal, originalCode, language, channelType, channelPlatformId, 1);
+    public EscalationResult attemptEscalation(
+            String outerSessionId,
+            String userId,
+            String chatId,
+            String sourceRole,
+            String targetRole,
+            String errorOutput,
+            String originalGoal,
+            String originalCode,
+            String language,
+            String channelType,
+            String channelPlatformId) {
+        return attemptEscalation(
+                outerSessionId,
+                userId,
+                chatId,
+                sourceRole,
+                targetRole,
+                errorOutput,
+                originalGoal,
+                originalCode,
+                language,
+                channelType,
+                channelPlatformId,
+                1);
     }
 
-    EscalationResult attemptEscalation(String outerSessionId, String userId, String chatId,
-                                        String sourceRole, String targetRole,
-                                        String errorOutput, String originalGoal,
-                                        String originalCode, String language,
-                                        String channelType, String channelPlatformId, int depth) {
-        return attemptEscalation(outerSessionId, userId, chatId, sourceRole, targetRole,
-                errorOutput, originalGoal, originalCode, language, channelType, channelPlatformId, depth, new ArrayList<>());
+    EscalationResult attemptEscalation(
+            String outerSessionId,
+            String userId,
+            String chatId,
+            String sourceRole,
+            String targetRole,
+            String errorOutput,
+            String originalGoal,
+            String originalCode,
+            String language,
+            String channelType,
+            String channelPlatformId,
+            int depth) {
+        return attemptEscalation(
+                outerSessionId,
+                userId,
+                chatId,
+                sourceRole,
+                targetRole,
+                errorOutput,
+                originalGoal,
+                originalCode,
+                language,
+                channelType,
+                channelPlatformId,
+                depth,
+                new ArrayList<>());
     }
 
-    EscalationResult attemptEscalation(String outerSessionId, String userId, String chatId,
-                                        String sourceRole, String targetRole,
-                                        String errorOutput, String originalGoal,
-                                        String originalCode, String language,
-                                        String channelType, String channelPlatformId, int depth,
-                                        List<String> escalationChain) {
+    EscalationResult attemptEscalation(
+            String outerSessionId,
+            String userId,
+            String chatId,
+            String sourceRole,
+            String targetRole,
+            String errorOutput,
+            String originalGoal,
+            String originalCode,
+            String language,
+            String channelType,
+            String channelPlatformId,
+            int depth,
+            List<String> escalationChain) {
 
         if (depth > maxEscalationDepth) {
-            log.warnf("[PersonaEscalation] Max depth %d reached for session %s, aborting",
+            log.warnf(
+                    "[PersonaEscalation] Max depth %d reached for session %s, aborting",
                     maxEscalationDepth, outerSessionId);
             return EscalationResult.failure("Max escalation depth reached");
         }
@@ -249,7 +348,8 @@ public class PersonaEscalationService {
         String pair = sourceRole + "->" + targetRole;
         escalationChain.add(pair);
         if (isPingPong(escalationChain)) {
-            log.warnf("[PersonaEscalation] Ping-pong detected: %s — aborting escalation for session %s",
+            log.warnf(
+                    "[PersonaEscalation] Ping-pong detected: %s — aborting escalation for session %s",
                     escalationChain, outerSessionId);
             return EscalationResult.failure("Escalation ping-pong detected: " + escalationChain);
         }
@@ -257,35 +357,48 @@ public class PersonaEscalationService {
         AgentRoleEnum targetEnum;
         try {
             targetEnum = AgentRoleEnum.fromString(targetRole);
-        } catch (IllegalArgumentException e) {
+        } catch (IllegalArgumentException _) {
             log.warnf("[PersonaEscalation] Unknown target persona '%s' for session %s", targetRole, outerSessionId);
             return EscalationResult.failure("Unknown target persona: " + targetRole);
         }
 
-        String innerSessionId = outerSessionId + AgentSentinels.ESCALATION_SESSION_SENTINEL
-                + sourceRole + ":" + targetRole + ":" + System.currentTimeMillis();
+        String innerSessionId = outerSessionId + AgentSentinels.ESCALATION_SESSION_SENTINEL + sourceRole + ":"
+                + targetRole + ":" + System.currentTimeMillis();
 
-        String escalationGoal = buildEscalationGoal(sourceRole, targetRole, errorOutput, originalGoal, originalCode, language);
+        String escalationGoal =
+                buildEscalationGoal(sourceRole, targetRole, errorOutput, originalGoal, originalCode, language);
 
-        log.infof("[PersonaEscalation] Escalating %s → %s (depth=%d) session=%s",
+        log.infof(
+                "[PersonaEscalation] Escalating %s → %s (depth=%d) session=%s",
                 sourceRole, targetRole, depth, innerSessionId);
 
         AgentResult result;
         try {
             int maxIterations = targetEnum.definition().maxIterations();
             result = WorkspaceContext.run(
-                    innerSessionId, userId, chatId, AutonomyLevel.FULL,
+                    innerSessionId,
+                    userId,
+                    chatId,
+                    AutonomyLevel.FULL,
                     targetEnum.toScopedName(),
-                    channelType, channelPlatformId,
-                    () -> agentLoop.get().run(innerSessionId, targetEnum.toScopedName(),
-                            escalationGoal, reasoningEngine, maxIterations));
+                    channelType,
+                    channelPlatformId,
+                    () -> agentLoop
+                            .get()
+                            .run(
+                                    innerSessionId,
+                                    targetEnum.toScopedName(),
+                                    escalationGoal,
+                                    reasoningEngine,
+                                    maxIterations));
         } catch (Exception e) {
             log.errorf("[PersonaEscalation] Delegation to %s failed: %s", targetRole, LogUtil.rootMessage(e));
             return EscalationResult.failure("Escalation delegation failed: " + e.getMessage());
         }
 
         if (result instanceof AgentResult.Finished f && f.answer() != null) {
-            log.infof("[PersonaEscalation] Escalation to %s succeeded (depth=%d) for session %s",
+            log.infof(
+                    "[PersonaEscalation] Escalation to %s succeeded (depth=%d) for session %s",
                     targetRole, depth, outerSessionId);
 
             // Check if the target also needs escalation
@@ -293,9 +406,20 @@ public class PersonaEscalationService {
                 String secondaryTarget = determineEscalationTarget(targetRole, f.answer(), escalationGoal);
                 if (secondaryTarget != null && !secondaryTarget.equals(sourceRole)) {
                     log.infof("[PersonaEscalation] %s needs further escalation to %s", targetRole, secondaryTarget);
-                    return attemptEscalation(outerSessionId, userId, chatId, targetRole, secondaryTarget,
-                            f.answer(), escalationGoal, originalCode, language, channelType, channelPlatformId,
-                            depth + 1, escalationChain);
+                    return attemptEscalation(
+                            outerSessionId,
+                            userId,
+                            chatId,
+                            targetRole,
+                            secondaryTarget,
+                            f.answer(),
+                            escalationGoal,
+                            originalCode,
+                            language,
+                            channelType,
+                            channelPlatformId,
+                            depth + 1,
+                            escalationChain);
                 }
             }
 
@@ -306,55 +430,71 @@ public class PersonaEscalationService {
         return EscalationResult.failure(errorMsg);
     }
 
-    String buildEscalationGoal(String sourceRole, String targetRole, String errorOutput, String originalGoal, String originalCode, String language) {
+    String buildEscalationGoal(
+            String sourceRole,
+            String targetRole,
+            String errorOutput,
+            String originalGoal,
+            String originalCode,
+            String language) {
         StringBuilder goal = new StringBuilder();
 
         String sourceDisplay = personaDisplayName(sourceRole);
         String targetDisplay = personaDisplayName(targetRole);
 
-        goal.append("ESCALATION FROM ").append(sourceDisplay).append(": ")
-            .append(targetDisplay).append(", the previous agent could not handle this task.\n\n")
-            .append("## ORIGINAL GOAL:\n```\n")
-            .append(originalGoal != null && !originalGoal.isBlank() ? originalGoal : "N/A")
-            .append("\n```\n\n");
+        goal.append("ESCALATION FROM ")
+                .append(sourceDisplay)
+                .append(": ")
+                .append(targetDisplay)
+                .append(", the previous agent could not handle this task.\n\n")
+                .append("## ORIGINAL GOAL:\n```\n")
+                .append(originalGoal != null && !originalGoal.isBlank() ? originalGoal : "N/A")
+                .append(STR);
 
         if (errorOutput != null && !errorOutput.isBlank()) {
-            goal.append("## ERROR/OUTPUT FROM ").append(sourceDisplay).append(":\n```\n")
-                .append(truncate(errorOutput, 4000))
-                .append("\n```\n\n");
+            goal.append("## ERROR/OUTPUT FROM ")
+                    .append(sourceDisplay)
+                    .append(":\n```\n")
+                    .append(truncate(errorOutput, 4000))
+                    .append(STR);
         }
 
         if (originalCode != null && !originalCode.isBlank()) {
-            goal.append("## RELEVANT CODE:\n```").append(language != null ? language : "text").append("\n")
-                .append(originalCode)
-                .append("\n```\n\n");
+            goal.append("## RELEVANT CODE:\n```")
+                    .append(language != null ? language : "text")
+                    .append("\n")
+                    .append(originalCode)
+                    .append(STR);
         }
 
         goal.append("## YOUR TASK:\n")
-            .append("You are the ").append(targetDisplay).append(". ")
-            .append(sourceDisplay).append(" encountered a problem and escalated to you.\n")
-            .append("1. Analyze the situation\n")
-            .append("2. Provide a complete solution within your capabilities\n")
-            .append("3. If you also cannot handle this, state clearly what you need\n\n")
-            .append("IMPORTANT: Provide your best answer. Do not delegate further unless absolutely necessary.");
+                .append("You are the ")
+                .append(targetDisplay)
+                .append(". ")
+                .append(sourceDisplay)
+                .append(" encountered a problem and escalated to you.\n")
+                .append("1. Analyze the situation\n")
+                .append("2. Provide a complete solution within your capabilities\n")
+                .append("3. If you also cannot handle this, state clearly what you need\n\n")
+                .append("IMPORTANT: Provide your best answer. Do not delegate further unless absolutely necessary.");
 
         return goal.toString();
     }
 
     private String personaDisplayName(String role) {
         return switch (role) {
-            case "coder" -> "Brahma (Coder)";
-            case "debugger" -> "Shiva (Debugger)";
-            case "researcher" -> "Saraswati (Researcher)";
-            case "architect" -> "Brihaspati (Architect)";
-            case "coordinator" -> "Vishnu (Coordinator)";
-            case "synthesizer" -> "Dattatreya (Synthesizer)";
-            case "optimizer" -> "Ganesha (Optimizer)";
-            case "sentinel" -> "Kartikeya (Sentinel)";
-            case "healer" -> "Lakshmi (Healer)";
-            case "protector" -> "Durga (Protector)";
-            case "purifier" -> "Kali (Purifier)";
-            case "nurturer" -> "Parvati (Nurturer)";
+            case "coder" -> AgentRoleEnum.CODER.definition().displayName();
+            case "debugger" -> AgentRoleEnum.DEBUGGER.definition().displayName();
+            case "researcher" -> AgentRoleEnum.RESEARCHER.definition().displayName();
+            case "architect" -> AgentRoleEnum.ARCHITECT.definition().displayName();
+            case "coordinator" -> AgentRoleEnum.COORDINATOR.definition().displayName();
+            case "synthesizer" -> AgentRoleEnum.SYNTHESIZER.definition().displayName();
+            case "optimizer" -> AgentRoleEnum.OPTIMIZER.definition().displayName();
+            case "sentinel" -> AgentRoleEnum.SENTINEL.definition().displayName();
+            case "healer" -> AgentRoleEnum.HEALER.definition().displayName();
+            case "protector" -> AgentRoleEnum.PROTECTOR.definition().displayName();
+            case "purifier" -> AgentRoleEnum.PURIFIER.definition().displayName();
+            case "nurturer" -> AgentRoleEnum.NURTURER.definition().displayName();
             default -> role;
         };
     }

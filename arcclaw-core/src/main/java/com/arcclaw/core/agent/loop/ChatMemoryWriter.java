@@ -1,20 +1,21 @@
 package com.arcclaw.core.agent.loop;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Set;
-import java.util.stream.Collectors;
-
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
-
-import com.arcclaw.core.agent.AgentSentinels;
-import com.arcclaw.core.security.InputSanitizer;
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.ToolExecutionResultMessage;
 import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.store.memory.chat.ChatMemoryStore;
+
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
+
+import com.arcclaw.core.agent.AgentSentinels;
+import com.arcclaw.core.security.InputSanitizer;
 
 /**
  * Persists goals and answers to the ChatMemoryStore.
@@ -24,14 +25,15 @@ import dev.langchain4j.store.memory.chat.ChatMemoryStore;
 @ApplicationScoped
 public class ChatMemoryWriter {
 
-    @Inject ChatMemoryStore chatMemoryStore;
-    @Inject @InputSanitizer.PII InputSanitizer piiScanReflex;
+    @Inject
+    ChatMemoryStore chatMemoryStore;
+
+    @Inject
+    @InputSanitizer.PII
+    InputSanitizer piiScanReflex;
 
     static final Set<String> SKIP_GOALS = Set.of(
-        AgentSentinels.GOAL_TOOL_APPROVED,
-        AgentSentinels.GOAL_RESUME_APPROVED,
-        AgentSentinels.GOAL_RESUME_DENIED
-    );
+            AgentSentinels.GOAL_TOOL_APPROVED, AgentSentinels.GOAL_RESUME_APPROVED, AgentSentinels.GOAL_RESUME_DENIED);
 
     /**
      * Saves the initial goal to chat memory with deduplication.
@@ -50,8 +52,7 @@ public class ChatMemoryWriter {
         // Deduplication - skip if last message already contains this goal
         if (!currentHistory.isEmpty()) {
             ChatMessage lastMsg = currentHistory.getLast();
-            if (lastMsg instanceof UserMessage
-                    && lastMsg.toString().contains(sanitizedGoal)) {
+            if (lastMsg instanceof UserMessage && lastMsg.toString().contains(sanitizedGoal)) {
                 return;
             }
         }
@@ -111,8 +112,7 @@ public class ChatMemoryWriter {
                 .filter(m -> {
                     if (m instanceof AiMessage ai && ai.hasToolExecutionRequests()) {
                         // Keep only tool calls that have a matching result in history
-                        return ai.toolExecutionRequests().stream()
-                                .anyMatch(req -> resultIds.contains(req.id()));
+                        return ai.toolExecutionRequests().stream().anyMatch(req -> resultIds.contains(req.id()));
                     }
                     return true;
                 })
@@ -122,6 +122,4 @@ public class ChatMemoryWriter {
             chatMemoryStore.updateMessages(sessionId, filteredHistory);
         }
     }
-
-
 }

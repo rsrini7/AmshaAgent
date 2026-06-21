@@ -112,6 +112,14 @@
           <groupId>dev.langchain4j</groupId>
           <artifactId>langchain4j-http-client-jdk</artifactId>
         </exclusion>
+        <exclusion>
+          <groupId>io.quarkus</groupId>
+          <artifactId>quarkus-hibernate-orm</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>io.quarkus</groupId>
+          <artifactId>quarkus-hibernate-orm-panache</artifactId>
+        </exclusion>
       </exclusions>
     </dependency>
     <dependency>
@@ -151,43 +159,36 @@
     <dependency>
       <groupId>com.cronutils</groupId>
       <artifactId>cron-utils</artifactId>
-      <version>9.2.1</version>
     </dependency>
 
     <!-- HTML Escape -->
     <dependency>
       <groupId>org.apache.commons</groupId>
       <artifactId>commons-text</artifactId>
-      <version>1.15.0</version>
     </dependency>
 
     <!-- Server-side Markdown (CommonMark) -->
     <dependency>
       <groupId>org.commonmark</groupId>
       <artifactId>commonmark</artifactId>
-      <version>0.24.0</version>
     </dependency>
     <dependency>
       <groupId>org.commonmark</groupId>
       <artifactId>commonmark-ext-gfm-tables</artifactId>
-      <version>0.24.0</version>
     </dependency>
 
     <!-- Lucene — dynamic tool search index -->
     <dependency>
       <groupId>org.apache.lucene</groupId>
       <artifactId>lucene-core</artifactId>
-      <version>10.4.0</version>
     </dependency>
     <dependency>
       <groupId>org.apache.lucene</groupId>
       <artifactId>lucene-queryparser</artifactId>
-      <version>10.4.0</version>
     </dependency>
     <dependency>
       <groupId>org.apache.lucene</groupId>
       <artifactId>lucene-analysis-common</artifactId>
-      <version>10.4.0</version>
     </dependency>
 
     <!-- Caffeine cache for ProcessingLockManager -->
@@ -214,7 +215,6 @@
     <dependency>
       <groupId>com.arize</groupId>
       <artifactId>openinference-instrumentation-langchain4j</artifactId>
-      <version>0.1.8</version>
     </dependency>
     <dependency>
       <groupId>io.opentelemetry</groupId>
@@ -271,8 +271,18 @@
       <version>${quarkus.version}</version>
       <scope>test</scope>
     </dependency>
+    <dependency>
+      <groupId>com.tngtech.archunit</groupId>
+      <artifactId>archunit-junit5</artifactId>
+      <scope>test</scope>
+    </dependency>
 
 
+    <dependency>
+      <groupId>io.quarkus</groupId>
+      <artifactId>quarkus-jacoco</artifactId>
+      <scope>test</scope>
+    </dependency>
   </dependencies>
 
   <build>

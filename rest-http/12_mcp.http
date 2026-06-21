@@ -8,7 +8,7 @@
 ###      Protocol: JSON-RPC 2.0 over HTTP (supports SSE for streaming)
 ###      Session: Mcp-Session-Id header (captured from MCP-1 response)
 ###      Handshake: initialize → notifications/initialized → tools/list → tools/call
-###      Exposed tools: github, memory_search (configured via arcclaw.mcp.exposed-tools)
+###      Exposed tools: github, recall_memory_search, archival_memory_search (configured via arcclaw.mcp.exposed-tools)
 ###      Allowlist: arcclaw.mcp.tool-allowlist controls which tools can be called
 ###
 ###   B) MCP CLIENT (outbound - ArcClaw connects to remote MCP servers)
@@ -59,7 +59,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # @name mcpToolList
 # Expect 200:
 # {
-#   "exposedInternalTools": [{"name":"github",...},{"name":"memory_search",...}],
+#   "exposedInternalTools": [{"name":"github",...},{"name":"recall_memory_search",...},{"name":"archival_memory_search",...}],
 #   "registeredDynamicTools": []   ← empty until FLOW D self-connect runs
 # }
 GET {{adminBase}}/mcp/tools
@@ -122,7 +122,7 @@ Mcp-Session-Id: {{mcpSessionId}}
 ###
 
 ### [MCP-3] tools/list - discover what ArcClaw exposes
-# Expect 200: tools array containing "github" and "memory_search"
+# Expect 200: tools array containing "github" and "recall_memory_search"
 # These come from arcclaw.mcp.exposed-tools via McpToolBridge.
 POST {{mcpBase}}/mcp
 Content-Type: application/json
@@ -139,10 +139,10 @@ Mcp-Session-Id: {{mcpSessionId}}
 
 ###
 
-### [MCP-4] tools/call - invoke memory_search
-# Expect 200: result.content[0].text = memory search output
-# Flow: McpToolsBean.memorySearch() → McpToolBridge.invoke()
-#       → ToolRegistry.invokeTool() → memory search impl
+### [MCP-4] tools/call - invoke recall_memory_search
+# Expect 200: result.content[0].text = recall_memory search output
+# Flow: McpToolsBean.recallMemorySearch() → McpToolBridge.invoke()
+#       → ToolRegistry.invokeTool() → recall memory search impl
 # Audit event MCP_TOOL_INVOKED persisted for every call.
 POST {{mcpBase}}/mcp
 Content-Type: application/json
@@ -155,7 +155,7 @@ Mcp-Session-Id: {{mcpSessionId}}
   "id": 3,
   "method": "tools/call",
   "params": {
-    "name": "memory_search",
+    "name": "recall_memory_search",
     "arguments": {
       "query": "ArcClaw architecture overview"
     }
@@ -295,7 +295,7 @@ X-ArcClaw-API-Key: {{validKey}}
 ###
 
 ### [MCP-CLIENT-2] Verify dynamic tools registered after self-connect
-# Expect 200: registeredDynamicTools contains github + memory_search
+# Expect 200: registeredDynamicTools contains github + recall_memory_search
 # Both with mcpServerName="self" and transport="HTTP_SSE"
 GET {{adminBase}}/mcp/tools
 Accept: application/json

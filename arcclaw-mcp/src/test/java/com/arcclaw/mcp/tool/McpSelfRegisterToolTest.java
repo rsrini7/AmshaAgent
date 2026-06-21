@@ -17,6 +17,7 @@ import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.tools.ToolExecutionContext;
 import com.arcclaw.core.tools.ToolResponse;
 import com.arcclaw.mcp.transport.McpClientService;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -24,6 +25,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
+@SuppressWarnings("java:S1192")
 class McpSelfRegisterToolTest {
 
     @Mock
@@ -38,29 +40,42 @@ class McpSelfRegisterToolTest {
     @Test
     void testValidHttpRegistration() throws Exception {
         Map<String, Object> params = Map.of(
-            "name", "my-server",
-            "transport", "http",
-            "url", "http://localhost:3000/mcp"
-        );
+                "name", "my-server",
+                "transport", "http",
+                "url", "http://localhost:3000/mcp");
 
-        ToolResponse resp = WorkspaceContext.run("session-456", "user-123", "chat-789", 
-            AutonomyLevel.FULL, "COORDINATOR", () -> tool.execute(ctx("session-456", "user-123"), params));
+        ToolResponse resp = WorkspaceContext.run(
+                "session-456",
+                "user-123",
+                "chat-789",
+                AutonomyLevel.FULL,
+                "COORDINATOR",
+                () -> tool.execute(ctx("session-456", "user-123"), params));
 
         assertEquals(0, resp.exitCode());
         verify(mcpClientService, times(1)).connect("my-server", "http://localhost:3000/mcp");
-        verify(auditService, times(1)).record(eq("session-456"), eq("user-123"), eq("COORDINATOR"), 
-            eq(SecurityEventType.TOOL_EXECUTED), anyString());
+        verify(auditService, times(1))
+                .record(
+                        eq("session-456"),
+                        eq("user-123"),
+                        eq("COORDINATOR"),
+                        eq(SecurityEventType.TOOL_EXECUTED),
+                        anyString());
     }
 
     @Test
     void testInvalidName() throws Exception {
         Map<String, Object> params = Map.of(
-            "name", "invalid name!",
-            "transport", "http"
-        );
+                "name", "invalid name!",
+                "transport", "http");
 
-        ToolResponse resp = WorkspaceContext.run("session-456", "user-123", "chat-789", 
-            AutonomyLevel.FULL, "COORDINATOR", () -> tool.execute(ctx("session-456", "user-123"), params));
+        ToolResponse resp = WorkspaceContext.run(
+                "session-456",
+                "user-123",
+                "chat-789",
+                AutonomyLevel.FULL,
+                "COORDINATOR",
+                () -> tool.execute(ctx("session-456", "user-123"), params));
 
         assertEquals(400, resp.exitCode());
         assertFalse(resp.success());
@@ -69,14 +84,18 @@ class McpSelfRegisterToolTest {
     @Test
     void testBlankUserIdFails() throws Exception {
         Map<String, Object> params = Map.of(
-            "name", "server",
-            "transport", "http",
-            "url", "http://host"
-        );
+                "name", "server",
+                "transport", "http",
+                "url", "http://host");
 
         // Blank userId in run() should trigger the guard in execute()
-        ToolResponse resp = WorkspaceContext.run("session-456", "", "chat-789", 
-            AutonomyLevel.FULL, "COORDINATOR", () -> tool.execute(ctx("session-456", ""), params));
+        ToolResponse resp = WorkspaceContext.run(
+                "session-456",
+                "",
+                "chat-789",
+                AutonomyLevel.FULL,
+                "COORDINATOR",
+                () -> tool.execute(ctx("session-456", ""), params));
 
         assertEquals(403, resp.exitCode());
     }
@@ -84,16 +103,21 @@ class McpSelfRegisterToolTest {
     @Test
     void testMcpConnectionExceptionPropagation() throws Exception {
         doThrow(new RuntimeException("Connection refused"))
-            .when(mcpClientService).connect(eq("fail-server"), anyString());
+                .when(mcpClientService)
+                .connect(eq("fail-server"), anyString());
 
         Map<String, Object> params = Map.of(
-            "name", "fail-server",
-            "transport", "http",
-            "url", "http://localhost:3000"
-        );
+                "name", "fail-server",
+                "transport", "http",
+                "url", "http://localhost:3000");
 
-        ToolResponse resp = WorkspaceContext.run("session-456", "user-123", "chat-789", 
-            AutonomyLevel.FULL, "COORDINATOR", () -> tool.execute(ctx("session-456", "user-123"), params));
+        ToolResponse resp = WorkspaceContext.run(
+                "session-456",
+                "user-123",
+                "chat-789",
+                AutonomyLevel.FULL,
+                "COORDINATOR",
+                () -> tool.execute(ctx("session-456", "user-123"), params));
 
         assertEquals(502, resp.exitCode());
         assertEquals("MCP connection failed: Connection refused", resp.output());
@@ -101,7 +125,17 @@ class McpSelfRegisterToolTest {
 
     private ToolExecutionContext ctx(String sessionId, String userId) {
         return new ToolExecutionContext(
-            sessionId, userId, "chat-789", "COORDINATOR", AutonomyLevel.FULL, 
-            "trace-1", null, null, null, null, null, null);
+                sessionId,
+                userId,
+                "chat-789",
+                "COORDINATOR",
+                AutonomyLevel.FULL,
+                "trace-1",
+                null,
+                null,
+                null,
+                null,
+                null,
+                null);
     }
 }

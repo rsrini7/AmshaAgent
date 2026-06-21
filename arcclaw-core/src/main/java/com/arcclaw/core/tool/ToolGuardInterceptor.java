@@ -15,8 +15,8 @@ import com.arcclaw.core.skill.CompiledSkillEntry;
  * without modifying the core ToolInvocationGuard.
  */
 public interface ToolGuardInterceptor {
-    /** 
-     * Tool names this interceptor handles. 
+    /**
+     * Tool names this interceptor handles.
      * Empty = handles all (proceed with caution).
      */
     Set<String> handledToolNames();
@@ -27,7 +27,12 @@ public interface ToolGuardInterceptor {
      * Return Optional.of(decision) to halt and use this decision.
      */
     Optional<ToolInvocationGuard.GuardDecision> evaluate(
-        String sessionId, String agentRole, AutonomyLevel autonomyLevel, String toolName,
-        Map<String, Object> params, List<ReasoningStep> history,
-        String goal, List<CompiledSkillEntry> skillSnapshot);
+            String sessionId,
+            String agentRole,
+            AutonomyLevel autonomyLevel,
+            String toolName,
+            Map<String, Object> params,
+            List<ReasoningStep> history,
+            String goal,
+            List<CompiledSkillEntry> skillSnapshot);
 }

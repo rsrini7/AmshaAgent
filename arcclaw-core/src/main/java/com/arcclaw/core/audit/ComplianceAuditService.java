@@ -7,6 +7,7 @@ import com.arcclaw.core.domain.model.AuditEvent;
 import com.arcclaw.core.domain.model.AuditEventRecord;
 import com.arcclaw.core.persistence.AsyncPersistenceEngine;
 import com.arcclaw.core.persistence.PersistenceEvent;
+
 import org.jboss.logging.Logger;
 
 @ApplicationScoped
@@ -23,8 +24,7 @@ public class ComplianceAuditService {
     }
 
     @Inject
-    public ComplianceAuditService(AuditEventRecorder auditEventRecorder,
-                                  AsyncPersistenceEngine persistenceEngine) {
+    public ComplianceAuditService(AuditEventRecorder auditEventRecorder, AsyncPersistenceEngine persistenceEngine) {
         this.auditEventRecorder = auditEventRecorder;
         this.persistenceEngine = persistenceEngine;
     }
@@ -38,8 +38,8 @@ public class ComplianceAuditService {
      *
      * @throws ComplianceViolationException if the mandatory write cannot be persisted
      */
-    public void recordMandatory(String sessionId, String userId, String agentRole,
-                                SecurityEventType type, String detail) {
+    public void recordMandatory(
+            String sessionId, String userId, String agentRole, SecurityEventType type, String detail) {
         log.infof("[AUDIT-MANDATORY] type=%s session=%s", type, sessionId);
         AuditEvent event = AuditEventRecord.securityEvent(sessionId, userId, agentRole, type, detail);
         PersistenceEvent pe = PersistenceEvent.critical(sessionId, type, () -> {

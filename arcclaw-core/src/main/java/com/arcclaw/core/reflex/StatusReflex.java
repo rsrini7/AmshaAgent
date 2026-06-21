@@ -1,12 +1,12 @@
 package com.arcclaw.core.reflex;
 
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
-
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
 
 import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.domain.model.AgentCheckpoint;
@@ -21,9 +21,14 @@ import com.arcclaw.persistence.api.CompactionStorePort;
 @ReflexPriority(500)
 public class StatusReflex implements AgentReflex {
 
-    @Inject StatefulAgentStore statefulAgentStore;
-    @Inject CompactionStorePort compactionSummaryRepository;
-    @Inject GovernanceStrategy governanceStrategy;
+    @Inject
+    StatefulAgentStore statefulAgentStore;
+
+    @Inject
+    CompactionStorePort compactionSummaryRepository;
+
+    @Inject
+    GovernanceStrategy governanceStrategy;
 
     @Override
     public boolean matches(String input) {
@@ -31,40 +36,35 @@ public class StatusReflex implements AgentReflex {
     }
 
     @Override
-    public ReflexResult execute(String sessionId, String userId, String chatId,
-                                String input, MessageContext context) {
+    public ReflexResult execute(String sessionId, String userId, String chatId, String input, MessageContext context) {
 
         List<AgentCheckpoint> checkpoints = new ArrayList<>();
 
         // Use AgentRoleEnum.values() - includes ALL built-in roles (ARCHITECT,
         // SYNTHESIZER, etc). A hardcoded list would silently miss new roles.
         for (AgentRoleEnum role : AgentRoleEnum.values()) {
-            statefulAgentStore.load(sessionId, role.toScopedName())
-                              .ifPresent(checkpoints::add);
+            statefulAgentStore.load(sessionId, role.toScopedName()).ifPresent(checkpoints::add);
         }
 
         String status = resolveStatus(checkpoints);
 
-        double budgetUsd    = governanceStrategy.getBudgetUsd();
-        double cost         = governanceStrategy.getSessionCost(sessionId);
-        double pct          = budgetUsd > 0 ? (cost / budgetUsd) * 100 : 0;
-        int    inputTokens  = governanceStrategy.getSessionInputTokens(sessionId);
-        int    outputTokens = governanceStrategy.getSessionOutputTokens(sessionId);
-        int    totalTokens  = inputTokens + outputTokens;
+        double budgetUsd = governanceStrategy.getBudgetUsd();
+        double cost = governanceStrategy.getSessionCost(sessionId);
+        double pct = budgetUsd > 0 ? (cost / budgetUsd) * 100 : 0;
+        int inputTokens = governanceStrategy.getSessionInputTokens(sessionId);
+        int outputTokens = governanceStrategy.getSessionOutputTokens(sessionId);
+        int totalTokens = inputTokens + outputTokens;
 
         String memoryLine = compactionSummaryRepository
-            .findLatestBySessionId(sessionId)
-            .map(s -> String.format("Compacted (msgs summarized: %d) | Active window running",
-                s.messagesCompacted()))
-            .orElse("Not compacted - session within active window");
+                .findLatestBySessionId(sessionId)
+                .map(s ->
+                        String.format("Compacted (msgs summarized: %d) | Active window running", s.messagesCompacted()))
+                .orElse("Not compacted - session within active window");
 
-        String shortId = sessionId.length() > 8
-            ? sessionId.substring(sessionId.length() - 8) : sessionId;
+        String shortId = sessionId.length() > 8 ? sessionId.substring(sessionId.length() - 8) : sessionId;
 
         String output = UserMessages.statusMessage(
-            status, cost, budgetUsd, pct,
-            inputTokens, outputTokens, totalTokens,
-            memoryLine, shortId);
+                status, cost, budgetUsd, pct, inputTokens, outputTokens, totalTokens, memoryLine, shortId);
 
         return ReflexResult.respond(output, context);
     }
@@ -99,7 +99,8 @@ public class StatusReflex implements AgentReflex {
             CheckpointStatus s = cp.getStatus();
             if (s == CheckpointStatus.RESUMING) {
                 // Ignore stale resuming checkpoints older than 5 minutes
-                if (cp.getUpdatedAt() != null && Duration.between(cp.getUpdatedAt(), Instant.now()).toMinutes() > 5) {
+                if (cp.getUpdatedAt() != null
+                        && Duration.between(cp.getUpdatedAt(), Instant.now()).toMinutes() > 5) {
                     continue;
                 }
                 return s.name();

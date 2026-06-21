@@ -9,12 +9,14 @@ import java.util.Set;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import io.quarkus.deployment.annotations.BuildProducer;
-import io.quarkus.deployment.builditem.nativeimage.ReflectiveClassBuildItem;
+
 import org.jboss.jandex.DotName;
 import org.jboss.jandex.IndexView;
 import org.jboss.jandex.Type;
 import org.junit.jupiter.api.Test;
+
+import io.quarkus.deployment.annotations.BuildProducer;
+import io.quarkus.deployment.builditem.nativeimage.ReflectiveClassBuildItem;
 
 class AgentFunctionProcessorTest {
 
@@ -30,7 +32,7 @@ class AgentFunctionProcessorTest {
 
         // String
         Method buildSchema = AgentFunctionProcessor.class.getDeclaredMethod(
-            "buildSchema", IndexView.class, Type.class, ObjectNode.class, Set.class, BuildProducer.class);
+                "buildSchema", IndexView.class, Type.class, ObjectNode.class, Set.class, BuildProducer.class);
         buildSchema.setAccessible(true);
 
         Type stringType = Type.create(DotName.createSimple("java.lang.String"), Type.Kind.CLASS);

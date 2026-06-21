@@ -8,10 +8,7 @@ import java.util.Map;
  * Replaces simple strings to allow future-proof metadata propagation (e.g. execution duration,
  * specific record IDs) back to the channel adapter.
  */
-public record CommandResponse(
-    String content,
-    Map<String, Object> metadata
-) {
+public record CommandResponse(String content, Map<String, Object> metadata) {
     public CommandResponse(String content) {
         this(content, Collections.emptyMap());
     }

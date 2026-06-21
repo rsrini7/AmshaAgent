@@ -8,7 +8,7 @@ public class LlmExceptionClassifier {
         LlmExceptionClassifierChain gemini = new GeminiExceptionClassifier();
         LlmExceptionClassifierChain langChain = new LangChain4jExceptionClassifier();
         LlmExceptionClassifierChain generic = new GenericExceptionClassifier();
-        
+
         gemini.setNext(langChain);
         langChain.setNext(generic);
         CHAIN = gemini;

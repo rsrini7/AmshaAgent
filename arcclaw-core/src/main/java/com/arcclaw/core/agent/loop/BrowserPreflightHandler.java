@@ -1,14 +1,14 @@
 package com.arcclaw.core.agent.loop;
 
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
 
 import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
@@ -20,6 +20,7 @@ import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.tools.AgentTool;
 import com.arcclaw.core.tools.ToolRegistry;
 import com.arcclaw.core.tools.ToolResponse;
+
 import org.jboss.logging.Logger;
 
 @ApplicationScoped
@@ -27,17 +28,15 @@ public class BrowserPreflightHandler {
 
     private static final Logger log = Logger.getLogger(BrowserPreflightHandler.class);
 
-    private static final Pattern URL_PATTERN = Pattern.compile(
-            "https?://[\\w\\-._~:/?#\\[\\]@!$&'()*+,;=%]+");
+    private static final Pattern URL_PATTERN = Pattern.compile("https?://[\\w\\-._~:/?#\\[\\]@!$&'()*+,;=%]+");
 
     private final ToolRegistry toolRegistry;
     private final ToolInvoker toolInvoker;
     private final ApprovalCheckpointManager checkpointManager;
 
     @Inject
-    public BrowserPreflightHandler(ToolRegistry toolRegistry,
-                                    ToolInvoker toolInvoker,
-                                    ApprovalCheckpointManager checkpointManager) {
+    public BrowserPreflightHandler(
+            ToolRegistry toolRegistry, ToolInvoker toolInvoker, ApprovalCheckpointManager checkpointManager) {
         this.toolRegistry = toolRegistry;
         this.toolInvoker = toolInvoker;
         this.checkpointManager = checkpointManager;
@@ -54,8 +53,12 @@ public class BrowserPreflightHandler {
         ReasoningStep preflightStep = preflightOpt.get();
         try {
             ToolResponse response = WorkspaceContext.run(
-                    context.sessionId(), context.userId(), context.chatId(),
-                    context.autonomyLevel(), context.agentRole(), context.channelType(),
+                    context.sessionId(),
+                    context.userId(),
+                    context.chatId(),
+                    context.autonomyLevel(),
+                    context.agentRole(),
+                    context.channelType(),
                     () -> toolInvoker.invoke(preflightStep.action(), preflightStep.actionInput(), context.sessionId()));
 
             ReasoningStep completed = preflightStep.withObservation(
@@ -63,12 +66,12 @@ public class BrowserPreflightHandler {
                     response.success());
             history.add(completed);
         } catch (RequiresApprovalException e) {
-            log.infof("[BrowserPreflight] Tool '%s' requires approval for session %s - pausing for human-in-the-loop",
+            log.infof(
+                    "[BrowserPreflight] Tool '%s' requires approval for session %s - pausing for human-in-the-loop",
                     preflightStep.action(), context.sessionId());
             List<ReasoningStep> historyAtPause = appendPendingStep(history, preflightStep);
-            return Optional.of(checkpointManager.persist(context,
-                    e.getFrame(), historyAtPause,
-                    context.channelType(), context.channelPlatformId()));
+            return Optional.of(checkpointManager.persist(
+                    context, e.getFrame(), historyAtPause, context.channelType(), context.channelPlatformId()));
         } catch (Exception e) {
             log.warnf("[BrowserPreflight] Failed for session %s: %s", context.sessionId(), LogUtil.rootMessage(e));
         }

@@ -1,9 +1,9 @@
 package com.arcclaw.core.config;
 
-import java.time.Instant;
-
 import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
+
+import java.time.Instant;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 
@@ -26,19 +26,25 @@ public class SystemMetadataRegistry {
         startedAt = Instant.now().toString();
     }
 
-    public String getAppName()    { return appName; }
-    public String getAppVersion() { return appVersion; }
-    public String getStartedAt()  { return startedAt; }
-    public String getEnvironment() { return activeProfile; }
+    public String getAppName() {
+        return appName;
+    }
+
+    public String getAppVersion() {
+        return appVersion;
+    }
+
+    public String getStartedAt() {
+        return startedAt;
+    }
+
+    public String getEnvironment() {
+        return activeProfile;
+    }
 
     public SystemInfo toInfo() {
         return new SystemInfo(appName, appVersion, activeProfile, startedAt);
     }
 
-    public record SystemInfo(
-            String name,
-            String version,
-            String environment,
-            String startedAt
-    ) {}
+    public record SystemInfo(String name, String version, String environment, String startedAt) {}
 }

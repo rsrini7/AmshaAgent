@@ -12,7 +12,7 @@ public interface SecretVault {
 
     /**
      * Stores a secret.
-     * 
+     *
      * @param keyName The unique name of the secret (e.g., "OPENAI_API_KEY").
      * @param secret  The secret bytes.
      */
@@ -22,7 +22,7 @@ public interface SecretVault {
 
     /**
      * Retrieves a decrypted secret.
-     * 
+     *
      * @param keyName The name of the secret.
      * @return An Optional containing the secret bytes (wrapped in VaultKey).
      */

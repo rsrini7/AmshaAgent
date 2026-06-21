@@ -14,6 +14,8 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import jakarta.inject.Inject;
+
 import java.time.Instant;
 import java.util.Map;
 import java.util.UUID;
@@ -22,15 +24,12 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-import jakarta.inject.Inject;
-
 import com.arcclaw.channel.api.ChannelMessage;
 import com.arcclaw.channel.api.ChannelServices;
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ChannelUser;
 import com.arcclaw.channel.api.ProcessingLockManager;
-import io.quarkus.test.InjectMock;
-import io.quarkus.test.component.QuarkusComponentTest;
+
 import org.apache.camel.Exchange;
 import org.apache.camel.Message;
 import org.apache.camel.component.telegram.model.IncomingMessage;
@@ -39,6 +38,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
+
+import io.quarkus.test.InjectMock;
+import io.quarkus.test.component.QuarkusComponentTest;
 
 @QuarkusComponentTest
 class TelegramAgentHandlerTest {
@@ -68,14 +70,14 @@ class TelegramAgentHandlerTest {
         when(channelServices.processAsync(any())).thenReturn(CompletableFuture.completedFuture(null));
 
         // Realistic lock behavior backed by an in-memory map
-        when(lockManager.tryLock(any())).thenAnswer(invocation ->
-                locks.putIfAbsent(invocation.getArgument(0), Boolean.TRUE) == null);
-        when(lockManager.isLocked(any())).thenAnswer(invocation ->
-                locks.containsKey(invocation.getArgument(0)));
+        when(lockManager.tryLock(any()))
+                .thenAnswer(invocation -> locks.putIfAbsent(invocation.getArgument(0), Boolean.TRUE) == null);
+        when(lockManager.isLocked(any())).thenAnswer(invocation -> locks.containsKey(invocation.getArgument(0)));
         // Use lenient() to avoid UnnecessaryStubbingException when unlock is not always called
-        Mockito.lenient().doAnswer(invocation ->
-                locks.remove(invocation.getArgument(0))
-        ).when(lockManager).unlock(any());
+        Mockito.lenient()
+                .doAnswer(invocation -> locks.remove(invocation.getArgument(0)))
+                .when(lockManager)
+                .unlock(any());
     }
 
     @Test
@@ -99,11 +101,12 @@ class TelegramAgentHandlerTest {
     @Test
     void testNonTextMessageNotifiesUser() {
         Exchange exchange = createExchange("chat123", "456", "alice", null);
-        
+
         handler.receiveMessage(exchange);
 
         verify(channelServices, never()).processAsync(any());
-        verify(sender).sendRaw(argThat(user -> "456".equals(user.platformId())), contains("only process text messages"));
+        verify(sender)
+                .sendRaw(argThat(user -> "456".equals(user.platformId())), contains("only process text messages"));
     }
 
     @Test
@@ -125,7 +128,7 @@ class TelegramAgentHandlerTest {
         ChannelMessage.TelegramMessage msg = new ChannelMessage.TelegramMessage(
                 new ChannelUser("456", "456", "alice", ChannelType.TELEGRAM), "hello world", "chat123", Instant.now());
         when(mapper.map(eq("hello world"), any(), eq("chat123"))).thenReturn(msg);
-        
+
         CompletableFuture<Void> failed = new CompletableFuture<>();
         failed.completeExceptionally(new RuntimeException("SPI error"));
         when(channelServices.processAsync(any())).thenReturn(failed);
@@ -138,15 +141,15 @@ class TelegramAgentHandlerTest {
         } finally {
             julLogger.setLevel(null); // Restore to parent logging level configuration
         }
-        
-        verify(sender, atLeastOnce()).sendRaw(argThat(user -> "456".equals(user.platformId())), contains("internal error occurred"));
+
+        verify(sender, atLeastOnce())
+                .sendRaw(argThat(user -> "456".equals(user.platformId())), contains("internal error occurred"));
     }
 
     @Test
     void rapidConcurrentMessagesFromSameChatAreSerialised() throws Exception {
         String chatId = "chat-" + UUID.randomUUID();
         CompletableFuture<Void> pending = new CompletableFuture<>();
-
 
         // 1. Stub first message to hang
         ChannelMessage.TelegramMessage msg1 = new ChannelMessage.TelegramMessage(

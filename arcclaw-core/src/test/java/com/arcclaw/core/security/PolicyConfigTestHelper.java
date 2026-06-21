@@ -14,25 +14,51 @@ public final class PolicyConfigTestHelper {
 
     public static PolicyConfig defaultConfig() {
         return new PolicyConfig() {
-            @Override public DestructiveVocabulary destructiveVocabulary() {
+            @Override
+            public DestructiveVocabulary destructiveVocabulary() {
                 return new DestructiveVocabulary() {
-                    @Override public List<String> patterns() {
+                    @Override
+                    public List<String> patterns() {
                         return List.of(
-                            "(?i)\\b(delete|remove|purge|drop|chmod|truncate|wipe|erase|destroy|archive|rename)\\b",
-                            "(?i)\\brm\\s*-?\\s*rf\\b"
-                        );
+                                "(?i)\\b(delete|remove|purge|drop|chmod|truncate|wipe|erase|destroy|archive|rename)\\b",
+                                "(?i)\\brm\\s*-?\\s*rf\\b");
                     }
-                    @Override public List<String> exemptRoles() { return List.of("debugger"); }
-                    @Override public List<String> sandboxOnlyRoles() { return List.of("coder"); }
-                    @Override public String overrideRole() { return "coordinator"; }
+
+                    @Override
+                    public List<String> exemptRoles() {
+                        return List.of("debugger");
+                    }
+
+                    @Override
+                    public List<String> sandboxOnlyRoles() {
+                        return List.of("coder");
+                    }
+
+                    @Override
+                    public String overrideRole() {
+                        return "coordinator";
+                    }
                 };
             }
-            @Override public Governance governance() {
+
+            @Override
+            public Governance governance() {
                 return new Governance() {
-                    @Override public List<String> hitlExemptTools() { return List.of(ToolCapability.SCHEDULE_TASK.toolName(), ToolCapability.MANAGE_SCHEDULE.toolName()); }
-                    @Override public List<String> supervisedSalvageOperations() {
-                        return List.of("NETWORK_OUTBOUND", "VAULT_ACCESS", "EXECUTE_SHELL",
-                                "WRITE_MEMORY", "DELEGATE_AUTONOMOUS", "WRITE_FS");
+                    @Override
+                    public List<String> hitlExemptTools() {
+                        return List.of(
+                                ToolCapability.SCHEDULE_TASK.toolName(), ToolCapability.MANAGE_SCHEDULE.toolName());
+                    }
+
+                    @Override
+                    public List<String> supervisedSalvageOperations() {
+                        return List.of(
+                                "NETWORK_OUTBOUND",
+                                "VAULT_ACCESS",
+                                "EXECUTE_SHELL",
+                                "WRITE_MEMORY",
+                                "DELEGATE_AUTONOMOUS",
+                                "WRITE_FS");
                     }
                 };
             }

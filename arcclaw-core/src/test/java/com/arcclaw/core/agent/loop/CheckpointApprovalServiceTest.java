@@ -5,9 +5,9 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
-import java.util.Optional;
-
 import jakarta.enterprise.inject.Instance;
+
+import java.util.Optional;
 
 import com.arcclaw.core.agent.hitl.CheckpointApprovalService;
 import com.arcclaw.core.agent.role.ToolCapability;
@@ -17,6 +17,7 @@ import com.arcclaw.core.domain.model.AgentCheckpointRecord;
 import com.arcclaw.core.persistence.AsyncPersistenceEngine;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.fasterxml.jackson.databind.ObjectMapper;
+
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -25,22 +26,28 @@ import org.mockito.MockitoAnnotations;
 
 public class CheckpointApprovalServiceTest {
 
-    @Mock StatefulAgentStore agentStore;
-    @Mock CheckpointResumeHandler resumeHandler;
-    @Mock Instance<CheckpointResumeHandler> resumeHandlerInstance;
-    @Mock AsyncPersistenceEngine asyncEngine;
-    @Mock AgentSseService agentSseService;
+    @Mock
+    StatefulAgentStore agentStore;
+
+    @Mock
+    CheckpointResumeHandler resumeHandler;
+
+    @Mock
+    Instance<CheckpointResumeHandler> resumeHandlerInstance;
+
+    @Mock
+    AsyncPersistenceEngine asyncEngine;
+
+    @Mock
+    AgentSseService agentSseService;
+
     CheckpointApprovalService checkpointApprovalService;
 
     @BeforeEach
     void setup() {
         MockitoAnnotations.openMocks(this);
-        checkpointApprovalService = new CheckpointApprovalService(
-                agentStore,
-                agentSseService,
-                new ObjectMapper(),
-                resumeHandlerInstance
-        );
+        checkpointApprovalService =
+                new CheckpointApprovalService(agentStore, agentSseService, new ObjectMapper(), resumeHandlerInstance);
         when(resumeHandlerInstance.isResolvable()).thenReturn(true);
         when(resumeHandlerInstance.get()).thenReturn(resumeHandler);
     }
@@ -50,7 +57,7 @@ public class CheckpointApprovalServiceTest {
         AgentCheckpoint cp = new AgentCheckpointRecord();
         cp.setSessionId("s1");
         cp.setAgentRole("coordinator");
-        
+
         when(agentStore.findLatestAwaitingApproval("s1")).thenReturn(Optional.of(cp));
         when(agentStore.isAllBatchToolsDecided("s1", "coordinator")).thenReturn(true);
 
@@ -64,7 +71,7 @@ public class CheckpointApprovalServiceTest {
         AgentCheckpoint cp = new AgentCheckpointRecord();
         cp.setSessionId("s1");
         cp.setAgentRole("coordinator");
-        
+
         when(agentStore.findLatestAwaitingApproval("s1")).thenReturn(Optional.of(cp));
         when(agentStore.isAllBatchToolsDecided("s1", "coordinator")).thenReturn(false);
 
@@ -90,8 +97,9 @@ public class CheckpointApprovalServiceTest {
         cp.setSessionId("s1");
         cp.setAgentRole("coordinator");
         cp.setPendingToolName("parallel|" + ToolCapability.GITHUB.toolName() + ",sandboxexec");
-        cp.setBatchToolDecisions("{\"" + ToolCapability.GITHUB.toolName() + "\":\"PENDING\",\"sandboxexec\":\"PENDING\"}");
-        
+        cp.setBatchToolDecisions(
+                "{\"" + ToolCapability.GITHUB.toolName() + "\":\"PENDING\",\"sandboxexec\":\"PENDING\"}");
+
         when(agentStore.findLatestAwaitingApproval("s1")).thenReturn(Optional.of(cp));
 
         checkpointApprovalService.approveAll("s1", "bulk approve");
@@ -106,7 +114,7 @@ public class CheckpointApprovalServiceTest {
         cp.setAgentRole("coordinator");
         when(agentStore.findLatestNonArchivedCheckpoint("s1")).thenReturn(Optional.of(cp));
         when(agentStore.claimForResume(anyString(), anyString())).thenReturn(true);
-        
+
         checkpointApprovalService.triggerResume(cp);
         verify(resumeHandler).resumeAfterBatchDecision(eq("s1"), eq("coordinator"), any(), any(), any());
     }

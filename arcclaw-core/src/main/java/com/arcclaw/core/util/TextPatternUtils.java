@@ -2,6 +2,8 @@ package com.arcclaw.core.util;
 
 import jakarta.enterprise.context.ApplicationScoped;
 
+import java.util.Locale;
+
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 /**
@@ -13,14 +15,16 @@ public class TextPatternUtils {
     @ConfigProperty(name = "arcclaw.core.util.json-salvage-max-lines", defaultValue = "20")
     int jsonSalvageMaxLines = 20;
 
-    public TextPatternUtils() {}
+    public TextPatternUtils() {
+        /* CDI proxy */
+    }
 
     /**
      * Returns true if the original goal requested execution.
      */
     public boolean goalRequestsExecution(String goal) {
         if (goal == null) return false;
-        String lower = goal.toLowerCase();
+        String lower = goal.toLowerCase(Locale.ROOT);
         return lower.contains("execute")
                 || lower.contains("must execute")
                 || lower.contains("and execute")
@@ -28,6 +32,11 @@ public class TextPatternUtils {
                 || lower.contains("run again")
                 || lower.contains("run it")
                 || lower.contains("run the")
+                || lower.contains("run java")
+                || lower.contains("run python")
+                || lower.contains("run node")
+                || lower.contains("run go")
+                || lower.contains("run bash")
                 || lower.contains("share result")
                 || lower.contains("share the result")
                 || lower.contains("run same")
@@ -36,15 +45,15 @@ public class TextPatternUtils {
                 || lower.contains("execute again")
                 || lower.contains("share generated")
                 || lower.contains("just do it");
-                }
+    }
     /**
      * Extracts a normalized language name if mentioned in the goal.
      * Uses word boundaries to avoid false positives (e.g. "government" matching "go").
      */
     public String goalMentionsLanguage(String goal) {
         if (goal == null) return null;
-        String lower = " " + goal.toLowerCase().replaceAll("[^a-z0-9]", " ") + " ";
-        
+        String lower = " " + goal.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]", " ") + " ";
+
         if (lower.contains(" java ")) return "java";
         if (lower.contains(" python ") || lower.contains(" py ")) return "python";
         if (lower.contains(" go ") || lower.contains(" golang ") || lower.contains(" go lang ")) return "go";
@@ -74,13 +83,12 @@ public class TextPatternUtils {
     public boolean looksLikeJson(String text) {
         if (text == null) return false;
         String trimmed = text.strip();
-        
+
         // Only flag single-block JSON - multi-line prose ending with } is valid.
         // 20 lines covers all realistic tool-call JSON echoes.
         long lineCount = trimmed.lines().count();
         if (lineCount > jsonSalvageMaxLines) return false;
 
-        return (trimmed.startsWith("{") && trimmed.endsWith("}"))
-                || (trimmed.startsWith("[") && trimmed.endsWith("]"));
+        return (trimmed.startsWith("{") && trimmed.endsWith("}")) || (trimmed.startsWith("[") && trimmed.endsWith("]"));
     }
 }

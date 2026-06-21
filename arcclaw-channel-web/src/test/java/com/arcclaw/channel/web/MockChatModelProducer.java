@@ -1,5 +1,8 @@
 package com.arcclaw.channel.web;
 
+import dev.langchain4j.model.chat.ChatModel;
+import dev.langchain4j.model.embedding.EmbeddingModel;
+
 import jakarta.annotation.Priority;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Alternative;
@@ -7,10 +10,10 @@ import jakarta.enterprise.inject.Produces;
 
 import com.arcclaw.core.agent.reasoning.AgentChatModelProvider;
 import com.arcclaw.core.agent.reasoning.StructuredOutputMode;
-import dev.langchain4j.model.chat.ChatModel;
-import dev.langchain4j.model.embedding.EmbeddingModel;
-import io.smallrye.common.annotation.Identifier;
+
 import org.mockito.Mockito;
+
+import io.smallrye.common.annotation.Identifier;
 
 /**
  * Mock producer and provider to satisfy LangChain4J ChatModel and EmbeddingModel dependencies

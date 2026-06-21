@@ -8,6 +8,7 @@ import java.util.List;
 import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.tools.ToolRegistry;
 import com.arcclaw.core.util.TextPatternUtils;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -19,11 +20,16 @@ class AnswerQualityGuardTest {
     @BeforeEach
     void setUp() {
         toolRegistry = mock(ToolRegistry.class);
-        when(toolRegistry.listTools()).thenReturn(List.of(
-            ToolCapability.MEMORY_SEARCH.toolName(), ToolCapability.INGEST_DOCUMENT.toolName(), ToolCapability.GITHUB.toolName(), ToolCapability.SANDBOX_EXEC.toolName(), 
-            ToolCapability.DELEGATE_TO_AGENT.toolName(), ToolCapability.SCHEDULE_TASK.toolName(), ToolCapability.MANAGE_SCHEDULE.toolName()
-        ));
-        
+        when(toolRegistry.listTools())
+                .thenReturn(List.of(
+                        ToolCapability.RECALL_MEMORY_SEARCH.toolName(),
+                        ToolCapability.INGEST_DOCUMENT.toolName(),
+                        ToolCapability.GITHUB.toolName(),
+                        ToolCapability.SANDBOX_EXEC.toolName(),
+                        ToolCapability.DELEGATE_TO_AGENT.toolName(),
+                        ToolCapability.SCHEDULE_TASK.toolName(),
+                        ToolCapability.MANAGE_SCHEDULE.toolName()));
+
         guard = new AnswerQualityGuard();
         guard.toolRegistry = toolRegistry;
         guard.textPatternUtils = new TextPatternUtils();
@@ -44,14 +50,14 @@ class AnswerQualityGuardTest {
         sb.append("We have several available tools in our arsenal. ");
         sb.append("For example, the sandbox_exec tool has a schema like: ");
         sb.append("{\"type\":\"function\", \"name\":\"sandbox_exec\", \"parameters\": {...}} ");
-        
+
         // Make it > 500 chars
         while (sb.length() < 600) {
             sb.append("This is part of the detailed documentation of system capabilities and available tools. ");
         }
-        
+
         String longAnswer = sb.toString();
-        
+
         // Even though it contains the RAW_TOOL_CALL_PATTERN, it should bypass because it's long and has keywords
         assertFalse(guard.isRawToolCallLeak(longAnswer), "Long descriptive answers should bypass leak detection");
     }
@@ -66,7 +72,7 @@ class AnswerQualityGuardTest {
     void testStripRawToolJson() {
         String mix = "Prose before. {\"type\":\"function\", \"name\":\"sandbox_exec\"} Prose after.";
         String stripped = guard.stripRawToolJson(mix);
-        
+
         assertTrue(stripped.contains("Prose before."));
         assertTrue(stripped.contains("Prose after."));
         assertFalse(stripped.contains("type"));
@@ -75,12 +81,13 @@ class AnswerQualityGuardTest {
     @Test
     void testNakedFunctionCallLeak() {
         // Suggested case
-        assertTrue(guard.isRawToolCallLeak("memory_search(query=\"test\")"),
-            "Naked function call pattern must match explicitly");
+        assertTrue(
+                guard.isRawToolCallLeak("recall_memory_search(query=\"test\")"),
+                "Naked function call pattern must match explicitly");
 
-        String leak = "I will check that for you: memory_search(query=\"what srini loves\")";
+        String leak = "I will check that for you: recall_memory_search(query=\"what srini loves\")";
         assertTrue(guard.isRawToolCallLeak(leak), "Should detect naked function call as a leak");
-        
+
         String stripped = guard.stripRawToolJson(leak);
         assertEquals("I will check that for you:", stripped);
     }
@@ -89,11 +96,10 @@ class AnswerQualityGuardTest {
     void testNakedFunctionCallFalsePositiveProtection() {
         // Coder agent common patterns should NOT match
         String coderExplanation = "Use print(end=\"\\n\") to control line endings.";
-        assertFalse(guard.isRawToolCallLeak(coderExplanation), 
-            "Generic code explanations should NOT be flagged as leaks");
-        
+        assertFalse(
+                guard.isRawToolCallLeak(coderExplanation), "Generic code explanations should NOT be flagged as leaks");
+
         String otherFunction = "Call connect(host=\"localhost\") to open the connection.";
-        assertFalse(guard.isRawToolCallLeak(otherFunction),
-            "Non-tool function calls should NOT be flagged as leaks");
+        assertFalse(guard.isRawToolCallLeak(otherFunction), "Non-tool function calls should NOT be flagged as leaks");
     }
 }

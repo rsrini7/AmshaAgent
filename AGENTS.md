@@ -1,231 +1,274 @@
 # ArcClaw Agent Developer Guide (AGENTS.md)
 
-Welcome! This document outlines the critical invariants, conventions, and architectural structures of ArcClaw. **All AI coding agents (Gemini, Claude, etc.) must strictly adhere to these rules when editing this codebase.**
+**All AI coding agents MUST adhere to these rules when editing this codebase.**
 
 ---
 
-* **Import Alignment**: After making any modifications to Java source files, you MUST run the import organization and FQN sorting script to align imports:
-  ```bash
-  python3 ./fix_fqns.py
-  ```
+* **Import Alignment**: After editing Java, run `python3 ./fix_fqns.py && ./mvnw spotless:apply -q`
+* **SonarQube Gate**: Before committing, run `mise run sonar:issues` (all BLOCKER+CRITICAL) or `mise run sonar:issues -- -severity BLOCKER`
+
+---
 
 ## 1. Critical Architectural Invariants
 
-### 1.1 The Transaction-Free Zone
-* **Rule**: Long-running operations—including LLM calls, external tool execution, and network API requests—**MUST NOT** be executed within an active database transaction.
-* **Reason**: SQLite's WAL mode and connection pool configuration will starve or deadlock under concurrent access if connections are held open during high-latency remote tasks. Keep transactions minimal, transactional writes fast, and run all remote tasks in non-transactional contexts.
-* **CDI Restriction**: Do not nest `@Transactional(value = TxType.REQUIRES_NEW)` inside active writes.
+### 1.1 Transaction-Free Zone
+LLM calls, external tool execution, and network requests **MUST NOT** run inside `@Transactional`. Do not nest `@Transactional(REQUIRES_NEW)` inside active writes.
+**Why**: SQLite WAL mode starves or deadlock under concurrent access if connections are held during high-latency remote tasks. Keep transactions minimal, writes fast.
 
 ### 1.2 SQLite WAL & Safety Level
-* **Rule**: Do not attempt to alter SQLite safety configurations (such as setting `synchronous=NORMAL`) inside an active transaction. Doing so throws a `SQLiteException` (Safety level may not be changed inside a transaction).
+Do not alter SQLite safety config (e.g. `synchronous=NORMAL`) inside an active transaction — throws `SQLiteException` ("Safety level may not be changed inside a transaction").
+
+### 1.3 Flyway Migration Parity
+Every Flyway migration **MUST** have a matching migration in the other backend with the same version number and table semantics.
+
+| Column Type | SQLite | PostgreSQL |
+|---|---|---|
+| Auto-increment PK | `INTEGER PRIMARY KEY AUTOINCREMENT` | `BIGSERIAL PRIMARY KEY` |
+| Timestamps | `TEXT NOT NULL` (ISO-8601) | `TIMESTAMP WITH TIME ZONE NOT NULL` |
+| Boolean | `BOOLEAN DEFAULT FALSE` | `BOOLEAN NOT NULL DEFAULT FALSE` |
+| Unique constraint | `UNIQUE(col1, col2)` | `UNIQUE(col1, col2)` (same) |
+
+**Locations**: `arcclaw-persistence-sqlite/src/main/resources/db/migration/sqlite/` / `arcclaw-persistence-postgres/src/main/resources/db/migration/postgresql/`
+
+### 1.3.1 Persistence Backend Selection
+Each adapter uses `@IfBuildProperty(name = "arcclaw.persistence.backend", stringValue = "sqlite"|"postgres"|"fs")`. SQLite is default (`enableIfMissing = true`). **JVM mode**: set `ARCCLAW_PERSISTENCE_BACKEND` in `.env` — no rebuild. **Native image**: baked at build time, must rebuild. Tiered memory backend (`arcclaw.memory.tiered.backend`) is a separate property and can differ. See `docs/Architecture_Invariants.md` §5.24 for full details.
+
+| Binary | Backend | Build command |
+|---|---|---|
+| `arcclaw-sqlite` | SQLite (default) | `./mvnw package -Dnative` |
+| `arcclaw-pg` | PostgreSQL | `./mvnw package -Dnative -Darcclaw.persistence.backend=postgres` |
+| `arcclaw-fs` | Filesystem | `./mvnw package -Dnative -Darcclaw.persistence.backend=fs` |
+
+JVM mode is backend-agnostic: one JAR, switch via `.env`. Native builds need separate binaries per backend. Release archives contain all 3 per OS.
+
+### 1.4 Admin REST Resource Pattern
+All `@Path("/admin/...")` resources **MUST** use `resolveUserId()` (from `CronResource.java` — `SecurityContext.getUserPrincipal()` with `WorkspaceContext.getUserIdOrUnknown()` fallback). Write endpoints (PUT/POST/DELETE/PATCH) **MUST** gate behind `isInternal()` returning `Response.status(FORBIDDEN)` when false. Reads (GET) remain unprotected.
+
+### 1.5 Heterogeneous Nullability in Sealed Interfaces
+If a sealed interface method returns a nullable wrapper (`Boolean`, `Integer`), Javadoc **MUST** declare `@nullable` and document which subtypes return null. Every consumer **MUST** null-guard:
+```java
+// SAFE — Boolean.TRUE handles null
+if (Boolean.TRUE.equals(step.success())) { ... }
+// SAFE — explicit null check
+if (step.success() != null && step.success()) { ... }
+// UNSAFE — NPE when success() returns null
+if (step.success()) { ... }  // DO NOT DO THIS
+```
+**Why**: `FinishStep.success()` always returns `true`, but `ParallelStep.success()` returns `null`. Auto-unboxing without null check causes NPE on specific execution paths. Enforced by `ReasoningStepSuccessNullSafetyTest` (ArchUnit).
+
+### 1.6 JDK 25 Language Features (GA Only — No Preview)
+**Use** (finalized): unnamed variables `_` (JEP 456, JDK 22), pattern matching `switch` (JEP 441, JDK 21), record patterns (JEP 440, JDK 21), sealed interfaces (JEP 409, JDK 17), pattern matching `instanceof` (JEP 394, JDK 16), text blocks (JEP 378, JDK 15), virtual threads (JEP 444, JDK 21), scoped values (JEP 481, JDK 25), flexible constructors (JEP 513, JDK 25).
+**Do NOT use** (preview): structured concurrency (JEP 505), stream gatherers (JEP 485), module imports (JEP 511), compact source files (JEP 512), value classes (JEP 502).
+```java
+// ✅ Unnamed variable — intentionally discarded
+var _ = conn.close();
+// ✅ Pattern matching switch
+return switch (step) {
+    case ToolCallStep tc  -> tc.success() != null && tc.success();
+    case FinishStep f     -> true;
+    case ParallelStep p   -> Boolean.TRUE.equals(p.success());
+};
+// ✅ Pattern matching instanceof
+if (response instanceof ToolResponse.ToolSuccess s) {
+    return s.output();
+}
+// ❌ Preview features — DO NOT USE
+import module java.base;  // JEP 511
+```
+
+### 1.7 Continuity Intent vs Follow-Up
+`isExplicitContinuity` (try again, retry, redo, proceed, continue) **restores old goal**. Execution follow-ups (`execute`, `run it`, `do it`, `run java`, `run python`, etc.) use the **new goal** — do NOT restore stale context. Enforcement: `IntentClassificationService.CONTINUITY_PATTERN`, `AgentDispatchHandler.resolveGoal()`, `TextPatternUtils.isFollowUpHeuristic()`.
+
+### 1.8 GraalVM SecureRandom Local Instantiation
+`SecureRandom` instances MUST be created locally per use with `new SecureRandom()`.
+MUST NOT hold `SecureRandom` in `static` or `static final` fields — GraalVM attempts
+to snapshot the object into the image heap, causing `UnsupportedFeatureException`.
+The byte array returned MUST be zeroed in a `finally` block after use
+(defense-in-depth against heap inspection).
+
+### 1.9 Strict Terminal Finish Rules
+The coordinator persona MUST emit a `FINISH` action immediately after any successful
+tool execution. No additional tool calls may follow a `FINISH` in the same turn.
+`AgentStateMachineRunner` enforces a two-pass protocol: pass 1 sends tool results
+with a terminal-mode hint; pass 2 sends a plain-text summary guidance. Violation:
+Tool chaining after `FINISH` corrupts the state machine and produces orphaned
+checkpoint states.
+
+### 1.10 Telegram HITL Notification Flush
+Channel callback handlers that bypass `AbstractDecisionReflex` (e.g., Telegram
+inline keyboard approval callbacks) MUST call `flushPendingNotifications()`
+after processing approval decisions. Without this flush, approval notifications
+may be silently dropped, leaving the user without feedback after a HITL decision.
+
+### 1.11 Fallback Session ID Derivation
+`FallbackSessionIdResolver` MUST derive session IDs deterministically from the
+three-tuple `(channelType, channelId, userId)`. Multi-channel sessions are isolated
+by `channelType` — a Telegram user and a WebSocket user with the same numeric ID
+MUST NOT share a session. Cron sessions (`sessionId.startsWith("cron-")`) MUST be
+excluded from chat approval routing.
 
 ---
 
 ## 2. Key Framework Components
 
 ### 2.1 Exception Classification (Chain of Responsibility)
-* **Structure**: Exception classification for LLM errors is delegated to [LlmExceptionClassifier.java](./arcclaw-core/src/main/java/com/arcclaw/core/agent/reasoning/error/LlmExceptionClassifier.java).
-* **Pattern**: Follows the Chain of Responsibility pattern via [LlmExceptionClassifierChain.java](./arcclaw-core/src/main/java/com/arcclaw/core/agent/reasoning/error/LlmExceptionClassifierChain.java).
-* **Extending**: To add a new LLM provider or handle specific API errors:
-  1. Create a new subclass extending `LlmExceptionClassifierChain`.
-  2. Implement `classify(Throwable t)` and delegate unhandled causes using `delegate(t)`.
-  3. Prepend or append the new classifier instance in the static block of `LlmExceptionClassifier.java`.
-* **Shared Utility**: Use the inherited `isRateLimitError(String)` helper method on the base chain rather than duplicating rate-limit matches.
+LLM error classification is delegated to `LlmExceptionClassifierChain` subclasses. To add a new provider classifier: extend `LlmExceptionClassifierChain`, implement `classify(Throwable)`, use `delegate(t)` for unhandled causes, prepend/append in `LlmExceptionClassifier.java` static block. Use inherited `isRateLimitError(String)` — don't duplicate.
 
-### 2.2 Channel Inbound Pipelines (Template Method Pattern)
-* **Structure**: All external message ingestion handlers (Telegram, Slack, Discord, etc.) must extend [AbstractInboundMessagePipeline.java](./arcclaw-channel-api/src/main/java/com/arcclaw/channel/api/AbstractInboundMessagePipeline.java).
-* **Pattern**: Implements standard concurrency serialization (chat-level processing flags/locks), reflex/slash command bypasses, and async delegation boundaries.
-* **Implementation Details**:
-  * Concrete handlers should parse raw payloads, resolve the `chatId` and `text`, and build standard `ChannelUser` and `ChannelMessage` representations.
-  * Delegate execution by calling `processInboundMessage(chatId, text, user, channelMessage)`.
+### 2.2 Channel Inbound Pipelines (Template Method)
+All inbound handlers extend `AbstractInboundMessagePipeline`. Parse payload → resolve `chatId`+`text` → build `ChannelUser`+`ChannelMessage` → call `processInboundMessage(chatId, text, user, channelMessage)`.
 
-### 2.3 Prompt Template Engine (Hardcoded Switch Pattern)
+### 2.3 Prompt Template Engine (Hardcoded Switch)
+`PromptTemplateEngine.templateFor()` uses a hardcoded `switch` mapping `role.id()` → Qute `@Location` template. When adding a persona: create `templates/prompts/role-<name>.txt`, inject `@Inject @Location("prompts/role-<name>") Template nameTemplate`, add `case "<name>"`. **No compile-time safety** — runtime `IllegalStateException` if missing.
 
-* **Structure**: Role-specific system prompt rendering is handled by [PromptTemplateEngine.java](./arcclaw-core/src/main/java/com/arcclaw/core/agent/reasoning/PromptTemplateEngine.java).
-* **Pattern**: Uses a hardcoded `switch` statement in `templateFor()` to map `role.id()` → Qute template.
-* **Extending**: When adding a new persona:
-  1. Create the template file at `templates/prompts/role-<name>.txt`
-  2. Add `@Inject @Location("prompts/role-<name>") Template <name>Template` field
-  3. Add the corresponding `case "<name>"` entry in `templateFor()`
-  * **No compile-time safety** — the switch is a runtime `IllegalStateException` if missing. Always verify.
-
----
-
-### 2.4 Prompt Registry (Multi-Backend Hexagonal Port)
-
-* **Structure**: All system prompt content blocks (persona identities, role templates, security rules, shared snippets) are stored in a backend-agnostic `PromptRegistry` rather than `static final String` constants or classpath Qute `@Location` templates.
-* **Backends**: SQLite, PostgreSQL, or Filesystem — selected via `arcclaw.persistence.backend` config property. Each implements `PromptStorePort` from `arcclaw-persistence-api`.
-* **Seed on startup**: `PromptRegistry.onStart(@Observes StartupEvent)` runs after Flyway migration, reads classpath `templates/personas/*.txt` and `templates/prompts/*.txt`, and writes them to the backend if missing. SHA-256 drift detection auto-updates rows on classpath changes but respects admin edits (version>1 or status≠ACTIVE).
-* **Graceful degradation**: If no `PromptStorePort` implementation is available (e.g. in unit tests), `get()` falls back to the classpath cache. All DB operations become no-ops.
-* **Extending**: When adding a new persona:
-  1. Create template file at `templates/prompts/role-<name>.txt`
-  2. Create persona identity at `templates/personas/<name>.txt`
-  3. Add role ID to `ALL_ROLES` array in `PromptRegistry.java` static block
-  4. The registry automatically seeds/detects drift on next startup
-  5. NO changes needed to `PromptTemplateEngine.java` hardcoded switch — the registry is tried first, then falls back to `@Location` templates
-* **Admin API**: `PUT /admin/prompts/{id}` and `POST /admin/prompts` for runtime edits. Changes with version>1 or non-ACTIVE status are preserved across deployments.
+### 2.4 Prompt Registry (Multi-Backend Port)
+System prompts stored in backend-agnostic `PromptRegistry` (SQLite/PG/FS via `PromptStorePort`). Auto-seeds from classpath `templates/personas/*.txt` + `templates/prompts/*.txt` on startup. SHA-256 drift detection auto-upgrades classpath changes but respects admin edits (version>1 or status≠ACTIVE). Falls back to classpath cache when no backend available. Admin API: `PUT/POST /admin/prompts/{id}`.
 
 ### 2.5 Configuration Property Sync Rule
+When adding `@ConfigProperty`, update ALL of: `application.yaml` (`${ENV_VAR:default}`), `.env.example` (with comment), module `README.md` (if exists). Verify: `grep "MY_PROP" .env.example application.yaml`.
 
-* **Rule**: When adding or updating any `@ConfigProperty` in a Java source file, you MUST update ALL of the following:
-  1. **`application.yaml`** (`arcclaw-app/src/main/resources/application.yaml`) — add the property under the appropriate `arcclaw.*` section with `${ENV_VAR:default}` format
-  2. **`.env.example`** (project root) — add the environment variable with a comment describing its purpose
-  3. **Module README** (if one exists) — update the configuration table in the module's own `README.md` (e.g. `arcclaw-tool-playwright/README.md`)
-* **Reason**: Config properties are documented in three places. Missing any one causes confusion for operators, failing CI builds, or runtime misconfiguration.
-* **Verification**: After adding a new config property, run:
-  ```bash
-  grep "MY_NEW_PROP" .env.example arcclaw-app/src/main/resources/application.yaml
-  ```
-  to confirm it appears in both files.
+### 2.6 Optional Bean Resolution via BeanManager
+For beans from optional Maven deps, use `BeanManager.getBeans(Object.class)` — NOT `Instance<Object>` or `@Any Instance<Object>`. Iterate set, check `bean.getBeanClass().getName()`, resolve via `beanManager.getReference()`, verify `getMethod()` before use. Verify: app log shows `[MCP] BeanManager returned N beans total` with N ≥ 10.
 
-### 2.6 Optional Bean Resolution via BeanManager (Reflection Pattern)
+### 2.7 Filesystem Backend + Lucene
+`arcclaw-persistence-fs` uses Lucene (`LuceneIndexManager`) for BM25 + optional vector kNN. JSON files under `{dataDir}/memory-index/` are source of truth; Lucene index under `{dataDir}/lucene-index/` is rebuilt from JSON on startup. Degrades to BM25-only if `EmbeddingModel` bean unavailable. Hybrid search merges via RRF (k=60). Config: `arcclaw.fs.data-dir`, `arcclaw.fs.lucene-index-dir`, `arcclaw.fs.vector-dimension`.
 
-* **Rule**: When a bean from an optional Maven dependency (`<optional>true</optional>`) must be accessed reflectively at runtime, use `BeanManager` — NOT `Instance<Object>` or `@Any Instance<Object>`.
-* **Reason**: `Instance<Object>` in Quarkus/ArC does not resolve all beans as expected. `@Any Instance<Object>` returns only beans explicitly annotated with `@Any`, not all beans. `BeanManager.getBeans(Object.class)` returns every CDI bean regardless of qualifiers.
-* **Pattern** (see `PlaywrightMcpHelper.java` for a working example):
-  1. `@Inject BeanManager beanManager`
-  2. `beanManager.getBeans(Object.class)` — returns `Set<Bean<?>>` of all beans
-  3. Iterate set, check `bean.getBeanClass().getName()` for the target class name
-  4. Resolve via `beanManager.getReference(typed, typed.getBeanClass(), creationalContext)`
-  5. Verify the resolved object has the expected methods via `getMethod()` before using
-* **Verification**: Run the app and grep the log for `[MCP] BeanManager returned N beans total`. If `N` is < 10, bean resolution is broken.
-
-### 2.7 Filesystem Backend + Lucene Memory Retrieval
-
-* **Structure**: The filesystem persistence backend (`arcclaw-persistence-fs`) replaces `MemoryRetrievalPort`'s naive `HashMap` + `String.contains()` with a disk-based Lucene index (`LuceneIndexManager`) for BM25 full-text and optional vector kNN search.
-* **Architecture**:
-  * JSON files remain the **source of truth** under `{dataDir}/memory-index/*.json`
-  * Lucene index under `{dataDir}/lucene-index/` is a **derived index**, rebuilt from JSON on startup via `rebuildFromJson()`
-  * Vector search is optional — governed by `Instance<EmbeddingModel>` availability. If the `EmbeddingModel` CDI bean is unsatisfied or dimension mismatches, FS degrades to BM25-only.
-  * Hybrid search merges BM25 + vector results via Reciprocal Rank Fusion (RRF, k=60).
-* **Lucene Document Schema**:
-  * `id` (`StringField`, stored) — unique document ID
-  * `content` (`TextField`, stored + indexed) — BM25 search body
-  * `metadata_json` (`StoredField`) — JSON-serialized metadata (retrievable, not indexed)
-  * `timestamp` (`LongPoint` + `StoredField`) — time-based filtering
-  * `embedding` (`KnnFloatVectorField`, COSINE) — optional vector for kNN search
-* **Configuration** (`arcclaw.fs.*`):
-  * `data-dir` — root data directory (default: `./arcclaw-data`)
-  * `lucene-index-dir` — Lucene index subdirectory (default: `lucene-index`; absolute paths supported)
-  * `vector-dimension` — expected embedding dimension (default: `768`; validated at runtime)
-* **Lifecycle**: `@PostConstruct init()` creates `LuceneIndexManager` + rebuilds from JSON; `@PreDestroy destroy()` closes the Lucene `IndexWriter` and `MMapDirectory`.
-* **Extending**: To change indexing behavior:
-  1. Modify `LuceneIndexManager.index()` for document schema changes
-  2. Modify `LuceneIndexManager.searchBM25()` / `searchVector()` for ranking changes
-  3. All retrieval operations go through `MemoryRetrievalPort` — the adapter pattern is unchanged
+**Lucene Document Schema**: `id` (`StringField`, stored), `content` (`TextField`, stored + indexed), `metadata_json` (`StoredField`), `timestamp` (`LongPoint` + `StoredField`), `embedding` (`KnnFloatVectorField`, COSINE — optional).
 
 ### 2.8 ToolSearchIndex (Dynamic Tool Discovery)
+In-memory Lucene index (`ByteBuffersDirectory`) over all tools. Reorders (not filters) `ToolSpecification` by BM25 relevance to goal. On `ParseException`, falls back to `QueryParser.escape()`. Rebuilt on `@PostConstruct`.
 
-* **Structure**: `ToolSearchIndex` (`arcclaw-core/.../tools/search/`) is an in-memory Lucene index (`ByteBuffersDirectory`) over all registered agent tools. It indexes tool `name` (StringField) and `description` (TextField) for BM25 relevance matching.
-* **Integration**: Wired into `ReasoningMessageAssembler.resolveTools()` to **reorder** (not filter) `ToolSpecification` objects by relevance to the user's goal. All permitted tools remain available — relevant ones are listed first.
-* **Query Safety**: On `ParseException` (e.g., `[ref:...]` brackets in goal text), falls back to `QueryParser.escape()` before retrying. Returns empty on total parse failure.
-* **Lifecycle**: Rebuilt on startup via `@PostConstruct`. Can be hot-reloaded via public `rebuild()` method.
+### 2.9 Role-Based Tool Governance Bypass
+`ToolGovernanceGuard` has a role trust pre-flight check before op-level enforcement:
+```java
+boolean isTrustedRole = !roleRegistry.requiresApprovalForTools(roleEnum);
+boolean isSensitiveOp = requiredOp == ToolOperation.NETWORK_OUTBOUND || requiredOp == ToolOperation.EXECUTE_SHELL;
+if (isTrustedRole && !isSensitiveOp) return; // allow
+```
+Trusted roles (`requiresApproval=false`) skip non-sensitive policy checks. `NETWORK_OUTBOUND` and `EXECUTE_SHELL` always require HITL regardless of trust. `garuda` removed from `hitl-exempt-tools` — role trust now handles this.
+
+### 2.10 EXECUTE_SHELL as Sensitive Op
+`EXECUTE_SHELL` (sandbox_exec) is classified alongside `NETWORK_OUTBOUND` as a sensitive operation — always requires HITL for trusted roles. Add new sensitive ops to `ToolGovernanceGuard.checkPolicy()`.
+
+### 2.11 Tool Guardrail Hardening
+`SmartWebFetchTool` now enforces 3 retry attempts with linear backoff and strict URL
+validation. The `url` parameter is mandatory for `browser_navigate` (Playwright).
+The researcher persona MUST NOT call `headroom_retrieve` — use `recall_memory_search`
+or `archival_memory_search` instead.
 
 ---
 
+## 3. Code Conventions
+
 ### 3.1 No Hardcoded Tool Name Strings
-* **Rule**: Never use hardcoded strings like `"sandbox_exec"`, `"github"`, `"schedule_task"`, etc. in Java code logic. Always reference the canonical name via `ToolCapability.ENUM.toolName()`.
-* **Reason**: Hardcoded strings silently break when tool names change. The enum is the single source of truth.
-* **Exceptions** (not refactorable):
-  * `@ToolMetadata(capabilityId = "...")` / `@Tool(name = "...")` annotation attributes (require compile-time constants)
-  * `@WithDefault("...")` annotation defaults
-  * Javadoc examples referencing tool names for documentation
-  * User-input pattern matching (e.g. checking if a user typed "github")
-  * LLM prompt instructions (text the model reads, not code identifiers)
-  * Cross-module constraint: `ToolCapability` lives in `arcclaw-core`. Only modules with a Maven dependency on `arcclaw-core` can import it. Modules like `arcclaw-channel-api` that don't depend on `arcclaw-core` must keep hardcoded strings.
+Use `ToolCapability.ENUM.toolName()` instead of `"sandbox_exec"`, `"github"`, etc. Exceptions (not refactorable): `@ToolMetadata`/`@Tool` annotation attributes, `@WithDefault` defaults, Javadoc examples, user-input pattern matching, LLM prompt instructions. Cross-module: `ToolCapability` lives in `arcclaw-core` — modules without that dependency (e.g. `arcclaw-channel-api`) must keep hardcoded strings.
+
+### 3.2 Telegram Garbled Line Stripping
+All outbound Telegram messages **MUST** pass through `stripGarbledLines()` before sending. Filters lines where >80% of non-space chars are `?`, `…`, em-dashes, `OTHER_PUNCTUATION`. Called in `TelegramChannelSender.sendMessageInternal()`.
+
+### 3.3 SessionReaper Zombie Recovery — All Channels
+On restart, auto-deny ALL stale `AWAITING_APPROVAL` checkpoints for all channel types (CLI, Telegram, WebSocket UI). Fires `ApprovalDecisionEvent` (Telegram keyboard expiry) + `agentSseService.complete()` (WebSocket SSE). CLI: `cliResultBridge.cancel()`.
+
+### 3.4 Saraswati Disabled from Delegation
+`saraswati` now has `requiresApproval=false` — other agents cannot delegate to the researcher role. Reason: read-only retrieval role; all roles have `garuda` for escalation. See `AgentRoleEnum.java` `DEFINITIONS.put(SARASWATI_ID, ...)`.
 
 ---
 
 ## 4. Maven Build & Dependency Resolution
-* **Rule**: Because modules are heavily linked, running single-module tests (e.g. via `-pl`) can fail if dependent jars are out of date in your local repository.
-* **Best Practice**: Whenever you modify a class in a dependency module (like `arcclaw-channel-api` or `arcclaw-core`), run a local repository installation:
-  ```bash
-  ./mvnw clean install -DskipTests
-  ```
-  This guarantees that all local classpath references are synchronized before executing module tests.
 
-### 4.1 Checkstyle Restrictions
-* **File Length**: Maximum **500 lines** per Java source file.
-* **Method Length**: Maximum **80 lines** per method.
-* **Enforcement**: Checkstyle runs during `compile` phase. Violations fail the build.
-* **Refactoring**: If a method exceeds 80 lines, extract logical blocks into private helper methods. If a file exceeds 500 lines, split into separate classes (e.g., extract inner classes, constants, or utility methods into companion files).
+* **Local repo sync**: After modifying a dependency module, run `./mvnw clean install -DskipTests` so dependent modules see the latest classes.
+* **PMD gates**: 500 lines/file, 80 lines/method, cognitive complexity ≤ 50 (transitioning to 15). PMD runs during `verify` phase. SonarQube (`mise run sonar:issues`) is primary gate.
+* **Version management**: All third-party dependency versions in parent `pom.xml` `<dependencyManagement>` via `<property>`. Module `pom.xml` entries **MUST NOT** have hardcoded `<version>`. Exceptions: plugin versions (managed separately), internal deps use `${project.version}`, BOM imports use their own property.
+* **PostgreSQL conflict**: Native PG on `:5432` intercepts Podman container's PG. Detect: `lsof -i :5432`. Fix: stop/uninstall native PG service (see OS-specific commands in `docs/MANUAL_SETUP.md`).
 
-### 4.2 PostgreSQL Local Service Conflict
-
-* **Problem**: A native PostgreSQL installed via `brew`, `apt`, `dnf`, `choco`, or the official installer binds to `127.0.0.1:5432`, intercepting connections intended for the Podman container's PostgreSQL. This causes `FATAL: role "arcclaw" does not exist` errors because the native instance doesn't have the ArcClaw user.
-* **Detection**: Run `lsof -i :5432`. If you see both `gvproxy` (Podman gateway) and `postgres` (native), you have a conflict.
-* **Fix (macOS/Homebrew)**:
-  ```bash
-  brew services stop postgresql@16
-  brew uninstall postgresql@16
-  rm -rf /opt/homebrew/var/postgresql@16
-  ```
-* **Fix (Linux/apt)**:
-  ```bash
-  sudo systemctl stop postgresql
-  sudo apt remove postgresql
-  ```
-* **Fix (Windows)**:
-  ```powershell
-  net stop postgresql-x64-16
-  # Or uninstall via "Add or Remove Programs"
-  ```
-* **Verification**: Run `mise run jar:pg -- serve` and check `psql -h 127.0.0.1 -U arcclaw -d arcclaw -c "SELECT 1;"` succeeds.
+---
 
 ## 5. Adding a New LLM Provider
 
-When adding a new LLM provider (e.g., llama.cpp, OMLX, etc.), update ALL of the following:
+Existing providers: `groq`, `openai`, `ollama`, `openrouter`, `claude-code`,
+`cerebras`, `gemini`, `nvidia`, `omlx`, `generic-openai`.
 
-### 5.1 Backend (Java)
-1. **`RoutingChatModelProvider`** — `arcclaw-core/.../routing/<Name>LlmProviderFactory.java` (for intent/compaction)
-2. **`AgentChatModelProvider`** — `arcclaw-core/.../agent/reasoning/<Name>ProviderFactory.java` (for infinite-loop agent)
-3. **`LlmModelFactory.java`** — Add URL pattern to `URL_PROVIDER_MAP` (e.g., `"localhost:9000", "llamacpp"`)
-4. **`OnboardingResource.java`** — Add default model to `DEFAULT_MODELS` map
+1. **`RoutingChatModelProvider`** — `arcclaw-core/.../routing/<Name>LlmProviderFactory.java`
+2. **`AgentChatModelProvider`** — `arcclaw-core/.../agent/reasoning/<Name>ProviderFactory.java`
+3. **`LlmModelFactory.java`** — Add URL pattern to `URL_PROVIDER_MAP`
+4. **`OnboardingResource.java`** — Add default model to `DEFAULT_MODELS`
+5. **`.env`** — Add `ARCCLAW_<NAME>_BASE_URL`, `ARCCLAW_<NAME>_MODEL`, add to `ARCCLAW_INFINITE_LOOP_LLM_PROVIDERS`
+6. **`.env.example`** — Same additions
+7. **`arc-settings.ts`** + **`arc-onboarding-step2.ts`** — Add to `PROVIDERS`/`providers` arrays
+8. **Verify**: `./mvnw compile -q` + `cd arcclaw-ui && npm run build`
 
-### 5.2 Configuration (.env)
-5. **`.env`** — Add `ARCCLAW_<NAME>_BASE_URL` and `ARCCLAW_<NAME>_MODEL`
-6. **`.env`** — Add provider to `ARCCLAW_INFINITE_LOOP_MODELS_LIST`
-7. **`.env.example`** — Same changes for documentation
+**Generic OpenAI provider pattern:** Use `GenericOpenAiLlmProviderFactory.java` (routing)
+and `GenericOpenAiProviderFactory.java` (agent reasoning) as templates. The generic
+provider auto-detects `deepseek-reasoner` and injects `include_reasoning=true` workaround.
+Requires `ARCCLAW_GENERIC_OPENAI_BASE_URL` and `ARCCLAW_GENERIC_OPENAI_API_KEY`.
 
-### 5.3 Frontend (UI)
-8. **`arc-settings.ts`** — Add entry to `PROVIDERS` array
-9. **`arc-onboarding-step2.ts`** — Add entry to `providers` array
+---
 
-### 5.4 Verification
-10. Compile: `./mvnw compile -DskipTests -q`
-11. Check UI builds: `cd arcclaw-ui && npm run build`
+## 6. Babysitter Integration
 
-## 6. Adding a New Persona (Agent Role)
+This project is babysitter-enabled for complex workflow orchestration.
 
-When adding a new persona (e.g., Garuda, Indra, etc.), update ALL of the following:
+**Invocation**: Use `/skill:babysit` or refer to the `cradle/user-install` / `cradle/project-install` processes.
 
-### 6.1 Core Definitions
-1. **`AgentPersona.java`** — Add enum entry with `roleId`, `displayName`, and `aliases`
-2. **`AgentRoleEnum.java`** — Add `static final` ID constant, instance, and `RoleDefinition` in `DEFINITIONS` map (use `Map.ofEntries()` if >10 entries)
+**Project profile**: `.a5c/project-profile.json` — contains tech stack, architecture, conventions, and pain points.
 
-### 6.2 Templates (Qute)
-3. **`templates/personas/<name>.txt`** — Create persona identity template (who they are, responsibilities, rules)
-4. **`templates/prompts/role-<name>.txt`** — Create role-specific prompt section (PERMITTED TOOLS, rules, includes)
+**Quality gates**: `.a5c/quality-gates.json` — pre-commit checks and deploy gates.
 
-### 6.3 CDI & Wiring
+**Mode**: semi-autonomous (babysitter pauses for approval on breakpoints).
+
+**Recommended methodology**: evolutionary with spec-driven refinement.
+
+**Relevant docs**:
+- `CLAUDE.md` — has a ## Babysitter section with quick commands
+- `.a5c/` — project-level babysitter configuration
+
+## 7. Adding a New Persona (Agent Role)
+
+1. **`AgentPersona.java`** — Add enum entry (`roleId`, `displayName`, `aliases`)
+2. **`AgentRoleEnum.java`** — Add `static final` ID constant, instance, and `RoleDefinition` in `DEFINITIONS` (use `Map.ofEntries()` if >10)
+3. **`templates/personas/<name>.txt`** — Persona identity (who they are, rules)
+4. **`templates/prompts/role-<name>.txt`** — Role-specific prompt section
 5. **`AgentProducer.java`** — Add `@Produces @ApplicationScoped @AgentRole(ID)` method
-6. **`CoordinatorPromptSection.java`** — Add to Trimurti/Tridevi architecture block
-7. **`PromptTemplateEngine.java`** — Add `@Inject @Location("prompts/role-<name>") Template <name>Template` field and corresponding `case "<name>"` entry in the `templateFor()` switch
-
-### 6.4 Delegation (CRITICAL - Static Lists, No Compile Safety)
-8. **`DelegateToAgentTool.java`** — Add role ID to `defaultRoles` in `@ToolMetadata` annotation
-9. **`templates/prompts/delegate-to-agent-rules.txt`** — Add to "Available Specialists" list
-
-### 6.5 Escalation & Routing
+6. **`CoordinatorPromptSection.java`** — Add to Trimurti/Tridevi block
+7. **`PromptTemplateEngine.java`** — Add `@Inject @Location("prompts/role-<name>")` + `case "<name>"` in `templateFor()`
+8. **`DelegateToAgentTool.java`** — Add role ID to `defaultRoles` in `@ToolMetadata`
+9. **`templates/prompts/delegate-to-agent-rules.txt`** — Add to "Available Specialists"
 10. **`PersonaEscalationService.java`** — Add escalation paths in `determineNewPersonaEscalation()`
-11. **`PromptInstructionLibrary.java`** — Add to system capabilities list
-
-### 6.6 Configuration
+11. **`PromptInstructionLibrary.java`** — Add to system capabilities
 12. **`application.yaml`** — Add role entry under `arcclaw.agents.roles`
+13. **Verify**: `./mvnw compile -q`, run `AgentRoleTest` + `PersonaEscalationServiceTest`
+14. Update `telegram-test-arcclaw.txt`
 
-### 6.7 Verification
-13. Compile: `./mvnw compile -DskipTests -q`
-14. Run tests: `./mvnw test -pl arcclaw-core -Dtest="AgentRoleTest,PersonaEscalationServiceTest"`
-15. Update `telegram-test-arcclaw.txt` with test cases for new persona
+**⚠ WARNING**: Items 7-9 are static lists/annotations — no compile-time safety. Always verify manually.
 
-**WARNING**: Items 8 and 9 are static lists in annotations/templates. Item 7 (`PromptTemplateEngine.java`) is a hardcoded switch — none of these have compile-time safety. Always verify manually.
+---
+
+## 8. GraalVM Native-Image Reflection Registration
+
+**Rule**: Every new Java file needs evaluation for `@RegisterForReflection`. JVM-mode success ≠ native-image safety.
+
+| Class Type | Needs Registration? |
+|---|---|
+| `record` (DTOs for JSON/JDBI) | **YES** |
+| JDBI DAO interfaces (`@SqlQuery`/`@SqlUpdate`) | **YES** |
+| JDBI inner `*DtoRow` classes | **YES** |
+| `@ApplicationScoped` in persistence modules | **YES** |
+| CDI beans in non-persistence modules | NO (ArC handles it) |
+| Enums, `@ConfigMapping`, `@Qualifier` | NO |
+
+**Module config files** (add to the module's `*ReflectionConfig.java`):
+`arcclaw-persistence-api` → `TieredMemoryReflectionConfig`, `arcclaw-persistence-sqlite` → `SqlitePersistenceReflectionConfig`, `arcclaw-persistence-postgres` → `PostgresPersistenceReflectionConfig`, `arcclaw-persistence-fs` → `FsReflectionConfig`, `arcclaw-core` → `CoreReflectionConfig`, `arcclaw-app` → `AppReflectionConfig`/`ChannelReflectionConfig`, `arcclaw-channel-telegram` → `TelegramReflectionConfig`, `arcclaw-onboarding` → `OnboardingReflectionConfig`, `arcclaw-mcp` → `McpReflectionConfig`, `arcclaw-rag` → `RagReflectionConfig`.
+
+**Native-image runtime init** (`native-image.properties` in `arcclaw-app`):
+Libs using FFM/MethodHandle/native access need `--initialize-at-run-time=<package>`. **Mark the ENTIRE package** (e.g. `org.apache.lucene`), not individual classes — GraalVM embeds static fields from build-time classes into the image heap, causing whack-a-mole errors when marking classes individually. Also mark CDI beans with `@PostConstruct` that trigger the library. Do NOT use `pom.xml additional-build-args` (Quarkus splits on commas breaking the arg).
+```properties
+# ✅ CORRECT — marks entire package + sub-packages
+--initialize-at-run-time=org.apache.lucene
+
+# ❌ WRONG — triggers whack-a-mole (each class's static deps cause new errors)
+--initialize-at-run-time=org.apache.lucene.store.PosixNativeAccess
+```
+
+**Foreign Function registration** (`reachability-metadata.json`):
+FFM downcalls need explicit registration. Current: `posix_madvise`, `getpagesize` (Lucene PosixNativeAccess). On `MissingForeignRegistrationError`, register the exact leaf type from the error message.
+
+**Verification**: `python3 ./fix_fqns.py && ./mvnw compile -DskipTests -q` for compilation; `mise build:native-local` for full native build.

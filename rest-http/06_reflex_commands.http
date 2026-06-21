@@ -263,8 +263,7 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ### [REFLEX-11] /mcp - show MCP status
 # Expect 200:
-#   "Exposed internal tools (2): github, memory_search
-#    Dynamic MCP tools: none connected"
+#   "Exposed internal tools (3): github, recall_memory_search, archival_memory_search
 # After connecting a server via 12_mcp.http, dynamic tools appear here.
 POST {{baseUrl}}/api/v1/sessions/{{cronRefSession.response.body.sessionId}}/run
 Content-Type: application/json

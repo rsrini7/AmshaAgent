@@ -11,6 +11,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+@SuppressWarnings("java:S5443") // Test-only: temp dirs in test are acceptable
 class LuceneIndexManagerTest {
 
     private Path tempDir;
@@ -28,7 +29,10 @@ class LuceneIndexManagerTest {
         if (tempDir != null) {
             try (var walk = Files.walk(tempDir)) {
                 walk.sorted(Comparator.reverseOrder()).forEach(p -> {
-                    try { Files.deleteIfExists(p); } catch (IOException _) { }
+                    try {
+                        Files.deleteIfExists(p);
+                    } catch (IOException _) {
+                    }
                 });
             }
         }

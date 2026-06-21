@@ -3,19 +3,22 @@ package com.arcclaw.rag;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
+import dev.langchain4j.model.openai.OpenAiEmbeddingModel;
+
 import java.time.Duration;
 import java.util.Optional;
 
-import dev.langchain4j.model.openai.OpenAiEmbeddingModel;
 import org.junit.jupiter.api.Test;
 import org.mockito.MockedStatic;
 
 class EmbeddingProviderFactoryTest {
 
     private final EmbeddingModelConfig config = new EmbeddingModelConfig(
-        "openai", "text-embedding-3-small", "https://api.openai.com/v1",
-        Optional.of("test-key"), Duration.ofSeconds(30)
-    );
+            "openai",
+            "text-embedding-3-small",
+            "https://api.openai.com/v1",
+            Optional.of("test-key"),
+            Duration.ofSeconds(30));
 
     @Test
     void testOpenAiProviderId() {
@@ -24,12 +27,20 @@ class EmbeddingProviderFactoryTest {
     }
 
     @Test
+    void testOpenAiDefaultBaseUrl() {
+        OpenAiEmbeddingProviderFactory factory = new OpenAiEmbeddingProviderFactory();
+        assertEquals("https://api.openai.com/v1", factory.defaultBaseUrl());
+    }
+
+    @Test
     void testOpenAiRequiresApiKey() {
         OpenAiEmbeddingProviderFactory factory = new OpenAiEmbeddingProviderFactory();
         EmbeddingModelConfig noKey = new EmbeddingModelConfig(
-            "openai", "text-embedding-3-small", "https://api.openai.com/v1",
-            Optional.empty(), Duration.ofSeconds(30)
-        );
+                "openai",
+                "text-embedding-3-small",
+                "https://api.openai.com/v1",
+                Optional.empty(),
+                Duration.ofSeconds(30));
         assertThrows(IllegalStateException.class, () -> factory.create(noKey));
     }
 
@@ -40,12 +51,16 @@ class EmbeddingProviderFactoryTest {
     }
 
     @Test
+    void testOllamaDefaultBaseUrl() {
+        OllamaEmbeddingProviderFactory factory = new OllamaEmbeddingProviderFactory();
+        assertEquals("http://localhost:11434", factory.defaultBaseUrl());
+    }
+
+    @Test
     void testOllamaCreateDoesNotThrow() {
         OllamaEmbeddingProviderFactory factory = new OllamaEmbeddingProviderFactory();
         EmbeddingModelConfig ollamaConfig = new EmbeddingModelConfig(
-            "ollama", "nomic-embed-text:v1.5", "http://localhost:11434",
-            Optional.empty(), Duration.ofSeconds(10)
-        );
+                "ollama", "nomic-embed-text:v1.5", "http://localhost:11434", Optional.empty(), Duration.ofSeconds(10));
         assertDoesNotThrow(() -> factory.create(ollamaConfig));
     }
 
@@ -56,12 +71,20 @@ class EmbeddingProviderFactoryTest {
     }
 
     @Test
+    void testJinaDefaultBaseUrl() {
+        JinaEmbeddingProviderFactory factory = new JinaEmbeddingProviderFactory();
+        assertEquals("https://api.jina.ai/v1/", factory.defaultBaseUrl());
+    }
+
+    @Test
     void testJinaRequiresApiKey() {
         JinaEmbeddingProviderFactory factory = new JinaEmbeddingProviderFactory();
         EmbeddingModelConfig noKey = new EmbeddingModelConfig(
-            "jina", "jina-embeddings-v5-text-nano", "https://api.jina.ai",
-            Optional.empty(), Duration.ofSeconds(30)
-        );
+                "jina",
+                "jina-embeddings-v5-text-nano",
+                "https://api.jina.ai",
+                Optional.empty(),
+                Duration.ofSeconds(30));
         assertThrows(IllegalStateException.class, () -> factory.create(noKey));
     }
 
@@ -69,15 +92,18 @@ class EmbeddingProviderFactoryTest {
     void testJinaOverridesDefaultModel() {
         JinaEmbeddingProviderFactory factory = new JinaEmbeddingProviderFactory();
         EmbeddingModelConfig defaultModelConfig = new EmbeddingModelConfig(
-            "jina", "nomic-embed-text:v1.5", "https://api.jina.ai",
-            Optional.of("test-key"), Duration.ofSeconds(30)
-        );
+                "jina",
+                "nomic-embed-text:v1.5",
+                "https://api.jina.ai",
+                Optional.of("test-key"),
+                Duration.ofSeconds(30));
         try (MockedStatic<OpenAiEmbeddingModel> builderMock = mockStatic(OpenAiEmbeddingModel.class)) {
-            OpenAiEmbeddingModel.OpenAiEmbeddingModelBuilder mockBuilder = mock(OpenAiEmbeddingModel.OpenAiEmbeddingModelBuilder.class, RETURNS_SELF);
+            OpenAiEmbeddingModel.OpenAiEmbeddingModelBuilder mockBuilder =
+                    mock(OpenAiEmbeddingModel.OpenAiEmbeddingModelBuilder.class, RETURNS_SELF);
             OpenAiEmbeddingModel mockModel = mock(OpenAiEmbeddingModel.class);
             when(mockBuilder.build()).thenReturn(mockModel);
             builderMock.when(OpenAiEmbeddingModel::builder).thenReturn(mockBuilder);
-            
+
             assertDoesNotThrow(() -> factory.create(defaultModelConfig));
         }
     }
@@ -93,9 +119,11 @@ class EmbeddingProviderFactoryTest {
     void testRequireApiKeyThrowsOnEmpty() {
         OpenAiEmbeddingProviderFactory factory = new OpenAiEmbeddingProviderFactory();
         EmbeddingModelConfig emptyKey = new EmbeddingModelConfig(
-            "openai", "text-embedding-3-small", "https://api.openai.com/v1",
-            Optional.of(""), Duration.ofSeconds(30)
-        );
+                "openai",
+                "text-embedding-3-small",
+                "https://api.openai.com/v1",
+                Optional.of(""),
+                Duration.ofSeconds(30));
         assertThrows(IllegalStateException.class, () -> factory.requireApiKey(emptyKey));
     }
 
@@ -103,9 +131,11 @@ class EmbeddingProviderFactoryTest {
     void testRequireApiKeyThrowsOnAbsent() {
         OpenAiEmbeddingProviderFactory factory = new OpenAiEmbeddingProviderFactory();
         EmbeddingModelConfig noKey = new EmbeddingModelConfig(
-            "openai", "text-embedding-3-small", "https://api.openai.com/v1",
-            Optional.empty(), Duration.ofSeconds(30)
-        );
+                "openai",
+                "text-embedding-3-small",
+                "https://api.openai.com/v1",
+                Optional.empty(),
+                Duration.ofSeconds(30));
         assertThrows(IllegalStateException.class, () -> factory.requireApiKey(noKey));
     }
 }

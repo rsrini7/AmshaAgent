@@ -5,9 +5,11 @@ import jakarta.inject.Inject;
 
 import com.arcclaw.persistence.api.PersistenceAction;
 import com.arcclaw.persistence.api.PersistenceAdapterPort;
+
+import org.jdbi.v3.core.Jdbi;
+
 import io.quarkus.arc.Unremovable;
 import io.quarkus.arc.properties.IfBuildProperty;
-import org.jdbi.v3.core.Jdbi;
 
 /**
  * PostgreSQL implementation of {@link PersistenceAdapterPort}.

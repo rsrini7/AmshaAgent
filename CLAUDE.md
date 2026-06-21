@@ -1,38 +1,53 @@
-# Rule Guidelines for Claude / OpenClaude (CLAUDE.md)
+# CLAUDE.md — Quick Rules for Claude
 
-## 1. Project Rules
-**Always read and follow [AGENTS.md](./AGENTS.md) before making any code changes.** Key rules:
+**Always read [AGENTS.md](./AGENTS.md) before making code changes.** Key rules:
 
-* **No hardcoded strings**: Use `ToolCapability.ENUM.toolName()` instead of `"sandbox_exec"`, `"github"`, etc.
-* **No hardcoded channel types**: Use `ChannelType.CLI.id()` instead of `"cli"`, `ChannelType.TELEGRAM` instead of `"telegram"`.
-* **Use LogUtil**: Always `LogUtil.rootMessage(e)` or `LogUtil.trimmedStack(e)`, never raw `e.getMessage()`.
-* **Transaction-Free Zone**: No LLM calls, network requests, or tool execution inside `@Transactional`.
-* **Import alignment**: After editing Java files, run `python3 ./fix_fqns.py`.
+* **No hardcoded strings**: `ToolCapability.ENUM.toolName()`, not `"sandbox_exec"`.
+* **No hardcoded channel types**: `ChannelType.CLI.id()`, not `"cli"`.
+* **Use LogUtil**: `LogUtil.rootMessage(e)`, never raw `e.getMessage()`.
+* **Transaction-Free Zone**: No LLM/network/tool calls inside `@Transactional`.
+* **Null-safe sealed interfaces**: `Boolean.TRUE.equals(x)`, never auto-unbox. §1.5
+* **JDK 25 GA only**: No preview features (structured concurrency, stream gatherers, module imports, value classes). §1.6
+* **Continuity vs follow-up**: Only `isExplicitContinuity` restores old goal. §1.7
+* **Governance bypass**: Trusted roles skip non-sensitive ops; `NETWORK_OUTBOUND` + `EXECUTE_SHELL` always need HITL. §2.9
+* **Garble-strip Telegram**: `stripGarbledLines()` before sending. §3.2
+* **Zombie recovery**: Auto-deny ALL stale approvals across all channels. §3.3
+* **Saraswati disabled**: `requiresApproval=false` — no delegation to researcher. §3.4
+* **Import alignment**: `python3 ./fix_fqns.py && ./mvnw spotless:apply -q`
+* **SonarQube**: `mise run sonar:issues` before committing. Fix BLOCKERs.
 
-## 2. Checkstyle Limits
-* **File**: max 500 lines per Java source file
-* **Method**: max 80 lines per method
-* If a method exceeds 80 lines, extract into private helper methods.
-
-## 3. ReplyNode Pattern
-`ReplyNode` is a sealed union of `ContentNode` (non-sealed, for content records) and `InteractionNode` (non-sealed, for interactive controls). Always use `switch` with pattern matching:
+## ReplyNode Pattern
+`ReplyNode` is a sealed union of `ContentNode` and `InteractionNode`. Always use `switch` with pattern matching:
 ```java
 return switch (node) {
     case ContentNode.Text t -> t.content();
     case ContentNode.Heading h -> h.text();
     case ContentNode.CodeBlock cb -> cb.code();
-    // ... etc
 };
 ```
 Never call methods on the base `ReplyNode` — concrete methods live on the subtype.
 
-## 3. Channel Plugin SPI
-New channels must implement `ChannelPlugin` with all 6 interfaces:
-`ChannelPlugin`, `ChannelSender`, `ReplyRenderer`, `ChannelAllowlist`, `ChannelJobNotifier`, `ChannelDaemon`.
+## PMD Gates
+Max: 500 lines/file · 80 lines/method · cognitive complexity ≤ 15.
 
-## 4. SQLite Diagnostics
-* **Metadata db**: `sqlite3 data/arcclaw-meta.db ".tables"`
-* **Search / Vector db**: `sqlite3 data/arcclaw-fts.db ".tables"`
+## SQLite Diagnostics
+`sqlite3 data/arcclaw-meta.db ".tables"` · `sqlite3 data/arcclaw-fts.db ".tables"`
 
-## 5. Full Reference
-See [AGENTS.md](./AGENTS.md) for complete developer instructions, architecture invariants, and patterns.
+## Babysitter
+ArcClaw is babysitter-enabled. Use `/skill:babysit` to orchestrate complex workflows via babysitter runs.
+
+**Recommended processes** for this project:
+- `gsd` — day-to-day development workflow for Pxxx phase-based work
+- `spec-driven-development` — quality gates for mature codebase
+- `evolutionary.js` — iterative refinement matching phase-based workflow
+
+**Recommended skills**: `code-review-pipeline`, `research-first-dev`, `continuous-learning`, `security-scanning`
+
+**Methodology**: evolutionary with spec-driven refinement
+
+**Project profile**: `.a5c/project-profile.json`
+
+**Babysitter mode**: semi-autonomous
+
+## See Also
+[AGENTS.md](./AGENTS.md) — full developer guide with invariants, patterns, and checklists.

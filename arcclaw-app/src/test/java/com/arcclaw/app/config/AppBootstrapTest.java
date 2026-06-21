@@ -32,21 +32,24 @@ class AppBootstrapTest {
         System.clearProperty("arcclaw.routing.intent-classifier.structured-output-mode");
         System.clearProperty("ARCCLAW_COMPACTION_STRUCTURED_OUTPUT_MODE");
         System.clearProperty("arcclaw.memory.compaction.structured-output-mode");
-        System.clearProperty("ARCCLAW_COMPACTION_PROVIDER");
-        System.clearProperty("ARCCLAW_INTENT_CLASSIFIER_PROVIDER");
+        System.clearProperty("ARCCLAW_INFINITE_LOOP_LLM_PROVIDERS");
+        System.clearProperty("ARCCLAW_INFINITE_LOOP_COMPACTION_PROVIDERS");
+        System.clearProperty("ARCCLAW_INFINITE_LOOP_CLASSIFIER_PROVIDERS");
+        System.clearProperty("ARCCLAW_INFINITE_LOOP_EMBEDDING_PROVIDERS");
     }
 
     @Test
     void testLoadDotEnv_setsSystemProperties(@TempDir Path tempDir) throws IOException {
         Path envFile = tempDir.resolve(".env");
-        Files.write(envFile, List.of(
-            "KEY_A=hello",
-            "KEY_B=world",
-            "# comment line",
-            "KEY_C=value with spaces",
-            "KEY_D=value #inline comment",
-            "KEY_E=\"quoted#value\""
-        ));
+        Files.write(
+                envFile,
+                List.of(
+                        "KEY_A=hello",
+                        "KEY_B=world",
+                        "# comment line",
+                        "KEY_C=value with spaces",
+                        "KEY_D=value #inline comment",
+                        "KEY_E=\"quoted#value\""));
 
         EnvConfigInitializer.loadDotEnv(tempDir);
 
@@ -58,14 +61,15 @@ class AppBootstrapTest {
     }
 
     @Test
-    void testLoadDotEnv_doesNotOverwriteExistingEnv(@TempDir Path tempDir) throws IOException {
-        System.setProperty("KEY_A", "original");
+    void testLoadDotEnv_appliesWhenNoOsEnvVar(@TempDir Path tempDir) throws IOException {
+        // In GraalVM native-image, loadDotEnv checks System.getenv() (OS env vars),
+        // not System.getProperty(). When no OS env var exists, .env value is applied.
         Path envFile = tempDir.resolve(".env");
-        Files.write(envFile, List.of("KEY_A=overridden"));
+        Files.write(envFile, List.of("KEY_A=from_dotenv"));
 
         EnvConfigInitializer.loadDotEnv(tempDir);
 
-        assertEquals("original", System.getProperty("KEY_A"));
+        assertEquals("from_dotenv", System.getProperty("KEY_A"));
     }
 
     @Test
@@ -74,15 +78,13 @@ class AppBootstrapTest {
     }
 
     @Test
-    void testValidateAndAutoFixLlmConfig_publishesEffectiveContextWindowToDottedKey(@TempDir Path tempDir) throws Exception {
+    void testValidateAndAutoFixLlmConfig_publishesEffectiveContextWindowToDottedKey(@TempDir Path tempDir)
+            throws Exception {
         System.setProperty("ARCCLAW_LLM_PROVIDER", "cerebras");
         System.setProperty("ARCCLAW_LLM_CONTEXT_WINDOW", "8192");
 
         Path envFile = tempDir.resolve(".env");
-        Files.write(envFile, List.of(
-            "ARCCLAW_LLM_PROVIDER=cerebras",
-            "ARCCLAW_LLM_CONTEXT_WINDOW=8192"
-        ));
+        Files.write(envFile, List.of("ARCCLAW_LLM_PROVIDER=cerebras", "ARCCLAW_LLM_CONTEXT_WINDOW=8192"));
 
         invokeValidateAndAutoFixLlmConfig(tempDir);
 

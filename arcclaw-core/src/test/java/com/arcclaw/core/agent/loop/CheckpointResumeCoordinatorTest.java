@@ -17,6 +17,7 @@ import com.arcclaw.core.domain.model.AgentCheckpointRecord;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -24,6 +25,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
+@SuppressWarnings("java:S1192")
 class CheckpointResumeCoordinatorTest {
 
     @Mock
@@ -64,7 +66,9 @@ class CheckpointResumeCoordinatorTest {
     @Test
     void resolveResumePath_WhenNoCheckpoint_ReturnsFreshStart() {
         when(agentStore.findLatestNonArchivedCheckpoint("sess-1")).thenReturn(Optional.empty());
-        assertTrue(coordinator.resolveResumePath("sess-1", "coordinator", "user-1", null) instanceof ResumeDecision.FreshStart);
+        assertTrue(
+                coordinator.resolveResumePath("sess-1", "coordinator", "user-1", null)
+                        instanceof ResumeDecision.FreshStart);
     }
 
     @Test
@@ -72,7 +76,9 @@ class CheckpointResumeCoordinatorTest {
         var cp = checkpoint("sess-1", "coder", CheckpointStatus.COMPLETED);
         when(agentStore.findLatestNonArchivedCheckpoint("sess-1")).thenReturn(Optional.of(cp));
 
-        assertTrue(coordinator.resolveResumePath("sess-1", "coordinator", "user-1", null) instanceof ResumeDecision.FreshStart);
+        assertTrue(
+                coordinator.resolveResumePath("sess-1", "coordinator", "user-1", null)
+                        instanceof ResumeDecision.FreshStart);
     }
 
     // ── IN_PROGRESS ─────────────────────────────────────────────
@@ -139,8 +145,13 @@ class CheckpointResumeCoordinatorTest {
         assertEquals(CheckpointStatus.ARCHIVED, cp.getStatus());
         assertEquals(CheckpointResumeCoordinator.FAIL_REASON_STALE_DISCARD, cp.getFailReason());
         assertNull(cp.getPendingToolName());
-        verify(auditService).record(eq("sess-1"), eq("user-1"), eq("coordinator"),
-                eq(SecurityEventType.CHECKPOINT_FAILED), contains("Stale"));
+        verify(auditService)
+                .record(
+                        eq("sess-1"),
+                        eq("user-1"),
+                        eq("coordinator"),
+                        eq(SecurityEventType.CHECKPOINT_FAILED),
+                        contains("Stale"));
     }
 
     // ── COMPLETED with role match ───────────────────────────────
@@ -163,12 +174,12 @@ class CheckpointResumeCoordinatorTest {
     void resolveResumePath_WhenCompletedPrunesStepsBeyondCarryLimit() {
         var cp = checkpoint("sess-1", "coordinator", CheckpointStatus.COMPLETED);
         var steps = List.of(
-            ReasoningStep.pending("", "t1", Map.of()), ReasoningStep.pending("", "t2", Map.of()),
-            ReasoningStep.pending("", "t3", Map.of()), ReasoningStep.pending("", "t4", Map.of()),
-            ReasoningStep.pending("", "t5", Map.of()), ReasoningStep.pending("", "t6", Map.of()),
-            ReasoningStep.pending("", "t7", Map.of()), ReasoningStep.pending("", "t8", Map.of()),
-            ReasoningStep.pending("", "t9", Map.of()), ReasoningStep.pending("", "t10", Map.of()),
-            ReasoningStep.pending("", "t11", Map.of()), ReasoningStep.pending("", "t12", Map.of()));
+                ReasoningStep.pending("", "t1", Map.of()), ReasoningStep.pending("", "t2", Map.of()),
+                ReasoningStep.pending("", "t3", Map.of()), ReasoningStep.pending("", "t4", Map.of()),
+                ReasoningStep.pending("", "t5", Map.of()), ReasoningStep.pending("", "t6", Map.of()),
+                ReasoningStep.pending("", "t7", Map.of()), ReasoningStep.pending("", "t8", Map.of()),
+                ReasoningStep.pending("", "t9", Map.of()), ReasoningStep.pending("", "t10", Map.of()),
+                ReasoningStep.pending("", "t11", Map.of()), ReasoningStep.pending("", "t12", Map.of()));
         when(agentStore.findLatestNonArchivedCheckpoint("sess-1")).thenReturn(Optional.of(cp));
         when(agentStore.deserializeSteps(cp)).thenReturn(steps);
 

@@ -3,6 +3,7 @@ package com.arcclaw.core.agent.loop;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 
 import com.arcclaw.channel.api.ChannelPlugin;
@@ -20,8 +21,10 @@ import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.util.AgentErrorMessageUtil;
 import com.arcclaw.core.util.ClassUtils;
-import io.opentelemetry.api.trace.Span;
+
 import org.jboss.logging.Logger;
+
+import io.opentelemetry.api.trace.Span;
 
 public class LoopResultHandler {
 
@@ -32,19 +35,20 @@ public class LoopResultHandler {
     private final ChannelPluginRegistry channelPluginRegistry;
     private final IntentClassificationService intentClassificationService;
 
-    public LoopResultHandler(StatefulAgentStore agentStore, AgentSseService agentSseService,
-                             ChannelPluginRegistry channelPluginRegistry,
-                             IntentClassificationService intentClassificationService) {
+    public LoopResultHandler(
+            StatefulAgentStore agentStore,
+            AgentSseService agentSseService,
+            ChannelPluginRegistry channelPluginRegistry,
+            IntentClassificationService intentClassificationService) {
         this.agentStore = agentStore;
         this.agentSseService = agentSseService;
         this.channelPluginRegistry = channelPluginRegistry;
         this.intentClassificationService = intentClassificationService;
     }
 
-    public void updateStoreForRetry(String sessionId, String canonicalRole,
-                                    AgentResult.AwaitingRetry awaitingRetry, MessageContext context) {
-        log.warnf("Session %s paused due to rate limit - retry after %dms",
-                sessionId, awaitingRetry.retryAfterMs());
+    public void updateStoreForRetry(
+            String sessionId, String canonicalRole, AgentResult.AwaitingRetry awaitingRetry, MessageContext context) {
+        log.warnf("Session %s paused due to rate limit - retry after %dms", sessionId, awaitingRetry.retryAfterMs());
         agentStore.load(sessionId, canonicalRole).ifPresent(cp -> {
             cp.setStatus(CheckpointStatus.AWAITING_RETRY);
             cp.setRetryAfterMs(awaitingRetry.retryAfterMs());
@@ -53,52 +57,70 @@ public class LoopResultHandler {
             if (context != null && context.getUser() != null && "TELEGRAM".equalsIgnoreCase(cp.getChannelType())) {
                 long waitSec = awaitingRetry.retryAfterMs() / 1000;
                 String notice = "⏳ Rate limit hit - I'll automatically retry in " + waitSec + " seconds.";
-                channelPluginRegistry.find(context.getUser().channel().id())
+                channelPluginRegistry
+                        .find(context.getUser().channel().id())
                         .map(ChannelPlugin::sender)
                         .ifPresent(sender -> sender.sendRaw(context.getUser(), notice));
             }
         });
-        agentSseService.publish(sessionId, new AgentSseService.AgentStatusEvent(
-                sessionId, canonicalRole, CheckpointStatus.AWAITING_RETRY.name(), Instant.now()
-        ));
+        agentSseService.publish(
+                sessionId,
+                new AgentSseService.AgentStatusEvent(
+                        sessionId, canonicalRole, CheckpointStatus.AWAITING_RETRY.name(), Instant.now()));
     }
 
-    public void updateStoreForTerminal(String sessionId, String canonicalRole, String userId,
-                                        AutonomyLevel autonomy, AgentResult result, String goal) {
+    public void updateStoreForTerminal(
+            String sessionId,
+            String canonicalRole,
+            String userId,
+            AutonomyLevel autonomy,
+            AgentResult result,
+            String goal) {
         if (result instanceof AgentResult.Finished) {
-            agentStore.saveAndFinalize(sessionId, canonicalRole, userId, autonomy, result.steps(), CheckpointStatus.COMPLETED, goal);
-            agentSseService.publish(sessionId, new AgentSseService.AgentStatusEvent(
-                    sessionId, canonicalRole, CheckpointStatus.COMPLETED.name(), Instant.now()
-            ));
+            agentStore.saveAndFinalize(
+                    sessionId, canonicalRole, userId, autonomy, result.steps(), CheckpointStatus.COMPLETED, goal);
+            agentSseService.publish(
+                    sessionId,
+                    new AgentSseService.AgentStatusEvent(
+                            sessionId, canonicalRole, CheckpointStatus.COMPLETED.name(), Instant.now()));
         } else if (result instanceof AgentResult.Failed f) {
             var cp = agentStore.save(sessionId, canonicalRole, userId, autonomy, result.steps(), goal);
             agentStore.markFailed(cp.getId(), f.reason());
-            agentSseService.publish(sessionId, new AgentSseService.AgentStatusEvent(
-                    sessionId, canonicalRole, CheckpointStatus.FAILED.name(), Instant.now()
-            ));
+            agentSseService.publish(
+                    sessionId,
+                    new AgentSseService.AgentStatusEvent(
+                            sessionId, canonicalRole, CheckpointStatus.FAILED.name(), Instant.now()));
         } else if (result instanceof AgentResult.LoopExceeded l) {
             var cp = agentStore.save(sessionId, canonicalRole, userId, autonomy, result.steps(), goal);
             agentStore.markFailed(cp.getId(), "Max iterations (" + l.maxIterations() + ") exceeded");
-            agentSseService.publish(sessionId, new AgentSseService.AgentStatusEvent(
-                    sessionId, canonicalRole, CheckpointStatus.FAILED.name(), Instant.now()
-            ));
+            agentSseService.publish(
+                    sessionId,
+                    new AgentSseService.AgentStatusEvent(
+                            sessionId, canonicalRole, CheckpointStatus.FAILED.name(), Instant.now()));
         }
     }
 
-    public AgentResult handleComplianceViolation(String sessionId, String canonicalRole, ComplianceViolationException cve) {
-        log.errorf("[SECURITY ALERT] ComplianceViolationException for session=%s eventType=%s - halting agent.",
+    public AgentResult handleComplianceViolation(
+            String sessionId, String canonicalRole, ComplianceViolationException cve) {
+        log.errorf(
+                "[SECURITY ALERT] ComplianceViolationException for session=%s eventType=%s - halting agent.",
                 sessionId, cve.getEventType());
         String msg = AgentErrorMessageUtil.safeMessage(cve);
-        AgentResult result = AgentResult.failed("COMPLIANCE_VIOLATION: " + msg,
-                AgentResult.FailureCategory.COMPLIANCE_VIOLATION, List.of());
+        AgentResult result = AgentResult.failed(
+                "COMPLIANCE_VIOLATION: " + msg, AgentResult.FailureCategory.COMPLIANCE_VIOLATION, List.of());
         String traceId = Span.current().getSpanContext().getTraceId();
         try {
-            agentStore.load(sessionId, canonicalRole).ifPresent(cp ->
-                agentStore.markFailed(cp.getId(), "COMPLIANCE_VIOLATION: " + msg,
-                    "COMPLIANCE_VIOLATION", traceId, ClassUtils.getCleanName(cve))
-            );
+            agentStore
+                    .load(sessionId, canonicalRole)
+                    .ifPresent(cp -> agentStore.markFailed(
+                            cp.getId(),
+                            "COMPLIANCE_VIOLATION: " + msg,
+                            "COMPLIANCE_VIOLATION",
+                            traceId,
+                            ClassUtils.getCleanName(cve)));
         } catch (Exception e) {
-            log.debugf("Failed to mark checkpoint failed %s: %s",
+            log.debugf(
+                    "Failed to mark checkpoint failed %s: %s",
                     LogUtil.ctx(sessionId, canonicalRole), LogUtil.rootMessage(e));
         }
         return result;
@@ -106,18 +128,24 @@ public class LoopResultHandler {
 
     public AgentResult handleSystemError(String sessionId, String canonicalRole, Exception e) {
         String errMsg = AgentErrorMessageUtil.safeMessage(e);
-        log.errorf("Agent execution failed %s: %s\n%s",
+        log.errorf(
+                "Agent execution failed %s: %s\n%s",
                 LogUtil.ctx(sessionId, canonicalRole), errMsg, LogUtil.trimmedStack(e));
-        AgentResult result = AgentResult.failed("SYSTEM_ERROR: " + errMsg,
-                AgentResult.FailureCategory.SYSTEM_ERROR, List.of());
+        AgentResult result =
+                AgentResult.failed("SYSTEM_ERROR: " + errMsg, AgentResult.FailureCategory.SYSTEM_ERROR, List.of());
         String traceId = Span.current().getSpanContext().getTraceId();
         try {
-            agentStore.load(sessionId, canonicalRole).ifPresent(cp ->
-                agentStore.markFailed(cp.getId(), "SYSTEM_ERROR: " + errMsg,
-                    "SYSTEM_ERROR", traceId, ClassUtils.getCleanName(e))
-            );
+            agentStore
+                    .load(sessionId, canonicalRole)
+                    .ifPresent(cp -> agentStore.markFailed(
+                            cp.getId(),
+                            "SYSTEM_ERROR: " + errMsg,
+                            "SYSTEM_ERROR",
+                            traceId,
+                            ClassUtils.getCleanName(e)));
         } catch (Exception ex) {
-            log.debugf("Failed to mark checkpoint failed %s: %s",
+            log.debugf(
+                    "Failed to mark checkpoint failed %s: %s",
                     LogUtil.ctx(sessionId, canonicalRole), LogUtil.rootMessage(ex));
         }
         return result;
@@ -125,8 +153,9 @@ public class LoopResultHandler {
 
     public void tryStampChannelInfo(String sessionId, String canonicalRole, MessageContext context) {
         if (context == null || context.getUser() == null) {
-            log.warnf("No MessageContext user for session %s - " +
-                      "approval timeout notification will be skipped.", sessionId);
+            log.warnf(
+                    "No MessageContext user for session %s - " + "approval timeout notification will be skipped.",
+                    sessionId);
             return;
         }
         try {
@@ -141,16 +170,19 @@ public class LoopResultHandler {
                     agentStore.stampChannelInfo(cp.getId(), channelType, platformId);
                 }
             });
-            log.debugf("Stamped channel info on checkpoint session=%s channel=%s platformId=%s",
-                       sessionId, context.getUser().channel(), context.getUser().platformId());
+            log.debugf(
+                    "Stamped channel info on checkpoint session=%s channel=%s platformId=%s",
+                    sessionId, context.getUser().channel(), context.getUser().platformId());
         } catch (Exception e) {
-            log.warnf("Failed to stamp channel info %s: %s",
-                      LogUtil.ctx(sessionId, canonicalRole), LogUtil.rootMessage(e));
+            log.warnf(
+                    "Failed to stamp channel info %s: %s",
+                    LogUtil.ctx(sessionId, canonicalRole), LogUtil.rootMessage(e));
         }
     }
 
     public boolean hasApprovedToolPending(String sessionId, String role) {
-        return agentStore.load(sessionId, role)
+        return agentStore
+                .load(sessionId, role)
                 .map(cp -> cp.getStatus() == CheckpointStatus.AWAITING_APPROVAL
                         || cp.getStatus() == CheckpointStatus.RESUMING)
                 .orElse(false);
@@ -190,21 +222,30 @@ public class LoopResultHandler {
             }
         }
 
-        String lowerObs = observation.toLowerCase();
+        String lowerObs = observation.toLowerCase(Locale.ROOT);
         String opening = lowerObs.length() > 150 ? lowerObs.substring(0, 150) : lowerObs;
-        if (opening.contains("i was unable") || opening.contains("unable to fetch")
-                || opening.contains("could not find") || opening.contains("i cannot")
+        if (opening.contains("i was unable")
+                || opening.contains("unable to fetch")
+                || opening.contains("could not find")
+                || opening.contains("i cannot")
                 || opening.contains("could not retrieve")) {
-            log.infof("[AgentLoop] Delegate result for session %s contains failure phrases - injecting observation to allow coordinator wrap-up without restart", sessionId);
+            log.infof(
+                    "[AgentLoop] Delegate result for session %s contains failure phrases - injecting observation to allow coordinator wrap-up without restart",
+                    sessionId);
 
             List<ReasoningStep> historyWithFailure = new ArrayList<>(resumedHistory);
-            historyWithFailure.add(ReasoningStep.observe(ToolCapability.DELEGATE_TO_AGENT.toolName(), observation, "Delegate failed - synthesize and finish"));
+            historyWithFailure.add(ReasoningStep.observeStep(
+                    ToolCapability.DELEGATE_TO_AGENT.toolName(),
+                    observation,
+                    "Delegate failed - synthesize and finish"));
 
             return Optional.of(AgentResult.finished(observation, historyWithFailure));
         }
 
-        log.infof("[AgentLoop] Fast-path: garuda resume result used as FINISH " +
-                "for session %s - skipping coordinator wrap-up LLM call", sessionId);
+        log.infof(
+                "[AgentLoop] Fast-path: garuda resume result used as FINISH "
+                        + "for session %s - skipping coordinator wrap-up LLM call",
+                sessionId);
         return Optional.of(AgentResult.finished(observation, List.copyOf(resumedHistory)));
     }
 }

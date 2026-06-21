@@ -1,9 +1,9 @@
 package com.arcclaw.core.audit;
 
-import java.math.BigDecimal;
-
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
+
+import java.math.BigDecimal;
 
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.persistence.api.AuditEventStorePort;
@@ -22,9 +22,10 @@ public class AuditService {
     }
 
     @Inject
-    public AuditService(TelemetryAuditService telemetryAuditService,
-                        ComplianceAuditService complianceAuditService,
-                        AuditEventStorePort auditStore) {
+    public AuditService(
+            TelemetryAuditService telemetryAuditService,
+            ComplianceAuditService complianceAuditService,
+            AuditEventStorePort auditStore) {
         this.telemetryAuditService = telemetryAuditService;
         this.complianceAuditService = complianceAuditService;
         this.auditStore = auditStore;
@@ -34,13 +35,18 @@ public class AuditService {
         telemetryAuditService.record(sessionId, userId, agentRole, type, detail);
     }
 
-    public void recordWithIdempotency(String sessionId, String userId, String agentRole,
-                                      SecurityEventType type, String detail, String idempotencyKey) {
+    public void recordWithIdempotency(
+            String sessionId,
+            String userId,
+            String agentRole,
+            SecurityEventType type,
+            String detail,
+            String idempotencyKey) {
         telemetryAuditService.recordWithIdempotency(sessionId, userId, agentRole, type, detail, idempotencyKey);
     }
 
-    public void recordMandatory(String sessionId, String userId, String agentRole,
-                                SecurityEventType type, String detail) {
+    public void recordMandatory(
+            String sessionId, String userId, String agentRole, SecurityEventType type, String detail) {
         complianceAuditService.recordMandatory(sessionId, userId, agentRole, type, detail);
     }
 
@@ -51,10 +57,17 @@ public class AuditService {
         recordMandatory(null, userId, null, type, detail);
     }
 
-    public void recordLoopCompletion(String sessionId, String userId, String agentRole,
-                                     String goalHash, AgentResult result,
-                                     int inputTokens, int outputTokens, BigDecimal usdCost) {
-        telemetryAuditService.recordLoopCompletion(sessionId, userId, agentRole, goalHash, result, inputTokens, outputTokens, usdCost);
+    public void recordLoopCompletion(
+            String sessionId,
+            String userId,
+            String agentRole,
+            String goalHash,
+            AgentResult result,
+            int inputTokens,
+            int outputTokens,
+            BigDecimal usdCost) {
+        telemetryAuditService.recordLoopCompletion(
+                sessionId, userId, agentRole, goalHash, result, inputTokens, outputTokens, usdCost);
     }
 
     public void waitForIdle() {
@@ -64,5 +77,4 @@ public class AuditService {
     public boolean hasEventInSession(String sessionId, SecurityEventType eventType) {
         return auditStore.countEventsByType(sessionId, eventType.name()) > 0;
     }
-    
 }

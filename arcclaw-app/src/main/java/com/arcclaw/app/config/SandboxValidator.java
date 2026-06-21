@@ -19,7 +19,8 @@ public class SandboxValidator {
             if (!podmanReachable) {
                 System.err.println("[ArcClaw] ⚠️  Podman is not reachable. Code tools will be OFFLINE.");
             } else {
-                String image = System.getProperty("ARCCLAW_SANDBOX_IMAGE", 
+                String image = System.getProperty(
+                        "ARCCLAW_SANDBOX_IMAGE",
                         System.getenv().getOrDefault("ARCCLAW_SANDBOX_IMAGE", "localhost/arcclaw-tool-runner:latest"));
                 if (!canRun("podman", "image", "inspect", image)) {
                     System.err.println("[ArcClaw] ⚠️  Podman image '" + image + "' missing.");
@@ -31,6 +32,11 @@ public class SandboxValidator {
     private static boolean canRun(String... cmd) {
         try {
             return new ProcessBuilder(cmd).start().waitFor(2, TimeUnit.SECONDS);
-        } catch (Exception e) { return false; }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return false;
+        } catch (Exception _) {
+            return false;
+        }
     }
 }

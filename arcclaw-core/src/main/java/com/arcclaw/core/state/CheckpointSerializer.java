@@ -1,10 +1,10 @@
 package com.arcclaw.core.state;
 
-import java.util.List;
-import java.util.Map;
-
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
+
+import java.util.List;
+import java.util.Map;
 
 import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
@@ -13,6 +13,7 @@ import com.arcclaw.persistence.api.ReasoningStepDto;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+
 import org.jboss.logging.Logger;
 
 /**
@@ -31,8 +32,7 @@ public class CheckpointSerializer {
     private static final Logger log = Logger.getLogger(CheckpointSerializer.class);
 
     /** Static field - never re-constructed per call (§9.1). */
-    private static final TypeReference<List<ReasoningStep>> STEPS_TYPE =
-            new TypeReference<>() {};
+    private static final TypeReference<List<ReasoningStep>> STEPS_TYPE = new TypeReference<>() {};
 
     @Inject
     ObjectMapper objectMapper;
@@ -65,9 +65,11 @@ public class CheckpointSerializer {
         try {
             return objectMapper.readValue(checkpoint.getStateJson(), STEPS_TYPE);
         } catch (JsonProcessingException e) {
-            log.errorf("Failed to deserialize stateJson for checkpoint id=%d: %s",
+            log.errorf(
+                    "Failed to deserialize stateJson for checkpoint id=%d: %s",
                     checkpoint.getId(), LogUtil.rootMessage(e));
-            log.debugf("Full stacktrace for deserialization failure of checkpoint id=%d:\n%s",
+            log.debugf(
+                    "Full stacktrace for deserialization failure of checkpoint id=%d:\n%s",
                     checkpoint.getId(), LogUtil.trimmedStack(e));
             return List.of();
         }
@@ -89,8 +91,7 @@ public class CheckpointSerializer {
                 step.success(),
                 step.errorCode(),
                 step.traceId(),
-                step.rootCauseClass()
-        );
+                step.rootCauseClass());
     }
 
     /**
@@ -107,8 +108,7 @@ public class CheckpointSerializer {
                 dto.success(),
                 dto.errorCode(),
                 dto.traceId(),
-                dto.rootCauseClass()
-        );
+                dto.rootCauseClass());
     }
 
     // ── Generic helpers ───────────────────────────────────────────────────────

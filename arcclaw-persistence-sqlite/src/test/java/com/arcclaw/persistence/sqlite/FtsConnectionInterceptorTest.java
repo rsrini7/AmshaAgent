@@ -9,8 +9,6 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 
-import io.quarkus.arc.Arc;
-import io.quarkus.arc.ArcContainer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -20,6 +18,9 @@ import org.mockito.MockedStatic;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.sqlite.SQLiteConnection;
 import org.sqlite.core.DB;
+
+import io.quarkus.arc.Arc;
+import io.quarkus.arc.ArcContainer;
 
 /**
  * Unit tests for {@link FtsConnectionInterceptor}.
@@ -59,10 +60,8 @@ class FtsConnectionInterceptorTest {
      *   <li>load_extension Statement is ready for verification</li>
      * </ul>
      *
-     * @param vec0AlreadyLoaded {@code true}  → simulates a re-borrowed connection
-     *                                           (vec0 already registered, load skipped)
-     *                          {@code false} → simulates a fresh connection handle
-     *                                           (vec0 not yet registered, load must fire)
+     * @param vec0AlreadyLoaded true simulates a re-borrowed connection (vec0 already registered, load skipped);
+     *                          false simulates a fresh connection handle (vec0 not yet registered, load must fire)
      */
     private record ConnBundle(Connection conn, Statement vecStmt) {}
 
@@ -74,34 +73,35 @@ class FtsConnectionInterceptorTest {
      * @param vec0AlreadyLoaded  see above
      * @param loadExtensionFails {@code true} → load_extension throws SQLException
      */
-    private ConnBundle buildConnection(boolean vec0AlreadyLoaded,
-                                   boolean loadExtensionFails) throws Exception {
+    private ConnBundle buildConnection(boolean vec0AlreadyLoaded, boolean loadExtensionFails) throws Exception {
         Connection conn = mock(Connection.class);
         lenient().when(conn.getAutoCommit()).thenReturn(true);
 
         // Step 1: PRAGMA database_list → fts already attached
         Statement pragmaStmt = mock(Statement.class);
-        ResultSet dbListRs   = mock(ResultSet.class);
+        ResultSet dbListRs = mock(ResultSet.class);
         when(dbListRs.next()).thenReturn(true, false);
         when(dbListRs.getString("name")).thenReturn("fts");
         when(pragmaStmt.executeQuery("PRAGMA database_list")).thenReturn(dbListRs);
 
         // Step 2a: pragma_module_list check
         Statement moduleCheckStmt = mock(Statement.class);
-        ResultSet moduleRs        = mock(ResultSet.class);
+        ResultSet moduleRs = mock(ResultSet.class);
         lenient().when(moduleRs.next()).thenReturn(vec0AlreadyLoaded);
-        lenient().when(moduleCheckStmt.executeQuery(contains("pragma_module_list")))
+        lenient()
+                .when(moduleCheckStmt.executeQuery(contains("pragma_module_list")))
                 .thenReturn(moduleRs);
 
         // Step 2b: load_extension Statement
         Statement vecStmt = mock(Statement.class);
         if (loadExtensionFails) {
-            lenient().when(vecStmt.execute(contains("load_extension")))
-                    .thenThrow(new SQLException(
-                            "no such file or directory: ./lib/vec0-test"));
+            lenient()
+                    .when(vecStmt.execute(contains("load_extension")))
+                    .thenThrow(new SQLException("no such file or directory: ./lib/vec0-test"));
         }
 
-        lenient().when(conn.createStatement())
+        lenient()
+                .when(conn.createStatement())
                 .thenReturn(pragmaStmt)
                 .thenReturn(moduleCheckStmt)
                 .thenReturn(vecStmt);
@@ -119,7 +119,6 @@ class FtsConnectionInterceptorTest {
         return new ConnBundle(conn, vecStmt);
     }
 
-
     /** Connection where PRAGMA database_list returns no "fts" → ATTACH must fire. */
     private ConnBundle buildConnectionWithoutFtsAttached() throws Exception {
         Connection conn = mock(Connection.class);
@@ -127,7 +126,7 @@ class FtsConnectionInterceptorTest {
 
         // PRAGMA database_list - no "fts" row
         Statement pragmaStmt = mock(Statement.class);
-        ResultSet dbListRs   = mock(ResultSet.class);
+        ResultSet dbListRs = mock(ResultSet.class);
         when(dbListRs.next()).thenReturn(false);
         when(pragmaStmt.executeQuery("PRAGMA database_list")).thenReturn(dbListRs);
 
@@ -136,19 +135,18 @@ class FtsConnectionInterceptorTest {
 
         // pragma_module_list - vec0 not loaded
         Statement moduleCheckStmt = mock(Statement.class);
-        ResultSet moduleRs        = mock(ResultSet.class);
+        ResultSet moduleRs = mock(ResultSet.class);
         when(moduleRs.next()).thenReturn(false);
-        when(moduleCheckStmt.executeQuery(contains("pragma_module_list")))
-                .thenReturn(moduleRs);
+        when(moduleCheckStmt.executeQuery(contains("pragma_module_list"))).thenReturn(moduleRs);
 
         // load_extension statement
         Statement vecStmt = mock(Statement.class);
 
         when(conn.createStatement())
-                .thenReturn(pragmaStmt)       // Step 1 PRAGMA
-                .thenReturn(attachStmt)        // Step 1 ATTACH
-                .thenReturn(moduleCheckStmt)   // Step 2 module check
-                .thenReturn(vecStmt);          // Step 2 load_extension
+                .thenReturn(pragmaStmt) // Step 1 PRAGMA
+                .thenReturn(attachStmt) // Step 1 ATTACH
+                .thenReturn(moduleCheckStmt) // Step 2 module check
+                .thenReturn(vecStmt); // Step 2 load_extension
 
         SQLiteConnection sqliteConn = mock(SQLiteConnection.class);
         DB db = mock(DB.class);
@@ -220,9 +218,9 @@ class FtsConnectionInterceptorTest {
             try (MockedStatic<Arc> arc = mockStatic(Arc.class)) {
                 arc.when(Arc::container).thenReturn(mock(ArcContainer.class));
 
-                ConnBundle fresh1  = buildConnection(false); // first borrow of handle A
-                ConnBundle reborrow = buildConnection(true);  // second borrow of handle A
-                ConnBundle fresh2  = buildConnection(false); // first borrow of handle B
+                ConnBundle fresh1 = buildConnection(false); // first borrow of handle A
+                ConnBundle reborrow = buildConnection(true); // second borrow of handle A
+                ConnBundle fresh2 = buildConnection(false); // first borrow of handle B
 
                 interceptor.onConnectionAcquire(fresh1.conn());
                 interceptor.onConnectionAcquire(reborrow.conn());
@@ -269,8 +267,7 @@ class FtsConnectionInterceptorTest {
                 interceptor.onConnectionAcquire(buildConnection(true).conn());
                 interceptor.onConnectionAcquire(buildConnection(false).conn());
 
-                assertTrue(interceptor.isVectorSearchEnabled(),
-                        "Flag must not flip back to false");
+                assertTrue(interceptor.isVectorSearchEnabled(), "Flag must not flip back to false");
             }
         }
 
@@ -370,21 +367,20 @@ class FtsConnectionInterceptorTest {
                 lenient().when(conn.getAutoCommit()).thenReturn(true);
 
                 Statement pragmaStmt = mock(Statement.class);
-                ResultSet dbListRs   = mock(ResultSet.class);
+                ResultSet dbListRs = mock(ResultSet.class);
                 when(dbListRs.next()).thenReturn(false); // fts not attached
                 when(pragmaStmt.executeQuery("PRAGMA database_list")).thenReturn(dbListRs);
 
                 Statement attachStmt = mock(Statement.class); // ATTACH fires
 
                 Statement moduleCheckStmt = mock(Statement.class);
-                ResultSet moduleRs        = mock(ResultSet.class);
+                ResultSet moduleRs = mock(ResultSet.class);
                 when(moduleRs.next()).thenReturn(false);
                 when(moduleCheckStmt.executeQuery(contains("pragma_module_list")))
                         .thenReturn(moduleRs);
 
                 Statement vecStmt = mock(Statement.class);
-                when(vecStmt.execute(contains("load_extension")))
-                        .thenThrow(new SQLException("simulated failure"));
+                when(vecStmt.execute(contains("load_extension"))).thenThrow(new SQLException("simulated failure"));
 
                 when(conn.createStatement())
                         .thenReturn(pragmaStmt)

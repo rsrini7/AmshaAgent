@@ -24,16 +24,13 @@ public class CliAgentObserver implements AgentObserver {
 
     @Override
     public void recordLlmCall(String sessionId, int inputTokens, int outputTokens) {
-        if (!ENABLED.isBound() || !ENABLED.get())
-            return;
-        System.out.printf("   💬 %d prompt / %d completion tokens%n",
-                inputTokens, outputTokens);
+        if (!ENABLED.isBound() || !ENABLED.get()) return;
+        System.out.printf("   💬 %d prompt / %d completion tokens%n", inputTokens, outputTokens);
     }
 
     @Override
     public void onStepComplete(String sessionId, String role, ReasoningStep step) {
-        if (!ENABLED.isBound() || !ENABLED.get())
-            return;
+        if (!ENABLED.isBound() || !ENABLED.get()) return;
         System.out.printf("🤖 [%s] Action: %s%n", role, step.action());
 
         if (step.observation() != null && !step.observation().isBlank()) {

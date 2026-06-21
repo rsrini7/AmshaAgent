@@ -9,10 +9,12 @@ import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.util.AgentErrorMessageUtil;
 import com.arcclaw.core.util.MdcKeys;
-import io.micrometer.core.instrument.Counter;
-import io.micrometer.core.instrument.MeterRegistry;
+
 import org.jboss.logging.Logger;
 import org.jboss.logging.MDC;
+
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 
 /**
  * Manages MDC field setup/teardown and agent role resolution for the
@@ -46,7 +48,7 @@ import org.jboss.logging.MDC;
  *
  * <h3>⚠️ Alias handling stays inside resolution (§4.4)</h3>
  * <p>All role alias expansion is contained entirely within
- * {@link #resolveCanonicalRole(String, String)}. No other method in this class
+ * {@link #resolveCanonicalRole(String, String, String)}. No other method in this class
  * may branch on, inspect, or expand role aliases.
  *
  * <p>After creation, verify no {@code @Transactional} leaked in:
@@ -114,29 +116,32 @@ public class SessionLifecycleCoordinator {
             MDC.remove(MdcKeys.AGENT_ROLE);
             MDC.remove(MdcKeys.USER_ID);
         } catch (Exception e) {
-            log.warnf("SessionLifecycleCoordinator.teardownMdc: failed to clear MDC keys: %s",
+            log.warnf(
+                    "SessionLifecycleCoordinator.teardownMdc: failed to clear MDC keys: %s",
                     AgentErrorMessageUtil.safeMessage(e));
         }
     }
-public String resolveCanonicalRole(String sessionId, String agentRole, String userId) {
-    if (!AgentRoleEnum.isKnownRole(agentRole)) {
-        log.warnf("SessionLifecycleCoordinator: unknown agentRole '%s' for session %s - defaulting to COORDINATOR",
-                agentRole, sessionId);
 
-        auditService.record(
-                sessionId,
-                userId,
-                agentRole,
-                SecurityEventType.INVALID_ROLE_FALLBACK,
-                "Unknown agentRole [" + agentRole + "] defaulted to COORDINATOR");
+    public String resolveCanonicalRole(String sessionId, String agentRole, String userId) {
+        if (!AgentRoleEnum.isKnownRole(agentRole)) {
+            log.warnf(
+                    "SessionLifecycleCoordinator: unknown agentRole '%s' for session %s - defaulting to COORDINATOR",
+                    agentRole, sessionId);
 
-        Counter.builder("arcclaw.agent.role.unknown")
-                .tag("role", agentRole != null ? agentRole : "null")
-                .register(meterRegistry)
-                .increment();
+            auditService.record(
+                    sessionId,
+                    userId,
+                    agentRole,
+                    SecurityEventType.INVALID_ROLE_FALLBACK,
+                    "Unknown agentRole [" + agentRole + "] defaulted to COORDINATOR");
 
-        return AgentRoleEnum.COORDINATOR.toScopedName();
-    }
+            Counter.builder("arcclaw.agent.role.unknown")
+                    .tag("role", agentRole != null ? agentRole : "null")
+                    .register(meterRegistry)
+                    .increment();
+
+            return AgentRoleEnum.COORDINATOR.toScopedName();
+        }
 
         // §4.4 - alias expansion happens HERE, nowhere else.
         // AgentRoleEnum.fromString handles any configured aliases.
@@ -147,8 +152,7 @@ public String resolveCanonicalRole(String sessionId, String agentRole, String us
         // and conversation history.  Standard roles are normalised to their
         // scoped names (e.g. "coordinator", "researcher").
         return AgentRoleEnum.isSkillRole(agentRole)
-                ? agentRole                      // skill:X - verbatim canonical key
-                : resolvedRole.toScopedName();   // coordinator, researcher, …
+                ? agentRole // skill:X - verbatim canonical key
+                : resolvedRole.toScopedName(); // coordinator, researcher, …
     }
 }
-

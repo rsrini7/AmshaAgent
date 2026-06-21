@@ -5,8 +5,10 @@ import jakarta.inject.Inject;
 
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.agent.result.AgentResult;
-import io.opentelemetry.api.trace.Span;
+
 import org.jboss.logging.Logger;
+
+import io.opentelemetry.api.trace.Span;
 
 @ApplicationScoped
 public class AgentTraceEnricher implements AgentObserver {
@@ -18,6 +20,7 @@ public class AgentTraceEnricher implements AgentObserver {
 
     @Override
     public void recordLlmCall(String sessionId, int inputTokens, int outputTokens) {
+        // No-op: LLM token tracking handled by MetricsAgentObserver. This enricher only instruments spans.
     }
 
     @Override
@@ -25,7 +28,9 @@ public class AgentTraceEnricher implements AgentObserver {
         Span root = otelContext.getRootSpan(sessionId);
         if (root == null || !root.isRecording()) return;
 
-        root.setAttribute("arcclaw.last.step.success", step.success());
+        if (step.success() != null) {
+            root.setAttribute("arcclaw.last.step.success", Boolean.TRUE.equals(step.success()));
+        }
     }
 
     @Override

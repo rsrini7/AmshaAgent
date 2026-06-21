@@ -1,16 +1,18 @@
 package com.arcclaw.core.lifecycle;
 
-import java.lang.management.ManagementFactory;
-
 import jakarta.annotation.Priority;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
 import jakarta.inject.Inject;
 import jakarta.interceptor.Interceptor;
 
+import java.lang.management.ManagementFactory;
+
 import com.arcclaw.core.config.SystemMetadataRegistry;
-import io.quarkus.runtime.StartupEvent;
+
 import org.jboss.logging.Logger;
+
+import io.quarkus.runtime.StartupEvent;
 
 /**
  * Logs application lifecycle events in a concise format,

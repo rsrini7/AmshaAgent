@@ -7,9 +7,11 @@ import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
+import dev.langchain4j.store.memory.chat.ChatMemoryStore;
+
 import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.security.InputSanitizer;
-import dev.langchain4j.store.memory.chat.ChatMemoryStore;
+
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -51,9 +53,9 @@ class ChatMemoryWriterTest {
     void testSaveGoalPersistsNormalGoal() {
         String sessionId = "session-1";
         String goal = "Normal user goal";
-        
+
         chatMemoryWriter.saveGoal(sessionId, goal);
-        
+
         verify(chatMemoryStore).getMessages(sessionId);
         verify(chatMemoryStore).updateMessages(eq(sessionId), anyList());
     }
@@ -61,8 +63,9 @@ class ChatMemoryWriterTest {
     @Test
     void skipGoalsContainsAllThreeSentinelConstants() {
         // Pin exact string values to prevent accidental drift
-        Assertions.assertTrue(ChatMemoryWriter.SKIP_GOALS.contains(
-            "The tool execution has been approved and completed. Read the tool's output. If it is an error, tell me. Otherwise, provide the final answer to my original request."));
+        Assertions.assertTrue(
+                ChatMemoryWriter.SKIP_GOALS.contains(
+                        "The tool execution has been approved and completed. Read the tool's output. If it is an error, tell me. Otherwise, provide the final answer to my original request."));
         Assertions.assertTrue(ChatMemoryWriter.SKIP_GOALS.contains("Resuming task after approval"));
         Assertions.assertTrue(ChatMemoryWriter.SKIP_GOALS.contains("Resuming task after denial"));
         Assertions.assertEquals(3, ChatMemoryWriter.SKIP_GOALS.size());
@@ -71,7 +74,7 @@ class ChatMemoryWriterTest {
     @Test
     void saveGoalDoesNotPersistAnySkipGoal() {
         String sessionId = "ses-1";
-        
+
         for (String skipGoal : ChatMemoryWriter.SKIP_GOALS) {
             Mockito.clearInvocations(chatMemoryStore);
             chatMemoryWriter.saveGoal(sessionId, skipGoal);

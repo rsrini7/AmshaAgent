@@ -6,10 +6,10 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
+import jakarta.enterprise.event.Event;
+
 import java.time.Instant;
 import java.util.List;
-
-import jakarta.enterprise.event.Event;
 
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.audit.AuditService;
@@ -20,6 +20,7 @@ import com.arcclaw.core.lifecycle.WorkspaceManager;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.persistence.api.CronRunStorePort;
 import com.arcclaw.persistence.api.CronStorePort;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -56,7 +57,8 @@ class CronResultHandlerTest {
 
     @BeforeEach
     void setup() {
-        handler = new CronResultHandler(cronStore, cronRunStore, auditService, workspaceManager, jobCompletedEvent, statefulAgentStore);
+        handler = new CronResultHandler(
+                cronStore, cronRunStore, auditService, workspaceManager, jobCompletedEvent, statefulAgentStore);
         job = new AgentCronRecord();
         job.setId("cron-1");
         job.setUserId("user-1");
@@ -75,9 +77,13 @@ class CronResultHandlerTest {
         verify(cronStore).markCompleted(eq(job.getId()), any(Instant.class));
         verify(workspaceManager).terminateSession(sessionId);
         verify(jobCompletedEvent).fire(any(AgentJobCompleted.class));
-        verify(auditService).record(anyString(), eq(job.getUserId()), anyString(),
-                eq(SecurityEventType.CRONFIRED),
-                ArgumentMatchers.contains("runOnce=true"));
+        verify(auditService)
+                .record(
+                        anyString(),
+                        eq(job.getUserId()),
+                        anyString(),
+                        eq(SecurityEventType.CRONFIRED),
+                        ArgumentMatchers.contains("runOnce=true"));
     }
 
     @Test
@@ -92,9 +98,13 @@ class CronResultHandlerTest {
         verify(cronStore).markFired(eq(job.getId()), any(Instant.class), any(Instant.class));
         verify(workspaceManager).terminateSession(sessionId);
         verify(jobCompletedEvent).fire(any(AgentJobCompleted.class));
-        verify(auditService).record(anyString(), eq(job.getUserId()), anyString(),
-                eq(SecurityEventType.CRONFIRED),
-                ArgumentMatchers.contains("runOnce=false"));
+        verify(auditService)
+                .record(
+                        anyString(),
+                        eq(job.getUserId()),
+                        anyString(),
+                        eq(SecurityEventType.CRONFIRED),
+                        ArgumentMatchers.contains("runOnce=false"));
     }
 
     @Test
@@ -107,9 +117,13 @@ class CronResultHandlerTest {
         verify(workspaceManager, never()).terminateSession(sessionId);
         verify(jobCompletedEvent).fire(any(AgentJobCompleted.class));
 
-        verify(auditService).record(anyString(), eq(job.getUserId()), anyString(),
-            eq(SecurityEventType.LOOP_AWAITING_APPROVAL),
-            ArgumentMatchers.contains("pendingTool=tool"));
+        verify(auditService)
+                .record(
+                        anyString(),
+                        eq(job.getUserId()),
+                        anyString(),
+                        eq(SecurityEventType.LOOP_AWAITING_APPROVAL),
+                        ArgumentMatchers.contains("pendingTool=tool"));
     }
 
     @Test
@@ -121,8 +135,8 @@ class CronResultHandlerTest {
         verify(cronStore).markFailed(eq(job.getId()), anyString());
         verify(workspaceManager).terminateSession(sessionId);
         verify(jobCompletedEvent).fire(any(AgentJobCompleted.class));
-        verify(auditService).record(anyString(), eq(job.getUserId()), anyString(),
-                eq(SecurityEventType.CRONFAILED), anyString());
+        verify(auditService)
+                .record(anyString(), eq(job.getUserId()), anyString(), eq(SecurityEventType.CRONFAILED), anyString());
     }
 
     @Test
@@ -134,8 +148,8 @@ class CronResultHandlerTest {
         verify(cronStore).markFailed(eq(job.getId()), anyString());
         verify(workspaceManager).terminateSession(sessionId);
         verify(jobCompletedEvent).fire(any(AgentJobCompleted.class));
-        verify(auditService).record(anyString(), eq(job.getUserId()), anyString(),
-                eq(SecurityEventType.CRONFAILED), anyString());
+        verify(auditService)
+                .record(anyString(), eq(job.getUserId()), anyString(), eq(SecurityEventType.CRONFAILED), anyString());
     }
 
     @Test
@@ -147,7 +161,7 @@ class CronResultHandlerTest {
         verify(cronStore).markFailed(job.getId(), "crash");
         verify(workspaceManager).terminateSession(sessionId);
         verify(jobCompletedEvent).fire(any(AgentJobCompleted.class));
-        verify(auditService).record(anyString(), eq(job.getUserId()), anyString(),
-                eq(SecurityEventType.CRONFAILED), anyString());
+        verify(auditService)
+                .record(anyString(), eq(job.getUserId()), anyString(), eq(SecurityEventType.CRONFAILED), anyString());
     }
 }

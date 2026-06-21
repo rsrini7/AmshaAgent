@@ -1,19 +1,21 @@
 package com.arcclaw.persistence.sqlite;
 
-import java.sql.Connection;
-import java.sql.ResultSet;
-import java.sql.Statement;
-
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
 import jakarta.inject.Inject;
 
+import java.sql.Connection;
+import java.sql.ResultSet;
+import java.sql.Statement;
+
 import com.arcclaw.common.util.LogUtil;
+
+import org.eclipse.microprofile.config.inject.ConfigProperty;
+import org.jboss.logging.Logger;
+
 import io.agroal.api.AgroalDataSource;
 import io.quarkus.arc.properties.IfBuildProperty;
 import io.quarkus.runtime.StartupEvent;
-import org.eclipse.microprofile.config.inject.ConfigProperty;
-import org.jboss.logging.Logger;
 
 /**
  * Creates the FTS5 virtual table for compaction summary search on startup.
@@ -50,7 +52,7 @@ public class FtsSchemaInitializer {
 
     private void ensureFtsSchema() {
         try (Connection conn = dataSource.getConnection();
-             Statement stmt = conn.createStatement()) {
+                Statement stmt = conn.createStatement()) {
             // Check if already attached (FtsConnectionInterceptor may have attached it)
             try (ResultSet rs = stmt.executeQuery("PRAGMA database_list")) {
                 while (rs.next()) {
@@ -69,23 +71,21 @@ public class FtsSchemaInitializer {
 
     private void createCompactionSummaryFts5Table() {
         try (Connection conn = dataSource.getConnection();
-             Statement stmt = conn.createStatement()) {
-            stmt.execute(
-                "CREATE VIRTUAL TABLE IF NOT EXISTS "
+                Statement stmt = conn.createStatement()) {
+            stmt.execute("CREATE VIRTUAL TABLE IF NOT EXISTS "
                     + SCHEMA_NAME + "." + FTS5_TABLE
-                    + " USING fts5(sessionId UNINDEXED, summary)"
-            );
+                    + " USING fts5(sessionId UNINDEXED, summary)");
             LOG.infof("FTS5 virtual table '%s.%s' created or verified.", SCHEMA_NAME, FTS5_TABLE);
         } catch (Exception e) {
-            LOG.warnf("Could not create FTS5 virtual table '%s.%s': %s", SCHEMA_NAME, FTS5_TABLE, LogUtil.rootMessage(e));
+            LOG.warnf(
+                    "Could not create FTS5 virtual table '%s.%s': %s", SCHEMA_NAME, FTS5_TABLE, LogUtil.rootMessage(e));
         }
     }
 
     private void verifyFts5Schema() {
         try (Connection conn = dataSource.getConnection();
-             Statement stmt = conn.createStatement()) {
-            try (ResultSet rs = stmt.executeQuery(
-                    "SELECT count(*) FROM " + SCHEMA_NAME + "." + FTS5_TABLE)) {
+                Statement stmt = conn.createStatement()) {
+            try (ResultSet rs = stmt.executeQuery("SELECT count(*) FROM " + SCHEMA_NAME + "." + FTS5_TABLE)) {
                 if (rs.next()) {
                     long count = rs.getLong(1);
                     LOG.infof("Audit schema enforcement complete. Audit event count: %d", count);

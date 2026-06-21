@@ -13,6 +13,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import com.arcclaw.persistence.api.CheckpointStorePort;
+
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
@@ -24,13 +25,13 @@ class BatchResumeRaceTest {
         store.resumeGuard = new ResumeCoordinationGuard();
         store.storeAdapter = mock(CheckpointStorePort.class);
         when(store.storeAdapter.claimForResume(anyString(), anyString())).thenReturn(true);
-        
+
         String sessionId = "sess-123";
         String role = "coordinator";
 
         // First call success
         assertTrue(store.claimForResume(sessionId, role), "First call should succeed");
-        
+
         // Parallel call fail
         assertFalse(store.claimForResume(sessionId, role), "Second concurrent call should fail");
 
@@ -44,7 +45,7 @@ class BatchResumeRaceTest {
         StatefulAgentStoreImpl store = new StatefulAgentStoreImpl();
         store.resumeGuard = new ResumeCoordinationGuard();
         store.storeAdapter = mock(CheckpointStorePort.class);
-        
+
         // Only the first call to claimForResume succeeds in the DB
         when(store.storeAdapter.claimForResume(anyString(), anyString()))
                 .thenReturn(true)

@@ -1,10 +1,6 @@
 package com.arcclaw.core.sandbox;
 
-public record SandboxResult(
-        boolean success,
-        String output,
-        String reason,
-        boolean isInfraFailure) {
+public record SandboxResult(boolean success, String output, String reason, boolean isInfraFailure) {
 
     public static SandboxResult success(String output) {
         return new SandboxResult(true, output, null, false);

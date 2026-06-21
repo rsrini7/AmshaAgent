@@ -10,6 +10,7 @@ import static org.mockito.Mockito.verify;
 
 import com.arcclaw.core.persistence.AsyncPersistenceEngine;
 import com.arcclaw.core.persistence.PersistenceEvent;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -39,21 +40,24 @@ class ComplianceAuditServiceTest {
         doNothing().when(persistenceEngine).submitCritical(any());
 
         // Should not throw
-        assertDoesNotThrow(() ->
-                complianceAuditService.recordMandatory("ses-1", "u1", "coordinator",
-                        SecurityEventType.TOOL_INVOKED, "test"));
+        assertDoesNotThrow(() -> complianceAuditService.recordMandatory(
+                "ses-1", "u1", "coordinator", SecurityEventType.TOOL_INVOKED, "test"));
     }
 
     @Test
     void testRecordMandatoryThrowsOnWriteFailure() {
         // Simulate the engine throwing ComplianceViolationException
-        doThrow(new ComplianceViolationException("ses-2", SecurityEventType.VAULT_ACCESS,
+        doThrow(new ComplianceViolationException(
+                        "ses-2",
+                        SecurityEventType.VAULT_ACCESS,
                         new RuntimeException("SQLITE_BUSY: database is locked")))
-            .when(persistenceEngine).submitCritical(any());
+                .when(persistenceEngine)
+                .submitCritical(any());
 
-        ComplianceViolationException ex = assertThrows(ComplianceViolationException.class, () ->
-                complianceAuditService.recordMandatory("ses-2", "u1", "coordinator",
-                        SecurityEventType.VAULT_ACCESS, "vault read"));
+        ComplianceViolationException ex = assertThrows(
+                ComplianceViolationException.class,
+                () -> complianceAuditService.recordMandatory(
+                        "ses-2", "u1", "coordinator", SecurityEventType.VAULT_ACCESS, "vault read"));
         assertEquals("ses-2", ex.getSessionId());
         assertEquals(SecurityEventType.VAULT_ACCESS, ex.getEventType());
     }
@@ -62,8 +66,8 @@ class ComplianceAuditServiceTest {
     void testRecordBuildsCorrectCriticalEvent() {
         doNothing().when(persistenceEngine).submitCritical(any());
 
-        complianceAuditService.recordMandatory("ses-3", "u999", "coder",
-                SecurityEventType.PROMPT_INJECTION_BLOCKED, "injection detected");
+        complianceAuditService.recordMandatory(
+                "ses-3", "u999", "coder", SecurityEventType.PROMPT_INJECTION_BLOCKED, "injection detected");
 
         ArgumentCaptor<PersistenceEvent> captor = ArgumentCaptor.forClass(PersistenceEvent.class);
         verify(persistenceEngine).submitCritical(captor.capture());

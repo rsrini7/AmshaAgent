@@ -7,17 +7,17 @@ package com.arcclaw.channel.api;
  * implementation of this interface, without modifying the core notification dispatchers.
  */
 public interface ChannelJobNotifier {
-    
+
     /**
      * Determines if this notifier supports the given channel type.
      */
     boolean supports(ChannelType channelType);
-    
+
     /**
      * Notifies the user on this channel that their scheduled/cron job has completed.
      */
     void notifyJobCompleted(String recipient, String renderedMessage, String sessionId);
-    
+
     /**
      * Notifies the user on this channel that a scheduled/cron job requires approval.
      * <p>
@@ -32,7 +32,7 @@ public interface ChannelJobNotifier {
      * @param renderedMessage The pre-formatted notification text.
      */
     void notifyApprovalRequired(String recipient, String cronSessionId, String toolName, String renderedMessage);
-    
+
     /**
      * Notifies the user on this channel that an approval has timed out.
      */

@@ -19,9 +19,11 @@ import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.structured.StructuredOutputEngine;
 import com.arcclaw.core.tools.ToolRegistry;
 import com.fasterxml.jackson.databind.ObjectMapper;
+
+import org.jboss.logging.Logger;
+
 import io.quarkus.qute.Template;
 import io.quarkus.qute.TemplateInstance;
-import org.jboss.logging.Logger;
 
 /**
  * Data-driven implementation of the {@link Agent} interface.
@@ -62,7 +64,7 @@ public class DefaultAgent implements Agent {
     public String systemPrompt(AgentExecutionContext context) {
         TemplateInstance instance = templateSupplier.get().instance();
         AgentRoleEnum roleEnum = new AgentRoleEnum(persona.roleId());
-        
+
         List<String> enabledToolDescriptions = roleEnum.definition().toolNames().stream()
                 .map(name -> toolRegistry.findTool(name).orElse(null))
                 .filter(tool -> tool != null && tool.isEnabled())
@@ -73,7 +75,7 @@ public class DefaultAgent implements Agent {
                 })
                 .map(tool -> "- `" + tool.name() + "`: " + tool.description())
                 .toList();
-                
+
         instance.data("tools", "\n" + String.join("\n", enabledToolDescriptions));
 
         // Injection §7.38: hydrated at render-time for deterministic relative scheduling.
@@ -81,15 +83,16 @@ public class DefaultAgent implements Agent {
 
         ZoneId zoneId = ZoneId.of(defaultTimezone);
         ZonedDateTime localNow = ZonedDateTime.now(zoneId);
-        
-        instance.data("USER_TZ_OFFSET", zoneId.getRules().getOffset(Instant.now()).toString() + " " + zoneId.getId());
+
+        instance.data(
+                "USER_TZ_OFFSET", zoneId.getRules().getOffset(Instant.now()).toString() + " " + zoneId.getId());
         instance.data("CURRENT_LOCAL_TIME", localNow.format(DateTimeFormatter.ofPattern("HH:mm z")));
 
         // Seed scheduling keys as null - Qute {#if} treats null as false
         // CommandDispatchHandler overwrites these if real values are passed in context.data()
-        instance.data("SUGGESTED_CRON",     null);
-        instance.data("TARGET_UTC_HOUR",    null);
-        instance.data("TARGET_UTC_MINUTE",  null);
+        instance.data("SUGGESTED_CRON", null);
+        instance.data("TARGET_UTC_HOUR", null);
+        instance.data("TARGET_UTC_MINUTE", null);
 
         // pass all dynamic metadata from the pipeline context
         if (context != null && context.data() != null) {
@@ -114,22 +117,22 @@ public class DefaultAgent implements Agent {
         SynthesisResult result = structuredOutputEngine.invoke(
                 sessionId, role(), combinedContext, "SynthesisFunction", SynthesisResult.class);
 
-        log.infof("[%s] Synthesis complete: %d contributions integrated.",
+        log.infof(
+                "[%s] Synthesis complete: %d contributions integrated.",
                 persona.roleId(),
                 result.contributions() != null ? result.contributions().size() : 0);
 
         try {
             String json = objectMapper.writeValueAsString(result);
             history.add(ReasoningStep.of(
-                "I have synthesized the specialist findings into a final resolution.",
-                ReasoningStep.FINISH,
-                Map.of("answer", result.finalResolution(), "structured", json),
-                "Structured synthesis complete.",
-                0, 0
-            ));
+                    "I have synthesized the specialist findings into a final resolution.",
+                    ReasoningStep.FINISH,
+                    Map.of("answer", result.finalResolution(), "structured", json),
+                    "Structured synthesis complete.",
+                    0,
+                    0));
         } catch (Exception e) {
-            log.warnf("Failed to serialize synthesis result for session %s: %s",
-                sessionId, LogUtil.rootMessage(e));
+            log.warnf("Failed to serialize synthesis result for session %s: %s", sessionId, LogUtil.rootMessage(e));
         }
 
         return AgentResult.structuredFinished(result.finalResolution(), result, List.copyOf(history));

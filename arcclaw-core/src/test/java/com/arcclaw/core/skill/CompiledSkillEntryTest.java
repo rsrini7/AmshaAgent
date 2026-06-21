@@ -7,18 +7,19 @@ import java.util.Set;
 import java.util.regex.Pattern;
 
 import com.arcclaw.core.agent.role.RoleDefinition;
+
 import org.junit.jupiter.api.Test;
 
+@SuppressWarnings("java:S1192")
 class CompiledSkillEntryTest {
 
-    private final SkillDefinition mockDef = new SkillDefinition(
-            "id-123", "reviewer", "desc", List.of(), List.of(), 5, "prompt");
-    private final RoleDefinition mockRole = new RoleDefinition(
-            "skill:reviewer", "reviewer", "desc", 5, false, false, Set.of(), Set.of());
-    private final Pattern[] patterns = new Pattern[]{
+    private final SkillDefinition mockDef =
+            new SkillDefinition("id-123", "reviewer", "desc", List.of(), List.of(), 5, "prompt");
+    private final RoleDefinition mockRole =
+            new RoleDefinition("skill:reviewer", "reviewer", "desc", 5, false, false, Set.of(), Set.of());
+    private final List<Pattern> patterns = List.of(
             Pattern.compile("review.*code", Pattern.CASE_INSENSITIVE),
-            Pattern.compile("check.*pr", Pattern.CASE_INSENSITIVE)
-    };
+            Pattern.compile("check.*pr", Pattern.CASE_INSENSITIVE));
 
     @Test
     void testMatchesTrueWhenInputMatchesPattern() {
@@ -44,17 +45,9 @@ class CompiledSkillEntryTest {
 
     @Test
     void testNullConstructorArgsThrow() {
-        assertThrows(NullPointerException.class, () ->
-            new CompiledSkillEntry(null, patterns, mockRole, "classpath")
-        );
-        assertThrows(NullPointerException.class, () ->
-            new CompiledSkillEntry(mockDef, null, mockRole, "classpath")
-        );
-        assertThrows(NullPointerException.class, () ->
-            new CompiledSkillEntry(mockDef, patterns, null, "classpath")
-        );
-        assertThrows(NullPointerException.class, () ->
-            new CompiledSkillEntry(mockDef, patterns, mockRole, null)
-        );
+        assertThrows(NullPointerException.class, () -> new CompiledSkillEntry(null, patterns, mockRole, "classpath"));
+        assertThrows(NullPointerException.class, () -> new CompiledSkillEntry(mockDef, null, mockRole, "classpath"));
+        assertThrows(NullPointerException.class, () -> new CompiledSkillEntry(mockDef, patterns, null, "classpath"));
+        assertThrows(NullPointerException.class, () -> new CompiledSkillEntry(mockDef, patterns, mockRole, null));
     }
 }

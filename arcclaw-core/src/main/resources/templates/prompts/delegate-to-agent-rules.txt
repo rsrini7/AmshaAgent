@@ -26,4 +26,4 @@ GOOD EXAMPLE:
 Use 'shiva' for the agent and 'Analyze the NullPointerException stack trace in app.log and fix the UserAuth.java file on line 42.' for the goal.
 
 BAD EXAMPLE (lacks context):
-Use 'coder' for the agent and 'fix it' for the goal.
+Use 'brahma' for the agent and 'fix it' for the goal.

@@ -1,5 +1,10 @@
 package com.arcclaw.persistence.fs;
 
+import jakarta.annotation.PostConstruct;
+import jakarta.annotation.PreDestroy;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+
 import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.io.UncheckedIOException;
@@ -12,15 +17,12 @@ import java.time.Instant;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
-import jakarta.annotation.PostConstruct;
-import jakarta.annotation.PreDestroy;
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
-
 import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.persistence.api.AdvisoryLockPort;
-import io.quarkus.arc.properties.IfBuildProperty;
+
 import org.jboss.logging.Logger;
+
+import io.quarkus.arc.properties.IfBuildProperty;
 
 @ApplicationScoped
 @IfBuildProperty(name = "arcclaw.persistence.backend", stringValue = "fs")
@@ -33,11 +35,12 @@ public class FsLockManager implements AdvisoryLockPort {
 
     @Inject
     public FsLockManager(FsStoreProperties properties) {
-        this.locksDir = Path.of(properties.dataDir()).resolve("locks").toAbsolutePath().normalize();
+        this.locksDir =
+                Path.of(properties.dataDir()).resolve("locks").toAbsolutePath().normalize();
     }
 
     protected FsLockManager() {
-        this.locksDir = Path.of("./arcclaw-data/locks").toAbsolutePath().normalize();
+        this.locksDir = Path.of("./data/fs/locks").toAbsolutePath().normalize();
     }
 
     @PostConstruct
@@ -61,26 +64,41 @@ public class FsLockManager implements AdvisoryLockPort {
         Path lockFile = lockFilePath(lockKey);
         try {
             Files.createDirectories(lockFile.getParent());
-            RandomAccessFile raf = new RandomAccessFile(lockFile.toFile(), "rw");
-            FileChannel channel = raf.getChannel();
-            try {
-                FileLock fileLock = channel.tryLock();
-                if (fileLock != null) {
-                    raf.writeBytes(Instant.now().plusSeconds(timeoutSeconds).toString());
-                    raf.getFD().sync();
-                    heldLocks.put(lockKey, new LockHolder(raf, channel, fileLock));
-                    return true;
-                }
-                channel.close();
-                raf.close();
-                return false;
-            } catch (OverlappingFileLockException e) {
-                channel.close();
-                raf.close();
+        } catch (IOException _) {
+            return false;
+        }
+        RandomAccessFile raf;
+        try {
+            raf = new RandomAccessFile(lockFile.toFile(), "rw");
+        } catch (IOException _) {
+            return false;
+        }
+        FileChannel channel = raf.getChannel();
+        try {
+            FileLock fileLock = channel.tryLock();
+            if (fileLock == null) {
+                closeQuietly(raf);
                 return false;
             }
-        } catch (IOException e) {
+            raf.writeBytes(Instant.now().plusSeconds(timeoutSeconds).toString());
+            raf.getFD().sync();
+            // raf intentionally NOT closed — held by LockHolder until unlock()
+            heldLocks.put(lockKey, new LockHolder(raf, channel, fileLock));
+            return true;
+        } catch (OverlappingFileLockException _) {
+            closeQuietly(raf);
             return false;
+        } catch (IOException _) {
+            closeQuietly(raf);
+            return false;
+        }
+    }
+
+    private static void closeQuietly(RandomAccessFile raf) {
+        try {
+            raf.close();
+        } catch (IOException _) {
+            // best-effort cleanup
         }
     }
 

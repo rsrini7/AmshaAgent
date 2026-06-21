@@ -1,14 +1,16 @@
 package com.arcclaw.core.agent.reasoning.port;
 
+import dev.langchain4j.model.chat.ChatModel;
+import dev.langchain4j.model.chat.request.ChatRequest;
+import dev.langchain4j.model.chat.response.ChatResponse;
+
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
 import com.arcclaw.core.agent.reasoning.error.LlmExceptionClassifier;
 import com.arcclaw.core.agent.reasoning.error.LlmMalformedResponseException;
 import com.arcclaw.core.agent.reasoning.error.LlmToolCallException;
-import dev.langchain4j.model.chat.ChatModel;
-import dev.langchain4j.model.chat.request.ChatRequest;
-import dev.langchain4j.model.chat.response.ChatResponse;
+
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.eclipse.microprofile.faulttolerance.CircuitBreaker;
 
@@ -41,8 +43,7 @@ public class LangChain4jLlmAdapter implements LlmProviderPort {
             failureRatio = 0.5,
             delay = 10000,
             successThreshold = 2,
-            skipOn = {LlmMalformedResponseException.class, LlmToolCallException.class}
-    )
+            skipOn = {LlmMalformedResponseException.class, LlmToolCallException.class})
     public ChatResponse nextStepWithCb(ChatRequest request) {
         try {
             return chatModel.chat(request);

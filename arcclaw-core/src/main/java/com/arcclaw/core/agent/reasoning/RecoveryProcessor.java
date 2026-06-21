@@ -1,17 +1,19 @@
 package com.arcclaw.core.agent.reasoning;
 
-import java.util.List;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
+
+import java.util.List;
+import java.util.Locale;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.util.TextPatternUtils;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+
 import org.jboss.logging.Logger;
 
 /**
@@ -28,8 +30,7 @@ public class RecoveryProcessor {
     private final TextPatternUtils textPatternUtils;
 
     @Inject
-    public RecoveryProcessor(ObjectMapper objectMapper,
-                            TextPatternUtils textPatternUtils) {
+    public RecoveryProcessor(ObjectMapper objectMapper, TextPatternUtils textPatternUtils) {
         this.objectMapper = objectMapper;
         this.textPatternUtils = textPatternUtils;
     }
@@ -74,7 +75,7 @@ public class RecoveryProcessor {
         }
         String result = sb.toString().strip();
         if (result.isBlank()) return null;
-        
+
         if (result.startsWith("{") && result.endsWith("}")) {
             try {
                 JsonNode node = objectMapper.readTree(result);
@@ -100,14 +101,20 @@ public class RecoveryProcessor {
         int startQuote = json.indexOf("\"", json.indexOf(":", codeIdx) + 1);
         if (startQuote == -1) return null;
         String partial = json.substring(startQuote + 1).strip();
-        log.infof("[RecoveryProcessor] Successfully extracted %d chars of partial code from truncated JSON", partial.length());
-        return partial.replace("\\\\", "\\").replace("\\\"", "\"").replace("\\n", "\n").replace("\\t", "\t");
+        log.infof(
+                "[RecoveryProcessor] Successfully extracted %d chars of partial code from truncated JSON",
+                partial.length());
+        return partial.replace("\\\\", "\\")
+                .replace("\\\"", "\"")
+                .replace("\\n", "\n")
+                .replace("\\t", "\t");
     }
 
     public boolean containsEmbeddedSandboxToolCall(String prose) {
         if (prose == null) return false;
-        String lower = prose.toLowerCase();
-        return lower.contains("\"sandbox_exec\"") || lower.contains(ToolCapability.SANDBOX_EXEC.toolName())
+        String lower = prose.toLowerCase(Locale.ROOT);
+        return lower.contains("\"sandbox_exec\"")
+                || lower.contains(ToolCapability.SANDBOX_EXEC.toolName())
                 || (lower.contains("\"code\"") && lower.contains("\"language\""));
     }
 
@@ -115,23 +122,32 @@ public class RecoveryProcessor {
         if (prose == null || prose.isBlank()) return false;
         if (prose.contains("u003c") || prose.contains("u003e") || prose.contains("u0026")) return true;
         if (prose.contains("```")) return false;
-        String lower = prose.toLowerCase();
-        boolean hasCodeKeywords = lower.contains("public class") || lower.contains("public static void")
-                || lower.contains("func main") || lower.contains("func ")
-                || lower.contains("import java") || lower.contains("import \"fmt\"")
-                || lower.contains("def ") || lower.contains("#!/bin/bash")
+        String lower = prose.toLowerCase(Locale.ROOT);
+        boolean hasCodeKeywords = lower.contains("public class")
+                || lower.contains("public static void")
+                || lower.contains("func main")
+                || lower.contains("func ")
+                || lower.contains("import java")
+                || lower.contains("import \"fmt\"")
+                || lower.contains("def ")
+                || lower.contains("#!/bin/bash")
                 || lower.contains("#!/usr/bin/env");
-        boolean looksStartMidSentence = prose.length() < 200 && Character.isLowerCase(prose.charAt(0)) && !prose.trim().endsWith(".");
+        boolean looksStartMidSentence = prose.length() < 200
+                && Character.isLowerCase(prose.charAt(0))
+                && !prose.trim().endsWith(".");
         return hasCodeKeywords || looksStartMidSentence;
     }
 
     public boolean proseIsUnexecutedCodePlan(String prose) {
         if (prose == null || prose.isBlank()) return false;
         if (prose.contains("```")) return true;
-        String lower = prose.toLowerCase();
-        return lower.contains("public class ") || lower.contains("func main") 
-            || lower.contains("def ") || lower.contains("package main")
-            || lower.contains("import \"fmt\"") || lower.contains("public static void");
+        String lower = prose.toLowerCase(Locale.ROOT);
+        return lower.contains("public class ")
+                || lower.contains("func main")
+                || lower.contains("def ")
+                || lower.contains("package main")
+                || lower.contains("import \"fmt\"")
+                || lower.contains("public static void");
     }
 
     public CodeBlock extractLatestCodeBlock(List<ReasoningStep> history) {
@@ -175,7 +191,7 @@ public class RecoveryProcessor {
 
     private String normalizeExecutionLanguage(String rawLanguage) {
         if (rawLanguage == null) return null;
-        String language = rawLanguage.trim().toLowerCase();
+        String language = rawLanguage.trim().toLowerCase(Locale.ROOT);
         return switch (language) {
             case "python3" -> "python";
             case "sh" -> "bash";

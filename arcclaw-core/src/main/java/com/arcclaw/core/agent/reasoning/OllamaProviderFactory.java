@@ -1,10 +1,11 @@
 package com.arcclaw.core.agent.reasoning;
 
+import dev.langchain4j.model.chat.ChatModel;
+import dev.langchain4j.model.ollama.OllamaChatModel;
+
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
-import dev.langchain4j.model.chat.ChatModel;
-import dev.langchain4j.model.ollama.OllamaChatModel;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 @ApplicationScoped
@@ -27,6 +28,11 @@ public class OllamaProviderFactory implements AgentChatModelProvider {
     @Override
     public StructuredOutputMode structuredOutputMode() {
         return agentConfig.structuredOutputMode();
+    }
+
+    @Override
+    public String baseUrl() {
+        return baseUrl;
     }
 
     @Override

@@ -153,10 +153,27 @@ services:
     networks:
       - arcclaw-net
 
+  sonarqube:
+    image: sonarqube:latest
+    container_name: arcclaw-sonarqube
+    environment:
+      - SONAR_ES_BOOTSTRAP_CHECKS_DISABLE=true
+    ports:
+      - "9000:9000"
+    volumes:
+      - sonarqube_data:/opt/sonarqube/data
+      - sonarqube_extensions:/opt/sonarqube/extensions
+      - sonarqube_logs:/opt/sonarqube/logs
+    networks:
+      - arcclaw-net
+
 volumes:
   arcclaw_data:
   ollama_data:
   postgres_data:
+  sonarqube_data:
+  sonarqube_extensions:
+  sonarqube_logs:
 
 networks:
   arcclaw-net:

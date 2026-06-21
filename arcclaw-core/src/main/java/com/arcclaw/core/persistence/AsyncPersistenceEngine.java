@@ -1,5 +1,9 @@
 package com.arcclaw.core.persistence;
 
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.event.Observes;
+import jakarta.inject.Inject;
+
 import java.time.Duration;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -7,23 +11,21 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.enterprise.event.Observes;
-import jakarta.inject.Inject;
-
 import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.core.audit.ComplianceViolationException;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
 import com.arcclaw.core.util.BackoffRetryExecutor;
 import com.arcclaw.persistence.api.CheckpointStorePort;
 import com.arcclaw.persistence.api.PersistenceAdapterPort;
+
+import org.eclipse.microprofile.config.inject.ConfigProperty;
+import org.jboss.logging.Logger;
+
 import io.micrometer.core.instrument.MeterRegistry;
 import io.quarkus.arc.Arc;
 import io.quarkus.arc.Unremovable;
 import io.quarkus.runtime.ShutdownEvent;
 import io.quarkus.runtime.StartupEvent;
-import org.eclipse.microprofile.config.inject.ConfigProperty;
-import org.jboss.logging.Logger;
 
 /**
  * Asynchronous persistence engine using background Virtual Threads to drain
@@ -35,10 +37,10 @@ public class AsyncPersistenceEngine {
 
     private static final Logger log = Logger.getLogger(AsyncPersistenceEngine.class);
 
-    private static final int  CRITICAL_QUEUE_CAPACITY  = 500;
-    private static final int  TELEMETRY_QUEUE_CAPACITY = 5_000;
+    private static final int CRITICAL_QUEUE_CAPACITY = 500;
+    private static final int TELEMETRY_QUEUE_CAPACITY = 5_000;
 
-    private final LinkedBlockingQueue<PersistenceEvent> criticalQueue  =
+    private final LinkedBlockingQueue<PersistenceEvent> criticalQueue =
             new LinkedBlockingQueue<>(CRITICAL_QUEUE_CAPACITY);
 
     private final LinkedBlockingQueue<PersistenceEvent> telemetryQueue =
@@ -57,10 +59,10 @@ public class AsyncPersistenceEngine {
     @ConfigProperty(name = "arcclaw.audit.idle-timeout-ms", defaultValue = "10000")
     long idleTimeoutMs;
 
-    private final AtomicBoolean running          = new AtomicBoolean(true);
-    private final AtomicBoolean processingCritical  = new AtomicBoolean(false);
+    private final AtomicBoolean running = new AtomicBoolean(true);
+    private final AtomicBoolean processingCritical = new AtomicBoolean(false);
     private final AtomicBoolean processingTelemetry = new AtomicBoolean(false);
-    private final AtomicInteger inFlightCritical  = new AtomicInteger(0);
+    private final AtomicInteger inFlightCritical = new AtomicInteger(0);
     private final AtomicInteger inFlightTelemetry = new AtomicInteger(0);
 
     private Thread criticalDrainThread;
@@ -94,11 +96,11 @@ public class AsyncPersistenceEngine {
         running.set(false);
         log.debug("AsyncPersistenceEngine Shutdown requested. Signaling drain threads...");
 
-        if (criticalDrainThread  != null) criticalDrainThread.interrupt();
+        if (criticalDrainThread != null) criticalDrainThread.interrupt();
         if (telemetryDrainThread != null) telemetryDrainThread.interrupt();
 
         try {
-            if (criticalDrainThread  != null) criticalDrainThread.join(Duration.ofMillis(200));
+            if (criticalDrainThread != null) criticalDrainThread.join(Duration.ofMillis(200));
             if (telemetryDrainThread != null) telemetryDrainThread.join(Duration.ofMillis(200));
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
@@ -153,7 +155,8 @@ public class AsyncPersistenceEngine {
         if (!telemetryQueue.offer(event)) {
             inFlightTelemetry.decrementAndGet();
             log.debug("Telemetry audit queue at capacity - dropping event (acceptable)");
-            registry.counter("arcclaw.audit.queue.overflow", "tier", "telemetry").increment();
+            registry.counter("arcclaw.audit.queue.overflow", "tier", "telemetry")
+                    .increment();
         }
     }
 
@@ -162,9 +165,12 @@ public class AsyncPersistenceEngine {
      * <strong>For use in tests only.</strong>
      */
     public void waitForIdle() {
-        if (inFlightCritical.get() == 0 && inFlightTelemetry.get() == 0
-                && criticalQueue.isEmpty() && telemetryQueue.isEmpty()
-                && !processingCritical.get() && !processingTelemetry.get()) {
+        if (inFlightCritical.get() == 0
+                && inFlightTelemetry.get() == 0
+                && criticalQueue.isEmpty()
+                && telemetryQueue.isEmpty()
+                && !processingCritical.get()
+                && !processingTelemetry.get()) {
             return;
         }
 
@@ -176,12 +182,13 @@ public class AsyncPersistenceEngine {
 
         sleepQuietly(10);
         long start = System.currentTimeMillis();
-        while (running.get() && (inFlightCritical.get() > 0
-                || inFlightTelemetry.get() > 0
-                || !criticalQueue.isEmpty()
-                || !telemetryQueue.isEmpty()
-                || processingCritical.get()
-                || processingTelemetry.get())) {
+        while (running.get()
+                && (inFlightCritical.get() > 0
+                        || inFlightTelemetry.get() > 0
+                        || !criticalQueue.isEmpty()
+                        || !telemetryQueue.isEmpty()
+                        || processingCritical.get()
+                        || processingTelemetry.get())) {
             sleepQuietly(10);
             if (System.currentTimeMillis() - start > idleTimeoutMs) {
                 log.warnf("waitForIdle timed out after %dms - possible deadlock or hung drain thread", idleTimeoutMs);
@@ -232,10 +239,11 @@ public class AsyncPersistenceEngine {
             } catch (Exception e) {
                 if (running.get()) {
                     log.errorf("Unexpected error in critical drain: %s", LogUtil.rootMessage(e));
-                    log.debugf("Full stacktrace for critical drain failure: %s", 
-                               LogUtil.trimmedStack(e));
+                    log.debugf("Full stacktrace for critical drain failure: %s", LogUtil.trimmedStack(e));
                 }
-                if (event != null && event.getFuture() != null && !event.getFuture().isDone()) {
+                if (event != null
+                        && event.getFuture() != null
+                        && !event.getFuture().isDone()) {
                     event.getFuture().completeExceptionally(e);
                 }
             }
@@ -264,8 +272,7 @@ public class AsyncPersistenceEngine {
                 // telemetry errors are logged and swallowed
                 if (running.get()) {
                     log.warnf("TELEMETRY event dropped: %s", LogUtil.rootMessage(e));
-                    log.debugf("Full stacktrace for telemetry drop: %s", 
-                               LogUtil.trimmedStack(e));
+                    log.debugf("Full stacktrace for telemetry drop: %s", LogUtil.trimmedStack(e));
                 }
             }
         }
@@ -279,34 +286,34 @@ public class AsyncPersistenceEngine {
 
         try {
             BackoffRetryExecutor.executeVoid(
-                "audit-drain-" + event.getEventType(),
-                new BackoffRetryExecutor.Strategy(3, 100, 500, 0.0), // Fixed delay-like for HMAC wait
-                e -> e instanceof IllegalStateException && e.getMessage() != null && e.getMessage().contains("HMAC key unavailable"),
-                () -> {
-                    String sid = event.getSessionId();
-                    if (sid == null || sid.isBlank()) {
-                        persistenceAdapter.execute(
-                                sid,
-                                event.getEventType().toString(),
-                                event.getDbAction());
-                    } else {
-                        WorkspaceScopeHolder.run(sid,
-                            () -> persistenceAdapter.execute(
+                    "audit-drain-" + event.getEventType(),
+                    new BackoffRetryExecutor.Strategy(3, 100, 500, 0.0), // Fixed delay-like for HMAC wait
+                    e -> e instanceof IllegalStateException
+                            && e.getMessage() != null
+                            && e.getMessage().contains("HMAC key unavailable"),
+                    () -> {
+                        String sid = event.getSessionId();
+                        if (sid == null || sid.isBlank()) {
+                            persistenceAdapter.execute(sid, event.getEventType().toString(), event.getDbAction());
+                        } else {
+                            WorkspaceScopeHolder.run(
                                     sid,
-                                    event.getEventType().toString(),
-                                    event.getDbAction()));
-                    }
-                }
-            );
+                                    () -> persistenceAdapter.execute(
+                                            sid, event.getEventType().toString(), event.getDbAction()));
+                        }
+                    });
             if (event.getFuture() != null) event.getFuture().complete(null);
         } catch (Exception e) {
             // Check if it was an HMAC failure that exhausted retries
-            boolean isHmacFailure = e instanceof IllegalStateException && e.getMessage() != null && e.getMessage().contains("HMAC key unavailable");
+            boolean isHmacFailure = e instanceof IllegalStateException
+                    && e.getMessage() != null
+                    && e.getMessage().contains("HMAC key unavailable");
             if (isHmacFailure) {
                 registry.counter("arcclaw.audit.drain.hmac_failure").increment();
             }
 
-            ComplianceViolationException cve = new ComplianceViolationException(event.getSessionId(), event.getEventType(), e);
+            ComplianceViolationException cve =
+                    new ComplianceViolationException(event.getSessionId(), event.getEventType(), e);
             if (event.getFuture() != null) event.getFuture().completeExceptionally(cve);
             throw cve;
         }

@@ -11,14 +11,17 @@ import java.util.Map;
 import com.arcclaw.core.agent.reasoning.ParallelToolCall;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.tools.ToolResponse;
-import io.opentelemetry.context.Context;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import io.opentelemetry.context.Context;
+
 @ExtendWith(MockitoExtension.class)
+@SuppressWarnings("java:S1192")
 class SequentialToolExecutorTest {
 
     @Mock
@@ -63,7 +66,8 @@ class SequentialToolExecutorTest {
     void execute_WithToolFailure_ReturnsFailedResult() {
         var ctx = context();
         var call = ParallelToolCall.pending("call_0", "calc", Map.of(), "{}");
-        when(toolInvoker.invoke(eq("calc"), any(), eq("sess-1"))).thenReturn(ToolResponse.failure(1, "division by zero"));
+        when(toolInvoker.invoke(eq("calc"), any(), eq("sess-1")))
+                .thenReturn(ToolResponse.failure(1, "division by zero"));
 
         ParallelToolCall result = executor.execute(ctx, call, Context.current());
 
@@ -75,7 +79,8 @@ class SequentialToolExecutorTest {
     void execute_WithToolPending_ReturnsFailedWithPendingOutput() {
         var ctx = context();
         var call = ParallelToolCall.pending("call_0", "approve_me", Map.of(), "{}");
-        when(toolInvoker.invoke(eq("approve_me"), any(), eq("sess-1"))).thenReturn(ToolResponse.pending("need approval", "tok_x"));
+        when(toolInvoker.invoke(eq("approve_me"), any(), eq("sess-1")))
+                .thenReturn(ToolResponse.pending("need approval", "tok_x"));
 
         ParallelToolCall result = executor.execute(ctx, call, Context.current());
 
@@ -105,8 +110,19 @@ class SequentialToolExecutorTest {
     }
 
     private static AgentExecutionContext context() {
-        return new AgentExecutionContext("sess-1", "user-1", "chat-1", "researcher",
-                "search the web", AutonomyLevel.FULL,
-                null, 5, 0, null, null, null, null);
+        return new AgentExecutionContext(
+                "sess-1",
+                "user-1",
+                "chat-1",
+                "researcher",
+                "search the web",
+                AutonomyLevel.FULL,
+                null,
+                5,
+                0,
+                null,
+                null,
+                null,
+                null);
     }
 }

@@ -13,7 +13,7 @@ class ChannelSenderRegistryRetirementTest {
 
     @Test
     void verifyRegistryFileIsDeleted() {
-        // Since we already deleted the file from the filesystem, 
+        // Since we already deleted the file from the filesystem,
         // this test simply serves as a marker for the PR.
         assertTrue(true, "ChannelSenderRegistry has been deleted.");
     }

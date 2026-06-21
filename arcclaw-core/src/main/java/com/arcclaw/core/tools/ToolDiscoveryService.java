@@ -1,5 +1,9 @@
 package com.arcclaw.core.tools;
 
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.inject.Instance;
+import jakarta.inject.Inject;
+
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Method;
 import java.util.Collections;
@@ -7,16 +11,14 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.enterprise.inject.Instance;
-import jakarta.inject.Inject;
-
 import com.arcclaw.core.agent.role.Capability;
 import com.arcclaw.core.agent.role.CapabilityRegistry;
 import com.arcclaw.core.agent.role.ToolMetadata;
 import com.arcclaw.core.util.ClassUtils;
-import io.quarkus.arc.Unremovable;
+
 import org.jboss.logging.Logger;
+
+import io.quarkus.arc.Unremovable;
 
 /**
  * Handles CDI tool discovery, metadata scanning, and initialization-time
@@ -28,10 +30,17 @@ public class ToolDiscoveryService {
 
     private static final Logger log = Logger.getLogger(ToolDiscoveryService.class);
 
-    @Inject Instance<AgentTool> discoveredTools;
-    @Inject CapabilityRegistry capabilityRegistry;
-    @Inject ToolSchemaProvider schemaProvider;
-    @Inject ToolSecretExtractor secretExtractor;
+    @Inject
+    Instance<AgentTool> discoveredTools;
+
+    @Inject
+    CapabilityRegistry capabilityRegistry;
+
+    @Inject
+    ToolSchemaProvider schemaProvider;
+
+    @Inject
+    ToolSecretExtractor secretExtractor;
 
     private Map<String, AgentTool> toolIndex;
     private Map<String, ToolRegistry.ToolDescriptor> descriptorCache;
@@ -46,15 +55,15 @@ public class ToolDiscoveryService {
 
         for (AgentTool tool : discoveredTools) {
             if (!tool.isEnabled()) continue;
-            
+
             String name = tool.name();
             if (mutableToolIndex.containsKey(name)) {
-                throw new IllegalStateException("Duplicate tool name registered: " + name + 
-                    ". Tool beans must have unique names.");
+                throw new IllegalStateException(
+                        "Duplicate tool name registered: " + name + ". Tool beans must have unique names.");
             }
-            
+
             mutableToolIndex.put(name, tool);
-            
+
             // 1. Build secrets cache
             mutableSecretsCache.put(name, secretExtractor.extractRequiredSecrets(tool.getClass(), "sandboxCommand"));
 
@@ -64,7 +73,7 @@ public class ToolDiscoveryService {
             // 3. Discover metadata-driven capabilities
             registerCapabilities(tool);
         }
-        
+
         this.toolIndex = Map.copyOf(mutableToolIndex);
         this.descriptorCache = Collections.unmodifiableMap(mutableDescriptorCache);
         this.secretsCache = Map.copyOf(mutableSecretsCache);
@@ -92,12 +101,13 @@ public class ToolDiscoveryService {
             if (cap != null) {
                 if (!cap.value().equals(name)) {
                     throw new IllegalStateException(String.format(
-                        "Mismatch between tool name '%s' and @Capability value '%s' on %s.%s. " +
-                        "Capability name must match the tool name (§T2-5).",
-                        name, cap.value(), ClassUtils.getCleanName(tool), method.getName()));
+                            "Mismatch between tool name '%s' and @Capability value '%s' on %s.%s. "
+                                    + "Capability name must match the tool name (§T2-5).",
+                            name, cap.value(), ClassUtils.getCleanName(tool), method.getName()));
                 }
-                log.debugf("Discovered @Capability on %s.%s: %s", 
-                    ClassUtils.getCleanName(tool), method.getName(), cap.value());
+                log.debugf(
+                        "Discovered @Capability on %s.%s: %s",
+                        ClassUtils.getCleanName(tool), method.getName(), cap.value());
                 grantToRoles(cap.defaultRoles(), name);
             }
         }

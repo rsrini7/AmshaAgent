@@ -13,8 +13,7 @@ import java.time.format.DateTimeFormatter;
 public class TemporalUtils {
 
     private static final DateTimeFormatter ISO_LEX_FORMATTER =
-            DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSSX")
-                    .withZone(ZoneOffset.UTC);
+            DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSSX").withZone(ZoneOffset.UTC);
 
     /**
      * Formats an {@link Instant} as a fixed-width ISO 8601 string.

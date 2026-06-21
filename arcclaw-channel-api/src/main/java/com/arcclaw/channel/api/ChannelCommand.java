@@ -1,5 +1,6 @@
 package com.arcclaw.channel.api;
 
+import java.util.Locale;
 import java.util.Optional;
 import java.util.regex.Pattern;
 
@@ -27,10 +28,16 @@ public interface ChannelCommand {
      * compile-time safety of the built-in set.
      */
     sealed interface BuiltInChannelCommand extends ChannelCommand
-        permits ChannelCommand.Approve, ChannelCommand.Deny, ChannelCommand.Status,
-                ChannelCommand.Halt, ChannelCommand.Reset, ChannelCommand.History,
-                ChannelCommand.CronTasks, ChannelCommand.DeleteCron, ChannelCommand.Start,
-                ChannelCommand.Unknown {}
+            permits ChannelCommand.Approve,
+                    ChannelCommand.Deny,
+                    ChannelCommand.Status,
+                    ChannelCommand.Halt,
+                    ChannelCommand.Reset,
+                    ChannelCommand.History,
+                    ChannelCommand.CronTasks,
+                    ChannelCommand.DeleteCron,
+                    ChannelCommand.Start,
+                    ChannelCommand.Unknown {}
 
     // Single compiled Pattern - avoids repeated compilation per message.
     // Group 1: command
@@ -38,8 +45,7 @@ public interface ChannelCommand {
     // Group 3: rest of the line (optional reason)
     Pattern CMD_PATTERN = Pattern.compile(
             "^/(start|approve|deny|status|halt|reset|history|cron|crons|deletecron|list(?:tasks?)?)(?:\\s+(\\S+))?(?:\\s+(.*))?",
-            Pattern.CASE_INSENSITIVE
-    );
+            Pattern.CASE_INSENSITIVE);
 
     Pattern WHITESPACE_PATTERN = Pattern.compile("\\s+");
 
@@ -49,10 +55,7 @@ public interface ChannelCommand {
      * or informational commands (Status, CronTasks, Unknown).
      */
     default boolean isControlCommand() {
-        return this instanceof Approve
-                || this instanceof Deny
-                || this instanceof Halt
-                || this instanceof Reset;
+        return this instanceof Approve || this instanceof Deny || this instanceof Halt || this instanceof Reset;
     }
 
     /**
@@ -81,64 +84,59 @@ public interface ChannelCommand {
         }
 
         // Normalize double slash prefix (e.g. //approve -> /approve)
-        // §Hardening: Only collapse exactly two slashes. Triple slashes (///) 
+        // §Hardening: Only collapse exactly two slashes. Triple slashes (///)
         // are treated as literal text/unknown per test contract.
-        String input = (trimmed.startsWith("//") && !trimmed.startsWith("///")) 
-                ? trimmed.substring(1) 
-                : trimmed;
+        String input = (trimmed.startsWith("//") && !trimmed.startsWith("///")) ? trimmed.substring(1) : trimmed;
 
         var matcher = CMD_PATTERN.matcher(input);
         if (!matcher.matches()) {
             return new Unknown(input);
         }
-        String cmd = matcher.group(1).toLowerCase();
+        String cmd = matcher.group(1).toLowerCase(Locale.ROOT);
         String arg = matcher.group(2); // may be null
         String reason = matcher.group(3); // may be null
         Optional<String> optArg = Optional.ofNullable(arg);
         Optional<String> optReason = Optional.ofNullable(reason != null && !reason.isBlank() ? reason.trim() : null);
 
         return switch (cmd) {
-            case "approve" -> new Approve(
-                parseTargetId(optArg),
-                parseToolName(optArg),
-                optReason);
-            case "deny"    -> new Deny(
-                parseTargetId(optArg),
-                parseToolName(optArg),
-                optReason);
-            case "status"  -> new Status();
-            case "halt"    -> new Halt();
-            case "reset"   -> new Reset();
+            case "approve" -> new Approve(parseTargetId(optArg), parseToolName(optArg), optReason);
+            case "deny" -> new Deny(parseTargetId(optArg), parseToolName(optArg), optReason);
+            case "status" -> new Status();
+            case "halt" -> new Halt();
+            case "reset" -> new Reset();
             case "history" -> new History();
-            case "crons"   -> new CronTasks();
-            case "start"   -> new Start(optArg);
-            case "cron" -> {
-                String[] parts = WHITESPACE_PATTERN.split(input.trim());
-                if ("delete".equalsIgnoreCase(arg)) {
-                    String cronId = parts.length > 2 ? parts[2].strip() : null;
-                    yield new DeleteCron(
-                        Optional.ofNullable(cronId == null || cronId.isBlank()
-                            ? null : cronId));
-                }
-                yield new CronTasks();
-            }
+            case "crons" -> new CronTasks();
+            case "start" -> new Start(optArg);
+            case "cron" -> parseCronCommand(arg, input);
             case "deletecron" -> new DeleteCron(optArg);
             case "listtask", "listtasks", "crontask", "crontasks" -> new CronTasks();
             default -> new Unknown(input);
         };
     }
 
-    static final Pattern UUID_PATTERN = Pattern.compile(
-        "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
-    );
+    private static BuiltInChannelCommand parseCronCommand(String arg, String input) {
+        String[] parts = WHITESPACE_PATTERN.split(input.trim(), -1);
+        if ("delete".equalsIgnoreCase(arg)) {
+            String cronId = parts.length > 2 ? parts[2].strip() : null;
+            return new DeleteCron(Optional.ofNullable(cronId == null || cronId.isBlank() ? null : cronId));
+        }
+        return new CronTasks();
+    }
+
+    Pattern UUID_PATTERN =
+            Pattern.compile("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$");
 
     private static Optional<String> parseTargetId(Optional<String> argOpt) {
         // Explicit targets can be a hyphenated ID, a numeric option, or an alphanumeric prefix of at least 4 chars.
-        return argOpt.filter(arg -> arg.contains("-") || arg.matches("\\d+") || (arg.length() >= 4 && arg.matches("[0-9a-fA-F]+")));
+        return argOpt.filter(
+                arg -> arg.contains("-") || arg.matches("\\d+") || (arg.length() >= 4 && arg.matches("[0-9a-fA-F]+")));
     }
 
     private static Optional<String> parseToolName(Optional<String> argOpt) {
-        return argOpt.filter(arg -> !arg.contains("-") && !arg.matches("\\d+") && !(arg.length() >= 4 && arg.matches("[0-9a-fA-F]+")) && !arg.isBlank());
+        return argOpt.filter(arg -> !arg.contains("-")
+                && !arg.matches("\\d+")
+                && !(arg.length() >= 4 && arg.matches("[0-9a-fA-F]+"))
+                && !arg.isBlank());
     }
 
     // ------------------------------------------------------------------
@@ -152,11 +150,8 @@ public interface ChannelCommand {
      * @param toolName if present, targets a specific tool in a parallel batch
      * @param reason   optional human-provided reason for approval
      */
-    record Approve(
-        Optional<String> targetId,
-        Optional<String> toolName,
-        Optional<String> reason
-    ) implements BuiltInChannelCommand {}
+    record Approve(Optional<String> targetId, Optional<String> toolName, Optional<String> reason)
+            implements BuiltInChannelCommand {}
 
     /**
      * Denies a pending tool execution.
@@ -165,13 +160,10 @@ public interface ChannelCommand {
      * @param toolName if present, targets a specific tool in a parallel batch
      * @param reason   optional human-provided reason for denial
      */
-    record Deny(
-        Optional<String> targetId,
-        Optional<String> toolName,
-        Optional<String> reason
-    ) implements BuiltInChannelCommand {}
+    record Deny(Optional<String> targetId, Optional<String> toolName, Optional<String> reason)
+            implements BuiltInChannelCommand {}
 
-     /**
+    /**
      * Telegram lifecycle command - sent automatically when a user opens a fresh
      * chat or clicks the "Start" button. {@code payload} carries any deep-link
      * parameter Telegram appends after /start (may be empty).

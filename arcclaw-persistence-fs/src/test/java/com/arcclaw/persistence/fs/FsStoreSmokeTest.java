@@ -14,10 +14,12 @@ import java.util.Optional;
 import java.util.UUID;
 
 import com.arcclaw.persistence.api.*;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+@SuppressWarnings({"java:S1192", "java:S5443"}) // Test-only: temp dirs in test are acceptable
 class FsStoreSmokeTest {
 
     private Path tempDir;
@@ -36,10 +38,25 @@ class FsStoreSmokeTest {
     void setUp() throws Exception {
         tempDir = Files.createTempDirectory("arcclaw-fs-test-");
         FsStoreProperties props = new FsStoreProperties() {
-            @Override public String dataDir() { return tempDir.toString(); }
-            @Override public int lockTimeoutSeconds() { return 5; }
-            @Override public String luceneIndexDir() { return "lucene-index"; }
-            @Override public int vectorDimension() { return 768; }
+            @Override
+            public String dataDir() {
+                return tempDir.toString();
+            }
+
+            @Override
+            public int lockTimeoutSeconds() {
+                return 5;
+            }
+
+            @Override
+            public String luceneIndexDir() {
+                return "lucene-index";
+            }
+
+            @Override
+            public int vectorDimension() {
+                return 768;
+            }
         };
         fileStore = new FilesystemFileStore(props);
         fileStore.ensureDataDir();
@@ -82,7 +99,11 @@ class FsStoreSmokeTest {
     void tearDown() throws IOException {
         try (var walk = Files.walk(tempDir)) {
             walk.sorted(Comparator.reverseOrder()).forEach(p -> {
-                try { Files.deleteIfExists(p); } catch (IOException e) { /* best-effort cleanup */ }
+                try {
+                    Files.deleteIfExists(p);
+                } catch (IOException e) {
+                    /* best-effort cleanup */
+                }
             });
         }
     }
@@ -122,7 +143,7 @@ class FsStoreSmokeTest {
 
     @Test
     void testSecretStore() {
-        SecretDto dto = new SecretDto("session1", "key1", 1, new byte[]{1,2,3}, new byte[]{4,5,6});
+        SecretDto dto = new SecretDto("session1", "key1", 1, new byte[] {1, 2, 3}, new byte[] {4, 5, 6});
         secretStore.save(dto);
         assertTrue(secretStore.find("session1", "key1").isPresent());
         assertEquals(1, secretStore.find("session1", "key1").get().encryptionKeyVersion());
@@ -132,8 +153,8 @@ class FsStoreSmokeTest {
 
     @Test
     void testSecretDeleteBySession() {
-        secretStore.save(new SecretDto("sess", "k1", 1, new byte[]{1}, new byte[]{2}));
-        secretStore.save(new SecretDto("sess", "k2", 1, new byte[]{3}, new byte[]{4}));
+        secretStore.save(new SecretDto("sess", "k1", 1, new byte[] {1}, new byte[] {2}));
+        secretStore.save(new SecretDto("sess", "k2", 1, new byte[] {3}, new byte[] {4}));
         secretStore.deleteBySessionId("sess");
         assertTrue(secretStore.find("sess", "k1").isEmpty());
         assertTrue(secretStore.find("sess", "k2").isEmpty());
@@ -167,10 +188,25 @@ class FsStoreSmokeTest {
     @Test
     void testCronStore() {
         String id = UUID.randomUUID().toString();
-        AgentCronDto dto = new AgentCronDto(id, "sess", "user1", "chat1", "telegram", "123",
-            "0 * * * *", "UTC", false, "do thing",
-            Instant.now().minusSeconds(60), Instant.now(), "ACTIVE",
-            "role1", null, null, Instant.now(), Instant.now());
+        AgentCronDto dto = new AgentCronDto(
+                id,
+                "sess",
+                "user1",
+                "chat1",
+                "telegram",
+                "123",
+                "0 * * * *",
+                "UTC",
+                false,
+                "do thing",
+                Instant.now().minusSeconds(60),
+                Instant.now(),
+                "ACTIVE",
+                "role1",
+                null,
+                null,
+                Instant.now(),
+                Instant.now());
         cronStore.save(dto);
         assertTrue(cronStore.findById(id).isPresent());
         assertFalse(cronStore.findDueCrons().isEmpty());
@@ -190,10 +226,25 @@ class FsStoreSmokeTest {
     @Test
     void testCronLifecycle() {
         String id = UUID.randomUUID().toString();
-        AgentCronDto dto = new AgentCronDto(id, "sess", "user1", null, null, null,
-            "*/5 * * * *", "UTC", false, "task",
-            Instant.now().minusSeconds(30), null, "ACTIVE",
-            null, null, null, Instant.now(), Instant.now());
+        AgentCronDto dto = new AgentCronDto(
+                id,
+                "sess",
+                "user1",
+                null,
+                null,
+                null,
+                "*/5 * * * *",
+                "UTC",
+                false,
+                "task",
+                Instant.now().minusSeconds(30),
+                null,
+                "ACTIVE",
+                null,
+                null,
+                null,
+                Instant.now(),
+                Instant.now());
         cronStore.save(dto);
 
         assertTrue(cronStore.claimForFire(id));
@@ -209,23 +260,71 @@ class FsStoreSmokeTest {
     @Test
     void testCheckpointSaveAndFind() {
         CheckpointDto cp = checkpointStore.save(new CheckpointDto(
-            null, "session-cp-1", "primary", "IN_PROGRESS", "LIMITED",
-            "{}", "platform1", "slack", "goal1",
-            null, null, null, null, null, null, null,
-            10, 0, null, null, null, null, null, null, null, 0, null, null
-        ));
+                null,
+                "session-cp-1",
+                "primary",
+                "IN_PROGRESS",
+                "LIMITED",
+                "{}",
+                "platform1",
+                "slack",
+                "goal1",
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                10,
+                0,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                0,
+                null,
+                null));
         assertNotNull(cp.id());
         assertTrue(checkpointStore.findById(cp.id()).isPresent());
-        assertTrue(checkpointStore.findBySessionAndRole("session-cp-1", "primary").isPresent());
+        assertTrue(
+                checkpointStore.findBySessionAndRole("session-cp-1", "primary").isPresent());
     }
 
     @Test
     void testCheckpointStatusTransition() {
         CheckpointDto cp = checkpointStore.save(new CheckpointDto(
-            null, "session-cp-2", "primary", "IN_PROGRESS", "LIMITED",
-            "{}", null, null, null, null, null, null, null, null, null, null,
-            10, 0, null, null, null, null, null, null, null, 0, null, null
-        ));
+                null,
+                "session-cp-2",
+                "primary",
+                "IN_PROGRESS",
+                "LIMITED",
+                "{}",
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                10,
+                0,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                0,
+                null,
+                null));
         checkpointStore.transitionStatus(cp.id(), "COMPLETED");
         Optional<CheckpointDto> found = checkpointStore.findById(cp.id());
         assertTrue(found.isPresent());
@@ -235,10 +334,34 @@ class FsStoreSmokeTest {
     @Test
     void testCheckpointAtomicTransition() {
         CheckpointDto cp = checkpointStore.save(new CheckpointDto(
-            null, "session-cp-3", "primary", "IN_PROGRESS", "LIMITED",
-            "{}", null, null, null, null, null, null, null, null, null, null,
-            10, 0, null, null, null, null, null, null, null, 0, null, null
-        ));
+                null,
+                "session-cp-3",
+                "primary",
+                "IN_PROGRESS",
+                "LIMITED",
+                "{}",
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                10,
+                0,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                0,
+                null,
+                null));
         assertTrue(checkpointStore.atomicTransition(cp.id(), "IN_PROGRESS", "COMPLETED"));
         assertFalse(checkpointStore.atomicTransition(cp.id(), "IN_PROGRESS", "FAILED"));
     }
@@ -246,12 +369,37 @@ class FsStoreSmokeTest {
     @Test
     void testCheckpointSteps() {
         CheckpointDto cp = checkpointStore.save(new CheckpointDto(
-            null, "session-cp-steps", "primary", "IN_PROGRESS", "LIMITED",
-            "{}", null, null, null, null, null, null, null, null, null, null,
-            10, 0, null, null, null, null, null, null, null, 0, null, null
-        ));
+                null,
+                "session-cp-steps",
+                "primary",
+                "IN_PROGRESS",
+                "LIMITED",
+                "{}",
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                10,
+                0,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                0,
+                null,
+                null));
         var step1 = new ReasoningStepDto("{\"thought\":\"step1\"}", "read", "{}", "ok", 10, 20, true, null, null, null);
-        var step2 = new ReasoningStepDto("{\"thought\":\"step2\"}", "write", "{}", "done", 5, 10, true, null, null, null);
+        var step2 =
+                new ReasoningStepDto("{\"thought\":\"step2\"}", "write", "{}", "done", 5, 10, true, null, null, null);
         checkpointStore.saveSteps(cp.id(), List.of(step1, step2));
         assertEquals(2, checkpointStore.loadSteps(cp.id()).size());
         checkpointStore.deleteSteps(cp.id());
@@ -260,23 +408,47 @@ class FsStoreSmokeTest {
 
     @Test
     void testCheckpointUpsert() {
-        CheckpointUpsertResult result = checkpointStore.upsertWithSteps(
-            "session-upsert", "primary", "{}", "LIMITED", 0, "goal", "{}");
+        CheckpointUpsertResult result =
+                checkpointStore.upsertWithSteps("session-upsert", "primary", "{}", "LIMITED", 0, "goal", "{}");
         assertTrue(result.created());
         assertNotNull(result.checkpoint().id());
 
         CheckpointUpsertResult result2 = checkpointStore.upsertWithSteps(
-            "session-upsert", "primary", "{\"updated\":true}", "LIMITED", 1, null, null);
+                "session-upsert", "primary", "{\"updated\":true}", "LIMITED", 1, null, null);
         assertFalse(result2.created());
     }
 
     @Test
     void testCheckpointMarkFailed() {
         CheckpointDto cp = checkpointStore.save(new CheckpointDto(
-            null, "session-fail", "primary", "IN_PROGRESS", "LIMITED",
-            "{}", null, null, null, null, null, null, null, null, null, null,
-            10, 0, null, null, null, null, null, null, null, 0, null, null
-        ));
+                null,
+                "session-fail",
+                "primary",
+                "IN_PROGRESS",
+                "LIMITED",
+                "{}",
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                10,
+                0,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                0,
+                null,
+                null));
         checkpointStore.markFailed(cp.id(), "test error", "ERR001", "trace1", "TestException");
         Optional<CheckpointDto> found = checkpointStore.findById(cp.id());
         assertTrue(found.isPresent());
@@ -290,18 +462,50 @@ class FsStoreSmokeTest {
     void testAuditStore() {
         String session = "audit-session-1";
         UUID id1 = UUID.randomUUID();
-        AuditEventDto event1 = new AuditEventDto(id1, session, "user1", "agent1",
-            "hash1", "SUCCESS", "TOOL_USE", "detail1",
-            100, 50, null, Instant.now(), 1, "1.0", "ikey1", 1L, "hmac1", null);
+        AuditEventDto event1 = new AuditEventDto(
+                id1,
+                session,
+                "user1",
+                "agent1",
+                "hash1",
+                "SUCCESS",
+                "TOOL_USE",
+                "detail1",
+                100,
+                50,
+                null,
+                Instant.now(),
+                1,
+                "1.0",
+                "ikey1",
+                1L,
+                "hmac1",
+                null);
         auditStore.save(event1);
 
         assertEquals(1, auditStore.findBySessionId(session).size());
         assertEquals(1, auditStore.getMaxSequence(session));
 
         UUID id2 = UUID.randomUUID();
-        AuditEventDto event2 = new AuditEventDto(id2, session, "user1", "agent1",
-            "hash2", "SUCCESS", "SESSION_START", "detail2",
-            200, 100, null, Instant.now(), 2, "1.0", "ikey2", 2L, "hmac2", "hmac1");
+        AuditEventDto event2 = new AuditEventDto(
+                id2,
+                session,
+                "user1",
+                "agent1",
+                "hash2",
+                "SUCCESS",
+                "SESSION_START",
+                "detail2",
+                200,
+                100,
+                null,
+                Instant.now(),
+                2,
+                "1.0",
+                "ikey2",
+                2L,
+                "hmac2",
+                "hmac1");
         auditStore.save(event2);
 
         assertEquals(2, auditStore.findBySessionId(session).size());
@@ -319,8 +523,6 @@ class FsStoreSmokeTest {
         assertEquals(1, memoryStore.search("hello", 10, null).size());
         assertEquals(0, memoryStore.search("goodbye", 10, null).size());
     }
-
-
 
     // ─── PersistenceAdapter ────────────────────────────────────
 

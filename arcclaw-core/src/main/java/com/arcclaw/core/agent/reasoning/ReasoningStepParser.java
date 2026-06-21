@@ -1,7 +1,15 @@
 package com.arcclaw.core.agent.reasoning;
 
+import dev.langchain4j.agent.tool.ToolExecutionRequest;
+import dev.langchain4j.data.message.AiMessage;
+import dev.langchain4j.model.chat.response.ChatResponse;
+
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
@@ -9,31 +17,26 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
-
 import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.util.TextPatternUtils;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import dev.langchain4j.agent.tool.ToolExecutionRequest;
-import dev.langchain4j.data.message.AiMessage;
-import dev.langchain4j.model.chat.response.ChatResponse;
+
 import org.jboss.logging.Logger;
 
 /**
  * Parses the ChatResponse from LangChain4j into a ReasoningStep.
  */
 @ApplicationScoped
+@SuppressWarnings("java:S1192")
 public class ReasoningStepParser {
 
     private static final Logger log = Logger.getLogger(ReasoningStepParser.class);
 
     /** Strips <think>...</think> blocks from Qwen/DeepSeek-style thinking models. */
-    private static final Pattern THINKING_TAG_PATTERN =
-            Pattern.compile("(?s)<think>.*?</think>\\s*", Pattern.DOTALL);
+    private static final Pattern THINKING_TAG_PATTERN = Pattern.compile("(?s)<think>.*?</think>\\s*", Pattern.DOTALL);
 
     /** Max answer length before we suspect chain-of-thought thinking leaked into the answer. */
     private static final int MAX_ANSWER_LENGTH = 4000;
@@ -41,15 +44,13 @@ public class ReasoningStepParser {
     /** Marks the boundary between chain-of-thought reasoning and the actual answer. */
     private static final Pattern THINKING_ANSWER_BOUNDARY = Pattern.compile(
             "(?m)^\\s*(?:Response|Final (?:Answer|Decision|Response)|Output)\\s*[:.]\\s*$",
-            Pattern.MULTILINE | Pattern.CASE_INSENSITIVE
-    );
+            Pattern.MULTILINE | Pattern.CASE_INSENSITIVE);
 
-    private static final Pattern LANGUAGE_FIELD_PATTERN =
-            Pattern.compile("\"language\"\\s*:\\s*\"([^\"]+)\"");
-    private static final Pattern RELATIVE_SCHEDULE_PATTERN =
-            Pattern.compile("\\b(in\\s+\\d+\\s*(min|mins|minute|minutes|hour|hours)|in\\s+one\\s+(min|minute|hour))\\b");
-    private static final Pattern ABSOLUTE_SCHEDULE_PATTERN =
-            Pattern.compile("\\b(at\\s+\\d{1,2}(:\\d{2})?\\s*(am|pm)?|every\\s+(day|hour|minute|week|month|monday|tuesday|wednesday|thursday|friday|saturday|sunday))\\b");
+    private static final Pattern LANGUAGE_FIELD_PATTERN = Pattern.compile("\"language\"\\s*:\\s*\"([^\"]+)\"");
+    private static final Pattern RELATIVE_SCHEDULE_PATTERN = Pattern.compile(
+            "\\b(in\\s+\\d+\\s*(min|mins|minute|minutes|hour|hours)|in\\s+one\\s+(min|minute|hour))\\b");
+    private static final Pattern ABSOLUTE_SCHEDULE_PATTERN = Pattern.compile(
+            "\\b(at\\s+\\d{1,2}(:\\d{2})?\\s*(am|pm)?|every\\s+(day|hour|minute|week|month|monday|tuesday|wednesday|thursday|friday|saturday|sunday))\\b");
 
     private final ObjectMapper objectMapper;
     private final TextPatternUtils textPatternUtils;
@@ -83,9 +84,8 @@ public class ReasoningStepParser {
         String text = aiMessage.text();
         String answer = stripThinkingTags(text);
 
-        return ReasoningStep.pending(text, ReasoningStep.FINISH,
-                Map.of("answer", answer != null ? answer : ""),
-                inputTokens, outputTokens);
+        return ReasoningStep.pending(
+                text, ReasoningStep.FINISH, Map.of("answer", answer != null ? answer : ""), inputTokens, outputTokens);
     }
 
     /**
@@ -126,98 +126,102 @@ public class ReasoningStepParser {
         return stripped;
     }
 
-    /**
-     * Strips model-artifact suffixes like {@code <|channel|>commentary} from tool names.
-     * Some free models (e.g. OpenRouter) append these to function-call names.
-     */
     private static String sanitizeToolName(String name) {
-        if (name == null) return null;
-        // Strip <|channel|> commentary suffix
-        int idx = name.indexOf("<|");
-        if (idx > 0) name = name.substring(0, idx);
-        // Strip trailing colon (e.g., "brahma:" → "brahma")
-        if (name.endsWith(":")) {
-            name = name.substring(0, name.length() - 1);
-        }
-        // Strip agent: prefix (e.g., "brahma:garuda" → "garuda")
-        int colonIdx = name.indexOf(':');
-        if (colonIdx > 0 && colonIdx < name.length() - 1) {
-            String afterColon = name.substring(colonIdx + 1);
-            // Tool names contain underscores; agent names don't
-            if (afterColon.contains("_")) {
-                name = afterColon;
-            }
-        }
-        return name;
+        return ReasoningStepParserUtils.sanitizeToolName(name);
     }
 
-    private ReasoningStep handleSingleToolCall(String sessionId, AiMessage aiMessage, ToolExecutionRequest req, int inputTokens, int outputTokens) {
+    private ReasoningStep handleSingleToolCall(
+            String sessionId, AiMessage aiMessage, ToolExecutionRequest req, int inputTokens, int outputTokens) {
         String rawName = req.name();
         String toolName = sanitizeToolName(rawName);
-        if (!rawName.equals(toolName)) {
+        if (rawName != null && !rawName.equals(toolName)) {
             log.infof("Sanitized tool name: '%s' -> '%s'", rawName, toolName);
         }
         log.infof("LLM is attempting to call tool: '%s' with args: %s", toolName, req.arguments());
 
-        String rawGoal = WorkspaceContext.RAW_USER_GOAL.isBound() 
-                ? WorkspaceContext.RAW_USER_GOAL.get() : null;
-
-        if (ToolCapability.SANDBOX_EXEC.toolName().equals(toolName) && !textPatternUtils.goalRequestsExecution(rawGoal)) {
-            String code = recoverCodeForDisplay(req.arguments());
-            if (code != null && !code.isBlank()) {
-                log.infof("Intercepted unrequested execution call; converting to FINISH step with code display.");
-                String language = textPatternUtils.inferLanguage(code);
-                String markdown = String.format("```%s\n%s\n```", language != null ? language : "", code);
-                return ReasoningStep.pending(aiMessage.text(), ReasoningStep.FINISH, 
-                        Map.of(ReasoningStep.ACTION_INPUT_ANSWER_KEY, markdown), inputTokens, outputTokens);
-            }
-        }
+        ReasoningStep intercepted = interceptUnrequestedExecution(toolName, req, aiMessage, inputTokens, outputTokens);
+        if (intercepted != null) return intercepted;
 
         Map<String, Object> actionInput = deserializeParams(sessionId, toolName, req.arguments());
         if (actionInput.containsKey("__error")) {
             return ReasoningStep.schemaError(
-                    "System: Your previous response contained invalid JSON. " +
-                            "Correct the format and retry. Error: " + actionInput.get("__error"),
-                    inputTokens, outputTokens
-            );
+                    "System: Your previous response contained invalid JSON. " + "Correct the format and retry. Error: "
+                            + actionInput.get("__error"),
+                    inputTokens,
+                    outputTokens);
         }
 
-        if (ToolCapability.MEMORY_SEARCH.toolName().equals(toolName)) {
-            String query = (String) actionInput.get("query");
-            if (query == null || query.isBlank() || isUnicodeCorrupted(query)) {
-                String rawGoalUpdated = WorkspaceContext.RAW_USER_GOAL.isBound() 
-                        ? WorkspaceContext.RAW_USER_GOAL.get() : null;
-                if (rawGoalUpdated != null && !rawGoalUpdated.isBlank()) {
-                    log.infof("Issue 7: Replacing garbled memory_search query '%s' with raw user goal", query);
-                    actionInput.put("query", rawGoalUpdated);
-                    query = rawGoalUpdated;
-                }
-            }
-
-            if (query == null || query.isBlank()) {
-                log.warnf("LLM emitted %s with blank query for session %s. Forcing correction.", toolName, sessionId);
-                return ReasoningStep.schemaError(
-                    "System: The 'query' parameter for '" + toolName + "' cannot be blank. " +
-                    "Please provide factual keywords for the search.",
-                    inputTokens, outputTokens
-                );
-            }
-        }
+        ReasoningStep fixed = fixupMemorySearchQuery(toolName, actionInput, sessionId, inputTokens, outputTokens);
+        if (fixed != null) return fixed;
 
         return ReasoningStep.pending(aiMessage.text(), toolName, actionInput, inputTokens, outputTokens);
     }
 
-    private ReasoningStep handleMultipleToolCalls(String sessionId, String agentRole, AiMessage aiMessage, List<ToolExecutionRequest> requests, int inputTokens, int outputTokens) {
-        log.infof("[PARALLEL-TOOLS] session=%s role=%s: LLM issued %d parallel " +
-                  "tool calls: %s - routing to ParallelToolStepExecutor.",
-                  sessionId, agentRole, requests.size(),
-                  requests.stream()
-                      .map(r -> sanitizeToolName(r.name()))
-                      .collect(Collectors.joining(", ")));
+    private ReasoningStep interceptUnrequestedExecution(
+            String toolName, ToolExecutionRequest req, AiMessage aiMessage, int inputTokens, int outputTokens) {
+        if (!ToolCapability.SANDBOX_EXEC.toolName().equals(toolName)) return null;
+        String rawGoal = WorkspaceContext.RAW_USER_GOAL.isBound() ? WorkspaceContext.RAW_USER_GOAL.get() : null;
+        if (textPatternUtils.goalRequestsExecution(rawGoal)) return null;
+
+        String code = recoverCodeForDisplay(req.arguments());
+        if (code == null || code.isBlank()) return null;
+
+        log.infof("Intercepted unrequested execution call; converting to FINISH step with code display.");
+        String language = textPatternUtils.inferLanguage(code);
+        String markdown = String.format("```%s\n%s\n```", language != null ? language : "", code);
+        return ReasoningStep.pending(
+                aiMessage.text(),
+                ReasoningStep.FINISH,
+                Map.of(ReasoningStep.ACTION_INPUT_ANSWER_KEY, markdown),
+                inputTokens,
+                outputTokens);
+    }
+
+    private ReasoningStep fixupMemorySearchQuery(
+            String toolName, Map<String, Object> actionInput, String sessionId, int inputTokens, int outputTokens) {
+        if (!ToolCapability.RECALL_MEMORY_SEARCH.toolName().equals(toolName)
+                && !ToolCapability.ARCHIVAL_MEMORY_SEARCH.toolName().equals(toolName)) {
+            return null;
+        }
+
+        String query = (String) actionInput.get("query");
+        if (query == null || query.isBlank() || isUnicodeCorrupted(query)) {
+            String rawGoal = WorkspaceContext.RAW_USER_GOAL.isBound() ? WorkspaceContext.RAW_USER_GOAL.get() : null;
+            if (rawGoal != null && !rawGoal.isBlank()) {
+                log.infof("Issue 7: Replacing garbled memory search query '%s' with raw user goal", query);
+                actionInput.put("query", rawGoal);
+                query = rawGoal;
+            }
+        }
+
+        if (query == null || query.isBlank()) {
+            log.warnf("LLM emitted %s with blank query for session %s. Forcing correction.", toolName, sessionId);
+            return ReasoningStep.schemaError(
+                    "System: The 'query' parameter for '" + toolName + "' cannot be blank. "
+                            + "Please provide factual keywords for the search.",
+                    inputTokens,
+                    outputTokens);
+        }
+        return null;
+    }
+
+    private ReasoningStep handleMultipleToolCalls(
+            String sessionId,
+            String agentRole,
+            AiMessage aiMessage,
+            List<ToolExecutionRequest> requests,
+            int inputTokens,
+            int outputTokens) {
+        log.infof(
+                "[PARALLEL-TOOLS] session=%s role=%s: LLM issued %d parallel "
+                        + "tool calls: %s - routing to ParallelToolStepExecutor.",
+                sessionId,
+                agentRole,
+                requests.size(),
+                requests.stream().map(r -> sanitizeToolName(r.name())).collect(Collectors.joining(", ")));
 
         List<ParallelToolCall> calls = new ArrayList<>();
-        String rawGoal = WorkspaceContext.RAW_USER_GOAL.isBound()
-                ? WorkspaceContext.RAW_USER_GOAL.get() : null;
+        String rawGoal = WorkspaceContext.RAW_USER_GOAL.isBound() ? WorkspaceContext.RAW_USER_GOAL.get() : null;
 
         if (isSchedulingGoal(rawGoal)) {
             ToolExecutionRequest scheduleRequest = requests.stream()
@@ -225,44 +229,57 @@ public class ReasoningStepParser {
                     .findFirst()
                     .orElse(null);
             if (scheduleRequest != null) {
-                log.warnf("[PARALLEL-TOOLS] session=%s scheduling goal emitted mixed parallel tools; " +
-                          "collapsing to schedule_task only.", sessionId);
-                Map<String, Object> actionInput = deserializeParams(sessionId, scheduleRequest.name(),
-                        scheduleRequest.arguments());
+                log.warnf(
+                        "[PARALLEL-TOOLS] session=%s scheduling goal emitted mixed parallel tools; "
+                                + "collapsing to schedule_task only.",
+                        sessionId);
+                Map<String, Object> actionInput =
+                        deserializeParams(sessionId, scheduleRequest.name(), scheduleRequest.arguments());
                 if (actionInput.containsKey("__error")) {
                     return ReasoningStep.schemaError(
-                            "System: Your previous response contained invalid JSON. " +
-                                    "Correct the format and retry. Error: " + actionInput.get("__error"),
-                            inputTokens, outputTokens
-                    );
+                            "System: Your previous response contained invalid JSON. "
+                                    + "Correct the format and retry. Error: " + actionInput.get("__error"),
+                            inputTokens,
+                            outputTokens);
                 }
-                return ReasoningStep.pending(aiMessage.text(), scheduleRequest.name(),
-                        actionInput, inputTokens, outputTokens);
+                return ReasoningStep.pending(
+                        aiMessage.text(), scheduleRequest.name(), actionInput, inputTokens, outputTokens);
             }
         }
 
-        if (requests.stream().allMatch(r -> ToolCapability.INGEST_DOCUMENT.toolName().equals(r.name()))) {
+        if (requests.stream()
+                .allMatch(r -> ToolCapability.INGEST_DOCUMENT.toolName().equals(r.name()))) {
             log.warnf("[PARALLEL-TOOLS] session=%s: LLM violated anti-parallel storage rule. Merging.", sessionId);
             String mergedText = requests.stream()
-                .map(r -> deserializeParams(sessionId, r.name(), r.arguments()))
-                .filter(p -> !p.containsKey("__error"))
-                .map(p -> p.get("text") != null ? p.get("text") : 
-                         (p.get("content") != null ? p.get("content") : 
-                         (p.get("value") != null ? p.get("value") : 
-                         (p.get("document") != null ? p.get("document") : 
-                         (p.get("doc") != null ? p.get("doc") : p.get("data"))))))
-                .filter(Objects::nonNull)
-                .map(Object::toString)
-                .collect(Collectors.joining(", "));
+                    .map(r -> deserializeParams(sessionId, r.name(), r.arguments()))
+                    .filter(p -> !p.containsKey("__error"))
+                    .map(p -> p.get("text") != null
+                            ? p.get("text")
+                            : (p.get("content") != null
+                                    ? p.get("content")
+                                    : (p.get("value") != null
+                                            ? p.get("value")
+                                            : (p.get("document") != null
+                                                    ? p.get("document")
+                                                    : (p.get("doc") != null ? p.get("doc") : p.get("data"))))))
+                    .filter(Objects::nonNull)
+                    .map(Object::toString)
+                    .collect(Collectors.joining(", "));
             String mergedLabel = requests.stream()
-                .map(r -> deserializeParams(sessionId, r.name(), r.arguments()))
-                .filter(p -> !p.containsKey("__error"))
-                .map(p -> p.get("label") != null ? p.get("label") : p.get("category"))
-                .filter(Objects::nonNull)
-                .map(Object::toString)
-                .findFirst().orElse("user_facts");
+                    .map(r -> deserializeParams(sessionId, r.name(), r.arguments()))
+                    .filter(p -> !p.containsKey("__error"))
+                    .map(p -> p.get("label") != null ? p.get("label") : p.get("category"))
+                    .filter(Objects::nonNull)
+                    .map(Object::toString)
+                    .findFirst()
+                    .orElse("user_facts");
             Map<String, Object> mergedParams = Map.of("label", mergedLabel, "text", mergedText);
-            return ReasoningStep.pending(aiMessage.text(), ToolCapability.INGEST_DOCUMENT.toolName(), mergedParams, inputTokens, outputTokens);
+            return ReasoningStep.pending(
+                    aiMessage.text(),
+                    ToolCapability.INGEST_DOCUMENT.toolName(),
+                    mergedParams,
+                    inputTokens,
+                    outputTokens);
         }
 
         for (int i = 0; i < requests.size(); i++) {
@@ -296,13 +313,15 @@ public class ReasoningStepParser {
 
     private Map<String, Object> deserializeParams(String sessionId, String toolName, String argsJson) {
         if (argsJson == null || argsJson.isBlank()) return Map.of();
-        
+
         // Phase 1: Try direct parse
         try {
             return doDeserialize(argsJson);
         } catch (Exception e) {
-            log.warnf("Initial JSON parse failed for session %s: %s. Attempting repair.", sessionId, LogUtil.rootMessage(e));
-            
+            log.warnf(
+                    "Initial JSON parse failed for session %s: %s. Attempting repair.",
+                    sessionId, LogUtil.rootMessage(e));
+
             // Phase 2: Repair and retry
             try {
                 String repaired = sanitizeJson(argsJson);
@@ -329,87 +348,12 @@ public class ReasoningStepParser {
         return parsed != null ? parsed : Map.of();
     }
 
-    @SuppressWarnings("unchecked")
     private void coerceBooleans(Map<String, Object> map) {
-        for (Map.Entry<String, Object> entry : map.entrySet()) {
-            Object val = entry.getValue();
-            if (val instanceof String s) {
-                if ("true".equalsIgnoreCase(s)) {
-                    entry.setValue(Boolean.TRUE);
-                } else if ("false".equalsIgnoreCase(s)) {
-                    entry.setValue(Boolean.FALSE);
-                }
-            } else if (val instanceof Map) {
-                coerceBooleans((Map<String, Object>) val);
-            } else if (val instanceof List list) {
-                coerceBooleans(list);
-            }
-        }
+        ReasoningStepParserUtils.coerceBooleans(map);
     }
 
-    @SuppressWarnings("unchecked")
-    private void coerceBooleans(List<Object> list) {
-        for (int i = 0; i < list.size(); i++) {
-            Object item = list.get(i);
-            if (item instanceof String s) {
-                if ("true".equalsIgnoreCase(s)) {
-                    list.set(i, Boolean.TRUE);
-                } else if ("false".equalsIgnoreCase(s)) {
-                    list.set(i, Boolean.FALSE);
-                }
-            } else if (item instanceof Map) {
-                coerceBooleans((Map<String, Object>) item);
-            } else if (item instanceof List innerList) {
-                coerceBooleans(innerList);
-            }
-        }
-    }
-
-    /**
-     * Attempts to repair common LLM tool-calling JSON errors:
-     * 1. Unescaped newlines within string values
-     * 2. Unescaped double-quotes within what looks like a code field
-     *
-     * Heuristic for interior-quote detection: when inside a JSON string value
-     * and an unescaped {@code "} is found, look ahead one character. If the
-     * following character is NOT a JSON structural delimiter ({@code ,}]}:) or
-     * whitespace, the quote is likely interior and should be escaped as {@code \"}.
-     */
     private String sanitizeJson(String json) {
-        if (json == null) return null;
-
-        StringBuilder sb = new StringBuilder();
-        boolean inString = false;
-        char prev = 0;
-
-        for (int i = 0; i < json.length(); i++) {
-            char c = json.charAt(i);
-
-            boolean isUnescapedQuote = (c == '"' && prev != '\\');
-            if (isUnescapedQuote && inString) {
-                char next = i + 1 < json.length() ? json.charAt(i + 1) : 0;
-                if (next != ',' && next != '}' && next != ']' && next != ':'
-                        && !Character.isWhitespace(next) && next != 0) {
-                    sb.append('\\');
-                    sb.append(c);
-                    prev = c;
-                    continue;
-                }
-            }
-
-            if (c == '"' && prev != '\\') {
-                inString = !inString;
-            }
-
-            if (inString && (c == '\n' || c == '\r')) {
-                sb.append("\\n");
-            } else {
-                sb.append(c);
-            }
-            prev = c;
-        }
-
-        return sb.toString();
+        return ReasoningStepParserUtils.sanitizeJson(json);
     }
 
     private Map<String, Object> recoverSandboxExecParams(String argsJson) {
@@ -442,16 +386,15 @@ public class ReasoningStepParser {
             rawCode = argsJson.substring(codeStart + 1);
         }
 
-        String code = rawCode
-                .replace("\\r", "\r")
+        String code = rawCode.replace("\\r", "\r")
                 .replace("\\n", "\n")
                 .replace("\\\"", "\"")
                 .replace("\\\\", "\\");
-        
+
         // Clean up trailing garbage from truncation (quotes and commas only)
         // DO NOT strip '}' as it might be a valid block end.
         if (code.endsWith("\"") || code.endsWith(",")) {
-             code = code.substring(0, code.length() - 1);
+            code = code.substring(0, code.length() - 1);
         }
 
         if (language == null || language.isBlank()) {
@@ -469,7 +412,7 @@ public class ReasoningStepParser {
 
     private boolean isSchedulingGoal(String rawGoal) {
         if (rawGoal == null || rawGoal.isBlank()) return false;
-        String lower = rawGoal.toLowerCase();
+        String lower = rawGoal.toLowerCase(Locale.ROOT);
         boolean hasScheduleVerb = lower.contains("schedule")
                 || lower.contains("remind")
                 || lower.contains("alarm")

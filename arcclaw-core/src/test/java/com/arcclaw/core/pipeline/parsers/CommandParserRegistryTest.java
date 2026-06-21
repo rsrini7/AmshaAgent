@@ -5,14 +5,15 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import jakarta.enterprise.inject.Instance;
+
 import java.util.Optional;
 import java.util.stream.Stream;
-
-import jakarta.enterprise.inject.Instance;
 
 import com.arcclaw.channel.api.ChannelCommand;
 import com.arcclaw.channel.api.ChannelCommandParser;
 import com.arcclaw.channel.api.ChannelType;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 

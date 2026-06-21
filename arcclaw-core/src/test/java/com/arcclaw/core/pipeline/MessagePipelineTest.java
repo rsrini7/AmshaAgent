@@ -4,11 +4,11 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
+import jakarta.enterprise.inject.Instance;
+
 import java.time.Instant;
 import java.util.Optional;
 import java.util.stream.Stream;
-
-import jakarta.enterprise.inject.Instance;
 
 import com.arcclaw.channel.api.ChannelMessage;
 import com.arcclaw.channel.api.ChannelPlugin;
@@ -16,6 +16,7 @@ import com.arcclaw.channel.api.ChannelSender;
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ChannelUser;
 import com.arcclaw.core.channel.ChannelPluginRegistry;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -32,11 +33,11 @@ class MessagePipelineTest {
         ChannelMessage msg = new ChannelMessage.CliMessage(user, "hello", "sid", Instant.now());
         sender = mock(ChannelSender.class);
         registry = mock(ChannelPluginRegistry.class);
-        
+
         ChannelPlugin plugin = mock(ChannelPlugin.class);
         when(plugin.sender()).thenReturn(sender);
         when(registry.find(any(ChannelType.class))).thenReturn(Optional.of(plugin));
-        
+
         context = new MessageContext("chat1", user, msg);
     }
 
@@ -44,11 +45,11 @@ class MessagePipelineTest {
     void testHandlersRunInPriorityOrder() {
         MessageHandler h1 = mockHandler(10, HandleResult.CONTINUE);
         MessageHandler h2 = mockHandler(20, HandleResult.CONTINUE);
-        
+
         setupPipeline(h2, h1); // Add out of order
-        
+
         pipeline.process(context);
-        
+
         var inOrder = inOrder(h1, h2);
         inOrder.verify(h1).handle(context);
         inOrder.verify(h2).handle(context);
@@ -58,10 +59,10 @@ class MessagePipelineTest {
     void testPipelineStopsOnStopResult() {
         MessageHandler h1 = mockHandler(10, HandleResult.STOP);
         MessageHandler h2 = mockHandler(20, HandleResult.CONTINUE);
-        
+
         setupPipeline(h1, h2);
         pipeline.process(context);
-        
+
         verify(h1).handle(context);
         verify(h2, never()).handle(context);
     }
@@ -71,16 +72,16 @@ class MessagePipelineTest {
         MessageHandler h1 = mock(MessageHandler.class);
         when(h1.priority()).thenReturn(10);
         when(h1.handle(any())).thenThrow(new RuntimeException("Oops"));
-        
+
         MessageHandler h2 = mockHandler(20, HandleResult.CONTINUE);
-        
+
         setupPipeline(h1, h2);
-        
+
         assertDoesNotThrow(() -> pipeline.process(context));
         verify(h2, never()).handle(context);
         verify(sender).sendRaw(eq(context.getUser()), contains("error"));
     }
-    
+
     @Test
     void testEmptyPipeline() {
         setupPipeline();
@@ -90,16 +91,19 @@ class MessagePipelineTest {
     @Test
     void testMessageContextStatePropagation() {
         MessageHandler h1 = new MessageHandler() {
-            public int priority() { return 10; }
+            public int priority() {
+                return 10;
+            }
+
             public HandleResult handle(MessageContext ctx) {
                 ctx.setSessionId("session-xyz");
                 return HandleResult.CONTINUE;
             }
         };
-        
+
         setupPipeline(h1);
         pipeline.process(context);
-        
+
         assertEquals("session-xyz", context.getSessionId().get());
     }
 
@@ -107,10 +111,10 @@ class MessagePipelineTest {
     void testStopAtLastHandler() {
         MessageHandler h1 = mockHandler(10, HandleResult.CONTINUE);
         MessageHandler h2 = mockHandler(20, HandleResult.STOP);
-        
+
         setupPipeline(h1, h2);
         pipeline.process(context);
-        
+
         verify(h1).handle(context);
         verify(h2).handle(context);
     }
@@ -120,10 +124,10 @@ class MessagePipelineTest {
         MessageHandler h1 = mockHandler(10, HandleResult.CONTINUE);
         MessageHandler h2 = mockHandler(20, HandleResult.CONTINUE);
         MessageHandler h3 = mockHandler(30, HandleResult.CONTINUE);
-        
+
         setupPipeline(h1, h2, h3);
         pipeline.process(context);
-        
+
         verify(h1).handle(context);
         verify(h2).handle(context);
         verify(h3).handle(context);

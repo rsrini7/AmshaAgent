@@ -1,11 +1,11 @@
 package com.arcclaw.app.ui;
 
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.event.Observes;
+
 import java.util.Collection;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.enterprise.event.Observes;
 
 import com.arcclaw.core.agent.event.AgentStateChangedEvent;
 
@@ -20,12 +20,8 @@ public class AgentStateStore {
 
     public void onAgentStateChanged(@Observes AgentStateChangedEvent event) {
         String key = event.sessionId() + ":" + event.agentName();
-        currentStates.put(key, new AgentState(
-            event.agentName(),
-            event.newStatus(),
-            event.currentTask(),
-            event.sessionId()
-        ));
+        currentStates.put(
+                key, new AgentState(event.agentName(), event.newStatus(), event.currentTask(), event.sessionId()));
     }
 
     public Collection<AgentState> getAll() {

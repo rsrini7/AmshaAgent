@@ -8,14 +8,14 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import jakarta.enterprise.inject.Instance;
+
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Stream;
-
-import jakarta.enterprise.inject.Instance;
 
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.agent.role.RoleRegistry;
@@ -26,6 +26,7 @@ import com.arcclaw.core.tools.AgentTool;
 import com.arcclaw.core.tools.IdempotencyMode;
 import com.arcclaw.core.tools.ToolRegistry;
 import com.fasterxml.jackson.databind.ObjectMapper;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -52,7 +53,7 @@ class ToolInvocationGuardTest {
         guard.objectMapper = objectMapper;
         guard.toolRegistry = mockToolRegistry;
         guard.interceptors = mockInterceptors;
-        
+
         guard.dynamicToolLookup = mock(Instance.class);
         when(guard.dynamicToolLookup.isUnsatisfied()).thenReturn(true);
 
@@ -67,15 +68,17 @@ class ToolInvocationGuardTest {
 
     @Test
     void testDuplicateToolCallReturnsCachedObservation() {
-        ReasoningStep past = ReasoningStep.pending("thought", "tool", Map.of("arg", 1), 0, 0)
-                .withObservation("result 1");
+        ReasoningStep past =
+                ReasoningStep.pending("thought", "tool", Map.of("arg", 1), 0, 0).withObservation("result 1");
         List<ReasoningStep> history = List.of(past);
 
         ToolInvocationGuard.GuardDecision result = guard.evaluate(
                 "s1", "coordinator", AutonomyLevel.SUPERVISED, "tool", Map.of("arg", 1), history, "goal", List.of());
 
         assertInstanceOf(ToolInvocationGuard.GuardDecision.Deduplicate.class, result);
-        assertTrue(((ToolInvocationGuard.GuardDecision.Deduplicate) result).cachedObservation().contains("result 1"));
+        assertTrue(((ToolInvocationGuard.GuardDecision.Deduplicate) result)
+                .cachedObservation()
+                .contains("result 1"));
     }
 
     @Test
@@ -96,7 +99,14 @@ class ToolInvocationGuardTest {
             when(roleRegistry.requiresApprovalForTools(any())).thenReturn(true);
 
             ToolInvocationGuard.GuardDecision result = guard.evaluate(
-                    "s1", "coordinator", AutonomyLevel.SUPERVISED, "delete-all", Map.of(), List.of(), "goal", List.of());
+                    "s1",
+                    "coordinator",
+                    AutonomyLevel.SUPERVISED,
+                    "delete-all",
+                    Map.of(),
+                    List.of(),
+                    "goal",
+                    List.of());
 
             assertInstanceOf(ToolInvocationGuard.GuardDecision.PauseForApproval.class, result);
         });
@@ -118,9 +128,17 @@ class ToolInvocationGuardTest {
     void testInterceptorCanBlockTool() {
         ToolGuardInterceptor interceptor = mock(ToolGuardInterceptor.class);
         when(interceptor.handledToolNames()).thenReturn(Set.of("guarded-tool"));
-        when(interceptor.evaluate(anyString(), anyString(), any(AutonomyLevel.class), anyString(), any(), anyList(), anyString(), anyList()))
+        when(interceptor.evaluate(
+                        anyString(),
+                        anyString(),
+                        any(AutonomyLevel.class),
+                        anyString(),
+                        any(),
+                        anyList(),
+                        anyString(),
+                        anyList()))
                 .thenReturn(Optional.of(new ToolInvocationGuard.GuardDecision.Blocked("interceptor-blocked")));
-        
+
         when(mockInterceptors.iterator()).thenReturn(List.of(interceptor).iterator());
         when(mockInterceptors.stream()).thenReturn(Stream.of(interceptor));
         guard.init(); // Re-initialize with new interceptor mock
@@ -129,7 +147,89 @@ class ToolInvocationGuardTest {
                 "s1", "coordinator", AutonomyLevel.SUPERVISED, "guarded-tool", Map.of(), List.of(), "goal", List.of());
 
         assertInstanceOf(ToolInvocationGuard.GuardDecision.Blocked.class, result);
-        assertTrue(((ToolInvocationGuard.GuardDecision.Blocked) result).observation().contains("interceptor-blocked"));
+        assertTrue(((ToolInvocationGuard.GuardDecision.Blocked) result)
+                .observation()
+                .contains("interceptor-blocked"));
+    }
+
+    @Test
+    void testApprovalGate_archivalInsert_requiresApprovalAtSupervisedLevel() {
+        workspaceRun("s1", AutonomyLevel.SUPERVISED, () -> {
+            // Create a real ArchivalMemoryInsertTool mock that returns requiresManualApproval=true
+            var archivalInsertTool = mock(AgentTool.class);
+            when(archivalInsertTool.idempotencyMode()).thenReturn(IdempotencyMode.NON_IDEMPOTENT);
+            when(archivalInsertTool.requiresManualApproval(any())).thenReturn(true);
+            when(mockToolRegistry.findTool("archival_memory_insert")).thenReturn(Optional.of(archivalInsertTool));
+
+            ToolInvocationGuard.GuardDecision result = guard.evaluate(
+                    "s1",
+                    "coordinator",
+                    AutonomyLevel.SUPERVISED,
+                    "archival_memory_insert",
+                    Map.of("content", "test", "chunk_type", "FACT"),
+                    List.of(),
+                    "goal",
+                    List.of());
+
+            // At SUPERVISED level with requiresManualApproval=true, must pause for approval
+            assertInstanceOf(
+                    ToolInvocationGuard.GuardDecision.PauseForApproval.class,
+                    result,
+                    "ArchivalMemoryInsertTool must require approval at SUPERVISED autonomy");
+        });
+    }
+
+    @Test
+    void testApprovalGate_archivalInsert_allowedAtFullAutonomy() {
+        workspaceRun("s1", AutonomyLevel.FULL, () -> {
+            var archivalInsertTool = mock(AgentTool.class);
+            when(archivalInsertTool.idempotencyMode()).thenReturn(IdempotencyMode.NON_IDEMPOTENT);
+            when(archivalInsertTool.requiresManualApproval(any())).thenReturn(true);
+            when(mockToolRegistry.findTool("archival_memory_insert")).thenReturn(Optional.of(archivalInsertTool));
+
+            ToolInvocationGuard.GuardDecision result = guard.evaluate(
+                    "s1",
+                    "coordinator",
+                    AutonomyLevel.FULL,
+                    "archival_memory_insert",
+                    Map.of("content", "test", "chunk_type", "FACT"),
+                    List.of(),
+                    "goal",
+                    List.of());
+
+            // At FULL autonomy, approval is bypassed
+            assertInstanceOf(
+                    ToolInvocationGuard.GuardDecision.Allow.class,
+                    result,
+                    "ArchivalMemoryInsertTool should be allowed at FULL autonomy");
+        });
+    }
+
+    @Test
+    void testApprovalGate_coreMemoryAppend_noApprovalRequired() {
+        workspaceRun("s1", AutonomyLevel.SUPERVISED, () -> {
+            var coreAppendTool = mock(AgentTool.class);
+            when(coreAppendTool.idempotencyMode()).thenReturn(IdempotencyMode.IDEMPOTENT);
+            when(coreAppendTool.requiresManualApproval(any())).thenReturn(false);
+            when(mockToolRegistry.findTool("core_memory_append")).thenReturn(Optional.of(coreAppendTool));
+            when(roleRegistry.requiresApprovalForTools(any())).thenReturn(false);
+
+            ToolInvocationGuard.GuardDecision result = guard.evaluate(
+                    "s1",
+                    "coordinator",
+                    AutonomyLevel.SUPERVISED,
+                    "core_memory_append",
+                    Map.of("block_key", "user_profile", "content", "test"),
+                    List.of(),
+                    "goal",
+                    List.of());
+
+            // Core memory append does NOT require manual approval
+            assertInstanceOf(
+                    ToolInvocationGuard.GuardDecision.Allow.class,
+                    result,
+                    "CoreMemoryAppendTool should not require approval at SUPERVISED");
+        });
     }
 
     private void workspaceRun(String sessionId, AutonomyLevel level, Runnable runnable) {

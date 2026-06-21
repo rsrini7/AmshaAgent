@@ -57,8 +57,7 @@ public interface ChannelMessage {
         Object value = attributes().get(key);
         if (value == null) return Optional.empty();
         if (!key.type().isInstance(value)) {
-            throw new ClassCastException(
-                "ChannelMessageAttribute '" + key.name() + "' expected "
+            throw new ClassCastException("ChannelMessageAttribute '" + key.name() + "' expected "
                     + key.type().getName() + " but got " + value.getClass().getName());
         }
         return Optional.of(key.type().cast(value));
@@ -76,14 +75,17 @@ public interface ChannelMessage {
      * @param chatId        Telegram chat ID (used as correlationId)
      * @param receivedAt    ingestion timestamp
      */
-    record TelegramMessage(
-            ChannelUser sender,
-            String text,
-            String chatId,
-            Instant receivedAt
-    ) implements ChannelMessage {
-        @Override public String correlationId() { return chatId; }
-        @Override public ChannelType channelType() { return ChannelType.TELEGRAM; }
+    record TelegramMessage(ChannelUser sender, String text, String chatId, Instant receivedAt)
+            implements ChannelMessage {
+        @Override
+        public String correlationId() {
+            return chatId;
+        }
+
+        @Override
+        public ChannelType channelType() {
+            return ChannelType.TELEGRAM;
+        }
     }
 
     /**
@@ -95,15 +97,17 @@ public interface ChannelMessage {
      * @param channelId     Discord text-channel ID (used as correlationId)
      * @param receivedAt    ingestion timestamp
      */
-    record DiscordMessage(
-            ChannelUser sender,
-            String text,
-            String guildId,
-            String channelId,
-            Instant receivedAt
-    ) implements ChannelMessage {
-        @Override public String correlationId() { return channelId; }
-        @Override public ChannelType channelType() { return ChannelType.DISCORD; }
+    record DiscordMessage(ChannelUser sender, String text, String guildId, String channelId, Instant receivedAt)
+            implements ChannelMessage {
+        @Override
+        public String correlationId() {
+            return channelId;
+        }
+
+        @Override
+        public ChannelType channelType() {
+            return ChannelType.DISCORD;
+        }
     }
 
     /**
@@ -114,14 +118,17 @@ public interface ChannelMessage {
      * @param apiKeyId      the resolved API key identifier (used as correlationId)
      * @param receivedAt    ingestion timestamp
      */
-    record RestApiMessage(
-            ChannelUser sender,
-            String text,
-            String apiKeyId,
-            Instant receivedAt
-    ) implements ChannelMessage {
-        @Override public String correlationId() { return apiKeyId; }
-        @Override public ChannelType channelType() { return ChannelType.REST_API; }
+    record RestApiMessage(ChannelUser sender, String text, String apiKeyId, Instant receivedAt)
+            implements ChannelMessage {
+        @Override
+        public String correlationId() {
+            return apiKeyId;
+        }
+
+        @Override
+        public ChannelType channelType() {
+            return ChannelType.REST_API;
+        }
     }
 
     /**
@@ -132,14 +139,16 @@ public interface ChannelMessage {
      * @param sessionId  the generated CLI session ID (used as correlationId)
      * @param receivedAt ingestion timestamp
      */
-    record CliMessage(
-            ChannelUser sender,
-            String text,
-            String sessionId,
-            Instant receivedAt
-    ) implements ChannelMessage {
-        @Override public String correlationId() { return sessionId; }
-        @Override public ChannelType channelType() { return ChannelType.CLI; }
+    record CliMessage(ChannelUser sender, String text, String sessionId, Instant receivedAt) implements ChannelMessage {
+        @Override
+        public String correlationId() {
+            return sessionId;
+        }
+
+        @Override
+        public ChannelType channelType() {
+            return ChannelType.CLI;
+        }
     }
 
     /**
@@ -150,13 +159,16 @@ public interface ChannelMessage {
      * @param sessionId  the WebSocket session ID (used as correlationId)
      * @param receivedAt ingestion timestamp
      */
-    record WebSocketMessage(
-            ChannelUser sender,
-            String text,
-            String sessionId,
-            Instant receivedAt
-    ) implements ChannelMessage {
-        @Override public String correlationId() { return sessionId; }
-        @Override public ChannelType channelType() { return ChannelType.WEBSOCKET; }
+    record WebSocketMessage(ChannelUser sender, String text, String sessionId, Instant receivedAt)
+            implements ChannelMessage {
+        @Override
+        public String correlationId() {
+            return sessionId;
+        }
+
+        @Override
+        public ChannelType channelType() {
+            return ChannelType.WEBSOCKET;
+        }
     }
 }

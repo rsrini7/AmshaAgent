@@ -1,8 +1,8 @@
 package com.arcclaw.channel.telegram;
 
-import java.time.Instant;
-
 import jakarta.enterprise.context.ApplicationScoped;
+
+import java.time.Instant;
 
 import com.arcclaw.channel.api.ChannelMessage;
 import com.arcclaw.channel.api.ChannelUser;

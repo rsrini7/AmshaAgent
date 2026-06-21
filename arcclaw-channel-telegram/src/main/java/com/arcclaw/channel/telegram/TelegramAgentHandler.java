@@ -10,10 +10,12 @@ import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ChannelUser;
 import com.arcclaw.channel.api.ProcessingLockManager;
 import com.arcclaw.common.util.LogUtil;
-import io.quarkus.arc.Unremovable;
+
 import org.apache.camel.Exchange;
 import org.apache.camel.component.telegram.model.IncomingMessage;
 import org.jboss.logging.Logger;
+
+import io.quarkus.arc.Unremovable;
 
 /**
  * Primary inbound message handler for the Telegram channel.
@@ -53,9 +55,9 @@ public class TelegramAgentHandler extends AbstractInboundMessagePipeline {
             return;
         }
 
-        String chatId = msg.getChat() != null 
-            ? String.valueOf(msg.getChat().getId())
-            : exchange.getIn().getHeader("CamelTelegramChatId", String.class);
+        String chatId = msg.getChat() != null
+                ? String.valueOf(msg.getChat().getId())
+                : exchange.getIn().getHeader("CamelTelegramChatId", String.class);
 
         if (chatId == null || chatId.isBlank()) {
             log.warnf("No chatId for exchange, dropping message");

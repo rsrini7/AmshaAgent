@@ -20,5 +20,4 @@ public interface LlmProviderPort {
      * @throws com.arcclaw.core.agent.reasoning.error.LlmProviderException if the provider throws an error.
      */
     ChatResponse nextStep(ChatRequest request);
-
 }

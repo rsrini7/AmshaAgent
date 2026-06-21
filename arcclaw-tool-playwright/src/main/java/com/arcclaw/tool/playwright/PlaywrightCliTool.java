@@ -1,5 +1,11 @@
 package com.arcclaw.tool.playwright;
 
+import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
+
+import jakarta.annotation.PreDestroy;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -9,14 +15,11 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Pattern;
-
-import jakarta.annotation.PreDestroy;
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
 
 import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.core.agent.role.ToolCapability;
@@ -28,7 +31,7 @@ import com.arcclaw.core.tools.AgentTool;
 import com.arcclaw.core.tools.IdempotencyMode;
 import com.arcclaw.core.tools.ToolExecutionContext;
 import com.arcclaw.core.tools.ToolResponse;
-import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
+
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
@@ -46,17 +49,15 @@ import org.jboss.logging.Logger;
  */
 @ApplicationScoped
 @ToolMetadata(
-    capabilityId = "browser_navigate",
-    description = "Headless browser navigation via @playwright/cli daemon",
-    defaultRoles = {"researcher", "synthesizer"}
-)
+        capabilityId = "browser_navigate",
+        description = "Headless browser navigation via @playwright/cli daemon",
+        defaultRoles = {"researcher", "synthesizer"})
 public class PlaywrightCliTool implements AgentTool {
 
     private static final Logger log = Logger.getLogger(PlaywrightCliTool.class);
 
     private static final int MAX_CONTENT_CHARS = 9092;
-    private static final Pattern SAFE_URL_PATTERN =
-        Pattern.compile("^https?://.*", Pattern.CASE_INSENSITIVE);
+    private static final Pattern SAFE_URL_PATTERN = Pattern.compile("^https?://.*", Pattern.CASE_INSENSITIVE);
 
     @ConfigProperty(name = "arcclaw.tools.playwright.enabled", defaultValue = "false")
     boolean configEnabled;
@@ -114,50 +115,54 @@ public class PlaywrightCliTool implements AgentTool {
             String version = exec("--version").trim();
             return ToolResponse.success("Playwright CLI is available: " + version);
         } catch (Exception e) {
-            return ToolResponse.failure(503,
-                "Playwright CLI not found. Install: npm install -g @playwright/cli && playwright-cli install-browser chromium");
+            return ToolResponse.failure(
+                    503,
+                    "Playwright CLI not found. Install: npm install -g @playwright/cli && playwright-cli install-browser chromium");
         }
     }
 
     @Override
     public String description() {
-        return "Full browser automation via @playwright/cli daemon. " +
-               "Actions: navigate (raw HTML), extract_text (visible text, default), screenshot (PNG), " +
-               "click (CSS selector), fill (input field), wait (element to appear), eval (JavaScript). " +
-               "Use for JS-heavy sites. For simple static pages, use web_fetch instead.";
+        return "Full browser automation via @playwright/cli daemon. "
+                + "Actions: navigate (raw HTML), extract_text (visible text, default), screenshot (PNG), "
+                + "click (CSS selector), fill (input field), wait (element to appear), eval (JavaScript). "
+                + "Use for JS-heavy sites. For simple static pages, use web_fetch instead.";
     }
 
     @Override
     public JsonObjectSchema parametersSchema() {
         return JsonObjectSchema.builder()
-            .addStringProperty("url",
-                "The full URL to navigate to. Must begin with http:// or https://. " +
-                "Required for navigate/extract_text/screenshot. Optional for click/fill/wait/eval (uses current page).")
-            .addEnumProperty("action",
-                List.of("navigate", "extract_text", "screenshot", "click", "fill", "wait", "eval"),
-                "navigate = return full raw HTML; " +
-                "extract_text = return visible body text (default); " +
-                "screenshot = return base64-encoded PNG; " +
-                "click = click an element by CSS selector (requires 'selector'); " +
-                "fill = fill an input field (requires 'selector' and 'value'); " +
-                "wait = wait for element to appear (requires 'selector', optional 'timeoutMs'); " +
-                "eval = evaluate JavaScript expression (requires 'script').")
-            .addStringProperty("selector",
-                "CSS selector for click/fill/wait actions. Example: 'button.submit', '#login-form input[name=email]'.")
-            .addStringProperty("value",
-                "Value to fill into an input field (used with action=fill).")
-            .addStringProperty("script",
-                "JavaScript expression to evaluate (used with action=eval). Example: 'document.title', 'document.querySelectorAll(\"a\").length'.")
-            .addIntegerProperty("timeoutMs",
-                "Timeout in milliseconds for wait action (default: 5000).")
-            .build();
+                .addStringProperty(
+                        "url",
+                        "The full URL to navigate to. Must begin with http:// or https://. "
+                                + "Required for navigate/extract_text/screenshot. Optional for click/fill/wait/eval (uses current page).")
+                .addEnumProperty(
+                        "action",
+                        List.of("navigate", "extract_text", "screenshot", "click", "fill", "wait", "eval"),
+                        "navigate = return full raw HTML; " + "extract_text = return visible body text (default); "
+                                + "screenshot = return base64-encoded PNG; "
+                                + "click = click an element by CSS selector (requires 'selector'); "
+                                + "fill = fill an input field (requires 'selector' and 'value'); "
+                                + "wait = wait for element to appear (requires 'selector', optional 'timeoutMs'); "
+                                + "eval = evaluate JavaScript expression (requires 'script').")
+                .addStringProperty(
+                        "selector",
+                        "CSS selector for click/fill/wait actions. Example: 'button.submit', '#login-form input[name=email]'.")
+                .addStringProperty("value", "Value to fill into an input field (used with action=fill).")
+                .addStringProperty(
+                        "script",
+                        "JavaScript expression to evaluate (used with action=eval). Example: 'document.title', 'document.querySelectorAll(\"a\").length'.")
+                .addIntegerProperty("timeoutMs", "Timeout in milliseconds for wait action (default: 5000).")
+                .required("url")
+                .build();
     }
 
     @Override
     public ToolResponse execute(ToolExecutionContext ctx, Map<String, Object> params) {
         if (!isEnabled()) {
-            return ToolResponse.failure(503, "Playwright CLI tool is not enabled. " +
-                "Set arcclaw.tools.playwright.enabled=true to activate.");
+            return ToolResponse.failure(
+                    503,
+                    "Playwright CLI tool is not enabled. " + "Set arcclaw.tools.playwright.enabled=true to activate.");
         }
 
         String userId = ctx.userId();
@@ -169,10 +174,11 @@ public class PlaywrightCliTool implements AgentTool {
         String session = sessionName(ctx.sessionId());
 
         // Actions that require a URL
-        boolean needsUrl = switch (action) {
-            case "click", "fill", "wait", "eval" -> false;
-            default -> true;
-        };
+        boolean needsUrl =
+                switch (action) {
+                    case "click", "fill", "wait", "eval" -> false;
+                    default -> true;
+                };
 
         String url = (String) params.get("url");
         if (needsUrl) {
@@ -180,8 +186,8 @@ public class PlaywrightCliTool implements AgentTool {
                 return ToolResponse.failure(400, "Parameter 'url' is required for action '" + action + "'.");
             }
             if (!SAFE_URL_PATTERN.matcher(url.trim()).matches()) {
-                return ToolResponse.failure(400,
-                    "Unsupported URL scheme. Only http:// and https:// are allowed. Got: " + url);
+                return ToolResponse.failure(
+                        400, "Unsupported URL scheme. Only http:// and https:// are allowed. Got: " + url);
             }
         }
 
@@ -191,7 +197,7 @@ public class PlaywrightCliTool implements AgentTool {
         String script = (String) params.get("script");
 
         if (("click".equals(action) || "fill".equals(action) || "wait".equals(action))
-            && (selector == null || selector.isBlank())) {
+                && (selector == null || selector.isBlank())) {
             return ToolResponse.failure(400, "Parameter 'selector' is required for action '" + action + "'.");
         }
         if ("fill".equals(action) && (value == null || value.isBlank())) {
@@ -223,22 +229,27 @@ public class PlaywrightCliTool implements AgentTool {
                 }
             }
 
-            String result = switch (action) {
-                case "screenshot" -> takeScreenshot(session);
-                case "navigate"   -> execWithSession(session, "eval", "() => document.documentElement.outerHTML");
-                case "click"      -> doClick(session, selector);
-                case "fill"       -> doFill(session, selector, value);
-                case "wait"       -> doWait(session, selector, params);
-                case "eval"       -> doEval(session, script);
-                default           -> extractText(session);
-            };
+            String result =
+                    switch (action) {
+                        case "screenshot" -> takeScreenshot(session);
+                        case "navigate" -> execWithSession(session, "eval", "() => document.documentElement.outerHTML");
+                        case "click" -> doClick(session, selector);
+                        case "fill" -> doFill(session, selector, value);
+                        case "wait" -> doWait(session, selector, params);
+                        case "eval" -> doEval(session, script);
+                        default -> extractText(session);
+                    };
 
             if (!"screenshot".equals(action) && result.length() > MAX_CONTENT_CHARS) {
                 result = truncateAtSentence(result, MAX_CONTENT_CHARS) + "\n[content truncated]";
             }
 
-            auditService.record(ctx.sessionId(), userId, ctx.agentRole(),
-                SecurityEventType.TOOL_EXECUTED, "Browser " + action + (url != null ? ": " + url : ""));
+            auditService.record(
+                    ctx.sessionId(),
+                    userId,
+                    ctx.agentRole(),
+                    SecurityEventType.TOOL_EXECUTED,
+                    "Browser " + action + (url != null ? ": " + url : ""));
 
             return ToolResponse.success(result);
 
@@ -249,7 +260,8 @@ public class PlaywrightCliTool implements AgentTool {
     }
 
     private String extractText(String session) {
-        String text = execWithSession(session, "eval", "() => document.body.innerText").trim();
+        String text = execWithSession(session, "eval", "() => document.body.innerText")
+                .trim();
         if (!text.isBlank()) return text;
         String snapshot = execWithSession(session, "snapshot", "--raw").trim();
         return snapshot.isBlank() ? "No content found" : snapshot;
@@ -271,21 +283,21 @@ public class PlaywrightCliTool implements AgentTool {
 
     private String doClick(String session, String selector) {
         String sel = escapeJsString(selector);
-        String script = "() => { const el = document.querySelector('" + sel + "'); " +
-                        "if (!el) throw new Error('Element not found'); " +
-                        "el.click(); return 'Clicked: ' + el.tagName + (el.id ? '#' + el.id : '') + (el.className ? '.' + el.className.split(' ')[0] : ''); }";
+        String script = "() => { const el = document.querySelector('" + sel + "'); "
+                + "if (!el) throw new Error('Element not found'); "
+                + "el.click(); return 'Clicked: ' + el.tagName + (el.id ? '#' + el.id : '') + (el.className ? '.' + el.className.split(' ')[0] : ''); }";
         return execWithSession(session, "eval", script).trim();
     }
 
     private String doFill(String session, String selector, String value) {
         String sel = escapeJsString(selector);
         String val = escapeJsString(value);
-        String script = "() => { const el = document.querySelector('" + sel + "'); " +
-                        "if (!el) throw new Error('Element not found'); " +
-                        "el.focus(); el.value = '" + val + "'; " +
-                        "el.dispatchEvent(new Event('input', {bubbles: true})); " +
-                        "el.dispatchEvent(new Event('change', {bubbles: true})); " +
-                        "return 'Filled ' + el.tagName + ' with ' + el.value.length + ' chars'; }";
+        String script = "() => { const el = document.querySelector('" + sel + "'); "
+                + "if (!el) throw new Error('Element not found'); "
+                + "el.focus(); el.value = '"
+                + val + "'; " + "el.dispatchEvent(new Event('input', {bubbles: true})); "
+                + "el.dispatchEvent(new Event('change', {bubbles: true})); "
+                + "return 'Filled ' + el.tagName + ' with ' + el.value.length + ' chars'; }";
         return execWithSession(session, "eval", script).trim();
     }
 
@@ -299,21 +311,24 @@ public class PlaywrightCliTool implements AgentTool {
         }
         // Use playwright-cli's built-in wait command with -- separator to prevent flag injection
         try {
-            return execWithSession(session, "wait", "--", selector, "--timeout=" + timeoutMs).trim();
+            return execWithSession(session, "wait", "--", selector, "--timeout=" + timeoutMs)
+                    .trim();
         } catch (Exception e) {
             // Fallback: poll via JS
             String sel = escapeJsString(selector);
-            String script = "() => { const el = document.querySelector('" + sel + "'); " +
-                            "if (!el) throw new Error('Element not found'); " +
-                            "return 'Element found: ' + el.tagName; }";
+            String script = "() => { const el = document.querySelector('" + sel + "'); "
+                    + "if (!el) throw new Error('Element not found'); "
+                    + "return 'Element found: ' + el.tagName; }";
             return execWithSession(session, "eval", script).trim();
         }
     }
 
     private String doEval(String session, String script) {
         String trimmed = script.trim();
-        boolean isCallable = trimmed.startsWith("()") || trimmed.startsWith("function")
-            || trimmed.startsWith("async ") || trimmed.startsWith("async\t");
+        boolean isCallable = trimmed.startsWith("()")
+                || trimmed.startsWith("function")
+                || trimmed.startsWith("async ")
+                || trimmed.startsWith("async\t");
         String wrapped = isCallable ? trimmed : "() => (" + trimmed + ")";
         return execWithSession(session, "eval", wrapped).trim();
     }
@@ -329,7 +344,10 @@ public class PlaywrightCliTool implements AgentTool {
             // Session may have expired (HITL pause, GC, etc.) — close stale session and retry once
             if (session != null) {
                 log.debugf("playwright-cli first attempt failed, closing stale session: %s", LogUtil.rootMessage(e));
-                try { execWithSessionOnce(null, "close-session", session); } catch (Exception _) { }
+                try {
+                    execWithSessionOnce(null, "close-session", session);
+                } catch (Exception _) {
+                }
             }
             return execWithSessionOnce(session, command, args);
         }
@@ -348,22 +366,21 @@ public class PlaywrightCliTool implements AgentTool {
             ProcessBuilder pb = new ProcessBuilder(platformCommand(cmd));
             pb.redirectErrorStream(true);
             Process process = pb.start();
-            String output = new String(process.getInputStream().readAllBytes());
+            String output = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
             int exit = process.waitFor();
             if (exit != 0) {
                 String firstLine = output.lines().findFirst().orElse(output.trim());
                 if (firstLine.contains("session.js:") || firstLine.contains("playwright-core")) {
-                    throw new RuntimeException(
-                        "Browser tool failed — Playwright CLI has a stale/crashed session. " +
-                        "Run: npm uninstall -g @playwright/cli && npm install -g @playwright/cli && playwright-cli install-browser chromium\n" +
-                        "Error: " + firstLine);
+                    throw new RuntimeException("Browser tool failed — Playwright CLI has a stale/crashed session. "
+                            + "Run: npm uninstall -g @playwright/cli && npm install -g @playwright/cli && playwright-cli install-browser chromium\n"
+                            + "Error: "
+                            + firstLine);
                 }
                 throw new RuntimeException("playwright-cli exit " + exit + ": " + firstLine);
             }
             return output;
         } catch (IOException e) {
-            throw new RuntimeException(
-                "playwright-cli not found. Install: npm install -g @playwright/cli");
+            throw new RuntimeException("playwright-cli not found. Install: npm install -g @playwright/cli");
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new RuntimeException("playwright-cli interrupted");
@@ -371,7 +388,7 @@ public class PlaywrightCliTool implements AgentTool {
     }
 
     private static boolean isWindows() {
-        return System.getProperty("os.name", "").toLowerCase().contains("win");
+        return System.getProperty("os.name", "").toLowerCase(Locale.ROOT).contains("win");
     }
 
     private static List<String> platformCommand(List<String> cmd) {
@@ -437,10 +454,7 @@ public class PlaywrightCliTool implements AgentTool {
     static String truncateAtSentence(String text, int maxLen) {
         if (text.length() <= maxLen) return text;
         String sub = text.substring(0, maxLen);
-        int lastSentence = Math.max(
-            sub.lastIndexOf('.'),
-            Math.max(sub.lastIndexOf('!'), sub.lastIndexOf('?'))
-        );
+        int lastSentence = Math.max(sub.lastIndexOf('.'), Math.max(sub.lastIndexOf('!'), sub.lastIndexOf('?')));
         return lastSentence > maxLen / 2 ? sub.substring(0, lastSentence + 1) : sub;
     }
 

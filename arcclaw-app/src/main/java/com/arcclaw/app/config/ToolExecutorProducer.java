@@ -1,18 +1,20 @@
 package com.arcclaw.app.config;
 
-import java.util.List;
-
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Produces;
 import jakarta.enterprise.inject.Typed;
 import jakarta.inject.Inject;
 
+import java.util.List;
+
 import com.arcclaw.core.tools.ToolCategory;
+
+import org.eclipse.microprofile.config.inject.ConfigProperty;
+import org.eclipse.microprofile.context.ManagedExecutor;
+
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tag;
 import io.smallrye.common.annotation.Identifier;
-import org.eclipse.microprofile.config.inject.ConfigProperty;
-import org.eclipse.microprofile.context.ManagedExecutor;
 
 /**
  * Produces dedicated ManagedExecutor pools per tool category (§T5-2).
@@ -74,9 +76,11 @@ public class ToolExecutorProducer {
                 .maxQueued(maxQueued)
                 .build();
         if (meterRegistry != null) {
-            meterRegistry.gauge("arcclaw.bulkhead.max-async",
+            meterRegistry.gauge(
+                    "arcclaw.bulkhead.max-async",
                     List.of(Tag.of("category", category.name())),
-                    executor, e -> maxAsync);
+                    executor,
+                    e -> maxAsync);
         }
         return executor;
     }

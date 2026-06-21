@@ -1,9 +1,9 @@
 package com.arcclaw.app.cli;
 
-import java.util.List;
-
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
+
+import java.util.List;
 
 import com.arcclaw.channel.api.ChannelSender;
 import com.arcclaw.channel.api.ChannelType;

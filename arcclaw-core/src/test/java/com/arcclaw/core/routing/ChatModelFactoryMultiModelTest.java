@@ -2,11 +2,12 @@ package com.arcclaw.core.routing;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-import java.util.List;
-
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.request.ChatRequest;
 import dev.langchain4j.model.chat.response.ChatResponse;
+
+import java.util.List;
+
 import org.junit.jupiter.api.Test;
 
 class ChatModelFactoryMultiModelTest {
@@ -17,15 +18,18 @@ class ChatModelFactoryMultiModelTest {
             public ChatResponse chat(ChatRequest request) {
                 return null;
             }
+
             @Override
-            public String toString() { return "mock-" + id; }
+            public String toString() {
+                return "mock-" + id;
+            }
         };
     }
 
     @Test
     void singleKey_singleModel_oneEntry() {
-        List<MultiModelChatModel.ModelEntry> entries = ChatModelFactory.buildMultiModelEntries(
-                "key1", "model-a", "test", (k, m) -> mockModel(k + "/" + m));
+        List<MultiModelChatModel.ModelEntry> entries =
+                ChatModelFactory.buildMultiModelEntries("key1", "model-a", "test", (k, m) -> mockModel(k + "/" + m));
 
         assertEquals(1, entries.size());
         assertEquals("test", entries.get(0).label());
@@ -82,8 +86,8 @@ class ChatModelFactoryMultiModelTest {
 
     @Test
     void resultIsNeverEmpty() {
-        List<MultiModelChatModel.ModelEntry> entries = ChatModelFactory.buildMultiModelEntries(
-                "key1", "model-a", "test", (k, m) -> mockModel(k + "/" + m));
+        List<MultiModelChatModel.ModelEntry> entries =
+                ChatModelFactory.buildMultiModelEntries("key1", "model-a", "test", (k, m) -> mockModel(k + "/" + m));
 
         assertFalse(entries.isEmpty());
     }

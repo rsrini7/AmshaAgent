@@ -1,8 +1,5 @@
 package com.arcclaw.onboarding;
 
-import java.nio.charset.StandardCharsets;
-import java.util.Map;
-
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.Consumes;
@@ -20,6 +17,9 @@ import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.NewCookie;
 import jakarta.ws.rs.core.Response;
 
+import java.nio.charset.StandardCharsets;
+import java.util.Map;
+
 import com.arcclaw.core.api.dto.ArcClawErrorResponse;
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
@@ -34,20 +34,32 @@ import com.arcclaw.core.util.HttpConstants;
 import com.arcclaw.onboarding.dto.PromptUpdateRequest;
 import com.arcclaw.onboarding.dto.ProviderUpdateRequest;
 import com.arcclaw.onboarding.dto.SettingsDto;
-import io.smallrye.common.annotation.RunOnVirtualThread;
+
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.eclipse.microprofile.openapi.annotations.Operation;
+
+import io.smallrye.common.annotation.RunOnVirtualThread;
 
 @Path("/settings")
 @Produces(MediaType.APPLICATION_JSON)
 @ApplicationScoped
+@RunOnVirtualThread
 public class SettingsResource {
 
-    @Inject SecretVault vault;
-    @Inject LlmValidationGateway llmValidationGateway;
-    @Inject OnboardingSessionRegistry registry;
-    @Inject DomainEventBus eventBus;
-    @Inject AuditService auditService;
+    @Inject
+    SecretVault vault;
+
+    @Inject
+    LlmValidationGateway llmValidationGateway;
+
+    @Inject
+    OnboardingSessionRegistry registry;
+
+    @Inject
+    DomainEventBus eventBus;
+
+    @Inject
+    AuditService auditService;
 
     @ConfigProperty(name = "quarkus.application.version", defaultValue = "dev")
     String appVersion;
@@ -68,8 +80,7 @@ public class SettingsResource {
     private void checkAuth(String key) {
         String resolved = resolveKey(key);
         if (resolved == null || !resolved.equals(internalApiKey)) {
-            throw new WebApplicationException(
-                Response.status(Response.Status.UNAUTHORIZED)
+            throw new WebApplicationException(Response.status(Response.Status.UNAUTHORIZED)
                     .entity(new ArcClawErrorResponse("Unauthorized", "Invalid or missing API Key"))
                     .build());
         }
@@ -80,13 +91,11 @@ public class SettingsResource {
     public SettingsDto getSettings(@HeaderParam("X-ArcClaw-API-Key") String key) {
         checkAuth(key);
         String provider = readVaultString(VaultConstants.LLM_PROVIDER_KEY, "");
-        String model    = readVaultString(VaultConstants.LLM_MODEL_KEY, "");
-        String prompt   = readVaultString(VaultConstants.SYSTEM_PROMPT_KEY, "");
-        boolean hasKey  = vault.systemKeyExists(VaultConstants.LLM_API_KEY);
+        String model = readVaultString(VaultConstants.LLM_MODEL_KEY, "");
+        String prompt = readVaultString(VaultConstants.SYSTEM_PROMPT_KEY, "");
+        boolean hasKey = vault.systemKeyExists(VaultConstants.LLM_API_KEY);
 
-        String displayPrompt = prompt.length() > 200
-            ? prompt.substring(0, 199) + "…"
-            : prompt;
+        String displayPrompt = prompt.length() > 200 ? prompt.substring(0, 199) + "…" : prompt;
 
         return new SettingsDto(provider, model, displayPrompt, hasKey, appVersion);
     }
@@ -103,50 +112,58 @@ public class SettingsResource {
     @PATCH
     @Path("/provider")
     @Consumes(MediaType.APPLICATION_JSON)
-    @RunOnVirtualThread
     @Operation(summary = "Update LLM provider and validate credentials")
     public Response updateProvider(@HeaderParam("X-ArcClaw-API-Key") String key, ProviderUpdateRequest req) {
         checkAuth(key);
         if (req.provider() == null || req.provider().isBlank()) {
             return Response.status(400)
-                .entity(new ArcClawErrorResponse("provider is required")).build();
+                    .entity(new ArcClawErrorResponse("provider is required"))
+                    .build();
         }
 
         boolean isClaudeCode = "claude-code".equals(req.provider());
-        boolean isOllama     = "ollama".equals(req.provider());
-        boolean isOmlx       = "omlx".equals(req.provider());
+        boolean isOllama = "ollama".equals(req.provider());
+        boolean isOmlx = "omlx".equals(req.provider());
 
         if (!isClaudeCode && !isOllama && !isOmlx) {
             if (req.apiKey() == null || req.apiKey().isBlank()) {
                 return Response.status(400)
-                    .entity(new ArcClawErrorResponse("apiKey is required for " + req.provider())).build();
+                        .entity(new ArcClawErrorResponse("apiKey is required for " + req.provider()))
+                        .build();
             }
             try {
                 boolean valid = llmValidationGateway.validate(req.provider(), req.model(), req.apiKey());
                 if (!valid) {
                     return Response.status(422)
-                        .entity(new ArcClawErrorResponse("API key validation failed", "provider: " + req.provider()))
-                        .build();
+                            .entity(new ArcClawErrorResponse(
+                                    "API key validation failed", "provider: " + req.provider()))
+                            .build();
                 }
             } catch (Exception e) {
                 return Response.status(422)
-                    .entity(new ArcClawErrorResponse("Validation error", e.getMessage())).build();
+                        .entity(new ArcClawErrorResponse("Validation error", e.getMessage()))
+                        .build();
             }
         }
 
         vault.storeSystemKey(VaultConstants.LLM_PROVIDER_KEY, req.provider().getBytes(StandardCharsets.UTF_8));
-        vault.storeSystemKey(VaultConstants.LLM_MODEL_KEY, (req.model() != null ? req.model() : "").getBytes(StandardCharsets.UTF_8));
+        vault.storeSystemKey(
+                VaultConstants.LLM_MODEL_KEY,
+                (req.model() != null ? req.model() : "").getBytes(StandardCharsets.UTF_8));
         if (!isClaudeCode && req.apiKey() != null) {
             vault.storeSystemKey(VaultConstants.LLM_API_KEY, req.apiKey().getBytes(StandardCharsets.UTF_8));
         }
 
-        eventBus.publish(EventTypeCatalog.CONFIGURATION_CHANGED,
-            ConfigurationChangedEvent.of("settings/provider", Map.of(
-                "provider", req.provider(),
-                "model", req.model() != null ? req.model() : ""
-            )));
+        eventBus.publish(
+                EventTypeCatalog.CONFIGURATION_CHANGED,
+                ConfigurationChangedEvent.of(
+                        "settings/provider",
+                        Map.of("provider", req.provider(), "model", req.model() != null ? req.model() : "")));
 
-        auditService.recordMandatory("settings", key != null ? key : "unknown", "system",
+        auditService.recordMandatory(
+                "settings",
+                key != null ? key : "unknown",
+                "system",
                 SecurityEventType.SETTINGS_CHANGED,
                 "field=provider provider=" + req.provider() + " model=" + (req.model() != null ? req.model() : ""));
 
@@ -161,16 +178,20 @@ public class SettingsResource {
         checkAuth(key);
         if (req.systemPrompt() == null || req.systemPrompt().isBlank()) {
             return Response.status(400)
-                .entity(new ArcClawErrorResponse("systemPrompt is required")).build();
+                    .entity(new ArcClawErrorResponse("systemPrompt is required"))
+                    .build();
         }
-        vault.storeSystemKey(VaultConstants.SYSTEM_PROMPT_KEY, req.systemPrompt().getBytes(StandardCharsets.UTF_8));
+        vault.storeSystemKey(
+                VaultConstants.SYSTEM_PROMPT_KEY, req.systemPrompt().getBytes(StandardCharsets.UTF_8));
 
-        eventBus.publish(EventTypeCatalog.CONFIGURATION_CHANGED,
-            ConfigurationChangedEvent.of("settings/prompt", Map.of(
-                "systemPrompt", "(updated)"
-            )));
+        eventBus.publish(
+                EventTypeCatalog.CONFIGURATION_CHANGED,
+                ConfigurationChangedEvent.of("settings/prompt", Map.of("systemPrompt", "(updated)")));
 
-        auditService.recordMandatory("settings", key != null ? key : "unknown", "system",
+        auditService.recordMandatory(
+                "settings",
+                key != null ? key : "unknown",
+                "system",
                 SecurityEventType.SETTINGS_CHANGED,
                 "field=prompt length=" + req.systemPrompt().length());
 
@@ -183,7 +204,10 @@ public class SettingsResource {
     public Response reset(@HeaderParam("X-ArcClaw-API-Key") String key) {
         checkAuth(key);
 
-        auditService.recordMandatory("settings", key != null ? key : "unknown", "system",
+        auditService.recordMandatory(
+                "settings",
+                key != null ? key : "unknown",
+                "system",
                 SecurityEventType.SETTINGS_RESET,
                 "keys=LLM_PROVIDER_KEY,LLM_MODEL_KEY,LLM_API_KEY,SYSTEM_PROMPT_KEY");
 
@@ -195,27 +219,30 @@ public class SettingsResource {
         vault.removeSystemKey(VaultConstants.LLM_API_KEY);
         vault.removeSystemKey(VaultConstants.SYSTEM_PROMPT_KEY);
 
-        return Response.ok(Map.of("reset", true,
-            "message", "Onboarding sessions cleared. Cache cleared. Refresh to re-run the wizard."))
-            .cookie(new NewCookie.Builder(HttpConstants.COOKIE_ARCCLAW_API_KEY)
-                .value("")
-                .path("/")
-                .maxAge(0)
-                .httpOnly(true)
-                .sameSite(NewCookie.SameSite.STRICT)
-                .build())
-            .build();
+        return Response.ok(Map.of(
+                        "reset",
+                        true,
+                        "message",
+                        "Onboarding sessions cleared. Cache cleared. Refresh to re-run the wizard."))
+                .cookie(new NewCookie.Builder(HttpConstants.COOKIE_ARCCLAW_API_KEY)
+                        .value("")
+                        .path("/")
+                        .maxAge(0)
+                        .httpOnly(true)
+                        .sameSite(NewCookie.SameSite.STRICT)
+                        .build())
+                .build();
     }
 
     private String readVaultString(String key, String fallback) {
-      return vault.retrieveSystemKey(key)
-          .map(vk -> {
-            try (VaultKey k = vk) {
-              return new String(k.get(), StandardCharsets.UTF_8);
-            } catch (Exception e) {
-              return fallback;
-            }
-          })
-          .orElse(fallback);
+        return vault.retrieveSystemKey(key)
+                .map(vk -> {
+                    try (VaultKey k = vk) {
+                        return new String(k.get(), StandardCharsets.UTF_8);
+                    } catch (Exception e) {
+                        return fallback;
+                    }
+                })
+                .orElse(fallback);
     }
 }

@@ -13,20 +13,20 @@ public class ToolExecutionState implements RunnerState {
 
     @Override
     public RunnerState execute(StateContext context) {
-        var outcome = services.stepDecisionRouter().route(
-                context.executionContext(),
-                context.history(),
-                step,
-                context.llmSchemaErrorCount(),
-                context.consecutiveFailures(),
-                services.skillRegistry().currentSnapshot()
-        );
+        var outcome = services.stepDecisionRouter()
+                .route(
+                        context.executionContext(),
+                        context.history(),
+                        step,
+                        context.llmSchemaErrorCount(),
+                        context.consecutiveFailures(),
+                        services.skillRegistry().currentSnapshot());
 
         if (outcome.isTerminal()) {
             context.setFinalResult(outcome.result());
             return services.terminalStateForResult(outcome.result());
         }
-        
+
         if (outcome.retryEngine()) {
             context.setTransientError(outcome.transientError());
             if (outcome.llmSchemaErrorCount() != null) {

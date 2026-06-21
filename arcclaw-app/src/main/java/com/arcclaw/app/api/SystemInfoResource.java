@@ -9,8 +9,10 @@ import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 
 import com.arcclaw.core.config.SystemMetadataRegistry;
-import io.smallrye.common.annotation.RunOnVirtualThread;
+
 import org.eclipse.microprofile.openapi.annotations.Operation;
+
+import io.smallrye.common.annotation.RunOnVirtualThread;
 
 @ApplicationScoped
 @Path("/info")

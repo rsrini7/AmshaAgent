@@ -6,6 +6,8 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import dev.langchain4j.store.memory.chat.ChatMemoryStore;
+
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -18,7 +20,7 @@ import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.tools.GithubTool;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import dev.langchain4j.store.memory.chat.ChatMemoryStore;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -47,22 +49,38 @@ class GithubToolGuardInterceptorTest {
         when(chatMemoryStore.getMessages(anyString())).thenReturn(List.of());
 
         Optional<ToolInvocationGuard.GuardDecision> result = interceptor.evaluate(
-                "s1", "coordinator", AutonomyLevel.SUPERVISED, GithubTool.NAME, Map.of(), List.of(), "abc def", List.of());
+                "s1",
+                "coordinator",
+                AutonomyLevel.SUPERVISED,
+                GithubTool.TOOL_NAME,
+                Map.of(),
+                List.of(),
+                "abc def",
+                List.of());
 
         assertTrue(result.isPresent());
         assertInstanceOf(ToolInvocationGuard.GuardDecision.Blocked.class, result.get());
-        assertTrue(((ToolInvocationGuard.GuardDecision.Blocked) result.get()).observation().contains("GitHub tool blocked"));
+        assertTrue(((ToolInvocationGuard.GuardDecision.Blocked) result.get())
+                .observation()
+                .contains("GitHub tool blocked"));
     }
 
     @Test
     void testGithubPreApprovedReturnsEmpty() {
         AgentCheckpoint cp = new AgentCheckpointRecord();
         cp.setStatus(CheckpointStatus.AWAITING_APPROVAL);
-        cp.setPendingToolName(GithubTool.NAME);
+        cp.setPendingToolName(GithubTool.TOOL_NAME);
         when(agentStore.load(anyString(), anyString())).thenReturn(Optional.of(cp));
 
         Optional<ToolInvocationGuard.GuardDecision> result = interceptor.evaluate(
-                "s1", "coordinator", AutonomyLevel.SUPERVISED, GithubTool.NAME, Map.of(), List.of(), "how are you?", List.of());
+                "s1",
+                "coordinator",
+                AutonomyLevel.SUPERVISED,
+                GithubTool.TOOL_NAME,
+                Map.of(),
+                List.of(),
+                "how are you?",
+                List.of());
 
         assertTrue(result.isEmpty(), "Pre-approved GitHub should pass through to HITL layer");
     }

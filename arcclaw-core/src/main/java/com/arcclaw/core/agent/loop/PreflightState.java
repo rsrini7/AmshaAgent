@@ -6,6 +6,8 @@ import java.util.Optional;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.lifecycle.WorkspaceManager;
 import com.arcclaw.core.scope.WorkspaceContext;
+import com.arcclaw.core.util.AgentGuards;
+
 import org.jboss.logging.Logger;
 
 public class PreflightState implements RunnerState {
@@ -21,10 +23,8 @@ public class PreflightState implements RunnerState {
     public RunnerState execute(StateContext context) {
         if (!context.isBrowserPreflightChecked()) {
             context.setBrowserPreflightChecked(true);
-            Optional<AgentResult> preflightResult = services.browserPreflightHandler().run(
-                    context.executionContext(),
-                    context.history()
-            );
+            Optional<AgentResult> preflightResult =
+                    services.browserPreflightHandler().run(context.executionContext(), context.history());
             if (preflightResult.isPresent()) {
                 AgentResult res = preflightResult.get();
                 context.setFinalResult(res);
@@ -34,20 +34,35 @@ public class PreflightState implements RunnerState {
 
         int iteration = context.iteration();
         AgentExecutionContext execCtx = context.executionContext();
-        if (!(iteration < execCtx.maxIterations() || (iteration == execCtx.maxIterations() && execCtx.isForceFinishRetry()))) {
+        if (!(iteration < execCtx.maxIterations()
+                || (iteration == execCtx.maxIterations() && execCtx.isForceFinishRetry()))) {
             context.setFinalResult(AgentResult.loopExceeded(execCtx.maxIterations(), List.copyOf(context.history())));
             return services.failedState();
         }
 
         if (WorkspaceManager.isSessionHalted(execCtx.sessionId())) {
             log.warnf("Session %s halted — stopping agent loop at iteration %d", execCtx.sessionId(), iteration);
-            context.setFinalResult(AgentResult.failed("Session halted by user", AgentResult.FailureCategory.USER_ABORT, List.copyOf(context.history())));
+            context.setFinalResult(AgentResult.failed(
+                    "Session halted by user", AgentResult.FailureCategory.USER_ABORT, List.copyOf(context.history())));
+            return services.failedState();
+        }
+
+        if (AgentGuards.isShuttingDown()) {
+            log.warnf(
+                    "Container shutting down — stopping agent loop for session %s at iteration %d",
+                    execCtx.sessionId(), iteration);
+            context.setFinalResult(AgentResult.failed(
+                    "System shutting down", AgentResult.FailureCategory.USER_ABORT, List.copyOf(context.history())));
             return services.failedState();
         }
 
         if (!WorkspaceContext.incrementAndCheckGlobalIterations()) {
-            log.warnf("Global iteration budget (%d) exceeded for session %s — terminating",
+            log.warnf(
+                    "Global iteration budget (%d) exceeded for session %s — terminating",
                     WorkspaceContext.DEFAULT_GLOBAL_MAX_ITERATIONS, execCtx.sessionId());
+            // Mark session as halted so subsequent goal submissions are rejected
+            // immediately instead of entering the loop and failing again.
+            WorkspaceManager.haltSession(execCtx.sessionId());
             context.setFinalResult(AgentResult.loopExceeded(iteration, List.copyOf(context.history())));
             return services.failedState();
         }

@@ -4,8 +4,10 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
 import com.arcclaw.persistence.api.AuditSchemaPort;
-import io.quarkus.arc.properties.IfBuildProperty;
+
 import org.jboss.logging.Logger;
+
+import io.quarkus.arc.properties.IfBuildProperty;
 
 @ApplicationScoped
 @IfBuildProperty(name = "arcclaw.persistence.backend", stringValue = "fs")
@@ -18,6 +20,7 @@ public class FsAuditSchemaEnforcer implements AuditSchemaPort {
 
     @Override
     public void enforceWormConstraints() {
-        log.info("FsAuditSchemaEnforcer: WORM constraints enforced at application level (files are immutable after write)");
+        log.info(
+                "FsAuditSchemaEnforcer: WORM constraints enforced at application level (files are immutable after write)");
     }
 }

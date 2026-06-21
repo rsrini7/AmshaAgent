@@ -1,15 +1,16 @@
 package com.arcclaw.core.routing;
 
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Optional;
 
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
-
 import com.arcclaw.common.util.LogUtil;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+
 import org.jboss.logging.Logger;
 
 /**
@@ -22,7 +23,7 @@ public class ClaudeCodeOAuthTokenExtractor {
     private static final Logger log = Logger.getLogger(ClaudeCodeOAuthTokenExtractor.class);
 
     private static final Path CREDENTIALS_PATH =
-        Path.of(System.getProperty("user.home"), ".claude", "credentials.json");
+            Path.of(System.getProperty("user.home"), ".claude", "credentials.json");
 
     @Inject
     ObjectMapper objectMapper;
@@ -41,7 +42,7 @@ public class ClaudeCodeOAuthTokenExtractor {
         try {
             byte[] content = Files.readAllBytes(CREDENTIALS_PATH);
             JsonNode root = objectMapper.readTree(content);
-            
+
             // Extract 'accessToken' (primary) or 'bearerToken' (fallback)
             JsonNode tokenNode = root.path("accessToken");
             if (tokenNode.isMissingNode() || tokenNode.asText().isBlank()) {

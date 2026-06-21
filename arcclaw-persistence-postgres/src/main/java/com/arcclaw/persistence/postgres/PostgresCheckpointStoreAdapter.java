@@ -1,15 +1,16 @@
 package com.arcclaw.persistence.postgres;
 
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
-
 import com.arcclaw.common.util.LogUtil;
+import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.ToolDecision;
 import com.arcclaw.persistence.api.CheckpointDto;
 import com.arcclaw.persistence.api.CheckpointStorePort;
@@ -18,12 +19,14 @@ import com.arcclaw.persistence.api.ReasoningStepDto;
 import com.arcclaw.persistence.postgres.jdbi.CheckpointJdbiDao;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.quarkus.arc.Unremovable;
-import io.quarkus.arc.properties.IfBuildProperty;
+
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 import org.jdbi.v3.core.Handle;
 import org.jdbi.v3.core.Jdbi;
+
+import io.quarkus.arc.Unremovable;
+import io.quarkus.arc.properties.IfBuildProperty;
 
 /**
  * PostgreSQL implementation of CheckpointStorePort backed by JDBI.
@@ -43,7 +46,8 @@ public class PostgresCheckpointStoreAdapter implements CheckpointStorePort {
     public PostgresCheckpointStoreAdapter(
             Jdbi jdbi,
             ObjectMapper objectMapper,
-            @ConfigProperty(name = "arcclaw.checkpoint.stale-claim-minutes", defaultValue = "2") int staleClaimMinutes) {
+            @ConfigProperty(name = "arcclaw.checkpoint.stale-claim-minutes", defaultValue = "2")
+                    int staleClaimMinutes) {
         this.jdbi = jdbi;
         this.objectMapper = objectMapper;
         this.staleClaimMinutes = staleClaimMinutes;
@@ -55,59 +59,100 @@ public class PostgresCheckpointStoreAdapter implements CheckpointStorePort {
 
     @Override
     public CheckpointDto save(CheckpointDto checkpointDto) {
-        log.infof("[CheckpointAdapter] Saving checkpoint session=%s role=%s",
+        log.infof(
+                "[CheckpointAdapter] Saving checkpoint session=%s role=%s",
                 checkpointDto.sessionId(), checkpointDto.agentRole());
         return jdbi.inTransaction(handle -> {
             var dao = handle.attach(CheckpointJdbiDao.class);
             Optional<CheckpointDto> existing = checkpointDto.id() != null
-                ? dao.findById(checkpointDto.id())
-                : dao.findAnyBySessionAndRole(checkpointDto.sessionId(), checkpointDto.agentRole());
+                    ? dao.findById(checkpointDto.id())
+                    : dao.findAnyBySessionAndRole(checkpointDto.sessionId(), checkpointDto.agentRole());
             CheckpointDto toSave;
-            if (existing.isPresent() && "AWAITING_APPROVAL".equals(checkpointDto.status())
-                    && "AWAITING_APPROVAL".equals(existing.get().status())) {
+            if (existing.isPresent()
+                    && CheckpointStatus.AWAITING_APPROVAL.name().equals(checkpointDto.status())
+                    && CheckpointStatus.AWAITING_APPROVAL
+                            .name()
+                            .equals(existing.get().status())) {
                 toSave = mergeBatchDecisions(existing.get(), checkpointDto);
             } else {
                 toSave = checkpointDto;
             }
             toSave = toSave.ensureTimestamps(
-                existing.map(CheckpointDto::createdAt).orElseGet(Instant::now),
-                Instant.now()
-            );
+                    existing.map(CheckpointDto::createdAt).orElseGet(Instant::now), Instant.now());
             dao.upsertCheckpoint(toSave);
             return dao.findAnyBySessionAndRole(checkpointDto.sessionId(), checkpointDto.agentRole())
-                .orElseThrow(() -> new RuntimeException("Checkpoint not found after upsert"));
+                    .orElseThrow(() -> new RuntimeException("Checkpoint not found after upsert"));
         });
     }
 
     @Override
-    public CheckpointUpsertResult upsertWithSteps(String sessionId, String agentRole,
-            String stateJson, String autonomy, int iterationsUsed, String originalGoal, String contextDataJson) {
+    public CheckpointUpsertResult upsertWithSteps(
+            String sessionId,
+            String agentRole,
+            String stateJson,
+            String autonomy,
+            int iterationsUsed,
+            String originalGoal,
+            String contextDataJson) {
         log.infof("[CheckpointAdapter] Upserting checkpoint state only for session=%s", sessionId);
         return jdbi.inTransaction(handle -> {
             var dao = handle.attach(CheckpointJdbiDao.class);
             Optional<CheckpointDto> existing = dao.findAnyBySessionAndRole(sessionId, agentRole);
             boolean created = existing.isEmpty();
             Instant now = Instant.now();
-            String status = existing.map(CheckpointDto::status).orElse("IN_PROGRESS");
-            if (!"AWAITING_APPROVAL".equals(status) && !"RESUMING".equals(status)) {
-                status = "IN_PROGRESS";
+            String status = existing.map(CheckpointDto::status).orElse(CheckpointStatus.IN_PROGRESS.name());
+            if (!CheckpointStatus.AWAITING_APPROVAL.name().equals(status)
+                    && !CheckpointStatus.RESUMING.name().equals(status)) {
+                status = CheckpointStatus.IN_PROGRESS.name();
             }
             CheckpointDto dto = new CheckpointDto(
-                null, sessionId, agentRole, status, autonomy, stateJson,
-                null, null, originalGoal, null, null, null, null, null, null, null,
-                null, iterationsUsed, null, null, contextDataJson, null, null, null,
-                null, 0, now, now
-            );
+                    null,
+                    sessionId,
+                    agentRole,
+                    status,
+                    autonomy,
+                    stateJson,
+                    null,
+                    null,
+                    originalGoal,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    iterationsUsed,
+                    null,
+                    null,
+                    contextDataJson,
+                    null,
+                    null,
+                    null,
+                    null,
+                    0,
+                    now,
+                    now);
             dao.upsertCheckpoint(dto);
-            CheckpointDto saved = dao.findAnyBySessionAndRole(sessionId, agentRole).orElseThrow();
+            CheckpointDto saved =
+                    dao.findAnyBySessionAndRole(sessionId, agentRole).orElseThrow();
             return new CheckpointUpsertResult(saved, created);
         });
     }
 
     @Override
-    public CheckpointUpsertResult upsertAndFinalize(String sessionId, String agentRole,
-            String stateJson, String finalStatus, List<ReasoningStepDto> steps, String originalGoal, String contextDataJson) {
-        log.infof("[CheckpointAdapter] Upserting and finalizing checkpoint for session=%s (status=%s)", sessionId, finalStatus);
+    public CheckpointUpsertResult upsertAndFinalize(
+            String sessionId,
+            String agentRole,
+            String stateJson,
+            String finalStatus,
+            List<ReasoningStepDto> steps,
+            String originalGoal,
+            String contextDataJson) {
+        log.infof(
+                "[CheckpointAdapter] Upserting and finalizing checkpoint for session=%s (status=%s)",
+                sessionId, finalStatus);
         return jdbi.inTransaction(handle -> {
             var dao = handle.attach(CheckpointJdbiDao.class);
             Instant now = Instant.now();
@@ -115,13 +160,37 @@ public class PostgresCheckpointStoreAdapter implements CheckpointStorePort {
             String autonomy = existing.map(CheckpointDto::autonomyLevel).orElse(null);
             int iterationsUsed = existing.map(CheckpointDto::iterationsUsed).orElse(0);
             CheckpointDto dto = new CheckpointDto(
-                null, sessionId, agentRole, finalStatus, autonomy, stateJson,
-                null, null, originalGoal, null, null, null, null, null, null, null,
-                null, iterationsUsed, null, null, contextDataJson, null, null, null,
-                null, 0, now, now
-            );
+                    null,
+                    sessionId,
+                    agentRole,
+                    finalStatus,
+                    autonomy,
+                    stateJson,
+                    null,
+                    null,
+                    originalGoal,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    iterationsUsed,
+                    null,
+                    null,
+                    contextDataJson,
+                    null,
+                    null,
+                    null,
+                    null,
+                    0,
+                    now,
+                    now);
             dao.upsertCheckpoint(dto);
-            CheckpointDto saved = dao.findAnyBySessionAndRole(sessionId, agentRole).orElseThrow();
+            CheckpointDto saved =
+                    dao.findAnyBySessionAndRole(sessionId, agentRole).orElseThrow();
             dao.deleteSteps(saved.id());
             if (steps != null && !steps.isEmpty()) {
                 insertSteps(handle, saved.id(), steps);
@@ -132,20 +201,19 @@ public class PostgresCheckpointStoreAdapter implements CheckpointStorePort {
 
     @Override
     public CheckpointDto saveCheckpointWithSteps(CheckpointDto checkpointDto, List<ReasoningStepDto> steps) {
-        log.infof("[CheckpointAdapter] Saving checkpoint with %d steps for session=%s",
+        log.infof(
+                "[CheckpointAdapter] Saving checkpoint with %d steps for session=%s",
                 steps.size(), checkpointDto.sessionId());
         return jdbi.inTransaction(handle -> {
             var dao = handle.attach(CheckpointJdbiDao.class);
             Optional<CheckpointDto> existing = checkpointDto.id() != null
-                ? dao.findById(checkpointDto.id())
-                : dao.findAnyBySessionAndRole(checkpointDto.sessionId(), checkpointDto.agentRole());
+                    ? dao.findById(checkpointDto.id())
+                    : dao.findAnyBySessionAndRole(checkpointDto.sessionId(), checkpointDto.agentRole());
             CheckpointDto toSave = checkpointDto.ensureTimestamps(
-                existing.map(CheckpointDto::createdAt).orElseGet(Instant::now),
-                Instant.now()
-            );
+                    existing.map(CheckpointDto::createdAt).orElseGet(Instant::now), Instant.now());
             dao.upsertCheckpoint(toSave);
             CheckpointDto saved = dao.findAnyBySessionAndRole(checkpointDto.sessionId(), checkpointDto.agentRole())
-                .orElseThrow();
+                    .orElseThrow();
             if (steps != null && !steps.isEmpty()) {
                 dao.deleteSteps(saved.id());
                 insertSteps(handle, saved.id(), steps);
@@ -221,7 +289,8 @@ public class PostgresCheckpointStoreAdapter implements CheckpointStorePort {
 
     @Override
     public boolean atomicTransition(Long id, String expectedStatus, String newStatus) {
-        return jdbi.withExtension(CheckpointJdbiDao.class, dao -> dao.atomicTransition(id, newStatus, Instant.now(), expectedStatus));
+        return jdbi.withExtension(
+                CheckpointJdbiDao.class, dao -> dao.atomicTransition(id, newStatus, Instant.now(), expectedStatus));
     }
 
     @Override
@@ -229,7 +298,8 @@ public class PostgresCheckpointStoreAdapter implements CheckpointStorePort {
         log.infof("[CheckpointAdapter] Attempting to claim resume for session=%s role=%s", sessionId, agentRole);
         Instant now = Instant.now();
         Instant cutoff = now.minus(staleClaimMinutes, ChronoUnit.MINUTES);
-        return jdbi.withExtension(CheckpointJdbiDao.class, dao -> dao.claimForResume(sessionId, agentRole, now, cutoff));
+        return jdbi.withExtension(
+                CheckpointJdbiDao.class, dao -> dao.claimForResume(sessionId, agentRole, now, cutoff));
     }
 
     @Override
@@ -287,10 +357,8 @@ public class PostgresCheckpointStoreAdapter implements CheckpointStorePort {
     }
 
     @Override
-    public boolean atomicUpdateBatchToolDecision(String sessionId, String agentRole,
-            String toolName, String decision) {
-        log.infof("[BatchOps] Updating tool decision for session=%s tool=%s -> %s",
-                sessionId, toolName, decision);
+    public boolean atomicUpdateBatchToolDecision(String sessionId, String agentRole, String toolName, String decision) {
+        log.infof("[BatchOps] Updating tool decision for session=%s tool=%s -> %s", sessionId, toolName, decision);
         return jdbi.inTransaction(handle -> {
             var dao = handle.attach(CheckpointJdbiDao.class);
             Optional<CheckpointDto> cp = dao.findAnyBySessionAndRole(sessionId, agentRole);
@@ -299,8 +367,9 @@ public class PostgresCheckpointStoreAdapter implements CheckpointStorePort {
                 return false;
             }
             CheckpointDto dto = cp.get();
-            if (!"AWAITING_APPROVAL".equals(dto.status())) {
-                log.warnf("[BatchOps] Checkpoint status is '%s' instead of AWAITING_APPROVAL for session=%s",
+            if (!CheckpointStatus.AWAITING_APPROVAL.name().equals(dto.status())) {
+                log.warnf(
+                        "[BatchOps] Checkpoint status is '%s' instead of AWAITING_APPROVAL for session=%s",
                         dto.status(), sessionId);
                 return false;
             }
@@ -310,8 +379,8 @@ public class PostgresCheckpointStoreAdapter implements CheckpointStorePort {
                 return false;
             }
             try {
-                Map<String, ToolDecision> map = objectMapper.readValue(
-                    rawJson, new TypeReference<Map<String, ToolDecision>>() {});
+                Map<String, ToolDecision> map =
+                        objectMapper.readValue(rawJson, new TypeReference<Map<String, ToolDecision>>() {});
                 if (!map.containsKey(toolName)) {
                     log.warnf("[BatchOps] Tool '%s' not in batch for session %s.", toolName, sessionId);
                     return false;
@@ -339,20 +408,23 @@ public class PostgresCheckpointStoreAdapter implements CheckpointStorePort {
     @Override
     public boolean isCheckpointExpired(String sessionId, long timeoutHours) {
         Instant cutoff = Instant.now().minus(timeoutHours, ChronoUnit.HOURS);
-        return jdbi.withExtension(CheckpointJdbiDao.class, dao ->
-            !dao.findExpiredCheckpoints(sessionId, cutoff).isEmpty());
+        return jdbi.withExtension(
+                CheckpointJdbiDao.class,
+                dao -> !dao.findExpiredCheckpoints(sessionId, cutoff).isEmpty());
     }
 
     @Override
     public boolean isSessionActive(String sessionId) {
-        return jdbi.withExtension(CheckpointJdbiDao.class, dao ->
-            !dao.findActiveBySessionAny(sessionId).isEmpty());
+        return jdbi.withExtension(
+                CheckpointJdbiDao.class,
+                dao -> !dao.findActiveBySessionAny(sessionId).isEmpty());
     }
 
     @Override
     public void stampChannelInfo(Long checkpointId, String channelType, String channelPlatformId) {
-        jdbi.useExtension(CheckpointJdbiDao.class, dao ->
-            dao.stampChannelInfo(checkpointId, channelType, channelPlatformId, Instant.now()));
+        jdbi.useExtension(
+                CheckpointJdbiDao.class,
+                dao -> dao.stampChannelInfo(checkpointId, channelType, channelPlatformId, Instant.now()));
     }
 
     @Override
@@ -370,8 +442,9 @@ public class PostgresCheckpointStoreAdapter implements CheckpointStorePort {
 
     @Override
     public void markCheckpointsFailed(String sessionId) {
-        jdbi.useExtension(CheckpointJdbiDao.class, dao ->
-            dao.markCheckpointsFailed(sessionId, "Session cancelled", Instant.now()));
+        jdbi.useExtension(
+                CheckpointJdbiDao.class,
+                dao -> dao.markCheckpointsFailed(sessionId, "Session cancelled", Instant.now()));
     }
 
     @Override
@@ -392,13 +465,22 @@ public class PostgresCheckpointStoreAdapter implements CheckpointStorePort {
 
     private void insertSteps(Handle handle, Long checkpointId, List<ReasoningStepDto> steps) {
         var batch = handle.prepareBatch(
-            "INSERT INTO reasoning_step (checkpoint_id, sequence_num, thoughtJson, action, actionInputJson, observation, input_tokens, output_tokens, success, error_code, trace_id, root_cause_class) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+                "INSERT INTO reasoning_step (checkpoint_id, sequence_num, thoughtJson, action, actionInputJson, observation, input_tokens, output_tokens, success, error_code, trace_id, root_cause_class) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
         for (int i = 0; i < steps.size(); i++) {
             ReasoningStepDto s = steps.get(i);
-            batch.add(checkpointId, i,
-                s.thoughtJson(), s.action(), s.actionInputJson(), s.observation(),
-                s.inputTokens(), s.outputTokens(), s.success(),
-                s.errorCode(), s.traceId(), s.rootCauseClass());
+            batch.add(
+                    checkpointId,
+                    i,
+                    s.thoughtJson(),
+                    s.action(),
+                    s.actionInputJson(),
+                    s.observation(),
+                    s.inputTokens(),
+                    s.outputTokens(),
+                    s.success(),
+                    s.errorCode(),
+                    s.traceId(),
+                    s.rootCauseClass());
         }
         batch.execute();
     }
@@ -413,18 +495,15 @@ public class PostgresCheckpointStoreAdapter implements CheckpointStorePort {
         if (managed.batchToolDecisions() == null) return incoming;
         try {
             Map<String, ToolDecision> managedMap = objectMapper.readValue(
-                managed.batchToolDecisions(),
-                new TypeReference<Map<String, ToolDecision>>() {});
+                    managed.batchToolDecisions(), new TypeReference<Map<String, ToolDecision>>() {});
             Map<String, ToolDecision> incomingMap = objectMapper.readValue(
-                incoming.batchToolDecisions(),
-                new TypeReference<Map<String, ToolDecision>>() {});
+                    incoming.batchToolDecisions(), new TypeReference<Map<String, ToolDecision>>() {});
             boolean changed = false;
             for (Map.Entry<String, ToolDecision> entry : managedMap.entrySet()) {
                 String tool = entry.getKey();
                 ToolDecision managedDecision = entry.getValue();
                 ToolDecision incomingDecision = incomingMap.get(tool);
-                if (ToolDecision.PENDING != managedDecision
-                        && ToolDecision.PENDING == incomingDecision) {
+                if (ToolDecision.PENDING != managedDecision && ToolDecision.PENDING == incomingDecision) {
                     incomingMap.put(tool, managedDecision);
                     changed = true;
                 }
@@ -434,8 +513,8 @@ public class PostgresCheckpointStoreAdapter implements CheckpointStorePort {
                 return incoming.withBatchToolDecisions(mergedJson);
             }
         } catch (Exception e) {
-            log.warnf("Failed to merge batch decisions for session %s: %s",
-                    managed.sessionId(), LogUtil.rootMessage(e));
+            log.warnf(
+                    "Failed to merge batch decisions for session %s: %s", managed.sessionId(), LogUtil.rootMessage(e));
         }
         return incoming;
     }

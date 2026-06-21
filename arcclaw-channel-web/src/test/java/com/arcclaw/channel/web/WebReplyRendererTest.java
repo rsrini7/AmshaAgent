@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import java.util.List;
 
 import com.arcclaw.channel.api.ContentNode;
+
 import org.junit.jupiter.api.Test;
 
 class WebReplyRendererTest {
@@ -39,10 +40,7 @@ class WebReplyRendererTest {
 
     @Test
     void testRenderMultipleNodes() {
-        String result = renderer.render(List.of(
-            new ContentNode.Heading("Title", 1),
-            new ContentNode.Text("Subtitle")
-        ));
+        String result = renderer.render(List.of(new ContentNode.Heading("Title", 1), new ContentNode.Text("Subtitle")));
         assertEquals("# Title\n\nSubtitle", result);
     }
 }

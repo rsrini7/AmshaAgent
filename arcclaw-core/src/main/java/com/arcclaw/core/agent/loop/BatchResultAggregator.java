@@ -1,5 +1,7 @@
 package com.arcclaw.core.agent.loop;
 
+import jakarta.enterprise.inject.Instance;
+
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -8,14 +10,13 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
-import jakarta.enterprise.inject.Instance;
-
 import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.core.agent.reasoning.ParallelToolCall;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.observability.AgentObserver;
 import com.fasterxml.jackson.databind.ObjectMapper;
+
 import org.jboss.logging.Logger;
 
 public class BatchResultAggregator {
@@ -31,19 +32,21 @@ public class BatchResultAggregator {
     }
 
     public List<ParallelToolCall> mergeCompletedCalls(
-            List<ParallelToolCall> originalCalls, List<ParallelToolCall> dedupCalls, List<ParallelToolCall> allowedCompleted) {
+            List<ParallelToolCall> originalCalls,
+            List<ParallelToolCall> dedupCalls,
+            List<ParallelToolCall> allowedCompleted) {
         List<ParallelToolCall> allCompleted = new ArrayList<>();
         for (ParallelToolCall original : originalCalls) {
             Optional<ParallelToolCall> dedup = dedupCalls.stream()
-                .filter(d -> Objects.equals(d.callId(), original.callId()))
-                .findFirst();
+                    .filter(d -> Objects.equals(d.callId(), original.callId()))
+                    .findFirst();
             if (dedup.isPresent()) {
                 allCompleted.add(dedup.get());
             } else {
                 allowedCompleted.stream()
-                    .filter(c -> Objects.equals(c.callId(), original.callId()))
-                    .findFirst()
-                    .ifPresent(allCompleted::add);
+                        .filter(c -> Objects.equals(c.callId(), original.callId()))
+                        .findFirst()
+                        .ifPresent(allCompleted::add);
             }
         }
         return allCompleted;
@@ -62,33 +65,29 @@ public class BatchResultAggregator {
         } catch (Exception e) {
             log.errorf("[PARALLEL] Failed to serialize completed batch: %s", LogUtil.rootMessage(e));
             return StepDecision.terminal(AgentResult.failed(
-                "Failed to serialize parallel tool results.",
-                AgentResult.FailureCategory.SYSTEM_ERROR,
-                List.copyOf(history)));
+                    "Failed to serialize parallel tool results.",
+                    AgentResult.FailureCategory.SYSTEM_ERROR,
+                    List.copyOf(history)));
         }
 
         Map<String, Object> completedPayload = new HashMap<>();
         completedPayload.put("batch", batchJson);
 
         String summary = completed.stream()
-            .map(c -> String.format("[%s → %s]", c.toolName(), c.success() ? "OK" : "FAIL"))
-            .collect(Collectors.joining(", "));
+                .map(c -> String.format("[%s → %s]", c.toolName(), c.success() ? "OK" : "FAIL"))
+                .collect(Collectors.joining(", "));
 
         log.infof("[PARALLEL] session=%s batch completed: %s", context.sessionId(), summary);
 
         boolean allSuccess = completed.stream().allMatch(ParallelToolCall::success);
 
         ReasoningStep completedBatchStep = ReasoningStep.parallelBatch(
-            batchStep.thought(),
-            completedPayload,
-            batchStep.inputTokens(),
-            batchStep.outputTokens()
-        ).withObservation(summary, allSuccess);
+                        batchStep.thought(), completedPayload, batchStep.inputTokens(), batchStep.outputTokens())
+                .withObservation(summary, allSuccess);
 
         history.add(completedBatchStep);
 
-        observers.forEach(o -> o.onStepComplete(
-                context.sessionId(), context.agentRole(), completedBatchStep));
+        observers.forEach(o -> o.onStepComplete(context.sessionId(), context.agentRole(), completedBatchStep));
 
         return StepDecision.proceed(completedBatchStep);
     }

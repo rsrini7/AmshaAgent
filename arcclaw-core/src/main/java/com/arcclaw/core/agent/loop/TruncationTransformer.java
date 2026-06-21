@@ -22,12 +22,12 @@ public class TruncationTransformer implements ObservationTransformer {
     @Override
     public String transform(String toolName, String input) {
         if (input == null) return "";
-        
+
         if (input.codePointCount(0, input.length()) > MAX_OBSERVATION_CODEPOINTS) {
             int safeOffset = input.offsetByCodePoints(0, MAX_OBSERVATION_CODEPOINTS);
-            LOG.warnf("Tool '%s' observation truncated from %d to %d codepoints",
-                toolName, input.codePointCount(0, input.length()),
-                MAX_OBSERVATION_CODEPOINTS);
+            LOG.warnf(
+                    "Tool '%s' observation truncated from %d to %d codepoints",
+                    toolName, input.codePointCount(0, input.length()), MAX_OBSERVATION_CODEPOINTS);
             return input.substring(0, safeOffset) + TRUNCATION_MARKER;
         }
         return input;

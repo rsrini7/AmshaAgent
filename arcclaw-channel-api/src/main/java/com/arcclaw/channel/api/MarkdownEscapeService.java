@@ -16,7 +16,7 @@ public class MarkdownEscapeService {
         StringBuilder sb = new StringBuilder(text.length() + 16);
         for (int i = 0; i < text.length(); i++) {
             char c = text.charAt(i);
-            
+
             // Check if this is an existing escape sequence
             if (c == '\\' && i + 1 < text.length()) {
                 char next = text.charAt(i + 1);
@@ -26,13 +26,13 @@ public class MarkdownEscapeService {
                     continue;
                 }
             }
-            
+
             // If it's a lone backslash, escape it
-            if (c == '\\') { 
-                sb.append('\\').append('\\'); 
-                continue; 
+            if (c == '\\') {
+                sb.append('\\').append('\\');
+                continue;
             }
-            
+
             if (escapeChars.contains(c)) sb.append('\\');
             sb.append(c);
         }

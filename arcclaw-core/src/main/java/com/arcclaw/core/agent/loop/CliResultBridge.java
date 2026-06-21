@@ -1,14 +1,15 @@
 package com.arcclaw.core.agent.loop;
 
+import jakarta.enterprise.context.ApplicationScoped;
+
 import java.util.Collections;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 
-import jakarta.enterprise.context.ApplicationScoped;
-
 import com.arcclaw.core.agent.result.AgentResult;
+
 import org.jboss.logging.Logger;
 
 /**
@@ -28,19 +29,16 @@ public class CliResultBridge {
     private static final Logger log = Logger.getLogger(CliResultBridge.class);
 
     /** Active waiters: CLI threads blocked on a CompletableFuture. */
-    private final ConcurrentHashMap<String, CompletableFuture<AgentResult>> waiters =
-            new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, CompletableFuture<AgentResult>> waiters = new ConcurrentHashMap<>();
 
     /**
      * Buffered results: task completed before CLI thread arrived.
      * Entries are evicted on retrieval or by SessionReaper GC sweep via cancel().
      */
-    private final ConcurrentHashMap<String, AgentResult> bufferedResults =
-            new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, AgentResult> bufferedResults = new ConcurrentHashMap<>();
 
     /** Prevents result corruption from duplicate complete() calls. */
-    private final Set<String> signaled =
-            Collections.newSetFromMap(new ConcurrentHashMap<>());
+    private final Set<String> signaled = Collections.newSetFromMap(new ConcurrentHashMap<>());
 
     // -------------------------------------------------------------------------
     // Public API

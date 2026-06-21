@@ -15,7 +15,9 @@ import com.arcclaw.channel.api.hitl.ApprovalDecision;
 import com.arcclaw.channel.api.hitl.ApprovalGateway;
 import com.arcclaw.channel.api.hitl.ApprovalOutcome;
 import com.arcclaw.channel.api.hitl.ApprovalResult;
+import com.arcclaw.core.reflex.ApprovalNotificationService;
 import com.fasterxml.jackson.databind.ObjectMapper;
+
 import org.apache.camel.Exchange;
 import org.apache.camel.Message;
 import org.apache.camel.component.telegram.model.Chat;
@@ -30,6 +32,7 @@ class TelegramCallbackHandlerExpiryGuardTest {
     private TelegramCallbackHandler handler;
     private TelegramChannelSender sender;
     private ApprovalGateway approvalGateway;
+    private ApprovalNotificationService notificationService;
     private Exchange exchange;
 
     @BeforeEach
@@ -37,10 +40,12 @@ class TelegramCallbackHandlerExpiryGuardTest {
         handler = new TelegramCallbackHandler();
         sender = mock(TelegramChannelSender.class);
         approvalGateway = mock(ApprovalGateway.class);
+        notificationService = mock(ApprovalNotificationService.class);
         exchange = mock(Exchange.class);
 
         handler.sender = sender;
         handler.approvalGateway = approvalGateway;
+        handler.notificationService = notificationService;
         handler.botToken = "dummy-token"; // To prevent NPE on http client creation logging
         handler.objectMapper = new ObjectMapper();
 
@@ -74,7 +79,7 @@ class TelegramCallbackHandlerExpiryGuardTest {
     void isCheckpointExpired_true_rejectsCall() {
         // mock expired
         when(approvalGateway.decide(eq("test-session"), eq("dummy_tool"), any(ApprovalDecision.class), anyString()))
-            .thenReturn(new ApprovalResult(ApprovalOutcome.EXPIRED, "test-session", "dummy_tool", 0, List.of()));
+                .thenReturn(new ApprovalResult(ApprovalOutcome.EXPIRED, "test-session", "dummy_tool", 0, List.of()));
 
         handler.handleCallback(exchange);
 
@@ -88,7 +93,7 @@ class TelegramCallbackHandlerExpiryGuardTest {
     void isCheckpointExpired_false_proceedsToApprove() {
         // mock not expired
         when(approvalGateway.decide(eq("test-session"), eq("dummy_tool"), any(ApprovalDecision.class), anyString()))
-            .thenReturn(new ApprovalResult(ApprovalOutcome.APPROVED, "test-session", "dummy_tool", 0, List.of()));
+                .thenReturn(new ApprovalResult(ApprovalOutcome.APPROVED, "test-session", "dummy_tool", 0, List.of()));
 
         handler.handleCallback(exchange);
 

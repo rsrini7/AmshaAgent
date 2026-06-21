@@ -4,18 +4,20 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
+import jakarta.enterprise.context.ContextNotActiveException;
+import jakarta.inject.Inject;
+
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.atomic.AtomicReference;
 
-import jakarta.enterprise.context.ContextNotActiveException;
-import jakarta.inject.Inject;
-
 import com.arcclaw.core.scope.ScopedCounter;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
 import com.arcclaw.core.scope.WorkspaceScoped;
-import io.quarkus.test.junit.QuarkusTest;
+
 import org.junit.jupiter.api.Test;
+
+import io.quarkus.test.junit.QuarkusTest;
 
 /**
  * Verifies {@link WorkspaceScoped} CDI scope behavior:
@@ -64,7 +66,9 @@ class WorkspaceScopeTest {
 
         // Verify: all increments hit the same instance
         WorkspaceScopeHolder.run(sessionId, () -> {
-            assertEquals(threadCount, counter.getCount(),
+            assertEquals(
+                    threadCount,
+                    counter.getCount(),
                     "All threads should share the same @WorkspaceScoped bean instance");
         });
     }
@@ -87,8 +91,7 @@ class WorkspaceScopeTest {
         });
 
         // Session B should have its own counter starting from 0
-        assertEquals(1, countB,
-                "Different sessions must have isolated @WorkspaceScoped bean instances");
+        assertEquals(1, countB, "Different sessions must have isolated @WorkspaceScoped bean instances");
 
         // Session A should still have count 2
         WorkspaceScopeHolder.run(sessionA, () -> {
@@ -99,7 +102,9 @@ class WorkspaceScopeTest {
     @Test
     void noSession_throwsContextNotActive() {
         // No WorkspaceScopeHolder.run/call - scope is inactive
-        assertThrows(ContextNotActiveException.class, () -> counter.increment(),
+        assertThrows(
+                ContextNotActiveException.class,
+                () -> counter.increment(),
                 "Accessing @WorkspaceScoped bean without active session should throw ContextNotActiveException");
     }
 }

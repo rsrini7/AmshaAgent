@@ -17,7 +17,7 @@ class SqliteErrorStringsTest {
         Throwable root = new RuntimeException("database is locked");
         Throwable mid = new RuntimeException("wrapped", root);
         Throwable top = new RuntimeException("top", mid);
-        
+
         assertTrue(SqliteErrorStrings.isBusy(top));
     }
 

@@ -1,8 +1,8 @@
 package com.arcclaw.core.agent.reasoning;
 
-import java.time.Duration;
-
 import jakarta.enterprise.context.ApplicationScoped;
+
+import java.time.Duration;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 
@@ -34,10 +34,27 @@ public class AgentLlmConfig {
     @ConfigProperty(name = "arcclaw.llm.structured-output-mode", defaultValue = "NATIVE")
     StructuredOutputMode structuredOutputMode;
 
-    public int maxTokens() { return maxTokens; }
-    public double temperature() { return temperature; }
-    public Duration timeout() { return timeout; }
-    public boolean logHttp() { return logHttp; }
-    public int maxRetries() { return maxRetries; }
-    public StructuredOutputMode structuredOutputMode() { return structuredOutputMode; }
+    public int maxTokens() {
+        return maxTokens;
+    }
+
+    public double temperature() {
+        return temperature;
+    }
+
+    public Duration timeout() {
+        return timeout;
+    }
+
+    public boolean logHttp() {
+        return logHttp;
+    }
+
+    public int maxRetries() {
+        return maxRetries;
+    }
+
+    public StructuredOutputMode structuredOutputMode() {
+        return structuredOutputMode;
+    }
 }

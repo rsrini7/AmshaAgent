@@ -7,6 +7,8 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import jakarta.inject.Inject;
+
 import java.time.Instant;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -14,15 +16,12 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-import jakarta.inject.Inject;
-
 import com.arcclaw.channel.api.ChannelMessage;
 import com.arcclaw.channel.api.ChannelServices;
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ChannelUser;
 import com.arcclaw.channel.api.ProcessingLockManager;
-import io.quarkus.test.InjectMock;
-import io.quarkus.test.component.QuarkusComponentTest;
+
 import org.apache.camel.Exchange;
 import org.apache.camel.Message;
 import org.apache.camel.component.telegram.model.IncomingMessage;
@@ -30,6 +29,9 @@ import org.apache.camel.component.telegram.model.User;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
+
+import io.quarkus.test.InjectMock;
+import io.quarkus.test.component.QuarkusComponentTest;
 
 /**
  * Verifies that the Telegram channel correctly notifies the user when the
@@ -58,13 +60,13 @@ class TelegramAgentHandlerPipelineSentinelTest {
     @BeforeEach
     void setup() {
         locks.clear();
-        when(lockManager.tryLock(any())).thenAnswer(invocation ->
-                locks.putIfAbsent(invocation.getArgument(0), Boolean.TRUE) == null);
-        when(lockManager.isLocked(any())).thenAnswer(invocation ->
-                locks.containsKey(invocation.getArgument(0)));
-        Mockito.lenient().doAnswer(invocation ->
-                locks.remove(invocation.getArgument(0))
-        ).when(lockManager).unlock(any());
+        when(lockManager.tryLock(any()))
+                .thenAnswer(invocation -> locks.putIfAbsent(invocation.getArgument(0), Boolean.TRUE) == null);
+        when(lockManager.isLocked(any())).thenAnswer(invocation -> locks.containsKey(invocation.getArgument(0)));
+        Mockito.lenient()
+                .doAnswer(invocation -> locks.remove(invocation.getArgument(0)))
+                .when(lockManager)
+                .unlock(any());
     }
 
     @Test
@@ -73,7 +75,7 @@ class TelegramAgentHandlerPipelineSentinelTest {
         // Use numeric ID to avoid NumberFormatException when simulating Telegram's Long field
         String userId = "45678";
         Exchange exchange = createExchange(chatId, userId, "alice", "hello");
-        
+
         ChannelUser user = new ChannelUser(userId, chatId, "alice", ChannelType.TELEGRAM);
         ChannelMessage msg = new ChannelMessage.TelegramMessage(user, "hello", chatId, Instant.now());
         when(mapper.map(any(), any(), any())).thenReturn(msg);

@@ -7,16 +7,15 @@ import com.arcclaw.core.security.AutonomyLevel;
  * Passed to {@link AgentTool#execute(ToolExecutionContext, java.util.Map)}.
  */
 public record ToolExecutionContext(
-    String sessionId,
-    String userId,
-    String chatId,
-    String agentRole,
-    AutonomyLevel autonomyLevel,
-    String traceId,
-    String channelType,
-    String channelPlatformId,
-    String rawUserGoal,
-    String suggestedCron,
-    String suggestedNextFireTime,
-    String suggestedCronSource
-) {}
+        String sessionId,
+        String userId,
+        String chatId,
+        String agentRole,
+        AutonomyLevel autonomyLevel,
+        String traceId,
+        String channelType,
+        String channelPlatformId,
+        String rawUserGoal,
+        String suggestedCron,
+        String suggestedNextFireTime,
+        String suggestedCronSource) {}

@@ -1,12 +1,13 @@
 package com.arcclaw.core.channel;
 
-import java.util.concurrent.TimeUnit;
-
 import jakarta.enterprise.context.ApplicationScoped;
+
+import java.util.concurrent.TimeUnit;
 
 import com.arcclaw.channel.api.ProcessingLockManager;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
+
 import io.quarkus.arc.DefaultBean;
 
 /**

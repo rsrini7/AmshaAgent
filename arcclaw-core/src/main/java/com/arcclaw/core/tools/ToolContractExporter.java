@@ -1,5 +1,9 @@
 package com.arcclaw.core.tools;
 
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.event.Observes;
+import jakarta.inject.Inject;
+
 import java.io.IOException;
 import java.lang.annotation.Annotation;
 import java.nio.file.Files;
@@ -8,18 +12,16 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.enterprise.event.Observes;
-import jakarta.inject.Inject;
-
 import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.core.agent.role.ToolMetadata;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
-import io.quarkus.runtime.LaunchMode;
-import io.quarkus.runtime.StartupEvent;
+
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
+
+import io.quarkus.runtime.LaunchMode;
+import io.quarkus.runtime.StartupEvent;
 
 /**
  * Exports all registered tool contracts to a versioned JSON file at startup.
@@ -33,8 +35,11 @@ public class ToolContractExporter {
 
     private static final Logger log = Logger.getLogger(ToolContractExporter.class);
 
-    @Inject ToolRegistry toolRegistry;
-    @Inject ToolDiscoveryService discoveryService;
+    @Inject
+    ToolRegistry toolRegistry;
+
+    @Inject
+    ToolDiscoveryService discoveryService;
 
     @ConfigProperty(name = "arcclaw.data-dir", defaultValue = "./data")
     String dataDir;
@@ -56,9 +61,8 @@ public class ToolContractExporter {
         root.put("version", 1);
         root.put("toolCount", toolRegistry.listTools().size());
 
-        List<Map<String, Object>> tools = toolRegistry.listTools().stream()
-                .map(this::buildToolContract)
-                .toList();
+        List<Map<String, Object>> tools =
+                toolRegistry.listTools().stream().map(this::buildToolContract).toList();
         root.put("tools", tools);
 
         ObjectMapper mapper = new ObjectMapper().enable(SerializationFeature.INDENT_OUTPUT);

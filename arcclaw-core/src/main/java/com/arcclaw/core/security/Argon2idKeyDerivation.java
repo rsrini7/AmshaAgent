@@ -1,11 +1,11 @@
 package com.arcclaw.core.security;
 
+import jakarta.enterprise.context.ApplicationScoped;
+
 import java.nio.ByteBuffer;
 import java.nio.CharBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
-
-import jakarta.enterprise.context.ApplicationScoped;
 
 import org.bouncycastle.crypto.generators.Argon2BytesGenerator;
 import org.bouncycastle.crypto.params.Argon2Parameters;
@@ -49,6 +49,7 @@ public class Argon2idKeyDerivation {
      * @param sessionId The workspace session ID (acts as the salt).
      * @return A {@link VaultKey} containing the derived 32-byte AES key.
      */
+    @SuppressWarnings("java:S2093") // ByteBuffer is not Closeable; try-finally zeroes sensitive data
     public VaultKey deriveSessionKey(String sessionId) {
         if (sessionId == null || sessionId.isBlank()) {
             throw new IllegalArgumentException("Session ID cannot be null or empty during key derivation");

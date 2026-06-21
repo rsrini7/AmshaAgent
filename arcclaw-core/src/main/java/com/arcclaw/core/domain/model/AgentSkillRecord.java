@@ -12,8 +12,7 @@ public final class AgentSkillRecord implements AgentSkill {
     private Instant createdAt;
     private Instant updatedAt;
 
-    public AgentSkillRecord() {}
-
+    /** Required no-arg constructor for JDBI RowMapper / Jackson deserialization. */
     public static AgentSkillRecord fromDto(SkillDto dto) {
         AgentSkillRecord r = new AgentSkillRecord();
         r.id = dto.id();
@@ -24,11 +23,38 @@ public final class AgentSkillRecord implements AgentSkill {
         return r;
     }
 
-    @Override public String getId() { return id; }
-    @Override public String getName() { return name; }
-    @Override public String getDefinitionYaml() { return definitionYaml; }
-    @Override public void setDefinitionYaml(String definitionYaml) { this.definitionYaml = definitionYaml; }
-    @Override public Instant getCreatedAt() { return createdAt; }
-    @Override public Instant getUpdatedAt() { return updatedAt; }
-    @Override public void setUpdatedAt(Instant updatedAt) { this.updatedAt = updatedAt; }
+    @Override
+    public String getId() {
+        return id;
+    }
+
+    @Override
+    public String getName() {
+        return name;
+    }
+
+    @Override
+    public String getDefinitionYaml() {
+        return definitionYaml;
+    }
+
+    @Override
+    public void setDefinitionYaml(String definitionYaml) {
+        this.definitionYaml = definitionYaml;
+    }
+
+    @Override
+    public Instant getCreatedAt() {
+        return createdAt;
+    }
+
+    @Override
+    public Instant getUpdatedAt() {
+        return updatedAt;
+    }
+
+    @Override
+    public void setUpdatedAt(Instant updatedAt) {
+        this.updatedAt = updatedAt;
+    }
 }

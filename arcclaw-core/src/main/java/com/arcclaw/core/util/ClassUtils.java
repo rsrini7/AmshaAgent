@@ -7,7 +7,7 @@ public class ClassUtils {
 
     /**
      * Extracts a clean simple name from a class, stripping CDI proxy suffixes.
-     * 
+     *
      * @param clazz the class to get the name for
      * @return the simple name without the proxy suffix
      */
@@ -27,7 +27,7 @@ public class ClassUtils {
 
     /**
      * Extracts a clean simple name from an object instance.
-     * 
+     *
      * @param obj the object to get the name for
      * @return the simple name without the proxy suffix
      */

@@ -1,5 +1,9 @@
 package com.arcclaw.persistence.fs;
 
+import jakarta.annotation.PostConstruct;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.DirectoryStream;
@@ -13,14 +17,11 @@ import java.util.List;
 import java.util.Optional;
 import java.util.stream.Stream;
 
-import jakarta.annotation.PostConstruct;
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
-
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+
 import io.quarkus.arc.properties.IfBuildProperty;
 
 @ApplicationScoped
@@ -34,19 +35,19 @@ public class FilesystemFileStore {
     public FilesystemFileStore(FsStoreProperties properties) {
         this.dataDir = Path.of(properties.dataDir()).toAbsolutePath().normalize();
         this.objectMapper = new ObjectMapper()
-            .registerModule(new JavaTimeModule())
-            .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
-            .configure(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS, false)
-            .configure(SerializationFeature.INDENT_OUTPUT, true);
+                .registerModule(new JavaTimeModule())
+                .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
+                .configure(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS, false)
+                .configure(SerializationFeature.INDENT_OUTPUT, true);
     }
 
     protected FilesystemFileStore() {
-        this.dataDir = Path.of("./arcclaw-data").toAbsolutePath().normalize();
+        this.dataDir = Path.of("./data/fs").toAbsolutePath().normalize();
         this.objectMapper = new ObjectMapper()
-            .registerModule(new JavaTimeModule())
-            .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
-            .configure(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS, false)
-            .configure(SerializationFeature.INDENT_OUTPUT, true);
+                .registerModule(new JavaTimeModule())
+                .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
+                .configure(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS, false)
+                .configure(SerializationFeature.INDENT_OUTPUT, true);
     }
 
     @PostConstruct
@@ -117,14 +118,13 @@ public class FilesystemFileStore {
         Path dir = resolve(segments);
         if (!Files.exists(dir)) return;
         try (Stream<Path> walk = Files.walk(dir)) {
-            walk.sorted(Comparator.reverseOrder())
-                .forEach(p -> {
-                    try {
-                        Files.deleteIfExists(p);
-                    } catch (IOException e) {
-                        throw new UncheckedIOException(e);
-                    }
-                });
+            walk.sorted(Comparator.reverseOrder()).forEach(p -> {
+                try {
+                    Files.deleteIfExists(p);
+                } catch (IOException e) {
+                    throw new UncheckedIOException(e);
+                }
+            });
         } catch (IOException e) {
             throw new UncheckedIOException("Failed to delete directory: " + dir, e);
         }

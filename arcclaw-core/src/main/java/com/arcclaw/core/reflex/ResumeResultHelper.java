@@ -13,15 +13,20 @@ import com.arcclaw.core.util.AgentResultFormatter;
 @Dependent
 public class ResumeResultHelper {
 
-    @Inject CheckpointResumeHandler checkpointResumeHandler;
-    @Inject CliResultBridge cliResultBridge;
-    @Inject StatefulAgentStore statefulAgentStore;
+    @Inject
+    CheckpointResumeHandler checkpointResumeHandler;
+
+    @Inject
+    CliResultBridge cliResultBridge;
+
+    @Inject
+    StatefulAgentStore statefulAgentStore;
 
     public String runSync(String sessionId, String activeRole, String userId, String chatId) {
-        cliResultBridge.register(sessionId);
+        var _ = cliResultBridge.register(sessionId);
         try {
-            AgentResult result = checkpointResumeHandler.resumeAfterBatchDecisionSync(
-                    sessionId, activeRole, userId, chatId, "cli");
+            AgentResult result =
+                    checkpointResumeHandler.resumeAfterBatchDecisionSync(sessionId, activeRole, userId, chatId, "cli");
             if (result == null) result = cliResultBridge.waitForResult(sessionId, 10000);
             return result != null ? AgentResultFormatter.format(result) : "⏱ Timed out waiting for session.";
         } catch (Exception e) {
@@ -32,7 +37,7 @@ public class ResumeResultHelper {
     }
 
     public String pollBridge(String sessionId) {
-        cliResultBridge.register(sessionId);
+        var _ = cliResultBridge.register(sessionId);
         try {
             AgentResult bridgeResult = cliResultBridge.waitForResult(sessionId, 200);
             return bridgeResult != null ? AgentResultFormatter.format(bridgeResult) : null;

@@ -16,6 +16,7 @@ import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.channel.ChannelPluginRegistry;
 import com.arcclaw.core.pipeline.HandleResult;
 import com.arcclaw.core.pipeline.MessageContext;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -51,7 +52,7 @@ class AllowlistHandlerTest {
     @Test
     void testAllowedUserReturnsContinue() {
         when(allowlist.isAllowed("123", "alice")).thenReturn(true);
-        
+
         assertEquals(HandleResult.CONTINUE, handler.handle(context));
         verify(sender, never()).send(any(), any());
     }

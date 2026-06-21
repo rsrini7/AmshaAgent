@@ -8,6 +8,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 
 import com.arcclaw.core.security.AutonomyLevel;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -52,9 +53,8 @@ public class ContextAwareExecutorScopedValuePropagationTest {
         };
 
         // Act
-        Future<Boolean> future = WorkspaceContext.run(sid, uid, cid, auto, role, channel, () -> 
-            contextAwareExecutor.submit(task)
-        );
+        Future<Boolean> future =
+                WorkspaceContext.run(sid, uid, cid, auto, role, channel, () -> contextAwareExecutor.submit(task));
 
         // Assert
         assertTrue(future.get(), "Context was not propagated correctly into virtual thread");
@@ -76,9 +76,8 @@ public class ContextAwareExecutorScopedValuePropagationTest {
         };
 
         // Act
-        Future<Boolean> future = WorkspaceContext.run(sid, uid, cid, auto, role, () -> 
-            contextAwareExecutor.submit(task)
-        );
+        Future<Boolean> future =
+                WorkspaceContext.run(sid, uid, cid, auto, role, () -> contextAwareExecutor.submit(task));
 
         // Assert
         assertTrue(future.get(), "Autonomy level was not propagated correctly to the executor thread");

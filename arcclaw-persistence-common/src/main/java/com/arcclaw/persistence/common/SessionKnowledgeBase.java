@@ -1,14 +1,5 @@
 package com.arcclaw.persistence.common;
 
-import java.util.List;
-import java.util.stream.Collectors;
-
-import jakarta.annotation.PreDestroy;
-import jakarta.inject.Inject;
-
-import com.arcclaw.common.util.LogUtil;
-import com.arcclaw.core.scope.WorkspaceScoped;
-import com.arcclaw.persistence.api.MemoryChunkDto;
 import dev.langchain4j.data.document.Metadata;
 import dev.langchain4j.data.embedding.Embedding;
 import dev.langchain4j.data.segment.TextSegment;
@@ -16,6 +7,17 @@ import dev.langchain4j.model.embedding.EmbeddingModel;
 import dev.langchain4j.store.embedding.EmbeddingSearchRequest;
 import dev.langchain4j.store.embedding.EmbeddingSearchResult;
 import dev.langchain4j.store.embedding.inmemory.InMemoryEmbeddingStore;
+
+import jakarta.annotation.PreDestroy;
+import jakarta.inject.Inject;
+
+import java.util.List;
+import java.util.stream.Collectors;
+
+import com.arcclaw.common.util.LogUtil;
+import com.arcclaw.core.scope.WorkspaceScoped;
+import com.arcclaw.persistence.api.MemoryChunkDto;
+
 import org.jboss.logging.Logger;
 
 @WorkspaceScoped
@@ -23,7 +25,8 @@ public class SessionKnowledgeBase {
 
     private static final Logger log = Logger.getLogger(SessionKnowledgeBase.class);
 
-    @Inject EmbeddingModel embeddingModel;
+    @Inject
+    EmbeddingModel embeddingModel;
 
     private InMemoryEmbeddingStore<TextSegment> store = new InMemoryEmbeddingStore<>();
 

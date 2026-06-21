@@ -12,6 +12,7 @@ import com.arcclaw.core.config.SystemMetadataRegistry;
 import com.arcclaw.core.domain.model.AuditEvent;
 import com.arcclaw.core.persistence.AsyncPersistenceEngine;
 import com.arcclaw.core.persistence.PersistenceEvent;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -58,11 +59,12 @@ class TelemetryAuditServiceTest {
 
     @Test
     void testRecordSwallowsExceptions() {
-        doThrow(new RuntimeException("[TEST-EXPECTED] mock telemetry failure")).when(persistenceEngine).submitTelemetry(any());
+        doThrow(new RuntimeException("[TEST-EXPECTED] mock telemetry failure"))
+                .when(persistenceEngine)
+                .submitTelemetry(any());
 
         // Must not throw - caller must not be affected by TELEMETRY failures
-        assertDoesNotThrow(() ->
-                telemetryAuditService.record("ses-5", "u1", "debugger",
-                        SecurityEventType.CONTEXT_COMPACTED, "compacted"));
+        assertDoesNotThrow(() -> telemetryAuditService.record(
+                "ses-5", "u1", "debugger", SecurityEventType.CONTEXT_COMPACTED, "compacted"));
     }
 }

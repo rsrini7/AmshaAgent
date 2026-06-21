@@ -2,16 +2,18 @@ package com.arcclaw.persistence.sqlite;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import jakarta.inject.Inject;
+
 import java.util.List;
 import java.util.UUID;
 
-import jakarta.inject.Inject;
-
 import com.arcclaw.persistence.api.MemoryChunkDto;
-import io.quarkus.test.junit.QuarkusTest;
+
 import org.jdbi.v3.core.Jdbi;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+
+import io.quarkus.test.junit.QuarkusTest;
 
 @QuarkusTest
 class GlobalKnowledgeBaseTest {
@@ -29,8 +31,10 @@ class GlobalKnowledgeBaseTest {
     void setUp() {
         // Clean up any test data
         jdbi.useHandle(handle -> {
-            handle.createUpdate("DELETE FROM fts.vec_global WHERE chunk_id LIKE 'test-%'").execute();
-            handle.createUpdate("DELETE FROM rag_chunk WHERE chunk_id LIKE 'test-%'").execute();
+            handle.createUpdate("DELETE FROM fts.vec_global WHERE chunk_id LIKE 'test-%'")
+                    .execute();
+            handle.createUpdate("DELETE FROM rag_chunk WHERE chunk_id LIKE 'test-%'")
+                    .execute();
         });
     }
 
@@ -47,21 +51,19 @@ class GlobalKnowledgeBaseTest {
         }
         assertNotNull(chunkId, "ingest should return a chunk ID");
 
-        String storedText = jdbi.withHandle(handle ->
-            handle.createQuery("SELECT text FROM rag_chunk WHERE chunk_id = ?")
-                .bind(0, chunkId)
-                .mapTo(String.class)
-                .findOne()
-                .orElse(null)
-        );
+        String storedText =
+                jdbi.withHandle(handle -> handle.createQuery("SELECT text FROM rag_chunk WHERE chunk_id = ?")
+                        .bind(0, chunkId)
+                        .mapTo(String.class)
+                        .findOne()
+                        .orElse(null));
         assertEquals(text, storedText);
 
-        int vecCount = jdbi.withHandle(handle ->
-            handle.createQuery("SELECT COUNT(*) FROM fts.vec_global WHERE chunk_id = ?")
-                .bind(0, chunkId)
-                .mapTo(Integer.class)
-                .one()
-        );
+        int vecCount =
+                jdbi.withHandle(handle -> handle.createQuery("SELECT COUNT(*) FROM fts.vec_global WHERE chunk_id = ?")
+                        .bind(0, chunkId)
+                        .mapTo(Integer.class)
+                        .one());
         assertEquals(1, vecCount);
     }
 
@@ -103,15 +105,15 @@ class GlobalKnowledgeBaseTest {
         }
 
         assertDoesNotThrow(() -> {
-            String result = kb.ingest("test-atomic-" + UUID.randomUUID().toString().substring(0, 8) + " Atomicity test content.");
+            String result = kb.ingest(
+                    "test-atomic-" + UUID.randomUUID().toString().substring(0, 8) + " Atomicity test content.");
             if (result != null) {
-                String text = jdbi.withHandle(handle ->
-                    handle.createQuery("SELECT text FROM rag_chunk WHERE chunk_id = ?")
-                        .bind(0, result)
-                        .mapTo(String.class)
-                        .findOne()
-                        .orElse(null)
-                );
+                String text =
+                        jdbi.withHandle(handle -> handle.createQuery("SELECT text FROM rag_chunk WHERE chunk_id = ?")
+                                .bind(0, result)
+                                .mapTo(String.class)
+                                .findOne()
+                                .orElse(null));
                 assertNotNull(text, "Rag chunk should exist after successful ingest");
             }
         });
@@ -138,11 +140,10 @@ class GlobalKnowledgeBaseTest {
         assertNull(chunkId, "ingest should return null on failure");
 
         // Verify that no orphaned vector row was committed to vec_global
-        int orphanedCount = jdbi.withHandle(handle ->
-            handle.createQuery("SELECT COUNT(*) FROM fts.vec_global WHERE chunk_id NOT IN (SELECT chunk_id FROM rag_chunk)")
+        int orphanedCount = jdbi.withHandle(handle -> handle.createQuery(
+                        "SELECT COUNT(*) FROM fts.vec_global WHERE chunk_id NOT IN (SELECT chunk_id FROM rag_chunk)")
                 .mapTo(Integer.class)
-                .one()
-        );
+                .one());
         assertEquals(0, orphanedCount, "No orphaned vectors should be left in fts.vec_global");
     }
 }

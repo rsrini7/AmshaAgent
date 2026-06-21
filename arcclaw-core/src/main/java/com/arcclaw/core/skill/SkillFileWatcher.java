@@ -5,6 +5,11 @@ import static java.nio.file.StandardWatchEventKinds.ENTRY_DELETE;
 import static java.nio.file.StandardWatchEventKinds.ENTRY_MODIFY;
 import static java.nio.file.StandardWatchEventKinds.OVERFLOW;
 
+import jakarta.annotation.PostConstruct;
+import jakarta.annotation.PreDestroy;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+
 import java.io.IOException;
 import java.nio.file.FileSystems;
 import java.nio.file.Path;
@@ -15,14 +20,10 @@ import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import jakarta.annotation.PostConstruct;
-import jakarta.annotation.PreDestroy;
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
-
 import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.audit.TelemetryAuditService;
+
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
@@ -60,10 +61,7 @@ public class SkillFileWatcher {
         }
 
         running.set(true);
-        watcherThread = Thread.ofPlatform()
-            .name("skill-watcher")
-            .daemon(true)
-            .start(() -> watchLoop(skillsDir));
+        watcherThread = Thread.ofPlatform().name("skill-watcher").daemon(true).start(() -> watchLoop(skillsDir));
         LOG.infof("Skill file watcher started on: %s", skillsDir);
     }
 
@@ -126,12 +124,11 @@ public class SkillFileWatcher {
             List<String> warnings = skillLoader.reloadAll(true);
             LOG.infof("Skill file watcher: reloaded skills (%d warnings)", warnings.size());
             telemetryAuditService.record(
-                AgentSentinels.SYSTEM_SESSION,
-                AgentSentinels.SYSTEM_USER,
-                AgentSentinels.SYSTEM_ROLE,
-                SecurityEventType.SKILL_REFRESHED,
-                "SkillFileWatcher: auto-reloaded from filesystem changes"
-            );
+                    AgentSentinels.SYSTEM_SESSION,
+                    AgentSentinels.SYSTEM_USER,
+                    AgentSentinels.SYSTEM_ROLE,
+                    SecurityEventType.SKILL_REFRESHED,
+                    "SkillFileWatcher: auto-reloaded from filesystem changes");
         } catch (Exception e) {
             LOG.errorf("Skill file watcher reload failed: %s", e.getMessage());
         }

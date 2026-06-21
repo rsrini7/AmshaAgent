@@ -21,7 +21,7 @@
             <version>${project.version}</version>
         </dependency>
 
-        <!-- Shared JPA entities -->
+        <!-- Shared DTOs/utilities -->
         <dependency>
             <groupId>com.arcclaw</groupId>
             <artifactId>arcclaw-persistence-common</artifactId>
@@ -66,10 +66,6 @@
             <artifactId>jakarta.enterprise.cdi-api</artifactId>
         </dependency>
         <dependency>
-            <groupId>jakarta.persistence</groupId>
-            <artifactId>jakarta.persistence-api</artifactId>
-        </dependency>
-        <dependency>
             <groupId>jakarta.transaction</groupId>
             <artifactId>jakarta.transaction-api</artifactId>
         </dependency>
@@ -98,7 +94,6 @@
         <dependency>
             <groupId>io.zonky.test</groupId>
             <artifactId>embedded-postgres</artifactId>
-            <version>2.2.2</version>
             <scope>test</scope>
         </dependency>
         <dependency>
@@ -127,6 +122,11 @@
             <artifactId>quarkus-config-yaml</artifactId>
             <scope>test</scope>
         </dependency>
+    <dependency>
+      <groupId>io.quarkus</groupId>
+      <artifactId>quarkus-jacoco</artifactId>
+      <scope>test</scope>
+    </dependency>
     </dependencies>
 
     <build>
@@ -147,7 +147,7 @@
             <plugin>
                 <artifactId>maven-surefire-plugin</artifactId>
                 <configuration>
-                    <argLine>--add-opens java.base/java.lang=ALL-UNNAMED --add-opens java.base/java.nio=ALL-UNNAMED --add-opens java.base/sun.nio.ch=ALL-UNNAMED</argLine>
+                    <argLine>${argLine} --add-opens java.base/java.lang=ALL-UNNAMED --add-opens java.base/java.nio=ALL-UNNAMED --add-opens java.base/sun.nio.ch=ALL-UNNAMED</argLine>
                     <systemPropertyVariables>
                         <java.util.logging.manager>org.jboss.logmanager.LogManager</java.util.logging.manager>
                         <maven.home>${maven.home}</maven.home>

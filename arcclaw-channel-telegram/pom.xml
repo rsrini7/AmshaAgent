@@ -67,7 +67,6 @@
     <dependency>
       <groupId>io.quarkiverse.jdbc</groupId>
       <artifactId>quarkus-jdbc-sqlite</artifactId>
-      <version>3.0.11</version>
       <scope>test</scope>
     </dependency>
     <dependency>
@@ -96,6 +95,11 @@
     <dependency>
       <groupId>io.quarkus</groupId>
       <artifactId>quarkus-junit5-component</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>io.quarkus</groupId>
+      <artifactId>quarkus-jacoco</artifactId>
       <scope>test</scope>
     </dependency>
   </dependencies>

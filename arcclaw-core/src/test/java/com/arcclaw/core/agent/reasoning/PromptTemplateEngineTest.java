@@ -13,9 +13,11 @@ import com.arcclaw.core.agent.reasoning.prompt.PromptRegistry;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.tools.AgentTool;
 import com.arcclaw.core.tools.ToolRegistry;
-import io.quarkus.qute.Engine;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+
+import io.quarkus.qute.Engine;
 
 class PromptTemplateEngineTest {
 
@@ -28,17 +30,23 @@ class PromptTemplateEngineTest {
         engine.toolRegistry = mock(ToolRegistry.class);
         when(engine.toolRegistry.findTool(anyString())).thenReturn(Optional.of(mock(AgentTool.class)));
         engine.promptRegistry = new PromptRegistry() {
-            @Override public String get(String roleId, String sectionKey) { return null; }
-            @Override public String get(String roleId, String sectionKey, String fallback) { return fallback; }
+            @Override
+            public String get(String roleId, String sectionKey) {
+                return null;
+            }
+
+            @Override
+            public String get(String roleId, String sectionKey, String fallback) {
+                return fallback;
+            }
         };
         engine.engine = Engine.builder().addDefaults().build();
         // Standalone Qute engine with defaults (which includes Map and Reflection resolvers)
-        quteEngine = Engine.builder()
-            .addDefaults()
-            .build();
+        quteEngine = Engine.builder().addDefaults().build();
 
         // Mock templates
-        engine.coordinatorTemplate = quteEngine.parse("Coordinator: {compactionSummary ?: 'No summary'} {systemTimeUtc ?: 'No time'}");
+        engine.coordinatorTemplate =
+                quteEngine.parse("Coordinator: {compactionSummary ?: 'No summary'} {systemTimeUtc ?: 'No time'}");
         engine.researcherTemplate = quteEngine.parse("Researcher Template");
         engine.coderTemplate = quteEngine.parse("Coder");
         engine.debuggerTemplate = quteEngine.parse("Debugger");

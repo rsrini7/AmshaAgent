@@ -9,9 +9,4 @@ import java.util.Optional;
  * Passed to {@link EmbeddingProviderFactory#create(EmbeddingModelConfig)}.
  */
 public record EmbeddingModelConfig(
-    String providerId,
-    String modelName,
-    String baseUrl,
-    Optional<String> apiKey,
-    Duration timeout
-) {}
+        String providerId, String modelName, String baseUrl, Optional<String> apiKey, Duration timeout) {}

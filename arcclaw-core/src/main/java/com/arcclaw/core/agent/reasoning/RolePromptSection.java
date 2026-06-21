@@ -21,5 +21,6 @@ public interface RolePromptSection {
      * @param isSimpleChitchat whether it's simple conversational intent
      * @return the prompt section text
      */
-    String buildSection(AgentExecutionContext context, AgentRoleEnum roleEnum, boolean isCompact, boolean isSimpleChitchat);
+    String buildSection(
+            AgentExecutionContext context, AgentRoleEnum roleEnum, boolean isCompact, boolean isSimpleChitchat);
 }

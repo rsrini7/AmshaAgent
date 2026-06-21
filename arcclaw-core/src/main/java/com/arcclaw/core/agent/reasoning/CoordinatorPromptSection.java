@@ -18,7 +18,8 @@ public class CoordinatorPromptSection implements RolePromptSection {
     }
 
     @Override
-    public String buildSection(AgentExecutionContext context, AgentRoleEnum roleEnum, boolean isCompact, boolean isSimpleChitchat) {
+    public String buildSection(
+            AgentExecutionContext context, AgentRoleEnum roleEnum, boolean isCompact, boolean isSimpleChitchat) {
         if (isCompact || isSimpleChitchat) return "";
 
         return """

@@ -1,14 +1,14 @@
 package com.arcclaw.core.agent.hitl;
 
-import java.time.Instant;
-import java.util.LinkedHashMap;
-import java.util.Map;
-import java.util.Optional;
-
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
+
+import java.time.Instant;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.Optional;
 
 import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.core.agent.loop.CheckpointResolutionException;
@@ -23,6 +23,7 @@ import com.arcclaw.core.util.BatchDecisionUtil;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+
 import org.jboss.logging.Logger;
 
 /**
@@ -45,10 +46,11 @@ public class CheckpointApprovalService {
     private final Instance<CheckpointResumeHandler> resumeHandlerInstance;
 
     @Inject
-    public CheckpointApprovalService(StatefulAgentStore agentStore,
-                                    AgentSseService agentSseService,
-                                    ObjectMapper objectMapper,
-                                    Instance<CheckpointResumeHandler> resumeHandlerInstance) {
+    public CheckpointApprovalService(
+            StatefulAgentStore agentStore,
+            AgentSseService agentSseService,
+            ObjectMapper objectMapper,
+            Instance<CheckpointResumeHandler> resumeHandlerInstance) {
         this.agentStore = agentStore;
         this.agentSseService = agentSseService;
         this.objectMapper = objectMapper;
@@ -73,20 +75,29 @@ public class CheckpointApprovalService {
         }
         agentStore.save(cp);
 
-        agentSseService.publish(sessionId, new AgentSseService.HitlEvent(
-                sessionId, HitlEventType.APPROVED.wireValue(), cp.getPendingToolName(), cp.getPendingToolParametersJson(), null, null, Instant.now()
-        ));
-        log.infof("HITL-APPROVE: session %s role %s approved with %d decisions", sessionId, agentRole, decisions.size());
+        agentSseService.publish(
+                sessionId,
+                new AgentSseService.HitlEvent(
+                        sessionId,
+                        HitlEventType.APPROVED.wireValue(),
+                        cp.getPendingToolName(),
+                        cp.getPendingToolParametersJson(),
+                        null,
+                        null,
+                        Instant.now()));
+        log.infof(
+                "HITL-APPROVE: session %s role %s approved with %d decisions", sessionId, agentRole, decisions.size());
     }
 
     @Transactional(Transactional.TxType.NOT_SUPPORTED)
     public AgentCheckpoint approveAll(String sessionId, String reason) {
         Optional<AgentCheckpoint> cpOpt = agentStore.findLatestAwaitingApproval(sessionId);
-        if (cpOpt.isEmpty()) throw new CheckpointResolutionException("No pending checkpoint found for session: " + sessionId, 404);
+        if (cpOpt.isEmpty())
+            throw new CheckpointResolutionException("No pending checkpoint found for session: " + sessionId, 404);
 
         AgentCheckpoint cp = cpOpt.get();
         // §Bug-1 Fix: Keep status as AWAITING_APPROVAL.
-        
+
         try {
             String decisionsJson = cp.getBatchToolDecisions();
             if (decisionsJson != null && !decisionsJson.isBlank()) {
@@ -99,9 +110,16 @@ public class CheckpointApprovalService {
         }
 
         agentStore.save(cp);
-        agentSseService.publish(sessionId, new AgentSseService.HitlEvent(
-                sessionId, HitlEventType.APPROVED.wireValue(), cp.getPendingToolName(), cp.getPendingToolParametersJson(), null, null, Instant.now()
-        ));
+        agentSseService.publish(
+                sessionId,
+                new AgentSseService.HitlEvent(
+                        sessionId,
+                        HitlEventType.APPROVED.wireValue(),
+                        cp.getPendingToolName(),
+                        cp.getPendingToolParametersJson(),
+                        null,
+                        null,
+                        Instant.now()));
         return cp;
     }
 
@@ -114,16 +132,24 @@ public class CheckpointApprovalService {
         cp.setStatus(CheckpointStatus.DENIED);
         agentStore.save(cp);
 
-        agentSseService.publish(sessionId, new AgentSseService.HitlEvent(
-                sessionId, HitlEventType.DENIED.wireValue(), cp.getPendingToolName(), cp.getPendingToolParametersJson(), null, reason, Instant.now()
-        ));
+        agentSseService.publish(
+                sessionId,
+                new AgentSseService.HitlEvent(
+                        sessionId,
+                        HitlEventType.DENIED.wireValue(),
+                        cp.getPendingToolName(),
+                        cp.getPendingToolParametersJson(),
+                        null,
+                        reason,
+                        Instant.now()));
         log.infof("HITL-DENY: session %s role %s denied. reason=%s", sessionId, agentRole, reason);
     }
 
     @Transactional(Transactional.TxType.NOT_SUPPORTED)
     public AgentCheckpoint denyAll(String sessionId, String reason) {
         Optional<AgentCheckpoint> cpOpt = agentStore.findLatestAwaitingApproval(sessionId);
-        if (cpOpt.isEmpty()) throw new CheckpointResolutionException("No pending checkpoint found for session: " + sessionId, 404);
+        if (cpOpt.isEmpty())
+            throw new CheckpointResolutionException("No pending checkpoint found for session: " + sessionId, 404);
 
         AgentCheckpoint cp = cpOpt.get();
         // §Bug-1 Fix: Keep status as AWAITING_APPROVAL so claimForResume CAS can succeed.
@@ -141,16 +167,24 @@ public class CheckpointApprovalService {
         }
 
         agentStore.save(cp);
-        agentSseService.publish(sessionId, new AgentSseService.HitlEvent(
-                sessionId, HitlEventType.DENIED.wireValue(), cp.getPendingToolName(), cp.getPendingToolParametersJson(), null, reason, Instant.now()
-        ));
+        agentSseService.publish(
+                sessionId,
+                new AgentSseService.HitlEvent(
+                        sessionId,
+                        HitlEventType.DENIED.wireValue(),
+                        cp.getPendingToolName(),
+                        cp.getPendingToolParametersJson(),
+                        null,
+                        reason,
+                        Instant.now()));
         return cp;
     }
 
     @Transactional(Transactional.TxType.NOT_SUPPORTED)
     public AgentCheckpoint approveTool(String sessionId, String toolName, String reason) {
         Optional<AgentCheckpoint> cpOpt = agentStore.findLatestAwaitingApproval(sessionId);
-        if (cpOpt.isEmpty()) throw new CheckpointResolutionException("No pending checkpoint found for session: " + sessionId, 404);
+        if (cpOpt.isEmpty())
+            throw new CheckpointResolutionException("No pending checkpoint found for session: " + sessionId, 404);
 
         AgentCheckpoint cp = cpOpt.get();
         // §Bug-2 Fix: Explicitly use the passed-in toolName parameter.
@@ -160,16 +194,17 @@ public class CheckpointApprovalService {
             if (existingDecisions != null && !existingDecisions.isBlank()) {
                 decisions = objectMapper.readValue(existingDecisions, new TypeReference<>() {});
             }
-            
+
             decisions.put(toolName, ToolDecision.APPROVED);
             cp.setBatchToolDecisions(objectMapper.writeValueAsString(decisions));
 
             // §Bug-1 Fix: Keep as AWAITING_APPROVAL.
             agentStore.save(cp);
 
-            agentSseService.publish(sessionId, new AgentSseService.HitlEvent(
-                    sessionId, HitlEventType.APPROVED.wireValue(), toolName, null, null, null, Instant.now()
-            ));
+            agentSseService.publish(
+                    sessionId,
+                    new AgentSseService.HitlEvent(
+                            sessionId, HitlEventType.APPROVED.wireValue(), toolName, null, null, null, Instant.now()));
         } catch (JsonProcessingException e) {
             log.errorf("HITL-APPROVE-TOOL: failed to update decision for %s: %s", toolName, LogUtil.rootMessage(e));
         }
@@ -179,7 +214,8 @@ public class CheckpointApprovalService {
     @Transactional(Transactional.TxType.NOT_SUPPORTED)
     public AgentCheckpoint denyTool(String sessionId, String toolName, String reason) {
         Optional<AgentCheckpoint> cpOpt = agentStore.findLatestAwaitingApproval(sessionId);
-        if (cpOpt.isEmpty()) throw new CheckpointResolutionException("No pending checkpoint found for session: " + sessionId, 404);
+        if (cpOpt.isEmpty())
+            throw new CheckpointResolutionException("No pending checkpoint found for session: " + sessionId, 404);
 
         AgentCheckpoint cp = cpOpt.get();
         // §Bug-2 Fix: Explicitly use the passed-in toolName parameter.
@@ -189,16 +225,17 @@ public class CheckpointApprovalService {
             if (existingDecisions != null && !existingDecisions.isBlank()) {
                 decisions = objectMapper.readValue(existingDecisions, new TypeReference<>() {});
             }
-            
+
             decisions.put(toolName, ToolDecision.DENIED);
             cp.setBatchToolDecisions(objectMapper.writeValueAsString(decisions));
 
             // §Bug-1 Fix: Keep as AWAITING_APPROVAL.
             agentStore.save(cp);
 
-            agentSseService.publish(sessionId, new AgentSseService.HitlEvent(
-                    sessionId, HitlEventType.DENIED.wireValue(), toolName, null, null, reason, Instant.now()
-            ));
+            agentSseService.publish(
+                    sessionId,
+                    new AgentSseService.HitlEvent(
+                            sessionId, HitlEventType.DENIED.wireValue(), toolName, null, null, reason, Instant.now()));
         } catch (JsonProcessingException e) {
             log.errorf("HITL-DENY-TOOL: failed to update decision for %s: %s", toolName, LogUtil.rootMessage(e));
         }
@@ -210,13 +247,14 @@ public class CheckpointApprovalService {
      * event only after the resume handler completes (or fails).
      * <p>
      * §Issue-2 Fix: Previously this published RESUMED before calling the handler,
-     * and {@link #recordResumed} would publish a second one. Now we publish exactly once.
+     * and a duplicate RESUMED would be published. Now we publish exactly once.
      */
     public void triggerResume(AgentCheckpoint cp) {
         if (cp == null) return;
 
         if (!BatchDecisionUtil.pendingToolNames(cp, objectMapper).isEmpty()) {
-            log.debugf("HITL-RESUME: skipping trigger for session %s as batch tools are still pending", cp.getSessionId());
+            log.debugf(
+                    "HITL-RESUME: skipping trigger for session %s as batch tools are still pending", cp.getSessionId());
             return;
         }
 
@@ -227,20 +265,21 @@ public class CheckpointApprovalService {
             if (resumeHandlerInstance.isResolvable()) {
                 CheckpointResumeHandler handler = resumeHandlerInstance.get();
                 handler.resumeAfterBatchDecision(
-                    cp.getSessionId(), cp.getAgentRole(),
-                    cp.getChannelPlatformId() != null ? cp.getChannelPlatformId() : "unknown",
-                    cp.getChannelPlatformId() != null ? cp.getChannelPlatformId() : cp.getSessionId(),
-                    cp.getChannelType() != null ? cp.getChannelType() : "websocket"
-                );
+                        cp.getSessionId(),
+                        cp.getAgentRole(),
+                        cp.getChannelPlatformId() != null ? cp.getChannelPlatformId() : "unknown",
+                        cp.getChannelPlatformId() != null ? cp.getChannelPlatformId() : cp.getSessionId(),
+                        cp.getChannelType() != null ? cp.getChannelType() : "websocket");
             }
         } catch (Exception e) {
-            log.warnf("HITL-RESUME: failed to trigger CheckpointResumeHandler automatically: %s", LogUtil.rootMessage(e));
+            log.warnf(
+                    "HITL-RESUME: failed to trigger CheckpointResumeHandler automatically: %s", LogUtil.rootMessage(e));
         }
 
         // Single RESUMED event published after the handler completes (or fails)
-        agentSseService.publish(cp.getSessionId(), new AgentSseService.HitlEvent(
-                cp.getSessionId(), HitlEventType.RESUMED.wireValue(), null, null, null, null, Instant.now()
-        ));
+        agentSseService.publish(
+                cp.getSessionId(),
+                new AgentSseService.HitlEvent(
+                        cp.getSessionId(), HitlEventType.RESUMED.wireValue(), null, null, null, null, Instant.now()));
     }
-
 }

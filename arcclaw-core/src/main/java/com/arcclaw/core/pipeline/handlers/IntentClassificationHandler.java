@@ -2,10 +2,12 @@ package com.arcclaw.core.pipeline.handlers;
 
 import static com.arcclaw.core.message.UserMessages.*;
 
-import java.util.regex.Pattern;
+import dev.langchain4j.exception.HttpException;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
+
+import java.util.regex.Pattern;
 
 import com.arcclaw.channel.api.ChannelMessage;
 import com.arcclaw.channel.api.ChannelPlugin;
@@ -21,7 +23,7 @@ import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.pipeline.MessageHandler;
 import com.arcclaw.core.security.DestructiveVocabularyFilter;
 import com.arcclaw.core.util.AgentErrorMessageUtil;
-import dev.langchain4j.exception.HttpException;
+
 import org.jboss.logging.Logger;
 
 /**
@@ -31,14 +33,23 @@ import org.jboss.logging.Logger;
 public class IntentClassificationHandler implements MessageHandler {
 
     private static final Logger log = Logger.getLogger(IntentClassificationHandler.class);
-    
+
     private static final Pattern TRAILING_PUNCTUATION_PATTERN = Pattern.compile("[/?\\s]+$");
 
-    @Inject IntentDetector classifier;
-    @Inject DestructiveVocabularyFilter destructiveVocabularyFilter;
-    @Inject ChannelPluginRegistry channelPluginRegistry;
-    @Inject AgentRoleCache roleCache;
-    @Inject IntentClassificationService intentDetector;
+    @Inject
+    IntentDetector classifier;
+
+    @Inject
+    DestructiveVocabularyFilter destructiveVocabularyFilter;
+
+    @Inject
+    ChannelPluginRegistry channelPluginRegistry;
+
+    @Inject
+    AgentRoleCache roleCache;
+
+    @Inject
+    IntentClassificationService intentDetector;
 
     @Override
     public int priority() {
@@ -58,11 +69,14 @@ public class IntentClassificationHandler implements MessageHandler {
         }
 
         if (destructiveVocabularyFilter.isDestructive(message.text())) {
-            log.warnf("[IntentClassificationHandler] Destructive vocabulary detected " +
-                    "- blocking before agent dispatch. chat=%s", context.getChatId());
-            channelPluginRegistry.find(context.getChannelType())
-                .map(ChannelPlugin::sender)
-                .ifPresent(s -> s.sendRaw(context.getUser(), DESTRUCTIVE_GUARD_REPLY));
+            log.warnf(
+                    "[IntentClassificationHandler] Destructive vocabulary detected "
+                            + "- blocking before agent dispatch. chat=%s",
+                    context.getChatId());
+            channelPluginRegistry
+                    .find(context.getChannelType())
+                    .map(ChannelPlugin::sender)
+                    .ifPresent(s -> s.sendRaw(context.getUser(), DESTRUCTIVE_GUARD_REPLY));
             return HandleResult.STOP;
         }
 
@@ -85,10 +99,12 @@ public class IntentClassificationHandler implements MessageHandler {
             return context.getChatId();
         });
 
-        String classificationInput = TRAILING_PUNCTUATION_PATTERN.matcher(message.text().trim()).replaceAll("");
+        String classificationInput =
+                TRAILING_PUNCTUATION_PATTERN.matcher(message.text().trim()).replaceAll("");
 
         String currentGoal = context.getGoal();
-        if (currentGoal != null && AgentSentinels.REDACTED_HYPHEN_PATTERN.matcher(currentGoal).find()) {
+        if (currentGoal != null
+                && AgentSentinels.REDACTED_HYPHEN_PATTERN.matcher(currentGoal).find()) {
             log.infof("PII-redacted goal detected for chat %s - forcing coordinator chitchat", context.getChatId());
             context.setData(AgentSentinels.DATA_IS_SIMPLE_CHITCHAT, true);
             context.setData(AgentSentinels.DATA_IS_PII_REDACTED, true);
@@ -99,15 +115,20 @@ public class IntentClassificationHandler implements MessageHandler {
         boolean isFollowUpHeuristic = intentDetector.isFollowUpHeuristic(classificationInput);
 
         String role = null;
-        if (isFollowUpHeuristic && previousRole != null && 
-           (AgentRoleEnum.CODER.toScopedName().equals(previousRole) || 
-            AgentRoleEnum.DEBUGGER.toScopedName().equals(previousRole))) {
-            
+        if (isFollowUpHeuristic
+                && previousRole != null
+                && (AgentRoleEnum.CODER.toScopedName().equals(previousRole)
+                        || AgentRoleEnum.DEBUGGER.toScopedName().equals(previousRole))) {
+
             if (intentDetector.isScheduleIntent(classificationInput)) {
-                log.infof("Goal requires scheduling, overriding sticky role %s to coordinator for chat %s", previousRole, context.getChatId());
+                log.infof(
+                        "Goal requires scheduling, overriding sticky role %s to coordinator for chat %s",
+                        previousRole, context.getChatId());
                 role = AgentRoleEnum.COORDINATOR.toScopedName();
             } else {
-                log.infof("Short follow-up detected for chat %s - preserving sticky role: %s", context.getChatId(), previousRole);
+                log.infof(
+                        "Short follow-up detected for chat %s - preserving sticky role: %s",
+                        context.getChatId(), previousRole);
                 role = previousRole;
             }
         } else {
@@ -120,7 +141,8 @@ public class IntentClassificationHandler implements MessageHandler {
         }
 
         if (role == null || role.isBlank()) {
-            log.warnf("IntentDetector returned null/blank for chat %s - defaulting to coordinator", context.getChatId());
+            log.warnf(
+                    "IntentDetector returned null/blank for chat %s - defaulting to coordinator", context.getChatId());
             return AgentRoleEnum.COORDINATOR.toScopedName();
         }
 
@@ -130,21 +152,27 @@ public class IntentClassificationHandler implements MessageHandler {
     private void handleHttpException(MessageContext context, HttpException e) {
         if (e.statusCode() == 429 || (e.getMessage() != null && e.getMessage().contains("rate limit"))) {
             log.warnf("Intent classifier rate limited for chat %s - defaulting to coordinator", context.getChatId());
-            channelPluginRegistry.find(context.getChannelType())
-                .map(ChannelPlugin::sender)
-                .ifPresent(s -> s.sendRaw(context.getUser(), CLASSIFICATION_RATE_LIMITED));
+            channelPluginRegistry
+                    .find(context.getChannelType())
+                    .map(ChannelPlugin::sender)
+                    .ifPresent(s -> s.sendRaw(context.getUser(), CLASSIFICATION_RATE_LIMITED));
         } else {
             String sanitizedMsg = AgentErrorMessageUtil.sanitizeErrorMessage(e.getMessage());
-            log.errorf("Intent classification failed (HTTP %d) for chat %s: %s", e.statusCode(), context.getChatId(), sanitizedMsg);
-            channelPluginRegistry.find(context.getChannelType())
-                .map(ChannelPlugin::sender)
-                .ifPresent(s -> s.sendRaw(context.getUser(), sanitizedMsg));
+            log.errorf(
+                    "Intent classification failed (HTTP %d) for chat %s: %s",
+                    e.statusCode(), context.getChatId(), sanitizedMsg);
+            channelPluginRegistry
+                    .find(context.getChannelType())
+                    .map(ChannelPlugin::sender)
+                    .ifPresent(s -> s.sendRaw(context.getUser(), sanitizedMsg));
         }
         context.setAgentRole(AgentRoleEnum.COORDINATOR.toScopedName());
     }
 
     private void handleGeneralException(MessageContext context, Exception e) {
-        log.warnf("Intent classification failed for chat %s - defaulting to coordinator: %s", context.getChatId(), LogUtil.rootMessage(e));
+        log.warnf(
+                "Intent classification failed for chat %s - defaulting to coordinator: %s",
+                context.getChatId(), LogUtil.rootMessage(e));
         context.setAgentRole(AgentRoleEnum.COORDINATOR.toScopedName());
     }
 }

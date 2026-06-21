@@ -11,6 +11,7 @@ import java.util.List;
 import java.util.Optional;
 
 import com.arcclaw.persistence.api.*;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -26,10 +27,25 @@ class FsStoreErrorPathTest {
     @BeforeEach
     void setUp() throws Exception {
         FsStoreProperties props = new FsStoreProperties() {
-            @Override public String dataDir() { return tempDir.toString(); }
-            @Override public int lockTimeoutSeconds() { return 5; }
-            @Override public String luceneIndexDir() { return "lucene-index"; }
-            @Override public int vectorDimension() { return 768; }
+            @Override
+            public String dataDir() {
+                return tempDir.toString();
+            }
+
+            @Override
+            public int lockTimeoutSeconds() {
+                return 5;
+            }
+
+            @Override
+            public String luceneIndexDir() {
+                return "lucene-index";
+            }
+
+            @Override
+            public int vectorDimension() {
+                return 768;
+            }
         };
         FilesystemFileStore fileStore = new FilesystemFileStore(props);
         fileStore.ensureDataDir();
@@ -46,7 +62,10 @@ class FsStoreErrorPathTest {
     void tearDown() throws IOException {
         try (var walk = Files.walk(tempDir)) {
             walk.sorted(Comparator.reverseOrder()).forEach(p -> {
-                try { Files.deleteIfExists(p); } catch (IOException _) { }
+                try {
+                    Files.deleteIfExists(p);
+                } catch (IOException _) {
+                }
             });
         }
     }

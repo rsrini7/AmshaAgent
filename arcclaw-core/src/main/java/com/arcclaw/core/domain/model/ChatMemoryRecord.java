@@ -8,8 +8,7 @@ public final class ChatMemoryRecord implements ChatMemory {
     private String messagesJson;
     private String metadataJson;
 
-    public ChatMemoryRecord() {}
-
+    /** Required no-arg constructor for JDBI RowMapper / Jackson deserialization. */
     public static ChatMemoryRecord fromDto(ChatMemoryDto dto) {
         ChatMemoryRecord r = new ChatMemoryRecord();
         r.memoryId = dto.memoryId();
@@ -18,10 +17,33 @@ public final class ChatMemoryRecord implements ChatMemory {
         return r;
     }
 
-    @Override public String getMemoryId() { return memoryId; }
-    @Override public void setMemoryId(String memoryId) { this.memoryId = memoryId; }
-    @Override public String getMessagesJson() { return messagesJson; }
-    @Override public void setMessagesJson(String messagesJson) { this.messagesJson = messagesJson; }
-    @Override public String getMetadataJson() { return metadataJson; }
-    @Override public void setMetadataJson(String metadataJson) { this.metadataJson = metadataJson; }
+    @Override
+    public String getMemoryId() {
+        return memoryId;
+    }
+
+    @Override
+    public void setMemoryId(String memoryId) {
+        this.memoryId = memoryId;
+    }
+
+    @Override
+    public String getMessagesJson() {
+        return messagesJson;
+    }
+
+    @Override
+    public void setMessagesJson(String messagesJson) {
+        this.messagesJson = messagesJson;
+    }
+
+    @Override
+    public String getMetadataJson() {
+        return metadataJson;
+    }
+
+    @Override
+    public void setMetadataJson(String metadataJson) {
+        this.metadataJson = metadataJson;
+    }
 }

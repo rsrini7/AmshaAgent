@@ -1,9 +1,9 @@
 # ArcClaw - Telegram Testing Guide
 
 > **Prerequisites**: ArcClaw is running in `attach telegram` mode with a valid `TELEGRAM_BOT_TOKEN`
-> and your user ID in `ARCCLAW_TELEGRAM_ALLOWED_USER_IDS`. See [SETUP.md Section 7.7](./SETUP.md#77-telegram-bot-setup-required-for-attach-telegram-mode) for setup.
+> and your user ID in `ARCCLAW_TELEGRAM_ALLOWED_USER_IDS`. See [MANUAL_SETUP.md §5.5](./MANUAL_SETUP.md#55-telegram-required-only-for-attach-mode) for Telegram setup.
 
-> **Docs**: [README](./README.md) · [Setup](./SETUP.md) · [Testing Guide](./TESTING_GUIDE.md) · [FAQ](./FAQ.md) · [REST Client Files](./rest-http/)
+> **Docs**: [README](../README.md) · [ARCHITECTURE.md](./ARCHITECTURE.md) · [CONFIGURATION.md](./CONFIGURATION.md) · [Setup](./SETUP.md) · [FAQ](./FAQ.md)
 
 ---
 
@@ -459,7 +459,7 @@ Dynamic MCP tools: none connected
 
 **Expect (after connecting a server):**
 ```
-Dynamic MCP tools (2): github [self, HTTP_SSE], memory_search [self, HTTP_SSE]
+Dynamic MCP tools (3): github [self, HTTP_SSE], recall_memory_search [self, HTTP_SSE], archival_memory_search [self, HTTP_SSE]
 ```
 
 ---
@@ -808,7 +808,7 @@ What topics did we discuss earlier in this session?
 
 ---
 
-### 13.3 Search long-term memory (MemorySearchTool)
+### 13.3 Search long-term memory (RecallMemorySearchTool)
 
 After compaction has run at least once:
 
@@ -816,10 +816,10 @@ After compaction has run at least once:
 Search your memory for any discussions about SQLite or WAL mode.
 ```
 
-**Expect:** Bot uses `memory_search` tool and returns relevant compaction summaries from your
+**Expect:** Bot uses `recall_memory_search` tool and returns relevant compaction summaries from your
 session's history. Available to: coordinator, researcher, architect, synthesizer.
 
-**Log:** `INFO  [ToolInvoker] Invoking tool='memory_search' session=<uuid>`
+**Log:** `INFO  [ToolInvoker] Invoking tool='recall_memory_search' session=<uuid>`
 
 ---
 
@@ -970,17 +970,31 @@ concurrent audit writes for the same session are serialized via `SessionAuditSeq
 `SessionReaper` runs at startup and terminates any sessions with `IN_PROGRESS` or
 `AWAITING_APPROVAL` checkpoints that were left open by a previous crash.
 
+**Important change (2026-05-30):** Zombie recovery now auto-denies ALL stale
+`AWAITING_APPROVAL` checkpoints for **all channel types** (CLI, Telegram, WebSocket UI),
+not just CLI. After restart, conversation context is stale — the LLM would be confused
+by old approval failures. Denial fires:
+- `ApprovalDecisionEvent` for Telegram inline keyboard button updates ("expired")
+- `agentSseService.complete()` for WebSocket UI SSE stream completion
+- `cliResultBridge.cancel()` for CLI session unblocking
+
 **Test:**
-1. Start a task: `Write a very long essay...` (something that takes time)
-2. While the agent is thinking, kill the process immediately (`Ctrl+C` hard)
+1. Trigger an AWAITING_APPROVAL checkpoint (e.g., invoke a tool requiring approval)
+2. Kill the process immediately (`Ctrl+C` hard) — do NOT approve or deny
 3. Restart the app
 
 **Expect on restart:**
 ```
-INFO  [SessionReaper] Recovering zombie session <uuid> - marking FAILED
+INFO  [SessionReaper] Zombie recovery: found N AWAITING_APPROVAL checkpoint(s) — auto-denying all.
+WARN    Auto-denying stale approval: id=<id> session=<uuid> role=<role> tool=<tool>
 ```
 
+**Verify Telegram behavior:** The inline approval keyboard from before the crash
+now shows buttons as "expired". The Telegram message is edited in-place.
+
 Sending a new message on the same session works - the agent starts fresh.
+
+**Reference:** `SessionReaper.java` zombie recovery step 2, `ApprovalDecisionEvent.java`.
 
 ---
 
@@ -1207,10 +1221,10 @@ After approval: `✅ Document ingested.`
 What do you know about ArcClaw's persistence layer?
 ```
 
-**Expect:** Agent uses `memory_search` and returns information about SQLite WAL mode from the
+**Expect:** Agent uses `recall_memory_search` and returns information about SQLite WAL mode from the
 ingested document.
 
-**Log:** `INFO  [ToolInvoker] Invoking tool='memory_search' session=<uuid>`
+**Log:** `INFO  [ToolInvoker] Invoking tool='recall_memory_search' session=<uuid>`
 
 ---
 

@@ -1,12 +1,12 @@
 package com.arcclaw.core.security;
 
-import java.util.Optional;
-import java.util.concurrent.locks.ReentrantLock;
-
 import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
+
+import java.util.Optional;
+import java.util.concurrent.locks.ReentrantLock;
 
 import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.audit.AuditService;
@@ -16,11 +16,14 @@ import com.arcclaw.core.observability.AgentOtelContext;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.persistence.api.SecretDto;
 import com.arcclaw.persistence.api.SecretStorePort;
+
 import io.opentelemetry.api.trace.Span;
 import io.opentelemetry.api.trace.StatusCode;
 
 @ApplicationScoped
 public class SecretVaultImpl implements SecretVault {
+
+    private static final String AUDIT_KEY_NAME_PREFIX = "keyName=";
 
     @Inject
     Argon2idKeyDerivation keyDerivation;
@@ -86,14 +89,18 @@ public class SecretVaultImpl implements SecretVault {
     @Override
     @Transactional(Transactional.TxType.REQUIRES_NEW)
     public void store(String keyName, byte[] secret) {
-        String sessionId = WorkspaceContext.SESSION_ID.isBound() ? WorkspaceContext.SESSION_ID.get() : VaultConstants.SYSTEM_SESSION_ID;
+        String sessionId = WorkspaceContext.SESSION_ID.isBound()
+                ? WorkspaceContext.SESSION_ID.get()
+                : VaultConstants.SYSTEM_SESSION_ID;
         store(keyName, secret, WorkspaceContext.getUserIdOrUnknown(), sessionId);
     }
 
     @Override
     @Transactional(Transactional.TxType.REQUIRES_NEW)
     public void store(String keyName, byte[] secret, String userId) {
-        String sessionId = WorkspaceContext.SESSION_ID.isBound() ? WorkspaceContext.SESSION_ID.get() : VaultConstants.SYSTEM_SESSION_ID;
+        String sessionId = WorkspaceContext.SESSION_ID.isBound()
+                ? WorkspaceContext.SESSION_ID.get()
+                : VaultConstants.SYSTEM_SESSION_ID;
         store(keyName, secret, userId, sessionId);
     }
 
@@ -107,19 +114,23 @@ public class SecretVaultImpl implements SecretVault {
             AesGcmSivCipher.CipherResult result = cipher.encrypt(secret, sessionKey, keyName);
 
             // 3. Persist
-            secretStore.save(new SecretDto(
-                sessionId,
-                keyName,
-                1,
-                result.ciphertext(),
-                result.nonce()
-            ));
+            secretStore.save(new SecretDto(sessionId, keyName, 1, result.ciphertext(), result.nonce()));
 
             // Only record audit for non-system sessions to avoid infinite recursion or
             // missing context
             if (!VaultConstants.SYSTEM_SESSION_ID.equals(sessionId)) {
-                auditService.record(sessionId, userId, AgentSentinels.SYSTEM_ROLE, SecurityEventType.VAULT_STORE, "keyName=" + keyName);
-                auditService.record(sessionId, userId, AgentSentinels.SYSTEM_ROLE, SecurityEventType.VAULT_ACCESS, "keyName=" + keyName + " op=STORE");
+                auditService.record(
+                        sessionId,
+                        userId,
+                        AgentSentinels.SYSTEM_ROLE,
+                        SecurityEventType.VAULT_STORE,
+                        AUDIT_KEY_NAME_PREFIX + keyName);
+                auditService.record(
+                        sessionId,
+                        userId,
+                        AgentSentinels.SYSTEM_ROLE,
+                        SecurityEventType.VAULT_ACCESS,
+                        AUDIT_KEY_NAME_PREFIX + keyName + " op=STORE");
             }
 
             if (span != null) span.setStatus(StatusCode.OK);
@@ -137,16 +148,21 @@ public class SecretVaultImpl implements SecretVault {
 
     @Override
     public Optional<VaultKey> get(String keyName) {
-        String sessionId = WorkspaceContext.SESSION_ID.isBound() ? WorkspaceContext.SESSION_ID.get() : VaultConstants.SYSTEM_SESSION_ID;
+        String sessionId = WorkspaceContext.SESSION_ID.isBound()
+                ? WorkspaceContext.SESSION_ID.get()
+                : VaultConstants.SYSTEM_SESSION_ID;
         return get(keyName, WorkspaceContext.getUserIdOrUnknown(), sessionId);
     }
 
     @Override
     public Optional<VaultKey> get(String keyName, String userId) {
-        String sessionId = WorkspaceContext.SESSION_ID.isBound() ? WorkspaceContext.SESSION_ID.get() : VaultConstants.SYSTEM_SESSION_ID;
+        String sessionId = WorkspaceContext.SESSION_ID.isBound()
+                ? WorkspaceContext.SESSION_ID.get()
+                : VaultConstants.SYSTEM_SESSION_ID;
         return get(keyName, userId, sessionId);
     }
 
+    @SuppressWarnings("java:S2093") // VaultKey lifecycle managed by VaultKeyCache, not local scope
     private Optional<VaultKey> get(String keyName, String userId, String sessionId) {
         Span span = otelContext.childSpan(sessionId, AgentOTelConstants.SPAN_VAULT_RETRIEVE);
         try {
@@ -156,10 +172,18 @@ public class SecretVaultImpl implements SecretVault {
 
             if (dto == null) {
                 if (!VaultConstants.SYSTEM_SESSION_ID.equals(sessionId)) {
-                    auditService.record(sessionId, userId, AgentSentinels.SYSTEM_ROLE, SecurityEventType.VAULT_RETRIEVE_MISS,
-                            "keyName=" + keyName);
-                    auditService.record(sessionId, userId, AgentSentinels.SYSTEM_ROLE, SecurityEventType.VAULT_ACCESS,
-                            "keyName=" + keyName + " op=RETRIEVE_MISS");
+                    auditService.record(
+                            sessionId,
+                            userId,
+                            AgentSentinels.SYSTEM_ROLE,
+                            SecurityEventType.VAULT_RETRIEVE_MISS,
+                            AUDIT_KEY_NAME_PREFIX + keyName);
+                    auditService.record(
+                            sessionId,
+                            userId,
+                            AgentSentinels.SYSTEM_ROLE,
+                            SecurityEventType.VAULT_ACCESS,
+                            AUDIT_KEY_NAME_PREFIX + keyName + " op=RETRIEVE_MISS");
                 }
                 if (span != null) {
                     span.setAttribute(AgentOTelConstants.ATTR_VAULT_FOUND, false);
@@ -173,8 +197,18 @@ public class SecretVaultImpl implements SecretVault {
             // 3. Decrypt
             byte[] plaintext = cipher.decrypt(dto.ciphertext(), dto.nonce(), sessionKey, keyName);
             if (!VaultConstants.SYSTEM_SESSION_ID.equals(sessionId)) {
-                auditService.record(sessionId, userId, AgentSentinels.SYSTEM_ROLE, SecurityEventType.VAULT_RETRIEVE, "keyName=" + keyName);
-                auditService.record(sessionId, userId, AgentSentinels.SYSTEM_ROLE, SecurityEventType.VAULT_ACCESS, "keyName=" + keyName + " op=RETRIEVE");
+                auditService.record(
+                        sessionId,
+                        userId,
+                        AgentSentinels.SYSTEM_ROLE,
+                        SecurityEventType.VAULT_RETRIEVE,
+                        AUDIT_KEY_NAME_PREFIX + keyName);
+                auditService.record(
+                        sessionId,
+                        userId,
+                        AgentSentinels.SYSTEM_ROLE,
+                        SecurityEventType.VAULT_ACCESS,
+                        AUDIT_KEY_NAME_PREFIX + keyName + " op=RETRIEVE");
             }
             if (span != null) {
                 span.setAttribute("vault.found", true);
@@ -192,7 +226,6 @@ public class SecretVaultImpl implements SecretVault {
         }
         // sessionKey NOT auto-closed here
     }
-
 
     @Override
     public Optional<VaultKey> retrieveSystemKey(String keyName) {
@@ -232,19 +265,19 @@ public class SecretVaultImpl implements SecretVault {
         try {
             AesGcmSivCipher.CipherResult result = cipher.encrypt(secret, systemKey, keyName);
 
-            secretStore.save(new SecretDto(
-                sessionId,
-                keyName,
-                1,
-                result.ciphertext(),
-                result.nonce()
-            ));
+            secretStore.save(new SecretDto(sessionId, keyName, 1, result.ciphertext(), result.nonce()));
 
-            auditService.record(AgentSentinels.SYSTEM_SESSION, AgentSentinels.SYSTEM_USER,
-                    AgentSentinels.SYSTEM_ROLE, SecurityEventType.VAULT_STORE,
+            auditService.record(
+                    AgentSentinels.SYSTEM_SESSION,
+                    AgentSentinels.SYSTEM_USER,
+                    AgentSentinels.SYSTEM_ROLE,
+                    SecurityEventType.VAULT_STORE,
                     "systemKey=" + keyName);
-            auditService.record(AgentSentinels.SYSTEM_SESSION, AgentSentinels.SYSTEM_USER,
-                    AgentSentinels.SYSTEM_ROLE, SecurityEventType.VAULT_ACCESS,
+            auditService.record(
+                    AgentSentinels.SYSTEM_SESSION,
+                    AgentSentinels.SYSTEM_USER,
+                    AgentSentinels.SYSTEM_ROLE,
+                    SecurityEventType.VAULT_ACCESS,
                     "systemKey=" + keyName + " op=STORE_SYSTEM");
         } catch (Exception e) {
             throw e;
@@ -256,8 +289,11 @@ public class SecretVaultImpl implements SecretVault {
     public void removeSystemKey(String keyName) {
         secretStore.delete(VaultConstants.SYSTEM_SESSION_ID, keyName);
 
-        auditService.record(AgentSentinels.SYSTEM_SESSION, AgentSentinels.SYSTEM_USER,
-                AgentSentinels.SYSTEM_ROLE, SecurityEventType.VAULT_ACCESS,
+        auditService.record(
+                AgentSentinels.SYSTEM_SESSION,
+                AgentSentinels.SYSTEM_USER,
+                AgentSentinels.SYSTEM_ROLE,
+                SecurityEventType.VAULT_ACCESS,
                 "systemKey=" + keyName + " op=DELETE_SYSTEM");
     }
 }

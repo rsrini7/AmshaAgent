@@ -1,21 +1,23 @@
 package com.arcclaw.core.governance;
 
+import jakarta.annotation.PostConstruct;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
-import jakarta.annotation.PostConstruct;
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
-
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.scope.WorkspaceContext;
-import io.micrometer.core.instrument.MeterRegistry;
-import io.quarkus.scheduler.Scheduled;
+
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
+
+import io.micrometer.core.instrument.MeterRegistry;
+import io.quarkus.scheduler.Scheduled;
 
 /**
  * Tracks AI consumption costs across all active sessions.
@@ -51,7 +53,7 @@ public class GovernanceLayer implements GovernanceStrategy {
         try {
             Instant cutoff = Instant.now().minus(maxAgeHours, ChronoUnit.HOURS);
             int evicted = 0;
-            
+
             // entrySet().removeIf is safe for ConcurrentHashMap
             var it = budgets.entrySet().iterator();
             while (it.hasNext()) {
@@ -61,7 +63,7 @@ public class GovernanceLayer implements GovernanceStrategy {
                     evicted++;
                 }
             }
-            
+
             if (evicted > 0) {
                 log.infof("Cleaned up %d stale budget(s) older than %d hours.", evicted, maxAgeHours);
                 registry.counter("arcclaw.governance.budget.evictions").increment(evicted);
@@ -89,9 +91,15 @@ public class GovernanceLayer implements GovernanceStrategy {
 
     // The recordLlmCall method is now a public method of GovernanceLayer,
     // to be called directly by AgentLoop or other components.
-    private enum BudgetStatus { OK, WARNING, EXCEEDED }
+    private enum BudgetStatus {
+        OK,
+        WARNING,
+        EXCEEDED
+    }
+
     private record BudgetUpdateResult(BudgetStatus status, double currentCost, double hardLimit) {}
 
+    @Override
     public void recordLlmCall(String sessionId, int inputTokens, int outputTokens) {
         if (sessionId == null) {
             return;
@@ -102,10 +110,13 @@ public class GovernanceLayer implements GovernanceStrategy {
         long effectiveOutput = zeroReport ? minTokensFloor : outputTokens;
 
         if (zeroReport) {
-            log.debugf("GOVERNANCE prose-extraction step for session %s - applying token floor %d", sessionId, minTokensFloor);
+            log.debugf(
+                    "GOVERNANCE prose-extraction step for session %s - applying token floor %d",
+                    sessionId, minTokensFloor);
         }
 
-        double incrementalCost = (effectiveInput / 1000.0) * pricePer1kInput + (effectiveOutput / 1000.0) * pricePer1kOutput;
+        double incrementalCost =
+                (effectiveInput / 1000.0) * pricePer1kInput + (effectiveOutput / 1000.0) * pricePer1kOutput;
 
         final BudgetUpdateResult[] resultWrapper = new BudgetUpdateResult[1];
         budgets.compute(sessionId, (_, existing) -> {
@@ -125,13 +136,13 @@ public class GovernanceLayer implements GovernanceStrategy {
 
             double currentCost = budget.totalCost;
 
-            log.debugf("Recorded LLM call for session %s: in=%d, out=%d, cost=$%.6f, total=$%.4f",
+            log.debugf(
+                    "Recorded LLM call for session %s: in=%d, out=%d, cost=$%.6f, total=$%.4f",
                     sessionId, inputTokens, outputTokens, incrementalCost, currentCost);
 
             // 3. HARD LIMIT CHECK (After applying update)
             if (currentCost >= budget.hardLimit) {
-                log.warnf("Session %s EXCEEDED budget ($%.2f >= $%.2f).",
-                        sessionId, currentCost, budget.hardLimit);
+                log.warnf("Session %s EXCEEDED budget ($%.2f >= $%.2f).", sessionId, currentCost, budget.hardLimit);
                 resultWrapper[0] = new BudgetUpdateResult(BudgetStatus.EXCEEDED, currentCost, budget.hardLimit);
                 return budget;
             }
@@ -139,9 +150,9 @@ public class GovernanceLayer implements GovernanceStrategy {
             // 4. SOFT WARNING CHECK
             if (currentCost >= budget.warningLimit && !budget.warningSent) {
                 budget.warningSent = true;
-                log.warnf("Session %s approaching budget limit: $%.4f / $%.2f (%.0f%%)",
-                        sessionId, currentCost, budget.hardLimit,
-                        (currentCost / budget.hardLimit) * 100);
+                log.warnf(
+                        "Session %s approaching budget limit: $%.4f / $%.2f (%.0f%%)",
+                        sessionId, currentCost, budget.hardLimit, (currentCost / budget.hardLimit) * 100);
                 resultWrapper[0] = new BudgetUpdateResult(BudgetStatus.WARNING, currentCost, budget.hardLimit);
                 return budget;
             }
@@ -152,27 +163,25 @@ public class GovernanceLayer implements GovernanceStrategy {
 
         BudgetUpdateResult result = resultWrapper[0];
         if (result.status == BudgetStatus.EXCEEDED) {
-            String detail = String.format("Session budget of $%.2f exceeded. Total cost: $%.4f",
-                    result.hardLimit, result.currentCost);
+            String detail = String.format(
+                    "Session budget of $%.2f exceeded. Total cost: $%.4f", result.hardLimit, result.currentCost);
             String userId = WorkspaceContext.getUserIdOrUnknown();
-            auditService.recordMandatory(sessionId, userId, "governance",
-                    SecurityEventType.BUDGET_EXCEEDED, detail);
+            auditService.recordMandatory(sessionId, userId, "governance", SecurityEventType.BUDGET_EXCEEDED, detail);
             throw new BudgetExceededException(detail);
         }
 
         if (result.status == BudgetStatus.WARNING) {
             throw new BudgetWarningException(String.format(
-                    "Session budget is %.0f%% consumed ($%.4f of $%.2f). " +
-                    "Responses will be concise to conserve budget.",
+                    "Session budget is %.0f%% consumed ($%.4f of $%.2f). "
+                            + "Responses will be concise to conserve budget.",
                     (result.currentCost / result.hardLimit) * 100, result.currentCost, result.hardLimit));
         }
     }
 
-
-
     /**
      * Clears tracked budget for a session (usually called when session terminates).
      */
+    @Override
     public void clearSession(String sessionId) {
         budgets.remove(sessionId);
     }
@@ -180,6 +189,7 @@ public class GovernanceLayer implements GovernanceStrategy {
     /**
      * Gets the total tracked USD cost for a given session.
      */
+    @Override
     public double getSessionCost(String sessionId) {
         SessionBudget budget = budgets.get(sessionId);
         if (budget != null) {
@@ -189,10 +199,12 @@ public class GovernanceLayer implements GovernanceStrategy {
         return 0.0;
     }
 
-    public double getBudgetUsd() { 
-        return budgetUsd; 
+    @Override
+    public double getBudgetUsd() {
+        return budgetUsd;
     }
 
+    @Override
     public int getSessionInputTokens(String sessionId) {
         SessionBudget b = budgets.get(sessionId);
         if (b != null) {
@@ -202,6 +214,7 @@ public class GovernanceLayer implements GovernanceStrategy {
         return 0;
     }
 
+    @Override
     public int getSessionOutputTokens(String sessionId) {
         SessionBudget b = budgets.get(sessionId);
         if (b != null) {
@@ -215,6 +228,7 @@ public class GovernanceLayer implements GovernanceStrategy {
      * Checks if a session is currently over its budget limit.
      * Throws BudgetExceededException if already over limit.
      */
+    @Override
     public void assertWithinBudget(String sessionId) {
         SessionBudget budget = budgets.get(sessionId);
         if (budget != null && budget.getTotalCost() >= budget.hardLimit) {

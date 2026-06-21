@@ -18,16 +18,48 @@ import com.arcclaw.channel.api.ReplyRenderer;
 @ApplicationScoped
 public class TelegramChannelPlugin implements ChannelPlugin {
 
-    @Inject TelegramChannelSender    sender;
-    @Inject TelegramMarkdownV2Renderer renderer;
-    @Inject TelegramAllowlistGuard   allowlist;
-    @Inject TelegramJobNotifier      jobNotifier;
-    @Inject TelegramChannelDaemon    daemon;
+    @Inject
+    TelegramChannelSender sender;
 
-    @Override public ChannelType     channelType() { return ChannelType.TELEGRAM; }
-    @Override public ChannelSender   sender()      { return sender; }
-    @Override public ReplyRenderer   renderer()    { return renderer; }
-    @Override public ChannelAllowlist allowlist()  { return allowlist; }
-    @Override public ChannelJobNotifier jobNotifier() { return jobNotifier; }
-    @Override public ChannelDaemon   daemon()      { return daemon; }
+    @Inject
+    TelegramMarkdownV2Renderer renderer;
+
+    @Inject
+    TelegramAllowlistGuard allowlist;
+
+    @Inject
+    TelegramJobNotifier jobNotifier;
+
+    @Inject
+    TelegramChannelDaemon daemon;
+
+    @Override
+    public ChannelType channelType() {
+        return ChannelType.TELEGRAM;
+    }
+
+    @Override
+    public ChannelSender sender() {
+        return sender;
+    }
+
+    @Override
+    public ReplyRenderer renderer() {
+        return renderer;
+    }
+
+    @Override
+    public ChannelAllowlist allowlist() {
+        return allowlist;
+    }
+
+    @Override
+    public ChannelJobNotifier jobNotifier() {
+        return jobNotifier;
+    }
+
+    @Override
+    public ChannelDaemon daemon() {
+        return daemon;
+    }
 }

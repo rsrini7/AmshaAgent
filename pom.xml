@@ -42,8 +42,28 @@
     <langchain4j.version>1.0.0-beta1</langchain4j.version>
     <bouncycastle.version>1.78.1</bouncycastle.version>
     <archunit.version>1.4.1</archunit.version>
+    <errorprone.version>2.49.0</errorprone.version>
     <camel.quarkus.version>3.27.3</camel.quarkus.version>
     <quarkus-jdbi.version>1.9.0</quarkus-jdbi.version>
+    <quarkus-mcp.version>1.10.3</quarkus-mcp.version>
+    <quarkus-jdbc-sqlite.version>3.0.11</quarkus-jdbc-sqlite.version>
+    <lucene.version>10.4.0</lucene.version>
+    <!-- Baked into build-info.properties. "default" = JVM mode (BackendValidator skips).
+         Native builds explicitly pass -Darcclaw.build.backend=sqlite|postgres|fs. -->
+    <arcclaw.build.backend>default</arcclaw.build.backend>
+    <commonmark.version>0.24.0</commonmark.version>
+    <commons-lang3.version>3.18.0</commons-lang3.version>
+    <commons-text.version>1.15.0</commons-text.version>
+    <cron-utils.version>9.2.1</cron-utils.version>
+    <owasp-sanitizer.version>20260313.1</owasp-sanitizer.version>
+    <openinference-langchain4j.version>0.1.8</openinference-langchain4j.version>
+    <embedded-postgres.version>2.2.2</embedded-postgres.version>
+    <bucket4j.version>8.16.1</bucket4j.version>
+    <wiremock.version>3.9.2</wiremock.version>
+    <jboss-logmanager.version>3.0.6.Final</jboss-logmanager.version>
+    <jline.version>3.30.11</jline.version>
+    <jansi.version>2.4.3</jansi.version>
+    <jacoco.version>0.8.14</jacoco.version>
     <maven.surefire.argLine>--add-opens java.base/java.lang=ALL-UNNAMED --add-opens java.base/java.nio=ALL-UNNAMED --add-opens java.base/sun.nio.ch=ALL-UNNAMED --add-opens java.base/jdk.internal.misc=ALL-UNNAMED -Dnet.bytebuddy.experimental=true --enable-native-access=ALL-UNNAMED</maven.surefire.argLine>
   </properties>
  
@@ -139,15 +159,119 @@
         <artifactId>quarkus-jdbi</artifactId>
         <version>${quarkus-jdbi.version}</version>
       </dependency>
+      <dependency>
+        <groupId>io.quarkiverse.mcp</groupId>
+        <artifactId>quarkus-mcp-server-stdio</artifactId>
+        <version>${quarkus-mcp.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.quarkiverse.mcp</groupId>
+        <artifactId>quarkus-mcp-server-http</artifactId>
+        <version>${quarkus-mcp.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.quarkiverse.jdbc</groupId>
+        <artifactId>quarkus-jdbc-sqlite</artifactId>
+        <version>${quarkus-jdbc-sqlite.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.apache.lucene</groupId>
+        <artifactId>lucene-core</artifactId>
+        <version>${lucene.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.apache.lucene</groupId>
+        <artifactId>lucene-queryparser</artifactId>
+        <version>${lucene.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.apache.lucene</groupId>
+        <artifactId>lucene-analysis-common</artifactId>
+        <version>${lucene.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.commonmark</groupId>
+        <artifactId>commonmark</artifactId>
+        <version>${commonmark.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.commonmark</groupId>
+        <artifactId>commonmark-ext-gfm-tables</artifactId>
+        <version>${commonmark.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.apache.commons</groupId>
+        <artifactId>commons-lang3</artifactId>
+        <version>${commons-lang3.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.apache.commons</groupId>
+        <artifactId>commons-text</artifactId>
+        <version>${commons-text.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.cronutils</groupId>
+        <artifactId>cron-utils</artifactId>
+        <version>${cron-utils.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.googlecode.owasp-java-html-sanitizer</groupId>
+        <artifactId>owasp-java-html-sanitizer</artifactId>
+        <version>${owasp-sanitizer.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.arize</groupId>
+        <artifactId>openinference-instrumentation-langchain4j</artifactId>
+        <version>${openinference-langchain4j.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.zonky.test</groupId>
+        <artifactId>embedded-postgres</artifactId>
+        <version>${embedded-postgres.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.bucket4j</groupId>
+        <artifactId>bucket4j_jdk17-core</artifactId>
+        <version>${bucket4j.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.wiremock</groupId>
+        <artifactId>wiremock-standalone</artifactId>
+        <version>${wiremock.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.jboss.logmanager</groupId>
+        <artifactId>jboss-logmanager</artifactId>
+        <version>${jboss-logmanager.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.jline</groupId>
+        <artifactId>jline-terminal</artifactId>
+        <version>${jline.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.jline</groupId>
+        <artifactId>jline-terminal-jansi</artifactId>
+        <version>${jline.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.jline</groupId>
+        <artifactId>jline-reader</artifactId>
+        <version>${jline.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.fusesource.jansi</groupId>
+        <artifactId>jansi</artifactId>
+        <version>${jansi.version}</version>
+      </dependency>
     </dependencies>
   </dependencyManagement>
- 
+
   <!-- Inherited test dependencies for all modules -->
   <dependencies>
     <dependency>
       <groupId>org.jboss.logmanager</groupId>
       <artifactId>jboss-logmanager</artifactId>
-      <version>3.0.6.Final</version>
       <scope>test</scope>
     </dependency>
   </dependencies>
@@ -169,20 +293,34 @@
             </execution>
           </executions>
         </plugin>
+        <!-- Error Prone: compile-time static analysis (catches NPE auto-unboxing, unchecked
+             return values, format string bugs, resource leaks). Requires javac internals
+             exports in .mvn/jvm.config — do NOT remove those exports without testing.
+             should-stop=ifError=FLOW is REQUIRED by Error Prone (default INIT causes build failure). -->
         <plugin>
           <artifactId>maven-compiler-plugin</artifactId>
           <version>3.15.0</version>
           <configuration>
             <compilerArgs>
               <arg>-parameters</arg>
+              <arg>-XDcompilePolicy=byfile</arg>
+              <arg>-Xplugin:ErrorProne</arg>
+              <arg>--should-stop=ifError=FLOW</arg>
             </compilerArgs>
+            <annotationProcessorPaths>
+              <path>
+                <groupId>com.google.errorprone</groupId>
+                <artifactId>error_prone_core</artifactId>
+                <version>${errorprone.version}</version>
+              </path>
+            </annotationProcessorPaths>
           </configuration>
         </plugin>
         <plugin>
           <artifactId>maven-surefire-plugin</artifactId>
           <version>3.5.0</version>
-          <configuration>
-            <argLine>${maven.surefire.argLine}</argLine>
+            <configuration>
+            <argLine>${argLine} ${maven.surefire.argLine}</argLine>
             <systemPropertyVariables>
               <java.util.logging.manager>org.jboss.logmanager.LogManager</java.util.logging.manager>
               <maven.home>${maven.home}</maven.home>
@@ -206,38 +344,76 @@
         </plugin>
         <plugin>
           <groupId>org.apache.maven.plugins</groupId>
-          <artifactId>maven-checkstyle-plugin</artifactId>
-          <version>3.6.0</version>
+          <artifactId>maven-pmd-plugin</artifactId>
+          <version>3.28.0</version>
+        </plugin>
+        <plugin>
+          <groupId>org.jacoco</groupId>
+          <artifactId>jacoco-maven-plugin</artifactId>
+          <version>${jacoco.version}</version>
         </plugin>
       </plugins>
     </pluginManagement>
     <plugins>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
-        <artifactId>maven-checkstyle-plugin</artifactId>
+        <artifactId>maven-pmd-plugin</artifactId>
+        <configuration>
+          <failOnViolation>true</failOnViolation>
+          <printFailingErrors>true</printFailingErrors>
+          <includeTests>false</includeTests>
+          <javaLanguageVersion>25</javaLanguageVersion>
+          <rulesets>
+            <ruleset>${maven.multiModuleProjectDirectory}/src/main/resources/rulesets/java/arcclaw-rules.xml</ruleset>
+          </rulesets>
+        </configuration>
         <executions>
           <execution>
             <id>complexity-gate</id>
             <phase>verify</phase>
             <goals><goal>check</goal></goals>
-            <configuration>
-              <checkstyleRules>
-                <module name="Checker">
-                  <module name="FileLength">
-                    <property name="max" value="500"/>
-                  </module>
-                  <module name="TreeWalker">
-                    <module name="MethodLength">
-                      <property name="max" value="80"/>
-                      <property name="countEmpty" value="false"/>
-                    </module>
-                  </module>
-                </module>
-              </checkstyleRules>
-              <consoleOutput>true</consoleOutput>
-              <failsOnError>true</failsOnError>
-              <includeTestSourceDirectory>false</includeTestSourceDirectory>
-            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+      <plugin>
+        <groupId>com.diffplug.spotless</groupId>
+        <artifactId>spotless-maven-plugin</artifactId>
+        <version>3.5.1</version>
+        <configuration>
+          <java>
+            <palantirJavaFormat>
+              <version>2.91.0</version>
+            </palantirJavaFormat>
+            <removeUnusedImports/>
+            <importOrder>
+              <order>,javax,jakarta,java,com,org,io,</order>
+            </importOrder>
+            <excludes>
+              <exclude>**/target/**</exclude>
+              <exclude>**/generated-sources/**</exclude>
+            </excludes>
+          </java>
+        </configuration>
+        <executions>
+          <execution>
+            <id>spotless-check</id>
+            <phase>verify</phase>
+            <goals><goal>check</goal></goals>
+          </execution>
+        </executions>
+      </plugin>
+      <plugin>
+        <groupId>org.jacoco</groupId>
+        <artifactId>jacoco-maven-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>prepare-agent</id>
+            <goals><goal>prepare-agent</goal></goals>
+          </execution>
+          <execution>
+            <id>report</id>
+            <phase>verify</phase>
+            <goals><goal>report</goal></goals>
           </execution>
         </executions>
       </plugin>
@@ -245,26 +421,5 @@
   </build>
 
   <profiles>
-    <profile>
-      <id>os-windows</id>
-      <activation><os><family>windows</family></os></activation>
-      <properties>
-        <playwright.driver.excludes>driver/linux/**,driver/linux-arm64/**,driver/mac/**,driver/mac-arm64/**</playwright.driver.excludes>
-      </properties>
-    </profile>
-    <profile>
-      <id>os-linux</id>
-      <activation><os><name>linux</name></os></activation>
-      <properties>
-        <playwright.driver.excludes>driver/win32_x64/**,driver/mac/**,driver/mac-arm64/**</playwright.driver.excludes>
-      </properties>
-    </profile>
-    <profile>
-      <id>os-mac</id>
-      <activation><os><family>mac</family></os></activation>
-      <properties>
-        <playwright.driver.excludes>driver/win32_x64/**,driver/linux/**,driver/linux-arm64/**</playwright.driver.excludes>
-      </properties>
-    </profile>
   </profiles>
 </project>

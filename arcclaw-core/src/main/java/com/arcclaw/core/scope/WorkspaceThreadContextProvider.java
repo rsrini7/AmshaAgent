@@ -7,7 +7,7 @@ import org.eclipse.microprofile.context.spi.ThreadContextProvider;
 import org.eclipse.microprofile.context.spi.ThreadContextSnapshot;
 
 /**
- * MicroProfile {@link ThreadContextProvider} to propagate the {@link WorkspaceScoped} 
+ * MicroProfile {@link ThreadContextProvider} to propagate the {@link WorkspaceScoped}
  * session context via {@link WorkspaceScopeHolder}'s propagation bridge.
  * <p>
  * This ensures that when a {@link io.smallrye.context.SmallRyeManagedExecutor} or

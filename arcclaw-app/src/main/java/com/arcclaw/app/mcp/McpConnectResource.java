@@ -1,8 +1,5 @@
 package com.arcclaw.app.mcp;
 
-import java.util.Map;
-import java.util.stream.Collectors;
-
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.validation.constraints.NotBlank;
@@ -16,6 +13,9 @@ import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 
+import java.util.Map;
+import java.util.stream.Collectors;
+
 import com.arcclaw.core.api.dto.ArcClawErrorResponse;
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
@@ -23,8 +23,10 @@ import com.arcclaw.mcp.config.McpToolAllowlist;
 import com.arcclaw.mcp.tool.DynamicToolCapabilityRegistry;
 import com.arcclaw.mcp.transport.McpClientService;
 import com.arcclaw.mcp.transport.McpConnectionException;
-import io.smallrye.common.annotation.RunOnVirtualThread;
+
 import org.eclipse.microprofile.openapi.annotations.Operation;
+
+import io.smallrye.common.annotation.RunOnVirtualThread;
 
 /**
  * REST admin endpoint for managing outbound MCP client connections at runtime.
@@ -37,7 +39,7 @@ import org.eclipse.microprofile.openapi.annotations.Operation;
  *
  * Self-connect smoke test (no external server needed):
  *   POST with {"name":"self","url":"http://localhost:8080/mcp"}
- *   ArcClaw connects to itself - github and memory_search appear as dynamic tools.
+ *   ArcClaw connects to itself - github and recall_memory_search appear as dynamic tools.
  *   Then send /mcp in Telegram to confirm the live count.
  */
 @ApplicationScoped
@@ -60,7 +62,8 @@ public class McpConnectResource {
 
     // ── request / response records ────────────────────────────────────────────
 
-    public record ConnectRequest(@NotBlank String name, @NotBlank String url) {}
+    public record ConnectRequest(
+            @NotBlank String name, @NotBlank String url) {}
 
     public record ConnectResponse(String name, String url, int toolsRegistered, String status) {}
 
@@ -117,16 +120,16 @@ public class McpConnectResource {
                 .count();
 
         int newTools = (int) (toolsAfter - toolsBefore);
-        auditService.recordMandatory("mcp-connect", "admin", "system",
+        auditService.recordMandatory(
+                "mcp-connect",
+                "admin",
+                "system",
                 SecurityEventType.MCP_SERVER_CONNECTED,
                 "server=" + request.name() + " url=" + request.url() + " tools=" + newTools);
 
         return Response.ok(new ConnectResponse(
-                request.name(),
-                request.url(),
-                (int) (toolsAfter - toolsBefore),
-                "connected"
-        )).build();
+                        request.name(), request.url(), (int) (toolsAfter - toolsBefore), "connected"))
+                .build();
     }
 
     /**
@@ -151,14 +154,18 @@ public class McpConnectResource {
         registry.getAll().stream()
                 .filter(t -> t.mcpServerName().equals(name))
                 .map(t -> t.toolName())
-                .collect(Collectors.toList())  // collect first to avoid ConcurrentModificationException
+                .collect(Collectors.toList()) // collect first to avoid ConcurrentModificationException
                 .forEach(registry::deregister);
 
-        auditService.recordMandatory("mcp-disconnect", "admin", "system",
+        auditService.recordMandatory(
+                "mcp-disconnect",
+                "admin",
+                "system",
                 SecurityEventType.MCP_SERVER_DISCONNECTED,
                 "server=" + name + " toolsRemoved=" + toolsBefore);
 
-        return Response.ok(new DisconnectResponse(name, true, (int) toolsBefore)).build();
+        return Response.ok(new DisconnectResponse(name, true, (int) toolsBefore))
+                .build();
     }
 
     /**
@@ -169,18 +176,17 @@ public class McpConnectResource {
     @Operation(summary = "List all currently connected remote MCP servers")
     public Response listConnected() {
         var grouped = registry.getAll().stream()
-                .collect(Collectors.groupingBy(
-                        t -> t.mcpServerName(),
-                        Collectors.counting()
-                ));
+                .collect(Collectors.groupingBy(t -> t.mcpServerName(), Collectors.counting()));
 
         var entries = grouped.entrySet().stream()
                 .map(e -> new ServerEntry(e.getKey(), "(url not stored)", e.getValue()))
                 .collect(Collectors.toList());
 
         return Response.ok(Map.of(
-                "connectedServers", entries,
-                "totalDynamicTools", registry.getAll().size()
-        )).build();
+                        "connectedServers",
+                        entries,
+                        "totalDynamicTools",
+                        registry.getAll().size()))
+                .build();
     }
 }

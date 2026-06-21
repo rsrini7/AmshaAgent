@@ -1,20 +1,22 @@
 package com.arcclaw.persistence.postgres;
 
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
-
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
 
 import com.arcclaw.core.state.CronStatus;
 import com.arcclaw.persistence.api.AgentCronDto;
 import com.arcclaw.persistence.api.CronStorePort;
 import com.arcclaw.persistence.postgres.jdbi.CronJdbiDao;
-import io.quarkus.arc.Unremovable;
-import io.quarkus.arc.properties.IfBuildProperty;
+
 import org.jboss.logging.Logger;
 import org.jdbi.v3.core.Jdbi;
+
+import io.quarkus.arc.Unremovable;
+import io.quarkus.arc.properties.IfBuildProperty;
 
 /**
  * PostgreSQL implementation of CronStorePort using JDBI.
@@ -52,7 +54,8 @@ public class PostgresCronStoreAdapter implements CronStorePort {
     @Override
     public List<AgentCronDto> findAwaitingApprovalByUserId(String userId) {
         log.debugf("Postgres: Finding awaiting approval cron tasks for userId=%s", userId);
-        return jdbi.withExtension(CronJdbiDao.class, dao -> dao.findByUserIdAndStatus(userId, CronStatus.AWAITING_APPROVAL.name()));
+        return jdbi.withExtension(
+                CronJdbiDao.class, dao -> dao.findByUserIdAndStatus(userId, CronStatus.AWAITING_APPROVAL.name()));
     }
 
     @Override
@@ -70,31 +73,38 @@ public class PostgresCronStoreAdapter implements CronStorePort {
     @Override
     public boolean claimForFire(String id) {
         log.debugf("Postgres: Claiming cron task %s for fire...", id);
-        return jdbi.withExtension(CronJdbiDao.class, dao -> dao.claimForFire(id, CronStatus.RUNNING.name(), CronStatus.ACTIVE.name()));
+        return jdbi.withExtension(
+                CronJdbiDao.class, dao -> dao.claimForFire(id, CronStatus.RUNNING.name(), CronStatus.ACTIVE.name()));
     }
 
     @Override
     public void releaseClaimToActive(String id) {
         log.debugf("Postgres: Releasing cron task %s back to active...", id);
-        jdbi.useExtension(CronJdbiDao.class, dao -> dao.releaseClaim(id, CronStatus.ACTIVE.name(), CronStatus.RUNNING.name()));
+        jdbi.useExtension(
+                CronJdbiDao.class, dao -> dao.releaseClaim(id, CronStatus.ACTIVE.name(), CronStatus.RUNNING.name()));
     }
 
     @Override
     public void markFired(String id, Instant lastFireTime, Instant nextFireTime) {
         log.debugf("Postgres: Marking cron task %s as fired. last=%s, next=%s", id, lastFireTime, nextFireTime);
-        jdbi.useExtension(CronJdbiDao.class, dao -> dao.markFired(id, CronStatus.ACTIVE.name(), lastFireTime, nextFireTime, Instant.now()));
+        jdbi.useExtension(
+                CronJdbiDao.class,
+                dao -> dao.markFired(id, CronStatus.ACTIVE.name(), lastFireTime, nextFireTime, Instant.now()));
     }
 
     @Override
     public void markCompleted(String id, Instant lastFireTime) {
         log.debugf("Postgres: Marking cron task %s as completed.", id);
-        jdbi.useExtension(CronJdbiDao.class, dao -> dao.markCompleted(id, CronStatus.COMPLETED.name(), lastFireTime, Instant.now()));
+        jdbi.useExtension(
+                CronJdbiDao.class,
+                dao -> dao.markCompleted(id, CronStatus.COMPLETED.name(), lastFireTime, Instant.now()));
     }
 
     @Override
     public void markAwaitingApproval(String id) {
         log.debugf("Postgres: Marking cron task %s as awaiting approval.", id);
-        jdbi.useExtension(CronJdbiDao.class, dao -> dao.markStatus(id, CronStatus.AWAITING_APPROVAL.name(), Instant.now()));
+        jdbi.useExtension(
+                CronJdbiDao.class, dao -> dao.markStatus(id, CronStatus.AWAITING_APPROVAL.name(), Instant.now()));
     }
 
     @Override
@@ -112,7 +122,8 @@ public class PostgresCronStoreAdapter implements CronStorePort {
     @Override
     public void markFailed(String id, String errorReason) {
         log.debugf("Postgres: Marking cron task %s as failed. reason=%s", id, errorReason);
-        jdbi.useExtension(CronJdbiDao.class, dao -> dao.markFailed(id, CronStatus.FAILED.name(), errorReason, Instant.now()));
+        jdbi.useExtension(
+                CronJdbiDao.class, dao -> dao.markFailed(id, CronStatus.FAILED.name(), errorReason, Instant.now()));
     }
 
     @Override
@@ -124,7 +135,9 @@ public class PostgresCronStoreAdapter implements CronStorePort {
     @Override
     public void reclaimStaleCrons(Instant threshold) {
         log.debugf("Postgres: Reclaiming stale cron tasks (threshold=%s)...", threshold);
-        jdbi.useExtension(CronJdbiDao.class, dao -> dao.reclaimStale(CronStatus.ACTIVE.name(), CronStatus.RUNNING.name(), threshold));
+        jdbi.useExtension(
+                CronJdbiDao.class,
+                dao -> dao.reclaimStale(CronStatus.ACTIVE.name(), CronStatus.RUNNING.name(), threshold));
     }
 
     @Override
@@ -135,11 +148,24 @@ public class PostgresCronStoreAdapter implements CronStorePort {
             Optional<AgentCronDto> existing = dao.findById(dto.id());
             Instant createdAt = existing.map(AgentCronDto::createdAt).orElseGet(Instant::now);
             AgentCronDto toSave = new AgentCronDto(
-                dto.id(), dto.sessionId(), dto.userId(), dto.chatId(), dto.channelType(),
-                dto.channelPlatformId(), dto.cronExpression(), dto.timezone(), dto.runOnce(), dto.goal(),
-                dto.nextFireTime(), dto.lastFireTime(), dto.status(),
-                dto.executionRole(), dto.errorReason(), dto.lastDeliveryId(), createdAt, Instant.now()
-            );
+                    dto.id(),
+                    dto.sessionId(),
+                    dto.userId(),
+                    dto.chatId(),
+                    dto.channelType(),
+                    dto.channelPlatformId(),
+                    dto.cronExpression(),
+                    dto.timezone(),
+                    dto.runOnce(),
+                    dto.goal(),
+                    dto.nextFireTime(),
+                    dto.lastFireTime(),
+                    dto.status(),
+                    dto.executionRole(),
+                    dto.errorReason(),
+                    dto.lastDeliveryId(),
+                    createdAt,
+                    Instant.now());
             dao.save(toSave);
         });
     }
@@ -186,7 +212,9 @@ public class PostgresCronStoreAdapter implements CronStorePort {
 
     @Override
     public List<AgentCronDto> findByUserId(String userId, String status, int offset, int limit) {
-        log.debugf("Postgres: Finding cron tasks for userId=%s (status=%s, offset=%d, limit=%d)", userId, status, offset, limit);
+        log.debugf(
+                "Postgres: Finding cron tasks for userId=%s (status=%s, offset=%d, limit=%d)",
+                userId, status, offset, limit);
         return jdbi.withExtension(CronJdbiDao.class, dao -> {
             if (status != null && !status.isBlank()) {
                 return dao.findByUserIdAndStatusPaginated(userId, status, offset, limit);

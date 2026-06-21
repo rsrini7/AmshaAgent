@@ -13,7 +13,7 @@
 ###   1. User instructs coordinator to schedule a task
 ###   2. Agent invokes ScheduleTaskTool with:
 ###        cronExpression (5-field UNIX), goal, timezone, runOnce
-###   3. ScheduleTaskTool validates via cron-utils, writes AgentCronEntity
+###   3. ScheduleTaskTool validates via cron-utils, writes AgentCron
 ###   4. AgentCronScheduler polls SQLite every 30 seconds
 ###   5. On fire: CronJobRunner executes agent loop (maxIterations=2)
 ###      Max-lookback-window: PT5M (jobs older than 5 min not replayed on restart)

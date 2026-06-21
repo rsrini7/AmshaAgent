@@ -18,16 +18,48 @@ import com.arcclaw.channel.api.ReplyRenderer;
 @ApplicationScoped
 public class CliChannelPlugin implements ChannelPlugin {
 
-    @Inject CliChannelSender    sender;
-    @Inject CliReplyRenderer    renderer;
-    @Inject CliAllowlist        allowlist;
-    @Inject CliJobNotifier      jobNotifier;
-    @Inject CliChannelDaemon    daemon;
+    @Inject
+    CliChannelSender sender;
 
-    @Override public ChannelType       channelType()  { return ChannelType.CLI; }
-    @Override public ChannelSender     sender()       { return sender; }
-    @Override public ReplyRenderer     renderer()     { return renderer; }
-    @Override public ChannelAllowlist  allowlist()    { return allowlist; }
-    @Override public ChannelJobNotifier jobNotifier() { return jobNotifier; }
-    @Override public ChannelDaemon     daemon()       { return daemon; }
+    @Inject
+    CliReplyRenderer renderer;
+
+    @Inject
+    CliAllowlist allowlist;
+
+    @Inject
+    CliJobNotifier jobNotifier;
+
+    @Inject
+    CliChannelDaemon daemon;
+
+    @Override
+    public ChannelType channelType() {
+        return ChannelType.CLI;
+    }
+
+    @Override
+    public ChannelSender sender() {
+        return sender;
+    }
+
+    @Override
+    public ReplyRenderer renderer() {
+        return renderer;
+    }
+
+    @Override
+    public ChannelAllowlist allowlist() {
+        return allowlist;
+    }
+
+    @Override
+    public ChannelJobNotifier jobNotifier() {
+        return jobNotifier;
+    }
+
+    @Override
+    public ChannelDaemon daemon() {
+        return daemon;
+    }
 }

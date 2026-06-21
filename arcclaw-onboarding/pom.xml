@@ -73,7 +73,6 @@
     <dependency>
       <groupId>io.quarkiverse.jdbc</groupId>
       <artifactId>quarkus-jdbc-sqlite</artifactId>
-      <version>3.0.11</version>
       <scope>test</scope>
     </dependency>
     <dependency>
@@ -92,6 +91,11 @@
     <dependency>
       <groupId>io.quarkus</groupId>
       <artifactId>quarkus-qute</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>io.quarkus</groupId>
+      <artifactId>quarkus-jacoco</artifactId>
       <scope>test</scope>
     </dependency>
   </dependencies>
@@ -115,7 +119,7 @@
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-surefire-plugin</artifactId>
         <configuration>
-          <argLine>${maven.surefire.argLine}</argLine>
+          <argLine>${argLine} ${maven.surefire.argLine}</argLine>
           <forkCount>1</forkCount>
           <reuseForks>true</reuseForks>
           <forkedProcessExitTimeoutInSeconds>10</forkedProcessExitTimeoutInSeconds>

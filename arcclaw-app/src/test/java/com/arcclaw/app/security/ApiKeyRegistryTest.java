@@ -5,16 +5,17 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import jakarta.inject.Inject;
+
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import jakarta.inject.Inject;
+import org.junit.jupiter.api.Test;
 
 import io.quarkus.test.junit.QuarkusTest;
 import io.quarkus.test.junit.QuarkusTestProfile;
 import io.quarkus.test.junit.TestProfile;
-import org.junit.jupiter.api.Test;
 
 @QuarkusTest
 @TestProfile(ApiKeyRegistryTest.TwoKeyProfile.class)
@@ -27,11 +28,10 @@ class ApiKeyRegistryTest {
         @Override
         public Map<String, String> getConfigOverrides() {
             return Map.of(
-                "arcclaw.api.keys.user-a", "aaaa-bbbb-cccc-dddd",
-                "arcclaw.api.keys.user-b", "eeee-ffff-gggg-hhhh",
-                "arcclaw.audit.hmac-key",  "test-hmac-key-for-registry-tests",
-                "arcclaw.api.rate-limit.requests-per-minute", "20"
-            );
+                    "arcclaw.api.keys.user-a", "aaaa-bbbb-cccc-dddd",
+                    "arcclaw.api.keys.user-b", "eeee-ffff-gggg-hhhh",
+                    "arcclaw.audit.hmac-key", "test-hmac-key-for-registry-tests",
+                    "arcclaw.api.rate-limit.requests-per-minute", "20");
         }
     }
 
@@ -53,7 +53,7 @@ class ApiKeyRegistryTest {
     @Test
     void testRateLimiterLimitsAfterThreshold() {
         String key = "test-rate-limit-key";
-        
+
         // Submit 20 requests at the same instant
         for (int i = 0; i < 20; i++) {
             assertTrue(registry.isAllowed(key), "Should be allowed before 20 requests. Failed at " + i);
@@ -72,11 +72,12 @@ class ApiKeyRegistryTest {
 
         for (int i = 0; i < threads; i++) {
             new Thread(() -> {
-                if (registry.isAllowed(key)) {
-                    successCount.incrementAndGet();
-                }
-                latch.countDown();
-            }).start();
+                        if (registry.isAllowed(key)) {
+                            successCount.incrementAndGet();
+                        }
+                        latch.countDown();
+                    })
+                    .start();
         }
 
         latch.await();

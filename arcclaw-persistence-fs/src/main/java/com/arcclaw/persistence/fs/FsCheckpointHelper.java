@@ -1,5 +1,9 @@
 package com.arcclaw.persistence.fs;
 
+import jakarta.annotation.PostConstruct;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -7,14 +11,11 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicLong;
 
-import jakarta.annotation.PostConstruct;
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
-
 import com.arcclaw.persistence.api.CheckpointDto;
 import com.arcclaw.persistence.api.ReasoningStepDto;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+
 import io.quarkus.arc.properties.IfBuildProperty;
 
 @ApplicationScoped
@@ -35,7 +36,8 @@ public class FsCheckpointHelper {
         for (String session : store.listDirs(List.of(DOMAIN))) {
             for (String roleFile : store.list(List.of(DOMAIN, session), ".json")) {
                 if (roleFile.equals("index.json")) continue;
-                Optional<CheckpointDto> cp = store.readOptional(List.of(DOMAIN, session, roleFile), CheckpointDto.class);
+                Optional<CheckpointDto> cp =
+                        store.readOptional(List.of(DOMAIN, session, roleFile), CheckpointDto.class);
                 if (cp.isPresent() && cp.get().id() != null && cp.get().id() > maxId) {
                     maxId = cp.get().id();
                 }
@@ -50,10 +52,10 @@ public class FsCheckpointHelper {
 
     List<CheckpointDto> loadSession(String sessionId) {
         return store.list(List.of(DOMAIN, sessionId), ".json").stream()
-            .filter(f -> !f.equals("index.json"))
-            .map(f -> store.readOptional(List.of(DOMAIN, sessionId, f), CheckpointDto.class))
-            .flatMap(Optional::stream)
-            .toList();
+                .filter(f -> !f.equals("index.json"))
+                .map(f -> store.readOptional(List.of(DOMAIN, sessionId, f), CheckpointDto.class))
+                .flatMap(Optional::stream)
+                .toList();
     }
 
     List<CheckpointDto> loadAll() {
@@ -72,8 +74,9 @@ public class FsCheckpointHelper {
     }
 
     void deleteStepsForSession(String sessionId, String role) {
-        findBySessionAndRole(sessionId, role).ifPresent(cp ->
-            store.deleteDirectory(List.of(DOMAIN, STEPS, cp.id().toString())));
+        findBySessionAndRole(sessionId, role)
+                .ifPresent(cp ->
+                        store.deleteDirectory(List.of(DOMAIN, STEPS, cp.id().toString())));
     }
 
     Optional<CheckpointDto> findBySessionAndRole(String sessionId, String agentRole) {

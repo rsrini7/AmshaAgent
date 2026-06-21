@@ -16,9 +16,9 @@ class NdjsonWriterTest {
     void testWriteLineWritesBytesAndNewline() throws IOException {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         String json = "{\"key\":\"value\"}";
-        
+
         NdjsonWriter.writeLine(out, json);
-        
+
         String result = out.toString(StandardCharsets.UTF_8);
         assertEquals(json + "\n", result);
     }
@@ -27,9 +27,9 @@ class NdjsonWriterTest {
     void testWriteLineFlushesStream() throws IOException {
         OutputStream out = mock(OutputStream.class);
         String json = "{}";
-        
+
         NdjsonWriter.writeLine(out, json);
-        
+
         verify(out, atLeastOnce()).flush();
     }
 
@@ -47,10 +47,10 @@ class NdjsonWriterTest {
     @Test
     void testMultipleWriteLineCalls() throws IOException {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
-        
+
         NdjsonWriter.writeLine(out, "{\"id\":1}");
         NdjsonWriter.writeLine(out, "{\"id\":2}");
-        
+
         String result = out.toString(StandardCharsets.UTF_8);
         assertEquals("{\"id\":1}\n" + "{\"id\":2}\n", result);
     }

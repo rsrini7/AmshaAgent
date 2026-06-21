@@ -57,6 +57,5 @@ public final class EventTypeCatalog {
     /** Fired for critical and telemetry persistence events. */
     public static final Class<PersistenceEvent> PERSISTENCE = PersistenceEvent.class;
 
-    private EventTypeCatalog() {
-    }
+    private EventTypeCatalog() {}
 }

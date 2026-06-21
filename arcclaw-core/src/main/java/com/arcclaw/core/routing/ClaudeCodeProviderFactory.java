@@ -1,17 +1,19 @@
 package com.arcclaw.core.routing;
 
-import java.nio.charset.StandardCharsets;
-import java.time.Duration;
-import java.util.Optional;
+import dev.langchain4j.model.anthropic.AnthropicChatModel;
+import dev.langchain4j.model.chat.ChatModel;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
+import java.nio.charset.StandardCharsets;
+import java.time.Duration;
+import java.util.Optional;
+
 import com.arcclaw.core.security.SecretVault;
 import com.arcclaw.core.security.VaultConstants;
 import com.arcclaw.core.security.VaultKey;
-import dev.langchain4j.model.anthropic.AnthropicChatModel;
-import dev.langchain4j.model.chat.ChatModel;
+
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
@@ -41,18 +43,19 @@ public class ClaudeCodeProviderFactory implements RoutingChatModelProvider {
     @Override
     public ChatModel create(LlmModelConfig config) {
         // 1. Try to retrieve token from vault using the standard system key (Fix I5)
-        Optional<String> token = secretVault.retrieveSystemKey(VaultConstants.CLAUDE_CODE_OAUTH_TOKEN_KEY)
+        Optional<String> token = secretVault
+                .retrieveSystemKey(VaultConstants.CLAUDE_CODE_OAUTH_TOKEN_KEY)
                 .map(VaultKey::get)
                 .map(bytes -> new String(bytes, StandardCharsets.UTF_8));
 
         if (token.isEmpty()) {
             // 2. Fall back to tokenExtractor (filesystem extraction from ~/.claude/credentials.json)
             token = tokenExtractor.extractToken();
-            
+
             if (token.isPresent()) {
                 // 3. Store in vault for future use to avoid repeated FS access
-                secretVault.storeSystemKey(VaultConstants.CLAUDE_CODE_OAUTH_TOKEN_KEY, 
-                    token.get().getBytes(StandardCharsets.UTF_8));
+                secretVault.storeSystemKey(
+                        VaultConstants.CLAUDE_CODE_OAUTH_TOKEN_KEY, token.get().getBytes(StandardCharsets.UTF_8));
                 log.info("Claude Code provider: token loaded from file and stored in vault.");
             }
         } else {
@@ -60,9 +63,8 @@ public class ClaudeCodeProviderFactory implements RoutingChatModelProvider {
         }
 
         if (token.isEmpty()) {
-            throw new IllegalStateException(
-                "Claude Code provider requires an OAuth token. " +
-                "Please run `claude login` in your local terminal first.");
+            throw new IllegalStateException("Claude Code provider requires an OAuth token. "
+                    + "Please run `claude login` in your local terminal first.");
         }
 
         // 5. Clean up model name assignment (Fix I1)

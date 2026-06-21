@@ -184,11 +184,10 @@ After reloading: `mise run <TAB>` shows all tasks with tab completion.
 
 ### What `mise run setup` does
 
-1. `.env.example` → `.env` (skips if exists)
-2. `chmod +x mvnw` (Linux/macOS/WSL2 only)
-3. `mise install java@temurin-25`
-4. `mise install java@graalvm-community-25.0.2`
+1. `setup:chmod-tasks` — makes all .mise/task scripts executable
+2. `setup:wsl-crlf` — fixes CRLF line endings in WSL2 (no-op on other platforms)
 
+> **Note:** `.env` creation and JDK installation are now split into `mise run arcclaw:setup`.
 ***
 
 ## 4. Trust the Config File
@@ -229,7 +228,7 @@ ArcClaw/
 │   ├── vec0.dll         ← Windows  (Auto-installed on first boot)
 │   ├── vec0.so          ← Linux    (Auto-installed on first boot)
 │   └── vec0.dylib       ← macOS    (Auto-installed on first boot)
-├── dist/                ← produced by: mise run dist  (gitignored)
+├── dist/                ← produced by: mise run dist:dist  (gitignored)
 └── arcclaw-app/
     └── target/
         ├── quarkus-app/quarkus-run.jar           ← produced by: mise run build-app
@@ -276,22 +275,22 @@ mise run help    # or: mise tasks
 
 | Task | What it does |
 |---|---|
-| `mise run start` | Bootstrap guide - works before `mise install` |
+| `mise run start` | Bootstrap guide — works before `mise install` |
 | **`mise run setup:profile`** | Write mise activate + completion to shell profile (idempotent) |
-| **`mise run setup`** | `.env`, chmod +x mvnw, install JDKs |
+| **`mise run setup`** | Make tasks executable, fix CRLF (WSL2) |
 | `mise run setup:wsl-crlf` | Fix CRLF in mvnw (WSL2 after Windows clone) |
 | `mise run setup:env-check` | Validate `.env` for missing/placeholder values |
 | **`mise run jdk:status`** | Show active JDK + all installed |
 | `mise run jdk:graalvm` | Switch to GraalVM Community 25.0.2 |
 | `mise run jdk:temurin` | Switch back to Temurin 25 |
 | `mise run jdk:install` | Install both JDKs (idempotent) |
-| **`mise run build-app`** | JVM build, skip tests - fast daily driver |
+| **`mise run build:app`** | JVM build, skip tests — fast daily driver |
 | `mise run build:full` | Clean install all modules, skip tests |
 | `mise run build:test` | Build and run all tests |
 | `mise run build:native` | Native binary - auto-detects Podman or local GraalVM |
 | `mise run build:native-local` | Native binary - always local GraalVM, no container |
 | `mise run build:native-lowmem` | Native binary - local GraalVM, 6 GB heap cap |
-| `mise run clean` | `mvnw clean` |
+| `mise run build:clean` | `mvnw clean` |
 | **`mise run dev`** | Hot-reload serve on :8080 (strategy: NONE) |
 | `mise run dev:chat` | Hot-reload - interactive REPL |
 | `mise run dev:attach` | Hot-reload - Telegram daemon |
@@ -307,22 +306,22 @@ mise run help    # or: mise tasks
 | `mise run native:chat` | Native binary - interactive REPL |
 | `mise run native:attach` | Native binary - Telegram daemon |
 | `mise run native:ask` | Native binary - one-shot task (`$env:GOAL="..."`) |
-| **`mise run dist`** | Assemble `dist/` folder: binary + vec0 + launchers |
+| **`mise run dist:dist`** | Assemble `dist/` folder: binary + vec0 + launchers |
 | `mise run dist:pack` | Create OS-specific release archives |
 | `mise run compose:up` | Full observability stack up |
 | `mise run compose:down` | Stop stack, keep volumes |
 | `mise run compose:down-clean` | Stop stack + delete volumes (prompts YES) |
 | `mise run compose:logs` | Follow arcclaw container logs |
 | `mise run compose:restart` | Restart only arcclaw service |
-| `mise run sandbox:check` | Verify tool-runner image exists |
+| `mise run podman:sandbox-check` | Verify tool-runner image exists |
 | `mise run podman:init` | macOS: init Podman VM (6 GB RAM, 4 CPUs) |
 | `mise run podman:start` | macOS: start Podman VM |
 | `mise run podman:stop` | macOS: stop Podman VM |
 | `mise run podman:socket` | WSL2/Linux: enable Podman user socket |
 | `mise run podman:status` | Podman + image status |
-| `mise run db:inspect` | Open `arcclaw-meta.db` in sqlite3 |
-| `mise run db:fts-check` | Verify FTS5 available |
-| `mise run db:vec-check` | Check `lib/vec0` extension for current platform |
+| `mise run db:sqlite:inspect` | Open `arcclaw-meta.db` in sqlite3 |
+| `mise run db:sqlite:fts-check` | Verify FTS5 available |
+| `mise run db:sqlite:vec-check` | Check `lib/vec0` extension for current platform |
 | `mise run info` | Print Java, Podman, Docker versions |
 | `mise run help` | List all tasks |
 
@@ -331,10 +330,11 @@ mise run help    # or: mise tasks
 ## 8. Build Tasks
 
 ```bash
-mise run build-app              # JVM build, skip tests → quarkus-run.jar
+```bash
+mise run build:app              # JVM build, skip tests → quarkus-run.jar
 mise run build:full             # all modules (after branch switch), skip tests
 mise run build:test             # with tests
-mise run clean
+mise run build:clean
 ```
 
 ### .env shielding - secrets stay out of the binary
@@ -424,7 +424,7 @@ $env:GOAL = "summarize today's logs"; mise run native:ask
 ### Assemble a dist/ folder (ship-ready)
 
 ```bash
-mise run dist
+mise run dist:dist
 ```
 
 Produces:
@@ -465,10 +465,11 @@ Manual download is **no longer required**, but you can override the auto-install
 
 ```bash
 # 1. Build on WSL2/Linux
-mise run build:native && mise run dist
+mise run build:native && mise run dist:dist
+
 
 # 2. Build on Windows (separate terminal)
-mise run build:native; mise run dist
+mise run build:native; mise run dist:dist
 
 # 3. Pack all archives (run from either platform)
 mise run dist:pack
@@ -532,9 +533,9 @@ Use [Podman Desktop](https://podman-desktop.io/) or Docker Desktop.
 ## 15. Database Helpers
 
 ```bash
-mise run db:inspect     # sqlite3 interactive CLI on arcclaw-meta.db
-mise run db:fts-check   # verify FTS5
-mise run db:vec-check   # verify lib/vec0 extension for your platform
+mise run db:sqlite:inspect     # sqlite3 interactive CLI on arcclaw-meta.db
+mise run db:sqlite:fts-check   # verify FTS5
+mise run db:sqlite:vec-check   # verify lib/vec0 extension for your platform
 ```
 
 ***
@@ -549,7 +550,8 @@ mise run db:vec-check   # verify lib/vec0 extension for your platform
 | `ARCCLAW_AUDIT_HMAC_KEY` | `.env` | ≥32 bytes, never change after first boot |
 | `ARCCLAW_API_KEYS_INTERNAL` | `.env` | Bearer token for REST API |
 | `ARCCLAW_API_KEYS_CI` | `.env` | CI/CD read-only key |
-| `ARCCLAW_EMBED_API_KEY` | `.env` | Jina AI embedding key (starts with `jina_`) |
+| `ARCCLAW_INFINITE_LOOP_EMBEDDING_PROVIDERS` | `.env` | Comma-separated embedding providers (default `ollama`). |
+| `ARCCLAW_EMBEDDING_<PROVIDER>_API_KEY` | `.env` | Per-provider embedding key (e.g. `ARCCLAW_EMBEDDING_JINA_API_KEY`). Required for non-local providers. |
 | `TELEGRAM_BOT_TOKEN` | `.env` | Only for `attach` mode |
 | `GOAL` | shell env | Goal string for `jar:ask`, `dev:ask`, `native:ask` |
 | `ROLE` | shell env | Optional role override for `ask` tasks |
@@ -650,7 +652,7 @@ mise run setup:env-check
 
 1. Check logs for "Vec0 binary installed to [...]" or "Vec0 binary already present".
 2. If failed, manually place the extension: `lib/vec0.so` (Linux), `lib/vec0.dylib` (macOS), `lib/vec0.dll` (Windows).
-3. Verify FTS5 is available: `mise run db:fts-check`.
+3. Verify FTS5 is available: `mise run db:sqlite:fts-check`.
 4. Then restart ArcClaw - vec0 is loaded at boot, not lazily.
 
 ### Native exe exits immediately (Windows)

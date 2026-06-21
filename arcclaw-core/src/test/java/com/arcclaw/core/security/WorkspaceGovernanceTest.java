@@ -5,12 +5,13 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.arcclaw.core.scope.WorkspaceContext;
-import io.quarkus.test.junit.QuarkusTest;
+
 import org.junit.jupiter.api.Test;
+
+import io.quarkus.test.junit.QuarkusTest;
 
 @QuarkusTest
 public class WorkspaceGovernanceTest {
-
 
     private static final String TEST_SESSION_ID = "gov-test-session";
 
@@ -49,6 +50,4 @@ public class WorkspaceGovernanceTest {
         assertFalse(policy.isAllowed(AutonomyLevel.SUPERVISED, ToolOperation.DELEGATE_AUTONOMOUS));
         assertFalse(policy.isAllowed(AutonomyLevel.SUPERVISED, ToolOperation.WRITE_FS));
     }
-
-
 }

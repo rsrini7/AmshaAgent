@@ -94,7 +94,7 @@ class DynamicToolCapabilityRegistryTest {
                         }
                     } else {
                         for (int j = 0; j < 100; j++) {
-                            registry.getAll().stream().count();
+                            var _ = registry.getAll().stream().count();
                         }
                     }
                 } catch (Exception e) {
@@ -108,8 +108,11 @@ class DynamicToolCapabilityRegistryTest {
 
         boolean finished = latch.await(10, TimeUnit.SECONDS);
         executor.shutdown();
-        
+
         assertTrue(finished, "Test timed out");
-        assertEquals(0, failures.get(), "ConcurrentModificationException or other error occurred during concurrent operation");
+        assertEquals(
+                0,
+                failures.get(),
+                "ConcurrentModificationException or other error occurred during concurrent operation");
     }
 }

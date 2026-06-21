@@ -10,6 +10,8 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import jakarta.inject.Inject;
+
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -17,19 +19,19 @@ import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
-import jakarta.inject.Inject;
-
 import com.arcclaw.persistence.api.AdvisoryLockPort;
 import com.arcclaw.persistence.api.AgentCronDto;
 import com.arcclaw.persistence.api.CronStorePort;
-import io.quarkus.test.InjectMock;
-import io.quarkus.test.junit.QuarkusTest;
-import io.quarkus.test.junit.QuarkusTestProfile;
-import io.quarkus.test.junit.TestProfile;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.mockito.ArgumentMatchers;
+
+import io.quarkus.test.InjectMock;
+import io.quarkus.test.junit.QuarkusTest;
+import io.quarkus.test.junit.QuarkusTestProfile;
+import io.quarkus.test.junit.TestProfile;
 
 /**
  * Concurrency-specific tests for {@link AgentCronScheduler}.
@@ -60,31 +62,30 @@ class AgentCronSchedulerConcurrencyTest {
     private AgentCronDto createDueJob(boolean runOnce) {
         String id = UUID.randomUUID().toString();
         return new AgentCronDto(
-            id,
-            "session-" + id,
-            "user-1",
-            "chat-1",
-            null,
-            null,
-            "0 9 * * 1",
-            "UTC",
-            runOnce,
-            "CRON: Test goal",
-            Instant.now(),
-            null,
-            "ACTIVE",
-            null,
-            null,
-            null,
-            null,
-            null
-        );
+                id,
+                "session-" + id,
+                "user-1",
+                "chat-1",
+                null,
+                null,
+                "0 9 * * 1",
+                "UTC",
+                runOnce,
+                "CRON: Test goal",
+                Instant.now(),
+                null,
+                "ACTIVE",
+                null,
+                null,
+                null,
+                null,
+                null);
     }
 
     @BeforeEach
     void setup() {
         reset(cronStore, jobRunner, advisoryLockPort);
-        
+
         when(advisoryLockPort.tryLock(anyString(), ArgumentMatchers.anyInt())).thenReturn(true);
 
         // Ensure exactly 2 permits are available via delegated method call
@@ -106,14 +107,16 @@ class AgentCronSchedulerConcurrencyTest {
         CountDownLatch finishLatch = new CountDownLatch(2);
 
         doAnswer(inv -> {
-            try {
-                startLatch.countDown();
-                gateLatch.await(60, TimeUnit.SECONDS);
-                return null;
-            } finally {
-                finishLatch.countDown();
-            }
-        }).when(jobRunner).execute(any());
+                    try {
+                        startLatch.countDown();
+                        gateLatch.await(60, TimeUnit.SECONDS);
+                        return null;
+                    } finally {
+                        finishLatch.countDown();
+                    }
+                })
+                .when(jobRunner)
+                .execute(any());
 
         scheduler.pollAndDispatch();
 
@@ -122,11 +125,11 @@ class AgentCronSchedulerConcurrencyTest {
         verify(cronStore, never()).markFailed(eq(job3.id()), anyString());
 
         assertTrue(startLatch.await(60, TimeUnit.SECONDS), "Jobs did not start for throttle test");
-        
+
         // Release them
         gateLatch.countDown();
         assertTrue(finishLatch.await(60, TimeUnit.SECONDS), "Jobs did not finish for throttle test");
-        
+
         waitForPermits(2);
     }
 
@@ -135,7 +138,9 @@ class AgentCronSchedulerConcurrencyTest {
         while (scheduler.getAvailablePermits() < expected && System.currentTimeMillis() < deadline) {
             Thread.sleep(100);
         }
-        assertTrue(scheduler.getAvailablePermits() == expected, "Expected " + expected + " permits, but got " + scheduler.getAvailablePermits());
+        assertTrue(
+                scheduler.getAvailablePermits() == expected,
+                "Expected " + expected + " permits, but got " + scheduler.getAvailablePermits());
     }
 
     @Test
@@ -145,9 +150,7 @@ class AgentCronSchedulerConcurrencyTest {
         AgentCronDto job2 = createDueJob(true);
         AgentCronDto job3 = createDueJob(true);
 
-        when(cronStore.findDueCrons())
-            .thenReturn(List.of(job1, job2))
-            .thenReturn(List.of(job3));
+        when(cronStore.findDueCrons()).thenReturn(List.of(job1, job2)).thenReturn(List.of(job3));
         when(cronStore.claimForFire(anyString())).thenReturn(true);
 
         CountDownLatch startLatch = new CountDownLatch(2);
@@ -155,39 +158,43 @@ class AgentCronSchedulerConcurrencyTest {
         CountDownLatch finishLatch = new CountDownLatch(2);
 
         doAnswer(inv -> {
-            try {
-                startLatch.countDown();
-                gateLatch.await(60, TimeUnit.SECONDS);
-                return null;
-            } finally {
-                finishLatch.countDown();
-            }
-        }).when(jobRunner).execute(any());
+                    try {
+                        startLatch.countDown();
+                        gateLatch.await(60, TimeUnit.SECONDS);
+                        return null;
+                    } finally {
+                        finishLatch.countDown();
+                    }
+                })
+                .when(jobRunner)
+                .execute(any());
 
         // Fire first two jobs
         scheduler.pollAndDispatch();
         assertTrue(startLatch.await(60, TimeUnit.SECONDS), "Jobs 1-2 did not start successfully");
-        
+
         // Let them finish
         gateLatch.countDown();
         assertTrue(finishLatch.await(60, TimeUnit.SECONDS), "Jobs 1-2 did not finish successfully");
-        
+
         // Wait for permit release
         waitForPermits(2);
 
         // Fire third job - should succeed if semaphore was released
         CountDownLatch finishLatch3 = new CountDownLatch(1);
         doAnswer(inv -> {
-            try {
-                return null;
-            } finally {
-                finishLatch3.countDown();
-            }
-        }).when(jobRunner).execute(any());
+                    try {
+                        return null;
+                    } finally {
+                        finishLatch3.countDown();
+                    }
+                })
+                .when(jobRunner)
+                .execute(any());
 
         scheduler.pollAndDispatch();
         assertTrue(finishLatch3.await(60, TimeUnit.SECONDS), "Job 3 did not finish after release");
-        
+
         verify(jobRunner, times(3)).execute(any());
     }
 
@@ -202,44 +209,46 @@ class AgentCronSchedulerConcurrencyTest {
         AgentCronDto job2 = createDueJob(true);
         AgentCronDto job3 = createDueJob(true);
 
-        when(cronStore.findDueCrons())
-            .thenReturn(List.of(job1, job2))
-            .thenReturn(List.of(job3));
+        when(cronStore.findDueCrons()).thenReturn(List.of(job1, job2)).thenReturn(List.of(job3));
         when(cronStore.claimForFire(anyString())).thenReturn(true);
 
         CountDownLatch startLatch = new CountDownLatch(2);
         CountDownLatch finishLatch = new CountDownLatch(2);
 
         doAnswer(inv -> {
-            try {
-                startLatch.countDown();
-                throw new RuntimeException("inner-failure");
-            } finally {
-                finishLatch.countDown();
-            }
-        }).when(jobRunner).execute(any());
+                    try {
+                        startLatch.countDown();
+                        throw new RuntimeException("inner-failure");
+                    } finally {
+                        finishLatch.countDown();
+                    }
+                })
+                .when(jobRunner)
+                .execute(any());
 
         // Fire first two jobs that throw
         scheduler.pollAndDispatch();
         assertTrue(startLatch.await(60, TimeUnit.SECONDS), "Jobs 1-2 did not start for exception test");
         assertTrue(finishLatch.await(60, TimeUnit.SECONDS), "Jobs 1-2 did not finish with exception");
-        
+
         // Wait for permit release
         waitForPermits(2);
 
         // Fire third job - should execute if permits were released
         CountDownLatch finishLatch3 = new CountDownLatch(1);
         doAnswer(inv -> {
-            try {
-                return null;
-            } finally {
-                finishLatch3.countDown();
-            }
-        }).when(jobRunner).execute(any());
+                    try {
+                        return null;
+                    } finally {
+                        finishLatch3.countDown();
+                    }
+                })
+                .when(jobRunner)
+                .execute(any());
 
         scheduler.pollAndDispatch();
         assertTrue(finishLatch3.await(60, TimeUnit.SECONDS), "Job 3 did not execute after exceptions");
-        
+
         verify(jobRunner, times(3)).execute(any());
     }
 }

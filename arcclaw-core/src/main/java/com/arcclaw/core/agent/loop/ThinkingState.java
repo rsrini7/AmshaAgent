@@ -17,23 +17,28 @@ public class ThinkingState implements RunnerState {
     @Override
     public RunnerState execute(StateContext context) {
         String currentTransientError = context.transientError();
-        if (context.history().isEmpty() && services.intentDetector().isWriteIntent(context.executionContext().goal())) {
+        if (context.history().isEmpty()
+                && services.intentDetector()
+                        .isWriteIntent(context.executionContext().goal())) {
             currentTransientError = "The user wants to store data. Call ingest_document immediately.";
         }
 
         try {
-            StepDecision engineDecision = services.engineStepHandler().processEngineStep(
-                    context.executionContext(),
-                    context.engine(),
-                    context.history(),
-                    currentTransientError,
-                    context.llmSchemaErrorCount(),
-                    context.iteration()
-            );
+            StepDecision engineDecision = services.engineStepHandler()
+                    .processEngineStep(
+                            context.executionContext(),
+                            context.engine(),
+                            context.history(),
+                            currentTransientError,
+                            context.llmSchemaErrorCount(),
+                            context.iteration());
 
             if (engineDecision.isRateLimitHit()) {
                 if (context.rateLimitRetryCount() + 1 > services.maxRateLimitRetries()) {
-                    context.setFinalResult(AgentResult.failed("Repeated rate limits.", AgentResult.FailureCategory.SYSTEM_ERROR, List.copyOf(context.history())));
+                    context.setFinalResult(AgentResult.failed(
+                            "Repeated rate limits.",
+                            AgentResult.FailureCategory.SYSTEM_ERROR,
+                            List.copyOf(context.history())));
                     return services.failedState();
                 }
                 context.incrementRateLimitRetryCount();
@@ -45,12 +50,14 @@ public class ThinkingState implements RunnerState {
 
         } catch (StructuredOutputException soe) {
             if (!services.correctionStrategy().withinBudget(context.llmSchemaErrorCount())) {
-                context.setFinalResult(AgentResult.loopExceeded(context.executionContext().maxIterations(), List.copyOf(context.history())));
+                context.setFinalResult(AgentResult.loopExceeded(
+                        context.executionContext().maxIterations(), List.copyOf(context.history())));
                 return services.failedState();
             }
             int nextSchemaCount = context.llmSchemaErrorCount() + 1;
             context.setLlmSchemaErrorCount(nextSchemaCount);
-            context.setTransientError(services.correctionStrategy().buildCorrectionHint(nextSchemaCount, soe.getMessage()));
+            context.setTransientError(
+                    services.correctionStrategy().buildCorrectionHint(nextSchemaCount, soe.getMessage()));
             return services.preflightState();
         }
     }

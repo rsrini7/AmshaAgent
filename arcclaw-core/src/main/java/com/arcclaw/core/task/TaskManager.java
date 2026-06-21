@@ -1,11 +1,11 @@
 package com.arcclaw.core.task;
 
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
-
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
 
 /**
  * Business logic for agent task lifecycle management.
@@ -41,12 +41,11 @@ public class TaskManager {
     }
 
     public TaskFile transitionTo(String id, TaskState newState) {
-        var task = repository.findById(id)
-            .orElseThrow(() -> new IllegalArgumentException("Task not found: " + id));
+        var task = repository.findById(id).orElseThrow(() -> new IllegalArgumentException("Task not found: " + id));
 
         if (task.status().isTerminal()) {
             throw new IllegalStateException(
-                "Cannot transition terminal task '" + task.name() + "' (state=" + task.status() + ")");
+                    "Cannot transition terminal task '" + task.name() + "' (state=" + task.status() + ")");
         }
 
         TaskFile updated = task.withStatus(newState);
@@ -54,8 +53,7 @@ public class TaskManager {
     }
 
     public TaskFile updateBody(String id, String newBody) {
-        var task = repository.findById(id)
-            .orElseThrow(() -> new IllegalArgumentException("Task not found: " + id));
+        var task = repository.findById(id).orElseThrow(() -> new IllegalArgumentException("Task not found: " + id));
         TaskFile updated = task.withBody(newBody);
         return repository.save(updated);
     }
@@ -71,7 +69,7 @@ public class TaskManager {
     public List<TaskFile> findStaleTasks() {
         Instant cutoff = Instant.now().minusSeconds(86400);
         return repository.findByStatus(TaskState.IN_PROGRESS).stream()
-            .filter(t -> t.updatedAt().isBefore(cutoff))
-            .toList();
+                .filter(t -> t.updatedAt().isBefore(cutoff))
+                .toList();
     }
 }

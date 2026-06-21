@@ -1,21 +1,22 @@
 package com.arcclaw.core.skill;
 
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.event.Observes;
+import jakarta.enterprise.inject.Instance;
+import jakarta.inject.Inject;
+
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
 import java.util.stream.Collectors;
-
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.enterprise.event.Observes;
-import jakarta.enterprise.inject.Instance;
-import jakarta.inject.Inject;
 
 import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
@@ -24,8 +25,10 @@ import com.arcclaw.core.agent.role.RoleRegistry;
 import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.audit.TelemetryAuditService;
-import io.quarkus.runtime.StartupEvent;
+
 import org.jboss.logging.Logger;
+
+import io.quarkus.runtime.StartupEvent;
 
 /**
  * Orchestrates the loading and compilation of agent skills via {@link SkillProvider} SPI.
@@ -63,8 +66,8 @@ public class SkillLoader {
         // Sort by priority (lower = higher priority, processed first)
         // putIfAbsent semantics: first writer wins → highest-priority provider wins on collision
         List<SkillProvider> ordered = providers.stream()
-            .sorted(Comparator.comparingInt(SkillProvider::priority))
-            .toList();
+                .sorted(Comparator.comparingInt(SkillProvider::priority))
+                .toList();
 
         for (SkillProvider provider : ordered) {
             LOG.infof("Loading skills from provider: %s (priority=%d)", provider.sourceName(), provider.priority());
@@ -73,9 +76,10 @@ public class SkillLoader {
                 try {
                     allWarnings.addAll(addSafe(mergedSkills, def, provider.sourceName()));
                 } catch (Exception e) {
-                   String w = "Failed to compile skill '" + def.name() + "' from " + provider.sourceName() + ": " + e.getMessage();
-                   LOG.warn(w);
-                   allWarnings.add(w);
+                    String w = "Failed to compile skill '" + def.name() + "' from " + provider.sourceName() + ": "
+                            + e.getMessage();
+                    LOG.warn(w);
+                    allWarnings.add(w);
                 }
             }
         }
@@ -89,20 +93,21 @@ public class SkillLoader {
 
         LOG.infof("Skill load complete. Total Loaded: %d", finalList.size());
 
-        SecurityEventType eventType = isRefresh
-                ? SecurityEventType.SKILL_REFRESHED
-                : SecurityEventType.SKILL_LOADED;
-        telemetryAuditService.record(AgentSentinels.SYSTEM_SESSION, AgentSentinels.SYSTEM_USER, AgentSentinels.SYSTEM_ROLE, eventType,
+        SecurityEventType eventType = isRefresh ? SecurityEventType.SKILL_REFRESHED : SecurityEventType.SKILL_LOADED;
+        telemetryAuditService.record(
+                AgentSentinels.SYSTEM_SESSION,
+                AgentSentinels.SYSTEM_USER,
+                AgentSentinels.SYSTEM_ROLE,
+                eventType,
                 "Loaded " + finalList.size() + " skills");
 
         return List.copyOf(allWarnings);
     }
 
-    private List<String> addSafe(Map<String, CompiledSkillEntry> map,
-                                  SkillDefinition def, String source) {
+    private List<String> addSafe(Map<String, CompiledSkillEntry> map, SkillDefinition def, String source) {
         List<String> warnings = new ArrayList<>();
         try {
-            Pattern[] compiledPatterns = compilePatterns(def.triggerPatterns());
+            List<Pattern> compiledPatterns = compilePatterns(def.triggerPatterns());
             CompileToolsResult toolsResult = compileTools(def.name(), def.toolCapabilities());
             warnings.addAll(toolsResult.warnings());
 
@@ -111,8 +116,8 @@ public class SkillLoader {
                     && !def.toolCapabilities().isEmpty()) {
                 throw new IllegalArgumentException(
                         "All declared tool-capabilities are invalid: " + def.toolCapabilities()
-                        + ". Valid values: " + validCapabilityNames()
-                        + ". Skill rejected to prevent a zombie role.");
+                                + ". Valid values: " + validCapabilityNames()
+                                + ". Skill rejected to prevent a zombie role.");
             }
 
             String canonicalRoleName = AgentRoleEnum.SKILL_PREFIX + def.name();
@@ -124,24 +129,22 @@ public class SkillLoader {
                     false,
                     false, // codeCapable
                     toolsResult.valid(),
-                    Set.of(def.name().toLowerCase())
-            );
+                    Set.of(def.name().toLowerCase(Locale.ROOT)));
 
             map.put(def.name(), new CompiledSkillEntry(def, compiledPatterns, roleDef, source));
 
         } catch (PatternSyntaxException e) {
-            String w = "Failed to compile trigger-pattern regex for skill '"
-                    + def.name() + "': " + e.getMessage();
+            String w = "Failed to compile trigger-pattern regex for skill '" + def.name() + "': " + e.getMessage();
             LOG.warnf(w);
             warnings.add(w);
         }
         return warnings;
     }
 
-    private Pattern[] compilePatterns(List<String> rawPatterns) {
+    private List<Pattern> compilePatterns(List<String> rawPatterns) {
         return rawPatterns.stream()
                 .map(p -> Pattern.compile(p, Pattern.CASE_INSENSITIVE))
-                .toArray(Pattern[]::new);
+                .toList();
     }
 
     private CompileToolsResult compileTools(String skillName, List<String> rawTools) {
@@ -152,7 +155,7 @@ public class SkillLoader {
         List<String> warnings = new ArrayList<>();
         Set<ToolCapability> valid = rawTools.stream()
                 .map(str -> {
-                    String normalized = str.toUpperCase().replace("_", "");
+                    String normalized = str.toUpperCase(Locale.ROOT).replace("_", "");
                     for (ToolCapability cap : ToolCapability.values()) {
                         if (cap.name().replace("_", "").equals(normalized)) {
                             return cap;
@@ -162,7 +165,7 @@ public class SkillLoader {
                             + "' - excluded. Valid values: " + validCapabilityNames();
                     LOG.warnf(w);
                     warnings.add(w);
-                    return (ToolCapability) null;
+                    return null;
                 })
                 .filter(Objects::nonNull)
                 .collect(Collectors.toUnmodifiableSet());
@@ -173,8 +176,6 @@ public class SkillLoader {
     private record CompileToolsResult(Set<ToolCapability> valid, List<String> warnings) {}
 
     private static String validCapabilityNames() {
-        return Arrays.stream(ToolCapability.values())
-                .map(Enum::name)
-                .collect(Collectors.joining(", "));
+        return Arrays.stream(ToolCapability.values()).map(Enum::name).collect(Collectors.joining(", "));
     }
 }

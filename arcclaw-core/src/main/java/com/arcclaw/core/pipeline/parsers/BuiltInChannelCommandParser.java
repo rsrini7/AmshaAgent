@@ -1,8 +1,8 @@
 package com.arcclaw.core.pipeline.parsers;
 
-import java.util.Optional;
-
 import jakarta.enterprise.context.ApplicationScoped;
+
+import java.util.Optional;
 
 import com.arcclaw.channel.api.ChannelCommand;
 import com.arcclaw.channel.api.ChannelCommandParser;

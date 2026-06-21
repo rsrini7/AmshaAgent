@@ -35,11 +35,9 @@ public interface ReplyRenderer {
                     batch.clear();
                 }
                 sb.append(renderInteraction(in)).append("\n\n");
-            } else {
-                // ReplyNode is sealed to ContentNode|InteractionNode for built-in types,
-                // but third-party plugins can define subtypes that miss both branches.
-                // Concrete renderers handle this in their renderContentNode() default arm.
             }
+            // Note: ReplyNode is sealed but third-party plugins can define subtypes
+            // that miss both branches. Concrete renderers handle this in renderContentNode().
         }
         if (!batch.isEmpty()) {
             sb.append(renderContent(batch));

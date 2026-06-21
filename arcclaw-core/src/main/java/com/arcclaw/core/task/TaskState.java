@@ -1,5 +1,7 @@
 package com.arcclaw.core.task;
 
+import java.util.Locale;
+
 /**
  * Lifecycle states for agent task files.
  * <p>
@@ -23,7 +25,7 @@ public enum TaskState {
 
     public static TaskState fromString(String s) {
         if (s == null || s.isBlank()) return TODO;
-        return switch (s.trim().toUpperCase()) {
+        return switch (s.trim().toUpperCase(Locale.ROOT)) {
             case "TODO" -> TODO;
             case "IN_PROGRESS", "IN PROGRESS", "INPROGRESS" -> IN_PROGRESS;
             case "COMPLETED", "DONE" -> COMPLETED;

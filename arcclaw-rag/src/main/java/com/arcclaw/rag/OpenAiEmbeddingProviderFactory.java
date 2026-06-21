@@ -1,9 +1,10 @@
 package com.arcclaw.rag;
 
-import jakarta.enterprise.context.ApplicationScoped;
-
 import dev.langchain4j.model.embedding.EmbeddingModel;
 import dev.langchain4j.model.openai.OpenAiEmbeddingModel;
+
+import jakarta.enterprise.context.ApplicationScoped;
+
 import org.jboss.logging.Logger;
 
 /**
@@ -11,7 +12,7 @@ import org.jboss.logging.Logger;
  */
 @ApplicationScoped
 public class OpenAiEmbeddingProviderFactory implements EmbeddingProviderFactory {
-    
+
     private static final Logger log = Logger.getLogger(OpenAiEmbeddingProviderFactory.class);
 
     @Override
@@ -20,13 +21,18 @@ public class OpenAiEmbeddingProviderFactory implements EmbeddingProviderFactory 
     }
 
     @Override
+    public String defaultBaseUrl() {
+        return "https://api.openai.com/v1";
+    }
+
+    @Override
     public EmbeddingModel create(EmbeddingModelConfig config) {
         String key = requireApiKey(config);
         log.infof("Creating OpenAI embedding model: %s", config.modelName());
         return OpenAiEmbeddingModel.builder()
-            .apiKey(key)
-            .modelName(config.modelName())
-            .timeout(config.timeout())
-            .build();
+                .apiKey(key)
+                .modelName(config.modelName())
+                .timeout(config.timeout())
+                .build();
     }
 }

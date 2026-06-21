@@ -18,9 +18,14 @@ public class McpToolRequest {
         }
     }
 
-    public String toolName() { return toolName; }
-    public String paramsJson() { return paramsJson; }
-    
+    public String toolName() {
+        return toolName;
+    }
+
+    public String paramsJson() {
+        return paramsJson;
+    }
+
     public String getHeader(String name) {
         for (Map.Entry<String, String> entry : headers.entrySet()) {
             if (entry.getKey().equalsIgnoreCase(name)) {

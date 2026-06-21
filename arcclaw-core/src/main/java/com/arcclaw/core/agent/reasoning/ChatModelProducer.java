@@ -1,8 +1,6 @@
 package com.arcclaw.core.agent.reasoning;
 
-import java.nio.charset.StandardCharsets;
-import java.util.Map;
-import java.util.Optional;
+import dev.langchain4j.model.chat.ChatModel;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.context.Dependent;
@@ -11,15 +9,20 @@ import jakarta.enterprise.inject.Instance;
 import jakarta.enterprise.inject.Produces;
 import jakarta.inject.Inject;
 
+import java.nio.charset.StandardCharsets;
+import java.util.Map;
+import java.util.Optional;
+
 import com.arcclaw.core.routing.ChatModelFactory;
 import com.arcclaw.core.security.SecretVault;
 import com.arcclaw.core.security.VaultConstants;
 import com.arcclaw.core.security.VaultKey;
-import dev.langchain4j.model.chat.ChatModel;
-import io.quarkus.arc.Unremovable;
-import io.smallrye.common.annotation.Identifier;
+
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
+
+import io.quarkus.arc.Unremovable;
+import io.smallrye.common.annotation.Identifier;
 
 @ApplicationScoped
 @Unremovable
@@ -27,16 +30,16 @@ public class ChatModelProducer {
 
     private static final Logger log = Logger.getLogger(ChatModelProducer.class);
     private static final Map<String, String> PROVIDER_BASE_URLS = Map.ofEntries(
-        Map.entry("groq",      "https://api.groq.com/openai/v1"),
-        Map.entry("openai",    "https://api.openai.com/v1"),
-        Map.entry("openrouter","https://openrouter.ai/api/v1"),
-        Map.entry("cerebras",  "https://api.cerebras.ai/v1"),
-        Map.entry("nvidia",    "https://integrate.api.nvidia.com/v1"),
-        Map.entry("ollama",    "http://localhost:11434"),
-        Map.entry("omlx",      "http://127.0.0.1:8000/v1"),
-        Map.entry("llamacpp",  "http://127.0.0.1:8080/v1"),
-        Map.entry("gemini",    "https://generativelanguage.googleapis.com/v1beta")
-    );
+            Map.entry("groq", "https://api.groq.com/openai/v1"),
+            Map.entry("openai", "https://api.openai.com/v1"),
+            Map.entry("openrouter", "https://openrouter.ai/api/v1"),
+            Map.entry("cerebras", "https://api.cerebras.ai/v1"),
+            Map.entry("nvidia", "https://integrate.api.nvidia.com/v1"),
+            Map.entry("ollama", "http://localhost:11434"),
+            Map.entry("omlx", "http://127.0.0.1:8000/v1"),
+            Map.entry("llamacpp", "http://127.0.0.1:8080/v1"),
+            Map.entry("gemini", "https://generativelanguage.googleapis.com/v1beta"),
+            Map.entry("generic-openai", ""));
 
     @ConfigProperty(name = "arcclaw.llm.provider", defaultValue = "groq")
     String provider;
@@ -69,8 +72,11 @@ public class ChatModelProducer {
                     effectiveProvider = p;
                     Optional<VaultKey> vaultKey = vault.retrieveSystemKey(VaultConstants.LLM_API_KEY);
                     Optional<VaultKey> vaultModel = vault.retrieveSystemKey(VaultConstants.LLM_MODEL_KEY);
-                    effectiveKey = vaultKey.map(k -> new String(k.get(), StandardCharsets.UTF_8)).orElse(null);
-                    effectiveModel = vaultModel.map(k -> new String(k.get(), StandardCharsets.UTF_8)).orElse(null);
+                    effectiveKey = vaultKey.map(k -> new String(k.get(), StandardCharsets.UTF_8))
+                            .orElse(null);
+                    effectiveModel = vaultModel
+                            .map(k -> new String(k.get(), StandardCharsets.UTF_8))
+                            .orElse(null);
                     log.infof("ChatModelProducer: using vault provider=%s model=%s", effectiveProvider, effectiveModel);
                 }
             }
@@ -80,11 +86,18 @@ public class ChatModelProducer {
         if (effectiveKey != null && effectiveModel != null) {
             String baseUrl = PROVIDER_BASE_URLS.getOrDefault(effectiveProvider, "");
             if (!baseUrl.isBlank()) {
-                log.infof("ChatModelProducer: building model from vault values (provider=%s baseUrl=%s)", effectiveProvider, baseUrl);
+                log.infof(
+                        "ChatModelProducer: building model from vault values (provider=%s baseUrl=%s)",
+                        effectiveProvider, baseUrl);
                 return ChatModelFactory.createOpenAi(
-                    baseUrl, effectiveKey, effectiveModel,
-                    agentConfig.maxTokens(), agentConfig.timeout(), agentConfig.maxRetries(),
-                    agentConfig.temperature(), agentConfig.logHttp());
+                        baseUrl,
+                        effectiveKey,
+                        effectiveModel,
+                        agentConfig.maxTokens(),
+                        agentConfig.timeout(),
+                        agentConfig.maxRetries(),
+                        agentConfig.temperature(),
+                        agentConfig.logHttp());
             }
         }
         return providerFactory.create();
@@ -116,11 +129,12 @@ public class ChatModelProducer {
                 return p;
             }
         }
-        throw new RuntimeException("No AgentChatModelProvider found for provider='" + cleanProvider + "' (raw: '" + provider + "')");
+        throw new RuntimeException(
+                "No AgentChatModelProvider found for provider='" + cleanProvider + "' (raw: '" + provider + "')");
     }
 
     private String clean(String value) {
         if (value == null) return null;
-        return value.split("#")[0].trim();
+        return value.split("#", 2)[0].trim();
     }
 }

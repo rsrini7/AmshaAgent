@@ -1,18 +1,21 @@
 package com.arcclaw.core.tools;
 
+import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
+
+import jakarta.annotation.PostConstruct;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.TimeoutException;
-
-import jakarta.annotation.PostConstruct;
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
 
 import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.core.agent.role.ToolCapability;
@@ -26,7 +29,7 @@ import com.arcclaw.core.sandbox.SandboxResult;
 import com.arcclaw.core.security.ToolOperation;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
+
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
@@ -35,17 +38,17 @@ import org.jboss.logging.Logger;
  */
 @ApplicationScoped
 @ToolMetadata(
-    capabilityId = "sandbox_exec",
-    description = "Execute code in an isolated sandbox",
-    defaultRoles = {"coder", "debugger"}
-)
+        capabilityId = "sandbox_exec",
+        description = "Execute code in an isolated sandbox",
+        defaultRoles = {"coder", "debugger"})
+@SuppressWarnings("java:S1192")
 public class SandboxExecTool implements AgentTool {
 
     private static final Logger log = Logger.getLogger(SandboxExecTool.class);
-    
+
     @ConfigProperty(name = "arcclaw.sandbox.max-output-chars", defaultValue = "8192")
     int maxOutputChars;
-    
+
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
     // ── Container-side mount point for the workspace directory.
@@ -61,16 +64,22 @@ public class SandboxExecTool implements AgentTool {
         if (isolationExecutor.isAllowInsecureFallback()) {
             msg += "Direct host fallback also failed: " + reason + ". ";
         } else {
-            msg += "The code was NOT run. Inform the user gracefully that the execution " +
-                   "environment is currently offline, or set " +
-                   "ARCCLAW_SANDBOX_ALLOW_INSECURE_FALLBACK=true to allow insecure fallback.";
+            msg += "The code was NOT run. Inform the user gracefully that the execution "
+                    + "environment is currently offline, or set "
+                    + "ARCCLAW_SANDBOX_ALLOW_INSECURE_FALLBACK=true to allow insecure fallback.";
         }
         return msg;
     }
 
-    @Inject ProcessIsolationExecutor isolationExecutor;
-    @Inject HostJavaCompiler hostJavaCompiler;
-    @Inject AuditService auditService;
+    @Inject
+    ProcessIsolationExecutor isolationExecutor;
+
+    @Inject
+    HostJavaCompiler hostJavaCompiler;
+
+    @Inject
+    AuditService auditService;
+
     CodeLanguageDetector codeLanguageDetector;
     OutputTruncator outputTruncator;
 
@@ -100,11 +109,29 @@ public class SandboxExecTool implements AgentTool {
         return ToolResponse.success("Sandbox execution environment is initialized.");
     }
 
-    @Override public String name()             { return ToolCapability.SANDBOX_EXEC.toolName(); }
-    @Override public String description()      { return ToolCapability.SANDBOX_EXEC.description(); }
-    @Override public ToolOperation requiredOperation() { return ToolOperation.EXECUTE_SHELL; }
-    @Override public boolean requiresSandbox() { return true; }
-    public ToolCapability capability()         { return ToolCapability.SANDBOX_EXEC; }
+    @Override
+    public String name() {
+        return ToolCapability.SANDBOX_EXEC.toolName();
+    }
+
+    @Override
+    public String description() {
+        return ToolCapability.SANDBOX_EXEC.description();
+    }
+
+    @Override
+    public ToolOperation requiredOperation() {
+        return ToolOperation.EXECUTE_SHELL;
+    }
+
+    @Override
+    public boolean requiresSandbox() {
+        return true;
+    }
+
+    public ToolCapability capability() {
+        return ToolCapability.SANDBOX_EXEC;
+    }
 
     @Override
     public JsonObjectSchema parametersSchema() {
@@ -133,32 +160,36 @@ public class SandboxExecTool implements AgentTool {
         if (code == null) throw new IllegalArgumentException("Parameter 'code' is required.");
         if (lang == null) throw new IllegalArgumentException("Parameter 'language' is required.");
 
-        lang = lang.toLowerCase();
+        lang = lang.toLowerCase(Locale.ROOT);
 
-        auditService.record(ctx.sessionId(), ctx.userId(), ctx.agentRole(),
+        auditService.record(
+                ctx.sessionId(),
+                ctx.userId(),
+                ctx.agentRole(),
                 SecurityEventType.TOOL_EXECUTED,
                 "sandbox_exec lang=" + lang + " codeLen=" + code.length());
 
         String violation = SandboxCodeSafetyScanner.findViolation(lang, code);
         if (violation != null) {
-            log.warnf("[SandboxExecTool] Blocked dangerous pattern in session %s: %s",
-                    ctx.sessionId(), violation);
+            log.warnf("[SandboxExecTool] Blocked dangerous pattern in session %s: %s", ctx.sessionId(), violation);
             throw new IllegalArgumentException("🚫 Execution blocked: " + violation);
         }
 
         return switch (lang) {
-case "java" -> {
+            case "java" -> {
                 String className = codeLanguageDetector.extractJavaClassName(code);
                 String srcPath = CONTAINER_WORKSPACE + "/" + className + ".java";
-                yield List.of("sh", "-c",
-                    "ver=$(java -version 2>&1); ver=${ver#*\\\"}; ver=${ver%%.*} && " +
-                    "exec java --enable-preview --source \"$ver\" " + srcPath);
+                yield List.of(
+                        "sh",
+                        "-c",
+                        "ver=$(java -version 2>&1); ver=${ver#*\\\"}; ver=${ver%%.*} && "
+                                + "exec java --enable-preview --source \"$ver\" " + srcPath);
             }
             case "python", "python3" -> List.of("python3", CONTAINER_WORKSPACE + "/script.py");
-            case "bash"              -> List.of("bash",    CONTAINER_WORKSPACE + "/script.sh");
+            case "bash" -> List.of("bash", CONTAINER_WORKSPACE + "/script.sh");
             case "go" -> List.of("go", "run", CONTAINER_WORKSPACE + "/main.go");
             case "node" -> List.of("node", CONTAINER_WORKSPACE + "/script.js");
-            default   -> codeLanguageDetector.buildCommand(lang, code);
+            default -> codeLanguageDetector.buildCommand(lang, code);
         };
     }
 
@@ -176,12 +207,12 @@ case "java" -> {
         String lang = (String) params.get("language");
         String code = (String) params.get("code");
         if (lang == null || code == null) return;
-        lang = lang.toLowerCase();
+        lang = lang.toLowerCase(Locale.ROOT);
 
         if ("java".equals(lang)) {
             if (!codeLanguageDetector.containsTypeDeclaration(code)) {
-                code = "public class Main {\n    public static void main(String[] args) {\n"
-                        + code.indent(8) + "    }\n}\n";
+                code = "public class Main {\n    public static void main(String[] args) {\n" + code.indent(8)
+                        + "    }\n}\n";
             }
             Files.createDirectories(workspaceRoot);
             String className = codeLanguageDetector.extractJavaClassName(code);
@@ -189,7 +220,7 @@ case "java" -> {
             Files.writeString(javaFile, code, StandardCharsets.UTF_8);
 
         } else if ("python".equals(lang) || "python3".equals(lang)) {
-            // Write to file - avoids shell quote-stripping of f-strings, 
+            // Write to file - avoids shell quote-stripping of f-strings,
             // double quotes, and special chars when passed via -c to Podman.
             Files.createDirectories(workspaceRoot);
             Files.writeString(workspaceRoot.resolve("script.py"), code, StandardCharsets.UTF_8);
@@ -203,7 +234,7 @@ case "java" -> {
         } else if ("bash".equals(lang)) {
             Files.createDirectories(workspaceRoot);
             Files.writeString(workspaceRoot.resolve("script.sh"), code, StandardCharsets.UTF_8);
-        } 
+        }
     }
 
     @Override
@@ -220,14 +251,14 @@ case "java" -> {
             String lang = (String) params.get("language");
             if (lang == null) return ToolResponse.failure(1, "Parameter 'language' is required.");
             if (code == null) return ToolResponse.failure(1, "Parameter 'code' is required.");
-            lang = lang.toLowerCase();
+            lang = lang.toLowerCase(Locale.ROOT);
 
             String violation = SandboxCodeSafetyScanner.findViolation(lang, code);
             if (violation != null) return ToolResponse.failure(1, "🚫 Execution blocked: " + violation);
 
             if ("java".equals(lang) && !codeLanguageDetector.containsTypeDeclaration(code)) {
-                code = "public class Main {\n    public static void main(String[] args) {\n"
-                        + code.indent(8) + "    }\n}\n";
+                code = "public class Main {\n    public static void main(String[] args) {\n" + code.indent(8)
+                        + "    }\n}\n";
             }
 
             // Secrets are intentionally empty on the direct-execution fallback path.
@@ -235,8 +266,10 @@ case "java" -> {
             // securely via SandboxSecretResolver + tmpfs transport.
             // DirectExecutor has no secure secret injection mechanism.
             if (params.containsKey("secrets")) {
-                log.warnf("[SandboxExecTool] 'secrets' parameter ignored on direct host fallback - " +
-                          "Podman unavailable. session=%s", sessionId);
+                log.warnf(
+                        "[SandboxExecTool] 'secrets' parameter ignored on direct host fallback - "
+                                + "Podman unavailable. session=%s",
+                        sessionId);
             }
             Map<String, String> requiredSecrets = Map.of();
 
@@ -244,8 +277,8 @@ case "java" -> {
 
             return switch (lang) {
                 case "java" -> executeJavaFallback(sessionId, workspaceRoot, code, requiredSecrets);
-                case "go"   -> executeGo(sessionId, workspaceRoot, code, requiredSecrets);
-                default     -> executeInterpreted(sessionId, workspaceRoot, lang, code, params, requiredSecrets);
+                case "go" -> executeGo(sessionId, workspaceRoot, code, requiredSecrets);
+                default -> executeInterpreted(sessionId, workspaceRoot, lang, code, params, requiredSecrets);
             };
         } catch (BudgetExceededException e) {
             throw e;
@@ -254,13 +287,13 @@ case "java" -> {
             return ToolResponse.infraFailure(buildSandboxOfflineMsg("Timeout"));
         } catch (Exception e) {
             String msg = e.getMessage();
-            return ToolResponse.failure(1, msg != null && !msg.isBlank()
-                ? msg : "Sandbox execution failed with no details.");
+            return ToolResponse.failure(
+                    1, msg != null && !msg.isBlank() ? msg : "Sandbox execution failed with no details.");
         }
     }
 
-    private ToolResponse executeJavaFallback(String sessionId, Path workspaceRoot,
-            String code, Map<String, String> secrets) throws Exception {
+    private ToolResponse executeJavaFallback(
+            String sessionId, Path workspaceRoot, String code, Map<String, String> secrets) throws Exception {
 
         Files.createDirectories(workspaceRoot);
         String className = codeLanguageDetector.extractJavaClassName(code);
@@ -288,9 +321,14 @@ case "java" -> {
         return ToolResponse.success(postProcessOutput(result.output(), Map.of()));
     }
 
-    private ToolResponse executeInterpreted(String sessionId, Path workspaceRoot,
-            String lang, String code, Map<String, Object> params,
-            Map<String, String> secrets) throws Exception {
+    private ToolResponse executeInterpreted(
+            String sessionId,
+            Path workspaceRoot,
+            String lang,
+            String code,
+            Map<String, Object> params,
+            Map<String, String> secrets)
+            throws Exception {
 
         List<String> commandList = new ArrayList<>(codeLanguageDetector.buildCommand(lang, code));
         Object argsObj = params.get("args");
@@ -310,8 +348,8 @@ case "java" -> {
         return ToolResponse.success(postProcessOutput(result.output(), params));
     }
 
-    private ToolResponse executeGo(String sessionId, Path workspaceRoot,
-            String code, Map<String, String> secrets) throws Exception {
+    private ToolResponse executeGo(String sessionId, Path workspaceRoot, String code, Map<String, String> secrets)
+            throws Exception {
         Files.createDirectories(workspaceRoot);
         Files.writeString(workspaceRoot.resolve("main.go"), code, StandardCharsets.UTF_8);
 
@@ -330,9 +368,10 @@ case "java" -> {
             return ToolResponse.success(postProcessOutput(result.output(), Map.of()));
         } catch (IOException e) {
             if (e.getMessage().contains("No such file or directory")) {
-                return ToolResponse.failure(1,
-                    "Go runtime not found on this system. " +
-                    "Install Go or rephrase the task to use Python/Node instead.");
+                return ToolResponse.failure(
+                        1,
+                        "Go runtime not found on this system. "
+                                + "Install Go or rephrase the task to use Python/Node instead.");
             }
             throw e;
         }

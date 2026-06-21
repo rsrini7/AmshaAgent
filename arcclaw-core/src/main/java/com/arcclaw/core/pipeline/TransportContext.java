@@ -7,11 +7,7 @@ import com.arcclaw.channel.api.ChannelUser;
 /**
  * Encapsulates transport-layer metadata for a message.
  */
-public record TransportContext(
-    String chatId,
-    ChannelUser user,
-    ChannelMessage message
-) {
+public record TransportContext(String chatId, ChannelUser user, ChannelMessage message) {
     public ChannelType channelType() {
         return user != null ? user.channel() : ChannelType.TELEGRAM;
     }

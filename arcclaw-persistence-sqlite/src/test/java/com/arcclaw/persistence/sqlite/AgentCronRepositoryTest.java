@@ -4,16 +4,18 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import jakarta.inject.Inject;
+
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.UUID;
 
-import jakarta.inject.Inject;
-
 import com.arcclaw.persistence.api.AgentCronDto;
 import com.arcclaw.persistence.api.CronStorePort;
-import io.quarkus.test.junit.QuarkusTest;
+
 import org.junit.jupiter.api.Test;
+
+import io.quarkus.test.junit.QuarkusTest;
 
 @QuarkusTest
 class AgentCronRepositoryTest {
@@ -24,31 +26,29 @@ class AgentCronRepositoryTest {
     private AgentCronDto createDto(String userId, String status, Instant nextFireTime) {
         String id = UUID.randomUUID().toString();
         return new AgentCronDto(
-            id,
-            "session-" + id,
-            userId,
-            "chat-1",
-            null,
-            null,
-            "0 9 * * 1",
-            "UTC",
-            false,
-            "CRON: Test goal",
-            nextFireTime,
-            null,
-            status,
-            null,
-            null,
-            null,
-            Instant.now(),
-            Instant.now()
-        );
+                id,
+                "session-" + id,
+                userId,
+                "chat-1",
+                null,
+                null,
+                "0 9 * * 1",
+                "UTC",
+                false,
+                "CRON: Test goal",
+                nextFireTime,
+                null,
+                status,
+                null,
+                null,
+                null,
+                Instant.now(),
+                Instant.now());
     }
 
     @Test
     void testFindDueCronsReturnsDueRows() {
-        AgentCronDto dto = createDto("user-due-1", "ACTIVE",
-                Instant.now().minus(1, ChronoUnit.MINUTES));
+        AgentCronDto dto = createDto("user-due-1", "ACTIVE", Instant.now().minus(1, ChronoUnit.MINUTES));
         assertDoesNotThrow(() -> cronStore.save(dto));
 
         var due = cronStore.findDueCrons();
@@ -57,8 +57,7 @@ class AgentCronRepositoryTest {
 
     @Test
     void testFindDueCronsExcludesFutureRows() {
-        AgentCronDto dto = createDto("user-due-2", "ACTIVE",
-                Instant.now().plus(1, ChronoUnit.HOURS));
+        AgentCronDto dto = createDto("user-due-2", "ACTIVE", Instant.now().plus(1, ChronoUnit.HOURS));
         assertDoesNotThrow(() -> cronStore.save(dto));
 
         var due = cronStore.findDueCrons();

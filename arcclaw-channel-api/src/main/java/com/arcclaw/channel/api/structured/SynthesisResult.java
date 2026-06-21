@@ -11,8 +11,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public record SynthesisResult(
-    @JsonProperty(required = true) List<AgentContribution> contributions,
-    @JsonProperty(required = true) List<ConflictSummary> conflictSummary,
-    @JsonProperty(required = true) String finalResolution,
-    Map<String, Object> additionalInfo
-) {}
+        @JsonProperty(required = true) List<AgentContribution> contributions,
+        @JsonProperty(required = true) List<ConflictSummary> conflictSummary,
+        @JsonProperty(required = true) String finalResolution,
+        Map<String, Object> additionalInfo) {}

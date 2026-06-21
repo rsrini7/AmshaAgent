@@ -9,8 +9,12 @@ import java.util.Optional;
  */
 public interface SkillStorePort {
     void save(SkillDto dto);
+
     List<SkillDto> findAll();
+
     Optional<SkillDto> findByName(String name);
+
     boolean deleteById(String id);
+
     long deleteAll();
 }

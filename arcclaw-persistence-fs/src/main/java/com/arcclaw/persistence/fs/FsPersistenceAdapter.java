@@ -5,6 +5,7 @@ import jakarta.inject.Inject;
 
 import com.arcclaw.persistence.api.PersistenceAction;
 import com.arcclaw.persistence.api.PersistenceAdapterPort;
+
 import io.quarkus.arc.Unremovable;
 import io.quarkus.arc.properties.IfBuildProperty;
 

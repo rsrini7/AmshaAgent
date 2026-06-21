@@ -81,13 +81,13 @@
       <version>${quarkus.version}</version>
       <scope>test</scope>
     </dependency>
-    <!-- Resolves DevMode Jupiter ClassNotFoundException for org.junit.internal.AssumptionViolatedException -->
+    <!-- JaCoCo coverage for Quarkus forked test JVMs (auto-configures agent + report) -->
     <dependency>
-      <groupId>junit</groupId>
-      <artifactId>junit</artifactId>
-      <version>4.13.2</version>
+      <groupId>io.quarkus</groupId>
+      <artifactId>quarkus-jacoco</artifactId>
       <scope>test</scope>
     </dependency>
+    <!-- JUnit 4 removed — all tests use JUnit 5 Jupiter. Re-add if DevMode ClassNotFoundException returns. -->
     <!-- Force local deployment module onto test classpath -->
     <dependency>
       <groupId>com.arcclaw</groupId>
@@ -121,7 +121,6 @@
     <dependency>
       <groupId>io.quarkiverse.jdbi</groupId>
       <artifactId>quarkus-jdbi</artifactId>
-      <version>1.9.0</version>
     </dependency>
     <dependency>
       <groupId>io.quarkus</groupId>
@@ -145,6 +144,14 @@
           <groupId>dev.langchain4j</groupId>
           <artifactId>langchain4j-http-client-jdk</artifactId>
         </exclusion>
+        <exclusion>
+          <groupId>io.quarkus</groupId>
+          <artifactId>quarkus-hibernate-orm</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>io.quarkus</groupId>
+          <artifactId>quarkus-hibernate-orm-panache</artifactId>
+        </exclusion>
       </exclusions>      
     </dependency>
     <dependency>
@@ -154,6 +161,14 @@
         <exclusion>
           <groupId>dev.langchain4j</groupId>
           <artifactId>langchain4j-http-client-jdk</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>io.quarkus</groupId>
+          <artifactId>quarkus-hibernate-orm</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>io.quarkus</groupId>
+          <artifactId>quarkus-hibernate-orm-panache</artifactId>
         </exclusion>
       </exclusions>
     </dependency>
@@ -166,6 +181,14 @@
           <groupId>dev.langchain4j</groupId>
           <artifactId>langchain4j-http-client-jdk</artifactId>
         </exclusion>
+        <exclusion>
+          <groupId>io.quarkus</groupId>
+          <artifactId>quarkus-hibernate-orm</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>io.quarkus</groupId>
+          <artifactId>quarkus-hibernate-orm-panache</artifactId>
+        </exclusion>
       </exclusions>
     </dependency>
 
@@ -176,6 +199,14 @@
         <exclusion>
           <groupId>dev.langchain4j</groupId>
           <artifactId>langchain4j-http-client-jdk</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>io.quarkus</groupId>
+          <artifactId>quarkus-hibernate-orm</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>io.quarkus</groupId>
+          <artifactId>quarkus-hibernate-orm-panache</artifactId>
         </exclusion>
       </exclusions>
     </dependency>
@@ -200,7 +231,6 @@
     <dependency>
       <groupId>io.quarkiverse.jdbc</groupId>
       <artifactId>quarkus-jdbc-sqlite</artifactId>
-      <version>3.0.11</version>
     </dependency>
 
     <!-- PostgreSQL JDBC driver (for %postgresql profile) -->
@@ -219,13 +249,27 @@
     <dependency>
       <groupId>com.bucket4j</groupId>
       <artifactId>bucket4j_jdk17-core</artifactId>
-      <version>8.16.1</version>
     </dependency>
 
     <!-- CLI dual-mode: picocli subcommand routing -->
     <dependency>
       <groupId>io.quarkus</groupId>
       <artifactId>quarkus-picocli</artifactId>
+    </dependency>
+
+    <!-- JLine3: line editing, history, tab completion for interactive CLI -->
+    <dependency>
+      <groupId>org.jline</groupId>
+      <artifactId>jline-terminal-jansi</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.jline</groupId>
+      <artifactId>jline-reader</artifactId>
+    </dependency>
+    <!-- Pin Jansi to 2.4.3 — overrides transitive 2.4.0 from jline-terminal-jansi -->
+    <dependency>
+      <groupId>org.fusesource.jansi</groupId>
+      <artifactId>jansi</artifactId>
     </dependency>
 
     <dependency>
@@ -359,6 +403,17 @@
         <version>3.1.0</version>
         <executions>
           <execution>
+            <id>bake-build-backend</id>
+            <phase>process-resources</phase>
+            <goals><goal>run</goal></goals>
+            <configuration>
+              <target>
+                <echo file="${project.build.outputDirectory}/build-info.properties"
+                      message="quarkus.arcclaw.build.backend=${arcclaw.build.backend}${line.separator}"/>
+              </target>
+            </configuration>
+          </execution>
+          <execution>
             <id>sync-env-example</id>
             <phase>generate-resources</phase>
             <goals><goal>run</goal></goals>
@@ -465,16 +520,6 @@ paths: {}</echo>
     </profile>
 
     <!-- Simplified Slim Profile: Uses automatic OS detection from parent POM -->
-    <profile>
-      <id>slim</id>
-      <activation>
-        <property><name>slim</name></property>
-      </activation>
-      <properties>
-        <quarkus.native.resources.excludes>${playwright.driver.excludes}</quarkus.native.resources.excludes>
-      </properties>
-    </profile>
-
     <profile>
       <id>jvm</id>
       <activation><activeByDefault>true</activeByDefault></activation>

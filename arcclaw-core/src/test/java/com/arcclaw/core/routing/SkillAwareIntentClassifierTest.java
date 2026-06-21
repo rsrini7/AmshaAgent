@@ -7,23 +7,26 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import jakarta.inject.Inject;
+
 import java.util.List;
 import java.util.Set;
 import java.util.regex.Pattern;
-
-import jakarta.inject.Inject;
 
 import com.arcclaw.core.agent.role.RoleDefinition;
 import com.arcclaw.core.audit.TelemetryAuditService;
 import com.arcclaw.core.skill.CompiledSkillEntry;
 import com.arcclaw.core.skill.SkillDefinition;
 import com.arcclaw.core.skill.SkillRegistry;
-import io.quarkus.test.InjectMock;
-import io.quarkus.test.junit.QuarkusTest;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import io.quarkus.test.InjectMock;
+import io.quarkus.test.junit.QuarkusTest;
+
 @QuarkusTest
+@SuppressWarnings("java:S1192")
 class SkillAwareIntentDetectorTest {
 
     @InjectMock
@@ -40,15 +43,16 @@ class SkillAwareIntentDetectorTest {
 
     @BeforeEach
     void setup() {
+        // No shared state to initialize — mocks injected per-test
     }
 
     @Test
     void testFastPathRoutesToSkillAndBypassesLLM() {
         SkillDefinition def = new SkillDefinition("id", "code-reviewer", "desc", List.of(), List.of(), 5, "p");
-        RoleDefinition roleDefinition = new RoleDefinition(
-                "skill:code-reviewer", "Code Reviewer", "desc", 5, false, false, Set.of(), Set.of());
-        CompiledSkillEntry entry = new CompiledSkillEntry(def, new Pattern[] { Pattern.compile(".*review.*code.*") },
-                roleDefinition, "db");
+        RoleDefinition roleDefinition =
+                new RoleDefinition("skill:code-reviewer", "Code Reviewer", "desc", 5, false, false, Set.of(), Set.of());
+        CompiledSkillEntry entry =
+                new CompiledSkillEntry(def, List.of(Pattern.compile(".*review.*code.*")), roleDefinition, "db");
 
         when(skillRegistry.currentSnapshot()).thenReturn(List.of(entry));
 

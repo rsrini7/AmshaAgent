@@ -1,16 +1,17 @@
 package com.arcclaw.core.observability;
 
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
+import org.jboss.logging.Logger;
 
 import io.opentelemetry.api.trace.Span;
 import io.opentelemetry.api.trace.Tracer;
 import io.opentelemetry.context.Context;
 import io.opentelemetry.context.Scope;
-import org.jboss.logging.Logger;
 
 /**
  * OTel session-level span management.
@@ -42,8 +43,7 @@ public class AgentOtelContext implements AgentObserver {
     }
 
     public Span startSessionSpan(String sessionId, String userId, String agentRole) {
-        if (sessionId == null)
-            return null;
+        if (sessionId == null) return null;
         var builder = tracer.spanBuilder(AgentOTelConstants.SPAN_SESSION)
                 .setAttribute(AgentOTelConstants.ATTR_SESSION_ID, sessionId)
                 .setAttribute(AgentOTelConstants.ATTR_OI_SPAN_KIND, AgentOTelConstants.OI_KIND_AGENT);
@@ -52,7 +52,9 @@ public class AgentOtelContext implements AgentObserver {
         Span span = builder.startSpan();
         rootSpans.put(sessionId, span);
         // §OTel Fix: Spans must be made current to be visible to child builders
-        rootScopes.put(sessionId, span.makeCurrent());
+        @SuppressWarnings("MustBeClosedChecker") // Scope stored in rootScopes, closed in endSessionSpan()
+        Scope scope = span.makeCurrent();
+        rootScopes.put(sessionId, scope);
         return span;
     }
 
@@ -62,8 +64,7 @@ public class AgentOtelContext implements AgentObserver {
      * @param sessionId The workspace session ID.
      */
     public void endSessionSpan(String sessionId) {
-        if (sessionId == null)
-            return;
+        if (sessionId == null) return;
         Scope scope = rootScopes.remove(sessionId);
         if (scope != null) {
             scope.close();
@@ -84,21 +85,15 @@ public class AgentOtelContext implements AgentObserver {
      * @return The child {@link Span}.
      */
     public Span childSpan(String sessionId, String operationName) {
-        if (sessionId == null)
-            return null;
+        if (sessionId == null) return null;
         Span parent = rootSpans.get(sessionId);
-        Context parentContext = parent != null
-                ? Context.current().with(parent)
-                : Context.current();
-        return tracer.spanBuilder(operationName)
-                .setParent(parentContext)
-                .startSpan();
+        Context parentContext = parent != null ? Context.current().with(parent) : Context.current();
+        return tracer.spanBuilder(operationName).setParent(parentContext).startSpan();
     }
 
     @Override
     public void recordLlmCall(String sessionId, int inputTokens, int outputTokens) {
-        if (sessionId == null)
-            return;
+        if (sessionId == null) return;
         Span rootSpan = rootSpans.get(sessionId);
         if (rootSpan != null) {
             long totalIn = totalInputTokens

@@ -1,15 +1,16 @@
 package com.arcclaw.core.audit;
 
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+
 import java.math.BigDecimal;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
-
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.lifecycle.SessionHeartbeatTracker;
 import com.arcclaw.core.observability.AgentObserver;
+
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 /**
@@ -22,7 +23,8 @@ public class AuditObserver implements AgentObserver {
     @Inject
     AuditService auditService;
 
-    @Inject SessionHeartbeatTracker heartbeatTracker;
+    @Inject
+    SessionHeartbeatTracker heartbeatTracker;
 
     @ConfigProperty(name = "arcclaw.governance.price-per-1k-input", defaultValue = "0.003")
     double pricePer1kInput;
@@ -44,19 +46,19 @@ public class AuditObserver implements AgentObserver {
     @Override
     public void onLoopComplete(String sessionId, String userId, String agentRole, String goalHash, AgentResult result) {
         if (sessionId == null || result == null) return;
-        
+
         TokenTracker tracker = trackers.remove(sessionId);
         int inTokens = tracker != null ? tracker.input.get() : 0;
         int outTokens = tracker != null ? tracker.output.get() : 0;
 
         heartbeatTracker.recordTokens(sessionId, inTokens, outTokens);
-        
+
         double costDouble = (inTokens / 1000.0) * pricePer1kInput + (outTokens / 1000.0) * pricePer1kOutput;
         BigDecimal cost = BigDecimal.valueOf(costDouble);
-        
+
         auditService.recordLoopCompletion(sessionId, userId, agentRole, goalHash, result, inTokens, outTokens, cost);
     }
-    
+
     public void cleanupSession(String sessionId) {
         if (sessionId != null) {
             trackers.remove(sessionId);

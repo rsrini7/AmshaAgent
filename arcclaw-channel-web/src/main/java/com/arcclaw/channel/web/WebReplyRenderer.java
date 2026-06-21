@@ -1,15 +1,16 @@
 package com.arcclaw.channel.web;
 
+import jakarta.enterprise.context.ApplicationScoped;
+
 import java.util.List;
 import java.util.stream.Collectors;
-
-import jakarta.enterprise.context.ApplicationScoped;
 
 import com.arcclaw.channel.api.ApprovalPrompt;
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ContentNode;
 import com.arcclaw.channel.api.InteractionNode;
 import com.arcclaw.channel.api.ReplyRenderer;
+
 import org.jboss.logging.Logger;
 
 @ApplicationScoped
@@ -57,9 +58,8 @@ public class WebReplyRenderer implements ReplyRenderer {
                 yield "```" + lang + "\n" + cb.code() + "\n```\n\n";
             }
             case ContentNode.InlineCode ic -> "`" + ic.code() + "`";
-            case ContentNode.BulletList bl -> bl.items().stream()
-                    .map(item -> "- " + item)
-                    .collect(Collectors.joining("\n")) + "\n\n";
+            case ContentNode.BulletList bl ->
+                bl.items().stream().map(item -> "- " + item).collect(Collectors.joining("\n")) + "\n\n";
             case ContentNode.NumberedList nl -> {
                 StringBuilder lst = new StringBuilder();
                 for (int i = 0; i < nl.items().size(); i++) {
@@ -72,8 +72,9 @@ public class WebReplyRenderer implements ReplyRenderer {
             case ContentNode.Separator _ -> "---\n\n";
             case ContentNode.ErrorMessage err -> "**Error (" + err.category() + ")**: " + err.reason() + "\n\n";
             default -> {
-                log.warnf("Unsupported ContentNode type %s in Web renderer",
-                    node.getClass().getName());
+                log.warnf(
+                        "Unsupported ContentNode type %s in Web renderer",
+                        node.getClass().getName());
                 yield "[Unsupported content type]";
             }
         };

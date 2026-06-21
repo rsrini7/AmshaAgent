@@ -1,9 +1,9 @@
 package com.arcclaw.rag;
 
-import java.util.List;
-
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
+
+import java.util.List;
 
 import com.arcclaw.persistence.api.MemoryChunkDto;
 import com.arcclaw.persistence.api.MemoryRetrievalPort;
@@ -19,7 +19,8 @@ public class TwoTierMemoryService {
 
     // private static final Logger log = Logger.getLogger(TwoTierMemoryService.class);
 
-    @Inject MemoryRetrievalPort memoryPort;
+    @Inject
+    MemoryRetrievalPort memoryPort;
 
     /**
      * Search across keyword and vector tiers.

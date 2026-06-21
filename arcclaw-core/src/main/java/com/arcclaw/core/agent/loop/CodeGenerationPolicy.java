@@ -1,11 +1,13 @@
 package com.arcclaw.core.agent.loop;
 
+import jakarta.enterprise.context.ApplicationScoped;
+
+import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import jakarta.enterprise.context.ApplicationScoped;
-
 import com.arcclaw.core.agent.role.AgentRoleEnum;
+
 import org.jboss.logging.Logger;
 
 /**
@@ -34,11 +36,9 @@ public class CodeGenerationPolicy {
      *
      * <p><strong>§9.1:</strong> {@code static final} - never compiled per-call.
      */
-    static final Pattern PROSE_CODE_PATTERN =
-            Pattern.compile("```[\\w]*\\n[\\s\\S]*?```", Pattern.MULTILINE);
+    static final Pattern PROSE_CODE_PATTERN = Pattern.compile("```[\\w]*\\n[\\s\\S]*?```", Pattern.MULTILINE);
 
-    static final Pattern FENCE_HEADER_PATTERN =
-            Pattern.compile("^```([\\w-]*)\\R");
+    static final Pattern FENCE_HEADER_PATTERN = Pattern.compile("^```([\\w-]*)\\R");
 
     /**
      * Keywords that strongly suggest the block is actual source code,
@@ -75,7 +75,8 @@ public class CodeGenerationPolicy {
                     continue;
                 }
                 // If it's a long block or looks like source code, block it
-                if (block.lines().count() > 10 || SOURCE_CODE_INDICATOR.matcher(block).find()) {
+                if (block.lines().count() > 10
+                        || SOURCE_CODE_INDICATOR.matcher(block).find()) {
                     return true;
                 }
             }
@@ -87,19 +88,21 @@ public class CodeGenerationPolicy {
         if (block == null || block.isBlank()) return false;
 
         Matcher headerMatcher = FENCE_HEADER_PATTERN.matcher(block);
-        String language = headerMatcher.find() ? headerMatcher.group(1).toLowerCase() : "";
-        String body = block
-                .replaceFirst("^```[\\w-]*\\R", "")
+        String language = headerMatcher.find() ? headerMatcher.group(1).toLowerCase(Locale.ROOT) : "";
+        String body = block.replaceFirst("^```[\\w-]*\\R", "")
                 .replaceFirst("\\R```\\s*$", "")
                 .trim();
 
-        if ("json".equals(language) || "yaml".equals(language) || "yml".equals(language)
-                || "text".equals(language) || "markdown".equals(language) || "md".equals(language)) {
+        if ("json".equals(language)
+                || "yaml".equals(language)
+                || "yml".equals(language)
+                || "text".equals(language)
+                || "markdown".equals(language)
+                || "md".equals(language)) {
             return true;
         }
 
-        boolean jsonLike = (body.startsWith("{") && body.endsWith("}"))
-                || (body.startsWith("[") && body.endsWith("]"));
+        boolean jsonLike = (body.startsWith("{") && body.endsWith("}")) || (body.startsWith("[") && body.endsWith("]"));
         return jsonLike && !SOURCE_CODE_INDICATOR.matcher(body).find();
     }
 

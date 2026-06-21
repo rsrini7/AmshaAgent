@@ -11,7 +11,7 @@ public interface SessionOwnerResolver {
 
     /**
      * Resolves an owner identity from a raw credential string.
-     * 
+     *
      * @param credential the raw key (e.g. from an X-ARCCLAW-API-KEY header)
      * @return the resolved userId / key label, or empty if invalid
      */

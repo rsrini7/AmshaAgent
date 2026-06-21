@@ -30,12 +30,19 @@ public final class AuditEventRecord implements AuditEvent {
     private String hmacHash;
     private String prevHash;
 
-    public AuditEventRecord() {}
-
-    public static AuditEventRecord of(String sessionId, String userId, String agentRole,
-                                       String goalHash, AuditOutcome outcome, SecurityEventType eventType,
-                                       int inputTokens, int outputTokens,
-                                       BigDecimal usdCost, int iterationsUsed, String eventDetail) {
+    /** Required no-arg constructor for JDBI RowMapper / Jackson deserialization. */
+    public static AuditEventRecord of(
+            String sessionId,
+            String userId,
+            String agentRole,
+            String goalHash,
+            AuditOutcome outcome,
+            SecurityEventType eventType,
+            int inputTokens,
+            int outputTokens,
+            BigDecimal usdCost,
+            int iterationsUsed,
+            String eventDetail) {
         var r = new AuditEventRecord();
         r.id = UUID.randomUUID();
         r.sessionId = sessionId;
@@ -54,9 +61,8 @@ public final class AuditEventRecord implements AuditEvent {
         return r;
     }
 
-    public static AuditEventRecord securityEvent(String sessionId, String userId,
-                                                  String agentRole, SecurityEventType type,
-                                                  String detail) {
+    public static AuditEventRecord securityEvent(
+            String sessionId, String userId, String agentRole, SecurityEventType type, String detail) {
         var r = new AuditEventRecord();
         r.id = UUID.randomUUID();
         r.sessionId = sessionId != null ? sessionId : "unknown";
@@ -98,46 +104,189 @@ public final class AuditEventRecord implements AuditEvent {
         return r;
     }
 
-    @Override public UUID getId() { return id; }
-    @Override public void setId(UUID id) { this.id = id; }
-    @Override public String getSessionId() { return sessionId; }
-    @Override public void setSessionId(String sessionId) { this.sessionId = sessionId; }
-    @Override public String getUserId() { return userId; }
-    @Override public void setUserId(String userId) { this.userId = userId; }
-    @Override public String getAgentRole() { return agentRole; }
-    @Override public void setAgentRole(String agentRole) { this.agentRole = agentRole; }
-    @Override public String getGoalHash() { return goalHash; }
-    @Override public void setGoalHash(String goalHash) { this.goalHash = goalHash; }
-    @Override public AuditOutcome getOutcome() { return outcome; }
-    @Override public void setOutcome(AuditOutcome outcome) { this.outcome = outcome; }
-    @Override public SecurityEventType getEventType() { return eventType; }
-    @Override public void setEventType(SecurityEventType eventType) { this.eventType = eventType; }
-    @Override public String getEventDetail() { return eventDetail; }
-    @Override public void setEventDetail(String eventDetail) { this.eventDetail = eventDetail; }
-    @Override public int getInputTokens() { return inputTokens; }
-    @Override public void setInputTokens(int inputTokens) { this.inputTokens = inputTokens; }
-    @Override public int getOutputTokens() { return outputTokens; }
-    @Override public void setOutputTokens(int outputTokens) { this.outputTokens = outputTokens; }
-    @Override public BigDecimal getUsdCost() { return usdCost; }
-    @Override public void setUsdCost(BigDecimal usdCost) { this.usdCost = usdCost; }
-    @Override public Instant getTimestamp() { return timestamp; }
-    @Override public void setTimestamp(Instant timestamp) { this.timestamp = timestamp; }
-    @Override public int getIterationsUsed() { return iterationsUsed; }
-    @Override public void setIterationsUsed(int iterationsUsed) { this.iterationsUsed = iterationsUsed; }
-    @Override public String getAppVersion() { return appVersion; }
-    @Override public void setAppVersion(String appVersion) { this.appVersion = appVersion; }
-    @Override public String getIdempotencyKey() { return idempotencyKey; }
-    @Override public void setIdempotencyKey(String idempotencyKey) { this.idempotencyKey = idempotencyKey; }
-    @Override public long getSequence() { return sequence; }
-    @Override public void setSequence(long sequence) { this.sequence = sequence; }
-    @Override public String getHmacHash() { return hmacHash; }
-    @Override public void setHmacHash(String hmacHash) { this.hmacHash = hmacHash; }
-    @Override public String getPrevHash() { return prevHash; }
-    @Override public void setPrevHash(String prevHash) { this.prevHash = prevHash; }
+    @Override
+    public UUID getId() {
+        return id;
+    }
+
+    @Override
+    public void setId(UUID id) {
+        this.id = id;
+    }
+
+    @Override
+    public String getSessionId() {
+        return sessionId;
+    }
+
+    @Override
+    public void setSessionId(String sessionId) {
+        this.sessionId = sessionId;
+    }
+
+    @Override
+    public String getUserId() {
+        return userId;
+    }
+
+    @Override
+    public void setUserId(String userId) {
+        this.userId = userId;
+    }
+
+    @Override
+    public String getAgentRole() {
+        return agentRole;
+    }
+
+    @Override
+    public void setAgentRole(String agentRole) {
+        this.agentRole = agentRole;
+    }
+
+    @Override
+    public String getGoalHash() {
+        return goalHash;
+    }
+
+    @Override
+    public void setGoalHash(String goalHash) {
+        this.goalHash = goalHash;
+    }
+
+    @Override
+    public AuditOutcome getOutcome() {
+        return outcome;
+    }
+
+    @Override
+    public void setOutcome(AuditOutcome outcome) {
+        this.outcome = outcome;
+    }
+
+    @Override
+    public SecurityEventType getEventType() {
+        return eventType;
+    }
+
+    @Override
+    public void setEventType(SecurityEventType eventType) {
+        this.eventType = eventType;
+    }
+
+    @Override
+    public String getEventDetail() {
+        return eventDetail;
+    }
+
+    @Override
+    public void setEventDetail(String eventDetail) {
+        this.eventDetail = eventDetail;
+    }
+
+    @Override
+    public int getInputTokens() {
+        return inputTokens;
+    }
+
+    @Override
+    public void setInputTokens(int inputTokens) {
+        this.inputTokens = inputTokens;
+    }
+
+    @Override
+    public int getOutputTokens() {
+        return outputTokens;
+    }
+
+    @Override
+    public void setOutputTokens(int outputTokens) {
+        this.outputTokens = outputTokens;
+    }
+
+    @Override
+    public BigDecimal getUsdCost() {
+        return usdCost;
+    }
+
+    @Override
+    public void setUsdCost(BigDecimal usdCost) {
+        this.usdCost = usdCost;
+    }
+
+    @Override
+    public Instant getTimestamp() {
+        return timestamp;
+    }
+
+    @Override
+    public void setTimestamp(Instant timestamp) {
+        this.timestamp = timestamp;
+    }
+
+    @Override
+    public int getIterationsUsed() {
+        return iterationsUsed;
+    }
+
+    @Override
+    public void setIterationsUsed(int iterationsUsed) {
+        this.iterationsUsed = iterationsUsed;
+    }
+
+    @Override
+    public String getAppVersion() {
+        return appVersion;
+    }
+
+    @Override
+    public void setAppVersion(String appVersion) {
+        this.appVersion = appVersion;
+    }
+
+    @Override
+    public String getIdempotencyKey() {
+        return idempotencyKey;
+    }
+
+    @Override
+    public void setIdempotencyKey(String idempotencyKey) {
+        this.idempotencyKey = idempotencyKey;
+    }
+
+    @Override
+    public long getSequence() {
+        return sequence;
+    }
+
+    @Override
+    public void setSequence(long sequence) {
+        this.sequence = sequence;
+    }
+
+    @Override
+    public String getHmacHash() {
+        return hmacHash;
+    }
+
+    @Override
+    public void setHmacHash(String hmacHash) {
+        this.hmacHash = hmacHash;
+    }
+
+    @Override
+    public String getPrevHash() {
+        return prevHash;
+    }
+
+    @Override
+    public void setPrevHash(String prevHash) {
+        this.prevHash = prevHash;
+    }
 
     @Override
     public String computePayloadStr() {
-        return id.toString() + "|" + sessionId + "|" + eventType + "|" +
-               (eventDetail != null ? eventDetail : "") + "|" + timestamp.toEpochMilli();
+        return id.toString() + "|" + sessionId + "|" + eventType + "|" + (eventDetail != null ? eventDetail : "") + "|"
+                + timestamp.toEpochMilli();
     }
 }

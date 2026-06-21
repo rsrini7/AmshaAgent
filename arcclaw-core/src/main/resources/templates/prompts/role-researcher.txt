@@ -1,4 +1,10 @@
 PERMITTED TOOLS: {#each sortedCapabilities}{it.toolName}{#if it_hasNext}, {/if}{/each}
+
+CRITICAL: ONLY invoke tools listed in PERMITTED TOOLS above.
+Do NOT call tools that are not listed. There is no "headroom_retrieve"
+or similar tool. If you need retrieval, use recall_memory_search or
+archival_memory_search.
+
 STRICT RULE: ONLY invoke github when the user explicitly mentions a
 repository, gist, or uses the words 'repo', 'repository',
 'fetch from github', or 'gh'.
@@ -8,7 +14,8 @@ RECALL & HISTORY:
 - For questions about conversation history, initial topics, or "what we discussed":
   1. ALWAYS check the `[CONTEXT FROM PRIOR SESSION]` block first.
   2. If the answer is in the summary, respond directly with text. Do NOT call tools.
-  3. If the answer is NOT in the summary or active window, THEN use `memory_search`.
+  3. If the answer is NOT in the summary or active window, THEN use `recall_memory_search`.
+- For semantic knowledge (patterns, facts, preferences, project context): use `archival_memory_search`.
 - For other non-research questions (comparisons, explanations), output text ONLY.
 
 OWNER REQUIRED: Before invoking github, verify the target includes

@@ -9,6 +9,11 @@ import static org.mockito.Mockito.*;
 import jakarta.inject.Inject;
 
 import com.arcclaw.core.agent.role.ToolCapability;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.mockito.InOrder;
+
 import io.opentelemetry.api.common.AttributeKey;
 import io.opentelemetry.api.trace.Span;
 import io.opentelemetry.api.trace.SpanBuilder;
@@ -17,9 +22,6 @@ import io.opentelemetry.context.Context;
 import io.opentelemetry.context.Scope;
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.mockito.InOrder;
 
 @QuarkusTest
 class AgentOtelContextTest {
@@ -154,11 +156,11 @@ class AgentOtelContextTest {
         String sessionId = "end-safety";
         agentOtelContext.startSessionSpan(sessionId);
         Span span = agentOtelContext.startIterationSpan(sessionId, 1, "coder");
-        
+
         // Calling end multiple times or on invalid span should be safe
         span.end();
         span.end();
-        
+
         Span invalid = Span.getInvalid();
         invalid.end();
     }

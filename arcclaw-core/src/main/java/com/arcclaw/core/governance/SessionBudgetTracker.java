@@ -14,8 +14,9 @@ public class SessionBudgetTracker {
     public void recordContextRatio(double estimatedTokens, long maxTokensBeforeCompaction) {
         if (meterRegistry == null) return;
         double ratio = estimatedTokens / maxTokensBeforeCompaction;
-        meterRegistry.summary("arcclaw.compaction.context.ratio", "tier", getRatioTier(ratio))
-                     .record(ratio);
+        meterRegistry
+                .summary("arcclaw.compaction.context.ratio", "tier", getRatioTier(ratio))
+                .record(ratio);
     }
 
     public static String getRatioTier(double ratio) {

@@ -2,33 +2,35 @@ package com.arcclaw.core.util;
 
 import static com.arcclaw.core.message.UserMessages.*;
 
+import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.core.message.UserMessages;
+
 import org.jboss.logging.Logger;
 
 public final class AgentErrorMessageUtil {
 
     private static final Pattern TOKEN_LIMIT_PATTERN = Pattern.compile("Limit (\\d+), Used (\\d+), Requested (\\d+)");
     private static final Pattern RETRY_AFTER_PATTERN = Pattern.compile("Please try again in ([\\dhms.]+)");
-    private static final Pattern DURATION_PATTERN    = Pattern.compile("(?:(\\d+)h)?(?:(\\d+)m)?(?:(\\d+(?:\\.\\d+)?)s)?");
+    private static final Pattern DURATION_PATTERN = Pattern.compile("(?:(\\d+)h)?(?:(\\d+)m)?(?:(\\d+(?:\\.\\d+)?)s)?");
 
     /**
      * JVM internal exception message patterns that should never be surfaced to users.
      * These indicate a lower-level framework crash (e.g. Retry-After header parse failure)
      * rather than a meaningful API error.
      */
-    private static final Pattern JVM_INTERNALS_PATTERN = Pattern.compile(
-            "^(For input string:|null|Cannot invoke|NullPointerException|NumberFormatException)");
+    private static final Pattern JVM_INTERNALS_PATTERN =
+            Pattern.compile("^(For input string:|null|Cannot invoke|NullPointerException|NumberFormatException)");
 
     private static final Pattern RETRY_AFTER_HEADER_PATTERN = Pattern.compile("(?i)retry-after:\\s*(\\d+)");
 
     private static final Logger log = Logger.getLogger(AgentErrorMessageUtil.class);
 
     private AgentErrorMessageUtil() {}
- 
+
     /**
      * Returns a safe message from a Throwable.
      * Returns e.getMessage() if present, otherwise returns the clean class simple name.
@@ -38,7 +40,7 @@ public final class AgentErrorMessageUtil {
         if (t == null) return "Unknown Error";
         return t.getMessage() != null ? t.getMessage() : ClassUtils.getCleanName(t);
     }
- 
+
     public static String sanitizeErrorMessage(String raw) {
         if (raw == null) return TASK_FAILED;
 
@@ -49,19 +51,18 @@ public final class AgentErrorMessageUtil {
         }
 
         String stripped = raw.replace("ReasoningEngine error: ", "")
-                             .replace("java.lang.RuntimeException: ", "")
-                             .replace("dev.langchain4j.exception.HttpException: ", "")
-                             .replace("TOOL_EXECUTION_FAILED: ", "")
-                             .trim();
+                .replace("java.lang.RuntimeException: ", "")
+                .replace("dev.langchain4j.exception.HttpException: ", "")
+                .replace("TOOL_EXECUTION_FAILED: ", "")
+                .trim();
 
         String apiMessage = stripped;
         boolean isJson = false;
 
-        Matcher messageMatcher = Pattern.compile("\"(?:message|detail)\"\\s*:\\s*\"(.*?)(?<!\\\\)\"").matcher(stripped);
+        Matcher messageMatcher = Pattern.compile("\"(?:message|detail)\"\\s*:\\s*\"(.*?)(?<!\\\\)\"")
+                .matcher(stripped);
         if (messageMatcher.find()) {
-            apiMessage = messageMatcher.group(1)
-                                  .replace("\\\"", "\"")
-                                  .replace("\\n", "\n");
+            apiMessage = messageMatcher.group(1).replace("\\\"", "\"").replace("\\n", "\n");
             isJson = true;
         }
 
@@ -101,14 +102,12 @@ public final class AgentErrorMessageUtil {
     }
 
     private static final Pattern LLM_ERROR_NARRATION_PATTERN = Pattern.compile(
-        "(?i).*(?:" +
-        "provided function definitions do not match the needs|" +
-        "function definitions were provided but no function call|" +
-        "model produced an invalid response|" +
-        "failed to call tool" +
-        ").*",
-        Pattern.DOTALL
-    );
+            "(?i).*(?:" + "provided function definitions do not match the needs|"
+                    + "function definitions were provided but no function call|"
+                    + "model produced an invalid response|"
+                    + "failed to call tool"
+                    + ").*",
+            Pattern.DOTALL);
 
     /**
      * Strips known Groq/OpenAI error phrases from FINISH answers.
@@ -132,8 +131,8 @@ public final class AgentErrorMessageUtil {
 
         if (tokenMatcher.find()) {
             String limit = tokenMatcher.group(1);
-            String used  = tokenMatcher.group(2);
-            String req   = tokenMatcher.group(3);
+            String used = tokenMatcher.group(2);
+            String req = tokenMatcher.group(3);
             return UserMessages.tokenLimitDetailed(limit, used, req, waitTime);
         }
 
@@ -158,15 +157,15 @@ public final class AgentErrorMessageUtil {
     }
 
     private static String humanReadableWait(String rawInterval) {
-        int hours   = 0;
+        int hours = 0;
         int minutes = 0;
         int seconds = 0;
-        String s = rawInterval.trim().toLowerCase();
+        String s = rawInterval.trim().toLowerCase(Locale.ROOT);
 
         Matcher m1 = DURATION_PATTERN.matcher(s);
 
         if (m1.matches()) {
-            if (m1.group(1) != null) hours   = Integer.parseInt(m1.group(1));
+            if (m1.group(1) != null) hours = Integer.parseInt(m1.group(1));
             if (m1.group(2) != null) minutes = Integer.parseInt(m1.group(2));
             if (m1.group(3) != null) seconds = (int) Math.round(Double.parseDouble(m1.group(3)));
         } else if (s.endsWith("s")) {
@@ -183,14 +182,20 @@ public final class AgentErrorMessageUtil {
 
         // Normalize
         minutes += seconds / 60;
-        seconds  = seconds % 60;
-        hours   += minutes / 60;
-        minutes  = minutes % 60;
+        seconds = seconds % 60;
+        hours += minutes / 60;
+        minutes = minutes % 60;
 
         StringBuilder sb = new StringBuilder();
-        if (hours > 0)   sb.append(hours).append(hours == 1 ? " hour" : " hours");
-        if (minutes > 0) { if (sb.length() > 0) sb.append(" "); sb.append(minutes).append(minutes == 1 ? " minute" : " minutes"); }
-        if (seconds > 0) { if (sb.length() > 0) sb.append(" and "); sb.append(seconds).append(seconds == 1 ? " second" : " seconds"); }
+        if (hours > 0) sb.append(hours).append(hours == 1 ? " hour" : " hours");
+        if (minutes > 0) {
+            if (sb.length() > 0) sb.append(" ");
+            sb.append(minutes).append(minutes == 1 ? " minute" : " minutes");
+        }
+        if (seconds > 0) {
+            if (sb.length() > 0) sb.append(" and ");
+            sb.append(seconds).append(seconds == 1 ? " second" : " seconds");
+        }
 
         String result = sb.toString();
         return result.isEmpty() ? "a few moments" : result;

@@ -1,14 +1,14 @@
 package com.arcclaw.core.scope;
 
+import jakarta.enterprise.context.spi.Contextual;
+import jakarta.enterprise.context.spi.CreationalContext;
+
 import java.lang.annotation.Annotation;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
-
-import jakarta.enterprise.context.spi.Contextual;
-import jakarta.enterprise.context.spi.CreationalContext;
 
 import io.quarkus.arc.InjectableBean;
 import io.quarkus.arc.InjectableContext;
@@ -43,7 +43,6 @@ public class WorkspaceScopeContext implements InjectableContext {
      * ConcurrentHashMap provides safe concurrent access across sessions
      * without a global lock.
      */
-
     private final ConcurrentHashMap<String, SessionStore> sessions = new ConcurrentHashMap<>();
 
     // ── InjectableContext contract ──────────────────────────────────────────
@@ -106,8 +105,8 @@ public class WorkspaceScopeContext implements InjectableContext {
      */
     @SuppressWarnings("unchecked")
     @Override
-    public <T> T getIfActive(Contextual<T> contextual,
-            Function<Contextual<T>, CreationalContext<T>> creationalContextSupplier) {
+    public <T> T getIfActive(
+            Contextual<T> contextual, Function<Contextual<T>, CreationalContext<T>> creationalContextSupplier) {
         String sessionId = WorkspaceScopeHolder.getIfActive();
         if (sessionId == null) {
             return null; // scope not active → return null, not exception
@@ -173,8 +172,8 @@ public class WorkspaceScopeContext implements InjectableContext {
             synchronized (store) {
                 for (var entry : store.beans.entrySet()) {
                     Contextual<Object> contextual = (Contextual<Object>) entry.getKey();
-                    CreationalContext<Object> ctx = (CreationalContext<Object>) store.creationalContexts
-                            .get(contextual);
+                    CreationalContext<Object> ctx =
+                            (CreationalContext<Object>) store.creationalContexts.get(contextual);
                     contextual.destroy(entry.getValue(), ctx);
                 }
                 store.beans.clear();
@@ -244,8 +243,7 @@ public class WorkspaceScopeContext implements InjectableContext {
      * Read-only snapshot of a session's bean state.
      * Required by Arc Dev UI for context introspection.
      */
-    private record WorkspaceContextState(
-            Map<InjectableBean<?>, Object> instances) implements ContextState {
+    private record WorkspaceContextState(Map<InjectableBean<?>, Object> instances) implements ContextState {
 
         @Override
         public Map<InjectableBean<?>, Object> getContextualInstances() {

@@ -1,5 +1,6 @@
 package com.arcclaw.core.skill;
 
+import java.util.List;
 import java.util.Objects;
 import java.util.regex.Pattern;
 
@@ -10,18 +11,14 @@ import com.arcclaw.core.agent.role.RoleDefinition;
  * <p>
  * Contains the parsed definition alongside pre-compiled regex patterns to ensure
  * fast evaluation during the message routing loop.
- * 
+ *
  * @param definition The parsed skill metadata and prompt string.
- * @param triggerPatterns Array of pre-compiled regex objects corresponding to the definition patterns.
+ * @param triggerPatterns Immutable list of pre-compiled regex objects corresponding to the definition patterns.
  * @param roleDefinition The derived RoleDefinition that grants tool capabilities.
  * @param source The origin of this skill ("classpath" or "database").
  */
 public record CompiledSkillEntry(
-    SkillDefinition definition,
-    Pattern[] triggerPatterns,
-    RoleDefinition roleDefinition,
-    String source
-) {
+        SkillDefinition definition, List<Pattern> triggerPatterns, RoleDefinition roleDefinition, String source) {
     /**
      * Compact constructor enforcing null safety.
      */
@@ -34,7 +31,7 @@ public record CompiledSkillEntry(
 
     /**
      * Checks if the user's input matches any of the skill's pre-compiled regular expressions.
-     * 
+     *
      * @param input The raw user input string.
      * @return true if there is at least one match, otherwise false.
      */

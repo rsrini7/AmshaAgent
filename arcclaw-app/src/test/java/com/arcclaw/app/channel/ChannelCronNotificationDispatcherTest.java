@@ -12,6 +12,7 @@ import com.arcclaw.channel.api.ChannelPlugin;
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.core.channel.ChannelPluginRegistry;
 import com.arcclaw.core.cron.AgentJobCompleted;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -39,8 +40,7 @@ class ChannelCronNotificationDispatcherTest {
         when(pluginRegistry.find(ChannelType.TELEGRAM)).thenReturn(Optional.of(telegramPlugin));
 
         AgentJobCompleted event = new AgentJobCompleted(
-            "cron-1", "user-1", ChannelType.TELEGRAM, "chat-1", 
-            "corr-1", "Hello", null, null, null);
+                "cron-1", "user-1", ChannelType.TELEGRAM, "chat-1", "corr-1", "Hello", null, null, null);
 
         dispatcher.onJobCompleted(event);
 
@@ -52,8 +52,7 @@ class ChannelCronNotificationDispatcherTest {
         when(pluginRegistry.find(ChannelType.CLI)).thenReturn(Optional.empty());
 
         AgentJobCompleted event = new AgentJobCompleted(
-            "cron-1", "user-1", ChannelType.CLI, "chat-1", 
-            "corr-1", "Hello", null, null, null);
+                "cron-1", "user-1", ChannelType.CLI, "chat-1", "corr-1", "Hello", null, null, null);
 
         dispatcher.onJobCompleted(event);
 
@@ -63,9 +62,8 @@ class ChannelCronNotificationDispatcherTest {
 
     @Test
     void testNullChannelTypeIsIgnored() {
-        AgentJobCompleted event = new AgentJobCompleted(
-            "cron-1", "user-1", null, "chat-1", 
-            "corr-1", "Hello", null, null, null);
+        AgentJobCompleted event =
+                new AgentJobCompleted("cron-1", "user-1", null, "chat-1", "corr-1", "Hello", null, null, null);
 
         dispatcher.onJobCompleted(event);
 

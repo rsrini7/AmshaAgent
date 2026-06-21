@@ -2,9 +2,9 @@
 
 > **Stack**: JDK 25 · Quarkus 3.27.2 · LangChain4J 1.x · SQLite (WAL + FTS5 + sqlite-vec) · Podman (rootless) · Groq Cloud
 >
-> This guide covers the automated test suite and the complete REST API surface. Use alongside [TELEGRAM_TESTING.md](./TELEGRAM_TESTING.md) for full end-to-end coverage, and [rest-http/README.md](./rest-http/README.md) for the `.http` file reference.
+> This guide covers the automated test suite and the complete REST API surface. Use alongside [TELEGRAM_TESTING.md](./TELEGRAM_TESTING.md) for full end-to-end coverage, and [rest-http/README.md](../rest-http/README.md) for the `.http` file reference.
 
-> **Docs**: [README](./README.md) · [Setup](./SETUP.md) · [Telegram Testing](./TELEGRAM_TESTING.md) · [FAQ](./FAQ.md) · [REST Client Files](./rest-http/)
+> **Docs**: [README](../README.md) · [ARCHITECTURE.md](./ARCHITECTURE.md) · [CONFIGURATION.md](./CONFIGURATION.md) · [Setup](./SETUP.md) · [FAQ](./FAQ.md)
 
 ---
 
@@ -38,7 +38,7 @@
 
 ## 1. Running the Test Suite
 
-ArcClaw has **1458 tests** across the multi-module reactor.
+ArcClaw has **1664 tests** across the multi-module reactor.
 
 ### 1.1 Run all tests
 
@@ -105,9 +105,9 @@ When the `%test` profile is active:
 - Fault tolerance is disabled (`quarkus.smallrye-fault-tolerance.enabled: false`)
 - `DevSecretSeederStartup` bean is absent - it is `@IfBuildProfile("dev")` only (Phase 64-B2)
 
-### 1.6 Target: 1458+ green, 0 failures
+### 1.6 Target: 1664+ green, 0 failures
 
-After any code change, the full suite must remain at or above 1458 passing tests. Do not accept a lower count - missing tests indicate a compilation failure or a deleted test case.
+After any code change, the full suite must remain at or above 1664 passing tests. Do not accept a lower count — missing tests indicate a compilation failure or a deleted test case.
 
 ---
 
@@ -144,7 +144,7 @@ ARCCLAW_TELEGRAM_BOT_TOKEN=...  # required for attach telegram mode only
 
 ### REST Client Files Index
 
-All HTTP test files live in `rest-http/`. See [rest-http/README.md](./rest-http/README.md) for full details.
+All HTTP test files live in `rest-http/`. See [rest-http/README.md](../rest-http/README.md) for full details.
 
 | File | Coverage |
 |---|---|
@@ -321,8 +321,14 @@ VALUES ('zombie-test-1', 'zombie-session-999', 'coordinator', 'AWAITING_APPROVAL
 Restart ArcClaw. Check logs immediately:
 
 ```
-INFO  [WorkspaceManager] [ZOMBIE-RECOVERY] recovered 1 stale session(s) - marked FAILED
+INFO  [SessionReaper] Zombie recovery: found N AWAITING_APPROVAL checkpoint(s) — auto-denying all.
+WARN    Auto-denying stale approval: id=<id> session=<uuid> role=<role> tool=<tool>
 ```
+
+**Note (2026-05-30):** All stale `AWAITING_APPROVAL` checkpoints are now auto-denied for
+ALL channel types (CLI, Telegram, WebSocket UI). The reaper fires `ApprovalDecisionEvent`
+and completes SSE streams via `agentSseService.complete()`. Previously only CLI approvals
+were auto-denied; Telegram/UI approvals survived the restart with stale context.
 
 ---
 
@@ -581,7 +587,8 @@ trigger-patterns:
   - "test skill routing"
   - "skill route test"
 tool-capabilities:
-  - MEMORY_SEARCH
+  - RECALL_MEMORY_SEARCH
+  - ARCHIVAL_MEMORY_SEARCH
 max-iterations: 3
 ---
 You are a test routing verifier. When invoked, always respond with exactly:
@@ -629,7 +636,8 @@ trigger-patterns:
   - "skill route test"
   - "skill route v2"
 tool-capabilities:
-  - MEMORY_SEARCH
+  - RECALL_MEMORY_SEARCH
+  - ARCHIVAL_MEMORY_SEARCH
 max-iterations: 4
 ---
 SKILL_ROUTING_VERIFIED_V2
@@ -770,7 +778,7 @@ curl -s http://localhost:8080/api/v1/mcp/tools \
 **Expect (before any connections):**
 ```json
 {
-  "exposedInternalTools": [{"name":"github",...},{"name":"memory_search",...}],
+  "exposedInternalTools": [{"name":"github",...},{"name":"recall_memory_search",...}],
   "registeredDynamicTools": []
 }
 ```
@@ -819,18 +827,18 @@ curl -s -X POST http://localhost:8080/mcp \
   -d '{"jsonrpc":"2.0","method":"tools/list","id":2,"params":{}}' | jq .result.tools[].name
 ```
 
-**Expect:** `"github"` and `"memory_search"`
+**Expect:** `"github"` and `"recall_memory_search"`
 
 ---
 
-**Step 4 - tools/call (memory_search):**
+**Step 4 - tools/call (recall_memory_search):**
 
 ```bash
 curl -s -X POST http://localhost:8080/mcp \
   -H "Content-Type: application/json" \
   -H "X-ArcClaw-API-Key: key-internal-changeme" \
   -H "Mcp-Session-Id: $MCP_SESSION" \
-  -d '{"jsonrpc":"2.0","method":"tools/call","id":3,"params":{"name":"memory_search","arguments":{"query":"ArcClaw"}}}' | jq .
+  -d '{"jsonrpc":"2.0","method":"tools/call","id":3,"params":{"name":"recall_memory_search","arguments":{"query":"ArcClaw"}}}' | jq .
 ```
 
 **Expect:** `result.content[0].text` contains search results.
@@ -939,7 +947,7 @@ The file is structured as five flows:
 | Flow | Coverage |
 |---|---|
 | **A** | `MCP-ADMIN-1/2` - Status + tool list (run first as health check) |
-| **B** | `MCP-1 → MCP-5` - Full protocol: initialize → notifications/initialized → tools/list → memory_search → github |
+| **B** | `MCP-1 → MCP-5` - Full protocol: initialize → notifications/initialized → tools/list → recall_memory_search → github |
 | **C** | `MCP-ERR-1–4` - Disallowed tool, missing session ID, stale session ID, unknown tool name |
 | **D** | `MCP-CLIENT-1–6` - Self-connect smoke test: connect → verify tools → list servers → disconnect → verify empty |
 | **E** | `MCP-CLIENT-ERR-1–5` - Missing url, unreachable server, disconnect 404, duplicate connect, 401 |
@@ -971,13 +979,13 @@ Run `12_mcp.http` Flow A, then Flow B in strict order.
 | # | What to run | What to verify |
 |---|---|---|
 | 1 | `MCP-ADMIN-1` | `{"serverEnabled":true,"dynamicToolCount":0}` - if 404, check `.env` `ARCCLAW_MCP_SERVER_ENABLED` |
-| 2 | `MCP-ADMIN-2` | `exposedInternalTools` has github + memory_search; `registeredDynamicTools:[]` |
+| 2 | `MCP-ADMIN-2` | `exposedInternalTools` has github + recall_memory_search; `registeredDynamicTools:[]` |
 | 3 | `MCP-1` (initialize) | `200`, `Mcp-Session-Id` header captured into `{{mcpSessionId}}` |
 | 4 | `MCP-2` (notifications/initialized) | `202` - handshake complete |
 | 5 | `MCP-3` (tools/list) | Both tools appear in the `tools` array |
-| 6 | `MCP-4` (memory_search call) | `result.content[0].text` populated; audit log shows `MCP_TOOL_INVOKED` |
+| 6 | `MCP-4` (recall_memory_search call) | `result.content[0].text` populated; audit log shows `MCP_TOOL_INVOKED` |
 | 7 | `MCP-5` (github call) | Content block returned - or graceful error string if `GITHUB_TOKEN` not seeded; still HTTP 200 |
-| 8 | **Telegram**: `/mcp` | McpReflex shows: `Exposed internal tools (2): github, memory_search` and `Dynamic MCP tools: none connected` |
+| 8 | **Telegram**: `/mcp` | McpReflex shows: `Exposed internal tools (2): github, recall_memory_search` and `Dynamic MCP tools: none connected` |
 | 9 | `MCP-ERR-1` | JSON-RPC error body for `sandbox_exec` (not in allowlist, removed from enum after Phase 64-D7) |
 | 10 | `MCP-ERR-2` | 4xx for missing `Mcp-Session-Id` header |
 
@@ -992,7 +1000,7 @@ No external MCP server required. ArcClaw connects to itself.
 | 1 | `MCP-CLIENT-1` (self-connect) | `{"status":"connected","toolsRegistered":2}` - proves full outbound stack: `McpConnectResource → McpClientService → MCP initialize handshake → tools/list → DynamicToolCapabilityRegistry.register()` |
 | 2 | `MCP-ADMIN-2` | `registeredDynamicTools` now has 2 entries; both `mcpServerName:"self"`, `transport:"HTTP_SSE"` |
 | 3 | `MCP-CLIENT-3` (list servers) | `{"connectedServers":[{"name":"self","toolCount":2}],"totalDynamicTools":2}` |
-| 4 | **Telegram**: `/mcp` | Now shows: `Dynamic MCP tools (2): github [self, HTTP_SSE], memory_search [self, HTTP_SSE]` |
+| 4 | **Telegram**: `/mcp` | Now shows: `Dynamic MCP tools (2): github [self, HTTP_SSE], recall_memory_search [self, HTTP_SSE]` |
 | 5 | `MCP-CLIENT-5` (disconnect) | `{"name":"self","deregistered":true,"toolsRemoved":2}` |
 | 6 | `MCP-CLIENT-6` | `registeredDynamicTools:[]` - confirmed empty |
 | 7 | **Telegram**: `/mcp` | Back to `Dynamic MCP tools: none connected` |
@@ -1972,7 +1980,7 @@ Run after deploying all Phase 64 fixes.
 
 Run after any significant code change. Combine automated + manual.
 
-### Automated (1458 tests - must remain green)
+### Automated (1664 tests — must remain green)
 
 ```bash
 ./mvnw clean test -pl arcclaw-app -am
@@ -2034,7 +2042,7 @@ Run after any significant code change. Combine automated + manual.
 | 16 | MCP self-connect | `toolsRegistered:N` (N ≥ 1) |
 | 17 | MCP disconnect | `toolsRemoved:N`, `registeredDynamicTools:[]` |
 | 18 | MCP protocol: initialize → tools/list | `200`/`202`, tools array returned |
-| 19 | RAG ingest + retrieval | Ingested chunk retrieved via memory_search |
+| 19 | RAG ingest + retrieval | Ingested chunk retrieved via recall_memory_search |
 | 20 | `rag_chunk` table has rows, no `rag:` prefix | SQLite check returns 0 |
 | 21 | Cron schedule + wait + result | `CRONFIRED` audit event, result delivered |
 | 22 | Fork-bomb guard | `ScheduleTaskTool` rejects `CRON:` prefix |
@@ -2134,4 +2142,4 @@ For `ARCCLAW_VAULT_PEPPER` and `ARCCLAW_AUDIT_HMAC_KEY`, use stable 32+ characte
 
 ---
 
-*Last updated: ArcClaw V1.0.0 · Quarkus 3.27.2 · JDK 25 · 1458 tests · 17 modules · 15 tools · 10 LLM providers · Cron run history API · Answer Quality Guard*
+*Last updated: ArcClaw V1.0.0 · Quarkus 3.27.2 · JDK 25 · 1664 tests · 17 modules · 15 tools · 10 LLM providers · Tiered Memory · Answer Quality Guard*

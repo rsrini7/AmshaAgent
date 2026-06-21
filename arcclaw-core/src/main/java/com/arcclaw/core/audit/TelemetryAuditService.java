@@ -1,9 +1,9 @@
 package com.arcclaw.core.audit;
 
-import java.math.BigDecimal;
-
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
+
+import java.math.BigDecimal;
 
 import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.core.agent.result.AgentResult;
@@ -13,6 +13,7 @@ import com.arcclaw.core.domain.model.AuditEventRecord;
 import com.arcclaw.core.persistence.AsyncPersistenceEngine;
 import com.arcclaw.core.persistence.PersistenceEvent;
 import com.arcclaw.core.util.AgentErrorMessageUtil;
+
 import org.jboss.logging.Logger;
 
 @ApplicationScoped
@@ -31,9 +32,10 @@ public class TelemetryAuditService {
     }
 
     @Inject
-    public TelemetryAuditService(AuditEventRecorder auditEventRecorder,
-                                 AsyncPersistenceEngine persistenceEngine,
-                                 SystemMetadataRegistry registry) {
+    public TelemetryAuditService(
+            AuditEventRecorder auditEventRecorder,
+            AsyncPersistenceEngine persistenceEngine,
+            SystemMetadataRegistry registry) {
         this.auditEventRecorder = auditEventRecorder;
         this.persistenceEngine = persistenceEngine;
         this.registry = registry;
@@ -51,8 +53,13 @@ public class TelemetryAuditService {
     /**
      * Records a point-in-time security event with an optional idempotency key.
      */
-    public void recordWithIdempotency(String sessionId, String userId, String agentRole,
-                                       SecurityEventType type, String detail, String idempotencyKey) {
+    public void recordWithIdempotency(
+            String sessionId,
+            String userId,
+            String agentRole,
+            SecurityEventType type,
+            String detail,
+            String idempotencyKey) {
         log.infof("[AUDIT-PROBE] type=%s session=%s idempotency=%s", type, sessionId, idempotencyKey);
         try {
             AuditEvent event = AuditEventRecord.securityEvent(sessionId, userId, agentRole, type, detail);
@@ -65,9 +72,13 @@ public class TelemetryAuditService {
         } catch (Exception e) {
             String msg = AgentErrorMessageUtil.safeMessage(e);
             if (msg.contains("[TEST-EXPECTED]")) {
-                log.warnf("[AUDIT] Failed to submit TELEMETRY event %s for session %s: %s (EXPECTED)", type, sessionId, msg);
+                log.warnf(
+                        "[AUDIT] Failed to submit TELEMETRY event %s for session %s: %s (EXPECTED)",
+                        type, sessionId, msg);
             } else {
-                log.warnf("[AUDIT] Failed to submit TELEMETRY event %s for session %s:\n%s", type, sessionId, LogUtil.trimmedStack(e));
+                log.warnf(
+                        "[AUDIT] Failed to submit TELEMETRY event %s for session %s:\n%s",
+                        type, sessionId, LogUtil.trimmedStack(e));
             }
         }
     }
@@ -76,24 +87,41 @@ public class TelemetryAuditService {
      * Records the outcome of an agent loop execution - TELEMETRY tier.
      * Swallows all exceptions to prevent crashing the caller.
      */
-    public void recordLoopCompletion(String sessionId, String userId, String agentRole,
-                                     String goalHash, AgentResult result,
-                                     int inputTokens, int outputTokens, BigDecimal usdCost) {
+    public void recordLoopCompletion(
+            String sessionId,
+            String userId,
+            String agentRole,
+            String goalHash,
+            AgentResult result,
+            int inputTokens,
+            int outputTokens,
+            BigDecimal usdCost) {
         try {
             AuditOutcome outcome = resolveOutcome(result);
             SecurityEventType eventType = resolveLoopEventType(outcome);
-            String detail = switch(result) {
-                case AgentResult.Failed f -> "reason=" + f.reason();
-                case AgentResult.LoopExceeded _ -> "reason=MAX_ITERATIONS";
-                default -> null;
-            };
+            String detail =
+                    switch (result) {
+                        case AgentResult.Failed f -> "reason=" + f.reason();
+                        case AgentResult.LoopExceeded _ -> "reason=MAX_ITERATIONS";
+                        default -> null;
+                    };
 
             int stepCount = result.steps().size();
             String appVersion = registry.getAppVersion();
 
             PersistenceEvent pe = PersistenceEvent.telemetry(sessionId, eventType, () -> {
-                AuditEvent event = AuditEventRecord.of(sessionId, userId, agentRole, goalHash, outcome, eventType,
-                                                       inputTokens, outputTokens, usdCost, stepCount, detail);
+                AuditEvent event = AuditEventRecord.of(
+                        sessionId,
+                        userId,
+                        agentRole,
+                        goalHash,
+                        outcome,
+                        eventType,
+                        inputTokens,
+                        outputTokens,
+                        usdCost,
+                        stepCount,
+                        detail);
                 event.setAppVersion(appVersion);
                 auditEventRecorder.record(event);
             });
@@ -101,16 +129,20 @@ public class TelemetryAuditService {
         } catch (Exception e) {
             String msg = AgentErrorMessageUtil.safeMessage(e);
             if (msg.contains("[TEST-EXPECTED]")) {
-                log.warnf("[AUDIT] Failed to submit loop completion TELEMETRY for session %s: %s (EXPECTED)", sessionId, msg);
+                log.warnf(
+                        "[AUDIT] Failed to submit loop completion TELEMETRY for session %s: %s (EXPECTED)",
+                        sessionId, msg);
             } else {
-                log.warnf("[AUDIT] Failed to submit loop completion TELEMETRY for session %s:\n%s", sessionId, LogUtil.trimmedStack(e));
+                log.warnf(
+                        "[AUDIT] Failed to submit loop completion TELEMETRY for session %s:\n%s",
+                        sessionId, LogUtil.trimmedStack(e));
             }
         }
     }
 
     private AuditOutcome resolveOutcome(AgentResult result) {
-        return switch(result) {
-            case AgentResult.Finished _       -> AuditOutcome.FINISH;
+        return switch (result) {
+            case AgentResult.Finished _ -> AuditOutcome.FINISH;
             case AgentResult.StructuredFinished _ -> AuditOutcome.FINISH;
             case AgentResult.AwaitingApproval _ -> AuditOutcome.AWAITING_APPROVAL;
             case AgentResult.AwaitingRetry _ -> AuditOutcome.AWAITING_RETRY;

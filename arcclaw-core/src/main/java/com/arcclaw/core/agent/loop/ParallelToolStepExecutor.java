@@ -1,5 +1,10 @@
 package com.arcclaw.core.agent.loop;
 
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.inject.Default;
+import jakarta.enterprise.inject.Instance;
+import jakarta.inject.Inject;
+
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -12,11 +17,6 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
-
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.enterprise.inject.Default;
-import jakarta.enterprise.inject.Instance;
-import jakarta.inject.Inject;
 
 import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.core.agent.reasoning.ParallelToolCall;
@@ -38,13 +38,15 @@ import com.arcclaw.core.util.MdcKeys;
 import com.arcclaw.core.util.PreExecutionFilter;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.micrometer.core.instrument.MeterRegistry;
-import io.opentelemetry.context.Context;
-import io.smallrye.common.annotation.Identifier;
+
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.eclipse.microprofile.context.ManagedExecutor;
 import org.jboss.logging.Logger;
 import org.jboss.logging.MDC;
+
+import io.micrometer.core.instrument.MeterRegistry;
+import io.opentelemetry.context.Context;
+import io.smallrye.common.annotation.Identifier;
 
 /**
  * Executes a parallel tool batch produced by ReasoningStepParser
@@ -81,8 +83,10 @@ public class ParallelToolStepExecutor {
             SequentialToolExecutor sequentialToolExecutor,
             Instance<ManagedExecutor> managedExecutors,
             ToolCategoryMapper categoryMapper,
-            @ConfigProperty(name = "arcclaw.hitl.pre-executable-tools", defaultValue = "") Optional<List<String>> preExecutableTools,
-            @ConfigProperty(name = "arcclaw.parallel.tool-timeout-seconds", defaultValue = "60") long toolTimeoutSeconds) {
+            @ConfigProperty(name = "arcclaw.hitl.pre-executable-tools", defaultValue = "")
+                    Optional<List<String>> preExecutableTools,
+            @ConfigProperty(name = "arcclaw.parallel.tool-timeout-seconds", defaultValue = "60")
+                    long toolTimeoutSeconds) {
         this.objectMapper = objectMapper;
         this.guard = guard;
         this.checkpointManager = checkpointManager;
@@ -103,9 +107,10 @@ public class ParallelToolStepExecutor {
     }
 
     private ManagedExecutor executorFor(ToolCategory category) {
-        return managedExecutors.select(Identifier.Literal.of(category.executorName()))
-                .stream().findFirst()
-                .orElseGet(() -> managedExecutors.select(Default.Literal.INSTANCE).get());
+        return managedExecutors.select(Identifier.Literal.of(category.executorName())).stream()
+                .findFirst()
+                .orElseGet(
+                        () -> managedExecutors.select(Default.Literal.INSTANCE).get());
     }
 
     private static final TypeReference<List<ParallelToolCall>> BATCH_TYPE = new TypeReference<>() {};
@@ -123,15 +128,16 @@ public class ParallelToolStepExecutor {
         if (calls == null || calls.isEmpty()) {
             log.errorf("[PARALLEL] session=%s: empty or corrupt batch - terminating.", context.sessionId());
             return StepDecision.terminal(AgentResult.failed(
-                "Parallel tool batch was empty or corrupt.",
-                AgentResult.FailureCategory.SYSTEM_ERROR,
-                List.copyOf(history)));
+                    "Parallel tool batch was empty or corrupt.",
+                    AgentResult.FailureCategory.SYSTEM_ERROR,
+                    List.copyOf(history)));
         }
 
-        log.infof("[PARALLEL] session=%s: executing %d tool calls: %s",
-                  context.sessionId(), calls.size(),
-                  calls.stream().map(ParallelToolCall::toolName)
-                       .collect(Collectors.joining(", ")));
+        log.infof(
+                "[PARALLEL] session=%s: executing %d tool calls: %s",
+                context.sessionId(),
+                calls.size(),
+                calls.stream().map(ParallelToolCall::toolName).collect(Collectors.joining(", ")));
 
         GuardEvaluationResult guardRes = evaluateGuardForCalls(context, history, batchStep, calls, consecutiveFailures);
         if (guardRes.hitlOrBlockedDecision != null) {
@@ -142,37 +148,39 @@ public class ParallelToolStepExecutor {
         List<ParallelToolCall> dedupCalls = guardRes.dedupCalls;
 
         if (allowedCalls.isEmpty()) {
-            log.infof("[PARALLEL-DEDUP] session=%s all %d tools were duplicates " +
-                      "- returning merged dedup batch.",
-                      context.sessionId(), calls.size());
+            log.infof(
+                    "[PARALLEL-DEDUP] session=%s all %d tools were duplicates " + "- returning merged dedup batch.",
+                    context.sessionId(), calls.size());
             List<ParallelToolCall> allDedup = new ArrayList<>(dedupCalls);
             return batchResultAggregator.buildCompletedBatchDecision(
-                context, history, batchStep, allDedup, consecutiveFailures);
+                    context, history, batchStep, allDedup, consecutiveFailures);
         }
 
         try {
             governanceLayer.assertWithinBudget(context.sessionId());
         } catch (BudgetExceededException be) {
-            log.warnf("[PARALLEL-BUDGET] session=%s batch aborted before execution: %s",
-                      context.sessionId(), be.getMessage());
+            log.warnf(
+                    "[PARALLEL-BUDGET] session=%s batch aborted before execution: %s",
+                    context.sessionId(), be.getMessage());
             return StepDecision.terminal(AgentResult.failed(
-                AgentErrorMessageUtil.sanitizeErrorMessage(be.getMessage()),
-                AgentResult.FailureCategory.BUDGET_EXCEEDED,
-                List.copyOf(history)));
+                    AgentErrorMessageUtil.sanitizeErrorMessage(be.getMessage()),
+                    AgentResult.FailureCategory.BUDGET_EXCEEDED,
+                    List.copyOf(history)));
         }
 
         if (rateLimitTracker.isAnyBackingOff()) {
-            log.warnf("[PARALLEL-RATELIMIT] session=%s: at least one LLM provider " +
-                      "is in rate-limit backoff. Parallel tool batch of %d will proceed.",
-                      context.sessionId(), calls.size());
+            log.warnf(
+                    "[PARALLEL-RATELIMIT] session=%s: at least one LLM provider "
+                            + "is in rate-limit backoff. Parallel tool batch of %d will proceed.",
+                    context.sessionId(), calls.size());
         }
 
         final Context otelContext = Context.current();
 
         MDC.put(MdcKeys.PARALLEL_BATCH_SIZE, String.valueOf(allowedCalls.size()));
-        MDC.put(MdcKeys.PARALLEL_TOOLS,
-            allowedCalls.stream().map(ParallelToolCall::toolName)
-                 .collect(Collectors.joining(",")));
+        MDC.put(
+                MdcKeys.PARALLEL_TOOLS,
+                allowedCalls.stream().map(ParallelToolCall::toolName).collect(Collectors.joining(",")));
 
         List<ParallelToolCall> allowedCompleted;
         try {
@@ -180,19 +188,20 @@ public class ParallelToolStepExecutor {
         } catch (RuntimeException re) {
             if ("Interrupted".equals(re.getMessage())) {
                 return StepDecision.terminal(AgentResult.failed(
-                    "Parallel tool execution interrupted.",
-                    AgentResult.FailureCategory.SYSTEM_ERROR,
-                    List.copyOf(history)));
+                        "Parallel tool execution interrupted.",
+                        AgentResult.FailureCategory.SYSTEM_ERROR,
+                        List.copyOf(history)));
             }
             throw re;
         } finally {
             MdcCleaner.clear(MdcKeys.PARALLEL_BATCH_SIZE, MdcKeys.PARALLEL_TOOLS);
         }
 
-        List<ParallelToolCall> allCompleted = batchResultAggregator.mergeCompletedCalls(calls, dedupCalls, allowedCompleted);
+        List<ParallelToolCall> allCompleted =
+                batchResultAggregator.mergeCompletedCalls(calls, dedupCalls, allowedCompleted);
 
         return batchResultAggregator.buildCompletedBatchDecision(
-            context, history, batchStep, allCompleted, consecutiveFailures);
+                context, history, batchStep, allCompleted, consecutiveFailures);
     }
 
     private static class GuardEvaluationResult {
@@ -202,44 +211,52 @@ public class ParallelToolStepExecutor {
     }
 
     private GuardEvaluationResult evaluateGuardForCalls(
-            AgentExecutionContext context, List<ReasoningStep> history, ReasoningStep batchStep,
-            List<ParallelToolCall> calls, int consecutiveFailures) {
+            AgentExecutionContext context,
+            List<ReasoningStep> history,
+            ReasoningStep batchStep,
+            List<ParallelToolCall> calls,
+            int consecutiveFailures) {
 
         GuardEvaluationResult r = new GuardEvaluationResult();
         for (ParallelToolCall call : calls) {
             ToolInvocationGuard.GuardDecision decision = guard.evaluate(
-                context.sessionId(), context.agentRole(), context.autonomyLevel(),
-                call.toolName(), call.params(), history,
-                context.goal(), List.of());
+                    context.sessionId(),
+                    context.agentRole(),
+                    context.autonomyLevel(),
+                    call.toolName(),
+                    call.params(),
+                    history,
+                    context.goal(),
+                    List.of());
             if (decision instanceof ToolInvocationGuard.GuardDecision.PauseForApproval) {
-                log.infof("[PARALLEL-HITL] session=%s tool=%s requires approval " +
-                          "- evaluating pre-execution for remaining %d tools.",
-                          context.sessionId(), call.toolName(), calls.size());
+                log.infof(
+                        "[PARALLEL-HITL] session=%s tool=%s requires approval "
+                                + "- evaluating pre-execution for remaining %d tools.",
+                        context.sessionId(), call.toolName(), calls.size());
                 r.hitlOrBlockedDecision = handleHitlBatch(context, history, batchStep, calls);
                 return r;
             }
 
             if (decision instanceof ToolInvocationGuard.GuardDecision.Blocked blocked) {
-                log.warnf("[PARALLEL-BLOCKED] session=%s tool=%s blocked: %s",
-                           context.sessionId(), call.toolName(), blocked.observation());
+                log.warnf(
+                        "[PARALLEL-BLOCKED] session=%s tool=%s blocked: %s",
+                        context.sessionId(), call.toolName(), blocked.observation());
                 String blockedObs = String.format(
-                    "[PARALLEL-BATCH-BLOCKED] Tool '%s' was blocked: %s",
-                    call.toolName(), blocked.observation());
+                        "[PARALLEL-BATCH-BLOCKED] Tool '%s' was blocked: %s", call.toolName(), blocked.observation());
                 ReasoningStep failedStep = batchStep.withObservation(blockedObs, false);
                 history.add(failedStep);
-                observers.forEach(o -> o.onStepComplete(
-                    context.sessionId(), context.agentRole(), failedStep));
+                observers.forEach(o -> o.onStepComplete(context.sessionId(), context.agentRole(), failedStep));
                 r.hitlOrBlockedDecision = StepDecision.retryValidation(consecutiveFailures + 1);
                 return r;
             }
 
             if (decision instanceof ToolInvocationGuard.GuardDecision.Deduplicate dedup) {
-                log.infof("[PARALLEL-DEDUP] session=%s tool=%s is duplicate - " +
-                          "using cached observation, continuing with remaining %d tools.",
-                          context.sessionId(), call.toolName(),
-                          calls.size() - 1);
+                log.infof(
+                        "[PARALLEL-DEDUP] session=%s tool=%s is duplicate - "
+                                + "using cached observation, continuing with remaining %d tools.",
+                        context.sessionId(), call.toolName(), calls.size() - 1);
                 r.dedupCalls.add(call.withResult("[DEDUP] " + dedup.cachedObservation(), true));
-                continue; 
+                continue;
             }
 
             r.allowedCalls.add(call);
@@ -248,21 +265,25 @@ public class ParallelToolStepExecutor {
     }
 
     private List<ParallelToolCall> runAllowedCallsAsync(
-            AgentExecutionContext context, List<ReasoningStep> history, List<ParallelToolCall> allowedCalls, Context otelContext) {
+            AgentExecutionContext context,
+            List<ReasoningStep> _history,
+            List<ParallelToolCall> allowedCalls,
+            Context otelContext) {
 
         List<ParallelToolCall> allowedCompleted = new ArrayList<>();
         List<CompletableFuture<ParallelToolCall>> futures = allowedCalls.stream()
-            .map(call -> {
-                ManagedExecutor executor = executorFor(categoryMapper.categoryFor(call.toolName()));
-                return CompletableFuture.supplyAsync(() -> 
-                    sequentialToolExecutor.execute(context, call, otelContext), 
-                    executor);
-            })
-            .toList();
+                .map(call -> {
+                    ManagedExecutor executor = executorFor(categoryMapper.categoryFor(call.toolName()));
+                    return CompletableFuture.supplyAsync(
+                            () -> sequentialToolExecutor.execute(context, call, otelContext), executor);
+                })
+                .toList();
 
         for (int i = 0; i < futures.size(); i++) {
             if (Thread.currentThread().isInterrupted() || WorkspaceManager.isSessionHalted(context.sessionId())) {
-                log.warnf("[PARALLEL] session %s: halted, cancelling %d pending futures", context.sessionId(), futures.size() - i);
+                log.warnf(
+                        "[PARALLEL] session %s: halted, cancelling %d pending futures",
+                        context.sessionId(), futures.size() - i);
                 futures.subList(i, futures.size()).forEach(f -> f.cancel(true));
                 break;
             }
@@ -275,25 +296,29 @@ public class ParallelToolStepExecutor {
             } catch (TimeoutException e) {
                 future.cancel(true);
                 ParallelToolCall timedOut = allowedCalls.get(i);
-                log.warnf("[PARALLEL-TIMEOUT] session=%s tool=%s timed out after %ds",
-                          context.sessionId(), timedOut.toolName(), toolTimeoutSeconds);
-                meterRegistry.counter("arcclaw.agent.tool.timeout",
-                        "tool", timedOut.toolName()).increment();
-                allowedCompleted.add(timedOut.withResult(
-                    String.format("Tool timed out after %ds.", toolTimeoutSeconds),
-                    false));
-                observers.forEach(o -> o.onStepComplete(context.sessionId(), context.agentRole(),
-                    ReasoningStep.observe(timedOut.toolName(),
-                        String.format("Tool timed out after %ds.", toolTimeoutSeconds),
-                        "System")));
+                log.warnf(
+                        "[PARALLEL-TIMEOUT] session=%s tool=%s timed out after %ds",
+                        context.sessionId(), timedOut.toolName(), toolTimeoutSeconds);
+                meterRegistry
+                        .counter("arcclaw.agent.tool.timeout", "tool", timedOut.toolName())
+                        .increment();
+                allowedCompleted.add(
+                        timedOut.withResult(String.format("Tool timed out after %ds.", toolTimeoutSeconds), false));
+                observers.forEach(o -> o.onStepComplete(
+                        context.sessionId(),
+                        context.agentRole(),
+                        ReasoningStep.observeStep(
+                                timedOut.toolName(),
+                                String.format("Tool timed out after %ds.", toolTimeoutSeconds),
+                                "System")));
             } catch (ExecutionException e) {
-                log.errorf("[PARALLEL-EXEC] Unexpected future failure: %s",
-                           LogUtil.rootMessage(e));
+                log.errorf("[PARALLEL-EXEC] Unexpected future failure: %s", LogUtil.rootMessage(e));
                 ParallelToolCall failedCall = allowedCalls.get(i);
                 allowedCompleted.add(failedCall.withResult("Unexpected execution failure.", false));
-                observers.forEach(o -> o.onStepComplete(context.sessionId(), context.agentRole(),
-                    ReasoningStep.observe(failedCall.toolName(),
-                        "Unexpected execution failure.", "System")));
+                observers.forEach(o -> o.onStepComplete(
+                        context.sessionId(),
+                        context.agentRole(),
+                        ReasoningStep.observeStep(failedCall.toolName(), "Unexpected execution failure.", "System")));
             }
         }
         return allowedCompleted;
@@ -305,51 +330,47 @@ public class ParallelToolStepExecutor {
             ReasoningStep batchStep,
             List<ParallelToolCall> calls) {
 
-        Set<String> safeTools = preExecutableTools
-            .map(HashSet::new)
-            .orElse(new HashSet<>());
+        Set<String> safeTools = preExecutableTools.map(HashSet::new).orElse(new HashSet<>());
 
         AutonomyLevel autonomy = context.autonomyLevel();
 
-        PreExecutionFilter.SplitResult split =
-            PreExecutionFilter.split(calls, autonomy, safeTools);
+        PreExecutionFilter.SplitResult split = PreExecutionFilter.split(calls, autonomy, safeTools);
 
         if (split.preExecutable().isEmpty()) {
             List<ReasoningStep> historyAtPause = batchResultAggregator.appendPendingBatchStep(history, batchStep);
-            return StepDecision.terminal(
-                checkpointManager.persistBatch(
-                    context, calls, historyAtPause,
-                    context.channelType(), context.channelPlatformId()));
+            return StepDecision.terminal(checkpointManager.persistBatch(
+                    context, calls, historyAtPause, context.channelType(), context.channelPlatformId()));
         }
 
         Map<String, ToolResponse> preResults = new LinkedHashMap<>();
         for (ParallelToolCall call : split.preExecutable()) {
             try {
                 ToolResponse resp = WorkspaceContext.runWithFullAutonomy(
-                    context.sessionId(), context.userId(), context.chatId(),
-                    context.agentRole(),
-                    () -> sequentialToolExecutor.invoke(call.toolName(), call.params(), context.sessionId()));
-                
+                        context.sessionId(),
+                        context.userId(),
+                        context.chatId(),
+                        context.agentRole(),
+                        () -> sequentialToolExecutor.invoke(call.toolName(), call.params(), context.sessionId()));
+
                 preResults.put(call.toolName(), resp);
                 log.debugf("[PRE-EXEC] session=%s tool=%s succeeded.", context.sessionId(), call.toolName());
             } catch (Exception e) {
-                log.warnf("[PRE-EXEC] session=%s tool %s failed pre-execution: %s",
-                    context.sessionId(), call.toolName(), LogUtil.rootMessage(e));
+                log.warnf(
+                        "[PRE-EXEC] session=%s tool %s failed pre-execution: %s",
+                        context.sessionId(), call.toolName(), LogUtil.rootMessage(e));
                 preResults.put(call.toolName(), ToolResponse.failure(1, "Pre-execution failed: " + e.getMessage()));
             }
         }
 
         List<ReasoningStep> historyAtPause = batchResultAggregator.appendPendingBatchStep(history, batchStep);
-        return StepDecision.terminal(
-            checkpointManager.persistBatchWithPreExecuted(
-                context, calls, preResults, historyAtPause,
-                context.channelType(), context.channelPlatformId()));
+        return StepDecision.terminal(checkpointManager.persistBatchWithPreExecuted(
+                context, calls, preResults, historyAtPause, context.channelType(), context.channelPlatformId()));
     }
 
     private List<ParallelToolCall> deserializeBatch(ReasoningStep batchStep, String sessionId) {
         try {
-            Object batchRaw = batchStep.actionInput() != null
-                ? batchStep.actionInput().get("batch") : null;
+            Object batchRaw =
+                    batchStep.actionInput() != null ? batchStep.actionInput().get("batch") : null;
             if (batchRaw == null) return null;
             String batchJson = batchRaw instanceof String s ? s : objectMapper.writeValueAsString(batchRaw);
             return objectMapper.readValue(batchJson, BATCH_TYPE);

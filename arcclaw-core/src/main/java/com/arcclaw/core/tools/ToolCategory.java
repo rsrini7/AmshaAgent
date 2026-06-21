@@ -1,7 +1,6 @@
 package com.arcclaw.core.tools;
 
 public enum ToolCategory {
-
     NETWORK("network-tool-executor", 8, 20),
     COMPUTE("compute-tool-executor", 4, 10),
     DATABASE("database-tool-executor", 6, 20),

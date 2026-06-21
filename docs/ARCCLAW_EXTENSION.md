@@ -133,7 +133,7 @@ The `AgentTool` interface provides several optional lifecycle and configuration 
 
 ## 2. Define a New Agent Persona
 
-> **For the complete 14-step checklist with all required touchpoints, see [`AGENTS.md` Section 6](./AGENTS.md#6-adding-a-new-persona-agent-role).**
+> **For the complete 14-step checklist with all required touchpoints, see [`AGENTS.md` Section 6](../AGENTS.md#6-adding-a-new-persona-agent-role).**
 
 ### Step 1 - Add enum entries
 
@@ -155,7 +155,7 @@ Map.entry(AgentPersona.ANALYST.roleId(), new RoleDefinition(
     AgentPersona.ANALYST.displayName(),
     "Interprets structured data and produces clear summaries.",
     5,       // maxIterations
-    true,    // requiresApproval
+    true,    // requiresApproval — false = trusted role (bypasses non-sensitive op checks)
     false,   // codeCapable
     Set.of(), // capabilities - assembled dynamically via @ToolMetadata
     AgentPersona.ANALYST.aliases()
@@ -375,7 +375,8 @@ trigger-patterns:
   - "alternate.*pattern"
 tool-capabilities:
   - GITHUB
-  - MEMORY_SEARCH
+  - RECALL_MEMORY_SEARCH
+  - ARCHIVAL_MEMORY_SEARCH
 max-iterations: 7
 ---
 You are a specialist persona. Describe the skill's behaviour in detail here.
@@ -501,7 +502,7 @@ ARCCLAW_LLM_MODEL_NAME=my-model-name
 ```
 
 > [!NOTE]
-> The model used for **agent reasoning** is configured via `arcclaw.llm.provider` / `ARCCLAW_LLM_PROVIDER`. The model used for **intent classification** is configured via `arcclaw.routing.intent-classifier.model` (defaults to `llama-3.1-8b-instant`). The model for **context compaction** is produced by `CompactionModelProducer` in `arcclaw-app`. All three can be configured independently.
+> The model used for **agent reasoning** is configured via `arcclaw.llm.provider` / `ARCCLAW_LLM_PROVIDER`. The model used for **intent classification** is produced by `InfiniteLoopIntentChatModelProvider` and selected from `arcclaw.infinite-loop.classifier.providers`. The model for **context compaction** is produced by `InfiniteLoopCompactionChatModelProvider` and selected from `arcclaw.infinite-loop.compaction.providers`. All three can be configured independently per-slot with infinite-loop failover.
 
 **Built-in LLM providers:**
 
@@ -564,6 +565,11 @@ public class MyObservationTransformer implements ObservationTransformer {
 ## 8. Add a ToolGuardInterceptor
 
 `ToolInvocationGuard` runs before every tool invocation and decides whether to allow, block, deduplicate, or pause for approval. You can plug in custom governance rules via the `ToolGuardInterceptor` SPI - for example, to enforce domain-specific constraints, rate limits per tool, or custom block patterns.
+
+**Sensitive operations requiring HITL:** `NETWORK_OUTBOUND` and `EXECUTE_SHELL` are
+classified as sensitive operations that always require HITL approval, even for trusted
+roles (roles with `requiresApproval=false` in their `RoleDefinition`). See Architecture
+Invariant §4.10.2 for the role-based governance bypass rules.
 
 ### Implementing a custom interceptor
 
@@ -799,7 +805,7 @@ Lower priority = processed first, wins on name collision. Use values between 10 
 
 ## 14. Add an EmbeddingProviderFactory (Embedding Models)
 
-`EmbeddingProviderFactory` adds new embedding model providers for RAG vector search. The `EmbeddingModelProducer` discovers all implementations via CDI and selects the active one based on `arcclaw.rag.embed-provider`.
+`EmbeddingProviderFactory` adds new embedding model providers for RAG vector search. `InfiniteLoopEmbeddingModelProvider` discovers all implementations via CDI and routes across the provider list in `arcclaw.infinite-loop.embedding.providers` with health tracking and cooldown.
 
 ```java
 @ApplicationScoped
@@ -824,12 +830,13 @@ public class CohereEmbeddingProviderFactory implements EmbeddingProviderFactory 
 | `OllamaEmbeddingProviderFactory` | `ollama` | `nomic-embed-text:v1.5` |
 | `OpenAiEmbeddingProviderFactory` | `openai` | `text-embedding-3-small` |
 
-Wire via `.env`:
+Wire via `.env` (add the provider to the slot list, then add per-provider keys):
 
 ```properties
-arcclaw.rag.embed-provider=cohere
-arcclaw.rag.embed-model=embed-english-v3.0
-arcclaw.rag.embed-api-key=your-key
+ARCCLAW_INFINITE_LOOP_EMBEDDING_PROVIDERS=ollama,cohere
+ARCCLAW_EMBEDDING_COHERE_API_KEY=your-key
+ARCCLAW_EMBEDDING_COHERE_MODEL=embed-english-v3.0
+ARCCLAW_EMBEDDING_COHERE_BASE_URL=https://api.cohere.com/v1
 ```
 
 ---

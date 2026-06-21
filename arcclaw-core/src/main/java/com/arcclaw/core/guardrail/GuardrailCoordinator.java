@@ -1,19 +1,21 @@
 package com.arcclaw.core.guardrail;
 
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.List;
-
 import jakarta.annotation.Priority;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
+
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
+
+import org.jboss.logging.Logger;
+
 import io.opentelemetry.api.trace.Span;
 import io.opentelemetry.api.trace.Tracer;
-import org.jboss.logging.Logger;
 
 @ApplicationScoped
 public class GuardrailCoordinator {
@@ -48,11 +50,15 @@ public class GuardrailCoordinator {
                 log.warnf("[GUARD] %s threw: %s", guard.getClass().getSimpleName(), e.getMessage());
                 span.recordException(e);
                 span.end();
-                return InputResult.blocked("Guardrail error: " + guard.getClass().getSimpleName());
+                return InputResult.blocked(
+                        "Guardrail error: " + guard.getClass().getSimpleName());
             }
 
             span.setAttribute("arcclaw.guardrail.decision", decision.getClass().getSimpleName());
-            auditService.record(sessionId, userId, "guardrail",
+            auditService.record(
+                    sessionId,
+                    userId,
+                    "guardrail",
                     SecurityEventType.REFLEX_COMMAND,
                     guard.getClass().getSimpleName() + "=" + decision.getClass().getSimpleName());
 
@@ -92,11 +98,15 @@ public class GuardrailCoordinator {
                 log.warnf("[GUARD] %s threw: %s", guard.getClass().getSimpleName(), e.getMessage());
                 span.recordException(e);
                 span.end();
-                return OutputResult.blocked("Guardrail error: " + guard.getClass().getSimpleName());
+                return OutputResult.blocked(
+                        "Guardrail error: " + guard.getClass().getSimpleName());
             }
 
             span.setAttribute("arcclaw.guardrail.decision", decision.getClass().getSimpleName());
-            auditService.record(sessionId, userId, "guardrail",
+            auditService.record(
+                    sessionId,
+                    userId,
+                    "guardrail",
                     SecurityEventType.REFLEX_COMMAND,
                     guard.getClass().getSimpleName() + "=" + decision.getClass().getSimpleName());
 
@@ -119,16 +129,34 @@ public class GuardrailCoordinator {
         return OutputResult.allowed(currentResponse);
     }
 
-    public record InputResult(String sanitizedPrompt, boolean allowed, boolean retryable, String blockReason, String retryPrompt) {
-        public static InputResult allowed(String prompt) { return new InputResult(prompt, true, false, null, null); }
-        public static InputResult blocked(String reason) { return new InputResult(null, false, false, reason, null); }
-        public static InputResult retry(String reason, String corrected) { return new InputResult(corrected, false, true, reason, corrected); }
+    public record InputResult(
+            String sanitizedPrompt, boolean allowed, boolean retryable, String blockReason, String retryPrompt) {
+        public static InputResult allowed(String prompt) {
+            return new InputResult(prompt, true, false, null, null);
+        }
+
+        public static InputResult blocked(String reason) {
+            return new InputResult(null, false, false, reason, null);
+        }
+
+        public static InputResult retry(String reason, String corrected) {
+            return new InputResult(corrected, false, true, reason, corrected);
+        }
     }
 
-    public record OutputResult(String sanitizedResponse, boolean allowed, boolean retryable, String blockReason, String retryResponse) {
-        public static OutputResult allowed(String response) { return new OutputResult(response, true, false, null, null); }
-        public static OutputResult blocked(String reason) { return new OutputResult(null, false, false, reason, null); }
-        public static OutputResult retry(String reason, String corrected) { return new OutputResult(corrected, false, true, reason, corrected); }
+    public record OutputResult(
+            String sanitizedResponse, boolean allowed, boolean retryable, String blockReason, String retryResponse) {
+        public static OutputResult allowed(String response) {
+            return new OutputResult(response, true, false, null, null);
+        }
+
+        public static OutputResult blocked(String reason) {
+            return new OutputResult(null, false, false, reason, null);
+        }
+
+        public static OutputResult retry(String reason, String corrected) {
+            return new OutputResult(corrected, false, true, reason, corrected);
+        }
     }
 
     private List<PreLlmGuard> sortInputGuards() {

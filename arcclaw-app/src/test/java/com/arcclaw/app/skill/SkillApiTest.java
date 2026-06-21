@@ -11,12 +11,15 @@ import com.arcclaw.core.audit.ComplianceAuditService;
 import com.arcclaw.core.audit.TelemetryAuditService;
 import com.arcclaw.core.util.HttpConstants;
 import com.arcclaw.persistence.api.SkillStorePort;
-import io.quarkus.test.InjectMock;
-import io.quarkus.test.junit.QuarkusTest;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import io.quarkus.test.InjectMock;
+import io.quarkus.test.junit.QuarkusTest;
+
 @QuarkusTest
+@SuppressWarnings("java:S1192")
 class SkillApiTest {
 
     @Inject
@@ -38,9 +41,10 @@ class SkillApiTest {
         // cause transient lock contention when background beans flush at startup.
         deleteAllWithRetry(3);
         // Defensive refresh to start with empty registry
-        given()
-            .header(HttpConstants.X_ARCCLAW_API_KEY, "key-internal-changeme")
-            .get("/api/v1/skills/refresh").then().statusCode(200);
+        given().header(HttpConstants.X_ARCCLAW_API_KEY, "key-internal-changeme")
+                .get("/api/v1/skills/refresh")
+                .then()
+                .statusCode(200);
     }
 
     private void deleteAllWithRetry(int maxRetries) {
@@ -62,12 +66,12 @@ class SkillApiTest {
 
     @Test
     void testListEmptySkills() {
-        given()
-            .header(HttpConstants.X_ARCCLAW_API_KEY, "key-internal-changeme")
-            .when().get("/api/v1/skills")
-            .then()
-            .statusCode(200)
-            .body("size()", is(0));
+        given().header(HttpConstants.X_ARCCLAW_API_KEY, "key-internal-changeme")
+                .when()
+                .get("/api/v1/skills")
+                .then()
+                .statusCode(200)
+                .body("size()", is(0));
     }
 
     @Test
@@ -80,35 +84,35 @@ class SkillApiTest {
                 You are playing ping pong
                 """;
 
-        given()
-            .header(HttpConstants.X_ARCCLAW_API_KEY, "key-internal-changeme")
-            .contentType("text/plain")
-            .body(yaml)
-            .when().post("/api/v1/skills")
-            .then()
-            .statusCode(201)
-            .body("message", containsString("ping-skill"));
+        given().header(HttpConstants.X_ARCCLAW_API_KEY, "key-internal-changeme")
+                .contentType("text/plain")
+                .body(yaml)
+                .when()
+                .post("/api/v1/skills")
+                .then()
+                .statusCode(201)
+                .body("message", containsString("ping-skill"));
 
-        given()
-            .header(HttpConstants.X_ARCCLAW_API_KEY, "key-internal-changeme")
-            .when().get("/api/v1/skills")
-            .then()
-            .statusCode(200)
-            .body("size()", is(1))
-            .body("[0].name", is("ping-skill"))
-            .body("[0].source", is("database"));
+        given().header(HttpConstants.X_ARCCLAW_API_KEY, "key-internal-changeme")
+                .when()
+                .get("/api/v1/skills")
+                .then()
+                .statusCode(200)
+                .body("size()", is(1))
+                .body("[0].name", is("ping-skill"))
+                .body("[0].source", is("database"));
     }
 
     @Test
     void testUpsertInvalidYamlFails() {
-        given()
-            .header(HttpConstants.X_ARCCLAW_API_KEY, "key-internal-changeme")
-            .contentType("text/plain")
-            .body("invalid missing dashes")
-            .when().post("/api/v1/skills")
-            .then()
-            .statusCode(400)
-            .body("detail", containsString("exactly two ---"));
+        given().header(HttpConstants.X_ARCCLAW_API_KEY, "key-internal-changeme")
+                .contentType("text/plain")
+                .body("invalid missing dashes")
+                .when()
+                .post("/api/v1/skills")
+                .then()
+                .statusCode(400)
+                .body("detail", containsString("exactly two ---"));
     }
 
     @Test
@@ -120,35 +124,36 @@ class SkillApiTest {
                 ---
                 Prompt logic here
                 """;
-        given()
-            .header(HttpConstants.X_ARCCLAW_API_KEY, "key-internal-changeme")
-            .contentType("text/plain")
-            .body(yaml)
-            .when().post("/api/v1/skills")
-            .then()
-            .statusCode(201);
+        given().header(HttpConstants.X_ARCCLAW_API_KEY, "key-internal-changeme")
+                .contentType("text/plain")
+                .body(yaml)
+                .when()
+                .post("/api/v1/skills")
+                .then()
+                .statusCode(201);
 
-        given()
-            .header(HttpConstants.X_ARCCLAW_API_KEY, "key-internal-changeme")
-            .when().delete("/api/v1/skills/target-skill")
-            .then()
-            .statusCode(200);
+        given().header(HttpConstants.X_ARCCLAW_API_KEY, "key-internal-changeme")
+                .when()
+                .delete("/api/v1/skills/target-skill")
+                .then()
+                .statusCode(200);
 
-        given()
-            .header(HttpConstants.X_ARCCLAW_API_KEY, "key-internal-changeme")
-            .when().get("/api/v1/skills")
-            .then()
-            .log().body()
-            .statusCode(200)
-            .body("size()", is(0));
+        given().header(HttpConstants.X_ARCCLAW_API_KEY, "key-internal-changeme")
+                .when()
+                .get("/api/v1/skills")
+                .then()
+                .log()
+                .body()
+                .statusCode(200)
+                .body("size()", is(0));
     }
 
     @Test
     void testDeleteNonExistentSkill() {
-        given()
-            .header(HttpConstants.X_ARCCLAW_API_KEY, "key-internal-changeme")
-            .when().delete("/api/v1/skills/does-not-exist")
-            .then()
-            .statusCode(404);
+        given().header(HttpConstants.X_ARCCLAW_API_KEY, "key-internal-changeme")
+                .when()
+                .delete("/api/v1/skills/does-not-exist")
+                .then()
+                .statusCode(404);
     }
 }

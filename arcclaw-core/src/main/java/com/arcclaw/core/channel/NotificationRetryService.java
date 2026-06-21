@@ -1,19 +1,21 @@
 package com.arcclaw.core.channel;
 
-import java.util.List;
-import java.util.concurrent.TimeUnit;
-
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
+
+import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 import com.arcclaw.channel.api.ChannelPlugin;
 import com.arcclaw.channel.api.ChannelSender;
 import com.arcclaw.channel.api.ChannelUser;
 import com.arcclaw.channel.api.ReplyNode;
 import com.arcclaw.common.util.LogUtil;
-import io.micrometer.core.instrument.MeterRegistry;
+
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
+
+import io.micrometer.core.instrument.MeterRegistry;
 
 /**
  * Service that handles notification delivery with retries and fallback (§T5-5).
@@ -55,11 +57,12 @@ public class NotificationRetryService {
                     return; // No point in retrying if sender is missing
                 }
             } catch (Exception e) {
-                log.warnf("Notification attempt %d failed for channel %s: %s",
+                log.warnf(
+                        "Notification attempt %d failed for channel %s: %s",
                         attempt, channelId, LogUtil.rootMessage(e));
-                
+
                 if (attempt == maxAttempts) break;
-                
+
                 try {
                     TimeUnit.MILLISECONDS.sleep(delay);
                 } catch (InterruptedException ie) {
@@ -71,9 +74,12 @@ public class NotificationRetryService {
             }
         }
 
-        log.errorf("Notification failed after %d attempts for channel %s. Recipient=%s", 
+        log.errorf(
+                "Notification failed after %d attempts for channel %s. Recipient=%s",
                 maxAttempts, channelId, recipient.platformId());
-        meterRegistry.counter("arcclaw.notification.retry.exhausted", "channel", channelId).increment();
+        meterRegistry
+                .counter("arcclaw.notification.retry.exhausted", "channel", channelId)
+                .increment();
     }
 
     /**
@@ -94,11 +100,12 @@ public class NotificationRetryService {
                     return;
                 }
             } catch (Exception e) {
-                log.warnf("Structured notification attempt %d failed for channel %s: %s",
+                log.warnf(
+                        "Structured notification attempt %d failed for channel %s: %s",
                         attempt, channelId, LogUtil.rootMessage(e));
-                
+
                 if (attempt == maxAttempts) break;
-                
+
                 try {
                     TimeUnit.MILLISECONDS.sleep(delay);
                 } catch (InterruptedException ie) {
@@ -111,6 +118,8 @@ public class NotificationRetryService {
         }
 
         log.errorf("Structured notification failed after %d attempts for channel %s", maxAttempts, channelId);
-        meterRegistry.counter("arcclaw.notification.retry.exhausted", "channel", channelId).increment();
+        meterRegistry
+                .counter("arcclaw.notification.retry.exhausted", "channel", channelId)
+                .increment();
     }
 }

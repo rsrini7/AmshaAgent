@@ -1,13 +1,15 @@
 package com.arcclaw.persistence.fs;
 
-import java.util.List;
-import java.util.Optional;
-
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
+import java.util.List;
+import java.util.Locale;
+import java.util.Optional;
+
 import com.arcclaw.persistence.api.CompactionStorePort;
 import com.arcclaw.persistence.api.CompactionSummaryDto;
+
 import io.quarkus.arc.properties.IfBuildProperty;
 
 @ApplicationScoped
@@ -36,13 +38,14 @@ public class FsCompactionStoreAdapter implements CompactionStorePort {
 
     @Override
     public List<CompactionSummaryDto> search(String userId, String query, int limit) {
-        String q = query.toLowerCase();
+        String q = query.toLowerCase(Locale.ROOT);
         return store.list(List.of(DOMAIN), ".json").stream()
-            .map(f -> store.readOptional(List.of(DOMAIN, f), CompactionSummaryDto.class))
-            .flatMap(Optional::stream)
-            .filter(dto -> userId == null || userId.equals(dto.userId()))
-            .filter(dto -> dto.summary() != null && dto.summary().toLowerCase().contains(q))
-            .limit(limit)
-            .toList();
+                .map(f -> store.readOptional(List.of(DOMAIN, f), CompactionSummaryDto.class))
+                .flatMap(Optional::stream)
+                .filter(dto -> userId == null || userId.equals(dto.userId()))
+                .filter(dto -> dto.summary() != null
+                        && dto.summary().toLowerCase(Locale.ROOT).contains(q))
+                .limit(limit)
+                .toList();
     }
 }

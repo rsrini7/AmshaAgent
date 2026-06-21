@@ -27,13 +27,6 @@
             <artifactId>quarkus-opentelemetry</artifactId>
         </dependency>        
 
-        <!-- JPA API for SPI signatures (provided scope) -->
-        <dependency>
-            <groupId>jakarta.persistence</groupId>
-            <artifactId>jakarta.persistence-api</artifactId>
-            <scope>provided</scope>
-        </dependency>
-
         <!-- Test -->
         <dependency>
             <groupId>io.quarkus</groupId>

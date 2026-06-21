@@ -1,5 +1,7 @@
 package com.arcclaw.core.sandbox;
 
+import java.util.Locale;
+
 /**
  * Defines the available isolation strategies for sandbox execution.
  */
@@ -33,7 +35,7 @@ public enum SandboxStrategy {
     public static SandboxStrategy fromString(String value) {
         if (value == null || value.isBlank()) return PODMAN;
         try {
-            return SandboxStrategy.valueOf(value.toUpperCase().trim());
+            return SandboxStrategy.valueOf(value.toUpperCase(Locale.ROOT).trim());
         } catch (IllegalArgumentException e) {
             return PODMAN;
         }

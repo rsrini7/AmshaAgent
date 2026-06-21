@@ -1,12 +1,13 @@
 package com.arcclaw.core.agent.loop;
 
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
+
+import java.util.HashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 
 import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
@@ -20,6 +21,7 @@ import com.arcclaw.core.tools.ToolRegistry;
 import com.arcclaw.core.util.AgentErrorMessageUtil;
 import com.arcclaw.core.util.TextPatternUtils;
 import com.fasterxml.jackson.databind.ObjectMapper;
+
 import org.jboss.logging.Logger;
 
 /**
@@ -60,21 +62,28 @@ public class FinishActionHandler {
     private final RoleRegistry roleRegistry;
 
     @Inject
-    public FinishActionHandler(AnswerGuardStrategy qualityGuard,
-                               CodeGenerationPolicy codePolicy,
-                               RateLimitTracker rateLimitTracker,
-                               Instance<AgentObserver> observers,
-                               CorrectionStrategy correctionStrategy,
-                               ObjectMapper objectMapper,
-                               TextPatternUtils textPatternUtils,
-                               ToolRegistry toolRegistry,
-                               RoleRegistry roleRegistry) {
+    public FinishActionHandler(
+            AnswerGuardStrategy qualityGuard,
+            CodeGenerationPolicy codePolicy,
+            RateLimitTracker rateLimitTracker,
+            Instance<AgentObserver> observers,
+            CorrectionStrategy correctionStrategy,
+            ObjectMapper objectMapper,
+            TextPatternUtils textPatternUtils,
+            ToolRegistry toolRegistry,
+            RoleRegistry roleRegistry) {
         this.qualityGuard = qualityGuard;
         this.observers = observers;
         this.toolRegistry = toolRegistry;
         this.roleRegistry = roleRegistry;
         this.resultProcessor = new FinishOutcomeProcessor(
-                qualityGuard, codePolicy, rateLimitTracker, correctionStrategy, objectMapper, textPatternUtils, toolRegistry);
+                qualityGuard,
+                codePolicy,
+                rateLimitTracker,
+                correctionStrategy,
+                textPatternUtils,
+                toolRegistry,
+                new HallucinationDetector(objectMapper));
     }
 
     /**
@@ -82,7 +91,12 @@ public class FinishActionHandler {
      * decide what to do next without inspecting answer text directly.
      */
     public sealed interface FinishOutcome
-            permits FinishOutcome.Completed, FinishOutcome.RetryLeak, FinishOutcome.Correction, FinishOutcome.SalvageFailed, FinishOutcome.ExecuteLeakedTool, FinishOutcome.InjectToolCall {
+            permits FinishOutcome.Completed,
+                    FinishOutcome.RetryLeak,
+                    FinishOutcome.Correction,
+                    FinishOutcome.SalvageFailed,
+                    FinishOutcome.ExecuteLeakedTool,
+                    FinishOutcome.InjectToolCall {
 
         /**
          * The answer passed all guards - return it as the session result.
@@ -92,9 +106,8 @@ public class FinishActionHandler {
         /**
          * A raw tool-call leak was detected and is retryable.
          */
-        record RetryLeak(ReasoningStep correctedStep,
-                         String correctionHint,
-                         String leakedToolName) implements FinishOutcome {}
+        record RetryLeak(ReasoningStep correctedStep, String correctionHint, String leakedToolName)
+                implements FinishOutcome {}
 
         /**
          * A hallucination or policy violation was detected that requires a corrective turn.
@@ -111,23 +124,19 @@ public class FinishActionHandler {
          * A raw tool-call leak was detected and parsed into an executable tool call.
          * The router should execute the tool and continue the loop.
          */
-        record ExecuteLeakedTool(String toolName,
-                                 Map<String, Object> arguments,
-                                 ReasoningStep correctedStep) implements FinishOutcome {}
+        record ExecuteLeakedTool(String toolName, Map<String, Object> arguments, ReasoningStep correctedStep)
+                implements FinishOutcome {}
 
         /**
          * The agent finished without calling any tools, but the goal suggests a tool should have been used.
          * The router should inject and execute the tool call, then continue the loop.
          */
-        record InjectToolCall(String toolName,
-                              Map<String, Object> arguments,
-                              ReasoningStep correctedStep) implements FinishOutcome {}
+        record InjectToolCall(String toolName, Map<String, Object> arguments, ReasoningStep correctedStep)
+                implements FinishOutcome {}
     }
 
-    public FinishOutcome handle(AgentExecutionContext context,
-                                List<ReasoningStep> history,
-                                ReasoningStep step,
-                                int llmSchemaErrorCount) {
+    public FinishOutcome handle(
+            AgentExecutionContext context, List<ReasoningStep> history, ReasoningStep step, int llmSchemaErrorCount) {
         if (step instanceof ReasoningStep.FinishStep finishStep) {
             return handle(context, history, finishStep, llmSchemaErrorCount);
         }
@@ -139,18 +148,21 @@ public class FinishActionHandler {
         // §Issue-4 Fix: Graceful fallback instead of unchecked exception for non-migrated callers.
         // This path should be unreachable after full migration to ReasoningStep.FinishStep,
         // but we guard defensively to avoid crashing the agent loop.
-        log.warnf("FINISH-HANDLER: unexpected step type %s passed to handle() bridge — returning Correction",
+        log.warnf(
+                "FINISH-HANDLER: unexpected step type %s passed to handle() bridge — returning Correction",
                 step != null ? step.getClass().getSimpleName() : "null");
         ReasoningStep correctedStep = step != null ? step.withObservation("Unexpected step type for FINISH") : null;
         context.setForceFinishRetry(true);
-        return new FinishOutcome.Correction(correctedStep,
+        return new FinishOutcome.Correction(
+                correctedStep,
                 "System: Expected a FINISH action but received an unexpected step type. Please FINISH with a plain text answer.");
     }
 
-    public FinishOutcome handle(AgentExecutionContext context,
-                                List<ReasoningStep> history,
-                                ReasoningStep.FinishStep step,
-                                int llmSchemaErrorCount) {
+    public FinishOutcome handle(
+            AgentExecutionContext context,
+            List<ReasoningStep> history,
+            ReasoningStep.FinishStep step,
+            int llmSchemaErrorCount) {
 
         String sessionId = context.sessionId();
         String agentRole = context.agentRole();
@@ -160,7 +172,8 @@ public class FinishActionHandler {
 
         // --- Raw tool-call leak detection ---
         if (qualityGuard.isRawToolCallLeak(candidateAnswer)) {
-            FinishOutcome outcome = resultProcessor.handleLeak(candidateAnswer, step, history, llmSchemaErrorCount, sessionId, context.goal());
+            FinishOutcome outcome = resultProcessor.handleLeak(
+                    candidateAnswer, step, history, llmSchemaErrorCount, sessionId, context.goal());
             if (outcome instanceof FinishOutcome.RetryLeak) {
                 context.setForceFinishRetry(true);
             }
@@ -172,7 +185,9 @@ public class FinishActionHandler {
 
         // --- Arbitrary JSON response detection (not tool-call JSON) ---
         if (resultProcessor.looksLikeJson(answer)) {
-            log.warnf("FINISH-HANDLER: Answer is raw JSON (not tool-call leak) for session %s - retrying with natural-language hint", sessionId);
+            log.warnf(
+                    "FINISH-HANDLER: Answer is raw JSON (not tool-call leak) for session %s - retrying with natural-language hint",
+                    sessionId);
             ReasoningStep cleanStep = step.withObservation("Your response was raw JSON instead of natural language.");
             String hint = "System: STOP. Your response was a raw JSON object/array, NOT a natural language answer. "
                     + "You MUST respond in plain text prose. Do NOT output JSON structures, code blocks, or data formats. "
@@ -205,8 +220,11 @@ public class FinishActionHandler {
         AnswerGuardStrategy.AnswerGuardResult guardResult = qualityGuard.guard(answer, history);
         answer = guardResult.answer();
         if (guardResult.isFailure()) {
-            log.warnf("FINISH-GUARD failure in session %s: %s (possible model collapse)", sessionId, guardResult.failureReason());
-            ReasoningStep correctedStep = step.withObservation("Quality guard rejected the answer: " + guardResult.failureReason());
+            log.warnf(
+                    "FINISH-GUARD failure in session %s: %s (possible model collapse)",
+                    sessionId, guardResult.failureReason());
+            ReasoningStep correctedStep =
+                    step.withObservation("Quality guard rejected the answer: " + guardResult.failureReason());
             String hint = "Your previous answer was rejected by the quality guard (" + guardResult.failureReason()
                     + "). Please provide a complete, well-formed response. Do NOT output raw JSON, tool calls, or placeholders.";
             context.setForceFinishRetry(true);
@@ -237,11 +255,12 @@ public class FinishActionHandler {
      * 1. Refusal + research goal → inject search tool
      * 2. Execution goal + no code in answer + sandbox available → inject sandbox_exec
      */
-    private FinishOutcome tryInjectToolCall(AgentExecutionContext context,
-                                            List<ReasoningStep> history,
-                                            ReasoningStep.FinishStep step,
-                                            String answer,
-                                            String sessionId) {
+    private FinishOutcome tryInjectToolCall(
+            AgentExecutionContext context,
+            List<ReasoningStep> history,
+            ReasoningStep.FinishStep step,
+            String answer,
+            String sessionId) {
         String goal = context.goal();
         if (goal == null || goal.isBlank()) return null;
 
@@ -252,12 +271,16 @@ public class FinishActionHandler {
         if (isRefusal && AgentSentinels.RESEARCH_KEYWORDS.matcher(goal).find()) {
             String searchTool = findSearchTool(availableTools);
             if (searchTool != null && isToolPermitted(context.agentRole(), searchTool)) {
-                log.infof("TOOL-INJECT session %s: agent finished without searching, injecting %s", sessionId, searchTool);
+                log.infof(
+                        "TOOL-INJECT session %s: agent finished without searching, injecting %s",
+                        sessionId, searchTool);
                 Map<String, Object> args = new HashMap<>();
-                args.put("query", goal.replaceAll("(?i)^(do )?research (on )?(use )?", "").trim());
+                args.put(
+                        "query",
+                        goal.replaceAll("(?i)^(do )?research (on )?(use )?", "").trim());
                 args.put("count", 5);
-                return new FinishOutcome.InjectToolCall(searchTool, args,
-                        step.withObservation("Injecting search tool call that was missed"));
+                return new FinishOutcome.InjectToolCall(
+                        searchTool, args, step.withObservation("Injecting search tool call that was missed"));
             }
         }
 
@@ -271,22 +294,33 @@ public class FinishActionHandler {
             log.infof("TOOL-INJECT session %s: execution goal but no code in answer, forcing correction", sessionId);
             return new FinishOutcome.Correction(
                     step.withObservation("Agent finished without writing code for an execution goal"),
-                    "STOP. You MUST write a complete Java program and call sandbox_exec to execute it. " +
-                    "The sandbox_exec tool requires 'language' (e.g. 'java') and 'code' parameters. " +
-                    "Do NOT explain. Do NOT research. Write the code NOW and call sandbox_exec immediately.");
+                    "STOP. You MUST write a complete Java program and call sandbox_exec to execute it. "
+                            + "The sandbox_exec tool requires 'language' (e.g. 'java') and 'code' parameters. "
+                            + "Do NOT explain. Do NOT research. Write the code NOW and call sandbox_exec immediately.");
         }
 
         // Case 3: Scheduling goal + not scheduled + schedule_task permitted -> force scheduling correction
-        if (AgentSentinels.SCHEDULING_KEYWORDS.matcher(goal).find()
+        // BUT skip if the goal is about SEARCHING for scheduled tasks (e.g., "search memory for cron tasks we
+        // scheduled")
+        boolean isSchedulingGoal =
+                AgentSentinels.SCHEDULING_KEYWORDS.matcher(goal).find();
+        boolean isSearchGoal = AgentSentinels.RESEARCH_KEYWORDS.matcher(goal).find()
+                || goal.toLowerCase(Locale.ROOT).contains("memory")
+                || goal.toLowerCase(Locale.ROOT).contains("recall")
+                || goal.toLowerCase(Locale.ROOT).contains("find");
+        if (isSchedulingGoal
+                && !isSearchGoal
                 && isToolPermitted(context.agentRole(), ToolCapability.SCHEDULE_TASK.toolName())) {
             boolean actuallyScheduled = resultProcessor.historyContainsSuccessfulSchedule(history);
             if (!actuallyScheduled) {
-                log.infof("TOOL-INJECT session %s: scheduling goal but no schedule_task call found, forcing correction", sessionId);
+                log.infof(
+                        "TOOL-INJECT session %s: scheduling goal but no schedule_task call found, forcing correction",
+                        sessionId);
                 return new FinishOutcome.Correction(
                         step.withObservation("Agent finished without calling schedule_task for a scheduling goal"),
-                        "System: STOP. The user requested a future/scheduled action, but you did NOT call " +
-                        "the schedule_task tool. You MUST compute the correct cron expression (based on current system time " +
-                        "and timezone conversions if any) and call the schedule_task tool now before finishing.");
+                        "System: STOP. The user requested a future/scheduled action, but you did NOT call "
+                                + "the schedule_task tool. You MUST compute the correct cron expression (based on current system time "
+                                + "and timezone conversions if any) and call the schedule_task tool now before finishing.");
             }
         }
 
@@ -296,7 +330,8 @@ public class FinishActionHandler {
     private static final List<String> SEARCH_TOOL_NAMES = List.of(
             ToolCapability.WEB_SEARCH_SERPER.toolName(),
             ToolCapability.WEB_SEARCH_BRAVE.toolName(),
-            "web_search", "search");
+            "web_search",
+            "search");
 
     private String findSearchTool(String availableTools) {
         for (String name : SEARCH_TOOL_NAMES) {
@@ -311,9 +346,9 @@ public class FinishActionHandler {
     }
 
     private static boolean historyContainsSuccess(String toolName, List<ReasoningStep> history) {
-        return history.stream().anyMatch(s -> s instanceof ReasoningStep.ToolCallStep tc
-                && toolName.equals(tc.action())
-                && Boolean.TRUE.equals(tc.success()));
+        return history.stream()
+                .anyMatch(s -> s instanceof ReasoningStep.ToolCallStep tc
+                        && toolName.equals(tc.action())
+                        && Boolean.TRUE.equals(tc.success()));
     }
-
 }

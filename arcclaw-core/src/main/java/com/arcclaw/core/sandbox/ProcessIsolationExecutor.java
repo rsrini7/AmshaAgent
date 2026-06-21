@@ -1,5 +1,9 @@
 package com.arcclaw.core.sandbox;
 
+import jakarta.annotation.PostConstruct;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.Collections;
@@ -8,12 +12,9 @@ import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
-import jakarta.annotation.PostConstruct;
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
-
 import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.core.sandbox.SandboxCircuitBreaker.CircuitBreakerState;
+
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
@@ -48,7 +49,6 @@ public class ProcessIsolationExecutor {
 
     private static final Logger log = Logger.getLogger(ProcessIsolationExecutor.class);
 
-
     @Inject
     SandboxCircuitBreaker circuitBreaker;
 
@@ -66,7 +66,6 @@ public class ProcessIsolationExecutor {
 
     @ConfigProperty(name = "arcclaw.sandbox.strategy", defaultValue = "PODMAN")
     SandboxStrategy sandboxStrategy;
-
 
     @ConfigProperty(name = "arcclaw.sandbox.enabled", defaultValue = "true")
     boolean sandboxEnabled;
@@ -104,7 +103,9 @@ public class ProcessIsolationExecutor {
                     circuitBreaker.openCircuit();
                 }
             } catch (Exception e) {
-                log.warnf("Podman not found on PATH - isolation degraded to NAMESPACE strategy (error: %s)", LogUtil.rootMessage(e));
+                log.warnf(
+                        "Podman not found on PATH - isolation degraded to NAMESPACE strategy (error: %s)",
+                        LogUtil.rootMessage(e));
                 log.debugf("Podman check exception details: %s", LogUtil.trimmedStack(e));
                 circuitBreaker.openCircuit();
             }
@@ -121,15 +122,16 @@ public class ProcessIsolationExecutor {
      * @return SandboxResult indicating success, failure, or infra failure.
      */
     public SandboxResult executeSandboxed(
-            String sessionId,
-            Path workspaceRoot,
-            List<String> command,
-            Map<String, String> requiredSecrets) throws Exception {
+            String sessionId, Path workspaceRoot, List<String> command, Map<String, String> requiredSecrets)
+            throws Exception {
 
         try {
-            if (!sandboxEnabled || SandboxStrategy.NONE == sandboxStrategy || SandboxStrategy.DIRECT == sandboxStrategy) {
+            if (!sandboxEnabled
+                    || SandboxStrategy.NONE == sandboxStrategy
+                    || SandboxStrategy.DIRECT == sandboxStrategy) {
                 return SandboxResult.success(directExecutor.executeDirectly(
-                        workspaceRoot, rewriteContainerPaths(command, workspaceRoot),
+                        workspaceRoot,
+                        rewriteContainerPaths(command, workspaceRoot),
                         resolveFallbackSecrets(requiredSecrets)));
             }
 
@@ -144,7 +146,8 @@ public class ProcessIsolationExecutor {
                         workspaceRoot, rewriteContainerPaths(command, workspaceRoot)));
             } catch (Exception nsEx) {
                 if (allowInsecureFallback) {
-                    log.warnf("[SANDBOX] Namespace unavailable (%s) - degrading to host execution",
+                    log.warnf(
+                            "[SANDBOX] Namespace unavailable (%s) - degrading to host execution",
                             LogUtil.rootMessage(nsEx));
                     return fallbackToHostExecution(workspaceRoot, command, requiredSecrets);
                 }
@@ -173,8 +176,10 @@ public class ProcessIsolationExecutor {
      */
     private List<String> rewriteContainerPaths(List<String> command, Path workspaceRoot) {
         final String containerRoot = "/workspace";
-        final String hostRoot = workspaceRoot.toAbsolutePath().toString()
-                .replace("\\", "/");   // normalize Windows backslashes → forward slashes
+        final String hostRoot = workspaceRoot
+                .toAbsolutePath()
+                .toString()
+                .replace("\\", "/"); // normalize Windows backslashes → forward slashes
 
         return command.stream()
                 .map(arg -> {
@@ -190,16 +195,15 @@ public class ProcessIsolationExecutor {
     }
 
     private SandboxResult tryPodmanExecution(
-            String sessionId, Path workspaceRoot, List<String> command,
-            Map<String, String> requiredSecrets) throws Exception {
+            String sessionId, Path workspaceRoot, List<String> command, Map<String, String> requiredSecrets)
+            throws Exception {
 
         if (!circuitBreaker.shouldAttemptPodman()) {
             return null;
         }
         CircuitBreakerState stateAtCall = circuitBreaker.getState();
         try {
-            String result = podmanExecutor.executeInContainer(
-                    sessionId, workspaceRoot, command, requiredSecrets);
+            String result = podmanExecutor.executeInContainer(sessionId, workspaceRoot, command, requiredSecrets);
             circuitBreaker.recordSuccess();
             return SandboxResult.success(result);
 
@@ -208,13 +212,13 @@ public class ProcessIsolationExecutor {
             if (allowInsecureFallback) {
                 return fallbackToHostExecution(workspaceRoot, command, requiredSecrets);
             }
-            return SandboxResult.infraFailure(
-                    "SANDBOX_OFFLINE: The sandbox image is missing. " +
-                    "Please rebuild it: podman build --no-cache -t arcclaw-tool-runner " +
-                    "-f ./sandbox/Dockerfile.toolrunner .");
+            return SandboxResult.infraFailure("SANDBOX_OFFLINE: The sandbox image is missing. "
+                    + "Please rebuild it: podman build --no-cache -t arcclaw-tool-runner "
+                    + "-f ./sandbox/Dockerfile.toolrunner .");
 
         } catch (PodmanUnavailableException e) {
-            String errMsg = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
+            String errMsg =
+                    e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
             log.warnf("Podman unavailable (%s) - checking fallback for session %s", errMsg, sessionId);
             if (allowInsecureFallback) {
                 return fallbackToHostExecution(workspaceRoot, command, requiredSecrets);
@@ -223,7 +227,8 @@ public class ProcessIsolationExecutor {
             return SandboxResult.infraFailure("SANDBOX_OFFLINE: Podman is unavailable - " + errMsg);
 
         } catch (IOException e) {
-            String errMsg = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
+            String errMsg =
+                    e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
             log.warnf("Podman unavailable (%s) - checking fallback for session %s", errMsg, sessionId);
             if (allowInsecureFallback) {
                 return fallbackToHostExecution(workspaceRoot, command, requiredSecrets);
@@ -234,19 +239,18 @@ public class ProcessIsolationExecutor {
         } catch (ToolExecutionException e) {
             throw e;
         } catch (Exception e) {
-            String errMsg = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
+            String errMsg =
+                    e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
             log.errorf("Sandbox execution failed unexpectedly (session=%s): %s", sessionId, errMsg);
             return SandboxResult.infraFailure("SANDBOX_OFFLINE: Unexpected error - " + errMsg);
         }
     }
 
     private SandboxResult fallbackToHostExecution(
-            Path workspaceRoot, List<String> command,
-            Map<String, String> requiredSecrets) throws Exception {
+            Path workspaceRoot, List<String> command, Map<String, String> requiredSecrets) throws Exception {
         log.warn("[SANDBOX] allow-insecure-fallback enabled - degrading to host execution");
         return SandboxResult.success(directExecutor.executeDirectly(
-                workspaceRoot, rewriteContainerPaths(command, workspaceRoot),
-                resolveFallbackSecrets(requiredSecrets)));
+                workspaceRoot, rewriteContainerPaths(command, workspaceRoot), resolveFallbackSecrets(requiredSecrets)));
     }
 
     private Map<String, byte[]> resolveFallbackSecrets(Map<String, String> requiredSecrets) {

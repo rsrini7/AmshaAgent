@@ -6,11 +6,11 @@ import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
+import jakarta.enterprise.inject.Instance;
+
 import java.time.Instant;
 import java.util.Optional;
 import java.util.stream.Stream;
-
-import jakarta.enterprise.inject.Instance;
 
 import com.arcclaw.channel.api.ChannelMessage;
 import com.arcclaw.channel.api.ChannelPlugin;
@@ -18,6 +18,7 @@ import com.arcclaw.channel.api.ChannelSender;
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ChannelUser;
 import com.arcclaw.core.channel.ChannelPluginRegistry;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -35,11 +36,11 @@ class MessagePipelineErrorTest {
         ChannelMessage msg = new ChannelMessage.CliMessage(user, "hello", "sid", Instant.now());
         sender = mock(ChannelSender.class);
         registry = mock(ChannelPluginRegistry.class);
-        
+
         ChannelPlugin plugin = mock(ChannelPlugin.class);
         when(plugin.sender()).thenReturn(sender);
         when(registry.find(any(ChannelType.class))).thenReturn(Optional.of(plugin));
-        
+
         context = new MessageContext("chat1", user, msg);
     }
 

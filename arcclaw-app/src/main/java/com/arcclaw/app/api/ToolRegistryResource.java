@@ -9,8 +9,10 @@ import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 
 import com.arcclaw.core.tools.ToolRegistry;
-import io.smallrye.common.annotation.RunOnVirtualThread;
+
 import org.eclipse.microprofile.openapi.annotations.Operation;
+
+import io.smallrye.common.annotation.RunOnVirtualThread;
 
 @ApplicationScoped
 @Path("/tools")
@@ -18,13 +20,12 @@ import org.eclipse.microprofile.openapi.annotations.Operation;
 @RunOnVirtualThread
 public class ToolRegistryResource {
 
-    @Inject ToolRegistry toolRegistry;
+    @Inject
+    ToolRegistry toolRegistry;
 
     @GET
     @Operation(summary = "Retrieve JSON schemas and descriptors for all registered agent tools")
     public Response listTools() {
-        return Response.ok(
-            toolRegistry.listToolDescriptors()
-        ).build();
+        return Response.ok(toolRegistry.listToolDescriptors()).build();
     }
 }

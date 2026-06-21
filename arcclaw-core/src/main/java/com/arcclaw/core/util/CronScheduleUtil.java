@@ -14,15 +14,13 @@ import com.cronutils.parser.CronParser;
  */
 public class CronScheduleUtil {
 
-    private static final CronParser UNIX_PARSER = new CronParser(
-            CronDefinitionBuilder.instanceDefinitionFor(CronType.UNIX));
+    private static final CronParser UNIX_PARSER =
+            new CronParser(CronDefinitionBuilder.instanceDefinitionFor(CronType.UNIX));
 
     public static Instant computeNext(String cronExpression, String timezone) {
-        ZonedDateTime next = ExecutionTime
-                .forCron(UNIX_PARSER.parse(cronExpression))
+        ZonedDateTime next = ExecutionTime.forCron(UNIX_PARSER.parse(cronExpression))
                 .nextExecution(ZonedDateTime.now(ZoneId.of(timezone)))
-                .orElseThrow(() -> new IllegalStateException(
-                        "No next execution for: " + cronExpression));
+                .orElseThrow(() -> new IllegalStateException("No next execution for: " + cronExpression));
         return next.toInstant();
     }
 }

@@ -46,12 +46,10 @@
     <dependency>
       <groupId>io.quarkiverse.mcp</groupId>
       <artifactId>quarkus-mcp-server-stdio</artifactId>
-      <version>1.10.3</version>
     </dependency>
     <dependency>
       <groupId>io.quarkiverse.mcp</groupId>
       <artifactId>quarkus-mcp-server-http</artifactId>
-      <version>1.10.3</version>
     </dependency>
     <dependency>
       <groupId>io.quarkus</groupId>
@@ -71,7 +69,6 @@
     <dependency>
         <groupId>org.wiremock</groupId>
         <artifactId>wiremock-standalone</artifactId>
-        <version>3.9.2</version>
         <scope>test</scope>
     </dependency>
   </dependencies>

@@ -27,6 +27,7 @@ import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.state.ToolDecision;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -63,19 +64,20 @@ class ApprovalStateMachineTest {
         when(agentStore.isCheckpointExpired("session-123", 24L)).thenReturn(false);
 
         doAnswer(invocation -> {
-            String tool = invocation.getArgument(2);
-            String decision = invocation.getArgument(3);
-            try {
-                Map<String, ToolDecision> map = objectMapper.readValue(
-                    cp.getBatchToolDecisions(),
-                    new TypeReference<Map<String, ToolDecision>>() {});
-                map.put(tool, ToolDecision.valueOf(decision));
-                cp.setBatchToolDecisions(objectMapper.writeValueAsString(map));
-            } catch (Exception e) {
-                throw new RuntimeException(e);
-            }
-            return true;
-        }).when(agentStore).updateBatchToolDecision(anyString(), anyString(), anyString(), anyString());
+                    String tool = invocation.getArgument(2);
+                    String decision = invocation.getArgument(3);
+                    try {
+                        Map<String, ToolDecision> map = objectMapper.readValue(
+                                cp.getBatchToolDecisions(), new TypeReference<Map<String, ToolDecision>>() {});
+                        map.put(tool, ToolDecision.valueOf(decision));
+                        cp.setBatchToolDecisions(objectMapper.writeValueAsString(map));
+                    } catch (Exception e) {
+                        throw new RuntimeException(e);
+                    }
+                    return true;
+                })
+                .when(agentStore)
+                .updateBatchToolDecision(anyString(), anyString(), anyString(), anyString());
     }
 
     private void mockTools(List<String> pending, List<String> all) {
@@ -98,7 +100,7 @@ class ApprovalStateMachineTest {
         when(agentStore.isAllBatchToolsDecided("session-123", "coder")).thenReturn(true);
 
         ApprovalResult result = stateMachine.decide("session-123", "github:read", ApprovalDecision.APPROVE, "test");
-        
+
         assertEquals(ApprovalOutcome.APPROVED, result.outcome());
         assertEquals("github:read", result.toolName());
         assertEquals(0, result.remainingPendingTools());
@@ -114,7 +116,7 @@ class ApprovalStateMachineTest {
         when(agentStore.isAllBatchToolsDecided("session-123", "coder")).thenReturn(true);
 
         ApprovalResult result = stateMachine.decide("session-123", "github:read", ApprovalDecision.REJECT, "test");
-        
+
         assertEquals(ApprovalOutcome.REJECTED, result.outcome());
         verify(agentStore).updateBatchToolDecision("session-123", "coder", "github:read", ToolDecision.DENIED.name());
     }
@@ -139,7 +141,7 @@ class ApprovalStateMachineTest {
         when(agentStore.isAllBatchToolsDecided("session-123", "coder")).thenReturn(false);
 
         ApprovalResult result = stateMachine.decide("session-123", "tool1", ApprovalDecision.APPROVE, "test");
-        
+
         assertEquals(ApprovalOutcome.PARTIAL_STILL_PENDING, result.outcome());
         assertEquals(2, result.remainingPendingTools());
     }
@@ -152,11 +154,11 @@ class ApprovalStateMachineTest {
         mockTools(List.of("tool2"), List.of("tool1", "tool2"));
         // Manually set tool1 to DENIED in the JSON
         cp.setBatchToolDecisions("{\"tool1\":\"DENIED\",\"tool2\":\"PENDING\"}");
-        
+
         when(agentStore.isAllBatchToolsDecided("session-123", "coder")).thenReturn(true);
 
         ApprovalResult result = stateMachine.decide("session-123", "tool2", ApprovalDecision.APPROVE, "test");
-        
+
         assertEquals(ApprovalOutcome.APPROVED, result.outcome());
         verify(resumeHandler).resumeAfterBatchDecision(any(), any(), any(), any(), any());
     }
@@ -168,11 +170,11 @@ class ApprovalStateMachineTest {
         // Now denying tool2.
         mockTools(List.of("tool2"), List.of("tool1", "tool2"));
         cp.setBatchToolDecisions("{\"tool1\":\"DENIED\",\"tool2\":\"PENDING\"}");
-        
+
         when(agentStore.isAllBatchToolsDecided("session-123", "coder")).thenReturn(true);
 
         ApprovalResult result = stateMachine.decide("session-123", "tool2", ApprovalDecision.REJECT, "test");
-        
+
         assertEquals(ApprovalOutcome.REJECTED, result.outcome());
     }
 

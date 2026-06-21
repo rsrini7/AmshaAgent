@@ -23,7 +23,8 @@ public interface PolicyConfig {
          * Regex patterns that flag a message as destructive.
          * Each pattern is compiled with {@code CASE_INSENSITIVE} flag.
          */
-        @WithDefault("\"(?i)\\b(delete|remove|purge|drop|chmod|truncate|wipe|erase|destroy|archive|rename)\\b\",\"(?i)\\brm\\s*-?\\s*rf\\b\"")
+        @WithDefault(
+                "\"(?i)\\b(delete|remove|purge|drop|chmod|truncate|wipe|erase|destroy|archive|rename)\\b\",\"(?i)\\brm\\s*-?\\s*rf\\b\"")
         List<String> patterns();
 
         /**

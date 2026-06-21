@@ -23,10 +23,12 @@ public class CheckpointStatusTest {
     @Test
     public void testTerminalStatusesConsistency() {
         Set<CheckpointStatus> terminalSet = CheckpointStatus.terminalStatuses();
-        
+
         for (CheckpointStatus status : CheckpointStatus.values()) {
-            assertEquals(status.isTerminal(), terminalSet.contains(status),
-                "isTerminal() and terminalStatuses() mismatch for: " + status);
+            assertEquals(
+                    status.isTerminal(),
+                    terminalSet.contains(status),
+                    "isTerminal() and terminalStatuses() mismatch for: " + status);
         }
     }
 
@@ -39,21 +41,22 @@ public class CheckpointStatusTest {
     @Test
     public void testTerminalLifecycleSnapshot() {
         Set<CheckpointStatus> terminalStatuses = CheckpointStatus.terminalStatuses();
-        
-        Set<CheckpointStatus> expectedTerminal = Set.of(
-            CheckpointStatus.COMPLETED,
-            CheckpointStatus.FAILED,
-            CheckpointStatus.LOOP_EXCEEDED,
-            CheckpointStatus.DENIED,
-            CheckpointStatus.COMPROMISED,
-            CheckpointStatus.ARCHIVED,
-            CheckpointStatus.ORPHANED,
-            CheckpointStatus.RESUMING
-        );
 
-        assertEquals(expectedTerminal, terminalStatuses,
-            "Terminal status set has changed. This snapshot test must be explicitly updated " +
-            "to acknowledge the change in terminal lifecycle states. §7.36");
+        Set<CheckpointStatus> expectedTerminal = Set.of(
+                CheckpointStatus.COMPLETED,
+                CheckpointStatus.FAILED,
+                CheckpointStatus.LOOP_EXCEEDED,
+                CheckpointStatus.DENIED,
+                CheckpointStatus.COMPROMISED,
+                CheckpointStatus.ARCHIVED,
+                CheckpointStatus.ORPHANED,
+                CheckpointStatus.RESUMING);
+
+        assertEquals(
+                expectedTerminal,
+                terminalStatuses,
+                "Terminal status set has changed. This snapshot test must be explicitly updated "
+                        + "to acknowledge the change in terminal lifecycle states. §7.36");
     }
 
     /**
@@ -62,19 +65,20 @@ public class CheckpointStatusTest {
     @Test
     public void testNonTerminalStatusesSnapshot() {
         Set<CheckpointStatus> nonTerminal = Arrays.stream(CheckpointStatus.values())
-            .filter(s -> !s.isTerminal())
-            .collect(Collectors.toSet());
+                .filter(s -> !s.isTerminal())
+                .collect(Collectors.toSet());
 
         Set<CheckpointStatus> expectedNonTerminal = Set.of(
-            CheckpointStatus.NOT_STARTED,
-            CheckpointStatus.IN_PROGRESS,
-            CheckpointStatus.AWAITING_APPROVAL,
-            CheckpointStatus.AWAITING_RETRY,
-            CheckpointStatus.APPROVED
-        );
+                CheckpointStatus.NOT_STARTED,
+                CheckpointStatus.IN_PROGRESS,
+                CheckpointStatus.AWAITING_APPROVAL,
+                CheckpointStatus.AWAITING_RETRY,
+                CheckpointStatus.APPROVED);
 
-        assertEquals(expectedNonTerminal, nonTerminal,
-            "Non-terminal status set has changed. New statuses must be explicitly " +
-            "classified as terminal or non-terminal in this snapshot test. §7.36");
+        assertEquals(
+                expectedNonTerminal,
+                nonTerminal,
+                "Non-terminal status set has changed. New statuses must be explicitly "
+                        + "classified as terminal or non-terminal in this snapshot test. §7.36");
     }
 }

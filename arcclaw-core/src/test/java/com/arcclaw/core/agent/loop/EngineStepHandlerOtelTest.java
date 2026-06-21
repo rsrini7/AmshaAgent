@@ -6,10 +6,10 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import jakarta.inject.Inject;
+
 import java.util.Collections;
 import java.util.Map;
-
-import jakarta.inject.Inject;
 
 import com.arcclaw.core.agent.reasoning.ReasoningEngine;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
@@ -17,9 +17,11 @@ import com.arcclaw.core.agent.reasoning.StructuredOutputMode;
 import com.arcclaw.core.governance.GovernanceStrategy;
 import com.arcclaw.core.observability.AgentOtelContext;
 import com.arcclaw.core.security.AutonomyLevel;
+
+import org.junit.jupiter.api.Test;
+
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
-import org.junit.jupiter.api.Test;
 
 @QuarkusTest
 public class EngineStepHandlerOtelTest {
@@ -43,7 +45,20 @@ public class EngineStepHandlerOtelTest {
         when(engine.nextStep(any(), anyString(), anyString(), any())).thenReturn(step);
 
         // Act
-        AgentExecutionContext context = new AgentExecutionContext("test-session", "user", "chat", "coordinator", "goal", AutonomyLevel.FULL, StructuredOutputMode.NATIVE, 5, 0, null, null, null, null);
+        AgentExecutionContext context = new AgentExecutionContext(
+                "test-session",
+                "user",
+                "chat",
+                "coordinator",
+                "goal",
+                AutonomyLevel.FULL,
+                StructuredOutputMode.NATIVE,
+                5,
+                0,
+                null,
+                null,
+                null,
+                null);
         handler.processEngineStep(context, engine, Collections.emptyList(), null, 0, 1);
 
         // Assert

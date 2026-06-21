@@ -5,12 +5,14 @@ import static org.junit.jupiter.api.Assertions.*;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.tools.ToolResponse;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
+@SuppressWarnings("java:S1192")
 class PersonaEscalationServiceTest {
 
     private PersonaEscalationService service;
@@ -79,19 +81,22 @@ class PersonaEscalationServiceTest {
 
     @Test
     void determineEscalationTarget_shiva_insufficientInfo_toSaraswati() {
-        String target = service.determineEscalationTarget("debugger", "insufficient information to determine root cause", null);
+        String target =
+                service.determineEscalationTarget("debugger", "insufficient information to determine root cause", null);
         assertEquals("researcher", target);
     }
 
     @Test
     void determineEscalationTarget_shiva_fundamentalFlaw_toBrahma() {
-        String target = service.determineEscalationTarget("debugger", "fundamental flaw in design, needs to be rewritten", null);
+        String target = service.determineEscalationTarget(
+                "debugger", "fundamental flaw in design, needs to be rewritten", null);
         assertEquals("coder", target);
     }
 
     @Test
     void determineEscalationTarget_shiva_architectureIssue_toBrahma() {
-        String target = service.determineEscalationTarget("debugger", "architecture issue requires complete rewrite", null);
+        String target =
+                service.determineEscalationTarget("debugger", "architecture issue requires complete rewrite", null);
         assertEquals("coder", target);
     }
 
@@ -103,7 +108,8 @@ class PersonaEscalationServiceTest {
 
     @Test
     void determineEscalationTarget_shiva_securityVulnerability_toKartikeya() {
-        String target = service.determineEscalationTarget("debugger", "dummy", "found a security vulnerability in the code");
+        String target =
+                service.determineEscalationTarget("debugger", "dummy", "found a security vulnerability in the code");
         assertEquals("sentinel", target);
     }
 
@@ -138,8 +144,14 @@ class PersonaEscalationServiceTest {
     }
 
     @Test
-    void determineEscalationTarget_noMatch_returnsNull() {
-        String target = service.determineEscalationTarget("coder", "simple syntax error", null);
+    void determineEscalationTarget_sandboxCodeError_escalatesToDebugger() {
+        String target = service.determineEscalationTarget("coder", "simple syntax error in line 5", null);
+        assertEquals("debugger", target);
+    }
+
+    @Test
+    void determineEscalationTarget_nonSandboxError_returnsNull() {
+        String target = service.determineEscalationTarget("coordinator", "rate limit exceeded", null);
         assertNull(target);
     }
 
@@ -170,7 +182,8 @@ class PersonaEscalationServiceTest {
 
     @Test
     void determineEscalationTarget_ganesha_securityIssue_toKartikeya() {
-        String target = service.determineEscalationTarget("optimizer", "dummy", "this logic has a security vulnerability");
+        String target =
+                service.determineEscalationTarget("optimizer", "dummy", "this logic has a security vulnerability");
         assertEquals("sentinel", target);
     }
 
@@ -195,7 +208,8 @@ class PersonaEscalationServiceTest {
 
     @Test
     void determineEscalationTarget_kartikeya_complexLogic_toGanesha() {
-        String target = service.determineEscalationTarget("sentinel", "dummy", "this requires complex algorithm analysis");
+        String target =
+                service.determineEscalationTarget("sentinel", "dummy", "this requires complex algorithm analysis");
         assertEquals("optimizer", target);
     }
 
@@ -260,8 +274,8 @@ class PersonaEscalationServiceTest {
     @Test
     void buildEscalationGoal_containsSourceAndTarget() {
         String goal = service.buildEscalationGoal("coder", "researcher", "cannot find symbol", "use List", null, null);
-        assertTrue(goal.contains("ESCALATION FROM Brahma (Coder)"));
-        assertTrue(goal.contains("Saraswati (Researcher)"));
+        assertTrue(goal.contains("ESCALATION FROM Brahma (The Creator)"));
+        assertTrue(goal.contains("Saraswati (The Researcher)"));
     }
 
     @Test
@@ -272,7 +286,8 @@ class PersonaEscalationServiceTest {
 
     @Test
     void buildEscalationGoal_containsCodeWhenProvided() {
-        String goal = service.buildEscalationGoal("coder", "researcher", "error", "goal", "public class Main {}", "java");
+        String goal =
+                service.buildEscalationGoal("coder", "researcher", "error", "goal", "public class Main {}", "java");
         assertTrue(goal.contains("public class Main {}"));
         assertTrue(goal.contains("java"));
     }
@@ -322,7 +337,8 @@ class PersonaEscalationServiceTest {
 
     @Test
     void formatAgentResultError_awaitingApproval() {
-        AgentResult result = AgentResult.awaitingApproval(ToolCapability.SANDBOX_EXEC.toolName(), "null", "sess1", null);
+        AgentResult result =
+                AgentResult.awaitingApproval(ToolCapability.SANDBOX_EXEC.toolName(), "null", "sess1", null);
         String msg = service.formatAgentResultError(result);
         assertTrue(msg.contains("requires human approval"));
     }

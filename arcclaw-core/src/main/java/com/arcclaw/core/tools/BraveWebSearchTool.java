@@ -1,5 +1,11 @@
 package com.arcclaw.core.tools;
 
+import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
+
+import jakarta.annotation.PostConstruct;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+
 import java.net.URI;
 import java.net.URLEncoder;
 import java.net.http.HttpClient;
@@ -9,10 +15,6 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Map;
 
-import jakarta.annotation.PostConstruct;
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
-
 import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.agent.role.ToolMetadata;
 import com.arcclaw.core.audit.AuditService;
@@ -21,7 +23,7 @@ import com.arcclaw.core.security.SecretVault;
 import com.arcclaw.core.security.ToolOperation;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
+
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 /**
@@ -30,10 +32,9 @@ import org.eclipse.microprofile.config.inject.ConfigProperty;
  */
 @ApplicationScoped
 @ToolMetadata(
-    capabilityId = "brave_web_search",
-    description = "Search the web for real-time information using the Brave API",
-    defaultRoles = {"researcher", "synthesizer"}
-)
+        capabilityId = "brave_web_search",
+        description = "Search the web for real-time information using the Brave API",
+        defaultRoles = {"researcher", "synthesizer"})
 public class BraveWebSearchTool implements AgentTool {
 
     @ConfigProperty(name = "arcclaw.tools.brave.api-key", defaultValue = "none")
@@ -44,12 +45,12 @@ public class BraveWebSearchTool implements AgentTool {
 
     private String getApiKey() {
         return vault.retrieveSystemKey("ARCCLAW_TOOLS_BRAVE_API_KEY")
-            .map(vk -> {
-                try (vk) {
-                    return new String(vk.get(), StandardCharsets.UTF_8);
-                }
-            })
-            .orElse(configApiKey);
+                .map(vk -> {
+                    try (vk) {
+                        return new String(vk.get(), StandardCharsets.UTF_8);
+                    }
+                })
+                .orElse(configApiKey);
     }
 
     @Inject
@@ -64,9 +65,8 @@ public class BraveWebSearchTool implements AgentTool {
 
     @PostConstruct
     void init() {
-        httpClient = HttpClient.newBuilder()
-            .connectTimeout(Duration.ofSeconds(10))
-            .build();
+        httpClient =
+                HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build();
     }
 
     @Override
@@ -94,7 +94,6 @@ public class BraveWebSearchTool implements AgentTool {
         return IdempotencyMode.IDEMPOTENT;
     }
 
-
     @Override
     public boolean isEnabled() {
         // Invariant: Use existence check instead of decryption during startup/init.
@@ -108,10 +107,10 @@ public class BraveWebSearchTool implements AgentTool {
     @Override
     public JsonObjectSchema parametersSchema() {
         return JsonObjectSchema.builder()
-            .addStringProperty("query", "The search query to send to Brave.")
-            .addIntegerProperty("count", "Number of results (1-20). Default: 5.") // Added (Fix I2)
-            .required("query")
-            .build();
+                .addStringProperty("query", "The search query to send to Brave.")
+                .addIntegerProperty("count", "Number of results (1-20). Default: 5.") // Added (Fix I2)
+                .required("query")
+                .build();
     }
 
     @Override
@@ -119,7 +118,7 @@ public class BraveWebSearchTool implements AgentTool {
         String userId = ctx.userId();
         String sessionId = ctx.sessionId();
         String agentRole = ctx.agentRole();
- 
+
         String query = (String) params.get("query");
         if (userId == null || userId.isBlank()) {
             return ToolResponse.failure(403, "Forbidden: userId is required for Brave web search.");
@@ -129,7 +128,8 @@ public class BraveWebSearchTool implements AgentTool {
         }
 
         if (!isEnabled()) {
-            return ToolResponse.failure(503, "Brave Search is not configured. (arcclaw.tools.brave.api-key is missing)");
+            return ToolResponse.failure(
+                    503, "Brave Search is not configured. (arcclaw.tools.brave.api-key is missing)");
         }
 
         // Support count parameter (Fix I2)
@@ -146,47 +146,52 @@ public class BraveWebSearchTool implements AgentTool {
             URI uri = URI.create(BRAVE_API_URL + "?q=" + encodedQuery + "&count=" + count);
 
             HttpRequest request = HttpRequest.newBuilder()
-                .uri(uri)
-                .header("Accept", "application/json")
-                .header("X-Subscription-Token", getApiKey())
-                .GET()
-                .build();
+                    .uri(uri)
+                    .header("Accept", "application/json")
+                    .header("X-Subscription-Token", getApiKey())
+                    .GET()
+                    .build();
 
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-            
+
             if (response.statusCode() != 200) {
-                 return ToolResponse.failure(response.statusCode(), "Brave Search API failed: " + response.body());
+                return ToolResponse.failure(response.statusCode(), "Brave Search API failed: " + response.body());
             }
 
             // Always audit even if zero results (Fix I3)
-            auditService.record(sessionId, userId, agentRole, 
-                SecurityEventType.TOOL_EXECUTED, "Web search: " + query);
+            auditService.record(sessionId, userId, agentRole, SecurityEventType.TOOL_EXECUTED, "Web search: " + query);
 
             JsonNode root = objectMapper.readTree(response.body());
             JsonNode results = root.path("web").path("results");
-            
+
             StringBuilder sb = new StringBuilder();
             sb.append("Web Search results for: \"").append(query).append("\"\n\n");
 
             if (results.isArray()) {
                 for (int i = 0; i < results.size(); i++) {
                     JsonNode result = results.get(i);
-                    sb.append("Title: ").append(result.path("title").asText("Untitled")).append("\n");
-                    sb.append("URL:   ").append(result.path("url").asText("Unknown URL")).append("\n");
-                    sb.append("Description: ").append(result.path("description").asText("No snippet available.")).append("\n\n");
+                    sb.append("Title: ")
+                            .append(result.path("title").asText("Untitled"))
+                            .append("\n");
+                    sb.append("URL:   ")
+                            .append(result.path("url").asText("Unknown URL"))
+                            .append("\n");
+                    sb.append("Description: ")
+                            .append(result.path("description").asText("No snippet available."))
+                            .append("\n\n");
                 }
             }
 
             String fullResult = sb.toString().trim();
-            if (fullResult.length() < 50) { 
-                 return ToolResponse.success("No results found for your query.");
+            if (fullResult.length() < 50) {
+                return ToolResponse.success("No results found for your query.");
             }
 
             // Implement response truncation (Fix I4)
             if (fullResult.length() > 4096) {
                 int lastNewline = fullResult.lastIndexOf("\n\n", 4096);
                 fullResult = (lastNewline > 0 ? fullResult.substring(0, lastNewline) : fullResult.substring(0, 4096))
-                             + "\n[results truncated]";
+                        + "\n[results truncated]";
             }
 
             return ToolResponse.success(fullResult);

@@ -5,20 +5,22 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import jakarta.inject.Inject;
+
 import java.util.ArrayList;
 import java.util.Optional;
-
-import jakarta.inject.Inject;
 
 import com.arcclaw.core.agent.reasoning.ReasoningEngine;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.channel.ChannelPluginRegistry;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.state.StatefulAgentStore;
-import io.quarkus.test.InjectMock;
-import io.quarkus.test.junit.QuarkusTest;
+
 import org.eclipse.microprofile.context.ManagedExecutor;
 import org.junit.jupiter.api.Test;
+
+import io.quarkus.test.InjectMock;
+import io.quarkus.test.junit.QuarkusTest;
 
 @QuarkusTest
 class CheckpointResumeHandlerTest {
@@ -52,7 +54,8 @@ class CheckpointResumeHandlerTest {
         MessageContext ctx = mock(MessageContext.class);
         when(ctx.isResumeSignal()).thenReturn(false);
 
-        AgentResult result = handler.handle(mock(AgentExecutionContext.class), new ArrayList<>(), ctx, stateMachineRunner);
+        AgentResult result =
+                handler.handle(mock(AgentExecutionContext.class), new ArrayList<>(), ctx, stateMachineRunner);
         assertNull(result);
     }
 

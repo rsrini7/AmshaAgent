@@ -13,24 +13,24 @@ Instance A → Instance B flow:
 6. Instance B resumes checkpoint, completes task, POSTs `{type: "TaskCompleted", result: SynthesisResult}` to Instance A's `callbackUrl`
 7. Instance A reconstitutes state from `A2ASuspendedCorrelationEntity`, merges result, continues local `AgentLoop`
 
-**State persistence on Instance A - `A2ASuspendedCorrelationEntity`:**
+**State persistence on Instance A - `A2ASuspendedCorrelationDto`:**
 
-Standard Hibernate `@Entity` per Architecture Nuance #11. References existing `AgentCheckpoint` by FK - no state duplication.
+JDBI DTO record per hexagonal architecture pattern. References existing `AgentCheckpoint` by FK - no state duplication.
 
 ```java
-@Entity
-@Table(name = "a2a_suspended_correlation")
-public class A2ASuspendedCorrelationEntity {
-    @Id String correlationId;
-    String sessionId;
-    String checkpointId;  // FK to agent_checkpoint
-    String remoteInstanceUrl;
-    String callbackUrl;
-    String status;        // PENDING / RESUMED / TIMED_OUT
-    @Convert(converter = InstantToTextConverter.class) Instant expiresAt;
-    @Convert(converter = InstantToTextConverter.class) Instant createdAt;
-}
+public record A2ASuspendedCorrelationDto(
+    String correlationId,
+    String sessionId,
+    String checkpointId,  // FK to agent_checkpoint
+    String remoteInstanceUrl,
+    String callbackUrl,
+    String status,        // PENDING / RESUMED / TIMED_OUT
+    Instant expiresAt,
+    Instant createdAt
+) {}
 ```
+
+With JDBI DAO (`A2ASuspendedCorrelationJdbiDao`) using `@RegisterConstructorMapper` and Flyway migration for the `a2a_suspended_correlation` table.
 
 **Authentication - Ed25519 JWT via BouncyCastle + Nimbus:**
 
@@ -80,7 +80,7 @@ List<Future<AgentResult>> futures = tasks.stream()
   "a2aEndpoint": "https://host/a2a",
   "mcpEndpoint": "https://host/mcp",
   "capabilities": ["code-reviewer", "researcher"],
-  "toolRoster": ["memory_search", "github"],
+  "toolRoster": ["recall_memory_search", "archival_memory_search", "github"],
   "publicKeyJwk": { "kty": "OKP", "crv": "Ed25519", "x": "..." }
 }
 ```
@@ -97,7 +97,7 @@ List<Future<AgentResult>> futures = tasks.stream()
 
 | # | Phase | Mandate | Source |
 |---|-------|---------|--------|
-| 8 | P63 | `A2ASuspendedCorrelationEntity` (`@Entity`, Hibernate-managed) references existing `AgentCheckpoint` by FK | Gemini Blind Spot 3 + Perplexity |
+| 8 | P63 | `A2ASuspendedCorrelationDto` (JDBI record) references existing `AgentCheckpoint` by FK | Gemini Blind Spot 3 + Perplexity |
 | 9 | P63 | `nimbus-jose-jwt:9.37.3` for JWT wrapping; BouncyCastle for Ed25519 key gen; `quarkus-smallrye-jwt` excluded | Perplexity Gap 7 |
 
 

@@ -5,10 +5,12 @@ import java.util.concurrent.Callable;
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.util.MdcKeys;
-import io.quarkus.arc.Arc;
-import io.quarkus.arc.ManagedContext;
+
 import org.jboss.logging.Logger;
 import org.jboss.logging.MDC;
+
+import io.quarkus.arc.Arc;
+import io.quarkus.arc.ManagedContext;
 
 /**
  * Scoped value holder for the current workspace session ID.
@@ -79,19 +81,20 @@ public final class WorkspaceScopeHolder {
     public static void run(String sessionId, String userId, String chatId, Runnable runnable) {
         validate(sessionId);
         if (userId != null || chatId != null) {
-            LOG.debugf("Binding session: %s [user=%s, chat=%s] on thread: %s", 
-                sessionId, userId, chatId, Thread.currentThread());
+            LOG.debugf(
+                    "Binding session: %s [user=%s, chat=%s] on thread: %s",
+                    sessionId, userId, chatId, Thread.currentThread());
         }
-        
+
         MDC.put(MdcKeys.SESSION_ID, sessionId);
         if (userId != null) MDC.put(MdcKeys.USER_ID, userId);
         if (chatId != null) MDC.put(MdcKeys.CHAT_ID, chatId);
-        
+
         var container = Arc.container();
         ManagedContext requestContext = container != null ? container.requestContext() : null;
         boolean wasActive = requestContext != null && requestContext.isActive();
         if (requestContext != null && !wasActive) requestContext.activate();
-        
+
         try {
             var scope = ScopedValue.where(WORKSPACE_ID, sessionId);
             if (userId != null) {
@@ -116,19 +119,20 @@ public final class WorkspaceScopeHolder {
     public static <T> T call(String sessionId, String userId, String chatId, Callable<T> callable) throws Exception {
         validate(sessionId);
         if (userId != null || chatId != null) {
-            LOG.debugf("Binding session: %s [user=%s, chat=%s] on thread: %s", 
-                sessionId, userId, chatId, Thread.currentThread());
+            LOG.debugf(
+                    "Binding session: %s [user=%s, chat=%s] on thread: %s",
+                    sessionId, userId, chatId, Thread.currentThread());
         }
-        
+
         MDC.put(MdcKeys.SESSION_ID, sessionId);
         if (userId != null) MDC.put(MdcKeys.USER_ID, userId);
         if (chatId != null) MDC.put(MdcKeys.CHAT_ID, chatId);
-        
+
         var container = Arc.container();
         ManagedContext requestContext = container != null ? container.requestContext() : null;
         boolean wasActive = requestContext != null && requestContext.isActive();
         if (requestContext != null && !wasActive) requestContext.activate();
-        
+
         try {
             var scope = ScopedValue.where(WORKSPACE_ID, sessionId);
             if (userId != null) {
@@ -165,11 +169,13 @@ public final class WorkspaceScopeHolder {
         AutonomyLevel autonomy = WorkspaceContext.AUTONOMY.isBound() ? WorkspaceContext.AUTONOMY.get() : null;
         String agentRole = WorkspaceContext.AGENT_ROLE.isBound() ? WorkspaceContext.AGENT_ROLE.get() : null;
         String channelType = WorkspaceContext.CHANNEL_TYPE.isBound() ? WorkspaceContext.CHANNEL_TYPE.get() : null;
-        String platformId = WorkspaceContext.CHANNEL_PLATFORM_ID.isBound() ? WorkspaceContext.CHANNEL_PLATFORM_ID.get() : null;
+        String platformId =
+                WorkspaceContext.CHANNEL_PLATFORM_ID.isBound() ? WorkspaceContext.CHANNEL_PLATFORM_ID.get() : null;
 
         return () -> {
             if (channelType != null) {
-                WorkspaceContext.run(sessionId, finalUserId, finalChatId, autonomy, agentRole, channelType, platformId, runnable);
+                WorkspaceContext.run(
+                        sessionId, finalUserId, finalChatId, autonomy, agentRole, channelType, platformId, runnable);
             } else if (autonomy != null && agentRole != null) {
                 WorkspaceContext.run(sessionId, finalUserId, finalChatId, autonomy, agentRole, runnable);
             } else {
@@ -196,7 +202,8 @@ public final class WorkspaceScopeHolder {
         AutonomyLevel autonomy = WorkspaceContext.AUTONOMY.isBound() ? WorkspaceContext.AUTONOMY.get() : null;
         String agentRole = WorkspaceContext.AGENT_ROLE.isBound() ? WorkspaceContext.AGENT_ROLE.get() : null;
         String channelType = WorkspaceContext.CHANNEL_TYPE.isBound() ? WorkspaceContext.CHANNEL_TYPE.get() : null;
-        String platformId = WorkspaceContext.CHANNEL_PLATFORM_ID.isBound() ? WorkspaceContext.CHANNEL_PLATFORM_ID.get() : null;
+        String platformId =
+                WorkspaceContext.CHANNEL_PLATFORM_ID.isBound() ? WorkspaceContext.CHANNEL_PLATFORM_ID.get() : null;
 
         return () -> {
             if (channelType != null) {
@@ -205,10 +212,21 @@ public final class WorkspaceScopeHolder {
                 String validatedChannel = ChannelType.fromString(channelType)
                         .map(ChannelType::name)
                         .orElseGet(() -> {
-                            Logger.getLogger(WorkspaceScopeHolder.class).warnf("Unrecognized channel type '%s' requested for session %s, defaulting to UNKNOWN", channelType, sessionId);
+                            Logger.getLogger(WorkspaceScopeHolder.class)
+                                    .warnf(
+                                            "Unrecognized channel type '%s' requested for session %s, defaulting to UNKNOWN",
+                                            channelType, sessionId);
                             return "UNKNOWN";
                         });
-                return WorkspaceContext.run(sessionId, finalUserId, finalChatId, autonomy, agentRole, validatedChannel, platformId, callable);
+                return WorkspaceContext.run(
+                        sessionId,
+                        finalUserId,
+                        finalChatId,
+                        autonomy,
+                        agentRole,
+                        validatedChannel,
+                        platformId,
+                        callable);
             } else if (autonomy != null && agentRole != null) {
                 return WorkspaceContext.run(sessionId, finalUserId, finalChatId, autonomy, agentRole, callable);
             } else {

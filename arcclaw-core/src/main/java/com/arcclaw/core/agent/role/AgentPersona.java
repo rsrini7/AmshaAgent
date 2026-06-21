@@ -1,5 +1,6 @@
 package com.arcclaw.core.agent.role;
 
+import java.util.Locale;
 import java.util.Optional;
 import java.util.Set;
 
@@ -48,11 +49,11 @@ public enum AgentPersona {
      */
     public static Optional<AgentPersona> fromString(String name) {
         if (name == null || name.isBlank()) return Optional.empty();
-        String n = name.trim().toLowerCase();
+        String n = name.trim().toLowerCase(Locale.ROOT);
         for (AgentPersona p : values()) {
-            if (p.name().toLowerCase().equals(n) 
-                || p.roleId.equals(n) 
-                || p.aliases.stream().anyMatch(a -> a.equals(n))) {
+            if (p.name().toLowerCase(Locale.ROOT).equals(n)
+                    || p.roleId.equals(n)
+                    || p.aliases.stream().anyMatch(a -> a.equals(n))) {
                 return Optional.of(p);
             }
         }

@@ -10,9 +10,11 @@ import com.tngtech.archunit.lang.ArchRule;
 class TelegramChannelArchitectureTest {
 
     @ArchTest
-    static final ArchRule telegram_channel_must_not_depend_on_core_internals =
-        noClasses().that().resideInAPackage("com.arcclaw.channel.telegram..")
-            .should().dependOnClassesThat()
+    static final ArchRule telegram_channel_must_not_depend_on_core_internals = noClasses()
+            .that()
+            .resideInAPackage("com.arcclaw.channel.telegram..")
+            .should()
+            .dependOnClassesThat()
             .resideInAPackage("com.arcclaw.core..")
             .allowEmptyShould(true)
             .because("Telegram channel must only depend on arcclaw-channel-api SPI.");

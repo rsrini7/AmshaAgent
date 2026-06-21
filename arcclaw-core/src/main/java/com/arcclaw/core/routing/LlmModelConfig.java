@@ -19,12 +19,11 @@ public record LlmModelConfig(
         Optional<Duration> timeout,
         Optional<Integer> maxRetries,
         StructuredOutputMode structuredOutputMode,
-        boolean toolless
-) {
+        boolean toolless) {
     public LlmModelConfig {
-        Objects.requireNonNull(provider,   "provider");
-        Objects.requireNonNull(modelName,  "modelName");
-        Objects.requireNonNull(baseUrl,    "baseUrl");
+        Objects.requireNonNull(provider, "provider");
+        Objects.requireNonNull(modelName, "modelName");
+        Objects.requireNonNull(baseUrl, "baseUrl");
         Objects.requireNonNull(structuredOutputMode, "structuredOutputMode");
     }
 }

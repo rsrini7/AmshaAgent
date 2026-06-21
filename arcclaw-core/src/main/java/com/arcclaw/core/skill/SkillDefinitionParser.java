@@ -1,8 +1,8 @@
 package com.arcclaw.core.skill;
 
-import java.util.List;
-
 import jakarta.enterprise.context.ApplicationScoped;
+
+import java.util.List;
 
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -15,17 +15,16 @@ import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 @ApplicationScoped
 public class SkillDefinitionParser {
 
-    /** 
+    /**
      * Uses YAMLFactory. Do NOT use plain ObjectMapper (which expects JSON)
      * and do NOT disable fail-on-unknown properties (to catch schema drift).
      */
     private static final ObjectMapper YAML_MAPPER =
-        new ObjectMapper(new YAMLFactory())
-            .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+            new ObjectMapper(new YAMLFactory()).configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
 
     /**
      * Parses a skill document in two-block format.
-     * 
+     *
      * @param rawText the raw skill file content
      * @return a validated SkillDefinition
      * @throws IllegalArgumentException if the document layout or YAML is malformed
@@ -40,8 +39,7 @@ public class SkillDefinitionParser {
         String[] parts = rawText.split("(?m)^---\\s*$", 3);
         if (parts.length < 3) {
             throw new IllegalArgumentException(
-                "Skill document must have exactly two --- delimiters (found " + parts.length + " sections)"
-            );
+                    "Skill document must have exactly two --- delimiters (found " + parts.length + " sections)");
         }
 
         String frontmatterYaml = parts[1].trim();
@@ -51,9 +49,7 @@ public class SkillDefinitionParser {
         try {
             fm = YAML_MAPPER.readValue(frontmatterYaml, SkillFrontmatter.class);
         } catch (Exception e) {
-            throw new IllegalArgumentException(
-                "Failed to parse skill frontmatter YAML: " + e.getMessage(), e
-            );
+            throw new IllegalArgumentException("Failed to parse skill frontmatter YAML: " + e.getMessage(), e);
         }
 
         if (fm == null) {
@@ -61,13 +57,12 @@ public class SkillDefinitionParser {
         }
 
         return new SkillDefinition(
-            null, // Auto-generate UUID
-            fm.name(),
-            fm.description(),
-            fm.triggerPatterns() != null ? fm.triggerPatterns() : List.of(),
-            fm.toolCapabilities() != null ? fm.toolCapabilities() : List.of(),
-            fm.maxIterations() > 0 ? fm.maxIterations() : 5,
-            systemPromptBody
-        );
+                null, // Auto-generate UUID
+                fm.name(),
+                fm.description(),
+                fm.triggerPatterns() != null ? fm.triggerPatterns() : List.of(),
+                fm.toolCapabilities() != null ? fm.toolCapabilities() : List.of(),
+                fm.maxIterations() > 0 ? fm.maxIterations() : 5,
+                systemPromptBody);
     }
 }

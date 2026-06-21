@@ -1,12 +1,13 @@
 package com.arcclaw.core.config;
 
-import java.io.File;
-
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
 
-import io.quarkus.runtime.StartupEvent;
+import java.io.File;
+
 import org.eclipse.microprofile.config.inject.ConfigProperty;
+
+import io.quarkus.runtime.StartupEvent;
 
 @ApplicationScoped
 public class DataDirectoryInitializer {
@@ -17,6 +18,6 @@ public class DataDirectoryInitializer {
     // This runs the millisecond Quarkus boots, before any database connection is established
     void onStart(@Observes StartupEvent ev) {
         // Create both: the data root (for SQLite) and the workspaces dir (for agents)
-        new File(workspaceRootDir).mkdirs();  // implicitly creates ./data parent too
+        new File(workspaceRootDir).mkdirs(); // implicitly creates ./data parent too
     }
 }

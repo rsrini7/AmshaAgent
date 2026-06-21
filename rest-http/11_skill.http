@@ -77,7 +77,8 @@ trigger-patterns:
   - "security.*audit"
 tool-capabilities:
   - GITHUB
-  - MEMORY_SEARCH
+  - RECALL_MEMORY_SEARCH
+  - ARCHIVAL_MEMORY_SEARCH
 max-iterations: 5
 ---
 You are a meticulous code reviewer with deep expertise in Java security.
@@ -106,7 +107,8 @@ trigger-patterns:
   - ".*algorithm.*complexity"
 tool-capabilities:
   - GITHUB
-  - MEMORY_SEARCH
+  - RECALL_MEMORY_SEARCH
+  - ARCHIVAL_MEMORY_SEARCH
 max-iterations: 7
 ---
 You are Saraswati, the knowledge agent. Research technical topics thoroughly.
@@ -145,9 +147,9 @@ trigger-patterns:
   - "review.*pull.?request"
   - "security.*audit"
   - "owasp.*review"
-tool-capabilities:
+  - RECALL_MEMORY_SEARCH
+  - ARCHIVAL_MEMORY_SEARCH
   - GITHUB
-  - MEMORY_SEARCH
 max-iterations: 6
 ---
 You are a security-focused code reviewer. Prioritise: OWASP Top 10, injection vectors,

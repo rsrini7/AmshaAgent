@@ -1,5 +1,6 @@
 package com.arcclaw.core.util;
 
+import java.util.Locale;
 import java.util.regex.Pattern;
 
 /**
@@ -16,10 +17,12 @@ public class FuzzyMatcher {
      */
     public static boolean isClose(String input, String target) {
         if (input == null || target == null) return false;
-        int dist = distance(input.toLowerCase().trim(), target.toLowerCase().trim());
-        
+        int dist = distance(
+                input.toLowerCase(Locale.ROOT).trim(),
+                target.toLowerCase(Locale.ROOT).trim());
+
         // Dynamic threshold logic: more forgiving for longer words
-        if (target.length() <= 6) return dist <= 1; 
+        if (target.length() <= 6) return dist <= 1;
         return dist <= 2;
     }
 
@@ -28,7 +31,10 @@ public class FuzzyMatcher {
      */
     public static boolean isClose(String input, String target, int maxDistance) {
         if (input == null || target == null) return false;
-        return distance(input.toLowerCase().trim(), target.toLowerCase().trim()) <= maxDistance;
+        return distance(
+                        input.toLowerCase(Locale.ROOT).trim(),
+                        target.toLowerCase(Locale.ROOT).trim())
+                <= maxDistance;
     }
 
     /**
@@ -51,7 +57,7 @@ public class FuzzyMatcher {
             for (int j = 1; j <= m; j++) {
                 int cost = (s1.charAt(i - 1) == s2.charAt(j - 1)) ? 0 : 1;
                 d[i][j] = Math.min(Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1), d[i - 1][j - 1] + cost);
-                
+
                 // Transposition check (Damerau improvement)
                 if (i > 1 && j > 1 && s1.charAt(i - 1) == s2.charAt(j - 2) && s1.charAt(i - 2) == s2.charAt(j - 1)) {
                     d[i][j] = Math.min(d[i][j], d[i - 2][j - 2] + cost);
@@ -67,7 +73,7 @@ public class FuzzyMatcher {
      */
     public static boolean containsFuzzy(String sentence, String target) {
         if (sentence == null || target == null) return false;
-        String[] words = WHITESPACE_PATTERN.split(sentence);
+        String[] words = WHITESPACE_PATTERN.split(sentence, -1);
         for (String word : words) {
             if (isClose(word, target)) return true;
         }

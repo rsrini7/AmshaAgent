@@ -1,19 +1,21 @@
 package com.arcclaw.persistence.fs;
 
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
-
 import com.arcclaw.persistence.api.AuditEventDto;
 import com.arcclaw.persistence.api.AuditEventStorePort;
+
+import org.jboss.logging.Logger;
+
 import io.quarkus.arc.Unremovable;
 import io.quarkus.arc.properties.IfBuildProperty;
-import org.jboss.logging.Logger;
 
 @ApplicationScoped
 @Unremovable
@@ -36,7 +38,8 @@ public class FsAuditEventStoreAdapter implements AuditEventStorePort {
         SessionIndex index = loadIndex(sessionDir);
         if (seq > index.maxSequence) {
             index.maxSequence = seq;
-            index.events.add(new IndexEntry(dto.id().toString(), dto.idempotencyKey(), dto.eventType(), dto.timestamp()));
+            index.events.add(
+                    new IndexEntry(dto.id().toString(), dto.idempotencyKey(), dto.eventType(), dto.timestamp()));
             saveIndex(sessionDir, index);
         }
 
@@ -52,16 +55,16 @@ public class FsAuditEventStoreAdapter implements AuditEventStorePort {
         }
         String lastEventId = index.events.get(index.events.size() - 1).id;
         return store.readOptional(List.of(DOMAIN, sessionId, lastEventId + ".json"), AuditEventDto.class)
-            .map(AuditEventDto::hmacHash);
+                .map(AuditEventDto::hmacHash);
     }
 
     @Override
     public List<AuditEventDto> findBySessionId(String sessionId) {
         SessionIndex index = loadIndex(sessionId);
         return index.events.stream()
-            .map(e -> store.readOptional(List.of(DOMAIN, sessionId, e.id + ".json"), AuditEventDto.class))
-            .flatMap(Optional::stream)
-            .toList();
+                .map(e -> store.readOptional(List.of(DOMAIN, sessionId, e.id + ".json"), AuditEventDto.class))
+                .flatMap(Optional::stream)
+                .toList();
     }
 
     @Override
@@ -70,7 +73,9 @@ public class FsAuditEventStoreAdapter implements AuditEventStorePort {
         List<String> sessions = store.listDirs(List.of(DOMAIN));
         for (String session : sessions) {
             SessionIndex idx = loadIndex(session);
-            count += idx.events.stream().filter(e -> key.equals(e.idempotencyKey)).count();
+            count += idx.events.stream()
+                    .filter(e -> key.equals(e.idempotencyKey))
+                    .count();
         }
         return count;
     }
@@ -91,15 +96,16 @@ public class FsAuditEventStoreAdapter implements AuditEventStorePort {
         if (id == null) return Optional.empty();
         List<String> sessions = store.listDirs(List.of(DOMAIN));
         for (String session : sessions) {
-            Optional<AuditEventDto> found = store.readOptional(
-                List.of(DOMAIN, session, id.toString() + ".json"), AuditEventDto.class);
+            Optional<AuditEventDto> found =
+                    store.readOptional(List.of(DOMAIN, session, id.toString() + ".json"), AuditEventDto.class);
             if (found.isPresent()) return found;
         }
         return Optional.empty();
     }
 
     @Override
-    public List<AuditEventDto> findAll(String sessionId, String eventType, Instant from, Instant to, int offset, int limit) {
+    public List<AuditEventDto> findAll(
+            String sessionId, String eventType, Instant from, Instant to, int offset, int limit) {
         List<AuditEventDto> results = new ArrayList<>();
         if (sessionId != null && !sessionId.isBlank()) {
             results.addAll(findBySessionId(sessionId));
@@ -111,23 +117,29 @@ public class FsAuditEventStoreAdapter implements AuditEventStorePort {
         }
         // Apply filters
         if (eventType != null && !eventType.isBlank()) {
-            results = results.stream().filter(e -> eventType.equals(e.eventType())).toList();
+            results = results.stream()
+                    .filter(e -> eventType.equals(e.eventType()))
+                    .toList();
         }
         if (from != null) {
-            results = results.stream().filter(e -> e.timestamp() != null && !e.timestamp().isBefore(from)).toList();
+            results = results.stream()
+                    .filter(e -> e.timestamp() != null && !e.timestamp().isBefore(from))
+                    .toList();
         }
         if (to != null) {
-            results = results.stream().filter(e -> e.timestamp() != null && !e.timestamp().isAfter(to)).toList();
+            results = results.stream()
+                    .filter(e -> e.timestamp() != null && !e.timestamp().isAfter(to))
+                    .toList();
         }
         // Sort by timestamp descending
         results = results.stream()
-            .sorted((a, b) -> {
-                if (a.timestamp() == null && b.timestamp() == null) return 0;
-                if (a.timestamp() == null) return 1;
-                if (b.timestamp() == null) return -1;
-                return b.timestamp().compareTo(a.timestamp());
-            })
-            .toList();
+                .sorted((a, b) -> {
+                    if (a.timestamp() == null && b.timestamp() == null) return 0;
+                    if (a.timestamp() == null) return 1;
+                    if (b.timestamp() == null) return -1;
+                    return b.timestamp().compareTo(a.timestamp());
+                })
+                .toList();
         int end = Math.min(offset + limit, results.size());
         if (offset >= results.size()) return List.of();
         return results.subList(offset, end);
@@ -140,7 +152,7 @@ public class FsAuditEventStoreAdapter implements AuditEventStorePort {
 
     private SessionIndex loadIndex(String sessionId) {
         return store.readOptional(List.of(DOMAIN, sessionId, "index.json"), SessionIndex.class)
-            .orElse(new SessionIndex());
+                .orElse(new SessionIndex());
     }
 
     private void saveIndex(String sessionId, SessionIndex index) {
@@ -149,6 +161,7 @@ public class FsAuditEventStoreAdapter implements AuditEventStorePort {
 
     private record IndexEntry(String id, String idempotencyKey, String eventType, Instant timestamp) {}
 
+    @SuppressWarnings("EffectivelyPrivate") // public fields needed for Jackson serialization
     private static class SessionIndex {
         public long maxSequence = 0;
         public List<IndexEntry> events = new ArrayList<>();

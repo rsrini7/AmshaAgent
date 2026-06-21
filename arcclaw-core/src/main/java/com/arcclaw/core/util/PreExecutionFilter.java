@@ -15,10 +15,7 @@ public final class PreExecutionFilter {
 
     private PreExecutionFilter() {}
 
-    public record SplitResult(
-        List<ParallelToolCall> preExecutable,
-        List<ParallelToolCall> hitlPending
-    ) {}
+    public record SplitResult(List<ParallelToolCall> preExecutable, List<ParallelToolCall> hitlPending) {}
 
     /**
      * Splits calls into pre-executable vs HITL-pending.
@@ -26,9 +23,7 @@ public final class PreExecutionFilter {
      * configuredSafeTools OR autonomyLevel == FULL_AUTONOMY. §7.31
      */
     public static SplitResult split(
-            List<ParallelToolCall> calls,
-            AutonomyLevel sessionAutonomy,
-            Set<String> configuredSafeTools) {
+            List<ParallelToolCall> calls, AutonomyLevel sessionAutonomy, Set<String> configuredSafeTools) {
 
         List<ParallelToolCall> pre = new ArrayList<>();
         List<ParallelToolCall> hitl = new ArrayList<>();
@@ -38,8 +33,7 @@ public final class PreExecutionFilter {
         }
 
         for (ParallelToolCall call : calls) {
-            if (sessionAutonomy == AutonomyLevel.FULL
-                    || configuredSafeTools.contains(call.toolName())) {
+            if (sessionAutonomy == AutonomyLevel.FULL || configuredSafeTools.contains(call.toolName())) {
                 pre.add(call);
             } else {
                 hitl.add(call);

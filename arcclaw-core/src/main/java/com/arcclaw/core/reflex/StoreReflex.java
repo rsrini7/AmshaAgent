@@ -1,11 +1,12 @@
 package com.arcclaw.core.reflex;
 
+import jakarta.enterprise.context.ApplicationScoped;
+
 import java.util.Optional;
 import java.util.regex.Pattern;
 
-import jakarta.enterprise.context.ApplicationScoped;
-
 import com.arcclaw.core.pipeline.MessageContext;
+
 import org.jboss.logging.Logger;
 
 /**
@@ -37,20 +38,20 @@ public class StoreReflex implements AgentReflex {
         }
 
         String content = matcher.group(2).trim();
-        
+
         // Pre-parse KEY=VALUE pairs to ensure accurate label extraction
         int idx = content.indexOf('=');
         if (idx > 0) {
             String label = content.substring(0, idx).trim();
             String value = content.substring(idx + 1).trim();
-            
+
             log.debugf("StoreReflex: pre-parsed label='%s' for session=%s", label, sessionId);
-            
+
             // Re-format the input for the agent to be hyper-explicit,
             // preventing the LLM from trying to parse the equal sign itself.
-            String structuredGoal = String.format("Store the following information with label \"%s\":\n\n%s", 
-                label, value);
-            
+            String structuredGoal =
+                    String.format("Store the following information with label \"%s\":\n\n%s", label, value);
+
             return new ReflexResult(Optional.empty(), structuredGoal);
         }
 

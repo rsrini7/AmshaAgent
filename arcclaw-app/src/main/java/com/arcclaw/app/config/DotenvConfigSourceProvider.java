@@ -35,7 +35,7 @@ public class DotenvConfigSourceProvider implements ConfigSourceProvider {
 
     private Map<String, String> loadDotenv() {
         Map<String, String> properties = new HashMap<>();
-        Path envPath = Paths.get(".env");
+        Path envPath = resolveEnvPath();
 
         if (!Files.exists(envPath)) {
             return properties; // No .env file found, rely on system/environment variables
@@ -44,7 +44,7 @@ public class DotenvConfigSourceProvider implements ConfigSourceProvider {
         try {
             for (String line : Files.readAllLines(envPath)) {
                 line = line.trim();
-                
+
                 // 1. Ignore full-line comments and empty lines
                 if (line.isEmpty() || line.startsWith("#")) {
                     continue;
@@ -60,8 +60,8 @@ public class DotenvConfigSourceProvider implements ConfigSourceProvider {
                     String value = stripInlineComments(rawValue);
 
                     // 4. Remove surrounding quotes if the user added them
-                    if ((value.startsWith("\"") && value.endsWith("\"")) ||
-                        (value.startsWith("'") && value.endsWith("'"))) {
+                    if ((value.startsWith("\"") && value.endsWith("\""))
+                            || (value.startsWith("'") && value.endsWith("'"))) {
                         if (value.length() >= 2) {
                             value = value.substring(1, value.length() - 1);
                         }
@@ -76,6 +76,24 @@ public class DotenvConfigSourceProvider implements ConfigSourceProvider {
         }
 
         return properties;
+    }
+
+    private Path resolveEnvPath() {
+        if (System.getProperty("org.graalvm.nativeimage.imagecode") != null) {
+            String command = ProcessHandle.current().info().command().orElse("");
+            if (!command.isEmpty()) {
+                try {
+                    Path binaryDir =
+                            Path.of(command).toAbsolutePath().normalize().getParent();
+                    if (binaryDir != null && Files.exists(binaryDir)) {
+                        return binaryDir.resolve(".env");
+                    }
+                } catch (Exception e) {
+                    // fall through to CWD
+                }
+            }
+        }
+        return Paths.get(".env");
     }
 
     /**
@@ -106,7 +124,7 @@ public class DotenvConfigSourceProvider implements ConfigSourceProvider {
     private static class DotenvConfigSource implements ConfigSource {
         private final Map<String, String> properties;
 
-        public DotenvConfigSource(Map<String, String> properties) {
+        DotenvConfigSource(Map<String, String> properties) {
             this.properties = properties;
         }
 

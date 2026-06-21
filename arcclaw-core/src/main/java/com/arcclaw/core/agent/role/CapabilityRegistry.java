@@ -1,11 +1,11 @@
 package com.arcclaw.core.agent.role;
 
+import jakarta.enterprise.context.ApplicationScoped;
+
 import java.util.Collections;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-
-import jakarta.enterprise.context.ApplicationScoped;
 
 import org.jboss.logging.Logger;
 
@@ -55,7 +55,7 @@ public class CapabilityRegistry {
         Set<String> tools = roleSupplementalTools.get(roleId);
         return (tools == null) ? Set.of() : Collections.unmodifiableSet(tools);
     }
- 
+
     /**
      * Checks if a role has a specific tool capability.
      */

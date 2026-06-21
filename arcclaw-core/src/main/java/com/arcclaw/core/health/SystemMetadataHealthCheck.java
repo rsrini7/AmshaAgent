@@ -4,6 +4,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
 import com.arcclaw.core.config.SystemMetadataRegistry;
+
 import org.eclipse.microprofile.health.HealthCheck;
 import org.eclipse.microprofile.health.HealthCheckResponse;
 import org.eclipse.microprofile.health.Readiness;
@@ -34,5 +35,4 @@ public class SystemMetadataHealthCheck implements HealthCheck {
                 .withData("startedAt", startedAt)
                 .build();
     }
-
 }

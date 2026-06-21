@@ -14,9 +14,10 @@ public interface McpToolAllowlist {
      * ToolCapability.toolName() values of internal tools to expose via MCP.
      * Uses toolName() (lowercase) values to match external MCP conventions.
      * "github" matches ToolCapability.GITHUB.toolName().
-     * "memory_search" matches ToolCapability.MEMORY_SEARCH.toolName().
+     * "recall_memory_search" matches ToolCapability.RECALL_MEMORY_SEARCH.toolName().
+     * "archival_memory_search" matches ToolCapability.ARCHIVAL_MEMORY_SEARCH.toolName().
      */
-    @WithDefault("github,memory_search")
+    @WithDefault("github,recall_memory_search,archival_memory_search")
     List<String> exposedTools();
 
     /**

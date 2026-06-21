@@ -73,3 +73,23 @@ arcclaw-source.7z
 tool-contracts.json
 results*.json
 autotest/logs/
+
+# Babysitter — keep project-profile, quality-gates, package.json; ignore transient
+.a5c/runs/
+.a5c/process-library/
+.a5c/node_modules/
+.a5c/logs/
+.a5c/creds.env
+.a5c/creds.env.tmp.*
+.scannerwork/
+
+.kimchi/
+
+.mise/tasks/headroom/logs/
+.mise/tasks/headroom/pids/
+
+!.headroom/config/*.json
+.headroom/*.db
+
+.omm/*
+!.omm/config.yaml

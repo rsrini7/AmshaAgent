@@ -10,10 +10,10 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import jakarta.inject.Inject;
+
 import java.time.Instant;
 import java.util.Optional;
-
-import jakarta.inject.Inject;
 
 import com.arcclaw.channel.api.ChannelAllowlist;
 import com.arcclaw.channel.api.ChannelMessage;
@@ -28,10 +28,12 @@ import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.pipeline.MessagePipeline;
 import com.arcclaw.core.reflex.ReflexRegistry;
 import com.arcclaw.core.reflex.ReflexResult;
-import io.quarkus.test.InjectMock;
-import io.quarkus.test.junit.QuarkusTest;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+
+import io.quarkus.test.InjectMock;
+import io.quarkus.test.junit.QuarkusTest;
 
 @QuarkusTest
 public class DenyPipelineTest {
@@ -44,7 +46,7 @@ public class DenyPipelineTest {
 
     @InjectMock
     AuditService auditService;
- 
+
     private ChannelAllowlist allowlist = mock(ChannelAllowlist.class);
 
     @InjectMock
@@ -61,7 +63,7 @@ public class DenyPipelineTest {
 
         user = new ChannelUser("user-123", "user-123", "alice", ChannelType.CLI);
         sender = mock(ChannelSender.class);
-        
+
         ChannelPlugin plugin = mock(ChannelPlugin.class);
         when(plugin.sender()).thenReturn(sender);
         when(plugin.allowlist()).thenReturn(allowlist);
@@ -75,23 +77,20 @@ public class DenyPipelineTest {
     void testDenyRoutesToReflexRegistryNotDirectly() {
         // Setup mock response
         when(reflexRegistry.processIfReflex(anyString(), anyString(), anyString(), anyString(), eq(context)))
-                .thenReturn(new ReflexResult(
-                        Optional.of(""),
-                        "/deny"
-                ));
+                .thenReturn(new ReflexResult(Optional.of(""), "/deny"));
 
         // Process message through pipeline
         pipeline.process(context);
 
         // Verify ReflexRegistry was called exactly once
-        verify(reflexRegistry, times(1)).processIfReflex(
-                anyString(), // Session resolution handler might change this
-                eq("user-123"), 
-                eq("chat-789"), 
-                eq("/deny"),
-                eq(context)
-        );
-        
+        verify(reflexRegistry, times(1))
+                .processIfReflex(
+                        anyString(), // Session resolution handler might change this
+                        eq("user-123"),
+                        eq("chat-789"),
+                        eq("/deny"),
+                        eq(context));
+
         // Verify sender was NOT called because response was blank
         verifyNoInteractions(sender);
     }
@@ -100,25 +99,24 @@ public class DenyPipelineTest {
     void testDenyAuditEventFires() {
         // To follow requirements strictly:
         when(reflexRegistry.processIfReflex(anyString(), anyString(), anyString(), anyString(), eq(context)))
-            .thenAnswer(invocation -> {
-                auditService.record(
-                    (String)invocation.getArgument(0), 
-                    (String)invocation.getArgument(1), 
-                    "reflex", 
-                    SecurityEventType.APPROVAL_DENIED, 
-                    "action=DENY session=" + invocation.getArgument(0)
-                );
-                return new ReflexResult(Optional.of("🚫"), "/deny");
-            });
+                .thenAnswer(invocation -> {
+                    auditService.record(
+                            (String) invocation.getArgument(0),
+                            (String) invocation.getArgument(1),
+                            "reflex",
+                            SecurityEventType.APPROVAL_DENIED,
+                            "action=DENY session=" + invocation.getArgument(0));
+                    return new ReflexResult(Optional.of("🚫"), "/deny");
+                });
 
         pipeline.process(context);
 
-        verify(auditService).record(
-                anyString(), // Session ID is dynamic
-                eq("user-123"), 
-                eq("reflex"), 
-                eq(SecurityEventType.APPROVAL_DENIED), 
-                contains("action=DENY")
-        );
+        verify(auditService)
+                .record(
+                        anyString(), // Session ID is dynamic
+                        eq("user-123"),
+                        eq("reflex"),
+                        eq(SecurityEventType.APPROVAL_DENIED),
+                        contains("action=DENY"));
     }
 }

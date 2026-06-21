@@ -99,6 +99,18 @@ These are NOT interchangeable.
 > per event (session scope), not the full workspace context. This is intentional and is
 > the only legitimate multi-session background binding pattern. See §5.17.
 
+### 2.8 Fallback session ID derivation
+
+`FallbackSessionIdResolver` MUST derive session IDs deterministically from the
+three-tuple `(channelType, channelId, userId)`.
+
+- The fallback key format is `{channelType}:{channelId}:{userId}`.
+- Multi-channel sessions are isolated by `channelType` — a Telegram user and a
+  WebSocket user with the same numeric ID MUST NOT share a session.
+- Cron sessions (`sessionId.startsWith("cron-")`) MUST be excluded from chat
+  approval routing to prevent cron checkpoints from appearing in user-facing
+  approval queues.
+
 ---
 
 ## 3. Runtime execution invariants
@@ -152,6 +164,50 @@ Storing system messages inflates context, corrupts compaction logic, and leaks t
 In `StructuredRetryLoop`, `assertWithinBudget()` threshold check MUST precede `compareAndSet()`.
 If CAS fires first at 79% budget, `warningSent` is permanently `true` - the real 80% boundary
 warning is forever suppressed. The ordering is: check → log → CAS, never CAS → check.
+
+## 3.8 Strict terminal finish rules
+
+The coordinator persona MUST emit a `FINISH` action immediately after any successful
+tool execution. No additional tool calls may follow a `FINISH` in the same turn.
+
+- `AgentStateMachineRunner` enforces a two-pass protocol: pass 1 sends tool results
+  with a terminal-mode hint; pass 2 sends a plain-text summary guidance.
+- The `finally` block in the finish handler MUST clean up history to prevent
+  residual system messages from corrupting subsequent turns.
+- Violation: Tool chaining after `FINISH` corrupts the state machine and produces
+  orphaned checkpoint states.
+
+## 3.9 Global budget halt
+
+`WorkspaceManager.haltSession()` provides a circuit-breaker for global budget
+exceedance with a 5-minute TTL.
+
+- `PreflightState` MUST check the global iteration budget before each loop iteration.
+- If the budget is exceeded, `haltSession(sessionId)` marks the session as halted.
+- Halted sessions reject new tool invocations until the TTL expires or an operator
+  explicitly unhalts the session.
+- MUST NOT allow tool execution while the session is in `HALTED` state.
+
+## 3.10 Telegram HITL notification flush
+
+Channel callback handlers that bypass `AbstractDecisionReflex` (e.g., Telegram
+inline keyboard approval callbacks) MUST call `flushPendingNotifications()`
+after processing approval decisions.
+
+- `TelegramCallbackHandler` injects `ApprovalNotificationService` and calls
+  `flushPendingNotifications()` in the callback path.
+- Without this flush, approval notifications may be silently dropped, leaving
+  the user without feedback after a HITL decision.
+
+## 3.11 GraalVM SecureRandom local instantiation
+
+Native-image builds MUST NOT hold `SecureRandom` in `static` or `static final` fields.
+
+- `SecureRandom` instances MUST be created locally per use with `new SecureRandom()`.
+- The byte array returned by `SecureRandom` MUST be zeroed in a `finally` block
+  after use (defense-in-depth against heap inspection).
+- Static fields cause `UnsupportedFeatureException` at native-image build time
+  because GraalVM attempts to snapshot the object into the image heap.
 
 ---
 
@@ -220,6 +276,35 @@ Sub-sessions spawned by `DelegateToAgentTool` MUST inherit `READONLY` from the p
   scheduling is metadata-only and does not execute arbitrary tool actions.
   This exemption is encoded in `ToolInvocationGuard` and MUST NOT be removed when
   adding new scheduling-adjacent tools without explicit review.
+
+### 4.10.2 Role-Based Tool Governance Bypass (§Invariant-RoleGovernanceBypass)
+
+`ToolGovernanceGuard` has a **role trust pre-flight check** that runs before operation-level
+policy enforcement. Trusted roles (those with `requiresApproval=false` in their
+`RoleDefinition`) bypass operation policy checks for **non-sensitive** operations.
+
+**Sensitive operations (`NETWORK_OUTBOUND` and `EXECUTE_SHELL`) always require HITL**
+regardless of role trust:
+
+```java
+boolean isSensitiveOp =
+    requiredOp == ToolOperation.NETWORK_OUTBOUND || requiredOp == ToolOperation.EXECUTE_SHELL;
+if (isTrustedRole && !isSensitiveOp) {
+    return; // trusted role — allow non-sensitive operations
+}
+```
+
+MUST NOT add new `ToolOperation` values without evaluating whether they should be
+classified as sensitive. Any operation involving external network access, arbitrary
+code execution, or privilege escalation MUST be added to the `isSensitiveOp` check.
+
+MUST NOT add roles to the HITL-exempt tools list (`hitl-exempt-tools`) as a replacement
+for the role trust pre-flight. The role trust check is preferred because it is
+dynamic (evaluated against the `RoleRegistry` at runtime) rather than static
+(config-driven). The `garuda` role has been removed from `hitl-exempt-tools` —
+its trusted role status is determined by `RoleRegistry.requiresApprovalForTools()`.
+
+**Reference:** `ToolGovernanceGuard.verifyAutonomy()`, `AgentRoleEnum.RoleDefinition.requiresApproval`, `PolicyConfig.HITL_EXEMPT_TOOLS`.
 
 ## 4.11 Intent Routing Negation Safety
 
@@ -626,6 +711,161 @@ All DDL is expressed in per-adapter Flyway migration SQL files only.
 ## 5.23 SessionSchemaEnforcer DDL Isolation (§5.23 INVARIANT)
 All raw DDL `CREATE TABLE` and similar schema emission statements are adapter-specific and must never live in `arcclaw-core` or `arcclaw-app`. Each persistence adapter module (e.g. `arcclaw-persistence-sqlite`) owns its specific programmatic DDL (like `AUTOINCREMENT` mapping) completely isolated from core domain code.
 
+## 5.24 Persistence Backend Selection (§5.24 INVARIANT)
+
+The persistence backend is controlled by a single build property: **`arcclaw.persistence.backend`**.
+
+### How It Works
+
+Every persistence adapter bean uses Quarkus `@IfBuildProperty` to conditionally activate:
+
+```java
+// SQLite — DEFAULT (enableIfMissing = true means: if property is unset, SQLite activates)
+@IfBuildProperty(name = "arcclaw.persistence.backend", stringValue = "sqlite", enableIfMissing = true)
+
+// PostgreSQL — opt-in only (no enableIfMissing)
+@IfBuildProperty(name = "arcclaw.persistence.backend", stringValue = "postgres")
+
+// Filesystem — opt-in only
+@IfBuildProperty(name = "arcclaw.persistence.backend", stringValue = "fs")
+```
+
+### When Backend Selection Happens
+
+| Mode | When `@IfBuildProperty` is evaluated | Switching backend |
+|------|--------------------------------------|-------------------|
+| **JVM** (`arcclaw serve`) | At **app startup** (runtime) | Set `ARCCLAW_PERSISTENCE_BACKEND` in `.env` — **no rebuild needed** |
+| **Native image** (`arcclaw-native`) | At **build time** (GraalVM compile) | Must **rebuild** the native binary with the new property set during build |
+
+### How to Switch Backend (JVM mode)
+
+```bash
+# 1. Set in .env (before starting the app)
+echo "ARCCLAW_PERSISTENCE_BACKEND=postgres" >> .env
+
+# 2. Also set connection details for the target backend:
+echo "QUARKUS_DATASOURCE_JDBC_URL=jdbc:postgresql://localhost:5432/arcclaw" >> .env
+echo "QUARKUS_DATASOURCE_USERNAME=arcclaw" >> .env
+echo "QUARKUS_DATASOURCE_PASSWORD=<password>" >> .env
+
+# 3. Start the app — no rebuild needed
+arcclaw serve
+```
+
+### How to Switch Backend (Native image)
+
+```bash
+# Must rebuild — @IfBuildProperty is baked into the native image at compile time
+export ARCCLAW_PERSISTENCE_BACKEND=postgres
+./mvnw package -Dnative
+```
+
+### Backend-Specific Configuration
+
+| Backend | `.env` variables needed | Notes |
+|---------|------------------------|-------|
+| **SQLite** (default) | None — zero config | Data stored in `./arcclaw-data/` by default |
+| **PostgreSQL** | `QUARKUS_DATASOURCE_JDBC_URL`, `QUARKUS_DATASOURCE_USERNAME`, `QUARKUS_DATASOURCE_PASSWORD` | Flyway auto-creates schema on startup |
+| **Filesystem** | `ARCCLAW_FS_DATA_DIR` (optional, default `./data/fs`) | Uses Lucene index for BM25 search |
+
+### Why SQLite Is the Default
+
+- `enableIfMissing = true` on the SQLite adapter means: if the property is not set at all, SQLite activates.
+- This ensures the binary works out of the box with zero configuration — no database server needed.
+- All three backend jars are included in the build; `@IfBuildProperty` selects which CDI beans register at startup.
+
+### Flyway Migration Parity
+
+Every Flyway migration must exist in both backends with the same version number:
+- SQLite: `arcclaw-persistence-sqlite/src/main/resources/db/migration/sqlite/V<n>__<name>.sql`
+- PostgreSQL: `arcclaw-persistence-postgres/src/main/resources/db/migration/postgresql/V<n>__<name>.sql`
+
+Flyway runs automatically on startup — the user does not need to manually create tables.
+
+### Tiered Memory Backend
+
+The tiered memory subsystem has its own separate backend selection:
+```yaml
+arcclaw:
+  memory:
+    tiered:
+      backend: ${ARCCLAW_MEMORY_TIERED_BACKEND:sqlite}
+```
+
+This is a **different property** from `arcclaw.persistence.backend`. The tiered memory backend can be different from the main persistence backend (e.g., main DB on Postgres, tiered memory on SQLite). Both default to `sqlite`.
+
+### Native Image Binary Naming Convention (§5.24.1)
+
+Since `@IfBuildProperty` is baked at build time, each persistence backend requires a **separate native binary**. The naming convention is:
+
+| Binary | Backend | Property value | Description |
+|--------|---------|---------------|-------------|
+| `arcclaw-sqlite` | SQLite | `sqlite` (default) | Zero-config, embedded database |
+| `arcclaw-pg` | PostgreSQL | `postgres` | Requires running PG instance |
+| `arcclaw-fs` | Filesystem | `fs` | Lucene-based, no SQL database |
+
+**Build approach:** Use `mise run` tasks (recommended) or raw Maven commands:
+
+```bash
+# Recommended: mise tasks (auto-switch JDK, copy to dist/)
+mise run build:native-local          # SQLite (default) → dist/arcclaw
+mise run build:native-local-pg       # PostgreSQL → dist/arcclaw-pg
+mise run build:native-local-fs       # Filesystem → dist/arcclaw-fs
+mise run build:native-local-all      # All 3 variants → dist/arcclaw, dist/arcclaw-pg, dist/arcclaw-fs
+```
+
+**What mise tasks do:**
+1. Auto-switch JDK to GraalVM Community 25 (via `mise use java@graalvm-community-25.0.2`)
+2. Bake `quarkus.arcclaw.build.backend` property into `build-info.properties`
+3. Build native image with memory auto-tuning (85% of available RAM)
+4. Copy final binary to `dist/` with correct name (`arcclaw`, `arcclaw-pg`, `arcclaw-fs`)
+5. Switch JDK back to Temurin 25 after build
+
+**Why use mise tasks:** Raw Maven commands require manual JDK switching, manual binary renaming, and don't auto-tune memory. Mise tasks handle all of this automatically.
+
+### Release Archive Distribution (§5.24.2)
+
+Each OS-specific release archive contains **all 3 backend variants**:
+
+```
+arcclaw-1.0.0-linux-x64.tar.gz
+  ├── arcclaw-sqlite     # SQLite (default)
+  ├── arcclaw-pg         # PostgreSQL
+  └── arcclaw-fs         # Filesystem
+
+arcclaw-1.0.0-macos-aarch64.tar.gz
+  ├── arcclaw-sqlite     # SQLite (default)
+  ├── arcclaw-pg         # PostgreSQL
+  └── arcclaw-fs         # Filesystem
+
+arcclaw-1.0.0-windows-x64.zip
+  ├── arcclaw-sqlite.exe # SQLite (default)
+  ├── arcclaw-pg.exe     # PostgreSQL
+  └── arcclaw-fs.exe     # Filesystem
+```
+
+This is **3 archives × 3 binaries each = 9 binaries total** across all platforms.
+
+**Why all 3 in one archive:** The user downloads one file for their OS and picks the binary matching their database. No separate downloads per backend.
+
+**Default binary (`arcclaw-sqlite` / `arcclaw-sqlite.exe`)** is always the SQLite variant — works out of the box with zero configuration. Users who want PostgreSQL or Filesystem use `arcclaw-pg` or `arcclaw-fs` respectively.
+
+**JVM mode is backend-agnostic:** The JAR distribution (`quarkus-run.jar`) includes all 3 backend jars. The user switches via `.env` at runtime — no separate JARs needed.
+
+---
+
+## 5.25 Checkpoint filter terminal statuses
+
+Checkpoint queries in the persistence layer MUST treat `DENIED` as a terminal
+status alongside `FAILED`, `COMPLETED`, `ARCHIVED`, and `COMPROMISED`.
+
+- `FsCheckpointStoreAdapter` MUST include `DENIED` in terminal status filters.
+- `isCheckpointExpired()` MUST narrow its check to `AWAITING_APPROVAL` only,
+  not all non-terminal statuses. A `DENIED` checkpoint is terminal and must
+  NOT be overwritten by expiration logic.
+- Violation: Treating `DENIED` as non-terminal causes spurious resume attempts
+  and corrupts the checkpoint lifecycle state machine.
+
 ---
 
 ## 6. Native image and reflection rules
@@ -644,18 +884,67 @@ All raw DDL `CREATE TABLE` and similar schema emission statements are adapter-sp
 ### 6.4 Resource loading
 - For generated/augmented resources in multi-module tests, prefer context-classloader resource loading when required by current Quarkus augmentation behavior.
 
-## 6.5 @RunOnVirtualThread enforcement (REMOVED — JDBI Migration)
+## 6.5 @RunOnVirtualThread enforcement (Revised — Post-JDBI)
 
-This rule was specific to Hibernate's `EntityManager` in JAX-RS resources. Since **all modules
-have migrated to JDBI**, there is no `EntityManager` to inject in any REST resource.
-`RestResourceBuildStep` has been removed.
+`RestResourceBuildStep` was NOT removed — it was restructured to enforce `@RunOnVirtualThread` on ALL `com.arcclaw` REST resource classes, not just those with `EntityManager` injection. The build step validates that every `@Path`-annotated class carries the `@RunOnVirtualThread` annotation, failing the build if any resource lacks it.
 
 ### 6.6 Static run-time objects
 - MUST NOT store JDK or library objects that require run-time initialization (e.g. `java.net.http.HttpClient`, `java.lang.Thread`, or descriptors) in `static` or `static final` fields when building for native-image.
 - GraalVM attempts to store these objects in the "image heap" at build time, leading to `UnsupportedFeatureException` (An object of type ... was found in the image heap).
 - Use `@ApplicationScoped` instance fields or `@PostConstruct` lazy initialization to ensure these objects are created at run-time.
-- **6.7 Module-specific Reflection Config**: New modules that introduce CDI beans, DTOs (for JSON/REST), or external libraries that use reflection MUST include a dedicated `*ReflectionConfig` class annotated with `@RegisterForReflection` in a `.config` subpackage. This centralizes reachability for GraalVM and prevents dead-code elimination of critical runtime components across module boundaries. JVM-mode success is NOT evidence that these registrations are unnecessary.
+- **6.7 Module-specific Reflection Config**: New modules that introduce CDI beans, DTOs (for JSON/REST), or external libraries that use reflection MUST include a dedicated `*ReflectionConfig` class annotated with `@RegisterForReflection` in a `.config` subpackage. This centralizes reachability for GraalVM and prevents dead-code elimination of critical runtime components across module boundaries. JVM-mode success is NOT evidence that these registrations are unnecessary. See [AGENTS.md §7](../AGENTS.md#7-graalvm-native-image-reflection-registration) for the complete checklist of what needs registration (records: YES, enums: NO, CDI beans: only in persistence modules, JDBI DAOs: YES).
+- **6.8 Native-Image Runtime Initialization**: Libraries using Foreign Function & Memory (FFM) API, `MethodHandle`, or native access (e.g., Lucene 10.x `PosixNativeAccess`) MUST be marked for run-time initialization in `arcclaw-app/src/main/resources/META-INF/native-image/com.arcclaw/arcclaw-app/native-image.properties`. Mark the **entire package** (`--initialize-at-run-time=org.apache.lucene`), not individual classes — GraalVM embeds static fields from build-time classes into the image heap, causing whack-a-mole errors when marking classes individually. Also mark any CDI beans with `@PostConstruct` that trigger the library. Do NOT use `pom.xml` `additional-build-args` for this — Quarkus splits on commas, breaking args that contain commas. See [AGENTS.md §7.5](../AGENTS.md#75-native-image-runtime-initialization-native-imageproperties) for detailed guidance.
 
+### 6.9 Lucene `TestSecrets` Class.forName Registration (§6.9 INVARIANT)
+
+Lucene 10.x ships `org.apache.lucene.internal.tests.TestSecrets` in the **production** `lucene-core` jar. Its static initializer calls `Class.forName("org.apache.lucene.index.ConcurrentMergeScheduler")` at runtime. In native-image, GraalVM's static analysis removes `ConcurrentMergeScheduler` because nothing directly references it — but `Class.forName()` is a runtime reflective call that cannot be analyzed at build time, resulting in `ClassNotFoundException` → `ExceptionInInitializerError` → crash on startup.
+
+**Fix:** Add a `reflect-config.json` to the module that depends on `lucene-core` (currently `arcclaw-persistence-fs`):
+
+```json
+[
+  { "name": "org.apache.lucene.index.ConcurrentMergeScheduler", "allDeclaredConstructors": true, "allPublicMethods": true },
+  { "name": "org.apache.lucene.index.SegmentReader", "allDeclaredConstructors": true, "allPublicMethods": true },
+  { "name": "org.apache.lucene.index.IndexWriter", "allDeclaredConstructors": true, "allPublicMethods": true },
+  { "name": "org.apache.lucene.store.FilterIndexInput", "allDeclaredConstructors": true, "allPublicMethods": true }
+]
+```
+
+These are the 4 classes referenced by `TestSecrets.<clinit>` via `Consumer.accept()` in a lambda (decompilable from `TestSecrets.class` constant pool). All four MUST be registered — missing any one causes `ExceptionInInitializerError` → crash on startup.
+
+**MUST NOT** register inner classes (e.g., `ConcurrentMergeScheduler.MergeThread`) as class literals in `@RegisterForReflection` — they have `protected`/`private` access and will not compile. Use the JSON config approach instead.
+
+**Detection:** GraalVM native-image build will NOT catch this — the error only manifests at **runtime** when the static initializer fires. Always verify with `mise build:native-local` and a test that boots the full application context.
+
+### 6.10 SQLite/vec0 Virtual Table Shadow Table Cleanup (§6.10 INVARIANT)
+
+FTS5 and vec0 virtual tables create internal **shadow tables** (e.g., `recall_messages_fts_data`, `vec_archival_info`) that Flyway's SQLite `clean` command cannot drop directly — it sees them as regular tables but they're owned by the virtual table module.
+
+**Fix:** `FtsCleanCallback` (a `FlywayConfigurationCustomizer` that fires `BEFORE_CLEAN`) MUST drop all virtual tables before Flyway attempts its own cleanup:
+
+```java
+stmt.execute("DROP TABLE IF EXISTS recall_messages_fts");
+stmt.execute("DROP TABLE IF EXISTS archival_chunks_fts");
+stmt.execute("DROP TABLE IF EXISTS vec_archival");
+```
+
+**MUST:** Add every new FTS5 or vec0 virtual table to `FtsCleanCallback.handle()`. Failure to do so causes `FlywaySqlException: Unable to drop "main"."<shadow_table>"` on test startup with `clean-at-start=true`.
+
+### 6.11 pgvector Graceful Degradation in Flyway (§6.11 INVARIANT)
+
+The `CREATE EXTENSION IF NOT EXISTS vector` statement in `V1__baseline.sql` MUST be wrapped in a `DO $$ EXCEPTION WHEN OTHERS $$` block so Flyway migration completes successfully in environments where pgvector is not installed (e.g., embedded Postgres in tests, CI without pgvector):
+
+```sql
+DO $$ BEGIN
+    CREATE EXTENSION IF NOT EXISTS vector;
+EXCEPTION WHEN OTHERS THEN
+    RAISE NOTICE 'pgvector not available — archival vector search degraded to BM25-only';
+END $$;
+```
+
+The `embedding vector(768)` column and HNSW index MUST be similarly guarded with `IF EXISTS (SELECT 1 FROM pg_available_extensions WHERE name = 'vector')`.
+
+**Rationale:** Tests use embedded Postgres (Testcontainers / `io.zonky.test`) which does not have pgvector installed. Unconditional `CREATE EXTENSION vector` fails with `could not open extension control file` and blocks all Postgres tests.
 
 ---
 
@@ -1269,9 +1558,9 @@ Every new or modified class MUST compile cleanly under JDK 25 standard without p
 
 ---
 
-## 11. Frontend (Lit/Web Component) Invariants
+## 23. Frontend (Lit/Web Component) Invariants
 
-### 11.1 Shadow DOM Event Boundary
+### 23.1 Shadow DOM Event Boundary
 
 Custom events dispatched from inside a Lit component's Shadow DOM MUST use `window.dispatchEvent()`. Events with `bubbles: true; composed: true` do NOT reliably cross the Shadow DOM boundary in all cases (observed with Chrome + Lit 3.x). This affects any event the shell needs to receive from child components.
 
@@ -1294,7 +1583,7 @@ Affected events (MUST use `window.dispatchEvent`):
 - `session-ready` (chat → shell, sessionId handoff)
 - `ws-status-change` (WsManager → shell, WebSocket status updates)
 
-### 11.2 CSS Height Resolution in Flex Layouts
+### 23.2 CSS Height Resolution in Flex Layouts
 
 Percentage height (`height: 100%`) on a child element does NOT resolve reliably when the parent is a flex item with `overflow-y: auto`. The flex item's computed height is not considered "definite" for percentage resolution in all browsers. This manifests as blank content areas.
 
@@ -1316,7 +1605,7 @@ Percentage height (`height: 100%`) on a child element does NOT resolve reliably 
 }
 ```
 
-### 11.3 Scrollbar Styles in Shadow DOM
+### 23.3 Scrollbar Styles in Shadow DOM
 
 `::-webkit-scrollbar` pseudo-element styles defined in the document's `<style>` block do NOT apply to scrollable elements inside Shadow DOMs. Each component with a scrollable container MUST define its own scrollbar styles.
 
@@ -1334,7 +1623,7 @@ Components with internal scrollable containers that need explicit scrollbar styl
 - `arc-audit-panel.ts`: `.table-wrap`, `.drawer`
 - `arc-scheduler-panel.ts`: `.drawer`
 
-### 11.4 Dynamic Tag Names in Templates
+### 23.4 Dynamic Tag Names in Templates
 
 Using `<${route.component}>` syntax (dynamic tag names from array iteration) can silently fail if the component is not yet registered as a custom element at render time. This produces a blank page with no console error.
 
@@ -1347,7 +1636,7 @@ ${this._route === '#/chat' ? html`<arc-chat-interface class="content-area"></arc
 ${ROUTES.map(r => html`<${r.component} class="content-area"></${r.component}>`)}
 ```
 
-### 11.5 `updated()` Lifecycle Guard for Async Connections
+### 23.5 `updated()` Lifecycle Guard for Async Connections
 
 When a Lit component's `updated()` lifecycle triggers an async connection (e.g., WebSocket), the guard condition MUST check for a property that is available on the **first render**, not a property that is only set after a subsequent async operation.
 
@@ -1368,7 +1657,7 @@ updated(changedProperties) {
 }
 ```
 
-### 11.6 WebSocket Stale Connection Guard
+### 23.6 WebSocket Stale Connection Guard
 
 When reconnecting a WebSocket, the old connection's `onclose` handler may fire AFTER the new connection is established. This handler must check that it is still the current manager before reacting.
 
@@ -1388,9 +1677,9 @@ Always call `this._ws.disconnect()` before nullifying the old connection in `rec
 
 ---
 
-## 12. Threading & Concurrency Invariants
+## 24. Threading & Concurrency Invariants
 
-### 12.1 Virtual Threads + `synchronized` on JDK 25
+### 24.1 Virtual Threads + `synchronized` on JDK 25
 
 JDK 25 has resolved the virtual-thread pinning issue with `synchronized` blocks. You do NOT need to migrate `synchronized` to `ReentrantLock` for Loom compatibility. Keep `synchronized` where it is semantically correct.
 
@@ -1400,7 +1689,7 @@ The existing `ReentrantLock` usages in `VaultKeyCache` and `SecretVaultImpl` are
 - `synchronized` blocks → safe on JDK 25, prefer for simplicity
 - `ReentrantLock` → only when CDI proxying requires it (field-level lock on `@ApplicationScoped` beans)
 
-### 12.2 Halt/Cancellation Interruption Checks
+### 24.2 Halt/Cancellation Interruption Checks
 
 Tool execution loops MUST check `Thread.currentThread().isInterrupted()` and `WorkspaceManager.isSessionHalted(sessionId)` at loop boundaries. These are GA APIs (no preview features) and are the primary halt propagation mechanism.
 

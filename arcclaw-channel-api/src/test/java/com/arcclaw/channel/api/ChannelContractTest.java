@@ -8,6 +8,7 @@ import java.util.Optional;
 import com.arcclaw.channel.api.hitl.ApprovalDecision;
 import com.arcclaw.channel.api.hitl.ApprovalDecisionEvent;
 import com.arcclaw.channel.api.hitl.ApprovalOutcome;
+
 import org.junit.jupiter.api.Test;
 
 /**
@@ -19,9 +20,7 @@ public class ChannelContractTest {
     @Test
     void testApprovalDecisionEventIntegrity() {
         ApprovalDecisionEvent event = new ApprovalDecisionEvent(
-            "sess-1", "telegram", "plat-1", "tool-1",
-            ApprovalDecision.APPROVE, ApprovalOutcome.APPROVED
-        );
+                "sess-1", "telegram", "plat-1", "tool-1", ApprovalDecision.APPROVE, ApprovalOutcome.APPROVED);
         assertEquals(ApprovalOutcome.APPROVED, event.outcome());
         assertEquals("sess-1", event.sessionId());
         assertEquals(ApprovalDecision.APPROVE, event.decision());
@@ -51,7 +50,8 @@ public class ChannelContractTest {
     @Test
     void testRestApiMessageDispatch() {
         ChannelUser user = new ChannelUser("u3", "rest-1", "user3", ChannelType.REST_API);
-        ChannelMessage msg = new ChannelMessage.RestApiMessage(user, "{ \"query\": \"test\" }", "ak-123", Instant.now());
+        ChannelMessage msg =
+                new ChannelMessage.RestApiMessage(user, "{ \"query\": \"test\" }", "ak-123", Instant.now());
         assertEquals(ChannelType.REST_API, msg.channelType());
         assertEquals("ak-123", msg.correlationId());
     }
@@ -178,10 +178,12 @@ public class ChannelContractTest {
     @Test
     void testAllBuiltInCommandTypesAreSealedPermits() {
         // Verify all 10 built-in command types are sealed permits of BuiltInChannelCommand
-        assertEquals(10, ChannelCommand.BuiltInChannelCommand.class.getPermittedSubclasses().length,
-            "Adding a new built-in command type requires adding it to the permits clause "
-            + "of BuiltInChannelCommand. If you see this failure, add the new record "
-            + "and add a case in CommandDispatchHandler.");
+        assertEquals(
+                10,
+                ChannelCommand.BuiltInChannelCommand.class.getPermittedSubclasses().length,
+                "Adding a new built-in command type requires adding it to the permits clause "
+                        + "of BuiltInChannelCommand. If you see this failure, add the new record "
+                        + "and add a case in CommandDispatchHandler.");
         assertNotNull(ChannelCommand.Approve.class);
         assertNotNull(ChannelCommand.Deny.class);
         assertNotNull(ChannelCommand.Status.class);

@@ -6,13 +6,15 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.util.List;
 
 import com.arcclaw.core.agent.result.AgentResult;
+
 import org.junit.jupiter.api.Test;
 
 class AgentResultFormatterTest {
 
     @Test
     void testFormatFailed_withNormalReason_prefixesWithX() {
-        AgentResult failed = AgentResult.failed("Something went wrong", AgentResult.FailureCategory.SYSTEM_ERROR, List.of());
+        AgentResult failed =
+                AgentResult.failed("Something went wrong", AgentResult.FailureCategory.SYSTEM_ERROR, List.of());
         String formatted = AgentResultFormatter.format(failed);
         assertEquals("❌ Something went wrong", formatted);
     }

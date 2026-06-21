@@ -1,0 +1,116 @@
+<svg width="100%" viewBox="0 0 780 860" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+  </defs>
+
+  <!-- Build system prompt -->
+  <g font-family="'Segoe UI', system-ui, sans-serif">
+    <rect x="210" y="16" width="260" height="50" rx="8" fill="#444441" stroke="#b4b2a9" stroke-width="0.5"/>
+    <text x="340" y="37" text-anchor="middle" dominant-baseline="central" font-size="14" font-weight="600" fill="#d3d1c7">Build system prompt</text>
+    <text x="340" y="55" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#b4b2a9">Role template · compaction summary · RAG context</text>
+  </g>
+  <line x1="340" y1="66" x2="340" y2="84" stroke="#9c9a92" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- LLM reasoning call -->
+  <g font-family="'Segoe UI', system-ui, sans-serif">
+    <rect x="210" y="84" width="260" height="50" rx="8" fill="#3c3489" stroke="#afa9ec" stroke-width="0.5"/>
+    <text x="340" y="105" text-anchor="middle" dominant-baseline="central" font-size="14" font-weight="600" fill="#cecbf6">LLM reasoning call</text>
+    <text x="340" y="123" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#afa9ec">LangChainReasoningEngine → ChatModel</text>
+  </g>
+  <line x1="340" y1="134" x2="340" y2="152" stroke="#9c9a92" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- Parse ReasoningStep -->
+  <g font-family="'Segoe UI', system-ui, sans-serif">
+    <rect x="210" y="152" width="260" height="50" rx="8" fill="#085041" stroke="#5dcaa5" stroke-width="0.5"/>
+    <text x="340" y="173" text-anchor="middle" dominant-baseline="central" font-size="14" font-weight="600" fill="#9fe1cb">Parse ReasoningStep</text>
+    <text x="340" y="191" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#5dcaa5">ACTION · OBSERVE · FINAL · PENDING</text>
+  </g>
+  <line x1="340" y1="202" x2="340" y2="220" stroke="#9c9a92" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- Decision diamond -->
+  <rect x="310" y="223" width="60" height="34" rx="4" transform="rotate(-45 340 240)" fill="#633806" stroke="#ef9f27" stroke-width="0.5"/>
+  <text x="340" y="237" text-anchor="middle" dominant-baseline="central" font-size="12" fill="#c2c0b6" font-family="'Segoe UI', system-ui, sans-serif">step</text>
+  <text x="340" y="251" text-anchor="middle" dominant-baseline="central" font-size="12" fill="#c2c0b6" font-family="'Segoe UI', system-ui, sans-serif">type?</text>
+
+  <!-- FINAL branch → AgentResult -->
+  <path d="M373 240 L510 240" fill="none" stroke="#9c9a92" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <text x="450" y="233" text-anchor="middle" font-size="12" fill="#c2c0b6" font-family="'Segoe UI', system-ui, sans-serif">FINAL</text>
+  <g font-family="'Segoe UI', system-ui, sans-serif">
+    <rect x="510" y="218" width="148" height="44" rx="8" fill="#085041" stroke="#5dcaa5" stroke-width="0.5"/>
+    <text x="584" y="236" text-anchor="middle" dominant-baseline="central" font-size="14" font-weight="600" fill="#9fe1cb">AgentResult</text>
+    <text x="584" y="252" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#5dcaa5">Finished / Failed</text>
+  </g>
+
+  <!-- ACTION branch → ToolInvocationGuard -->
+  <line x1="340" y1="268" x2="340" y2="296" stroke="#9c9a92" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <text x="358" y="284" text-anchor="start" font-size="12" fill="#c2c0b6" font-family="'Segoe UI', system-ui, sans-serif">ACTION</text>
+
+  <!-- ToolInvocationGuard + Governance -->
+  <g font-family="'Segoe UI', system-ui, sans-serif">
+    <rect x="130" y="296" width="420" height="60" rx="8" fill="#712b13" stroke="#f0997b" stroke-width="0.5"/>
+    <text x="340" y="316" text-anchor="middle" dominant-baseline="central" font-size="14" font-weight="600" fill="#f5c4b3">ToolInvocationGuard + Governance</text>
+    <text x="340" y="336" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#f0997b">Role trust pre-flight · Budget · rate-limit · approval gate</text>
+    <text x="340" y="350" text-anchor="middle" dominant-baseline="central" font-size="9" fill="#e07860">Trusted role? → skip non-sensitive · EXECUTE_SHELL+NETWORK_OUTBOUND always need HITL</text>
+  </g>
+
+  <!-- needs approval: dashed line goes left to narrow column (x=30), then down -->
+  <!-- narrow column boxes are x=5..180, main column starts at x=190 — no overlap -->
+  <path d="M130 326 L30 326 L30 400" fill="none" stroke="#9c9a92" stroke-width="1.5" stroke-dasharray="4 3" marker-end="url(#arrow)"/>
+  <text x="80" y="318" text-anchor="middle" font-size="12" fill="#c2c0b6" font-family="'Segoe UI', system-ui, sans-serif">needs approval</text>
+
+  <!-- LEFT COLUMN (x=5..180): AwaitingApproval + Zombie, below main column boxes -->
+  <g font-family="'Segoe UI', system-ui, sans-serif">
+    <rect x="5" y="400" width="165" height="45" rx="8" fill="#633806" stroke="#ef9f27" stroke-width="0.5"/>
+    <text x="87" y="419" text-anchor="middle" dominant-baseline="central" font-size="14" font-weight="600" fill="#fac775">AwaitingApproval</text>
+    <text x="87" y="437" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#ef9f27">Checkpoint persisted</text>
+  </g>
+
+  <!-- arrow: AwaitingApproval → Zombie (vertical, both in left column) -->
+  <line x1="87" y1="445" x2="87" y2="470" stroke="#9c9a92" stroke-width="1.5" stroke-dasharray="4 3" marker-end="url(#arrow)"/>
+
+  <g font-family="'Segoe UI', system-ui, sans-serif">
+    <rect x="5" y="470" width="175" height="45" rx="8" fill="#771133" stroke="#e06090" stroke-width="0.5"/>
+    <text x="92" y="489" text-anchor="middle" dominant-baseline="central" font-size="13" font-weight="600" fill="#f0a0c0">Zombie Recovery (restart)</text>
+    <text x="92" y="507" text-anchor="middle" dominant-baseline="central" font-size="10" fill="#e06090">Auto-deny ALL channels · fire events</text>
+  </g>
+
+  <!-- MAIN COLUMN (x=190..490): ToolInvoker → Auto-Heal → Escalation → ChatMem -->
+  <line x1="340" y1="356" x2="340" y2="376" stroke="#9c9a92" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <g font-family="'Segoe UI', system-ui, sans-serif">
+    <rect x="190" y="376" width="300" height="50" rx="8" fill="#0c447c" stroke="#85b7eb" stroke-width="0.5"/>
+    <text x="340" y="397" text-anchor="middle" dominant-baseline="central" font-size="14" font-weight="600" fill="#b5d4f4">ToolInvoker · observation transformers</text>
+    <text x="340" y="415" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#85b7eb">PII redact · injection redact · truncate</text>
+  </g>
+
+  <line x1="340" y1="426" x2="340" y2="446" stroke="#9c9a92" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <g font-family="'Segoe UI', system-ui, sans-serif">
+    <rect x="190" y="446" width="300" height="50" rx="8" fill="#995700" stroke="#ef9f27" stroke-width="0.5"/>
+    <text x="340" y="467" text-anchor="middle" dominant-baseline="central" font-size="14" font-weight="600" fill="#fac775">Auto-Heal (sandbox_exec failure)</text>
+    <text x="340" y="485" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#ef9f27">ExecutionFailureRecoveryService → Shiva :heal:</text>
+  </g>
+
+  <line x1="340" y1="496" x2="340" y2="530" stroke="#9c9a92" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <g font-family="'Segoe UI', system-ui, sans-serif">
+    <rect x="170" y="530" width="340" height="50" rx="8" fill="#633806" stroke="#ef9f27" stroke-width="0.5"/>
+    <text x="340" y="551" text-anchor="middle" dominant-baseline="central" font-size="14" font-weight="600" fill="#fac775">Persona Escalation (any failure)</text>
+    <text x="340" y="569" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#ef9f27">PersonaEscalationService → target :escalate:</text>
+  </g>
+
+  <line x1="340" y1="580" x2="340" y2="610" stroke="#9c9a92" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <g font-family="'Segoe UI', system-ui, sans-serif">
+    <rect x="210" y="610" width="260" height="40" rx="8" fill="#444441" stroke="#b4b2a9" stroke-width="0.5"/>
+    <text x="340" y="630" text-anchor="middle" dominant-baseline="central" font-size="14" font-weight="600" fill="#d3d1c7">ChatMemoryWriter · next iteration</text>
+  </g>
+
+  <!-- Loop arrow back to top (right side) -->
+  <path d="M490 630 L660 630 L660 320"
+        fill="none" stroke="#9c9a92" stroke-width="1.5" stroke-dasharray="4 3"/>
+  <text x="664" y="310" text-anchor="start" font-size="12" fill="#c2c0b6" font-family="'Segoe UI', system-ui, sans-serif">loop</text>
+  <path d="M660 296 L660 91 L490 91"
+        fill="none" stroke="#9c9a92" stroke-width="1.5" stroke-dasharray="4 3"
+        marker-end="url(#arrow)"/>
+
+
+</svg>

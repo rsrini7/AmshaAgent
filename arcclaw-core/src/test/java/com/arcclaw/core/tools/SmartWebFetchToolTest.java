@@ -17,8 +17,8 @@ class SmartWebFetchToolTest {
 
     @Test
     void htmlToTextRemovesScriptAndStyle() {
-        String html = "<html><head><script>var x=1;</script><style>.a{color:red}</style></head>" +
-                      "<body><p>Visible</p></body></html>";
+        String html = "<html><head><script>var x=1;</script><style>.a{color:red}</style></head>"
+                + "<body><p>Visible</p></body></html>";
         String text = SmartWebFetchTool.htmlToText(html);
         assertTrue(text.contains("Visible"));
         assertFalse(text.contains("var x"));

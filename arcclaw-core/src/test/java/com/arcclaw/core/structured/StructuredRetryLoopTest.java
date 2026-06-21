@@ -12,10 +12,10 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import jakarta.inject.Inject;
+
 import java.util.UUID;
 import java.util.function.Supplier;
-
-import jakarta.inject.Inject;
 
 import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.audit.TelemetryAuditService;
@@ -23,11 +23,13 @@ import com.arcclaw.core.governance.BudgetExceededException;
 import com.arcclaw.core.governance.BudgetWarningException;
 import com.arcclaw.core.governance.GovernanceStrategy;
 import com.arcclaw.core.observability.AgentOtelContext;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+
 import io.opentelemetry.api.trace.Span;
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
 
 @QuarkusTest
 class StructuredRetryLoopTest {
@@ -68,12 +70,18 @@ class StructuredRetryLoopTest {
         @SuppressWarnings("unchecked")
         Supplier<String> call = mock(Supplier.class);
         when(call.get())
-            .thenThrow(new JsonExtractionException("fail", "raw", String.class, null, null))
-            .thenReturn("recovered");
+                .thenThrow(new JsonExtractionException("fail", "raw", String.class, null, null))
+                .thenReturn("recovered");
 
         String result = retryLoop.execute(sessionId, "role", "op", call);
         assertEquals("recovered", result);
-        verify(auditService).record(eq(sessionId), anyString(), eq("role"), eq(SecurityEventType.STRUCTURED_OUTPUT_RETRY), anyString());
+        verify(auditService)
+                .record(
+                        eq(sessionId),
+                        anyString(),
+                        eq("role"),
+                        eq(SecurityEventType.STRUCTURED_OUTPUT_RETRY),
+                        anyString());
         verify(mockSpan).end();
     }
 
@@ -117,8 +125,8 @@ class StructuredRetryLoopTest {
         @SuppressWarnings("unchecked")
         Supplier<String> call = mock(Supplier.class);
         when(call.get())
-            .thenThrow(new JsonExtractionException("fail", "raw", String.class, null, null))
-            .thenReturn("ok");
+                .thenThrow(new JsonExtractionException("fail", "raw", String.class, null, null))
+                .thenReturn("ok");
 
         retryLoop.execute(sessionId, "role", "op", call);
         verify(auditService, times(1)).record(any(), any(), any(), any(), any());
@@ -128,8 +136,7 @@ class StructuredRetryLoopTest {
     void testBudgetWarningFollowedByExtractionFailure() {
         @SuppressWarnings("unchecked")
         Supplier<String> call = mock(Supplier.class);
-        when(call.get())
-            .thenThrow(new BudgetWarningException("Low budget"));
+        when(call.get()).thenThrow(new BudgetWarningException("Low budget"));
 
         assertThrows(BudgetWarningException.class, () -> retryLoop.execute(sessionId, "role", "op", call));
         verify(call, times(1)).get();

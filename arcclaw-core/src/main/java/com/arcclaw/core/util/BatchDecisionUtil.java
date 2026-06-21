@@ -22,13 +22,12 @@ public final class BatchDecisionUtil {
     public static List<String> pendingToolNames(AgentCheckpoint cp, ObjectMapper objectMapper) {
         if (!cp.hasBatchToolDecisions()) return List.of();
         try {
-            Map<String, ToolDecision> map = objectMapper.readValue(
-                cp.getBatchToolDecisions(),
-                new TypeReference<>() {});
+            Map<String, ToolDecision> map =
+                    objectMapper.readValue(cp.getBatchToolDecisions(), new TypeReference<>() {});
             return map.entrySet().stream()
-                .filter(e -> ToolDecision.PENDING == e.getValue())
-                .map(Map.Entry::getKey)
-                .toList();
+                    .filter(e -> ToolDecision.PENDING == e.getValue())
+                    .map(Map.Entry::getKey)
+                    .toList();
         } catch (Exception e) {
             return List.of();
         }
@@ -40,9 +39,8 @@ public final class BatchDecisionUtil {
     public static List<String> allToolNames(AgentCheckpoint cp, ObjectMapper objectMapper) {
         if (!cp.hasBatchToolDecisions()) return List.of();
         try {
-            Map<String, ToolDecision> map = objectMapper.readValue(
-                cp.getBatchToolDecisions(),
-                new TypeReference<>() {});
+            Map<String, ToolDecision> map =
+                    objectMapper.readValue(cp.getBatchToolDecisions(), new TypeReference<>() {});
             return map.keySet().stream().toList();
         } catch (Exception e) {
             return List.of();

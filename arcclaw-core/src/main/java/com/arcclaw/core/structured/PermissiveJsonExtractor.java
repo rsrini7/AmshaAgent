@@ -1,8 +1,8 @@
 package com.arcclaw.core.structured;
 
-import java.util.regex.Pattern;
-
 import jakarta.enterprise.context.ApplicationScoped;
+
+import java.util.regex.Pattern;
 
 import com.arcclaw.common.util.LogUtil;
 import com.fasterxml.jackson.core.JsonParser;
@@ -11,6 +11,7 @@ import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.json.JsonMapper;
+
 import org.jboss.logging.Logger;
 
 /**
@@ -20,12 +21,12 @@ import org.jboss.logging.Logger;
 @ApplicationScoped
 public class PermissiveJsonExtractor {
     private static final Logger log = Logger.getLogger(PermissiveJsonExtractor.class);
-    
+
     private static final int MAX_JSON_CHARS = 512 * 1024; // 512 KiB hard cap
 
     // Pattern to match ```json ... ``` or plain ``` ... ``` blocks
-    private static final Pattern JSON_FENCE_PATTERN = Pattern.compile(
-            "^\\s*```(?:json)?\\s*(.*?)\\s*```\\s*$", Pattern.DOTALL);
+    private static final Pattern JSON_FENCE_PATTERN =
+            Pattern.compile("^\\s*```(?:json)?\\s*(.*?)\\s*```\\s*$", Pattern.DOTALL);
 
     public PermissiveJsonExtractor() {
         // No-op constructor, mapper built per-request to satisfy prompt requirements
@@ -45,7 +46,7 @@ public class PermissiveJsonExtractor {
 
     /**
      * Extracts an object of the given type from a raw string response.
-     * 
+     *
      * @param rawResponse The raw string (potentially containing markdown fences)
      * @param targetType The class to deserialize into
      * @return The deserialized object
@@ -57,9 +58,9 @@ public class PermissiveJsonExtractor {
             throw new JsonExtractionException("LLM returned null or blank response");
         }
         if (rawResponse.length() > MAX_JSON_CHARS) {
-            throw new JsonExtractionException(
-                String.format("LLM JSON response exceeds %d char limit (actual: %d chars). " +
-                    "Possible prompt-stuffing or runaway generation.",
+            throw new JsonExtractionException(String.format(
+                    "LLM JSON response exceeds %d char limit (actual: %d chars). "
+                            + "Possible prompt-stuffing or runaway generation.",
                     MAX_JSON_CHARS, rawResponse.length()));
         }
 
@@ -72,14 +73,14 @@ public class PermissiveJsonExtractor {
         try {
             return mapper.readValue(cleaned, targetType);
         } catch (Exception e) {
-            log.warnf("JSON extraction failed for type %s. Cleaned input: %s",
+            log.warnf(
+                    "JSON extraction failed for type %s. Cleaned input: %s",
                     targetType.getSimpleName(),
                     cleaned != null && cleaned.length() > 120
-                        ? cleaned.substring(0, 120) + "...[" + cleaned.length() + " chars]"
-                        : cleaned);
+                            ? cleaned.substring(0, 120) + "...[" + cleaned.length() + " chars]"
+                            : cleaned);
             throw new JsonExtractionException(
-                    "Permissive extraction failed: " + e.getMessage(),
-                    rawResponse, targetType, cleaned, e);
+                    "Permissive extraction failed: " + e.getMessage(), rawResponse, targetType, cleaned, e);
         }
     }
 
@@ -93,7 +94,8 @@ public class PermissiveJsonExtractor {
     private String unwrapSchemaEnvelope(String json, ObjectMapper mapper) {
         try {
             JsonNode root = mapper.readTree(json);
-            if (root.has("type") && root.has("properties")
+            if (root.has("type")
+                    && root.has("properties")
                     && "object".equals(root.get("type").asText())) {
                 return mapper.writeValueAsString(root.get("properties"));
             }
@@ -103,7 +105,7 @@ public class PermissiveJsonExtractor {
         }
         return json;
     }
-    
+
     private String stripFences(String input) {
         var matcher = JSON_FENCE_PATTERN.matcher(input);
         if (matcher.find()) {
@@ -111,5 +113,4 @@ public class PermissiveJsonExtractor {
         }
         return input.trim();
     }
-
 }

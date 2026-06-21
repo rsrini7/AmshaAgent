@@ -12,7 +12,8 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 public class ReasoningStepDeserializer extends JsonDeserializer<ReasoningStep> {
 
     @Override
-    public ReasoningStep deserialize(JsonParser p, DeserializationContext ctxt) throws IOException, JsonProcessingException {
+    public ReasoningStep deserialize(JsonParser p, DeserializationContext ctxt)
+            throws IOException, JsonProcessingException {
         ObjectMapper mapper = (ObjectMapper) p.getCodec();
         ObjectNode node = mapper.readTree(p);
 
@@ -28,7 +29,10 @@ public class ReasoningStepDeserializer extends JsonDeserializer<ReasoningStep> {
         }
 
         // Backward compatibility for legacy flat records based on "action" field
-        String action = node.has("action") && !node.get("action").isNull() ? node.get("action").asText() : null;
+        String action = node.has(ToolCallJsonKeys.ACTION)
+                        && !node.get(ToolCallJsonKeys.ACTION).isNull()
+                ? node.get(ToolCallJsonKeys.ACTION).asText()
+                : null;
 
         if (ReasoningStep.FINISH.equals(action)) {
             return mapper.treeToValue(node, ReasoningStep.FinishStep.class);

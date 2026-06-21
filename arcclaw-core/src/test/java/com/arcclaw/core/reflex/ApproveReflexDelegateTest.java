@@ -29,6 +29,7 @@ import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.persistence.api.CronStorePort;
 import com.fasterxml.jackson.databind.ObjectMapper;
+
 import org.jboss.logging.Logger;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -37,24 +38,50 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
+@SuppressWarnings("java:S1192")
 class ApproveReflexDelegateTest {
 
-    @Mock StatefulAgentStore agentStore;
-    @Mock AgentLoop agentLoop;
-    @Mock DelegateApprovalGuard delegateGuard;
-    @Mock CheckpointResumeHandler resumeHandler;
-    @Mock CronStorePort cronStore;
-    @Mock ReasoningEngine reasoningEngine;
-    @Mock AuditService auditService;
-    @Mock ObjectMapper objectMapper;
-    @Mock CheckpointApprovalService checkpointApprovalService;
-    @Mock CliResultBridge cliResultBridge;
-    @Mock WorkspaceManager workspaceManager;
-    @Mock ApprovalNotificationService notificationService;
-    @Mock ResumeResultHelper resumeResultHelper;
-    
+    @Mock
+    StatefulAgentStore agentStore;
+
+    @Mock
+    AgentLoop agentLoop;
+
+    @Mock
+    DelegateApprovalGuard delegateGuard;
+
+    @Mock
+    CheckpointResumeHandler resumeHandler;
+
+    @Mock
+    CronStorePort cronStore;
+
+    @Mock
+    ReasoningEngine reasoningEngine;
+
+    @Mock
+    AuditService auditService;
+
+    @Mock
+    ObjectMapper objectMapper;
+
+    @Mock
+    CheckpointApprovalService checkpointApprovalService;
+
+    @Mock
+    CliResultBridge cliResultBridge;
+
+    @Mock
+    WorkspaceManager workspaceManager;
+
+    @Mock
+    ApprovalNotificationService notificationService;
+
+    @Mock
+    ResumeResultHelper resumeResultHelper;
+
     ApproveReflex reflex;
-    
+
     @BeforeEach
     void setup() {
         reflex = new ApproveReflex();
@@ -76,17 +103,17 @@ class ApproveReflexDelegateTest {
         String adminId = "attacker";
         String targetSid = "b2ada049-88e1-474d-9589-783a82190d46";
         String input = "/approve " + targetSid;
-        
+
         // Session exists with pending approval — allowed because user is the owner
         AgentCheckpoint cp = mock(AgentCheckpointRecord.class);
         when(cp.getAgentRole()).thenReturn("coordinator");
         when(agentStore.findLatestAwaitingApproval(eq(targetSid))).thenReturn(Optional.of(cp));
         lenient().when(delegateGuard.isDelegate(adminId)).thenReturn(false);
-        
+
         MessageContext context = createTestContext(targetSid, adminId, input);
-        
+
         var result = reflex.execute(targetSid, adminId, "chat1", input, context);
-        
+
         assertTrue(result.commandResponse().isPresent());
         assertEquals("", result.commandResponse().get());
     }
@@ -96,14 +123,14 @@ class ApproveReflexDelegateTest {
         String adminId = "admin123";
         String targetSid = "b2ada049-88e1-474d-9589-783a82190d46";
         String input = "/approve " + targetSid;
-        
+
         // No pending session — falls through session path to cron path to "not found"
         when(agentStore.findLatestAwaitingApproval(eq(targetSid))).thenReturn(Optional.empty());
-        
+
         MessageContext context = createTestContext(targetSid, adminId, input);
-        
+
         var result = reflex.execute(targetSid, adminId, "chat1", input, context);
-        
+
         assertTrue(result.commandResponse().get().contains("Target session not found or has no pending approval."));
     }
 
@@ -113,15 +140,15 @@ class ApproveReflexDelegateTest {
         String ownerId = "regularUser";
         String mySessionId = "b2ada049-88e1-474d-9589-783a82190d46";
         String input = "/approve " + mySessionId;
-        
+
         AgentCheckpoint cp = mock(AgentCheckpointRecord.class);
         when(cp.getAgentRole()).thenReturn("coordinator");
         when(agentStore.findLatestAwaitingApproval(eq(mySessionId))).thenReturn(Optional.of(cp));
         lenient().when(delegateGuard.isDelegate(ownerId)).thenReturn(false);
-        
+
         MessageContext context = createTestContext(mySessionId, ownerId, input);
         var result = reflex.execute(mySessionId, ownerId, "chat1", input, context);
-        
+
         assertTrue(result.commandResponse().isPresent());
         assertEquals("", result.commandResponse().get());
     }
@@ -131,19 +158,19 @@ class ApproveReflexDelegateTest {
         String adminId = "delegateUser";
         String mySessionId = "b2ada049-88e1-474d-9589-783a82190d46";
         String input = "/approve " + mySessionId;
-        
+
         lenient().when(delegateGuard.isDelegate(adminId)).thenReturn(true);
-        
+
         // Mock the pending checkpoint for their own session
         AgentCheckpoint cp = mock(AgentCheckpointRecord.class);
         when(cp.getAgentRole()).thenReturn("coordinator");
         when(cp.hasBatchToolDecisions()).thenReturn(false);
         when(agentStore.findLatestAwaitingApproval(eq(mySessionId))).thenReturn(Optional.of(cp));
-        
+
         MessageContext context = createTestContext(mySessionId, adminId, input);
         var result = reflex.execute(mySessionId, adminId, "chat1", input, context);
-        
-        // Even for delegates, the self-session fast-path returns "" 
+
+        // Even for delegates, the self-session fast-path returns ""
         assertTrue(result.commandResponse().isPresent());
         assertEquals("", result.commandResponse().get());
     }
@@ -178,7 +205,8 @@ class ApproveReflexDelegateTest {
         // approve cron tasks without delegate role.
         assertTrue(result.commandResponse().isPresent());
         String response = result.commandResponse().get();
-        assertTrue(!response.contains("not authorized"),
+        assertTrue(
+                !response.contains("not authorized"),
                 "Cron task approval by owner should not require delegate role, got: " + response);
 
         // Verify the cron path was actually attempted

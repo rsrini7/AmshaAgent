@@ -16,8 +16,8 @@ public class InjectionInputGuard implements PreLlmGuard {
     @Override
     public GuardDecision validate(String sessionId, String userId, String userMessage, String assembledPrompt) {
         if (reflex.matches(userMessage)) {
-            return new GuardDecision.Block("Prompt injection detected",
-                    "Message triggered injection reflex at the LLM boundary");
+            return new GuardDecision.Block(
+                    "Prompt injection detected", "Message triggered injection reflex at the LLM boundary");
         }
         return new GuardDecision.Allow();
     }

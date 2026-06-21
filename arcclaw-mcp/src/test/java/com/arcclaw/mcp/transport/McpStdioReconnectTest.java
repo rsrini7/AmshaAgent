@@ -3,6 +3,9 @@ package com.arcclaw.mcp.transport;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.*;
 
+import jakarta.enterprise.inject.Instance;
+import jakarta.enterprise.util.AnnotationLiteral;
+
 import java.io.BufferedReader;
 import java.io.OutputStream;
 import java.io.StringReader;
@@ -12,15 +15,14 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Stream;
 
-import jakarta.enterprise.inject.Instance;
-import jakarta.enterprise.util.AnnotationLiteral;
-
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+
 import org.eclipse.microprofile.context.ManagedExecutor;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
+
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 
 public class McpStdioReconnectTest {
 
@@ -33,7 +35,7 @@ public class McpStdioReconnectTest {
         service = new McpClientService();
         service.objectMapper = mapper;
         service.meterRegistry = new SimpleMeterRegistry();
-        
+
         service.managedExecutors = mock(Instance.class);
         ManagedExecutor mockExec = mock(ManagedExecutor.class);
         when(service.managedExecutors.select(any(Class.class))).thenReturn(service.managedExecutors);
@@ -49,11 +51,11 @@ public class McpStdioReconnectTest {
     void testF19_CleanupAndReconnectOnDeadProcess() throws Exception {
         // 1. Setup mock dead state
         String serverName = "dead-server";
-        
+
         Process mockProcess = mock(Process.class);
         OutputStream mockOut = mock(OutputStream.class);
         // This reader will return null (EOF) immediately
-        BufferedReader mockReader = new BufferedReader(new StringReader("")); 
+        BufferedReader mockReader = new BufferedReader(new StringReader(""));
 
         // Inject into private maps
         setPrivateField(service, "processes", mapOf(serverName, mockProcess));
@@ -70,7 +72,7 @@ public class McpStdioReconnectTest {
         // but we want to verify it's CALLED.
         doNothing().when(spyService).connectStdio(anyString(), anyString(), anyList(), anyMap());
 
-        // 3. Invoke. First attempt fails due to EOF in sendRequestStdio. 
+        // 3. Invoke. First attempt fails due to EOF in sendRequestStdio.
         // cleanupStdio(serverName) is called.
         // Exception propagates to @Retry (not active here since we're calling directly or mocking).
         // Actually, we need to test that sendRequestStdio calls cleanupStdio.

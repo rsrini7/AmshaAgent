@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #MISE description="WSL2: Linux binary via rsync to local ext4 - auto-detects Podman vs local GraalVM"
 #MISE quiet=true
-#MISE depends=["setup:wsl-crlf", "build:ui-copy"]
+#MISE depends=["setup:wsl-crlf", "build:ui:copy"]
 
 set -e
 
@@ -166,7 +166,7 @@ cd "$OLDPWD"
 
 echo "▶   Assembling dist/ folder..."
 # This seamlessly executes the pwsh dist task inside WSL2!
-mise run dist
+mise run dist:dist
 
 WIN_DIST_PATH=$(wslpath -w "$OLDPWD/dist")
 echo "✅ WSL2 Build complete! Linux binary is waiting in $WIN_DIST_PATH"

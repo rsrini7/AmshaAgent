@@ -1,10 +1,10 @@
 package com.arcclaw.core.channel;
 
-import java.util.concurrent.CompletableFuture;
-
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
+
+import java.util.concurrent.CompletableFuture;
 
 import com.arcclaw.channel.api.ChannelMessage;
 import com.arcclaw.channel.api.ChannelServices;
@@ -14,6 +14,7 @@ import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.pipeline.MessagePipeline;
 import com.arcclaw.core.pipeline.SessionIdResolver;
 import com.arcclaw.core.security.SessionOwnerResolver;
+
 import org.eclipse.microprofile.context.ManagedExecutor;
 
 /**
@@ -22,12 +23,23 @@ import org.eclipse.microprofile.context.ManagedExecutor;
 @ApplicationScoped
 public class ChannelServicesImpl implements ChannelServices {
 
-    @Inject MessagePipeline messagePipeline;
-    @Inject WorkspaceManager workspaceManager;
-    @Inject SessionIdResolver sessionIdResolver;
-    @Inject SessionHeartbeatTracker heartbeatTracker;
-    @Inject Instance<SessionOwnerResolver> ownerResolver;
-    @Inject ManagedExecutor executor;
+    @Inject
+    MessagePipeline messagePipeline;
+
+    @Inject
+    WorkspaceManager workspaceManager;
+
+    @Inject
+    SessionIdResolver sessionIdResolver;
+
+    @Inject
+    SessionHeartbeatTracker heartbeatTracker;
+
+    @Inject
+    Instance<SessionOwnerResolver> ownerResolver;
+
+    @Inject
+    ManagedExecutor executor;
 
     @Override
     public String resolveOrCreateSession(String channelType, String channelId, String userId) {
@@ -36,11 +48,8 @@ public class ChannelServicesImpl implements ChannelServices {
 
     @Override
     public CompletableFuture<Void> processAsync(ChannelMessage message) {
-        MessageContext context = new MessageContext(
-            message.correlationId(), 
-            message.sender(), 
-            message);
-            
+        MessageContext context = new MessageContext(message.correlationId(), message.sender(), message);
+
         return executor.runAsync(() -> messagePipeline.process(context));
     }
 

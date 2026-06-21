@@ -31,7 +31,7 @@ The reactor enforces strict architectural separation that prevents accidental de
 
 - **`arcclaw-channel-api`** - Channel SPI contracts (6 interfaces: `ChannelPlugin`, `ChannelSender`, `ReplyRenderer`, `ChannelAllowlist`, `ChannelJobNotifier`, `ChannelDaemon`) plus structured output types. Zero implementation — allows `arcclaw-core` to reference channel concepts without coupling to any specific adapter.
 - **`arcclaw-persistence-api`** - Hexagonal architecture port interfaces (`CheckpointStorePort`, `ChatMemoryStorePort`, `CronStorePort`, `SecretStorePort`, `SkillStorePort`, `AuditEventStorePort`, `AuditSchemaPort`, `CompactionStorePort`, `MemoryRetrievalPort`, `AdvisoryLockPort`, `PersistenceAdapterPort`). Core depends on ports, not implementations.
-- **`arcclaw-persistence-common`** - Shared JPA entities (`AgentCheckpointEntity`, `AgentCronEntity`, `AuditEventEntity`, `ReasoningStepEntity`) used by all persistence adapters.
+- **`arcclaw-persistence-common`** - Shared JDBI records/DTOs and `SessionKnowledgeBase` (in-memory embedding store) used by all persistence adapters.
 - **`arcclaw-core`** - Agent runtime kernel. Domain logic, tools, reflexes, governance, sandbox, pipeline, and CDI interfaces. Has zero awareness of REST, Telegram, or CLI.
 - **`arcclaw-persistence-sqlite`** - SQLite adapter implementing all persistence ports. Contains `GlobalKnowledgeBase`, `SessionKnowledgeBase`, WAL configuration, FTS5 setup, and `RagSchemaInitializer`.
 - **`arcclaw-persistence-fs`** - Filesystem-based persistence adapter for environments without SQLite.
@@ -194,7 +194,7 @@ Apache Camel's `camel-telegram` component handles the long-polling lifecycle, gr
 |---|---|---|---|
 | `coordinator` | Vishnu | Can use all tools | General tasks, delegation, scheduling |
 | `researcher` | Saraswati | Read-only tools only; never fabricates | External data retrieval, GitHub lookups |
-| `coder` | Brahma | sandbox_exec + check_list + add_mcp_server | Code execution, engineering tasks |
+| `coder` | Brahma | sandbox_exec + manage_checklist + register_mcp_server | Code execution, engineering tasks |
 | `debugger` | Shiva | GitHub only; contrarian by design | Bug analysis, stack traces, security audits |
 | `architect` | Brihaspati | GitHub + memory search; never writes code | ADRs, design reviews, trade-off analysis |
 | `synthesizer` | Dattatreya | All tools; only for cross-domain tasks | Multi-agent output integration |
@@ -315,7 +315,7 @@ The `ToolObservationSanitizer` also runs both `PromptInjectionReflex.sanitize()`
 
 ```
 🔌 MCP Status
-Exposed internal tools (2): github, memory_search
+Exposed internal tools (3): github, recall_memory_search, archival_memory_search
 Dynamic MCP tools: none connected
 ```
 
@@ -394,14 +394,14 @@ This reloads both classpath built-in skills and database-tier skills without res
 
 MCP is an open protocol for LLM tool interoperability over JSON-RPC. ArcClaw implements it in both directions:
 
-- **Inbound MCP server**: External MCP clients (e.g. Claude Desktop, other agents) can connect to ArcClaw's `/mcp` endpoint and call its `github` and `memory_search` tools via JSON-RPC over HTTP-SSE.
+- **Inbound MCP server**: External MCP clients (e.g. Claude Desktop, other agents) can connect to ArcClaw's `/mcp` endpoint and call its `github`, `recall_memory_search`, and `archival_memory_search` tools via JSON-RPC over HTTP-SSE.
 - **Outbound MCP client**: ArcClaw can connect to any external MCP server (`POST /api/v1/mcp/connect`). The connected server's tools are registered as `ExternalMcpToolAdapter` instances, becoming natively available to agent roles in the tool schema.
 
 ---
 
 ### Q: Which internal tools does ArcClaw expose as an MCP server?
 
-By default, `github` and `memory_search` are exposed. The `McpToolAllowlist` configuration controls this allowlist. Disallowed tool names return a JSON-RPC error with a descriptive message rather than executing.
+By default, `github`, `recall_memory_search`, and `archival_memory_search` are exposed. The `McpToolAllowlist` configuration controls this allowlist. Disallowed tool names return a JSON-RPC error with a descriptive message rather than executing.
 
 ---
 
@@ -410,7 +410,7 @@ By default, `github` and `memory_search` are exposed. The `McpToolAllowlist` con
 ```
 1. POST /mcp  {"method":"initialize"}      → 200, Mcp-Session-Id in response header
 2. POST /mcp  {"method":"initialized"}     → 202, handshake complete
-3. POST /mcp  {"method":"tools/list"}      → tools array (github, memory_search)
+3. POST /mcp  {"method":"tools/list"}      → tools array (github, recall_memory_search, archival_memory_search)
 4. POST /mcp  {"method":"tools/call",...}  → content block + MCP_TOOL_INVOKED audit event
 ```
 
@@ -445,7 +445,7 @@ After this, `GET /api/v1/mcp/tools` should show `registeredDynamicTools` with 2 
 
 ArcClaw uses a rolling window `ChatMemoryStore` capped at `arcclaw.chat-memory.max-messages` (default 20). When the window fills, the `CompactionHandler` in the message pipeline triggers `ContextCompactionService` if the message count exceeds `arcclaw.memory.compaction.threshold` (default 5 above the keep-recent count).
 
-Compaction uses `llama-3.1-8b-instant` to summarize the oldest messages into a `CompactionSummaryEntity`, discards the originals from the rolling window, and preserves the most recent `keep-recent` (default 5) messages verbatim. The summary is also written into the FTS5 database (`arcclaw-fts.db`) so it can be recalled later via `MemorySearchTool`.
+Compaction uses `llama-3.1-8b-instant` to summarize the oldest messages into a `CompactionSummaryDto`, discards the originals from the rolling window, and preserves the most recent `keep-recent` (default 5) messages verbatim. The summary is also written into the FTS5 database (`arcclaw-fts.db`) so it can be recalled later via `MemorySearchTool`.
 
 ---
 
@@ -455,7 +455,7 @@ Compaction uses `llama-3.1-8b-instant` to summarize the oldest messages into a `
 
 The search merges FTS5 keyword results and sqlite-vec vector results using Reciprocal Rank Fusion (RRF, k=60). If the vector extension is unavailable, it degrades silently to FTS5-only results.
 
-Agents with `memory_search` in their tool list (coordinator, researcher, architect, synthesizer) can use this to recall decisions made in previous sessions.
+Agents with `recall_memory_search` in their tool list (coordinator, researcher, architect, synthesizer) can use this to recall decisions made in previous sessions.
 
 ---
 
@@ -534,7 +534,7 @@ Built-in examples: `SynthesisFunction` returns `SynthesisResult` (synthesizer's 
 ### Q: How does the autonomous cron scheduler work end-to-end?
 
 1. A user asks an agent to schedule a future task. The `coordinator` or `synthesizer` persona invokes `ScheduleTaskTool` with a 5-field UNIX cron expression, a self-contained goal, an optional timezone, and a `runOnce` flag.
-2. The tool validates the cron expression (via `cron-utils`), computes `nextFireTime`, and writes an `AgentCronEntity` with status `PENDING` to the `agent_cron` SQLite table.
+2. The tool validates the cron expression (via `cron-utils`), computes `nextFireTime`, and writes an `AgentCronDto` with status `PENDING` to the `agent_cron` SQLite table.
 3. `AgentCronScheduler` polls every 30 seconds (`arcclaw.cron.poll-interval`). It picks up `PENDING` jobs whose `nextFireTime ≤ now()` and hands them to `CronJobRunner`.
 4. `CronJobRunner` executes an agent loop (capped at `arcclaw.cron.max-iterations`, default 2) for the cron goal. On completion, it fires a CDI `AgentJobCompleted` event.
 5. `TelegramCronNotificationObserver` (or `CliCronNotificationObserver`) observes the event and delivers the result to the originating chat.

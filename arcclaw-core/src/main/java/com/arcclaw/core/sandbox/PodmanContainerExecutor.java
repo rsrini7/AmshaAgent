@@ -1,39 +1,45 @@
 package com.arcclaw.core.sandbox;
 
+import jakarta.annotation.PreDestroy;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.event.Observes;
+import jakarta.inject.Inject;
+
 import java.io.File;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 
-import jakarta.annotation.PreDestroy;
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.enterprise.event.Observes;
-import jakarta.inject.Inject;
-
 import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.core.observability.AgentOTelConstants;
 import com.arcclaw.core.observability.AgentOtelContext;
 import com.arcclaw.core.util.PathSanitizer;
+
+import org.eclipse.microprofile.config.inject.ConfigProperty;
+import org.jboss.logging.Logger;
+
 import io.opentelemetry.api.trace.Span;
 import io.opentelemetry.api.trace.StatusCode;
 import io.opentelemetry.context.Scope;
 import io.quarkus.runtime.StartupEvent;
-import org.eclipse.microprofile.config.inject.ConfigProperty;
-import org.jboss.logging.Logger;
 
 @ApplicationScoped
 public class PodmanContainerExecutor {
 
+    private static final String PODMAN_ENV_FLAG = "--env";
+
     private static final Logger log = Logger.getLogger(PodmanContainerExecutor.class);
 
-    private static volatile boolean podmanAvailable = false;
-    private static volatile long lastChecked = 0;
+    private volatile boolean podmanAvailable = false;
+    private volatile long lastChecked = 0;
 
     @Inject
     AgentOtelContext otelContext;
@@ -96,7 +102,8 @@ public class PodmanContainerExecutor {
                 if (stopped && proc.exitValue() == 0) {
                     log.infof("Container %s stopped cleanly.", containerName);
                 } else {
-                    log.warnf("Container %s did not stop within grace period (exit=%d).",
+                    log.warnf(
+                            "Container %s did not stop within grace period (exit=%d).",
                             containerName, stopped ? proc.exitValue() : -1);
                 }
             } catch (Exception e) {
@@ -107,13 +114,11 @@ public class PodmanContainerExecutor {
     }
 
     public String executeInContainer(
-            String sessionId,
-            Path workspaceRoot,
-            List<String> command,
-            Map<String, String> requiredSecrets) throws Exception {
+            String sessionId, Path workspaceRoot, List<String> command, Map<String, String> requiredSecrets)
+            throws Exception {
 
         var resolvedSecrets = secretResolver.resolveSecrets(requiredSecrets);
-        
+
         checkPodmanAvailable();
         checkImageAvailable();
 
@@ -122,8 +127,8 @@ public class PodmanContainerExecutor {
         try (var transport = new TmpfsSecretTransport(sessionId)) {
             List<String> transportArgs = transport.prepare(resolvedSecrets);
 
-            String containerName = "zc-" + sessionId.substring(0, Math.min(8, sessionId.length()))
-                    + "-" + Long.toHexString(System.nanoTime());
+            String containerName = "zc-" + sessionId.substring(0, Math.min(8, sessionId.length())) + "-"
+                    + Long.toHexString(System.nanoTime());
 
             Span span = otelContext.childSpan(sessionId, AgentOTelConstants.SPAN_TOOL_CONTAINER_EXEC);
             span.setAttribute(AgentOTelConstants.ATTR_CONTAINER_IMAGE, sandboxImage);
@@ -139,7 +144,9 @@ public class PodmanContainerExecutor {
                 return result;
             } catch (Exception e) {
                 span.recordException(e);
-                span.setStatus(StatusCode.ERROR, e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName());
+                span.setStatus(
+                        StatusCode.ERROR,
+                        e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName());
                 throw e;
             } finally {
                 span.end();
@@ -148,28 +155,41 @@ public class PodmanContainerExecutor {
         }
     }
 
-    private List<String> buildPodmanCmd(String containerName, List<String> transportArgs, Path workspaceRoot, List<String> command) {
+    private List<String> buildPodmanCmd(
+            String containerName, List<String> transportArgs, Path workspaceRoot, List<String> command) {
         var podmanCmd = new ArrayList<>(List.of(
-                podmanPath, "run", "--rm",
-                "--name", containerName,
-                "--pull", "never",
+                podmanPath,
+                "run",
+                "--rm",
+                "--name",
+                containerName,
+                "--pull",
+                "never",
                 "--network=" + containerNetwork,
                 "--read-only",
-                "--tmpfs", "/tmp:rw,nosuid,size=128m",
+                "--tmpfs",
+                "/tmp:rw,nosuid,size=128m",
                 "--security-opt=no-new-privileges",
                 "--cap-drop=ALL",
-                "-v", workspaceRoot.toAbsolutePath() + ":/workspace:ro",
+                "-v",
+                workspaceRoot.toAbsolutePath() + ":/workspace:ro",
                 "--user=" + toolRunnerUser + ":" + toolRunnerUser,
-                "--env", "GOCACHE=/tmp/go-cache",
-                "--env", "GOPATH=/tmp/go-path",
-                "--env", "GOMAXPROCS=1",
-                "--env", "JAVA_TOOL_OPTIONS=-Djava.io.tmpdir=/tmp",
-                "--env", "GH_CONFIG_DIR=/tmp/gh-config",
-                "--env", "GH_NO_UPDATE_NOTIFIER=1",
-                "--env", "GH_PROMPT_DISABLED=1",
+                PODMAN_ENV_FLAG,
+                "GOCACHE=/tmp/go-cache",
+                PODMAN_ENV_FLAG,
+                "GOPATH=/tmp/go-path",
+                PODMAN_ENV_FLAG,
+                "GOMAXPROCS=1",
+                PODMAN_ENV_FLAG,
+                "JAVA_TOOL_OPTIONS=-Djava.io.tmpdir=/tmp",
+                PODMAN_ENV_FLAG,
+                "GH_CONFIG_DIR=/tmp/gh-config",
+                PODMAN_ENV_FLAG,
+                "GH_NO_UPDATE_NOTIFIER=1",
+                PODMAN_ENV_FLAG,
+                "GH_PROMPT_DISABLED=1",
                 "--pids-limit=" + CONTAINER_PIDS_LIMIT,
-                "--ulimit=nofile=256:256"
-        ));
+                "--ulimit=nofile=256:256"));
 
         if (containerMemoryLimit != null && !containerMemoryLimit.isBlank()) {
             podmanCmd.add("--memory=" + containerMemoryLimit);
@@ -184,12 +204,14 @@ public class PodmanContainerExecutor {
         return podmanCmd;
     }
 
-    private Process prepareAndStartProcess(String sessionId, List<String> podmanCmd, TmpfsSecretTransport transport) throws IOException {
+    private Process prepareAndStartProcess(String sessionId, List<String> podmanCmd, TmpfsSecretTransport transport)
+            throws IOException {
         log.infof("[Sandbox] Executing: %s", String.join(" ", podmanCmd));
         var pb = new ProcessBuilder(podmanCmd);
 
         // Use PathSanitizer to match ToolRegistry.invokeSandboxed() which sanitizes colons in session IDs.
-        File workspaceDir = Path.of(workspaceRootDir, PathSanitizer.sanitizeForFilesystem(sessionId)).toFile();
+        File workspaceDir = Path.of(workspaceRootDir, PathSanitizer.sanitizeForFilesystem(sessionId))
+                .toFile();
         if (!workspaceDir.exists()) {
             boolean created = workspaceDir.mkdirs();
             if (!created) {
@@ -207,7 +229,7 @@ public class PodmanContainerExecutor {
     private String readSandboxOutputAndGetResult(Process process, List<String> command) throws Exception {
         var stdoutFuture = CompletableFuture.supplyAsync(() -> {
             try {
-                return new String(process.getInputStream().readAllBytes());
+                return new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
             } catch (IOException e) {
                 log.warnf("Failed to drain sandbox stdout: %s", LogUtil.rootMessage(e));
                 return "";
@@ -215,7 +237,7 @@ public class PodmanContainerExecutor {
         });
         var stderrFuture = CompletableFuture.supplyAsync(() -> {
             try {
-                return new String(process.getErrorStream().readAllBytes());
+                return new String(process.getErrorStream().readAllBytes(), StandardCharsets.UTF_8);
             } catch (IOException e) {
                 log.warnf("Failed to drain sandbox stderr: %s", LogUtil.rootMessage(e));
                 return "";
@@ -245,7 +267,8 @@ public class PodmanContainerExecutor {
 
         // Filter benign JVM informational lines from stderr
         if (stderr != null && !stderr.isBlank()) {
-            stderr = stderr.replaceAll("(?m)^Picked up JAVA_TOOL_OPTIONS:.*$", "").trim();
+            stderr = stderr.replaceAll("(?m)^Picked up JAVA_TOOL_OPTIONS:.*$", "")
+                    .trim();
         }
 
         if (exitCode != 0) {
@@ -275,7 +298,7 @@ public class PodmanContainerExecutor {
     private long resolveTimeout(List<String> command) {
         // Detect network calls: gh, curl, wget, python -m pip, etc.
         if (!command.isEmpty()) {
-            String first = command.get(0).toLowerCase();
+            String first = command.get(0).toLowerCase(Locale.ROOT);
             if (first.equals("gh") || first.equals("curl") || first.equals("wget")) {
                 return networkTimeoutSeconds;
             }
@@ -286,11 +309,11 @@ public class PodmanContainerExecutor {
     private void checkImageAvailable() throws SandboxImageMissingException {
         try {
             // Using inspect is more reliable across name forms (bare vs localhost/ prefix).
-            Process p = new ProcessBuilder(podmanPath, "image", "inspect", sandboxImage, "--format", "{{.Id}}")
-                .start();
+            Process p = new ProcessBuilder(podmanPath, "image", "inspect", sandboxImage, "--format", "{{.Id}}").start();
             boolean ok = p.waitFor(3, TimeUnit.SECONDS);
             if (!ok || p.exitValue() != 0) {
-                throw new SandboxImageMissingException("Sandbox image '" + sandboxImage + "' missing from Podman storage.");
+                throw new SandboxImageMissingException(
+                        "Sandbox image '" + sandboxImage + "' missing from Podman storage.");
             }
         } catch (IOException | InterruptedException e) {
             throw new SandboxImageMissingException("Failed to check sandbox image: " + e.getMessage());
@@ -306,8 +329,8 @@ public class PodmanContainerExecutor {
 
         try {
             Process p = new ProcessBuilder(podmanPath, "info")
-                .redirectErrorStream(true)
-                .start();
+                    .redirectErrorStream(true)
+                    .start();
             boolean ok = p.waitFor(3, TimeUnit.SECONDS);
             if (!ok || p.exitValue() != 0) {
                 podmanAvailable = false;

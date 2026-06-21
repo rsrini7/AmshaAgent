@@ -23,9 +23,9 @@ class ToolCategoryMapperTest {
 
     @Test
     void categoryFor_database() {
-        assertEquals(ToolCategory.DATABASE, mapper.categoryFor("memory_search"));
+        assertEquals(ToolCategory.DATABASE, mapper.categoryFor("recall_memory_search"));
         assertEquals(ToolCategory.DATABASE, mapper.categoryFor("ingest_document"));
-        assertEquals(ToolCategory.DATABASE, mapper.categoryFor("check_list"));
+        assertEquals(ToolCategory.DATABASE, mapper.categoryFor("manage_checklist"));
         assertEquals(ToolCategory.DATABASE, mapper.categoryFor("agent_task"));
     }
 
@@ -35,7 +35,7 @@ class ToolCategoryMapperTest {
         assertEquals(ToolCategory.INTERNAL, mapper.categoryFor("schedule_task"));
         assertEquals(ToolCategory.INTERNAL, mapper.categoryFor("manage_schedule"));
         assertEquals(ToolCategory.INTERNAL, mapper.categoryFor("garuda"));
-        assertEquals(ToolCategory.INTERNAL, mapper.categoryFor("add_mcp_server"));
+        assertEquals(ToolCategory.INTERNAL, mapper.categoryFor("register_mcp_server"));
     }
 
     @Test

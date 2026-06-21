@@ -14,6 +14,7 @@ import java.util.Optional;
 
 import com.arcclaw.core.security.SecretVault;
 import com.arcclaw.core.security.VaultKey;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
@@ -50,7 +51,7 @@ public class SandboxSecretResolverTest {
     void testResolveSecrets_missingKey_throwsSecurityException() {
         when(secretVault.get("missing")).thenReturn(Optional.empty());
         Map<String, String> required = Map.of("ENV_VAR", "missing");
-        
+
         assertThrows(SecurityException.class, () -> secretResolver.resolveSecrets(required));
     }
 
@@ -59,10 +60,10 @@ public class SandboxSecretResolverTest {
         byte[] secretData = "secret-value".getBytes();
         when(vaultKey.get()).thenReturn(secretData);
         when(secretVault.get("key1")).thenReturn(Optional.of(vaultKey));
-        
+
         Map<String, String> required = Map.of("VAR1", "key1");
         Map<String, byte[]> result = secretResolver.resolveSecrets(required);
-        
+
         assertNotNull(result);
         assertEquals(1, result.size());
         assertArrayEquals(secretData, result.get("VAR1"));
