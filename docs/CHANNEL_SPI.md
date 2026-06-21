@@ -127,7 +127,7 @@ The `ChannelPluginRegistry` discovers all `ChannelPlugin` implementations via CD
 
 ### Step 1: Create the Maven module
 
-Create `amsha-channel-discord/` with a dependency on `amsha-channel-api`:
+Create `channel-discord/` with a dependency on `amsha-channel-api`:
 
 ```xml
 <dependency>
@@ -315,7 +315,7 @@ public class DiscordChannelPlugin implements ChannelPlugin {
 
 Add to root `pom.xml`:
 ```xml
-<module>amsha-channel-discord</module>
+<module>channel-discord</module>
 ```
 
 That's it. `ChannelPluginRegistry` will discover `DiscordChannelPlugin` via CDI at startup. No changes to `amsha-core` or `amsha-app` are required.

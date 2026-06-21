@@ -70,8 +70,8 @@ See [docs/QUICK_START.md](./docs/QUICK_START.md) for detailed setup options.
 | `docs/assets/` | Architecture diagrams (SVG) — referenced from README + ARCHITECTURE.md |
 | `app/` | Main deployable: CLI, REST, security, wiring |
 | `core/` | Agent loop, tools, audit, governance, sandbox, reflexes |
-| `amsha-persistence-*/` | Hexagonal persistence: API ports + SQLite / PostgreSQL / FS adapters |
-| `amsha-channel-*/` | Channel adapters: Telegram, WebSocket |
+| `persistence-*/` | Hexagonal persistence: API ports + SQLite / PostgreSQL / FS adapters |
+| `channel-*/` | Channel adapters: Telegram, WebSocket |
 | `ui/` | Lit 3.x + TypeScript web frontend |
 | `mcp/`, `rag/`, `tool-playwright/` | Optional runtime modules |
 
