@@ -12,6 +12,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.BiFunction;
+import java.util.regex.Pattern;
 
 import com.amsha.common.util.LogUtil;
 import com.amsha.core.agent.reasoning.StructuredOutputMode;
@@ -29,6 +30,9 @@ import org.jboss.logging.Logger;
 public final class ChatModelFactory {
 
     private static final Logger LOG = Logger.getLogger(ChatModelFactory.class);
+
+    /** Matches headroom proxy ports 8788–8797 (e.g. {@code :8789}). */
+    private static final Pattern HEADROOM_PORT_PATTERN = Pattern.compile(":87[89]\\d");
 
     private ChatModelFactory() {}
 
@@ -70,7 +74,7 @@ public final class ChatModelFactory {
     /**
      * Applies {@link ResponseFormat#JSON} when the model supports native structured output
      * and no tools are needed (toolless mode). Used by intent-classifier and compaction models.
-     * Bypasses JSON mode if the base URL routes through Headroom proxy.
+     * Bypasses JSON mode if the base URL routes through any Headroom proxy (ports 8788–8797).
      */
     public static void applyJsonResponseFormat(
             OpenAiChatModel.OpenAiChatModelBuilder builder,
@@ -78,12 +82,20 @@ public final class ChatModelFactory {
             boolean toolless,
             String baseUrl) {
         if (mode == StructuredOutputMode.NATIVE && toolless) {
-            if (baseUrl != null && (baseUrl.contains(":8789") || baseUrl.contains("headroom"))) {
+            if (isHeadroomProxyUrl(baseUrl)) {
                 LOG.info("Bypassing native JSON response format due to Headroom proxy routing: " + baseUrl);
                 return;
             }
             builder.responseFormat(ResponseFormat.JSON);
         }
+    }
+
+    /** Returns {@code true} if the URL routes through a Headroom proxy instance. */
+    private static boolean isHeadroomProxyUrl(String url) {
+        if (url == null) return false;
+        String lower = url.toLowerCase();
+        return lower.contains("headroom")
+                || HEADROOM_PORT_PATTERN.matcher(lower).find();
     }
 
     /**
