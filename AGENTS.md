@@ -216,6 +216,15 @@ or `archival_memory_search` instead.
 ### 3.1 No Hardcoded Tool Name Strings
 Use `ToolCapability.ENUM.toolName()` instead of `"sandbox_exec"`, `"github"`, etc. Exceptions (not refactorable): `@ToolMetadata`/`@Tool` annotation attributes, `@WithDefault` defaults, Javadoc examples, user-input pattern matching, LLM prompt instructions. Cross-module: `ToolCapability` lives in `amsha-core` — modules without that dependency (e.g. `amsha-channel-api`) must keep hardcoded strings.
 
+Tool parameter mode values (e.g., `"group_consult"`, `"solo"`) **MUST** be `static final String` constants in the tool class — not inline string literals. Use the constant in conditionals and code-generated strings. LLM prompt text (in `.txt` templates and `CoordinatorPromptSection`) remains as literal strings per the exception above.
+```java
+// ❌ WRONG
+if ("group_consult".equals(mode)) { ... }
+// ✅ CORRECT
+static final String MODE_GROUP_CONSULT = "group_consult";
+if (MODE_GROUP_CONSULT.equals(mode)) { ... }
+```
+
 ### 3.2 Telegram Garbled Line Stripping
 All outbound Telegram messages **MUST** pass through `stripGarbledLines()` before sending. Filters lines where >80% of non-space chars are `?`, `…`, em-dashes, `OTHER_PUNCTUATION`. Called in `TelegramChannelSender.sendMessageInternal()`.
 

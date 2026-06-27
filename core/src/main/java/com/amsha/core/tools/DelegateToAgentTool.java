@@ -17,6 +17,7 @@ import java.util.stream.Collectors;
 import com.amsha.common.util.LogUtil;
 import com.amsha.core.agent.AgentSentinels;
 import com.amsha.core.agent.loop.AgentLoop;
+import com.amsha.core.agent.loop.GroupConsultationService;
 import com.amsha.core.agent.reasoning.ReasoningEngine;
 import com.amsha.core.agent.result.AgentResult;
 import com.amsha.core.agent.role.AgentRoleEnum;
@@ -59,6 +60,13 @@ public class DelegateToAgentTool implements AgentTool {
     private static final Logger log = Logger.getLogger(DelegateToAgentTool.class);
     private static final String PARAM_AGENT = "agent";
     private static final String PARAM_GOAL = "goal";
+    private static final String PARAM_MODE = "mode";
+
+    /** Delegation mode: single agent handles alone. */
+    static final String MODE_SOLO = "solo";
+
+    /** Delegation mode: group lead consults family members if task spans multiple domains. */
+    static final String MODE_GROUP_CONSULT = "group_consult";
 
     @Inject
     ReasoningEngine reasoningEngine;
@@ -74,6 +82,9 @@ public class DelegateToAgentTool implements AgentTool {
 
     @Inject
     AgentOtelContext otelContext;
+
+    @Inject
+    GroupConsultationService groupConsultationService;
 
     @ConfigProperty(name = "amsha.delegation.max-depth", defaultValue = "3")
     int maxDelegationDepth = 3;
@@ -112,6 +123,13 @@ public class DelegateToAgentTool implements AgentTool {
                         JsonStringSchema.builder()
                                 .description("The self-contained task description for the sub-agent.")
                                 .build())
+                .addProperty(
+                        PARAM_MODE,
+                        JsonStringSchema.builder()
+                                .description("Delegation mode. 'solo' (default): delegate to single agent. "
+                                        + "'group_consult': delegate to group lead who will consult family members "
+                                        + "if the task spans multiple domains within their realm.")
+                                .build())
                 .required(PARAM_AGENT, PARAM_GOAL)
                 .build();
     }
@@ -144,6 +162,12 @@ public class DelegateToAgentTool implements AgentTool {
         String agentName = stripSurroundingQuotes(String.valueOf(agentObj));
         String goal = String.valueOf(goalObj);
 
+        // Read delegation mode (default: solo)
+        Object modeObj = params.get(PARAM_MODE);
+        String mode = (modeObj != null && !String.valueOf(modeObj).isBlank())
+                ? String.valueOf(modeObj).trim().toLowerCase(Locale.ROOT)
+                : MODE_SOLO;
+
         int depth = outerSessionId.split(Pattern.quote(AgentSentinels.DELEGATE_SESSION_SENTINEL)).length - 1;
         if (depth >= maxDelegationDepth) {
             log.warnf(
@@ -172,12 +196,18 @@ public class DelegateToAgentTool implements AgentTool {
 
         AgentRoleEnum targetRole = AgentRoleEnum.fromString(agentName);
 
+        // Group consultation mode: enhance goal with family huddle prompt
+        if (MODE_GROUP_CONSULT.equals(mode)) {
+            goal = enhanceGoalWithGroupConsultation(targetRole.toScopedName(), goal);
+            log.infof("[DELEGATE] group_consult mode: enhanced goal for agent=%s", targetRole.toScopedName());
+        }
+
         auditService.record(
                 outerSessionId,
                 userId,
                 ctx.agentRole(),
                 SecurityEventType.DELEGATION_DISPATCHED,
-                "target=" + agentName + " depth=" + depth + " goalLen=" + goal.length());
+                "target=" + agentName + " depth=" + depth + " goalLen=" + goal.length() + " mode=" + mode);
 
         // Capture parent OTel context before spawning sub-agent
         Context parentOtelContext = Context.current();
@@ -348,6 +378,32 @@ public class DelegateToAgentTool implements AgentTool {
             return s.substring(1, s.length() - 1).trim();
         }
         return s;
+    }
+
+    /**
+     * Enhances the delegation goal with group consultation prompt when mode=group_consult.
+     * If the target agent is a group lead, triages the task and adds consultation guidance.
+     * If the target is not a group lead, the goal is returned unchanged.
+     */
+    private String enhanceGoalWithGroupConsultation(String agentName, String goal) {
+        var triage = groupConsultationService.triage(agentName, goal);
+
+        if (triage.canSelfHandle()) {
+            log.debugf("[GROUP_CONSULT] %s can self-handle: %s", agentName, triage.reason());
+            return goal;
+        }
+
+        // Enhance the goal with consultation prompt
+        String enhanced = goal
+                + "\n\n" + triage.consultationPrompt()
+                + "\n\nINSTRUCTIONS: You have been delegated with mode=" + MODE_GROUP_CONSULT + ". "
+                + "Consult the family members listed above via garuda, then synthesize their "
+                + "analyses into a unified response. Do NOT skip the consultation step.";
+
+        log.infof(
+                "[GROUP_CONSULT] Enhanced goal for %s: consulting %s — %s",
+                agentName, triage.recommendedMembers(), triage.reason());
+        return enhanced;
     }
 
     /**

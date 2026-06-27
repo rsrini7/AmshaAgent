@@ -18,6 +18,7 @@ import java.util.Optional;
 
 import com.amsha.core.agent.AgentSentinels;
 import com.amsha.core.agent.loop.AgentLoop;
+import com.amsha.core.agent.loop.GroupConsultationService;
 import com.amsha.core.agent.reasoning.ReasoningEngine;
 import com.amsha.core.agent.result.AgentResult;
 import com.amsha.core.agent.role.AgentRoleEnum;
@@ -305,5 +306,52 @@ class DelegateToAgentToolTest {
         ToolResponse response2 = tool.execute(ctx, Map.of("agent", "shiva"));
         assertFalse(response2.success());
         assertTrue(response2.output().contains("Parameter 'goal' is required."));
+    }
+
+    @Test
+    void execute_groupConsultMode_enhancesGoalWhenMultiDomain() throws Exception {
+        GroupConsultationService mockTriageService = Mockito.mock(GroupConsultationService.class);
+        GroupConsultationService.TriageResult triageResult = GroupConsultationService.TriageResult.consult(
+                List.of("sentinel", "optimizer"),
+                "Task spans multiple domains",
+                "=== KAILASA FAMILY HUDDLE ===\nConsult: Kartikeya (security), Ganesha (logic)");
+
+        Mockito.doReturn(triageResult).when(mockTriageService).triage(any(), any());
+
+        DelegateToAgentTool groupTool = new DelegateToAgentTool();
+        groupTool.reasoningEngine = reasoningEngine;
+        groupTool.agentLoop = agentLoopInstance;
+        groupTool.checkpointCrud = checkpointCrud;
+        groupTool.auditService = auditService;
+        groupTool.otelContext = otelContext;
+        groupTool.groupConsultationService = mockTriageService;
+        groupTool.maxDelegationDepth = 3;
+
+        when(agentLoop.run(any(), any(), any(), any(), anyInt()))
+                .thenReturn(AgentResult.finished("Consulted family", List.of()));
+
+        ToolExecutionContext ctx = new ToolExecutionContext(
+                SESSION_ID,
+                USER_ID,
+                CHAT_ID,
+                "coordinator",
+                AutonomyLevel.FULL,
+                "trace-1",
+                null,
+                null,
+                null,
+                null,
+                null,
+                null);
+
+        Map<String, Object> params = Map.of(
+                "agent", "shiva",
+                "goal", "Fix SQL injection vulnerability and debug the recursive crash",
+                "mode", "group_consult");
+
+        ToolResponse response = groupTool.execute(ctx, params);
+        assertTrue(response.success());
+        Mockito.verify(mockTriageService)
+                .triage("debugger", "Fix SQL injection vulnerability and debug the recursive crash");
     }
 }

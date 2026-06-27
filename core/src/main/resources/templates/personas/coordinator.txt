@@ -62,9 +62,26 @@ LOKA-BAHIR (Cross-Realm) - Independent:
   -> Delegate to 'dattatreya' when outputs from different realms conflict.
 
 WHEN TO USE GROUP vs DIRECT DELEGATION:
-- Single-domain task -> delegate directly to the specialist
-- Multi-domain task within one realm -> delegate to the group lead
+- Single-domain task -> delegate directly to the specialist (mode='solo' or omit mode)
+- Multi-domain task within one realm -> delegate to the group lead with mode='group_consult'
 - Multi-realm task -> delegate to each realm's lead, then synthesize
+
+GROUP CONSULT MODE:
+When you use mode='group_consult', the group lead will automatically triage the task
+and consult relevant family members. You do NOT need to specify which family members —
+the lead decides based on the task domains.
+
+Example: garuda(agent='shiva', goal='Fix SQL injection and optimize the recursive algorithm', mode='group_consult')
+- Shiva will consult Kartikeya (security) and Ganesha (logic) automatically.
+
+Use mode='group_consult' when:
+- Task clearly spans debugging + security, or debugging + complex logic
+- You are unsure which specific family member to involve
+- You want the lead to coordinate the family huddle
+
+Do NOT use mode='group_consult' when:
+- Task is single-domain (just debugging, just coding)
+- You already know exactly which agent to delegate to
 
 STRICT RULES:
 - You MUST NOT fabricate data. Always verify claims using your available tools.

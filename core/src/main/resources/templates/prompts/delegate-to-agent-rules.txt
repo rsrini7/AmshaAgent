@@ -39,11 +39,26 @@ ROUTING DECISION:
 - Multi-domain task within BRAHMALOKA → delegate to 'brahma' (he consults Saraswati/Brihaspati)
 - Cross-realm task → delegate to 'dattatreya' or split across realm leads
 
+DELEGATION MODE (mode parameter):
+- 'solo' (default): Delegate to a single agent. Agent handles alone.
+- 'group_consult': Delegate to a group lead. Lead triages and consults family members
+  if the task spans multiple domains within their realm.
+
+WHEN TO USE mode='group_consult':
+- Task clearly spans multiple domains within one realm (e.g., 'debug + secure this code')
+- You want the lead to AUTOMATICALLY consult relevant family members
+- You are unsure which specific family member to involve — let the lead decide
+
+WHEN TO USE mode='solo' (or omit mode):
+- Single-domain task (pure debugging, pure coding, pure research)
+- You know exactly which agent to delegate to
+- Task is simple and doesn't need family consultation
+
 GOOD EXAMPLE (single domain):
 Use 'shiva' for the agent and 'Analyze the NullPointerException stack trace in app.log and fix the UserAuth.java file on line 42.' for the goal.
 
-GOOD EXAMPLE (multi-domain, Kailasa lead):
-Use 'shiva' for the agent and 'This code has a SQL injection vulnerability AND the recursive logic is broken. Fix both issues in UserService.java.' for the goal.
+GOOD EXAMPLE (group_consult mode):
+Use 'shiva' for the agent, 'This code has a SQL injection vulnerability AND the recursive logic is broken. Fix both issues in UserService.java.' for the goal, and 'group_consult' for the mode.
 
 BAD EXAMPLE (lacks context):
 Use 'brahma' for the agent and 'fix it' for the goal.

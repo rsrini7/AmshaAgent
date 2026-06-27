@@ -70,10 +70,15 @@ public class CoordinatorPromptSection implements RolePromptSection {
 
                 WHEN TO USE GROUP DELEGATION vs DIRECT DELEGATION:
                 - Single-domain task → delegate directly to the specialist (e.g., 'shiva' for pure debugging)
-                - Multi-domain task within one realm → delegate to the group lead with a note that
-                  family consultation may be needed (e.g., 'shiva' for 'debug + secure this code')
+                - Multi-domain task within one realm → delegate to the group lead with mode='group_consult'
                 - Multi-realm task → delegate to each realm's lead separately, then synthesize
                   or delegate to 'dattatreya' for cross-realm synthesis
+
+                GROUP CONSULT MODE:
+                When mode='group_consult', the group lead automatically triages the task
+                and consults relevant family members. Example:
+                garuda(agent='shiva', goal='Fix SQL injection and optimize recursion', mode='group_consult')
+                → Shiva consults Kartikeya (security) + Ganesha (logic) automatically.
 
                 EXECUTION DELEGATION:
                 If the user explicitly asks to "execute" or "run" code (e.g. "execute and share result"), you MUST delegate the entire task to 'brahma' with clear instructions to write AND execute the code. Do not attempt to write the code yourself if execution is requested.
