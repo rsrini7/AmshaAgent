@@ -41,11 +41,20 @@ public class GeminiProviderFactory implements AgentChatModelProvider {
 
     @Override
     public ChatModel create() {
+        return doCreate(null);
+    }
+
+    @Override
+    public ChatModel create(String customModelName) {
+        return doCreate(customModelName);
+    }
+
+    private ChatModel doCreate(String overrideModel) {
         String key = apiKey.orElseThrow(() -> new IllegalStateException("Gemini requires AMSHA_GEMINI_API_KEY"));
 
         return AiGeminiChatLanguageModel.builder()
                 .key(key)
-                .modelId(modelName)
+                .modelId(overrideModel != null ? overrideModel : modelName)
                 .temperature(agentConfig.temperature())
                 .maxOutputTokens(agentConfig.maxTokens())
                 .timeout(agentConfig.timeout())

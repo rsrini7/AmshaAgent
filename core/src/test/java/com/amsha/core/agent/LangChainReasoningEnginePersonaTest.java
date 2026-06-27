@@ -76,7 +76,8 @@ class LangChainReasoningEnginePersonaTest {
 
         ChatResponse mockResponse = mock(ChatResponse.class);
         when(mockResponse.aiMessage()).thenReturn(AiMessage.aiMessage("mock response"));
-        when(mockLlmProviderPort.nextStep(any(ChatRequest.class))).thenReturn(mockResponse);
+        when(mockLlmProviderPort.nextStep(any(ChatRequest.class), any(String.class)))
+                .thenReturn(mockResponse);
 
         ReasoningStep expectedStep =
                 ReasoningStep.pending("mock thought", ReasoningStep.FINISH, Collections.emptyMap(), 0, 0);
@@ -132,7 +133,7 @@ class LangChainReasoningEnginePersonaTest {
 
         // Assert
         ArgumentCaptor<ChatRequest> captor = ArgumentCaptor.forClass(ChatRequest.class);
-        Mockito.verify(mockLlmProviderPort).nextStep(captor.capture());
+        Mockito.verify(mockLlmProviderPort).nextStep(captor.capture(), any(String.class));
 
         String actualPrompt = findSystemMessageText(captor.getValue());
         assertTrue(expectedPrompt.equals(actualPrompt), "System prompt should match the one from builder");
@@ -156,7 +157,7 @@ class LangChainReasoningEnginePersonaTest {
 
         // Assert
         ArgumentCaptor<ChatRequest> captor = ArgumentCaptor.forClass(ChatRequest.class);
-        Mockito.verify(mockLlmProviderPort).nextStep(captor.capture());
+        Mockito.verify(mockLlmProviderPort).nextStep(captor.capture(), any(String.class));
 
         String actualPrompt = findSystemMessageText(captor.getValue());
         assertTrue(actualPrompt != null && !actualPrompt.isBlank(), "Should have a non-blank system message");
@@ -179,7 +180,7 @@ class LangChainReasoningEnginePersonaTest {
 
         // Assert
         ArgumentCaptor<ChatRequest> captor = ArgumentCaptor.forClass(ChatRequest.class);
-        Mockito.verify(mockLlmProviderPort).nextStep(captor.capture());
+        Mockito.verify(mockLlmProviderPort).nextStep(captor.capture(), any(String.class));
 
         String actualPrompt = findSystemMessageText(captor.getValue());
         assertTrue(actualPrompt != null && !actualPrompt.isBlank(), "Should have a non-blank system message");

@@ -46,7 +46,16 @@ public class OmlxProviderFactory implements AgentChatModelProvider {
 
     @Override
     public ChatModel create() {
-        String model = modelName.orElseThrow(() -> new IllegalStateException("OMLX requires AMSHA_OMLX_MODEL"));
+        return doCreate(modelName.orElseThrow(() -> new IllegalStateException("OMLX requires AMSHA_OMLX_MODEL")));
+    }
+
+    @Override
+    public ChatModel create(String customModelName) {
+        return doCreate(customModelName);
+    }
+
+    private ChatModel doCreate(String overrideModel) {
+        String model = overrideModel;
         // Disable Qwen/DeepSeek thinking mode — puts chain-of-thought in content field
         Map<String, Object> customParams = Map.of("enable_thinking", false);
         List<MultiModelChatModel.ModelEntry> entries = ChatModelFactory.buildMultiModelEntries(

@@ -37,9 +37,18 @@ public class OllamaProviderFactory implements AgentChatModelProvider {
 
     @Override
     public ChatModel create() {
+        return doCreate(null);
+    }
+
+    @Override
+    public ChatModel create(String customModelName) {
+        return doCreate(customModelName);
+    }
+
+    private ChatModel doCreate(String overrideModel) {
         return OllamaChatModel.builder()
                 .baseUrl(baseUrl)
-                .modelName(modelId)
+                .modelName(overrideModel != null ? overrideModel : modelId)
                 .logRequests(agentConfig.logHttp())
                 .logResponses(agentConfig.logHttp())
                 .build();

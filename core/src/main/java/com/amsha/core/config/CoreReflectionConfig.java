@@ -16,6 +16,7 @@ import com.amsha.core.audit.AuditVerifier;
 import com.amsha.core.audit.SecurityEventType;
 import com.amsha.core.cron.AgentJobCompleted;
 import com.amsha.core.cron.CronTaskScheduled;
+import com.amsha.core.routing.ModelRouter;
 import com.amsha.core.sandbox.SandboxResult;
 import com.amsha.core.skill.CompiledSkillEntry;
 import com.amsha.core.skill.SkillDefinition;
@@ -74,7 +75,8 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             ToolResponse.ToolFailure.class,
             ToolResponse.ToolPending.class,
             ReasoningStepDeserializer.class,
-            ReasoningStepSerializer.class
+            ReasoningStepSerializer.class,
+            ModelRouter.ModelConfig.class
         },
         classNames = {
             "com.github.benmanes.caffeine.cache.SSLMSA",

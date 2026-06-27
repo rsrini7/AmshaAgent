@@ -10,6 +10,8 @@ quarkiverse:
 
 amsha:
   auto-seed-secrets: false
+  llm:
+    model: "test-model"
   api:
     keys:
       internal: "key-internal-changeme"

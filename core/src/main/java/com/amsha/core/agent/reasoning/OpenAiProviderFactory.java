@@ -45,8 +45,17 @@ public class OpenAiProviderFactory implements AgentChatModelProvider {
 
     @Override
     public ChatModel create() {
+        return doCreate(modelName.orElseThrow(() -> new IllegalStateException("OpenAI requires AMSHA_OPENAI_MODEL")));
+    }
+
+    @Override
+    public ChatModel create(String customModelName) {
+        return doCreate(customModelName);
+    }
+
+    private ChatModel doCreate(String overrideModel) {
         String key = apiKey.orElseThrow(() -> new IllegalStateException("OpenAI requires AMSHA_OPENAI_API_KEY"));
-        String model = modelName.orElseThrow(() -> new IllegalStateException("OpenAI requires AMSHA_OPENAI_MODEL"));
+        String model = overrideModel;
         List<MultiModelChatModel.ModelEntry> entries = ChatModelFactory.buildMultiModelEntries(
                 key,
                 model,

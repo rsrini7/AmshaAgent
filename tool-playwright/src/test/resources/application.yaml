@@ -1,4 +1,6 @@
 amsha:
+  llm:
+    model: "test-model"
   tools:
     playwright:
       enabled: true

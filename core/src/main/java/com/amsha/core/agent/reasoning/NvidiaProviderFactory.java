@@ -46,6 +46,15 @@ public class NvidiaProviderFactory implements AgentChatModelProvider {
 
     @Override
     public ChatModel create() {
+        return doCreate(modelName);
+    }
+
+    @Override
+    public ChatModel create(String customModelName) {
+        return doCreate(customModelName);
+    }
+
+    private ChatModel doCreate(String modelName) {
         String key = apiKey.orElseThrow(() -> new IllegalStateException("Nvidia requires AMSHA_NVIDIA_API_KEY"));
         List<MultiModelChatModel.ModelEntry> entries = ChatModelFactory.buildMultiModelEntries(
                 key,

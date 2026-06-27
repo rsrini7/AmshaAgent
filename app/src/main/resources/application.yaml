@@ -333,6 +333,25 @@ amsha:
     context-window: ${AMSHA_LLM_CONTEXT_WINDOW:128000}
     compact-prompt-enabled: ${AMSHA_LLM_COMPACT_PROMPT_ENABLED:false}
     structured-output-mode: ${AMSHA_LLM_STRUCTURED_OUTPUT_MODE:NATIVE}
+    circuit-breaker:
+      enabled: ${AMSHA_LLM_CIRCUIT_BREAKER_ENABLED:true}
+    # Per-persona model routing (P102). Resolution: persona → group → global.
+    # Single model:
+    #   persona-models:
+    #     brahma:
+    #       provider: deepseek
+    #       model: deepseek-coder-33b
+    # Multi-model (failover chain):
+    #   persona-models:
+    #     brahma:
+    #       0:
+    #         provider: deepseek
+    #         model: deepseek-coder-33b
+    #       1:
+    #         provider: groq
+    #         model: llama-3.3-70b
+    group-models: ${AMSHA_LLM_GROUP_MODELS:}
+    persona-models: ${AMSHA_LLM_PERSONA_MODELS:}
     openrouter:
       app-name: "${AMSHA_OPENROUTER_APP_NAME:https://github.com/rsrini7/amsha}"
       site-url: "${AMSHA_OPENROUTER_SITE_URL:https://github.com/rsrini7/amsha}"
@@ -774,6 +793,8 @@ mp:
 
   amsha:
     data-dir: "target/"
+    llm:
+      model: "test-model"
     agent:
       default-timezone: "UTC"
     rag:

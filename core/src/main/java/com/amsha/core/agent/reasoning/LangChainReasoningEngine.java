@@ -175,7 +175,7 @@ public class LangChainReasoningEngine implements ReasoningEngine {
 
         ChatResponse response;
         try {
-            response = executeLlmStep(isSimpleChitchat, context, isWriteIntent, request);
+            response = executeLlmStep(isSimpleChitchat, context, isWriteIntent, request, agentRole);
         } catch (Exception e) {
             return handleLlmException(e, history, sessionId, targetLanguage, context, goal, isWriteIntent, agentRole);
         }
@@ -261,7 +261,11 @@ public class LangChainReasoningEngine implements ReasoningEngine {
     }
 
     private ChatResponse executeLlmStep(
-            boolean isSimpleChitchat, AgentExecutionContext context, boolean isWriteIntent, ChatRequest request) {
+            boolean isSimpleChitchat,
+            AgentExecutionContext context,
+            boolean isWriteIntent,
+            ChatRequest request,
+            String agentRole) {
         boolean isCompact = isSimpleChitchat || context.isForceFinishRetry();
         Span span = otelContext.childSpan(context.sessionId(), AgentOTelConstants.SPAN_LLM_PROVIDER_CALL);
         try {
@@ -278,7 +282,7 @@ public class LangChainReasoningEngine implements ReasoningEngine {
                     msgCount, estTokens, totalChars, context.agentRole(), isCompact);
             ChatResponse response = ScopedValue.where(WorkspaceContext.IS_WRITE_INTENT, isWriteIntent)
                     .where(WorkspaceContext.IS_COMPACT, isCompact)
-                    .call(() -> llmProviderPort.nextStep(request));
+                    .call(() -> llmProviderPort.nextStep(request, agentRole));
             if (span != null) {
                 if (response.tokenUsage() != null) {
                     span.setAttribute(AgentOTelConstants.ATTR_LLM_INPUT_TOKENS, (long)

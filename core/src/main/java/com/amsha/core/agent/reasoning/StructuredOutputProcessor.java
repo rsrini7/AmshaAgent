@@ -68,7 +68,7 @@ public class StructuredOutputProcessor {
 
             ChatRequest request = ChatRequest.builder().messages(messages).build();
 
-            ChatResponse response = llmProviderPort.nextStep(request);
+            ChatResponse response = llmProviderPort.nextStep(request, agentRole);
 
             TokenUsage usage = response.tokenUsage();
             if (usage != null) {
