@@ -3,7 +3,7 @@
 # Dot-source this from every start-*.ps1 script so the version pin and
 # Apple-Silicon MPS tuning live in one place.
 
-$script:DefaultHeadroomVersion = '0.25.0'
+$script:DefaultHeadroomVersion = '0.27.0'
 
 function Get-HeadroomVersion {
     # .env override wins; otherwise use the built-in pin.

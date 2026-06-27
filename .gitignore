@@ -93,3 +93,5 @@ autotest/logs/
 
 .omm/*
 !.omm/config.yaml
+
+headroom_memory.db
