@@ -108,6 +108,59 @@ by `channelType` — a Telegram user and a WebSocket user with the same numeric 
 MUST NOT share a session. Cron sessions (`sessionId.startsWith("cron-")`) MUST be
 excluded from chat approval routing.
 
+### 1.12 Group-Aware Escalation Order (Lokas)
+Agent groups (Lokas) route tasks to group leads who decide: self-handle, consult family, or escalate out.
+Escalation priority order is **sacred** — never reorder:
+1. Role-specific rules (`escalateByRole`) — highest priority
+2. New persona rules (`determineNewPersonaEscalation`)
+3. Group-aware fallback (`tryIntraGroupEscalation`) — lowest priority
+4. Sandbox code error fallback (→ Shiva)
+
+**Why**: Group-aware routing is a FALLBACK. If it runs first, it intercepts cases that existing role-specific rules should handle (e.g., sentinel "enforce" should go to debugger, not to sibling sentinel).
+
+Groups are **in-memory only** — no schema changes needed for SQLite/PG/FS. `AgentGroupRegistry` holds built-in groups; dynamic groups registered at runtime via `registerDynamic()`. Cross-backend parity: no Flyway migration required.
+
+### 1.13 Escalation Keyword Specificity
+Escalation keywords in `canRoleHandleGoal()` and `EscalationPatterns` **MUST** be specific enough to avoid false positives.
+```java
+// ❌ WRONG — "fix" matches "prefix", "fixture", "suffix"
+containsAny(goal, "fix", "debug", "error")
+// ✅ CORRECT — "fix bug" is specific
+containsAny(goal, "fix bug", "debug", "error")
+```
+Rule: Test keywords against false-positive candidates before committing. Single words like `"fix"`, `"broken"`, `"patch"` are too broad — use `"fix bug"`, `"broken code"`, `"patch bug"`.
+
+### 1.14 Role ID Canonicalization
+All role ID returns from escalation/routing methods **MUST** use `AgentRoleEnum.fromString(id).toScopedName()` — not raw strings. Ensures lowercase canonical form.
+```java
+// ❌ WRONG — returns raw string from group member list
+return sibling;
+// ✅ CORRECT — returns canonical scoped name
+return AgentRoleEnum.fromString(sibling).toScopedName();
+```
+`AgentRoleEnum.fromString()` **MUST** be wrapped in try-catch when called with potentially unknown role IDs (dynamic/skill roles). Falls back to raw string, logs warning.
+
+### 1.15 Record Cross-Field Validation
+Records with inter-field constraints **MUST** validate in the compact constructor:
+```java
+public record AgentGroup(String groupId, String leadRoleId, List<String> memberRoleIds, ...) {
+    public AgentGroup {
+        if (!memberRoleIds.contains(leadRoleId)) {
+            throw new IllegalArgumentException("leadRoleId must be a member of the group");
+        }
+    }
+}
+```
+
+### 1.16 Static Immutable Maps
+Static data populated once and never modified **MUST** use `Map.copyOf()` — NOT `ConcurrentHashMap`.
+```java
+// ❌ WRONG — mutable concurrent map for static data
+private static final Map<String, AgentGroup> BY_MEMBER = new ConcurrentHashMap<>();
+// ✅ CORRECT — immutable snapshot, inherently thread-safe
+private static final Map<String, AgentGroup> BY_MEMBER = Map.copyOf(temp);
+```
+
 ---
 
 ## 2. Key Framework Components
@@ -171,6 +224,16 @@ On restart, auto-deny ALL stale `AWAITING_APPROVAL` checkpoints for all channel 
 
 ### 3.4 Saraswati Disabled from Delegation
 `saraswati` now has `requiresApproval=false` — other agents cannot delegate to the researcher role. Reason: read-only retrieval role; all roles have `garuda` for escalation. See `AgentRoleEnum.java` `DEFINITIONS.put(SARASWATI_ID, ...)`.
+
+### 3.5 Prompt Keyword Specificity for Escalation
+Escalation keywords in persona `.txt` files and `EscalationPatterns.java` **MUST** avoid single-word patterns that match unrelated text. After any prompt change, run:
+```bash
+./mvnw test -pl core -Dtest="PersonaEscalationServiceTest,EscalationPatternsTest"
+```
+Persona prompts should optimize for **LLM comprehension**, not mythological accuracy. Use "lead of your realm", "brother", "father" — not "step-son", "form of", "emanation of".
+
+### 3.6 Duplicate Code Path Avoidance
+When method A calls method B, and B already handles feature X, **do not** also handle X in A. Example: `tryIntraGroupEscalation()` was called in both `PersonaEscalationService.determineEscalationTarget()` AND `EscalationPatterns.determineNewPersonaEscalation()` (which is called by the former). Duplicate removed — group-aware fallback lives exclusively in `determineNewPersonaEscalation()`.
 
 ---
 
@@ -236,8 +299,10 @@ This project is babysitter-enabled for complex workflow orchestration.
 10. **`PersonaEscalationService.java`** — Add escalation paths in `determineNewPersonaEscalation()`
 11. **`PromptInstructionLibrary.java`** — Add to system capabilities
 12. **`application.yaml`** — Add role entry under `amsha.agents.roles`
-13. **Verify**: `./mvnw compile -q`, run `AgentRoleTest` + `PersonaEscalationServiceTest`
-14. Update `telegram-test-amsha.txt`
+13. **`AgentGroupRegistry.java`** — Add to appropriate group (Loka) if applicable
+14. **Persona prompt** — Add `<GROUP_NAME> FAMILY AWARENESS` section with escalation rules
+15. **Verify**: `./mvnw compile -q`, run `AgentRoleTest` + `PersonaEscalationServiceTest`
+16. Update `telegram-test-amsha.txt`
 
 **⚠ WARNING**: Items 7-9 are static lists/annotations — no compile-time safety. Always verify manually.
 
