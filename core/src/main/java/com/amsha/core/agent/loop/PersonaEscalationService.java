@@ -123,6 +123,9 @@ public class PersonaEscalationService {
     @Inject
     ObjectMapper objectMapper;
 
+    @Inject
+    GroupConsultationService groupConsultationService;
+
     @ConfigProperty(name = "amsha.agent.escalation.enabled", defaultValue = "true")
     boolean escalationEnabled;
 
@@ -159,6 +162,10 @@ public class PersonaEscalationService {
     /**
      * Determines if escalation is needed based on error content patterns.
      * Returns the target persona ID if escalation is warranted, null otherwise.
+     *
+     * <p>Group-aware escalation: when a role fails, prefer escalating to a
+     * sibling within the same group (Loka) before reaching outside. This models
+     * the mythological pattern where family members help each other first.
      */
     public String determineEscalationTarget(String sourceRole, String errorOutput, String originalGoal) {
         if (sourceRole == null || errorOutput == null) {
@@ -168,12 +175,15 @@ public class PersonaEscalationService {
         String errorLower = errorOutput.toLowerCase(Locale.ROOT);
         String goalLower = originalGoal != null ? originalGoal.toLowerCase(Locale.ROOT) : "";
 
+        // 1. Role-specific escalation rules (highest priority — preserves existing behavior)
         String target = escalateByRole(sourceRole, errorLower, goalLower);
         if (target != null) return target;
 
+        // 2. New persona escalation patterns & Group-aware fallback
         target = EscalationPatterns.determineNewPersonaEscalation(sourceRole, goalLower);
         if (target != null) return target;
 
+        // 4. Sandbox code errors → Shiva (universal fallback)
         if (matchesSandboxCodeError(errorLower)) {
             return AgentRoleEnum.DEBUGGER.toScopedName();
         }
@@ -535,5 +545,27 @@ public class PersonaEscalationService {
             case AgentResult.AwaitingRetry r -> "Agent hit rate limit, retry after " + (r.retryAfterMs() / 1000) + "s";
             default -> "Unknown agent result: " + result.getClass().getSimpleName();
         };
+    }
+
+    // ── Group Consultation ────────────────────────────────────────────
+
+    /**
+     * Performs group consultation triage for a task arriving at a group lead.
+     * Returns triage result indicating whether the lead should self-handle
+     * or consult family members.
+     *
+     * @param leadRoleId The lead's role ID
+     * @param goal       The task description
+     * @return Triage result with recommendation
+     */
+    public GroupConsultationService.TriageResult triageGroupConsultation(String leadRoleId, String goal) {
+        return groupConsultationService.triage(leadRoleId, goal);
+    }
+
+    /**
+     * Checks if a role is a group lead who can consult family members.
+     */
+    public boolean isGroupLead(String roleId) {
+        return groupConsultationService.isGroupLead(roleId);
     }
 }
