@@ -18,9 +18,11 @@ import java.util.Optional;
 
 import com.amsha.core.agent.AgentSentinels;
 import com.amsha.core.agent.loop.AgentLoop;
+import com.amsha.core.agent.loop.GroupConsultationEngine;
 import com.amsha.core.agent.loop.GroupConsultationService;
 import com.amsha.core.agent.reasoning.ReasoningEngine;
 import com.amsha.core.agent.result.AgentResult;
+import com.amsha.core.agent.role.AgentGroupRegistry;
 import com.amsha.core.agent.role.AgentRoleEnum;
 import com.amsha.core.agent.role.ToolCapability;
 import com.amsha.core.audit.AuditService;
@@ -316,7 +318,14 @@ class DelegateToAgentToolTest {
                 "Task spans multiple domains",
                 "=== KAILASA FAMILY HUDDLE ===\nConsult: Kartikeya (security), Ganesha (logic)");
 
-        Mockito.doReturn(triageResult).when(mockTriageService).triage(any(), any());
+        Mockito.lenient().doReturn(triageResult).when(mockTriageService).triage(any(), any());
+        Mockito.doReturn(true).when(mockTriageService).isGroupLead(any());
+        Mockito.doReturn(Optional.of(AgentGroupRegistry.KAILASA))
+                .when(mockTriageService)
+                .getGroup(any());
+
+        GroupConsultationEngine mockEngine = Mockito.mock(GroupConsultationEngine.class);
+        mockEngine.groupRegistry = new AgentGroupRegistry();
 
         DelegateToAgentTool groupTool = new DelegateToAgentTool();
         groupTool.reasoningEngine = reasoningEngine;
@@ -325,6 +334,7 @@ class DelegateToAgentToolTest {
         groupTool.auditService = auditService;
         groupTool.otelContext = otelContext;
         groupTool.groupConsultationService = mockTriageService;
+        groupTool.groupConsultationEngine = mockEngine;
         groupTool.maxDelegationDepth = 3;
 
         when(agentLoop.run(any(), any(), any(), any(), anyInt()))
@@ -351,7 +361,6 @@ class DelegateToAgentToolTest {
 
         ToolResponse response = groupTool.execute(ctx, params);
         assertTrue(response.success());
-        Mockito.verify(mockTriageService)
-                .triage("debugger", "Fix SQL injection vulnerability and debug the recursive crash");
+        Mockito.verify(mockTriageService).isGroupLead("debugger");
     }
 }

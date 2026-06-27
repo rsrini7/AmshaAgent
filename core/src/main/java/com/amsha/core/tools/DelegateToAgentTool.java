@@ -17,6 +17,7 @@ import java.util.stream.Collectors;
 import com.amsha.common.util.LogUtil;
 import com.amsha.core.agent.AgentSentinels;
 import com.amsha.core.agent.loop.AgentLoop;
+import com.amsha.core.agent.loop.GroupConsultationEngine;
 import com.amsha.core.agent.loop.GroupConsultationService;
 import com.amsha.core.agent.reasoning.ReasoningEngine;
 import com.amsha.core.agent.result.AgentResult;
@@ -41,7 +42,6 @@ import org.jboss.logging.Logger;
 
 import io.opentelemetry.api.trace.Span;
 import io.opentelemetry.api.trace.StatusCode;
-import io.opentelemetry.context.Context;
 
 /**
  * Allows the coordinator to delegate specialized tasks (like coding or debugging)
@@ -85,6 +85,9 @@ public class DelegateToAgentTool implements AgentTool {
 
     @Inject
     GroupConsultationService groupConsultationService;
+
+    @Inject
+    GroupConsultationEngine groupConsultationEngine;
 
     @ConfigProperty(name = "amsha.delegation.max-depth", defaultValue = "3")
     int maxDelegationDepth = 3;
@@ -198,8 +201,13 @@ public class DelegateToAgentTool implements AgentTool {
 
         // Group consultation mode: enhance goal with family huddle prompt
         if (MODE_GROUP_CONSULT.equals(mode)) {
-            goal = enhanceGoalWithGroupConsultation(targetRole.toScopedName(), goal);
-            log.infof("[DELEGATE] group_consult mode: enhanced goal for agent=%s", targetRole.toScopedName());
+            String leadRoleId = targetRole.toScopedName();
+            if (groupConsultationService.isGroupLead(leadRoleId)) {
+                return executeGroupConsultation(
+                        ctx, outerSessionId, leadRoleId, goal, targetRole, userId, chatId, depth);
+            }
+            // Not a group lead — fall through to normal delegation
+            log.debugf("[DELEGATE] group_consult mode but %s is not a group lead — delegating normally", leadRoleId);
         }
 
         auditService.record(
@@ -209,41 +217,9 @@ public class DelegateToAgentTool implements AgentTool {
                 SecurityEventType.DELEGATION_DISPATCHED,
                 "target=" + agentName + " depth=" + depth + " goalLen=" + goal.length() + " mode=" + mode);
 
-        // Capture parent OTel context before spawning sub-agent
-        Context parentOtelContext = Context.current();
-        log.debugf(
-                "GARUDA: Dispatching to agent=%s depth=%d parentTraceId=%s",
-                agentName, depth, parentOtelContext.toString());
+        log.debugf("GARUDA: Dispatching to agent=%s depth=%d", agentName, depth);
 
-        AgentResult result;
-        Span delegationSpan = otelContext.childSpan(outerSessionId, AgentOTelConstants.SPAN_DELEGATION_DISPATCH);
-        try {
-            if (delegationSpan != null) {
-                delegationSpan.setAttribute(AgentOTelConstants.ATTR_DELEGATION_TARGET, agentName);
-                delegationSpan.setAttribute(AgentOTelConstants.ATTR_DELEGATION_DEPTH, (long) depth);
-                delegationSpan.setAttribute(AgentOTelConstants.ATTR_DELEGATION_GOAL_LEN, (long) goal.length());
-            }
-            result = runSubAgent(ctx, outerSessionId, agentName, goal, targetRole, userId, chatId);
-            if (delegationSpan != null) delegationSpan.setStatus(StatusCode.OK);
-        } catch (BudgetExceededException e) {
-            if (delegationSpan != null) {
-                delegationSpan.setStatus(StatusCode.ERROR, e.getMessage());
-                delegationSpan.recordException(e);
-                delegationSpan.end();
-            }
-            throw e;
-        } catch (Exception e) {
-            if (delegationSpan != null) {
-                delegationSpan.setStatus(StatusCode.ERROR, e.getMessage());
-                delegationSpan.recordException(e);
-                delegationSpan.end();
-            }
-            return handleRunSubAgentException(targetRole, e);
-        } finally {
-            if (delegationSpan != null) delegationSpan.end();
-        }
-
-        return handleSubAgentResult(result, targetRole, outerSessionId);
+        return executeNormalDelegation(ctx, outerSessionId, agentName, goal, targetRole, userId, chatId, depth);
     }
 
     private AgentResult runSubAgent(
@@ -378,6 +354,136 @@ public class DelegateToAgentTool implements AgentTool {
             return s.substring(1, s.length() - 1).trim();
         }
         return s;
+    }
+
+    /**
+     * Executes a group consultation: spawns parallel sub-agents for family members,
+     * collects their analyses, and passes the synthesized result to the group lead
+     * for final synthesis.
+     */
+    private ToolResponse executeGroupConsultation(
+            ToolExecutionContext ctx,
+            String outerSessionId,
+            String leadRoleId,
+            String goal,
+            AgentRoleEnum targetRole,
+            String userId,
+            String chatId,
+            int depth) {
+
+        var groupOpt = groupConsultationEngine.groupRegistry.findById(groupConsultationService
+                .getGroup(leadRoleId)
+                .map(g -> g.groupId())
+                .orElse(""));
+        if (groupOpt.isEmpty()) {
+            log.warnf("[GROUP_CONSULT] No group found for %s — falling back to normal delegation", leadRoleId);
+            goal = enhanceGoalWithGroupConsultation(leadRoleId, goal);
+            return executeNormalDelegation(ctx, outerSessionId, leadRoleId, goal, targetRole, userId, chatId, depth);
+        }
+
+        var group = groupOpt.get();
+        var subTasks = groupConsultationEngine.buildSubTasks(group, goal);
+
+        if (subTasks.isEmpty()) {
+            log.debugf("[GROUP_CONSULT] %s can self-handle — no family consultation needed", leadRoleId);
+            return executeNormalDelegation(ctx, outerSessionId, leadRoleId, goal, targetRole, userId, chatId, depth);
+        }
+
+        log.infof("[GROUP_CONSULT] Spawning %d family members for %s", subTasks.size(), leadRoleId);
+
+        // Build the sub-agent runner that delegates to the actual agent loop
+        GroupConsultationEngine.SubAgentRunner runner = (memberId, memberGoal) -> {
+            AgentRoleEnum memberRole = AgentRoleEnum.fromString(memberId);
+            int maxIter = Math.max(1, memberRole.definition().maxIterations());
+            String memberSession = outerSessionId + AgentSentinels.DELEGATE_SESSION_SENTINEL + memberId + ":consult:"
+                    + System.currentTimeMillis();
+
+            AgentResult result = WorkspaceContext.run(
+                    memberSession,
+                    userId,
+                    chatId,
+                    ctx.autonomyLevel(),
+                    memberRole.toScopedName(),
+                    ctx.channelType(),
+                    ctx.channelPlatformId(),
+                    () -> agentLoop
+                            .get()
+                            .run(memberSession, memberRole.toScopedName(), memberGoal, reasoningEngine, maxIter));
+
+            return switch (result) {
+                case AgentResult.Finished f -> f.answer();
+                case AgentResult.Failed fail -> "[Failed: " + fail.reason() + "]";
+                default -> "[No output]";
+            };
+        };
+
+        // Run parallel consultation
+        var consultResult = groupConsultationEngine.consultGroup(group.groupId(), goal, subTasks, runner);
+
+        auditService.record(
+                outerSessionId,
+                userId,
+                ctx.agentRole(),
+                SecurityEventType.DELEGATION_DISPATCHED,
+                String.format(
+                        "group_consult group=%s consulted=%d failed=%d",
+                        consultResult.groupId(), consultResult.membersConsulted(), consultResult.membersFailed()));
+
+        if (!consultResult.hasUsefulResults()) {
+            log.warnf("[GROUP_CONSULT] No useful results from family — falling back to lead-only", leadRoleId);
+            return executeNormalDelegation(ctx, outerSessionId, leadRoleId, goal, targetRole, userId, chatId, depth);
+        }
+
+        // Enhance the goal with family results and delegate to lead for synthesis
+        String enhancedGoal = goal + "\n\n" + consultResult.toSynthesisPrompt();
+        log.infof("[GROUP_CONSULT] Family consultation complete — delegating to %s for synthesis", leadRoleId);
+
+        return executeNormalDelegation(
+                ctx, outerSessionId, leadRoleId, enhancedGoal, targetRole, userId, chatId, depth);
+    }
+
+    /**
+     * Executes a normal (non-group-consult) delegation to a single agent.
+     */
+    private ToolResponse executeNormalDelegation(
+            ToolExecutionContext ctx,
+            String outerSessionId,
+            String agentName,
+            String goal,
+            AgentRoleEnum targetRole,
+            String userId,
+            String chatId,
+            int depth) {
+
+        AgentResult result;
+        Span delegationSpan = otelContext.childSpan(outerSessionId, AgentOTelConstants.SPAN_DELEGATION_DISPATCH);
+        try {
+            if (delegationSpan != null) {
+                delegationSpan.setAttribute(AgentOTelConstants.ATTR_DELEGATION_TARGET, agentName);
+                delegationSpan.setAttribute(AgentOTelConstants.ATTR_DELEGATION_DEPTH, (long) depth);
+                delegationSpan.setAttribute(AgentOTelConstants.ATTR_DELEGATION_GOAL_LEN, (long) goal.length());
+            }
+            result = runSubAgent(ctx, outerSessionId, agentName, goal, targetRole, userId, chatId);
+            if (delegationSpan != null) delegationSpan.setStatus(StatusCode.OK);
+        } catch (BudgetExceededException e) {
+            if (delegationSpan != null) {
+                delegationSpan.setStatus(StatusCode.ERROR, e.getMessage());
+                delegationSpan.recordException(e);
+                delegationSpan.end();
+            }
+            throw e;
+        } catch (Exception e) {
+            if (delegationSpan != null) {
+                delegationSpan.setStatus(StatusCode.ERROR, e.getMessage());
+                delegationSpan.recordException(e);
+                delegationSpan.end();
+            }
+            return handleRunSubAgentException(targetRole, e);
+        } finally {
+            if (delegationSpan != null) delegationSpan.end();
+        }
+
+        return handleSubAgentResult(result, targetRole, outerSessionId);
     }
 
     /**
