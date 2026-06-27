@@ -18,8 +18,10 @@ import java.util.Optional;
 
 import com.amsha.core.agent.AgentSentinels;
 import com.amsha.core.agent.loop.AgentLoop;
+import com.amsha.core.agent.loop.GroupAnalyticsService;
 import com.amsha.core.agent.loop.GroupConsultationEngine;
 import com.amsha.core.agent.loop.GroupConsultationService;
+import com.amsha.core.agent.loop.TaskClassifierService;
 import com.amsha.core.agent.reasoning.ReasoningEngine;
 import com.amsha.core.agent.result.AgentResult;
 import com.amsha.core.agent.role.AgentGroupRegistry;
@@ -327,6 +329,14 @@ class DelegateToAgentToolTest {
         GroupConsultationEngine mockEngine = Mockito.mock(GroupConsultationEngine.class);
         mockEngine.groupRegistry = new AgentGroupRegistry();
 
+        Map<String, String> subTasks = Map.of("sentinel", "Analyze security vulnerability");
+        Mockito.doReturn(subTasks).when(mockEngine).buildSubTasks(any(), any());
+
+        GroupConsultationEngine.GroupConsultationResult consultResult =
+                new GroupConsultationEngine.GroupConsultationResult(
+                        "kailasa", Map.of("sentinel", "Analyzed vulnerability: looks safe"), null, 1, 0);
+        Mockito.doReturn(consultResult).when(mockEngine).consultGroup(any(), any(), any(), any());
+
         DelegateToAgentTool groupTool = new DelegateToAgentTool();
         groupTool.reasoningEngine = reasoningEngine;
         groupTool.agentLoop = agentLoopInstance;
@@ -335,6 +345,8 @@ class DelegateToAgentToolTest {
         groupTool.otelContext = otelContext;
         groupTool.groupConsultationService = mockTriageService;
         groupTool.groupConsultationEngine = mockEngine;
+        groupTool.taskClassifier = new TaskClassifierService();
+        groupTool.groupAnalytics = new GroupAnalyticsService();
         groupTool.maxDelegationDepth = 3;
 
         when(agentLoop.run(any(), any(), any(), any(), anyInt()))
@@ -362,5 +374,7 @@ class DelegateToAgentToolTest {
         ToolResponse response = groupTool.execute(ctx, params);
         assertTrue(response.success());
         Mockito.verify(mockTriageService).isGroupLead("debugger");
+        assertEquals(1, groupTool.groupAnalytics.totalConsultations());
+        assertEquals(1.0, groupTool.groupAnalytics.successRate("kailasa"));
     }
 }

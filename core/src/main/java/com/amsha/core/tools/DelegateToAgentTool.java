@@ -17,8 +17,10 @@ import java.util.stream.Collectors;
 import com.amsha.common.util.LogUtil;
 import com.amsha.core.agent.AgentSentinels;
 import com.amsha.core.agent.loop.AgentLoop;
+import com.amsha.core.agent.loop.GroupAnalyticsService;
 import com.amsha.core.agent.loop.GroupConsultationEngine;
 import com.amsha.core.agent.loop.GroupConsultationService;
+import com.amsha.core.agent.loop.TaskClassifierService;
 import com.amsha.core.agent.reasoning.ReasoningEngine;
 import com.amsha.core.agent.result.AgentResult;
 import com.amsha.core.agent.role.AgentRoleEnum;
@@ -88,6 +90,12 @@ public class DelegateToAgentTool implements AgentTool {
 
     @Inject
     GroupConsultationEngine groupConsultationEngine;
+
+    @Inject
+    TaskClassifierService taskClassifier;
+
+    @Inject
+    GroupAnalyticsService groupAnalytics;
 
     @ConfigProperty(name = "amsha.delegation.max-depth", defaultValue = "3")
     int maxDelegationDepth = 3;
@@ -428,6 +436,15 @@ public class DelegateToAgentTool implements AgentTool {
                 String.format(
                         "group_consult group=%s consulted=%d failed=%d",
                         consultResult.groupId(), consultResult.membersConsulted(), consultResult.membersFailed()));
+
+        // Record analytics
+        var domains = taskClassifier.classify(goal);
+        groupAnalytics.recordOutcome(
+                consultResult.groupId(),
+                domains.stream().map(d -> d.name().toLowerCase(Locale.ROOT)).toList(),
+                consultResult.membersConsulted(),
+                consultResult.membersFailed(),
+                consultResult.hasUsefulResults());
 
         if (!consultResult.hasUsefulResults()) {
             log.warnf("[GROUP_CONSULT] No useful results from family — falling back to lead-only", leadRoleId);
