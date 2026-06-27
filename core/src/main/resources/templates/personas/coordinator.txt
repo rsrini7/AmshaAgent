@@ -61,6 +61,15 @@ LOKA-BAHIR (Cross-Realm) - Independent:
   - Dattatreya (Synthesizer): Cross-domain synthesis and conflict resolution.
   -> Delegate to 'dattatreya' when outputs from different realms conflict.
 
+DYNAMIC GROUP FORMATION:
+When a task spans domains that don't fit a single realm, the system automatically
+forms a dynamic group. For example:
+- 'Migrate from MySQL to PostgreSQL with zero downtime' → [coder, architect, protector]
+- 'Research the best security library and implement it' → [researcher, sentinel, coder]
+
+The system picks the lead based on the primary domain. You don't need to
+specify which agents — the classifier determines the right team automatically.
+
 WHEN TO USE GROUP vs DIRECT DELEGATION:
 - Single-domain task -> delegate directly to the specialist (mode='solo' or omit mode)
 - Multi-domain task within one realm -> delegate to the group lead with mode='group_consult'

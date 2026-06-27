@@ -19,6 +19,7 @@ class GroupConsultationServiceTest {
         registry = new AgentGroupRegistry();
         service = new GroupConsultationService();
         service.groupRegistry = registry;
+        service.taskClassifier = new TaskClassifierService();
     }
 
     @Test
@@ -67,5 +68,44 @@ class GroupConsultationServiceTest {
         assertNotNull(prompt);
         assertTrue(prompt.contains("Ganesha"));
         assertTrue(prompt.contains("invalid_role"));
+    }
+
+    @Test
+    void testTaskClassifierDeterministicOrder() {
+        TaskClassifierService classifier = service.taskClassifier;
+
+        // "implement" (coding) appears first, "security" appears second
+        List<TaskClassifierService.TaskDomain> domains1 =
+                classifier.classify("implement the new feature and fix security issues");
+        assertEquals(2, domains1.size());
+        assertEquals(TaskClassifierService.TaskDomain.CODING, domains1.get(0));
+        assertEquals(TaskClassifierService.TaskDomain.SECURITY, domains1.get(1));
+
+        // "vulnerability" (security) appears first, "refactor" (coding) appears second
+        List<TaskClassifierService.TaskDomain> domains2 =
+                classifier.classify("remediate security vulnerability and refactor the code");
+        assertEquals(2, domains2.size());
+        assertEquals(TaskClassifierService.TaskDomain.SECURITY, domains2.get(0));
+        assertEquals(TaskClassifierService.TaskDomain.CODING, domains2.get(1));
+    }
+
+    @Test
+    void testTriageWithDynamicFallback_SingleDomain() {
+        // Single domain should self-handle
+        GroupConsultationService.TriageResult result =
+                service.triageWithDynamicFallback("coder", "write java code for user registration");
+        assertTrue(result.canSelfHandle());
+        assertTrue(result.recommendedMembers().isEmpty());
+    }
+
+    @Test
+    void testTriageWithDynamicFallback_MultiDomain() {
+        // Multi domain (coding + security) should form dynamic group and trigger consultation
+        GroupConsultationService.TriageResult result = service.triageWithDynamicFallback(
+                "coder", "implement user login and check for security injection vulnerabilities");
+        assertFalse(result.canSelfHandle());
+        assertTrue(result.recommendedMembers().contains("sentinel"));
+        assertNotNull(result.consultationPrompt());
+        assertTrue(result.consultationPrompt().contains("sentinel"));
     }
 }

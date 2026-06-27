@@ -68,6 +68,13 @@ public class CoordinatorPromptSection implements RolePromptSection {
                   → Delegate to 'dattatreya' when outputs from different realms conflict
                     or need integration.
 
+                DYNAMIC GROUP FORMATION:
+                When a task spans domains that don't fit a single realm, the system
+                automatically forms a dynamic group. The classifier picks the right
+                agents and lead based on the task's domains. You don't need to
+                specify individual agents — use mode='group_consult' and the system
+                handles team formation.
+
                 WHEN TO USE GROUP DELEGATION vs DIRECT DELEGATION:
                 - Single-domain task → delegate directly to the specialist (e.g., 'shiva' for pure debugging)
                 - Multi-domain task within one realm → delegate to the group lead with mode='group_consult'

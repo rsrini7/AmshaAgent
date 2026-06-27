@@ -46,6 +46,9 @@ public class GroupConsultationService {
     @Inject
     AgentGroupRegistry groupRegistry;
 
+    @Inject
+    TaskClassifierService taskClassifier;
+
     /**
      * Result of triaging a task within a group.
      *
@@ -82,6 +85,39 @@ public class GroupConsultationService {
                 .findByLead(leadRoleId)
                 .map(group -> triageWithinGroup(group, goal))
                 .orElse(TriageResult.selfHandle("Role '" + leadRoleId + "' is not a group lead — handling directly"));
+    }
+
+    /**
+     * Triages a task with dynamic group fallback. If the static group says
+     * "self-handle" but the task actually spans multiple domains, forms a
+     * dynamic group using the TaskClassifierService.
+     *
+     * @param leadRoleId The lead's role ID
+     * @param goal       The task description
+     * @return TriageResult — either from static group or dynamic group
+     */
+    public TriageResult triageWithDynamicFallback(String leadRoleId, String goal) {
+        TriageResult staticResult = triage(leadRoleId, goal);
+
+        // If static group found members, use that
+        if (!staticResult.canSelfHandle()) {
+            return staticResult;
+        }
+
+        // Try dynamic group formation
+        var domains = taskClassifier.classify(goal);
+        if (domains.size() <= 1) {
+            return staticResult; // Single domain — self-handle is correct
+        }
+
+        var dynamicGroup = taskClassifier.formDynamicGroup(goal);
+        if (dynamicGroup == null) {
+            return staticResult;
+        }
+
+        // Dynamic group formed — triage within it
+        log.infof("[GROUP-CONSULT] Dynamic group formed: %s for domains %s", dynamicGroup.groupId(), domains);
+        return triageWithinGroup(dynamicGroup, goal);
     }
 
     /**
@@ -135,18 +171,15 @@ public class GroupConsultationService {
     private TriageResult triageWithinGroup(AgentGroup group, String goal) {
         String goalLower = goal.toLowerCase(Locale.ROOT);
 
-        // Check if the lead's core expertise covers the entire task
-        if (isWithinLeadExpertise(group.leadRoleId(), goalLower)) {
-            return TriageResult.selfHandle(String.format(
-                    "Task is within %s's core expertise — no family consultation needed", group.leadRoleId()));
-        }
-
-        // Determine which family members are needed
+        // Determine which family members are needed FIRST
         List<String> needed = determineNeededMembers(group, goalLower);
 
         if (needed.isEmpty()) {
-            // Task is slightly outside lead's expertise but no specific member matches
-            // Lead should handle with their best judgment
+            // No specific member matches — check if lead can handle
+            if (isWithinLeadExpertise(group.leadRoleId(), goalLower)) {
+                return TriageResult.selfHandle(String.format(
+                        "Task is within %s's core expertise — no family consultation needed", group.leadRoleId()));
+            }
             return TriageResult.selfHandle(
                     "No specific family member identified — lead will handle with best judgment");
         }
