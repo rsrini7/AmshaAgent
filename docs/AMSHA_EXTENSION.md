@@ -225,15 +225,17 @@ case "analyst" -> analystTemplate;
 ### Step 4 - Wire into the system
 
 1. **`CoordinatorPromptSection.java`** - Add to Trimurti/Tridevi block
-2. **`PersonaEscalationService.java`** - Add escalation paths
+2. **`PersonaEscalationService.java`** - Add escalation paths in `determineNewPersonaEscalation()`
 3. **`PromptInstructionLibrary.java`** - Add to system capabilities
 4. **`DelegateToAgentTool.java`** - Add to `defaultRoles` in `@ToolMetadata`
 5. **`delegate-to-agent-rules.txt`** - Add to "Available Specialists" list
-6. **`application.yaml`** - Add role entry
+6. **`application.yaml`** - Add role entry under `amsha.agents.roles`
+7. **`AgentGroupRegistry.java`** - Add to appropriate group (Loka) if applicable
+8. **Persona prompt** - Add `<GROUP_NAME> FAMILY AWARENESS` section with escalation rules
 
 ### Step 5 - Update documentation
 
-1. **`AGENTS.md`** - Ensure Section 6 covers the new persona
+1. **`AGENTS.md`** - Ensure Section 7 covers the new persona
 2. **`telegram-test-amsha.txt`** - Add test cases
 3. **`04_agent_roles.http`** - Add HTTP test cases
 
@@ -517,6 +519,7 @@ AMSHA_LLM_MODEL_NAME=my-model-name
 | `GeminiProviderFactory` | `gemini` | `AgentChatModelProvider` | `amsha-core` |
 | `NvidiaProviderFactory` | `nvidia` | `AgentChatModelProvider` | `amsha-core` |
 | `CerebrasProviderFactory` | `cerebras` | `AgentChatModelProvider` | `amsha-core` |
+| `LlamaCppProviderFactory` | `llamacpp` | `AgentChatModelProvider` | `amsha-core` |
 | `InfiniteLoopAgentChatModelProvider` | `infiniteloop` | `AgentChatModelProvider` | `amsha-core` |
 
 Each provider also has a corresponding `RoutingChatModelProvider` implementation in `amsha-app` for intent classification and compaction.
