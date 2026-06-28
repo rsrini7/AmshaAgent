@@ -337,12 +337,12 @@ amsha:
       enabled: ${AMSHA_LLM_CIRCUIT_BREAKER_ENABLED:true}
     # Per-persona model routing (P102). Resolution: persona → group → global.
     # Single model:
-    #   persona-models:
+    #   persona.models:
     #     brahma:
     #       provider: deepseek
     #       model: deepseek-coder-33b
     # Multi-model (failover chain):
-    #   persona-models:
+    #   persona.models:
     #     brahma:
     #       0:
     #         provider: deepseek
@@ -350,8 +350,14 @@ amsha:
     #       1:
     #         provider: groq
     #         model: llama-3.3-70b
-    group-models: ${AMSHA_LLM_GROUP_MODELS:}
-    persona-models: ${AMSHA_LLM_PERSONA_MODELS:}
+    #
+    # Or via env vars:
+    #   AMSHA_LLM_PERSONA_MODELS_BRAHMA_PROVIDER=deepseek
+    #   AMSHA_LLM_PERSONA_MODELS_BRAHMA_MODEL=deepseek-coder-33b
+    #   AMSHA_LLM_PERSONA_MODELS_BRAHMA_0_PROVIDER=deepseek
+    #   AMSHA_LLM_PERSONA_MODELS_BRAHMA_0_MODEL=deepseek-coder-33b
+    group.models:
+    persona.models:
     openrouter:
       app-name: "${AMSHA_OPENROUTER_APP_NAME:https://github.com/rsrini7/amsha}"
       site-url: "${AMSHA_OPENROUTER_SITE_URL:https://github.com/rsrini7/amsha}"

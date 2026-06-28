@@ -22,8 +22,8 @@ import io.smallrye.config.SmallRyeConfigProviderResolver;
 /**
  * Routes agent roles to their resolved ChatModel using a 3-tier resolution:
  * <ol>
- *   <li><b>Persona override</b> — {@code amsha.llm.persona-models.{role}} (highest priority)</li>
- *   <li><b>Group default</b> — {@code amsha.llm.group-models.{groupId}} (medium priority)</li>
+ *   <li><b>Persona override</b> — {@code amsha.llm.persona.models.{role}} (highest priority)</li>
+ *   <li><b>Group default</b> — {@code amsha.llm.group.models.{groupId}} (medium priority)</li>
  *   <li><b>Global default</b> — {@code amsha.llm.provider} + {@code amsha.llm.model} (fallback)</li>
  * </ol>
  *
@@ -52,8 +52,8 @@ public class ModelRouter {
     @ConfigProperty(name = "amsha.llm.provider", defaultValue = "groq")
     String globalProvider;
 
-    @ConfigProperty(name = "amsha.llm.model", defaultValue = "")
-    String globalModel;
+    @ConfigProperty(name = "amsha.llm.model")
+    Optional<String> globalModel;
 
     /**
      * Resolves the ChatModel for a given agent role.
@@ -75,7 +75,7 @@ public class ModelRouter {
         }
 
         // 3. Global default
-        return getOrCreateModel(globalProvider, globalModel);
+        return getOrCreateModel(globalProvider, globalModel.orElse(""));
     }
 
     /**
@@ -89,7 +89,7 @@ public class ModelRouter {
         var groupConfigs = getGroupConfigs(agentRole);
         if (!groupConfigs.isEmpty()) return groupConfigs;
 
-        return List.of(new ModelConfig(globalProvider, globalModel));
+        return List.of(new ModelConfig(globalProvider, globalModel.orElse("")));
     }
 
     // ── Private ────────────────────────────────────────────────────────────
@@ -97,18 +97,18 @@ public class ModelRouter {
     /**
      * Reads persona model configs. Supports multiple entries for fallback chain.
      * Config format:
-     *   Single:  amsha.llm.persona-models.{role}.provider / .model
-     *   Multi:   amsha.llm.persona-models.{role}.0.provider / .model
-     *            amsha.llm.persona-models.{role}.1.provider / .model
+     *   Single:  amsha.llm.persona.models.{role}.provider / .model
+     *   Multi:   amsha.llm.persona.models.{role}.0.provider / .model
+     *            amsha.llm.persona.models.{role}.1.provider / .model
      */
     private List<ModelConfig> getPersonaConfigs(String agentRole) {
         List<ModelConfig> configs = new ArrayList<>();
         var config = SmallRyeConfigProviderResolver.instance()
                 .getConfig(Thread.currentThread().getContextClassLoader());
 
-        // Try numbered entries first: persona-models.brahma.0.provider, .1.provider, etc.
+        // Try numbered entries first: persona.models.brahma.0.provider, .1.provider, etc.
         for (int i = 0; i < 10; i++) {
-            String base = "amsha.llm.persona-models." + agentRole + "." + i;
+            String base = "amsha.llm.persona.models." + agentRole + "." + i;
             Optional<String> provider = config.getOptionalValue(base + ".provider", String.class);
             Optional<String> model = config.getOptionalValue(base + ".model", String.class);
             if (provider.isPresent() && model.isPresent()) {
@@ -120,7 +120,7 @@ public class ModelRouter {
 
         // If no numbered entries, try unnumbered
         if (configs.isEmpty()) {
-            String base = "amsha.llm.persona-models." + agentRole;
+            String base = "amsha.llm.persona.models." + agentRole;
             Optional<String> provider = config.getOptionalValue(base + ".provider", String.class);
             Optional<String> model = config.getOptionalValue(base + ".model", String.class);
             if (provider.isPresent() && model.isPresent()) {
@@ -147,7 +147,7 @@ public class ModelRouter {
 
                     // Try numbered entries first
                     for (int i = 0; i < 10; i++) {
-                        String base = "amsha.llm.group-models." + group.groupId() + "." + i;
+                        String base = "amsha.llm.group.models." + group.groupId() + "." + i;
                         Optional<String> provider = config.getOptionalValue(base + ".provider", String.class);
                         Optional<String> model = config.getOptionalValue(base + ".model", String.class);
                         if (provider.isPresent() && model.isPresent()) {
@@ -159,7 +159,7 @@ public class ModelRouter {
 
                     // If no numbered entries, try unnumbered
                     if (configs.isEmpty()) {
-                        String base = "amsha.llm.group-models." + group.groupId();
+                        String base = "amsha.llm.group.models." + group.groupId();
                         Optional<String> provider = config.getOptionalValue(base + ".provider", String.class);
                         Optional<String> model = config.getOptionalValue(base + ".model", String.class);
                         if (provider.isPresent() && model.isPresent()) {

@@ -8,6 +8,7 @@ import dev.langchain4j.model.chat.ChatModel;
 import jakarta.enterprise.inject.Instance;
 
 import java.util.List;
+import java.util.Optional;
 
 import com.amsha.core.agent.reasoning.AgentChatModelProvider;
 import com.amsha.core.agent.role.AgentGroupRegistry;
@@ -50,7 +51,7 @@ class ModelRouterTest {
         router.modelPool = modelPool;
         router.groupRegistry = groupRegistry;
         router.globalProvider = "groq";
-        router.globalModel = "llama-3.3-70b";
+        router.globalModel = Optional.of("llama-3.3-70b");
 
         // Mock providers Instance
         @SuppressWarnings("unchecked")

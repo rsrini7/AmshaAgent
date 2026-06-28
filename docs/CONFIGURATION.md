@@ -31,38 +31,38 @@ Override the default LLM model per agent persona or group (Loka). Resolution ord
 
 | Variable Pattern | Description |
 |---|---|
-| `amsha.llm.persona-models.<role>.provider` | Provider for a specific persona (e.g., `brahma`, `shiva`, `vishnu`) |
-| `amsha.llm.persona-models.<role>.model` | Model for a specific persona |
+| `amsha.llm.persona.models.<role>.provider` | Provider for a specific persona (e.g., `brahma`, `shiva`, `vishnu`) |
+| `amsha.llm.persona.models.<role>.model` | Model for a specific persona |
 
 **Example:** Brahma uses DeepSeek Coder for code generation:
 ```bash
-amsha.llm.persona-models.brahma.provider=deepseek
-amsha.llm.persona-models.brahma.model=deepseek-coder-33b
+amsha.llm.persona.models.brahma.provider=deepseek
+amsha.llm.persona.models.brahma.model=deepseek-coder-33b
 ```
 
 ### Group-Level Default (All Members of a Loka)
 
 | Variable Pattern | Description |
 |---|---|
-| `amsha.llm.group-models.<groupId>.provider` | Provider for all members of a group |
-| `amsha.llm.group-models.<groupId>.model` | Model for all members of a group |
+| `amsha.llm.group.models.<groupId>.provider` | Provider for all members of a group |
+| `amsha.llm.group.models.<groupId>.model` | Model for all members of a group |
 
 **Groups:** `kailasa`, `brahmaloka`, `vaikunta`, `loka-bahir`
 
 **Example:** Kailasa (debugging group) uses fast Llama:
 ```bash
-amsha.llm.group-models.kailasa.provider=groq
-amsha.llm.group-models.kailasa.model=meta-llama/llama-4-scout-17b-16e-instruct
+amsha.llm.group.models.kailasa.provider=groq
+amsha.llm.group.models.kailasa.model=meta-llama/llama-4-scout-17b-16e-instruct
 ```
 
 ### Multi-Model Failover
 
-Comma-separated numbered entries for automatic failover:
+Commas-separated numbered entries for automatic failover:
 ```bash
-amsha.llm.persona-models.brahma.0.provider=deepseek
-amsha.llm.persona-models.brahma.0.model=deepseek-coder-33b
-amsha.llm.persona-models.brahma.1.provider=groq
-amsha.llm.persona-models.brahma.1.model=llama-3.3-70b
+amsha.llm.persona.models.brahma.0.provider=deepseek
+amsha.llm.persona.models.brahma.0.model=deepseek-coder-33b
+amsha.llm.persona.models.brahma.1.provider=groq
+amsha.llm.persona.models.brahma.1.model=llama-3.3-70b
 ```
 
 Circuit breaker per-model isolation is automatic. A failure in one provider (e.g., Groq rate-limit) will NOT trip the circuit for other providers (e.g., OpenAI, Gemini).
