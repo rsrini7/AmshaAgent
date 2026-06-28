@@ -99,13 +99,21 @@ public class LangChain4jLlmAdapter implements LlmProviderPort {
      * annotation-based CDI proxies, which cannot be scoped per-key.
      */
     static class PerModelCircuitBreaker {
+        private static final Logger log = Logger.getLogger(PerModelCircuitBreaker.class);
+
         private final String poolKey;
 
+        enum State {
+            CLOSED,
+            OPEN,
+            HALF_OPEN
+        }
+
         // Circuit state
+        private State state = State.CLOSED;
         private int failureCount;
         private int successCount;
         private int requestCount;
-        private boolean open;
         private long openSince;
 
         private static final int REQUEST_VOLUME_THRESHOLD = 4;
@@ -118,11 +126,11 @@ public class LangChain4jLlmAdapter implements LlmProviderPort {
         }
 
         synchronized ChatResponse execute(ChatRequest request, ChatModel model) {
-            if (open) {
+            if (state == State.OPEN) {
                 long elapsed = System.currentTimeMillis() - openSince;
                 if (elapsed >= DELAY_MS) {
-                    // Half-open: allow one probe request
-                    open = false;
+                    log.infof("[CB] Half-open for %s — retrying after %dms", poolKey, elapsed);
+                    state = State.HALF_OPEN;
                     requestCount = 0;
                     failureCount = 0;
                     successCount = 0;
@@ -147,19 +155,34 @@ public class LangChain4jLlmAdapter implements LlmProviderPort {
         }
 
         private synchronized void onSuccess() {
-            successCount++;
-            if (open && successCount >= SUCCESS_THRESHOLD) {
-                open = false;
-                failureCount = 0;
-                requestCount = 0;
+            if (state == State.HALF_OPEN) {
+                successCount++;
+                if (successCount >= SUCCESS_THRESHOLD) {
+                    log.infof("[CB] Closed for %s — recovered after %d successes", poolKey, successCount);
+                    state = State.CLOSED;
+                    failureCount = 0;
+                    requestCount = 0;
+                }
+            } else if (state == State.CLOSED) {
+                successCount++;
             }
         }
 
         private synchronized void onFailure() {
             failureCount++;
-            if (requestCount >= REQUEST_VOLUME_THRESHOLD && ((double) failureCount / requestCount) >= FAILURE_RATIO) {
-                open = true;
+            if (state == State.HALF_OPEN) {
+                log.warnf("[CB] Opened for %s during half-open due to failure", poolKey);
+                state = State.OPEN;
                 openSince = System.currentTimeMillis();
+            } else if (state == State.CLOSED) {
+                if (requestCount >= REQUEST_VOLUME_THRESHOLD
+                        && ((double) failureCount / requestCount) >= FAILURE_RATIO) {
+                    log.warnf(
+                            "[CB] Opened for %s — failureRate=%.2f (%d/%d)",
+                            poolKey, (double) failureCount / requestCount, failureCount, requestCount);
+                    state = State.OPEN;
+                    openSince = System.currentTimeMillis();
+                }
             }
         }
     }

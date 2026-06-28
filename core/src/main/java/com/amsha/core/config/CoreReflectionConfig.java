@@ -1,5 +1,9 @@
 package com.amsha.core.config;
 
+import com.amsha.core.agent.loop.GroupAnalyticsService;
+import com.amsha.core.agent.loop.GroupConsultationEngine;
+import com.amsha.core.agent.loop.GroupConsultationService;
+import com.amsha.core.agent.loop.TaskClassifierService;
 import com.amsha.core.agent.reasoning.ParallelToolCall;
 import com.amsha.core.agent.reasoning.ReasoningStep;
 import com.amsha.core.agent.reasoning.ReasoningStepDeserializer;
@@ -76,7 +80,11 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             ToolResponse.ToolPending.class,
             ReasoningStepDeserializer.class,
             ReasoningStepSerializer.class,
-            ModelRouter.ModelConfig.class
+            ModelRouter.ModelConfig.class,
+            GroupConsultationEngine.GroupConsultationResult.class,
+            GroupConsultationService.TriageResult.class,
+            GroupAnalyticsService.DomainComboStats.class,
+            TaskClassifierService.TaskDomain.class
         },
         classNames = {
             "com.github.benmanes.caffeine.cache.SSLMSA",

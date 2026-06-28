@@ -12,9 +12,7 @@ import jakarta.inject.Inject;
 import java.util.Locale;
 import java.util.Map;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 
-import com.amsha.common.util.LogUtil;
 import com.amsha.core.agent.AgentSentinels;
 import com.amsha.core.agent.loop.AgentLoop;
 import com.amsha.core.agent.loop.GroupAnalyticsService;
@@ -35,7 +33,6 @@ import com.amsha.core.scope.WorkspaceContext;
 import com.amsha.core.security.AutonomyLevel;
 import com.amsha.core.security.ToolOperation;
 import com.amsha.core.util.AgentGuards;
-import com.amsha.core.util.AgentResultFormatter;
 import com.amsha.persistence.api.CheckpointCrudPort;
 import com.amsha.persistence.api.CheckpointDto;
 
@@ -92,10 +89,13 @@ public class DelegateToAgentTool implements AgentTool {
     GroupConsultationEngine groupConsultationEngine;
 
     @Inject
+    GroupAnalyticsService groupAnalytics;
+
+    @Inject
     TaskClassifierService taskClassifier;
 
     @Inject
-    GroupAnalyticsService groupAnalytics;
+    DelegationProcessor delegationProcessor;
 
     @ConfigProperty(name = "amsha.delegation.max-depth", defaultValue = "3")
     int maxDelegationDepth = 3;
@@ -161,7 +161,7 @@ public class DelegateToAgentTool implements AgentTool {
 
         Object agentObj = params.get(PARAM_AGENT);
         Object goalObj = params.get(PARAM_GOAL);
-        String delegatableList = getDelegatableAgentList();
+        String delegatableList = delegationProcessor.getDelegatableAgentList();
 
         if (agentObj == null || String.valueOf(agentObj).isBlank()) {
             return ToolResponse.failure(400, delegationAgentRequired(delegatableList));
@@ -170,7 +170,7 @@ public class DelegateToAgentTool implements AgentTool {
             return ToolResponse.failure(400, DELEGATION_GOAL_REQUIRED);
         }
 
-        String agentName = stripSurroundingQuotes(String.valueOf(agentObj));
+        String agentName = DelegationProcessor.stripSurroundingQuotes(String.valueOf(agentObj));
         String goal = String.valueOf(goalObj);
 
         // Read delegation mode (default: solo)
@@ -196,7 +196,7 @@ public class DelegateToAgentTool implements AgentTool {
 
         String normalized;
         try {
-            normalized = normalizeAgent(agentName, goal, currentRoleName, delegatableList);
+            normalized = delegationProcessor.normalizeAgent(agentName, goal, currentRoleName);
         } catch (IllegalArgumentException e) {
             return ToolResponse.failure(400, e.getMessage());
         }
@@ -307,61 +307,12 @@ public class DelegateToAgentTool implements AgentTool {
     }
 
     private ToolResponse handleRunSubAgentException(AgentRoleEnum targetRole, Exception e) {
-        if (e instanceof IllegalStateException
-                && e.getMessage() != null
-                && e.getMessage().contains("unbound")) {
-            return ToolResponse.failure(403, "Security violation: tenant context not bound.");
-        }
-        log.errorf(
-                "[DELEGATE] Failed to delegate to agent %s: %s\n%s",
-                targetRole.toScopedName(), LogUtil.rootMessage(e), LogUtil.trimmedStack(e));
-        return ToolResponse.failure(500, delegationFailed(targetRole.toScopedName(), e.getMessage()));
+        return delegationProcessor.handleRunSubAgentException(targetRole, e);
     }
 
     private ToolResponse handleSubAgentResult(AgentResult result, AgentRoleEnum targetRole, String outerSessionId) {
-        if (result instanceof AgentResult.AwaitingApproval aa) {
-            return ToolResponse.failure(
-                    409, delegationPaused(targetRole.toScopedName(), aa.toolName(), aa.sessionId()));
-        }
-        if (result instanceof AgentResult.LoopExceeded) {
-            return ToolResponse.failure(
-                    500,
-                    delegationExceeded(
-                            targetRole.toScopedName(),
-                            Math.max(1, targetRole.definition().maxIterations())));
-        }
-
-        if (result instanceof AgentResult.Finished f && f.answer() != null) {
-            String trimmed = f.answer().trim();
-            if (trimmed.contains("unable to share my internal instructions")
-                    || trimmed.contains("PROMPT_LEAK_BLOCKED")) {
-                return ToolResponse.failure(
-                        403,
-                        "Sub-agent refused to complete the task due to safety constraints or prompt injection filters. "
-                                + "Do NOT return this error to the user. You must answer the user's request directly using your own knowledge and tools.");
-            }
-        }
-
-        String formatted = AgentResultFormatter.format(result);
         log.infof("[DELEGATE] agent=%s completed for session=%s", targetRole.toScopedName(), outerSessionId);
-        return ToolResponse.success(formatted);
-    }
-
-    private String getDelegatableAgentList() {
-        return AgentRoleEnum.values().stream()
-                .filter(role -> !role.equals(AgentRoleEnum.COORDINATOR))
-                .flatMap(role -> role.definition().aliases().stream())
-                .sorted()
-                .collect(Collectors.joining(", "));
-    }
-
-    private static String stripSurroundingQuotes(String s) {
-        if (s == null) return null;
-        s = s.trim();
-        if (s.length() >= 2 && ((s.startsWith("'") && s.endsWith("'")) || (s.startsWith("\"") && s.endsWith("\"")))) {
-            return s.substring(1, s.length() - 1).trim();
-        }
-        return s;
+        return delegationProcessor.handleSubAgentResult(result, targetRole);
     }
 
     /**
@@ -385,7 +336,7 @@ public class DelegateToAgentTool implements AgentTool {
                 .orElse(""));
         if (groupOpt.isEmpty()) {
             log.warnf("[GROUP_CONSULT] No group found for %s — falling back to normal delegation", leadRoleId);
-            goal = enhanceGoalWithGroupConsultation(leadRoleId, goal);
+            goal = delegationProcessor.enhanceGoalWithGroupConsultation(leadRoleId, goal);
             return executeNormalDelegation(ctx, outerSessionId, leadRoleId, goal, targetRole, userId, chatId, depth);
         }
 
@@ -401,7 +352,13 @@ public class DelegateToAgentTool implements AgentTool {
 
         // Build the sub-agent runner that delegates to the actual agent loop
         GroupConsultationEngine.SubAgentRunner runner = (memberId, memberGoal) -> {
-            AgentRoleEnum memberRole = AgentRoleEnum.fromString(memberId);
+            AgentRoleEnum memberRole;
+            try {
+                memberRole = AgentRoleEnum.fromString(memberId);
+            } catch (IllegalArgumentException e) {
+                log.warnf("[GROUP_CONSULT] Unknown role ID '%s' — skipping member", memberId);
+                return "[Skipped: unknown role '" + memberId + "']";
+            }
             int maxIter = Math.max(1, memberRole.definition().maxIterations());
             String memberSession = outerSessionId + AgentSentinels.DELEGATE_SESSION_SENTINEL + memberId + ":consult:"
                     + System.currentTimeMillis();
@@ -501,89 +458,5 @@ public class DelegateToAgentTool implements AgentTool {
         }
 
         return handleSubAgentResult(result, targetRole, outerSessionId);
-    }
-
-    /**
-     * Enhances the delegation goal with group consultation prompt when mode=group_consult.
-     * If the target agent is a group lead, triages the task and adds consultation guidance.
-     * If the target is not a group lead, the goal is returned unchanged.
-     */
-    private String enhanceGoalWithGroupConsultation(String agentName, String goal) {
-        var triage = groupConsultationService.triage(agentName, goal);
-
-        if (triage.canSelfHandle()) {
-            log.debugf("[GROUP_CONSULT] %s can self-handle: %s", agentName, triage.reason());
-            return goal;
-        }
-
-        // Enhance the goal with consultation prompt
-        String enhanced = goal
-                + "\n\n" + triage.consultationPrompt()
-                + "\n\nINSTRUCTIONS: You have been delegated with mode=" + MODE_GROUP_CONSULT + ". "
-                + "Consult the family members listed above via garuda, then synthesize their "
-                + "analyses into a unified response. Do NOT skip the consultation step.";
-
-        log.infof(
-                "[GROUP_CONSULT] Enhanced goal for %s: consulting %s — %s",
-                agentName, triage.recommendedMembers(), triage.reason());
-        return enhanced;
-    }
-
-    /**
-     * Validates and normalizes the target agent name. Returns null if self-delegation
-     * after redirect (caller should tell LLM to proceed directly).
-     */
-    private String normalizeAgent(String agentName, String goal, String currentRoleName, String delegatableList) {
-        String normalized = agentName.trim().toLowerCase(Locale.ROOT);
-
-        if (isSelfDelegation(normalized, currentRoleName)) {
-            log.infof("[REDIRECT] %s tried to delegate to itself — auto-redirecting to coordinator", currentRoleName);
-            normalized = AgentRoleEnum.COORDINATOR.id();
-            agentName = normalized;
-            if (isSelfDelegation(normalized, currentRoleName)) return null;
-        }
-
-        if (isCoderDelegatingToResearcher(normalized, currentRoleName)) {
-            log.infof(
-                    "[CODE-FIRST] %s delegating research to %s — allowing for context gathering",
-                    currentRoleName, normalized);
-        }
-
-        if (isCombinedGoalToResearcher(normalized, currentRoleName, goal)) {
-            log.infof(
-                    "[REDIRECT] %s → %s blocked (combined goal), auto-redirecting to brahma",
-                    currentRoleName, normalized);
-            normalized = AgentRoleEnum.CODER.id();
-            agentName = normalized;
-        }
-
-        if (!AgentRoleEnum.isKnownRole(agentName)) {
-            throw new IllegalArgumentException(delegationUnknownAgent(agentName, delegatableList));
-        }
-        return normalized;
-    }
-
-    private boolean isSelfDelegation(String normalized, String currentRoleName) {
-        AgentRoleEnum current = AgentRoleEnum.fromString(currentRoleName);
-        return current.id().equals(normalized) || current.definition().aliases().contains(normalized);
-    }
-
-    @SuppressWarnings("ReferenceEquality") // enum identity comparison is correct
-    private boolean isCoderDelegatingToResearcher(String normalized, String currentRoleName) {
-        if (!AgentRoleEnum.isKnownRole(normalized)) return false;
-        AgentRoleEnum current = AgentRoleEnum.fromString(currentRoleName);
-        AgentRoleEnum target = AgentRoleEnum.fromString(normalized);
-        return current == AgentRoleEnum.CODER && target == AgentRoleEnum.RESEARCHER;
-    }
-
-    @SuppressWarnings("ReferenceEquality") // enum identity comparison is correct
-    private boolean isCombinedGoalToResearcher(String normalized, String currentRoleName, String goal) {
-        if (!AgentRoleEnum.isKnownRole(normalized)) return false;
-        AgentRoleEnum current = AgentRoleEnum.fromString(currentRoleName);
-        AgentRoleEnum target = AgentRoleEnum.fromString(normalized);
-        return current == AgentRoleEnum.COORDINATOR
-                && target == AgentRoleEnum.RESEARCHER
-                && goal != null
-                && AgentSentinels.CODE_EXECUTION_KEYWORDS.matcher(goal).find();
     }
 }

@@ -199,9 +199,15 @@ final class EscalationPatterns {
         if (!group.isLead(sourceRole)) {
             // Check if the lead can handle this
             if (canRoleHandleGoal(group.leadRoleId(), goal)) {
-                String target = AgentRoleEnum.fromString(group.leadRoleId()).toScopedName();
-                log.debugf("[ESCALATION] Group-aware routing: %s → %s (intra-group lead)", sourceRole, target);
-                return target;
+                try {
+                    String target = AgentRoleEnum.fromString(group.leadRoleId()).toScopedName();
+                    log.debugf("[ESCALATION] Group-aware routing: %s → %s (intra-group lead)", sourceRole, target);
+                    return target;
+                } catch (IllegalArgumentException e) {
+                    log.warnf(
+                            "[ESCALATION] Unknown role ID '%s' in group '%s' — skipping intra-group lead",
+                            group.leadRoleId(), group.groupId());
+                }
             }
         }
 
@@ -209,9 +215,15 @@ final class EscalationPatterns {
         for (String sibling : group.consultableMembers()) {
             if (sibling.equals(sourceRole)) continue;
             if (canRoleHandleGoal(sibling, goal)) {
-                String target = AgentRoleEnum.fromString(sibling).toScopedName();
-                log.debugf("[ESCALATION] Group-aware routing: %s → %s (intra-group sibling)", sourceRole, target);
-                return target;
+                try {
+                    String target = AgentRoleEnum.fromString(sibling).toScopedName();
+                    log.debugf("[ESCALATION] Group-aware routing: %s → %s (intra-group sibling)", sourceRole, target);
+                    return target;
+                } catch (IllegalArgumentException e) {
+                    log.warnf(
+                            "[ESCALATION] Unknown role ID '%s' in group '%s' — skipping intra-group sibling",
+                            sibling, group.groupId());
+                }
             }
         }
 
@@ -261,6 +273,19 @@ final class EscalationPatterns {
             case String s
             when AgentRoleEnum.NURTURER_ID.equals(s) ->
                 containsAny(goal, "tone", "empathy", "sentiment", "user experience", "communication");
+            case String s
+            when AgentRoleEnum.HEALER_ID.equals(s) ->
+                containsAny(
+                        goal,
+                        "error recovery",
+                        "self-healing",
+                        "heal",
+                        "health",
+                        "budget",
+                        "cost",
+                        "optimization",
+                        "resilience",
+                        "graceful degradation");
             case String s
             when AgentRoleEnum.CODER_ID.equals(s) ->
                 containsAny(goal, "implement", "write code", "generate", "create", "build", "feature", "new code");

@@ -1,7 +1,6 @@
 package com.amsha.core.agent.loop;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.*;
 
 import com.amsha.core.agent.role.AgentRoleEnum;
 
@@ -145,5 +144,124 @@ class EscalationPatternsTest {
     @Test
     void nullSourceRole_returnsNull() {
         assertNull(EscalationPatterns.determineNewPersonaEscalation(null, "implement"));
+    }
+
+    // ── tryIntraGroupEscalation ────────────────────────────────────
+
+    @Test
+    void intraGroup_memberEscalatesToLead_whenLeadCanHandle() {
+        // Optimizer is a member of Kailasa, lead is debugger
+        // Goal about "fix bug" should route to debugger (lead)
+        String result = EscalationPatterns.tryIntraGroupEscalation(
+                AgentRoleEnum.OPTIMIZER.toScopedName(), "fix bug in the parser");
+        assertEquals(DEBUGGER, result);
+    }
+
+    @Test
+    void intraGroup_memberEscalatesToSibling_whenLeadCannotHandle() {
+        // Sentinel is a member of Kailasa, lead is debugger
+        // Goal about "complex logic recursion" should route to optimizer (sibling)
+        String result = EscalationPatterns.tryIntraGroupEscalation(
+                AgentRoleEnum.SENTINEL.toScopedName(), "complex logic recursion algorithm");
+        assertEquals(OPTIMIZER, result);
+    }
+
+    @Test
+    void intraGroup_leadEscalatesToSibling() {
+        // Debugger is the lead of Kailasa
+        // Goal about "security vulnerability" should route to sentinel (sibling)
+        String result = EscalationPatterns.tryIntraGroupEscalation(
+                AgentRoleEnum.DEBUGGER.toScopedName(), "security vulnerability in auth");
+        assertEquals(SENTINEL, result);
+    }
+
+    @Test
+    void intraGroup_noMatchInGroup_returnsNull() {
+        // Goal about "tell me a joke" doesn't match any Kailasa member
+        String result =
+                EscalationPatterns.tryIntraGroupEscalation(AgentRoleEnum.DEBUGGER.toScopedName(), "tell me a joke");
+        assertNull(result);
+    }
+
+    @Test
+    void intraGroup_unknownRoleNotInAnyGroup_returnsNull() {
+        // "unknown-role" is not in any built-in group
+        String result = EscalationPatterns.tryIntraGroupEscalation("unknown-role", "fix bug");
+        assertNull(result);
+    }
+
+    @Test
+    void intraGroup_brahmaloka_memberEscalatesToLead() {
+        // Researcher is a member of Brahmaloka, lead is coder
+        String result = EscalationPatterns.tryIntraGroupEscalation(
+                AgentRoleEnum.RESEARCHER.toScopedName(), "write code for user service");
+        assertEquals(CODER, result);
+    }
+
+    @Test
+    void intraGroup_brahmaloka_leadEscalatesToResearcher() {
+        // Coder is the lead of Brahmaloka
+        // Goal about "research API documentation" should route to researcher
+        String result = EscalationPatterns.tryIntraGroupEscalation(
+                AgentRoleEnum.CODER.toScopedName(), "research API documentation for library");
+        assertEquals(RESEARCHER, result);
+    }
+
+    @Test
+    void intraGroup_vaiKunta_leadEscalatesToHealer() {
+        // Coordinator is the lead of Vaikunta
+        // Goal about "error recovery" should route to healer
+        String result = EscalationPatterns.tryIntraGroupEscalation(
+                AgentRoleEnum.COORDINATOR.toScopedName(), "error recovery self-healing");
+        assertEquals(AgentRoleEnum.HEALER.toScopedName(), result);
+    }
+
+    // ── canRoleHandleGoal ───────────────────────────────────────────
+
+    @Test
+    void canRoleHandleGoal_debugger_fixBug() {
+        assertTrue(EscalationPatterns.containsAny("fix bug in parser", "fix bug", "debug"));
+    }
+
+    @Test
+    void canRoleHandleGoal_optimizer_algorithm() {
+        assertTrue(
+                EscalationPatterns.containsAny("complex logic recursion", "complex logic", "recursion", "algorithm"));
+    }
+
+    @Test
+    void canRoleHandleGoal_sentinel_security() {
+        assertTrue(EscalationPatterns.containsAny("security vulnerability", "security", "vulnerability", "injection"));
+    }
+
+    @Test
+    void canRoleHandleGoal_noMatch() {
+        assertFalse(EscalationPatterns.containsAny("tell me a joke", "fix bug", "debug", "security"));
+    }
+
+    // ── determineNewPersonaEscalation with group-aware fallback ────
+
+    @Test
+    void groupAwareOptimizer_debugGoal_escalatesToDebugger() {
+        // Optimizer is in Kailasa; "fix bug" matches debugger (lead)
+        String result = EscalationPatterns.determineNewPersonaEscalation(
+                AgentRoleEnum.OPTIMIZER.toScopedName(), "fix bug in parser");
+        assertEquals(DEBUGGER, result);
+    }
+
+    @Test
+    void groupAwareSentinel_optimizeGoal_escalatesToOptimizer() {
+        // Sentinel is in Kailasa; "complex logic recursion" matches optimizer (sibling)
+        String result = EscalationPatterns.determineNewPersonaEscalation(
+                AgentRoleEnum.SENTINEL.toScopedName(), "complex logic recursion");
+        assertEquals(OPTIMIZER, result);
+    }
+
+    @Test
+    void groupAwareResearcher_codeGoal_escalatesToCoder() {
+        // Researcher is in Brahmaloka; "implement feature" matches coder (lead)
+        String result = EscalationPatterns.determineNewPersonaEscalation(
+                AgentRoleEnum.RESEARCHER.toScopedName(), "implement new feature for user service");
+        assertEquals(CODER, result);
     }
 }
