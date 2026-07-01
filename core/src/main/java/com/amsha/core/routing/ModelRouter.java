@@ -9,10 +9,12 @@ import jakarta.inject.Inject;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 
 import com.amsha.core.agent.reasoning.AgentChatModelProvider;
 import com.amsha.core.agent.role.AgentGroupRegistry;
+import com.amsha.core.agent.role.AgentPersona;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
@@ -106,31 +108,53 @@ public class ModelRouter {
         var config = SmallRyeConfigProviderResolver.instance()
                 .getConfig(Thread.currentThread().getContextClassLoader());
 
-        // Try numbered entries first: persona.models.brahma.0.provider, .1.provider, etc.
-        for (int i = 0; i < 10; i++) {
-            String base = "amsha.llm.persona.models." + agentRole + "." + i;
-            Optional<String> provider = config.getOptionalValue(base + ".provider", String.class);
-            Optional<String> model = config.getOptionalValue(base + ".model", String.class);
-            if (provider.isPresent() && model.isPresent()) {
-                configs.add(new ModelConfig(provider.get(), model.get()));
-            } else {
-                break; // No more numbered entries
+        List<String> roleKeys = new ArrayList<>();
+        roleKeys.add(agentRole);
+
+        AgentPersona.fromString(agentRole).ifPresent(persona -> {
+            String nameLower = persona.name().toLowerCase(Locale.ROOT);
+            if (!roleKeys.contains(nameLower)) {
+                roleKeys.add(nameLower);
+            }
+            for (String alias : persona.aliases()) {
+                String aliasLower = alias.toLowerCase(Locale.ROOT);
+                if (!roleKeys.contains(aliasLower)) {
+                    roleKeys.add(aliasLower);
+                }
+            }
+        });
+
+        for (String rKey : roleKeys) {
+            // Try numbered entries first
+            for (int i = 0; i < 10; i++) {
+                String base = "amsha.llm.persona.models." + rKey + "." + i;
+                Optional<String> provider = config.getOptionalValue(base + ".provider", String.class);
+                Optional<String> model = config.getOptionalValue(base + ".model", String.class);
+                if (provider.isPresent() && model.isPresent()) {
+                    configs.add(new ModelConfig(provider.get(), model.get()));
+                } else {
+                    break;
+                }
+            }
+
+            // If no numbered entries, try unnumbered
+            if (configs.isEmpty()) {
+                String base = "amsha.llm.persona.models." + rKey;
+                Optional<String> provider = config.getOptionalValue(base + ".provider", String.class);
+                Optional<String> model = config.getOptionalValue(base + ".model", String.class);
+                if (provider.isPresent() && model.isPresent()) {
+                    configs.add(new ModelConfig(provider.get(), model.get()));
+                }
+            }
+
+            if (!configs.isEmpty()) {
+                log.debugf(
+                        "[MODEL-ROUTER] Persona configs resolved for %s using config key suffix '%s': %s",
+                        agentRole, rKey, configs);
+                break;
             }
         }
 
-        // If no numbered entries, try unnumbered
-        if (configs.isEmpty()) {
-            String base = "amsha.llm.persona.models." + agentRole;
-            Optional<String> provider = config.getOptionalValue(base + ".provider", String.class);
-            Optional<String> model = config.getOptionalValue(base + ".model", String.class);
-            if (provider.isPresent() && model.isPresent()) {
-                configs.add(new ModelConfig(provider.get(), model.get()));
-            }
-        }
-
-        if (!configs.isEmpty()) {
-            log.debugf("[MODEL-ROUTER] Persona configs for %s: %s", agentRole, configs);
-        }
         return configs;
     }
 
