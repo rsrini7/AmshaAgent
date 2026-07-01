@@ -131,7 +131,7 @@ _CAT_RULES: list[tuple[list[str], PromptCategory]] = [
       "write a bash"], PromptCategory.CODE_EXEC),
     (["delegate to","delegat"], PromptCategory.DELEGATION),
     (["/status","status","/history","history","/reset","reset","/halt","halt",
-      "/commands","commands","/reflex","reflex","who are you","capabilities",
+      "/commands","commands","/reflex","reflex","capabilities",
       "priorities","full capablities","vishnu"], PromptCategory.COMMAND),
     (["vault "], PromptCategory.VAULT),
     (["search for","real time search","real search","current news","LTS version",
@@ -215,7 +215,7 @@ def build_assertion(prompt: str, cat: PromptCategory) -> AssertionRule:
 
     if cat == PromptCategory.CODE_EXEC:
         if "factorial" in p:
-            return AssertionRule(must_contain=["3628800"],                      expect_approval=True)
+            return AssertionRule(must_contain=["3628800", "3,628,800"],          expect_approval=True)
         if "hello" in p and ("sandbox" in p or "bash" in p):
             return AssertionRule(must_contain=["hello"],                        expect_approval=True)
         return AssertionRule(expect_approval=True)

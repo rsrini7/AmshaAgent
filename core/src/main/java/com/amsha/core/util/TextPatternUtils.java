@@ -44,6 +44,10 @@ public class TextPatternUtils {
                 || lower.contains("do same")
                 || lower.contains("execute again")
                 || lower.contains("share generated")
+                || lower.contains("sandbox_exec")
+                || lower.contains("run code")
+                || lower.contains("run command")
+                || lower.contains("run program")
                 || lower.contains("just do it");
     }
     /**
