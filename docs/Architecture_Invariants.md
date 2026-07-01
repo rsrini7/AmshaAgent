@@ -306,6 +306,25 @@ its trusted role status is determined by `RoleRegistry.requiresApprovalForTools(
 
 **Reference:** `ToolGovernanceGuard.verifyAutonomy()`, `AgentRoleEnum.RoleDefinition.requiresApproval`, `PolicyConfig.HITL_EXEMPT_TOOLS`.
 
+### 4.10.3 Group-Aware Escalation Order (§Invariant-GroupEscalation)
+
+Agent groups (Lokas) route tasks to group leads who decide: self-handle, consult family, or escalate out.
+Escalation priority order is **sacred** — never reorder:
+1. Role-specific rules (`escalateByRole`) — highest priority
+2. New persona rules (`determineNewPersonaEscalation`)
+3. Group-aware fallback (`tryIntraGroupEscalation`) — lowest priority
+4. Sandbox code error fallback (→ Shiva)
+
+Groups are **in-memory only** — no schema changes needed for SQLite/PG/FS. `AgentGroupRegistry` holds built-in groups; dynamic groups registered at runtime via `registerDynamic()`.
+
+Escalation keywords MUST be specific enough to avoid false positives. Single words like `"fix"`, `"broken"`, `"patch"` are too broad — use `"fix bug"`, `"broken code"`, `"patch bug"`. Tool parameter mode values (e.g., `"group_consult"`, `"solo"`) MUST be `static final String` constants in the tool class.
+
+All role ID returns from escalation/routing methods MUST use `AgentRoleEnum.fromString(id).toScopedName()` (or its canonical form) instead of raw strings to ensure lowercase canonical forms are used. `AgentRoleEnum.fromString()` MUST be wrapped in a try-catch block when dealing with potentially unknown dynamic or skill role IDs, falling back to raw string and logging a warning.
+
+### 4.10.4 Record Cross-Field Validation (§Invariant-RecordValidation)
+
+Records with inter-field constraints MUST validate in the compact constructor (e.g., `AgentGroup` validates that `leadRoleId` is in `memberRoleIds`). Static data populated once and never modified MUST use `Map.copyOf()` — NOT `ConcurrentHashMap`.
+
 ## 4.11 Intent Routing Negation Safety
 
 Fast-path routing patterns in IntentRoutingProvider implementations

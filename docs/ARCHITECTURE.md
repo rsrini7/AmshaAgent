@@ -717,6 +717,33 @@ Config: `amsha.agent.auto-heal.enabled` (default `true`), `amsha.agent.auto-heal
 
 Config: `amsha.agent.escalation.enabled` (default `true`), `amsha.agent.escalation.max-depth` (default `2`). Session sentinel: `:escalate:`. Circuit breaker: `isPingPong()` detects A→B→A→B loops in last 4 entries.
 
+### Grouped Agent Ensembles (Lokas)
+
+Personas are organized into **4 Lokas (realms)** based on mythological residence. Each realm has a group lead who triages incoming tasks:
+
+| Realm | Lead | Members | Domain |
+|---|---|---|---|
+| **Kailasa** | Shiva (debugger) | Parvati, Ganesha, Kartikeya, Durga, Kali | Debugging, security, logic, policy, cleanup |
+| **Brahmaloka** | Brahma (coder) | Saraswati, Brihaspati | Coding, research, architecture |
+| **Vaikunta** | Vishnu (coordinator) | Lakshmi | Orchestration, scheduling, healing |
+| **Loka-Bahir** | Dattatreya (synthesizer) | — | Cross-realm conflict resolution |
+
+**Group Consultation Flow:**
+```
+Coordinator: garuda(agent="shiva", goal="Fix SQL injection AND optimize recursion", mode="group_consult")
+  → GroupConsultationEngine.buildSubTasks()
+  → Parallel virtual threads: Kartikeya (security) + Ganesha (logic)
+  → Collect results (timeout 60s)
+  → Enhanced goal += synthesis prompt
+  → Shiva synthesizes family analyses → unified fix
+```
+
+**Dynamic Group Formation:** When a task spans domains that don't fit a single realm, `TaskClassifierService` classifies the task into domains and forms a dynamic group with the primary domain's role as lead.
+
+**Group-Aware Escalation:** When a persona fails, `EscalationPatterns.tryIntraGroupEscalation()` prefers routing to a sibling within the same realm before escalating externally.
+
+Config: `amsha.group.consult.max-concurrent` (default `4`), `amsha.group.consult.timeout-seconds` (default `60`), `amsha.group.analytics.enabled` (default `true`).
+
 ### Delegation & Escalation Flow
 
 ```mermaid

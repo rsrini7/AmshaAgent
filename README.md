@@ -48,8 +48,10 @@ See [docs/QUICK_START.md](./docs/QUICK_START.md) for detailed setup options.
 
 - **ReAct agent loop** over Groq, OpenAI, OpenRouter, Ollama, Gemini, Claude, and more (10 providers)
 - **12 specialist personas** with per-role tool schemas and Qute-rendered system prompts
+- **Realm-based grouped agents** — personas organized into 4 Lokas (Kailasa, Brahmaloka, Vaikunta, Loka-Bahir) with group leads that consult family members
 - **Agent delegation** — any role can delegate via `garuda`; capability-subset enforcement prevents privilege escalation
-- **Persona escalation** — auto-routes tasks when a persona hits its capability boundary
+- **Group consultation** — `mode='group_consult'` triggers parallel family huddle with virtual threads; dynamic group formation for cross-realm tasks
+- **Persona escalation** — auto-routes tasks when a persona hits its capability boundary; group-aware fallback prefers intra-realm routing
 - **Parallel tool execution** — N tool calls in one LLM turn, concurrent with Virtual Threads
 - **17 deterministic reflexes** — zero-token fast-path for commands, PII redaction, injection blocking, vault ops
 - **Hexagonal persistence** — SQLite (default), PostgreSQL, or filesystem; swappable without core changes
