@@ -1,9 +1,11 @@
 package com.amsha.selfevolve.runtime;
 
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.event.Observes;
 import jakarta.enterprise.event.ObservesAsync;
 import jakarta.inject.Inject;
 
+import com.amsha.core.agent.event.AgentStateChangedEvent;
 import com.amsha.core.events.CompactionEvent;
 import com.amsha.core.events.ToolExecutionEvent;
 import com.amsha.selfevolve.api.EvolutionEventType;
@@ -74,6 +76,23 @@ public class EvolutionEventObserver {
             service.emit(event.sessionId(), event.userId(), EvolutionEventType.COMPACTION, null, content, null, null);
         } catch (Exception e) {
             log.warnf("[SelfEvolve] Failed to observe compaction event: %s", e.getMessage());
+        }
+    }
+
+    /**
+     * Observes agent state changes and flushes session buffer when loop finishes (goes idle or errors).
+     */
+    public void onStateChanged(@Observes AgentStateChangedEvent event) {
+        if (!service.isEnabled()) {
+            return;
+        }
+        String status = event.newStatus();
+        if ("idle".equals(status) || "error".equals(status)) {
+            try {
+                service.flushSession(event.sessionId());
+            } catch (Exception e) {
+                log.warnf("[SelfEvolve] Failed to flush session on loop completion: %s", e.getMessage());
+            }
         }
     }
 }
