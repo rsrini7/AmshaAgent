@@ -12,9 +12,11 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 
+import com.amsha.core.agent.loop.TaskClassifierService;
 import com.amsha.core.agent.reasoning.AgentChatModelProvider;
 import com.amsha.core.agent.role.AgentGroupRegistry;
 import com.amsha.core.agent.role.AgentPersona;
+import com.amsha.core.scope.WorkspaceContext;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
@@ -51,6 +53,9 @@ public class ModelRouter {
     @Inject
     AgentGroupRegistry groupRegistry;
 
+    @Inject
+    TaskClassifierService classifierService;
+
     @ConfigProperty(name = "amsha.llm.provider", defaultValue = "groq")
     String globalProvider;
 
@@ -64,20 +69,8 @@ public class ModelRouter {
      * for automatic failover and round-robin rotation.
      */
     public ChatModel resolve(String agentRole) {
-        // 1. Try persona override (may return multiple)
-        var personaConfigs = getPersonaConfigs(agentRole);
-        if (!personaConfigs.isEmpty()) {
-            return buildModelFromConfigs(personaConfigs);
-        }
-
-        // 2. Try group default (may return multiple)
-        var groupConfigs = getGroupConfigs(agentRole);
-        if (!groupConfigs.isEmpty()) {
-            return buildModelFromConfigs(groupConfigs);
-        }
-
-        // 3. Global default
-        return getOrCreateModel(globalProvider, globalModel.orElse(""));
+        var configs = resolveConfigs(agentRole);
+        return buildModelFromConfigs(configs);
     }
 
     /**
@@ -85,6 +78,14 @@ public class ModelRouter {
      * Returns a list — single entry for single model, multiple for fallback chain.
      */
     public List<ModelConfig> resolveConfigs(String agentRole) {
+        String goal = WorkspaceContext.RAW_USER_GOAL.isBound() ? WorkspaceContext.RAW_USER_GOAL.get() : null;
+        if (goal != null && isLightweightTask(goal)) {
+            log.infof(
+                    "[MODEL-ROUTER] Goal classified as lightweight. Routing to default low-cost provider: %s",
+                    globalProvider);
+            return List.of(new ModelConfig(globalProvider, globalModel.orElse("")));
+        }
+
         var personaConfigs = getPersonaConfigs(agentRole);
         if (!personaConfigs.isEmpty()) return personaConfigs;
 
@@ -245,6 +246,28 @@ public class ModelRouter {
             }
         }
         throw new RuntimeException("No AgentChatModelProvider found for provider='" + providerName + "'");
+    }
+
+    private boolean isLightweightTask(String goal) {
+        if (goal == null) {
+            return true;
+        }
+        String goalLower = goal.toLowerCase(Locale.ROOT);
+        if (goalLower.startsWith("/") || goalLower.matches(".*\\b(hello|hi|hey|clear|reset|resethard)\\b.*")) {
+            return true;
+        }
+        if (classifierService == null) {
+            return false;
+        }
+        var domains = classifierService.classify(goal);
+        boolean hasHeavyDomain = domains.contains(TaskClassifierService.TaskDomain.CODING)
+                || domains.contains(TaskClassifierService.TaskDomain.DEBUGGING)
+                || domains.contains(TaskClassifierService.TaskDomain.SECURITY)
+                || domains.contains(TaskClassifierService.TaskDomain.ARCHITECTURE);
+        if (hasHeavyDomain) {
+            return false;
+        }
+        return goal.trim().length() < 15 || domains.isEmpty();
     }
 
     /**

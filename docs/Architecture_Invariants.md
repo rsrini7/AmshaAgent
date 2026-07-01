@@ -1724,3 +1724,18 @@ if (Thread.currentThread().isInterrupted() || WorkspaceManager.isSessionHalted(s
 }
 ```
 
+### 24.3 Safe Agentic Workflow (SAW) Orchestration
+
+To maintain a secure, cost-effective, and resilient multi-agent execution pipeline, developers MUST adhere to the following SAW orchestration invariants:
+
+1. **Lightweight Task Classification Routing**:
+   - Requests resolved via `ModelRouter.resolve` MUST be pre-screened using `TaskClassifierService`.
+   - Lightweight tasks (such as chitchat, simple greetings, or session controls like `/reset`) MUST bypass expensive model configuration overrides (such as DeepSeek or Cerebras) and route directly to the global low-cost provider (`infinite-loop`), minimizing token expenses and rate limit exhaustion.
+2. **Evidence-Based Coder Verification**:
+   - Code outputs produced by the `coder` (Brahma) role MUST pass programmatically through `SandboxVerificationGate` checks (running code blocks inside `SandboxExecTool`).
+   - *HITL Bypass Exception*: Since code verification is an automated, sandboxed validator check executed by the system harness, the verification gate's invocation of `SandboxExecTool.execute()` directly is an intentional bypass of normal Human-in-the-Loop (HITL) checks. This enables automated validation of code correctness before presenting it to the user.
+   - If execution fails (non-zero exit code or compilation error), the system MUST intercept the failure, extract the error details, and automatically delegate the stack trace recursively to the `debugger` (Shiva) to auto-fix and heal before returning the final response.
+3. **Complex Task Backlog Refinement**:
+   - Coordinator tasks spanning multiple domains MUST be refined at startup by the `AgentStateMachineRunner`. The goal MUST be split into discrete sub-tasks and populated into the workspace filesystem as active `agent_task` markdown logs to support strict accountability.
+
+
