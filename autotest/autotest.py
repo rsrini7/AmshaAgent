@@ -150,6 +150,13 @@ def classify(prompt: str) -> PromptCategory:
 def build_assertion(prompt: str, cat: PromptCategory) -> AssertionRule:
     p = prompt.lower()
 
+    if "brahmaloka connection success" in p:
+        return AssertionRule(must_contain=["Brahmaloka Connection Success"], expect_approval=True)
+    if "kailasa connection success" in p:
+        return AssertionRule(must_contain=["Kailasa Connection Success"], expect_approval=True)
+    if "cerebras systems" in p:
+        return AssertionRule(must_contain=["Cerebras"], expect_approval=True)
+
     if cat == PromptCategory.SECURITY:
         if "common prompt injection" in p or "attack vectors" in p:
             return AssertionRule(
