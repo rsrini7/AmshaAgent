@@ -14,10 +14,21 @@ import dev.langchain4j.model.chat.response.ChatResponse;
 public interface LlmProviderPort {
 
     /**
-     * Executes a chat request and returns the response.
+     * Executes a chat request using the global default model.
      * @param request The chat request.
      * @return The chat response.
      * @throws com.amsha.core.agent.reasoning.error.LlmProviderException if the provider throws an error.
      */
     ChatResponse nextStep(ChatRequest request);
+
+    /**
+     * Executes a chat request routed to the model resolved for the given agent role.
+     * Resolution: persona override → group default → global default.
+     *
+     * @param request   The chat request.
+     * @param agentRole The agent role ID (e.g. "coder", "debugger"). Used for per-persona model routing.
+     * @return The chat response.
+     * @throws com.amsha.core.agent.reasoning.error.LlmProviderException if the provider throws an error.
+     */
+    ChatResponse nextStep(ChatRequest request, String agentRole);
 }

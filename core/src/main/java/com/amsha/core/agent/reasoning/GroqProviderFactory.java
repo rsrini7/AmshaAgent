@@ -45,10 +45,19 @@ public class GroqProviderFactory implements AgentChatModelProvider {
 
     @Override
     public ChatModel create() {
+        return createModel(modelName);
+    }
+
+    @Override
+    public ChatModel create(String customModelName) {
+        return createModel(customModelName);
+    }
+
+    private ChatModel createModel(String model) {
         String key = apiKey.orElseThrow(() -> new IllegalStateException("Groq requires AMSHA_GROQ_API_KEY"));
         List<MultiModelChatModel.ModelEntry> entries = ChatModelFactory.buildMultiModelEntries(
                 key,
-                modelName,
+                model,
                 "groq",
                 (k, m) -> ChatModelFactory.createOpenAi(
                         baseUrl,

@@ -134,7 +134,15 @@ public class GroupConsultationEngine {
             String memberGoal = entry.getValue();
 
             CompletableFuture<String> future = CompletableFuture.supplyAsync(
-                            () -> runMemberAgent(memberId, memberGoal, agentRunner), virtualThreadExecutor)
+                            () -> {
+                                try {
+                                    return runMemberAgent(memberId, memberGoal, agentRunner);
+                                } catch (Exception e) {
+                                    if (e instanceof RuntimeException re) throw re;
+                                    throw new RuntimeException(e);
+                                }
+                            },
+                            virtualThreadExecutor)
                     .orTimeout(timeoutSeconds, TimeUnit.SECONDS);
             futures.put(memberId, future);
         }
@@ -157,9 +165,11 @@ public class GroupConsultationEngine {
                     failed++;
                 }
             } catch (Exception e) {
-                results.put(memberId, "[" + memberId + " failed: " + e.getMessage() + "]");
+                Throwable cause = e.getCause();
+                String msg = cause != null ? cause.getMessage() : e.getMessage();
+                results.put(memberId, "[" + memberId + " failed: " + msg + "]");
                 failed++;
-                log.warnf("[GROUP-ENGINE] Member %s failed: %s", memberId, e.getMessage());
+                log.warnf("[GROUP-ENGINE] Member %s failed: %s", memberId, msg);
             }
         }
 
@@ -171,13 +181,17 @@ public class GroupConsultationEngine {
     /**
      * Builds sub-tasks for each member based on the group's domain and the original goal.
      * Each member receives a task scoped to their expertise.
+     *
+     * @return Map of memberId → subGoal. Empty map (via {@code Map.of()}) means the lead
+     *         can self-handle — callers should check {@code isEmpty()} to decide
+     *         whether to skip parallel consultation.
      */
     public Map<String, String> buildSubTasks(AgentGroup group, String goal) {
         Map<String, String> subTasks = new LinkedHashMap<>();
         GroupConsultationService.TriageResult triage = consultationService.triage(group.leadRoleId(), goal);
 
         if (triage.canSelfHandle()) {
-            return Map.of(); // No consultation needed
+            return Map.of();
         }
 
         for (String memberId : triage.recommendedMembers()) {
@@ -190,13 +204,8 @@ public class GroupConsultationEngine {
 
     // ── Private ────────────────────────────────────────────────────────────
 
-    private String runMemberAgent(String memberId, String goal, SubAgentRunner runner) {
-        try {
-            return runner.run(memberId, goal);
-        } catch (Exception e) {
-            log.errorf("[GROUP-ENGINE] Member %s threw exception: %s", memberId, e.getMessage());
-            return "[" + memberId + " error: " + e.getMessage() + "]";
-        }
+    private String runMemberAgent(String memberId, String goal, SubAgentRunner runner) throws Exception {
+        return runner.run(memberId, goal);
     }
 
     private String buildMemberSubGoal(String memberId, String originalGoal) {

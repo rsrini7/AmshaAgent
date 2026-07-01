@@ -45,6 +45,15 @@ public class CerebrasProviderFactory implements AgentChatModelProvider {
 
     @Override
     public ChatModel create() {
+        return doCreate(modelName);
+    }
+
+    @Override
+    public ChatModel create(String customModelName) {
+        return doCreate(customModelName);
+    }
+
+    private ChatModel doCreate(String modelName) {
         String key = apiKey.orElseThrow(() -> new IllegalStateException("Cerebras requires AMSHA_CEREBRAS_API_KEY"));
         List<MultiModelChatModel.ModelEntry> entries = ChatModelFactory.buildMultiModelEntries(
                 key,

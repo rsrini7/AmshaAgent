@@ -267,6 +267,25 @@ Key constraints:
 - **Delegation depth** is capped by `amsha.delegation.max-depth` (default: 2) to prevent infinite delegation chains.
 - Sub-agents run with their own isolated context and report results back to the parent agent as an observation.
 
+### Q: What are Lokas (grouped agent ensembles)?
+
+Personas are organized into **4 Lokas (realms)** based on mythological residence. Each realm has a group lead who triages incoming tasks:
+
+| Realm | Lead | Members | Domain |
+|---|---|---|---|
+| **Kailasa** | Shiva (debugger) | Parvati, Ganesha, Kartikeya, Durga, Kali | Debugging, security, logic, policy, cleanup |
+| **Brahmaloka** | Brahma (coder) | Saraswati, Brihaspati | Coding, research, architecture |
+| **Vaikunta** | Vishnu (coordinator) | Lakshmi | Orchestration, scheduling, healing |
+| **Loka-Bahir** | Dattatreya (synthesizer) | — | Cross-realm conflict resolution |
+
+**Group Consultation:** When a task requires multiple perspectives (e.g., "fix SQL injection AND optimize recursion"), the coordinator can trigger `mode='group_consult'` via the `garuda` tool. This spawns parallel virtual threads for relevant family members, collects their analyses, and the group lead synthesizes a unified response.
+
+**Dynamic Group Formation:** When a task spans domains that don't fit a single realm, `TaskClassifierService` classifies the task into domains and forms a dynamic group with the primary domain's role as lead.
+
+**Group-Aware Escalation:** When a persona fails, `EscalationPatterns.tryIntraGroupEscalation()` prefers routing to a sibling within the same realm before escalating externally. This ensures intra-realm expertise is leveraged first.
+
+Config: `amsha.group.consult.max-concurrent` (default `4`), `amsha.group.consult.timeout-seconds` (default `60`), `amsha.group.analytics.enabled` (default `true`).
+
 ---
 
 ## ⚡ The Reflex System

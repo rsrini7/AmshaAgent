@@ -54,13 +54,23 @@ public class GenericOpenAiProviderFactory implements AgentChatModelProvider {
 
     @Override
     public ChatModel create() {
+        return doCreate(modelName.orElseThrow(
+                () -> new IllegalStateException("generic-openai requires AMSHA_GENERIC_OPENAI_MODEL")));
+    }
+
+    @Override
+    public ChatModel create(String customModelName) {
+        return doCreate(customModelName);
+    }
+
+    private ChatModel doCreate(String overrideModel) {
         String resolvedBaseUrl = baseUrl.orElse("");
         if (resolvedBaseUrl.isBlank()) {
             throw new IllegalStateException("generic-openai requires AMSHA_GENERIC_OPENAI_BASE_URL");
         }
         String key = apiKey.orElseThrow(
                 () -> new IllegalStateException("generic-openai requires AMSHA_GENERIC_OPENAI_API_KEY"));
-        String resolvedModel = modelName.orElse("");
+        String resolvedModel = overrideModel;
         if (resolvedModel.isBlank()) {
             throw new IllegalStateException("generic-openai requires AMSHA_GENERIC_OPENAI_MODEL");
         }

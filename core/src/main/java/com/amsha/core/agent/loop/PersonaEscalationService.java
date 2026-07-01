@@ -179,11 +179,11 @@ public class PersonaEscalationService {
         String target = escalateByRole(sourceRole, errorLower, goalLower);
         if (target != null) return target;
 
-        // 2. New persona escalation patterns & Group-aware fallback
+        // 2. New persona escalation patterns (includes group-aware fallback via tryIntraGroupEscalation)
         target = EscalationPatterns.determineNewPersonaEscalation(sourceRole, goalLower);
         if (target != null) return target;
 
-        // 4. Sandbox code errors → Shiva (universal fallback)
+        // 3. Sandbox code errors → Shiva (universal fallback)
         if (matchesSandboxCodeError(errorLower)) {
             return AgentRoleEnum.DEBUGGER.toScopedName();
         }

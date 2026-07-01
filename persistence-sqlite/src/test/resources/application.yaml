@@ -1,5 +1,7 @@
 amsha:
   data-dir: "./target"
+  llm:
+    model: "test-model"
   workspace:
     root-dir: "./target/workspaces"
   auto-seed-secrets: false

@@ -50,6 +50,15 @@ public class ClaudeCodeProviderFactory implements AgentChatModelProvider {
 
     @Override
     public ChatModel create() {
+        return doCreate(null);
+    }
+
+    @Override
+    public ChatModel create(String customModelName) {
+        return doCreate(customModelName);
+    }
+
+    private ChatModel doCreate(String overrideModel) {
         Optional<String> token = secretVault
                 .retrieveSystemKey(VaultConstants.CLAUDE_CODE_OAUTH_TOKEN_KEY)
                 .map(VaultKey::get)
@@ -71,7 +80,7 @@ public class ClaudeCodeProviderFactory implements AgentChatModelProvider {
                     + "Please run `claude login` in your local terminal first.");
         }
 
-        String resolvedModel = modelName;
+        String resolvedModel = overrideModel != null ? overrideModel : modelName;
         if (resolvedModel == null || resolvedModel.isBlank() || "mistral-small".equalsIgnoreCase(resolvedModel)) {
             resolvedModel = "claude-sonnet-4-5";
         }

@@ -24,7 +24,7 @@ public interface PolicyConfig {
          * Each pattern is compiled with {@code CASE_INSENSITIVE} flag.
          */
         @WithDefault(
-                "\"(?i)\\b(delete|remove|purge|drop|chmod|truncate|wipe|erase|destroy|archive|rename)\\b\",\"(?i)\\brm\\s*-?\\s*rf\\b\"")
+                "(?i)\\b(delete|remove|purge|drop|chmod|truncate|wipe|erase|destroy|archive|rename)\\b,(?i)\\brm\\s*-?\\s*rf\\b")
         List<String> patterns();
 
         /**

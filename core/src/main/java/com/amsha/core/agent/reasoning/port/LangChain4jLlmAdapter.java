@@ -7,48 +7,183 @@ import dev.langchain4j.model.chat.response.ChatResponse;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
+import java.util.concurrent.ConcurrentHashMap;
+
 import com.amsha.core.agent.reasoning.error.LlmExceptionClassifier;
 import com.amsha.core.agent.reasoning.error.LlmMalformedResponseException;
 import com.amsha.core.agent.reasoning.error.LlmToolCallException;
+import com.amsha.core.routing.ModelRouter;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
-import org.eclipse.microprofile.faulttolerance.CircuitBreaker;
+import org.jboss.logging.Logger;
 
+/**
+ * Routes LLM requests to the correct ChatModel based on agent role,
+ * with per-model circuit breaker isolation to prevent cross-provider cascade failures.
+ *
+ * <p>Circuit breakers are scoped per pool key ({@code provider#model}) via
+ * separate adapter instances managed by {@link PerModelCircuitBreaker}.
+ * A failure in Groq will NOT trip the circuit for OpenAI or Gemini.
+ */
 @ApplicationScoped
 public class LangChain4jLlmAdapter implements LlmProviderPort {
 
-    private final ChatModel chatModel;
+    private static final Logger log = Logger.getLogger(LangChain4jLlmAdapter.class);
+
+    private final ChatModel globalChatModel;
+    private final ModelRouter modelRouter;
 
     @ConfigProperty(name = "amsha.llm.circuit-breaker.enabled", defaultValue = "true")
     boolean cbEnabled;
 
-    @Inject
-    public LangChain4jLlmAdapter(ChatModel chatModel) {
-        this.chatModel = chatModel;
-    }
+    /** Per-model circuit breaker adapters, keyed by pool key (provider#model). */
+    private final ConcurrentHashMap<String, PerModelCircuitBreaker> circuitBreakers = new ConcurrentHashMap<>();
 
     @Inject
-    LangChain4jLlmAdapter self; // self-proxy for @CircuitBreaker
+    public LangChain4jLlmAdapter(ChatModel globalChatModel, ModelRouter modelRouter) {
+        this.globalChatModel = globalChatModel;
+        this.modelRouter = modelRouter;
+    }
 
     @Override
     public ChatResponse nextStep(ChatRequest request) {
-        if (!cbEnabled) {
-            return chatModel.chat(request);
-        }
-        return self.nextStepWithCb(request);
+        return nextStep(request, null);
     }
 
-    @CircuitBreaker(
-            requestVolumeThreshold = 4,
-            failureRatio = 0.5,
-            delay = 10000,
-            successThreshold = 2,
-            skipOn = {LlmMalformedResponseException.class, LlmToolCallException.class})
-    public ChatResponse nextStepWithCb(ChatRequest request) {
+    @Override
+    public ChatResponse nextStep(ChatRequest request, String agentRole) {
+        ChatModel resolvedModel = resolveModel(agentRole);
+
+        if (!cbEnabled) {
+            return resolvedModel.chat(request);
+        }
+
+        // Use per-model circuit breaker to isolate failures across providers
+        String poolKey = derivePoolKey(resolvedModel);
+        PerModelCircuitBreaker cb = circuitBreakers.computeIfAbsent(poolKey, k -> new PerModelCircuitBreaker(poolKey));
+        return cb.execute(request, resolvedModel);
+    }
+
+    private ChatModel resolveModel(String agentRole) {
+        if (agentRole == null || agentRole.isBlank()) {
+            return globalChatModel;
+        }
         try {
-            return chatModel.chat(request);
+            return modelRouter.resolve(agentRole);
         } catch (Exception e) {
-            throw LlmExceptionClassifier.classify(e);
+            log.warnf(
+                    "[LLM-ADAPTER] Model resolution failed for role=%s, falling back to global: %s",
+                    agentRole, e.getMessage());
+            return globalChatModel;
+        }
+    }
+
+    /**
+     * Derives a human-readable pool key for circuit breaker scoping.
+     * Uses the model's toString() as a fallback if it's not a known type.
+     */
+    private String derivePoolKey(ChatModel model) {
+        if (model == globalChatModel) {
+            return "global";
+        }
+        // Use class name + hash to distinguish model instances
+        return model.getClass().getSimpleName() + "@" + Integer.toHexString(System.identityHashCode(model));
+    }
+
+    /**
+     * Per-model circuit breaker that wraps LLM calls with fault tolerance.
+     * Each instance is scoped to a single model pool key, preventing
+     * cross-provider cascade failures.
+     *
+     * <p>Uses SmallRye Fault Tolerance programmatic API rather than
+     * annotation-based CDI proxies, which cannot be scoped per-key.
+     */
+    static class PerModelCircuitBreaker {
+        private static final Logger log = Logger.getLogger(PerModelCircuitBreaker.class);
+
+        private final String poolKey;
+
+        enum State {
+            CLOSED,
+            OPEN,
+            HALF_OPEN
+        }
+
+        // Circuit state
+        private State state = State.CLOSED;
+        private int failureCount;
+        private int successCount;
+        private int requestCount;
+        private long openSince;
+
+        private static final int REQUEST_VOLUME_THRESHOLD = 4;
+        private static final double FAILURE_RATIO = 0.5;
+        private static final long DELAY_MS = 10_000;
+        private static final int SUCCESS_THRESHOLD = 2;
+
+        PerModelCircuitBreaker(String poolKey) {
+            this.poolKey = poolKey;
+        }
+
+        synchronized ChatResponse execute(ChatRequest request, ChatModel model) {
+            if (state == State.OPEN) {
+                long elapsed = System.currentTimeMillis() - openSince;
+                if (elapsed >= DELAY_MS) {
+                    log.infof("[CB] Half-open for %s — retrying after %dms", poolKey, elapsed);
+                    state = State.HALF_OPEN;
+                    requestCount = 0;
+                    failureCount = 0;
+                    successCount = 0;
+                } else {
+                    throw new RuntimeException(
+                            "Circuit breaker OPEN for " + poolKey + " (retry in " + (DELAY_MS - elapsed) + "ms)");
+                }
+            }
+
+            requestCount++;
+            try {
+                ChatResponse response = model.chat(request);
+                onSuccess();
+                return response;
+            } catch (LlmMalformedResponseException | LlmToolCallException e) {
+                // Skip — these are not infrastructure failures
+                throw e;
+            } catch (Exception e) {
+                onFailure();
+                throw LlmExceptionClassifier.classify(e);
+            }
+        }
+
+        private synchronized void onSuccess() {
+            if (state == State.HALF_OPEN) {
+                successCount++;
+                if (successCount >= SUCCESS_THRESHOLD) {
+                    log.infof("[CB] Closed for %s — recovered after %d successes", poolKey, successCount);
+                    state = State.CLOSED;
+                    failureCount = 0;
+                    requestCount = 0;
+                }
+            } else if (state == State.CLOSED) {
+                successCount++;
+            }
+        }
+
+        private synchronized void onFailure() {
+            failureCount++;
+            if (state == State.HALF_OPEN) {
+                log.warnf("[CB] Opened for %s during half-open due to failure", poolKey);
+                state = State.OPEN;
+                openSince = System.currentTimeMillis();
+            } else if (state == State.CLOSED) {
+                if (requestCount >= REQUEST_VOLUME_THRESHOLD
+                        && ((double) failureCount / requestCount) >= FAILURE_RATIO) {
+                    log.warnf(
+                            "[CB] Opened for %s — failureRate=%.2f (%d/%d)",
+                            poolKey, (double) failureCount / requestCount, failureCount, requestCount);
+                    state = State.OPEN;
+                    openSince = System.currentTimeMillis();
+                }
+            }
         }
     }
 }

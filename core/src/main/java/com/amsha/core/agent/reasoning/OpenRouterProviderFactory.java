@@ -51,11 +51,20 @@ public class OpenRouterProviderFactory implements AgentChatModelProvider {
 
     @Override
     public ChatModel create() {
+        return doCreate(null);
+    }
+
+    @Override
+    public ChatModel create(String customModelName) {
+        return doCreate(customModelName);
+    }
+
+    private ChatModel doCreate(String overrideModel) {
         String key =
                 apiKey.orElseThrow(() -> new IllegalStateException("OpenRouter requires AMSHA_OPENROUTER_API_KEY"));
         List<MultiModelChatModel.ModelEntry> entries = ChatModelFactory.buildMultiModelEntries(
                 key,
-                modelName,
+                overrideModel != null ? overrideModel : modelName,
                 "openrouter",
                 (k, m) -> ChatModelFactory.withOpenRouterHeaders(
                                 ChatModelFactory.openAiBuilder(

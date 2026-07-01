@@ -125,7 +125,8 @@ class LangChainReasoningEngineTest {
                 .finishReason(FinishReason.STOP)
                 .build();
 
-        when(llmProviderPort.nextStep(any(ChatRequest.class))).thenReturn(mockResponse);
+        when(llmProviderPort.nextStep(any(ChatRequest.class), any(String.class)))
+                .thenReturn(mockResponse);
         when(promptBuilder.build(any(), any(), any(), any(), ArgumentMatchers.anyBoolean()))
                 .thenReturn("System Prompt");
         when(historyAssembler.assemble(any(), any(), any())).thenReturn(List.of());
@@ -165,7 +166,8 @@ class LangChainReasoningEngineTest {
                 .finishReason(FinishReason.TOOL_EXECUTION)
                 .build();
 
-        when(llmProviderPort.nextStep(any(ChatRequest.class))).thenReturn(mockResponse);
+        when(llmProviderPort.nextStep(any(ChatRequest.class), any(String.class)))
+                .thenReturn(mockResponse);
         when(promptBuilder.build(any(), any(), any(), any(), ArgumentMatchers.anyBoolean()))
                 .thenReturn("System Prompt");
         when(historyAssembler.assemble(any(), any(), any())).thenReturn(List.of());
@@ -212,7 +214,8 @@ class LangChainReasoningEngineTest {
 
             // Capture the request to verify filtered messages
             ArgumentCaptor<ChatRequest> requestCaptor = ArgumentCaptor.forClass(ChatRequest.class);
-            when(llmProviderPort.nextStep(requestCaptor.capture())).thenReturn(mockResponse);
+            when(llmProviderPort.nextStep(requestCaptor.capture(), any(String.class)))
+                    .thenReturn(mockResponse);
             when(promptBuilder.build(any(), any(), any(), any(), ArgumentMatchers.anyBoolean()))
                     .thenReturn("System Prompt");
             // For the filter test, we need the assembler to actually return the filtered messages if it were the real
@@ -278,7 +281,7 @@ class LangChainReasoningEngineTest {
             when(chatMemoryStore.getMessages(sessionId)).thenReturn(messages);
 
             ArgumentCaptor<ChatRequest> requestCaptor = ArgumentCaptor.forClass(ChatRequest.class);
-            when(llmProviderPort.nextStep(requestCaptor.capture()))
+            when(llmProviderPort.nextStep(requestCaptor.capture(), any(String.class)))
                     .thenReturn(ChatResponse.builder()
                             .aiMessage(new AiMessage("some response"))
                             .build());
@@ -321,7 +324,7 @@ class LangChainReasoningEngineTest {
                 .build();
 
         ArgumentCaptor<ChatRequest> captor = ArgumentCaptor.forClass(ChatRequest.class);
-        when(llmProviderPort.nextStep(captor.capture())).thenReturn(response);
+        when(llmProviderPort.nextStep(captor.capture(), any(String.class))).thenReturn(response);
         when(promptBuilder.build(any(), any(), any(), any(), ArgumentMatchers.anyBoolean()))
                 .thenReturn("System Prompt");
         when(historyAssembler.assemble(any(), any(), any())).thenReturn(List.of());
@@ -348,7 +351,7 @@ class LangChainReasoningEngineTest {
 
         ArgumentCaptor<ChatRequest> captor = ArgumentCaptor.forClass(ChatRequest.class);
         when(roleRegistry.permittedTools(any())).thenReturn(Set.of());
-        when(llmProviderPort.nextStep(captor.capture())).thenReturn(response);
+        when(llmProviderPort.nextStep(captor.capture(), any(String.class))).thenReturn(response);
         when(promptBuilder.build(any(), any(), any(), any(), ArgumentMatchers.anyBoolean()))
                 .thenReturn("System Prompt");
         when(historyAssembler.assemble(any(), any(), any())).thenReturn(List.of());
@@ -374,7 +377,7 @@ class LangChainReasoningEngineTest {
                 .build();
 
         ArgumentCaptor<ChatRequest> captor = ArgumentCaptor.forClass(ChatRequest.class);
-        when(llmProviderPort.nextStep(captor.capture())).thenReturn(response);
+        when(llmProviderPort.nextStep(captor.capture(), any(String.class))).thenReturn(response);
 
         // Mock RoleRegistry to return permitted tools for researcher
         when(roleRegistry.permittedTools(AgentRoleEnum.RESEARCHER))
@@ -447,7 +450,7 @@ class LangChainReasoningEngineTest {
                 .build();
 
         ArgumentCaptor<ChatRequest> captor = ArgumentCaptor.forClass(ChatRequest.class);
-        when(llmProviderPort.nextStep(captor.capture())).thenReturn(response);
+        when(llmProviderPort.nextStep(captor.capture(), any(String.class))).thenReturn(response);
         when(promptBuilder.build(any(), any(), any(), any(), ArgumentMatchers.anyBoolean()))
                 .thenReturn("System Prompt");
         when(historyAssembler.assemble(any(), any(), any())).thenReturn(List.of());
@@ -476,7 +479,7 @@ class LangChainReasoningEngineTest {
     @Test
     void testCronFiredSessionStripsScheduleTools() {
         ArgumentCaptor<ChatRequest> captor = ArgumentCaptor.forClass(ChatRequest.class);
-        when(llmProviderPort.nextStep(captor.capture()))
+        when(llmProviderPort.nextStep(captor.capture(), any(String.class)))
                 .thenReturn(
                         ChatResponse.builder().aiMessage(new AiMessage("OK")).build());
 
@@ -542,7 +545,7 @@ class LangChainReasoningEngineTest {
             when(chatMemoryStore.getMessages(sessionId)).thenReturn(messages);
 
             ArgumentCaptor<ChatRequest> requestCaptor = ArgumentCaptor.forClass(ChatRequest.class);
-            when(llmProviderPort.nextStep(requestCaptor.capture()))
+            when(llmProviderPort.nextStep(requestCaptor.capture(), any(String.class)))
                     .thenReturn(ChatResponse.builder()
                             .aiMessage(new AiMessage("Here is the sort function"))
                             .build());
@@ -606,7 +609,8 @@ class LangChainReasoningEngineTest {
         AiMessage mockAiMessage = AiMessage.aiMessage("{\"label\":\"name\",\"text\":\"Srini\"}");
         ChatResponse mockResponse =
                 ChatResponse.builder().aiMessage(mockAiMessage).build();
-        when(llmProviderPort.nextStep(any(ChatRequest.class))).thenReturn(mockResponse);
+        when(llmProviderPort.nextStep(any(ChatRequest.class), any(String.class)))
+                .thenReturn(mockResponse);
         when(promptBuilder.build(any(), any(), any(), any(), ArgumentMatchers.anyBoolean()))
                 .thenReturn("System Prompt");
         when(historyAssembler.assemble(any(), any(), any())).thenReturn(List.of());
@@ -632,7 +636,8 @@ class LangChainReasoningEngineTest {
         LlmToolCallException ex = new LlmToolCallException(
                 "{\"error\":{\"message\":\"tool_use_failed\"}, \"failed_generation\":\"I will explain the code first...\"}");
 
-        when(llmProviderPort.nextStep(any(ChatRequest.class))).thenThrow(ex);
+        when(llmProviderPort.nextStep(any(ChatRequest.class), any(String.class)))
+                .thenThrow(ex);
         when(promptBuilder.build(any(), any(), any(), any(), ArgumentMatchers.anyBoolean()))
                 .thenReturn("System Prompt");
         when(historyAssembler.assemble(any(), any(), any())).thenReturn(List.of());
@@ -711,7 +716,8 @@ class LangChainReasoningEngineTest {
         ChatResponse mockResponse = ChatResponse.builder()
                 .aiMessage(AiMessage.aiMessage("LLM response"))
                 .build();
-        when(llmProviderPort.nextStep(any(ChatRequest.class))).thenReturn(mockResponse);
+        when(llmProviderPort.nextStep(any(ChatRequest.class), any(String.class)))
+                .thenReturn(mockResponse);
         when(promptBuilder.build(any(), any(), any(), any(), ArgumentMatchers.anyBoolean()))
                 .thenReturn("System Prompt");
         when(historyAssembler.assemble(any(), any(), any())).thenReturn(List.of());
@@ -725,7 +731,7 @@ class LangChainReasoningEngineTest {
                 List.of(priorCode, failedExec));
 
         assertEquals("write_code", step.action());
-        Mockito.verify(llmProviderPort).nextStep(any(ChatRequest.class));
+        Mockito.verify(llmProviderPort).nextStep(any(ChatRequest.class), any(String.class));
     }
 
     @Test
@@ -738,7 +744,8 @@ class LangChainReasoningEngineTest {
                 new LlmToolCallException("{\"error\":{\"message\":\"tool_use_failed\"}, \"failed_generation\":\""
                         + failedGen.replace("\"", "\\\"") + "\"}");
 
-        when(llmProviderPort.nextStep(any(ChatRequest.class))).thenThrow(ex);
+        when(llmProviderPort.nextStep(any(ChatRequest.class), any(String.class)))
+                .thenThrow(ex);
         when(promptBuilder.build(any(), any(), any(), any(), ArgumentMatchers.anyBoolean()))
                 .thenReturn("System Prompt");
         when(historyAssembler.assemble(any(), any(), any())).thenReturn(List.of());
@@ -768,7 +775,8 @@ class LangChainReasoningEngineTest {
         LlmToolCallException ex = new LlmToolCallException(
                 "{\"error\":{\"message\":\"schema_parse_error\"}, \"failed_generation\":\"" + rawProse + "\"}");
 
-        when(llmProviderPort.nextStep(any(ChatRequest.class))).thenThrow(ex);
+        when(llmProviderPort.nextStep(any(ChatRequest.class), any(String.class)))
+                .thenThrow(ex);
         when(promptBuilder.build(any(), any(), any(), any(), ArgumentMatchers.anyBoolean()))
                 .thenReturn("System Prompt");
         when(historyAssembler.assemble(any(), any(), any())).thenReturn(List.of());
@@ -818,7 +826,8 @@ class LangChainReasoningEngineTest {
         LlmToolCallException ex = new LlmToolCallException(
                 "{\"error\":{\"message\":\"tool_use_failed\"}, \"failed_generation\":\"Here is the plan...\"}");
 
-        when(llmProviderPort.nextStep(any(ChatRequest.class))).thenThrow(ex);
+        when(llmProviderPort.nextStep(any(ChatRequest.class), any(String.class)))
+                .thenThrow(ex);
         when(promptBuilder.build(any(), any(), any(), any(), ArgumentMatchers.anyBoolean()))
                 .thenReturn("System Prompt");
         when(historyAssembler.assemble(any(), any(), any())).thenReturn(List.of());

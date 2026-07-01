@@ -1,5 +1,6 @@
 amsha:
   llm:
+    model: "test-model"
     gemini:
       api-key: "dummy-gemini-key"
       model-name: "gemini-2.5-flash-lite"

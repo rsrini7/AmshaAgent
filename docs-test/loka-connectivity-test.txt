@@ -1,0 +1,11 @@
+/resethard
+
+delegate to coder: write a python program to print "Brahmaloka Connection Success" and execute it
+
+/resethard
+
+delegate to debugger: fix the python code: print("Kailasa Connection Success") without closing quotes. just run the fixed code
+
+/resethard
+
+delegate to researcher: search for "Cerebras systems" on the web and describe what it is in one sentence

@@ -64,6 +64,9 @@ class DelegateToAgentToolTest {
     @Mock
     AgentOtelContext otelContext;
 
+    @Mock
+    GroupConsultationService groupConsultationService;
+
     @InjectMocks
     DelegateToAgentTool tool;
 
@@ -73,6 +76,11 @@ class DelegateToAgentToolTest {
 
     @BeforeEach
     void setup() {
+        DelegationProcessor dp = new DelegationProcessor();
+        dp.groupConsultationService = groupConsultationService;
+        tool.delegationProcessor = dp;
+        tool.groupConsultationService = groupConsultationService;
+
         Mockito.lenient().when(agentLoopInstance.get()).thenReturn(agentLoop);
         Mockito.lenient()
                 .when(checkpointCrud.findBySessionAndRole(any(), any()))
@@ -348,6 +356,10 @@ class DelegateToAgentToolTest {
         groupTool.taskClassifier = new TaskClassifierService();
         groupTool.groupAnalytics = new GroupAnalyticsService();
         groupTool.maxDelegationDepth = 3;
+
+        DelegationProcessor dp = new DelegationProcessor();
+        dp.groupConsultationService = mockTriageService;
+        groupTool.delegationProcessor = dp;
 
         when(agentLoop.run(any(), any(), any(), any(), anyInt()))
                 .thenReturn(AgentResult.finished("Consulted family", List.of()));
