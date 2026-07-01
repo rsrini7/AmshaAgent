@@ -30,6 +30,23 @@ if (Test-Path '.env') {
     Write-Host 'ℹ️   .env shielded (.env.build-backup) - secrets will not be baked into JAR.'
 }
 
+# --- Ensure env-example is a real copy (not symlink) for native-image ---
+$envExampleSrc = '.env.example'
+$envExampleDst = 'app/src/main/resources/env-example'
+$srcItem = Get-Item $envExampleSrc -ErrorAction SilentlyContinue
+if ($srcItem) {
+    if ((Test-Path $envExampleDst) -and ((Get-Item $envExampleDst).Attributes -band [IO.FileAttributes]::ReparsePoint)) {
+        Remove-Item $envExampleDst -Force
+    }
+    $dstItem = Get-Item $envExampleDst -ErrorAction SilentlyContinue
+    if (-not $dstItem -or $srcItem.LastWriteTime -gt $dstItem.LastWriteTime) {
+        Copy-Item -Path $envExampleSrc -Destination $envExampleDst -Force
+        Write-Host 'ℹ️   .env.example copied to app/src/main/resources/env-example'
+    }
+} else {
+    Write-Host '⚠️   .env.example not found — skipping copy (native build may fail).'
+}
+
 try {
     $env:MAVEN_OPTS = "$mOpts -Xmx${jitGB}g -Xms${jitGB}g"
 
