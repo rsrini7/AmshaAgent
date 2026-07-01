@@ -67,6 +67,12 @@ amsha.llm.persona.models.brahma.1.model=llama-3.3-70b
 
 Circuit breaker per-model isolation is automatic. A failure in one provider (e.g., Groq rate-limit) will NOT trip the circuit for other providers (e.g., OpenAI, Gemini).
 
+### Dynamic Task Routing (SAW Pattern)
+
+To avoid API rate limits and optimize costs, the model router uses a pre-flight classifier (`TaskClassifierService`) to analyze goals:
+* **Lightweight Goals**: Tasks classified as chitchat, greetings, or basic commands (like `/reset`) automatically bypass persona/group overrides and route directly to the global default low-cost model, avoiding unnecessary latency and costs on heavy reasoning slots.
+* **Heavy/Specialist Goals**: Complex tasks (requiring coding, debugging, security, or architecture) are routed to their designated high-capability models.
+
 ## Generic OpenAI Provider
 
 Generic OpenAI-compatible provider for custom endpoints (e.g., DeepSeek,

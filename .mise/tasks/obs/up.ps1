@@ -25,8 +25,37 @@ if ($LASTEXITCODE -ne 0) {
         exit 1
     }
 }
-podman compose up -d otel-collector jaeger phoenix prometheus
-if ($LASTEXITCODE -ne 0) { Write-Host '❌  Failed to start observability stack'; exit 1 }
+# Pre-flight: remove stale containers that would block compose up
+# Fixed container_name entries (e.g. prometheus) collide across projects.
+foreach ($name in @('prometheus', 'amshaagentinternal-otel-collector-1', 'amshaagentinternal-jaeger-1', 'amshaagentinternal-phoenix-1')) {
+    $exists = podman ps -a --filter "name=^/$($name)$" --format '{{.ID}}' 2>$null
+    if ($exists) {
+        Write-Host "🧹  Removing stale container: $name"
+        podman rm -f $name 2>$null | Out-Null
+    }
+}
+$composeOut = podman compose up -d otel-collector jaeger phoenix prometheus 2>&1
+if ($LASTEXITCODE -ne 0) {
+    # "proxy already running" — stale gvproxy inside the VM. Bounce the machine and retry.
+    if ($composeOut -match 'proxy already running') {
+        Write-Host '🔄  Podman proxy stale — restarting machine...'
+        podman machine stop 2>&1 | Out-Null
+        Start-Sleep -Seconds 2
+        podman machine start 2>&1 | Out-Null
+        Start-Sleep -Seconds 3
+        # Re-run cleanup after restart (stale containers may persist)
+        foreach ($name in @('prometheus', 'amshaagentinternal-otel-collector-1', 'amshaagentinternal-jaeger-1', 'amshaagentinternal-phoenix-1')) {
+            $exists = podman ps -a --filter "name=^/$($name)$" --format '{{.ID}}' 2>$null
+            if ($exists) { podman rm -f $name 2>$null | Out-Null }
+        }
+        podman compose up -d otel-collector jaeger phoenix prometheus
+        if ($LASTEXITCODE -ne 0) { Write-Host '❌  Observability stack failed even after machine restart'; exit 1 }
+    } else {
+        Write-Host $composeOut
+        Write-Host '❌  Failed to start observability stack'
+        exit 1
+    }
+}
 Write-Host '✅  Observability stack started:'
 Write-Host '    Jaeger UI  -> http://localhost:16686'
 Write-Host '    Phoenix UI -> http://localhost:6006'

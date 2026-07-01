@@ -16,6 +16,7 @@ import com.amsha.core.governance.BudgetExceededException;
 import com.amsha.core.observability.AgentObserver;
 import com.amsha.core.observability.AgentOtelContext;
 import com.amsha.core.skill.SkillRegistry;
+import com.amsha.core.task.TaskManager;
 import com.amsha.core.util.AgentErrorMessageUtil;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
@@ -32,6 +33,12 @@ import io.opentelemetry.context.Scope;
 public class AgentStateMachineRunner {
 
     private static final Logger log = Logger.getLogger(AgentStateMachineRunner.class);
+
+    @Inject
+    TaskClassifierService classifierService;
+
+    @Inject
+    TaskManager taskManager;
 
     private static final int LOG_GOAL_MAX = 80;
     private static final String GOAL_LOG_FMT = "StateMachine starting session=%s goal='%s' maxIterations=%d";
@@ -187,6 +194,27 @@ public class AgentStateMachineRunner {
 
         loopExitPublisher.publishStart(context);
         writer.saveGoal(context.sessionId(), goal);
+
+        // SAW Backlog Refinement pattern: dynamically create tasks for complex coordinator goals
+        // Null checks on classifierService and taskManager are required for manually-constructed test suites.
+        if (classifierService != null
+                && taskManager != null
+                && "coordinator".equalsIgnoreCase(context.agentRole())
+                && resumedHistory.isEmpty()) {
+            List<TaskClassifierService.TaskDomain> domains = classifierService.classify(goal);
+            if (domains.size() > 1) {
+                log.infof("[BACKLOG] Complex coordinator goal detected. Refining backlog into task list...");
+                List<String> domainNames = domains.stream().map(Enum::name).toList();
+                String taskName = "COORDINATE (" + String.join(", ", domainNames) + "): " + goal;
+                if (taskName.length() > 80) {
+                    taskName = taskName.substring(0, 77) + "...";
+                }
+                taskManager.createTask(
+                        taskName,
+                        "Refined from complex coordinator goal spanning domains: " + domainNames
+                                + "\n\nOriginal Goal:\n" + goal);
+            }
+        }
 
         RunnerServices services = new RunnerServices(
                 engineStepHandler,

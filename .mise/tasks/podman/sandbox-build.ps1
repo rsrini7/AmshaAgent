@@ -12,7 +12,7 @@ if (-not (Test-Path $dockerfile)) {
     exit 1
 }
 Write-Host '▶   Building amsha-tool-runner image via Podman...'
-podman build --no-cache -t amsha-tool-runner -f $dockerfile .
+podman build --no-cache --network=host -t amsha-tool-runner -f $dockerfile .
 if ($LASTEXITCODE -ne 0) {
     Write-Host "❌  Podman build failed (exit $LASTEXITCODE)"
     exit $LASTEXITCODE
