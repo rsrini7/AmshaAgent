@@ -1,0 +1,119 @@
+package com.amsha.selfevolve.runtime;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+import java.util.List;
+
+import com.amsha.core.config.SelfEvolveConfig;
+import com.amsha.selfevolve.api.EvolutionEvent;
+import com.amsha.selfevolve.api.EvolutionEventType;
+import com.amsha.selfevolve.store.EvolutionEventStorePort;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+@ExtendWith(MockitoExtension.class)
+class DefaultSelfEvolveServiceTest {
+
+    @Mock
+    SelfEvolveConfig config;
+
+    @Mock
+    SelfEvolveConfig.FlushConfig flushConfig;
+
+    @Mock
+    EvolutionEventStorePort store;
+
+    @InjectMocks
+    DefaultSelfEvolveService service;
+
+    @BeforeEach
+    void setup() {
+        lenient().when(config.flush()).thenReturn(flushConfig);
+    }
+
+    @Test
+    void emit_disabled_doesNothing() {
+        when(config.enabled()).thenReturn(false);
+        boolean flushed = service.emit("s1", "u1", EvolutionEventType.USER_MESSAGE, "coordinator", "hi", null, 1);
+        assertFalse(flushed);
+        verify(store, never()).insertBatch(any());
+    }
+
+    @Test
+    void emit_enabled_persistsOnThreshold() {
+        when(config.enabled()).thenReturn(true);
+        when(config.bufferSize()).thenReturn(2);
+        when(flushConfig.maxEvents()).thenReturn(2);
+        when(flushConfig.idleMs()).thenReturn(300000L);
+        when(store.insertBatch(any())).thenReturn(2);
+
+        service.init();
+
+        service.emit("s1", "u1", EvolutionEventType.USER_MESSAGE, "coordinator", "msg1", null, 1);
+        boolean flushed = service.emit("s1", "u1", EvolutionEventType.AGENT_MESSAGE, "coordinator", "msg2", null, 1);
+
+        assertTrue(flushed);
+        verify(store, times(1)).insertBatch(any());
+    }
+
+    @Test
+    void emit_enabled_noFlushBelowThreshold() {
+        when(config.enabled()).thenReturn(true);
+        when(config.bufferSize()).thenReturn(10);
+        when(flushConfig.maxEvents()).thenReturn(10);
+        when(flushConfig.idleMs()).thenReturn(300000L);
+
+        service.init();
+
+        boolean flushed = service.emit("s1", "u1", EvolutionEventType.USER_MESSAGE, "coordinator", "msg1", null, 1);
+        assertFalse(flushed);
+        verify(store, never()).insertBatch(any());
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void flushSession_drainsAndPersists() {
+        when(config.enabled()).thenReturn(true);
+        when(config.bufferSize()).thenReturn(10);
+        when(flushConfig.maxEvents()).thenReturn(10);
+        when(flushConfig.idleMs()).thenReturn(300000L);
+        when(store.insertBatch(any())).thenReturn(1);
+
+        service.init();
+
+        service.emit("s1", "u1", EvolutionEventType.TOOL_CALL, "coder", "exec code", "sandbox_exec", 1);
+        service.flushSession("s1");
+
+        ArgumentCaptor<List<EvolutionEvent>> captor = ArgumentCaptor.forClass(List.class);
+        verify(store, times(1)).insertBatch(captor.capture());
+        assertEquals(1, captor.getValue().size());
+        assertEquals("sandbox_exec", captor.getValue().get(0).toolName());
+    }
+
+    @Test
+    void isEnabled_returnsConfigValue() {
+        when(config.enabled()).thenReturn(false);
+        assertFalse(service.isEnabled());
+        when(config.enabled()).thenReturn(true);
+        assertTrue(service.isEnabled());
+    }
+
+    @Test
+    void bufferSize_returnsZeroWhenNoBuffer() {
+        assertEquals(0, service.bufferSize("unknown"));
+    }
+}

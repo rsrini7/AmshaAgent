@@ -23,10 +23,11 @@
 | `amsha-mcp` | MCP server bridge + dynamic client tool loading |
 | `amsha-onboarding` | 5-step setup wizard REST API + /complete |
 | `amsha-tool-playwright` | Playwright browser automation tool |
+| `amsha-self-evolve` | Self-Evolution trace capture and learning loop |
 | `amsha-common` | Shared utilities (LogUtil, constants) |
 | `ui` | Lit 3.x + TypeScript web frontend |
 
-**Dependency flow:** `amsha-app` → `amsha-core` → `amsha-channel-api` ← `amsha-channel-telegram`, `amsha-channel-web`. `amsha-deployment` is build-time only (not in runtime fat-jar). `amsha-rag`, `amsha-mcp`, and `amsha-tool-playwright` are optional runtime modules discovered via CDI. Persistence follows hexagonal architecture: `amsha-persistence-api` defines ports, `amsha-persistence-common` holds shared entities, three adapters (sqlite, postgres, fs) implement ports.
+**Dependency flow:** `amsha-app` → `amsha-core` → `amsha-channel-api` ← `amsha-channel-telegram`, `amsha-channel-web`. `amsha-deployment` is build-time only (not in runtime fat-jar). `amsha-rag`, `amsha-mcp`, `amsha-tool-playwright`, and `amsha-self-evolve` are optional runtime modules discovered via CDI. Persistence follows hexagonal architecture: `amsha-persistence-api` defines ports, `amsha-persistence-common` holds shared entities, three adapters (sqlite, postgres, fs) implement ports.
 
 ![Module Architecture](./assets/amsha_module_architecture.svg)
 
@@ -321,6 +322,19 @@ Retrieval merges FTS5 keyword search + sqlite-vec vector search via Reciprocal R
 5. Releases `CompactionEventBridge` latch so `CompactionSummaryCache` reads fresh summary
 
 The `CompactionEventBridge` uses a `CountDownLatch` per session to prevent a race where cache populates before compaction write commits, caching `null` for the rest of the session.
+
+### Self-Evolution Trace Capture
+
+The `amsha-self-evolve` module captures a complete persistent history of agent reasoning and tool executions. This trace dataset is used for extraction of common failure/success patterns (Phase 9) and synthesis of behavioral directives (Phase 10) to optimize future interactions.
+
+*   **CDI Event Triggers**: The trace capture listens asynchronously to core framework events:
+    *   `ToolExecutionEvent` (fired by `ToolInvoker` before/after tool invocation)
+    *   `CompactionEvent` (fired by `CompactionService` after historical context summarizes)
+*   **Trace Buffering & Flushing**: Events are temporarily held in an in-memory session buffer (`InMemoryConversationBuffer`) and flushed to persistent storage based on trigger thresholds (session termination, event threshold of 12 events, or 5-minute idle timeout).
+*   **Idempotency & Backend Parity**: Idempotency is database-enforced using primary keys and unique indexes. The system resolves store adapters dynamically via Quarkus `@IfBuildProperty`:
+    *   `SqliteEvolutionEventStore` is selected for SQLite persistence.
+    *   `PostgresEvolutionEventStore` is selected for PostgreSQL persistence.
+    *   `NoOpEvolutionEventStore` is selected for Filesystem (FS) persistence.
 
 ---
 

@@ -7,6 +7,7 @@ import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.model.chat.ChatModel;
 
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.event.Event;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
@@ -23,6 +24,7 @@ import com.amsha.core.audit.AuditService;
 import com.amsha.core.audit.SecurityEventType;
 import com.amsha.core.compaction.CompactionAbortedException;
 import com.amsha.core.config.TieredMemoryConfig;
+import com.amsha.core.events.CompactionEvent;
 import com.amsha.core.governance.RateLimitTracker;
 import com.amsha.core.governance.SessionBudgetTracker;
 import com.amsha.core.memory.tiered.RecallMemoryService;
@@ -87,6 +89,9 @@ public class CompactionService {
 
     @Inject
     RecallMemoryService recallService;
+
+    @Inject
+    Event<CompactionEvent> compactionEvent;
 
     @ConfigProperty(name = "amsha.memory.compaction.enabled", defaultValue = "true")
     boolean enabled;
@@ -406,6 +411,10 @@ public class CompactionService {
         log.infof(
                 "Context compacted for session %s. Compacted %d messages, kept %d.",
                 sessionId, toCompact.size(), filteredKeep.size());
+
+        // Fire compaction event for self-evolve trace capture
+        compactionEvent.fireAsync(
+                new CompactionEvent(sessionId, userId, toCompact.size(), filteredKeep.size(), truncatedSummary));
     }
 
     private static boolean isRateLimit(Throwable e) {

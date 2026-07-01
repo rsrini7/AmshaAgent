@@ -1,6 +1,6 @@
 # Memory Tiered Architecture & Self-Evolution — Phased Implementation Plan
 
-> **Status:** v2.2-implemented — Phase 0 ✅ complete (24 files, 3 ISP ports, CDI producer, GraalVM reflection)
+> **Status:** v2.9-implemented — Phases 0-8 ✅ complete
 > **Backlog Ref:** `Ideas-Pending/BACKLOG.md` Item #8
 > **Input Docs:** `MemGPT-Style.md`, `Self-Evolution.md`, `Memory_Self_Evoluton_Plan.md` (v1.2), `Memory_self_Review.md`
 > **Date:** 2026-05-24
@@ -901,7 +901,9 @@ Set<String> ALLOWED_BLOCK_KEYS = Set.of(
 
 ---
 
-## 11. Phase 8: Self-Evolve Trace Capture
+## 11. Phase 8: Self-Evolve Trace Capture ✅ COMPLETE
+
+> **Status:** ✅ COMPLETE — 14 new files, 28 tests, CDI event integration, SQLite/Postgres migrations
 
 **Goal:** Build trace history — event emission + buffer + flush, no synthesis yet.
 
@@ -910,11 +912,11 @@ Set<String> ALLOWED_BLOCK_KEYS = Set.of(
 | Component | Location | Description |
 |---|---|---|
 | `amsha-self-evolve` module | New module | Separate from core memory |
-| `EvolutionEvent` DTO | `amsha-self-evolve/api` | Typed events |
-| `ConversationBuffer` | `amsha-self-evolve/buffer` | In-memory per-session accumulation |
-| `SelfEvolveService.append()` | `amsha-self-evolve/runtime` | Event ingestion |
-| Flush triggers | `amsha-self-evolve/runtime` | Session end, threshold, idle timeout |
-| Event store SPI | `amsha-self-evolve/store` | SQLite/Postgres/FS backend |
+| `EvolutionEvent` DTO | `self-evolve/api` | Typed events |
+| `ConversationBuffer` | `self-evolve/buffer` | In-memory per-session accumulation |
+| `SelfEvolveService.append()` | `self-evolve/runtime` | Event ingestion |
+| Flush triggers | `self-evolve/runtime` | Session end, threshold, idle timeout |
+| Event store SPI | `self-evolve/store` | SQLite/Postgres/FS backend |
 
 ### 11.2 Change Points
 
@@ -953,19 +955,19 @@ public enum EvolutionEventType {
 
 ```bash
 # Event emission sequence tests
-./mvnw test -pl amsha-self-evolve -Dtest="EvolutionEventEmissionTest"
+./mvnw test -pl self-evolve -Dtest="EvolutionEventEmissionTest"
 # Flush-on-threshold tests
-./mvnw test -pl amsha-self-evolve -Dtest="ConversationBufferFlushThresholdTest"
+./mvnw test -pl self-evolve -Dtest="ConversationBufferFlushThresholdTest"
 # Disabled-feature no-op tests
-./mvnw test -pl amsha-self-evolve -Dtest="SelfEvolveDisabledNoOpTest"
+./mvnw test -pl self-evolve -Dtest="SelfEvolveDisabledNoOpTest"
 ```
 
 ### 11.6 Exit Criteria
 
-- [ ] Trace history captured reliably across sessions
-- [ ] Flush logic reliable (no lost events)
-- [ ] Feature can be disabled cleanly (zero overhead)
-- [ ] **Nothing injected into prompts yet**
+- [x] Trace history captured reliably across sessions
+- [x] Flush logic reliable (no lost events)
+- [x] Feature can be disabled cleanly (zero overhead)
+- [x] **Nothing injected into prompts yet**
 
 ---
 
@@ -977,10 +979,10 @@ public enum EvolutionEventType {
 
 | Component | Location | Description |
 |---|---|---|
-| `MemoryExtractorLite` | `amsha-self-evolve/extract` | Rule-based pattern matching |
-| Extracted record DTOs | `amsha-self-evolve/api` | Typed records |
-| SIMPLE retrieval | `amsha-self-evolve/retrieve` | FTS5 over extracted records |
-| Deduplication layer | `amsha-self-evolve/internal` | Prevent duplicate extractions |
+| `MemoryExtractorLite` | `self-evolve/extract` | Rule-based pattern matching |
+| Extracted record DTOs | `self-evolve/api` | Typed records |
+| SIMPLE retrieval | `self-evolve/retrieve` | FTS5 over extracted records |
+| Deduplication layer | `self-evolve/internal` | Prevent duplicate extractions |
 
 ### 12.2 Record Types
 
@@ -1025,11 +1027,11 @@ if (event.type == RESOLUTION && priorToolSuccess) {
 
 ```bash
 # Rule extraction tests from real traces
-./mvnw test -pl amsha-self-evolve -Dtest="MemoryExtractorRuleTest"
+./mvnw test -pl self-evolve -Dtest="MemoryExtractorRuleTest"
 # Deduplication tests
-./mvnw test -pl amsha-self-evolve -Dtest="ExtractedMemoryDedupeTest"
+./mvnw test -pl self-evolve -Dtest="ExtractedMemoryDedupeTest"
 # SIMPLE retrieval tests
-./mvnw test -pl amsha-self-evolve -Dtest="SimpleRetrievalTest"
+./mvnw test -pl self-evolve -Dtest="SimpleRetrievalTest"
 ```
 
 ### 12.5 Exit Criteria
@@ -1049,11 +1051,11 @@ if (event.type == RESOLUTION && priorToolSuccess) {
 
 | Component | Location | Description |
 |---|---|---|
-| `InteractionPolicySynthesizer` | `amsha-self-evolve/policy` | LLM-driven directive generation |
-| `DirectiveBundle` | `amsha-self-evolve/api` | Synthesized directives with lifecycle state |
-| `SelfEvolveReflectTool` | `amsha-self-evolve` | On-demand synthesis trigger |
-| Directive storage | `amsha-self-evolve/store` | As `DIRECTIVE` archival chunks or typed records |
-| **Lifecycle manager** | `amsha-self-evolve/policy` | **v2.1: CANDIDATE → SHADOW → ACTIVE → DISABLED state machine** |
+| `InteractionPolicySynthesizer` | `self-evolve/policy` | LLM-driven directive generation |
+| `DirectiveBundle` | `self-evolve/api` | Synthesized directives with lifecycle state |
+| `SelfEvolveReflectTool` | `self-evolve` | On-demand synthesis trigger |
+| Directive storage | `self-evolve/store` | As `DIRECTIVE` archival chunks or typed records |
+| **Lifecycle manager** | `self-evolve/policy` | **v2.1: CANDIDATE → SHADOW → ACTIVE → DISABLED state machine** |
 
 ### 13.2 Change Points
 
@@ -1130,10 +1132,10 @@ if (directivesEnabled) {
 
 ```bash
 # Confidence threshold tests
-./mvnw test -pl amsha-self-evolve -Dtest="DirectiveConfidenceThresholdTest"
+./mvnw test -pl self-evolve -Dtest="DirectiveConfidenceThresholdTest"
 
 # Low-confidence suppression tests
-./mvnw test -pl amsha-self-evolve -Dtest="LowConfidenceDirectiveSuppressionTest"
+./mvnw test -pl self-evolve -Dtest="LowConfidenceDirectiveSuppressionTest"
 
 # Admin delete/disable tests
 ./mvnw test -pl amsha-app -Dtest="DirectiveAdminDisableTest"
@@ -1142,16 +1144,16 @@ if (directivesEnabled) {
 ./mvnw test -pl amsha-core -Dtest="DirectiveInjectionCapTest"
 
 # v2.1: New directives start in SHADOW or CANDIDATE
-./mvnw test -pl amsha-self-evolve -Dtest="DirectiveShadowLifecycleStartTest"
+./mvnw test -pl self-evolve -Dtest="DirectiveShadowLifecycleStartTest"
 
 # v2.1: Shadow directives injected with evaluation labeling only
 ./mvnw test -pl amsha-core -Dtest="ShadowDirectiveEvaluationLabelingTest"
 
 # v2.1: Promotion criteria test (SHADOW → ACTIVE)
-./mvnw test -pl amsha-self-evolve -Dtest="DirectivePromotionCriteriaTest"
+./mvnw test -pl self-evolve -Dtest="DirectivePromotionCriteriaTest"
 
 # v2.1: Faulty directive quarantine/disable test
-./mvnw test -pl amsha-self-evolve -Dtest="FaultyDirectiveQuarantineTest"
+./mvnw test -pl self-evolve -Dtest="FaultyDirectiveQuarantineTest"
 ```
 
 ### 13.6 Exit Criteria
@@ -1177,7 +1179,7 @@ if (directivesEnabled) {
 |---|---|---|
 | `PostgresTieredMemoryStore` | `amsha-persistence-postgres` | Single class implements all three segregated ports; annotated `@TieredBackend("postgres")` |
 | `FsTieredMemoryStore` | `amsha-persistence-fs` | Single class implements all three segregated ports; annotated `@TieredBackend("fs")` |
-| Self-evolve backends | `amsha-self-evolve/store/*` | SQLite/Postgres/FS providers |
+| Self-evolve backends | `self-evolve/store/*` | SQLite/Postgres/FS providers |
 | Capability declarations | `amsha-persistence-api` | Explicit feature matrix |
 
 **Backend Implementation Pattern:** Each backend is a single `@ApplicationScoped` CDI bean implementing all three segregated port interfaces. The `@TieredBackend` qualifier identifies the backend. The `TieredMemoryProducer` resolves each port independently, but at runtime they reference the same bean instance:
@@ -1481,10 +1483,10 @@ amsha:
 | `amsha-core` | `com.amsha.core.memory.tiered` | `TieredMemoryProducer`, `@TieredBackend`, `TieredBackendLiteral`, `TieredMemoryBackend`, NoOp stores |
 | `amsha-core` | `com.amsha.core.config` | `TieredMemoryConfig`, `MemoryPromptBudgetConfig`, `SelfEvolveConfig` |
 
-### 17.2 amsha-self-evolve Module Structure
+### 17.2 self-evolve Module Structure
 
 ```
-amsha-self-evolve/
+self-evolve/
 └── src/main/java/com/amsha/selfevolve/
     ├── api/                    # Public DTOs (EvolutionEvent, MemoryRecord, DirectiveBundle)
     ├── buffer/                 # ConversationBuffer, InMemoryConversationBuffer
@@ -1499,7 +1501,7 @@ amsha-self-evolve/
 ### 17.3 Dependencies
 
 ```xml
-<!-- amsha-self-evolve/pom.xml -->
+<!-- self-evolve/pom.xml -->
 <dependencies>
     <dependency>
         <groupId>com.amsha</groupId>
@@ -1531,7 +1533,7 @@ amsha-self-evolve/
 | 5 | ✅ Archival storage works, no auto-promotion, **vector writes serialized** |
 | 6 | ✅ Archival tools exposed, **tool-first policy**, injection sparse |
 | 7 | ✅ Write tools gated, audited, rate-limited, **CAS atomic append** |
-| 8 | Self-evolve traces captured, no synthesis |
+| 8 | ✅ Self-evolve traces captured, no synthesis |
 | 9 | Rule-based extraction works, no LLM yet |
 | 10 | Directive synthesis offline, **shadow lifecycle**, high-confidence only |
 | 11 | Backend parity achieved, degraded modes documented |
@@ -1642,11 +1644,11 @@ This section summarizes the five architecture decisions added in v2.1 and their 
 
 ---
 
-**Document Version:** 2.8-implemented
-**Previous Version:** 2.7-implemented
-**Key Changes:** Post-Phase-7 cleanup: deprecated MemorySearchTool removed, MEMORY_SEARCH enum removed, all references migrated to RECALL_MEMORY_SEARCH + ARCHIVAL_MEMORY_SEARCH, MCP server exposes both tools, prompts updated with tool selection guidance, TODO(Phase-7) userId resolution fixed
-**Next Step:** Phase 8 — Self-Evolve Trace Capture (EvolutionEvent, ConversationBuffer, SelfEvolveService)
-**Review Status:** Phases 0-7 complete, post-phase cleanup done, all tests passing
+**Document Version:** 2.9-implemented
+**Previous Version:** 2.8-implemented
+**Key Changes:** Phase 8 complete: Self-Evolve Trace Capture (14 new files, 28 tests, CDI event integration, SQLite/Postgres migrations)
+**Next Step:** Phase 9 — Rule-Based Extraction (MemoryExtractorLite, ExtractedMemory, SIMPLE retrieval)
+**Review Status:** Phases 0-8 complete, self-evolve trace capture working, all tests passing
 
 ---
 
@@ -1666,6 +1668,7 @@ This section summarizes the five architecture decisions added in v2.1 and their 
 | **Phase 5** | ✅ COMPLETE | 2026-05-25 | 4 tests (+4) | Archival relational + vector tier (BM25 FTS5, vec0, RRF, VectorIngestionService) |
 | **Phase 6** | ✅ COMPLETE | 2026-05-26 | 2 new files, 4 modified | `archival_memory_search` tool, `ArchivalContextCache`, hybrid BM25+vector activation, `[RELEVANT KNOWLEDGE]` prompt injection |
 | **Phase 7** | ✅ COMPLETE | 2026-05-26 | 5 new files, 4 modified | 4 write tools, `MemoryWriteGovernance`, CAS atomic append, approval gating, `MEMORY_WRITE_MUTATED` audit |
+| **Phase 8** | ✅ COMPLETE | 2026-07-01 | 14 new files, 3 modified | `amsha-self-evolve` module, `EvolutionEvent`, `ConversationBuffer`, `DefaultSelfEvolveService`, `FlushTriggerPolicy`, CDI event integration, SQLite/Postgres migrations, 28 tests |
 
 ### A.2 Post-Phase-7 Cleanup (2026-05-28)
 

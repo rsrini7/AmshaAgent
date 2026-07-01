@@ -75,7 +75,7 @@ See [docs/QUICK_START.md](./docs/QUICK_START.md) for detailed setup options.
 | `persistence-*/` | Hexagonal persistence: API ports + SQLite / PostgreSQL / FS adapters |
 | `channel-*/` | Channel adapters: Telegram, WebSocket |
 | `ui/` | Lit 3.x + TypeScript web frontend |
-| `mcp/`, `rag/`, `tool-playwright/` | Optional runtime modules |
+| `mcp/`, `rag/`, `tool-playwright/`, `self-evolve/` | Optional runtime and self-evolution modules |
 
 ---
 
@@ -123,6 +123,7 @@ rag/                  ← Two-tier vector (vec0) + FTS5 RAG memory
 mcp/                  ← MCP server bridge + dynamic client tool loading
 onboarding/           ← 6-step setup wizard REST API
 tool-playwright/      ← Playwright browser automation tool
+self-evolve/          ← Trace capture and self-evolution learning loop
 deployment/           ← Build-time: custom CDI scope, MCP reflection
 │
 ui/                   ← Lit 3.x + TypeScript web frontend

@@ -30,6 +30,12 @@
       <artifactId>amsha-core</artifactId>
     </dependency>
 
+    <!-- Self-Evolution trace capture + extraction -->
+    <dependency>
+      <groupId>com.amsha</groupId>
+      <artifactId>amsha-self-evolve</artifactId>
+    </dependency>
+
     <!-- SQLite adapter (persistence backend) -->
     <dependency>
       <groupId>com.amsha</groupId>

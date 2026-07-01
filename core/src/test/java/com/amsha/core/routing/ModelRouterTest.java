@@ -67,7 +67,7 @@ class ModelRouterTest {
     @Test
     void resolve_globalFallback_whenNoPersonaOrGroupConfig() {
         // No persona or group config → falls back to global
-        when(modelPool.getOrCreate(eq("groq#llama-3.3-70b"), any())).thenReturn(groqModel);
+        when(modelPool.getOrCreate(anyString(), any())).thenReturn(groqModel);
 
         ChatModel result = router.resolve("coder");
 

@@ -360,3 +360,25 @@ DO $$ BEGIN
         RAISE NOTICE 'pgvector not loaded — skipping embedding column and HNSW index';
     END IF;
 END $$;
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- Self-Evolution trace events (Phase 8)
+-- ═══════════════════════════════════════════════════════════════════════════
+CREATE TABLE IF NOT EXISTS evolution_events (
+    event_id        TEXT PRIMARY KEY,
+    session_id      TEXT NOT NULL,
+    user_id         TEXT NOT NULL,
+    event_type      TEXT NOT NULL,
+    role            TEXT,
+    content         TEXT,
+    tool_name       TEXT,
+    turn_number     INTEGER,
+    metadata_json   TEXT,
+    created_at      TIMESTAMP WITH TIME ZONE NOT NULL,
+    UNIQUE(session_id, event_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_evolution_session ON evolution_events(session_id);
+CREATE INDEX IF NOT EXISTS idx_evolution_user ON evolution_events(user_id);
+CREATE INDEX IF NOT EXISTS idx_evolution_type ON evolution_events(event_type);
+CREATE INDEX IF NOT EXISTS idx_evolution_created ON evolution_events(created_at);

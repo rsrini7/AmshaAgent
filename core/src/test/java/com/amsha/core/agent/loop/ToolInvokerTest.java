@@ -9,8 +9,11 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import jakarta.enterprise.event.Event;
+
 import java.util.Map;
 
+import com.amsha.core.events.ToolExecutionEvent;
 import com.amsha.core.governance.RequiresApprovalException;
 import com.amsha.core.observability.AgentOtelContext;
 import com.amsha.core.tools.ToolRegistry;
@@ -29,6 +32,9 @@ class ToolInvokerTest {
     private ToolObservationSanitizer observationSanitizer;
     private AgentOtelContext agentOtelContext;
 
+    @SuppressWarnings("unchecked")
+    private final Event<ToolExecutionEvent> toolEvent = mock(Event.class);
+
     @BeforeEach
     void setUp() {
         invoker = new ToolInvoker();
@@ -40,6 +46,7 @@ class ToolInvokerTest {
         invoker.observationSanitizer = observationSanitizer;
         invoker.agentOtelContext = agentOtelContext;
         invoker.registry = new SimpleMeterRegistry();
+        invoker.toolEvent = toolEvent;
 
         when(observationSanitizer.sanitize(anyString(), anyString())).thenAnswer(inv -> inv.getArgument(1));
 
