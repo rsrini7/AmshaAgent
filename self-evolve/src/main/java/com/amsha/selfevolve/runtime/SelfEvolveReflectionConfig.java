@@ -2,9 +2,13 @@ package com.amsha.selfevolve.runtime;
 
 import com.amsha.selfevolve.api.EvolutionEvent;
 import com.amsha.selfevolve.api.EvolutionEventType;
+import com.amsha.selfevolve.api.ExtractedMemory;
 import com.amsha.selfevolve.api.FlushReason;
+import com.amsha.selfevolve.api.MemoryRecordType;
 import com.amsha.selfevolve.store.postgres.PostgresEvolutionEventJdbiDao;
+import com.amsha.selfevolve.store.postgres.PostgresExtractedMemoryJdbiDao;
 import com.amsha.selfevolve.store.sqlite.EvolutionEventJdbiDao;
+import com.amsha.selfevolve.store.sqlite.ExtractedMemoryJdbiDao;
 
 import io.quarkus.runtime.annotations.RegisterForReflection;
 
@@ -16,7 +20,11 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             EvolutionEvent.class,
             EvolutionEventType.class,
             FlushReason.class,
+            ExtractedMemory.class,
+            MemoryRecordType.class,
             EvolutionEventJdbiDao.class,
-            PostgresEvolutionEventJdbiDao.class
+            ExtractedMemoryJdbiDao.class,
+            PostgresEvolutionEventJdbiDao.class,
+            PostgresExtractedMemoryJdbiDao.class
         })
 public class SelfEvolveReflectionConfig {}

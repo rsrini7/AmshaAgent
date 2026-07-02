@@ -1,9 +1,9 @@
 # Memory Tiered Architecture & Self-Evolution — Phased Implementation Plan
 
-> **Status:** v2.9-implemented — Phases 0-8 ✅ complete
+> **Status:** v3.0-implemented — Phases 0-9 ✅ complete
 > **Backlog Ref:** `Ideas-Pending/BACKLOG.md` Item #8
 > **Input Docs:** `MemGPT-Style.md`, `Self-Evolution.md`, `Memory_Self_Evoluton_Plan.md` (v1.2), `Memory_self_Review.md`
-> **Date:** 2026-05-24
+> **Date:** 2026-07-02
 
 ---
 
@@ -971,7 +971,9 @@ public enum EvolutionEventType {
 
 ---
 
-## 12. Phase 9: Rule-Based Extraction
+## 12. Phase 9: Rule-Based Extraction ✅ COMPLETE
+
+> **Status:** ✅ COMPLETE — 13 new files, 37 new tests (73 total in self-evolve module), rule engine, SIMPLE retrieval, DB-enforced deduplication.
 
 **Goal:** Structured records from traces — safe, deterministic, no LLM synthesis.
 
@@ -1036,10 +1038,10 @@ if (event.type == RESOLUTION && priorToolSuccess) {
 
 ### 12.5 Exit Criteria
 
-- [ ] Usable structured records without LLM synthesis dependency
-- [ ] Deduplication prevents record explosion
-- [ ] SIMPLE retrieval works (<10ms latency)
-- [ ] Confidence scoring reasonable (0.5-0.9 range)
+- [x] Usable structured records without LLM synthesis dependency
+- [x] Deduplication prevents record explosion (DB-enforced via UNIQUE(session_id, content_hash) + batch app-level dedup)
+- [x] SIMPLE retrieval works (<10ms, NoOp or real store)
+- [x] Confidence scoring reasonable (0.5-0.9 range)
 
 ---
 
@@ -1647,8 +1649,8 @@ This section summarizes the five architecture decisions added in v2.1 and their 
 **Document Version:** 2.9-implemented
 **Previous Version:** 2.8-implemented
 **Key Changes:** Phase 8 complete: Self-Evolve Trace Capture (14 new files, 28 tests, CDI event integration, SQLite/Postgres migrations)
-**Next Step:** Phase 9 — Rule-Based Extraction (MemoryExtractorLite, ExtractedMemory, SIMPLE retrieval)
-**Review Status:** Phases 0-8 complete, self-evolve trace capture working, all tests passing
+**Next Step:** Phase 10 — Directive Synthesis (InteractionPolicySynthesizer, shadow lifecycle)
+**Review Status:** Phases 0-9 complete, self-evolve trace capture + rule-based extraction working, all 73 tests passing
 
 ---
 
@@ -1669,6 +1671,7 @@ This section summarizes the five architecture decisions added in v2.1 and their 
 | **Phase 6** | ✅ COMPLETE | 2026-05-26 | 2 new files, 4 modified | `archival_memory_search` tool, `ArchivalContextCache`, hybrid BM25+vector activation, `[RELEVANT KNOWLEDGE]` prompt injection |
 | **Phase 7** | ✅ COMPLETE | 2026-05-26 | 5 new files, 4 modified | 4 write tools, `MemoryWriteGovernance`, CAS atomic append, approval gating, `MEMORY_WRITE_MUTATED` audit |
 | **Phase 8** | ✅ COMPLETE | 2026-07-01 | 14 new files, 3 modified | `amsha-self-evolve` module, `EvolutionEvent`, `ConversationBuffer`, `DefaultSelfEvolveService`, `FlushTriggerPolicy`, CDI event integration, SQLite/Postgres migrations, 28 tests |
+| **Phase 9** | ✅ COMPLETE | 2026-07-02 | 13 new files, 3 modified | `MemoryExtractorLite` rule engine, `ExtractedMemory`/`MemoryRecordType` DTOs, `ExtractionDeduplicator`, `SimpleMemoryRetriever`, `SqliteExtractedMemoryStore` + Postgres, V2 Flyway migrations, 37 new tests (73 total) |
 
 ### A.2 Post-Phase-7 Cleanup (2026-05-28)
 
@@ -1971,10 +1974,11 @@ static String truncateSafely(String text, int maxChars) {
 ### A.4 Test Suite Status (Updated)
 
 ```
-Total Tests: ~1,079 (core + persistence-sqlite)
+Total Tests: ~1,116 (core + persistence-sqlite + self-evolve)
   - amsha-core:        ~1,022 tests (963 base + 9 PromptBudget + 4 ArchivalMemory + 19 Phase 6 + 27 Phase 7 + 1 skip)
   - amsha-app:         145 tests
   - amsha-persistence: 57 tests (sqlite module)
+  - amsha-self-evolve: 73 tests (36 Phase 8 + 37 Phase 9)
 Failures: 0
 Errors:   0
 Skipped:  1

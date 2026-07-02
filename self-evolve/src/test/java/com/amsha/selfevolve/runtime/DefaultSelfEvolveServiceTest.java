@@ -18,7 +18,9 @@ import java.util.List;
 import com.amsha.core.config.SelfEvolveConfig;
 import com.amsha.selfevolve.api.EvolutionEvent;
 import com.amsha.selfevolve.api.EvolutionEventType;
+import com.amsha.selfevolve.extract.MemoryExtractorLite;
 import com.amsha.selfevolve.store.EvolutionEventStorePort;
+import com.amsha.selfevolve.store.ExtractedMemoryStorePort;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -44,6 +46,12 @@ class DefaultSelfEvolveServiceTest {
     @Mock
     Instance<EvolutionEventStorePort> storeInstances;
 
+    @Mock
+    Instance<ExtractedMemoryStorePort> extractedStoreInstances;
+
+    @Mock
+    Instance<MemoryExtractorLite> extractorInstance;
+
     @InjectMocks
     DefaultSelfEvolveService service;
 
@@ -56,6 +64,13 @@ class DefaultSelfEvolveServiceTest {
         lenient().when(it.hasNext()).thenReturn(true, false);
         lenient().when(it.next()).thenReturn(store);
         lenient().when(storeInstances.iterator()).thenReturn(it);
+
+        // Mock extracted store as unsatisfied (falls back to NoOp)
+        lenient().when(extractorInstance.isUnsatisfied()).thenReturn(true);
+        Iterator<ExtractedMemoryStorePort> extractedIt =
+                (Iterator<ExtractedMemoryStorePort>) Mockito.mock(Iterator.class);
+        lenient().when(extractedIt.hasNext()).thenReturn(false);
+        lenient().when(extractedStoreInstances.iterator()).thenReturn(extractedIt);
     }
 
     @Test
