@@ -5,6 +5,7 @@ import jakarta.inject.Inject;
 
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 
@@ -40,7 +41,7 @@ public class FsExtractedMemoryStore implements ExtractedMemoryStorePort {
         String sessionId = memories.getFirst().sessionId();
         List<ExtractedMemory> existing = loadMemories(sessionId);
         int before = existing.size();
-        var existingHashes = new java.util.HashSet<String>();
+        var existingHashes = new HashSet<String>();
         for (ExtractedMemory m : existing) {
             existingHashes.add(m.contentHash());
         }
