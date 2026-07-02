@@ -39,7 +39,13 @@ public class PromptRegistry {
             log.info("No PromptStorePort implementation available — prompt registry is classpath-only");
             return;
         }
-        syncFromClasspath();
+        try {
+            syncFromClasspath();
+        } catch (Exception e) {
+            // Table may not exist yet during startup (e.g., before Flyway migration completes)
+            log.debugf(
+                    "PromptRegistry: syncFromClasspath failed (table may not exist yet): %s", LogUtil.rootMessage(e));
+        }
     }
 
     private PromptStorePort store() {

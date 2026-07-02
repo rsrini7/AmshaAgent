@@ -8,14 +8,17 @@ import java.util.List;
 import java.util.UUID;
 
 import com.amsha.persistence.api.MemoryChunkDto;
+import com.amsha.persistence.sqlite.testutil.FlywayEnabledTestProfile;
 
 import org.jdbi.v3.core.Jdbi;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import io.quarkus.test.junit.QuarkusTest;
+import io.quarkus.test.junit.TestProfile;
 
 @QuarkusTest
+@TestProfile(FlywayEnabledTestProfile.class)
 class GlobalKnowledgeBaseTest {
 
     @Inject

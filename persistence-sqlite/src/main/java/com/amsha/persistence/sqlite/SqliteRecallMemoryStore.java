@@ -64,6 +64,18 @@ public class SqliteRecallMemoryStore implements RecallMemoryStorePort {
 
     @Override
     public void purgeExpired(String userId, int retentionDays) {
-        // No-op: recall messages are ephemeral per-session — no server-side expiry needed.
+        jdbi.useExtension(RecallMemoryJdbiDao.class, dao -> dao.purgeExpired(userId, retentionDays));
+    }
+
+    @Override
+    public void purgeExpiredAll(int retentionDays) {
+        jdbi.useExtension(RecallMemoryJdbiDao.class, dao -> dao.purgeExpiredAll(retentionDays));
+    }
+
+    /**
+     * Returns the total number of recall messages for a given user.
+     */
+    public long countByUserId(String userId) {
+        return jdbi.withExtension(RecallMemoryJdbiDao.class, dao -> dao.countByUserId(userId));
     }
 }

@@ -1,4 +1,6 @@
 amsha:
+  persistence:
+    backend: sqlite
   data-dir: "./target"
   llm:
     model: "test-model"
@@ -59,7 +61,9 @@ quarkus:
       acquisition-timeout: 10s
 
   flyway:
+    enabled: true
     migrate-at-start: true
+    clean-at-start: ${AMSHA_FLYWAY_CLEAN_AT_START:false}
     locations: classpath:db/migration/sqlite
 
   langchain4j:

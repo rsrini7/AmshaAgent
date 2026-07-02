@@ -126,7 +126,15 @@
           <systemPropertyVariables>
             <quarkus.http.test-port>0</quarkus.http.test-port>
             <quarkus.shutdown.timeout>5S</quarkus.shutdown.timeout>
+            <amsha.persistence.backend>sqlite</amsha.persistence.backend>
+            <quarkus.flyway.enabled>true</quarkus.flyway.enabled>
+            <quarkus.flyway.migrate-at-start>true</quarkus.flyway.migrate-at-start>
           </systemPropertyVariables>
+          <environmentVariables>
+            <AMSHA_PERSISTENCE_BACKEND>sqlite</AMSHA_PERSISTENCE_BACKEND>
+            <QUARKUS_FLYWAY_ENABLED>true</QUARKUS_FLYWAY_ENABLED>
+            <QUARKUS_FLYWAY_MIGRATE_AT_START>true</QUARKUS_FLYWAY_MIGRATE_AT_START>
+          </environmentVariables>
         </configuration>
       </plugin>
     </plugins>

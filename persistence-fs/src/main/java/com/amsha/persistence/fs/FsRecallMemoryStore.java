@@ -131,6 +131,11 @@ public class FsRecallMemoryStore implements RecallMemoryStorePort {
         // No-op: recall messages are ephemeral per-session
     }
 
+    @Override
+    public void purgeExpiredAll(int retentionDays) {
+        // No-op: recall messages are ephemeral per-session
+    }
+
     private boolean matchesQuery(RecallMessageDto m, RecallSearchQuery query, String lowerQuery) {
         // User filter
         if (query.userId() != null && !query.userId().equals(m.userId())) {

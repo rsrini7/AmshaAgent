@@ -359,3 +359,90 @@ Libs using FFM/MethodHandle/native access need `--initialize-at-run-time=<packag
 FFM downcalls need explicit registration. Current: `posix_madvise`, `getpagesize` (Lucene PosixNativeAccess). On `MissingForeignRegistrationError`, register the exact leaf type from the error message.
 
 **Verification**: `python3 ./fix_fqns.py && ./mvnw compile -DskipTests -q` for compilation; `mise build:native-local` for full native build.
+
+---
+
+## 9. Phase 12: Hardening & Cleanup (Memory Tiered)
+
+### 9.1 Admin REST Endpoints
+
+| Endpoint | Method | Description |
+|---|---|---|
+| `/admin/memory/recall/search` | GET | Search recall memory with query, sessionId, limit, includeSummaries |
+| `/admin/memory/recall/purge` | POST | Purge expired recall messages (requires internal API key) |
+| `/admin/memory/archival/search` | GET | Search archival memory with query, limit, chunkTypes |
+| `/admin/memory/archival/{chunkId}` | GET | Get specific archival chunk by ID |
+| `/admin/memory/archival/{chunkId}` | DELETE | Delete archival chunk (requires internal API key) |
+| `/admin/memory/archival/evict` | POST | Evict low-confidence chunks (requires internal API key) |
+| `/admin/memory/core` | GET | List all core memory blocks |
+| `/admin/memory/core/{blockKey}` | GET | Get specific core memory block |
+| `/admin/memory/core/{blockKey}` | PUT | Upsert core memory block (requires internal API key) |
+| `/admin/memory/core/{blockKey}` | DELETE | Delete core memory block (requires internal API key) |
+| `/admin/memory/directives` | GET | List all directives |
+| `/admin/memory/directives/reconcile` | POST | Reconcile directive lifecycle (requires internal API key) |
+
+### 9.2 Observability Metrics (Micrometer)
+
+| Metric | Type | Description |
+|---|---|---|
+| `memory.recall.search` | Counter | Total recall memory searches |
+| `memory.recall.search.latency` | Timer | Recall memory search latency (p50, p95, p99) |
+| `memory.recall.result.count` | DistributionSummary | Distribution of recall search result counts |
+| `memory.recall.purge` | Counter | Total recall memory purge operations |
+| `memory.archival.search` | Counter | Total archival memory searches |
+| `memory.archival.search.latency` | Timer | Archival memory search latency (p50, p95, p99) |
+| `memory.archival.result.count` | DistributionSummary | Distribution of archival search result counts |
+| `memory.archival.confidence` | DistributionSummary | Distribution of archival chunk confidence scores |
+| `memory.archival.evict` | Counter | Total archival memory eviction operations |
+
+### 9.3 Retention & Eviction Jobs
+
+| Schedule | Job | Description |
+|---|---|---|
+| `0 0 2 * * ?` | `purgeExpiredRecallMessages` | Purge recall messages older than `amsha.memory.retention.recall-retention-days` (default: 30) |
+| `0 0 3 * * ?` | `evictLowConfidenceArchivalChunks` | Evict archival chunks with confidence below threshold and older than minAgeDays |
+
+### 9.4 Configuration Properties
+
+```yaml
+amsha:
+  memory:
+    retention:
+      enabled: ${AMSHA_MEMORY_RETENTION_ENABLED:true}
+      recall-retention-days: ${AMSHA_MEMORY_RETENTION_RECALL_RETENTION_DAYS:30}
+      archival-eviction-threshold: ${AMSHA_MEMORY_RETENTION_ARCHIVAL_EVICTION_THRESHOLD:0.3}
+      archival-min-age-days: ${AMSHA_MEMORY_RETENTION_ARCHIVAL_MIN_AGE_DAYS:30}
+```
+
+### 9.5 Latency Targets
+
+| Operation | Target | Phase |
+|---|---|---|
+| Core Memory render | <1ms | Phase 1 |
+| Recall search (session) | <10ms | Phase 3 |
+| Recall search (cross-session) | <50ms | Phase 3 |
+| Archival hybrid search | <50ms | Phase 5 |
+| Self-evolve SIMPLE retrieval | <10ms | Phase 9 |
+| Self-evolve DEEP synthesis | 2-5s (offline) | Phase 10 |
+
+### 9.6 Phase 12 Verification Commands
+
+```bash
+# Run Phase 12 tests
+./mvnw test -pl amsha-app -Dtest="MemoryLatencyP95Test"
+./mvnw test -pl amsha-app -Dtest="MemoryConcurrencyTest"
+./mvnw test -pl amsha-app -Dtest="TieredMemoryDisableRegressionTest"
+./mvnw test -pl amsha-app -Dtest="EndToEndDisabledBehaviorTest"
+./mvnw test -pl amsha-app -Dtest="EndToEndTieredMemoryTest"
+./mvnw test -pl amsha-app -Dtest="TieredMemoryHealthDtoTest"
+./mvnw test -pl amsha-app -Dtest="MemoryMetricsObserverTest"
+./mvnw test -pl amsha-app -Dtest="MemoryRetentionSchedulerTest"
+./mvnw test -pl amsha-app -Dtest="RecallMemoryAdminResourceTest"
+./mvnw test -pl amsha-app -Dtest="ArchivalMemoryAdminResourceTest"
+
+# Run all admin endpoint tests
+./mvnw test -pl amsha-app -Dtest="*AdminResource*Test"
+
+# Verify retention config
+grep "AMSHA_MEMORY_RETENTION" .env.example app/src/main/resources/application.yaml
+```

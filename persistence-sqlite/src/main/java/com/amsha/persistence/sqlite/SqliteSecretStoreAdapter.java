@@ -40,9 +40,14 @@ public class SqliteSecretStoreAdapter implements SecretStorePort {
 
     @Override
     public Optional<SecretDto> find(String sessionId, String keyName) {
-        return jdbi.withExtension(SecretJdbiDao.class, dao -> dao.find(sessionId, keyName))
-                .map(row -> new SecretDto(
-                        row.sessionId(), row.keyName(), row.encryptionKeyVersion(), row.ciphertext(), row.nonce()));
+        try {
+            return jdbi.withExtension(SecretJdbiDao.class, dao -> dao.find(sessionId, keyName))
+                    .map(row -> new SecretDto(
+                            row.sessionId(), row.keyName(), row.encryptionKeyVersion(), row.ciphertext(), row.nonce()));
+        } catch (Exception e) {
+            // Table may not exist yet during startup (e.g., before Flyway migration completes)
+            return Optional.empty();
+        }
     }
 
     @Override

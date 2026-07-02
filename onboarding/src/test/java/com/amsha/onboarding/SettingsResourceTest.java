@@ -8,6 +8,7 @@ import static org.mockito.Mockito.when;
 import com.amsha.core.llm.LlmValidationGateway;
 import com.amsha.onboarding.dto.PromptUpdateRequest;
 import com.amsha.onboarding.dto.ProviderUpdateRequest;
+import com.amsha.onboarding.testutil.FlywayEnabledTestProfile;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.junit.jupiter.api.BeforeEach;
@@ -15,10 +16,12 @@ import org.junit.jupiter.api.Test;
 
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
+import io.quarkus.test.junit.TestProfile;
 import io.restassured.http.ContentType;
 import io.restassured.specification.RequestSpecification;
 
 @QuarkusTest
+@TestProfile(FlywayEnabledTestProfile.class)
 public class SettingsResourceTest {
 
     @InjectMock

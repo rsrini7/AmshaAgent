@@ -112,23 +112,30 @@ public class DevSecretSeeder {
     @SuppressWarnings("java:S2119")
     private void seedAuditHmacKey() {
         String keyName = VaultConstants.AUDIT_HMAC_KEY_NAME;
-        if (!secretVault.systemKeyExists(keyName)) {
-            byte[] hmacKeyBytes = new byte[32];
-            // Instantiate SecureRandom locally — NOT as a static field.
-            // GraalVM native image marks java.security.SecureRandom for run-time
-            // initialization. A static field would pin the instance into the image
-            // heap at build time, causing:
-            //   UnsupportedFeatureException: An object of type 'java.security.SecureRandom'
-            //   was found in the image heap.
-            new SecureRandom().nextBytes(hmacKeyBytes);
-            try {
-                secretVault.storeSystemKey(keyName, hmacKeyBytes);
-                log.infof("DevSecretSeeder: seeded %s (ephemeral, dev/test only)", keyName);
-            } catch (Exception e) {
-                log.errorf("DevSecretSeeder: failed to seed %s: %s", keyName, LogUtil.rootMessage(e));
-            } finally {
-                Arrays.fill(hmacKeyBytes, (byte) 0);
+        try {
+            if (!secretVault.systemKeyExists(keyName)) {
+                byte[] hmacKeyBytes = new byte[32];
+                // Instantiate SecureRandom locally — NOT as a static field.
+                // GraalVM native image marks java.security.SecureRandom for run-time
+                // initialization. A static field would pin the instance into the image
+                // heap at build time, causing:
+                //   UnsupportedFeatureException: An object of type 'java.security.SecureRandom'
+                //   was found in the image heap.
+                new SecureRandom().nextBytes(hmacKeyBytes);
+                try {
+                    secretVault.storeSystemKey(keyName, hmacKeyBytes);
+                    log.infof("DevSecretSeeder: seeded %s (ephemeral, dev/test only)", keyName);
+                } catch (Exception e) {
+                    log.errorf("DevSecretSeeder: failed to seed %s: %s", keyName, LogUtil.rootMessage(e));
+                } finally {
+                    Arrays.fill(hmacKeyBytes, (byte) 0);
+                }
             }
+        } catch (Exception e) {
+            // Table may not exist yet during startup (e.g., before Flyway migration completes)
+            log.debugf(
+                    "DevSecretSeeder: could not check/store %s (table may not exist yet): %s",
+                    keyName, LogUtil.rootMessage(e));
         }
     }
 

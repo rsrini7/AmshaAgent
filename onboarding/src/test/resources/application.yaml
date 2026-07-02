@@ -71,7 +71,10 @@ quarkus:
       initial-size: 1
       acquisition-timeout: 10s
   flyway:
+    enabled: true
     migrate-at-start: true
+    clean-at-start: true
+    baseline-on-migrate: true
     locations: classpath:db/migration/sqlite
   log:
     level: INFO

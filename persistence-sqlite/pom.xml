@@ -176,7 +176,15 @@
                     <systemPropertyVariables>
                         <java.util.logging.manager>org.jboss.logmanager.LogManager</java.util.logging.manager>
                         <maven.home>${maven.home}</maven.home>
+                        <amsha.persistence.backend>sqlite</amsha.persistence.backend>
+                        <quarkus.flyway.enabled>true</quarkus.flyway.enabled>
+                        <quarkus.flyway.migrate-at-start>true</quarkus.flyway.migrate-at-start>
                     </systemPropertyVariables>
+                    <environmentVariables>
+                        <AMSHA_PERSISTENCE_BACKEND>sqlite</AMSHA_PERSISTENCE_BACKEND>
+                        <QUARKUS_FLYWAY_ENABLED>true</QUARKUS_FLYWAY_ENABLED>
+                        <QUARKUS_FLYWAY_MIGRATE_AT_START>true</QUARKUS_FLYWAY_MIGRATE_AT_START>
+                    </environmentVariables>
                     <!-- Force sequential execution to prevent SQLite file locking and cleanup race conditions -->
                     <parallel>none</parallel>
                     <threadCount>1</threadCount>

@@ -11,6 +11,7 @@ import org.flywaydb.core.api.callback.Event;
 import org.flywaydb.core.api.configuration.FluentConfiguration;
 import org.jboss.logging.Logger;
 
+import io.quarkus.arc.Unremovable;
 import io.quarkus.flyway.FlywayConfigurationCustomizer;
 
 /**
@@ -20,6 +21,7 @@ import io.quarkus.flyway.FlywayConfigurationCustomizer;
  * Dropping the parent virtual table cascades removal of all shadow tables.
  */
 @ApplicationScoped
+@Unremovable
 public class FtsCleanCallback implements FlywayConfigurationCustomizer {
 
     private static final Logger log = Logger.getLogger(FtsCleanCallback.class);

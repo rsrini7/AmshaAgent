@@ -1,6 +1,6 @@
 # Memory Tiered Architecture & Self-Evolution — Phased Implementation Plan
 
-> **Status:** v3.1-implemented — Phases 0-11 ✅ complete
+> **Status:** v3.1-implemented — Phases 0-12 ✅ complete
 > **Backlog Ref:** `Ideas-Pending/BACKLOG.md` Item #8
 > **Date:** 2026-07-02
 
@@ -1540,7 +1540,7 @@ self-evolve/
 | 9 | ✅ Rule-based extraction works, no LLM, DB-enforced dedup |
 | 10 | ✅ Directive synthesis offline, **shadow lifecycle**, high-confidence only, SQLite + Postgres backends, admin API |
 | 11 | ✅ Backend parity achieved (SQLite + Postgres + FS), degraded modes documented |
-| 12 | Observability complete, old tools deprecated |
+| 12 | ✅ Observability complete, old tools deprecated, admin APIs, retention jobs |
 
 ### 18.2 Cross-Phase Verification Commands
 
@@ -1647,11 +1647,11 @@ This section summarizes the five architecture decisions added in v2.1 and their 
 
 ---
 
-**Document Version:** 2.12-implemented
-**Previous Version:** 2.11-implemented
-**Key Changes:** Phase 11 complete: FsDirectiveStore for filesystem backend, all 3 backends (SQLite + Postgres + FS) now have complete directive store implementations
-**Next Step:** Phase 12 — Hardening & Cleanup (observability, retention jobs, deprecation)
-**Review Status:** Phases 0-11 complete, all backend parity achieved, directive synthesis fully operational across all backends, all tests passing
+**Document Version:** 2.13-complete
+**Previous Version:** 2.12-implemented
+**Key Changes:** Phase 12 complete: Admin APIs (recall, archival, core, directives), Micrometer observability metrics (latency, hit rates, confidence distribution), retention/eviction scheduled jobs, memory-specific metrics, AGENTS.md documentation
+**Next Step:** All phases complete — production ready
+**Review Status:** Phases 0-12 complete, all backend parity achieved, directive synthesis fully operational across all backends, observability complete, retention jobs active, all tests passing
 
 ---
 
@@ -1675,6 +1675,7 @@ This section summarizes the five architecture decisions added in v2.1 and their 
 | **Phase 9** | ✅ COMPLETE | 2026-07-02 | 15 new files, 5 modified | `MemoryExtractorLite` rule engine, `ExtractedMemory`/`MemoryRecordType` DTOs, `ExtractionDeduplicator`, `SimpleMemoryRetriever`, all 3 backend stores (SQLite + Postgres + FS), V2 Flyway migrations, 37 new tests (73 total) |
 | **Phase 10** | ✅ COMPLETE | 2026-07-02 | 12 new files, 4 modified | `InteractionPolicySynthesizer`, `ShadowLifecycleManager`, `SelfEvolveReflectTool`, `DirectiveProvider` interface, `DirectiveBundle`/`SynthesizedDirective`/`DirectiveState` DTOs, SQLite + Postgres stores + V3 migrations, `AdminDirectiveResource`, `NoOpDirectiveProvider`, prompt injection in `ChatHistoryAssembler`, 18 new tests (123 total) |
 | **Phase 11** | ✅ COMPLETE | 2026-07-02 | 1 new file | `FsDirectiveStore` filesystem backend, all 3 backends (SQLite + Postgres + FS) complete for directive store |
+| **Phase 12** | ✅ COMPLETE | 2026-07-02 | 10 new files, 4 modified | Admin APIs (recall, archival, core, directives), Micrometer observability metrics (9 metrics), retention/eviction scheduled jobs, `MemoryMetricsObserver`, `MemoryRetentionScheduler`, AGENTS.md documentation, 10 test classes |
 
 ### A.2 Post-Phase-7 Cleanup (2026-05-28)
 
@@ -1816,7 +1817,7 @@ Skipped:  1
 | No integration test for DAO layer | Mocked tool tests verify behavior | Add `RecallMemoryJdbiDaoIntegrationTest` (SQLite in-memory) |
 | `MemorySearchTool` not yet routed to new tools | `@Deprecated` annotation, description updated | Phase 12: Full removal or tier-aware routing |
 | Cross-session search not gated by config | Allowed via magic strings `"all"`, `"*"` | Phase 4: Add `cross-session-search` config flag |
-| `purgeExpired` not implemented | Debug log stub in place | Phase 12: Retention/eviction jobs |
+| `purgeExpired` not implemented | Debug log stub in place | ✅ Phase 12: Implemented via `MemoryRetentionScheduler` |
 
 ### A.9 Phase 3 Tactical Fixes (Post-Review)
 

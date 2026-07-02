@@ -44,7 +44,9 @@ quarkus:
       url: jdbc:postgresql://localhost:5432/test
 
   flyway:
+    enabled: true
     migrate-at-start: true
+    clean-at-start: ${AMSHA_FLYWAY_CLEAN_AT_START:false}
     locations: classpath:db/migration/postgresql
 
   opentelemetry:

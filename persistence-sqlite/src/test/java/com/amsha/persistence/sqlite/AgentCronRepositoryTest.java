@@ -12,12 +12,15 @@ import java.util.UUID;
 
 import com.amsha.persistence.api.AgentCronDto;
 import com.amsha.persistence.api.CronStorePort;
+import com.amsha.persistence.sqlite.testutil.FlywayEnabledTestProfile;
 
 import org.junit.jupiter.api.Test;
 
 import io.quarkus.test.junit.QuarkusTest;
+import io.quarkus.test.junit.TestProfile;
 
 @QuarkusTest
+@TestProfile(FlywayEnabledTestProfile.class)
 class AgentCronRepositoryTest {
 
     @Inject

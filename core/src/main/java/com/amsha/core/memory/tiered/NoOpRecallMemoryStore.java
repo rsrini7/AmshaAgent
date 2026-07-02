@@ -36,4 +36,9 @@ final class NoOpRecallMemoryStore implements RecallMemoryStorePort {
     public void purgeExpired(String userId, int retentionDays) {
         // no-op when disabled
     }
+
+    @Override
+    public void purgeExpiredAll(int retentionDays) {
+        // no-op when disabled
+    }
 }

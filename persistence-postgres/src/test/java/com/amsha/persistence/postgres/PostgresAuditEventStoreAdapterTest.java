@@ -11,13 +11,16 @@ import java.util.UUID;
 
 import com.amsha.persistence.api.AuditEventDto;
 import com.amsha.persistence.api.AuditEventStorePort;
+import com.amsha.persistence.postgres.testutil.FlywayEnabledTestProfile;
 
 import org.junit.jupiter.api.Test;
 
 import io.quarkus.test.common.QuarkusTestResource;
 import io.quarkus.test.junit.QuarkusTest;
+import io.quarkus.test.junit.TestProfile;
 
 @QuarkusTest
+@TestProfile(FlywayEnabledTestProfile.class)
 @QuarkusTestResource(PostgresTestResource.class)
 class PostgresAuditEventStoreAdapterTest {
 
