@@ -258,7 +258,7 @@ When method A calls method B, and B already handles feature X, **do not** also h
   - Either `amsha-persistence-fs` (Filesystem — `@IfBuildProperty("fs")`) OR the store lives in the `self-evolve` module with `persistence-fs` wrappers
   - Flyway V<n> migrations must exist in both `persistence-sqlite` and `persistence-postgres` (FS has no migrations).
   - **Verification**: `grep -rn '@IfBuildProperty.*sqlite\|@IfBuildProperty.*postgres\|@IfBuildProperty.*fs' --include='*Store*.java'` should return matches for all 3 backends per port.
-  - **Known failure**: Phase 8/9 self-evolve stores were built for SQLite+Postgres but the FS backend was missed entirely (P104). This rule prevents recurrence.
+  - **Known failures**: P104 (self-evolve FS missed), P104b (tiered memory FS missed), P104c (`%filesystem` profile missing `amsha.memory.tiered.backend`). This rule prevents recurrence.
 * **Module CDI discovery**: Every non-app, non-deployment Maven module with CDI beans MUST include:
   1. `jandex-maven-plugin` in `<build><plugins>` section
   2. `src/main/resources/META-INF/beans.xml` with `bean-discovery-mode="annotated"`

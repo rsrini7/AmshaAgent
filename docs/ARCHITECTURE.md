@@ -18,7 +18,7 @@
 | `amsha-persistence-common` | Shared JDBI records/DTOs |
 | `amsha-persistence-sqlite` | SQLite adapter (WAL + FTS5 + vec0) |
 | `amsha-persistence-postgres` | PostgreSQL adapter |
-| `amsha-persistence-fs` | Filesystem-based adapter (Lucene BM25) |
+| `amsha-persistence-fs` | Filesystem-based adapter (Lucene BM25) + tiered memory (Core/Recall/Archival) + self-evolve (Events/Extracted) |
 | `amsha-rag` | Two-tier vector (vec0) + FTS5 RAG memory |
 | `amsha-mcp` | MCP server bridge + dynamic client tool loading |
 | `amsha-onboarding` | 5-step setup wizard REST API + /complete |

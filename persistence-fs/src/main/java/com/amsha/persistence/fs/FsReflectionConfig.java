@@ -20,7 +20,10 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             FsLockManager.class,
             FilesystemFileStore.class,
             FsEvolutionEventStore.class,
-            FsExtractedMemoryStore.class
+            FsExtractedMemoryStore.class,
+            FsCoreMemoryStore.class,
+            FsRecallMemoryStore.class,
+            FsArchivalMemoryStore.class
         },
         classNames = {
             "org.apache.lucene.search.BoostAttribute",

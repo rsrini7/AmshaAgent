@@ -900,11 +900,25 @@ created/updated simultaneously:
 Flyway V<n> migrations must exist in both `persistence-sqlite` and `persistence-postgres`
 (FS has no migrations).
 
-**Verification**: grep for `@IfBuildProperty` across all `*Store*.java` files — each port
-should have matches for all 3 backends.
+**Affected ports** (all MUST have 3 backend implementations):
 
-**Known failure**: Phase 8/9 self-evolve stores were built for SQLite + PostgreSQL but the
-FS backend was missed entirely (P104). This rule prevents recurrence.
+| Port | SQLite | PostgreSQL | Filesystem |
+|---|---|---|---|
+| `CoreMemoryStorePort` | `SqliteCoreMemoryStore` | — | `FsCoreMemoryStore` |
+| `RecallMemoryStorePort` | `SqliteRecallMemoryStore` | `PostgresRecallMemoryStore` | `FsRecallMemoryStore` |
+| `ArchivalMemoryStorePort` | `SqliteArchivalMemoryStore` | `PostgresArchivalMemoryStore` | `FsArchivalMemoryStore` |
+| `EvolutionEventStorePort` | `SqliteEvolutionEventStore` | `PostgresEvolutionEventStore` | `FsEvolutionEventStore` |
+| `ExtractedMemoryStorePort` | `SqliteExtractedMemoryStore` | `PostgresExtractedMemoryStore` | `FsExtractedMemoryStore` |
+
+**Verification**: grep for `@IfBuildProperty` and `@TieredBackend` across all `*Store*.java` files —
+each port should have matches for all 3 backends.
+
+**Known failures**:
+- P104: Phase 8/9 self-evolve stores were built for SQLite + PostgreSQL but the FS backend was missed entirely.
+- P104b: Tiered memory stores (`CoreMemoryStorePort`, `RecallMemoryStorePort`, `ArchivalMemoryStorePort`) had no `@TieredBackend("fs")` implementations — runtime error `No @TieredBackend("fs") RecallMemoryStorePort implementation found`.
+- P104c: `%filesystem` profile in `application.yaml` was missing `amsha.memory.tiered.backend: fs` — caused tiered memory to default to SQLite while FS backend was active.
+
+This rule prevents recurrence of all three patterns.
 
 ---
 

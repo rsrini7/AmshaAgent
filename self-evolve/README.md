@@ -26,9 +26,21 @@ Flush Trigger (Session End / Threshold / Idle Timeout)
        │
        ▼
 EvolutionEventStorePort (Hexagonal Store Port)
-       ├─► SqliteEvolutionEventStore (SQLite backend, JDBI)
-       └─► PostgresEvolutionEventStore (PostgreSQL backend, JDBI)
+       ├─► SqliteEvolutionEventStore  (SQLite, JDBI)           — @IfBuildProperty("sqlite")
+       ├─► PostgresEvolutionEventStore (PostgreSQL, JDBI)       — @IfBuildProperty("postgres")
+       └─► FsEvolutionEventStore       (Filesystem, JSON files) — @IfBuildProperty("fs")
 ```
+
+**Phase 9 (Rule-Based Extraction) stores:**
+
+```
+ExtractedMemoryStorePort (Hexagonal Store Port)
+       ├─► SqliteExtractedMemoryStore  (SQLite, JDBI)           — @IfBuildProperty("sqlite")
+       ├─► PostgresExtractedMemoryStore (PostgreSQL, JDBI)       — @IfBuildProperty("postgres")
+       └─► FsExtractedMemoryStore       (Filesystem, JSON files) — @IfBuildProperty("fs")
+```
+
+**All 3 backends MUST be updated when adding/modifying stores** (see `docs/Architecture_Invariants.md` §5.26).
 
 ---
 
@@ -71,8 +83,9 @@ Traces are stored in the `evolution_events` table (defined in Flyway migrations 
 ## 4. GraalVM Native Image Support
 
 CDI beans and JDBI DAO proxies are explicitly registered for reflection in [SelfEvolveReflectionConfig.java](./src/main/java/com/amsha/selfevolve/runtime/SelfEvolveReflectionConfig.java):
-*   `EvolutionEvent`
-*   `EvolutionEventType`
-*   `FlushReason`
-*   `EvolutionEventJdbiDao`
-*   `PostgresEvolutionEventJdbiDao`
+*   `EvolutionEvent`, `EvolutionEventType`, `FlushReason`
+*   `ExtractedMemory`, `MemoryRecordType`
+*   `EvolutionEventJdbiDao` (SQLite), `PostgresEvolutionEventJdbiDao` (PostgreSQL)
+*   `ExtractedMemoryJdbiDao` (SQLite), `PostgresExtractedMemoryJdbiDao` (PostgreSQL)
+
+FS backend stores (`FsEvolutionEventStore`, `FsExtractedMemoryStore`) are registered in `persistence-fs/.../FsReflectionConfig.java`.
