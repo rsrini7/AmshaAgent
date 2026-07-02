@@ -920,6 +920,9 @@ mp:
   amsha:
     persistence:
       backend: postgres
+    memory:
+      tiered:
+        backend: postgres
   quarkus:
     datasource:
       db-kind: postgresql
@@ -955,6 +958,9 @@ mp:
   amsha:
     persistence:
       backend: fs
+    memory:
+      tiered:
+        backend: fs
   quarkus:
     datasource:
       enabled: false
