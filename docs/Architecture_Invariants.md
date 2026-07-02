@@ -1383,6 +1383,21 @@ Without Jandex, `@ApplicationScoped` beans in library modules are **silently inv
 to the Quarkus CDI container - no error, no warning, just missing beans.
 This applies to every `amsha-channel-*` module added in P67 and beyond.
 
+### 15.1 Verification requirement
+- Compilation success + unit test pass in isolation is NOT proof of CDI discovery.
+- After adding a new module's dependency to `amsha-app`, verify CDI bean initialization by
+  grepping the startup log for bean-specific log messages (e.g., `[SelfEvolve] Enabled`).
+- A `@Startup @ApplicationScoped` bean that never logs at startup means the module is
+  invisible to the Quarkus CDI container.
+
+### 15.2 Known failure pattern: P104 self-evolve module
+The `amsha-self-evolve` module was created with all CDI annotations (`@Startup`,
+`@ApplicationScoped`, `@ObservesAsync`) but was **silently ignored** at runtime because
+both `beans.xml` and `jandex-maven-plugin` were missing. The module compiled, all 36
+unit tests passed in isolation, and the dependency was declared in `amsha-app/pom.xml`,
+yet zero beans were instantiated. The only symptom was the absence of expected log lines.
+Always verify with a runtime startup log check when adding CDI beans from a new module.
+
 ---
 
 ## 16. New Module Creation
@@ -1405,6 +1420,9 @@ This applies to every `amsha-channel-*` module added in P67 and beyond.
 ### 16.3 CDI Discovery (Jandex)
 - Refer to §15. Every module MUST have `jandex-maven-plugin` and `beans.xml`.
 - Without Jandex, internal beans will be **silently ignored** when the module is consumed.
+- Compilation and unit test pass in isolation is NOT sufficient proof. After wiring the
+  module into `amsha-app`, verify CDI discovery by grepping startup logs for bean-init
+  messages (e.g., `[SelfEvolve] Enabled`). See §15.1-15.2 for the full protocol.
 
 ### 16.4 Session Management (§16.4 INVARIANT)
 - Amsha Agent primarily uses RESTEasy Reactive (`quarkus-rest`).

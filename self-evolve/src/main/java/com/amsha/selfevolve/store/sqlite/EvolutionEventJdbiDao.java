@@ -5,15 +5,14 @@ import java.util.List;
 import com.amsha.selfevolve.api.EvolutionEvent;
 
 import org.jdbi.v3.sqlobject.customizer.Bind;
-import org.jdbi.v3.sqlobject.customizer.BindBean;
-import org.jdbi.v3.sqlobject.locator.UseClasspathSqlLocator;
+import org.jdbi.v3.sqlobject.customizer.BindMethods;
 import org.jdbi.v3.sqlobject.statement.SqlBatch;
 import org.jdbi.v3.sqlobject.statement.SqlQuery;
+import org.jdbi.v3.sqlobject.statement.SqlUpdate;
 
 /**
  * JDBI SQL Object for evolution_events table (SQLite).
  */
-@UseClasspathSqlLocator
 public interface EvolutionEventJdbiDao {
 
     @SqlBatch("""
@@ -21,7 +20,7 @@ public interface EvolutionEventJdbiDao {
             (event_id, session_id, user_id, event_type, role, content, tool_name, turn_number, metadata_json, created_at)
             VALUES (:eventId, :sessionId, :userId, :eventType, :role, :content, :toolName, :turnNumber, :metadataJson, :createdAt)
             """)
-    int[] insertBatch(@BindBean List<EvolutionEvent> events);
+    int[] insertBatch(@BindMethods List<EvolutionEvent> events);
 
     @SqlQuery("""
             SELECT event_id, session_id, user_id, event_type, role, content, tool_name, turn_number, metadata_json, created_at
@@ -41,7 +40,7 @@ public interface EvolutionEventJdbiDao {
             """)
     List<EvolutionEvent> getByUser(@Bind("userId") String userId, @Bind("limit") int limit);
 
-    @SqlQuery("""
+    @SqlUpdate("""
             DELETE FROM evolution_events
             WHERE created_at < datetime('now', '-' || :retentionDays || ' days')
             """)

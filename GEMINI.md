@@ -13,6 +13,7 @@ In Windows, do not use `dir /s /b` or `grep` (which are prone to failure).
 
 ## 3. Project Architectural Invariants & Patterns
 Refer to [AGENTS.md](./AGENTS.md) for full developer instructions, including:
+* Module CDI discovery: every module with CDI beans MUST have `jandex-maven-plugin` + `beans.xml`. Compilation ≠ proof. Verify startup logs. (§4, `docs/Architecture_Invariants.md` §15).
 * The Transaction-Free Zone (no high-latency network/LLM calls inside DB transactions).
 * Exception Classification Chain of Responsibility.
 * Inbound Message Pipeline abstractions.

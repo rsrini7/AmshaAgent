@@ -16,6 +16,7 @@
 * **Import alignment**: `python3 ./fix_fqns.py && ./mvnw spotless:apply -q`
 * **Doc verification**: `python3 ./verify_docs.py` after editing `.md` files.
 * **SonarQube**: `mise run sonar:issues` before committing. Fix BLOCKERs.
+* **Module CDI discovery**: `jandex-maven-plugin` + `beans.xml` REQUIRED. Grep startup logs for bean init. §4, `docs/Architecture_Invariants.md` §15.
 
 ## ReplyNode Pattern
 `ReplyNode` is a sealed union of `ContentNode` and `InteractionNode`. Always use `switch` with pattern matching:

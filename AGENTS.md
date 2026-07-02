@@ -252,6 +252,11 @@ When method A calls method B, and B already handles feature X, **do not** also h
 * **PMD gates**: 500 lines/file, 80 lines/method, cognitive complexity ≤ 50 (transitioning to 15). PMD runs during `verify` phase. SonarQube (`mise run sonar:issues`) is primary gate.
 * **Version management**: All third-party dependency versions in parent `pom.xml` `<dependencyManagement>` via `<property>`. Module `pom.xml` entries **MUST NOT** have hardcoded `<version>`. Exceptions: plugin versions (managed separately), internal deps use `${project.version}`, BOM imports use their own property.
 * **PostgreSQL conflict**: Native PG on `:5432` intercepts Podman container's PG. Detect: `lsof -i :5432`. Fix: stop/uninstall native PG service (see OS-specific commands in `docs/MANUAL_SETUP.md`).
+* **Module CDI discovery**: Every non-app, non-deployment Maven module with CDI beans MUST include:
+  1. `jandex-maven-plugin` in `<build><plugins>` section
+  2. `src/main/resources/META-INF/beans.xml` with `bean-discovery-mode="annotated"`
+  
+  Without these, `@ApplicationScoped` beans are **silently invisible** — no error, no warning, just missing beans. Compilation + unit test pass in isolation is NOT sufficient proof. After wiring into `amsha-app`, verify by grepping startup logs for bean-init messages (e.g., `[SelfEvolve] Enabled`). See `docs/Architecture_Invariants.md` §15 for the full protocol and the P104 self-evolve failure pattern.
 
 ---
 

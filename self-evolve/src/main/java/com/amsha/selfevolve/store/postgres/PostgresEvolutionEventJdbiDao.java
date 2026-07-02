@@ -5,7 +5,7 @@ import java.util.List;
 import com.amsha.selfevolve.api.EvolutionEvent;
 
 import org.jdbi.v3.sqlobject.customizer.Bind;
-import org.jdbi.v3.sqlobject.customizer.BindBean;
+import org.jdbi.v3.sqlobject.customizer.BindMethods;
 import org.jdbi.v3.sqlobject.statement.SqlBatch;
 import org.jdbi.v3.sqlobject.statement.SqlQuery;
 import org.jdbi.v3.sqlobject.statement.SqlUpdate;
@@ -21,7 +21,7 @@ public interface PostgresEvolutionEventJdbiDao {
             VALUES (:eventId, :sessionId, :userId, :eventType, :role, :content, :toolName, :turnNumber, :metadataJson, :createdAt)
             ON CONFLICT (event_id) DO NOTHING
             """)
-    int[] insertBatch(@BindBean List<EvolutionEvent> events);
+    int[] insertBatch(@BindMethods List<EvolutionEvent> events);
 
     @SqlQuery("""
             SELECT event_id, session_id, user_id, event_type, role, content, tool_name, turn_number, metadata_json, created_at
