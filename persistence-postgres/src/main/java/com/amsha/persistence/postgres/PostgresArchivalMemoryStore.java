@@ -74,8 +74,20 @@ public class PostgresArchivalMemoryStore implements ArchivalMemoryStorePort {
 
     @Override
     public void evictLowConfidence(double threshold, int minAgeDays) {
-        log.debugf(
-                "evictLowConfidence not yet implemented (threshold=%.2f, minAgeDays=%d) — Phase 12 deliverable",
-                threshold, minAgeDays);
+        jdbi.useExtension(ArchivalMemoryJdbiDao.class, dao -> dao.evictLowConfidence(threshold, minAgeDays));
+    }
+
+    /**
+     * Returns the total number of archival chunks for a given user.
+     */
+    public long countByUserId(String userId) {
+        return jdbi.withExtension(ArchivalMemoryJdbiDao.class, dao -> dao.countByUserId(userId));
+    }
+
+    /**
+     * Lists archival chunks for a given user with pagination.
+     */
+    public List<ArchivalChunkDto> listByUserId(String userId, int limit, int offset) {
+        return jdbi.withExtension(ArchivalMemoryJdbiDao.class, dao -> dao.listByUserId(userId, limit, offset));
     }
 }

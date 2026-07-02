@@ -8,7 +8,7 @@
   ![Native Image Ready](https://img.shields.io/badge/Native_Image-Ready-orange.svg?style=flat&logo=graalvm)
   ![OpenTelemetry](https://img.shields.io/badge/OpenTelemetry-Tracing-blueviolet.svg?style=flat&logo=opentelemetry)
   ![Podman](https://img.shields.io/badge/Isolation-Rootless_Podman-purple.svg?style=flat&logo=podman)
-  ![Tests](https://img.shields.io/badge/Tests-2633_passing-brightgreen.svg?style=flat)
+  ![Tests](https://img.shields.io/badge/Tests-2853_passing-brightgreen.svg?style=flat)
   [![Built with Devbox](https://img.shields.io/badge/built_with-devbox-green.svg?style=flat)](https://www.jetify.com/devbox/)
   [![Built with mise](https://img.shields.io/badge/built_with-mise-blue.svg?style=flat)](https://jdx.dev)
 </div>
@@ -75,7 +75,7 @@ See [docs/QUICK_START.md](./docs/QUICK_START.md) for detailed setup options.
 | `persistence-*/` | Hexagonal persistence: API ports + SQLite / PostgreSQL / FS adapters |
 | `channel-*/` | Channel adapters: Telegram, WebSocket |
 | `ui/` | Lit 3.x + TypeScript web frontend |
-| `mcp/`, `rag/`, `tool-playwright/` | Optional runtime modules |
+| `mcp/`, `rag/`, `tool-playwright/`, `self-evolve/` | Optional runtime and self-evolution modules |
 
 ---
 
@@ -123,6 +123,7 @@ rag/                  ← Two-tier vector (vec0) + FTS5 RAG memory
 mcp/                  ← MCP server bridge + dynamic client tool loading
 onboarding/           ← 6-step setup wizard REST API
 tool-playwright/      ← Playwright browser automation tool
+self-evolve/          ← Trace capture and self-evolution learning loop
 deployment/           ← Build-time: custom CDI scope, MCP reflection
 │
 ui/                   ← Lit 3.x + TypeScript web frontend

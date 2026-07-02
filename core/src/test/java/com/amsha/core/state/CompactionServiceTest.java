@@ -11,6 +11,8 @@ import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.response.ChatResponse;
 
+import jakarta.enterprise.event.Event;
+
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
@@ -19,6 +21,7 @@ import java.util.Optional;
 
 import com.amsha.core.audit.AuditService;
 import com.amsha.core.config.TieredMemoryConfig;
+import com.amsha.core.events.CompactionEvent;
 import com.amsha.core.governance.RateLimitTracker;
 import com.amsha.core.governance.SessionBudgetTracker;
 import com.amsha.core.memory.tiered.RecallMemoryService;
@@ -42,6 +45,9 @@ class CompactionServiceTest {
     TieredMemoryConfig mockTieredConfig;
     RecallMemoryService mockRecallService;
 
+    @SuppressWarnings("unchecked")
+    Event<CompactionEvent> mockCompactionEvent;
+
     @BeforeEach
     void setup() {
         service = new CompactionService();
@@ -51,6 +57,7 @@ class CompactionServiceTest {
         mockModel = mock(ChatModel.class);
         mockTieredConfig = mock(TieredMemoryConfig.class);
         mockRecallService = mock(RecallMemoryService.class);
+        mockCompactionEvent = mock(Event.class);
 
         when(mockTieredConfig.enabled()).thenReturn(false);
 
@@ -65,6 +72,7 @@ class CompactionServiceTest {
         service.objectMapper = new ObjectMapper();
         service.tieredConfig = mockTieredConfig;
         service.recallService = mockRecallService;
+        service.compactionEvent = mockCompactionEvent;
 
         service.enabled = true;
         service.threshold = 10;

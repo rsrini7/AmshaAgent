@@ -21,4 +21,6 @@ public interface RecallMemoryStorePort {
     Optional<RecallMessageDto> getById(String messageId);
 
     void purgeExpired(String userId, int retentionDays);
+
+    void purgeExpiredAll(int retentionDays);
 }

@@ -172,6 +172,7 @@ public class AgentStateMachineRunner {
             log.errorf(
                     "StateMachine: terminal retry failed for session %s; falling back to standard loop.",
                     context.sessionId());
+            context.setForceFinishRetry(false);
             return run(context, engine, history);
         } finally {
             context.setForceFinishRetry(false);

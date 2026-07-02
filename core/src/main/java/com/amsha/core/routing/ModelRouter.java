@@ -70,6 +70,9 @@ public class ModelRouter {
      */
     public ChatModel resolve(String agentRole) {
         var configs = resolveConfigs(agentRole);
+        if (configs.isEmpty()) {
+            return getOrCreateModel(globalProvider, globalModel.orElse(""));
+        }
         return buildModelFromConfigs(configs);
     }
 

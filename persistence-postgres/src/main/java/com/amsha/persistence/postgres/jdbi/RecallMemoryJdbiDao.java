@@ -1,6 +1,7 @@
 package com.amsha.persistence.postgres.jdbi;
 
 import java.util.List;
+import java.util.Optional;
 
 import com.amsha.persistence.api.RecallMessageDto;
 
@@ -63,4 +64,32 @@ public interface RecallMemoryJdbiDao {
             @Bind("query") String query,
             @Bind("includeSummaries") boolean includeSummaries,
             @Bind("limit") int limit);
+
+    @SqlQuery("""
+        SELECT message_id AS "messageId", session_id AS "sessionId", user_id AS "userId",
+               turn_number AS "turnNumber", content_hash AS "contentHash", role,
+               message_type AS "messageType", content, tool_name AS "toolName",
+               tool_call_id AS "toolCallId", has_code AS "hasCode", has_error AS "hasError",
+               created_at AS "createdAt", metadata_json AS "metadataJson"
+        FROM recall_messages WHERE message_id = :messageId
+        """)
+    Optional<RecallMessageDto> getById(@Bind("messageId") String messageId);
+
+    @SqlUpdate("""
+        DELETE FROM recall_messages
+        WHERE user_id = :userId
+          AND created_at < NOW() - INTERVAL '1 day' * :retentionDays
+        """)
+    int purgeExpired(@Bind("userId") String userId, @Bind("retentionDays") int retentionDays);
+
+    @SqlUpdate("""
+        DELETE FROM recall_messages
+        WHERE created_at < NOW() - INTERVAL '1 day' * :retentionDays
+        """)
+    int purgeExpiredAll(@Bind("retentionDays") int retentionDays);
+
+    @SqlQuery("""
+        SELECT COUNT(*) FROM recall_messages WHERE user_id = :userId
+        """)
+    long countByUserId(@Bind("userId") String userId);
 }

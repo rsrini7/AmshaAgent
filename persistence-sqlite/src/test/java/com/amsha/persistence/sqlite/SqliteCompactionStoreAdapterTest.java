@@ -12,12 +12,15 @@ import java.util.List;
 import java.util.Optional;
 
 import com.amsha.persistence.api.CompactionSummaryDto;
+import com.amsha.persistence.sqlite.testutil.FlywayEnabledTestProfile;
 
 import org.junit.jupiter.api.Test;
 
 import io.quarkus.test.junit.QuarkusTest;
+import io.quarkus.test.junit.TestProfile;
 
 @QuarkusTest
+@TestProfile(FlywayEnabledTestProfile.class)
 class SqliteCompactionStoreAdapterTest {
 
     @Inject

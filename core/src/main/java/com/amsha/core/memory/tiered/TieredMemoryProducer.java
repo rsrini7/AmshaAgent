@@ -1,6 +1,7 @@
 package com.amsha.core.memory.tiered;
 
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.inject.Any;
 import jakarta.enterprise.inject.Instance;
 import jakarta.enterprise.inject.Produces;
 import jakarta.inject.Inject;
@@ -32,12 +33,15 @@ public class TieredMemoryProducer {
     TieredMemoryConfig config;
 
     @Inject
+    @Any
     Instance<CoreMemoryStorePort> coreStores;
 
     @Inject
+    @Any
     Instance<RecallMemoryStorePort> recallStores;
 
     @Inject
+    @Any
     Instance<ArchivalMemoryStorePort> archivalStores;
 
     @Produces

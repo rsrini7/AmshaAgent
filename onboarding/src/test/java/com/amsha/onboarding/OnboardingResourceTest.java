@@ -14,16 +14,19 @@ import com.amsha.onboarding.dto.Step2Request;
 import com.amsha.onboarding.dto.Step3Request;
 import com.amsha.onboarding.dto.Step4Request;
 import com.amsha.onboarding.dto.Step5Request;
+import com.amsha.onboarding.testutil.FlywayEnabledTestProfile;
 
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
+import io.quarkus.test.junit.TestProfile;
 import io.restassured.http.ContentType;
 import io.restassured.response.Response;
 
 @QuarkusTest
+@TestProfile(FlywayEnabledTestProfile.class)
 class OnboardingResourceTest {
 
     @InjectMock

@@ -446,6 +446,11 @@ amsha:
     governance:
       core-writes-per-minute: ${AMSHA_MEMORY_GOVERNANCE_CORE_WRITES_PER_MINUTE:5}
       archival-writes-per-hour: ${AMSHA_MEMORY_GOVERNANCE_ARCHIVAL_WRITES_PER_HOUR:10}
+    retention:
+      enabled: ${AMSHA_MEMORY_RETENTION_ENABLED:true}
+      recall-retention-days: ${AMSHA_MEMORY_RETENTION_RECALL_RETENTION_DAYS:30}
+      archival-eviction-threshold: ${AMSHA_MEMORY_RETENTION_ARCHIVAL_EVICTION_THRESHOLD:0.3}
+      archival-min-age-days: ${AMSHA_MEMORY_RETENTION_ARCHIVAL_MIN_AGE_DAYS:30}
   chat:
     default-observation-max-length: 2000
     tool-specific-limits:
@@ -920,6 +925,9 @@ mp:
   amsha:
     persistence:
       backend: postgres
+    memory:
+      tiered:
+        backend: postgres
   quarkus:
     datasource:
       db-kind: postgresql
@@ -955,6 +963,9 @@ mp:
   amsha:
     persistence:
       backend: fs
+    memory:
+      tiered:
+        backend: fs
   quarkus:
     datasource:
       enabled: false

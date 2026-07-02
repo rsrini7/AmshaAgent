@@ -27,6 +27,7 @@
     <module>channel-web</module>
     <module>channel-telegram</module>
     <module>tool-playwright</module>
+    <module>self-evolve</module>
     <module>deployment</module>
     <module>ui</module>
     <module>app</module>
@@ -110,6 +111,11 @@
       <dependency>
         <groupId>com.amsha</groupId>
         <artifactId>amsha-core</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.amsha</groupId>
+        <artifactId>amsha-self-evolve</artifactId>
         <version>${project.version}</version>
       </dependency>
       <dependency>

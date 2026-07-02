@@ -887,6 +887,41 @@ status alongside `FAILED`, `COMPLETED`, `ARCHIVED`, and `COMPROMISED`.
 
 ---
 
+## 5.26 Backend Parity for All Store Ports (§5.26 INVARIANT)
+
+When adding or modifying any `*StorePort` interface, ALL 3 backend implementations MUST be
+created/updated simultaneously:
+
+- `amsha-persistence-sqlite` (SQLite — default, `@IfBuildProperty(enableIfMissing = true)`)
+- `amsha-persistence-postgres` (PostgreSQL — `@IfBuildProperty("postgres")`)
+- Either `amsha-persistence-fs` (Filesystem — `@IfBuildProperty("fs")`) OR the store lives
+  in the `self-evolve` module with `persistence-fs` wrappers
+
+Flyway V<n> migrations must exist in both `persistence-sqlite` and `persistence-postgres`
+(FS has no migrations).
+
+**Affected ports** (all MUST have 3 backend implementations):
+
+| Port | SQLite | PostgreSQL | Filesystem |
+|---|---|---|---|
+| `CoreMemoryStorePort` | `SqliteCoreMemoryStore` | — | `FsCoreMemoryStore` |
+| `RecallMemoryStorePort` | `SqliteRecallMemoryStore` | `PostgresRecallMemoryStore` | `FsRecallMemoryStore` |
+| `ArchivalMemoryStorePort` | `SqliteArchivalMemoryStore` | `PostgresArchivalMemoryStore` | `FsArchivalMemoryStore` |
+| `EvolutionEventStorePort` | `SqliteEvolutionEventStore` | `PostgresEvolutionEventStore` | `FsEvolutionEventStore` |
+| `ExtractedMemoryStorePort` | `SqliteExtractedMemoryStore` | `PostgresExtractedMemoryStore` | `FsExtractedMemoryStore` |
+
+**Verification**: grep for `@IfBuildProperty` and `@TieredBackend` across all `*Store*.java` files —
+each port should have matches for all 3 backends.
+
+**Known failures**:
+- P104: Phase 8/9 self-evolve stores were built for SQLite + PostgreSQL but the FS backend was missed entirely.
+- P104b: Tiered memory stores (`CoreMemoryStorePort`, `RecallMemoryStorePort`, `ArchivalMemoryStorePort`) had no `@TieredBackend("fs")` implementations — runtime error `No @TieredBackend("fs") RecallMemoryStorePort implementation found`.
+- P104c: `%filesystem` profile in `application.yaml` was missing `amsha.memory.tiered.backend: fs` — caused tiered memory to default to SQLite while FS backend was active.
+
+This rule prevents recurrence of all three patterns.
+
+---
+
 ## 6. Native image and reflection rules
 
 ### 6.1 Reflection safety
@@ -1383,6 +1418,21 @@ Without Jandex, `@ApplicationScoped` beans in library modules are **silently inv
 to the Quarkus CDI container - no error, no warning, just missing beans.
 This applies to every `amsha-channel-*` module added in P67 and beyond.
 
+### 15.1 Verification requirement
+- Compilation success + unit test pass in isolation is NOT proof of CDI discovery.
+- After adding a new module's dependency to `amsha-app`, verify CDI bean initialization by
+  grepping the startup log for bean-specific log messages (e.g., `[SelfEvolve] Enabled`).
+- A `@Startup @ApplicationScoped` bean that never logs at startup means the module is
+  invisible to the Quarkus CDI container.
+
+### 15.2 Known failure pattern: P104 self-evolve module
+The `amsha-self-evolve` module was created with all CDI annotations (`@Startup`,
+`@ApplicationScoped`, `@ObservesAsync`) but was **silently ignored** at runtime because
+both `beans.xml` and `jandex-maven-plugin` were missing. The module compiled, all 36
+unit tests passed in isolation, and the dependency was declared in `amsha-app/pom.xml`,
+yet zero beans were instantiated. The only symptom was the absence of expected log lines.
+Always verify with a runtime startup log check when adding CDI beans from a new module.
+
 ---
 
 ## 16. New Module Creation
@@ -1405,6 +1455,9 @@ This applies to every `amsha-channel-*` module added in P67 and beyond.
 ### 16.3 CDI Discovery (Jandex)
 - Refer to §15. Every module MUST have `jandex-maven-plugin` and `beans.xml`.
 - Without Jandex, internal beans will be **silently ignored** when the module is consumed.
+- Compilation and unit test pass in isolation is NOT sufficient proof. After wiring the
+  module into `amsha-app`, verify CDI discovery by grepping startup logs for bean-init
+  messages (e.g., `[SelfEvolve] Enabled`). See §15.1-15.2 for the full protocol.
 
 ### 16.4 Session Management (§16.4 INVARIANT)
 - Amsha Agent primarily uses RESTEasy Reactive (`quarkus-rest`).

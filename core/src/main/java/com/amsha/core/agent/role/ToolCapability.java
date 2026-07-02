@@ -99,7 +99,15 @@ public enum ToolCapability {
     WEB_FETCH(
             "web_fetch",
             ToolCategory.NETWORK,
-            "Fetch a URL and return its content as plain text (lightweight HTTP GET).");
+            "Fetch a URL and return its content as plain text (lightweight HTTP GET)."),
+
+    SELF_EVOLVE_REFLECT(
+            "self_evolve_reflect",
+            ToolCategory.INTERNAL,
+            "Trigger self-evolution directive synthesis. Analyzes extracted memory patterns and synthesizes "
+                    + "behavioral directives to improve future agent behavior. "
+                    + "New directives start in SHADOW mode for safe evaluation. "
+                    + "Use when explicitly asked to reflect, learn, or improve behavior.");
 
     private final String toolName;
     private final ToolCategory category;

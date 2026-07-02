@@ -229,6 +229,8 @@ schema) and must match the model used by every active provider.
 
 | Variable | Default | Description |
 |---|---|---|
+| `AMSHA_PERSISTENCE_BACKEND` | *(unset)* | **Build-time** persistence backend: sqlite (default), postgres, fs. Controls `@IfBuildProperty`. Rebuild after changing. |
+| `QUARKUS_FLYWAY_ENABLED` | `true` | **Build-time**. Set to `false` when `AMSHA_PERSISTENCE_BACKEND=fs` (disables SQL migrations and Jdbi-dependent beans). |
 | `AMSHA_MEMORY_TIERED_BACKEND` | `sqlite` | Tiered memory backend: sqlite, postgres, fs |
 | `AMSHA_MEMORY_TIERED_ENABLED` | `false` | Enable tiered memory system |
 | `AMSHA_MEMORY_RECALL_ENABLED` | `false` | Enable recall memory (conversation search) |

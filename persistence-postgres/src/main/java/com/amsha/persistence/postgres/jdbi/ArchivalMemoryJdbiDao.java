@@ -78,4 +78,29 @@ public interface ArchivalMemoryJdbiDao {
 
     @SqlUpdate("DELETE FROM archival_chunks WHERE chunk_id = :chunkId")
     void delete(@Bind("chunkId") String chunkId);
+
+    @SqlUpdate("""
+        DELETE FROM archival_chunks
+        WHERE confidence < :threshold
+          AND created_at < NOW() - INTERVAL '1 day' * :minAgeDays
+        """)
+    int evictLowConfidence(@Bind("threshold") double threshold, @Bind("minAgeDays") int minAgeDays);
+
+    @SqlQuery("""
+        SELECT COUNT(*) FROM archival_chunks WHERE user_id = :userId
+        """)
+    long countByUserId(@Bind("userId") String userId);
+
+    @SqlQuery("""
+        SELECT chunk_id AS "chunkId", user_id AS "userId", content, chunk_type AS "chunkType",
+               source_session AS "sourceSession", source_message AS "sourceMessage",
+               tags, confidence, access_count AS "accessCount",
+               created_at AS "createdAt", updated_at AS "updatedAt"
+        FROM archival_chunks
+        WHERE user_id = :userId
+        ORDER BY created_at DESC
+        LIMIT :limit OFFSET :offset
+        """)
+    List<ArchivalChunkDto> listByUserId(
+            @Bind("userId") String userId, @Bind("limit") int limit, @Bind("offset") int offset);
 }

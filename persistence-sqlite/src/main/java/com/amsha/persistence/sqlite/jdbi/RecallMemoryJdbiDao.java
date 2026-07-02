@@ -76,4 +76,22 @@ public interface RecallMemoryJdbiDao {
         WHERE m.message_id = :messageId
         """)
     Optional<RecallMessageDto> getById(@Bind("messageId") String messageId);
+
+    @SqlUpdate("""
+        DELETE FROM recall_messages
+        WHERE user_id = :userId
+          AND created_at < datetime('now', '-' || :retentionDays || ' days')
+        """)
+    int purgeExpired(@Bind("userId") String userId, @Bind("retentionDays") int retentionDays);
+
+    @SqlUpdate("""
+        DELETE FROM recall_messages
+        WHERE created_at < datetime('now', '-' || :retentionDays || ' days')
+        """)
+    int purgeExpiredAll(@Bind("retentionDays") int retentionDays);
+
+    @SqlQuery("""
+        SELECT COUNT(*) FROM recall_messages WHERE user_id = :userId
+        """)
+    long countByUserId(@Bind("userId") String userId);
 }

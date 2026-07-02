@@ -10,13 +10,16 @@ import java.util.Optional;
 
 import com.amsha.persistence.api.AgentCronDto;
 import com.amsha.persistence.api.CronStorePort;
+import com.amsha.persistence.postgres.testutil.FlywayEnabledTestProfile;
 
 import org.junit.jupiter.api.Test;
 
 import io.quarkus.test.common.QuarkusTestResource;
 import io.quarkus.test.junit.QuarkusTest;
+import io.quarkus.test.junit.TestProfile;
 
 @QuarkusTest
+@TestProfile(FlywayEnabledTestProfile.class)
 @QuarkusTestResource(PostgresTestResource.class)
 @SuppressWarnings("java:S1192")
 class PostgresCronStoreAdapterTest {

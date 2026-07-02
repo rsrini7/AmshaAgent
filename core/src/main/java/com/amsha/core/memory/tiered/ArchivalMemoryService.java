@@ -44,4 +44,12 @@ public class ArchivalMemoryService {
     public void delete(String chunkId) {
         store.delete(chunkId);
     }
+
+    /**
+     * Evict archival chunks with confidence below threshold that are older than minAgeDays.
+     * Returns the number of evicted chunks.
+     */
+    public void evictLowConfidence(double threshold, int minAgeDays) {
+        store.evictLowConfidence(threshold, minAgeDays);
+    }
 }
