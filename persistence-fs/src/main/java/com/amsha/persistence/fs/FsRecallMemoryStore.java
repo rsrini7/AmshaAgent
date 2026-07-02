@@ -3,6 +3,7 @@ package com.amsha.persistence.fs;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -128,12 +129,53 @@ public class FsRecallMemoryStore implements RecallMemoryStorePort {
 
     @Override
     public void purgeExpired(String userId, int retentionDays) {
-        // No-op: recall messages are ephemeral per-session
+        if (userId == null) return;
+        Instant cutoff = Instant.now().minusSeconds(retentionDays * 86400L);
+        for (String filename : store.list(List.of(DOMAIN), ".json")) {
+            List<RecallMessageDto> messages = loadMessagesFromFile(filename);
+            if (messages.isEmpty()) continue;
+            List<RecallMessageDto> kept = new ArrayList<>();
+            boolean modified = false;
+            for (RecallMessageDto m : messages) {
+                if (userId.equals(m.userId()) && m.createdAt().isBefore(cutoff)) {
+                    modified = true;
+                } else {
+                    kept.add(m);
+                }
+            }
+            if (modified) {
+                if (kept.isEmpty()) {
+                    store.delete(List.of(DOMAIN, filename));
+                } else {
+                    store.write(List.of(DOMAIN, filename), new MessageList(kept));
+                }
+            }
+        }
     }
 
     @Override
     public void purgeExpiredAll(int retentionDays) {
-        // No-op: recall messages are ephemeral per-session
+        Instant cutoff = Instant.now().minusSeconds(retentionDays * 86400L);
+        for (String filename : store.list(List.of(DOMAIN), ".json")) {
+            List<RecallMessageDto> messages = loadMessagesFromFile(filename);
+            if (messages.isEmpty()) continue;
+            List<RecallMessageDto> kept = new ArrayList<>();
+            boolean modified = false;
+            for (RecallMessageDto m : messages) {
+                if (m.createdAt().isBefore(cutoff)) {
+                    modified = true;
+                } else {
+                    kept.add(m);
+                }
+            }
+            if (modified) {
+                if (kept.isEmpty()) {
+                    store.delete(List.of(DOMAIN, filename));
+                } else {
+                    store.write(List.of(DOMAIN, filename), new MessageList(kept));
+                }
+            }
+        }
     }
 
     private boolean matchesQuery(RecallMessageDto m, RecallSearchQuery query, String lowerQuery) {

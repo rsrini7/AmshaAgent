@@ -1290,11 +1290,11 @@ DistributionSummary archivalResultConfidence = DistributionSummary.builder("memo
 
 ### 15.5 Exit Criteria
 
-- [ ] Feature set stable and observable
-- [ ] Old `MemorySearchTool` fully deprecated
-- [ ] Compaction summaries no longer canonical memory
-- [ ] Disabled tiers cleanly fall back to pre-Phase 0 behavior
-- [ ] Documentation complete (AGENTS.md updated)
+- [x] Feature set stable and observable
+- [x] Old `MemorySearchTool` fully deprecated
+- [x] Compaction summaries no longer canonical memory
+- [x] Disabled tiers cleanly fall back to pre-Phase 0 behavior
+- [x] Documentation complete (AGENTS.md updated)
 
 ---
 
