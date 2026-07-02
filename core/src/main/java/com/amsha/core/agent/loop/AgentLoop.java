@@ -331,6 +331,13 @@ public class AgentLoop {
                 ? context.getUser().platformId()
                 : WorkspaceContext.channelPlatformId();
 
+        int startingIteration = 0;
+        if (decision instanceof CheckpointResumeCoordinator.ResumeDecision.ResumedHistory r) {
+            if (intentClassificationService.isContinuityCommand(goal)) {
+                startingIteration = r.iterationsUsed();
+            }
+        }
+
         return new AgentExecutionContext(
                 sessionId,
                 capturedUserId,
@@ -340,9 +347,7 @@ public class AgentLoop {
                 autonomy,
                 mode,
                 maxIterations,
-                decision instanceof CheckpointResumeCoordinator.ResumeDecision.ResumedHistory r
-                        ? r.iterationsUsed()
-                        : 0,
+                startingIteration,
                 channelTypeStr,
                 channelPlatformId,
                 systemNote,

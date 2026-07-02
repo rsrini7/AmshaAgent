@@ -91,6 +91,8 @@ BACKGROUND_CRON_APPROVAL_PATTERNS = [
     "A background task is waiting for your approval",
     "Background CRON",
     "approve 1 or approve",
+    "Approval Required for background task",
+    "Type /approve or /deny to respond."
 ]
 INJECTION_BLOCKED_PATTERNS = [
     "adversarial instruction prompt injection detected",
@@ -132,7 +134,7 @@ _CAT_RULES: list[tuple[list[str], PromptCategory]] = [
     (["delegate to","delegat"], PromptCategory.DELEGATION),
     (["/status","status","/history","history","/reset","reset","/halt","halt",
       "/commands","commands","/reflex","reflex","capabilities",
-      "priorities","full capablities","vishnu"], PromptCategory.COMMAND),
+      "priorities","full capablities","vishnu","/start","start"], PromptCategory.COMMAND),
     (["vault "], PromptCategory.VAULT),
     (["search for","real time search","real search","current news","LTS version",
       "japanese","\u6a5f\u68b0\u5b66\u4e60","\u65e5\u672c\u8a9e","b\u062dth","Amsha Agent*","architecture notes",
@@ -396,11 +398,11 @@ class ApprovalHandler:
 
     def _extract_numbered_approvals(self, text: str) -> list[str]:
         approvals = []
-        for m in re.finditer(r"approve (\d+)", text):
-            approvals.append(f"approve {m.group(1)}")
+        for m in re.finditer(r"approve ([0-9a-f-]{36})", text):
+            approvals.append(f"/approve {m.group(1)}")
         if not approvals:
-            for m in re.finditer(r"approve ([0-9a-f-]{36})", text):
-                approvals.append(f"approve {m.group(1)}")
+            for m in re.finditer(r"approve (\d+)", text):
+                approvals.append(f"/approve {m.group(1)}")
         return approvals
 
     def handle_pending(self) -> int:
@@ -426,7 +428,7 @@ class ApprovalHandler:
                     self._send(cmd); count += 1; time.sleep(0.5)
                 self._buf.drain(1.0)
             else:
-                self._send("approve 1"); count += 1
+                self._send("/approve 1"); count += 1
             self._buf.reset(); self._buf.drain(2.0)
             return count
 
@@ -513,59 +515,47 @@ def run_prompt(proc, buf: OutputBuffer, approver: ApprovalHandler,
         outcome, reason = evaluate(tc.assertion, response, tc.category)
         return TestResult(tc.line_no, tc.prompt, outcome, response, reason, elapsed)
 
-    if not tc.assertion.expect_approval:
-        found, _ = buf.wait_for([PROMPT_READY], timeout=actual_timeout)
-        elapsed = time.monotonic() - start
-        if not found:
-            return TestResult(tc.line_no, tc.prompt, Outcome.TIMEOUT,
-                              buf.snapshot(), "Timed out waiting for You>", elapsed)
-        response = buf.snapshot()
-        outcome, reason = evaluate(tc.assertion, response, tc.category)
-
-        # FIX #3: log-based correction on FAIL (uses fingerprint for precise matching)
-        if outcome == Outcome.FAIL and cli_log_path:
-            log_response = verify_response_from_log(cli_log_path, tc.prompt, fp)
-            if log_response:
-                alt_outcome, alt_reason = evaluate(tc.assertion, log_response, tc.category)
-                if alt_outcome == Outcome.PASS:
-                    _log(f" [LOG-CORRECTED] #{tc.line_no} FAIL→PASS via log", log_f)
-                    return TestResult(tc.line_no, tc.prompt, Outcome.PASS,
-                                      log_response, f"log-corrected: {alt_reason}", elapsed)
-
-        return TestResult(tc.line_no, tc.prompt, outcome, response, reason, elapsed)
-
     all_patterns = (APPROVAL_NEEDED_PATTERNS + AMBIGUOUS_APPROVAL_PATTERNS +
                     BACKGROUND_CRON_APPROVAL_PATTERNS + [PROMPT_READY])
-    found, matched = buf.wait_for(all_patterns, timeout=actual_timeout)
 
-    if not found:
-        elapsed = time.monotonic() - start
-        return TestResult(tc.line_no, tc.prompt, Outcome.TIMEOUT,
-                          buf.snapshot(), "No approval gate or prompt within timeout", elapsed)
+    approval_handled = False
+    while True:
+        found, matched = buf.wait_for(all_patterns, timeout=actual_timeout)
+        if not found:
+            elapsed = time.monotonic() - start
+            return TestResult(tc.line_no, tc.prompt, Outcome.TIMEOUT,
+                              buf.snapshot(), "Timed out waiting for prompt completion or approval", elapsed)
 
-    if matched == PROMPT_READY:
-        response = buf.snapshot()
-        outcome, reason = evaluate(tc.assertion, response, tc.category)
-        return TestResult(tc.line_no, tc.prompt, outcome, response, reason,
-                          time.monotonic() - start)
+        if matched == PROMPT_READY:
+            break
 
-    approver.handle_pending()
-    buf.reset()
+        approver.handle_pending()
+        approval_handled = True
+        buf.reset()
+        buf.drain(1.0)
 
-    found2, _ = buf.wait_for([PROMPT_READY], timeout=actual_timeout)
     elapsed = time.monotonic() - start
-    if not found2:
-        response = buf.snapshot()
-        if len(response) > 50:
-            outcome, reason = evaluate(tc.assertion, response, tc.category)
-            return TestResult(tc.line_no, tc.prompt, outcome, response, reason, elapsed)
-        return TestResult(tc.line_no, tc.prompt, Outcome.TIMEOUT,
-                          response, "Post-approval timeout", elapsed)
-
     response = buf.snapshot()
+
+    if tc.assertion.expect_approval and not approval_handled:
+        return TestResult(tc.line_no, tc.prompt, Outcome.FAIL,
+                          response, "Expected approval but none occurred", elapsed)
+
     outcome, reason = evaluate(tc.assertion, response, tc.category)
-    return TestResult(tc.line_no, tc.prompt, outcome, response, reason,
-                      time.monotonic() - start)
+
+    # FIX #3: log-based correction on FAIL (uses fingerprint for precise matching)
+    if outcome == Outcome.FAIL and cli_log_path:
+        log_response = verify_response_from_log(cli_log_path, tc.prompt, fp)
+        if log_response:
+            alt_outcome, alt_reason = evaluate(tc.assertion, log_response, tc.category)
+            if alt_outcome == Outcome.PASS:
+                _log(f" [LOG-CORRECTED] #{tc.line_no} FAIL→PASS via log", log_f)
+                return TestResult(tc.line_no, tc.prompt, Outcome.PASS,
+                                  log_response, f"log-corrected: {alt_reason}", elapsed)
+
+    return TestResult(tc.line_no, tc.prompt, outcome, response, reason, elapsed)
+
+
 
 # ─── Reporter ──────────────────────────────────────────────────────────────────
 def print_summary(results: list[TestResult], log_f):

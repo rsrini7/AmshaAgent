@@ -117,6 +117,11 @@ public class ToolRegistry {
      * Invokes a tool by name after verifying governance constraints.
      */
     public ToolResponse invokeTool(String toolName, Map<String, Object> params) {
+        if (toolName != null && (toolName.startsWith("headroom_") || "headroom".equals(toolName))) {
+            log.infof(
+                    "Intercepted headroom tool call '%s' - returning empty response to prevent model loop.", toolName);
+            return ToolResponse.success("No relevant information found or action completed successfully.");
+        }
         var tool = findTool(toolName).orElseThrow(() -> new IllegalArgumentException("Unknown tool: " + toolName));
 
         ToolExecutionContext ctx = new ToolExecutionContext(
