@@ -3,6 +3,8 @@ package com.amsha.selfevolve.runtime;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.inject.Any;
+import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
 import java.util.List;
@@ -19,8 +21,11 @@ import com.amsha.selfevolve.api.FlushReason;
 import com.amsha.selfevolve.buffer.ConversationBuffer;
 import com.amsha.selfevolve.buffer.InMemoryConversationBuffer;
 import com.amsha.selfevolve.store.EvolutionEventStorePort;
+import com.amsha.selfevolve.store.noop.NoOpEvolutionEventStore;
 
 import org.jboss.logging.Logger;
+
+import io.quarkus.runtime.Startup;
 
 /**
  * Default implementation of self-evolution trace capture service.
@@ -28,6 +33,7 @@ import org.jboss.logging.Logger;
  * <p>
  * When {@code amsha.self-evolve.enabled=false}, all operations are no-ops.
  */
+@Startup
 @ApplicationScoped
 public class DefaultSelfEvolveService {
 
@@ -37,8 +43,10 @@ public class DefaultSelfEvolveService {
     SelfEvolveConfig config;
 
     @Inject
-    EvolutionEventStorePort store;
+    @Any
+    Instance<EvolutionEventStorePort> storeInstances;
 
+    private EvolutionEventStorePort store;
     private FlushTriggerPolicy flushPolicy;
     private final Map<String, ConversationBuffer> buffers = new ConcurrentHashMap<>();
     private final Map<String, Long> lastEventTimestamps = new ConcurrentHashMap<>();
@@ -47,9 +55,12 @@ public class DefaultSelfEvolveService {
     @PostConstruct
     void init() {
         if (!config.enabled()) {
+            store = new NoOpEvolutionEventStore();
             log.info("[SelfEvolve] Disabled — all operations are no-ops");
             return;
         }
+        // Resolve the real store from CDI (e.g. SqliteEvolutionEventStore)
+        store = resolveStore();
         flushPolicy = new FlushTriggerPolicy(
                 config.flush().maxEvents(), config.flush().idleMs());
         idleTimer = Executors.newSingleThreadScheduledExecutor(
@@ -59,6 +70,18 @@ public class DefaultSelfEvolveService {
         log.infof(
                 "[SelfEvolve] Enabled — buffer=%d, idle=%dms, store=%s",
                 config.bufferSize(), config.flush().idleMs(), store.getClass().getSimpleName());
+    }
+
+    private EvolutionEventStorePort resolveStore() {
+        for (EvolutionEventStorePort candidate : storeInstances) {
+            if (!(candidate instanceof NoOpEvolutionEventStore)) {
+                log.infof(
+                        "[SelfEvolve] Resolved store: %s", candidate.getClass().getSimpleName());
+                return candidate;
+            }
+        }
+        log.warn("[SelfEvolve] No real store found — falling back to NoOp");
+        return new NoOpEvolutionEventStore();
     }
 
     @PreDestroy

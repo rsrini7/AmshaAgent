@@ -10,6 +10,9 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import jakarta.enterprise.inject.Instance;
+
+import java.util.Iterator;
 import java.util.List;
 
 import com.amsha.core.config.SelfEvolveConfig;
@@ -23,6 +26,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
@@ -37,17 +41,27 @@ class DefaultSelfEvolveServiceTest {
     @Mock
     EvolutionEventStorePort store;
 
+    @Mock
+    Instance<EvolutionEventStorePort> storeInstances;
+
     @InjectMocks
     DefaultSelfEvolveService service;
 
     @BeforeEach
+    @SuppressWarnings("unchecked")
     void setup() {
         lenient().when(config.flush()).thenReturn(flushConfig);
+        // Mock Instance iteration to return our mock store
+        Iterator<EvolutionEventStorePort> it = (Iterator<EvolutionEventStorePort>) Mockito.mock(Iterator.class);
+        lenient().when(it.hasNext()).thenReturn(true, false);
+        lenient().when(it.next()).thenReturn(store);
+        lenient().when(storeInstances.iterator()).thenReturn(it);
     }
 
     @Test
     void emit_disabled_doesNothing() {
         when(config.enabled()).thenReturn(false);
+        service.init();
         boolean flushed = service.emit("s1", "u1", EvolutionEventType.USER_MESSAGE, "coordinator", "hi", null, 1);
         assertFalse(flushed);
         verify(store, never()).insertBatch(any());
