@@ -18,7 +18,9 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             FsPersistenceAdapter.class,
             FsPromptStoreAdapter.class,
             FsLockManager.class,
-            FilesystemFileStore.class
+            FilesystemFileStore.class,
+            FsEvolutionEventStore.class,
+            FsExtractedMemoryStore.class
         },
         classNames = {
             "org.apache.lucene.search.BoostAttribute",

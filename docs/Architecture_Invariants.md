@@ -887,6 +887,27 @@ status alongside `FAILED`, `COMPLETED`, `ARCHIVED`, and `COMPROMISED`.
 
 ---
 
+## 5.26 Backend Parity for All Store Ports (§5.26 INVARIANT)
+
+When adding or modifying any `*StorePort` interface, ALL 3 backend implementations MUST be
+created/updated simultaneously:
+
+- `amsha-persistence-sqlite` (SQLite — default, `@IfBuildProperty(enableIfMissing = true)`)
+- `amsha-persistence-postgres` (PostgreSQL — `@IfBuildProperty("postgres")`)
+- Either `amsha-persistence-fs` (Filesystem — `@IfBuildProperty("fs")`) OR the store lives
+  in the `self-evolve` module with `persistence-fs` wrappers
+
+Flyway V<n> migrations must exist in both `persistence-sqlite` and `persistence-postgres`
+(FS has no migrations).
+
+**Verification**: grep for `@IfBuildProperty` across all `*Store*.java` files — each port
+should have matches for all 3 backends.
+
+**Known failure**: Phase 8/9 self-evolve stores were built for SQLite + PostgreSQL but the
+FS backend was missed entirely (P104). This rule prevents recurrence.
+
+---
+
 ## 6. Native image and reflection rules
 
 ### 6.1 Reflection safety

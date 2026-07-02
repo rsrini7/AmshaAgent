@@ -973,7 +973,7 @@ public enum EvolutionEventType {
 
 ## 12. Phase 9: Rule-Based Extraction ✅ COMPLETE
 
-> **Status:** ✅ COMPLETE — 13 new files, 37 new tests (73 total in self-evolve module), rule engine, SIMPLE retrieval, DB-enforced deduplication.
+> **Status:** ✅ COMPLETE — 15 new files, 37 new tests (73 total in self-evolve module), rule engine, SIMPLE retrieval, DB-enforced deduplication. All 3 backends (SQLite, Postgres, Filesystem) supported.
 
 **Goal:** Structured records from traces — safe, deterministic, no LLM synthesis.
 
@@ -1671,7 +1671,7 @@ This section summarizes the five architecture decisions added in v2.1 and their 
 | **Phase 6** | ✅ COMPLETE | 2026-05-26 | 2 new files, 4 modified | `archival_memory_search` tool, `ArchivalContextCache`, hybrid BM25+vector activation, `[RELEVANT KNOWLEDGE]` prompt injection |
 | **Phase 7** | ✅ COMPLETE | 2026-05-26 | 5 new files, 4 modified | 4 write tools, `MemoryWriteGovernance`, CAS atomic append, approval gating, `MEMORY_WRITE_MUTATED` audit |
 | **Phase 8** | ✅ COMPLETE | 2026-07-01 | 14 new files, 3 modified | `amsha-self-evolve` module, `EvolutionEvent`, `ConversationBuffer`, `DefaultSelfEvolveService`, `FlushTriggerPolicy`, CDI event integration, SQLite/Postgres migrations, 28 tests |
-| **Phase 9** | ✅ COMPLETE | 2026-07-02 | 13 new files, 3 modified | `MemoryExtractorLite` rule engine, `ExtractedMemory`/`MemoryRecordType` DTOs, `ExtractionDeduplicator`, `SimpleMemoryRetriever`, `SqliteExtractedMemoryStore` + Postgres, V2 Flyway migrations, 37 new tests (73 total) |
+| **Phase 9** | ✅ COMPLETE | 2026-07-02 | 15 new files, 5 modified | `MemoryExtractorLite` rule engine, `ExtractedMemory`/`MemoryRecordType` DTOs, `ExtractionDeduplicator`, `SimpleMemoryRetriever`, all 3 backend stores (SQLite + Postgres + FS), V2 Flyway migrations, 37 new tests (73 total) |
 
 ### A.2 Post-Phase-7 Cleanup (2026-05-28)
 

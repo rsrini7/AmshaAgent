@@ -29,6 +29,13 @@
             <version>${project.version}</version>
         </dependency>
 
+        <!-- Self-Evolve (port interfaces for evolution events + extracted memories) -->
+        <dependency>
+            <groupId>com.amsha</groupId>
+            <artifactId>amsha-self-evolve</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
         <!-- Quarkus CDI -->
         <dependency>
             <groupId>io.quarkus</groupId>

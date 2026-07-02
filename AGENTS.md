@@ -252,6 +252,13 @@ When method A calls method B, and B already handles feature X, **do not** also h
 * **PMD gates**: 500 lines/file, 80 lines/method, cognitive complexity ≤ 50 (transitioning to 15). PMD runs during `verify` phase. SonarQube (`mise run sonar:issues`) is primary gate.
 * **Version management**: All third-party dependency versions in parent `pom.xml` `<dependencyManagement>` via `<property>`. Module `pom.xml` entries **MUST NOT** have hardcoded `<version>`. Exceptions: plugin versions (managed separately), internal deps use `${project.version}`, BOM imports use their own property.
 * **PostgreSQL conflict**: Native PG on `:5432` intercepts Podman container's PG. Detect: `lsof -i :5432`. Fix: stop/uninstall native PG service (see OS-specific commands in `docs/MANUAL_SETUP.md`).
+* **Backend parity for all stores**: When adding or modifying any `*StorePort` interface, ALL 3 backend implementations MUST be created/updated simultaneously:
+  - `amsha-persistence-sqlite` (SQLite — default, `@IfBuildProperty(enableIfMissing = true)`)
+  - `amsha-persistence-postgres` (PostgreSQL — `@IfBuildProperty("postgres")`)
+  - Either `amsha-persistence-fs` (Filesystem — `@IfBuildProperty("fs")`) OR the store lives in the `self-evolve` module with `persistence-fs` wrappers
+  - Flyway V<n> migrations must exist in both `persistence-sqlite` and `persistence-postgres` (FS has no migrations).
+  - **Verification**: `grep -rn '@IfBuildProperty.*sqlite\|@IfBuildProperty.*postgres\|@IfBuildProperty.*fs' --include='*Store*.java'` should return matches for all 3 backends per port.
+  - **Known failure**: Phase 8/9 self-evolve stores were built for SQLite+Postgres but the FS backend was missed entirely (P104). This rule prevents recurrence.
 * **Module CDI discovery**: Every non-app, non-deployment Maven module with CDI beans MUST include:
   1. `jandex-maven-plugin` in `<build><plugins>` section
   2. `src/main/resources/META-INF/beans.xml` with `bean-discovery-mode="annotated"`
