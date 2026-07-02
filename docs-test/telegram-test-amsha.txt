@@ -6,17 +6,21 @@ Hey i am Srini and love to Study a lot and teach kids.. who are you ?
 
 schedule to write python program Factorial of 10 and execute then share the result after 1 min
 
-do real time search on getting spring boot and quarkus LTS version
-
 delegate to shiva: ask ganesha to analyze this recursive algorithm for logical flaws
 
 /crons
 
-Write a Java method that reverses a string using streams.
+do real time search on getting spring boot and quarkus LTS version
+
+trigger self evolve reflect to synthesize behavioral directives
+
+show me the current directive status
 
 remember A. remember B. remember C. remember D. remember E. remember F.
 
 /status
+
+Write a Java method that reverses a string using streams.
 
 schedule to get top 5 gist from github user rsrini7 after 1 min
 

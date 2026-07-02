@@ -19,6 +19,7 @@ import com.amsha.core.config.SelfEvolveConfig;
 import com.amsha.selfevolve.api.EvolutionEvent;
 import com.amsha.selfevolve.api.EvolutionEventType;
 import com.amsha.selfevolve.extract.MemoryExtractorLite;
+import com.amsha.selfevolve.store.DirectiveStorePort;
 import com.amsha.selfevolve.store.EvolutionEventStorePort;
 import com.amsha.selfevolve.store.ExtractedMemoryStorePort;
 
@@ -50,6 +51,9 @@ class DefaultSelfEvolveServiceTest {
     Instance<ExtractedMemoryStorePort> extractedStoreInstances;
 
     @Mock
+    Instance<DirectiveStorePort> directiveStoreInstances;
+
+    @Mock
     Instance<MemoryExtractorLite> extractorInstance;
 
     @InjectMocks
@@ -71,6 +75,12 @@ class DefaultSelfEvolveServiceTest {
                 (Iterator<ExtractedMemoryStorePort>) Mockito.mock(Iterator.class);
         lenient().when(extractedIt.hasNext()).thenReturn(false);
         lenient().when(extractedStoreInstances.iterator()).thenReturn(extractedIt);
+
+        // Mock directive store instances
+        @SuppressWarnings("unchecked")
+        Iterator<DirectiveStorePort> directiveIt = (Iterator<DirectiveStorePort>) Mockito.mock(Iterator.class);
+        lenient().when(directiveIt.hasNext()).thenReturn(false);
+        lenient().when(directiveStoreInstances.iterator()).thenReturn(directiveIt);
     }
 
     @Test

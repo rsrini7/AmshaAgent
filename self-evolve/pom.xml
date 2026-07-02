@@ -46,6 +46,12 @@
       <artifactId>jboss-logging</artifactId>
     </dependency>
 
+    <!-- LangChain4j for LLM-based directive synthesis -->
+    <dependency>
+      <groupId>io.quarkiverse.langchain4j</groupId>
+      <artifactId>quarkus-langchain4j-core</artifactId>
+    </dependency>
+
     <!-- Testing -->
     <dependency>
       <groupId>io.quarkus</groupId>

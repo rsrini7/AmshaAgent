@@ -124,6 +124,10 @@ public class GroupConsultationService {
      * Checks if a role is a group lead.
      */
     public boolean isGroupLead(String roleId) {
+        if (groupRegistry == null) {
+            log.warnf("[GroupConsultation] groupRegistry is null — isGroupLead returning false for %s", roleId);
+            return false;
+        }
         return groupRegistry.findByLead(roleId).isPresent();
     }
 
@@ -131,6 +135,10 @@ public class GroupConsultationService {
      * Gets the group for a given role, if any.
      */
     public Optional<AgentGroup> getGroup(String roleId) {
+        if (groupRegistry == null) {
+            log.warnf("[GroupConsultation] groupRegistry is null — getGroup returning empty for %s", roleId);
+            return Optional.empty();
+        }
         return groupRegistry.findByMember(roleId);
     }
 

@@ -10,6 +10,7 @@ import dev.langchain4j.store.memory.chat.ChatMemoryStore;
 
 import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
 import java.util.ArrayList;
@@ -24,6 +25,7 @@ import com.amsha.core.agent.AgentSentinels;
 import com.amsha.core.config.TieredMemoryConfig;
 import com.amsha.core.memory.tiered.CoreMemoryPromptRenderer;
 import com.amsha.core.memory.tiered.CoreMemoryService;
+import com.amsha.core.memory.tiered.DirectiveProvider;
 import com.amsha.core.memory.tiered.PromptBudgetManager;
 import com.amsha.core.scope.WorkspaceContext;
 import com.amsha.persistence.api.CoreMemoryBlockDto;
@@ -66,6 +68,9 @@ public class ChatHistoryAssembler {
 
     @Inject
     ArchivalContextCache archivalContextCache;
+
+    @Inject
+    Instance<DirectiveProvider> directiveProviderInstance;
 
     @ConfigProperty(name = "amsha.chat.default-observation-max-length", defaultValue = "4000")
     int defaultObservationMaxLength;
@@ -165,11 +170,45 @@ public class ChatHistoryAssembler {
             messages.add(SystemMessage.systemMessage(block));
         }
 
+        // 4. [BEHAVIORAL DIRECTIVES] — Phase 10: Self-Evolve directive injection
+        injectDirectives(messages, sessionId);
+
         appendChatHistory(messages, sessionId);
         appendReActHistory(messages, history);
         handleGoalAndHints(messages, goal);
 
         return messages;
+    }
+
+    private void injectDirectives(List<ChatMessage> messages, String sessionId) {
+        if (directiveProviderInstance == null || directiveProviderInstance.isUnsatisfied()) {
+            return;
+        }
+        String userId = WorkspaceContext.getUserIdOrUnknown();
+        try {
+            DirectiveProvider provider = directiveProviderInstance.get();
+            // Active directives (authoritative)
+            List<String> active = provider.getInjectableDirectives(userId);
+            if (!active.isEmpty()) {
+                StringBuilder sb = new StringBuilder("[BEHAVIORAL DIRECTIVES]\n");
+                for (String d : active) {
+                    sb.append("- ").append(d).append("\n");
+                }
+                messages.add(SystemMessage.systemMessage(sb.toString()));
+            }
+            // Shadow directives (evaluation)
+            List<String> shadow = provider.getShadowDirectives(userId);
+            if (!shadow.isEmpty()) {
+                StringBuilder sb = new StringBuilder("[BEHAVIORAL DIRECTIVES - EVALUATION]\n");
+                for (String d : shadow) {
+                    sb.append("- [EVAL] ").append(d).append("\n");
+                }
+                messages.add(SystemMessage.systemMessage(sb.toString()));
+            }
+        } catch (Exception e) {
+            // Directive injection is non-critical — log and continue
+            log.debugf("[ChatHistoryAssembler] Directive injection skipped: %s", e.getMessage());
+        }
     }
 
     private void appendChatHistory(List<ChatMessage> messages, String sessionId) {

@@ -23,8 +23,10 @@ import com.amsha.selfevolve.api.FlushReason;
 import com.amsha.selfevolve.buffer.ConversationBuffer;
 import com.amsha.selfevolve.buffer.InMemoryConversationBuffer;
 import com.amsha.selfevolve.extract.MemoryExtractorLite;
+import com.amsha.selfevolve.store.DirectiveStorePort;
 import com.amsha.selfevolve.store.EvolutionEventStorePort;
 import com.amsha.selfevolve.store.ExtractedMemoryStorePort;
+import com.amsha.selfevolve.store.noop.NoOpDirectiveStore;
 import com.amsha.selfevolve.store.noop.NoOpEvolutionEventStore;
 import com.amsha.selfevolve.store.noop.NoOpExtractedMemoryStore;
 
@@ -56,10 +58,15 @@ public class DefaultSelfEvolveService {
     Instance<ExtractedMemoryStorePort> extractedStoreInstances;
 
     @Inject
+    @Any
+    Instance<DirectiveStorePort> directiveStoreInstances;
+
+    @Inject
     Instance<MemoryExtractorLite> extractorInstance;
 
     private EvolutionEventStorePort store;
     private ExtractedMemoryStorePort extractedStore;
+    private DirectiveStorePort directiveStore;
     private FlushTriggerPolicy flushPolicy;
     private final Map<String, ConversationBuffer> buffers = new ConcurrentHashMap<>();
     private final Map<String, Long> lastEventTimestamps = new ConcurrentHashMap<>();
@@ -75,6 +82,7 @@ public class DefaultSelfEvolveService {
         // Resolve the real store from CDI (e.g. SqliteEvolutionEventStore)
         store = resolveStore();
         extractedStore = resolveExtractedStore();
+        directiveStore = resolveDirectiveStore();
         flushPolicy = new FlushTriggerPolicy(
                 config.flush().maxEvents(), config.flush().idleMs());
         idleTimer = Executors.newSingleThreadScheduledExecutor(
@@ -109,6 +117,19 @@ public class DefaultSelfEvolveService {
         }
         log.warn("[SelfEvolve] No real extracted memory store found — falling back to NoOp");
         return new NoOpExtractedMemoryStore();
+    }
+
+    private DirectiveStorePort resolveDirectiveStore() {
+        for (DirectiveStorePort candidate : directiveStoreInstances) {
+            if (!(candidate instanceof NoOpDirectiveStore)) {
+                log.infof(
+                        "[SelfEvolve] Resolved directive store: %s",
+                        candidate.getClass().getSimpleName());
+                return candidate;
+            }
+        }
+        log.warn("[SelfEvolve] No real directive store found — falling back to NoOp");
+        return new NoOpDirectiveStore();
     }
 
     @PreDestroy
@@ -207,6 +228,13 @@ public class DefaultSelfEvolveService {
      */
     public boolean isEnabled() {
         return config != null && config.enabled();
+    }
+
+    /**
+     * Returns the directive store. Used by policy components.
+     */
+    public DirectiveStorePort directiveStore() {
+        return directiveStore != null ? directiveStore : new NoOpDirectiveStore();
     }
 
     private void flushBuffer(ConversationBuffer buffer, FlushReason reason) {
