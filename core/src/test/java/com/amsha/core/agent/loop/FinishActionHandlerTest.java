@@ -15,7 +15,6 @@ import java.util.Map;
 import java.util.Set;
 
 import com.amsha.core.agent.reasoning.ReasoningStep;
-import com.amsha.core.agent.role.AgentRoleEnum;
 import com.amsha.core.agent.role.RoleRegistry;
 import com.amsha.core.agent.role.ToolCapability;
 import com.amsha.core.governance.RateLimitTracker;
@@ -56,11 +55,11 @@ class FinishActionHandlerTest {
                         ToolCapability.SANDBOX_EXEC.toolName(),
                         ToolCapability.WEB_SEARCH_SERPER.toolName(),
                         ToolCapability.RECALL_MEMORY_SEARCH.toolName()));
-        when(roleRegistry.permittedTools(any())).thenAnswer(invocation -> {
-            AgentRoleEnum r = invocation.getArgument(0);
-            if ("coordinator".equals(r.id())) {
+        when(roleRegistry.resolvePermittedTools(anyString())).thenAnswer(invocation -> {
+            String r = invocation.getArgument(0);
+            if ("coordinator".equals(r)) {
                 return Set.of(ToolCapability.SCHEDULE_TASK.toolName(), ToolCapability.RECALL_MEMORY_SEARCH.toolName());
-            } else if ("coder".equals(r.id())) {
+            } else if ("coder".equals(r)) {
                 return Set.of(ToolCapability.SANDBOX_EXEC.toolName());
             }
             return Set.of();

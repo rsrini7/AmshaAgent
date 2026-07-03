@@ -47,7 +47,6 @@ public class ToolDiscoveryService {
     private Map<String, Map<String, String>> secretsCache;
 
     public void discover() {
-        capabilityRegistry.clear(); // idempotent - safe on hot-reload (§4.2)
         log.info("ToolDiscoveryService: Discovering and indexing agent tools...");
         Map<String, AgentTool> mutableToolIndex = new HashMap<>();
         Map<String, ToolRegistry.ToolDescriptor> mutableDescriptorCache = new LinkedHashMap<>();

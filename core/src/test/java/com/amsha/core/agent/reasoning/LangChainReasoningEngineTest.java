@@ -33,7 +33,6 @@ import com.amsha.core.agent.IntentClassificationService;
 import com.amsha.core.agent.loop.AgentExecutionContext;
 import com.amsha.core.agent.reasoning.error.LlmToolCallException;
 import com.amsha.core.agent.reasoning.port.LlmProviderPort;
-import com.amsha.core.agent.role.AgentRoleEnum;
 import com.amsha.core.agent.role.RoleRegistry;
 import com.amsha.core.agent.role.ToolCapability;
 import com.amsha.core.governance.BudgetWarningException;
@@ -87,7 +86,7 @@ class LangChainReasoningEngineTest {
     @BeforeEach
     void setUp() {
         // Default behavior for mocks
-        when(roleRegistry.permittedTools(any())).thenReturn(Collections.emptySet());
+        when(roleRegistry.resolvePermittedTools(anyString())).thenReturn(Collections.emptySet());
         when(toolRegistry.listTools()).thenReturn(Collections.emptyList());
         when(summaryCache.getSummary(any())).thenReturn(Optional.empty());
     }
@@ -350,7 +349,7 @@ class LangChainReasoningEngineTest {
                 .build();
 
         ArgumentCaptor<ChatRequest> captor = ArgumentCaptor.forClass(ChatRequest.class);
-        when(roleRegistry.permittedTools(any())).thenReturn(Set.of());
+        when(roleRegistry.resolvePermittedTools(anyString())).thenReturn(Set.of());
         when(llmProviderPort.nextStep(captor.capture(), any(String.class))).thenReturn(response);
         when(promptBuilder.build(any(), any(), any(), any(), ArgumentMatchers.anyBoolean()))
                 .thenReturn("System Prompt");
@@ -380,7 +379,7 @@ class LangChainReasoningEngineTest {
         when(llmProviderPort.nextStep(captor.capture(), any(String.class))).thenReturn(response);
 
         // Mock RoleRegistry to return permitted tools for researcher
-        when(roleRegistry.permittedTools(AgentRoleEnum.RESEARCHER))
+        when(roleRegistry.resolvePermittedTools("researcher"))
                 .thenReturn(Set.of(ToolCapability.GITHUB.toolName(), ToolCapability.RECALL_MEMORY_SEARCH.toolName()));
 
         // Mock ToolRegistry to return available tools
@@ -458,7 +457,7 @@ class LangChainReasoningEngineTest {
                 .thenReturn(ReasoningStep.pending("Done.", ReasoningStep.FINISH, Map.of(), 100, 100));
 
         // Mock RoleRegistry to return permitted tools
-        when(roleRegistry.permittedTools(any())).thenReturn(Set.of(ToolCapability.GITHUB.toolName()));
+        when(roleRegistry.resolvePermittedTools(anyString())).thenReturn(Set.of(ToolCapability.GITHUB.toolName()));
 
         // Act
         reasoningEngine.nextStep(ctx, "coordinator", "goal", List.of());
@@ -484,7 +483,7 @@ class LangChainReasoningEngineTest {
                         ChatResponse.builder().aiMessage(new AiMessage("OK")).build());
 
         // Mock RoleRegistry to return permitted tools for coordinator
-        when(roleRegistry.permittedTools(AgentRoleEnum.COORDINATOR))
+        when(roleRegistry.resolvePermittedTools("coordinator"))
                 .thenReturn(Set.of(
                         ToolCapability.GITHUB.toolName(),
                         ToolCapability.SCHEDULE_TASK.toolName(),

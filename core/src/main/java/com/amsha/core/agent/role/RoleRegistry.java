@@ -103,6 +103,28 @@ public class RoleRegistry {
     }
 
     /**
+     * Resolves permitted tools for any role (built-in or dynamic skill).
+     * <p>
+     * For skill roles (prefixed with "skill:"), uses the dynamic role definition's
+     * declared capabilities — NOT the fallback researcher tools. This prevents
+     * skill roles from being contaminated with the researcher's full tool set
+     * (e.g., {@code browser_navigate} leaking into a skill that only declares
+     * {@code sandbox_exec}).
+     *
+     * @param roleName the raw role name string (e.g. "researcher", "skill:remote-browser")
+     * @return the immutable set of permitted tool names, never null
+     */
+    public Set<String> resolvePermittedTools(String roleName) {
+        if (roleName == null || roleName.isBlank()) {
+            return Set.of();
+        }
+        if (AgentRoleEnum.isSkillRole(roleName)) {
+            return permittedToolsForDynamic(roleName);
+        }
+        return permittedTools(AgentRoleEnum.fromString(roleName));
+    }
+
+    /**
      * Resolves permitted tools for a dynamic role.
      * @param canonicalName The full canonical name (e.g. "skill:code-reviewer")
      * @return The immutable set of tool names, or empty if unknown.

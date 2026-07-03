@@ -154,7 +154,7 @@ public class LangChainReasoningEngine implements ReasoningEngine {
             isSimpleChitchat = false;
         }
 
-        Set<String> allowedTools = roleRegistry.permittedTools(AgentRoleEnum.fromString(agentRole));
+        Set<String> allowedTools = roleRegistry.resolvePermittedTools(agentRole);
         ReasoningMessageAssembler.AssembledMessages assembled = messageAssembler.assemble(
                 context,
                 agentRole,

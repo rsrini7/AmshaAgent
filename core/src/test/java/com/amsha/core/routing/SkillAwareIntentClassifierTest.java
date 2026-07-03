@@ -74,6 +74,36 @@ class SkillAwareIntentDetectorTest {
     }
 
     @Test
+    void testNameMatchRoutesSkillWithZeroTriggerPatterns() {
+        SkillDefinition def = new SkillDefinition("id2", "remote-browser", "desc", List.of(), List.of(), 5, "p");
+        RoleDefinition rd = new RoleDefinition(
+                "skill:remote-browser", "Remote Browser", "desc", 5, false, false, Set.of(), Set.of());
+        CompiledSkillEntry entry = new CompiledSkillEntry(def, List.of(), rd, "skillsjars");
+
+        when(skillRegistry.currentSnapshot()).thenReturn(List.of(entry));
+
+        String role = classifier.classify("use remote-browser to navigate to https://example.com");
+
+        assertEquals("skill:remote-browser", role);
+        verify(fallbackService, never()).classify(anyString());
+    }
+
+    @Test
+    void testNameMatchIsCaseInsensitive() {
+        SkillDefinition def = new SkillDefinition("id3", "Remote-Browser", "desc", List.of(), List.of(), 5, "p");
+        RoleDefinition rd = new RoleDefinition(
+                "skill:remote-browser", "Remote Browser", "desc", 5, false, false, Set.of(), Set.of());
+        CompiledSkillEntry entry = new CompiledSkillEntry(def, List.of(), rd, "skillsjars");
+
+        when(skillRegistry.currentSnapshot()).thenReturn(List.of(entry));
+
+        String role = classifier.classify("delegate to Remote-Browser to get page title");
+
+        assertEquals("skill:Remote-Browser", role);
+        verify(fallbackService, never()).classify(anyString());
+    }
+
+    @Test
     void testNullOrBlankInputFallsBackToLLM() {
         when(fallbackService.classify(null)).thenReturn("coordinator");
         when(fallbackService.classify("   ")).thenReturn("coordinator");

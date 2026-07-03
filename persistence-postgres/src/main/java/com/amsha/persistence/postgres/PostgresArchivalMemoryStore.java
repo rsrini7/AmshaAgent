@@ -38,7 +38,8 @@ public class PostgresArchivalMemoryStore implements ArchivalMemoryStorePort {
     @Override
     public void upsert(ArchivalChunkDto chunk) {
         jdbi.useExtension(ArchivalMemoryJdbiDao.class, dao -> dao.upsert(chunk));
-        log.debugf("[Archival] Upserted chunk %s (user=%s, type=%s)", chunk.chunkId(), chunk.userId(), chunk.chunkType());
+        log.debugf(
+                "[Archival] Upserted chunk %s (user=%s, type=%s)", chunk.chunkId(), chunk.userId(), chunk.chunkType());
     }
 
     @Override

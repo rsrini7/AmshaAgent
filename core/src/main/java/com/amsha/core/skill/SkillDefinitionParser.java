@@ -8,6 +8,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import com.amsha.core.agent.role.ToolCapability;
 import com.fasterxml.jackson.databind.DeserializationFeature;
@@ -90,6 +92,8 @@ public class SkillDefinitionParser {
             Map.entry("garuda", "DELEGATE_TO_AGENT"),
             Map.entry("delegate", "DELEGATE_TO_AGENT"));
 
+    private static final Pattern SKILLSJARS_TOOL_PATTERN = Pattern.compile("^(\\w+)\\(.*\\)$");
+
     private List<String> mapSkillsJarTools(String allowedTools) {
         if (allowedTools == null || allowedTools.isBlank()) {
             return List.of();
@@ -100,7 +104,13 @@ public class SkillDefinitionParser {
                     if (cap.isPresent()) {
                         return cap.get().name();
                     }
-                    return SKILLSJARS_TOOL_MAP.get(tool.toLowerCase(Locale.ROOT));
+                    // Strip SkillsJars pattern wrapper: Bash(browser-use:*) → bash
+                    String lookup = tool.toLowerCase(Locale.ROOT);
+                    Matcher m = SKILLSJARS_TOOL_PATTERN.matcher(lookup);
+                    if (m.matches()) {
+                        lookup = m.group(1);
+                    }
+                    return SKILLSJARS_TOOL_MAP.get(lookup);
                 })
                 .filter(Objects::nonNull)
                 .distinct()

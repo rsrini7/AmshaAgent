@@ -18,6 +18,7 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import com.amsha.common.util.LogUtil;
+import com.amsha.core.agent.role.AgentRoleEnum;
 import com.amsha.core.agent.role.ToolCapability;
 import com.amsha.core.scope.WorkspaceContext;
 import com.amsha.core.util.TextPatternUtils;
@@ -160,6 +161,12 @@ public class ReasoningStepParser {
     private ReasoningStep interceptUnrequestedExecution(
             String toolName, ToolExecutionRequest req, AiMessage aiMessage, int inputTokens, int outputTokens) {
         if (!ToolCapability.SANDBOX_EXEC.toolName().equals(toolName)) return null;
+
+        // Skill roles (e.g. skill:remote-browser) are designed to execute commands —
+        // skip the "unrequested execution" guard; execution IS their purpose.
+        String agentRole = WorkspaceContext.AGENT_ROLE.isBound() ? WorkspaceContext.AGENT_ROLE.get() : null;
+        if (agentRole != null && AgentRoleEnum.isSkillRole(agentRole)) return null;
+
         String rawGoal = WorkspaceContext.RAW_USER_GOAL.isBound() ? WorkspaceContext.RAW_USER_GOAL.get() : null;
         if (textPatternUtils.goalRequestsExecution(rawGoal)) return null;
 

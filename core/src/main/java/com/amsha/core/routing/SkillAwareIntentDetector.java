@@ -5,7 +5,10 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Alternative;
 import jakarta.inject.Inject;
 
+import java.util.Comparator;
 import java.util.List;
+import java.util.Locale;
+import java.util.regex.Pattern;
 
 import com.amsha.channel.api.IntentDetector;
 import com.amsha.core.agent.role.AgentRoleEnum;
@@ -44,12 +47,28 @@ public class SkillAwareIntentDetector implements IntentDetector {
         List<CompiledSkillEntry> snapshot = skillRegistry.currentSnapshot();
         for (CompiledSkillEntry entry : snapshot) {
             if (entry.matches(userMessage)) {
-                // Return dynamic role name syntax
                 return AgentRoleEnum.SKILL_PREFIX + entry.definition().name();
             }
         }
 
-        // No skill trigger match - fallback to expensive LLM classification
+        // Second chance: name-based match for skills with zero trigger patterns.
+        // Uses word boundaries to prevent substring collisions (e.g. "go" won't match "google").
+        // Sorted by name length descending so "remote-browser" is checked before "browser".
+        List<CompiledSkillEntry> sorted = snapshot.stream()
+                .sorted(Comparator.comparingInt(e -> -e.definition().name().length()))
+                .toList();
+        String lowerInput = userMessage.toLowerCase(Locale.ROOT);
+        for (CompiledSkillEntry entry : sorted) {
+            String rawName = entry.definition().name();
+            if (rawName.isBlank()) continue;
+            String name = rawName.toLowerCase(Locale.ROOT);
+            Pattern p = Pattern.compile("\\b" + Pattern.quote(name) + "\\b");
+            if (p.matcher(lowerInput).find()) {
+                return AgentRoleEnum.SKILL_PREFIX + entry.definition().name();
+            }
+        }
+
+        // No skill match - fallback to expensive LLM classification
         return fallbackService.classify(userMessage);
     }
 }
