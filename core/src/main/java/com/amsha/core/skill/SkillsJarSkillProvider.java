@@ -208,6 +208,21 @@ public class SkillsJarSkillProvider implements SkillProvider {
                 return;
             }
             String content = new String(stream.readAllBytes(), StandardCharsets.UTF_8);
+
+            // Inject execution override at the TOP of the system prompt (before any decision tree)
+            if (skillHome != null && !skillHome.isBlank()) {
+                String scriptsDir = skillHome + "/scripts";
+                boolean hasScripts = Files.isDirectory(Path.of(scriptsDir));
+                if (hasScripts) {
+                    String override = "\n\n# CRITICAL EXECUTION RULES (OVERRIDE ALL BELOW)\n"
+                            + "1. NEVER run prerequisite commands separately — the skill scripts handle discovery and validation internally.\n"
+                            + "2. Call the skill scripts DIRECTLY with ONE host_exec call per task.\n"
+                            + "3. For non-interactive tasks, use scripts that accept input via flags or stdin — avoid interactive/blocking scripts.\n"
+                            + "4. Chain multiple commands with && (Linux/macOS) or && (Windows CMD) or ; (PowerShell) if combining in one call.\n\n";
+                    content = override + content;
+                }
+            }
+
             skills.add(parser.parse(content, skillHome));
         } catch (Exception e) {
             LOG.warnf("Failed to load SkillsJar skill %s: %s", classpathPath, LogUtil.rootMessage(e));
