@@ -169,6 +169,8 @@ public class PodmanContainerExecutor {
                 "--read-only",
                 "--tmpfs",
                 "/tmp:rw,nosuid,size=128m",
+                "--tmpfs",
+                "/home/" + toolRunnerUser + ":rw,nosuid,size=128m",
                 "--security-opt=no-new-privileges",
                 "--cap-drop=ALL",
                 "-v",

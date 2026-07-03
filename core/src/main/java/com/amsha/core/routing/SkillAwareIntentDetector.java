@@ -5,9 +5,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Alternative;
 import jakarta.inject.Inject;
 
-import java.util.Comparator;
 import java.util.List;
-import java.util.Locale;
 import java.util.regex.Pattern;
 
 import com.amsha.channel.api.IntentDetector;
@@ -51,20 +49,23 @@ public class SkillAwareIntentDetector implements IntentDetector {
             }
         }
 
-        // Second chance: name-based match for skills with zero trigger patterns.
-        // Uses word boundaries to prevent substring collisions (e.g. "go" won't match "google").
-        // Sorted by name length descending so "remote-browser" is checked before "browser".
-        List<CompiledSkillEntry> sorted = snapshot.stream()
-                .sorted(Comparator.comparingInt(e -> -e.definition().name().length()))
+        // Second chance: name-based fuzzy match for skills with zero trigger patterns.
+        // e.g. "use remote-browser to navigate ..." should route to skill:remote-browser
+        // even when the skill has no regex routes defined.
+        // Sort by name length descending so that longer/more specific names match first.
+        List<CompiledSkillEntry> sortedByLength = snapshot.stream()
+                .sorted((e1, e2) -> Integer.compare(
+                        e2.definition().name().length(), e1.definition().name().length()))
                 .toList();
-        String lowerInput = userMessage.toLowerCase(Locale.ROOT);
-        for (CompiledSkillEntry entry : sorted) {
-            String rawName = entry.definition().name();
-            if (rawName.isBlank()) continue;
-            String name = rawName.toLowerCase(Locale.ROOT);
-            Pattern p = Pattern.compile("\\b" + Pattern.quote(name) + "\\b");
-            if (p.matcher(lowerInput).find()) {
-                return AgentRoleEnum.SKILL_PREFIX + entry.definition().name();
+
+        for (CompiledSkillEntry entry : sortedByLength) {
+            String name = entry.definition().name();
+            if (name != null && !name.isBlank()) {
+                Pattern boundaryPattern =
+                        Pattern.compile("\\b" + Pattern.quote(name) + "\\b", Pattern.CASE_INSENSITIVE);
+                if (boundaryPattern.matcher(userMessage).find()) {
+                    return AgentRoleEnum.SKILL_PREFIX + entry.definition().name();
+                }
             }
         }
 

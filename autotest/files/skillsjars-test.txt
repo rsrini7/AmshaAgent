@@ -1,9 +1,5 @@
-/start
+/skills
 
-/reset
-
-Show me all loaded skills using /skills
-
-delegate to remote-browser navigate to https://example.com and get the page title
+delegate to jdb-debugger to attach to a dummy Java process and inspect active threads
 
 /reset

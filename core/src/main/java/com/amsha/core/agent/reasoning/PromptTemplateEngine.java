@@ -12,6 +12,7 @@ import com.amsha.core.agent.loop.AgentExecutionContext;
 import com.amsha.core.agent.reasoning.prompt.PromptConstants;
 import com.amsha.core.agent.reasoning.prompt.PromptRegistry;
 import com.amsha.core.agent.role.AgentRoleEnum;
+import com.amsha.core.agent.role.RoleRegistry;
 import com.amsha.core.agent.role.ToolCapability;
 import com.amsha.core.security.AutonomyLevel;
 import com.amsha.core.tools.AgentTool;
@@ -88,7 +89,14 @@ public class PromptTemplateEngine {
     Template nurturerTemplate;
 
     @Inject
+    @Location("prompts/role-skill")
+    Template skillTemplate;
+
+    @Inject
     ToolRegistry toolRegistry;
+
+    @Inject
+    RoleRegistry roleRegistry;
 
     @Inject
     PromptRegistry promptRegistry;
@@ -123,7 +131,8 @@ public class PromptTemplateEngine {
         // HARD FILTER: only include tools that are actually enabled in the registry.
         // This prevents hallucinations where the LLM tries to call a tool that lacks API keys.
         boolean isBackground = context != null && context.autonomyLevel() == AutonomyLevel.BACKGROUND;
-        List<ToolCapability> sortedCapabilities = role.definition().capabilities().stream()
+        var roleDef = roleRegistry.resolveRoleDefinition(role.id());
+        List<ToolCapability> sortedCapabilities = roleDef.capabilities().stream()
                 .filter(cap -> toolRegistry
                         .findTool(cap.toolName())
                         .map(AgentTool::isEnabled)
@@ -164,12 +173,13 @@ public class PromptTemplateEngine {
                 .anyMatch(c -> ToolCapability.BROWSER_NAVIGATE.toolName().equals(c.toolName()));
 
         var request = templateFor(role)
-                .data("roleDef", role.definition())
+                .data("roleDef", roleDef)
                 .data("sortedCapabilities", sortedCapabilities)
                 .data("hasSandboxExec", hasSandboxExec)
                 .data("hasBrowserNavigate", hasBrowserNavigate)
                 .data("compactionSummary", compactionSummary)
-                .data("systemTimeUtc", timeString);
+                .data("systemTimeUtc", timeString)
+                .data("dynamicSkills", roleRegistry.getDynamicRoles());
 
         if (context != null && context.data() != null) {
             context.data().forEach(request::data);
@@ -182,6 +192,9 @@ public class PromptTemplateEngine {
         String templateText = promptRegistry.get(role.id(), PromptConstants.KEY_ROLE_TEMPLATE);
         if (templateText != null) {
             return engine.parse(templateText);
+        }
+        if (AgentRoleEnum.isSkillRole(role.id())) {
+            return skillTemplate;
         }
         return switch (role.id()) {
             case "coordinator" -> coordinatorTemplate;

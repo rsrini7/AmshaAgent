@@ -369,6 +369,31 @@ SQLite appends the platform suffix automatically - always pass the path **withou
 
 If the extension is missing from resources and the filesystem, Amsha Agent degrades gracefully to FTS5-only search.
 
+### 6.4 Dynamic Skill Tool Dependencies (Host Fallback Mode)
+
+When executing dynamic agent skills (loaded from classpath `.jar` files) in **Direct Execution** (host fallback) mode, the LLM will generate bash code that invokes external CLI utilities. These tools must be installed on your host machine's PATH:
+
+#### browser-use (Remote Browser Skill)
+Requires `browser-use` and a browser instance installed on your host:
+- **macOS**:
+  ```bash
+  uv tool install browser-use
+  # Or via pip3:
+  pip3 install browser-use
+  ```
+- **Linux/WSL2**:
+  ```bash
+  pip3 install browser-use
+  ```
+- **Windows**:
+  ```powershell
+  pip install browser-use
+  ```
+
+#### jdb-debugger (Java Debugger Skill)
+Requires `jdb` to be available. This is pre-packaged inside the Java Development Kit (JDK), so ensuring a valid JDK (version 21 or 25) is installed on your host PATH is sufficient.
+
+
 ---
 
 ## 7. Build the Application

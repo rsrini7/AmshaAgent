@@ -103,6 +103,27 @@ public class RoleRegistry {
     }
 
     /**
+     * Resolves the role definition for any role (built-in or dynamic skill).
+     *
+     * @param roleName the raw role name string
+     * @return the resolved RoleDefinition, never null (returns a default fallback if unknown)
+     */
+    public RoleDefinition resolveRoleDefinition(String roleName) {
+        if (roleName == null || roleName.isBlank()) {
+            return AgentRoleEnum.COORDINATOR.definition();
+        }
+        RoleDefinition dynamicDef = dynamicRoles.get(roleName);
+        if (dynamicDef != null) {
+            return dynamicDef;
+        }
+        try {
+            return AgentRoleEnum.fromString(roleName).definition();
+        } catch (IllegalArgumentException e) {
+            return new RoleDefinition(roleName, "Dynamic Role", "", 5, true, false, Set.of(), Set.of());
+        }
+    }
+
+    /**
      * Resolves permitted tools for any role (built-in or dynamic skill).
      * <p>
      * For skill roles (prefixed with "skill:"), uses the dynamic role definition's

@@ -22,6 +22,7 @@ import com.amsha.core.agent.loop.TaskClassifierService;
 import com.amsha.core.agent.reasoning.ReasoningEngine;
 import com.amsha.core.agent.result.AgentResult;
 import com.amsha.core.agent.role.AgentRoleEnum;
+import com.amsha.core.agent.role.RoleRegistry;
 import com.amsha.core.agent.role.ToolCapability;
 import com.amsha.core.agent.role.ToolMetadata;
 import com.amsha.core.audit.AuditService;
@@ -96,6 +97,9 @@ public class DelegateToAgentTool implements AgentTool {
 
     @Inject
     DelegationProcessor delegationProcessor;
+
+    @Inject
+    RoleRegistry roleRegistry;
 
     @Inject
     VerificationGate verificationGate;
@@ -242,7 +246,8 @@ public class DelegateToAgentTool implements AgentTool {
             String userId,
             String chatId)
             throws Exception {
-        int maxIterations = Math.max(1, targetRole.definition().maxIterations());
+        int maxIterations =
+                Math.max(1, roleRegistry.resolveRoleDefinition(agentName).maxIterations());
         String innerSessionId = outerSessionId + AgentSentinels.DELEGATE_SESSION_SENTINEL + agentName + ":"
                 + System.currentTimeMillis();
 

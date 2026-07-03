@@ -232,7 +232,7 @@ public record AgentRoleEnum(String id) {
 
         // Skill-based dynamic routing
         if (isSkillRole(normalized)) {
-            return RESEARCHER;
+            return new AgentRoleEnum(normalized);
         }
 
         for (AgentRoleEnum builtIn : BUILT_IN) {

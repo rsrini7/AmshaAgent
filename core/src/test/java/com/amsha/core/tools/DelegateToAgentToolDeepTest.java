@@ -7,13 +7,18 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.Collections;
+import java.util.List;
+import java.util.Set;
 
 import com.amsha.core.agent.result.AgentResult;
 import com.amsha.core.agent.role.AgentRoleEnum;
+import com.amsha.core.agent.role.RoleDefinition;
+import com.amsha.core.agent.role.RoleRegistry;
 import com.amsha.core.security.ToolOperation;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 
 /**
  * Deep coverage tests for {@link DelegationProcessor} and {@link DelegateToAgentTool}.
@@ -106,6 +111,18 @@ class DelegateToAgentToolDeepTest {
     void testNormalizeAgent_knownRole() {
         String result = processor.normalizeAgent("saraswati", "do research", "coordinator");
         assertEquals("saraswati", result);
+    }
+
+    @Test
+    void testNormalizeAgent_dynamicSkillAutoPrepend() {
+        RoleRegistry registry = Mockito.mock(RoleRegistry.class);
+        RoleDefinition skillDef = new RoleDefinition(
+                "skill:remote-browser", "Remote Browser", "Description", 5, true, false, Set.of(), Set.of());
+        Mockito.when(registry.getDynamicRoles()).thenReturn(List.of(skillDef));
+        processor.roleRegistry = registry;
+
+        String result = processor.normalizeAgent("remote-browser", "open website", "coordinator");
+        assertEquals("skill:remote-browser", result);
     }
 
     @Test
