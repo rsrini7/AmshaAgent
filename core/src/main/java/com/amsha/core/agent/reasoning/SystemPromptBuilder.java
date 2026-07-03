@@ -103,10 +103,37 @@ public class SystemPromptBuilder {
             String skillName = AgentRoleEnum.skillName(agentRole);
             roleEnum = AgentRoleEnum.fromString(agentRole);
 
-            personaPrompt = skillRegistry
-                    .findByName(skillName)
+            var skillEntry = skillRegistry.findByName(skillName);
+            String basePrompt = skillEntry
                     .map(entry -> entry.definition().systemPrompt())
                     .orElseGet(() -> agentPersonaRegistry.getPersonaPrompt(context, AgentRoleEnum.COORDINATOR));
+
+            // Inject skill home path so the LLM knows where companion scripts live
+            String skillHome = skillEntry.map(e -> e.definition().skillHome()).orElse(null);
+            if (skillHome != null && !skillHome.isBlank()) {
+                basePrompt += "\n\n## Skill Assets\n"
+                        + "Companion scripts and references for this skill are located at:\n"
+                        + "`" + skillHome + "`\n"
+                        + "When the instructions say 'scripts/jdb-attach.sh', use the full path: `"
+                        + skillHome + "/scripts/jdb-attach.sh`.\n"
+                        + "\nIMPORTANT: The scripts handle all intermediate steps internally (process discovery,\n"
+                        + "port verification, etc.). Do NOT run prerequisite commands separately.\n"
+                        + "Call the script directly with all parameters in a SINGLE host_exec call.\n";
+            }
+
+            // Inject execution protocol for skill roles
+            basePrompt += "\n\n## Execution Protocol\n"
+                    + "1. Plan ALL steps needed to accomplish the goal BEFORE calling any tools.\n"
+                    + "2. Combine ALL necessary commands into a SINGLE host_exec call. Every host_exec requires human approval — do NOT make multiple calls.\n"
+                    + "   - Linux/macOS: chain with `&&` or `;` — e.g. `cmd1 && cmd2 && cmd3`\n"
+                    + "   - Windows CMD: chain with `&&` — e.g. `cmd1 && cmd2 && cmd3`\n"
+                    + "   - Windows PowerShell: chain with `;` — e.g. `cmd1; cmd2; cmd3`\n"
+                    + "   - Cross-platform scripts: use `bash script.sh` on Linux/macOS, `wsl bash script.sh` on Windows\n"
+                    + "3. If a skill provides scripts, call the script directly — do NOT run prerequisite commands (like process discovery or port checks) separately. The scripts handle those steps internally.\n"
+                    + "4. After the single tool call returns, emit a FINISH action with a summary of the results.\n"
+                    + "5. If the tool call fails, retry once. If it fails again, emit FINISH with the error details.\n"
+                    + "6. Command output may be truncated. Use `lsof -i :PORT` (Linux/macOS) or `netstat -ano | findstr :PORT` (Windows) to check ports.\n";
+            personaPrompt = basePrompt;
         } else {
             roleEnum = AgentRoleEnum.fromString(agentRole);
             personaPrompt = agentPersonaRegistry.getPersonaPrompt(context, roleEnum);

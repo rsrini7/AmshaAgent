@@ -38,6 +38,18 @@ public class SkillDefinitionParser {
      * @throws IllegalArgumentException if the document layout or YAML is malformed
      */
     public SkillDefinition parse(String rawText) {
+        return parse(rawText, null);
+    }
+
+    /**
+     * Parses a skill document with an optional skill home path for companion scripts.
+     *
+     * @param rawText   the raw skill file content
+     * @param skillHome filesystem path where skill scripts/references are located (may be null)
+     * @return a validated SkillDefinition
+     * @throws IllegalArgumentException if the document layout or YAML is malformed
+     */
+    public SkillDefinition parse(String rawText, String skillHome) {
         if (rawText == null || rawText.isBlank()) {
             throw new IllegalArgumentException("Skill document cannot be empty");
         }
@@ -79,7 +91,8 @@ public class SkillDefinitionParser {
                 fm.triggerPatterns() != null ? fm.triggerPatterns() : List.of(),
                 capabilities.stream().distinct().toList(),
                 fm.maxIterations() > 0 ? fm.maxIterations() : 5,
-                systemPromptBody);
+                systemPromptBody,
+                skillHome);
     }
 
     private static final Map<String, String> SKILLSJARS_TOOL_MAP = Map.ofEntries(

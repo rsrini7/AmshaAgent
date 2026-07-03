@@ -87,7 +87,8 @@ class SkillResourceTest {
                 List.of("review.*code"),
                 List.of(),
                 5,
-                "You are a code reviewer.");
+                "You are a code reviewer.",
+                null);
         when(parser.parse(yaml)).thenReturn(def);
         when(skillStore.findByName(SKILL_NAME)).thenReturn(Optional.empty());
 
@@ -101,8 +102,8 @@ class SkillResourceTest {
     @Test
     void upsertSkillReturns201OnUpdate() {
         String yaml = "---\nname: code-reviewer\n---\nUpdated prompt";
-        SkillDefinition def =
-                new SkillDefinition("skill-1", SKILL_NAME, "Reviews code", List.of(), List.of(), 5, "Updated prompt.");
+        SkillDefinition def = new SkillDefinition(
+                "skill-1", SKILL_NAME, "Reviews code", List.of(), List.of(), 5, "Updated prompt.", null);
         SkillDto existing = new SkillDto("skill-1", SKILL_NAME, "old-yaml", Instant.now(), Instant.now());
         when(parser.parse(yaml)).thenReturn(def);
         when(skillStore.findByName(SKILL_NAME)).thenReturn(Optional.of(existing));
@@ -170,7 +171,8 @@ class SkillResourceTest {
                 List.of("review.*code"),
                 List.of(),
                 5,
-                "You are a code reviewer.");
+                "You are a code reviewer.",
+                null);
         RoleDefinition roleDef =
                 new RoleDefinition("skill:code-reviewer", "Code Reviewer", "Reviews code", 5, false, false, null, null);
         return new CompiledSkillEntry(def, List.of(), roleDef, "classpath");

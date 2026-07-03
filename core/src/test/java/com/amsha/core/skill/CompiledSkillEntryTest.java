@@ -14,7 +14,7 @@ import org.junit.jupiter.api.Test;
 class CompiledSkillEntryTest {
 
     private final SkillDefinition mockDef =
-            new SkillDefinition("id-123", "reviewer", "desc", List.of(), List.of(), 5, "prompt");
+            new SkillDefinition("id-123", "reviewer", "desc", List.of(), List.of(), 5, "prompt", null);
     private final RoleDefinition mockRole =
             new RoleDefinition("skill:reviewer", "reviewer", "desc", 5, false, false, Set.of(), Set.of());
     private final List<Pattern> patterns = List.of(
