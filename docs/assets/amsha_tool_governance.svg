@@ -1,0 +1,82 @@
+<svg width="100%" viewBox="0 0 780 500" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+  </defs>
+
+  <!-- Title -->
+  <g font-family="'Segoe UI', system-ui, sans-serif">
+    <text x="20" y="30" font-size="16" font-weight="600" fill="#d3d1c7">Tool Governance &amp; Sandbox Execution Flow</text>
+    <text x="20" y="48" font-size="11" fill="#9c9a92">Gated validation and isolated execution path for agent tool calls.</text>
+  </g>
+
+  <!-- LLM Kernel / Origin -->
+  <g font-family="'Segoe UI', system-ui, sans-serif">
+    <rect x="20" y="80" width="200" height="50" rx="8" fill="#3c3489" stroke="#afa9ec" stroke-width="0.5"/>
+    <text x="120" y="105" text-anchor="middle" dominant-baseline="central" font-size="14" font-weight="600" fill="#cecbf6">LLM Kernel</text>
+    <text x="120" y="121" text-anchor="middle" dominant-baseline="central" font-size="10" fill="#afa9ec">Emits ToolCallStep</text>
+  </g>
+
+  <!-- ToolGovernanceGuard -->
+  <g font-family="'Segoe UI', system-ui, sans-serif">
+    <rect x="290" y="80" width="220" height="50" rx="8" fill="#712b13" stroke="#f0997b" stroke-width="0.5"/>
+    <text x="400" y="105" text-anchor="middle" dominant-baseline="central" font-size="14" font-weight="600" fill="#f5c4b3">ToolGovernanceGuard</text>
+    <text x="400" y="121" text-anchor="middle" dominant-baseline="central" font-size="10" fill="#f0997b">Role trust pre-flight check</text>
+  </g>
+
+  <!-- Decision Point: Sensitive Op? -->
+  <g font-family="'Segoe UI', system-ui, sans-serif">
+    <polygon points="400,160 500,185 400,210 300,185" fill="#633806" stroke="#ef9f27" stroke-width="0.5"/>
+    <text x="400" y="180" text-anchor="middle" dominant-baseline="central" font-size="11" font-weight="600" fill="#fac775">Sensitive Op or</text>
+    <text x="400" y="192" text-anchor="middle" dominant-baseline="central" font-size="10" fill="#fac775">Untrusted Role?</text>
+  </g>
+
+  <!-- HITL Approval Gate -->
+  <g font-family="'Segoe UI', system-ui, sans-serif">
+    <rect x="290" y="240" width="220" height="50" rx="8" fill="#633806" stroke="#ef9f27" stroke-width="0.5"/>
+    <text x="400" y="265" text-anchor="middle" dominant-baseline="central" font-size="14" font-weight="600" fill="#fac775">HITL Approval Gate</text>
+    <text x="400" y="281" text-anchor="middle" dominant-baseline="central" font-size="10" fill="#ef9f27">Persists checkpoint &amp; waits</text>
+  </g>
+
+  <!-- ToolInvoker / Sandbox -->
+  <g font-family="'Segoe UI', system-ui, sans-serif">
+    <rect x="290" y="325" width="220" height="55" rx="8" fill="#0c447c" stroke="#85b7eb" stroke-width="0.5"/>
+    <text x="400" y="347" text-anchor="middle" dominant-baseline="central" font-size="14" font-weight="600" fill="#b5d4f4">ToolInvoker</text>
+    <text x="400" y="367" text-anchor="middle" dominant-baseline="central" font-size="10" fill="#85b7eb">Direct or Podman Sandbox Exec</text>
+  </g>
+
+  <!-- Observation Sanitizer -->
+  <g font-family="'Segoe UI', system-ui, sans-serif">
+    <rect x="290" y="415" width="220" height="50" rx="8" fill="#085041" stroke="#5dcaa5" stroke-width="0.5"/>
+    <text x="400" y="440" text-anchor="middle" dominant-baseline="central" font-size="14" font-weight="600" fill="#9fe1cb">Observation Sanitizers</text>
+    <text x="400" y="456" text-anchor="middle" dominant-baseline="central" font-size="10" fill="#5dcaa5">PII redact · Truncate · HTML sanitize</text>
+  </g>
+
+  <!-- ==================== LINES & ARROWS ==================== -->
+
+  <!-- LLM Kernel → ToolGovernanceGuard -->
+  <line x1="220" y1="105" x2="290" y2="105" stroke="#9c9a92" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- ToolGovernanceGuard → Decision -->
+  <line x1="400" y1="130" x2="400" y2="160" stroke="#9c9a92" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- Decision → HITL Gate (Yes) -->
+  <line x1="400" y1="210" x2="400" y2="240" stroke="#9c9a92" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <text x="410" y="224" font-size="11" fill="#fac775" font-family="'Segoe UI', system-ui, sans-serif">Yes</text>
+
+  <!-- HITL Gate → ToolInvoker -->
+  <line x1="400" y1="290" x2="400" y2="325" stroke="#9c9a92" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- Decision → ToolInvoker (No - Bypass path) -->
+  <path d="M500 185 L560 185 L560 352 L510 352" fill="none" stroke="#5dcaa5" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <text x="566" y="258" font-size="11" fill="#5dcaa5" font-family="'Segoe UI', system-ui, sans-serif">No (Bypass Gate)</text>
+
+  <!-- ToolInvoker → Sanitizer -->
+  <line x1="400" y1="380" x2="400" y2="415" stroke="#9c9a92" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- Sanitizer → Feedback to LLM Kernel -->
+  <path d="M290 440 L120 440 L120 130" fill="none" stroke="#9c9a92" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <text x="130" y="300" font-size="10" fill="#c2c0b6" font-family="'Segoe UI', system-ui, sans-serif" transform="rotate(-90 130 300)">Sanitized Observation Output</text>
+
+</svg>

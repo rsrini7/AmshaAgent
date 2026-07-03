@@ -161,6 +161,15 @@ private static final Map<String, AgentGroup> BY_MEMBER = new ConcurrentHashMap<>
 private static final Map<String, AgentGroup> BY_MEMBER = Map.copyOf(temp);
 ```
 
+### 1.17 CDI Qualifier Literal Pattern (`AnnotationLiteral`)
+CDI qualifier literals **MUST** extend `AnnotationLiteral<T>` AND implement the annotation interface `T`. This is required by the CDI spec (Jakarta CDI §11.1) for programmatic lookup via `Instance.select(new MyQualifierLiteral("value"))`.
+```java
+// ✅ CORRECT — CDI spec requires implements TieredBackend
+@SuppressWarnings("java:S2176")
+public final class TieredBackendLiteral extends AnnotationLiteral<TieredBackend> implements TieredBackend { ... }
+```
+The `implements TieredBackend` triggers an IDE/Sonar warning ("annotation type should not be used as a superinterface") — suppress with `@SuppressWarnings("java:S2176")` and document why. **Do not** refactor to reflection or string-based selection.
+
 ---
 
 ## 2. Key Framework Components

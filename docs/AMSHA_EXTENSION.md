@@ -2,6 +2,8 @@
 
 Amsha Agent is designed as a modular kernel. Every major subsystem exposes a clean CDI interface that you can implement once and have it discovered automatically via Quarkus Arc - no wiring code, no registry modifications, no restart required beyond a standard redeploy.
 
+For a visual representation of how components connect, refer to the [Module Architecture Diagram](assets/amsha_module_architecture.svg), [Message Pipeline Diagram](assets/amsha_message_pipeline.svg), and the [Agent Loop Diagram](assets/amsha_agent_loop.svg).
+
 > **Before extending Amsha Agent**, read [`Architecture_Invariants.md`](./Architecture_Invariants.md). The invariants there are not suggestions - violations can cause silent misbehaviour, security regressions, or broken native image builds.
 
 ---

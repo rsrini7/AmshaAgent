@@ -28,19 +28,19 @@
   </g>
 
   <!-- Branch to CommandDispatchHandler (priority 45) — between Session and Intent -->
-  <line x1="200" y1="159" x2="180" y2="159" stroke="#9c9a92" stroke-width="1.5" marker-end="url(#arrow)"/>
-  <text x="190" y="153" text-anchor="middle" font-size="10" fill="#c2c0b6" font-family="'Segoe UI', system-ui, sans-serif">reflex?</text>
+  <line x1="200" y1="159" x2="170" y2="159" stroke="#9c9a92" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <text x="185" y="153" text-anchor="middle" font-size="10" fill="#c2c0b6" font-family="'Segoe UI', system-ui, sans-serif">reflex?</text>
 
   <g font-family="'Segoe UI', system-ui, sans-serif">
-    <rect x="20" y="140" width="160" height="46" rx="8" fill="#633806" stroke="#ef9f27" stroke-width="0.5"/>
-    <text x="100" y="158" text-anchor="middle" dominant-baseline="central" font-size="13" font-weight="600" fill="#fac775">CommandDispatch</text>
-    <text x="100" y="176" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#ef9f27">priority 45 · reflex fast-path</text>
+    <rect x="10" y="140" width="160" height="46" rx="8" fill="#633806" stroke="#ef9f27" stroke-width="0.5"/>
+    <text x="90" y="158" text-anchor="middle" dominant-baseline="central" font-size="13" font-weight="600" fill="#fac775">CommandDispatch</text>
+    <text x="90" y="176" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#ef9f27">priority 45 · reflex fast-path</text>
   </g>
 
   <!-- Short-circuit path routed BELOW the pipeline boxes (no overlap) -->
-  <path d="M100 186 L100 440 L640 440 L640 122"
+  <path d="M90 186 L90 440 L640 440 L640 122"
         fill="none" stroke="#ef9f27" stroke-width="1.5" stroke-dasharray="4 3" marker-end="url(#arrow)"/>
-  <text x="108" y="432" text-anchor="start" font-size="11" fill="#ef9f27" font-family="'Segoe UI', system-ui, sans-serif">reflex match → short-circuit → reply direct</text>
+  <text x="98" y="432" text-anchor="start" font-size="11" fill="#ef9f27" font-family="'Segoe UI', system-ui, sans-serif">reflex match → short-circuit → reply direct</text>
 
   <!-- Main flow continues: Session → Intent -->
   <line x1="340" y1="182" x2="340" y2="200" stroke="#9c9a92" stroke-width="1.5" marker-end="url(#arrow)"/>
@@ -57,7 +57,7 @@
   <g font-family="'Segoe UI', system-ui, sans-serif">
     <rect x="200" y="264" width="280" height="46" rx="8" fill="#995700" stroke="#ef9f27" stroke-width="0.5"/>
     <text x="340" y="282" text-anchor="middle" dominant-baseline="central" font-size="14" font-weight="600" fill="#fac775">CompactionHandler  (priority 60)</text>
-    <text x="340" y="300" text-anchor="middle" dominant-baseline="central" font-size="12" fill="#ef9f27">Compact chat history if over threshold</text>
+    <text x="340" y="300" text-anchor="middle" dominant-baseline="central" font-size="12" fill="#ef9f27">Preserve to Recall &amp; compact chat memory</text>
   </g>
   <line x1="340" y1="310" x2="340" y2="328" stroke="#9c9a92" stroke-width="1.5" marker-end="url(#arrow)"/>
 
@@ -66,5 +66,13 @@
     <rect x="160" y="328" width="360" height="46" rx="8" fill="#0c447c" stroke="#85b7eb" stroke-width="0.5"/>
     <text x="340" y="346" text-anchor="middle" dominant-baseline="central" font-size="14" font-weight="600" fill="#b5d4f4">AgentDispatchHandler  (priority 70)</text>
     <text x="340" y="364" text-anchor="middle" dominant-baseline="central" font-size="12" fill="#85b7eb">isExplicitContinuity? → old goal · else → new goal</text>
+  </g>
+
+  <!-- EvolutionEventObserver (Async CDI) -->
+  <line x1="520" y1="351" x2="540" y2="351" stroke="#9c9a92" stroke-width="1" stroke-dasharray="3 2" marker-end="url(#arrow)"/>
+  <g font-family="'Segoe UI', system-ui, sans-serif">
+    <rect x="540" y="328" width="160" height="46" rx="8" fill="#492473" stroke="#a98fe2" stroke-width="0.5"/>
+    <text x="620" y="346" text-anchor="middle" dominant-baseline="central" font-size="13" font-weight="600" fill="#e8dff5">EvolutionObserver</text>
+    <text x="620" y="364" text-anchor="middle" dominant-baseline="central" font-size="10" fill="#a98fe2">Async CDI trace capture</text>
   </g>
 </svg>

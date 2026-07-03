@@ -27,7 +27,7 @@ Immutable user identity: `(platformId, channelId, displayName, channel)`. The `p
 
 ### `MessageContext`
 
-Wraps a `ChannelUser` + message text + session metadata. This is what gets dispatched to the `MessagePipeline`.
+Wraps a `ChannelUser` + message text + session metadata. This is what gets dispatched to the `MessagePipeline` (see the message pipeline diagram in [ARCHITECTURE.md](ARCHITECTURE.md#message-pipeline-handler-chain) or directly view [amsha_message_pipeline.svg](assets/amsha_message_pipeline.svg)).
 
 ---
 
@@ -345,3 +345,12 @@ At a minimum:
 2. Verify `isConfigured()` returns `false` when the token is missing.
 3. Verify `ChannelAllowlist.isAllowed()` blocks unauthorized users.
 4. Verify `ReplyRenderer.render()` produces valid output for your platform's markdown format.
+
+---
+
+## 📚 Related Documents
+
+- [Architecture Guide](ARCHITECTURE.md) - Context on message processing & pipeline visual flow
+- [Extension Guide](AMSHA_EXTENSION.md) - Overall guide to extending all parts of the agent
+- [Message Pipeline Diagram](assets/amsha_message_pipeline.svg) - Visual representation of message processing
+

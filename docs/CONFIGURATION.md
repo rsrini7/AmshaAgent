@@ -256,7 +256,24 @@ schema) and must match the model used by every active provider.
 | `AMSHA_MEMORY_PROMPT_BUDGET_CORE_TOKENS` | `800` | Memory prompt budget for core memory |
 | `AMSHA_MEMORY_PROMPT_BUDGET_ARCHIVAL_RESULTS` | `3` | Memory prompt budget archival results |
 | `AMSHA_MEMORY_PROMPT_BUDGET_DIRECTIVES` | `5` | Memory prompt budget directives |
+| `AMSHA_MEMORY_RETENTION_ENABLED` | `true` | Enable memory retention scheduler (daily purges) |
+| `AMSHA_MEMORY_RETENTION_RECALL_RETENTION_DAYS` | `30` | Daily purge window for recall messages (days) |
+| `AMSHA_MEMORY_RETENTION_ARCHIVAL_EVICTION_THRESHOLD` | `0.3` | Daily purge threshold for low-confidence archival context |
+| `AMSHA_MEMORY_RETENTION_ARCHIVAL_MIN_AGE_DAYS` | `30` | Minimum age before low-confidence archival context is purged |
 | `AMSHA_RAG_VEC_PATH` | `./lib/vec0` | Path to sqlite-vec native extension |
+
+## Self-Evolution
+
+| Variable | Default | Description |
+|---|---|---|
+| `AMSHA_SELF_EVOLVE_ENABLED` | `false` | Enable behavioral self-evolution and trace capture |
+| `AMSHA_SELF_EVOLVE_BACKEND` | `sqlite` | Backend for self-evolve trace/directive storage (sqlite, postgres, fs) |
+| `AMSHA_SELF_EVOLVE_BUFFER_SIZE` | `50` | Buffer size for trace event processing |
+| `AMSHA_SELF_EVOLVE_DEFAULT_SEARCH_LIMIT` | `8` | Default limit for searching self-evolve directives |
+| `AMSHA_SELF_EVOLVE_DIRECTIVES_ENABLED` | `true` | Enable synthesized directive injection in prompt assembly |
+| `AMSHA_SELF_EVOLVE_SYNTHESIS_TRIGGER` | `manual` | Synthesis trigger mode (manual, cron) |
+| `AMSHA_SELF_EVOLVE_FLUSH_MAX_EVENTS` | `12` | Max events buffered before flushing to persistent trace store |
+| `AMSHA_SELF_EVOLVE_FLUSH_IDLE_MS` | `300000` | Buffer idle flush timeout (ms) |
 
 ## Sandbox
 

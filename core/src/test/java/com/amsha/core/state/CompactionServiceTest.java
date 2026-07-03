@@ -45,7 +45,6 @@ class CompactionServiceTest {
     TieredMemoryConfig mockTieredConfig;
     RecallMemoryService mockRecallService;
 
-    @SuppressWarnings("unchecked")
     Event<CompactionEvent> mockCompactionEvent;
 
     @BeforeEach

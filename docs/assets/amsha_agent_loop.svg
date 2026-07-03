@@ -9,7 +9,7 @@
   <g font-family="'Segoe UI', system-ui, sans-serif">
     <rect x="210" y="16" width="260" height="50" rx="8" fill="#444441" stroke="#b4b2a9" stroke-width="0.5"/>
     <text x="340" y="37" text-anchor="middle" dominant-baseline="central" font-size="14" font-weight="600" fill="#d3d1c7">Build system prompt</text>
-    <text x="340" y="55" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#b4b2a9">Role template · compaction summary · RAG context</text>
+    <text x="340" y="55" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#b4b2a9">Core/Recall/Archival/Directives injection · Budget</text>
   </g>
   <line x1="340" y1="66" x2="340" y2="84" stroke="#9c9a92" stroke-width="1.5" marker-end="url(#arrow)"/>
 
@@ -112,5 +112,36 @@
         fill="none" stroke="#9c9a92" stroke-width="1.5" stroke-dasharray="4 3"
         marker-end="url(#arrow)"/>
 
+  <!-- Offline Self-Evolution Loop -->
+  <!-- CDI Event trigger from loop line at y=630 -->
+  <line x1="660" y1="630" x2="665" y2="630" stroke="#9c9a92" stroke-width="1" stroke-dasharray="3 2" />
+  <path d="M665 630 L717 630 L717 600" fill="none" stroke="#a98fe2" stroke-width="1.2" stroke-dasharray="3 2" marker-end="url(#arrow)"/>
+  <text x="670" y="618" font-size="10" fill="#a98fe2" font-family="'Segoe UI', system-ui, sans-serif">CDI Events</text>
 
+  <!-- EvolutionObserver box -->
+  <g font-family="'Segoe UI', system-ui, sans-serif">
+    <rect x="665" y="555" width="105" height="45" rx="8" fill="#492473" stroke="#a98fe2" stroke-width="0.5"/>
+    <text x="717" y="571" text-anchor="middle" dominant-baseline="central" font-size="12" font-weight="600" fill="#e8dff5">EvolutionObserver</text>
+    <text x="717" y="587" text-anchor="middle" dominant-baseline="central" font-size="9" fill="#a98fe2">Async trace capture</text>
+  </g>
+  <line x1="717" y1="555" x2="717" y2="520" stroke="#a98fe2" stroke-width="1.2" marker-end="url(#arrow)"/>
+
+  <!-- MemoryExtractor box -->
+  <g font-family="'Segoe UI', system-ui, sans-serif">
+    <rect x="665" y="475" width="105" height="45" rx="8" fill="#492473" stroke="#a98fe2" stroke-width="0.5"/>
+    <text x="717" y="491" text-anchor="middle" dominant-baseline="central" font-size="12" font-weight="600" fill="#e8dff5">MemoryExtractor</text>
+    <text x="717" y="507" text-anchor="middle" dominant-baseline="central" font-size="9" fill="#a98fe2">Rule-based extract</text>
+  </g>
+  <line x1="717" y1="475" x2="717" y2="440" stroke="#a98fe2" stroke-width="1.2" marker-end="url(#arrow)"/>
+
+  <!-- PolicySynthesizer box -->
+  <g font-family="'Segoe UI', system-ui, sans-serif">
+    <rect x="665" y="395" width="105" height="45" rx="8" fill="#492473" stroke="#a98fe2" stroke-width="0.5"/>
+    <text x="717" y="411" text-anchor="middle" dominant-baseline="central" font-size="12" font-weight="600" fill="#e8dff5">PolicySynthesizer</text>
+    <text x="717" y="427" text-anchor="middle" dominant-baseline="central" font-size="9" fill="#a98fe2">Offline synthesis</text>
+  </g>
+
+  <!-- Feedback path back to Build system prompt (right side entry) -->
+  <path d="M717 395 L717 42 L470 42" fill="none" stroke="#a98fe2" stroke-width="1.2" stroke-dasharray="3 2" marker-end="url(#arrow)"/>
+  <text x="705" y="280" text-anchor="start" font-size="11" fill="#a98fe2" font-family="'Segoe UI', system-ui, sans-serif" transform="rotate(-90 705 280)">Inject shadow/active directives</text>
 </svg>

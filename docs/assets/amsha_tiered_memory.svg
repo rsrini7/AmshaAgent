@@ -1,0 +1,94 @@
+<svg width="100%" viewBox="0 0 780 500" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+    <marker id="arrow-async" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M2 1L8 5L2 9" fill="none" stroke="#a98fe2" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+  </defs>
+
+  <!-- Title / Legend -->
+  <g font-family="'Segoe UI', system-ui, sans-serif">
+    <text x="20" y="30" font-size="16" font-weight="600" fill="#d3d1c7">Three-Tiered Memory &amp; Asynchronous RAG</text>
+    <text x="20" y="48" font-size="11" fill="#9c9a92">Asynchronous caching decouples database retrieval latency from the active reasoning path.</text>
+  </g>
+
+  <!-- ==================== THREE MEMORY TIERS ==================== -->
+  
+  <!-- Core Memory Box -->
+  <g font-family="'Segoe UI', system-ui, sans-serif">
+    <rect x="20" y="80" width="240" height="74" rx="8" fill="#444441" stroke="#b4b2a9" stroke-width="0.5"/>
+    <text x="35" y="102" font-size="14" font-weight="600" fill="#d3d1c7">1. Core Memory</text>
+    <text x="35" y="120" font-size="11" fill="#b4b2a9">Ephemeral active context &amp; credentials</text>
+    <text x="35" y="136" font-size="10" fill="#9c9a92">CAS writes · Max 20 blocks (2k chars each)</text>
+  </g>
+
+  <!-- Recall Memory Box -->
+  <g font-family="'Segoe UI', system-ui, sans-serif">
+    <rect x="20" y="190" width="240" height="74" rx="8" fill="#0c447c" stroke="#85b7eb" stroke-width="0.5"/>
+    <text x="35" y="212" font-size="14" font-weight="600" fill="#b5d4f4">2. Recall Memory</text>
+    <text x="35" y="230" font-size="11" fill="#85b7eb">Conversation message history</text>
+    <text x="35" y="246" font-size="10" fill="#7ba3cc">SQLite FTS5 / Lucene BM25 · 30-day retention</text>
+  </g>
+
+  <!-- Archival Memory Box -->
+  <g font-family="'Segoe UI', system-ui, sans-serif">
+    <rect x="20" y="300" width="240" height="74" rx="8" fill="#085041" stroke="#5dcaa5" stroke-width="0.5"/>
+    <text x="35" y="322" font-size="14" font-weight="600" fill="#9fe1cb">3. Archival Memory</text>
+    <text x="35" y="340" font-size="11" fill="#5dcaa5">Long-term knowledge &amp; injected files</text>
+    <text x="35" y="356" font-size="10" fill="#4ea688">Lucene hybrid vector kNN + BM25 · Indefinite</text>
+  </g>
+
+  <!-- ==================== PROMPT ASSEMBLY & CACHING ==================== -->
+
+  <!-- Archival Context Cache Box -->
+  <g font-family="'Segoe UI', system-ui, sans-serif">
+    <rect x="340" y="300" width="240" height="74" rx="8" fill="#492473" stroke="#a98fe2" stroke-width="0.5"/>
+    <text x="355" y="322" font-size="14" font-weight="600" fill="#e8dff5">ArchivalContextCache</text>
+    <text x="355" y="340" font-size="11" fill="#a98fe2">Warmed cache populated asynchronously</text>
+    <text x="355" y="356" font-size="10" fill="#957cbf">Pre-fetches RAG results on Goal Resolution</text>
+  </g>
+
+  <!-- Prompt Assembly Engine Box -->
+  <g font-family="'Segoe UI', system-ui, sans-serif">
+    <rect x="340" y="135" width="240" height="74" rx="8" fill="#633806" stroke="#ef9f27" stroke-width="0.5"/>
+    <text x="355" y="157" font-size="14" font-weight="600" fill="#fac775">Prompt Assembly Engine</text>
+    <text x="355" y="175" font-size="11" fill="#ef9f27">Assembles final system prompt</text>
+    <text x="355" y="191" font-size="10" fill="#c4904a">Runs synchronously in O(1) time</text>
+  </g>
+
+  <!-- LLM Execution Kernel Box -->
+  <g font-family="'Segoe UI', system-ui, sans-serif">
+    <rect x="630" y="135" width="130" height="74" rx="8" fill="#3c3489" stroke="#afa9ec" stroke-width="0.5"/>
+    <text x="645" y="167" font-size="14" font-weight="600" fill="#cecbf6">LLM Kernel</text>
+    <text x="645" y="185" font-size="11" fill="#afa9ec">Reasoning Loop</text>
+  </g>
+
+  <!-- ==================== FLOW LINES & ARROWS ==================== -->
+
+  <!-- Core Memory → Prompt Assembly (Direct O(1) read) -->
+  <path d="M260 117 L300 117 L300 150 L340 150" fill="none" stroke="#9c9a92" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <text x="305" y="130" font-size="9" fill="#c2c0b6" font-family="'Segoe UI', system-ui, sans-serif">Sync O(1)</text>
+
+  <!-- Recall Memory → Prompt Assembly (Direct O(1) read) -->
+  <path d="M260 227 L300 227 L300 190 L340 190" fill="none" stroke="#9c9a92" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <text x="305" y="215" font-size="9" fill="#c2c0b6" font-family="'Segoe UI', system-ui, sans-serif">Sync O(1)</text>
+
+  <!-- Archival Memory → ArchivalContextCache (Async Vector Search) -->
+  <line x1="260" y1="337" x2="340" y2="337" stroke="#a98fe2" stroke-width="1.5" stroke-dasharray="3 3" marker-end="url(#arrow-async)"/>
+  <text x="300" y="328" text-anchor="middle" font-size="9" fill="#a98fe2" font-family="'Segoe UI', system-ui, sans-serif">Async RAG</text>
+
+  <!-- ArchivalContextCache → Prompt Assembly (Sync cached O(1) read) -->
+  <line x1="460" y1="300" x2="460" y2="209" stroke="#9c9a92" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <text x="466" y="258" text-anchor="start" font-size="9" fill="#c2c0b6" font-family="'Segoe UI', system-ui, sans-serif">Sync O(1)</text>
+
+  <!-- Prompt Assembly Engine → LLM Execution Kernel -->
+  <line x1="580" y1="172" x2="630" y2="172" stroke="#9c9a92" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <text x="605" y="165" text-anchor="middle" font-size="9" fill="#c2c0b6" font-family="'Segoe UI', system-ui, sans-serif">Prompt</text>
+
+  <!-- Trigger link from LLM Kernel / Goal Resolution to Archival Context Cache warming -->
+  <path d="M695 209 L695 410 L460 410 L460 374" fill="none" stroke="#a98fe2" stroke-width="1.2" stroke-dasharray="4 3" marker-end="url(#arrow-async)"/>
+  <text x="590" y="402" text-anchor="middle" font-size="10" fill="#a98fe2" font-family="'Segoe UI', system-ui, sans-serif">Goal Resolution / Session Init Trigger (Async Cache Warm)</text>
+
+</svg>

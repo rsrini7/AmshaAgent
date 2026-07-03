@@ -24,6 +24,8 @@ If a rule here is violated, the code is considered incorrect even if tests appea
 
 ## 1. Module boundaries
 
+Refer to the [Module Architecture Diagram](assets/amsha_module_architecture.svg) for a visual layout of the components and their interactions.
+
 ### 1.1 Deployment module
 - `amsha-deployment` is build-time only.
 - MUST NOT place runtime business logic, request handling, persistence, tool logic, or channel behavior there.
@@ -116,11 +118,11 @@ three-tuple `(channelType, channelId, userId)`.
 ## 3. Runtime execution invariants
 
 ### 3.1 Agent loop boundaries
-- `AgentLoop` orchestration must remain distinct from tool execution, checkpoint persistence, and message transport.
+- `AgentLoop` orchestration must remain distinct from tool execution, checkpoint persistence, and message transport (see the [Agent Loop Diagram](assets/amsha_agent_loop.svg) for visual context).
 - Do not move transport-specific logic into the core state machine.
 
 ### 3.2 Tool invocation path
-- All tool execution MUST flow through `ToolRegistry` and `ToolInvoker`.
+- All tool execution MUST flow through `ToolRegistry` and `ToolInvoker` (see the [Tool Governance & Sandbox Execution Flow Diagram](assets/amsha_tool_governance.svg) for visual context).
 - Do not bypass guard, audit, sanitization, or approval logic by calling tool implementation classes directly.
 
 ### 3.3 Tool observation sanitization

@@ -666,6 +666,14 @@ mise run native:serve    # or: native:chat / native:attach
 
 The `.env` file has placeholder values like `key-<random>`. The `amsha` launcher uses a safe line-by-line loader that never shell-evaluates values - this error only occurs if you `source .env` manually. Use the launcher instead.
 
+---
+
+## 📚 Related Documents
+
+- [Manual Setup Guide](MANUAL_SETUP.md) - Deep dive into setting up dependencies manually
+- [Architecture Guide](ARCHITECTURE.md) - System architecture overview
+- [Configuration Guide](CONFIGURATION.md) - Environment variables and configuration options
+
 ***
 
 *Amsha Agent V0.1.0 · Quarkus 3.27.2 · JDK 25 · mise · Temurin 25 + GraalVM Community 25.0.2*

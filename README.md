@@ -142,7 +142,13 @@ ui/                   ← Lit 3.x + TypeScript web frontend
 ### Agent Loop
 <img src="./docs/assets/amsha_agent_loop.svg" alt="Agent Loop" width="100%">
 
-> Detailed flows (HITL approval, delegation, security layers, data flow) with Mermaid diagrams in [ARCHITECTURE.md](./docs/ARCHITECTURE.md).
+### Tiered Memory & RAG
+<img src="./docs/assets/amsha_tiered_memory.svg" alt="Tiered Memory & RAG" width="100%">
+
+### Tool Governance & Sandbox
+<img src="./docs/assets/amsha_tool_governance.svg" alt="Tool Governance & Sandbox" width="100%">
+
+> Detailed flows (HITL approval, memory caching, tool governance, delegation, security layers, data flow) with Mermaid diagrams in [ARCHITECTURE.md](./docs/ARCHITECTURE.md).
 
 ---
 
