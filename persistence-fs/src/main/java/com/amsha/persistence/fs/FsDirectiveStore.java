@@ -124,7 +124,6 @@ public class FsDirectiveStore implements DirectiveStorePort {
             List<SynthesizedDirective> directives = loadDirectivesFromFile(f);
             boolean removed = directives.removeIf(d -> d.id().equals(directiveId));
             if (removed) {
-                String userId = f.replace(".json", "");
                 store.write(List.of(DOMAIN, f), new DirectiveBatch(directives));
                 log.debugf("[SelfEvolve-FS] Deleted directive %s", directiveId);
                 return true;
@@ -143,7 +142,6 @@ public class FsDirectiveStore implements DirectiveStorePort {
             directives.removeIf(
                     d -> d.state() == DirectiveState.DISABLED && d.updatedAt().isBefore(cutoff));
             if (directives.size() < before) {
-                String userId = f.replace(".json", "");
                 store.write(List.of(DOMAIN, f), new DirectiveBatch(directives));
                 purged += before - directives.size();
             }
