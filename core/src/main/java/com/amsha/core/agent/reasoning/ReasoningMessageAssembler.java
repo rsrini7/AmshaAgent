@@ -220,9 +220,12 @@ public class ReasoningMessageAssembler {
                     if (skillHome != null && ToolCapability.HOST_EXEC.toolName().equals(tool.name())) {
                         String scriptsDir = skillHome + "/scripts";
                         boolean hasScripts = Files.isDirectory(Path.of(scriptsDir));
-                        log.infof("[ToolDescInjection] tool=%s scriptsDir=%s hasScripts=%s", tool.name(), scriptsDir, hasScripts);
+                        log.infof(
+                                "[ToolDescInjection] tool=%s scriptsDir=%s hasScripts=%s",
+                                tool.name(), scriptsDir, hasScripts);
                         if (hasScripts) {
                             description += "\n\nSkill scripts are located at: " + scriptsDir
+                                    + "\nIMPORTANT: Use host_exec (not sandbox_exec) to run skill scripts — they need host filesystem access."
                                     + "\nCall scripts directly with full path. Do NOT run prerequisite commands."
                                     + "\nFor non-interactive tasks, use scripts that accept input via flags or stdin."
                                     + "\nChain commands with && (Linux/macOS) or ; (PowerShell) if needed.";

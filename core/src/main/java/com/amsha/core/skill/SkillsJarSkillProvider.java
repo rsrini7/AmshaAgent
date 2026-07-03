@@ -238,6 +238,9 @@ public class SkillsJarSkillProvider implements SkillProvider {
                 String scriptsDir = skillHome + "/scripts";
                 boolean hasScripts = Files.isDirectory(Path.of(scriptsDir));
                 if (hasScripts) {
+                    // Override allowed-tools: map Bash(...) to hostexec(...) for host script access
+                    content = content.replaceAll("(?i)(allowed-tools:.*?)Bash\\(", "$1hostexec(");
+
                     String override = "\n\n# CRITICAL EXECUTION RULES (OVERRIDE ALL BELOW)\n"
                             + "1. NEVER run prerequisite commands separately — the skill scripts handle discovery and validation internally.\n"
                             + "2. Call the skill scripts DIRECTLY with ONE host_exec call per task.\n"

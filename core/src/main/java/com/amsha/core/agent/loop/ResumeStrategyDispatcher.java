@@ -8,7 +8,6 @@ import com.amsha.core.agent.AgentSentinels;
 import com.amsha.core.agent.reasoning.ReasoningEngine;
 import com.amsha.core.agent.reasoning.ReasoningStep;
 import com.amsha.core.agent.result.AgentResult;
-import com.amsha.core.agent.role.AgentRoleEnum;
 import com.amsha.core.agent.role.ToolCapability;
 import com.amsha.core.domain.model.AgentCheckpoint;
 import com.amsha.core.lifecycle.WorkspaceManager;
@@ -208,10 +207,6 @@ class ResumeStrategyDispatcher {
                         return AgentResult.finished(success.output(), List.copyOf(history));
                     }
                     completeInProgressCheckpoint(checkpoint);
-                    // Skill roles: return tool result, let checkpoint system handle next HITL cycle
-                    if (AgentRoleEnum.isSkillRole(context.agentRole())) {
-                        return AgentResult.finished(success.output(), List.copyOf(history));
-                    }
                     return stateMachineRunner.runFinishPass(context, reasoningEngine, history);
                 } else {
                     // web_fetch fallback to browser_navigate (same logic as ToolResultProcessor)
@@ -376,9 +371,6 @@ class ResumeStrategyDispatcher {
         if (retriedResponse instanceof ToolResponse.ToolSuccess _) {
             recordReasoningStep(toolName, fixedParamsJson, retriedResponse.output(), true, history, sessionId);
             completeInProgressCheckpoint(checkpoint);
-            if (AgentRoleEnum.isSkillRole(context.agentRole())) {
-                return AgentResult.finished(retriedResponse.output(), List.copyOf(history));
-            }
             return stateMachineRunner.runFinishPass(context, reasoningEngine, history);
         } else if (retriedResponse instanceof ToolResponse.ToolFailure retryFailure && !retryFailure.isInfraFailure()) {
             log.warnf("[AutoHeal-Resume] Re-execution also failed: %s", retryFailure.output());
@@ -441,9 +433,6 @@ class ResumeStrategyDispatcher {
                     history,
                     sessionId);
             completeInProgressCheckpoint(checkpoint);
-            if (AgentRoleEnum.isSkillRole(context.agentRole())) {
-                return AgentResult.finished(escalation.result(), List.copyOf(history));
-            }
             return stateMachineRunner.runFinishPass(context, reasoningEngine, history);
         }
 
