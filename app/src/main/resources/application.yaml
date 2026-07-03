@@ -394,6 +394,9 @@ amsha:
   auto-seed-secrets: "${AMSHA_AUTO_SEED_SECRETS:false}"
   skills:
     hot-reload: true
+    adaptive:
+      enabled: ${AMSHA_SKILLS_ADAPTIVE_ENABLED:false}
+    default-max-iterations: ${AMSHA_SKILLS_DEFAULT_MAX_ITERATIONS:15}
     skillsjars:
       require-approval-for-sensitive: ${AMSHA_SKILLSJARS_REQUIRE_APPROVAL_FOR_SENSITIVE:true}
   core:

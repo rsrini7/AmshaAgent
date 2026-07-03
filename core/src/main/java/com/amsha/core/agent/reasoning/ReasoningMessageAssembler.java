@@ -23,6 +23,7 @@ import com.amsha.core.agent.loop.AgentExecutionContext;
 import com.amsha.core.agent.role.AgentRoleEnum;
 import com.amsha.core.agent.role.ToolCapability;
 import com.amsha.core.security.AutonomyLevel;
+import com.amsha.core.skill.SkillAdaptationManager;
 import com.amsha.core.skill.SkillRegistry;
 import com.amsha.core.tools.AgentTool;
 import com.amsha.core.tools.ToolRegistry;
@@ -47,6 +48,9 @@ public class ReasoningMessageAssembler {
 
     @Inject
     SkillRegistry skillRegistry;
+
+    @Inject
+    SkillAdaptationManager adaptationManager;
 
     @Inject
     public ReasoningMessageAssembler(ChatHistoryAssembler historyAssembler, ToolRegistry toolRegistry) {
@@ -229,6 +233,12 @@ public class ReasoningMessageAssembler {
                                     + "\nCall scripts directly with full path. Do NOT run prerequisite commands."
                                     + "\nFor non-interactive tasks, use scripts that accept input via flags or stdin."
                                     + "\nChain commands with && (Linux/macOS) or ; (PowerShell) if needed.";
+
+                            // Add adaptation instructions if adaptive mode is enabled
+                            String adaptInstructions = adaptationManager.getAdaptationInstructions(skillHome);
+                            if (!adaptInstructions.isEmpty()) {
+                                description += adaptInstructions;
+                            }
                         }
                     }
                     return ToolSpecification.builder()

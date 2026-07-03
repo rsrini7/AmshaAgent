@@ -110,8 +110,8 @@ public class HostExecTool implements AgentTool {
     public JsonObjectSchema parametersSchema() {
         return JsonObjectSchema.builder()
                 .addStringProperty("code", "The source code to execute on the host")
-                .addStringProperty("language", "The programming language (bash, java)")
-                .required("code", "language")
+                .addStringProperty("language", "The programming language (bash, java). Default: bash")
+                .required("code")
                 .build();
     }
 
@@ -126,8 +126,7 @@ public class HostExecTool implements AgentTool {
         try {
             if (params == null) return ToolResponse.failure(1, "Parameters are required.");
             String code = (String) params.get("code");
-            String lang = (String) params.get("language");
-            if (lang == null) return ToolResponse.failure(1, "Parameter 'language' is required.");
+            String lang = (String) params.getOrDefault("language", "bash");
             if (code == null) return ToolResponse.failure(1, "Parameter 'code' is required.");
             lang = lang.toLowerCase(Locale.ROOT);
 

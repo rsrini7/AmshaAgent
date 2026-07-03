@@ -16,6 +16,8 @@ import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 
+import org.eclipse.microprofile.config.inject.ConfigProperty;
+
 /**
  * Parses a raw markdown skill document into a {@link SkillDefinition}.
  * Expects exactly two "---" delimiters separating the YAML frontmatter from the prompt body.
@@ -29,6 +31,9 @@ public class SkillDefinitionParser {
      */
     private static final ObjectMapper YAML_MAPPER =
             new ObjectMapper(new YAMLFactory()).configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+
+    @ConfigProperty(name = "amsha.skills.default-max-iterations", defaultValue = "15")
+    int defaultMaxIterations;
 
     /**
      * Parses a skill document in two-block format.
@@ -90,7 +95,7 @@ public class SkillDefinitionParser {
                 fm.description(),
                 fm.triggerPatterns() != null ? fm.triggerPatterns() : List.of(),
                 capabilities.stream().distinct().toList(),
-                fm.maxIterations() > 0 ? fm.maxIterations() : 5,
+                fm.maxIterations() > 0 ? fm.maxIterations() : defaultMaxIterations,
                 systemPromptBody,
                 skillHome);
     }

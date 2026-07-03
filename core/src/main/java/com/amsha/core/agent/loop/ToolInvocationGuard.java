@@ -15,7 +15,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedDeque;
 
 import com.amsha.core.agent.reasoning.ReasoningStep;
-import com.amsha.core.agent.role.AgentRoleEnum;
 import com.amsha.core.agent.role.RoleRegistry;
 import com.amsha.core.agent.role.ToolCapability;
 import com.amsha.core.governance.ApprovalFrame;
@@ -157,10 +156,7 @@ public class ToolInvocationGuard {
                 || ToolCapability.ARCHIVAL_MEMORY_SEARCH.toolName().equals(toolName)
                 || ToolCapability.INGEST_DOCUMENT.toolName().equals(toolName);
 
-        boolean isExempt = isSchedulingTool
-                || isDelegationTool
-                || (isMemoryTool && level != AutonomyLevel.READONLY)
-                || AgentRoleEnum.isSkillRole(agentRole);
+        boolean isExempt = isSchedulingTool || isDelegationTool || (isMemoryTool && level != AutonomyLevel.READONLY);
 
         if ((roleRegistry.requiresApprovalForTools(agentRole) || toolRequiresApproval)
                 && !isExempt

@@ -21,6 +21,8 @@ import java.util.Enumeration;
 import java.util.List;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import com.amsha.common.util.LogUtil;
 
@@ -35,6 +37,9 @@ public class SkillsJarSkillProvider implements SkillProvider {
 
     @Inject
     SkillDefinitionParser parser;
+
+    @Inject
+    SkillAdaptationManager adaptationManager;
 
     @Override
     public String sourceName() {
@@ -158,8 +163,8 @@ public class SkillsJarSkillProvider implements SkillProvider {
             while (entries.hasMoreElements()) {
                 JarEntry entry = entries.nextElement();
                 String name = entry.getName();
-                // Only extract files under the same skill dir, skip SKILL.md itself
-                if (name.startsWith(skillDir) && !name.equals(skillMdPath) && !entry.isDirectory()) {
+                // Extract all companion files for the skill, including SKILL.md itself.
+                if (name.startsWith(skillDir) && !entry.isDirectory()) {
                     String relativePath = name.substring(skillDir.length());
                     Path target = amshaHome.resolve(relativePath);
                     Files.createDirectories(target.getParent());
@@ -238,15 +243,25 @@ public class SkillsJarSkillProvider implements SkillProvider {
                 String scriptsDir = skillHome + "/scripts";
                 boolean hasScripts = Files.isDirectory(Path.of(scriptsDir));
                 if (hasScripts) {
-                    // Override allowed-tools: map Bash(...) to hostexec(...) for host script access
-                    content = content.replaceAll("(?i)(allowed-tools:.*?)Bash\\(", "$1hostexec(");
+                    if (adaptationManager.isAdaptiveEnabled()) {
+                        // Adaptive mode: let the LLM adapt the skill for the environment
+                        // Only strip conflicting sections, don't add overrides
+                        content = stripConflictingSections(content);
+                        LOG.infof("[SkillsJar] Adaptive mode enabled for '%s' — LLM will adapt", classpathPath);
+                    } else {
+                        // Non-adaptive mode: apply our overrides
+                        content = stripConflictingSections(content);
 
-                    String override = "\n\n# CRITICAL EXECUTION RULES (OVERRIDE ALL BELOW)\n"
-                            + "1. NEVER run prerequisite commands separately — the skill scripts handle discovery and validation internally.\n"
-                            + "2. Call the skill scripts DIRECTLY with ONE host_exec call per task.\n"
-                            + "3. For non-interactive tasks, use scripts that accept input via flags or stdin — avoid interactive/blocking scripts.\n"
-                            + "4. Chain multiple commands with && (Linux/macOS) or && (Windows CMD) or ; (PowerShell) if combining in one call.\n\n";
-                    content = override + content;
+                        // Override allowed-tools: map Bash(...) to hostexec(...) for host script access
+                        content = content.replaceAll("(?i)(allowed-tools:.*?)Bash\\(", "$1hostexec(");
+
+                        String override = "\n\n# CRITICAL EXECUTION RULES (OVERRIDE ALL BELOW)\n"
+                                + "1. NEVER run prerequisite commands separately — the skill scripts handle discovery and validation internally.\n"
+                                + "2. Call the skill scripts DIRECTLY with ONE host_exec call per task.\n"
+                                + "3. For non-interactive tasks, use scripts that accept input via flags or stdin — avoid interactive/blocking scripts.\n"
+                                + "4. Chain multiple commands with && (Linux/macOS) or && (Windows CMD) or ; (PowerShell) if combining in one call.\n\n";
+                        content = override + content;
+                    }
                 }
             }
 
@@ -254,5 +269,45 @@ public class SkillsJarSkillProvider implements SkillProvider {
         } catch (Exception e) {
             LOG.warnf("Failed to load SkillsJar skill %s: %s", classpathPath, LogUtil.rootMessage(e));
         }
+    }
+
+    /**
+     * Strips SKILL.md sections that encourage the LLM to run prerequisite commands
+     * separately (e.g. "Decision Tree", "Quick Start", "Prerequisites", "Enabling JDWP").
+     * Generic — works for any skill, not specific to any tool.
+     */
+    private static String stripConflictingSections(String content) {
+        // Remove markdown sections whose heading contains conflicting keywords
+        String[] conflictingKeywords = {"decision tree", "quick start", "prerequisites", "enabling "};
+        String[] lines = content.split("\n");
+        StringBuilder result = new StringBuilder();
+        boolean skipping = false;
+        int skipLevel = 0;
+
+        for (String line : lines) {
+            Matcher heading = Pattern.compile("^(#{1,6})\\s+(.+)$").matcher(line);
+            if (heading.matches()) {
+                String title = heading.group(2).toLowerCase();
+                int level = heading.group(1).length();
+                boolean conflict = false;
+                for (String kw : conflictingKeywords) {
+                    if (title.contains(kw)) {
+                        conflict = true;
+                        break;
+                    }
+                }
+                if (conflict) {
+                    skipping = true;
+                    skipLevel = level;
+                    continue;
+                } else if (skipping && level <= skipLevel) {
+                    skipping = false;
+                }
+            }
+            if (!skipping) {
+                result.append(line).append('\n');
+            }
+        }
+        return result.toString();
     }
 }
