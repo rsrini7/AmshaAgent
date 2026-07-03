@@ -14,6 +14,8 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.nio.file.StandardOpenOption;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Enumeration;
 import java.util.List;
@@ -135,8 +137,7 @@ public class SkillsJarSkillProvider implements SkillProvider {
 
     /**
      * Extracts non-SKILL.md files (scripts/, references/, etc.) from the skill
-     * directory in the JAR to a temp directory so host_exec / sandbox_exec can
-     * run them.
+     * directory in the JAR to ~/.amsha/skills/skillsjars/<skillName>/
      *
      * @return the extracted skill home path, or null if nothing was extracted
      */
@@ -146,9 +147,11 @@ public class SkillsJarSkillProvider implements SkillProvider {
         String skillName = skillDir.endsWith("/") ? skillDir.substring(0, skillDir.length() - 1) : skillDir;
         skillName = skillName.substring(skillName.lastIndexOf('/') + 1);
 
+        // Use stable path: ~/.amsha/skills/skillsjars/<skillName>/
+        Path amshaHome = Path.of(System.getProperty("user.home"), ".amsha", "skills", "skillsjars", skillName);
+
         try {
-            Path tempDir = Files.createTempDirectory("amsha-skill-" + skillName + "-");
-            tempDir.toFile().deleteOnExit();
+            Files.createDirectories(amshaHome);
             boolean extracted = false;
 
             Enumeration<JarEntry> entries = jarFile.entries();
@@ -158,7 +161,7 @@ public class SkillsJarSkillProvider implements SkillProvider {
                 // Only extract files under the same skill dir, skip SKILL.md itself
                 if (name.startsWith(skillDir) && !name.equals(skillMdPath) && !entry.isDirectory()) {
                     String relativePath = name.substring(skillDir.length());
-                    Path target = tempDir.resolve(relativePath);
+                    Path target = amshaHome.resolve(relativePath);
                     Files.createDirectories(target.getParent());
                     try (InputStream is = jarFile.getInputStream(entry)) {
                         Files.copy(is, target, StandardCopyOption.REPLACE_EXISTING);
@@ -172,15 +175,36 @@ public class SkillsJarSkillProvider implements SkillProvider {
             }
 
             if (extracted) {
-                LOG.infof("[SkillsJar] Extracted skill assets for '%s' to %s", skillName, tempDir);
-                return tempDir.toString();
+                // Write source tracking metadata
+                writeSourceMetadata(amshaHome, skillName, jarFile);
+                LOG.infof("[SkillsJar] Extracted skill assets for '%s' to %s", skillName, amshaHome);
+                return amshaHome.toString();
             }
-            // Nothing to extract — clean up
-            Files.deleteIfExists(tempDir);
             return null;
         } catch (Exception e) {
             LOG.warnf("[SkillsJar] Failed to extract assets for '%s': %s", skillName, e.getMessage());
             return null;
+        }
+    }
+
+    /**
+     * Writes .skill-source.json to track where the skill came from.
+     */
+    private void writeSourceMetadata(Path skillDir, String skillName, JarFile jarFile) {
+        try {
+            Path metaFile = skillDir.resolve(".skill-source.json");
+            String version = jarFile.getManifest() != null
+                    ? jarFile.getManifest().getMainAttributes().getValue("Bundle-Version")
+                    : "unknown";
+            String json = String.format(
+                    "{\n  \"source\": \"skillsjars\",\n  \"skillName\": \"%s\",\n  \"version\": \"%s\",\n  \"jarFile\": \"%s\",\n  \"extractedAt\": \"%s\"\n}",
+                    skillName,
+                    version,
+                    jarFile.getName().replace("\\", "/"),
+                    Instant.now().toString());
+            Files.writeString(metaFile, json, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+        } catch (Exception e) {
+            LOG.debugf("[SkillsJar] Could not write source metadata for '%s': %s", skillName, e.getMessage());
         }
     }
 
