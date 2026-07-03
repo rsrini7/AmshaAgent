@@ -65,6 +65,28 @@ public class RoleRegistry {
     }
 
     /**
+     * Controls which roles require human approval by evaluating the raw role name.
+     * Checks dynamic skill roles first to respect custom requiresApproval definitions,
+     * falling back to static role configuration.
+     *
+     * @param roleName the raw role name string
+     * @return true if the role's tool calls require explicit approval
+     */
+    public boolean requiresApprovalForTools(String roleName) {
+        if (roleName == null) return true;
+        RoleDefinition dynamicDef = dynamicRoles.get(roleName);
+        if (dynamicDef != null) {
+            return dynamicDef.requiresApproval();
+        }
+        try {
+            AgentRoleEnum role = AgentRoleEnum.fromString(roleName);
+            return role.definition().requiresApproval();
+        } catch (IllegalArgumentException e) {
+            return true;
+        }
+    }
+
+    /**
      * Registers a new dynamic role derived from a skill.
      * @param name The canonical skill name
      * @param definition The compiled role definition
@@ -78,6 +100,28 @@ public class RoleRegistry {
      */
     public Collection<RoleDefinition> getDynamicRoles() {
         return Collections.unmodifiableCollection(dynamicRoles.values());
+    }
+
+    /**
+     * Resolves permitted tools for any role (built-in or dynamic skill).
+     * <p>
+     * For skill roles (prefixed with "skill:"), uses the dynamic role definition's
+     * declared capabilities — NOT the fallback researcher tools. This prevents
+     * skill roles from being contaminated with the researcher's full tool set
+     * (e.g., {@code browser_navigate} leaking into a skill that only declares
+     * {@code sandbox_exec}).
+     *
+     * @param roleName the raw role name string (e.g. "researcher", "skill:remote-browser")
+     * @return the immutable set of permitted tool names, never null
+     */
+    public Set<String> resolvePermittedTools(String roleName) {
+        if (roleName == null || roleName.isBlank()) {
+            return Set.of();
+        }
+        if (AgentRoleEnum.isSkillRole(roleName)) {
+            return permittedToolsForDynamic(roleName);
+        }
+        return permittedTools(AgentRoleEnum.fromString(roleName));
     }
 
     /**

@@ -32,13 +32,20 @@ public class PostgresDirectiveStore implements DirectiveStorePort {
     @Override
     public int insert(SynthesizedDirective directive) {
         Jdbi jdbi = Jdbi.create(dataSource).installPlugin(new SqlObjectPlugin());
-        return jdbi.withExtension(PostgresDirectiveJdbiDao.class, dao -> dao.insert(directive));
+        int rows = jdbi.withExtension(PostgresDirectiveJdbiDao.class, dao -> dao.insert(directive));
+        if (rows > 0) {
+            log.debugf(
+                    "[SelfEvolve] Inserted directive %s (state=%s, confidence=%.2f)",
+                    directive.id(), directive.state(), directive.confidence());
+        }
+        return rows;
     }
 
     @Override
     public void update(SynthesizedDirective directive) {
         Jdbi jdbi = Jdbi.create(dataSource).installPlugin(new SqlObjectPlugin());
         jdbi.useExtension(PostgresDirectiveJdbiDao.class, dao -> dao.update(directive));
+        log.debugf("[SelfEvolve] Updated directive %s (state=%s)", directive.id(), directive.state());
     }
 
     @Override
@@ -69,12 +76,17 @@ public class PostgresDirectiveStore implements DirectiveStorePort {
     public boolean delete(String directiveId) {
         Jdbi jdbi = Jdbi.create(dataSource).installPlugin(new SqlObjectPlugin());
         int rows = jdbi.withExtension(PostgresDirectiveJdbiDao.class, dao -> dao.deleteById(directiveId));
+        log.debugf("[SelfEvolve] Deleted directive %s (found=%b)", directiveId, rows > 0);
         return rows > 0;
     }
 
     @Override
     public int purgeExpired(int retentionDays) {
         Jdbi jdbi = Jdbi.create(dataSource).installPlugin(new SqlObjectPlugin());
-        return jdbi.withExtension(PostgresDirectiveJdbiDao.class, dao -> dao.purgeExpired(retentionDays));
+        int purged = jdbi.withExtension(PostgresDirectiveJdbiDao.class, dao -> dao.purgeExpired(retentionDays));
+        if (purged > 0) {
+            log.infof("[SelfEvolve] Purged %d expired directives (retention=%d days)", purged, retentionDays);
+        }
+        return purged;
     }
 }

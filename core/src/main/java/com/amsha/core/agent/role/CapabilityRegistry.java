@@ -65,6 +65,15 @@ public class CapabilityRegistry {
     }
 
     /**
+     * Removes all supplemental tool capabilities granted to a specific role.
+     *
+     * @param roleId The canonical role ID.
+     */
+    public void remove(String roleId) {
+        roleSupplementalTools.remove(roleId);
+    }
+
+    /**
      * Clears all registered supplemental tools.
      * <p>
      * <strong>§4.2:</strong> This is idempotent and safe to call during

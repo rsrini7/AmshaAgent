@@ -20,6 +20,7 @@ import com.amsha.core.agent.loop.AgentExecutionContext;
 import com.amsha.core.agent.persona.AgentPersonaRegistry;
 import com.amsha.core.agent.reasoning.prompt.PromptRegistry;
 import com.amsha.core.agent.role.CapabilityRegistry;
+import com.amsha.core.agent.role.RoleRegistry;
 import com.amsha.core.agent.role.ToolCapability;
 import com.amsha.core.security.AutonomyLevel;
 import com.amsha.core.skill.SkillRegistry;
@@ -41,6 +42,9 @@ class SystemPromptBuilderTest {
 
     @Mock
     SkillRegistry skillRegistry;
+
+    @Mock
+    RoleRegistry roleRegistry;
 
     @Mock
     ToolRegistry toolRegistry;
@@ -90,6 +94,7 @@ class SystemPromptBuilderTest {
                 agentPersonaRegistry,
                 promptTemplateEngine,
                 skillRegistry,
+                roleRegistry,
                 intentService,
                 null);
 

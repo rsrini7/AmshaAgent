@@ -12,7 +12,6 @@ import java.util.Map;
 import com.amsha.core.agent.AgentSentinels;
 import com.amsha.core.agent.reasoning.ReasoningStep;
 import com.amsha.core.agent.result.AgentResult;
-import com.amsha.core.agent.role.AgentRoleEnum;
 import com.amsha.core.agent.role.RoleRegistry;
 import com.amsha.core.agent.role.ToolCapability;
 import com.amsha.core.governance.RateLimitTracker;
@@ -341,8 +340,7 @@ public class FinishActionHandler {
     }
 
     private boolean isToolPermitted(String agentRole, String toolName) {
-        var role = AgentRoleEnum.fromString(agentRole);
-        return roleRegistry.permittedTools(role).contains(toolName);
+        return roleRegistry.resolvePermittedTools(agentRole).contains(toolName);
     }
 
     private static boolean historyContainsSuccess(String toolName, List<ReasoningStep> history) {

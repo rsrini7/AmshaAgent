@@ -14,6 +14,13 @@ import com.amsha.common.util.LogUtil;
 
 import org.jboss.logging.Logger;
 
+/**
+ * Loads bundled skills from the static classpath index at {@code /skills/index.txt}.
+ * <p>
+ * SkillsJars skills are loaded by {@link SkillsJarSkillProvider} instead,
+ * which has a distinct {@code sourceName()} of {@code "skillsjars"} to enable
+ * third-party security checks (HITL approval for sensitive capabilities).
+ */
 @ApplicationScoped
 public class ClasspathSkillProvider implements SkillProvider {
 

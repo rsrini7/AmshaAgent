@@ -85,4 +85,26 @@ class SkillDefinitionParserTest {
         SkillDefinition def = parser.parse(doc);
         assertEquals(5, def.maxIterations());
     }
+
+    @Test
+    void testAllowedToolsMapping() {
+        String doc = """
+                ---
+                name: skillsjars-skill
+                description: Uses allowed-tools
+                allowed-tools: bash browser_navigate github web_search garuda nonexistent
+                max-iterations: 8
+                ---
+                prompt
+                """;
+
+        SkillDefinition def = parser.parse(doc);
+        assertEquals("skillsjars-skill", def.name());
+        assertEquals(5, def.toolCapabilities().size());
+        assertTrue(def.toolCapabilities().contains("SANDBOX_EXEC"));
+        assertTrue(def.toolCapabilities().contains("BROWSER_NAVIGATE"));
+        assertTrue(def.toolCapabilities().contains("GITHUB"));
+        assertTrue(def.toolCapabilities().contains("WEB_SEARCH_BRAVE"));
+        assertTrue(def.toolCapabilities().contains("DELEGATE_TO_AGENT"));
+    }
 }

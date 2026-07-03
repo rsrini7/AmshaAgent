@@ -30,6 +30,13 @@
       <artifactId>amsha-core</artifactId>
     </dependency>
 
+    <!-- SkillsJars dynamic skill dependency -->
+    <dependency>
+      <groupId>com.skillsjars</groupId>
+      <artifactId>browser-use__browser-use__remote-browser</artifactId>
+      <version>2026_02_23-1d154e1</version>
+    </dependency>
+
     <!-- Self-Evolution trace capture + extraction -->
     <dependency>
       <groupId>com.amsha</groupId>

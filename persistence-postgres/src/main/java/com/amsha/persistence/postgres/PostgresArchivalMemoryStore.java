@@ -38,6 +38,8 @@ public class PostgresArchivalMemoryStore implements ArchivalMemoryStorePort {
     @Override
     public void upsert(ArchivalChunkDto chunk) {
         jdbi.useExtension(ArchivalMemoryJdbiDao.class, dao -> dao.upsert(chunk));
+        log.debugf(
+                "[Archival] Upserted chunk %s (user=%s, type=%s)", chunk.chunkId(), chunk.userId(), chunk.chunkType());
     }
 
     @Override
@@ -46,9 +48,11 @@ public class PostgresArchivalMemoryStore implements ArchivalMemoryStorePort {
                 query.chunkTypes() == null || query.chunkTypes().isEmpty();
         List<String> chunkTypes = chunkTypesEmpty ? List.of("") : List.copyOf(query.chunkTypes());
 
-        return jdbi.withExtension(
+        List<ArchivalChunkDto> results = jdbi.withExtension(
                 ArchivalMemoryJdbiDao.class,
                 dao -> dao.search(query.userId(), query.query(), query.limit(), chunkTypesEmpty, chunkTypes));
+        log.debugf("[Archival] Search user=%s query='%s' → %d results", query.userId(), query.query(), results.size());
+        return results;
     }
 
     @Override
@@ -65,16 +69,19 @@ public class PostgresArchivalMemoryStore implements ArchivalMemoryStorePort {
     public void incrementAccessCounts(List<String> chunkIds) {
         if (chunkIds == null || chunkIds.isEmpty()) return;
         jdbi.useExtension(ArchivalMemoryJdbiDao.class, dao -> dao.incrementAccessCounts(chunkIds));
+        log.debugf("[Archival] Incremented access count for %d chunks", chunkIds.size());
     }
 
     @Override
     public void delete(String chunkId) {
         jdbi.useExtension(ArchivalMemoryJdbiDao.class, dao -> dao.delete(chunkId));
+        log.debugf("[Archival] Deleted chunk %s", chunkId);
     }
 
     @Override
     public void evictLowConfidence(double threshold, int minAgeDays) {
         jdbi.useExtension(ArchivalMemoryJdbiDao.class, dao -> dao.evictLowConfidence(threshold, minAgeDays));
+        log.infof("[Archival] Evicted low-confidence chunks (threshold=%.2f, minAge=%d days)", threshold, minAgeDays);
     }
 
     /**

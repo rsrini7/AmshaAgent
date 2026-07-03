@@ -9,6 +9,7 @@ import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import com.amsha.core.agent.AgentSentinels;
@@ -16,6 +17,7 @@ import com.amsha.core.agent.IntentClassificationService;
 import com.amsha.core.agent.loop.AgentExecutionContext;
 import com.amsha.core.agent.persona.AgentPersonaRegistry;
 import com.amsha.core.agent.role.AgentRoleEnum;
+import com.amsha.core.agent.role.RoleRegistry;
 import com.amsha.core.skill.SkillRegistry;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
@@ -25,7 +27,8 @@ import io.smallrye.common.annotation.Identifier;
 
 /**
  * Builds the system prompt for Amsha Agent agents.
- * Orchestrates persona, role-specific sections, shared rules, and dynamic guards.
+ * Orchestrates persona, role-specific sections, shared rules, and dynamic
+ * guards.
  */
 @ApplicationScoped
 public class SystemPromptBuilder {
@@ -41,6 +44,7 @@ public class SystemPromptBuilder {
     private final AgentPersonaRegistry agentPersonaRegistry;
     private final PromptTemplateEngine promptTemplateEngine;
     private final SkillRegistry skillRegistry;
+    private final RoleRegistry roleRegistry;
     private final IntentClassificationService intentService;
     private final Instance<ContextEnricher> contextEnrichers;
 
@@ -56,6 +60,7 @@ public class SystemPromptBuilder {
             AgentPersonaRegistry agentPersonaRegistry,
             PromptTemplateEngine promptTemplateEngine,
             SkillRegistry skillRegistry,
+            RoleRegistry roleRegistry,
             IntentClassificationService intentService,
             Instance<ContextEnricher> contextEnrichers) {
         this.contextWindow = contextWindow;
@@ -67,12 +72,13 @@ public class SystemPromptBuilder {
         this.agentPersonaRegistry = agentPersonaRegistry;
         this.promptTemplateEngine = promptTemplateEngine;
         this.skillRegistry = skillRegistry;
+        this.roleRegistry = roleRegistry;
         this.intentService = intentService;
         this.contextEnrichers = contextEnrichers;
     }
 
     protected SystemPromptBuilder() {
-        this(128000, false, null, null, null, null, null, null, null, null, null);
+        this(128000, false, null, null, null, null, null, null, null, null, null, null);
     }
 
     public String build(
@@ -144,7 +150,21 @@ public class SystemPromptBuilder {
         if (!isSimpleChitchat) {
             dynamicRules += sharedSectionBuilder.buildExecutionBoundaryRule(roleEnum, isCompact);
             dynamicRules += "\n" + sharedSectionBuilder.buildBrowserRetryRule(context, roleEnum, isCompact);
-            dynamicRules += "\n" + sharedSectionBuilder.buildToolContaminationGuard(context, roleEnum, isCompact);
+
+            // For skill roles, use the skill's own capabilities, not the researcher's tool
+            // set
+            if (AgentRoleEnum.isSkillRole(agentRole)) {
+                Set<String> skillTools = roleRegistry.resolvePermittedTools(agentRole);
+                String skillToolList = skillTools.stream().sorted().collect(Collectors.joining(", "));
+                if (skillToolList.isBlank()) {
+                    dynamicRules += "\nHARD TOOL OVERRIDE: You have NO external tools available in this turn.\n";
+                } else {
+                    dynamicRules += "\nHARD TOOL OVERRIDE - CROSS-TURN CONTAMINATION PREVENTION:\n"
+                            + "Your ONLY available tools in this turn are: " + skillToolList + ".\n";
+                }
+            } else {
+                dynamicRules += "\n" + sharedSectionBuilder.buildToolContaminationGuard(context, roleEnum, isCompact);
+            }
         }
 
         String finalPrompt = baseSystemPrompt + strictBinding + "\n" + securityPrompt

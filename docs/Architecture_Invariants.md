@@ -1422,7 +1422,7 @@ This applies to every `amsha-channel-*` module added in P67 and beyond.
 
 ### 15.1 Verification requirement
 - Compilation success + unit test pass in isolation is NOT proof of CDI discovery.
-- After adding a new module's dependency to `amsha-app`, verify CDI bean initialization by
+- After adding a new module's dependency to `app/pom.xml`, verify CDI bean initialization by
   grepping the startup log for bean-specific log messages (e.g., `[SelfEvolve] Enabled`).
 - A `@Startup @ApplicationScoped` bean that never logs at startup means the module is
   invisible to the Quarkus CDI container.
@@ -1431,7 +1431,7 @@ This applies to every `amsha-channel-*` module added in P67 and beyond.
 The `amsha-self-evolve` module was created with all CDI annotations (`@Startup`,
 `@ApplicationScoped`, `@ObservesAsync`) but was **silently ignored** at runtime because
 both `beans.xml` and `jandex-maven-plugin` were missing. The module compiled, all 36
-unit tests passed in isolation, and the dependency was declared in `amsha-app/pom.xml`,
+unit tests passed in isolation, and the dependency was declared in `app/pom.xml`,
 yet zero beans were instantiated. The only symptom was the absence of expected log lines.
 Always verify with a runtime startup log check when adding CDI beans from a new module.
 

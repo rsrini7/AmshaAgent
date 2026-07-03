@@ -153,7 +153,6 @@ public class FsArchivalMemoryStore implements ArchivalMemoryStorePort {
             boolean removed = chunks.removeIf(c -> c.chunkId().equals(chunkId));
             if (removed) {
                 // Find userId from remaining chunks or filename
-                String userId = f.replace(".json", "");
                 store.write(List.of(DOMAIN, f), new ChunkList(chunks));
                 log.debugf("[FsArchival] Deleted chunk %s", chunkId);
                 break;

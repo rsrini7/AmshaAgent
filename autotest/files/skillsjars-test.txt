@@ -1,0 +1,9 @@
+/start
+
+/reset
+
+Show me all loaded skills using /skills
+
+delegate to remote-browser navigate to https://example.com and get the page title
+
+/reset

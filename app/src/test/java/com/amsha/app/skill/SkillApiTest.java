@@ -71,7 +71,7 @@ class SkillApiTest {
                 .get("/api/v1/skills")
                 .then()
                 .statusCode(200)
-                .body("size()", is(0));
+                .body("findAll { it.source == 'database' }.size()", is(0));
     }
 
     @Test
@@ -98,9 +98,8 @@ class SkillApiTest {
                 .get("/api/v1/skills")
                 .then()
                 .statusCode(200)
-                .body("size()", is(1))
-                .body("[0].name", is("ping-skill"))
-                .body("[0].source", is("database"));
+                .body("findAll { it.source == 'database' }.size()", is(1))
+                .body("find { it.name == 'ping-skill' }.source", is("database"));
     }
 
     @Test
@@ -145,7 +144,7 @@ class SkillApiTest {
                 .log()
                 .body()
                 .statusCode(200)
-                .body("size()", is(0));
+                .body("findAll { it.source == 'database' }.size()", is(0));
     }
 
     @Test
