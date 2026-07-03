@@ -188,7 +188,11 @@ delegate to coordinator: ask parvati to adjust the tone of this response - "Your
 
 what patterns have we discussed for error handling?
 
+search my conversation history for "core memory"
+
 search archival for "Quarkus" with limit 3
+
+search my archival knowledge for "patterns"
 
 search my archival for CODE type chunks
 
@@ -196,11 +200,19 @@ read my core memory
 
 show me my user_profile block
 
+search all my sessions for "hello"
+
+what patterns do I prefer for error handling?
+
 remember that I prefer Java records over Lombok
+
+read my core memory show me my active_task block
 
 my active task is implementing tiered memory architecture
 
 update my constraints to: always use CAS for concurrent writes
+
+store something in block "invalid_key"
 
 store something in block invalid_key
 

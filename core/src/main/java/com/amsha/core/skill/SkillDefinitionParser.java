@@ -2,8 +2,14 @@ package com.amsha.core.skill;
 
 import jakarta.enterprise.context.ApplicationScoped;
 
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Objects;
 
+import com.amsha.core.agent.role.ToolCapability;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
@@ -56,13 +62,48 @@ public class SkillDefinitionParser {
             throw new IllegalArgumentException("Parsed frontmatter is null (empty YAML)");
         }
 
+        List<String> capabilities = new ArrayList<>();
+        if (fm.toolCapabilities() != null) {
+            capabilities.addAll(fm.toolCapabilities());
+        }
+        if (fm.allowedTools() != null) {
+            capabilities.addAll(mapSkillsJarTools(fm.allowedTools()));
+        }
+
         return new SkillDefinition(
                 null, // Auto-generate UUID
                 fm.name(),
                 fm.description(),
                 fm.triggerPatterns() != null ? fm.triggerPatterns() : List.of(),
-                fm.toolCapabilities() != null ? fm.toolCapabilities() : List.of(),
+                capabilities.stream().distinct().toList(),
                 fm.maxIterations() > 0 ? fm.maxIterations() : 5,
                 systemPromptBody);
+    }
+
+    private static final Map<String, String> SKILLSJARS_TOOL_MAP = Map.ofEntries(
+            Map.entry("bash", "SANDBOX_EXEC"),
+            Map.entry("shell", "SANDBOX_EXEC"),
+            Map.entry("cmd", "SANDBOX_EXEC"),
+            Map.entry("browser_navigate", "BROWSER_NAVIGATE"),
+            Map.entry("github", "GITHUB"),
+            Map.entry("web_search", "WEB_SEARCH_BRAVE"),
+            Map.entry("garuda", "DELEGATE_TO_AGENT"),
+            Map.entry("delegate", "DELEGATE_TO_AGENT"));
+
+    private List<String> mapSkillsJarTools(String allowedTools) {
+        if (allowedTools == null || allowedTools.isBlank()) {
+            return List.of();
+        }
+        return Arrays.stream(allowedTools.split("\\s+"))
+                .map(tool -> {
+                    var cap = ToolCapability.fromToolName(tool);
+                    if (cap.isPresent()) {
+                        return cap.get().name();
+                    }
+                    return SKILLSJARS_TOOL_MAP.get(tool.toLowerCase(Locale.ROOT));
+                })
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
     }
 }

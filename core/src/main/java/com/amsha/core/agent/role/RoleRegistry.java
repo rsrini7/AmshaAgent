@@ -65,6 +65,28 @@ public class RoleRegistry {
     }
 
     /**
+     * Controls which roles require human approval by evaluating the raw role name.
+     * Checks dynamic skill roles first to respect custom requiresApproval definitions,
+     * falling back to static role configuration.
+     *
+     * @param roleName the raw role name string
+     * @return true if the role's tool calls require explicit approval
+     */
+    public boolean requiresApprovalForTools(String roleName) {
+        if (roleName == null) return true;
+        RoleDefinition dynamicDef = dynamicRoles.get(roleName);
+        if (dynamicDef != null) {
+            return dynamicDef.requiresApproval();
+        }
+        try {
+            AgentRoleEnum role = AgentRoleEnum.fromString(roleName);
+            return role.definition().requiresApproval();
+        } catch (IllegalArgumentException e) {
+            return true;
+        }
+    }
+
+    /**
      * Registers a new dynamic role derived from a skill.
      * @param name The canonical skill name
      * @param definition The compiled role definition

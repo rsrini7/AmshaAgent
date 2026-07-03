@@ -160,7 +160,7 @@ public class ToolInvocationGuard {
 
         boolean isExempt = isSchedulingTool || isDelegationTool || (isMemoryTool && level != AutonomyLevel.READONLY);
 
-        if ((roleRegistry.requiresApprovalForTools(resolvedRole) || toolRequiresApproval)
+        if ((roleRegistry.requiresApprovalForTools(agentRole) || toolRequiresApproval)
                 && !isExempt
                 && !AutonomyLevel.FULL.equals(level)) {
 

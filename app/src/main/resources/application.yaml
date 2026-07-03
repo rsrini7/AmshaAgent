@@ -394,6 +394,8 @@ amsha:
   auto-seed-secrets: "${AMSHA_AUTO_SEED_SECRETS:false}"
   skills:
     hot-reload: true
+    skillsjars:
+      require-approval-for-sensitive: ${AMSHA_SKILLSJARS_REQUIRE_APPROVAL_FOR_SENSITIVE:true}
   core:
     util:
       json-salvage-max-lines: ${AMSHA_CORE_UTIL_JSON_SALVAGE_MAX_LINES:20}

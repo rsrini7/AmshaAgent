@@ -328,6 +328,12 @@ schema) and must match the model used by every active provider.
 | `AMSHA_TOOLS_PLAYWRIGHT_MCP_COMMAND` | `npx` | MCP server launch command |
 | `AMSHA_TOOLS_PLAYWRIGHT_MCP_ARGS` | `@playwright/mcp` | MCP server args |
 | `AMSHA_TOOLS_PLAYWRIGHT_RESUMPTION_STALE_MARK_SECONDS` | `300` | Playwright resume staleness (s) |
+
+## Skills & SkillsJars
+
+| Variable | Default | Description |
+|---|---|---|
+| `AMSHA_SKILLSJARS_REQUIRE_APPROVAL_FOR_SENSITIVE` | `true` | When true, sensitive operations requested by third-party SkillsJars (e.g. COMPUTE/NETWORK/DELEGATE capabilities) require human approval. |
 | `AMSHA_GITHUB_REPOS_PER_PAGE` | `100` | GitHub API results per page |
 
 ## Web Channel

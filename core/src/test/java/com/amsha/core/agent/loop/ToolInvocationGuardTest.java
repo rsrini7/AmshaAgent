@@ -96,7 +96,7 @@ class ToolInvocationGuardTest {
     @Test
     void testHitlPauseForApproval() {
         workspaceRun("s1", AutonomyLevel.SUPERVISED, () -> {
-            when(roleRegistry.requiresApprovalForTools(any())).thenReturn(true);
+            when(roleRegistry.requiresApprovalForTools(anyString())).thenReturn(true);
 
             ToolInvocationGuard.GuardDecision result = guard.evaluate(
                     "s1",
@@ -115,7 +115,7 @@ class ToolInvocationGuardTest {
     @Test
     void testFullAutonomySkipsHitl() {
         workspaceRun("s1", AutonomyLevel.FULL, () -> {
-            when(roleRegistry.requiresApprovalForTools(any())).thenReturn(true);
+            when(roleRegistry.requiresApprovalForTools(anyString())).thenReturn(true);
 
             ToolInvocationGuard.GuardDecision result = guard.evaluate(
                     "s1", "coordinator", AutonomyLevel.FULL, "delete-all", Map.of(), List.of(), "goal", List.of());
@@ -212,7 +212,7 @@ class ToolInvocationGuardTest {
             when(coreAppendTool.idempotencyMode()).thenReturn(IdempotencyMode.IDEMPOTENT);
             when(coreAppendTool.requiresManualApproval(any())).thenReturn(false);
             when(mockToolRegistry.findTool("core_memory_append")).thenReturn(Optional.of(coreAppendTool));
-            when(roleRegistry.requiresApprovalForTools(any())).thenReturn(false);
+            when(roleRegistry.requiresApprovalForTools(anyString())).thenReturn(false);
 
             ToolInvocationGuard.GuardDecision result = guard.evaluate(
                     "s1",

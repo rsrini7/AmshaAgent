@@ -8,7 +8,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import com.amsha.core.agent.role.AgentRoleEnum;
 import com.amsha.core.agent.role.CapabilityRegistry;
 import com.amsha.core.agent.role.RoleRegistry;
 import com.amsha.core.audit.AuditService;
@@ -102,8 +101,7 @@ public class ToolGovernanceGuard {
         // 0. ROLE TRUST: if the role has requiresApproval=false, it's a trusted execution role.
         // Trusted roles bypass operation policy checks for non-sensitive operations.
         // NETWORK_OUTBOUND (external search) and EXECUTE_SHELL (code execution) always require HITL.
-        AgentRoleEnum roleEnum = AgentRoleEnum.fromString(ctx.agentRole());
-        boolean isTrustedRole = !roleRegistry.requiresApprovalForTools(roleEnum);
+        boolean isTrustedRole = !roleRegistry.requiresApprovalForTools(ctx.agentRole());
         boolean isSensitiveOp =
                 requiredOp == ToolOperation.NETWORK_OUTBOUND || requiredOp == ToolOperation.EXECUTE_SHELL;
         if (isTrustedRole && !isSensitiveOp) {

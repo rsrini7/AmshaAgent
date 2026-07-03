@@ -15,4 +15,6 @@ public record SkillFrontmatter(
 
         @JsonProperty("tool-capabilities") List<String> toolCapabilities,
 
+        @JsonProperty("allowed-tools") String allowedTools,
+
         @JsonProperty("max-iterations") int maxIterations) {}
