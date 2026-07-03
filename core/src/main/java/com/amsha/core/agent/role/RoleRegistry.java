@@ -152,8 +152,18 @@ public class RoleRegistry {
      */
     public Set<String> permittedToolsForDynamic(String canonicalName) {
         RoleDefinition def = dynamicRoles.get(canonicalName);
-        return def == null
-                ? Set.of()
-                : def.capabilities().stream().map(ToolCapability::toolName).collect(Collectors.toUnmodifiableSet());
+        Set<String> base = def == null
+                ? new HashSet<>()
+                : def.capabilities().stream()
+                        .map(ToolCapability::toolName)
+                        .collect(Collectors.toCollection(HashSet::new));
+        // Merge supplemental grants from CapabilityRegistry (e.g. host_exec granted by HostExecSkillGrant)
+        if (capabilityRegistry != null) {
+            Set<String> supplemental = capabilityRegistry.getSupplementalTools(canonicalName);
+            if (!supplemental.isEmpty()) {
+                base.addAll(supplemental);
+            }
+        }
+        return Collections.unmodifiableSet(base);
     }
 }

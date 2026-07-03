@@ -107,4 +107,21 @@ class SkillDefinitionParserTest {
         assertTrue(def.toolCapabilities().contains("WEB_SEARCH_BRAVE"));
         assertTrue(def.toolCapabilities().contains("DELEGATE_TO_AGENT"));
     }
+
+    @Test
+    void testHostExecAllowedToolsMapping() {
+        String doc = """
+                ---
+                name: jdb-debugger
+                description: Host debugger skill
+                allowed-tools: HostExec(jdb:*) hostexec host bash
+                max-iterations: 10
+                ---
+                prompt
+                """;
+
+        SkillDefinition def = parser.parse(doc);
+        assertTrue(def.toolCapabilities().contains("HOST_EXEC"));
+        assertTrue(def.toolCapabilities().contains("SANDBOX_EXEC"));
+    }
 }

@@ -90,7 +90,9 @@ public class SkillDefinitionParser {
             Map.entry("github", "GITHUB"),
             Map.entry("web_search", "WEB_SEARCH_BRAVE"),
             Map.entry("garuda", "DELEGATE_TO_AGENT"),
-            Map.entry("delegate", "DELEGATE_TO_AGENT"));
+            Map.entry("delegate", "DELEGATE_TO_AGENT"),
+            Map.entry("hostexec", "HOST_EXEC"),
+            Map.entry("host", "HOST_EXEC"));
 
     private static final Pattern SKILLSJARS_TOOL_PATTERN = Pattern.compile("^(\\w+)\\(.*\\)$");
 

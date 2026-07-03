@@ -511,6 +511,11 @@ amsha:
       mcp-command: "${AMSHA_TOOLS_PLAYWRIGHT_MCP_COMMAND:npx}"
       mcp-args: "${AMSHA_TOOLS_PLAYWRIGHT_MCP_ARGS:@playwright/mcp}"
 
+    # Direct-host execution grant list for diagnostic skills that cannot work
+    # inside the Podman sandbox (e.g. JDB attaching to host JVMs).
+    host-exec:
+      skills: "${AMSHA_TOOLS_HOST_EXEC_SKILLS:jdb-debugger}"
+
   hitl:
     pre-executable-tools: ""   # (§75-A1) comma-separated tool names
     delegate-approver-ids: ""  # (§75-B1) comma-separated user IDs
