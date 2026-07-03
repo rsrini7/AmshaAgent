@@ -103,6 +103,27 @@ public class RoleRegistry {
     }
 
     /**
+     * Resolves the role definition for any role (built-in or dynamic skill).
+     *
+     * @param roleName the raw role name string
+     * @return the resolved RoleDefinition, never null (returns a default fallback if unknown)
+     */
+    public RoleDefinition resolveRoleDefinition(String roleName) {
+        if (roleName == null || roleName.isBlank()) {
+            return AgentRoleEnum.COORDINATOR.definition();
+        }
+        RoleDefinition dynamicDef = dynamicRoles.get(roleName);
+        if (dynamicDef != null) {
+            return dynamicDef;
+        }
+        try {
+            return AgentRoleEnum.fromString(roleName).definition();
+        } catch (IllegalArgumentException e) {
+            return new RoleDefinition(roleName, "Dynamic Role", "", 5, true, false, Set.of(), Set.of());
+        }
+    }
+
+    /**
      * Resolves permitted tools for any role (built-in or dynamic skill).
      * <p>
      * For skill roles (prefixed with "skill:"), uses the dynamic role definition's
@@ -131,8 +152,18 @@ public class RoleRegistry {
      */
     public Set<String> permittedToolsForDynamic(String canonicalName) {
         RoleDefinition def = dynamicRoles.get(canonicalName);
-        return def == null
-                ? Set.of()
-                : def.capabilities().stream().map(ToolCapability::toolName).collect(Collectors.toUnmodifiableSet());
+        Set<String> base = def == null
+                ? new HashSet<>()
+                : def.capabilities().stream()
+                        .map(ToolCapability::toolName)
+                        .collect(Collectors.toCollection(HashSet::new));
+        // Merge supplemental grants from CapabilityRegistry (e.g. host_exec granted by HostExecSkillGrant)
+        if (capabilityRegistry != null) {
+            Set<String> supplemental = capabilityRegistry.getSupplementalTools(canonicalName);
+            if (!supplemental.isEmpty()) {
+                base.addAll(supplemental);
+            }
+        }
+        return Collections.unmodifiableSet(base);
     }
 }

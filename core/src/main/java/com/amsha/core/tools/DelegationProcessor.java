@@ -13,6 +13,7 @@ import com.amsha.core.agent.AgentSentinels;
 import com.amsha.core.agent.loop.GroupConsultationService;
 import com.amsha.core.agent.result.AgentResult;
 import com.amsha.core.agent.role.AgentRoleEnum;
+import com.amsha.core.agent.role.RoleRegistry;
 import com.amsha.core.util.AgentResultFormatter;
 
 import org.jboss.logging.Logger;
@@ -30,9 +31,22 @@ public class DelegationProcessor {
     @Inject
     GroupConsultationService groupConsultationService;
 
+    @Inject
+    RoleRegistry roleRegistry;
+
     public String normalizeAgent(String agentName, String goal, String currentRoleName) {
         String normalized = agentName.trim().toLowerCase(Locale.ROOT);
         String delegatableList = getDelegatableAgentList();
+
+        // If it's a dynamic skill name without the "skill:" prefix, auto-prepend it if registered
+        if (roleRegistry != null && !normalized.startsWith(AgentRoleEnum.SKILL_PREFIX)) {
+            String skillKey = AgentRoleEnum.SKILL_PREFIX + normalized;
+            boolean isRegisteredSkill = roleRegistry.getDynamicRoles().stream()
+                    .anyMatch(def -> def.canonicalName().equalsIgnoreCase(skillKey));
+            if (isRegisteredSkill) {
+                normalized = skillKey;
+            }
+        }
 
         if (isSelfDelegation(normalized, currentRoleName)) {
             log.infof("[REDIRECT] %s tried to delegate to itself — auto-redirecting to coordinator", currentRoleName);

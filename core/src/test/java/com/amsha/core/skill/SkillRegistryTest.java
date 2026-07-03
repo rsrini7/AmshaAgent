@@ -16,7 +16,7 @@ class SkillRegistryTest {
     private final SkillRegistry registry = new SkillRegistry();
 
     private CompiledSkillEntry createMockEntry(String name, String regex) {
-        SkillDefinition def = new SkillDefinition("id", name, "desc", List.of(), List.of(), 5, "prompt");
+        SkillDefinition def = new SkillDefinition("id", name, "desc", List.of(), List.of(), 5, "prompt", null);
         List<Pattern> patterns = List.of(Pattern.compile(regex, Pattern.CASE_INSENSITIVE));
         RoleDefinition role = new RoleDefinition("skill:" + name, name, "desc", 5, false, false, Set.of(), Set.of());
         return new CompiledSkillEntry(def, patterns, role, "classpath");

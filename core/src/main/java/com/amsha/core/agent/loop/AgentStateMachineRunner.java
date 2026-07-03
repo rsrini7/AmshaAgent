@@ -105,21 +105,23 @@ public class AgentStateMachineRunner {
         int offset = context.getCheckpointRestoreOffset();
         ReasoningStep lastToolStep = history.stream()
                 .skip(offset)
-                .filter(s -> ToolCapability.SANDBOX_EXEC.toolName().equals(s.action())
+                .filter(s -> (ToolCapability.SANDBOX_EXEC.toolName().equals(s.action())
+                                || ToolCapability.HOST_EXEC.toolName().equals(s.action()))
                         && s.observation() != null
                         && !s.observation().isBlank())
                 .reduce((first, second) -> second)
                 .orElse(null);
 
-        boolean currentTurnHasSandboxAttempt = history.stream()
+        boolean currentTurnHasToolAttempt = history.stream()
                 .skip(offset)
-                .anyMatch(s -> ToolCapability.SANDBOX_EXEC.toolName().equals(s.action()));
+                .anyMatch(s -> ToolCapability.SANDBOX_EXEC.toolName().equals(s.action())
+                        || ToolCapability.HOST_EXEC.toolName().equals(s.action()));
 
-        if (lastToolStep != null && currentTurnHasSandboxAttempt) {
-            history.add(ReasoningStep.systemMessage(
-                    "The sandbox_exec tool returned the following output. Report it EXACTLY:\n" + "OUTPUT: "
-                            + lastToolStep.observation() + "\n"
-                            + "Do NOT paraphrase, recalculate, or invent values. Use the exact value above."));
+        if (lastToolStep != null && currentTurnHasToolAttempt) {
+            history.add(ReasoningStep.systemMessage("The " + lastToolStep.action()
+                    + " tool returned the following output. Report it EXACTLY:\n" + "OUTPUT: "
+                    + lastToolStep.observation() + "\n"
+                    + "Do NOT paraphrase, recalculate, or invent values. Use the exact value above."));
         }
 
         try {

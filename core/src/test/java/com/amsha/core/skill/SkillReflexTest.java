@@ -66,7 +66,7 @@ class SkillReflexTest {
     @Test
     void testPopulatedRegistryOutput() {
         SkillDefinition def1 =
-                new SkillDefinition("id1", "reviewer", "Reviews PRs", List.of("pattern"), List.of(), 5, "prompt");
+                new SkillDefinition("id1", "reviewer", "Reviews PRs", List.of("pattern"), List.of(), 5, "prompt", null);
         RoleDefinition role1 =
                 new RoleDefinition("skill:reviewer", "Reviewer", "Reviews PRs", 5, false, false, Set.of(), Set.of());
         CompiledSkillEntry e1 = new CompiledSkillEntry(def1, List.of(Pattern.compile("pattern")), role1, "db");
@@ -80,7 +80,7 @@ class SkillReflexTest {
 
     @Test
     void testBlankDescriptionFallback() {
-        SkillDefinition def1 = new SkillDefinition("id1", "minimal", "", List.of(), List.of(), 5, "prompt");
+        SkillDefinition def1 = new SkillDefinition("id1", "minimal", "", List.of(), List.of(), 5, "prompt", null);
         RoleDefinition role1 = new RoleDefinition("skill:minimal", "Minimal", "", 5, false, false, Set.of(), Set.of());
         CompiledSkillEntry e1 = new CompiledSkillEntry(def1, List.of(), role1, "db");
 

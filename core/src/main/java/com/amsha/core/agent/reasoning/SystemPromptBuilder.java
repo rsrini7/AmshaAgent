@@ -103,10 +103,32 @@ public class SystemPromptBuilder {
             String skillName = AgentRoleEnum.skillName(agentRole);
             roleEnum = AgentRoleEnum.fromString(agentRole);
 
-            personaPrompt = skillRegistry
-                    .findByName(skillName)
+            var skillEntry = skillRegistry.findByName(skillName);
+            String basePrompt = skillEntry
                     .map(entry -> entry.definition().systemPrompt())
                     .orElseGet(() -> agentPersonaRegistry.getPersonaPrompt(context, AgentRoleEnum.COORDINATOR));
+
+            // Inject skill home path so the LLM knows where companion scripts live
+            String skillHome = skillEntry.map(e -> e.definition().skillHome()).orElse(null);
+            if (skillHome != null && !skillHome.isBlank()) {
+                basePrompt += "\n\n## Skill Assets\n"
+                        + "Companion scripts and references for this skill are located at:\n"
+                        + "`" + skillHome + "`\n"
+                        + "Replace any relative 'scripts/...' paths in the instructions below with the full path above.\n";
+            }
+
+            // Inject execution protocol for skill roles
+            basePrompt += "\n\n## Execution Protocol\n"
+                    + "1. Plan ALL steps needed to accomplish the goal BEFORE calling any tools.\n"
+                    + "2. Combine ALL necessary commands into a SINGLE host_exec call. Every host_exec requires human approval — do NOT make multiple calls.\n"
+                    + "   - Linux/macOS: chain with `&&` or `;` — e.g. `cmd1 && cmd2 && cmd3`\n"
+                    + "   - Windows CMD: chain with `&&` — e.g. `cmd1 && cmd2 && cmd3`\n"
+                    + "   - Windows PowerShell: chain with `;` — e.g. `cmd1; cmd2; cmd3`\n"
+                    + "   - Cross-platform scripts: use `bash script.sh` on Linux/macOS, `wsl bash script.sh` on Windows\n"
+                    + "3. If a skill provides scripts, call the script directly — do NOT run prerequisite commands separately. The scripts handle those steps internally.\n"
+                    + "4. After the single tool call returns, emit a FINISH action with a summary of the results.\n"
+                    + "5. If the tool call fails, retry once. If it fails again, emit FINISH with the error details.\n";
+            personaPrompt = basePrompt;
         } else {
             roleEnum = AgentRoleEnum.fromString(agentRole);
             personaPrompt = agentPersonaRegistry.getPersonaPrompt(context, roleEnum);

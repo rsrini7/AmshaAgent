@@ -82,6 +82,8 @@ APPROVAL_NEEDED_PATTERNS = [
     "Approval pending",
     "type approve or deny",
     "approve or deny before sending",
+    "Parallel batch execution requires approval",
+    "Type /approve or /deny",
 ]
 AMBIGUOUS_APPROVAL_PATTERNS = [
     "Ambiguous approval",
@@ -140,7 +142,7 @@ _CAT_RULES: list[tuple[list[str], PromptCategory]] = [
     (["search for","real time search","real search","current news","LTS version",
       "japanese","\u6a5f\u68b0\u5b66\u4e60","\u65e5\u672c\u8a9e","b\u062dth","Amsha Agent*","architecture notes",
       "hardcorded string","scan is there"], PromptCategory.KNOWLEDGE),
-    (["/skills","loaded skills","skills list","skillsjars","remote-browser","skill:"], PromptCategory.SKILLSJARS),
+    (["/skills","loaded skills","skills list","skillsjars","remote-browser","jdb-debugger","skill:"], PromptCategory.SKILLSJARS),
 ]
 
 def classify(prompt: str) -> PromptCategory:
@@ -244,7 +246,7 @@ def build_assertion(prompt: str, cat: PromptCategory) -> AssertionRule:
     if cat == PromptCategory.SKILLSJARS:
         if p.strip() == "/skills":
             return AssertionRule(must_contain=["skill","active","loaded"], expect_approval=False)
-        if "delegate" in p and ("remote-browser" in p or "skill:" in p):
+        if "delegate" in p and ("remote-browser" in p or "jdb-debugger" in p or "skill:" in p):
             return AssertionRule(expect_approval=True)
         return AssertionRule(expect_approval=True)
 

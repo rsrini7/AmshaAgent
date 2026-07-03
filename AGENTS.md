@@ -455,3 +455,27 @@ amsha:
 # Verify retention config
 grep "AMSHA_MEMORY_RETENTION" .env.example app/src/main/resources/application.yaml
 ```
+
+---
+
+## 10. Dynamic SkillsJars (Agentic Skills) Execution Architecture
+
+Dynamic skills (loaded from classpath `.jar` dependencies under `META-INF/skills/`) act as **instruction-based wrappers** for the agent. 
+
+### How SkillsJars Work:
+1. **JVM Scanning & Prompt Injection**: On startup, `SkillsJarSkillProvider` locates skills jars, parses their `SKILL.md` (which details system prompts, allowed tools, and rules), and registers the dynamic role with the system's `RoleRegistry`.
+2. **Tool Bindings & CLI Dependencies**: 
+   - A skill jar (e.g. `remote-browser` or `jdb-debugger`) defines permitted tool capabilities (such as `sandbox_exec`).
+   - The skill's `SKILL.md` instructs the LLM on which command-line utilities to invoke inside the sandbox (e.g. `browser-use` CLI or `jdb` commands).
+3. **Execution Environment Requirement**: 
+   - When the agent executes a dynamic skill role, it utilizes `sandbox_exec` to run bash scripts.
+   - Therefore, the execution sandbox (or host fallback environment) must pre-install the respective CLI binaries (such as `browser-use`, `jdb`, `chromium`, etc.) so that the shell execution does not fail with `command not found`.
+
+### Cloud Dependency Vetting (P105 Lesson):
+Before adding a SkillsJar to `app/pom.xml`, **extract and read** the skill's `SKILL.md` (`jar xf <jar> META-INF/skills/.../SKILL.md`) and verify:
+- Does it work offline / in an air-gapped sandbox?
+- Does it require cloud API keys or paid SaaS authentication?
+- Are all CLI dependencies installable in `Dockerfile.toolrunner`?
+
+**Cloud-only skills MUST NOT be bundled** unless the API key is provisioned in `.env` and injected via `SandboxSecretResolver`. A skill that silently fails without an API key triggers infinite Shiva auto-heal loops (`heal:shiva:...:heal:shiva:...`) until workspace paths exceed OS limits. See `docs/Architecture_Invariants.md` §24.5.
+

@@ -13,19 +13,19 @@ class SkillDefinitionTest {
     void testNullNameThrows() {
         assertThrows(
                 NullPointerException.class,
-                () -> new SkillDefinition("id", null, "desc", List.of(), List.of(), 5, "systemPrompt"));
+                () -> new SkillDefinition("id", null, "desc", List.of(), List.of(), 5, "systemPrompt", null));
     }
 
     @Test
     void testNullSystemPromptThrows() {
         assertThrows(
                 NullPointerException.class,
-                () -> new SkillDefinition("id", "code-reviewer", "desc", List.of(), List.of(), 5, null));
+                () -> new SkillDefinition("id", "code-reviewer", "desc", List.of(), List.of(), 5, null, null));
     }
 
     @Test
     void testNullListsBecomeEmpty() {
-        SkillDefinition def = new SkillDefinition("id", "code-reviewer", "desc", null, null, 5, "prompt");
+        SkillDefinition def = new SkillDefinition("id", "code-reviewer", "desc", null, null, 5, "prompt", null);
         assertNotNull(def.triggerPatterns());
         assertTrue(def.triggerPatterns().isEmpty());
         assertNotNull(def.toolCapabilities());
@@ -34,30 +34,35 @@ class SkillDefinitionTest {
 
     @Test
     void testMaxIterationsDefaultsTo5IfZeroOrNegative() {
-        SkillDefinition def1 = new SkillDefinition("id", "code-reviewer", "desc", List.of(), List.of(), 0, "prompt");
+        SkillDefinition def1 =
+                new SkillDefinition("id", "code-reviewer", "desc", List.of(), List.of(), 0, "prompt", null);
         assertEquals(5, def1.maxIterations());
 
-        SkillDefinition def2 = new SkillDefinition("id", "code-reviewer", "desc", List.of(), List.of(), -10, "prompt");
+        SkillDefinition def2 =
+                new SkillDefinition("id", "code-reviewer", "desc", List.of(), List.of(), -10, "prompt", null);
         assertEquals(5, def2.maxIterations());
 
-        SkillDefinition def3 = new SkillDefinition("id", "code-reviewer", "desc", List.of(), List.of(), 10, "prompt");
+        SkillDefinition def3 =
+                new SkillDefinition("id", "code-reviewer", "desc", List.of(), List.of(), 10, "prompt", null);
         assertEquals(10, def3.maxIterations());
     }
 
     @Test
     void testNullOrBlankIdGeneratesUUID() {
-        SkillDefinition def1 = new SkillDefinition(null, "code-reviewer", "desc", List.of(), List.of(), 5, "prompt");
+        SkillDefinition def1 =
+                new SkillDefinition(null, "code-reviewer", "desc", List.of(), List.of(), 5, "prompt", null);
         assertNotNull(def1.id());
         assertFalse(def1.id().isBlank());
 
-        SkillDefinition def2 = new SkillDefinition("   ", "code-reviewer", "desc", List.of(), List.of(), 5, "prompt");
+        SkillDefinition def2 =
+                new SkillDefinition("   ", "code-reviewer", "desc", List.of(), List.of(), 5, "prompt", null);
         assertNotNull(def2.id());
         assertFalse(def2.id().isBlank());
     }
 
     @Test
     void testNullDescriptionBecomesEmptyString() {
-        SkillDefinition def = new SkillDefinition("id", "code-reviewer", null, List.of(), List.of(), 5, "prompt");
+        SkillDefinition def = new SkillDefinition("id", "code-reviewer", null, List.of(), List.of(), 5, "prompt", null);
         assertNotNull(def.description());
         assertEquals("", def.description());
     }

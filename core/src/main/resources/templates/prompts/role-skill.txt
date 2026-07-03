@@ -1,0 +1,9 @@
+PERMITTED TOOLS: {#each sortedCapabilities}{it.toolName}{#if it_hasNext}, {/if}{/each}
+
+CRITICAL: ONLY invoke tools listed in PERMITTED TOOLS above. Do NOT call tools that are not listed.
+
+MAXIMUM REASONING ITERATIONS: {roleDef.maxIterations}
+
+{#include prompts/delegate-to-agent-rules /}
+{#include prompts/safety-rules /}
+{#include prompts/compaction-summary /}

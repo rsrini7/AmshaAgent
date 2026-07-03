@@ -26,6 +26,7 @@ import com.amsha.core.agent.reasoning.ReasoningEngine;
 import com.amsha.core.agent.result.AgentResult;
 import com.amsha.core.agent.role.AgentGroupRegistry;
 import com.amsha.core.agent.role.AgentRoleEnum;
+import com.amsha.core.agent.role.RoleRegistry;
 import com.amsha.core.agent.role.ToolCapability;
 import com.amsha.core.audit.AuditService;
 import com.amsha.core.governance.BudgetExceededException;
@@ -67,6 +68,9 @@ class DelegateToAgentToolTest {
     @Mock
     GroupConsultationService groupConsultationService;
 
+    @Mock
+    RoleRegistry roleRegistry;
+
     @InjectMocks
     DelegateToAgentTool tool;
 
@@ -85,6 +89,10 @@ class DelegateToAgentToolTest {
         Mockito.lenient()
                 .when(checkpointCrud.findBySessionAndRole(any(), any()))
                 .thenReturn(Optional.empty());
+        Mockito.lenient().when(roleRegistry.resolveRoleDefinition(any())).thenAnswer(invocation -> {
+            String roleId = invocation.getArgument(0);
+            return AgentRoleEnum.fromString(roleId).definition();
+        });
     }
 
     @Test
@@ -350,6 +358,7 @@ class DelegateToAgentToolTest {
         groupTool.agentLoop = agentLoopInstance;
         groupTool.checkpointCrud = checkpointCrud;
         groupTool.auditService = auditService;
+        groupTool.roleRegistry = roleRegistry;
         groupTool.otelContext = otelContext;
         groupTool.groupConsultationService = mockTriageService;
         groupTool.groupConsultationEngine = mockEngine;

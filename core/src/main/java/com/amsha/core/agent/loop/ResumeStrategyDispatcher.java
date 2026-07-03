@@ -120,7 +120,7 @@ class ResumeStrategyDispatcher {
                 boolean allDenied =
                         !decisions.isEmpty() && decisions.values().stream().allMatch(ToolDecision.DENIED::equals);
                 if (allDenied) return AgentSentinels.GOAL_DENY_APPROVED;
-            } catch (Exception e) {
+            } catch (Exception _) {
                 log.warnf("resolveResumeGoal: failed to parse batch decisions for session %s", cp.getSessionId());
             }
         }

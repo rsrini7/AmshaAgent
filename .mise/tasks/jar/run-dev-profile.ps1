@@ -28,6 +28,13 @@ if ($cmd -in @('chat','ask')) {
     $jvmArgs += '-Damsha.telegram.enabled=false'
 }
 if ($cmd -eq 'attach') { $jvmArgs += '-Damsha.telegram.enabled=true' }
+# JDWP debug: set AMSHA_DEBUG=true (or AMSHA_DEBUG=PORT) to enable
+if ($env:AMSHA_DEBUG -and $env:AMSHA_DEBUG -ne 'false') {
+    $debugPort = if ($env:AMSHA_DEBUG -match '^\d+$') { $env:AMSHA_DEBUG } elseif ($env:AMSHA_DEBUG_PORT) { $env:AMSHA_DEBUG_PORT } else { '5005' }
+    $jvmArgs += "-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:$debugPort"
+    Write-Host "[jar:dev] JDWP debug enabled on port $debugPort"
+    Write-Host "[jar:dev] Attach:  jdb -connect com.sun.jdi.SocketAttach:hostname=localhost,port=$debugPort"
+}
 Write-Host "▶   Starting JAR in dev profile - mode: $cmd"
 try {
     & java @jvmArgs -jar $jar $cmd

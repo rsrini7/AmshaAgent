@@ -62,3 +62,10 @@ Use 'shiva' for the agent, 'This code has a SQL injection vulnerability AND the 
 
 BAD EXAMPLE (lacks context):
 Use 'brahma' for the agent and 'fix it' for the goal.
+
+{#if dynamicSkills}
+DYNAMIC SKILLS / SPECIALISTS (loaded at runtime):
+{#each dynamicSkills}
+- {it.canonicalName} ({it.displayName}): {it.intentDescription}
+{/each}
+{/if}

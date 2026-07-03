@@ -11,6 +11,7 @@ import java.util.Optional;
 
 import com.amsha.core.agent.reasoning.prompt.PromptRegistry;
 import com.amsha.core.agent.role.AgentRoleEnum;
+import com.amsha.core.agent.role.RoleRegistry;
 import com.amsha.core.tools.AgentTool;
 import com.amsha.core.tools.ToolRegistry;
 
@@ -29,6 +30,11 @@ class PromptTemplateEngineTest {
         engine = new PromptTemplateEngine();
         engine.toolRegistry = mock(ToolRegistry.class);
         when(engine.toolRegistry.findTool(anyString())).thenReturn(Optional.of(mock(AgentTool.class)));
+        engine.roleRegistry = mock(RoleRegistry.class);
+        when(engine.roleRegistry.resolveRoleDefinition(anyString())).thenAnswer(inv -> {
+            String roleId = inv.getArgument(0);
+            return AgentRoleEnum.fromString(roleId).definition();
+        });
         engine.promptRegistry = new PromptRegistry() {
             @Override
             public String get(String roleId, String sectionKey) {

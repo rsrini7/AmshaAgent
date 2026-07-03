@@ -10,6 +10,8 @@ import dev.langchain4j.data.message.UserMessage;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
@@ -18,8 +20,10 @@ import java.util.stream.Collectors;
 
 import com.amsha.core.agent.AgentSentinels;
 import com.amsha.core.agent.loop.AgentExecutionContext;
+import com.amsha.core.agent.role.AgentRoleEnum;
 import com.amsha.core.agent.role.ToolCapability;
 import com.amsha.core.security.AutonomyLevel;
+import com.amsha.core.skill.SkillRegistry;
 import com.amsha.core.tools.AgentTool;
 import com.amsha.core.tools.ToolRegistry;
 import com.amsha.core.tools.search.ToolSearchIndex;
@@ -40,6 +44,9 @@ public class ReasoningMessageAssembler {
 
     @Inject
     ToolSearchIndex toolSearchIndex;
+
+    @Inject
+    SkillRegistry skillRegistry;
 
     @Inject
     public ReasoningMessageAssembler(ChatHistoryAssembler historyAssembler, ToolRegistry toolRegistry) {
@@ -106,8 +113,14 @@ public class ReasoningMessageAssembler {
         boolean isBackgroundSession = context.autonomyLevel() == AutonomyLevel.BACKGROUND
                 || (context.sessionId() != null && context.sessionId().startsWith(AgentSentinels.CRON_SESSION_PREFIX));
 
-        List<ToolSpecification> toolSpecifications =
-                resolveTools(allowedTools, isSimpleChitchat, context.isForceFinishRetry(), isBackgroundSession, goal);
+        List<ToolSpecification> toolSpecifications = resolveTools(
+                allowedTools,
+                isSimpleChitchat,
+                context.isForceFinishRetry(),
+                isBackgroundSession,
+                goal,
+                agentRole,
+                context.sessionId());
 
         log.debugf(
                 "[ReasoningAssembler] Assembled %d messages and %d tools for session %s",
@@ -160,9 +173,24 @@ public class ReasoningMessageAssembler {
             boolean isSimpleChitchat,
             boolean isForceFinishRetry,
             boolean isBackgroundSession,
-            String goal) {
+            String goal,
+            String agentRole,
+            String sessionId) {
         if (isSimpleChitchat || isForceFinishRetry) {
             return List.of();
+        }
+
+        // Get skill home path for dynamic tool description injection
+        final String skillHome;
+        if (agentRole != null && AgentRoleEnum.isSkillRole(agentRole)) {
+            String skillName = AgentRoleEnum.skillName(agentRole);
+            var skillEntry = skillRegistry.currentSnapshot().stream()
+                    .filter(e -> e.definition().name().equals(skillName))
+                    .findFirst();
+            skillHome = skillEntry.map(e -> e.definition().skillHome()).orElse(null);
+            log.infof("[ToolDescInjection] agentRole=%s skillName=%s skillHome=%s", agentRole, skillName, skillHome);
+        } else {
+            skillHome = null;
         }
 
         List<String> ranked = new ArrayList<>();
@@ -186,11 +214,29 @@ public class ReasoningMessageAssembler {
                                 && !name.equals(ToolCapability.MANAGE_SCHEDULE.toolName())))
                 .map(name -> toolRegistry.findTool(name).orElseThrow())
                 .filter(AgentTool::isEnabled)
-                .map(tool -> ToolSpecification.builder()
-                        .name(tool.name())
-                        .description(tool.description())
-                        .parameters(tool.parametersSchema())
-                        .build())
+                .map(tool -> {
+                    String description = tool.description();
+                    // Inject skill's basePath into host_exec description for skill roles
+                    if (skillHome != null && ToolCapability.HOST_EXEC.toolName().equals(tool.name())) {
+                        String scriptsDir = skillHome + "/scripts";
+                        boolean hasScripts = Files.isDirectory(Path.of(scriptsDir));
+                        log.infof(
+                                "[ToolDescInjection] tool=%s scriptsDir=%s hasScripts=%s",
+                                tool.name(), scriptsDir, hasScripts);
+                        if (hasScripts) {
+                            description += "\n\nSkill scripts are located at: " + scriptsDir
+                                    + "\nIMPORTANT: Use host_exec (not sandbox_exec) to run skill scripts — they need host filesystem access."
+                                    + "\nCall scripts directly with full path. Do NOT run prerequisite commands."
+                                    + "\nFor non-interactive tasks, use scripts that accept input via flags or stdin."
+                                    + "\nChain commands with && (Linux/macOS) or ; (PowerShell) if needed.";
+                        }
+                    }
+                    return ToolSpecification.builder()
+                            .name(tool.name())
+                            .description(description)
+                            .parameters(tool.parametersSchema())
+                            .build();
+                })
                 .collect(Collectors.toList());
     }
 }

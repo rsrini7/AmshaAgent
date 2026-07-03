@@ -48,7 +48,7 @@ class SkillAwareIntentDetectorTest {
 
     @Test
     void testFastPathRoutesToSkillAndBypassesLLM() {
-        SkillDefinition def = new SkillDefinition("id", "code-reviewer", "desc", List.of(), List.of(), 5, "p");
+        SkillDefinition def = new SkillDefinition("id", "code-reviewer", "desc", List.of(), List.of(), 5, "p", null);
         RoleDefinition roleDefinition =
                 new RoleDefinition("skill:code-reviewer", "Code Reviewer", "desc", 5, false, false, Set.of(), Set.of());
         CompiledSkillEntry entry =
@@ -75,7 +75,7 @@ class SkillAwareIntentDetectorTest {
 
     @Test
     void testNameMatchRoutesSkillWithZeroTriggerPatterns() {
-        SkillDefinition def = new SkillDefinition("id2", "remote-browser", "desc", List.of(), List.of(), 5, "p");
+        SkillDefinition def = new SkillDefinition("id2", "remote-browser", "desc", List.of(), List.of(), 5, "p", null);
         RoleDefinition rd = new RoleDefinition(
                 "skill:remote-browser", "Remote Browser", "desc", 5, false, false, Set.of(), Set.of());
         CompiledSkillEntry entry = new CompiledSkillEntry(def, List.of(), rd, "skillsjars");
@@ -90,7 +90,7 @@ class SkillAwareIntentDetectorTest {
 
     @Test
     void testNameMatchIsCaseInsensitive() {
-        SkillDefinition def = new SkillDefinition("id3", "Remote-Browser", "desc", List.of(), List.of(), 5, "p");
+        SkillDefinition def = new SkillDefinition("id3", "Remote-Browser", "desc", List.of(), List.of(), 5, "p", null);
         RoleDefinition rd = new RoleDefinition(
                 "skill:remote-browser", "Remote Browser", "desc", 5, false, false, Set.of(), Set.of());
         CompiledSkillEntry entry = new CompiledSkillEntry(def, List.of(), rd, "skillsjars");

@@ -143,7 +143,7 @@ class SkillLoaderTest {
         addSafeMethod.setAccessible(true);
 
         SkillDefinition sensitiveDef = new SkillDefinition(
-                null, "sensitive-skill", "Reviews code", List.of(), List.of("SANDBOX_EXEC"), 5, "Systems Prompt");
+                null, "sensitive-skill", "Reviews code", List.of(), List.of("SANDBOX_EXEC"), 5, "Systems Prompt", null);
         Map<String, CompiledSkillEntry> map = new HashMap<>();
 
         @SuppressWarnings("unchecked")
@@ -164,7 +164,8 @@ class SkillLoaderTest {
                 List.of(),
                 List.of("RECALL_MEMORY_SEARCH"),
                 5,
-                "Systems Prompt");
+                "Systems Prompt",
+                null);
         map.clear();
         addSafeMethod.invoke(realLoader, map, nonSensitiveDef, "skillsjars");
         CompiledSkillEntry entry2 = map.get("nonsensitive-skill");
@@ -184,7 +185,7 @@ class SkillLoaderTest {
         addSafeMethod.setAccessible(true);
 
         SkillDefinition skill = new SkillDefinition(
-                null, "temp-reload-skill", "Desc", List.of(), List.of("GITHUB"), 5, "Systems Prompt");
+                null, "temp-reload-skill", "Desc", List.of(), List.of("GITHUB"), 5, "Systems Prompt", null);
 
         Map<String, CompiledSkillEntry> map = new HashMap<>();
         addSafeMethod.invoke(realLoader, map, skill, "skillsjars");

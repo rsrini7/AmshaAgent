@@ -1793,4 +1793,30 @@ To maintain a secure, cost-effective, and resilient multi-agent execution pipeli
 3. **Complex Task Backlog Refinement**:
    - Coordinator tasks spanning multiple domains MUST be refined at startup by the `AgentStateMachineRunner`. The goal MUST be split into discrete sub-tasks and populated into the workspace filesystem as active `agent_task` markdown logs to support strict accountability.
 
+### 24.4 Dynamic SkillsJars (Agentic Skills) Execution Invariant
 
+Dynamic skills (loaded dynamically from `.jar` files in classpath) are **instruction-based wrappers** that inject system prompts and permitted tools to the LLM reasoning loop. They do not contain compiled runtime execution engines themselves.
+
+**Invariants:**
+- **External CLI Binary Dependency**: When a dynamic skill (like `remote-browser`) declares an allowed tool capability (like `sandbox_exec`), the LLM is expected to call external CLI binaries (e.g. `browser-use`) inside the sandbox environment.
+- **Environment Provisioning**: The runtime execution sandbox (such as the `amsha-tool-runner` Podman container) or the host machine (in fallback mode) MUST pre-install any external binary/CLI tools referenced by the dynamic skill. If the binaries are absent in the sandbox or on the host PATH, tool execution will fail with `command not found`.
+- **Pre-execution Verification**: Dynamic skills must be documented with their system dependencies, and verification gates (like `browser-use doctor`) must be run during bootstrap or sanity testing.
+
+### 24.5 SkillsJars Cloud Dependency Vetting
+
+Before adding a SkillsJar dependency to `app/pom.xml`, the skill's `SKILL.md` instructions **MUST** be reviewed to determine whether the skill requires:
+
+1. **Cloud API keys / SaaS authentication** (e.g. `browser-use auth login`, `BROWSER_USE_API_KEY`)
+2. **Network egress to third-party services** (e.g. Browser Use Cloud, external browser farms)
+3. **Paid service subscriptions**
+
+**Invariants:**
+- **Cloud-only skills MUST NOT be bundled** unless the corresponding API key is provisioned in `.env` and injected into the sandbox via `SandboxSecretResolver`. A skill that silently fails without an API key wastes LLM tokens on infinite auto-heal loops.
+- **Skill vetting checklist**: Before adding a SkillsJar, extract and read the `SKILL.md` from the JAR (`jar xf <jar> META-INF/skills/.../SKILL.md`) and verify:
+  - Does it work offline / in an air-gapped sandbox?
+  - Does it require authentication or API keys?
+  - Does it need network access beyond the sandbox?
+  - Are all CLI dependencies installable in the `Dockerfile.toolrunner`?
+- **Auto-heal loop prevention**: If a skill's CLI tool fails with an authentication or configuration error (not a code error), `ExecutionFailureRecoveryService` should NOT trigger Shiva auto-heal — the error is environmental, not fixable by code changes.
+
+**Why**: The `browser-use` skill (removed in P105) appeared to be a local CLI tool but actually required a paid Browser Use Cloud API key. Without it, the LLM entered an infinite Shiva auto-heal loop (`heal:shiva:...:heal:shiva:...`) that grew session IDs until macOS rejected the workspace directory path with `File name too long`.

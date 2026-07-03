@@ -64,6 +64,18 @@ public enum ToolCapability {
                     + "{\"code\":\"public class Main{public static void main(String[] a){System.out.println(\\\"Hello\\\");}}\",\"language\":\"java\"} - CORRECT. "
                     + "Keep your JSON payload under 2000 characters to prevent max_tokens truncation. For short snippets, use a compact single-line form without newlines."),
 
+    HOST_EXEC(
+            "host_exec",
+            ToolCategory.COMPUTE,
+            "Execute a command directly on the host (bypassing the Podman sandbox). "
+                    + "REQUIRED: 'code' (string), 'language' (one of: bash, java). "
+                    + "OPTIONAL: 'args' (list). "
+                    + "Bash: writes code to <workspace>/script.sh and runs it. "
+                    + "Java: writes a .java file, compiles via javac, then runs the resulting class. "
+                    + "SAFETY: this tool always requires HITL approval; it is NOT granted to any default role. "
+                    + "The runtime capability grant is configured via amsha.tools.host-exec.skills. "
+                    + "Example: {\"code\":\"echo hello\",\"language\":\"bash\"}"),
+
     DELEGATE_TO_AGENT(
             "garuda",
             ToolCategory.INTERNAL,

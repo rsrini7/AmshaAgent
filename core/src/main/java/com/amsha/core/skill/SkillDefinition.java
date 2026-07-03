@@ -34,6 +34,7 @@ import java.util.UUID;
  * @param toolCapabilities List of tool capability enum strings (e.g. GITHUB, RECALL_MEMORY_SEARCH, ARCHIVAL_MEMORY_SEARCH).
  * @param maxIterations Maximum allowed execution loops before halting.
  * @param systemPrompt The actual LLM prompt instruction block.
+ * @param skillHome Optional filesystem path where skill companion scripts/references are extracted.
  */
 public record SkillDefinition(
         String id,
@@ -42,7 +43,8 @@ public record SkillDefinition(
         List<String> triggerPatterns,
         List<String> toolCapabilities,
         int maxIterations,
-        String systemPrompt) {
+        String systemPrompt,
+        String skillHome) {
     /**
      * Compact constructor enforcing non-null/non-blank rules and deep immutability.
      */
