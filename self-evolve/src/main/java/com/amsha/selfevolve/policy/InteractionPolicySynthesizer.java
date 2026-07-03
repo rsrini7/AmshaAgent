@@ -218,7 +218,6 @@ public class InteractionPolicySynthesizer {
     }
 
     private String extractJsonValue(String json, String key) {
-        String pattern = "\"" + key + "\"\\s*:\\s*\"";
         int start = json.indexOf("\"" + key + "\"");
         if (start < 0) return null;
         start = json.indexOf(":", start);

@@ -77,7 +77,6 @@ class DefaultSelfEvolveServiceTest {
         lenient().when(extractedStoreInstances.iterator()).thenReturn(extractedIt);
 
         // Mock directive store instances
-        @SuppressWarnings("unchecked")
         Iterator<DirectiveStorePort> directiveIt = (Iterator<DirectiveStorePort>) Mockito.mock(Iterator.class);
         lenient().when(directiveIt.hasNext()).thenReturn(false);
         lenient().when(directiveStoreInstances.iterator()).thenReturn(directiveIt);

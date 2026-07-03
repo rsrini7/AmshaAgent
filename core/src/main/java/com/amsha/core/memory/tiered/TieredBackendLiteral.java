@@ -16,7 +16,7 @@ import jakarta.enterprise.util.AnnotationLiteral;
  *   TieredMemoryStorePort sqlite = stores.select(new TieredBackendLiteral("sqlite")).get();
  * }</pre>
  */
-@SuppressWarnings("java:S2176")
+@SuppressWarnings({"java:S2176", "java:S1206"})
 public final class TieredBackendLiteral extends AnnotationLiteral<TieredBackend> implements TieredBackend {
 
     private static final long serialVersionUID = 1L;

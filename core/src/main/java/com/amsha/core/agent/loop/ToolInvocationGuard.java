@@ -15,7 +15,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedDeque;
 
 import com.amsha.core.agent.reasoning.ReasoningStep;
-import com.amsha.core.agent.role.AgentRoleEnum;
 import com.amsha.core.agent.role.RoleRegistry;
 import com.amsha.core.agent.role.ToolCapability;
 import com.amsha.core.governance.ApprovalFrame;
@@ -144,7 +143,6 @@ public class ToolInvocationGuard {
             return new GuardDecision.Blocked("Tool '" + toolName + "' is not recognized or permitted.");
         }
 
-        AgentRoleEnum resolvedRole = AgentRoleEnum.fromString(agentRole);
         boolean isSchedulingTool = ToolCapability.SCHEDULE_TASK.toolName().equals(toolName)
                 || ToolCapability.MANAGE_SCHEDULE.toolName().equals(toolName);
         boolean isDelegationTool = ToolCapability.DELEGATE_TO_AGENT.toolName().equals(toolName);
@@ -229,7 +227,7 @@ public class ToolInvocationGuard {
         try {
             TreeMap<String, Object> sorted = new TreeMap<>(params);
             return toolName + ":" + objectMapper.writeValueAsString(sorted);
-        } catch (Exception e) {
+        } catch (Exception _) {
             return toolName + ":err:" + Objects.hash(params);
         }
     }
