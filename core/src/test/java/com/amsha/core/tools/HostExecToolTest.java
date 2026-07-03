@@ -14,6 +14,7 @@ import static org.mockito.Mockito.when;
 import jakarta.inject.Inject;
 
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -81,6 +82,16 @@ class HostExecToolTest {
         String desc = tool.description();
         assertNotNull(desc);
         assertTrue(desc.toLowerCase().contains("host"), "description must mention host: " + desc);
+    }
+
+    @Test
+    void description_includes_generic_host_exec_diagnostics_guidance() {
+        String desc = tool.description().toLowerCase(Locale.ROOT);
+        assertTrue(
+                desc.contains("bypassing the podman sandbox")
+                        && desc.contains("ps -axww")
+                        && (desc.contains("lsof") || desc.contains("ss -ltnp") || desc.contains("jcmd")),
+                "description must include generic host_exec diagnostics guidance: " + desc);
     }
 
     // -------------------------------------------------------------------------

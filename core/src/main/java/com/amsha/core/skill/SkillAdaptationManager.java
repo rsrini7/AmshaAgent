@@ -73,23 +73,21 @@ public class SkillAdaptationManager {
             return "";
         }
 
-        if (isAdapted(skillHome)) {
-            return "\n\n## Skill Adaptation Status\n"
-                    + "This skill has already been adapted for the current environment.\n"
-                    + "If you need to re-adapt, delete the `.adapted` marker file in the skill directory.\n";
-        }
-
         String os = System.getProperty("os.name", "unknown").toLowerCase();
         boolean isWindows = os.contains("windows");
         boolean isMac = os.contains("mac") || os.contains("darwin");
         boolean isLinux = os.contains("linux");
 
-        String shellExt = isWindows ? "ps1" : "sh";
-        String shellCmd = isWindows ? "powershell -File" : "bash";
-        String chainOp = isWindows ? ";" : "&&";
+        if (isAdapted(skillHome)) {
+            return "\n\n## Skill Adaptation Status\n"
+                    + "This skill has already been adapted for the current environment.\n"
+                    + getOsSpecificDetectionHint(isWindows, isMac, isLinux)
+                    + "If you need to re-adapt, delete the `.adapted` marker file in the skill directory.\n";
+        }
 
         return "\n\n## Skill Adaptation (First Run)\n"
                 + "This skill has NOT been adapted for the current environment yet.\n"
+                + getOsSpecificDetectionHint(isWindows, isMac, isLinux)
                 + "You MUST adapt it before executing. Here's how:\n"
                 + "\n"
                 + "### Step 1: Read the SKILL.md\n"
@@ -152,5 +150,31 @@ public class SkillAdaptationManager {
             LOG.warnf("[SkillAdaptation] Failed to list adaptable files: %s", e.getMessage());
             return List.of();
         }
+    }
+
+    private String getOsSpecificDetectionHint(boolean isWindows, boolean isMac, boolean isLinux) {
+        if (isWindows) {
+            return "\n" + "### Platform detection note\n"
+                    + "On Windows, `tasklist` output may truncate long command lines. "
+                    + "Use `wmic process get processid,commandline` or `jcmd <pid> VM.system_properties` for complete process details. "
+                    + "For port listeners, use `netstat -ano | findstr <port>`.\n\n";
+        }
+
+        if (isMac) {
+            return "\n" + "### Platform detection note\n"
+                    + "On macOS, `ps aux` can truncate long command lines. "
+                    + "Use `ps -axww` or `ps -eo pid,comm,args` for complete listings. "
+                    + "For port listeners, use `lsof -iTCP:<port> -sTCP:LISTEN` or `jcmd <pid> VM.system_properties`.\n\n";
+        }
+
+        if (isLinux) {
+            return "\n" + "### Platform detection note\n"
+                    + "On Linux, use `ps -eo pid,comm,args` for complete command-line listings. "
+                    + "For port listeners, use `ss -ltnp | grep <port>` or `lsof -i:<port>`.\n\n";
+        }
+
+        return "\n" + "### Platform detection note\n"
+                + "Use a full command-line listing and a port check to confirm process details, "
+                + "not just a simple `ps` line.\n\n";
     }
 }
