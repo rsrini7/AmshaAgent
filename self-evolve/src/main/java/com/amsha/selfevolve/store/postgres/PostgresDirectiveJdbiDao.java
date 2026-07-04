@@ -4,6 +4,7 @@ import java.util.List;
 
 import com.amsha.selfevolve.api.SynthesizedDirective;
 
+import org.jdbi.v3.sqlobject.config.RegisterConstructorMapper;
 import org.jdbi.v3.sqlobject.customizer.Bind;
 import org.jdbi.v3.sqlobject.customizer.BindBean;
 import org.jdbi.v3.sqlobject.statement.SqlQuery;
@@ -12,6 +13,7 @@ import org.jdbi.v3.sqlobject.statement.SqlUpdate;
 /**
  * JDBI SQL Object for synthesized_directives table (PostgreSQL).
  */
+@RegisterConstructorMapper(SynthesizedDirective.class)
 public interface PostgresDirectiveJdbiDao {
 
     @SqlUpdate("""
