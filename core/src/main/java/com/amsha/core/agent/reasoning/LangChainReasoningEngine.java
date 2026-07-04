@@ -266,7 +266,7 @@ public class LangChainReasoningEngine implements ReasoningEngine {
             boolean isWriteIntent,
             ChatRequest request,
             String agentRole) {
-        boolean isCompact = isSimpleChitchat || context.isForceFinishRetry();
+        boolean isCompact = promptBuilder.isCompactPromptEnabled() || isSimpleChitchat || context.isForceFinishRetry();
         Span span = otelContext.childSpan(context.sessionId(), AgentOTelConstants.SPAN_LLM_PROVIDER_CALL);
         try {
             int msgCount = request.messages() != null ? request.messages().size() : 0;

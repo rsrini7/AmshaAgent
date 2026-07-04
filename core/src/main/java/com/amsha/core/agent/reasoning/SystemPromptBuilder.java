@@ -82,6 +82,15 @@ public class SystemPromptBuilder {
         this(128000, false, null, null, null, null, null, null, null, null, null, null);
     }
 
+    /**
+     * Returns whether compact prompts are enabled via configuration. This is the
+     * same flag used when building system prompts; callers should combine it with
+     * runtime signals (e.g. simple chitchat, finish retry) for LLM-routing decisions.
+     */
+    public boolean isCompactPromptEnabled() {
+        return compactPromptEnabled;
+    }
+
     public String build(
             AgentExecutionContext context,
             String agentRole,
@@ -94,8 +103,7 @@ public class SystemPromptBuilder {
 
         String detectionGoal = (context != null) ? context.goal() : goal;
         boolean isSimpleChitchat = intentService != null && intentService.isSimpleConversational(detectionGoal);
-        boolean isCompact =
-                compactPromptEnabled || (contextWindow > 0 && contextWindow <= 8192) || isTruncationRecovery;
+        boolean isCompact = compactPromptEnabled || isTruncationRecovery;
 
         final String personaPrompt;
         final AgentRoleEnum roleEnum;

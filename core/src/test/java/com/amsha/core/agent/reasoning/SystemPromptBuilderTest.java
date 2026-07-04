@@ -224,7 +224,8 @@ class SystemPromptBuilderTest {
         when(toolRegistry.findTool(any())).thenReturn(Optional.of(mockTool));
         when(capabilityRegistry.getSupplementalTools("researcher"))
                 .thenReturn(Collections.singleton(ToolCapability.BROWSER_NAVIGATE.toolName()));
-        setField(builder, "contextWindow", 8192);
+        setField(builder, "contextWindow", 128000);
+        setField(builder, "compactPromptEnabled", true);
 
         String result = builder.build(createCtx("s1"), "researcher", "s1", "some goal", false);
 
@@ -261,7 +262,8 @@ class SystemPromptBuilderTest {
         when(agentPersonaRegistry.getPersonaPrompt(any(), any())).thenReturn("PERSONA_MARKER");
         when(promptTemplateEngine.buildSystemPrompt(any(), any(), any(), any())).thenReturn("TOOL_BINDING_MARKER");
         when(toolRegistry.findTool(any())).thenReturn(Optional.empty());
-        setField(builder, "contextWindow", 8192);
+        setField(builder, "contextWindow", 128000);
+        setField(builder, "compactPromptEnabled", true);
 
         String result = builder.build(createCtx("s1"), "coordinator", "s1", "some goal", false);
 
@@ -291,7 +293,8 @@ class SystemPromptBuilderTest {
         when(agentPersonaRegistry.getPersonaPrompt(any(), any())).thenReturn("PERSONA_MARKER");
         when(promptTemplateEngine.buildSystemPrompt(any(), any(), any(), any())).thenReturn("TOOL_BINDING_MARKER");
         when(toolRegistry.findTool(any())).thenReturn(Optional.empty());
-        setField(builder, "contextWindow", 8192);
+        setField(builder, "contextWindow", 128000);
+        setField(builder, "compactPromptEnabled", true);
 
         String result =
                 builder.build(createCtx("s1"), "researcher", "s1", "lookup latest Spring Boot and Quarkus LTS", false);
