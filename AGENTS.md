@@ -253,6 +253,26 @@ Persona prompts should optimize for **LLM comprehension**, not mythological accu
 ### 3.6 Duplicate Code Path Avoidance
 When method A calls method B, and B already handles feature X, **do not** also handle X in A. Example: `tryIntraGroupEscalation()` was called in both `PersonaEscalationService.determineEscalationTarget()` AND `EscalationPatterns.determineNewPersonaEscalation()` (which is called by the former). Duplicate removed — group-aware fallback lives exclusively in `determineNewPersonaEscalation()`.
 
+### 3.7 Prompt Compact-Mode Parity Rule
+The system has a compact prompt path (`amsha.llm.compact-prompt-enabled` / `AMSHA_LLM_COMPACT_PROMPT_ENABLED`). When modifying **any** prompt content that has a compact variant, the compact variant MUST be upd›
+
+ | Full prompt source | Compact counterpart | Notes |
+ |---|---|---|
+ | `PromptInstructionLibrary.SECURITY_RULES_PROMPT` | `PromptInstructionLibrary.COMPACT_SECURITY_RULES_PROMPT` | Keep termination (`FINISH`), tool-execution, and skill-role rules aligned. |
+ | `PromptSectionBuilder` execution-boundary constants | `COMPACT_EXECUTION_BOUNDARY_*` | Must match the non-compact boundary semantics. |
+ | `templates/prompts/role-*.txt` | N/A today | Add `role-<name>-compact.txt` only when a role is frequently used with compact mode. |
+
+ **Critical compact-mode rules that must never be dropped:**
+ - After a successful tool call, emit `FINISH` with a plain-text final answer.
+ - Skill roles (`skill:*`) must execute the task themselves using their permitted tools and then emit `FIN
+ ISH`. They must NOT delegate execution to `brahma`, `shiva`, or another persona.
+ - Tool execution boundaries (`host_exec` vs `sandbox_exec`) must match the role's capabilities.
+
+ **Verification after prompt changes:**
+ ```bash
+ ./mvnw test -pl core -Dtest="SystemPromptBuilderTest"
+ ```
+
 ---
 
 ## 4. Maven Build & Dependency Resolution

@@ -188,6 +188,18 @@ public class SystemPromptBuilder {
             securityPrompt += "\n" + instructionLibrary.buildCompactToolPriorityRules(toolNames);
         }
 
+        // Compact mode can append generic execution-chain rules that incorrectly tell
+        // skill roles to delegate execution. Add a high-priority override for skill
+        // roles so they execute directly and terminate.
+        if (isCompact && AgentRoleEnum.isSkillRole(agentRole)) {
+            securityPrompt += "\n\nSKILL ROLE OVERRIDE (HIGHEST PRIORITY):\n"
+                    + "You are a `skill:" + AgentRoleEnum.skillName(agentRole) + "` role.\n"
+                    + "- IGNORE any rule above that tells you to delegate execution to 'brahma', 'shiva', or another persona.\n"
+                    + "- EXECUTE the task yourself using ONLY the tools listed under PERMITTED TOOLS.\n"
+                    + "- After the tool observation confirms success, IMMEDIATELY emit a `FINISH` action with a concise plain-text answer.\n"
+                    + "- Do NOT plan another step, do NOT ask clarifying questions, and do NOT leave the turn open.\n";
+        }
+
         String dynamicRules = "";
         if (!isSimpleChitchat) {
             dynamicRules += sharedSectionBuilder.buildExecutionBoundaryRule(roleEnum, isCompact);

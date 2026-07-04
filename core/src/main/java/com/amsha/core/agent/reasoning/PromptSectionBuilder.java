@@ -64,7 +64,7 @@ public class PromptSectionBuilder {
     private static final String COMPACT_EXECUTION_BOUNDARY_SANDBOX =
             "EXECUTION BOUNDARY: Use `sandbox_exec` for run/execute/compile.\n";
     private static final String COMPACT_EXECUTION_BOUNDARY_NO_SANDBOX =
-            "EXECUTION BOUNDARY: You cannot run code directly. Delegate to 'brahma' for execution.\n";
+            "EXECUTION BOUNDARY: You cannot run code directly. If you are a skill role, use your permitted execution tool; otherwise hand off to the appropriate specialist execution role.\n";
 
     private static final String COMPACT_BROWSER_RETRY_RULE =
             "BROWSER EXTRACTION RETRY RULE: If `browser_navigate` extraction returns too little text, retry once with a broader selector.\n";

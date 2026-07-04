@@ -259,7 +259,31 @@ Dynamic skills MUST render their system prompt via the pre-compiled Qute wrapper
 `SkillSystemPrompt.html` only. Ad hoc string-built prompts bypass injection-safety
 sanitization and native-image Qute compilation checks.
 
-## 4.9 AgentFunctionProcessor schema source
+## 4.9 Prompt compact-mode parity (§Invariant-PromptCompactParity)
+
+The system prompt builder supports a compact path controlled by
+`amsha.llm.compact-prompt-enabled`. Compact prompts MUST remain behaviorally
+equivalent to full prompts for every load-bearing rule.
+
+Invariants:
+
+- When a full prompt section is changed, the compact counterpart MUST be updated
+  in the same change. Never let compact mode silently drop a rule.
+- Critical rules that MUST be present in compact mode:
+  1. **Termination**: After a successful tool observation, the agent MUST emit
+     a `FINISH` action with a concise plain-text final answer. It MUST NOT plan
+     another step or leave the turn open.
+  2. **Skill self-execution**: Dynamic `skill:*` roles MUST execute the task
+     themselves using only their `PERMITTED TOOLS`. They MUST NOT delegate
+     execution to `brahma`, `shiva`, or another persona.
+  3. **Execution boundary**: The choice of `host_exec` vs `sandbox_exec` MUST
+     match the role's capabilities as resolved by `RoleRegistry`.
+- If a new persona or role template gains a compact variant, both variants MUST
+  be kept in sync.
+- Verification: after any prompt change, run
+  `./mvnw test -pl core -Dtest="SystemPromptBuilderTest"`.
+
+## 4.10 AgentFunctionProcessor schema source
 
 `AgentFunctionProcessor` MUST generate JSON schema from the SAM **return type** using
 `SchemaFactoryWrapper.acceptJsonFormatVisitor(returnTypeClass, visitor)`.

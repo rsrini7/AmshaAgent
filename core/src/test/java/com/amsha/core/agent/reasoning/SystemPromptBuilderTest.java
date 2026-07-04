@@ -1,5 +1,6 @@
 package com.amsha.core.agent.reasoning;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
@@ -12,6 +13,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Stream;
 
 import com.amsha.core.agent.AgentSentinels;
@@ -255,6 +257,27 @@ class SystemPromptBuilderTest {
         assertTrue(
                 !result.contains("YOUR INTERNAL ARCHITECTURE"),
                 "Non-coordinator roles should not contain the coordinator architecture block");
+    }
+
+    @Test
+    void testBuildSystemPrompt_compactModeForSkillRoleOverridesDelegationAndTerminates() throws Exception {
+        when(agentPersonaRegistry.getPersonaPrompt(any(), any())).thenReturn("PERSONA_MARKER");
+        when(promptTemplateEngine.buildSystemPrompt(any(), any(), any(), any())).thenReturn("TOOL_BINDING_MARKER");
+        when(toolRegistry.findTool(any())).thenReturn(Optional.empty());
+        when(roleRegistry.resolvePermittedTools("skill:test-skill"))
+                .thenReturn(Set.of(ToolCapability.SANDBOX_EXEC.toolName()));
+        when(skillRegistry.currentSnapshot()).thenReturn(Collections.emptyList());
+        setField(builder, "contextWindow", 128000);
+        setField(builder, "compactPromptEnabled", true);
+
+        String result = builder.build(createCtx("s1"), "skill:test-skill", "s1", "some goal", false);
+
+        assertTrue(result.contains("SKILL ROLE OVERRIDE (HIGHEST PRIORITY)"));
+        assertTrue(result.contains("EXECUTE the task yourself using ONLY the tools listed"));
+        assertTrue(result.contains("IMMEDIATELY emit a `FINISH` action"));
+        assertTrue(result.contains("IGNORE any rule above that tells you to delegate execution"));
+        assertTrue(result.contains("If you are a `skill:*` role, execute the task yourself"));
+        assertFalse(result.contains("otherwise delegate to 'brahma'"));
     }
 
     @Test
