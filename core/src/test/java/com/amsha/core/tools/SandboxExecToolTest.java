@@ -157,16 +157,16 @@ class SandboxExecToolTest {
     }
 
     @Test
-    void missing_language_returns_failure_with_hint() throws Exception {
+    void missing_language_defaults_to_bash_and_succeeds() throws Exception {
+        when(mockIsolationExecutor.executeSandboxed(any(), any(), any(), any()))
+                .thenReturn(SandboxResult.success("ok"));
+
         WorkspaceContext.run("test-session", "user1", "chat1", AutonomyLevel.FULL, "coder", () -> {
-            Map<String, Object> params = Map.of("code", "print('hi')");
+            Map<String, Object> params = Map.of("code", "echo hi");
             ToolResponse r = tool.execute(ctx(), params);
 
-            assertFalse(r.success());
-            assertTrue(r.output().contains("'language' is required"));
-            // Error message must include usage example so the LLM self-corrects next iteration
-            assertTrue(r.output().contains("language"), "Error must contain usage hint to help LLM self-correct");
-            verifyNoInteractions(mockIsolationExecutor);
+            assertTrue(r.success());
+            assertEquals("ok", r.output());
             return null;
         });
     }

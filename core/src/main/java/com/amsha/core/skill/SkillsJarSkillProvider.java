@@ -198,9 +198,39 @@ public class SkillsJarSkillProvider implements SkillProvider {
     private void writeSourceMetadata(Path skillDir, String skillName, JarFile jarFile) {
         try {
             Path metaFile = skillDir.resolve(".skill-source.json");
-            String version = jarFile.getManifest() != null
-                    ? jarFile.getManifest().getMainAttributes().getValue("Bundle-Version")
-                    : "unknown";
+            String version = null;
+            if (jarFile.getManifest() != null) {
+                var attrs = jarFile.getManifest().getMainAttributes();
+                version = attrs.getValue("Bundle-Version");
+                if (version == null) {
+                    version = attrs.getValue("Implementation-Version");
+                }
+                if (version == null) {
+                    version = attrs.getValue("Specification-Version");
+                }
+            }
+            if (version == null) {
+                try {
+                    String fileName = Path.of(jarFile.getName()).getFileName().toString();
+                    if (fileName.endsWith(".jar")) {
+                        fileName = fileName.substring(0, fileName.length() - 4);
+                    }
+                    String prefix = "com.skillsjars." + skillName + "-";
+                    if (fileName.startsWith(prefix)) {
+                        version = fileName.substring(prefix.length());
+                    } else {
+                        int lastHyphen = fileName.lastIndexOf('-');
+                        if (lastHyphen != -1) {
+                            version = fileName.substring(lastHyphen + 1);
+                        }
+                    }
+                } catch (Exception e) {
+                    // Ignore
+                }
+            }
+            if (version == null) {
+                version = "unknown";
+            }
             String json = String.format(
                     "{\n  \"source\": \"skillsjars\",\n  \"skillName\": \"%s\",\n  \"version\": \"%s\",\n  \"jarFile\": \"%s\",\n  \"extractedAt\": \"%s\"\n}",
                     skillName,

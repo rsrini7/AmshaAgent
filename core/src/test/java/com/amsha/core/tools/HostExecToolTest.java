@@ -69,10 +69,10 @@ class HostExecToolTest {
     }
 
     @Test
-    void parameters_schema_requires_code_and_language() {
+    void parameters_schema_requires_code() {
         var schema = tool.parametersSchema();
         assertNotNull(schema);
-        assertEquals(List.of("code", "language"), schema.required());
+        assertEquals(List.of("code"), schema.required());
         assertTrue(schema.properties().containsKey("code"));
         assertTrue(schema.properties().containsKey("language"));
     }
@@ -231,7 +231,9 @@ class HostExecToolTest {
     // -------------------------------------------------------------------------
 
     @Test
-    void missing_language_returns_failure() throws Exception {
+    void missing_language_defaults_to_bash_and_succeeds() throws Exception {
+        when(mockDirectExecutor.executeDirectly(any(), anyList(), any())).thenReturn("hi\n");
+
         AtomicReference<ToolResponse> ref = new AtomicReference<>();
         WorkspaceContext.run("test-session", "user1", "chat1", AutonomyLevel.FULL, "debugger", () -> {
             ref.set(tool.execute(ctx(), Map.of("code", "echo hi")));
@@ -239,9 +241,15 @@ class HostExecToolTest {
         });
 
         ToolResponse r = ref.get();
-        assertFalse(r.success());
-        assertTrue(r.output().contains("'language' is required"), "Actual: " + r.output());
-        verify(mockDirectExecutor, never()).executeDirectly(any(), anyList(), any());
+        assertTrue(r.success());
+        assertEquals("hi\n", r.output());
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<String>> cmdCaptor = ArgumentCaptor.forClass(List.class);
+        verify(mockDirectExecutor).executeDirectly(any(), cmdCaptor.capture(), any());
+        List<String> cmd = cmdCaptor.getValue();
+        assertEquals("bash", cmd.get(0));
+        assertTrue(cmd.get(1).endsWith("script.sh"));
     }
 
     @Test

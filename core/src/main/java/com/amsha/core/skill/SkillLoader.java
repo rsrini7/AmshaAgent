@@ -8,6 +8,7 @@ import jakarta.inject.Inject;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -139,7 +140,16 @@ public class SkillLoader {
 
             String canonicalRoleName = AgentRoleEnum.SKILL_PREFIX + def.name();
             boolean isThirdParty = "skillsjars".equals(source);
-            boolean hasSensitiveOps = toolsResult.valid().stream()
+
+            Set<ToolCapability> finalCapabilities = new HashSet<>(toolsResult.valid());
+            if (finalCapabilities.isEmpty() && isThirdParty) {
+                finalCapabilities.add(ToolCapability.SANDBOX_EXEC);
+                finalCapabilities.add(ToolCapability.RECALL_MEMORY_SEARCH);
+                finalCapabilities.add(ToolCapability.CORE_MEMORY_READ);
+                LOG.infof("Skill '%s' declared no capabilities; granting defaults: %s", def.name(), finalCapabilities);
+            }
+
+            boolean hasSensitiveOps = finalCapabilities.stream()
                     .anyMatch(cap -> cap.category() == ToolCategory.COMPUTE
                             || cap.category() == ToolCategory.NETWORK
                             || cap == ToolCapability.DELEGATE_TO_AGENT);
@@ -152,10 +162,10 @@ public class SkillLoader {
                     def.maxIterations(),
                     requiresApproval,
                     false, // codeCapable
-                    toolsResult.valid(),
+                    finalCapabilities,
                     Set.of(def.name().toLowerCase(Locale.ROOT)));
 
-            for (ToolCapability cap : toolsResult.valid()) {
+            for (ToolCapability cap : finalCapabilities) {
                 capabilityRegistry.grant(canonicalRoleName, cap.toolName());
             }
 

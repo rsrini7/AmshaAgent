@@ -52,16 +52,16 @@ public class HostExecTool implements AgentTool {
     @ConfigProperty(name = "amsha.workspace.root-dir", defaultValue = "./data/workspaces")
     String workspaceRootDir;
 
-    @ConfigProperty(name = "amsha.sandbox.max-output-chars", defaultValue = "8192")
+    @ConfigProperty(name = "amsha.tools.host-exec.max-output-chars", defaultValue = "8192")
     int maxOutputChars;
 
-    @ConfigProperty(name = "amsha.sandbox.python-executable")
+    @ConfigProperty(name = "amsha.tools.host-exec.python-executable")
     Optional<String> configuredPythonExe;
 
-    @ConfigProperty(name = "amsha.sandbox.java-executable")
+    @ConfigProperty(name = "amsha.tools.host-exec.java-executable")
     Optional<String> configuredJavaExe;
 
-    @ConfigProperty(name = "amsha.sandbox.go-executable")
+    @ConfigProperty(name = "amsha.tools.host-exec.go-executable")
     Optional<String> configuredGoExe;
 
     @Inject
@@ -110,6 +110,7 @@ public class HostExecTool implements AgentTool {
     public JsonObjectSchema parametersSchema() {
         return JsonObjectSchema.builder()
                 .addStringProperty("code", "The source code to execute on the host")
+                .addStringProperty("command", "Alias for 'code'. The command or script to execute on the host.")
                 .addStringProperty("language", "The programming language (bash, java). Default: bash")
                 .required("code")
                 .build();
@@ -125,9 +126,15 @@ public class HostExecTool implements AgentTool {
         String sessionId = ctx.sessionId();
         try {
             if (params == null) return ToolResponse.failure(1, "Parameters are required.");
+            if (!params.containsKey("code") && params.containsKey("command")) {
+                params.put("code", params.get("command"));
+            }
             String code = (String) params.get("code");
             String lang = (String) params.getOrDefault("language", "bash");
             if (code == null) return ToolResponse.failure(1, "Parameter 'code' is required.");
+            if (lang == null || lang.isBlank()) {
+                lang = "bash";
+            }
             lang = lang.toLowerCase(Locale.ROOT);
 
             auditService.record(
