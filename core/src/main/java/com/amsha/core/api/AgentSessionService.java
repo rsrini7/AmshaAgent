@@ -279,7 +279,9 @@ public class AgentSessionService {
                         sessionId, REST_USER_ID, sessionId, AutonomyLevel.FULL, canonicalRole, channel, () -> {
                             String resumeGoal = checkpointResumeHandler.resolveResumeGoal(sessionId, canonicalRole);
                             int resumeIterations = checkpoint.get().getMaxIterations() != null
-                                    ? Math.min(checkpoint.get().getMaxIterations(), maxResumeIterations)
+                                    ? Math.max(
+                                            maxResumeIterations,
+                                            checkpoint.get().getMaxIterations())
                                     : maxResumeIterations;
                             MessageContext context = createRestContext(sessionId, resumeGoal);
                             context.setResumeSignal(true);
