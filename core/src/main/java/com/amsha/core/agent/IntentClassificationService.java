@@ -18,8 +18,8 @@ public class IntentClassificationService {
     // Continuity commands restore the OLD goal (explicit retry/redo).
     // Execution follow-ups ("execute", "run it", "do it") are NOT continuity — they use the NEW goal.
     private static final Pattern CONTINUITY_PATTERN = Pattern.compile(
-            "(?i)^\\s*(try\\s+again|retry|do\\s+it\\s+again|once\\s+more|redo|go\\s+ahead|proceed|continue|yes|yep|yeah|sure|do\\s+it|go"
-                    + "|now\\s+execute|run\\s+that|execute\\s+it|run\\s+this)(\\s+.*)?$");
+            "(?i)^\\s*(?:try\\s+again|retry|do\\s+it\\s+again|once\\s+more|redo|go\\s+ahead|proceed|continue|yes|yep|yeah|sure"
+                    + "|now\\s+execute|run\\s+that|execute\\s+it|run\\s+this)(?:[.!?]+\\s*)?(?:\\s+.*)?$");
 
     private static final Pattern TOOL_VERB_PATTERN = Pattern.compile(
             "\\b(search|find|fetch|list|get|github|gh|repo|read|browse|open|go to|url|site|web|run|exec|code|script|program|schedule|at|every|after|in|save|store|ingest|remember|note|weather|news|price|latest|stock|status|info|history|check|bullet|recap|summarize|summary)\\b",

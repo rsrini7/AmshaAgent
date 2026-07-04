@@ -63,6 +63,8 @@ class IntentClassificationServiceTest {
         assertTrue(intentDetector.isContinuityCommand("try again"));
         assertTrue(intentDetector.isContinuityCommand("redo"));
         assertTrue(intentDetector.isContinuityCommand("continue"));
+        assertTrue(intentDetector.isContinuityCommand("yes."));
+        assertTrue(intentDetector.isContinuityCommand("proceed!"));
 
         // Pattern uses matches() with optional suffix so it matches full phrases starting with signal
         assertTrue(intentDetector.isContinuityCommand("retry the task"));
