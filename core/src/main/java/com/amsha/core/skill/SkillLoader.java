@@ -143,7 +143,9 @@ public class SkillLoader {
 
             Set<ToolCapability> finalCapabilities = new HashSet<>(toolsResult.valid());
             if (finalCapabilities.isEmpty() && isThirdParty) {
-                finalCapabilities.add(ToolCapability.SANDBOX_EXEC);
+                // Skills jars typically ship companion scripts/CLIs that must run on the host.
+                // Default to host_exec unless the skill explicitly declares sandbox_exec.
+                finalCapabilities.add(ToolCapability.HOST_EXEC);
                 finalCapabilities.add(ToolCapability.RECALL_MEMORY_SEARCH);
                 finalCapabilities.add(ToolCapability.CORE_MEMORY_READ);
                 LOG.infof("Skill '%s' declared no capabilities; granting defaults: %s", def.name(), finalCapabilities);
