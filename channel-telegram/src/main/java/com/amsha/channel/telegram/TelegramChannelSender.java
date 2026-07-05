@@ -128,7 +128,23 @@ public class TelegramChannelSender implements ChannelSender {
         msg.setParseMode("MarkdownV2");
         msg.setReplyMarkup(markup);
 
-        producerTemplate.sendBodyAndHeader(TELEGRAM_BOTS_ENDPOINT, msg, TelegramConstants.TELEGRAM_CHAT_ID, chatId);
+        try {
+            producerTemplate.sendBodyAndHeader(TELEGRAM_BOTS_ENDPOINT, msg, TelegramConstants.TELEGRAM_CHAT_ID, chatId);
+        } catch (Exception e) {
+            String root = LogUtil.rootMessage(e);
+            if (root != null && root.toLowerCase().contains("can't parse entities")) {
+                log.errorf(
+                        "TELEGRAM-SEND MarkdownV2 parse failed for chat %s; retrying as plain text. Rendered text:\n%s",
+                        chatId, text);
+                OutgoingTextMessage fallback = new OutgoingTextMessage();
+                fallback.setText(text);
+                fallback.setReplyMarkup(markup);
+                producerTemplate.sendBodyAndHeader(
+                        TELEGRAM_BOTS_ENDPOINT, fallback, TelegramConstants.TELEGRAM_CHAT_ID, chatId);
+            } else {
+                throw e;
+            }
+        }
     }
 
     /**
