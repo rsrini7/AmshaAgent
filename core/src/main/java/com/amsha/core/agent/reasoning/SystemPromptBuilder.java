@@ -97,13 +97,13 @@ public class SystemPromptBuilder {
             String sessionId,
             String goal,
             boolean isTruncationRecovery) {
-        log.infof(
-                "[SystemPrompt] Building prompt for session %s (role=%s, recovery=%b)",
-                sessionId, agentRole, isTruncationRecovery);
-
         String detectionGoal = (context != null) ? context.goal() : goal;
         boolean isSimpleChitchat = intentService != null && intentService.isSimpleConversational(detectionGoal);
         boolean isCompact = compactPromptEnabled || isTruncationRecovery;
+
+        log.infof(
+                "[SystemPrompt] Building prompt for session %s (role=%s, compact=%s, configCompact=%s, truncationRecovery=%s, simpleChitchat=%s)",
+                sessionId, agentRole, isCompact, compactPromptEnabled, isTruncationRecovery, isSimpleChitchat);
 
         final String personaPrompt;
         final AgentRoleEnum roleEnum;
