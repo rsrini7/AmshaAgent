@@ -22,8 +22,9 @@ public final class ToolStepResolutionUtils {
     private static final Set<String> MUTATING_GOAL_KEYWORDS = Set.of(
             "delete", "remove", "cancel", "stop", "modify", "change", "update", "edit", "pause", "resume", "clear",
             "disable");
-    private static final Set<String> ARTIFACT_COMPLETION_HINTS =
-            Set.of("output/", "xdg-open", "open ", "start ", "default browser");
+    private static final Set<String> ARTIFACT_COMPLETION_HINTS = Set.of("output/", "xdg-open", "default browser");
+
+    private static final Set<String> ARTIFACT_COMPLETION_LINE_START_HINTS = Set.of("open ", "start ");
 
     private ToolStepResolutionUtils() {}
 
@@ -113,6 +114,9 @@ public final class ToolStepResolutionUtils {
         if (ARTIFACT_COMPLETION_HINTS.stream().anyMatch(lower::contains)) {
             return true;
         }
+        if (ARTIFACT_COMPLETION_LINE_START_HINTS.stream().anyMatch(h -> containsAtLineStart(lower, h))) {
+            return true;
+        }
         return lower.contains("opened browser preview")
                 || lower.contains("opened default browser")
                 || lower.contains("browser preview:")
@@ -120,5 +124,35 @@ public final class ToolStepResolutionUtils {
                 || lower.contains("generated artifact")
                 || lower.contains("file:///")
                 || lower.contains("file://");
+    }
+
+    /**
+     * Case-insensitive substring match that only succeeds when {@code needle} appears either at index 0
+     * of {@code text} or immediately after a newline character. This is intended for shell-command hints
+     * such as {@code "open "} or {@code "start "}, which should not match mid-sentence prose like
+     * "open source" returned by web search tools.
+     */
+    private static boolean containsAtLineStart(String text, String needle) {
+        if (text == null || needle == null || text.isEmpty() || needle.isEmpty()) {
+            return false;
+        }
+        if (text.regionMatches(true, 0, needle, 0, needle.length())) {
+            return true;
+        }
+        int from = 0;
+        while (true) {
+            int newline = text.indexOf('\n', from);
+            if (newline < 0) {
+                return false;
+            }
+            int start = newline + 1;
+            if (start + needle.length() > text.length()) {
+                return false;
+            }
+            if (text.regionMatches(true, start, needle, 0, needle.length())) {
+                return true;
+            }
+            from = start;
+        }
     }
 }

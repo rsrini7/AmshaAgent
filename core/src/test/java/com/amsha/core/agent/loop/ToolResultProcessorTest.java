@@ -251,4 +251,34 @@ class ToolResultProcessorTest {
                 ctx, ToolCapability.BROWSER_NAVIGATE.toolName(), Map.of(), res, obs, step, List.of(), 0);
         assertEquals(1, decision.consecutiveFailures());
     }
+
+    @Test
+    void resolveOutcome_SerperWebSearchWithOpenSourcePhrase_DoesNotTerminateAsArtifactCompletion() {
+        // Regression: web search results containing phrases like "open source" used to match the
+        // artifact-completion fast path (which checks for the "open " hint), causing the delegated
+        // research loop to terminate with a generic artifact-success message instead of synthesizing
+        // the actual research result. serper_web_search is NOT an artifact-capable tool, so the
+        // fast path must be skipped and execution should fall through to the circuit-breaker path.
+        var ctx = ctx();
+        String obsText = "1. Project Foo is an open source initiative backed by the community.\n"
+                + "2. Open source licenses compared.\n"
+                + "Latest LTS version is 42.";
+        var step = ReasoningStep.pending("", ToolCapability.WEB_SEARCH_SERPER.toolName(), Map.of("query", "foo"));
+        var res = ToolResponse.success(obsText);
+
+        StepDecision decision = processor.resolveOutcome(
+                ctx,
+                ToolCapability.WEB_SEARCH_SERPER.toolName(),
+                Map.of("query", "foo"),
+                res,
+                obsText,
+                step,
+                List.of(),
+                0);
+
+        assertNotEquals(DecisionType.TERMINAL, decision.type());
+        assertEquals(DecisionType.PROCEED, decision.type());
+        assertEquals(0, decision.consecutiveFailures());
+        assertNull(decision.result());
+    }
 }

@@ -53,4 +53,66 @@ class ToolStepResolutionUtilsTest {
 
         assertTrue(ToolStepResolutionUtils.hasRecentArtifactCompletion(history));
     }
+
+    @Test
+    void midSentenceOpenSourceIsNotArtifactCompletionSignal() {
+        // Regression: serper_web_search results containing "open source" prose used to falsely trigger
+        // the artifact-completion fast path. After tightening the matcher, only line-starting shell
+        // commands like "open <path>" should count.
+        ReasoningStep step = ReasoningStep.pending(
+                        "web search",
+                        ToolCapability.WEB_SEARCH_SERPER.toolName(),
+                        Map.of("query", "latest LTS version of foo"),
+                        0,
+                        0)
+                .withObservation(
+                        "1. Project Foo is an open source initiative backed by the community.\n"
+                                + "2. Open source licenses compared.\n"
+                                + "Latest LTS version is 42.",
+                        true);
+
+        assertFalse(ToolStepResolutionUtils.isArtifactCompletionSignal(step));
+    }
+
+    @Test
+    void lineStartingOpenOutputIsArtifactCompletionSignal() {
+        ReasoningStep step = ReasoningStep.pending(
+                        "open generated file",
+                        ToolCapability.HOST_EXEC.toolName(),
+                        Map.of("code", "open output/particle-art.html"),
+                        0,
+                        0)
+                .withObservation("Opened browser preview: output/particle-art.html", true);
+
+        assertTrue(ToolStepResolutionUtils.isArtifactCompletionSignal(step));
+    }
+
+    @Test
+    void lineStartingStartOutputBackslashIsArtifactCompletionSignal() {
+        // Windows-style shell command at the start of a line.
+        ReasoningStep step = ReasoningStep.pending(
+                        "open generated file",
+                        ToolCapability.HOST_EXEC.toolName(),
+                        Map.of("code", "start output\\particle-art.html"),
+                        0,
+                        0)
+                .withObservation("Opened browser preview: output\\particle-art.html", true);
+
+        assertTrue(ToolStepResolutionUtils.isArtifactCompletionSignal(step));
+    }
+
+    @Test
+    void openAfterNewlineIsArtifactCompletionSignal() {
+        // A "open <path>" command appearing after a newline (e.g. multi-line script output) should
+        // still match, since it is a real shell command, not prose.
+        ReasoningStep step = ReasoningStep.pending(
+                        "run script",
+                        ToolCapability.HOST_EXEC.toolName(),
+                        Map.of("code", "echo done\nopen output/foo.html"),
+                        0,
+                        0)
+                .withObservation("done\nopened default browser at output/foo.html", true);
+
+        assertTrue(ToolStepResolutionUtils.isArtifactCompletionSignal(step));
+    }
 }

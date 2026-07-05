@@ -204,7 +204,8 @@ public class AgentStateMachineRunner {
         String observation = lastToolStep.observation();
 
         if (isShellTool(action)) {
-            boolean generatedArtifact = ToolStepResolutionUtils.isArtifactCompletionSignal(lastToolStep);
+            boolean generatedArtifact = ToolStepResolutionUtils.isArtifactCompletionSignal(lastToolStep)
+                    || looksLikeLargeArtifact(observation);
             if (generatedArtifact) {
                 return includeGuidance
                         ? "The approved shell tool completed successfully. Summarize the generated artifact briefly without repeating raw shell output."
@@ -215,25 +216,18 @@ public class AgentStateMachineRunner {
                     : GENERIC_TERMINAL_SUCCESS;
         }
 
-        if (observation == null || observation.isBlank()) {
-            return GENERIC_TERMINAL_SUCCESS;
-        }
-
-        if (looksLikeLargeArtifact(observation)) {
-            return includeGuidance
-                    ? "The approved tool completed successfully. Summarize the result briefly without repeating raw output."
-                    : GENERIC_TERMINAL_ARTIFACT_SUCCESS;
-        }
-
-        return observation;
-    }
-
-    private boolean isShellTool(String action) {
-        return ToolCapability.HOST_EXEC.toolName().equals(action)
-                || ToolCapability.SANDBOX_EXEC.toolName().equals(action);
+        // Non-shell tools commonly return long web/page content. Do not echo the raw
+        // payload into the terminal synthesis pass, or the model tends to repeat it.
+        return includeGuidance
+                ? "The approved tool completed successfully. Summarize the result briefly in plain text without repeating raw output."
+                : GENERIC_TERMINAL_SUCCESS;
     }
 
     private boolean looksLikeLargeArtifact(String observation) {
+        if (observation == null || observation.isBlank()) {
+            return false;
+        }
+
         if (observation.length() > MAX_TERMINAL_ECHO_CHARS) {
             return true;
         }
@@ -250,6 +244,11 @@ public class AgentStateMachineRunner {
                 || lower.contains("```")
                 || lower.contains("<body")
                 || lower.contains("<script");
+    }
+
+    private boolean isShellTool(String action) {
+        return ToolCapability.HOST_EXEC.toolName().equals(action)
+                || ToolCapability.SANDBOX_EXEC.toolName().equals(action);
     }
 
     public AgentResult run(AgentExecutionContext context, ReasoningEngine engine, List<ReasoningStep> resumedHistory) {
