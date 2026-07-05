@@ -11,6 +11,7 @@ import java.util.Objects;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import com.amsha.core.agent.reasoning.PromptInstructionLibrary;
 import com.amsha.core.agent.role.ToolCapability;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -96,7 +97,7 @@ public class SkillDefinitionParser {
                 fm.triggerPatterns() != null ? fm.triggerPatterns() : List.of(),
                 capabilities.stream().distinct().toList(),
                 fm.maxIterations() > 0 ? fm.maxIterations() : defaultMaxIterations,
-                systemPromptBody,
+                PromptInstructionLibrary.skillExecutionPrecedencePreamble() + systemPromptBody,
                 skillHome);
     }
 

@@ -98,12 +98,20 @@ public class SystemPromptBuilder {
             String goal,
             boolean isTruncationRecovery) {
         String detectionGoal = (context != null) ? context.goal() : goal;
-        boolean isSimpleChitchat = intentService != null && intentService.isSimpleConversational(detectionGoal);
+        boolean isSkillRole = AgentRoleEnum.isSkillRole(agentRole);
+        boolean isSimpleChitchat =
+                !isSkillRole && intentService != null && intentService.isSimpleConversational(detectionGoal);
         boolean isCompact = compactPromptEnabled || isTruncationRecovery;
 
         log.infof(
-                "[SystemPrompt] Building prompt for session %s (role=%s, compact=%s, configCompact=%s, truncationRecovery=%s, simpleChitchat=%s)",
-                sessionId, agentRole, isCompact, compactPromptEnabled, isTruncationRecovery, isSimpleChitchat);
+                "[SystemPrompt] Building prompt for session %s (role=%s, compact=%s, configCompact=%s, truncationRecovery=%s, simpleChitchat=%s, contextWindow=%s)",
+                sessionId,
+                agentRole,
+                isCompact,
+                compactPromptEnabled,
+                isTruncationRecovery,
+                isSimpleChitchat,
+                contextWindow);
 
         final String personaPrompt;
         final AgentRoleEnum roleEnum;
@@ -141,6 +149,7 @@ public class SystemPromptBuilder {
                     + "1. Plan ALL steps needed to accomplish the goal BEFORE calling any tools.\n"
                     + "2. Combine ALL necessary commands into a SINGLE " + execTool + " call. Every " + execTool
                     + " requires human approval — do NOT make multiple calls.\n"
+                    + "   - If the task creates files or artifacts, include directory creation and all file writes in that same call.\n"
                     + "   - Linux/macOS: chain with `&&` or `;` — e.g. `cmd1 && cmd2 && cmd3`\n"
                     + "   - Windows CMD: chain with `&&` — e.g. `cmd1 && cmd2 && cmd3`\n"
                     + "   - Windows PowerShell: chain with `;` — e.g. `cmd1; cmd2; cmd3`\n"
@@ -188,16 +197,11 @@ public class SystemPromptBuilder {
             securityPrompt += "\n" + instructionLibrary.buildCompactToolPriorityRules(toolNames);
         }
 
-        // Compact mode can append generic execution-chain rules that incorrectly tell
-        // skill roles to delegate execution. Add a high-priority override for skill
-        // roles so they execute directly and terminate.
-        if (isCompact && AgentRoleEnum.isSkillRole(agentRole)) {
-            securityPrompt += "\n\nSKILL ROLE OVERRIDE (HIGHEST PRIORITY):\n"
-                    + "You are a `skill:" + AgentRoleEnum.skillName(agentRole) + "` role.\n"
-                    + "- IGNORE any rule above that tells you to delegate execution to 'brahma', 'shiva', or another persona.\n"
-                    + "- EXECUTE the task yourself using ONLY the tools listed under PERMITTED TOOLS.\n"
-                    + "- After the tool observation confirms success, IMMEDIATELY emit a `FINISH` action with a concise plain-text answer.\n"
-                    + "- Do NOT plan another step, do NOT ask clarifying questions, and do NOT leave the turn open.\n";
+        // Skill roles must always execute directly and terminate. Compact mode
+        // needs the override because it appends generic execution-chain rules,
+        // but non-compact mode also needs it to suppress delegation fallthrough.
+        if (AgentRoleEnum.isSkillRole(agentRole)) {
+            securityPrompt += "\n\n" + PromptInstructionLibrary.skillRoleOverride(AgentRoleEnum.skillName(agentRole));
         }
 
         String dynamicRules = "";

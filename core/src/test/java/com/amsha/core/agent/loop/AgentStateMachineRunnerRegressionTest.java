@@ -2,6 +2,7 @@ package com.amsha.core.agent.loop;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyList;
@@ -371,5 +372,98 @@ class AgentStateMachineRunnerRegressionTest {
 
         assertInstanceOf(AgentResult.Finished.class, result);
         assertEquals("terminal-ans", ((AgentResult.Finished) result).answer());
+    }
+
+    @Test
+    void testRunFinishPassForcedResultWhenEngineKeepsCallingTools() {
+        ReasoningStep toolStep = ReasoningStep.pending(
+                        "read template",
+                        ToolCapability.HOST_EXEC.toolName(),
+                        Map.of("code", "cat viewer.html", "language", "bash"),
+                        100,
+                        100)
+                .withObservation("<html>template content</html>", true);
+        ReasoningStep repeatedToolStep = ReasoningStep.pending(
+                "read again",
+                ToolCapability.HOST_EXEC.toolName(),
+                Map.of("code", "cat viewer.html", "language", "bash"),
+                100,
+                100);
+
+        when(engine.nextStep(any(), anyString(), anyString(), anyList()))
+                .thenReturn(repeatedToolStep)
+                .thenReturn(repeatedToolStep);
+
+        AgentExecutionContext ctx = new AgentExecutionContext(
+                "s1",
+                "u1",
+                "c1",
+                "coordinator",
+                "goal",
+                AutonomyLevel.FULL,
+                StructuredOutputMode.NATIVE,
+                5,
+                0,
+                null,
+                null,
+                null,
+                null);
+
+        AgentResult result = runner.runFinishPass(ctx, engine, new ArrayList<>(List.of(toolStep)));
+
+        assertInstanceOf(AgentResult.Finished.class, result);
+        assertEquals(
+                "The approved tool was executed successfully and the requested artifact was generated.",
+                ((AgentResult.Finished) result).answer());
+    }
+
+    @Test
+    void testRunFinishPassDoesNotEchoLargeHostExecOutput() {
+        String largeHtml = ("<html>\n" + "  <body>\n" + "    <main>generated artifact</main>\n" + "  </body>\n"
+                        + "</html>\n")
+                .repeat(20);
+        ReasoningStep toolStep = ReasoningStep.pending(
+                        "render artifact",
+                        ToolCapability.HOST_EXEC.toolName(),
+                        Map.of("code", "cat viewer.html", "language", "bash"),
+                        100,
+                        100)
+                .withObservation(largeHtml, true);
+
+        when(engine.nextStep(any(), anyString(), anyString(), anyList()))
+                .thenReturn(ReasoningStep.pending(
+                        "still working",
+                        ToolCapability.HOST_EXEC.toolName(),
+                        Map.of("code", "cat viewer.html", "language", "bash"),
+                        100,
+                        100))
+                .thenReturn(ReasoningStep.pending(
+                        "still working",
+                        ToolCapability.HOST_EXEC.toolName(),
+                        Map.of("code", "cat viewer.html", "language", "bash"),
+                        100,
+                        100));
+
+        AgentExecutionContext ctx = new AgentExecutionContext(
+                "s1",
+                "u1",
+                "c1",
+                "coordinator",
+                "goal",
+                AutonomyLevel.FULL,
+                StructuredOutputMode.NATIVE,
+                5,
+                0,
+                null,
+                null,
+                null,
+                null);
+
+        AgentResult result = runner.runFinishPass(ctx, engine, new ArrayList<>(List.of(toolStep)));
+
+        assertInstanceOf(AgentResult.Finished.class, result);
+        String answer = ((AgentResult.Finished) result).answer();
+        assertEquals("The approved tool was executed successfully and the requested artifact was generated.", answer);
+        assertTrue(!answer.contains("<html>"));
     }
 }

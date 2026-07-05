@@ -1,12 +1,14 @@
 package com.amsha.core.skill;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
 import java.lang.reflect.Method;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.jar.JarFile;
 import java.util.jar.JarOutputStream;
 import java.util.jar.Manifest;
@@ -72,6 +74,48 @@ class SkillsJarSkillProviderTest {
             String actualName = extractedDir.getFileName().toString();
             assertEquals("jdb-debugger", actualName, "Skill directory should be named after the skill");
         }
+    }
+
+    @Test
+    void testBrowserPreviewRulesApplyToHtmlSkillsGenerically() throws Exception {
+        Path skillHome = Files.createTempDirectory(tempHome, "viewer-skill");
+        Files.createDirectories(skillHome.resolve("output"));
+
+        SkillDefinition base = new SkillDefinition(
+                "id",
+                "generic-viewer",
+                "Render artifacts",
+                List.of(),
+                List.of(),
+                5,
+                "BASE SYSTEM PROMPT",
+                skillHome.toString());
+
+        SkillDefinition augmented = SkillsJarSkillProvider.maybeAugmentBrowserPreview(
+                base, "This skill generates .html files and browser artifacts.", skillHome.toString());
+
+        assertTrue(augmented.systemPrompt().contains("BROWSER PREVIEW RULES"));
+        assertTrue(augmented.systemPrompt().contains(skillHome.resolve("output").toString()));
+        assertTrue(augmented.systemPrompt().contains("default browser"));
+    }
+
+    @Test
+    void testBrowserPreviewRulesDoNotApplyToNonHtmlSkills() {
+        Path skillHome = tempHome.resolve("plain-skill");
+        SkillDefinition base = new SkillDefinition(
+                "id",
+                "plain-skill",
+                "Plain skill",
+                List.of(),
+                List.of(),
+                5,
+                "BASE SYSTEM PROMPT",
+                skillHome.toString());
+
+        SkillDefinition augmented = SkillsJarSkillProvider.maybeAugmentBrowserPreview(
+                base, "This skill only reads text.", skillHome.toString());
+
+        assertSame(base, augmented, "Non-HTML skills should be returned unchanged");
     }
 
     private Path createSkillJar() throws IOException {

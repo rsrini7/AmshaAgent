@@ -1,7 +1,6 @@
 package com.amsha.core.agent.loop;
 
 import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
 
 import java.util.List;
 import java.util.Optional;
@@ -15,8 +14,8 @@ import org.junit.jupiter.api.Test;
 
 /**
  * Deep unit tests for {@link AnswerQualityGuard}.
- * All methods are called for real. Only ToolRegistry and TextPatternUtils are mocked
- * (external dependencies).
+ * All methods are called for real. ToolRegistry and TextPatternUtils use simple
+ * in-memory stubs to avoid Mockito/agent attachment requirements in this JDK.
  */
 class AnswerQualityGuardDeepTest {
 
@@ -26,9 +25,13 @@ class AnswerQualityGuardDeepTest {
 
     @BeforeEach
     void setup() {
-        toolRegistry = mock(ToolRegistry.class);
-        textPatternUtils = mock(TextPatternUtils.class);
-        when(toolRegistry.listTools()).thenReturn(List.of("sandbox_exec", "github", "serper_web_search"));
+        toolRegistry = new ToolRegistry() {
+            @Override
+            public List<String> listTools() {
+                return List.of("sandbox_exec", "github", "serper_web_search", "host_exec");
+            }
+        };
+        textPatternUtils = new TextPatternUtils();
 
         guard = new AnswerQualityGuard();
         guard.toolRegistry = toolRegistry;
@@ -82,26 +85,46 @@ class AnswerQualityGuardDeepTest {
         }
 
         @Test
+        void isRawToolCallLeak_dsmlToolCalls_returnsTrue() {
+            String answer = """
+                    <｜｜DSML｜｜tool_calls>
+                      <｜｜DSML｜｜invoke name="host_exec">
+                        <｜｜DSML｜｜parameter name="code" string="true">echo hi</｜｜DSML｜｜parameter>
+                      </｜｜DSML｜｜invoke>
+                    </｜｜DSML｜｜tool_calls>
+            """;
+            assertTrue(guard.isRawToolCallLeak(answer));
+        }
+
+        @Test
+        void isRawToolCallLeak_xmlToolCalls_returnsTrue() {
+            String answer = """
+                    <tool_call>
+                      <function=host_exec>
+                        <parameter=code>echo hi</parameter>
+                      </function>
+                    </tool_call>
+                    """;
+            assertTrue(guard.isRawToolCallLeak(answer));
+        }
+
+        @Test
         void isRawToolCallLeak_nakedFunctionCall_returnsTrue() {
-            when(textPatternUtils.looksLikeJson(any())).thenReturn(false);
             assertTrue(guard.isRawToolCallLeak("sandbox_exec(\"hello\")"));
         }
 
         @Test
         void isRawToolCallLeak_looksLikeJson_returnsTrue() {
-            when(textPatternUtils.looksLikeJson("{\"key\":\"val\"}")).thenReturn(true);
             assertTrue(guard.isRawToolCallLeak("{\"key\":\"val\"}"));
         }
 
         @Test
         void isRawToolCallLeak_cleanAnswer_returnsFalse() {
-            when(textPatternUtils.looksLikeJson(any())).thenReturn(false);
             assertFalse(guard.isRawToolCallLeak("The weather today is sunny and warm."));
         }
 
         @Test
         void isRawToolCallLeak_descriptiveBypass_longWithKeywords_returnsFalse() {
-            when(textPatternUtils.looksLikeJson(any())).thenReturn(false);
             String longAnswer = "Here are the available tools and capabilities for your reference. ".repeat(10)
                     + "The capabilities include sandbox_exec for code execution.";
             assertFalse(guard.isRawToolCallLeak(longAnswer));
@@ -160,6 +183,36 @@ class AnswerQualityGuardDeepTest {
         }
 
         @Test
+        void stripRawToolJson_dsmlBlock_removesIt() {
+            String answer = """
+                    Here is the plan.
+                    <｜｜DSML｜｜tool_calls>
+                      <｜｜DSML｜｜invoke name="host_exec">
+                        <｜｜DSML｜｜parameter name="code" string="true">echo hi</｜｜DSML｜｜parameter>
+                      </｜｜DSML｜｜invoke>
+                    </｜｜DSML｜｜tool_calls>
+                    """;
+            String stripped = guard.stripRawToolJson(answer);
+            assertFalse(stripped.contains("DSML"));
+            assertTrue(stripped.contains("Here is the plan."));
+        }
+
+        @Test
+        void stripRawToolJson_xmlBlock_removesIt() {
+            String answer = """
+                    Here is the plan.
+                    <tool_call>
+                      <function=host_exec>
+                        <parameter=code>echo hi</parameter>
+                      </function>
+                    </tool_call>
+                    """;
+            String stripped = guard.stripRawToolJson(answer);
+            assertFalse(stripped.contains("tool_call"));
+            assertTrue(stripped.contains("Here is the plan."));
+        }
+
+        @Test
         void stripRawToolJson_shortPunctuationOnly_returnsEmpty() {
             String answer = "```json\n{}\n```";
             String stripped = guard.stripRawToolJson(answer);
@@ -211,27 +264,35 @@ class AnswerQualityGuardDeepTest {
         }
 
         @Test
+        void extractLeakedToolName_xmlFormat_returnsName() {
+            String answer = """
+                    <tool_call>
+                      <function=host_exec>
+                        <parameter=code>echo hi</parameter>
+                      </function>
+                    </tool_call>
+                    """;
+            assertEquals("host_exec", guard.extractLeakedToolName(answer));
+        }
+
+        @Test
         void extractLeakedToolName_nakedCall_returnsName() {
-            when(textPatternUtils.looksLikeJson(any())).thenReturn(false);
             String answer = "sandbox_exec(\"hello world\")";
             assertEquals("sandbox_exec", guard.extractLeakedToolName(answer));
         }
 
         @Test
         void extractLeakedToolName_delegatetoagent_returnsDelegate() {
-            when(textPatternUtils.looksLikeJson(any())).thenReturn(false);
             assertEquals("delegatetoagent", guard.extractLeakedToolName("delegatetoagent something"));
         }
 
         @Test
         void extractLeakedToolName_looksLikeJson_returnsFallback() {
-            when(textPatternUtils.looksLikeJson("{\"key\":\"val\"}")).thenReturn(true);
             assertEquals("a structured JSON block", guard.extractLeakedToolName("{\"key\":\"val\"}"));
         }
 
         @Test
         void extractLeakedToolName_noMatch_returnsFallback() {
-            when(textPatternUtils.looksLikeJson(any())).thenReturn(false);
             assertEquals("the intended tool", guard.extractLeakedToolName("just a normal sentence"));
         }
     }
@@ -337,7 +398,6 @@ class AnswerQualityGuardDeepTest {
 
         @Test
         void guard_nullAnswer_returnsFailure() {
-            when(textPatternUtils.looksLikeJson(any())).thenReturn(false);
             AnswerGuardStrategy.AnswerGuardResult result = guard.guard(null, List.of());
             assertTrue(result.isFailure());
             assertTrue(result.answer().contains("try again"));
@@ -345,14 +405,12 @@ class AnswerQualityGuardDeepTest {
 
         @Test
         void guard_blankAnswer_returnsFailure() {
-            when(textPatternUtils.looksLikeJson(any())).thenReturn(false);
             AnswerGuardStrategy.AnswerGuardResult result = guard.guard("  ", List.of());
             assertTrue(result.isFailure());
         }
 
         @Test
         void guard_leakedAnswer_returnsLeakFailure() {
-            when(textPatternUtils.looksLikeJson(any())).thenReturn(false);
             AnswerGuardStrategy.AnswerGuardResult result =
                     guard.guard("{\"type\":\"function\",\"name\":\"github\"}", List.of());
             assertFalse(result.salvaged());
@@ -361,7 +419,6 @@ class AnswerQualityGuardDeepTest {
 
         @Test
         void guard_cleanAnswer_returnsSuccess() {
-            when(textPatternUtils.looksLikeJson(any())).thenReturn(false);
             String answer = "The answer to your question is 42.";
             AnswerGuardStrategy.AnswerGuardResult result = guard.guard(answer, List.of());
             assertNotNull(result);
@@ -370,7 +427,6 @@ class AnswerQualityGuardDeepTest {
 
         @Test
         void guard_suspiciouslyShort_returnsSalvagedRetryPrompt() {
-            when(textPatternUtils.looksLikeJson(any())).thenReturn(false);
             AnswerGuardStrategy.AnswerGuardResult result = guard.guard("done", List.of());
             // "done" triggers SUSPICIOUSLY_SHORT, guard returns retry prompt which is
             // considered "salvaged" (answer changed), so isFailure=false but answer contains retry
@@ -420,6 +476,23 @@ class AnswerQualityGuardDeepTest {
             Optional<AnswerGuardStrategy.LeakedToolCall> result = guard.extractLeakedToolCall(answer);
             assertTrue(result.isPresent());
             assertEquals("github", result.get().toolName());
+        }
+
+        @Test
+        void extractLeakedToolCall_dsmlFormat_parses() {
+            String answer = """
+                    <｜｜DSML｜｜tool_calls>
+                      <｜｜DSML｜｜invoke name="host_exec">
+                        <｜｜DSML｜｜parameter name="code" string="true">mkdir -p output</｜｜DSML｜｜parameter>
+                        <｜｜DSML｜｜parameter name="language" string="true">bash</｜｜DSML｜｜parameter>
+                      </｜｜DSML｜｜invoke>
+                    </｜｜DSML｜｜tool_calls>
+                    """;
+            Optional<AnswerGuardStrategy.LeakedToolCall> result = guard.extractLeakedToolCall(answer);
+            assertTrue(result.isPresent());
+            assertEquals("host_exec", result.get().toolName());
+            assertEquals("mkdir -p output", result.get().arguments().get("code"));
+            assertEquals("bash", result.get().arguments().get("language"));
         }
 
         @Test

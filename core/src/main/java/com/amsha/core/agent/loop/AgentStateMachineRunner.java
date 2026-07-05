@@ -33,6 +33,10 @@ import io.opentelemetry.context.Scope;
 public class AgentStateMachineRunner {
 
     private static final Logger log = Logger.getLogger(AgentStateMachineRunner.class);
+    private static final String GENERIC_TERMINAL_SUCCESS = "The approved tool was executed successfully.";
+    private static final String GENERIC_TERMINAL_ARTIFACT_SUCCESS =
+            "The approved tool was executed successfully and the requested artifact was generated.";
+    private static final int MAX_TERMINAL_ECHO_CHARS = 512;
 
     @Inject
     TaskClassifierService classifierService;
@@ -94,7 +98,14 @@ public class AgentStateMachineRunner {
     public AgentResult runFinishPass(
             AgentExecutionContext context, ReasoningEngine engine, List<ReasoningStep> history) {
         log.infof("StateMachine: performing terminal finish pass for session %s", context.sessionId());
-        context.setForceFinishRetry(true);
+        AgentExecutionContext originalContext = context;
+        originalContext.setForceFinishRetry(true);
+
+        String terminalGoal = "FINISH ONLY: the approved tool has already been executed successfully. "
+                + "Do not call any tools. Provide a brief plain-text summary of what was accomplished.";
+        AgentExecutionContext terminalContext = originalContext.withGoal(terminalGoal);
+        terminalContext.setForceFinishRetry(true);
+        terminalContext.setCheckpointRestoreOffset(originalContext.getCheckpointRestoreOffset());
 
         int historySizeBeforeTerminalHint = history.size();
         history.add(
@@ -102,7 +113,7 @@ public class AgentStateMachineRunner {
                         + "You are in the final synthesis pass. Your ONLY permitted action is FINISH. "
                         + "Do NOT call any more tools. Provide a brief plain-text summary of what was accomplished."));
 
-        int offset = context.getCheckpointRestoreOffset();
+        int offset = terminalContext.getCheckpointRestoreOffset();
         ReasoningStep lastToolStep = history.stream()
                 .skip(offset)
                 .filter(s -> (ToolCapability.SANDBOX_EXEC.toolName().equals(s.action())
@@ -118,22 +129,21 @@ public class AgentStateMachineRunner {
                         || ToolCapability.HOST_EXEC.toolName().equals(s.action()));
 
         if (lastToolStep != null && currentTurnHasToolAttempt) {
-            history.add(ReasoningStep.systemMessage("The " + lastToolStep.action()
-                    + " tool returned the following output. Report it EXACTLY:\n" + "OUTPUT: "
-                    + lastToolStep.observation() + "\n"
-                    + "Do NOT paraphrase, recalculate, or invent values. Use the exact value above."));
+            history.add(ReasoningStep.systemMessage(buildTerminalToolSummary(lastToolStep, true)));
         }
 
         try {
-            ReasoningStep step = engine.nextStep(context, context.agentRole(), context.goal(), history);
+            ReasoningStep step =
+                    engine.nextStep(terminalContext, terminalContext.agentRole(), terminalContext.goal(), history);
             if (step instanceof ReasoningStep.FinishStep finish) {
-                FinishActionHandler.FinishOutcome outcome = finishActionHandler.handle(context, history, finish, 0);
+                FinishActionHandler.FinishOutcome outcome =
+                        finishActionHandler.handle(terminalContext, history, finish, 0);
 
                 if (outcome instanceof FinishActionHandler.FinishOutcome.Completed c) {
-                    if (context.sessionId() != null
+                    if (terminalContext.sessionId() != null
                             && c.answer() != null
                             && !c.answer().isBlank()) {
-                        writer.saveAnswer(context.sessionId(), c.answer());
+                        writer.saveAnswer(terminalContext.sessionId(), c.answer());
                     }
                     return c.result();
                 }
@@ -141,7 +151,7 @@ public class AgentStateMachineRunner {
 
             log.warnf(
                     "StateMachine: terminal pass did not result in FINISH for session %s; retrying with guidance hint.",
-                    context.sessionId());
+                    terminalContext.sessionId());
             int historySizeBeforeHint = history.size();
             history.add(
                     ReasoningStep.systemMessage(
@@ -151,16 +161,17 @@ public class AgentStateMachineRunner {
                                     + "Even a short sentence like 'Information stored successfully' is acceptable. Finish now."));
 
             try {
-                ReasoningStep retryStep = engine.nextStep(context, context.agentRole(), context.goal(), history);
+                ReasoningStep retryStep =
+                        engine.nextStep(terminalContext, terminalContext.agentRole(), terminalContext.goal(), history);
                 if (retryStep instanceof ReasoningStep.FinishStep retryFinish) {
                     FinishActionHandler.FinishOutcome retryOutcome =
-                            finishActionHandler.handle(context, history, retryFinish, 0);
+                            finishActionHandler.handle(terminalContext, history, retryFinish, 0);
 
                     if (retryOutcome instanceof FinishActionHandler.FinishOutcome.Completed rc) {
-                        if (context.sessionId() != null
+                        if (terminalContext.sessionId() != null
                                 && rc.answer() != null
                                 && !rc.answer().isBlank()) {
-                            writer.saveAnswer(context.sessionId(), rc.answer());
+                            writer.saveAnswer(terminalContext.sessionId(), rc.answer());
                         }
                         return rc.result();
                     }
@@ -172,16 +183,73 @@ public class AgentStateMachineRunner {
             }
 
             log.errorf(
-                    "StateMachine: terminal retry failed for session %s; falling back to standard loop.",
-                    context.sessionId());
-            context.setForceFinishRetry(false);
-            return run(context, engine, history);
+                    "StateMachine: terminal retry failed for session %s; returning forced terminal result.",
+                    terminalContext.sessionId());
+            String fallbackAnswer = buildTerminalToolSummary(lastToolStep, false);
+            return AgentResult.finished(fallbackAnswer, List.copyOf(history));
         } finally {
-            context.setForceFinishRetry(false);
+            originalContext.setForceFinishRetry(false);
             if (history.size() > historySizeBeforeTerminalHint) {
                 history.subList(historySizeBeforeTerminalHint, history.size()).clear();
             }
         }
+    }
+
+    private String buildTerminalToolSummary(ReasoningStep lastToolStep, boolean includeGuidance) {
+        if (lastToolStep == null) {
+            return GENERIC_TERMINAL_SUCCESS;
+        }
+
+        String action = lastToolStep.action();
+        String observation = lastToolStep.observation();
+
+        if (isShellTool(action)) {
+            boolean generatedArtifact = ToolStepResolutionUtils.isArtifactCompletionSignal(lastToolStep);
+            if (generatedArtifact) {
+                return includeGuidance
+                        ? "The approved shell tool completed successfully. Summarize the generated artifact briefly without repeating raw shell output."
+                        : GENERIC_TERMINAL_ARTIFACT_SUCCESS;
+            }
+            return includeGuidance
+                    ? "The approved shell tool completed successfully. Summarize the result briefly without repeating raw shell output."
+                    : GENERIC_TERMINAL_SUCCESS;
+        }
+
+        if (observation == null || observation.isBlank()) {
+            return GENERIC_TERMINAL_SUCCESS;
+        }
+
+        if (looksLikeLargeArtifact(observation)) {
+            return includeGuidance
+                    ? "The approved tool completed successfully. Summarize the result briefly without repeating raw output."
+                    : GENERIC_TERMINAL_ARTIFACT_SUCCESS;
+        }
+
+        return observation;
+    }
+
+    private boolean isShellTool(String action) {
+        return ToolCapability.HOST_EXEC.toolName().equals(action)
+                || ToolCapability.SANDBOX_EXEC.toolName().equals(action);
+    }
+
+    private boolean looksLikeLargeArtifact(String observation) {
+        if (observation.length() > MAX_TERMINAL_ECHO_CHARS) {
+            return true;
+        }
+
+        long newlineCount = observation.chars().filter(ch -> ch == '\n').count();
+        if (newlineCount >= 4) {
+            return true;
+        }
+
+        String lower = observation.toLowerCase();
+        return lower.contains("<html")
+                || lower.contains("</html")
+                || lower.contains("<!doctype html")
+                || lower.contains("```")
+                || lower.contains("<body")
+                || lower.contains("<script");
     }
 
     public AgentResult run(AgentExecutionContext context, ReasoningEngine engine, List<ReasoningStep> resumedHistory) {

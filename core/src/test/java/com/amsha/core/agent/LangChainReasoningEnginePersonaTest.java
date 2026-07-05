@@ -17,6 +17,7 @@ import java.util.Collections;
 import java.util.Set;
 
 import com.amsha.core.agent.loop.AgentExecutionContext;
+import com.amsha.core.agent.loop.LoopStuckDetector;
 import com.amsha.core.agent.reasoning.ChatHistoryAssembler;
 import com.amsha.core.agent.reasoning.CompactionSummaryCache;
 import com.amsha.core.agent.reasoning.LangChainReasoningEngine;
@@ -85,7 +86,7 @@ class LangChainReasoningEnginePersonaTest {
 
         // 3. Setup Collaborators
         ReasoningMessageAssembler messageAssembler =
-                new ReasoningMessageAssembler(mockHistoryAssembler, mockToolRegistry);
+                new ReasoningMessageAssembler(mockHistoryAssembler, mockToolRegistry, new LoopStuckDetector());
         RecoveryProcessor recoveryProcessor = new RecoveryProcessor(new ObjectMapper(), new TextPatternUtils());
         ReasoningValidator reasoningValidator = new ReasoningValidator(mock(CompactionSummaryCache.class));
         StructuredOutputProcessor structuredOutputProcessor = new StructuredOutputProcessor(

@@ -15,11 +15,13 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
 import com.amsha.core.agent.AgentSentinels;
 import com.amsha.core.agent.loop.AgentExecutionContext;
+import com.amsha.core.agent.loop.LoopStuckDetector;
 import com.amsha.core.agent.role.AgentRoleEnum;
 import com.amsha.core.agent.role.ToolCapability;
 import com.amsha.core.security.AutonomyLevel;
@@ -42,6 +44,7 @@ public class ReasoningMessageAssembler {
 
     private final ChatHistoryAssembler historyAssembler;
     private final ToolRegistry toolRegistry;
+    private final LoopStuckDetector loopStuckDetector;
 
     @Inject
     ToolSearchIndex toolSearchIndex;
@@ -53,13 +56,15 @@ public class ReasoningMessageAssembler {
     SkillAdaptationManager adaptationManager;
 
     @Inject
-    public ReasoningMessageAssembler(ChatHistoryAssembler historyAssembler, ToolRegistry toolRegistry) {
+    public ReasoningMessageAssembler(
+            ChatHistoryAssembler historyAssembler, ToolRegistry toolRegistry, LoopStuckDetector loopStuckDetector) {
         this.historyAssembler = historyAssembler;
         this.toolRegistry = toolRegistry;
+        this.loopStuckDetector = loopStuckDetector;
     }
 
     protected ReasoningMessageAssembler() {
-        this(null, null);
+        this(null, null, null);
     }
 
     public record AssembledMessages(List<ChatMessage> messages, List<ToolSpecification> tools) {}
@@ -87,8 +92,13 @@ public class ReasoningMessageAssembler {
                         && sm.text().contains(AgentSentinels.COMPACTED_SUMMARY_SENTINEL)))
                 .toList();
 
+        Optional<String> stuckHint = loopStuckDetector.detectStuckHint(history, agentRole);
         String finalSystemPrompt =
                 resolveSystemPrompt(assembled, systemPrompt, isWriteIntent, context.isForceFinishRetry());
+        if (stuckHint.isPresent()) {
+            log.infof("[ReasoningAssembler] Injecting loop-stuck hint for session %s (role=%s)", sessionId, agentRole);
+            finalSystemPrompt = finalSystemPrompt + "\n\n" + stuckHint.get();
+        }
 
         List<ChatMessage> messages = new ArrayList<>();
         messages.add(SystemMessage.systemMessage(finalSystemPrompt));

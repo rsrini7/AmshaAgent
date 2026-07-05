@@ -11,6 +11,8 @@ import java.lang.reflect.Field;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import com.amsha.channel.api.ChannelMessage;
@@ -21,6 +23,7 @@ import com.amsha.core.agent.reasoning.ChatHistoryAssembler;
 import com.amsha.core.agent.reasoning.CompactionSummaryCache;
 import com.amsha.core.agent.reasoning.LangChainReasoningEngine;
 import com.amsha.core.agent.reasoning.ReasoningMessageAssembler;
+import com.amsha.core.agent.reasoning.ReasoningStep;
 import com.amsha.core.agent.reasoning.ReasoningStepParser;
 import com.amsha.core.agent.reasoning.ReasoningValidator;
 import com.amsha.core.agent.reasoning.RecoveryProcessor;
@@ -29,6 +32,7 @@ import com.amsha.core.agent.reasoning.SystemPromptBuilder;
 import com.amsha.core.agent.reasoning.port.LlmProviderPort;
 import com.amsha.core.agent.result.AgentResult;
 import com.amsha.core.agent.role.RoleRegistry;
+import com.amsha.core.agent.role.ToolCapability;
 import com.amsha.core.agent.sse.AgentSseService;
 import com.amsha.core.audit.AuditHashUtil;
 import com.amsha.core.domain.model.AgentCheckpoint;
@@ -82,7 +86,8 @@ class AgentLoopTest {
                 .thenReturn("MOCK SYSTEM PROMPT");
 
         // Setup Collaborators
-        ReasoningMessageAssembler messageAssembler = new ReasoningMessageAssembler(historyAssembler, toolRegistry);
+        ReasoningMessageAssembler messageAssembler =
+                new ReasoningMessageAssembler(historyAssembler, toolRegistry, new LoopStuckDetector());
         RecoveryProcessor recoveryProcessor = new RecoveryProcessor(new ObjectMapper(), new TextPatternUtils());
         ReasoningValidator reasoningValidator = new ReasoningValidator(summaryCache);
         StructuredOutputProcessor structuredOutputProcessor =
@@ -201,6 +206,65 @@ class AgentLoopTest {
             AgentResult result = loop.runWithRole("s1", "coord", "goal", null, engine, 5, ctx);
 
             assertTrue(result instanceof AgentResult.AwaitingApproval);
+            return null;
+        });
+    }
+
+    @Test
+    void continuationCommandRestoresHistoryFromCompletedCheckpoint() throws Exception {
+        AgentLoop loop = new AgentLoop();
+
+        StatefulAgentStore agentStore = mock(StatefulAgentStore.class);
+        AgentStateMachineRunner stateMachineRunner = mock(AgentStateMachineRunner.class);
+        CheckpointResumeHandler checkpointResumeHandler = mock(CheckpointResumeHandler.class);
+        AuditHashUtil hashUtil = mock(AuditHashUtil.class);
+        SessionLifecycleCoordinator sessionLifecycleCoordinator = mock(SessionLifecycleCoordinator.class);
+        CheckpointResumeCoordinator checkpointResumeCoordinator = mock(CheckpointResumeCoordinator.class);
+        ObservabilityManager observabilityManager = mock(ObservabilityManager.class);
+        AgentSseService agentSseService = mock(AgentSseService.class);
+        MeterRegistry meterRegistry = mock(MeterRegistry.class);
+        Counter counter = mock(Counter.class);
+        when(meterRegistry.counter(anyString(), any(String[].class))).thenReturn(counter);
+
+        IntentClassificationService intentClassificationService = mock(IntentClassificationService.class);
+
+        ReasoningStep priorStep = ReasoningStep.fastPath(
+                "prior work", ToolCapability.HOST_EXEC.toolName(), Map.of("code", "cat viewer.html"));
+        when(checkpointResumeCoordinator.resolveResumePath(any(), any(), any(), any()))
+                .thenReturn(new CheckpointResumeCoordinator.ResumeDecision.ResumedHistory(
+                        List.of(priorStep), 1, "skill:algorithmic-art", null));
+        when(intentClassificationService.isContinuationCommand("proceed")).thenReturn(true);
+        when(intentClassificationService.isResumeCommand(anyString())).thenReturn(false);
+
+        when(sessionLifecycleCoordinator.setupMdc(any(), any())).thenReturn("user");
+
+        setField(loop, "agentStore", agentStore);
+        setField(loop, "stateMachineRunner", stateMachineRunner);
+        setField(loop, "checkpointResumeHandler", checkpointResumeHandler);
+        setField(loop, "hashUtil", hashUtil);
+        setField(loop, "sessionLifecycleCoordinator", sessionLifecycleCoordinator);
+        Span span = mock(Span.class);
+        Scope scope = mock(Scope.class);
+        when(span.makeCurrent()).thenReturn(scope);
+        when(observabilityManager.beginSession(any(), any(), any())).thenReturn(span);
+
+        setField(loop, "checkpointResumeCoordinator", checkpointResumeCoordinator);
+        setField(loop, "observabilityManager", observabilityManager);
+        setField(loop, "agentSseService", agentSseService);
+        setField(loop, "meterRegistry", meterRegistry);
+        setField(loop, "intentClassificationService", intentClassificationService);
+
+        ChannelUser user = new ChannelUser("foo", "bar", "disp", ChannelType.TELEGRAM);
+        ChannelMessage msg = new ChannelMessage.TelegramMessage(user, "proceed", "foo", Instant.now());
+        MessageContext ctx = new MessageContext("foo", user, msg);
+
+        AgentResult finished = AgentResult.finished("ok", List.of());
+        when(stateMachineRunner.run(any(), any(), any())).thenReturn(finished);
+
+        WorkspaceContext.run("s1", "user", "chat", AutonomyLevel.FULL, "skill:algorithmic-art", () -> {
+            AgentResult result = loop.runWithRole("s1", "skill:algorithmic-art", "original goal", null, engine, 5, ctx);
+
+            assertTrue(result instanceof AgentResult.Finished);
             return null;
         });
     }

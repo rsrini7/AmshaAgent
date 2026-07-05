@@ -36,6 +36,20 @@ public class LeakedToolCallParser {
     private static final Pattern NVIDIA_TOOL_NAME_PATTERN =
             Pattern.compile("TOOLCALLS\\s+([a-zA-Z_][a-zA-Z0-9_]*)", Pattern.CASE_INSENSITIVE);
 
+    /** DSML-style invoke blocks leaked into plain text answers. */
+    private static final Pattern DSML_INVOKE_PATTERN =
+            Pattern.compile("(?is)invoke\\s+name\\s*=\\s*\"([a-zA-Z_][a-zA-Z0-9_]*)\"");
+
+    private static final Pattern DSML_PARAMETER_PATTERN =
+            Pattern.compile("(?is)parameter\\s+name\\s*=\\s*\"([a-zA-Z_][a-zA-Z0-9_]*)\"[^>]*>(.*?)</[^>]*parameter>");
+
+    /** Generic XML-style wrapper used by some models for tool calls. */
+    private static final Pattern XML_FUNCTION_PATTERN =
+            Pattern.compile("(?is)<function\\s*=\\s*\"?([a-zA-Z_][a-zA-Z0-9_]*)\"?\\s*>");
+
+    private static final Pattern XML_PARAMETER_PATTERN = Pattern.compile(
+            "(?is)<parameter(?:\\s+name\\s*=\\s*|\\s*=\\s*)\"?([a-zA-Z_][a-zA-Z0-9_]*)\"?[^>]*>(.*?)</[^>]*parameter>");
+
     // Extracts content from markdown code blocks (```lang\n...\n```)
     private static final Pattern CODE_BLOCK_EXTRACT_PATTERN =
             Pattern.compile("```(?:\\w+)?\\s*\\n([\\s\\S]*?)```", Pattern.MULTILINE);
@@ -66,6 +80,20 @@ public class LeakedToolCallParser {
                     return Optional.of(new LeakedToolCall(toolName, args));
                 }
             }
+        }
+
+        // Try DSML format
+        Optional<LeakedToolCall> dsml = parseDsmlToolCall(answer);
+        if (dsml.isPresent()) {
+            log.infof("Parsed DSML format: tool=%s", dsml.get().toolName());
+            return dsml;
+        }
+
+        // Try generic XML-style tool-call format
+        Optional<LeakedToolCall> xml = parseXmlToolCall(answer);
+        if (xml.isPresent()) {
+            log.infof("Parsed XML tool-call format: tool=%s", xml.get().toolName());
+            return xml;
         }
 
         // Try JSON formats
@@ -115,6 +143,54 @@ public class LeakedToolCallParser {
             log.debugf("No parseable leaked tool call found in answer");
         }
         return naked;
+    }
+
+    private Optional<LeakedToolCall> parseDsmlToolCall(String answer) {
+        if (answer == null || answer.isBlank()) return Optional.empty();
+
+        Matcher invoke = DSML_INVOKE_PATTERN.matcher(answer);
+        if (!invoke.find()) {
+            return Optional.empty();
+        }
+
+        String toolName = invoke.group(1);
+        if (!toolRegistry.listTools().contains(toolName)) {
+            return Optional.empty();
+        }
+
+        Map<String, Object> args = new HashMap<>();
+        String tail = answer.substring(invoke.start());
+        Matcher params = DSML_PARAMETER_PATTERN.matcher(tail);
+        while (params.find()) {
+            String key = params.group(1);
+            String value = params.group(2) != null ? params.group(2).strip() : "";
+            args.put(key, value);
+        }
+        return Optional.of(new LeakedToolCall(toolName, args));
+    }
+
+    private Optional<LeakedToolCall> parseXmlToolCall(String answer) {
+        if (answer == null || answer.isBlank()) return Optional.empty();
+
+        Matcher function = XML_FUNCTION_PATTERN.matcher(answer);
+        if (!function.find()) {
+            return Optional.empty();
+        }
+
+        String toolName = function.group(1);
+        if (!toolRegistry.listTools().contains(toolName)) {
+            return Optional.empty();
+        }
+
+        Map<String, Object> args = new HashMap<>();
+        String tail = answer.substring(function.start());
+        Matcher params = XML_PARAMETER_PATTERN.matcher(tail);
+        while (params.find()) {
+            String key = params.group(1);
+            String value = params.group(2) != null ? params.group(2).strip() : "";
+            args.put(key, value);
+        }
+        return Optional.of(new LeakedToolCall(toolName, args));
     }
 
     private Optional<LeakedToolCall> parseJsonObjectFormat(Map<String, Object> parsed) {

@@ -139,8 +139,13 @@ public class IntentDetectorService implements IntentDetector {
 
     @Override
     public String classify(String userMessage) {
-        if (intentDetector.isContinuityCommand(userMessage)) {
-            log.debugf("CLASSIFIER: continuity phrase matched → fall back to previous role");
+        if (intentDetector.isRetryCommand(userMessage)) {
+            log.debugf("CLASSIFIER: retry phrase matched → fall back to previous role");
+            return "__CONTINUE__";
+        }
+
+        if (intentDetector.isContinuationCommand(userMessage)) {
+            log.debugf("CLASSIFIER: continuation phrase matched → fall back to previous role");
             return "__CONTINUE__";
         }
 

@@ -62,6 +62,17 @@ public class ToolResultProcessor {
             decision = handleWebFetchOutcome(context, params, response, observation, history);
         }
 
+        if (decision == null
+                && response != null
+                && response.success()
+                && ToolStepResolutionUtils.isArtifactCompletionSignal(completedStep)) {
+            String finalAnswer = "The requested artifact was generated and opened successfully.";
+            if (context.sessionId() != null) {
+                writer.saveAnswer(context.sessionId(), finalAnswer);
+            }
+            return StepDecision.terminal(AgentResult.finished(finalAnswer, List.copyOf(history)));
+        }
+
         if (decision != null) {
             return decision;
         }

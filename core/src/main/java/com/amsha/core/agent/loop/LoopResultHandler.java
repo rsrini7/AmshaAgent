@@ -203,7 +203,7 @@ public class LoopResultHandler {
         if (observation == null || observation.isBlank()) return Optional.empty();
 
         String goal = (messageContext != null) ? messageContext.getGoal() : null;
-        if (goal != null && !intentClassificationService.isContinuityCommand(goal)) {
+        if (goal != null && !intentClassificationService.isResumeCommand(goal)) {
             return Optional.empty();
         }
 

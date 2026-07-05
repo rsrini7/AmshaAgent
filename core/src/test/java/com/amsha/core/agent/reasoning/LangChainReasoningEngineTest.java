@@ -39,6 +39,7 @@ import com.amsha.core.governance.BudgetWarningException;
 import com.amsha.core.governance.GovernanceStrategy;
 import com.amsha.core.scope.WorkspaceScopeHolder;
 import com.amsha.core.security.AutonomyLevel;
+import com.amsha.core.skill.SkillRegistry;
 import com.amsha.core.tools.AgentTool;
 import com.amsha.core.tools.ToolRegistry;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -73,6 +74,9 @@ class LangChainReasoningEngineTest {
 
     @InjectMock
     RoleRegistry roleRegistry;
+
+    @InjectMock
+    SkillRegistry skillRegistry;
 
     @InjectMock
     ToolRegistry toolRegistry;
@@ -185,6 +189,59 @@ class LangChainReasoningEngineTest {
         assertEquals(100, step.outputTokens());
         assertTrue(step.actionInput().containsKey("repo"));
         assertEquals("test/repo", step.actionInput().get("repo"));
+    }
+
+    @Test
+    void testSkillRoleDoesNotUseSimpleChitchatPromptPath() {
+        // Arrange
+        AgentTool execTool = Mockito.mock(AgentTool.class);
+        when(execTool.isEnabled()).thenReturn(true);
+        when(toolRegistry.findTool(ToolCapability.HOST_EXEC.toolName())).thenReturn(Optional.of(execTool));
+        when(roleRegistry.resolvePermittedTools("skill:algorithmic-art"))
+                .thenReturn(Set.of(ToolCapability.HOST_EXEC.toolName()));
+        when(skillRegistry.currentSnapshot()).thenReturn(List.of());
+
+        AiMessage mockAiMessage = AiMessage.aiMessage("I'll start by reading the template file.");
+        ChatResponse mockResponse = ChatResponse.builder()
+                .aiMessage(mockAiMessage)
+                .tokenUsage(new TokenUsage(10, 10))
+                .finishReason(FinishReason.STOP)
+                .build();
+
+        when(llmProviderPort.nextStep(any(ChatRequest.class), any(String.class)))
+                .thenReturn(mockResponse);
+        when(promptBuilder.build(any(), any(), any(), any(), ArgumentMatchers.anyBoolean()))
+                .thenReturn("System Prompt");
+        when(historyAssembler.assemble(any(), any(), any())).thenReturn(List.of());
+        when(stepParser.parse(any(), any(), any()))
+                .thenReturn(ReasoningStep.pending(
+                        "I'll start by reading the template file.",
+                        ReasoningStep.FINISH,
+                        Map.of("answer", "I'll start by reading the template file."),
+                        10,
+                        10));
+
+        AgentExecutionContext ctx = new AgentExecutionContext(
+                "skill-session",
+                "user-1",
+                "chat-1",
+                "skill:algorithmic-art",
+                "use algorithmic art to generate very simple flow fields",
+                AutonomyLevel.FULL,
+                StructuredOutputMode.NATIVE,
+                5,
+                0,
+                null,
+                null,
+                null,
+                null);
+
+        // Act
+        ReasoningStep step = reasoningEngine.nextStep(ctx, "skill:algorithmic-art", ctx.goal(), List.of());
+
+        // Assert
+        assertEquals(ReasoningStep.OBSERVE, step.action());
+        assertTrue(step.observation().contains("CRITICAL SKILL MODE"));
     }
 
     @InjectMock

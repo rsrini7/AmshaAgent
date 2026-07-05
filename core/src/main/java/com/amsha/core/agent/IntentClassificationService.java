@@ -15,11 +15,15 @@ public class IntentClassificationService {
             "\\b(save|store|ingest|remember|add to memory|note that|call me|my name is|refer to me as|address me as)\\b",
             Pattern.CASE_INSENSITIVE);
 
-    // Continuity commands restore the OLD goal (explicit retry/redo).
-    // Execution follow-ups ("execute", "run it", "do it") are NOT continuity — they use the NEW goal.
-    private static final Pattern CONTINUITY_PATTERN = Pattern.compile(
-            "(?i)^\\s*(?:try\\s+again|retry|do\\s+it\\s+again|once\\s+more|redo|go\\s+ahead|proceed|continue|yes|yep|yeah|sure"
-                    + "|now\\s+execute|run\\s+that|execute\\s+it|run\\s+this)(?:[.!?]+\\s*)?(?:\\s+.*)?$");
+    // Retry commands mean "do the same task again".
+    // Continuation commands mean "keep going with the current task".
+    // Execution follow-ups ("execute", "run it", "do it") are NOT retry/continuation — they use the NEW goal.
+    private static final Pattern RETRY_PATTERN = Pattern.compile(
+            "(?i)^\\s*(?:try\\s+again|retry|do\\s+it\\s+again|once\\s+more|redo|same|again|repeat)(?:[.!?]+\\s*)?(?:\\s+.*)?$");
+
+    private static final Pattern CONTINUATION_PATTERN = Pattern.compile(
+            "(?i)^\\s*(?:go\\s+ahead|proceed|continue|carry\\s+on|keep\\s+going|move\\s+ahead|resume|yes|yep|yeah|sure|ok|okay)"
+                    + "(?:[.!?]+\\s*)?(?:\\s+.*)?$");
 
     private static final Pattern TOOL_VERB_PATTERN = Pattern.compile(
             "\\b(search|find|fetch|list|get|github|gh|repo|read|browse|open|go to|url|site|web|run|exec|code|script|program|schedule|at|every|after|in|save|store|ingest|remember|note|weather|news|price|latest|stock|status|info|history|check|bullet|recap|summarize|summary)\\b",
@@ -113,11 +117,35 @@ public class IntentClassificationService {
     }
 
     /**
-     * Returns true if the user is explicitly asking to retry or continue
-     * a previous operation using standard phrases.
+     * Returns true if the user is explicitly asking to retry a previous operation.
      */
-    public boolean isContinuityCommand(String text) {
+    public boolean isRetryCommand(String text) {
         if (text == null || text.isBlank()) return false;
-        return CONTINUITY_PATTERN.matcher(text).matches();
+        return RETRY_PATTERN.matcher(text).matches();
+    }
+
+    /**
+     * Returns true if the user is explicitly asking to continue the current task.
+     */
+    public boolean isContinuationCommand(String text) {
+        if (text == null || text.isBlank()) return false;
+        return CONTINUATION_PATTERN.matcher(text).matches();
+    }
+
+    /**
+     * Backward-compatible alias for the combined resume semantics.
+     * Prefer {@link #isRetryCommand(String)} or {@link #isContinuationCommand(String)}.
+     */
+    @Deprecated
+    public boolean isContinuityCommand(String text) {
+        return isRetryCommand(text) || isContinuationCommand(text);
+    }
+
+    /**
+     * Combined resume semantics used when either retry or continue should restore
+     * the prior checkpoint goal and context.
+     */
+    public boolean isResumeCommand(String text) {
+        return isContinuityCommand(text);
     }
 }

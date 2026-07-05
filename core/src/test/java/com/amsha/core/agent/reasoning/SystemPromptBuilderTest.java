@@ -272,12 +272,31 @@ class SystemPromptBuilderTest {
 
         String result = builder.build(createCtx("s1"), "skill:test-skill", "s1", "some goal", false);
 
-        assertTrue(result.contains("SKILL ROLE OVERRIDE (HIGHEST PRIORITY)"));
-        assertTrue(result.contains("EXECUTE the task yourself using ONLY the tools listed"));
-        assertTrue(result.contains("IMMEDIATELY emit a `FINISH` action"));
-        assertTrue(result.contains("IGNORE any rule above that tells you to delegate execution"));
+        assertTrue(result.contains(PromptInstructionLibrary.skillRoleOverride("test-skill")));
         assertTrue(result.contains("If you are a `skill:*` role, execute the task yourself"));
         assertFalse(result.contains("otherwise delegate to 'brahma'"));
+    }
+
+    @Test
+    void testBuildSystemPrompt_treatsSkillRolesAsNonChitchat() throws Exception {
+        when(agentPersonaRegistry.getPersonaPrompt(any(), any())).thenReturn("PERSONA_MARKER");
+        when(promptTemplateEngine.buildSystemPrompt(any(), any(), any(), any())).thenReturn("TOOL_BINDING_MARKER");
+        when(toolRegistry.findTool(any())).thenReturn(Optional.empty());
+        when(roleRegistry.resolvePermittedTools("skill:test-skill"))
+                .thenReturn(Set.of(ToolCapability.HOST_EXEC.toolName()));
+        when(skillRegistry.findByName("test-skill")).thenReturn(Optional.empty());
+        when(skillRegistry.currentSnapshot()).thenReturn(Collections.emptyList());
+        when(intentService.isSimpleConversational(any())).thenReturn(true);
+        setField(builder, "contextWindow", 128000);
+        setField(builder, "compactPromptEnabled", false);
+
+        String result = builder.build(
+                createCtx("s1"), "skill:test-skill", "s1", "use algorithmic art to generate simple flow fields", false);
+
+        assertFalse(result.contains("STRICT MODE - SIMPLE CONVERSATION"));
+        assertTrue(result.contains(PromptInstructionLibrary.skillRoleOverride("test-skill")));
+        assertTrue(result.contains("## Execution Protocol"));
+        assertTrue(result.contains("HARD TOOL OVERRIDE - CROSS-TURN CONTAMINATION PREVENTION"));
     }
 
     @Test

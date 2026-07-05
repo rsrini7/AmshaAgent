@@ -1,7 +1,6 @@
 package com.amsha.core.agent.loop;
 
 import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
 
 import java.util.List;
 import java.util.Optional;
@@ -18,8 +17,12 @@ class LeakedToolCallParserTest {
 
     @BeforeEach
     void setUp() {
-        ToolRegistry registry = mock(ToolRegistry.class);
-        when(registry.listTools()).thenReturn(List.of("garuda", "sandbox_exec", "github"));
+        ToolRegistry registry = new ToolRegistry() {
+            @Override
+            public List<String> listTools() {
+                return List.of("garuda", "sandbox_exec", "github", "host_exec");
+            }
+        };
         parser = new LeakedToolCallParser(registry);
     }
 
@@ -71,6 +74,42 @@ class LeakedToolCallParserTest {
         assertTrue(result.isPresent());
         assertEquals("garuda", result.get().toolName());
         assertEquals("saraswati", result.get().arguments().get("agent"));
+    }
+
+    @Test
+    void extractLeakedToolCall_dsmlFormat() {
+        String answer = """
+                I have the template structure.
+                <｜｜DSML｜｜tool_calls>
+                  <｜｜DSML｜｜invoke name="host_exec">
+                    <｜｜DSML｜｜parameter name="code" string="true">mkdir -p output</｜｜DSML｜｜parameter>
+                    <｜｜DSML｜｜parameter name="language" string="true">bash</｜｜DSML｜｜parameter>
+                  </｜｜DSML｜｜invoke>
+                </｜｜DSML｜｜tool_calls>
+                """;
+        Optional<LeakedToolCall> result = parser.extractLeakedToolCall(answer);
+        assertTrue(result.isPresent());
+        assertEquals("host_exec", result.get().toolName());
+        assertEquals("mkdir -p output", result.get().arguments().get("code"));
+        assertEquals("bash", result.get().arguments().get("language"));
+    }
+
+    @Test
+    void extractLeakedToolCall_xmlFormat() {
+        String answer = """
+                I have the template structure.
+                <tool_call>
+                  <function=host_exec>
+                    <parameter=code>ls -la /tmp</parameter>
+                    <parameter=language>bash</parameter>
+                  </function>
+                </tool_call>
+                """;
+        Optional<LeakedToolCall> result = parser.extractLeakedToolCall(answer);
+        assertTrue(result.isPresent());
+        assertEquals("host_exec", result.get().toolName());
+        assertEquals("ls -la /tmp", result.get().arguments().get("code"));
+        assertEquals("bash", result.get().arguments().get("language"));
     }
 
     @Test

@@ -144,7 +144,8 @@ public class LangChainReasoningEngine implements ReasoningEngine {
         String finalGoal = buildFinalGoal(context, agentRole, goal, cappedHistory);
 
         boolean isWriteIntent = intentClassifier.isWriteIntent(goal);
-        boolean isSimpleChitchat = intentClassifier.isSimpleConversational(goal);
+        boolean isSkillRole = AgentRoleEnum.isSkillRole(agentRole);
+        boolean isSimpleChitchat = !isSkillRole && intentClassifier.isSimpleConversational(goal);
         boolean isHistoryQuery = intentClassifier.isHistoryQuery(goal);
         if (isWriteIntent
                 || isHistoryQuery
@@ -279,7 +280,7 @@ public class LangChainReasoningEngine implements ReasoningEngine {
                 span.setAttribute(AgentOTelConstants.ATTR_LLM_MESSAGE_COUNT, (long) msgCount);
             }
             log.infof(
-                    "LLM call: %d messages, ~%d est. tokens, %d chars, role=%s, compact=%s (config=%s, chitchat=%s, forceFinishRetry=%s)",
+                    "LLM call: %d messages, ~%d est. tokens, %d chars, role=%s, runtimeCompact=%s (configCompact=%s, chitchat=%s, forceFinishRetry=%s)",
                     msgCount,
                     estTokens,
                     totalChars,
@@ -465,6 +466,16 @@ public class LangChainReasoningEngine implements ReasoningEngine {
             boolean isWriteIntent,
             String targetLanguage) {
         ReasoningStep parsedStep = stepParser.parse(sessionId, agentRole, response);
+
+        if (ReasoningStep.FINISH.equals(parsedStep.action())
+                && AgentRoleEnum.isSkillRole(agentRole)
+                && response.aiMessage() != null
+                && !response.aiMessage().hasToolExecutionRequests()
+                && !context.isForceFinishRetry()) {
+            return ReasoningStep.systemMessage("CRITICAL SKILL MODE: You have not executed any permitted tools yet. "
+                    + "Call your execution tool directly and do not answer in prose. "
+                    + "After the tool returns, FINISH with a concise summary.");
+        }
 
         if (ReasoningStep.FINISH.equals(parsedStep.action())
                 && isWriteIntent

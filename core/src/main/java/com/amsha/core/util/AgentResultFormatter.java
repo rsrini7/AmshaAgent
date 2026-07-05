@@ -113,7 +113,67 @@ public class AgentResultFormatter {
         // 3. Trailing/leading fragment from a split TOOLCALL block
         cleaned = TOOLCALL_FRAGMENT.matcher(cleaned).replaceAll("").strip();
 
+        // 4. Trailing DSML-style tool-call block
+        cleaned = stripDsmlLeakBlock(cleaned);
+
+        // 4b. Generic XML-style tool-call block
+        cleaned = stripXmlToolCallBlock(cleaned);
+
+        // 5. Full HTML artifact: collapse to a short browser-preview notice so
+        // Telegram does not dump the generated page body as chat text.
+        cleaned = HtmlArtifactUtil.collapseHtmlArtifact(cleaned);
+
         return cleaned.isBlank() ? "[Tool output was malformed - no answer text was generated.]" : cleaned;
+    }
+
+    private static String stripDsmlLeakBlock(String text) {
+        if (text == null || text.isBlank()) {
+            return text;
+        }
+
+        int dsmlIdx = indexOfIgnoreCase(text, "DSML");
+        if (dsmlIdx < 0) {
+            return text;
+        }
+
+        int lineStart = text.lastIndexOf('\n', dsmlIdx);
+        if (lineStart < 0) {
+            return text.substring(0, dsmlIdx).stripTrailing();
+        }
+        return text.substring(0, lineStart).stripTrailing();
+    }
+
+    private static String stripXmlToolCallBlock(String text) {
+        if (text == null || text.isBlank()) {
+            return text;
+        }
+
+        int toolCallIdx = firstIndexOfIgnoreCase(text, "<tool_call");
+        int functionIdx = firstIndexOfIgnoreCase(text, "<function=");
+        int idx = minPositive(toolCallIdx, functionIdx);
+        if (idx < 0) {
+            return text;
+        }
+
+        int lineStart = text.lastIndexOf('\n', idx);
+        if (lineStart < 0) {
+            return text.substring(0, idx).stripTrailing();
+        }
+        return text.substring(0, lineStart).stripTrailing();
+    }
+
+    private static int indexOfIgnoreCase(String text, String needle) {
+        return text.toLowerCase().indexOf(needle.toLowerCase());
+    }
+
+    private static int firstIndexOfIgnoreCase(String text, String needle) {
+        return text.toLowerCase().indexOf(needle.toLowerCase());
+    }
+
+    private static int minPositive(int a, int b) {
+        if (a < 0) return b;
+        if (b < 0) return a;
+        return Math.min(a, b);
     }
 
     /**

@@ -13,6 +13,7 @@ import java.util.stream.Collectors;
 import com.amsha.core.agent.AgentSentinels;
 import com.amsha.core.agent.reasoning.ReasoningStep;
 import com.amsha.core.tools.ToolRegistry;
+import com.amsha.core.util.HtmlArtifactUtil;
 import com.amsha.core.util.TextPatternUtils;
 
 import org.jboss.logging.Logger;
@@ -87,6 +88,19 @@ public class AnswerQualityGuard implements AnswerGuardStrategy {
 
     /** Detects Mistral-style [TOOL_CALLS] prefix leaking into FINISH text. */
     static final Pattern MISTRAL_TOOL_CALL_PATTERN = Pattern.compile("\\[TOOL_CALLS\\]", Pattern.CASE_INSENSITIVE);
+
+    /** Detects DSML-style tool-call wrappers leaking into FINISH text. */
+    static final Pattern DSML_TOOL_CALL_PATTERN = Pattern.compile("(?is)DSML.*invoke\\s+name\\s*=\\s*\"");
+
+    /** Detects generic XML-style tool-call wrappers leaking into FINISH text. */
+    static final Pattern XML_TOOL_CALL_PATTERN = Pattern.compile("(?is)<tool_call\\b.*<function\\s*=\\s*");
+
+    /** Extracts the DSML tool name from an {@code invoke name=\"...\"} block. */
+    static final Pattern DSML_TOOL_NAME_PATTERN = Pattern.compile("(?is)invoke\\s+name\\s*=\\s*\"([^\"]+)\"");
+
+    /** Extracts the tool name from a generic XML {@code <function=tool>} block. */
+    static final Pattern XML_TOOL_NAME_PATTERN =
+            Pattern.compile("(?is)<function\\s*=\\s*\"?([a-zA-Z_][a-zA-Z0-9_]*)\"?\\s*>");
 
     /**
      * Extracts the tool name from a standard JSON leak so the correction hint
@@ -163,6 +177,8 @@ public class AnswerQualityGuard implements AnswerGuardStrategy {
                 || RAW_TOOL_JSON_PATTERN.matcher(answer).find()
                 || NVIDIA_TOOL_CALL_PATTERN.matcher(answer).find()
                 || MISTRAL_TOOL_CALL_PATTERN.matcher(answer).find()
+                || DSML_TOOL_CALL_PATTERN.matcher(answer).find()
+                || XML_TOOL_CALL_PATTERN.matcher(answer).find()
                 || (nakedFunctionCallPattern != null
                         && nakedFunctionCallPattern.matcher(answer).find())
                 || textPatternUtils.looksLikeJson(answer);
@@ -197,6 +213,12 @@ public class AnswerQualityGuard implements AnswerGuardStrategy {
         // Remove {"tool_calls": [...]} or {"calls": [...]} entirely
         stripped = stripped.replaceAll("(?s)\\{\\s*\"(?:tool_)?calls\"\\s*:.*?}", "");
 
+        // Remove DSML tool-call wrappers entirely.
+        stripped = stripDsmlLeakBlock(stripped);
+
+        // Remove generic XML tool-call wrappers entirely.
+        stripped = stripXmlToolCallBlock(stripped);
+
         // Remove {"name": ..., "parameters": ...} or {"tool_name": ..., "parameters": ...}
         stripped = stripped.replaceAll("(?s)\\{\\s*\"(?:tool_)?name\"\\s*:.*?\"parameters\"\\s*:.*?}", "");
 
@@ -230,6 +252,56 @@ public class AnswerQualityGuard implements AnswerGuardStrategy {
         return stripped.strip();
     }
 
+    private static String stripDsmlLeakBlock(String text) {
+        if (text == null || text.isBlank()) {
+            return "";
+        }
+
+        int dsmlIdx = indexOfIgnoreCase(text, "DSML");
+        if (dsmlIdx < 0) {
+            return text;
+        }
+
+        int lineStart = text.lastIndexOf('\n', dsmlIdx);
+        if (lineStart < 0) {
+            return text.substring(0, dsmlIdx).stripTrailing();
+        }
+        return text.substring(0, lineStart).stripTrailing();
+    }
+
+    private static int indexOfIgnoreCase(String text, String needle) {
+        return text.toLowerCase().indexOf(needle.toLowerCase());
+    }
+
+    private static String stripXmlToolCallBlock(String text) {
+        if (text == null || text.isBlank()) {
+            return "";
+        }
+
+        int toolCallIdx = firstIndexOfIgnoreCase(text, "<tool_call");
+        int functionIdx = firstIndexOfIgnoreCase(text, "<function=");
+        int idx = minPositive(toolCallIdx, functionIdx);
+        if (idx < 0) {
+            return text;
+        }
+
+        int lineStart = text.lastIndexOf('\n', idx);
+        if (lineStart < 0) {
+            return text.substring(0, idx).stripTrailing();
+        }
+        return text.substring(0, lineStart).stripTrailing();
+    }
+
+    private static int firstIndexOfIgnoreCase(String text, String needle) {
+        return text.toLowerCase().indexOf(needle.toLowerCase());
+    }
+
+    private static int minPositive(int a, int b) {
+        if (a < 0) return b;
+        if (b < 0) return a;
+        return Math.min(a, b);
+    }
+
     /**
      * Extracts the leaked tool name from a raw-tool-call answer for use in
      * correction hints. Returns {@code "the intended tool"} as a safe fallback.
@@ -244,6 +316,12 @@ public class AnswerQualityGuard implements AnswerGuardStrategy {
         if (nameMatcher.find()) return nameMatcher.group(1);
         Matcher nvidiaMatcher = NVIDIA_TOOL_NAME_PATTERN.matcher(answer);
         if (nvidiaMatcher.find()) return nvidiaMatcher.group(1);
+
+        Matcher dsmlMatcher = DSML_TOOL_NAME_PATTERN.matcher(answer);
+        if (dsmlMatcher.find()) return dsmlMatcher.group(1);
+
+        Matcher xmlMatcher = XML_TOOL_NAME_PATTERN.matcher(answer);
+        if (xmlMatcher.find()) return xmlMatcher.group(1);
 
         if (nakedFunctionCallPattern != null) {
             Matcher nakedMatcher = nakedFunctionCallPattern.matcher(answer);
@@ -373,6 +451,12 @@ public class AnswerQualityGuard implements AnswerGuardStrategy {
         if (AgentSentinels.SYSTEM_INSTRUCTION_ECHO_PATTERN.matcher(stripped).find()) {
             log.warnf("ANSWER-GUARD detected system instruction echo in answer for session %s - rejecting", sessionId);
             return "I wasn't able to generate a meaningful response. Please try again.";
+        }
+
+        String collapsed = HtmlArtifactUtil.collapseHtmlArtifact(stripped);
+        if (!collapsed.equals(stripped)) {
+            log.warnf("ANSWER-GUARD collapsed HTML artifact in answer for session %s", sessionId);
+            return collapsed;
         }
 
         return stripped;

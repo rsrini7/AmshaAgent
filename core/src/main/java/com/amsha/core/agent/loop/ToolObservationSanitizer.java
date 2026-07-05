@@ -6,12 +6,23 @@ import jakarta.inject.Inject;
 
 import java.util.Comparator;
 import java.util.List;
+import java.util.stream.Stream;
 
 @ApplicationScoped
 public class ToolObservationSanitizer {
 
     @Inject
     Instance<ObservationTransformer> transformers;
+
+    private final List<ObservationTransformer> configuredTransformers;
+
+    ToolObservationSanitizer() {
+        this.configuredTransformers = null;
+    }
+
+    ToolObservationSanitizer(List<ObservationTransformer> configuredTransformers) {
+        this.configuredTransformers = configuredTransformers == null ? List.of() : List.copyOf(configuredTransformers);
+    }
 
     /**
      * Sanitizes a raw tool observation before it is appended to agent history.
@@ -26,7 +37,7 @@ public class ToolObservationSanitizer {
     public String sanitize(String toolName, String rawObservation) {
         if (rawObservation == null) return "";
 
-        List<ObservationTransformer> ordered = transformers.stream()
+        List<ObservationTransformer> ordered = orderedTransformers()
                 .sorted(Comparator.comparingInt(ObservationTransformer::priority))
                 .toList();
 
@@ -35,5 +46,12 @@ public class ToolObservationSanitizer {
             result = t.transform(toolName, result);
         }
         return result;
+    }
+
+    private Stream<ObservationTransformer> orderedTransformers() {
+        if (configuredTransformers != null) {
+            return configuredTransformers.stream();
+        }
+        return transformers.stream();
     }
 }

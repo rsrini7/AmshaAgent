@@ -13,6 +13,8 @@ import static org.mockito.Mockito.when;
 
 import jakarta.inject.Inject;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -24,8 +26,10 @@ import com.amsha.core.sandbox.ToolExecutionException;
 import com.amsha.core.scope.WorkspaceContext;
 import com.amsha.core.security.AutonomyLevel;
 import com.amsha.core.security.ToolOperation;
+import com.amsha.core.util.HtmlArtifactUtil;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.mockito.ArgumentCaptor;
 
 import io.quarkus.test.InjectMock;
@@ -40,6 +44,9 @@ class HostExecToolTest {
 
     @InjectMock
     DirectExecutor mockDirectExecutor;
+
+    @TempDir
+    Path tempDir;
 
     private static final String TRUNCATION_SUFFIX = "[output truncated at max output chars limit]";
 
@@ -339,7 +346,74 @@ class HostExecToolTest {
         assertTrue(r.output().endsWith(TRUNCATION_SUFFIX));
     }
 
+    @Test
+    void templateReads_do_not_collapse_into_artifact_notice() {
+        String html = """
+                <html>
+                  <body><main>template</main></body>
+                </html>
+                """;
+
+        String formatted =
+                tool.postProcessOutput(html, Map.of("code", "cat /tmp/skills/example/templates/viewer.html"));
+
+        assertEquals(HtmlArtifactUtil.HTML_TEMPLATE_NOTICE, formatted);
+    }
+
+    @Test
+    void outputFolder_html_collapses_into_artifact_notice() {
+        String html = """
+                <html>
+                  <body><main>artifact</main></body>
+                </html>
+                """;
+
+        String formatted = tool.postProcessOutput(html, Map.of("code", "cat output/generated.html"));
+
+        assertEquals(HtmlArtifactUtil.HTML_ARTIFACT_NOTICE, formatted);
+    }
+
+    @Test
+    void skillHome_browser_artifact_is_mirrored_into_skill_output_dir() throws Exception {
+        Path skillHome = Files.createTempDirectory(tempDir, "skill-home");
+        Path source = Files.createTempFile(tempDir, "particle-art", ".html");
+        Files.writeString(source, """
+                <!doctype html>
+                <html>
+                  <body><main>artifact</main></body>
+                </html>
+                """);
+
+        when(mockDirectExecutor.executeDirectly(any(), anyList(), any())).thenReturn("ignored\n");
+
+        AtomicReference<ToolResponse> ref = new AtomicReference<>();
+        WorkspaceContext.run("test-session", "user1", "chat1", AutonomyLevel.FULL, "debugger", () -> {
+            ref.set(tool.execute(
+                    ctx(
+                            "use algorithmic art to generate very simple particle system open in browser",
+                            skillHome.toString()),
+                    Map.of("code", "cat " + source, "language", "bash")));
+            return null;
+        });
+
+        ToolResponse r = ref.get();
+        assertTrue(r.success(), "browser preview should succeed: " + r.output());
+
+        Path mirrored = skillHome.resolve("output").resolve(source.getFileName());
+        assertTrue(Files.exists(mirrored), "mirrored artifact missing: " + mirrored);
+        assertEquals(Files.readString(source), Files.readString(mirrored));
+        assertEquals("Opened browser preview: " + mirrored, r.output());
+    }
+
     private ToolExecutionContext ctx() {
+        return ctx(null);
+    }
+
+    private ToolExecutionContext ctx(String rawGoal) {
+        return ctx(rawGoal, null);
+    }
+
+    private ToolExecutionContext ctx(String rawGoal, String skillHome) {
         return new ToolExecutionContext(
                 "test-session",
                 "user1",
@@ -349,9 +423,10 @@ class HostExecToolTest {
                 "trace-1",
                 null,
                 null,
+                rawGoal,
                 null,
                 null,
                 null,
-                null);
+                skillHome);
     }
 }

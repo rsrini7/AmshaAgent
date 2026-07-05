@@ -57,29 +57,44 @@ class IntentClassificationServiceTest {
     }
 
     @Test
-    void testContinuityCommand() {
-        assertTrue(intentDetector.isContinuityCommand("retry"));
-        assertTrue(intentDetector.isContinuityCommand("  proceed  "));
-        assertTrue(intentDetector.isContinuityCommand("try again"));
-        assertTrue(intentDetector.isContinuityCommand("redo"));
-        assertTrue(intentDetector.isContinuityCommand("continue"));
-        assertTrue(intentDetector.isContinuityCommand("yes."));
-        assertTrue(intentDetector.isContinuityCommand("proceed!"));
+    void testRetryCommand() {
+        assertTrue(intentDetector.isRetryCommand("retry"));
+        assertTrue(intentDetector.isRetryCommand("try again"));
+        assertTrue(intentDetector.isRetryCommand("redo"));
+        assertTrue(intentDetector.isRetryCommand("same"));
+        assertTrue(intentDetector.isRetryCommand("again"));
+        assertTrue(intentDetector.isRetryCommand("repeat"));
+        assertTrue(intentDetector.isRetryCommand("retry the task"));
+        assertTrue(intentDetector.isRetryCommand("retry carefully"));
 
-        // Pattern uses matches() with optional suffix so it matches full phrases starting with signal
-        assertTrue(intentDetector.isContinuityCommand("retry the task"));
-        assertTrue(intentDetector.isContinuityCommand("retry carefully"));
+        assertFalse(intentDetector.isRetryCommand("proceed"));
+        assertFalse(intentDetector.isRetryCommand("continue"));
+        assertFalse(intentDetector.isRetryCommand("go ahead"));
+    }
 
-        // Execution follow-ups — NOT continuity (use NEW goal, not restored old goal)
-        assertFalse(intentDetector.isContinuityCommand("execute"));
-        assertFalse(intentDetector.isContinuityCommand("run it"));
-        assertFalse(intentDetector.isContinuityCommand("do it"));
+    @Test
+    void testContinuationCommand() {
+        assertTrue(intentDetector.isContinuationCommand("  proceed  "));
+        assertTrue(intentDetector.isContinuationCommand("continue"));
+        assertTrue(intentDetector.isContinuationCommand("go ahead"));
+        assertTrue(intentDetector.isContinuationCommand("carry on"));
+        assertTrue(intentDetector.isContinuationCommand("keep going"));
+        assertTrue(intentDetector.isContinuationCommand("resume"));
+        assertTrue(intentDetector.isContinuationCommand("yes."));
+        assertTrue(intentDetector.isContinuationCommand("okay!"));
 
-        // Multi-word execution commands ARE continuity (explicit "execute it", "run that")
-        assertTrue(intentDetector.isContinuityCommand("now execute it"));
-        assertTrue(intentDetector.isContinuityCommand("execute it"));
-        assertTrue(intentDetector.isContinuityCommand("run that"));
-        assertFalse(intentDetector.isContinuityCommand("Execute the code"));
-        assertFalse(intentDetector.isContinuityCommand("RUN IT"));
+        assertFalse(intentDetector.isContinuationCommand("retry"));
+        assertFalse(intentDetector.isContinuationCommand("try again"));
+        assertFalse(intentDetector.isContinuationCommand("redo"));
+    }
+
+    @Test
+    void testResumeCommandCombinesRetryAndContinuation() {
+        assertTrue(intentDetector.isResumeCommand("retry"));
+        assertTrue(intentDetector.isResumeCommand("proceed"));
+        assertTrue(intentDetector.isResumeCommand("continue"));
+        assertFalse(intentDetector.isResumeCommand("execute"));
+        assertFalse(intentDetector.isResumeCommand("run it"));
+        assertFalse(intentDetector.isResumeCommand("do it"));
     }
 }

@@ -295,7 +295,8 @@ public class SkillsJarSkillProvider implements SkillProvider {
                 }
             }
 
-            skills.add(parser.parse(content, skillHome));
+            SkillDefinition definition = parser.parse(content, skillHome);
+            skills.add(maybeAugmentBrowserPreview(definition, content, skillHome));
         } catch (Exception e) {
             LOG.warnf("Failed to load SkillsJar skill %s: %s", classpathPath, LogUtil.rootMessage(e));
         }
@@ -339,5 +340,46 @@ public class SkillsJarSkillProvider implements SkillProvider {
             }
         }
         return result.toString();
+    }
+
+    static SkillDefinition maybeAugmentBrowserPreview(SkillDefinition definition, String rawContent, String skillHome) {
+        if (definition == null || rawContent == null || rawContent.isBlank()) {
+            return definition;
+        }
+        if (!shouldEnableBrowserPreview(rawContent)) {
+            return definition;
+        }
+
+        String outputDir = skillHome != null && !skillHome.isBlank() ? skillHome + "/output" : "output";
+        String browserOverride = """
+
+                # BROWSER PREVIEW RULES (OVERRIDE ALL BELOW)
+                1. When you generate HTML, JS, or CSS artifacts, write them into `%s`.
+                2. Read the starter template under `templates/` once as reference, but never open that template file in a browser.
+                3. Do not paste raw HTML into Telegram or the final answer when the artifact is meant for the browser.
+                4. Use `host_exec` to list the files in `%s` and open the generated `.html` artifact with the host's default browser opener (`open` on macOS, `xdg-open` on Linux, `start` on Windows).
+                5. If multiple HTML files exist, open the main viewer file you just created.
+                6. If the browser fails to open, keep the artifact in `%s` and reply with a brief summary only.
+                7. Never dump the generated HTML back into Telegram when a browser preview is possible.
+
+                """;
+        String systemPrompt =
+                String.format(browserOverride, outputDir, outputDir, outputDir, outputDir) + definition.systemPrompt();
+        return new SkillDefinition(
+                definition.id(),
+                definition.name(),
+                definition.description(),
+                definition.triggerPatterns(),
+                definition.toolCapabilities(),
+                definition.maxIterations(),
+                systemPrompt,
+                definition.skillHome());
+    }
+
+    private static boolean shouldEnableBrowserPreview(String rawContent) {
+        return rawContent.contains("<html")
+                || rawContent.contains(".html")
+                || rawContent.contains("open in browser")
+                || rawContent.contains("browser preview");
     }
 }

@@ -16,7 +16,6 @@ public class LlmConfigAutoFixer {
     }
 
     public static void validateAndAutoFixLlmConfig(Path binaryDir) {
-        Path envFile = binaryDir.resolve(".env");
         String provider = System.getProperty("AMSHA_LLM_PROVIDER", System.getenv("AMSHA_LLM_PROVIDER"));
         if (provider == null || provider.isBlank()) provider = "groq";
 

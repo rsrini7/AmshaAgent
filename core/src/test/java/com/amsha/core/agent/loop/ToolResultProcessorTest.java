@@ -132,6 +132,24 @@ class ToolResultProcessorTest {
     }
 
     @Test
+    void resolveOutcome_SuccessfulArtifactOpen_OnGenericTool_TerminatesImmediately() {
+        var ctx = ctx();
+        var step = ReasoningStep.pending("", "custom_render", Map.of("path", "output/particle-art.html"));
+        var res = ToolResponse.success("Opened browser preview: file:///private/tmp/particle_art.html");
+        var obs = processor.buildObservation(res);
+
+        StepDecision decision = processor.resolveOutcome(
+                ctx, "custom_render", Map.of("path", "output/particle-art.html"), res, obs, step, List.of(), 0);
+
+        assertEquals(DecisionType.TERMINAL, decision.type());
+        assertTrue(decision.result() instanceof AgentResult.Finished);
+        assertEquals(
+                "The requested artifact was generated and opened successfully.",
+                ((AgentResult.Finished) decision.result()).answer());
+        verify(writer).saveAnswer("sess-1", "The requested artifact was generated and opened successfully.");
+    }
+
+    @Test
     void resolveOutcome_ScheduleTaskSuccess_TriggersTerminal() {
         var ctx = ctx();
         var step = ReasoningStep.pending("", ToolCapability.SCHEDULE_TASK.toolName(), Map.of());

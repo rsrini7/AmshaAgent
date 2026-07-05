@@ -192,9 +192,14 @@ public class AgentLoop {
 
                 String effectiveRole = canonicalRole;
                 if (decision instanceof CheckpointResumeCoordinator.ResumeDecision.ResumedHistory r) {
-                    if (intentClassificationService.isContinuityCommand(goal)) {
+                    if (intentClassificationService.isResumeCommand(goal) || isContinuationRequest(context)) {
                         resumedHistory.addAll(r.history());
                         effectiveRole = r.checkpointRole();
+                        if (isContinuationRequest(context)) {
+                            log.infof(
+                                    "[AgentLoop] Continuation request detected for session %s - restoring history from %s turn to avoid restarting the original task.",
+                                    sessionId, r.checkpointRole());
+                        }
                     } else {
                         log.infof(
                                 "[AgentLoop] Fresh goal detected for session %s - skipping history restoration from %s turn and resetting to canonical role %s to avoid task confusion.",
@@ -333,7 +338,7 @@ public class AgentLoop {
 
         int startingIteration = 0;
         if (decision instanceof CheckpointResumeCoordinator.ResumeDecision.ResumedHistory r) {
-            if (intentClassificationService.isContinuityCommand(goal)) {
+            if (intentClassificationService.isResumeCommand(goal) || isContinuationRequest(context)) {
                 startingIteration = r.iterationsUsed();
             }
         }
@@ -403,5 +408,13 @@ public class AgentLoop {
     public AgentResult run(String goal, ReasoningEngine engine, int maxIterations) {
         String sessionId = WorkspaceScopeHolder.getIfActive();
         return run(sessionId, AgentRoleEnum.COORDINATOR.toScopedName(), goal, engine, maxIterations);
+    }
+
+    private boolean isContinuationRequest(MessageContext context) {
+        if (context == null || context.getMessage() == null) {
+            return false;
+        }
+        String text = context.getMessage().text();
+        return text != null && !text.isBlank() && intentClassificationService.isContinuationCommand(text);
     }
 }

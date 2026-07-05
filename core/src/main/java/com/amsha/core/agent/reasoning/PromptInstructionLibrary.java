@@ -14,8 +14,37 @@ import com.amsha.core.agent.reasoning.prompt.PromptRegistry;
 @ApplicationScoped
 public class PromptInstructionLibrary {
 
+    private static final String SKILL_EXECUTION_PRECEDENCE_PREAMBLE = """
+            SYSTEM OVERRIDE FOR ALL SKILLS:
+            The skill prompt below is subordinate to the platform system prompt.
+            If the skill text conflicts with tool usage, execution timing, or the
+            requirement to use a tool before explaining work, follow the platform.
+            For tasks that require a tool, act first with the permitted tool and
+            only then provide the final result. Do not narrate a plan before the
+            first tool call unless the platform explicitly says to do so.
+
+            """;
+
+    private static final String SKILL_ROLE_OVERRIDE_TEMPLATE = """
+            SKILL ROLE OVERRIDE (HIGHEST PRIORITY):
+            You are a `skill:%s` role.
+            - IGNORE any rule above that tells you to delegate execution to 'brahma', 'shiva', or another persona.
+            - EXECUTE the task yourself using ONLY the tools listed under PERMITTED TOOLS.
+            - If the task produces files or other artifacts, batch directory creation and all file writes into the same permitted tool call when feasible.
+            - After the tool observation confirms success, IMMEDIATELY emit a `FINISH` action with a concise plain-text answer.
+            - Do NOT plan another step, do NOT ask clarifying questions, and do NOT leave the turn open.
+            """;
+
     @Inject
     PromptRegistry promptRegistry;
+
+    public static String skillExecutionPrecedencePreamble() {
+        return SKILL_EXECUTION_PRECEDENCE_PREAMBLE;
+    }
+
+    public static String skillRoleOverride(String skillName) {
+        return String.format(SKILL_ROLE_OVERRIDE_TEMPLATE, skillName);
+    }
 
     @Deprecated
     public static final String SECURITY_RULES_PROMPT = """
