@@ -687,15 +687,29 @@ You are a meticulous code reviewer...
 
 ```
 StartupEvent → SkillLoader.onStart()
-  → ClasspathSkillProvider  (priority 100 - reads /skills/index.txt from classpath)
-  → DatabaseSkillProvider   (priority 10  - reads agent_skill table from SQLite)
+  → DatabaseSkillProvider     (priority 10  - reads agent_skill table from SQLite)
+  → SkillsJarSkillProvider    (priority 50  - loads from META-INF/skills/ in JARs)
+  → ClasspathSkillProvider    (priority 100 - reads /skills/index.txt from classpath)
   → SkillDefinitionParser.parse(yaml)
   → Pattern.compile(triggerPatterns)     [pre-compiled for O(1) matching]
   → RoleRegistry.registerDynamic(skill:name, RoleDefinition)
   → SkillRegistry.updateSnapshot(CompiledSkillEntry[])
 ```
 
-Database skills override classpath skills by name. `SkillResource` (REST CRUD at `/skills`) provides hot-reload.
+**Priority order** (lower wins): Database skills override SkillsJars, which override classpath skills. `SkillResource` (REST CRUD at `/skills`) provides hot-reload.
+
+### SkillsJarSkillProvider (Dynamic JAR Loading)
+
+Skills can be packaged as JAR files under `META-INF/skills/`. The `SkillsJarSkillProvider` (priority 50) loads skills from JAR dependencies:
+- **Index path** (`META-INF/skills/skills-index.txt`): optional pre-indexed list of `SKILL.md` paths. When present, skills are loaded via the index (fast path, avoids classpath scanning).
+- **Fallback**: classpath scanning of `META-INF/skills/` for `SKILL.md` files.
+
+Each SkillsJar contains:
+- `META-INF/skills/<skill-name>/SKILL.md` — YAML-fronted markdown defining system prompt, trigger patterns, tool capabilities, and max iterations.
+
+### SkillAdaptationManager
+
+The `SkillAdaptationManager` enables adaptive skill execution — dynamically adjusting skill behavior based on execution context and tool outputs. Controlled by `amsha.skills.adaptive.enabled` (`false` by default). When enabled, skills can auto-adapt their parameters, retry strategies, and tool selection based on observed results. See [CONFIGURATION.md](./CONFIGURATION.md) §Skills & SkillsJars for `AMSHA_SKILLS_ADAPTIVE_ENABLED`.
 
 ### Routing
 

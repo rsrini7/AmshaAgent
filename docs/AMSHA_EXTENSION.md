@@ -802,6 +802,7 @@ public class S3SkillProvider implements SkillProvider {
 | Provider | Priority | Source |
 |---|---|---|
 | `DatabaseSkillProvider` | 10 | SQLite `agent_skill` table (user-created, wins on collision) |
+| `SkillsJarSkillProvider` | 50 | `META-INF/skills/` in JAR dependencies (bundled SkillsJars) |
 | `ClasspathSkillProvider` | 100 | `src/main/resources/skills/` (bundled baseline) |
 
 Lower priority = processed first, wins on name collision. Use values between 10 and 100 for custom providers.

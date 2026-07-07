@@ -45,7 +45,7 @@
     <!-- amsha-core -->
     <rect x="310" y="110" width="240" height="52" rx="8" fill="#085041" stroke="#5dcaa5" stroke-width="0.5"/>
     <text x="430" y="132" text-anchor="middle" dominant-baseline="central" font-size="14" font-weight="600" fill="#9fe1cb">amsha-core</text>
-    <text x="430" y="150" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#5dcaa5">Agent loop · Tools · Audit · Governance</text>
+    <text x="430" y="150" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#5dcaa5">Agent loop · Tools · Audit · 3-tier skills</text>
 
     <!-- amsha-channel-api -->
     <rect x="310" y="204" width="240" height="52" rx="8" fill="#444441" stroke="#b4b2a9" stroke-width="0.5"/>

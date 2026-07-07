@@ -328,12 +328,17 @@ schema) and must match the model used by every active provider.
 | `AMSHA_TOOLS_PLAYWRIGHT_MCP_COMMAND` | `npx` | MCP server launch command |
 | `AMSHA_TOOLS_PLAYWRIGHT_MCP_ARGS` | `@playwright/mcp` | MCP server args |
 | `AMSHA_TOOLS_PLAYWRIGHT_RESUMPTION_STALE_MARK_SECONDS` | `300` | Playwright resume staleness (s) |
+| `AMSHA_TOOLS_HOST_EXEC_SKILLS` | `jdb-debugger` | Skills allowed to use host_exec tool (comma-separated) |
+| `AMSHA_HOST_EXEC_MAX_OUTPUT_CHARS` | `8192` | Max output chars for host_exec tool (falls back to sandbox max) |
+| `AMSHA_HOST_EXEC_PYTHON_EXECUTABLE` | — | Python executable path for host_exec (falls back to sandbox python) |
 
 ## Skills & SkillsJars
 
 | Variable | Default | Description |
 |---|---|---|
 | `AMSHA_SKILLSJARS_REQUIRE_APPROVAL_FOR_SENSITIVE` | `true` | When true, sensitive operations requested by third-party SkillsJars (e.g. COMPUTE/NETWORK/DELEGATE capabilities) require human approval. |
+| `AMSHA_SKILLS_ADAPTIVE_ENABLED` | `false` | Enable adaptive skill adaptation (dynamic skill loading from JAR files). |
+| `AMSHA_SKILLS_DEFAULT_MAX_ITERATIONS` | `15` | Default maximum iterations for skill execution loops. |
 | `AMSHA_GITHUB_REPOS_PER_PAGE` | `100` | GitHub API results per page |
 
 ## Web Channel
