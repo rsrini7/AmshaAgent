@@ -170,6 +170,18 @@ public final class TieredBackendLiteral extends AnnotationLiteral<TieredBackend>
 ```
 The `implements TieredBackend` triggers an IDE/Sonar warning ("annotation type should not be used as a superinterface") — suppress with `@SuppressWarnings("java:S2176")` and document why. **Do not** refactor to reflection or string-based selection.
 
+### 1.18 Agent-Loop Guardrails (Stuck Detection & Budget)
+The agent loop has three cooperative guards that MUST remain in place:
+- **`PreflightState`** MUST check the global iteration budget (`WorkspaceContext.incrementAndCheckGlobalIterations()`) before each loop iteration; exceeding it terminates the session as halted.
+- **`LoopStuckDetector`** inspects recent reasoning history and injects a corrective hint when the agent repeats non-progressing tool calls (threshold: 2 identical repeats, or 3 read-only-only repeats). Hints are derived from the actual repeated tool input — do NOT hardcode skill-specific paths.
+- **`ToolInvocationGuard`** is the pre-invocation interceptor chain; it dedups identical repeated tool calls and evicts stale observations. It MUST run before any tool executes. Do not bypass it to "speed up" execution.
+
+### 1.19 HTML Artifact Collapsing
+`HtmlArtifactTransformer` (priority 40, an `ObservationTransformer`) collapses generated HTML artifacts from `host_exec`/`sandbox_exec` output into a short browser-preview notice via `HtmlArtifactUtil.collapseHtmlArtifact()`. The HTML is mirrored to a browser-preview target (see `HostExecTool` `BROWSER_PREVIEW_GOAL_PATTERN`) rather than echoed into chat. Do NOT disable this transformer or echo raw HTML back into the conversation — it floods the context window and breaks the FINISH flow (§1.9).
+
+### 1.20 Skill Role `host_exec` Gating
+`host_exec` for skill roles is granted **only** through `HostExecSkillGrant` reading `amsha.tools.host-exec.skills` (default `jdb-debugger`). Never widen `SkillLoader` defaults or grant `host_exec` to unlisted skills directly. `EXECUTE_SHELL` HITL is still enforced by `ToolGovernanceGuard` even after the grant.
+
 ---
 
 ## 2. Key Framework Components
@@ -486,11 +498,31 @@ Dynamic skills (loaded from classpath `.jar` dependencies under `META-INF/skills
 ### How SkillsJars Work:
 1. **JVM Scanning & Prompt Injection**: On startup, `SkillsJarSkillProvider` locates skills jars, parses their `SKILL.md` (which details system prompts, allowed tools, and rules), and registers the dynamic role with the system's `RoleRegistry`.
 2. **Tool Bindings & CLI Dependencies**: 
-   - A skill jar (e.g. `remote-browser` or `jdb-debugger`) defines permitted tool capabilities (such as `sandbox_exec`).
-   - The skill's `SKILL.md` instructs the LLM on which command-line utilities to invoke inside the sandbox (e.g. `browser-use` CLI or `jdb` commands).
+   - A skill jar (e.g. `remote-browser` or `jdb-debugger`) defines permitted tool capabilities in its `SKILL.md` (e.g. `sandbox_exec`, `host_exec`, or `Bash(...)`).
+   - The skill's `SKILL.md` instructs the LLM on which command-line utilities to invoke (e.g. `browser-use` CLI or `jdb` commands).
 3. **Execution Environment Requirement**: 
-   - When the agent executes a dynamic skill role, it utilizes `sandbox_exec` to run bash scripts.
-   - Therefore, the execution sandbox (or host fallback environment) must pre-install the respective CLI binaries (such as `browser-use`, `jdb`, `chromium`, etc.) so that the shell execution does not fail with `command not found`.
+   - A skill that declares no explicit capability in `SKILL.md` **defaults to `host_exec`** (changed from `sandbox_exec` in commit `dc1632bd` — host execution fits most third-party skill jars). Skills that declare `sandbox_exec` keep the sandbox.
+   - `host_exec` is **always HITL-approved** because it maps to `EXECUTE_SHELL` (§1.10); only the `amsha.tools.host-exec.skills` allowlist (default `jdb-debugger`) receives the `host_exec` capability grant (see §10.3).
+   - The execution environment (host or sandbox) must pre-install the respective CLI binaries (such as `browser-use`, `jdb`, `chromium`, etc.) so shell execution does not fail with `command not found`.
+
+### 10.1 Skill-Aware Intent Routing (`SkillAwareIntentDetector`)
+`SkillAwareIntentDetector` (`@Alternative @Priority(1)`) sits in front of `IntentDetectorService`. On each inbound message it:
+1. Tests the text against the pre-compiled trigger `Pattern[]` from `SkillRegistry.currentSnapshot()` (O(n·p)). On match it returns `skill:{name}` immediately, **bypassing the LLM classifier entirely**.
+2. Falls back to a name-boundary fuzzy match (skills with zero trigger patterns, e.g. "use remote-browser to …").
+3. Otherwise delegates to `IntentDetectorService` (LLM).
+
+When `SystemPromptBuilder` sees a `skill:` role prefix it injects the skill's custom system prompt (`skillRoleOverride` / `skillExecutionPrecedencePreamble`) and restricts the tool set to the skill's permitted tools. **Do not** route skill triggers through generic persona escalation — the `skill:` prefix is handled exclusively by this detector.
+
+### 10.2 Adaptive Skills (`SkillAdaptationManager`)
+Controlled by `amsha.skills.adaptive.enabled` (`false` by default; `AMSHA_SKILLS_ADAPTIVE_ENABLED`). When enabled, on first run the manager injects adaptation instructions telling the LLM to rewrite the skill's `SKILL.md`:
+- change `allowed-tools: Bash(...)` → `allowed-tools: hostexec(...)`,
+- strip decision-tree / delegate sections,
+- write an `.adapted` marker file in the skill home (idempotent — re-runs skip already-adapted skills).
+
+`amsha.skills.default-max-iterations` (`15`; `AMSHA_SKILLS_DEFAULT_MAX_ITERATIONS`) bounds the skill execution loop. The adaptation logic lives in `SkillAdaptationManager` only — do not replicate SKILL.md rewriting elsewhere.
+
+### 10.3 host_exec Skill Grant (`HostExecSkillGrant`)
+`HostExecSkillGrant` (startup `@Priority(APPLICATION+600)`, runs AFTER `SkillLoader`) grants `host_exec` capability to the roles listed in `amsha.tools.host-exec.skills` (default `jdb-debugger`). This is the **only** sanctioned path that adds `host_exec` to a skill role; the grant merely adds the tool to the permitted-tools set — `EXECUTE_SHELL` HITL is still enforced by `ToolGovernanceGuard`. To let a new skill use `host_exec`, add it to `amsha.tools.host-exec.skills` (config sync rule §2.5), never by widening `SkillLoader` defaults.
 
 ### Cloud Dependency Vetting (P105 Lesson):
 Before adding a SkillsJar to `app/pom.xml`, **extract and read** the skill's `SKILL.md` (`jar xf <jar> META-INF/skills/.../SKILL.md`) and verify:

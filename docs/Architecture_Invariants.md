@@ -361,6 +361,22 @@ IntentRoutingProvider.shouldSkip(String userMessage) with a
 static final Pattern negation guard. Never compile patterns
 inline - use static final Pattern per §9.1.
 
+## 4.12 Agent-Loop Guardrails (§Invariant-AgentLoopGuards)
+
+The agent loop has three cooperative guards that MUST remain in place (see `AGENTS.md` §1.18):
+
+- **`PreflightState`** MUST check the global iteration budget (`WorkspaceContext.incrementAndCheckGlobalIterations()`) before each loop iteration; exceeding it terminates the session as halted.
+- **`LoopStuckDetector`** MUST inspect recent reasoning history and inject a corrective hint when the agent repeats non-progressing tool calls (threshold: 2 identical repeats, or 3 read-only-only repeats). Hints are derived from the actual repeated tool input — do NOT hardcode skill-specific paths.
+- **`ToolInvocationGuard`** is the pre-invocation interceptor chain; it dedups identical repeated tool calls and evicts stale observations. It MUST run before any tool executes. Do not bypass it to "speed up" execution.
+
+## 4.13 HTML Artifact Collapsing (§Invariant-HtmlArtifactCollapse)
+
+`HtmlArtifactTransformer` (`ObservationTransformer`, priority 40) MUST collapse generated HTML artifacts from `host_exec`/`sandbox_exec` output into a short browser-preview notice via `HtmlArtifactUtil.collapseHtmlArtifact()`. The HTML is mirrored to a browser-preview target rather than echoed into chat. This transformer MUST NOT be disabled — raw HTML in the conversation floods the context window and breaks the FINISH flow. See `AGENTS.md` §1.19.
+
+## 4.14 Skill Role `host_exec` Gating (§Invariant-SkillHostExecGating)
+
+`host_exec` for skill roles is granted ONLY through `HostExecSkillGrant`, which reads `amsha.tools.host-exec.skills` (default `jdb-debugger`). `SkillLoader` defaults MUST NOT be widened and `host_exec` MUST NOT be granted to unlisted skills directly. `EXECUTE_SHELL` HITL remains enforced by `ToolGovernanceGuard` after the grant. See `AGENTS.md` §1.20.
+
 ---
 
 ## 5. Persistence and transaction rules
