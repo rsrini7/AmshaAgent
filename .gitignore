@@ -96,3 +96,4 @@ autotest/logs/
 
 headroom_memory.db
 .tokensave/
+.m2/

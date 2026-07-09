@@ -41,6 +41,10 @@ public class IntentClassificationService {
             "\\b(schedule|cron|run at|run every|run daily|run hourly|every\\s+(hour|minute|day|week|month|\\d+)|daily|hourly|weekly|monthly)\\b",
             Pattern.CASE_INSENSITIVE);
 
+    private static final Pattern SELF_EVOLVE_INTENT_PATTERN = Pattern.compile(
+            "\\b(self[\\s_-]*evolve(?:[\\s_-]*reflect)?|self_evolve_reflect|behavioral directives?|directive status|current directive status|synthesize behavioral directives?)\\b",
+            Pattern.CASE_INSENSITIVE);
+
     /**
      * returns true if the text indicates a "write intent" - specifically
      * for storing information in the long-term memory (ingest_document).
@@ -80,6 +84,15 @@ public class IntentClassificationService {
     public boolean isScheduleIntent(String text) {
         if (text == null || text.isBlank()) return false;
         return SCHEDULE_INTENT_PATTERN.matcher(text).find();
+    }
+
+    /**
+     * Returns true if the request is about self-evolve reflection, directive synthesis,
+     * or reading the current behavioral directive status.
+     */
+    public boolean isSelfEvolveIntent(String text) {
+        if (text == null || text.isBlank()) return false;
+        return SELF_EVOLVE_INTENT_PATTERN.matcher(text).find();
     }
 
     /**

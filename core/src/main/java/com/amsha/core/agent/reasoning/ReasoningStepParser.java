@@ -289,6 +289,27 @@ public class ReasoningStepParser {
                     outputTokens);
         }
 
+        if (requests.stream()
+                .allMatch(r -> ToolCapability.SELF_EVOLVE_REFLECT.toolName().equals(r.name()))) {
+            log.warnf(
+                    "[PARALLEL-TOOLS] session=%s: LLM emitted multiple self_evolve_reflect calls; collapsing to one action.",
+                    sessionId);
+            ToolExecutionRequest selected = requests.stream()
+                    .filter(r -> isSelfEvolveStatusAction(sessionId, r))
+                    .findFirst()
+                    .orElse(requests.getFirst());
+            Map<String, Object> actionInput = deserializeParams(sessionId, selected.name(), selected.arguments());
+            if (actionInput.containsKey("__error")) {
+                return ReasoningStep.schemaError(
+                        "System: Your previous response contained invalid JSON. "
+                                + "Correct the format and retry. Error: " + actionInput.get("__error"),
+                        inputTokens,
+                        outputTokens);
+            }
+            return ReasoningStep.pending(
+                    aiMessage.text(), sanitizeToolName(selected.name()), actionInput, inputTokens, outputTokens);
+        }
+
         for (int i = 0; i < requests.size(); i++) {
             ToolExecutionRequest req = requests.get(i);
             String name = sanitizeToolName(req.name());
@@ -316,6 +337,12 @@ public class ReasoningStepParser {
         }
 
         return ReasoningStep.parallelBatch(aiMessage.text(), batchPayload, inputTokens, outputTokens);
+    }
+
+    private boolean isSelfEvolveStatusAction(String sessionId, ToolExecutionRequest request) {
+        Map<String, Object> params = deserializeParams(sessionId, request.name(), request.arguments());
+        Object action = params.get("action");
+        return action != null && "status".equalsIgnoreCase(action.toString());
     }
 
     private Map<String, Object> deserializeParams(String sessionId, String toolName, String argsJson) {

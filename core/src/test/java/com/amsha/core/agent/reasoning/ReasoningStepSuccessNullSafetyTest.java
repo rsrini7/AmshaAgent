@@ -57,7 +57,9 @@ class ReasoningStepSuccessNullSafetyTest {
             // Uses Boolean.TRUE.equals() — null-safe (fixed 2026-05-28)
             "com.amsha.core.observability.AgentTraceEnricher",
             // Uses Boolean.TRUE.equals() — null-safe
-            "com.amsha.core.agent.loop.HallucinationDetector");
+            "com.amsha.core.agent.loop.HallucinationDetector",
+            // Uses Boolean.TRUE.equals() — null-safe
+            "com.amsha.core.agent.loop.ToolStepResolutionUtils");
 
     /**
      * Enumerates all classes that call {@code ReasoningStep.success()} and verifies

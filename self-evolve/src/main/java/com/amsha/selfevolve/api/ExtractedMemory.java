@@ -5,6 +5,8 @@ import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+import org.jdbi.v3.core.mapper.reflect.ColumnName;
+
 /**
  * A structured memory record extracted from evolution trace events via rule-based extraction.
  * Immutable once created.
@@ -30,7 +32,7 @@ public record ExtractedMemory(
         String content,
         double confidence,
         String contentHash,
-        String sourceEventIdsJson,
+        @ColumnName("source_event_ids") String sourceEventIdsJson,
         Instant createdAt) {
 
     /**

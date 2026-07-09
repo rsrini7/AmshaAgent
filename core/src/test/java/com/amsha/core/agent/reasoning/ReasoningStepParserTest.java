@@ -201,6 +201,27 @@ class ReasoningStepParserTest {
     }
 
     @Test
+    void testParse_selfEvolveReflectParallelCallsCollapseToStatus() {
+        ToolExecutionRequest synthesizeReq = ToolExecutionRequest.builder()
+                .id("call_synth")
+                .name(ToolCapability.SELF_EVOLVE_REFLECT.toolName())
+                .arguments("{\"action\":\"synthesize\"}")
+                .build();
+        ToolExecutionRequest statusReq = ToolExecutionRequest.builder()
+                .id("call_status")
+                .name(ToolCapability.SELF_EVOLVE_REFLECT.toolName())
+                .arguments("{\"action\":\"status\"}")
+                .build();
+        AiMessage aiMessage = AiMessage.aiMessage("Thinking", List.of(synthesizeReq, statusReq));
+        ChatResponse response = ChatResponse.builder().aiMessage(aiMessage).build();
+
+        ReasoningStep step = parser.parse("s1", "coordinator", response);
+
+        assertEquals(ToolCapability.SELF_EVOLVE_REFLECT.toolName(), step.action());
+        assertEquals("status", step.actionInput().get("action"));
+    }
+
+    @Test
     void testParse_schedulingGoalCollapsesMixedParallelBatchToScheduleTask() throws Exception {
         ToolExecutionRequest scheduleReq = ToolExecutionRequest.builder()
                 .id("call_sched")

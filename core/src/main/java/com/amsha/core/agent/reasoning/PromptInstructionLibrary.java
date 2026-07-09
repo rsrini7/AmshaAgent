@@ -35,6 +35,14 @@ public class PromptInstructionLibrary {
             - Do NOT plan another step, do NOT ask clarifying questions, and do NOT leave the turn open.
             """;
 
+    private static final String SELF_EVOLVE_DIRECTIVE_RULES = """
+            SELF-EVOLVE DIRECTIVE TOOL:
+            - `self_evolve_reflect` is a single-action tool.
+            - If the user asks for current directive status, call `self_evolve_reflect` with `action="status"` only.
+            - Never emit more than one `self_evolve_reflect` call in the same turn.
+            - Never batch `status` with `synthesize` or `reconcile`.
+            """;
+
     @Inject
     PromptRegistry promptRegistry;
 
@@ -44,6 +52,10 @@ public class PromptInstructionLibrary {
 
     public static String skillRoleOverride(String skillName) {
         return String.format(SKILL_ROLE_OVERRIDE_TEMPLATE, skillName);
+    }
+
+    public static String selfEvolveDirectiveRules() {
+        return SELF_EVOLVE_DIRECTIVE_RULES;
     }
 
     @Deprecated
@@ -450,6 +462,7 @@ public class PromptInstructionLibrary {
                 "6. For general world knowledge, versions, or comparisons, use `garuda(agent=saraswati)`. Do NOT use `github` for non-repository questions. Use `github` ONLY for explicit owner/repo requests.\n");
         sb.append(
                 "7. Use `recall_memory_search` for exact past-session text. Use `archival_memory_search` for semantic knowledge (patterns, facts, preferences).\n");
+        sb.append(selfEvolveDirectiveRules()).append('\n');
         if (available.contains("browser_navigate")) {
             sb.append("8. Use `browser_navigate` only for webpage/URL/browser extraction tasks.\n");
         }
@@ -477,6 +490,6 @@ public class PromptInstructionLibrary {
     public String getSecurityRules(boolean compact) {
         String key = compact ? PromptConstants.KEY_COMPACT_SECURITY_RULES : PromptConstants.KEY_SECURITY_RULES;
         String fallback = compact ? COMPACT_SECURITY_RULES_PROMPT : SECURITY_RULES_PROMPT;
-        return promptRegistry.get(PromptConstants.ROLE_CORE, key, fallback);
+        return promptRegistry.get(PromptConstants.ROLE_CORE, key, fallback) + "\n\n" + selfEvolveDirectiveRules();
     }
 }
