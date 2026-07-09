@@ -95,6 +95,29 @@ class FinishActionHandlerTest {
     }
 
     @Test
+    void interceptedExecutionFinish_completesWithoutCorrection() {
+        AgentExecutionContext ctx = mock(AgentExecutionContext.class);
+        when(qualityGuard.guard(anyString(), any()))
+                .thenReturn(new AnswerGuardStrategy.AnswerGuardResult("", true, "would normally fail"));
+        ReasoningStep step = ReasoningStep.pending(
+                "intercepted",
+                ReasoningStep.FINISH,
+                Map.of(
+                        ReasoningStep.ACTION_INPUT_ANSWER_KEY,
+                        "```bash\necho should-not-run\n```",
+                        ReasoningStep.ACTION_INPUT_INTERCEPTED_EXECUTION_KEY,
+                        true),
+                0,
+                0);
+
+        FinishActionHandler.FinishOutcome outcome = handler.handle(ctx, List.of(), step, 0);
+
+        assertTrue(outcome instanceof FinishActionHandler.FinishOutcome.Completed);
+        assertEquals(
+                "```bash\necho should-not-run\n```", ((FinishActionHandler.FinishOutcome.Completed) outcome).answer());
+    }
+
+    @Test
     void testHandleStripsActionFinishPrefix() {
         AgentExecutionContext ctx = mock(AgentExecutionContext.class);
         ReasoningStep step =

@@ -14,6 +14,7 @@ import java.util.List;
 
 import com.amsha.core.agent.role.ToolCapability;
 import com.amsha.core.scope.WorkspaceContext;
+import com.amsha.core.security.AutonomyLevel;
 import com.amsha.core.util.TextPatternUtils;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -58,6 +59,31 @@ class ReasoningStepParserTest {
         assertEquals("amsha", step.actionInput().get("repo"));
         assertEquals(100, step.inputTokens());
         assertEquals(50, step.outputTokens());
+    }
+
+    @Test
+    void unrequestedSandboxExec_isConvertedToMarkedFinishStep() throws Exception {
+        ToolExecutionRequest toolReq = ToolExecutionRequest.builder()
+                .id("call_shell")
+                .name(ToolCapability.SANDBOX_EXEC.toolName())
+                .arguments("{\"language\":\"bash\",\"code\":\"echo should-not-run\"}")
+                .build();
+        AiMessage aiMessage = AiMessage.aiMessage("I will run it", Collections.singletonList(toolReq));
+        ChatResponse response = ChatResponse.builder().aiMessage(aiMessage).build();
+
+        ReasoningStep step = WorkspaceContext.run(
+                "s1",
+                "user1",
+                "chat1",
+                AutonomyLevel.FULL,
+                "coordinator",
+                () -> ScopedValue.where(WorkspaceContext.RAW_USER_GOAL, "Show me the shell command text")
+                        .call(() -> parser.parse("s1", "coordinator", response)));
+
+        assertEquals(ReasoningStep.FINISH, step.action());
+        assertEquals(Boolean.TRUE, step.actionInput().get(ReasoningStep.ACTION_INPUT_INTERCEPTED_EXECUTION_KEY));
+        assertTrue(String.valueOf(step.actionInput().get(ReasoningStep.ACTION_INPUT_ANSWER_KEY))
+                .contains("echo should-not-run"));
     }
 
     @Test

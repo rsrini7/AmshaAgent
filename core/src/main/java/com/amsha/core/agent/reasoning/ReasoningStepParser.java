@@ -75,7 +75,8 @@ public class ReasoningStepParser {
         if (aiMessage.hasToolExecutionRequests()) {
             List<ToolExecutionRequest> requests = aiMessage.toolExecutionRequests();
             if (requests.size() == 1) {
-                return handleSingleToolCall(sessionId, aiMessage, requests.getFirst(), inputTokens, outputTokens);
+                return handleSingleToolCall(
+                        sessionId, agentRole, aiMessage, requests.getFirst(), inputTokens, outputTokens);
             }
             if (requests.size() > 1) {
                 return handleMultipleToolCalls(sessionId, agentRole, aiMessage, requests, inputTokens, outputTokens);
@@ -132,7 +133,12 @@ public class ReasoningStepParser {
     }
 
     private ReasoningStep handleSingleToolCall(
-            String sessionId, AiMessage aiMessage, ToolExecutionRequest req, int inputTokens, int outputTokens) {
+            String sessionId,
+            String agentRole,
+            AiMessage aiMessage,
+            ToolExecutionRequest req,
+            int inputTokens,
+            int outputTokens) {
         String rawName = req.name();
         String toolName = sanitizeToolName(rawName);
         if (rawName != null && !rawName.equals(toolName)) {
@@ -140,7 +146,8 @@ public class ReasoningStepParser {
         }
         log.infof("LLM is attempting to call tool: '%s' with args: %s", toolName, req.arguments());
 
-        ReasoningStep intercepted = interceptUnrequestedExecution(toolName, req, aiMessage, inputTokens, outputTokens);
+        ReasoningStep intercepted =
+                interceptUnrequestedExecution(toolName, agentRole, req, aiMessage, inputTokens, outputTokens);
         if (intercepted != null) return intercepted;
 
         Map<String, Object> actionInput = deserializeParams(sessionId, toolName, req.arguments());
@@ -159,13 +166,20 @@ public class ReasoningStepParser {
     }
 
     private ReasoningStep interceptUnrequestedExecution(
-            String toolName, ToolExecutionRequest req, AiMessage aiMessage, int inputTokens, int outputTokens) {
+            String toolName,
+            String agentRole,
+            ToolExecutionRequest req,
+            AiMessage aiMessage,
+            int inputTokens,
+            int outputTokens) {
         if (!ToolCapability.SANDBOX_EXEC.toolName().equals(toolName)) return null;
 
         // Skill roles (e.g. skill:remote-browser) are designed to execute commands —
         // skip the "unrequested execution" guard; execution IS their purpose.
-        String agentRole = WorkspaceContext.AGENT_ROLE.isBound() ? WorkspaceContext.AGENT_ROLE.get() : null;
-        if (agentRole != null && AgentRoleEnum.isSkillRole(agentRole)) return null;
+        String effectiveRole = agentRole != null
+                ? agentRole
+                : (WorkspaceContext.AGENT_ROLE.isBound() ? WorkspaceContext.AGENT_ROLE.get() : null);
+        if (effectiveRole != null && AgentRoleEnum.isSkillRole(effectiveRole)) return null;
 
         String rawGoal = WorkspaceContext.RAW_USER_GOAL.isBound() ? WorkspaceContext.RAW_USER_GOAL.get() : null;
         if (textPatternUtils.goalRequestsExecution(rawGoal)) return null;
@@ -179,7 +193,11 @@ public class ReasoningStepParser {
         return ReasoningStep.pending(
                 aiMessage.text(),
                 ReasoningStep.FINISH,
-                Map.of(ReasoningStep.ACTION_INPUT_ANSWER_KEY, markdown),
+                Map.of(
+                        ReasoningStep.ACTION_INPUT_ANSWER_KEY,
+                        markdown,
+                        ReasoningStep.ACTION_INPUT_INTERCEPTED_EXECUTION_KEY,
+                        true),
                 inputTokens,
                 outputTokens);
     }
@@ -440,6 +458,18 @@ public class ReasoningStepParser {
     }
 
     private String recoverCodeForDisplay(String argsJson) {
+        if (argsJson == null || argsJson.isBlank()) return null;
+        if (objectMapper != null) {
+            try {
+                Map<String, Object> parsed = doDeserialize(argsJson);
+                Object code = parsed.get("code");
+                if (code != null && !code.toString().isBlank()) {
+                    return code.toString();
+                }
+            } catch (Exception _) {
+                // Fall through to malformed sandbox_exec recovery below.
+            }
+        }
         Map<String, Object> recovered = recoverSandboxExecParams(argsJson);
         return (String) recovered.get("code");
     }

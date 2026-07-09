@@ -94,6 +94,7 @@ public sealed interface ReasoningStep
     String PARALLEL_SENTINEL_DUNDER = "__parallel__";
     String PARALLEL_SENTINEL_PIPE_PREFIX = "parallel|";
     String ACTION_INPUT_ANSWER_KEY = "answer";
+    String ACTION_INPUT_INTERCEPTED_EXECUTION_KEY = "__intercepted_unrequested_execution";
 
     @JsonIgnore
     default boolean isParallelBatch() {
