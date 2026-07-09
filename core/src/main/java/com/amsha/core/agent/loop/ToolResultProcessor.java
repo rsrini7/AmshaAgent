@@ -62,11 +62,38 @@ public class ToolResultProcessor {
             decision = handleWebFetchOutcome(context, params, response, observation, history);
         }
 
+        if (decision == null
+                && response != null
+                && response.success()
+                && isArtifactCapableTool(toolName)
+                && ToolStepResolutionUtils.isArtifactCompletionSignal(completedStep)) {
+            String finalAnswer = "The requested artifact was generated and opened successfully.";
+            if (context.sessionId() != null) {
+                writer.saveAnswer(context.sessionId(), finalAnswer);
+            }
+            return StepDecision.terminal(AgentResult.finished(finalAnswer, List.copyOf(history)));
+        }
+
         if (decision != null) {
             return decision;
         }
 
         return evaluateCircuitBreaker(completedStep, response, consecutiveFailures, context.sessionId(), history);
+    }
+
+    /**
+     * Returns true only for tools that can produce shell-style artifacts (commands, generated files, browser
+     * preview launches). Known non-artifact tools such as {@code serper_web_search}, {@code brave_web_search},
+     * {@code web_fetch}, {@code github}, memory tools, and delegation tools are excluded so that broad
+     * substring hints in their observations (e.g. "open source") do not falsely terminate the agent loop.
+     * Unknown/dynamic tool names are treated as artifact-capable so skill-based custom renderers still work.
+     */
+    private boolean isArtifactCapableTool(String toolName) {
+        return ToolCapability.fromToolName(toolName)
+                .map(cap -> cap == ToolCapability.HOST_EXEC
+                        || cap == ToolCapability.SANDBOX_EXEC
+                        || cap == ToolCapability.BROWSER_NAVIGATE)
+                .orElse(true);
     }
 
     public StepDecision evaluateCircuitBreaker(

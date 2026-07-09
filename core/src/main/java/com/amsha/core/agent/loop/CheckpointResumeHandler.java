@@ -205,11 +205,14 @@ public class CheckpointResumeHandler {
     }
 
     private int calculateResumeBudget(AgentCheckpoint cp) {
-        int maxResumeIterations = 5;
-        int original = cp.getMaxIterations() != null ? cp.getMaxIterations() : maxResumeIterations;
+        int defaultResumeIterations = 5;
+        int original = cp.getMaxIterations() != null ? cp.getMaxIterations() : defaultResumeIterations;
         int used = cp.getIterationsUsed();
         int remaining = Math.max(0, original - used);
-        return Math.max(3, Math.min(remaining, maxResumeIterations));
+        // Use the original max as the per-resume cap — not a hardcoded 5.
+        // Skills with higher maxIterations (e.g. 15) need bigger resume budgets.
+        int perResumeCap = Math.max(defaultResumeIterations, original);
+        return Math.max(3, Math.min(remaining, perResumeCap));
     }
 
     private void handleResumeFailure(String sessionId, MessageContext context, Exception e) {

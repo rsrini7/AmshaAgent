@@ -49,15 +49,34 @@ public class PromptSectionBuilder {
             "compile and run" any code, you MUST use `garuda(agent=brahma)` to handle the execution.
             """;
 
+    private static final String EXECUTION_BOUNDARY_HOST = """
+            EXECUTION BOUNDARY:
+            You CAN execute code using the `host_exec` tool, which runs code directly on the
+            host machine. When a user asks you to "execute", "run", "compile and run",
+            or "just do it" with a code snippet, use `host_exec` with the appropriate
+            `code` and `language` parameters.
+            Supported languages: python, python3, bash, node, java, go.
+            """;
+
+    private static final String COMPACT_EXECUTION_BOUNDARY_HOST =
+            "EXECUTION BOUNDARY: Use `host_exec` for run/execute/compile.\n";
+
     private static final String COMPACT_EXECUTION_BOUNDARY_SANDBOX =
             "EXECUTION BOUNDARY: Use `sandbox_exec` for run/execute/compile.\n";
     private static final String COMPACT_EXECUTION_BOUNDARY_NO_SANDBOX =
-            "EXECUTION BOUNDARY: You cannot run code directly. Delegate to 'brahma' for execution.\n";
+            "EXECUTION BOUNDARY: You cannot run code directly. If you are a skill role, use your permitted execution tool; otherwise hand off to the appropriate specialist execution role.\n";
 
     private static final String COMPACT_BROWSER_RETRY_RULE =
             "BROWSER EXTRACTION RETRY RULE: If `browser_navigate` extraction returns too little text, retry once with a broader selector.\n";
 
     public String buildExecutionBoundaryRule(AgentRoleEnum roleEnum, boolean isCompact) {
+        boolean hasHost = capabilityRegistry.hasCapability(roleEnum.id(), ToolCapability.HOST_EXEC.toolName());
+        if (hasHost) {
+            if (isCompact) {
+                return COMPACT_EXECUTION_BOUNDARY_HOST;
+            }
+            return EXECUTION_BOUNDARY_HOST;
+        }
         boolean hasSandbox = capabilityRegistry.hasCapability(roleEnum.id(), ToolCapability.SANDBOX_EXEC.toolName());
         if (isCompact) {
             return hasSandbox ? COMPACT_EXECUTION_BOUNDARY_SANDBOX : COMPACT_EXECUTION_BOUNDARY_NO_SANDBOX;

@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -185,5 +186,19 @@ class ApprovalStateMachineTest {
 
         ApprovalResult result = stateMachine.decide("session-123", "tool1", ApprovalDecision.APPROVE, "test");
         assertEquals(ApprovalOutcome.ALREADY_DECIDED, result.outcome());
+    }
+
+    @Test
+    void testCombinedBatchToolName_withUnderscores_resolvesToApproveAll() {
+        mockTools(List.of("core_memory_read", "host_exec"), List.of("core_memory_read", "host_exec"));
+        when(agentStore.isAllBatchToolsDecided("session-123", "coder")).thenReturn(true);
+
+        ApprovalResult result =
+                stateMachine.decide("session-123", "core_memory_read_host_exec", ApprovalDecision.APPROVE, "test");
+
+        assertEquals(ApprovalOutcome.APPROVED, result.outcome());
+        verify(agentStore, times(2))
+                .updateBatchToolDecision(eq("session-123"), eq("coder"), anyString(), eq(ToolDecision.APPROVED.name()));
+        verify(resumeHandler).resumeAfterBatchDecision(any(), any(), any(), any(), any());
     }
 }

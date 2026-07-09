@@ -74,7 +74,9 @@ class AgentDispatchHandlerTest {
     @BeforeEach
     void setup() {
         mockedContext = mockStatic(WorkspaceContext.class);
-        lenient().when(intentClassifier.isContinuityCommand(anyString())).thenReturn(false);
+        lenient().when(intentClassifier.isRetryCommand(anyString())).thenReturn(false);
+        lenient().when(intentClassifier.isContinuationCommand(anyString())).thenReturn(false);
+        lenient().when(intentClassifier.isResumeCommand(anyString())).thenReturn(false);
         lenient().when(channelPluginRegistry.find(any(ChannelType.class))).thenReturn(Optional.empty());
         lenient().when(agentStore.markResuming(anyString())).thenReturn(true);
         handler.defaultTimezone = "Asia/Kolkata";
@@ -235,12 +237,21 @@ class AgentDispatchHandlerTest {
     @Test
     @SuppressWarnings("unchecked")
     void testTimeContextInjectorCalledOnGoalRestoration() throws Exception {
-        MessageContext context = createTestContext(AutonomyLevel.FULL);
-        context.setGoal(null);
+        ChannelUser user = new ChannelUser("u1", "u1", "User 1", ChannelType.REST_API);
+        ChannelMessage msg = new ChannelMessage.RestApiMessage(user, "proceed", "m1", Instant.now());
+        MessageContext context = new MessageContext("chat123", user, msg);
+        context.setSessionId("sess123");
+        context.setAutonomyLevel(AutonomyLevel.FULL);
+        context.setAgentRole("coordinator");
+        context.setGoal("proceed");
 
-        lenient().when(intentClassifier.isContinuityCommand("test")).thenReturn(true);
+        SessionContext sessionContext = new SessionContext("sess123", user, AutonomyLevel.FULL, false);
+        context.setSessionContext(sessionContext);
+
+        lenient().when(intentClassifier.isContinuationCommand("proceed")).thenReturn(true);
+        lenient().when(intentClassifier.isResumeCommand("proceed")).thenReturn(true);
         lenient()
-                .when(intentClassifier.isContinuityCommand("schedule a search every minute"))
+                .when(intentClassifier.isResumeCommand("schedule a search every minute"))
                 .thenReturn(false);
 
         AgentCheckpoint mockCheckpoint = Mockito.mock(AgentCheckpoint.class);

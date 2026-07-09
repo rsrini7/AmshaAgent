@@ -394,6 +394,9 @@ amsha:
   auto-seed-secrets: "${AMSHA_AUTO_SEED_SECRETS:false}"
   skills:
     hot-reload: true
+    adaptive:
+      enabled: ${AMSHA_SKILLS_ADAPTIVE_ENABLED:false}
+    default-max-iterations: ${AMSHA_SKILLS_DEFAULT_MAX_ITERATIONS:15}
     skillsjars:
       require-approval-for-sensitive: ${AMSHA_SKILLSJARS_REQUIRE_APPROVAL_FOR_SENSITIVE:true}
   core:
@@ -515,6 +518,10 @@ amsha:
     # inside the Podman sandbox (e.g. JDB attaching to host JVMs).
     host-exec:
       skills: "${AMSHA_TOOLS_HOST_EXEC_SKILLS:jdb-debugger}"
+      max-output-chars: "${AMSHA_HOST_EXEC_MAX_OUTPUT_CHARS:${AMSHA_SANDBOX_MAX_OUTPUT_CHARS:8192}}"
+      python-executable: "${AMSHA_HOST_EXEC_PYTHON_EXECUTABLE:${AMSHA_SANDBOX_PYTHON_EXECUTABLE:}}"
+      java-executable: "${AMSHA_HOST_EXEC_JAVA_EXECUTABLE:${AMSHA_SANDBOX_JAVA_EXECUTABLE:}}"
+      go-executable: "${AMSHA_HOST_EXEC_GO_EXECUTABLE:${AMSHA_SANDBOX_GO_EXECUTABLE:}}"
 
   hitl:
     pre-executable-tools: ""   # (§75-A1) comma-separated tool names

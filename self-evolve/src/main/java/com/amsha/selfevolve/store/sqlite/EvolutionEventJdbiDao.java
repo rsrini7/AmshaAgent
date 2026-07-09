@@ -4,6 +4,7 @@ import java.util.List;
 
 import com.amsha.selfevolve.api.EvolutionEvent;
 
+import org.jdbi.v3.sqlobject.config.RegisterConstructorMapper;
 import org.jdbi.v3.sqlobject.customizer.Bind;
 import org.jdbi.v3.sqlobject.customizer.BindMethods;
 import org.jdbi.v3.sqlobject.statement.SqlBatch;
@@ -13,6 +14,7 @@ import org.jdbi.v3.sqlobject.statement.SqlUpdate;
 /**
  * JDBI SQL Object for evolution_events table (SQLite).
  */
+@RegisterConstructorMapper(EvolutionEvent.class)
 public interface EvolutionEventJdbiDao {
 
     @SqlBatch("""

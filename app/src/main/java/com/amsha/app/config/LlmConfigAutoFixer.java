@@ -1,46 +1,55 @@
 package com.amsha.app.config;
 
 import java.nio.file.Path;
-import java.util.Locale;
 
 /**
- * Handles LLM model and base URL auto-correction based on the selected provider.
+ * Normalizes LLM configuration from legacy environment-variable names to the
+ * dotted property names used by {@code application.yaml}. All decisions are
+ * config-driven; provider/model-specific hardcoded defaults have been removed.
  */
 public class LlmConfigAutoFixer {
 
+    private static final String DEFAULT_CONTEXT_WINDOW = "128000";
+
+    private LlmConfigAutoFixer() {
+        // Utility class for static helpers only.
+    }
+
     public static void validateAndAutoFixLlmConfig(Path binaryDir) {
-        Path envFile = binaryDir.resolve(".env");
         String provider = System.getProperty("AMSHA_LLM_PROVIDER", System.getenv("AMSHA_LLM_PROVIDER"));
         if (provider == null || provider.isBlank()) provider = "groq";
 
         // Per-provider base URLs and models are configured in each provider's
         // @ConfigProperty annotations with sensible defaults. No auto-fix needed.
 
-        resolveContextWindow(envFile, provider);
-        resolveStructuredOutputModes(provider);
+        resolveContextWindow();
+        resolveStructuredOutputModes();
     }
 
-    private static void resolveContextWindow(Path _envFile, String provider) {
+    private static void resolveContextWindow() {
         String current = System.getProperty("AMSHA_LLM_CONTEXT_WINDOW", System.getenv("AMSHA_LLM_CONTEXT_WINDOW"));
-        String target =
-                switch (provider.toLowerCase(Locale.ROOT)) {
-                    case "gemini" -> "1000000";
-                    case "ollama" -> "8192";
-                    default -> "128000";
-                };
-        String effective = (current == null || current.isBlank()) ? target : current;
+        String effective = (current == null || current.isBlank()) ? DEFAULT_CONTEXT_WINDOW : current;
         System.setProperty("AMSHA_LLM_CONTEXT_WINDOW", effective);
         System.setProperty("amsha.llm.context-window", effective);
 
-        boolean compact = Integer.parseInt(effective) <= 8192;
-        System.setProperty("AMSHA_LLM_COMPACT_PROMPT_ENABLED", String.valueOf(compact));
-        System.setProperty("amsha.llm.compact-prompt-enabled", String.valueOf(compact));
+        // Respect an explicitly configured compact-prompt flag; do not derive it from
+        // context-window size. Default to false when unset so application.yaml defaults apply.
+        String compact = System.getProperty(
+                "AMSHA_LLM_COMPACT_PROMPT_ENABLED", System.getenv("AMSHA_LLM_COMPACT_PROMPT_ENABLED"));
+        if (compact == null || compact.isBlank()) {
+            System.setProperty("AMSHA_LLM_COMPACT_PROMPT_ENABLED", "false");
+            System.setProperty("amsha.llm.compact-prompt-enabled", "false");
+        }
     }
 
-    private static void resolveStructuredOutputModes(String provider) {
-        String modelKey = "AMSHA_" + provider.toUpperCase(Locale.ROOT) + "_MODEL";
-        String model = System.getProperty(modelKey, System.getenv(modelKey));
-        String target = (model != null && model.contains("llama-4-scout")) ? "PROMPT_DIRECTIVE" : "NATIVE";
-        System.setProperty("amsha.llm.structured-output-mode", target);
+    private static void resolveStructuredOutputModes() {
+        // Respect an explicitly configured structured-output mode; do not derive it from
+        // the selected model. Default to NATIVE when unset so application.yaml defaults apply.
+        String mode = System.getProperty(
+                "AMSHA_LLM_STRUCTURED_OUTPUT_MODE", System.getenv("AMSHA_LLM_STRUCTURED_OUTPUT_MODE"));
+        if (mode == null || mode.isBlank()) {
+            System.setProperty("AMSHA_LLM_STRUCTURED_OUTPUT_MODE", "NATIVE");
+            System.setProperty("amsha.llm.structured-output-mode", "NATIVE");
+        }
     }
 }

@@ -74,7 +74,11 @@ public enum ToolCapability {
                     + "Java: writes a .java file, compiles via javac, then runs the resulting class. "
                     + "SAFETY: this tool always requires HITL approval; it is NOT granted to any default role. "
                     + "The runtime capability grant is configured via amsha.tools.host-exec.skills. "
-                    + "Example: {\"code\":\"echo hello\",\"language\":\"bash\"}"),
+                    + "Example: {\"code\":\"echo hello\",\"language\":\"bash\"}. "
+                    + "Use host_exec for direct host debugging and diagnostics. "
+                    + "For investigating host JVM processes or port listeners, run host_exec with full command-line output (e.g. `ps -axww` or `ps -eo pid,comm,args`) "
+                    + "and validate listeners with `lsof -iTCP:<port> -sTCP:LISTEN`, `ss -ltnp | grep <port>`, or `jcmd <pid> VM.system_properties`. "
+                    + "Do not rely on truncated short ps output for host process inspection."),
 
     DELEGATE_TO_AGENT(
             "garuda",

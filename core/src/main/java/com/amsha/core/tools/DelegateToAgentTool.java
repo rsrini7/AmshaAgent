@@ -166,6 +166,16 @@ public class DelegateToAgentTool implements AgentTool {
         String userId = ctx.userId();
         String chatId = ctx.chatId();
 
+        if (AgentRoleEnum.isSkillRole(currentRoleName)) {
+            log.warnf(
+                    "[DELEGATE] Skill role %s attempted delegation in session %s — forcing direct execution",
+                    currentRoleName, outerSessionId);
+            return ToolResponse.success(
+                    "You are a skill role and must execute the task directly with your permitted tools. "
+                            + "Do not delegate to brahma, shiva, or any other persona. "
+                            + "Write generated files to the skill output directory and then FINISH.");
+        }
+
         Object agentObj = params.get(PARAM_AGENT);
         Object goalObj = params.get(PARAM_GOAL);
         String delegatableList = delegationProcessor.getDelegatableAgentList();

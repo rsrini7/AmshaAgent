@@ -28,6 +28,7 @@ import com.amsha.core.scope.WorkspaceScopeHolder;
 import com.amsha.core.security.AutonomyLevel;
 import com.amsha.core.security.AutonomyPolicy;
 import com.amsha.core.security.RequiresSecret;
+import com.amsha.core.skill.SkillRegistry;
 import com.amsha.core.util.ClassUtils;
 import com.amsha.core.util.PathSanitizer;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -80,6 +81,9 @@ public class ToolRegistry {
 
     @Inject
     AuditService auditService;
+
+    @Inject
+    SkillRegistry skillRegistry;
 
     @ConfigProperty(name = "amsha.workspace.root-dir", defaultValue = "./data/workspaces")
     String workspaceRootDir;
@@ -140,7 +144,8 @@ public class ToolRegistry {
                 WorkspaceContext.SUGGESTED_NEXT_FIRE_TIME.isBound()
                         ? WorkspaceContext.SUGGESTED_NEXT_FIRE_TIME.get()
                         : null,
-                WorkspaceContext.SUGGESTED_CRON_SOURCE.isBound() ? WorkspaceContext.SUGGESTED_CRON_SOURCE.get() : null);
+                WorkspaceContext.SUGGESTED_CRON_SOURCE.isBound() ? WorkspaceContext.SUGGESTED_CRON_SOURCE.get() : null,
+                resolveSkillHome());
 
         // 1. Governance checks
         try {
@@ -233,6 +238,18 @@ public class ToolRegistry {
             if (e instanceof ComplianceViolationException cve) throw cve;
             return handleExecutionException(ctx, toolName, e);
         }
+    }
+
+    private String resolveSkillHome() {
+        String agentRole = WorkspaceContext.AGENT_ROLE.isBound() ? WorkspaceContext.AGENT_ROLE.get() : null;
+        if (agentRole == null || !AgentRoleEnum.isSkillRole(agentRole)) {
+            return null;
+        }
+        String skillName = AgentRoleEnum.skillName(agentRole);
+        return skillRegistry
+                .findByName(skillName)
+                .map(entry -> entry.definition().skillHome())
+                .orElse(null);
     }
 
     private ToolResponse invokeDirect(ToolExecutionContext ctx, AgentTool tool, Map<String, Object> params) {

@@ -13,6 +13,7 @@ import com.amsha.core.agent.role.ToolCapability;
 import com.amsha.core.governance.RateLimitTracker;
 import com.amsha.core.routing.InfiniteLoopChatModel;
 import com.amsha.core.tools.ToolRegistry;
+import com.amsha.core.util.HtmlArtifactUtil;
 import com.amsha.core.util.TextPatternUtils;
 
 import org.apache.commons.text.StringEscapeUtils;
@@ -387,7 +388,11 @@ public class FinishOutcomeProcessor {
                     "FINISH-HANDLER stripped leaked tool-call JSON from answer (%d chars removed)",
                     raw.length() - stripped.length());
         }
-        return stripped;
+        String collapsed = HtmlArtifactUtil.collapseHtmlArtifact(stripped);
+        if (!collapsed.equals(stripped)) {
+            log.warnf("FINISH-HANDLER collapsed HTML artifact in answer");
+        }
+        return collapsed;
     }
 
     /**

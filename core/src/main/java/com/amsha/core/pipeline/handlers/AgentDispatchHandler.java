@@ -118,28 +118,31 @@ public class AgentDispatchHandler implements MessageHandler {
 
         String rawMessageText =
                 context.getMessage() != null ? context.getMessage().text() : "";
-        // Only isContinuityCommand ("same", "again", "retry") restores the old goal.
-        // isFollowUpHeuristic ("run", "execute", "in java") preserves the ROLE but uses the NEW goal.
-        boolean isExplicitContinuity = intentClassifier.isContinuityCommand(rawMessageText);
+        // Retry and continuation commands both resume the prior task context.
+        // Execution follow-ups ("run", "execute", "in java") preserve the ROLE but use the NEW goal.
+        boolean isRetryCommand = intentClassifier.isRetryCommand(rawMessageText);
+        boolean isContinuationCommand = intentClassifier.isContinuationCommand(rawMessageText);
+        boolean isResumeCommand = isRetryCommand || isContinuationCommand;
 
         String restoredGoal = null;
-        if (isExplicitContinuity) {
+        if (isResumeCommand) {
             restoredGoal = agentStore
                     .findLatestNonArchivedCheckpoint(sessionId)
+                    .or(() -> agentStore.findLatestCheckpoint(sessionId))
                     .map(AgentCheckpoint::getOriginalGoal)
-                    .filter(g -> g != null && !g.isBlank() && !intentClassifier.isContinuityCommand(g))
+                    .filter(g -> g != null && !g.isBlank() && !intentClassifier.isResumeCommand(g))
                     .orElse(null);
 
             if (restoredGoal != null && !restoredGoal.isBlank()) {
                 log.infof(
-                        "[AgentDispatch] Continuity detected for session %s - restoring original goal: %s",
-                        sessionId, restoredGoal);
+                        "[AgentDispatch] Resume command detected for session %s (retry=%b, continue=%b) - restoring original goal: %s",
+                        sessionId, isRetryCommand, isContinuationCommand, restoredGoal);
                 goal = normalizeGoal(restoredGoal);
                 TimeContextInjector.inject(context, goal, defaultTimezone);
             } else {
                 log.warnf(
-                        "[AgentDispatch] Continuity detected for session %s but no suitable original goal found in history.",
-                        sessionId);
+                        "[AgentDispatch] Resume command detected for session %s (retry=%b, continue=%b) but no suitable original goal found in history.",
+                        sessionId, isRetryCommand, isContinuationCommand);
             }
         }
 
@@ -149,8 +152,14 @@ public class AgentDispatchHandler implements MessageHandler {
                 piiSanitizer != null && restoredGoal != null ? piiSanitizer.sanitize(restoredGoal) : restoredGoal;
 
         log.infof(
-                "[AgentDispatch] Goal Resolution: rawGoal='%s' rawMessage='%s' isContinuity=%b restoredGoal='%s' finalGoal='%s'",
-                logSafeRawGoal, logSafeRawMessage, isExplicitContinuity, logSafeRestoredGoal, goal);
+                "[AgentDispatch] Goal Resolution: rawGoal='%s' rawMessage='%s' isRetry=%b isContinue=%b isResume=%b restoredGoal='%s' finalGoal='%s'",
+                logSafeRawGoal,
+                logSafeRawMessage,
+                isRetryCommand,
+                isContinuationCommand,
+                isResumeCommand,
+                logSafeRestoredGoal,
+                goal);
 
         return goal;
     }

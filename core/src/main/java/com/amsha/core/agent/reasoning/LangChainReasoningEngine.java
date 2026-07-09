@@ -144,7 +144,8 @@ public class LangChainReasoningEngine implements ReasoningEngine {
         String finalGoal = buildFinalGoal(context, agentRole, goal, cappedHistory);
 
         boolean isWriteIntent = intentClassifier.isWriteIntent(goal);
-        boolean isSimpleChitchat = intentClassifier.isSimpleConversational(goal);
+        boolean isSkillRole = AgentRoleEnum.isSkillRole(agentRole);
+        boolean isSimpleChitchat = !isSkillRole && intentClassifier.isSimpleConversational(goal);
         boolean isHistoryQuery = intentClassifier.isHistoryQuery(goal);
         if (isWriteIntent
                 || isHistoryQuery
@@ -266,7 +267,8 @@ public class LangChainReasoningEngine implements ReasoningEngine {
             boolean isWriteIntent,
             ChatRequest request,
             String agentRole) {
-        boolean isCompact = isSimpleChitchat || context.isForceFinishRetry();
+        boolean configCompact = promptBuilder.isCompactPromptEnabled();
+        boolean isCompact = configCompact || isSimpleChitchat || context.isForceFinishRetry();
         Span span = otelContext.childSpan(context.sessionId(), AgentOTelConstants.SPAN_LLM_PROVIDER_CALL);
         try {
             int msgCount = request.messages() != null ? request.messages().size() : 0;
@@ -278,8 +280,15 @@ public class LangChainReasoningEngine implements ReasoningEngine {
                 span.setAttribute(AgentOTelConstants.ATTR_LLM_MESSAGE_COUNT, (long) msgCount);
             }
             log.infof(
-                    "LLM call: %d messages, ~%d est. tokens, %d chars, role=%s, compact=%s",
-                    msgCount, estTokens, totalChars, context.agentRole(), isCompact);
+                    "LLM call: %d messages, ~%d est. tokens, %d chars, role=%s, runtimeCompact=%s (configCompact=%s, chitchat=%s, forceFinishRetry=%s)",
+                    msgCount,
+                    estTokens,
+                    totalChars,
+                    context.agentRole(),
+                    isCompact,
+                    configCompact,
+                    isSimpleChitchat,
+                    context.isForceFinishRetry());
             ChatResponse response = ScopedValue.where(WorkspaceContext.IS_WRITE_INTENT, isWriteIntent)
                     .where(WorkspaceContext.IS_COMPACT, isCompact)
                     .call(() -> llmProviderPort.nextStep(request, agentRole));
@@ -457,6 +466,16 @@ public class LangChainReasoningEngine implements ReasoningEngine {
             boolean isWriteIntent,
             String targetLanguage) {
         ReasoningStep parsedStep = stepParser.parse(sessionId, agentRole, response);
+
+        if (ReasoningStep.FINISH.equals(parsedStep.action())
+                && AgentRoleEnum.isSkillRole(agentRole)
+                && response.aiMessage() != null
+                && !response.aiMessage().hasToolExecutionRequests()
+                && !context.isForceFinishRetry()) {
+            return ReasoningStep.systemMessage("CRITICAL SKILL MODE: You have not executed any permitted tools yet. "
+                    + "Call your execution tool directly and do not answer in prose. "
+                    + "After the tool returns, FINISH with a concise summary.");
+        }
 
         if (ReasoningStep.FINISH.equals(parsedStep.action())
                 && isWriteIntent

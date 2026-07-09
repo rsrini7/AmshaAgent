@@ -137,8 +137,9 @@ public class SandboxExecTool implements AgentTool {
     public JsonObjectSchema parametersSchema() {
         return JsonObjectSchema.builder()
                 .addStringProperty("code", "The source code to execute")
-                .addStringProperty("language", "The programming language (python, java, go, node, bash)")
-                .required("code", "language")
+                .addStringProperty("command", "Alias for 'code'. The command or script to execute.")
+                .addStringProperty("language", "The programming language (python, java, go, node, bash). Default: bash")
+                .required("code")
                 .build();
     }
 
@@ -154,12 +155,13 @@ public class SandboxExecTool implements AgentTool {
     // ─────────────────────────────────────────────────────────────────────────
     @Override
     public List<String> sandboxCommand(ToolExecutionContext ctx, Map<String, Object> params) {
-        ensureUnwrapped(params);
+        normalizeParams(params);
         String code = (String) params.get("code");
-        String lang = (String) params.get("language");
         if (code == null) throw new IllegalArgumentException("Parameter 'code' is required.");
-        if (lang == null) throw new IllegalArgumentException("Parameter 'language' is required.");
-
+        String lang = (String) params.get("language");
+        if (lang == null || lang.isBlank()) {
+            lang = "bash";
+        }
         lang = lang.toLowerCase(Locale.ROOT);
 
         auditService.record(
@@ -203,10 +205,13 @@ public class SandboxExecTool implements AgentTool {
     // ─────────────────────────────────────────────────────────────────────────
     @Override
     public void prepareWorkspace(Path workspaceRoot, Map<String, Object> params) throws IOException {
-        ensureUnwrapped(params);
+        normalizeParams(params);
         String lang = (String) params.get("language");
+        if (lang == null) {
+            lang = "bash";
+        }
         String code = (String) params.get("code");
-        if (lang == null || code == null) return;
+        if (code == null) return;
         lang = lang.toLowerCase(Locale.ROOT);
 
         if ("java".equals(lang)) {
@@ -247,10 +252,13 @@ public class SandboxExecTool implements AgentTool {
         String sessionId = ctx.sessionId();
 
         try {
+            normalizeParams(params);
             String code = (String) params.get("code");
             String lang = (String) params.get("language");
-            if (lang == null) return ToolResponse.failure(1, "Parameter 'language' is required.");
             if (code == null) return ToolResponse.failure(1, "Parameter 'code' is required.");
+            if (lang == null || lang.isBlank()) {
+                lang = "bash";
+            }
             lang = lang.toLowerCase(Locale.ROOT);
 
             String violation = SandboxCodeSafetyScanner.findViolation(lang, code);
@@ -383,6 +391,14 @@ public class SandboxExecTool implements AgentTool {
 
     String extractJavaClassName(String code) {
         return codeLanguageDetector.extractJavaClassName(code);
+    }
+
+    private void normalizeParams(Map<String, Object> params) {
+        if (params == null) return;
+        if (!params.containsKey("code") && params.containsKey("command")) {
+            params.put("code", params.get("command"));
+        }
+        ensureUnwrapped(params);
     }
 
     private void ensureUnwrapped(Map<String, Object> params) {

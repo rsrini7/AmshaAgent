@@ -11,10 +11,13 @@ import java.util.Objects;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import com.amsha.core.agent.reasoning.PromptInstructionLibrary;
 import com.amsha.core.agent.role.ToolCapability;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
+
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 /**
  * Parses a raw markdown skill document into a {@link SkillDefinition}.
@@ -29,6 +32,9 @@ public class SkillDefinitionParser {
      */
     private static final ObjectMapper YAML_MAPPER =
             new ObjectMapper(new YAMLFactory()).configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+
+    @ConfigProperty(name = "amsha.skills.default-max-iterations", defaultValue = "15")
+    int defaultMaxIterations;
 
     /**
      * Parses a skill document in two-block format.
@@ -90,8 +96,8 @@ public class SkillDefinitionParser {
                 fm.description(),
                 fm.triggerPatterns() != null ? fm.triggerPatterns() : List.of(),
                 capabilities.stream().distinct().toList(),
-                fm.maxIterations() > 0 ? fm.maxIterations() : 5,
-                systemPromptBody,
+                fm.maxIterations() > 0 ? fm.maxIterations() : defaultMaxIterations,
+                PromptInstructionLibrary.skillExecutionPrecedencePreamble() + systemPromptBody,
                 skillHome);
     }
 

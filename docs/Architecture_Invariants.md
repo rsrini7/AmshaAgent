@@ -259,7 +259,31 @@ Dynamic skills MUST render their system prompt via the pre-compiled Qute wrapper
 `SkillSystemPrompt.html` only. Ad hoc string-built prompts bypass injection-safety
 sanitization and native-image Qute compilation checks.
 
-## 4.9 AgentFunctionProcessor schema source
+## 4.9 Prompt compact-mode parity (§Invariant-PromptCompactParity)
+
+The system prompt builder supports a compact path controlled by
+`amsha.llm.compact-prompt-enabled`. Compact prompts MUST remain behaviorally
+equivalent to full prompts for every load-bearing rule.
+
+Invariants:
+
+- When a full prompt section is changed, the compact counterpart MUST be updated
+  in the same change. Never let compact mode silently drop a rule.
+- Critical rules that MUST be present in compact mode:
+  1. **Termination**: After a successful tool observation, the agent MUST emit
+     a `FINISH` action with a concise plain-text final answer. It MUST NOT plan
+     another step or leave the turn open.
+  2. **Skill self-execution**: Dynamic `skill:*` roles MUST execute the task
+     themselves using only their `PERMITTED TOOLS`. They MUST NOT delegate
+     execution to `brahma`, `shiva`, or another persona.
+  3. **Execution boundary**: The choice of `host_exec` vs `sandbox_exec` MUST
+     match the role's capabilities as resolved by `RoleRegistry`.
+- If a new persona or role template gains a compact variant, both variants MUST
+  be kept in sync.
+- Verification: after any prompt change, run
+  `./mvnw test -pl core -Dtest="SystemPromptBuilderTest"`.
+
+## 4.10 AgentFunctionProcessor schema source
 
 `AgentFunctionProcessor` MUST generate JSON schema from the SAM **return type** using
 `SchemaFactoryWrapper.acceptJsonFormatVisitor(returnTypeClass, visitor)`.
@@ -336,6 +360,22 @@ If a pattern is broad enough to match negations, implement
 IntentRoutingProvider.shouldSkip(String userMessage) with a
 static final Pattern negation guard. Never compile patterns
 inline - use static final Pattern per §9.1.
+
+## 4.12 Agent-Loop Guardrails (§Invariant-AgentLoopGuards)
+
+The agent loop has three cooperative guards that MUST remain in place (see `AGENTS.md` §1.18):
+
+- **`PreflightState`** MUST check the global iteration budget (`WorkspaceContext.incrementAndCheckGlobalIterations()`) before each loop iteration; exceeding it terminates the session as halted.
+- **`LoopStuckDetector`** MUST inspect recent reasoning history and inject a corrective hint when the agent repeats non-progressing tool calls (threshold: 2 identical repeats, or 3 read-only-only repeats). Hints are derived from the actual repeated tool input — do NOT hardcode skill-specific paths.
+- **`ToolInvocationGuard`** is the pre-invocation interceptor chain; it dedups identical repeated tool calls and evicts stale observations. It MUST run before any tool executes. Do not bypass it to "speed up" execution.
+
+## 4.13 HTML Artifact Collapsing (§Invariant-HtmlArtifactCollapse)
+
+`HtmlArtifactTransformer` (`ObservationTransformer`, priority 40) MUST collapse generated HTML artifacts from `host_exec`/`sandbox_exec` output into a short browser-preview notice via `HtmlArtifactUtil.collapseHtmlArtifact()`. The HTML is mirrored to a browser-preview target rather than echoed into chat. This transformer MUST NOT be disabled — raw HTML in the conversation floods the context window and breaks the FINISH flow. See `AGENTS.md` §1.19.
+
+## 4.14 Skill Role `host_exec` Gating (§Invariant-SkillHostExecGating)
+
+`host_exec` for skill roles is granted ONLY through `HostExecSkillGrant`, which reads `amsha.tools.host-exec.skills` (default `jdb-debugger`). `SkillLoader` defaults MUST NOT be widened and `host_exec` MUST NOT be granted to unlisted skills directly. `EXECUTE_SHELL` HITL remains enforced by `ToolGovernanceGuard` after the grant. See `AGENTS.md` §1.20.
 
 ---
 

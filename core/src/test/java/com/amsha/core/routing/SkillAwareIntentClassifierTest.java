@@ -104,6 +104,21 @@ class SkillAwareIntentDetectorTest {
     }
 
     @Test
+    void testNameMatchFuzzyHyphenSpace() {
+        SkillDefinition def = new SkillDefinition("id4", "algorithmic-art", "desc", List.of(), List.of(), 5, "p", null);
+        RoleDefinition rd = new RoleDefinition(
+                "skill:algorithmic-art", "Algorithmic Art", "desc", 5, false, false, Set.of(), Set.of());
+        CompiledSkillEntry entry = new CompiledSkillEntry(def, List.of(), rd, "skillsjars");
+
+        when(skillRegistry.currentSnapshot()).thenReturn(List.of(entry));
+
+        String role = classifier.classify("use algorithmic art to generate particle art");
+
+        assertEquals("skill:algorithmic-art", role);
+        verify(fallbackService, never()).classify(anyString());
+    }
+
+    @Test
     void testNullOrBlankInputFallsBackToLLM() {
         when(fallbackService.classify(null)).thenReturn("coordinator");
         when(fallbackService.classify("   ")).thenReturn("coordinator");

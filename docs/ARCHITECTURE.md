@@ -229,6 +229,18 @@ The LLM can request multiple tools in one step. Parallel batches:
 - Pre-execute FULL-autonomy tools before the HITL pause
 - Merge results in original call order
 
+### Agent-Loop Guards & Safety
+
+Three cooperative guards protect the loop from runaway execution and context flooding:
+
+- **`PreflightState`** (runner state, runs at loop entry) — checks the global iteration budget via `WorkspaceContext.incrementAndCheckGlobalIterations()` before each iteration; exceeding it terminates the session as `FAILED`/`LOOP_EXCEEDED`. Also halts on `WorkspaceManager.isSessionHalted()` or `AgentGuards.isShuttingDown()`. See `AGENTS.md` §1.18.
+- **`LoopStuckDetector`** — stateless inspects recent `ReasoningStep[]` history; injects a corrective hint when the agent repeats non-progressing tool calls. Thresholds: 2 identical tool-input repeats, or 3 read-only-only repeats (`cat`, `grep`, `ls`, …). Hints derive from the actual repeated input (no hard-coded skill paths).
+- **`HtmlArtifactTransformer`** (`ObservationTransformer`, priority 40) — collapses generated HTML artifacts from `host_exec`/`sandbox_exec` output into a short browser-preview notice via `HtmlArtifactUtil.collapseHtmlArtifact()`. The HTML is mirrored to a browser-preview target (see `HostExecTool` `BROWSER_PREVIEW_GOAL_PATTERN`) rather than echoed into chat. Disabling it floods the context window and breaks the FINISH flow. See `AGENTS.md` §1.19.
+
+### Browser Preview (HostExec)
+
+When a `host_exec` goal matches `HostExecTool.BROWSER_PREVIEW_GOAL_PATTERN` and produces an HTML file, `HostExecTool` mirrors the artifact to a browser-preview target and returns `Opened browser preview: <path>` instead of raw HTML. This pairs with `HtmlArtifactTransformer` so generated HTML never re-enters the conversation context.
+
 ---
 
 ## Reflex System (Zero-Token Fast Path)
@@ -687,15 +699,33 @@ You are a meticulous code reviewer...
 
 ```
 StartupEvent → SkillLoader.onStart()
-  → ClasspathSkillProvider  (priority 100 - reads /skills/index.txt from classpath)
-  → DatabaseSkillProvider   (priority 10  - reads agent_skill table from SQLite)
+  → DatabaseSkillProvider     (priority 10  - reads agent_skill table from SQLite)
+  → SkillsJarSkillProvider    (priority 50  - loads from META-INF/skills/ in JARs)
+  → ClasspathSkillProvider    (priority 100 - reads /skills/index.txt from classpath)
   → SkillDefinitionParser.parse(yaml)
   → Pattern.compile(triggerPatterns)     [pre-compiled for O(1) matching]
   → RoleRegistry.registerDynamic(skill:name, RoleDefinition)
   → SkillRegistry.updateSnapshot(CompiledSkillEntry[])
 ```
 
-Database skills override classpath skills by name. `SkillResource` (REST CRUD at `/skills`) provides hot-reload.
+**Priority order** (lower wins): Database skills override SkillsJars, which override classpath skills. `SkillResource` (REST CRUD at `/skills`) provides hot-reload.
+
+### SkillsJarSkillProvider (Dynamic JAR Loading)
+
+Skills can be packaged as JAR files under `META-INF/skills/`. The `SkillsJarSkillProvider` (priority 50) loads skills from JAR dependencies:
+- **Index path** (`META-INF/skills/skills-index.txt`): optional pre-indexed list of `SKILL.md` paths. When present, skills are loaded via the index (fast path, avoids classpath scanning).
+- **Fallback**: classpath scanning of `META-INF/skills/` for `SKILL.md` files.
+
+Each SkillsJar contains:
+- `META-INF/skills/<skill-name>/SKILL.md` — YAML-fronted markdown defining system prompt, trigger patterns, tool capabilities, and max iterations.
+
+### SkillAdaptationManager
+
+The `SkillAdaptationManager` enables adaptive skill execution — dynamically adjusting skill behavior based on execution context and tool outputs. Controlled by `amsha.skills.adaptive.enabled` (`false` by default). When enabled, skills can auto-adapt their parameters, retry strategies, and tool selection based on observed results. See [CONFIGURATION.md](./CONFIGURATION.md) §Skills & SkillsJars for `AMSHA_SKILLS_ADAPTIVE_ENABLED`.
+
+### HostExecSkillGrant
+
+`HostExecSkillGrant` (startup `@Priority(APPLICATION+600)`, runs AFTER `SkillLoader`) is the **only** sanctioned path that grants the `host_exec` tool capability to skill roles. It reads `amsha.tools.host-exec.skills` (default `jdb-debugger`) and calls `CapabilityRegistry.grant("skill:<name>", "host_exec")` for each listed skill. `host_exec` is always HITL-approved (maps to `EXECUTE_SHELL`); the grant merely adds the tool to the permitted-tools set — `ToolGovernanceGuard` still enforces HITL. To let a new skill use `host_exec`, add it to `amsha.tools.host-exec.skills` (config sync §2.5); never widen `SkillLoader` defaults. See `AGENTS.md` §1.20.
 
 ### Routing
 

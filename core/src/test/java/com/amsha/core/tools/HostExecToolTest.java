@@ -13,7 +13,10 @@ import static org.mockito.Mockito.when;
 
 import jakarta.inject.Inject;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -23,8 +26,10 @@ import com.amsha.core.sandbox.ToolExecutionException;
 import com.amsha.core.scope.WorkspaceContext;
 import com.amsha.core.security.AutonomyLevel;
 import com.amsha.core.security.ToolOperation;
+import com.amsha.core.util.HtmlArtifactUtil;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.mockito.ArgumentCaptor;
 
 import io.quarkus.test.InjectMock;
@@ -39,6 +44,9 @@ class HostExecToolTest {
 
     @InjectMock
     DirectExecutor mockDirectExecutor;
+
+    @TempDir
+    Path tempDir;
 
     private static final String TRUNCATION_SUFFIX = "[output truncated at max output chars limit]";
 
@@ -68,10 +76,10 @@ class HostExecToolTest {
     }
 
     @Test
-    void parameters_schema_requires_code_and_language() {
+    void parameters_schema_requires_code() {
         var schema = tool.parametersSchema();
         assertNotNull(schema);
-        assertEquals(List.of("code", "language"), schema.required());
+        assertEquals(List.of("code"), schema.required());
         assertTrue(schema.properties().containsKey("code"));
         assertTrue(schema.properties().containsKey("language"));
     }
@@ -81,6 +89,16 @@ class HostExecToolTest {
         String desc = tool.description();
         assertNotNull(desc);
         assertTrue(desc.toLowerCase().contains("host"), "description must mention host: " + desc);
+    }
+
+    @Test
+    void description_includes_generic_host_exec_diagnostics_guidance() {
+        String desc = tool.description().toLowerCase(Locale.ROOT);
+        assertTrue(
+                desc.contains("bypassing the podman sandbox")
+                        && desc.contains("ps -axww")
+                        && (desc.contains("lsof") || desc.contains("ss -ltnp") || desc.contains("jcmd")),
+                "description must include generic host_exec diagnostics guidance: " + desc);
     }
 
     // -------------------------------------------------------------------------
@@ -220,7 +238,9 @@ class HostExecToolTest {
     // -------------------------------------------------------------------------
 
     @Test
-    void missing_language_returns_failure() throws Exception {
+    void missing_language_defaults_to_bash_and_succeeds() throws Exception {
+        when(mockDirectExecutor.executeDirectly(any(), anyList(), any())).thenReturn("hi\n");
+
         AtomicReference<ToolResponse> ref = new AtomicReference<>();
         WorkspaceContext.run("test-session", "user1", "chat1", AutonomyLevel.FULL, "debugger", () -> {
             ref.set(tool.execute(ctx(), Map.of("code", "echo hi")));
@@ -228,9 +248,15 @@ class HostExecToolTest {
         });
 
         ToolResponse r = ref.get();
-        assertFalse(r.success());
-        assertTrue(r.output().contains("'language' is required"), "Actual: " + r.output());
-        verify(mockDirectExecutor, never()).executeDirectly(any(), anyList(), any());
+        assertTrue(r.success());
+        assertEquals("hi\n", r.output());
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<String>> cmdCaptor = ArgumentCaptor.forClass(List.class);
+        verify(mockDirectExecutor).executeDirectly(any(), cmdCaptor.capture(), any());
+        List<String> cmd = cmdCaptor.getValue();
+        assertEquals("bash", cmd.get(0));
+        assertTrue(cmd.get(1).endsWith("script.sh"));
     }
 
     @Test
@@ -320,7 +346,74 @@ class HostExecToolTest {
         assertTrue(r.output().endsWith(TRUNCATION_SUFFIX));
     }
 
+    @Test
+    void templateReads_do_not_collapse_into_artifact_notice() {
+        String html = """
+                <html>
+                  <body><main>template</main></body>
+                </html>
+                """;
+
+        String formatted =
+                tool.postProcessOutput(html, Map.of("code", "cat /tmp/skills/example/templates/viewer.html"));
+
+        assertEquals(HtmlArtifactUtil.HTML_TEMPLATE_NOTICE, formatted);
+    }
+
+    @Test
+    void outputFolder_html_collapses_into_artifact_notice() {
+        String html = """
+                <html>
+                  <body><main>artifact</main></body>
+                </html>
+                """;
+
+        String formatted = tool.postProcessOutput(html, Map.of("code", "cat output/generated.html"));
+
+        assertEquals(HtmlArtifactUtil.HTML_ARTIFACT_NOTICE, formatted);
+    }
+
+    @Test
+    void skillHome_browser_artifact_is_mirrored_into_skill_output_dir() throws Exception {
+        Path skillHome = Files.createTempDirectory(tempDir, "skill-home");
+        Path source = Files.createTempFile(tempDir, "particle-art", ".html");
+        Files.writeString(source, """
+                <!doctype html>
+                <html>
+                  <body><main>artifact</main></body>
+                </html>
+                """);
+
+        when(mockDirectExecutor.executeDirectly(any(), anyList(), any())).thenReturn("ignored\n");
+
+        AtomicReference<ToolResponse> ref = new AtomicReference<>();
+        WorkspaceContext.run("test-session", "user1", "chat1", AutonomyLevel.FULL, "debugger", () -> {
+            ref.set(tool.execute(
+                    ctx(
+                            "use algorithmic art to generate very simple particle system open in browser",
+                            skillHome.toString()),
+                    Map.of("code", "cat " + source, "language", "bash")));
+            return null;
+        });
+
+        ToolResponse r = ref.get();
+        assertTrue(r.success(), "browser preview should succeed: " + r.output());
+
+        Path mirrored = skillHome.resolve("output").resolve(source.getFileName());
+        assertTrue(Files.exists(mirrored), "mirrored artifact missing: " + mirrored);
+        assertEquals(Files.readString(source), Files.readString(mirrored));
+        assertEquals("Opened browser preview: " + mirrored, r.output());
+    }
+
     private ToolExecutionContext ctx() {
+        return ctx(null);
+    }
+
+    private ToolExecutionContext ctx(String rawGoal) {
+        return ctx(rawGoal, null);
+    }
+
+    private ToolExecutionContext ctx(String rawGoal, String skillHome) {
         return new ToolExecutionContext(
                 "test-session",
                 "user1",
@@ -330,9 +423,10 @@ class HostExecToolTest {
                 "trace-1",
                 null,
                 null,
+                rawGoal,
                 null,
                 null,
                 null,
-                null);
+                skillHome);
     }
 }

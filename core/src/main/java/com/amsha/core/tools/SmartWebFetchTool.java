@@ -32,6 +32,8 @@ import com.amsha.core.security.ToolOperation;
 
 import org.jboss.logging.Logger;
 
+import io.quarkus.runtime.LaunchMode;
+
 /**
  * Lightweight web fetch tool that retrieves URL content as plain text.
  * <p>
@@ -70,6 +72,10 @@ public class SmartWebFetchTool implements AgentTool {
 
     @PostConstruct
     void init() {
+        if (LaunchMode.current() == LaunchMode.TEST) {
+            LOG.debug("Skipping SmartWebFetchTool SOCKS proxy initialization in test mode.");
+            return;
+        }
         try {
             socksProxy = new LocalSocksProxy();
             ProxySelector socksSelector = new ProxySelector() {

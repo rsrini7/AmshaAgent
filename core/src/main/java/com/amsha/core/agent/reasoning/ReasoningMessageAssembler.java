@@ -15,14 +15,17 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
 import com.amsha.core.agent.AgentSentinels;
 import com.amsha.core.agent.loop.AgentExecutionContext;
+import com.amsha.core.agent.loop.LoopStuckDetector;
 import com.amsha.core.agent.role.AgentRoleEnum;
 import com.amsha.core.agent.role.ToolCapability;
 import com.amsha.core.security.AutonomyLevel;
+import com.amsha.core.skill.SkillAdaptationManager;
 import com.amsha.core.skill.SkillRegistry;
 import com.amsha.core.tools.AgentTool;
 import com.amsha.core.tools.ToolRegistry;
@@ -41,6 +44,7 @@ public class ReasoningMessageAssembler {
 
     private final ChatHistoryAssembler historyAssembler;
     private final ToolRegistry toolRegistry;
+    private final LoopStuckDetector loopStuckDetector;
 
     @Inject
     ToolSearchIndex toolSearchIndex;
@@ -49,13 +53,18 @@ public class ReasoningMessageAssembler {
     SkillRegistry skillRegistry;
 
     @Inject
-    public ReasoningMessageAssembler(ChatHistoryAssembler historyAssembler, ToolRegistry toolRegistry) {
+    SkillAdaptationManager adaptationManager;
+
+    @Inject
+    public ReasoningMessageAssembler(
+            ChatHistoryAssembler historyAssembler, ToolRegistry toolRegistry, LoopStuckDetector loopStuckDetector) {
         this.historyAssembler = historyAssembler;
         this.toolRegistry = toolRegistry;
+        this.loopStuckDetector = loopStuckDetector;
     }
 
     protected ReasoningMessageAssembler() {
-        this(null, null);
+        this(null, null, null);
     }
 
     public record AssembledMessages(List<ChatMessage> messages, List<ToolSpecification> tools) {}
@@ -83,8 +92,13 @@ public class ReasoningMessageAssembler {
                         && sm.text().contains(AgentSentinels.COMPACTED_SUMMARY_SENTINEL)))
                 .toList();
 
+        Optional<String> stuckHint = loopStuckDetector.detectStuckHint(history, agentRole);
         String finalSystemPrompt =
                 resolveSystemPrompt(assembled, systemPrompt, isWriteIntent, context.isForceFinishRetry());
+        if (stuckHint.isPresent()) {
+            log.infof("[ReasoningAssembler] Injecting loop-stuck hint for session %s (role=%s)", sessionId, agentRole);
+            finalSystemPrompt = finalSystemPrompt + "\n\n" + stuckHint.get();
+        }
 
         List<ChatMessage> messages = new ArrayList<>();
         messages.add(SystemMessage.systemMessage(finalSystemPrompt));
@@ -229,6 +243,12 @@ public class ReasoningMessageAssembler {
                                     + "\nCall scripts directly with full path. Do NOT run prerequisite commands."
                                     + "\nFor non-interactive tasks, use scripts that accept input via flags or stdin."
                                     + "\nChain commands with && (Linux/macOS) or ; (PowerShell) if needed.";
+
+                            // Add adaptation instructions if adaptive mode is enabled
+                            String adaptInstructions = adaptationManager.getAdaptationInstructions(skillHome);
+                            if (!adaptInstructions.isEmpty()) {
+                                description += adaptInstructions;
+                            }
                         }
                     }
                     return ToolSpecification.builder()

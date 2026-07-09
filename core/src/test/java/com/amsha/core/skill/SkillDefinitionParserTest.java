@@ -2,6 +2,8 @@ package com.amsha.core.skill;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import com.amsha.core.agent.reasoning.PromptInstructionLibrary;
+
 import org.junit.jupiter.api.Test;
 
 class SkillDefinitionParserTest {
@@ -31,7 +33,8 @@ class SkillDefinitionParserTest {
         assertEquals(1, def.toolCapabilities().size());
         assertEquals("GITHUB", def.toolCapabilities().get(0));
         assertEquals(8, def.maxIterations());
-        assertEquals("SYSTEM PROMPT INSTRUCTIONS", def.systemPrompt());
+        assertTrue(def.systemPrompt().startsWith(PromptInstructionLibrary.skillExecutionPrecedencePreamble()));
+        assertTrue(def.systemPrompt().contains("SYSTEM PROMPT INSTRUCTIONS"));
     }
 
     @Test
@@ -71,7 +74,8 @@ class SkillDefinitionParserTest {
         SkillDefinition def = parser.parse(doc);
         assertEquals("minimal", def.name());
         assertEquals("", def.description());
-        assertEquals("prompt", def.systemPrompt());
+        assertTrue(def.systemPrompt().startsWith(PromptInstructionLibrary.skillExecutionPrecedencePreamble()));
+        assertTrue(def.systemPrompt().contains("prompt"));
     }
 
     @Test

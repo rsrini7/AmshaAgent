@@ -12,7 +12,6 @@ import com.amsha.persistence.api.RecallMessageDto;
 import com.amsha.persistence.api.RecallSearchQuery;
 import com.amsha.persistence.postgres.jdbi.RecallMemoryJdbiDao;
 
-import org.jboss.logging.Logger;
 import org.jdbi.v3.core.Jdbi;
 
 import io.quarkus.arc.properties.IfBuildProperty;
@@ -21,8 +20,6 @@ import io.quarkus.arc.properties.IfBuildProperty;
 @TieredBackend("postgres")
 @IfBuildProperty(name = "amsha.persistence.backend", stringValue = "postgres")
 public class PostgresRecallMemoryStore implements RecallMemoryStorePort {
-
-    private static final Logger log = Logger.getLogger(PostgresRecallMemoryStore.class);
 
     private final Jdbi jdbi;
 

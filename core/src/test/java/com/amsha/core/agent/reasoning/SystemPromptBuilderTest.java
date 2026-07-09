@@ -1,5 +1,6 @@
 package com.amsha.core.agent.reasoning;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
@@ -12,6 +13,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Stream;
 
 import com.amsha.core.agent.AgentSentinels;
@@ -224,7 +226,8 @@ class SystemPromptBuilderTest {
         when(toolRegistry.findTool(any())).thenReturn(Optional.of(mockTool));
         when(capabilityRegistry.getSupplementalTools("researcher"))
                 .thenReturn(Collections.singleton(ToolCapability.BROWSER_NAVIGATE.toolName()));
-        setField(builder, "contextWindow", 8192);
+        setField(builder, "contextWindow", 128000);
+        setField(builder, "compactPromptEnabled", true);
 
         String result = builder.build(createCtx("s1"), "researcher", "s1", "some goal", false);
 
@@ -257,11 +260,52 @@ class SystemPromptBuilderTest {
     }
 
     @Test
+    void testBuildSystemPrompt_compactModeForSkillRoleOverridesDelegationAndTerminates() throws Exception {
+        when(agentPersonaRegistry.getPersonaPrompt(any(), any())).thenReturn("PERSONA_MARKER");
+        when(promptTemplateEngine.buildSystemPrompt(any(), any(), any(), any())).thenReturn("TOOL_BINDING_MARKER");
+        when(toolRegistry.findTool(any())).thenReturn(Optional.empty());
+        when(roleRegistry.resolvePermittedTools("skill:test-skill"))
+                .thenReturn(Set.of(ToolCapability.SANDBOX_EXEC.toolName()));
+        when(skillRegistry.currentSnapshot()).thenReturn(Collections.emptyList());
+        setField(builder, "contextWindow", 128000);
+        setField(builder, "compactPromptEnabled", true);
+
+        String result = builder.build(createCtx("s1"), "skill:test-skill", "s1", "some goal", false);
+
+        assertTrue(result.contains(PromptInstructionLibrary.skillRoleOverride("test-skill")));
+        assertTrue(result.contains("If you are a `skill:*` role, execute the task yourself"));
+        assertFalse(result.contains("otherwise delegate to 'brahma'"));
+    }
+
+    @Test
+    void testBuildSystemPrompt_treatsSkillRolesAsNonChitchat() throws Exception {
+        when(agentPersonaRegistry.getPersonaPrompt(any(), any())).thenReturn("PERSONA_MARKER");
+        when(promptTemplateEngine.buildSystemPrompt(any(), any(), any(), any())).thenReturn("TOOL_BINDING_MARKER");
+        when(toolRegistry.findTool(any())).thenReturn(Optional.empty());
+        when(roleRegistry.resolvePermittedTools("skill:test-skill"))
+                .thenReturn(Set.of(ToolCapability.HOST_EXEC.toolName()));
+        when(skillRegistry.findByName("test-skill")).thenReturn(Optional.empty());
+        when(skillRegistry.currentSnapshot()).thenReturn(Collections.emptyList());
+        when(intentService.isSimpleConversational(any())).thenReturn(true);
+        setField(builder, "contextWindow", 128000);
+        setField(builder, "compactPromptEnabled", false);
+
+        String result = builder.build(
+                createCtx("s1"), "skill:test-skill", "s1", "use algorithmic art to generate simple flow fields", false);
+
+        assertFalse(result.contains("STRICT MODE - SIMPLE CONVERSATION"));
+        assertTrue(result.contains(PromptInstructionLibrary.skillRoleOverride("test-skill")));
+        assertTrue(result.contains("## Execution Protocol"));
+        assertTrue(result.contains("HARD TOOL OVERRIDE - CROSS-TURN CONTAMINATION PREVENTION"));
+    }
+
+    @Test
     void testBuildSystemPrompt_compactModeWithoutBrowserOmitsRetryRule() throws Exception {
         when(agentPersonaRegistry.getPersonaPrompt(any(), any())).thenReturn("PERSONA_MARKER");
         when(promptTemplateEngine.buildSystemPrompt(any(), any(), any(), any())).thenReturn("TOOL_BINDING_MARKER");
         when(toolRegistry.findTool(any())).thenReturn(Optional.empty());
-        setField(builder, "contextWindow", 8192);
+        setField(builder, "contextWindow", 128000);
+        setField(builder, "compactPromptEnabled", true);
 
         String result = builder.build(createCtx("s1"), "coordinator", "s1", "some goal", false);
 
@@ -291,7 +335,8 @@ class SystemPromptBuilderTest {
         when(agentPersonaRegistry.getPersonaPrompt(any(), any())).thenReturn("PERSONA_MARKER");
         when(promptTemplateEngine.buildSystemPrompt(any(), any(), any(), any())).thenReturn("TOOL_BINDING_MARKER");
         when(toolRegistry.findTool(any())).thenReturn(Optional.empty());
-        setField(builder, "contextWindow", 8192);
+        setField(builder, "contextWindow", 128000);
+        setField(builder, "compactPromptEnabled", true);
 
         String result =
                 builder.build(createCtx("s1"), "researcher", "s1", "lookup latest Spring Boot and Quarkus LTS", false);

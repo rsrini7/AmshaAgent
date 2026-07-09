@@ -36,6 +36,12 @@ public class PreflightState implements RunnerState {
         AgentExecutionContext execCtx = context.executionContext();
         if (!(iteration < execCtx.maxIterations()
                 || (iteration == execCtx.maxIterations() && execCtx.isForceFinishRetry()))) {
+            if (ToolStepResolutionUtils.hasRecentArtifactCompletion(context.history())) {
+                context.setFinalResult(AgentResult.finished(
+                        "The requested artifact was generated and opened successfully.",
+                        List.copyOf(context.history())));
+                return services.completedState();
+            }
             context.setFinalResult(AgentResult.loopExceeded(execCtx.maxIterations(), List.copyOf(context.history())));
             return services.failedState();
         }

@@ -34,10 +34,16 @@
     <!-- NOTE: browser-use__remote-browser removed — requires paid Browser Use Cloud API key.
          See Architecture_Invariants.md §24.5 for SkillsJars cloud dependency guidelines. -->
 
-    <dependency>
+    <!-- <dependency>
       <groupId>com.skillsjars</groupId>
       <artifactId>brunoborges__jdb-agentic-debugger__jdb-debugger</artifactId>
       <version>2026_02_19-4b3ade6</version>
+    </dependency> -->
+
+    <dependency>
+        <groupId>com.skillsjars</groupId>
+        <artifactId>anthropics__skills__algorithmic-art</artifactId>
+        <version>2026_03_06-b0cbd3d</version>
     </dependency>
 
     <!-- Self-Evolution trace capture + extraction -->

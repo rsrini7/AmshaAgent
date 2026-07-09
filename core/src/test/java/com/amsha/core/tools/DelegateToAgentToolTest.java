@@ -130,6 +130,33 @@ class DelegateToAgentToolTest {
     }
 
     @Test
+    void execute_skillRoleIsBlockedFromDelegating() throws Exception {
+        Map<String, Object> params = Map.of(
+                "agent", "brahma",
+                "goal", "write and open the artifact");
+
+        ToolExecutionContext ctx = new ToolExecutionContext(
+                SESSION_ID,
+                USER_ID,
+                CHAT_ID,
+                "skill:algorithmic-art",
+                AutonomyLevel.FULL,
+                "trace-1",
+                null,
+                null,
+                null,
+                null,
+                null,
+                null);
+
+        ToolResponse response = tool.execute(ctx, params);
+
+        assertTrue(response.success());
+        assertTrue(response.output().contains("must execute the task directly"));
+        assertTrue(response.output().contains("Do not delegate"));
+    }
+
+    @Test
     void execute_selfDelegationRedirectsToCoordinator() throws Exception {
         Map<String, Object> params = Map.of(
                 "agent", "coordinator",

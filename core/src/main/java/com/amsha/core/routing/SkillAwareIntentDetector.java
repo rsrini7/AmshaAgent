@@ -5,8 +5,10 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Alternative;
 import jakarta.inject.Inject;
 
+import java.util.Arrays;
 import java.util.List;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 import com.amsha.channel.api.IntentDetector;
 import com.amsha.core.agent.role.AgentRoleEnum;
@@ -61,8 +63,9 @@ public class SkillAwareIntentDetector implements IntentDetector {
         for (CompiledSkillEntry entry : sortedByLength) {
             String name = entry.definition().name();
             if (name != null && !name.isBlank()) {
-                Pattern boundaryPattern =
-                        Pattern.compile("\\b" + Pattern.quote(name) + "\\b", Pattern.CASE_INSENSITIVE);
+                String[] segments = name.split("[-_]");
+                String regexName = Arrays.stream(segments).map(Pattern::quote).collect(Collectors.joining("[\\s_-]+"));
+                Pattern boundaryPattern = Pattern.compile("\\b" + regexName + "\\b", Pattern.CASE_INSENSITIVE);
                 if (boundaryPattern.matcher(userMessage).find()) {
                     return AgentRoleEnum.SKILL_PREFIX + entry.definition().name();
                 }

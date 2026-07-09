@@ -21,6 +21,8 @@ import java.util.Enumeration;
 import java.util.List;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import com.amsha.common.util.LogUtil;
 
@@ -35,6 +37,9 @@ public class SkillsJarSkillProvider implements SkillProvider {
 
     @Inject
     SkillDefinitionParser parser;
+
+    @Inject
+    SkillAdaptationManager adaptationManager;
 
     @Override
     public String sourceName() {
@@ -158,8 +163,8 @@ public class SkillsJarSkillProvider implements SkillProvider {
             while (entries.hasMoreElements()) {
                 JarEntry entry = entries.nextElement();
                 String name = entry.getName();
-                // Only extract files under the same skill dir, skip SKILL.md itself
-                if (name.startsWith(skillDir) && !name.equals(skillMdPath) && !entry.isDirectory()) {
+                // Extract all companion files for the skill, including SKILL.md itself.
+                if (name.startsWith(skillDir) && !entry.isDirectory()) {
                     String relativePath = name.substring(skillDir.length());
                     Path target = amshaHome.resolve(relativePath);
                     Files.createDirectories(target.getParent());
@@ -193,9 +198,39 @@ public class SkillsJarSkillProvider implements SkillProvider {
     private void writeSourceMetadata(Path skillDir, String skillName, JarFile jarFile) {
         try {
             Path metaFile = skillDir.resolve(".skill-source.json");
-            String version = jarFile.getManifest() != null
-                    ? jarFile.getManifest().getMainAttributes().getValue("Bundle-Version")
-                    : "unknown";
+            String version = null;
+            if (jarFile.getManifest() != null) {
+                var attrs = jarFile.getManifest().getMainAttributes();
+                version = attrs.getValue("Bundle-Version");
+                if (version == null) {
+                    version = attrs.getValue("Implementation-Version");
+                }
+                if (version == null) {
+                    version = attrs.getValue("Specification-Version");
+                }
+            }
+            if (version == null) {
+                try {
+                    String fileName = Path.of(jarFile.getName()).getFileName().toString();
+                    if (fileName.endsWith(".jar")) {
+                        fileName = fileName.substring(0, fileName.length() - 4);
+                    }
+                    String prefix = "com.skillsjars." + skillName + "-";
+                    if (fileName.startsWith(prefix)) {
+                        version = fileName.substring(prefix.length());
+                    } else {
+                        int lastHyphen = fileName.lastIndexOf('-');
+                        if (lastHyphen != -1) {
+                            version = fileName.substring(lastHyphen + 1);
+                        }
+                    }
+                } catch (Exception e) {
+                    // Ignore
+                }
+            }
+            if (version == null) {
+                version = "unknown";
+            }
             String json = String.format(
                     "{\n  \"source\": \"skillsjars\",\n  \"skillName\": \"%s\",\n  \"version\": \"%s\",\n  \"jarFile\": \"%s\",\n  \"extractedAt\": \"%s\"\n}",
                     skillName,
@@ -238,21 +273,113 @@ public class SkillsJarSkillProvider implements SkillProvider {
                 String scriptsDir = skillHome + "/scripts";
                 boolean hasScripts = Files.isDirectory(Path.of(scriptsDir));
                 if (hasScripts) {
-                    // Override allowed-tools: map Bash(...) to hostexec(...) for host script access
-                    content = content.replaceAll("(?i)(allowed-tools:.*?)Bash\\(", "$1hostexec(");
+                    if (adaptationManager.isAdaptiveEnabled()) {
+                        // Adaptive mode: let the LLM adapt the skill for the environment
+                        // Only strip conflicting sections, don't add overrides
+                        content = stripConflictingSections(content);
+                        LOG.infof("[SkillsJar] Adaptive mode enabled for '%s' — LLM will adapt", classpathPath);
+                    } else {
+                        // Non-adaptive mode: apply our overrides
+                        content = stripConflictingSections(content);
 
-                    String override = "\n\n# CRITICAL EXECUTION RULES (OVERRIDE ALL BELOW)\n"
-                            + "1. NEVER run prerequisite commands separately — the skill scripts handle discovery and validation internally.\n"
-                            + "2. Call the skill scripts DIRECTLY with ONE host_exec call per task.\n"
-                            + "3. For non-interactive tasks, use scripts that accept input via flags or stdin — avoid interactive/blocking scripts.\n"
-                            + "4. Chain multiple commands with && (Linux/macOS) or && (Windows CMD) or ; (PowerShell) if combining in one call.\n\n";
-                    content = override + content;
+                        // Override allowed-tools: map Bash(...) to hostexec(...) for host script access
+                        content = content.replaceAll("(?i)(allowed-tools:.*?)Bash\\(", "$1hostexec(");
+
+                        String override = "\n\n# CRITICAL EXECUTION RULES (OVERRIDE ALL BELOW)\n"
+                                + "1. NEVER run prerequisite commands separately — the skill scripts handle discovery and validation internally.\n"
+                                + "2. Call the skill scripts DIRECTLY with ONE host_exec call per task.\n"
+                                + "3. For non-interactive tasks, use scripts that accept input via flags or stdin — avoid interactive/blocking scripts.\n"
+                                + "4. Chain multiple commands with && (Linux/macOS) or && (Windows CMD) or ; (PowerShell) if combining in one call.\n\n";
+                        content = override + content;
+                    }
                 }
             }
 
-            skills.add(parser.parse(content, skillHome));
+            SkillDefinition definition = parser.parse(content, skillHome);
+            skills.add(maybeAugmentBrowserPreview(definition, content, skillHome));
         } catch (Exception e) {
             LOG.warnf("Failed to load SkillsJar skill %s: %s", classpathPath, LogUtil.rootMessage(e));
         }
+    }
+
+    /**
+     * Strips SKILL.md sections that encourage the LLM to run prerequisite commands
+     * separately (e.g. "Decision Tree", "Quick Start", "Prerequisites", "Enabling JDWP").
+     * Generic — works for any skill, not specific to any tool.
+     */
+    private static String stripConflictingSections(String content) {
+        // Remove markdown sections whose heading contains conflicting keywords
+        String[] conflictingKeywords = {"decision tree", "quick start", "prerequisites", "enabling "};
+        String[] lines = content.split("\n");
+        StringBuilder result = new StringBuilder();
+        boolean skipping = false;
+        int skipLevel = 0;
+
+        for (String line : lines) {
+            Matcher heading = Pattern.compile("^(#{1,6})\\s+(.+)$").matcher(line);
+            if (heading.matches()) {
+                String title = heading.group(2).toLowerCase();
+                int level = heading.group(1).length();
+                boolean conflict = false;
+                for (String kw : conflictingKeywords) {
+                    if (title.contains(kw)) {
+                        conflict = true;
+                        break;
+                    }
+                }
+                if (conflict) {
+                    skipping = true;
+                    skipLevel = level;
+                    continue;
+                } else if (skipping && level <= skipLevel) {
+                    skipping = false;
+                }
+            }
+            if (!skipping) {
+                result.append(line).append('\n');
+            }
+        }
+        return result.toString();
+    }
+
+    static SkillDefinition maybeAugmentBrowserPreview(SkillDefinition definition, String rawContent, String skillHome) {
+        if (definition == null || rawContent == null || rawContent.isBlank()) {
+            return definition;
+        }
+        if (!shouldEnableBrowserPreview(rawContent)) {
+            return definition;
+        }
+
+        String outputDir = skillHome != null && !skillHome.isBlank() ? skillHome + "/output" : "output";
+        String browserOverride = """
+
+                # BROWSER PREVIEW RULES (OVERRIDE ALL BELOW)
+                1. When you generate HTML, JS, or CSS artifacts, write them into `%s`.
+                2. Read the starter template under `templates/` once as reference, but never open that template file in a browser.
+                3. Do not paste raw HTML into Telegram or the final answer when the artifact is meant for the browser.
+                4. Use `host_exec` to list the files in `%s` and open the generated `.html` artifact with the host's default browser opener (`open` on macOS, `xdg-open` on Linux, `start` on Windows).
+                5. If multiple HTML files exist, open the main viewer file you just created.
+                6. If the browser fails to open, keep the artifact in `%s` and reply with a brief summary only.
+                7. Never dump the generated HTML back into Telegram when a browser preview is possible.
+
+                """;
+        String systemPrompt =
+                String.format(browserOverride, outputDir, outputDir, outputDir, outputDir) + definition.systemPrompt();
+        return new SkillDefinition(
+                definition.id(),
+                definition.name(),
+                definition.description(),
+                definition.triggerPatterns(),
+                definition.toolCapabilities(),
+                definition.maxIterations(),
+                systemPrompt,
+                definition.skillHome());
+    }
+
+    private static boolean shouldEnableBrowserPreview(String rawContent) {
+        return rawContent.contains("<html")
+                || rawContent.contains(".html")
+                || rawContent.contains("open in browser")
+                || rawContent.contains("browser preview");
     }
 }
