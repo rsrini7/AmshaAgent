@@ -21,6 +21,20 @@ interface ChatMessage {
   targetSessionId?: string;
 }
 
+interface ProgressUpdate {
+  phase: string;
+  detail: string;
+}
+
+const HALTED_MESSAGE_PATTERNS = [
+  /session halted by user/i,
+  /halted by user/i,
+  /loop exceeded/i,
+  /budget exceeded/i,
+  /timed out/i,
+  /session halted/i,
+];
+
 @customElement('arc-chat-interface')
 export class ArcChatInterface extends LitElement {
   @consume({ context: arcContext, subscribe: true })
@@ -36,6 +50,10 @@ export class ArcChatInterface extends LitElement {
   @state() private _denyReason = '';
   @state() private _showDenyReason = false;
   @state() private _isTyping = false;
+  @state() private _sessionHalted = false;
+  @state() private _progressPhase = '';
+  @state() private _progressDetail = '';
+  @state() private _progressTrail: ProgressUpdate[] = [];
   @state() private _markdownCache = new Map<string, string>();
 
   private _ws: WsManager | null = null;
@@ -47,6 +65,7 @@ export class ArcChatInterface extends LitElement {
   private _wsTokenFetchedAt = 0;
   private _lastConnectAt = 0;
   private _isReconnecting = false;
+  private _boundProgress = ((e: Event) => this._onProgress(e as CustomEvent<ProgressUpdate>)) as EventListener;
   private static readonly WS_TOKEN_TTL = 30_000;
   private static readonly MIN_CONNECT_INTERVAL = 5000;
 
@@ -55,6 +74,24 @@ export class ArcChatInterface extends LitElement {
       display: flex; flex-direction: column;
       box-sizing: border-box; 
       background: var(--bg-base);
+      min-height: 0;
+    }
+
+    .chat-shell {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .progress-shell {
+      position: sticky;
+      top: 0;
+      z-index: 30;
+      flex-shrink: 0;
+      padding: 16px 24px 12px;
+      background: linear-gradient(180deg, color-mix(in srgb, var(--bg-base) 96%, transparent), color-mix(in srgb, var(--bg-base) 88%, transparent));
+      backdrop-filter: blur(10px);
     }
     
     .chat-header {
@@ -159,6 +196,130 @@ export class ArcChatInterface extends LitElement {
       background: var(--bg-elevated); border-radius: 18px 18px 18px 4px;
       align-self: flex-start; border: 1px solid var(--border);
     }
+    .progress-panel {
+      width: 100%;
+      min-height: 96px;
+      padding: 14px 16px;
+      margin: 0;
+      border: 1px solid color-mix(in srgb, var(--accent-secondary) 28%, var(--border));
+      border-radius: 18px 18px 18px 4px;
+      background:
+        linear-gradient(
+          180deg,
+          color-mix(in srgb, var(--bg-elevated) 90%, transparent),
+          color-mix(in srgb, var(--accent-secondary) 8%, transparent)
+        );
+      box-shadow: 0 10px 28px rgba(0, 0, 0, 0.18);
+      position: relative;
+      overflow: hidden;
+    }
+    .progress-panel::before {
+      content: '';
+      position: absolute;
+      inset: 0 auto auto 0;
+      width: 160px;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, var(--accent-secondary), transparent);
+      animation: progress-sheen 1.8s linear infinite;
+    }
+    @keyframes progress-sheen {
+      0% { transform: translateX(-120%); opacity: 0.35; }
+      100% { transform: translateX(calc(100vw + 120%)); opacity: 0.9; }
+    }
+    .progress-head {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
+    }
+    .progress-copy {
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .progress-kicker {
+      font-size: 10px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+    }
+    .progress-phase {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--text-primary);
+    }
+    .progress-detail {
+      margin-top: 8px;
+      font-size: 13px;
+      line-height: 1.45;
+      color: var(--text-muted);
+      max-width: 72ch;
+      min-height: 1.45em;
+    }
+    .progress-trail {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 12px;
+      max-width: 100%;
+    }
+    .progress-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: 11px;
+      color: var(--text-muted);
+      border: 1px solid var(--border);
+      background: color-mix(in srgb, var(--bg-base) 80%, transparent);
+    }
+    .progress-chip-current {
+      color: var(--text-primary);
+      border-color: color-mix(in srgb, var(--accent-secondary) 40%, var(--border));
+      background: color-mix(in srgb, var(--accent-secondary) 14%, var(--bg-base));
+    }
+    .progress-bar {
+      margin-top: 12px;
+      height: 2px;
+      border-radius: 999px;
+      overflow: hidden;
+      background: color-mix(in srgb, var(--border) 40%, transparent);
+    }
+    .progress-bar > span {
+      display: block;
+      width: 42%;
+      height: 100%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, transparent, var(--accent-secondary), transparent);
+      animation: progress-bar-move 1.5s ease-in-out infinite;
+    }
+    .halt-actions {
+      display: flex;
+      justify-content: flex-end;
+      margin-top: 12px;
+    }
+    .new-session-btn {
+      border: 1px solid color-mix(in srgb, var(--accent-secondary) 35%, var(--border));
+      background: color-mix(in srgb, var(--accent-secondary) 12%, var(--bg-base));
+      color: var(--text-primary);
+      border-radius: 999px;
+      padding: 8px 14px;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: transform 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+    }
+    .new-session-btn:hover {
+      transform: translateY(-1px);
+      border-color: color-mix(in srgb, var(--accent-secondary) 55%, var(--border));
+      background: color-mix(in srgb, var(--accent-secondary) 18%, var(--bg-base));
+    }
+    @keyframes progress-bar-move {
+      0% { transform: translateX(-120%); }
+      100% { transform: translateX(260%); }
+    }
     .dot {
       width: 6px; height: 6px; border-radius: 50%; background: var(--accent);
       opacity: 0.4;
@@ -257,8 +418,8 @@ export class ArcChatInterface extends LitElement {
     }
   }
 
-  private async _loadHistory() {
-    const sid = this._appContext?.sessionId;
+  private async _loadHistory(sessionId?: string) {
+    const sid = sessionId || this._appContext?.sessionId;
     if (!sid) return;
     try {
       const headers: Record<string, string> = {};
@@ -282,21 +443,55 @@ export class ArcChatInterface extends LitElement {
           isApprovalPrompt: m.role === 'assistant' && (m.text.includes('⏸') || m.text.includes('Approval')),
           actionId: m.actionId || null
         }));
+      this._sessionHalted = [...this._messages]
+        .reverse()
+        .some((m) => m.role === 'assistant' && HALTED_MESSAGE_PATTERNS.some((pattern) => pattern.test(m.text)));
       await this.updateComplete;
       this._scrollToBottom();
     } catch (e) {
       console.warn('Amsha Agent: chat history fetch failed', e);
     }
   }
+
+  connectedCallback() {
+    super.connectedCallback();
+    window.addEventListener('amsha-agent-progress', this._boundProgress);
+  }
   
   disconnectedCallback() {
     super.disconnectedCallback();
+    window.removeEventListener('amsha-agent-progress', this._boundProgress);
     if (this._reconnectTimeoutId) {
       clearTimeout(this._reconnectTimeoutId);
       this._reconnectTimeoutId = null;
     }
     this._markdownCache.clear();
+    this._resetProgress();
     this._ws?.disconnect();
+  }
+
+  private _onProgress(event: CustomEvent<ProgressUpdate>) {
+    const phase = event.detail?.phase?.trim();
+    const detail = event.detail?.detail?.trim() || '';
+    if (!phase && !detail) return;
+
+    this._progressPhase = phase || this._progressPhase || 'Working';
+    this._progressDetail = detail;
+
+    const next = { phase: this._progressPhase, detail: this._progressDetail };
+    const last = this._progressTrail[this._progressTrail.length - 1];
+    if (!last || last.phase !== next.phase || last.detail !== next.detail) {
+      this._progressTrail = [...this._progressTrail, next].slice(-4);
+    }
+
+    this._isTyping = true;
+    this._scrollToBottom();
+  }
+
+  private _resetProgress() {
+    this._progressPhase = '';
+    this._progressDetail = '';
+    this._progressTrail = [];
   }
 
   private async _connect() {
@@ -398,6 +593,7 @@ export class ArcChatInterface extends LitElement {
       this._wsStatus = 'open';
       this._connecting = false;
       this._isTyping = false;
+      this._resetProgress();
       
       // We now have the server-assigned internal session ID
       if (frame.sessionId) {
@@ -408,7 +604,7 @@ export class ArcChatInterface extends LitElement {
           }));
         }
         // Always reload history on connect/reconnect (handles page refresh)
-        this._loadHistory();
+        this._loadHistory(frame.sessionId || this._appContext?.sessionId);
       }
     } else if (frame.type === 'session_terminated') {
       if (this._intentionalClose) return;
@@ -418,23 +614,35 @@ export class ArcChatInterface extends LitElement {
         this._ws = null;
       }
       this._wsStatus = 'closed';
+      this._sessionHalted = true;
+      this._resetProgress();
     } else if (frame.type === 'message' && frame.role === 'assistant') {
-      this._isTyping = false;
-      this._awaitingApproval = false;
-      this._showDenyReason = false;
-      
       const isApproval = frame.approval || frame.text.includes('⏸');
-      
+      this._isTyping = false;
+      this._showDenyReason = false;
+
       this._messages = [...this._messages, {
-        id: crypto.randomUUID(), 
-        role: 'assistant', 
-        text: frame.text, 
-        timestamp: frame.timestamp || Date.now(), 
+        id: crypto.randomUUID(),
+        role: 'assistant',
+        text: frame.text,
+        timestamp: frame.timestamp || Date.now(),
         isApprovalPrompt: !!isApproval,
         approvalData: frame.approval || null,
         targetSessionId: frame.sessionId || null
       }];
-      if (isApproval) this._awaitingApproval = true;
+      this._awaitingApproval = !!isApproval;
+      if (frame.text && HALTED_MESSAGE_PATTERNS.some((pattern) => pattern.test(frame.text))) {
+        this._sessionHalted = true;
+      } else if (!isApproval) {
+        this._sessionHalted = false;
+      }
+      if (isApproval) {
+        this._progressPhase = 'Waiting for approval';
+        this._progressDetail = 'Approve or deny the tool request';
+        this._progressTrail = [...this._progressTrail, { phase: this._progressPhase, detail: this._progressDetail }].slice(-4);
+      } else {
+        this._resetProgress();
+      }
       // Scroll to bottom after new message
       this._scrollToBottom();
     }
@@ -446,8 +654,41 @@ export class ArcChatInterface extends LitElement {
     this._messages = [...this._messages, { id: crypto.randomUUID(), role: 'user', text, timestamp: Date.now() }];
     this._ws?.send({ type: 'message', text });
     this._input = '';
+    this._progressPhase = 'Thinking';
+    this._progressDetail = 'Preparing the first response';
+    this._progressTrail = [{ phase: this._progressPhase, detail: this._progressDetail }];
+    this._sessionHalted = false;
     this._isTyping = true;
     this._scrollToBottom();
+  }
+
+  public startNewSession(platformId: string) {
+    if (this._reconnectTimeoutId) {
+      clearTimeout(this._reconnectTimeoutId);
+      this._reconnectTimeoutId = null;
+    }
+
+    this._intentionalClose = true;
+    if (this._ws) {
+      this._ws.disconnect();
+      this._ws = null;
+    }
+
+    this._messages = [];
+    this._input = '';
+    this._awaitingApproval = false;
+    this._denyReason = '';
+    this._showDenyReason = false;
+    this._isTyping = false;
+    this._sessionHalted = false;
+    this._resetProgress();
+
+    this.platformId = platformId;
+    sessionStorage.setItem('amsha-platform-id', platformId);
+    this._intentionalClose = false;
+    this._isReconnecting = true;
+    this._connecting = true;
+    this._connect();
   }
   
   private _sendApprove(msg: ChatMessage) {
@@ -534,9 +775,44 @@ export class ArcChatInterface extends LitElement {
   }
 
   render() {
+    const showProgress = this._isTyping || this._awaitingApproval || this._progressTrail.length > 0;
+    const phaseLabel = this._progressPhase || (this._awaitingApproval ? 'Waiting for approval' : 'Working');
+    const detailLabel = this._progressDetail || (this._awaitingApproval ? 'Approve or deny the tool request' : 'Processing the request');
+
     return html`
-      <div class="messages">
-        ${this._messages.map(m => m.role === 'system' ? html`
+      <div class="chat-shell">
+        <div class="progress-shell">
+          ${showProgress ? html`
+            <div class="progress-panel">
+              <div class="progress-head">
+                <div class="pulse-dot"></div>
+                <div class="progress-copy">
+                  <div class="progress-kicker">Live progress</div>
+                  <div class="progress-phase">${phaseLabel}</div>
+                </div>
+              </div>
+              <div class="progress-detail">${detailLabel}</div>
+              ${this._progressTrail.length > 1 ? html`
+                <div class="progress-trail">
+                  ${this._progressTrail.map((step, index) => html`
+                    <span class="progress-chip ${index === this._progressTrail.length - 1 ? 'progress-chip-current' : ''}">
+                      ${step.phase}
+                    </span>
+                  `)}
+                </div>
+              ` : nothing}
+              <div class="progress-bar"><span></span></div>
+              ${this._sessionHalted ? html`
+                <div class="halt-actions">
+                  <button class="new-session-btn" @click=${() => this.startNewSession(crypto.randomUUID())}>New Session</button>
+                </div>
+              ` : nothing}
+            </div>
+          ` : nothing}
+        </div>
+
+        <div class="messages">
+          ${this._messages.map(m => m.role === 'system' ? html`
             <div class="msg-group msg-group-system">
                <div class="bubble bubble-system">${m.text}</div>
             </div>
@@ -549,34 +825,29 @@ export class ArcChatInterface extends LitElement {
                <div class="timestamp timestamp-${m.role}">${this._formatTime(m.timestamp)}</div>
             </div>
           `)}
+        </div>
         
-        ${this._isTyping ? html`
-          <div class="typing">
-            <div class="dot"></div><div class="dot"></div><div class="dot"></div>
+        <div class="input-wrapper">
+          <div class="input-area">
+            <div class="attach-btn" aria-label="Attach file" role="button" tabindex="0">📎</div>
+            <textarea
+              aria-label="Message Amsha Agent"
+              placeholder="Ask Amsha Agent anything…"
+              .value="${this._input}"
+              ?disabled="${this._awaitingApproval}"
+              rows="1"
+              @input="${(e: Event) => {
+                 this._input = (e.target as HTMLTextAreaElement).value;
+                 const el = e.target as HTMLTextAreaElement;
+                 el.style.height = 'auto';
+                 el.style.height = el.scrollHeight + 'px';
+              }}"
+              @keydown="${(e: KeyboardEvent) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); this._send(); } }}"
+            ></textarea>
+            <button aria-label="Send message" class="send-btn" ?disabled="${!this._input.trim() || this._wsStatus !== 'open' || this._awaitingApproval}" @click="${this._send}">
+               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+            </button>
           </div>
-        ` : nothing}
-      </div>
-      
-      <div class="input-wrapper">
-        <div class="input-area">
-          <div class="attach-btn" aria-label="Attach file" role="button" tabindex="0">📎</div>
-          <textarea
-            aria-label="Message Amsha Agent"
-            placeholder="Ask Amsha Agent anything…"
-            .value="${this._input}"
-            ?disabled="${this._awaitingApproval}"
-            rows="1"
-            @input="${(e: Event) => {
-               this._input = (e.target as HTMLTextAreaElement).value;
-               const el = e.target as HTMLTextAreaElement;
-               el.style.height = 'auto';
-               el.style.height = el.scrollHeight + 'px';
-            }}"
-            @keydown="${(e: KeyboardEvent) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); this._send(); } }}"
-          ></textarea>
-          <button aria-label="Send message" class="send-btn" ?disabled="${!this._input.trim() || this._wsStatus !== 'open' || this._awaitingApproval}" @click="${this._send}">
-             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
-          </button>
         </div>
       </div>
     `;

@@ -269,14 +269,37 @@ export class ArcShell extends LitElement {
 
   // SSE event handlers
   private _handleSseEvent(event: any) {
-    if (event.type === 'status_change') {
-       this._fetchAgents();
-       this._fetchApprovals();
-    } else if (event.type === 'AWAITING_APPROVAL') {
-       this._handleHitlEvent(event);
-    } else if (event.type === 'agent_status') {
-       this._handleAgentEvent(event);
+    if (event.sessionId && this._sessionId && event.sessionId !== this._sessionId) {
+      return;
     }
+
+    const eventType = event.eventType ?? event.type;
+    if (eventType === 'status_change') {
+      this._fetchAgents();
+      this._fetchApprovals();
+    } else if (eventType === 'progress') {
+      this._publishProgress(event.agentName || 'Working', event.payload || '');
+    } else if (
+      eventType === 'AWAITING_APPROVAL' ||
+      eventType === 'APPROVED' ||
+      eventType === 'DENIED' ||
+      eventType === 'RESUMED'
+    ) {
+      this._handleHitlEvent(event);
+    } else if (eventType === 'agent_status') {
+      this._handleAgentEvent(event);
+    }
+  }
+
+  private _publishProgress(phase: string, detail: string) {
+    window.dispatchEvent(
+      new CustomEvent('amsha-agent-progress', {
+        detail: {
+          phase,
+          detail
+        }
+      })
+    );
   }
 
     // ─── SSE Event Handlers ──────────────────────────────────────────────────
@@ -310,6 +333,25 @@ export class ArcShell extends LitElement {
             (a.toolName === event.toolName || !event.toolName)
           )
       );
+    }
+
+    this._publishHitlProgress(event);
+  }
+
+  private _publishHitlProgress(event: any) {
+    switch (event?.type) {
+      case 'AWAITING_APPROVAL':
+        this._publishProgress('Waiting for approval', 'Approve or deny the tool request');
+        break;
+      case 'APPROVED':
+        this._publishProgress('Approval granted', 'Tool request approved. Resuming work.');
+        break;
+      case 'DENIED':
+        this._publishProgress('Approval denied', 'Tool request denied.');
+        break;
+      case 'RESUMED':
+        this._publishProgress('Resuming work', 'Picking up where the agent left off.');
+        break;
     }
   }
 
@@ -365,17 +407,11 @@ export class ArcShell extends LitElement {
     this._sseManager = new SseManager(
       `/api/v1/chat/stream?sessionId=${encodeURIComponent(this._sessionId)}`,
       this._apiKey,
-      (event: AgentEvent) => {
-        if (event.eventType === 'status_change') {
-          this._fetchAgents();
-          this._fetchApprovals();
-        }
-        this._handleSseEvent(event);
-      },
-        (status) => {
-          const wasDown = this._sseStatus !== 'connected';
-          this._sseStatus = status;
-          this._updateContext();
+      (event: AgentEvent) => this._handleSseEvent(event),
+      (status) => {
+        const wasDown = this._sseStatus !== 'connected';
+        this._sseStatus = status;
+        this._updateContext();
           if (wasDown && status === 'connected') {
             this._fetchAgents();
             this._fetchApprovals();

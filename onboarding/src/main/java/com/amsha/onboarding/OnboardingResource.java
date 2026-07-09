@@ -86,6 +86,15 @@ public class OnboardingResource {
     @Inject
     AuditService auditService;
 
+    @ConfigProperty(name = "amsha.llm.provider", defaultValue = "groq")
+    String configuredProvider;
+
+    @ConfigProperty(name = "amsha.llm.vault-priority", defaultValue = "false")
+    boolean vaultPriority;
+
+    @ConfigProperty(name = "amsha.ui.skip-onboarding", defaultValue = "false")
+    boolean skipOnboarding;
+
     @ConfigProperty(name = "amsha.api.keys.internal", defaultValue = "key-internal-changeme")
     String internalApiKey;
 
@@ -110,9 +119,12 @@ public class OnboardingResource {
         String sid = resolveSessionId(cookie, headers);
         OnboardingState state = registry.getOrCreate(sid);
 
-        if (state.currentStep == OnboardingState.Step.WELCOME && vault.systemKeyExists(VaultConstants.LLM_API_KEY)) {
+        if (state.currentStep == OnboardingState.Step.WELCOME && (skipOnboarding || backendLlmConfigured())) {
             state.currentStep = OnboardingState.Step.COMPLETE;
             state.credentialsValidated = true;
+            if (state.selectedProvider == null || state.selectedProvider.isBlank()) {
+                state.selectedProvider = configuredProvider;
+            }
         }
 
         log.infof("status: sid=%s, currentStep=%s", sid, state.currentStep);
@@ -129,6 +141,41 @@ public class OnboardingResource {
             rb.cookie(createApiCookie(internalApiKey));
         }
         return rb.build();
+    }
+
+    private boolean backendLlmConfigured() {
+        if (skipOnboarding) {
+            return true;
+        }
+
+        if (vault.systemKeyExists(VaultConstants.LLM_API_KEY)) {
+            return true;
+        }
+
+        String provider = configuredProvider != null ? configuredProvider.trim() : "";
+        if (provider.isBlank()) {
+            return false;
+        }
+
+        if (provider.equalsIgnoreCase("ollama")
+                || provider.equalsIgnoreCase("claude-code")
+                || provider.equalsIgnoreCase("omlx")
+                || provider.equalsIgnoreCase("llamacpp")) {
+            return true;
+        }
+
+        String apiKey = System.getProperty("AMSHA_LLM_API_KEY", System.getenv("AMSHA_LLM_API_KEY"));
+        if (apiKey != null && !apiKey.isBlank()) {
+            return true;
+        }
+
+        if (!vaultPriority && provider.equalsIgnoreCase("infinite-loop")) {
+            String providers = System.getProperty(
+                    "AMSHA_INFINITE_LOOP_LLM_PROVIDERS", System.getenv("AMSHA_INFINITE_LOOP_LLM_PROVIDERS"));
+            return providers != null && !providers.isBlank();
+        }
+
+        return false;
     }
 
     @POST

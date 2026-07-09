@@ -129,6 +129,8 @@ deployment/           ← Build-time: custom CDI scope, MCP reflection
 ui/                   ← Lit 3.x + TypeScript web frontend
 ```
 
+Set `AMSHA_UI_SKIP_ONBOARDING=true` if you want the web UI to skip the setup wizard when the backend is already configured.
+
 ---
 
 ## Architecture at a Glance

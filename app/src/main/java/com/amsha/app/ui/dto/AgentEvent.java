@@ -1,3 +1,3 @@
 package com.amsha.app.ui.dto;
 
-public record AgentEvent(String eventType, String agentName, String payload) {}
+public record AgentEvent(String sessionId, String eventType, String agentName, String payload) {}
