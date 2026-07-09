@@ -46,11 +46,14 @@ public class PostgresArchivalMemoryStore implements ArchivalMemoryStorePort {
     public List<ArchivalChunkDto> search(ArchivalSearchQuery query) {
         boolean chunkTypesEmpty =
                 query.chunkTypes() == null || query.chunkTypes().isEmpty();
-        List<String> chunkTypes = chunkTypesEmpty ? List.of("") : List.copyOf(query.chunkTypes());
+        List<String> chunkTypes = chunkTypesEmpty ? List.of() : List.copyOf(query.chunkTypes());
 
-        List<ArchivalChunkDto> results = jdbi.withExtension(
-                ArchivalMemoryJdbiDao.class,
-                dao -> dao.search(query.userId(), query.query(), query.limit(), chunkTypesEmpty, chunkTypes));
+        List<ArchivalChunkDto> results = jdbi.withExtension(ArchivalMemoryJdbiDao.class, dao -> {
+            if (chunkTypesEmpty) {
+                return dao.searchAllTypes(query.userId(), query.query(), query.limit());
+            }
+            return dao.searchByTypes(query.userId(), query.query(), query.limit(), chunkTypes);
+        });
         log.debugf("[Archival] Search user=%s query='%s' → %d results", query.userId(), query.query(), results.size());
         return results;
     }

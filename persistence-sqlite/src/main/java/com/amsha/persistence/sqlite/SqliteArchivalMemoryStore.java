@@ -55,7 +55,7 @@ public class SqliteArchivalMemoryStore implements ArchivalMemoryStorePort {
     public List<ArchivalChunkDto> search(ArchivalSearchQuery query) {
         boolean chunkTypesEmpty =
                 query.chunkTypes() == null || query.chunkTypes().isEmpty();
-        List<String> chunkTypes = chunkTypesEmpty ? List.of("") : List.copyOf(query.chunkTypes());
+        List<String> chunkTypes = chunkTypesEmpty ? List.of() : List.copyOf(query.chunkTypes());
 
         // BM25-only path: useVector=false or vector unavailable
         if (!query.useVector() || !vectorIngestion.isVectorAvailable()) {
@@ -108,8 +108,12 @@ public class SqliteArchivalMemoryStore implements ArchivalMemoryStorePort {
 
     private List<ArchivalChunkDto> bm25Search(
             String userId, String query, int limit, boolean chunkTypesEmpty, List<String> chunkTypes) {
-        return jdbi.withExtension(
-                ArchivalMemoryJdbiDao.class, dao -> dao.search(userId, query, limit, chunkTypesEmpty, chunkTypes));
+        return jdbi.withExtension(ArchivalMemoryJdbiDao.class, dao -> {
+            if (chunkTypesEmpty) {
+                return dao.searchAllTypes(userId, query, limit);
+            }
+            return dao.searchByTypes(userId, query, limit, chunkTypes);
+        });
     }
 
     /**

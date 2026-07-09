@@ -12,7 +12,6 @@ import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -20,7 +19,6 @@ import com.amsha.channel.api.ChannelMessage;
 import com.amsha.channel.api.ChannelServices;
 import com.amsha.channel.api.ChannelType;
 import com.amsha.channel.api.ChannelUser;
-import com.amsha.channel.api.hitl.PendingApprovalChecker;
 import com.amsha.common.util.LogUtil;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
@@ -40,17 +38,11 @@ public class WebChatEndpoint {
 
     private static final Logger log = Logger.getLogger(WebChatEndpoint.class);
 
-    // Sessions currently undergoing termination (keyed by amshaSessionId)
-    private final Set<String> terminatingSessions = ConcurrentHashMap.newKeySet();
-
     @Inject
     WebSocketSessionStore sessionStore;
 
     @Inject
     ChannelServices channelServices;
-
-    @Inject
-    PendingApprovalChecker pendingApprovalChecker;
 
     @Inject
     WsTokenStore wsTokenStore;
@@ -222,29 +214,11 @@ public class WebChatEndpoint {
             sessionStore.unregister(platformId);
         }
 
-        // Terminate using Amsha Agent sessionId - not platformId (§78-fix-2)
-        if (amshaSessionId != null && terminatingSessions.add(amshaSessionId)) {
-            try {
-                // HITL sessions must survive WebSocket disconnects - user may reconnect
-                // from another tab or device to approve/deny.
-                if (pendingApprovalChecker.hasPendingApproval(amshaSessionId)) {
-                    log.infof(
-                            "WebSocket %s: connId=%s amshaSession=%s - skipping termination (AWAITING_APPROVAL pending)",
-                            reason, connId, amshaSessionId);
-                    return; // SessionReaper handles cleanup after HITL timeout
-                }
-
-                // Notify UI that this is an intentional server-side termination
-                conn.sendText("{\"type\":\"session_terminated\"}").subscribe().with(v -> {}, err -> {});
-
-                channelServices.terminateSession(amshaSessionId);
-                log.infof("WebSocket %s: connId=%s amshaSession=%s terminated", reason, connId, amshaSessionId);
-            } finally {
-                terminatingSessions.remove(amshaSessionId);
-            }
-        } else if (amshaSessionId != null) {
-            log.debugf(
-                    "WebSocket %s: connId=%s amshaSession=%s - termination already in progress",
+        // A browser refresh or tab close must not terminate the session.
+        // The workspace continues running and will be reattached on reconnect.
+        if (amshaSessionId != null) {
+            log.infof(
+                    "WebSocket %s: connId=%s amshaSession=%s disconnected - session preserved",
                     reason, connId, amshaSessionId);
         } else {
             log.debugf(

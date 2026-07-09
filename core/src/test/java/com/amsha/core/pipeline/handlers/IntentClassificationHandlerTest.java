@@ -30,6 +30,7 @@ import com.amsha.core.security.DestructiveVocabularyFilter;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 
 class IntentClassificationHandlerTest {
 
@@ -109,5 +110,21 @@ class IntentClassificationHandlerTest {
         handler.handle(context);
 
         verify(classifier).classify("who am i");
+    }
+
+    @Test
+    void testHandle_routesSelfEvolveIntentToCoordinator() {
+        ChannelUser user = new ChannelUser("u1", "u1", "user", ChannelType.TELEGRAM);
+        ChannelMessage msg = new ChannelMessage.TelegramMessage(
+                user, "trigger self_evolve_reflect to synthesize behavioral directives", "c1", Instant.now());
+        MessageContext context = new MessageContext("c1", user, msg);
+
+        when(intentDetector.isSelfEvolveIntent(anyString())).thenReturn(true);
+
+        handler.handle(context);
+
+        assertEquals(
+                AgentRoleEnum.COORDINATOR.toScopedName(), context.getAgentRole().get());
+        verify(classifier, Mockito.never()).classify(anyString());
     }
 }

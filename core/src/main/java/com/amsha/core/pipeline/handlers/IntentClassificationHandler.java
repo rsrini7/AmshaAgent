@@ -111,6 +111,13 @@ public class IntentClassificationHandler implements MessageHandler {
             return AgentRoleEnum.COORDINATOR.toScopedName();
         }
 
+        if (intentDetector.isSelfEvolveIntent(classificationInput)) {
+            log.infof(
+                    "Self-evolve or directive-status request detected for chat %s - routing to coordinator",
+                    context.getChatId());
+            return AgentRoleEnum.COORDINATOR.toScopedName();
+        }
+
         String previousRole = roleCache.findLatestRole(sid).orElse(null);
         boolean isFollowUpHeuristic = intentDetector.isFollowUpHeuristic(classificationInput);
 

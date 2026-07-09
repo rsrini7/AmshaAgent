@@ -34,23 +34,37 @@ public interface ArchivalMemoryJdbiDao {
     void upsert(@BindMethods ArchivalChunkDto dto);
 
     @SqlQuery("""
-        SELECT chunk_id AS "chunkId", user_id AS "userId", content, chunk_type AS "chunkType",
-               source_session AS "sourceSession", source_message AS "sourceMessage",
-               tags, confidence, access_count AS "accessCount",
-               created_at AS "createdAt", updated_at AS "updatedAt"
-        FROM archival_chunks c
-        JOIN archival_chunks_fts fts ON c.rowid = fts.rowid
-        WHERE c.user_id = :userId
-          AND (:chunkTypesEmpty = 1 OR c.chunk_type IN (<chunkTypes>))
-          AND archival_chunks_fts MATCH :query
-        ORDER BY rank
-        LIMIT :limit
-        """)
-    List<ArchivalChunkDto> search(
+            SELECT chunk_id AS "chunkId", user_id AS "userId", content, chunk_type AS "chunkType",
+                   source_session AS "sourceSession", source_message AS "sourceMessage",
+                   tags, confidence, access_count AS "accessCount",
+                   created_at AS "createdAt", updated_at AS "updatedAt"
+            FROM archival_chunks c
+            JOIN archival_chunks_fts fts ON c.rowid = fts.rowid
+            WHERE c.user_id = :userId
+              AND archival_chunks_fts MATCH :query
+            ORDER BY rank
+            LIMIT :limit
+            """)
+    List<ArchivalChunkDto> searchAllTypes(
+            @Bind("userId") String userId, @Bind("query") String query, @Bind("limit") int limit);
+
+    @SqlQuery("""
+            SELECT chunk_id AS "chunkId", user_id AS "userId", content, chunk_type AS "chunkType",
+                   source_session AS "sourceSession", source_message AS "sourceMessage",
+                   tags, confidence, access_count AS "accessCount",
+                   created_at AS "createdAt", updated_at AS "updatedAt"
+            FROM archival_chunks c
+            JOIN archival_chunks_fts fts ON c.rowid = fts.rowid
+            WHERE c.user_id = :userId
+              AND c.chunk_type IN (<chunkTypes>)
+              AND archival_chunks_fts MATCH :query
+            ORDER BY rank
+            LIMIT :limit
+            """)
+    List<ArchivalChunkDto> searchByTypes(
             @Bind("userId") String userId,
             @Bind("query") String query,
             @Bind("limit") int limit,
-            @Bind("chunkTypesEmpty") boolean chunkTypesEmpty,
             @Bind("chunkTypes") List<String> chunkTypes);
 
     @SqlQuery("""

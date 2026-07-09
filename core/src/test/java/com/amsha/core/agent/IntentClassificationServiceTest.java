@@ -97,4 +97,17 @@ class IntentClassificationServiceTest {
         assertFalse(intentDetector.isResumeCommand("run it"));
         assertFalse(intentDetector.isResumeCommand("do it"));
     }
+
+    @Test
+    void testSelfEvolveIntentDetection() {
+        assertTrue(
+                intentDetector.isSelfEvolveIntent("trigger self_evolve_reflect to synthesize behavioral directives"));
+        assertTrue(intentDetector.isSelfEvolveIntent("what is the current directive status"));
+        assertTrue(intentDetector.isSelfEvolveIntent("synthesize behavioral directives"));
+
+        assertFalse(intentDetector.isSelfEvolveIntent("show me current status"));
+        assertFalse(intentDetector.isSelfEvolveIntent("reflect on the code"));
+        assertFalse(intentDetector.isSelfEvolveIntent(null));
+        assertFalse(intentDetector.isSelfEvolveIntent(""));
+    }
 }

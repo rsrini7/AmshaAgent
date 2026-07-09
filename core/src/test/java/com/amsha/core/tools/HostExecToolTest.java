@@ -29,7 +29,6 @@ import com.amsha.core.security.ToolOperation;
 import com.amsha.core.util.HtmlArtifactUtil;
 
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
 import org.mockito.ArgumentCaptor;
 
 import io.quarkus.test.InjectMock;
@@ -44,9 +43,6 @@ class HostExecToolTest {
 
     @InjectMock
     DirectExecutor mockDirectExecutor;
-
-    @TempDir
-    Path tempDir;
 
     private static final String TRUNCATION_SUFFIX = "[output truncated at max output chars limit]";
 
@@ -375,6 +371,7 @@ class HostExecToolTest {
 
     @Test
     void skillHome_browser_artifact_is_mirrored_into_skill_output_dir() throws Exception {
+        Path tempDir = Files.createTempDirectory("host-exec-test-");
         Path skillHome = Files.createTempDirectory(tempDir, "skill-home");
         Path source = Files.createTempFile(tempDir, "particle-art", ".html");
         Files.writeString(source, """

@@ -11,6 +11,7 @@ import jakarta.ws.rs.GET;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.PathParam;
 import jakarta.ws.rs.Produces;
+import jakarta.ws.rs.QueryParam;
 import jakarta.ws.rs.core.MediaType;
 
 import java.time.Duration;
@@ -52,20 +53,28 @@ public class ChatStreamResource {
 
     public void onStateChanged(@Observes AgentStateChangedEvent event) {
         processor.onNext(new AgentEvent(
+                event.sessionId(),
                 "status_change",
                 event.agentName(),
                 event.newStatus() + (event.currentTask() != null ? " : " + event.currentTask() : "")));
+    }
+
+    public void onAgentEvent(@Observes AgentEvent event) {
+        if (event == null || event.sessionId() == null || event.eventType() == null) {
+            return;
+        }
+        processor.onNext(event);
     }
 
     @GET
     @Produces(MediaType.SERVER_SENT_EVENTS)
     @RestStreamElementType(MediaType.APPLICATION_JSON)
     @Operation(summary = "Stream agent status changes and keep-alive heartbeats via SSE")
-    public Multi<AgentEvent> stream() {
+    public Multi<AgentEvent> stream(@QueryParam("sessionId") String sessionId) {
         Multi<AgentEvent> heartbeat = Multi.createFrom()
                 .ticks()
                 .every(Duration.ofSeconds(20))
-                .map(t -> new AgentEvent("heartbeat", "system", "keep-alive"));
+                .map(t -> new AgentEvent(sessionId, "heartbeat", "system", "keep-alive"));
 
         // hotStream is shared - each subscriber gets their own downstream from the broadcast
         return Multi.createBy().merging().streams(hotStream, heartbeat);

@@ -34,22 +34,35 @@ public interface ArchivalMemoryJdbiDao {
     void upsert(@BindMethods ArchivalChunkDto dto);
 
     @SqlQuery("""
-        SELECT chunk_id AS "chunkId", user_id AS "userId", content, chunk_type AS "chunkType",
-               source_session AS "sourceSession", source_message AS "sourceMessage",
-               tags, confidence, access_count AS "accessCount",
-               created_at AS "createdAt", updated_at AS "updatedAt"
-        FROM archival_chunks
-        WHERE user_id = :userId
-          AND (:chunkTypesEmpty = true OR chunk_type IN (<chunkTypes>))
-          AND content_tsv @@ plainto_tsquery('english', :query)
-        ORDER BY ts_rank(content_tsv, plainto_tsquery('english', :query)) DESC
-        LIMIT :limit
-        """)
-    List<ArchivalChunkDto> search(
+            SELECT chunk_id AS "chunkId", user_id AS "userId", content, chunk_type AS "chunkType",
+                   source_session AS "sourceSession", source_message AS "sourceMessage",
+                   tags, confidence, access_count AS "accessCount",
+                   created_at AS "createdAt", updated_at AS "updatedAt"
+            FROM archival_chunks
+            WHERE user_id = :userId
+              AND content_tsv @@ plainto_tsquery('english', :query)
+            ORDER BY ts_rank(content_tsv, plainto_tsquery('english', :query)) DESC
+            LIMIT :limit
+            """)
+    List<ArchivalChunkDto> searchAllTypes(
+            @Bind("userId") String userId, @Bind("query") String query, @Bind("limit") int limit);
+
+    @SqlQuery("""
+            SELECT chunk_id AS "chunkId", user_id AS "userId", content, chunk_type AS "chunkType",
+                   source_session AS "sourceSession", source_message AS "sourceMessage",
+                   tags, confidence, access_count AS "accessCount",
+                   created_at AS "createdAt", updated_at AS "updatedAt"
+            FROM archival_chunks
+            WHERE user_id = :userId
+              AND chunk_type IN (<chunkTypes>)
+              AND content_tsv @@ plainto_tsquery('english', :query)
+            ORDER BY ts_rank(content_tsv, plainto_tsquery('english', :query)) DESC
+            LIMIT :limit
+            """)
+    List<ArchivalChunkDto> searchByTypes(
             @Bind("userId") String userId,
             @Bind("query") String query,
             @Bind("limit") int limit,
-            @Bind("chunkTypesEmpty") boolean chunkTypesEmpty,
             @Bind("chunkTypes") List<String> chunkTypes);
 
     @SqlQuery("""

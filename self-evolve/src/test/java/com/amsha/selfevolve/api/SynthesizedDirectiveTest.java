@@ -8,9 +8,31 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.Instant;
 
+import org.jdbi.v3.core.mapper.reflect.ColumnName;
 import org.junit.jupiter.api.Test;
 
 class SynthesizedDirectiveTest {
+
+    @Test
+    void sourceRecordIdsJson_hasJdbiColumnMapping() throws Exception {
+        var constructor = SynthesizedDirective.class.getDeclaredConstructor(
+                String.class,
+                String.class,
+                String.class,
+                DirectiveState.class,
+                double.class,
+                String.class,
+                String.class,
+                int.class,
+                int.class,
+                Instant.class,
+                Instant.class);
+        var sourceRecordIds = constructor.getParameters()[5];
+        assertEquals("sourceRecordIdsJson", sourceRecordIds.getName());
+        assertEquals(
+                "source_record_ids",
+                sourceRecordIds.getAnnotation(ColumnName.class).value());
+    }
 
     @Test
     void create_setsCandidiateState() {

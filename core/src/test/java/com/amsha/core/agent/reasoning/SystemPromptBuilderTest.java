@@ -210,6 +210,20 @@ class SystemPromptBuilderTest {
         assertTrue(result.contains("Do NOT call"), "Should forbid web search for time");
     }
 
+    @Test
+    void testBuildSystemPrompt_containsSelfEvolveSingleActionRule() {
+        // Arrange
+        when(agentPersonaRegistry.getPersonaPrompt(any(), any())).thenReturn("MOCK_PERSONA");
+
+        // Act
+        String result = builder.build(createCtx("s1"), "coordinator", "s1", "show me current directive status", false);
+
+        // Assert
+        assertTrue(result.contains("self_evolve_reflect"), "Should mention the self-evolve tool");
+        assertTrue(result.contains("single-action tool"), "Should forbid batching self-evolve actions");
+        assertTrue(result.contains("Never batch"), "Should explicitly block synthesize/status batching");
+    }
+
     private void setField(Object target, String name, Object value) throws Exception {
         Field field = target.getClass().getDeclaredField(name);
         field.setAccessible(true);

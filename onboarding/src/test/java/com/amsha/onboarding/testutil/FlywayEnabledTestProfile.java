@@ -15,6 +15,7 @@ public class FlywayEnabledTestProfile implements QuarkusTestProfile {
     public Map<String, String> getConfigOverrides() {
         return Map.of(
                 "quarkus.flyway.enabled", "true",
-                "quarkus.flyway.migrate-at-start", "true");
+                "quarkus.flyway.migrate-at-start", "true",
+                "amsha.ui.skip-onboarding", "false");
     }
 }

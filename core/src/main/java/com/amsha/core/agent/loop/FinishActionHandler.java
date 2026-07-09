@@ -169,6 +169,12 @@ public class FinishActionHandler {
         // --- Extract and strip candidate answer ---
         String candidateAnswer = resultProcessor.extractCandidateAnswer(step);
 
+        if (step.actionInput() != null
+                && Boolean.TRUE.equals(step.actionInput().get(ReasoningStep.ACTION_INPUT_INTERCEPTED_EXECUTION_KEY))) {
+            AgentResult result = AgentResult.finished(candidateAnswer, List.copyOf(history));
+            return new FinishOutcome.Completed(result, candidateAnswer);
+        }
+
         // --- Raw tool-call leak detection ---
         if (qualityGuard.isRawToolCallLeak(candidateAnswer)) {
             FinishOutcome outcome = resultProcessor.handleLeak(

@@ -95,3 +95,5 @@ autotest/logs/
 !.omm/config.yaml
 
 headroom_memory.db
+.tokensave/
+.m2/

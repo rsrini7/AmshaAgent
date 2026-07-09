@@ -43,77 +43,69 @@ class OnboardingResourceTest {
     @Test
     void testWizardFlow() {
         Mockito.when(mockModelFactory.validate(any(), any(), any())).thenReturn(true);
+        Mockito.when(mockVault.systemKeyExists(any())).thenReturn(false);
 
         // Manual cookie tracking - SessionFilter only works with JSESSIONID, not custom cookies
         final String[] sid = {null};
 
-        // 1. GET /status → step=1 on fresh start
-        String newSid = doGet("/onboarding/status", sid[0])
-                .then()
-                .statusCode(200)
-                .body("step", is(1))
-                .extract()
-                .cookie(SID_COOKIE);
-        if (newSid != null) sid[0] = newSid;
-
-        // 8. Out-of-order guard: step/2 before step/1 → 403
+        // Out-of-order guard: step/2 before step/1 -> 403
         doPost("/onboarding/step/2", new Step2Request("groq", ""), sid[0])
                 .then()
                 .statusCode(403);
 
-        // 2. POST /step/1 → nextStep=2
-        newSid = doPost("/onboarding/step/1", null, sid[0])
+        // 1. POST /step/1 -> nextStep=2
+        String newSid = doPost("/onboarding/step/1", null, sid[0])
                 .then()
                 .statusCode(200)
                 .body("nextStep", is(2))
                 .extract()
                 .cookie(SID_COOKIE);
-        if (newSid != null) sid[0] = newSid;
+        if (newSid != null) {
+            sid[0] = newSid;
+        }
 
-        // 3. POST /step/2 → nextStep=3, default model populated
+        doGet("/onboarding/status", sid[0]).then().statusCode(200).body("step", is(2));
+
+        // 2. POST /step/2 -> nextStep=3, default model populated
         newSid = doPost("/onboarding/step/2", new Step2Request("groq", ""), sid[0])
                 .then()
                 .statusCode(200)
                 .body("nextStep", is(3))
                 .extract()
                 .cookie(SID_COOKIE);
-        if (newSid != null) sid[0] = newSid;
+        if (newSid != null) {
+            sid[0] = newSid;
+        }
 
-        // Status check: model auto-populated to meta-llama/llama-4-scout-17b-16e-instruct
+        // Status check: model auto-populated meta-llama/llama-4-scout-17b-16e-instruct
         doGet("/onboarding/status", sid[0])
                 .then()
                 .statusCode(200)
                 .body("model", is("meta-llama/llama-4-scout-17b-16e-instruct"));
 
-        // 4. POST /step/3 → mocked gateway validates → nextStep=4
-        newSid = doPost("/onboarding/step/3", new Step3Request("test-key"), sid[0])
+        // 3. POST /step/3 -> nextStep=4
+        doPost("/onboarding/step/3", new Step3Request("test-key"), sid[0])
                 .then()
                 .statusCode(200)
                 .body("nextStep", is(4))
                 .body("valid", is(true))
-                .extract()
                 .cookie(SID_COOKIE);
-        if (newSid != null) sid[0] = newSid;
 
-        // 5. POST /step/4 → nextStep=5
-        newSid = doPost("/onboarding/step/4", new Step4Request("You are Amsha Agent."), sid[0])
+        // 4. POST /step/4 -> nextStep=5
+        doPost("/onboarding/step/4", new Step4Request("You are Amsha Agent."), sid[0])
                 .then()
                 .statusCode(200)
                 .body("nextStep", is(5))
-                .extract()
                 .cookie(SID_COOKIE);
-        if (newSid != null) sid[0] = newSid;
 
-        // 6. POST /step/5 → nextStep=6
-        newSid = doPost("/onboarding/step/5", new Step5Request(List.of()), sid[0])
+        // 5. POST /step/5 -> nextStep=6
+        doPost("/onboarding/step/5", new Step5Request(List.of()), sid[0])
                 .then()
                 .statusCode(200)
                 .body("nextStep", is(6))
-                .extract()
                 .cookie(SID_COOKIE);
-        if (newSid != null) sid[0] = newSid;
 
-        // 7. GET /complete → done=true, redirectTo=/#/chat
+        // 6. GET /complete -> done=true, redirectTo=/#/chat
         doGet("/onboarding/complete", sid[0])
                 .then()
                 .statusCode(200)
@@ -123,14 +115,20 @@ class OnboardingResourceTest {
 
     private Response doGet(String path, String sid) {
         var spec = given();
-        if (sid != null) spec = spec.cookie(SID_COOKIE, sid);
+        if (sid != null) {
+            spec = spec.cookie(SID_COOKIE, sid);
+        }
         return spec.when().get(path);
     }
 
     private Response doPost(String path, Object body, String sid) {
         var spec = given().contentType(ContentType.JSON);
-        if (sid != null) spec = spec.cookie(SID_COOKIE, sid);
-        if (body != null) spec = spec.body(body);
+        if (sid != null) {
+            spec = spec.cookie(SID_COOKIE, sid);
+        }
+        if (body != null) {
+            spec = spec.body(body);
+        }
         return spec.when().post(path);
     }
 }

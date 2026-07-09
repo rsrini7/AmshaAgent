@@ -56,7 +56,7 @@ public class SelfEvolveReflectTool implements AgentTool {
 
     @Override
     public String description() {
-        return "Trigger self-evolution directive synthesis and lifecycle reconciliation.";
+        return "Trigger a single self-evolution directive action: synthesize, reconcile, or status.";
     }
 
     @Override
@@ -64,9 +64,9 @@ public class SelfEvolveReflectTool implements AgentTool {
         return JsonObjectSchema.builder()
                 .addStringProperty(
                         "action",
-                        "Action to perform: 'synthesize' (create new directives), "
-                                + "'reconcile' (promote/disable existing), 'status' (view current directives). "
-                                + "Default: 'synthesize'")
+                        "Action to perform. Use exactly one of: 'synthesize' (create new directives), "
+                                + "'reconcile' (promote/disable existing), or 'status' (view current directives). "
+                                + "Default: 'synthesize'. Never batch multiple actions.")
                 .build();
     }
 

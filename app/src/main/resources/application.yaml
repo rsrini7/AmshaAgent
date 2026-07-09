@@ -325,6 +325,8 @@ amsha:
   llm:
     provider: ${AMSHA_LLM_PROVIDER:groq}
     vault-priority: ${AMSHA_LLM_VAULT_PRIORITY:false}
+    ui:
+      skip-onboarding: ${AMSHA_UI_SKIP_ONBOARDING:false}
     log-http: ${AMSHA_LLM_LOG_HTTP:false}
     max-retries: ${AMSHA_LLM_MAX_RETRIES:3}
     max-output-tokens: ${AMSHA_LLM_MAX_OUTPUT_TOKENS:8192}

@@ -3,6 +3,8 @@ package com.amsha.selfevolve.api;
 import java.time.Instant;
 import java.util.UUID;
 
+import org.jdbi.v3.core.mapper.reflect.ColumnName;
+
 /**
  * A behavioral directive synthesized from extracted memory patterns.
  * Immutable once created. Lifecycle state transitions create new instances.
@@ -25,7 +27,7 @@ public record SynthesizedDirective(
         String text,
         DirectiveState state,
         double confidence,
-        String sourceRecordIdsJson,
+        @ColumnName("source_record_ids") String sourceRecordIdsJson,
         String synthesisPromptHash,
         int evaluationHits,
         int evaluationMisses,

@@ -94,7 +94,7 @@ public class LoopStuckDetector {
 
         return Optional.of("CRITICAL OVERRIDE — DO NOT REPEAT. You have already called `"
                 + toolName + "` " + count + " times with the same input (" + operationSummary
-                + "). This is NOT making progress. STOP calling this tool with the same arguments. "
+                + "). This is NOT making progress. STOP repeating this exact call. "
                 + "Use the information you already have, complete the task, and emit FINISH immediately. "
                 + "If you cannot complete the task, emit FINISH explaining the blocker. "
                 + "Do NOT call `" + toolName + "` again with the same arguments under any circumstances.");
@@ -112,7 +112,7 @@ public class LoopStuckDetector {
             return Optional.empty();
         }
 
-        return Optional.of("CRITICAL OVERRIDE — STOP INSPECTING AND START DOING. Your last "
+        return Optional.of("CRITICAL OVERRIDE — STOP inspecting and start doing. Your last "
                 + READ_ONLY_LOOP_THRESHOLD
                 + " tool calls were read-only operations. You already have enough information. "
                 + "Perform the actual execution/write step required by the goal and emit FINISH immediately. "
