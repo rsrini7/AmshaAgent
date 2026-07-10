@@ -2,6 +2,33 @@
 
 These are architectural evolution items, not urgent fixes.
 
+### Unify Channel Dispatch and Intent Classification
+
+**Problem:** WebSocket and Telegram messages enter through `ChannelServices` and
+the shared `MessagePipeline`, while interactive CLI chat, `ask`, and some REST
+operations call `AgentLoop` directly. Direct entry points can therefore skip
+skill-aware intent detection, destructive-vocabulary checks, command handling,
+and other pipeline behavior. This caused CLI prompts naming
+`algorithmic-art` to fall back to the coordinator and then delegate to Brahma,
+even though the skill was loaded.
+
+**Direction:** Extract a shared application-level dispatch service responsible
+for canonical role resolution, intent/skill classification, session context,
+and agent-loop invocation. Keep channel-specific adapters for synchronous CLI
+output, HITL approval, REST responses, and asynchronous WebSocket/Telegram
+delivery, but make them all call the shared service.
+
+**Acceptance criteria:**
+- CLI chat, `ask`, REST, WebSocket, and Telegram use the same role-resolution path.
+- Explicit role overrides remain authoritative.
+- Skill names and trigger patterns resolve to `skill:<name>` consistently.
+- HITL behavior and existing channel response semantics remain unchanged.
+- Add entry-point tests that verify identical routing for a skill prompt.
+
+**Current mitigation:** CLI chat performs skill-aware classification before its
+direct `AgentLoop` call. This is intentionally temporary until the shared
+dispatch service is implemented.
+
 ### 7. Agent Loop → Graph-Based Orchestration (DAG)
 After the GoF State pattern is in place (P1), the next evolution is a full directed graph model similar to LangGraph.
 

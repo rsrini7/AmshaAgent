@@ -34,6 +34,7 @@ import com.amsha.core.lifecycle.WorkspaceManager;
 import com.amsha.core.pipeline.MessageContext;
 import com.amsha.core.reflex.ReflexRegistry;
 import com.amsha.core.reflex.ReflexResult;
+import com.amsha.core.routing.SkillAwareIntentDetector;
 import com.amsha.core.scope.WorkspaceContext;
 import com.amsha.core.security.AutonomyLevel;
 import com.amsha.core.state.StatefulAgentStore;
@@ -87,6 +88,9 @@ public class ChatCommand implements Runnable {
 
     @Inject
     CliResultBridge cliResultBridge;
+
+    @Inject
+    SkillAwareIntentDetector skillAwareIntentDetector;
 
     private volatile String currentCliSessionId;
 
@@ -361,6 +365,20 @@ public class ChatCommand implements Runnable {
             log.infof("CLI chat session %s dispatching input: %s", sessionId, input);
             System.out.println("⚡ Thinking...");
 
+            // ChatCommand invokes AgentLoop directly and therefore bypasses the
+            // message pipeline's IntentClassificationHandler. Resolve skill
+            // roles here when using the default coordinator role; an explicit
+            // --role remains authoritative for existing CLI workflows.
+            String dispatchRole = role;
+            if (AgentRoleEnum.COORDINATOR_ID.equalsIgnoreCase(role)) {
+                String detectedRole = skillAwareIntentDetector.classify(input);
+                if (detectedRole != null && !detectedRole.isBlank()) {
+                    dispatchRole = detectedRole;
+                    context.setAgentRole(detectedRole);
+                    log.infof("CLI skill-aware role selection: input='%s' role=%s", input, detectedRole);
+                }
+            }
+
             // Register BEFORE agentLoop.run() so the future exists even if
             // complete() fires on a REST thread before we reach the switch below.
             // The virtual thread holds this reference directly - no second register() needed.
@@ -368,7 +386,7 @@ public class ChatCommand implements Runnable {
 
             hitlResultPrinted = false; // reset for this dispatch cycle
 
-            AgentResult result = agentLoop.run(sessionId, role, input, reasoningEngine, maxIterations, context);
+            AgentResult result = agentLoop.run(sessionId, dispatchRole, input, reasoningEngine, maxIterations, context);
 
             String output =
                     switch (result) {
