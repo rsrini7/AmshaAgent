@@ -154,7 +154,8 @@ public class ToolInvocationGuard {
         // and must pause consistently here before parallel execution starts.
         boolean isMemoryReadTool =
                 ToolCapability.RECALL_MEMORY_SEARCH.toolName().equals(toolName)
-                        || ToolCapability.ARCHIVAL_MEMORY_SEARCH.toolName().equals(toolName);
+                        || ToolCapability.ARCHIVAL_MEMORY_SEARCH.toolName().equals(toolName)
+                        || ToolCapability.CORE_MEMORY_READ.toolName().equals(toolName);
 
         boolean isExempt = isSchedulingTool || (isMemoryReadTool && level != AutonomyLevel.READONLY);
 
