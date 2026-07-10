@@ -12,6 +12,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.attribute.PosixFilePermission;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
@@ -20,6 +21,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Stream;
 
 import com.amsha.core.agent.role.ToolCapability;
 import com.amsha.core.agent.role.ToolMetadata;
@@ -216,7 +218,51 @@ public class HostExecTool implements AgentTool {
             return ToolResponse.success(
                     "Opened browser preview: " + (mirrored != null ? mirrored.toString() : previewTarget));
         }
+        Path openedArtifact = autoOpenGeneratedHtml(ctx, workspaceRoot, code);
+        if (openedArtifact != null) {
+            return ToolResponse.success(
+                    postProcessOutput(rawOutput, Map.of()) + "\nOpened browser preview: " + openedArtifact);
+        }
         return ToolResponse.success(postProcessOutput(rawOutput, Map.of()));
+    }
+
+    /** Opens the newest generated artifact in the skill output directory after a successful host script. */
+    private Path autoOpenGeneratedHtml(ToolExecutionContext ctx, Path workspaceRoot, String code) {
+        if (ctx == null
+                || ctx.rawUserGoal() == null
+                || !BROWSER_PREVIEW_GOAL_PATTERN.matcher(ctx.rawUserGoal()).find()
+                || containsBrowserOpener(code)) {
+            return null;
+        }
+
+        Path outputDir = workspaceRoot.resolve("output");
+        if (!Files.isDirectory(outputDir)) return null;
+
+        try (Stream<Path> files = Files.walk(outputDir, 2)) {
+            Path artifact = files.filter(Files::isRegularFile)
+                    .filter(p ->
+                            p.getFileName().toString().toLowerCase(Locale.ROOT).endsWith(".html"))
+                    .max(Comparator.comparingLong(p -> p.toFile().lastModified()))
+                    .orElse(null);
+            if (artifact == null) return null;
+
+            String opener =
+                    System.getProperty("os.name", "").toLowerCase(Locale.ROOT).contains("mac")
+                            ? "open"
+                            : (System.getProperty("os.name", "")
+                                            .toLowerCase(Locale.ROOT)
+                                            .contains("win")
+                                    ? "start"
+                                    : "xdg-open");
+            new ProcessBuilder(opener, artifact.toAbsolutePath().toString())
+                    .redirectErrorStream(true)
+                    .start();
+            log.infof("[HostExec] Auto-opened generated browser artifact %s", artifact);
+            return artifact;
+        } catch (Exception e) {
+            log.debugf("[HostExec] Browser auto-open unavailable: %s", e.getMessage());
+            return null;
+        }
     }
 
     private ToolResponse executeJava(Path workspaceRoot, String code) throws Exception {
