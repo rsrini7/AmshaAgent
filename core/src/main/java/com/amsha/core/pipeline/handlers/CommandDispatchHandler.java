@@ -128,7 +128,8 @@ public class CommandDispatchHandler implements MessageHandler {
                         /halt - emergency stop
 
                         *Tasks:*
-                        /crons - list scheduled tasks
+                        /cron - list scheduled tasks
+                        /approvals - list pending approvals
                         /deletecron <id> - delete a cron job
                         /retry - retry last stale approval
 

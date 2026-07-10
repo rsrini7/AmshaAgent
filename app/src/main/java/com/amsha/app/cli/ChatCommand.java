@@ -335,6 +335,7 @@ public class ChatCommand implements Runnable {
     private List<String> extractSlashCommands() {
         return List.of(
                 "/approve",
+                "/approvals",
                 "/commands",
                 "/crons",
                 "/deletecron",
