@@ -17,6 +17,7 @@ import com.amsha.common.util.LogUtil;
 import com.amsha.core.domain.model.AgentCheckpoint;
 import com.amsha.core.state.CheckpointStatus;
 import com.amsha.core.state.StatefulAgentStore;
+import com.amsha.core.util.DatabaseSafetyGuard;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
@@ -130,6 +131,7 @@ public class RateLimitRetryScheduler {
 
             backlogMaxAge.set(maxAgeSec);
         } catch (RuntimeException e) {
+            if (DatabaseSafetyGuard.checkDatabaseFailure(e)) return;
             String msg = e.getMessage() != null ? e.getMessage() : "";
             boolean isShutdown = shuttingDown || msg.contains("pool is closed") || msg.contains("database closed");
             if (!isShutdown) {
@@ -140,6 +142,7 @@ public class RateLimitRetryScheduler {
                 log.debugf("Full shutdown race details:\n%s", LogUtil.trimmedStack(e));
             }
         } catch (Exception e) {
+            if (DatabaseSafetyGuard.checkDatabaseFailure(e)) return;
             log.error("RateLimitRetryScheduler: processPendingRetries failed", e);
         }
     }
@@ -172,6 +175,7 @@ public class RateLimitRetryScheduler {
                 }
             }
         } catch (RuntimeException e) {
+            if (DatabaseSafetyGuard.checkDatabaseFailure(e)) return;
             String msg = e.getMessage() != null ? e.getMessage() : "";
             boolean isShutdown = shuttingDown || msg.contains("pool is closed") || msg.contains("database closed");
             if (!isShutdown) {
@@ -182,6 +186,7 @@ public class RateLimitRetryScheduler {
                 log.debugf("Full shutdown race details:\n%s", LogUtil.trimmedStack(e));
             }
         } catch (Exception e) {
+            if (DatabaseSafetyGuard.checkDatabaseFailure(e)) return;
             log.error("RateLimitRetryScheduler: sweepOrphanedRetries failed", e);
         }
     }

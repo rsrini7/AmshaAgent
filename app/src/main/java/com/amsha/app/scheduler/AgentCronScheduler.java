@@ -27,6 +27,7 @@ import com.amsha.core.cron.CronTaskScheduled;
 import com.amsha.core.domain.model.AgentCron;
 import com.amsha.core.domain.model.AgentCronRecord;
 import com.amsha.core.util.CronScheduleUtil;
+import com.amsha.core.util.DatabaseSafetyGuard;
 import com.amsha.core.util.MdcCleaner;
 import com.amsha.core.util.MdcKeys;
 import com.amsha.persistence.api.AdvisoryLockPort;
@@ -141,6 +142,7 @@ public class AgentCronScheduler {
             }
             log.infof("AgentCronScheduler: orphan sweep complete. %d job(s) updated.", orphaned.size());
         } catch (RuntimeException e) {
+            if (DatabaseSafetyGuard.checkDatabaseFailure(e)) return;
             String msg = e.getMessage() != null ? e.getMessage() : "";
             boolean isShutdown = !active || msg.contains("pool is closed") || msg.contains("database closed");
             if (!isShutdown) {
@@ -151,6 +153,7 @@ public class AgentCronScheduler {
                 log.debugf("Full shutdown race details:\n%s", LogUtil.trimmedStack(e));
             }
         } catch (Exception e) {
+            if (DatabaseSafetyGuard.checkDatabaseFailure(e)) return;
             log.error("AgentCronScheduler: failed to sweep orphaned approval jobs", e);
         }
     }
@@ -331,6 +334,7 @@ public class AgentCronScheduler {
                 }
             }
         } catch (RuntimeException e) {
+            if (DatabaseSafetyGuard.checkDatabaseFailure(e)) return;
             String msg = e.getMessage() != null ? e.getMessage() : "";
             boolean isShutdown = !active || msg.contains("pool is closed") || msg.contains("database closed");
             if (!isShutdown) {
@@ -341,6 +345,7 @@ public class AgentCronScheduler {
                 log.debugf("Full shutdown race details:\n%s", LogUtil.trimmedStack(e));
             }
         } catch (Exception e) {
+            if (DatabaseSafetyGuard.checkDatabaseFailure(e)) return;
             log.error("AgentCronScheduler: pollAndDispatch failed", e);
         }
     }
