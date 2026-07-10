@@ -90,12 +90,16 @@ public class AgentLoop {
     @Inject
     IntentClassificationService intentClassificationService;
 
+    @Inject
+    ChatMemoryWriter chatMemoryWriter;
+
     private LoopResultHandler loopResultHandler;
 
     private LoopResultHandler getLoopResultHandler() {
         var h = this.loopResultHandler;
         if (h == null) {
-            h = new LoopResultHandler(agentStore, agentSseService, channelPluginRegistry, intentClassificationService);
+            h = new LoopResultHandler(
+                    agentStore, agentSseService, channelPluginRegistry, intentClassificationService, chatMemoryWriter);
             this.loopResultHandler = h;
         }
         return h;

@@ -145,18 +145,18 @@ public class ToolInvocationGuard {
 
         boolean isSchedulingTool = ToolCapability.SCHEDULE_TASK.toolName().equals(toolName)
                 || ToolCapability.MANAGE_SCHEDULE.toolName().equals(toolName);
-        boolean isDelegationTool = ToolCapability.DELEGATE_TO_AGENT.toolName().equals(toolName);
 
         boolean toolRequiresApproval =
                 toolOpt.map(tool -> tool.requiresManualApproval(params)).orElse(false);
 
-        // Memory search/ingest tools are read-only and should be exempt from HITL approval
-        // at both BACKGROUND and SUPERVISED levels. Only FULL autonomy bypasses all checks.
-        boolean isMemoryTool = ToolCapability.RECALL_MEMORY_SEARCH.toolName().equals(toolName)
-                || ToolCapability.ARCHIVAL_MEMORY_SEARCH.toolName().equals(toolName)
-                || ToolCapability.INGEST_DOCUMENT.toolName().equals(toolName);
+        // Memory search tools are read-only and should be exempt from HITL approval
+        // at both BACKGROUND and SUPERVISED levels. ingest_document is WRITE_MEMORY
+        // and must pause consistently here before parallel execution starts.
+        boolean isMemoryReadTool =
+                ToolCapability.RECALL_MEMORY_SEARCH.toolName().equals(toolName)
+                        || ToolCapability.ARCHIVAL_MEMORY_SEARCH.toolName().equals(toolName);
 
-        boolean isExempt = isSchedulingTool || isDelegationTool || (isMemoryTool && level != AutonomyLevel.READONLY);
+        boolean isExempt = isSchedulingTool || (isMemoryReadTool && level != AutonomyLevel.READONLY);
 
         if ((roleRegistry.requiresApprovalForTools(agentRole) || toolRequiresApproval)
                 && !isExempt

@@ -52,6 +52,9 @@ public class ReasoningStepParser {
             "\\b(in\\s+\\d+\\s*(min|mins|minute|minutes|hour|hours)|in\\s+one\\s+(min|minute|hour))\\b");
     private static final Pattern ABSOLUTE_SCHEDULE_PATTERN = Pattern.compile(
             "\\b(at\\s+\\d{1,2}(:\\d{2})?\\s*(am|pm)?|every\\s+(day|hour|minute|week|month|monday|tuesday|wednesday|thursday|friday|saturday|sunday))\\b");
+    private static final Pattern WRITE_MEMORY_GOAL_PATTERN = Pattern.compile(
+            "\\b(save|store|remember|ingest|add to memory|note that|call me|my name is|refer to me as|address me as)\\b",
+            Pattern.CASE_INSENSITIVE);
 
     private final ObjectMapper objectMapper;
     private final TextPatternUtils textPatternUtils;
@@ -307,6 +310,39 @@ public class ReasoningStepParser {
                     outputTokens);
         }
 
+        if (!isWriteMemoryGoal(rawGoal)
+                && requests.stream()
+                        .anyMatch(r -> ToolCapability.INGEST_DOCUMENT.toolName().equals(r.name()))) {
+            List<ToolExecutionRequest> nonStorageRequests = requests.stream()
+                    .filter(r -> !ToolCapability.INGEST_DOCUMENT.toolName().equals(r.name()))
+                    .toList();
+            if (!nonStorageRequests.isEmpty()) {
+                log.warnf(
+                        "[PARALLEL-TOOLS] session=%s: dropping stale ingest_document from mixed non-storage batch.",
+                        sessionId);
+                if (nonStorageRequests.size() == 1) {
+                    ToolExecutionRequest selected = nonStorageRequests.getFirst();
+                    Map<String, Object> actionInput =
+                            deserializeParams(sessionId, selected.name(), selected.arguments());
+                    if (actionInput.containsKey("__error")) {
+                        return ReasoningStep.schemaError(
+                                "System: Your previous response contained invalid JSON. "
+                                        + "Correct the format and retry. Error: " + actionInput.get("__error"),
+                                inputTokens,
+                                outputTokens);
+                    }
+                    return ReasoningStep.pending(
+                            aiMessage.text(),
+                            sanitizeToolName(selected.name()),
+                            actionInput,
+                            inputTokens,
+                            outputTokens);
+                }
+                return handleMultipleToolCalls(
+                        sessionId, agentRole, aiMessage, nonStorageRequests, inputTokens, outputTokens);
+            }
+        }
+
         if (requests.stream()
                 .allMatch(r -> ToolCapability.SELF_EVOLVE_REFLECT.toolName().equals(r.name()))) {
             log.warnf(
@@ -361,6 +397,10 @@ public class ReasoningStepParser {
         Map<String, Object> params = deserializeParams(sessionId, request.name(), request.arguments());
         Object action = params.get("action");
         return action != null && "status".equalsIgnoreCase(action.toString());
+    }
+
+    private boolean isWriteMemoryGoal(String rawGoal) {
+        return rawGoal != null && WRITE_MEMORY_GOAL_PATTERN.matcher(rawGoal).find();
     }
 
     private Map<String, Object> deserializeParams(String sessionId, String toolName, String argsJson) {

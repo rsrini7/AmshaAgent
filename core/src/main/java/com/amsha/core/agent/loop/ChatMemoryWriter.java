@@ -78,6 +78,13 @@ public class ChatMemoryWriter {
             currentHistory = new ArrayList<>(currentHistory);
         }
 
+        if (!currentHistory.isEmpty()) {
+            ChatMessage lastMsg = currentHistory.getLast();
+            if (lastMsg instanceof AiMessage ai && sanitizedAnswer.equals(ai.text())) {
+                return;
+            }
+        }
+
         currentHistory.add(AiMessage.aiMessage(sanitizedAnswer));
         chatMemoryStore.updateMessages(sessionId, currentHistory);
     }
