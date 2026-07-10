@@ -21,6 +21,7 @@ import com.amsha.core.agent.sse.AgentSseService;
 import com.amsha.core.audit.AuditHashUtil;
 import com.amsha.core.audit.ComplianceViolationException;
 import com.amsha.core.channel.ChannelPluginRegistry;
+import com.amsha.core.domain.model.AgentCheckpoint;
 import com.amsha.core.governance.BudgetExceededException;
 import com.amsha.core.governance.BudgetWarningException;
 import com.amsha.core.pipeline.MessageContext;
@@ -187,10 +188,26 @@ public class AgentLoop {
 
         AgentResult result = null;
         List<ReasoningStep> resumedHistory = new ArrayList<>();
+        String effectiveGoal = goal;
 
         Span span = observabilityManager.beginSession(sessionId, capturedUserId, canonicalRole);
         try (Scope _ = span.makeCurrent()) {
             try {
+                if (intentClassificationService.isResumeCommand(goal)) {
+                    String restoredGoal = agentStore
+                            .findLatestNonArchivedCheckpoint(sessionId)
+                            .or(() -> agentStore.findLatestCheckpoint(sessionId))
+                            .map(AgentCheckpoint::getOriginalGoal)
+                            .filter(g -> g != null && !g.isBlank() && !intentClassificationService.isResumeCommand(g))
+                            .orElse(null);
+                    if (restoredGoal != null && !restoredGoal.isBlank()) {
+                        effectiveGoal = restoredGoal;
+                        log.infof(
+                                "[AgentLoop] Resume command detected for session %s - restoring original goal: %s",
+                                sessionId, effectiveGoal);
+                    }
+                }
+
                 var decision = checkpointResumeCoordinator.resolveResumePath(
                         sessionId, canonicalRole, capturedUserId, context);
 
@@ -220,7 +237,7 @@ public class AgentLoop {
                         sessionId,
                         capturedUserId,
                         effectiveRole,
-                        goal,
+                        effectiveGoal,
                         systemNote,
                         maxIterations,
                         context,
@@ -232,7 +249,7 @@ public class AgentLoop {
                         resumedHistory,
                         context,
                         engine,
-                        goal,
+                        effectiveGoal,
                         sessionId,
                         canonicalRole,
                         capturedUserId);
@@ -251,7 +268,7 @@ public class AgentLoop {
                                     capturedUserId,
                                     agentExecutionContext.autonomyLevel(),
                                     result,
-                                    goal);
+                                    effectiveGoal);
                 }
 
                 return result;
@@ -294,7 +311,7 @@ public class AgentLoop {
 
             } finally {
                 try {
-                    String goalHash = hashUtil.sha256hex(goal);
+                    String goalHash = hashUtil.sha256hex(effectiveGoal);
                     observabilityManager.notifyLoopComplete(sessionId, capturedUserId, canonicalRole, goalHash, result);
                 } finally {
                     observabilityManager.endSession(sessionId);

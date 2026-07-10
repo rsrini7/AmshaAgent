@@ -1,5 +1,6 @@
 package com.amsha.core.agent.loop;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -51,6 +52,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.mockito.ArgumentMatchers;
 
 import io.micrometer.core.instrument.Counter;
@@ -265,6 +267,70 @@ class AgentLoopTest {
             AgentResult result = loop.runWithRole("s1", "skill:algorithmic-art", "original goal", null, engine, 5, ctx);
 
             assertTrue(result instanceof AgentResult.Finished);
+            return null;
+        });
+    }
+
+    @Test
+    void resumeCommandAsGoalRestoresOriginalGoalFromCheckpoint() throws Exception {
+        AgentLoop loop = new AgentLoop();
+
+        StatefulAgentStore agentStore = mock(StatefulAgentStore.class);
+        AgentStateMachineRunner stateMachineRunner = mock(AgentStateMachineRunner.class);
+        CheckpointResumeHandler checkpointResumeHandler = mock(CheckpointResumeHandler.class);
+        AuditHashUtil hashUtil = mock(AuditHashUtil.class);
+        SessionLifecycleCoordinator sessionLifecycleCoordinator = mock(SessionLifecycleCoordinator.class);
+        CheckpointResumeCoordinator checkpointResumeCoordinator = mock(CheckpointResumeCoordinator.class);
+        ObservabilityManager observabilityManager = mock(ObservabilityManager.class);
+        AgentSseService agentSseService = mock(AgentSseService.class);
+        MeterRegistry meterRegistry = mock(MeterRegistry.class);
+        Counter counter = mock(Counter.class);
+        when(meterRegistry.counter(anyString(), any(String[].class))).thenReturn(counter);
+
+        IntentClassificationService intentClassificationService = mock(IntentClassificationService.class);
+
+        // Mock resume command detection
+        when(intentClassificationService.isResumeCommand("yes proceed")).thenReturn(true);
+        when(intentClassificationService.isResumeCommand("original goal")).thenReturn(false);
+
+        // Mock checkpoint with original goal
+        AgentCheckpoint checkpoint = mock(AgentCheckpointRecord.class);
+        when(checkpoint.getOriginalGoal()).thenReturn("original goal");
+        when(agentStore.findLatestNonArchivedCheckpoint("s1")).thenReturn(Optional.of(checkpoint));
+
+        when(sessionLifecycleCoordinator.setupMdc(any(), any())).thenReturn("user");
+        when(checkpointResumeCoordinator.resolveResumePath(any(), any(), any(), any()))
+                .thenReturn(new CheckpointResumeCoordinator.ResumeDecision.FreshStart());
+
+        setField(loop, "agentStore", agentStore);
+        setField(loop, "stateMachineRunner", stateMachineRunner);
+        setField(loop, "checkpointResumeHandler", checkpointResumeHandler);
+        setField(loop, "hashUtil", hashUtil);
+        setField(loop, "sessionLifecycleCoordinator", sessionLifecycleCoordinator);
+        Span span = mock(Span.class);
+        Scope scope = mock(Scope.class);
+        when(span.makeCurrent()).thenReturn(scope);
+        when(observabilityManager.beginSession(any(), any(), any())).thenReturn(span);
+
+        setField(loop, "checkpointResumeCoordinator", checkpointResumeCoordinator);
+        setField(loop, "observabilityManager", observabilityManager);
+        setField(loop, "agentSseService", agentSseService);
+        setField(loop, "meterRegistry", meterRegistry);
+        setField(loop, "intentClassificationService", intentClassificationService);
+
+        ChannelUser user = new ChannelUser("foo", "bar", "disp", ChannelType.TELEGRAM);
+        ChannelMessage msg = new ChannelMessage.TelegramMessage(user, "yes proceed", "foo", Instant.now());
+        MessageContext ctx = new MessageContext("foo", user, msg);
+
+        AgentResult finished = AgentResult.finished("ok", List.of());
+        ArgumentCaptor<AgentExecutionContext> contextCaptor = ArgumentCaptor.forClass(AgentExecutionContext.class);
+        when(stateMachineRunner.run(contextCaptor.capture(), any(), any())).thenReturn(finished);
+
+        WorkspaceContext.run("s1", "user", "chat", AutonomyLevel.FULL, "coordinator", () -> {
+            AgentResult result = loop.runWithRole("s1", "coordinator", "yes proceed", null, engine, 5, ctx);
+
+            assertTrue(result instanceof AgentResult.Finished);
+            assertEquals("original goal", contextCaptor.getValue().goal());
             return null;
         });
     }
