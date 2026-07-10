@@ -536,7 +536,8 @@ paths: {}</echo>
           native/vec0/*,
           templates/**,
           prompts/**,
-          skills/**
+          skills/**,
+          META-INF/skills/**
         </quarkus.native.resources.includes>
       </properties>
     </profile>

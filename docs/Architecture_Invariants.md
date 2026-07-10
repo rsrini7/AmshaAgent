@@ -1841,6 +1841,7 @@ Dynamic skills (loaded dynamically from `.jar` files in classpath) are **instruc
 - **External CLI Binary Dependency**: When a dynamic skill (like `remote-browser`) declares an allowed tool capability (like `sandbox_exec`), the LLM is expected to call external CLI binaries (e.g. `browser-use`) inside the sandbox environment.
 - **Environment Provisioning**: The runtime execution sandbox (such as the `amsha-tool-runner` Podman container) or the host machine (in fallback mode) MUST pre-install any external binary/CLI tools referenced by the dynamic skill. If the binaries are absent in the sandbox or on the host PATH, tool execution will fail with `command not found`.
 - **Pre-execution Verification**: Dynamic skills must be documented with their system dependencies, and verification gates (like `browser-use doctor`) must be run during bootstrap or sanity testing.
+- **Native SkillsJar Index Parity**: Every SkillsJar dependency added to or removed from `app/pom.xml` MUST have its exact path below `META-INF/skills/` added to or removed from `app/src/main/resources/META-INF/skills/skills-index.txt` in the same change. Run `python3 ./verify_skillsjar_index.py --fix` to regenerate it and `python3 ./verify_skillsjar_index.py` to validate it. GraalVM Native Image cannot enumerate classpath resource directories, so native mode loads these skills through the index; `META-INF/skills/**` MUST remain in `quarkus.native.resources.includes`.
 
 ### 24.5 SkillsJars Cloud Dependency Vetting
 
@@ -1857,6 +1858,7 @@ Before adding a SkillsJar dependency to `app/pom.xml`, the skill's `SKILL.md` in
   - Does it require authentication or API keys?
   - Does it need network access beyond the sandbox?
   - Are all CLI dependencies installable in the `Dockerfile.toolrunner`?
+  - Has its exact `SKILL.md` path been added to `app/src/main/resources/META-INF/skills/skills-index.txt` for the native image?
 - **Auto-heal loop prevention**: If a skill's CLI tool fails with an authentication or configuration error (not a code error), `ExecutionFailureRecoveryService` should NOT trigger Shiva auto-heal — the error is environmental, not fixable by code changes.
 
 **Why**: The `browser-use` skill (removed in P105) appeared to be a local CLI tool but actually required a paid Browser Use Cloud API key. Without it, the LLM entered an infinite Shiva auto-heal loop (`heal:shiva:...:heal:shiva:...`) that grew session IDs until macOS rejected the workspace directory path with `File name too long`.

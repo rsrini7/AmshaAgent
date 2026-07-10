@@ -19,6 +19,7 @@
 * **Module CDI discovery**: `jandex-maven-plugin` + `beans.xml` REQUIRED. Grep startup logs for bean init. §4, `docs/Architecture_Invariants.md` §15.
 * **Backend parity**: When adding/updating any `*StorePort`, create ALL 3 backends (SQLite, Postgres, FS) simultaneously. P104 lesson: FS was missed for self-evolve stores. §4, §5.26.
 * **Compact prompt parity**: When changing prompt rules, keep compact-mode prompts behaviorally aligned with the full prompt. Critical rules such as termination (`FINISH`), skill-role self-execution, and execution-boundary semantics must remain present in compact mode. Verify with `./mvnw -pl core -Dtest=SystemPromptBuilderTest test -q`.
+* **Native SkillsJar parity**: Any SkillsJar dependency change in `app/pom.xml` requires the matching exact `SKILL.md` path in `app/src/main/resources/META-INF/skills/skills-index.txt`; Native Image cannot scan skill directories.
 
 ## ReplyNode Pattern
 `ReplyNode` is a sealed union of `ContentNode` and `InteractionNode`. Always use `switch` with pattern matching:

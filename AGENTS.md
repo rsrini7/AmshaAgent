@@ -530,5 +530,7 @@ Before adding a SkillsJar to `app/pom.xml`, **extract and read** the skill's `SK
 - Does it require cloud API keys or paid SaaS authentication?
 - Are all CLI dependencies installable in `Dockerfile.toolrunner`?
 
-**Cloud-only skills MUST NOT be bundled** unless the API key is provisioned in `.env` and injected via `SandboxSecretResolver`. A skill that silently fails without an API key triggers infinite Shiva auto-heal loops (`heal:shiva:...:heal:shiva:...`) until workspace paths exceed OS limits. See `docs/Architecture_Invariants.md` §24.5.
+### Native SkillsJar Index Parity
+Every SkillsJar dependency added to or removed from `app/pom.xml` **MUST** be added to or removed from `app/src/main/resources/META-INF/skills/skills-index.txt` in the same change. Run `python3 ./verify_skillsjar_index.py --fix` to generate the index from the resolved local JARs, then run `python3 ./verify_skillsjar_index.py` to validate it. JVM mode can scan JAR directories, but GraalVM Native Image cannot enumerate them; it loads SkillsJars only through this index. Keep `META-INF/skills/**` in `quarkus.native.resources.includes`.
 
+**Cloud-only skills MUST NOT be bundled** unless the API key is provisioned in `.env` and injected via `SandboxSecretResolver`. A skill that silently fails without an API key triggers infinite Shiva auto-heal loops (`heal:shiva:...:heal:shiva:...`) until workspace paths exceed OS limits. See `docs/Architecture_Invariants.md` §24.5.
