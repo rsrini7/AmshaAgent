@@ -34,7 +34,10 @@ class ReasoningStepParserTest {
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
-        parser = new ReasoningStepParser(objectMapper, new TextPatternUtils());
+        TextPatternUtils textPatternUtils = new TextPatternUtils();
+        ToolCallParameterParser parameterParser = new ToolCallParameterParser(objectMapper, textPatternUtils);
+        ParallelToolCallCollapser parallelCollapser = new ParallelToolCallCollapser(objectMapper, parameterParser);
+        parser = new ReasoningStepParser(textPatternUtils, parameterParser, parallelCollapser);
     }
 
     @Test

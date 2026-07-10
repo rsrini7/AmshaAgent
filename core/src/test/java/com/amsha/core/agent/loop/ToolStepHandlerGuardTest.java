@@ -28,10 +28,11 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
+
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 
 @ExtendWith(MockitoExtension.class)
 class ToolStepHandlerGuardTest {
@@ -63,7 +64,9 @@ class ToolStepHandlerGuardTest {
     @Mock
     ExecutionFailureRecoveryService recoveryService;
 
-    @InjectMocks
+    @Mock
+    ToolStepEscalationHandler escalationHandler;
+
     ToolStepHandler handler;
 
     private AgentExecutionContext createCtx(String role, String goal) {
@@ -85,7 +88,20 @@ class ToolStepHandlerGuardTest {
 
     @BeforeEach
     void setup() {
-        // Minimal mock setup to bypass normal validation
+        // Build ToolStepValidator with real logic but mocked dependencies
+        ToolStepValidator validator = new ToolStepValidator(toolRegistry, observers, dynamicToolLookup);
+
+        handler = new ToolStepHandler(
+                observers,
+                guard,
+                invoker,
+                writer,
+                checkpointManager,
+                parallelExecutor,
+                new SimpleMeterRegistry(),
+                recoveryService,
+                validator,
+                escalationHandler);
     }
 
     @Test
