@@ -461,23 +461,30 @@ class FinishOutcomeProcessorDeepTest {
 
         @Test
         void applyCodePolicy_nullAnswer_returnsNull() {
-            assertNull(processor.applyCodePolicy("s1", "coordinator", List.of(), null, null));
+            assertNull(processor.applyCodePolicy("s1", "coordinator", "goal", List.of(), null, null));
         }
 
         @Test
-        void applyCodePolicy_codeBlockedForRole_notDeepDelegation_returnsCorrection() {
+        void applyCodePolicy_codeBlockedForRole_notDeepDelegation_injectsCoderDelegation() {
             when(codePolicy.isGeneratedCodeBlock("```java\nSystem.out.println();\n```", "coordinator"))
                     .thenReturn(true);
             when(codePolicy.canGenerateCode("coordinator")).thenReturn(false);
-            when(codePolicy.buildRefusalMessage("coordinator")).thenReturn("Please use garuda.");
 
             ReasoningStep step = new ReasoningStep.FinishStep("thought", null, 0, 0, false);
             var result = processor.applyCodePolicy(
-                    "s1", "coordinator", List.of(), "```java\nSystem.out.println();\n```", step);
+                    "s1",
+                    "coordinator",
+                    "Write a Java method that reverses a string using streams.",
+                    List.of(),
+                    "```java\nSystem.out.println();\n```",
+                    step);
 
-            assertInstanceOf(FinishActionHandler.FinishOutcome.Correction.class, result);
-            var correction = (FinishActionHandler.FinishOutcome.Correction) result;
-            assertTrue(correction.correctionHint().contains("garuda"));
+            assertInstanceOf(FinishActionHandler.FinishOutcome.InjectToolCall.class, result);
+            var injection = (FinishActionHandler.FinishOutcome.InjectToolCall) result;
+            assertEquals("garuda", injection.toolName());
+            assertEquals("brahma", injection.arguments().get("agent"));
+            assertTrue(String.valueOf(injection.arguments().get("goal")).contains("reverses a string"));
+            assertTrue(String.valueOf(injection.arguments().get("goal")).contains("System.out.println"));
         }
 
         @Test
@@ -490,7 +497,8 @@ class FinishOutcomeProcessorDeepTest {
             String sessionId = "parent:delegate:a:1:delegate:b:2";
 
             ReasoningStep step = new ReasoningStep.FinishStep("thought", null, 0, 0, false);
-            var result = processor.applyCodePolicy(sessionId, "researcher", List.of(), "```java\ncode\n```", step);
+            var result =
+                    processor.applyCodePolicy(sessionId, "researcher", "goal", List.of(), "```java\ncode\n```", step);
 
             assertInstanceOf(FinishActionHandler.FinishOutcome.Correction.class, result);
             var correction = (FinishActionHandler.FinishOutcome.Correction) result;
@@ -505,14 +513,14 @@ class FinishOutcomeProcessorDeepTest {
             when(codePolicy.isGeneratedCodeBlock("```java\ncode\n```", "coder")).thenReturn(true);
             when(codePolicy.canGenerateCode("coder")).thenReturn(true);
 
-            assertNull(processor.applyCodePolicy("s1", "coder", List.of(), "```java\ncode\n```", null));
+            assertNull(processor.applyCodePolicy("s1", "coder", "goal", List.of(), "```java\ncode\n```", null));
         }
 
         @Test
         void applyCodePolicy_notCodeBlock_returnsNull() {
             when(codePolicy.isGeneratedCodeBlock("just text", "coordinator")).thenReturn(false);
 
-            assertNull(processor.applyCodePolicy("s1", "coordinator", List.of(), "just text", null));
+            assertNull(processor.applyCodePolicy("s1", "coordinator", "goal", List.of(), "just text", null));
         }
     }
 
