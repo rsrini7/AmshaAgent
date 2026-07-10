@@ -361,6 +361,28 @@
       </plugins>
     </pluginManagement>
     <plugins>
+      <!-- GraalVM cannot read skill resources from dependency JARs at runtime.
+           Materialize all SkillsJar resources in the application output first. -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-dependency-plugin</artifactId>
+        <version>3.8.1</version>
+        <executions>
+          <execution>
+            <id>unpack-skillsjar-resources</id>
+            <phase>process-resources</phase>
+            <goals>
+              <goal>unpack-dependencies</goal>
+            </goals>
+            <configuration>
+              <includeGroupIds>com.skillsjars</includeGroupIds>
+              <includes>META-INF/skills/**</includes>
+              <outputDirectory>${project.build.outputDirectory}</outputDirectory>
+              <overWriteIfNewer>true</overWriteIfNewer>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
       <plugin>
         <groupId>io.quarkus.platform</groupId>
         <artifactId>quarkus-maven-plugin</artifactId>

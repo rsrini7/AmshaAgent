@@ -23,6 +23,7 @@ import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Stream;
 
 import com.amsha.common.util.LogUtil;
 
@@ -60,6 +61,9 @@ public class SkillsJarSkillProvider implements SkillProvider {
         }
 
         loadFromClasspath(skills);
+        if (skills.isEmpty()) {
+            loadFromExtractedSkills(skills);
+        }
         return skills;
     }
 
@@ -256,6 +260,28 @@ public class SkillsJarSkillProvider implements SkillProvider {
         }
     }
 
+    /**
+     * Native Image cannot enumerate dependency JAR directories. Skills that a JVM
+     * run previously extracted to the stable SkillsJars home remain usable by the
+     * native distribution as a fallback.
+     */
+    private void loadFromExtractedSkills(List<SkillDefinition> skills) {
+        Path skillsHome = Path.of(System.getProperty("user.home"), ".amsha", "skills", "skillsjars");
+        if (!Files.isDirectory(skillsHome)) {
+            return;
+        }
+        try (Stream<Path> children = Files.list(skillsHome)) {
+            children.map(path -> path.resolve("SKILL.md"))
+                    .filter(Files::isRegularFile)
+                    .forEach(skillFile -> loadSkillFromFile(skillFile, skills));
+        } catch (Exception e) {
+            LOG.warnf("Failed to load extracted SkillsJars from %s: %s", skillsHome, e.getMessage());
+        }
+        if (!skills.isEmpty()) {
+            LOG.infof("Loaded %d SkillsJars skill(s) from extracted skill home", skills.size());
+        }
+    }
+
     private void loadSkillFromResource(String classpathPath, List<SkillDefinition> skills) {
         loadSkillFromResource(classpathPath, skills, null);
     }
@@ -267,6 +293,24 @@ public class SkillsJarSkillProvider implements SkillProvider {
                 return;
             }
             String content = new String(stream.readAllBytes(), StandardCharsets.UTF_8);
+            loadSkillContent(content, classpathPath, skills, skillHome);
+        } catch (Exception e) {
+            LOG.warnf("Failed to load SkillsJar skill %s: %s", classpathPath, LogUtil.rootMessage(e));
+        }
+    }
+
+    private void loadSkillFromFile(Path skillFile, List<SkillDefinition> skills) {
+        try {
+            String content = Files.readString(skillFile, StandardCharsets.UTF_8);
+            loadSkillContent(
+                    content, skillFile.toString(), skills, skillFile.getParent().toString());
+        } catch (Exception e) {
+            LOG.warnf("Failed to load extracted SkillsJar skill %s: %s", skillFile, LogUtil.rootMessage(e));
+        }
+    }
+
+    private void loadSkillContent(String content, String source, List<SkillDefinition> skills, String skillHome) {
+        try {
 
             // Inject execution override at the TOP of the system prompt (before any decision tree)
             if (skillHome != null && !skillHome.isBlank()) {
@@ -277,7 +321,7 @@ public class SkillsJarSkillProvider implements SkillProvider {
                         // Adaptive mode: let the LLM adapt the skill for the environment
                         // Only strip conflicting sections, don't add overrides
                         content = stripConflictingSections(content);
-                        LOG.infof("[SkillsJar] Adaptive mode enabled for '%s' — LLM will adapt", classpathPath);
+                        LOG.infof("[SkillsJar] Adaptive mode enabled for '%s' — LLM will adapt", source);
                     } else {
                         // Non-adaptive mode: apply our overrides
                         content = stripConflictingSections(content);
@@ -298,7 +342,7 @@ public class SkillsJarSkillProvider implements SkillProvider {
             SkillDefinition definition = parser.parse(content, skillHome);
             skills.add(maybeAugmentBrowserPreview(definition, content, skillHome));
         } catch (Exception e) {
-            LOG.warnf("Failed to load SkillsJar skill %s: %s", classpathPath, LogUtil.rootMessage(e));
+            LOG.warnf("Failed to parse SkillsJar skill %s: %s", source, LogUtil.rootMessage(e));
         }
     }
 

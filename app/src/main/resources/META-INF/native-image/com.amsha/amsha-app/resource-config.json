@@ -1,0 +1,12 @@
+{
+  "resources": {
+    "includes": [
+      {
+        "pattern": "\\QMETA-INF/skills/skills-index.txt\\E"
+      },
+      {
+        "pattern": "META-INF/skills/.*/SKILL\\.md"
+      }
+    ]
+  }
+}
