@@ -43,9 +43,23 @@ try {
     $graalPath = (mise where java@graalvm-community-25.0.2).Trim()
     $env:GRAALVM_HOME = $graalPath
     $env:JAVA_HOME = $graalPath
+    $nativeAdditionalBuildArgs = @()
+    if ($IsMacOS -and $env:PATH -like '*nix/store*') {
+        $zlib = Get-ChildItem '/nix/store' -Filter 'libz.dylib' -Recurse -ErrorAction SilentlyContinue |
+            Where-Object { $_.FullName -like '*-zlib-*/lib/libz.dylib' } |
+            Select-Object -First 1
+        if ($zlib) {
+            $zlibLibDir = $zlib.DirectoryName
+            if ($env:NIX_LDFLAGS -notlike "*$zlibLibDir*") {
+                $env:NIX_LDFLAGS = "$env:NIX_LDFLAGS -L$zlibLibDir".Trim()
+            }
+            $nativeAdditionalBuildArgs += "-Dquarkus.native.additional-build-args=-H:CLibraryPath=$zlibLibDir"
+            Write-Host "ℹ️   Added zlib linker path for Nix clang: $zlibLibDir"
+        }
+    }
 
     $env:MAVEN_OPTS = '--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow'
-    & $mvnw clean package -Pnative -pl app -am -DskipTests "-Damsha.build.backend=fs" "-Damsha.persistence.backend=fs" "-Dquarkus.profile=prod,filesystem" '-Dquarkus.native.container-build=false' "-Dquarkus.native.native-image-xmx=${targetGB}g"
+    & $mvnw clean package -Pnative -pl app -am -DskipTests "-Damsha.build.backend=fs" "-Damsha.persistence.backend=fs" "-Dquarkus.profile=prod,filesystem" '-Dquarkus.native.container-build=false' "-Dquarkus.native.native-image-xmx=${targetGB}g" @nativeAdditionalBuildArgs
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     Write-Host "✅  Filesystem native build complete: app/target/amsha-app-0.1.0-SNAPSHOT$suffix"
     Write-Host '▶   Copying to dist/amsha-fs...'
