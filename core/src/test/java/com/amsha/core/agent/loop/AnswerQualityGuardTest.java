@@ -54,6 +54,20 @@ class AnswerQualityGuardTest {
     }
 
     @Test
+    void testXmlToolNameParametersLeak() {
+        String leak = """
+                <tool_call>
+                <tool_name>recall_memory_search</tool_name>
+                <parameters>
+                {"query": "first conversation initial discussion"}</parameters>
+                </tool_call>
+                """;
+
+        assertTrue(guard.isRawToolCallLeak(leak));
+        assertEquals("recall_memory_search", guard.extractLeakedToolName(leak));
+    }
+
+    @Test
     void testDescriptiveBypass() {
         // Build a long string that looks like a capability description
         StringBuilder sb = new StringBuilder();

@@ -128,6 +128,25 @@ class LeakedToolCallParserTest {
     }
 
     @Test
+    void extractLeakedToolCall_xmlToolNameParametersFormat() {
+        String answer = """
+                <tool_call>
+                <tool_name>recall_memory_search</tool_name>
+                <parameters>
+                {"query": "first conversation initial discussion"}</parameters>
+                </tool_call>
+                """;
+
+        Optional<LeakedToolCall> result = parser.extractLeakedToolCall(answer);
+
+        assertTrue(result.isPresent());
+        assertEquals("recall_memory_search", result.get().toolName());
+        assertEquals(
+                "first conversation initial discussion",
+                result.get().arguments().get("query"));
+    }
+
+    @Test
     void extractLeakedToolCall_noToolCall_returnsEmpty() {
         String answer = "Here is the analysis of the code. No issues found.";
         Optional<LeakedToolCall> result = parser.extractLeakedToolCall(answer);

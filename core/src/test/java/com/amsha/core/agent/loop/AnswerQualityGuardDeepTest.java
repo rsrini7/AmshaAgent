@@ -213,6 +213,22 @@ class AnswerQualityGuardDeepTest {
         }
 
         @Test
+        void stripRawToolJson_xmlToolNameParametersBlock_removesIt() {
+            String answer = """
+                    Here is the plan.
+                    <tool_call>
+                    <tool_name>recall_memory_search</tool_name>
+                    <parameters>
+                    {"query": "first conversation initial discussion"}</parameters>
+                    </tool_call>
+                    """;
+            String stripped = guard.stripRawToolJson(answer);
+            assertFalse(stripped.contains("tool_call"));
+            assertFalse(stripped.contains("recall_memory_search"));
+            assertTrue(stripped.contains("Here is the plan."));
+        }
+
+        @Test
         void stripRawToolJson_shortPunctuationOnly_returnsEmpty() {
             String answer = "```json\n{}\n```";
             String stripped = guard.stripRawToolJson(answer);

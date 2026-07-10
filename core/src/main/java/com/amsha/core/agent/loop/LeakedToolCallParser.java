@@ -51,6 +51,10 @@ public class LeakedToolCallParser {
     private static final Pattern XML_JSON_TOOL_CALL_PATTERN =
             Pattern.compile("(?is)<tool_call\\b[^>]*>\\s*(\\{.*?})\\s*</tool_call>");
 
+    /** XML tool call format with separate tool_name and parameters tags. */
+    private static final Pattern XML_TOOL_NAME_PARAMS_PATTERN = Pattern.compile(
+            "(?is)<tool_call\\b[^>]*>\\s*<tool_name>([^<]+)</tool_name>\\s*<parameters>(.*?)</parameters>\\s*</tool_call>");
+
     private static final Pattern XML_PARAMETER_PATTERN = Pattern.compile(
             "(?is)<parameter(?:\\s+name\\s*=\\s*|\\s*=\\s*)\"?([a-zA-Z_][a-zA-Z0-9_]*)\"?[^>]*>(.*?)</[^>]*parameter>");
 
@@ -104,6 +108,14 @@ public class LeakedToolCallParser {
         if (xmlJson.isPresent()) {
             log.infof("Parsed XML JSON tool-call format: tool=%s", xmlJson.get().toolName());
             return xmlJson;
+        }
+
+        Optional<LeakedToolCall> xmlToolNameParams = parseXmlToolNameParamsCall(answer);
+        if (xmlToolNameParams.isPresent()) {
+            log.infof(
+                    "Parsed XML tool_name/parameters format: tool=%s",
+                    xmlToolNameParams.get().toolName());
+            return xmlToolNameParams;
         }
 
         // Try JSON formats
@@ -219,6 +231,42 @@ public class LeakedToolCallParser {
             log.debugf("Failed to parse XML JSON tool-call body: %s", LogUtil.rootMessage(e));
             return Optional.empty();
         }
+    }
+
+    private Optional<LeakedToolCall> parseXmlToolNameParamsCall(String answer) {
+        if (answer == null || answer.isBlank()) return Optional.empty();
+
+        Matcher m = XML_TOOL_NAME_PARAMS_PATTERN.matcher(answer);
+        if (!m.find()) {
+            return Optional.empty();
+        }
+
+        String toolName = m.group(1).strip();
+        if (!toolRegistry.listTools().contains(toolName)) {
+            return Optional.empty();
+        }
+
+        String paramsContent = m.group(2).strip();
+        Map<String, Object> args = new HashMap<>();
+        if (paramsContent.startsWith("{") && paramsContent.endsWith("}")) {
+            try {
+                ObjectMapper mapper = new ObjectMapper();
+                args = mapper.readValue(paramsContent, new TypeReference<>() {});
+            } catch (Exception e) {
+                log.debugf("Failed to parse JSON parameters in XML tool call: %s", LogUtil.rootMessage(e));
+                return Optional.empty();
+            }
+        } else {
+            // Try extracting via XML parameter tags
+            Matcher paramsMatcher = XML_PARAMETER_PATTERN.matcher(paramsContent);
+            while (paramsMatcher.find()) {
+                String key = paramsMatcher.group(1);
+                String value =
+                        paramsMatcher.group(2) != null ? paramsMatcher.group(2).strip() : "";
+                args.put(key, value);
+            }
+        }
+        return Optional.of(new LeakedToolCall(toolName, args));
     }
 
     private Optional<LeakedToolCall> parseJsonObjectFormat(Map<String, Object> parsed) {

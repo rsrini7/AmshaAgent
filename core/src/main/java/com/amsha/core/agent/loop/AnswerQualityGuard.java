@@ -94,7 +94,7 @@ public class AnswerQualityGuard implements AnswerGuardStrategy {
 
     /** Detects generic XML-style tool-call wrappers leaking into FINISH text. */
     static final Pattern XML_TOOL_CALL_PATTERN =
-            Pattern.compile("(?is)<tool_call\\b.*?(?:<function\\s*=\\s*|\"name\"\\s*:\\s*\")");
+            Pattern.compile("(?is)<tool_call\\b.*?(?:<function\\s*=\\s*|\"name\"\\s*:\\s*\"|<tool_name\\b)");
 
     /** Extracts the DSML tool name from an {@code invoke name=\"...\"} block. */
     static final Pattern DSML_TOOL_NAME_PATTERN = Pattern.compile("(?is)invoke\\s+name\\s*=\\s*\"([^\"]+)\"");
@@ -102,6 +102,9 @@ public class AnswerQualityGuard implements AnswerGuardStrategy {
     /** Extracts the tool name from a generic XML {@code <function=tool>} block. */
     static final Pattern XML_TOOL_NAME_PATTERN =
             Pattern.compile("(?is)<function\\s*=\\s*\"?([a-zA-Z_][a-zA-Z0-9_]*)\"?\\s*>");
+
+    /** Extracts the tool name from a generic XML {@code <tool_name>tool</tool_name>} block. */
+    static final Pattern XML_TOOL_NAME_TAG_PATTERN = Pattern.compile("(?is)<tool_name\\b[^>]*>([^<]+)</tool_name>");
 
     /**
      * Extracts the tool name from a standard JSON leak so the correction hint
@@ -323,6 +326,9 @@ public class AnswerQualityGuard implements AnswerGuardStrategy {
 
         Matcher xmlMatcher = XML_TOOL_NAME_PATTERN.matcher(answer);
         if (xmlMatcher.find()) return xmlMatcher.group(1);
+
+        Matcher xmlTagMatcher = XML_TOOL_NAME_TAG_PATTERN.matcher(answer);
+        if (xmlTagMatcher.find()) return xmlTagMatcher.group(1).strip();
 
         if (nakedFunctionCallPattern != null) {
             Matcher nakedMatcher = nakedFunctionCallPattern.matcher(answer);
