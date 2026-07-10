@@ -105,6 +105,24 @@ class FinishOutcomeProcessorDeepTest {
         }
 
         @Test
+        void extractCandidateAnswer_stripsSuffixXmlTokenLeak() {
+            ReasoningStep stepXml = new ReasoningStep.FinishStep("The answer. <finish/>", null, 10, 20, false);
+            assertEquals("The answer.", processor.extractCandidateAnswer(stepXml));
+
+            ReasoningStep stepFinnish = new ReasoningStep.FinishStep("The answer. <finnish />", null, 10, 20, false);
+            assertEquals("The answer.", processor.extractCandidateAnswer(stepFinnish));
+        }
+
+        @Test
+        void extractCandidateAnswer_stripsPrefixXmlTokenLeak() {
+            ReasoningStep step = new ReasoningStep.FinishStep("<finish/> The answer.", null, 10, 20, false);
+            assertEquals("The answer.", processor.extractCandidateAnswer(step));
+
+            ReasoningStep stepFinnish = new ReasoningStep.FinishStep("<finnish /> The answer.", null, 10, 20, false);
+            assertEquals("The answer.", processor.extractCandidateAnswer(stepFinnish));
+        }
+
+        @Test
         void extractCandidateAnswer_stripsActionPrefix() {
             ReasoningStep step = new ReasoningStep.FinishStep("Action: FINISH The answer.", null, 10, 20, false);
 

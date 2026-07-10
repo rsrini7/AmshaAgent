@@ -37,11 +37,11 @@ public class FinishOutcomeProcessor {
             Pattern.compile("(?s)\\{\\s*\"(tool|action|function|callId|content|metadata)\"\\s*:.*?\\}", Pattern.DOTALL);
 
     private static final Pattern PREFIX_TOKEN_LEAK = Pattern.compile(
-            "(?i)^(\\s*[*_]*(FINISH:?|Action:\\s*FINISH|Answer:|Final Answer:|Response:)[*_]*\\s*)+",
+            "(?i)^(\\s*[*_]*(FINISH:?|Action:\\s*FINISH|Answer:|Final Answer:|Response:|<\\s*finn?ish\\s*/?\\s*>)[*_]*\\s*)+",
             Pattern.MULTILINE);
 
-    private static final Pattern SUFFIX_TOKEN_LEAK =
-            Pattern.compile("(?i)\\s*[*_]*(FINISH:?|Action:\\s*FINISH)[*_]*\\s*$", Pattern.MULTILINE);
+    private static final Pattern SUFFIX_TOKEN_LEAK = Pattern.compile(
+            "(?i)\\s*[*_]*(FINISH:?|Action:\\s*FINISH|<\\s*finn?ish\\s*/?\\s*>)[*_]*\\s*$", Pattern.MULTILINE);
 
     private static final Pattern FENCE_ONLY_PATTERN =
             Pattern.compile("^\\s*```[a-z]*\\s*[}\\]]*\\s*```\\s*$", Pattern.CASE_INSENSITIVE);
