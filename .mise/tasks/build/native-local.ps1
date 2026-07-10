@@ -81,8 +81,11 @@ if ($srcItem) {
     & $mvnw clean package -Pnative -pl app -am -DskipTests "-Damsha.build.backend=sqlite" "-Damsha.persistence.backend=sqlite" "-Dquarkus.profile=prod" '-Dquarkus.native.container-build=false' "-Dquarkus.native.native-image-xmx=${targetGB}g" @nativeAdditionalBuildArgs
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     Write-Host "✅  Native build complete [local]: app/target/amsha-app-0.1.0-SNAPSHOT$suffix"
-    Write-Host '▶   Assembling dist/ folder...'
-    mise run dist:dist
+    if ($args -contains '--clean' -or $args -contains '-c') {
+        mise run dist:dist -- --clean
+    } else {
+        mise run dist:dist
+    }
 } finally {
     if ($envBackup -eq $true -and (Test-Path '.env.build-backup')) { Rename-Item '.env.build-backup' '.env'; Write-Host 'ℹ️   .env restored.' }
     elseif ($envBackup -eq 'build.env') { Remove-Item '.env' -ErrorAction SilentlyContinue; Write-Host 'ℹ️   Temporary build.env copy removed.' }
