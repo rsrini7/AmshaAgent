@@ -402,6 +402,10 @@ public class ExecutionFailureRecoveryService {
      * Returns null if valid, or an error message if validation fails.
      */
     String validateExtractedCode(String fixedCode, String originalCode, String language) {
+        if (language == null || language.isBlank()) {
+            return "Cannot validate recovered code because sandbox_exec language is missing";
+        }
+
         // Gap 2a: Reject identical code — Shiva didn't actually fix anything
         if (fixedCode.trim().equals(originalCode.trim())) {
             return "Shiva returned identical code — no fix was applied";

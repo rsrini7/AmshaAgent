@@ -204,6 +204,14 @@ class ExecutionFailureRecoveryServiceTest {
     }
 
     @Test
+    void validateExtractedCode_missingLanguage_returnsError() {
+        String error = service.validateExtractedCode("print('fixed')", "print('broken')", "");
+
+        assertNotNull(error);
+        assertTrue(error.contains("language is missing"));
+    }
+
+    @Test
     void validateExtractedCode_identicalCodeWithWhitespace_returnsError() {
         String original = "  public class Main { }  ";
         String fixed = "public class Main { }";

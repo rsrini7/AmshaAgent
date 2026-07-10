@@ -260,49 +260,58 @@ public class ToolStepHandler {
                     context.sessionId());
             String originalCode = extractParam(params, "code");
             String language = extractParam(params, "language");
-            String originalGoal = context.goal();
-
-            ExecutionFailureRecoveryService.RecoveryResult recovery = recoveryService.attemptRecovery(
-                    context.sessionId(),
-                    context.userId(),
-                    context.chatId(),
-                    originalCode,
-                    language,
-                    failure.output(),
-                    context.channelType(),
-                    context.channelPlatformId(),
-                    originalGoal);
-
-            if (recovery.success()) {
-                // Pre-re-execution validation: skip podman if code is obviously broken
-                String execValidationError = recoveryService.validateForExecution(recovery.fixedCode(), language);
-                if (execValidationError != null) {
-                    log.warnf("[AutoHeal] Fixed code failed pre-execution validation: %s", execValidationError);
-                    response = attemptEscalationAfterHealFailure(
-                            context, step, toolName, params, failure, failure, history);
-                } else {
-                    log.infof(
-                            "[AutoHeal] Recovery succeeded, re-executing sandbox_exec with fixed code (attempts=%d)",
-                            recovery.attemptsUsed());
-                    Map<String, Object> fixedParams = new HashMap<>(params);
-                    fixedParams.put("code", recovery.fixedCode());
-                    ToolResponse retriedResponse = invokeToolWithParams(context, history, step, toolName, fixedParams);
-
-                    if (retriedResponse instanceof ToolResponse.ToolFailure retryFailure
-                            && !retryFailure.isInfraFailure()) {
-                        log.warnf("[AutoHeal] Re-execution also failed, attempting persona escalation");
-                        response = attemptEscalationAfterHealFailure(
-                                context, step, toolName, params, failure, retryFailure, history);
-                    } else {
-                        response = retriedResponse;
-                    }
-                }
+            if (language == null || language.isBlank()) {
+                log.warnf(
+                        "[AutoHeal] Skipping recovery for session %s because sandbox_exec language is missing",
+                        context.sessionId());
                 autoHealAttemptedEscalation = true;
             } else {
-                autoHealAttemptedEscalation = true;
-                log.warnf("[AutoHeal] Recovery failed: %s, attempting persona escalation", recovery.errorIfFailed());
-                response =
-                        attemptEscalationAfterHealFailure(context, step, toolName, params, failure, failure, history);
+                String originalGoal = context.goal();
+
+                ExecutionFailureRecoveryService.RecoveryResult recovery = recoveryService.attemptRecovery(
+                        context.sessionId(),
+                        context.userId(),
+                        context.chatId(),
+                        originalCode,
+                        language,
+                        failure.output(),
+                        context.channelType(),
+                        context.channelPlatformId(),
+                        originalGoal);
+
+                if (recovery.success()) {
+                    // Pre-re-execution validation: skip podman if code is obviously broken
+                    String execValidationError = recoveryService.validateForExecution(recovery.fixedCode(), language);
+                    if (execValidationError != null) {
+                        log.warnf("[AutoHeal] Fixed code failed pre-execution validation: %s", execValidationError);
+                        response = attemptEscalationAfterHealFailure(
+                                context, step, toolName, params, failure, failure, history);
+                    } else {
+                        log.infof(
+                                "[AutoHeal] Recovery succeeded, re-executing sandbox_exec with fixed code (attempts=%d)",
+                                recovery.attemptsUsed());
+                        Map<String, Object> fixedParams = new HashMap<>(params);
+                        fixedParams.put("code", recovery.fixedCode());
+                        ToolResponse retriedResponse =
+                                invokeToolWithParams(context, history, step, toolName, fixedParams);
+
+                        if (retriedResponse instanceof ToolResponse.ToolFailure retryFailure
+                                && !retryFailure.isInfraFailure()) {
+                            log.warnf("[AutoHeal] Re-execution also failed, attempting persona escalation");
+                            response = attemptEscalationAfterHealFailure(
+                                    context, step, toolName, params, failure, retryFailure, history);
+                        } else {
+                            response = retriedResponse;
+                        }
+                    }
+                    autoHealAttemptedEscalation = true;
+                } else {
+                    autoHealAttemptedEscalation = true;
+                    log.warnf(
+                            "[AutoHeal] Recovery failed: %s, attempting persona escalation", recovery.errorIfFailed());
+                    response = attemptEscalationAfterHealFailure(
+                            context, step, toolName, params, failure, failure, history);
+                }
             }
         }
 

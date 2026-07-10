@@ -157,16 +157,14 @@ class SandboxExecToolTest {
     }
 
     @Test
-    void missing_language_defaults_to_bash_and_succeeds() throws Exception {
-        when(mockIsolationExecutor.executeSandboxed(any(), any(), any(), any()))
-                .thenReturn(SandboxResult.success("ok"));
-
+    void missing_language_returns_failure() throws Exception {
         WorkspaceContext.run("test-session", "user1", "chat1", AutonomyLevel.FULL, "coder", () -> {
             Map<String, Object> params = Map.of("code", "echo hi");
             ToolResponse r = tool.execute(ctx(), params);
 
-            assertTrue(r.success());
-            assertEquals("ok", r.output());
+            assertFalse(r.success());
+            assertTrue(r.output().contains("Parameter 'language' is required"));
+            verifyNoInteractions(mockIsolationExecutor);
             return null;
         });
     }
@@ -483,6 +481,19 @@ class SandboxExecToolTest {
             assertFalse(r.success());
             assertTrue(
                     r.output().contains("Unsupported language"), "Expected 'Unsupported language' in: " + r.output());
+            verifyNoInteractions(mockIsolationExecutor);
+            return null;
+        });
+    }
+
+    @Test
+    void missing_language_is_rejected_before_execution() throws Exception {
+        WorkspaceContext.run("test-session", "user1", "chat1", AutonomyLevel.FULL, "coder", () -> {
+            Map<String, Object> params = Map.of("code", "import math\nprint(math.factorial(10))");
+            ToolResponse r = tool.execute(ctx(), params);
+
+            assertFalse(r.success());
+            assertTrue(r.output().contains("Parameter 'language' is required"));
             verifyNoInteractions(mockIsolationExecutor);
             return null;
         });

@@ -45,6 +45,7 @@ class IntentClassificationServiceTest {
     @Test
     void testFollowUpHeuristic() {
         assertTrue(intentDetector.isFollowUpHeuristic("retry same command"));
+        assertTrue(intentDetector.isFollowUpHeuristic("execute and share result"));
         assertTrue(intentDetector.isFollowUpHeuristic("run it again"));
         assertTrue(intentDetector.isFollowUpHeuristic("in java please"));
         assertTrue(intentDetector.isFollowUpHeuristic("use sandbox for this"));
@@ -54,6 +55,13 @@ class IntentClassificationServiceTest {
 
         // No signals
         assertFalse(intentDetector.isFollowUpHeuristic("hello world"));
+    }
+
+    @Test
+    void testExecutionFollowUpsAreNotSimpleConversation() {
+        assertFalse(intentDetector.isSimpleConversational("execute and share result"));
+        assertFalse(intentDetector.isSimpleConversational("run it again"));
+        assertFalse(intentDetector.isSimpleConversational("do it"));
     }
 
     @Test
