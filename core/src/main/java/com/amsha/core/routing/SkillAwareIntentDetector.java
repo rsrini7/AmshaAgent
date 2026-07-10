@@ -15,6 +15,8 @@ import com.amsha.core.agent.role.AgentRoleEnum;
 import com.amsha.core.skill.CompiledSkillEntry;
 import com.amsha.core.skill.SkillRegistry;
 
+import org.jboss.logging.Logger;
+
 import io.quarkus.arc.Unremovable;
 
 /**
@@ -32,6 +34,8 @@ import io.quarkus.arc.Unremovable;
 @Unremovable
 public class SkillAwareIntentDetector implements IntentDetector {
 
+    private static final Logger LOG = Logger.getLogger(SkillAwareIntentDetector.class);
+
     @Inject
     SkillRegistry skillRegistry;
 
@@ -47,7 +51,7 @@ public class SkillAwareIntentDetector implements IntentDetector {
         List<CompiledSkillEntry> snapshot = skillRegistry.currentSnapshot();
         for (CompiledSkillEntry entry : snapshot) {
             if (entry.matches(userMessage)) {
-                return AgentRoleEnum.SKILL_PREFIX + entry.definition().name();
+                return skillRole(entry, "trigger pattern", userMessage);
             }
         }
 
@@ -67,12 +71,18 @@ public class SkillAwareIntentDetector implements IntentDetector {
                 String regexName = Arrays.stream(segments).map(Pattern::quote).collect(Collectors.joining("[\\s_-]+"));
                 Pattern boundaryPattern = Pattern.compile("\\b" + regexName + "\\b", Pattern.CASE_INSENSITIVE);
                 if (boundaryPattern.matcher(userMessage).find()) {
-                    return AgentRoleEnum.SKILL_PREFIX + entry.definition().name();
+                    return skillRole(entry, "skill name", userMessage);
                 }
             }
         }
 
         // No skill match - fallback to expensive LLM classification
         return fallbackService.classify(userMessage);
+    }
+
+    private static String skillRole(CompiledSkillEntry entry, String matchType, String userMessage) {
+        String role = AgentRoleEnum.SKILL_PREFIX + entry.definition().name();
+        LOG.infof("Skill intent matched via %s: role=%s message='%s'", matchType, role, userMessage);
+        return role;
     }
 }

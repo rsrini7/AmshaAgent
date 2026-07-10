@@ -19,13 +19,13 @@ import com.amsha.channel.api.ChannelPlugin;
 import com.amsha.channel.api.ChannelSender;
 import com.amsha.channel.api.ChannelType;
 import com.amsha.channel.api.ChannelUser;
-import com.amsha.channel.api.IntentDetector;
 import com.amsha.core.agent.IntentClassificationService;
 import com.amsha.core.agent.loop.AgentRoleCache;
 import com.amsha.core.agent.role.AgentRoleEnum;
 import com.amsha.core.channel.ChannelPluginRegistry;
 import com.amsha.core.pipeline.HandleResult;
 import com.amsha.core.pipeline.MessageContext;
+import com.amsha.core.routing.SkillAwareIntentDetector;
 import com.amsha.core.security.DestructiveVocabularyFilter;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -35,7 +35,7 @@ import org.mockito.Mockito;
 class IntentClassificationHandlerTest {
 
     private IntentClassificationHandler handler;
-    private IntentDetector classifier;
+    private SkillAwareIntentDetector classifier;
     private ChannelSender sender;
     private ChannelPluginRegistry registry;
     private AgentRoleCache roleCache;
@@ -44,7 +44,7 @@ class IntentClassificationHandlerTest {
     @BeforeEach
     void setUp() {
         handler = new IntentClassificationHandler();
-        classifier = mock(IntentDetector.class);
+        classifier = mock(SkillAwareIntentDetector.class);
         sender = mock(ChannelSender.class);
         registry = mock(ChannelPluginRegistry.class);
         roleCache = mock(AgentRoleCache.class);
