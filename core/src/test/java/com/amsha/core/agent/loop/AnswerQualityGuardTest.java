@@ -43,6 +43,17 @@ class AnswerQualityGuardTest {
     }
 
     @Test
+    void testXmlJsonToolCallLeak() {
+        String leak = """
+                <tool_call>
+                {"name": "recall_memory_search", "arguments": {"query": "first discussion"}}
+                </tool_call>
+                """;
+
+        assertTrue(guard.isRawToolCallLeak(leak));
+    }
+
+    @Test
     void testDescriptiveBypass() {
         // Build a long string that looks like a capability description
         StringBuilder sb = new StringBuilder();

@@ -146,6 +146,8 @@ what is my email
 
 /commands
 
+delegate to coder: write a python program to print "Brahmaloka Connection Success" and execute it
+
 /status
 
 /reset
@@ -166,11 +168,15 @@ delegate to parvati: analyze the emotional tone of this message - "I'm so frustr
 
 what is ganesha capable of ?
 
+delegate to debugger: fix the python code: print("Kailasa Connection Success") without closing quotes. just run the fixed code
+
 what is kartikeya's role in the system ?
 
 how does lakshmi help with token optimization ?
 
 what security checks does kartikeya perform ?
+
+delegate to researcher: search for "Cerebras systems" on the web and describe what it is in one sentence
 
 how does durga enforce policies ?
 

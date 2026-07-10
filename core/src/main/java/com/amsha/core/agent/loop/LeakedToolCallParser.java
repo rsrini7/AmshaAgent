@@ -47,6 +47,10 @@ public class LeakedToolCallParser {
     private static final Pattern XML_FUNCTION_PATTERN =
             Pattern.compile("(?is)<function\\s*=\\s*\"?([a-zA-Z_][a-zA-Z0-9_]*)\"?\\s*>");
 
+    /** Generic XML wrapper with JSON body: <tool_call>{"name":"tool", ...}</tool_call>. */
+    private static final Pattern XML_JSON_TOOL_CALL_PATTERN =
+            Pattern.compile("(?is)<tool_call\\b[^>]*>\\s*(\\{.*?})\\s*</tool_call>");
+
     private static final Pattern XML_PARAMETER_PATTERN = Pattern.compile(
             "(?is)<parameter(?:\\s+name\\s*=\\s*|\\s*=\\s*)\"?([a-zA-Z_][a-zA-Z0-9_]*)\"?[^>]*>(.*?)</[^>]*parameter>");
 
@@ -94,6 +98,12 @@ public class LeakedToolCallParser {
         if (xml.isPresent()) {
             log.infof("Parsed XML tool-call format: tool=%s", xml.get().toolName());
             return xml;
+        }
+
+        Optional<LeakedToolCall> xmlJson = parseXmlJsonToolCall(answer);
+        if (xmlJson.isPresent()) {
+            log.infof("Parsed XML JSON tool-call format: tool=%s", xmlJson.get().toolName());
+            return xmlJson;
         }
 
         // Try JSON formats
@@ -191,6 +201,24 @@ public class LeakedToolCallParser {
             args.put(key, value);
         }
         return Optional.of(new LeakedToolCall(toolName, args));
+    }
+
+    private Optional<LeakedToolCall> parseXmlJsonToolCall(String answer) {
+        if (answer == null || answer.isBlank()) return Optional.empty();
+
+        Matcher jsonBlock = XML_JSON_TOOL_CALL_PATTERN.matcher(answer);
+        if (!jsonBlock.find()) {
+            return Optional.empty();
+        }
+
+        try {
+            ObjectMapper mapper = new ObjectMapper();
+            Map<String, Object> parsed = mapper.readValue(jsonBlock.group(1), new TypeReference<>() {});
+            return parseJsonObjectFormat(parsed);
+        } catch (Exception e) {
+            log.debugf("Failed to parse XML JSON tool-call body: %s", LogUtil.rootMessage(e));
+            return Optional.empty();
+        }
     }
 
     private Optional<LeakedToolCall> parseJsonObjectFormat(Map<String, Object> parsed) {

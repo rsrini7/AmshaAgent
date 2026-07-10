@@ -93,7 +93,8 @@ public class AnswerQualityGuard implements AnswerGuardStrategy {
     static final Pattern DSML_TOOL_CALL_PATTERN = Pattern.compile("(?is)DSML.*invoke\\s+name\\s*=\\s*\"");
 
     /** Detects generic XML-style tool-call wrappers leaking into FINISH text. */
-    static final Pattern XML_TOOL_CALL_PATTERN = Pattern.compile("(?is)<tool_call\\b.*<function\\s*=\\s*");
+    static final Pattern XML_TOOL_CALL_PATTERN =
+            Pattern.compile("(?is)<tool_call\\b.*?(?:<function\\s*=\\s*|\"name\"\\s*:\\s*\")");
 
     /** Extracts the DSML tool name from an {@code invoke name=\"...\"} block. */
     static final Pattern DSML_TOOL_NAME_PATTERN = Pattern.compile("(?is)invoke\\s+name\\s*=\\s*\"([^\"]+)\"");
