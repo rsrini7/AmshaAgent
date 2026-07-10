@@ -3,6 +3,7 @@ package com.amsha.core.reflex;
 import jakarta.enterprise.context.Dependent;
 import jakarta.inject.Inject;
 
+import java.time.Instant;
 import java.util.Optional;
 import java.util.function.BiConsumer;
 
@@ -17,7 +18,10 @@ import com.amsha.core.lifecycle.WorkspaceManager;
 import com.amsha.core.pipeline.MessageContext;
 import com.amsha.core.scope.WorkspaceContext;
 import com.amsha.core.security.AutonomyLevel;
+import com.amsha.core.state.CheckpointStatus;
 import com.amsha.core.state.StatefulAgentStore;
+import com.amsha.persistence.api.CronRunDto;
+import com.amsha.persistence.api.CronRunStorePort;
 import com.amsha.persistence.api.CronStorePort;
 
 @Dependent
@@ -28,6 +32,9 @@ public class CronDecisionRouter {
 
     @Inject
     CronStorePort cronStore;
+
+    @Inject
+    CronRunStorePort cronRunStore;
 
     @Inject
     AgentLoop agentLoop;
@@ -88,6 +95,7 @@ public class CronDecisionRouter {
             }
 
             ctx.postProcessCronDecision().accept(cron, ctx.reason, result);
+            updateLatestRun(cronSessionId, result);
             ctx.jobNotifier().accept(cron, result);
             return ctx.successResponse().get(result);
         } finally {
@@ -107,6 +115,45 @@ public class CronDecisionRouter {
                 || result instanceof AgentResult.StructuredFinished
                 || result instanceof AgentResult.Failed
                 || result instanceof AgentResult.LoopExceeded;
+    }
+
+    private void updateLatestRun(String cronSessionId, AgentResult result) {
+        if (cronRunStore == null || cronSessionId == null || result == null) {
+            return;
+        }
+        cronRunStore.findAll(CheckpointStatus.AWAITING_APPROVAL.name(), 0, 100).stream()
+                .filter(run -> cronSessionId.equals(run.sessionId()))
+                .findFirst()
+                .ifPresent(run -> cronRunStore.save(updatedRun(run, result)));
+    }
+
+    private CronRunDto updatedRun(CronRunDto run, AgentResult result) {
+        String status =
+                switch (result) {
+                    case AgentResult.Finished _, AgentResult.StructuredFinished _ -> "COMPLETED";
+                    case AgentResult.AwaitingApproval _ -> "AWAITING_APPROVAL";
+                    case AgentResult.AwaitingRetry _ -> "AWAITING_RETRY";
+                    case AgentResult.Failed _, AgentResult.LoopExceeded _ -> "FAILED";
+                };
+        String errorReason =
+                switch (result) {
+                    case AgentResult.Failed f -> f.reason();
+                    case AgentResult.LoopExceeded _ -> "Loop exceeded";
+                    default -> null;
+                };
+        return new CronRunDto(
+                run.id(),
+                run.cronId(),
+                run.sessionId(),
+                status,
+                run.startedAt(),
+                Instant.now(),
+                errorReason,
+                run.iterationsUsed(),
+                result.totalInputTokens(),
+                result.totalOutputTokens(),
+                run.usdCost(),
+                run.createdAt());
     }
 
     private String resolveSessionId(String cronId) {

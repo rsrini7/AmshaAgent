@@ -458,11 +458,11 @@ amsha:
       recall-retention-days: ${AMSHA_MEMORY_RETENTION_RECALL_RETENTION_DAYS:30}
       archival-eviction-threshold: ${AMSHA_MEMORY_RETENTION_ARCHIVAL_EVICTION_THRESHOLD:0.3}
       archival-min-age-days: ${AMSHA_MEMORY_RETENTION_ARCHIVAL_MIN_AGE_DAYS:30}
-  chat:
-    default-observation-max-length: 2000
-    tool-specific-limits:
-      github_search: 10000
-      read_file: 8000
+    chat:
+      recovered-observation-max-chars: ${AMSHA_CHAT_RECOVERED_OBSERVATION_MAX_CHARS:2000}
+      tool-specific-limits:
+        github_search: 10000
+        read_file: 8000
       web_search: 5000
   chat-memory:
     max-messages: ${AMSHA_CHAT_MEMORY_MAX_MESSAGES:20}
