@@ -24,14 +24,39 @@ public class ThinkingState implements RunnerState {
         }
 
         try {
+            int historySizeBefore = context.history().size();
             StepDecision engineDecision = services.engineStepHandler()
                     .processEngineStep(
                             context.executionContext(),
                             context.engine(),
                             context.history(),
                             currentTransientError,
-                            context.llmSchemaErrorCount(),
-                            context.iteration());
+                    context.llmSchemaErrorCount(),
+                    context.iteration());
+
+            if (engineDecision.type() == DecisionType.CONTINUE) {
+                if (context.history().size() == historySizeBefore) {
+                    int noProgress = context.recordNoProgress();
+                    if (noProgress >= 2) {
+                        String reason = engineDecision.transientError();
+                        String detail = reason == null || reason.isBlank()
+                                ? "The model returned no executable step repeatedly."
+                                : "The model made no progress repeatedly: " + reason;
+                        context.setFinalResult(AgentResult.failed(
+                                detail, AgentResult.FailureCategory.SCHEMA_ERROR, List.copyOf(context.history())));
+                        return services.failedState();
+                    }
+                    // Retry once with the compact/finish-recovery prompt so
+                    // a malformed provider response cannot resend the full
+                    // skill and memory context.
+                    context.executionContext().setForceFinishRetry(true);
+                } else {
+                    context.resetNoProgress();
+                    context.executionContext().setForceFinishRetry(false);
+                }
+            } else {
+                context.resetNoProgress();
+            }
 
             if (engineDecision.isRateLimitHit()) {
                 if (context.rateLimitRetryCount() + 1 > services.maxRateLimitRetries()) {

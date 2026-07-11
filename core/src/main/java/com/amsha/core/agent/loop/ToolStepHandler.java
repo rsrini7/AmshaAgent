@@ -1,14 +1,5 @@
 package com.amsha.core.agent.loop;
 
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.enterprise.inject.Instance;
-import jakarta.inject.Inject;
-
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-
 import com.amsha.common.util.LogUtil;
 import com.amsha.core.agent.AgentSentinels;
 import com.amsha.core.agent.reasoning.ReasoningStep;
@@ -20,11 +11,23 @@ import com.amsha.core.scope.WorkspaceContext;
 import com.amsha.core.security.AutonomyLevel;
 import com.amsha.core.skill.CompiledSkillEntry;
 import com.amsha.core.tools.ToolResponse;
-
-import org.jboss.logging.Logger;
-
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.inject.Instance;
+import jakarta.inject.Inject;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import org.jboss.logging.Logger;
+
+
+
+
+
+
 
 /**
  * Handles tool name validation, 4-phase tool invocation,
@@ -276,6 +279,28 @@ public class ToolStepHandler {
             final ReasoningStep blockedStep = step.withObservation(b.observation(), false);
             history.add(blockedStep);
             observers.forEach(o -> o.onStepComplete(context.sessionId(), context.agentRole(), blockedStep));
+
+            // A deterministic validation/policy rejection must not cause the
+            // state machine to spend the entire iteration budget asking the
+            // model to repeat the same invalid call.  Keep the valid history,
+            // but terminate this turn after the same blocked invocation is
+            // observed twice so the caller can correct the parameters and
+            // resume the session.
+            long repeatedBlockedCalls = history.stream()
+                    .filter(s -> s instanceof ReasoningStep.ToolCallStep)
+                    .filter(s -> Objects.equals(s.action(), step.action()))
+                    .filter(s -> Objects.equals(s.actionInput(), step.actionInput()))
+                    .filter(s -> Boolean.FALSE.equals(s.success()))
+                    .count();
+            log.warnf(
+                    "[TOOL-GUARD] Blocked tool '%s' for session %s (repeat=%d): %s",
+                    step.action(), context.sessionId(), repeatedBlockedCalls, b.observation());
+            if (repeatedBlockedCalls >= 2) {
+                return StepDecision.terminal(AgentResult.failed(
+                        "Tool call blocked repeatedly: " + b.observation(),
+                        AgentResult.FailureCategory.SCHEMA_ERROR,
+                        List.copyOf(history)));
+            }
 
             if (context.sessionId() != null
                     && context.sessionId().contains(AgentSentinels.DELEGATE_SESSION_SENTINEL)

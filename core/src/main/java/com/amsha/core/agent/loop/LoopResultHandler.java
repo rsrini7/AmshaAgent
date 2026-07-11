@@ -103,6 +103,10 @@ public class LoopResultHandler {
                     new AgentSseService.AgentStatusEvent(
                             sessionId, canonicalRole, CheckpointStatus.FAILED.name(), Instant.now()));
         } else if (result instanceof AgentResult.LoopExceeded l) {
+            // Quarantine only the failed turn's dangling tool requests. Preserve the
+            // session history and completed tool results so the same session can recover
+            // on its next goal without replaying an invalid/pending call.
+            chatMemoryWriter.scrubUnfulfilledToolCalls(sessionId);
             var cp = agentStore.save(sessionId, canonicalRole, userId, autonomy, result.steps(), goal);
             agentStore.markFailed(cp.getId(), "Max iterations (" + l.maxIterations() + ") exceeded");
             agentSseService.publish(
