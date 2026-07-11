@@ -57,6 +57,12 @@ public class SqliteExtractedMemoryStore implements ExtractedMemoryStorePort {
     }
 
     @Override
+    public List<String> listUserIds(int limit) {
+        int sqlLimit = limit <= 0 ? -1 : limit;
+        return jdbi.withExtension(ExtractedMemoryJdbiDao.class, dao -> dao.listUserIds(sqlLimit));
+    }
+
+    @Override
     public boolean existsByHash(String sessionId, String contentHash) {
         return jdbi.withExtension(ExtractedMemoryJdbiDao.class, dao -> dao.existsByHash(sessionId, contentHash));
     }

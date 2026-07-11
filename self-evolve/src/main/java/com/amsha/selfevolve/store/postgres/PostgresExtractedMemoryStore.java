@@ -62,6 +62,13 @@ public class PostgresExtractedMemoryStore implements ExtractedMemoryStorePort {
     }
 
     @Override
+    public List<String> listUserIds(int limit) {
+        int sqlLimit = limit <= 0 ? Integer.MAX_VALUE : limit;
+        Jdbi jdbi = Jdbi.create(dataSource).installPlugin(new SqlObjectPlugin());
+        return jdbi.withExtension(PostgresExtractedMemoryJdbiDao.class, dao -> dao.listUserIds(sqlLimit));
+    }
+
+    @Override
     public boolean existsByHash(String sessionId, String contentHash) {
         Jdbi jdbi = Jdbi.create(dataSource).installPlugin(new SqlObjectPlugin());
         return jdbi.withExtension(

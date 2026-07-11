@@ -11,6 +11,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
+import com.amsha.common.util.LogUtil;
 import com.amsha.core.agent.IntentClassificationService;
 import com.amsha.core.agent.reasoning.ReasoningEngine;
 import com.amsha.core.agent.reasoning.ReasoningStep;
@@ -24,6 +25,7 @@ import com.amsha.core.channel.ChannelPluginRegistry;
 import com.amsha.core.domain.model.AgentCheckpoint;
 import com.amsha.core.governance.BudgetExceededException;
 import com.amsha.core.governance.BudgetWarningException;
+import com.amsha.core.memory.tiered.DirectiveFeedbackPort;
 import com.amsha.core.pipeline.MessageContext;
 import com.amsha.core.scope.WorkspaceContext;
 import com.amsha.core.scope.WorkspaceScopeHolder;
@@ -93,6 +95,9 @@ public class AgentLoop {
 
     @Inject
     ChatMemoryWriter chatMemoryWriter;
+
+    @Inject
+    Instance<DirectiveFeedbackPort> directiveFeedbackPortInstance;
 
     private LoopResultHandler loopResultHandler;
 
@@ -187,6 +192,7 @@ public class AgentLoop {
         sessionLifecycleCoordinator.setupMdc(sessionId, canonicalRole, capturedUserId);
 
         AgentResult result = null;
+        boolean exceptionCaught = false;
         List<ReasoningStep> resumedHistory = new ArrayList<>();
         String effectiveGoal = goal;
 
@@ -274,12 +280,14 @@ public class AgentLoop {
                 return result;
 
             } catch (StructuredOutputException e) {
+                exceptionCaught = true;
                 String msg = AgentErrorMessageUtil.safeMessage(e);
                 log.errorf("Structured output failure for session %s: %s", sessionId, msg);
                 result = AgentResult.failed(msg, AgentResult.FailureCategory.SCHEMA_ERROR, List.copyOf(resumedHistory));
                 return result;
 
             } catch (BudgetExceededException e) {
+                exceptionCaught = true;
                 meterRegistry
                         .counter(
                                 "amsha.agent.loop.failure",
@@ -291,13 +299,16 @@ public class AgentLoop {
                 throw e;
 
             } catch (BudgetWarningException e) {
+                exceptionCaught = true;
                 throw e;
 
             } catch (ComplianceViolationException cve) {
+                exceptionCaught = true;
                 result = getLoopResultHandler().handleComplianceViolation(sessionId, canonicalRole, cve);
                 return result;
 
             } catch (Exception e) {
+                exceptionCaught = true;
                 meterRegistry
                         .counter(
                                 "amsha.agent.loop.failure",
@@ -311,6 +322,16 @@ public class AgentLoop {
 
             } finally {
                 try {
+                    boolean isTerminal = (result != null
+                                    && !(result instanceof AgentResult.AwaitingApproval)
+                                    && !(result instanceof AgentResult.AwaitingRetry))
+                            || exceptionCaught;
+                    if (isTerminal) {
+                        boolean success = !exceptionCaught
+                                && (result instanceof AgentResult.Finished
+                                        || result instanceof AgentResult.StructuredFinished);
+                        recordDirectiveOutcome(sessionId, capturedUserId, success);
+                    }
                     String goalHash = hashUtil.sha256hex(effectiveGoal);
                     observabilityManager.notifyLoopComplete(sessionId, capturedUserId, canonicalRole, goalHash, result);
                 } finally {
@@ -437,5 +458,20 @@ public class AgentLoop {
         }
         String text = context.getMessage().text();
         return text != null && !text.isBlank() && intentClassificationService.isContinuationCommand(text);
+    }
+
+    private void recordDirectiveOutcome(String sessionId, String userId, boolean success) {
+        if (directiveFeedbackPortInstance == null
+                || directiveFeedbackPortInstance.isUnsatisfied()
+                || sessionId == null
+                || userId == null
+                || userId.isBlank()) {
+            return;
+        }
+        try {
+            directiveFeedbackPortInstance.get().recordSessionOutcome(sessionId, userId, success);
+        } catch (Exception e) {
+            log.debugf("Directive feedback skipped for session %s: %s", sessionId, LogUtil.rootMessage(e));
+        }
     }
 }

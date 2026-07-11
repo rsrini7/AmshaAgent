@@ -7,6 +7,7 @@ import jakarta.inject.Inject;
 
 import com.amsha.core.agent.event.AgentStateChangedEvent;
 import com.amsha.core.events.CompactionEvent;
+import com.amsha.core.events.ConversationMessageEvent;
 import com.amsha.core.events.ToolExecutionEvent;
 import com.amsha.selfevolve.api.EvolutionEventType;
 
@@ -54,6 +55,26 @@ public class EvolutionEventObserver {
                     event.turnNumber());
         } catch (Exception e) {
             log.warnf("[SelfEvolve] Failed to observe tool event: %s", e.getMessage());
+        }
+    }
+
+    /**
+     * Observes persisted conversational messages and emits user/agent trace events.
+     */
+    public void onConversationMessage(@ObservesAsync ConversationMessageEvent event) {
+        if (!service.isEnabled()) {
+            return;
+        }
+        try {
+            EvolutionEventType type =
+                    switch (event.type()) {
+                        case USER_MESSAGE -> EvolutionEventType.USER_MESSAGE;
+                        case AGENT_MESSAGE -> EvolutionEventType.AGENT_MESSAGE;
+                    };
+            service.emit(
+                    event.sessionId(), event.userId(), type, event.role(), event.content(), null, event.turnNumber());
+        } catch (Exception e) {
+            log.warnf("[SelfEvolve] Failed to observe conversation message: %s", e.getMessage());
         }
     }
 

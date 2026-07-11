@@ -10,20 +10,15 @@ import java.util.List;
  */
 public interface DirectiveProvider {
 
-    /**
-     * Returns directive texts eligible for prompt injection.
-     *
-     * @param userId user to get directives for
-     * @return list of directive texts (max 5, each max 600 chars)
-     */
-    List<String> getInjectableDirectives(String userId);
+    record DirectiveInfo(String id, String text) {}
+
+    record DirectivesResult(List<DirectiveInfo> active, List<DirectiveInfo> shadow) {}
 
     /**
-     * Returns shadow directive texts for evaluation injection.
-     * These are prefixed with [EVAL] in the prompt.
+     * Returns both active and shadow directives for prompt injection.
      *
      * @param userId user to get directives for
-     * @return list of shadow directive texts
+     * @return DirectivesResult containing active and shadow directives
      */
-    List<String> getShadowDirectives(String userId);
+    DirectivesResult getDirectives(String userId);
 }

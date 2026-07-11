@@ -122,6 +122,25 @@ class MemoryExtractorRuleTest {
     }
 
     @Test
+    void userPreferenceMessage_extractsUserPreference() {
+        List<EvolutionEvent> events = List.of(event(
+                "e1",
+                EvolutionEventType.USER_MESSAGE,
+                "user1",
+                "Please use Java records over Lombok for immutable DTOs.",
+                null,
+                1,
+                Instant.now()));
+
+        List<ExtractedMemory> results = extractor.extract(events, "user1");
+
+        assertTrue(results.stream().anyMatch(m -> m.recordType() == MemoryRecordType.USER_PREFERENCE));
+        assertTrue(results.stream()
+                .filter(m -> m.recordType() == MemoryRecordType.USER_PREFERENCE)
+                .anyMatch(m -> m.content().contains("Java records over Lombok")));
+    }
+
+    @Test
     void duplicateContent_deduplicated() {
         Instant now = Instant.now();
         // Two identical error contexts should deduplicate

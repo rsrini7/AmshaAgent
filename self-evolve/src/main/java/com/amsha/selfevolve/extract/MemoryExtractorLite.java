@@ -8,6 +8,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.regex.Pattern;
 
 import com.amsha.selfevolve.api.EvolutionEvent;
 import com.amsha.selfevolve.api.EvolutionEventType;
@@ -34,6 +35,9 @@ import com.amsha.selfevolve.internal.ExtractionDeduplicator;
 @Singleton
 public class MemoryExtractorLite {
 
+    private static final Pattern USER_PREFERENCE_PATTERN = Pattern.compile(
+            "(?i)\\b(?:prefer|preferences?|please use|always use|never use|do not use|don't use|avoid|use .{1,80}? over)\\b");
+
     private final ExtractionDeduplicator deduplicator;
     private final List<ExtractionRule> rules;
 
@@ -41,6 +45,7 @@ public class MemoryExtractorLite {
     public MemoryExtractorLite(ExtractionDeduplicator deduplicator) {
         this.deduplicator = deduplicator;
         this.rules = List.of(
+                this::extractUserPreferences,
                 this::extractFailurePatterns,
                 this::extractResolutionPatterns,
                 this::extractToolHints,
@@ -72,6 +77,39 @@ public class MemoryExtractorLite {
 
         // Deduplicate by content hash within this extraction batch
         return deduplicateBatch(allExtractions, sessionId, userId);
+    }
+
+    /**
+     * User preference: explicit preference/constraint statements from user messages.
+     */
+    private List<ExtractedMemory> extractUserPreferences(List<EvolutionEvent> events, String userId) {
+        String sessionId = events.getFirst().sessionId();
+        List<ExtractedMemory> results = new ArrayList<>();
+        for (EvolutionEvent event : events) {
+            if (event.eventType() != EvolutionEventType.USER_MESSAGE || event.content() == null) {
+                continue;
+            }
+            String content = event.content().strip();
+            String matchTarget = content.length() > 500 ? content.substring(0, 500) : content;
+            if (content.length() < 8
+                    || !USER_PREFERENCE_PATTERN.matcher(matchTarget).find()) {
+                continue;
+            }
+            String normalized = normalizePreference(content);
+            if (normalized.isBlank()) {
+                continue;
+            }
+            String hash = deduplicator.hashContent(normalized);
+            results.add(ExtractedMemory.create(
+                    sessionId,
+                    userId,
+                    MemoryRecordType.USER_PREFERENCE,
+                    normalized,
+                    0.85,
+                    hash,
+                    List.of(event.eventId())));
+        }
+        return results;
     }
 
     /**
@@ -233,5 +271,13 @@ public class MemoryExtractorLite {
             }
         }
         return List.copyOf(seen.values());
+    }
+
+    private static String normalizePreference(String content) {
+        String normalized = content.replaceAll("\\s+", " ").trim();
+        if (normalized.length() > 400) {
+            normalized = normalized.substring(0, 400).trim();
+        }
+        return normalized;
     }
 }

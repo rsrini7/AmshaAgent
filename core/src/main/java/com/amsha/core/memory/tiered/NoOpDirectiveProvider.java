@@ -12,12 +12,7 @@ import java.util.List;
 public class NoOpDirectiveProvider implements DirectiveProvider {
 
     @Override
-    public List<String> getInjectableDirectives(String userId) {
-        return List.of();
-    }
-
-    @Override
-    public List<String> getShadowDirectives(String userId) {
-        return List.of();
+    public DirectivesResult getDirectives(String userId) {
+        return new DirectivesResult(List.of(), List.of());
     }
 }

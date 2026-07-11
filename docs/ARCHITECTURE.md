@@ -377,14 +377,14 @@ The `MemoryExtractorLite` evaluates captured session traces offline. It parses t
 *   Provides structured semantic records mapping the target goal, tool, input parameters, and failure/success outcomes.
 
 #### 3. Directive Synthesis & Lifecycle (Phase 10)
-The `InteractionPolicySynthesizer` aggregates extracted memories over multiple turns. When a specific failure/success pattern recurs, it synthesizes a new **behavioral directive** to optimize the agent's behavior.
+The `InteractionPolicySynthesizer` aggregates extracted memories over multiple turns. When a specific failure/success pattern recurs, it synthesizes a new **behavioral directive** to optimize the agent's behavior. An out-of-band daily cron pass (`SelfEvolveSynthesisScheduler`, trigger-gated by `amsha.self-evolve.synthesis-trigger=cron`) synthesizes directives for all known users in a batch, isolating per-user errors so one failure does not abort the whole run.
 
 Directives follow a strict lifecycle state machine:
 ```
 [CANDIDATE] ──(Review)──> [SHADOW] ──(Validation)──> [ACTIVE] ──(Decline)──> [DISABLED]
 ```
 *   **CANDIDATE**: Newly synthesized directive, awaiting administrator verification.
-*   **SHADOW**: Evaluated silently in the background during active sessions. The system logs whether the directive *would* have succeeded/improved output without injecting it.
+*   **SHADOW**: Evaluated by injecting the directive into the agent's prompt under an `[EVAL]` label during active sessions (no authoritative behavior change). When the session terminates — successfully, in failure, or via an error/exception path — `DirectiveFeedbackPort` records the outcome (hit on success, miss on failure) and feeds it back to `DirectiveFeedbackService`, which advances the directive's lifecycle (`Validation` → `ACTIVE`) or declines it.
 *   **ACTIVE**: Injected directly into the agent's system prompt matching the target role or goal context.
 *   **DISABLED**: Explicitly turned off due to negative impact or manual override.
 

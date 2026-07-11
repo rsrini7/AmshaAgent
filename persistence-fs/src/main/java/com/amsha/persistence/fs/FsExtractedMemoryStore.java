@@ -104,6 +104,24 @@ public class FsExtractedMemoryStore implements ExtractedMemoryStorePort {
     }
 
     @Override
+    public List<String> listUserIds(int limit) {
+        var userIds = new HashSet<String>();
+        for (String f : store.list(List.of(DOMAIN), ".json")) {
+            for (ExtractedMemory m : loadMemoriesFromFile(f)) {
+                if (m.userId() != null && !m.userId().isBlank()) {
+                    userIds.add(m.userId());
+                }
+            }
+        }
+        List<String> users = new ArrayList<>(userIds);
+        users.sort(String::compareTo);
+        if (limit > 0 && users.size() > limit) {
+            return users.subList(0, limit);
+        }
+        return users;
+    }
+
+    @Override
     public boolean existsByHash(String sessionId, String contentHash) {
         return loadMemories(sessionId).stream().anyMatch(m -> contentHash.equals(m.contentHash()));
     }

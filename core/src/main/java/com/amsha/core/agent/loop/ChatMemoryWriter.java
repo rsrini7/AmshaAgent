@@ -7,6 +7,7 @@ import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.store.memory.chat.ChatMemoryStore;
 
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.event.Event;
 import jakarta.inject.Inject;
 
 import java.util.ArrayList;
@@ -15,6 +16,8 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 import com.amsha.core.agent.AgentSentinels;
+import com.amsha.core.events.ConversationMessageEvent;
+import com.amsha.core.scope.WorkspaceContext;
 import com.amsha.core.security.InputSanitizer;
 
 /**
@@ -31,6 +34,9 @@ public class ChatMemoryWriter {
     @Inject
     @InputSanitizer.PII
     InputSanitizer piiScanReflex;
+
+    @Inject
+    Event<ConversationMessageEvent> conversationMessageEvents;
 
     static final Set<String> SKIP_GOALS = Set.of(
             AgentSentinels.GOAL_TOOL_APPROVED, AgentSentinels.GOAL_RESUME_APPROVED, AgentSentinels.GOAL_RESUME_DENIED);
@@ -59,6 +65,7 @@ public class ChatMemoryWriter {
 
         currentHistory.add(UserMessage.userMessage(sanitizedGoal));
         chatMemoryStore.updateMessages(sessionId, currentHistory);
+        emitUserMessageEvent(sessionId, sanitizedGoal, currentHistory.size());
     }
 
     /**
@@ -87,6 +94,7 @@ public class ChatMemoryWriter {
 
         currentHistory.add(AiMessage.aiMessage(sanitizedAnswer));
         chatMemoryStore.updateMessages(sessionId, currentHistory);
+        emitAgentMessageEvent(sessionId, sanitizedAnswer, currentHistory.size());
     }
 
     /**
@@ -128,5 +136,25 @@ public class ChatMemoryWriter {
         if (filteredHistory.size() < currentHistory.size()) {
             chatMemoryStore.updateMessages(sessionId, filteredHistory);
         }
+    }
+
+    private void emitUserMessageEvent(String sessionId, String content, int turnNumber) {
+        if (conversationMessageEvents == null || sessionId == null || content == null || content.isBlank()) {
+            return;
+        }
+        conversationMessageEvents.fireAsync(
+                ConversationMessageEvent.user(sessionId, WorkspaceContext.getUserIdOrUnknown(), content, turnNumber));
+    }
+
+    private void emitAgentMessageEvent(String sessionId, String content, int turnNumber) {
+        if (conversationMessageEvents == null || sessionId == null || content == null || content.isBlank()) {
+            return;
+        }
+        conversationMessageEvents.fireAsync(ConversationMessageEvent.agent(
+                sessionId,
+                WorkspaceContext.getUserIdOrUnknown(),
+                WorkspaceContext.AGENT_ROLE.isBound() ? WorkspaceContext.AGENT_ROLE.get() : "coordinator",
+                content,
+                turnNumber));
     }
 }
