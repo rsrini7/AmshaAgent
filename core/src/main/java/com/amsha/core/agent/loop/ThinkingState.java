@@ -1,9 +1,11 @@
 package com.amsha.core.agent.loop;
 
 import java.util.List;
+import java.util.Map;
 
 import com.amsha.core.agent.reasoning.ReasoningStep;
 import com.amsha.core.agent.result.AgentResult;
+import com.amsha.core.agent.role.ToolCapability;
 import com.amsha.core.structured.StructuredOutputException;
 
 public class ThinkingState implements RunnerState {
@@ -38,6 +40,18 @@ public class ThinkingState implements RunnerState {
                 if (context.history().size() == historySizeBefore) {
                     int noProgress = context.recordNoProgress();
                     if (noProgress >= 2) {
+                        if (services.intentDetector()
+                                        .isWriteIntent(
+                                                context.executionContext().goal())
+                                && !historyContainsIngestDocument(context.history())) {
+                            context.resetNoProgress();
+                            context.executionContext().setForceFinishRetry(false);
+                            context.setTransientError(null);
+                            return new ToolExecutionState(
+                                    services,
+                                    buildWriteFallbackStep(
+                                            context.executionContext().goal()));
+                        }
                         String reason = engineDecision.transientError();
                         String detail = reason == null || reason.isBlank()
                                 ? "The model returned no executable step repeatedly."
@@ -110,5 +124,31 @@ public class ThinkingState implements RunnerState {
     @Override
     public boolean isInsideIterationSpan() {
         return true;
+    }
+
+    private static boolean historyContainsIngestDocument(List<ReasoningStep> history) {
+        return history.stream()
+                .anyMatch(step -> ToolCapability.INGEST_DOCUMENT.toolName().equals(step.action()));
+    }
+
+    private static ReasoningStep buildWriteFallbackStep(String goal) {
+        return ReasoningStep.pending(
+                "Deterministic write fallback from loop: repeated no progress on write intent",
+                ToolCapability.INGEST_DOCUMENT.toolName(),
+                Map.of("text", extractWritePayload(goal), "label", "user_memory"),
+                0,
+                0);
+    }
+
+    private static String extractWritePayload(String goal) {
+        if (goal == null || goal.isBlank()) {
+            return "User requested that this information be remembered.";
+        }
+        String text = goal.replaceFirst("(?i)^\\s*(remember|store|save|ingest)(?:\\s+this)?\\s*[:,-]?\\s*", "")
+                .trim();
+        if (text.isBlank()) {
+            text = goal.trim();
+        }
+        return text.length() > 12000 ? text.substring(0, 12000) : text;
     }
 }
