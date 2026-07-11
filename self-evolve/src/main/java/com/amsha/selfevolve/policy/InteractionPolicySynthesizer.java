@@ -113,6 +113,7 @@ public class InteractionPolicySynthesizer {
 
         // Persist and activate shadow lifecycle
         List<SynthesizedDirective> activated = new ArrayList<>();
+        int persistenceFailures = 0;
         for (SynthesizedDirective d : newDirectives) {
             try {
                 int inserted = directiveStore.insert(d);
@@ -125,8 +126,13 @@ public class InteractionPolicySynthesizer {
                             d.text().substring(0, Math.min(50, d.text().length())));
                 }
             } catch (Exception e) {
+                persistenceFailures++;
                 log.warnf("[PolicySynthesizer] Failed to persist directive: %s", e.getMessage());
             }
+        }
+
+        if (persistenceFailures > 0) {
+            throw new IllegalStateException("Failed to persist " + persistenceFailures + " synthesized directive(s)");
         }
 
         log.infof(
