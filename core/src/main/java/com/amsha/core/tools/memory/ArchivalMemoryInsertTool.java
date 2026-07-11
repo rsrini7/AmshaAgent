@@ -86,6 +86,19 @@ public class ArchivalMemoryInsertTool implements AgentTool {
     }
 
     @Override
+    public String validateParameters(Map<String, Object> params) {
+        if (params == null) return "Parameters are required.";
+        Object content = params.get("content");
+        if (!(content instanceof String text) || text.isBlank()) return "'content' is required.";
+        Object type = params.get("chunk_type");
+        if (!(type instanceof String value) || !ALLOWED_CHUNK_TYPES.contains(value.toUpperCase(Locale.ROOT))) {
+            return "'chunk_type' must be one of: " + ALLOWED_CHUNK_TYPES;
+        }
+        if (text.length() > MAX_CONTENT_CHARS) return "Content exceeds max length of " + MAX_CONTENT_CHARS + " characters.";
+        return null;
+    }
+
+    @Override
     public ToolOperation requiredOperation() {
         return ToolOperation.WRITE_MEMORY;
     }

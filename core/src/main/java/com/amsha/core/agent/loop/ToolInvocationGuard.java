@@ -122,6 +122,12 @@ public class ToolInvocationGuard {
         }
 
         var toolOpt = toolRegistry.findTool(toolName);
+        if (toolOpt.isPresent()) {
+            String validationError = toolOpt.get().validateParameters(params);
+            if (validationError != null && !validationError.isBlank()) {
+                return new GuardDecision.Blocked(validationError);
+            }
+        }
         IdempotencyMode mode = toolOpt.map(AgentTool::idempotencyMode).orElse(IdempotencyMode.NON_IDEMPOTENT);
 
         if (mode != IdempotencyMode.NON_IDEMPOTENT) {
