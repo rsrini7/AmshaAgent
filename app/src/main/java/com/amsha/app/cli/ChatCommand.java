@@ -65,6 +65,11 @@ public class ChatCommand implements Runnable {
             defaultValue = AgentRoleEnum.COORDINATOR_ID)
     String role = AgentRoleEnum.COORDINATOR_ID;
 
+    @CommandLine.Option(
+            names = {"-s", "--session-id"},
+            description = "Resume an existing persisted session by ID; generates a new CLI session when omitted.")
+    String requestedSessionId;
+
     @Inject
     Logger log;
 
@@ -124,7 +129,9 @@ public class ChatCommand implements Runnable {
     @Override
     @ActivateRequestContext
     public void run() {
-        String sessionId = "cli-" + UUID.randomUUID();
+        String sessionId = requestedSessionId == null || requestedSessionId.isBlank()
+                ? "cli-" + UUID.randomUUID()
+                : requestedSessionId.trim();
         this.currentCliSessionId = sessionId;
 
         // Install Jansi ANSI support — auto-detects terminal capabilities.

@@ -2,6 +2,53 @@
 
 These are architectural evolution items, not urgent fixes.
 
+### Cross-Channel `/newsession` Session Rotation
+
+**Problem:** `/reset` and `/resethard` mutate the current session, but there is
+no command to start a new session while preserving the old session's persisted
+history. CLI currently generates a new UUID only when the process starts;
+Telegram and UI/WebSocket sessions are managed by their channel adapters.
+
+**Direction:** Add a shared session-rotation service and a `/newsession`
+command. The service must create a new session mapping while retaining the old
+session in persistence, then let each adapter update its active context:
+
+- CLI replaces its interactive session ID and continues in the same process.
+- Telegram creates a new user/chat session mapping.
+- UI/WebSocket receives a session-rotated event and switches its active ID.
+
+**Acceptance criteria:**
+- `/newsession` preserves the old session and its history.
+- `/history` in the new session starts empty; resuming the old ID still shows its history.
+- HITL checkpoints, workspace state, and role context do not leak across sessions.
+- CLI, Telegram, and UI/WebSocket expose consistent behavior and messaging.
+- Existing `/reset` and `/resethard` semantics remain unchanged.
+
+### Persistent Session Catalog and Resume Picker
+
+**Problem:** Explicit CLI resume is available with `--session-id`, but users
+cannot discover historical sessions or select the most recent session. The
+current session service only lists active sessions, and each channel owns its
+session mapping differently.
+
+**Direction:** Add a shared `SessionCatalog` persistence port with SQLite,
+PostgreSQL, and filesystem adapters. Store owner identity, channel/chat scope,
+session ID, last-used timestamp, role, and a safe goal preview. Expose this
+through consistent channel commands and options:
+
+- `/sessions` — list recent sessions scoped to the current user/chat.
+- `/resume <id|number>` — select a persisted session.
+- CLI `--last-session` — resume the most recent eligible session.
+- CLI `--new-session` — explicitly avoid automatic last-session reuse.
+- Telegram/UI session pickers use the same catalog and ownership checks.
+
+**Acceptance criteria:**
+- Historical sessions remain discoverable after restart and native rebuilds.
+- No session from another user or chat is listed or resumable.
+- A new session starts empty while the selected old session retains history.
+- SQLite, PostgreSQL, and filesystem backends provide equivalent behavior.
+- `/newsession` and existing `/reset`/`/resethard` semantics remain distinct.
+
 ### Unify Channel Dispatch and Intent Classification
 
 **Problem:** WebSocket and Telegram messages enter through `ChannelServices` and
