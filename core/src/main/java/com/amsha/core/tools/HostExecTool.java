@@ -21,6 +21,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import com.amsha.core.agent.role.ToolCapability;
@@ -203,6 +204,7 @@ public class HostExecTool implements AgentTool {
         Files.createDirectories(workspaceRoot);
         BrowserPreviewPlan browserPreview = rewriteBrowserPreviewIfNeeded(ctx, code);
         String effectiveCode = browserPreview.code();
+        Map<Path, Long> existingHtml = snapshotHtmlArtifacts(ctx, workspaceRoot);
 
         Path scriptPath = workspaceRoot.resolve("script.sh");
         Files.writeString(scriptPath, effectiveCode, StandardCharsets.UTF_8);
@@ -218,20 +220,23 @@ public class HostExecTool implements AgentTool {
             return ToolResponse.success(
                     "Opened browser preview: " + (mirrored != null ? mirrored.toString() : previewTarget));
         }
-        Path openedArtifact = autoOpenGeneratedHtml(ctx, workspaceRoot, code);
+        Path openedArtifact = autoOpenGeneratedHtml(ctx, workspaceRoot, code, existingHtml);
         if (openedArtifact != null) {
             return ToolResponse.success(
                     postProcessOutput(rawOutput, Map.of()) + "\nOpened browser preview: " + openedArtifact);
+        }
+        if (requiresBrowserArtifact(ctx)) {
+            return ToolResponse.success(
+                    postProcessOutput(rawOutput, Map.of())
+                            + "\nHost command completed; no new HTML artifact was detected.");
         }
         return ToolResponse.success(postProcessOutput(rawOutput, Map.of()));
     }
 
     /** Opens the newest generated artifact in the skill output directory after a successful host script. */
-    private Path autoOpenGeneratedHtml(ToolExecutionContext ctx, Path workspaceRoot, String code) {
-        if (ctx == null
-                || ctx.rawUserGoal() == null
-                || !BROWSER_PREVIEW_GOAL_PATTERN.matcher(ctx.rawUserGoal()).find()
-                || containsBrowserOpener(code)) {
+    private Path autoOpenGeneratedHtml(
+            ToolExecutionContext ctx, Path workspaceRoot, String code, Map<Path, Long> existingHtml) {
+        if (!requiresBrowserArtifact(ctx) || containsBrowserOpener(code)) {
             return null;
         }
 
@@ -242,6 +247,7 @@ public class HostExecTool implements AgentTool {
             Path artifact = files.filter(Files::isRegularFile)
                     .filter(p ->
                             p.getFileName().toString().toLowerCase(Locale.ROOT).endsWith(".html"))
+                    .filter(p -> isNewOrModified(p, existingHtml))
                     .max(Comparator.comparingLong(p -> p.toFile().lastModified()))
                     .orElse(null);
             if (artifact == null) return null;
@@ -263,6 +269,34 @@ public class HostExecTool implements AgentTool {
             log.debugf("[HostExec] Browser auto-open unavailable: %s", e.getMessage());
             return null;
         }
+    }
+
+    private boolean requiresBrowserArtifact(ToolExecutionContext ctx) {
+        // Skill metadata is authoritative for skill roles; retain the goal-based
+        // fallback for non-skill callers and older integrations that do not carry metadata.
+        return ctx != null
+                && (ctx.browserPreview()
+                        || (ctx.rawUserGoal() != null && BROWSER_PREVIEW_GOAL_PATTERN.matcher(ctx.rawUserGoal()).find()));
+    }
+
+    private Map<Path, Long> snapshotHtmlArtifacts(ToolExecutionContext ctx, Path workspaceRoot) {
+        if (!requiresBrowserArtifact(ctx)) return Map.of();
+        Path outputDir = workspaceRoot.resolve("output");
+        if (!Files.isDirectory(outputDir)) return Map.of();
+        try (Stream<Path> files = Files.walk(outputDir, 2)) {
+            return files.filter(Files::isRegularFile)
+                    .filter(p ->
+                            p.getFileName().toString().toLowerCase(Locale.ROOT).endsWith(".html"))
+                    .collect(Collectors.toUnmodifiableMap(
+                            Path::toAbsolutePath, p -> p.toFile().lastModified(), (a, b) -> b));
+        } catch (IOException e) {
+            return Map.of();
+        }
+    }
+
+    private boolean isNewOrModified(Path path, Map<Path, Long> existingHtml) {
+        Long previous = existingHtml.get(path.toAbsolutePath());
+        return previous == null || path.toFile().lastModified() > previous;
     }
 
     private ToolResponse executeJava(Path workspaceRoot, String code) throws Exception {
@@ -343,7 +377,7 @@ public class HostExecTool implements AgentTool {
 
         // Template files are reference material, not the final browser artifact.
         // Let the model read them, but never auto-open them as the rendered preview.
-        if (htmlPath.contains("/templates/")) {
+        if (isTemplatePath(htmlPath)) {
             log.debugf("[HostExec] Browser preview skip for template path %s", htmlPath.trim());
             return new BrowserPreviewPlan(code, null);
         }
@@ -356,6 +390,15 @@ public class HostExecTool implements AgentTool {
     private boolean containsBrowserOpener(String code) {
         String lower = code.toLowerCase(Locale.ROOT);
         return lower.contains("xdg-open") || lower.contains("open ") || lower.contains("start ");
+    }
+
+    /** Template/reference files must never be mistaken for generated browser artifacts. */
+    private boolean isTemplatePath(String path) {
+        String normalized = path == null ? "" : path.trim().replace('\\', '/').toLowerCase(Locale.ROOT);
+        return normalized.startsWith("templates/")
+                || normalized.startsWith("tmpl/")
+                || normalized.contains("/templates/")
+                || normalized.contains("/tmpl/");
     }
 
     private String buildBrowserOpenScript(String htmlPath) {

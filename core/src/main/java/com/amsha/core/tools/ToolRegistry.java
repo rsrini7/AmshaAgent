@@ -145,7 +145,8 @@ public class ToolRegistry {
                         ? WorkspaceContext.SUGGESTED_NEXT_FIRE_TIME.get()
                         : null,
                 WorkspaceContext.SUGGESTED_CRON_SOURCE.isBound() ? WorkspaceContext.SUGGESTED_CRON_SOURCE.get() : null,
-                resolveSkillHome());
+                resolveSkillHome(),
+                resolveBrowserPreview());
 
         // 1. Governance checks
         try {
@@ -250,6 +251,13 @@ public class ToolRegistry {
                 .findByName(skillName)
                 .map(entry -> entry.definition().skillHome())
                 .orElse(null);
+    }
+
+    private boolean resolveBrowserPreview() {
+        String agentRole = WorkspaceContext.AGENT_ROLE.isBound() ? WorkspaceContext.AGENT_ROLE.get() : null;
+        if (agentRole == null || !AgentRoleEnum.isSkillRole(agentRole)) return false;
+        String skillName = AgentRoleEnum.skillName(agentRole);
+        return skillRegistry.findByName(skillName).map(entry -> entry.definition().browserPreview()).orElse(false);
     }
 
     private ToolResponse invokeDirect(ToolExecutionContext ctx, AgentTool tool, Map<String, Object> params) {

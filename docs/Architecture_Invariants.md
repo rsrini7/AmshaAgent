@@ -1845,6 +1845,8 @@ Dynamic skills (loaded dynamically from `.jar` files in classpath) are **instruc
 
 ### 24.5 SkillsJars Cloud Dependency Vetting
 
+Skills that intentionally create HTML/browser artifacts MUST declare `browser-preview: true` in `SKILL.md` frontmatter. They MAY declare an optional skill-home-relative `template-dir` (such as `tmpl`) when starter templates exist. The provider and `host_exec` consume this metadata generically for output/template guidance, new-artifact enforcement, and browser opening; browser behavior MUST NOT be inferred from skill names or incidental prompt text.
+
 Before adding a SkillsJar dependency to `app/pom.xml`, the skill's `SKILL.md` instructions **MUST** be reviewed to determine whether the skill requires:
 
 1. **Cloud API keys / SaaS authentication** (e.g. `browser-use auth login`, `BROWSER_USE_API_KEY`)

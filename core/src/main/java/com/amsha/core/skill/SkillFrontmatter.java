@@ -17,4 +17,9 @@ public record SkillFrontmatter(
 
         @JsonProperty("allowed-tools") String allowedTools,
 
+        /** Explicitly requests browser preview handling for generated artifacts. */
+        @JsonProperty("browser-preview") boolean browserPreview,
+
+        @JsonProperty("template-dir") String templateDir,
+
         @JsonProperty("max-iterations") int maxIterations) {}

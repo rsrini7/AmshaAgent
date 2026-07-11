@@ -98,7 +98,9 @@ public class SkillDefinitionParser {
                 capabilities.stream().distinct().toList(),
                 fm.maxIterations() > 0 ? fm.maxIterations() : defaultMaxIterations,
                 PromptInstructionLibrary.skillExecutionPrecedencePreamble() + systemPromptBody,
-                skillHome);
+                skillHome,
+                fm.browserPreview(),
+                fm.templateDir());
     }
 
     private static final Map<String, String> SKILLSJARS_TOOL_MAP = Map.ofEntries(
