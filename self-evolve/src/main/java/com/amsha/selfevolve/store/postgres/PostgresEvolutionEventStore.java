@@ -1,7 +1,5 @@
 package com.amsha.selfevolve.store.postgres;
 
-import javax.sql.DataSource;
-
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
@@ -12,7 +10,6 @@ import com.amsha.selfevolve.store.EvolutionEventStorePort;
 
 import org.jboss.logging.Logger;
 import org.jdbi.v3.core.Jdbi;
-import org.jdbi.v3.sqlobject.SqlObjectPlugin;
 
 import io.quarkus.arc.properties.IfBuildProperty;
 
@@ -26,15 +23,15 @@ public class PostgresEvolutionEventStore implements EvolutionEventStorePort {
 
     private static final Logger log = Logger.getLogger(PostgresEvolutionEventStore.class);
 
+    /** Injected Jdbi carries the shared PostgreSQL argument and column mappers. */
     @Inject
-    DataSource dataSource;
+    Jdbi jdbi;
 
     @Override
     public int insertBatch(List<EvolutionEvent> events) {
         if (events == null || events.isEmpty()) {
             return 0;
         }
-        Jdbi jdbi = Jdbi.create(dataSource).installPlugin(new SqlObjectPlugin());
         int[] results = jdbi.withExtension(PostgresEvolutionEventJdbiDao.class, dao -> dao.insertBatch(events));
         int persisted = 0;
         for (int r : results) {
@@ -46,19 +43,16 @@ public class PostgresEvolutionEventStore implements EvolutionEventStorePort {
 
     @Override
     public List<EvolutionEvent> getBySession(String sessionId, int limit) {
-        Jdbi jdbi = Jdbi.create(dataSource).installPlugin(new SqlObjectPlugin());
         return jdbi.withExtension(PostgresEvolutionEventJdbiDao.class, dao -> dao.getBySession(sessionId, limit));
     }
 
     @Override
     public List<EvolutionEvent> getByUser(String userId, int limit) {
-        Jdbi jdbi = Jdbi.create(dataSource).installPlugin(new SqlObjectPlugin());
         return jdbi.withExtension(PostgresEvolutionEventJdbiDao.class, dao -> dao.getByUser(userId, limit));
     }
 
     @Override
     public int purgeExpired(int retentionDays) {
-        Jdbi jdbi = Jdbi.create(dataSource).installPlugin(new SqlObjectPlugin());
         return jdbi.withExtension(PostgresEvolutionEventJdbiDao.class, dao -> dao.purgeExpired(retentionDays));
     }
 }

@@ -11,7 +11,6 @@ import com.amsha.selfevolve.store.ExtractedMemoryStorePort;
 
 import org.jboss.logging.Logger;
 import org.jdbi.v3.core.Jdbi;
-import org.jdbi.v3.sqlobject.SqlObjectPlugin;
 
 import io.quarkus.arc.properties.IfBuildProperty;
 
@@ -25,15 +24,15 @@ public class PostgresExtractedMemoryStore implements ExtractedMemoryStorePort {
 
     private static final Logger log = Logger.getLogger(PostgresExtractedMemoryStore.class);
 
+    /** Injected Jdbi carries the shared PostgreSQL argument and column mappers. */
     @Inject
-    javax.sql.DataSource dataSource;
+    Jdbi jdbi;
 
     @Override
     public int insertBatch(List<ExtractedMemory> memories) {
         if (memories == null || memories.isEmpty()) {
             return 0;
         }
-        Jdbi jdbi = Jdbi.create(dataSource).installPlugin(new SqlObjectPlugin());
         int[] results = jdbi.withExtension(PostgresExtractedMemoryJdbiDao.class, dao -> dao.insertBatch(memories));
         int persisted = 0;
         for (int r : results) {
@@ -45,39 +44,33 @@ public class PostgresExtractedMemoryStore implements ExtractedMemoryStorePort {
 
     @Override
     public List<ExtractedMemory> getBySession(String sessionId, int limit) {
-        Jdbi jdbi = Jdbi.create(dataSource).installPlugin(new SqlObjectPlugin());
         return jdbi.withExtension(PostgresExtractedMemoryJdbiDao.class, dao -> dao.getBySession(sessionId, limit));
     }
 
     @Override
     public List<ExtractedMemory> getByUser(String userId, int limit) {
-        Jdbi jdbi = Jdbi.create(dataSource).installPlugin(new SqlObjectPlugin());
         return jdbi.withExtension(PostgresExtractedMemoryJdbiDao.class, dao -> dao.getByUser(userId, limit));
     }
 
     @Override
     public List<ExtractedMemory> getByType(MemoryRecordType recordType, int limit) {
-        Jdbi jdbi = Jdbi.create(dataSource).installPlugin(new SqlObjectPlugin());
         return jdbi.withExtension(PostgresExtractedMemoryJdbiDao.class, dao -> dao.getByType(recordType.name(), limit));
     }
 
     @Override
     public List<String> listUserIds(int limit) {
         int sqlLimit = limit <= 0 ? Integer.MAX_VALUE : limit;
-        Jdbi jdbi = Jdbi.create(dataSource).installPlugin(new SqlObjectPlugin());
         return jdbi.withExtension(PostgresExtractedMemoryJdbiDao.class, dao -> dao.listUserIds(sqlLimit));
     }
 
     @Override
     public boolean existsByHash(String sessionId, String contentHash) {
-        Jdbi jdbi = Jdbi.create(dataSource).installPlugin(new SqlObjectPlugin());
         return jdbi.withExtension(
                 PostgresExtractedMemoryJdbiDao.class, dao -> dao.existsByHash(sessionId, contentHash));
     }
 
     @Override
     public int purgeExpired(int retentionDays) {
-        Jdbi jdbi = Jdbi.create(dataSource).installPlugin(new SqlObjectPlugin());
         return jdbi.withExtension(PostgresExtractedMemoryJdbiDao.class, dao -> dao.purgeExpired(retentionDays));
     }
 }
