@@ -23,7 +23,7 @@ class HallucinationDetector {
             Pattern.MULTILINE);
 
     private static final Pattern HALLUCINATED_SCHEDULE_CLAIM = Pattern.compile(
-            "(?i)\\b(?:I (?:have |'ve )?(?:scheduled|set a (?:reminder|timer)|created a (?:cron|task))|task (?:is |has been )?scheduled|scheduled the task|cron job has been|will run (?:in|at|every)|remind you in|reminder has been set|timer has been set)\\b",
+            "(?i)\\b(?:I(?:\\s+have|'ve)?\\s+(?:scheduled|set a (?:reminder|timer)|created a (?:cron|task))|task (?:is |has been )?scheduled|scheduled the task|cron job has been|will run (?:in|at|every)|remind you in|reminder has been set|timer has been set)\\b",
             Pattern.MULTILINE);
 
     private static final Pattern KNOWLEDGE_DISCLAIMER = Pattern.compile(

@@ -21,6 +21,7 @@ public class ListReflexesReflex implements AgentReflex {
 
     private static final Map<Class<?>, ReflexDescriptor> DESCRIPTORS = Map.ofEntries(
             Map.entry(ListCronsReflex.class, new ReflexDescriptor("`/crons`", "List scheduled jobs")),
+            Map.entry(ListApprovalsReflex.class, new ReflexDescriptor("`/approvals`", "List pending approvals")),
             Map.entry(DeleteCronReflex.class, new ReflexDescriptor("`/delete-cron`", "Delete a scheduled job")),
             Map.entry(StatusReflex.class, new ReflexDescriptor("`/status`", "Show agent status")),
             Map.entry(HistoryReflex.class, new ReflexDescriptor("`/history`", "Show recent chat history")),

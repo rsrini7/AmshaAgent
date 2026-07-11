@@ -114,8 +114,11 @@ if ($strategy -eq 'container') {
         $env:MAVEN_OPTS = $mOpts
         & $mvnw clean package -Pnative -pl app -am -DskipTests "-Damsha.persistence.backend=sqlite" "-Dquarkus.profile=prod" "-Dquarkus.native.native-image-xmx=${targetGB}g" $containerFlag
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-        Write-Host '▶   Assembling dist/ folder...'
-        mise run dist
+        if ($args -contains '--clean' -or $args -contains '-c') {
+            mise run dist -- --clean
+        } else {
+            mise run dist
+        }
     } finally {
         if ($envBackup -eq $true -and (Test-Path '.env.build-backup')) { Rename-Item '.env.build-backup' '.env'; Write-Host 'ℹ️   .env restored.' }
         elseif ($envBackup -eq 'build.env') { Remove-Item '.env' -ErrorAction SilentlyContinue; Write-Host 'ℹ️   Temporary build.env copy removed.' }
@@ -139,8 +142,11 @@ if ($strategy -eq 'container') {
         $env:MAVEN_OPTS = $mOpts
         & $mvnw clean package -Pnative -pl app -am -DskipTests "-Damsha.persistence.backend=sqlite" "-Dquarkus.profile=prod" "-Dquarkus.native.native-image-xmx=${targetGB}g" $containerFlag
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-        Write-Host '▶   Assembling dist/ folder...'
-        mise run dist
+        if ($args -contains '--clean' -or $args -contains '-c') {
+            mise run dist -- --clean
+        } else {
+            mise run dist
+        }
     } finally {
         if ($envBackup -eq $true -and (Test-Path '.env.build-backup')) { Rename-Item '.env.build-backup' '.env'; Write-Host 'ℹ️   .env restored.' }
         elseif ($envBackup -eq 'build.env') { Remove-Item '.env' -ErrorAction SilentlyContinue; Write-Host 'ℹ️   Temporary build.env copy removed.' }

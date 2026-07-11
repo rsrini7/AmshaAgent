@@ -8,14 +8,14 @@
   ![Native Image Ready](https://img.shields.io/badge/Native_Image-Ready-orange.svg?style=flat&logo=graalvm)
   ![OpenTelemetry](https://img.shields.io/badge/OpenTelemetry-Tracing-blueviolet.svg?style=flat&logo=opentelemetry)
   ![Podman](https://img.shields.io/badge/Isolation-Rootless_Podman-purple.svg?style=flat&logo=podman)
-  ![Tests](https://img.shields.io/badge/Tests-2949_passing-brightgreen.svg?style=flat)
+  ![Tests](https://img.shields.io/badge/Tests-2987_passing-brightgreen.svg?style=flat)
   [![Built with Devbox](https://img.shields.io/badge/built_with-devbox-green.svg?style=flat)](https://www.jetify.com/devbox/)
   [![Built with mise](https://img.shields.io/badge/built_with-mise-blue.svg?style=flat)](https://jdx.dev)
 </div>
 
 ---
 
-> **A self-hosted, production-grade agentic AI platform** — ReAct agent loop, 12 specialist personas, HITL governance, Podman sandbox, hexagonal persistence (SQLite / PostgreSQL / FS). Runs as a single ~118 MB binary.
+> **A self-hosted, production-grade agentic AI platform** — ReAct agent loop, 12 specialist personas, HITL governance, Podman sandbox, hexagonal persistence (SQLite / PostgreSQL / FS). Runs as a single ~183 MB binary.
 
 **Stack**: JDK 25 · Quarkus 3.27.2 · LangChain4J 1.x · SQLite (WAL + FTS5 + sqlite-vec) · Podman · Apache Camel · BouncyCastle
 

@@ -11,6 +11,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
+import com.amsha.common.util.LogUtil;
 import com.amsha.core.agent.IntentClassificationService;
 import com.amsha.core.agent.reasoning.ReasoningEngine;
 import com.amsha.core.agent.reasoning.ReasoningStep;
@@ -21,8 +22,10 @@ import com.amsha.core.agent.sse.AgentSseService;
 import com.amsha.core.audit.AuditHashUtil;
 import com.amsha.core.audit.ComplianceViolationException;
 import com.amsha.core.channel.ChannelPluginRegistry;
+import com.amsha.core.domain.model.AgentCheckpoint;
 import com.amsha.core.governance.BudgetExceededException;
 import com.amsha.core.governance.BudgetWarningException;
+import com.amsha.core.memory.tiered.DirectiveFeedbackPort;
 import com.amsha.core.pipeline.MessageContext;
 import com.amsha.core.scope.WorkspaceContext;
 import com.amsha.core.scope.WorkspaceScopeHolder;
@@ -90,12 +93,19 @@ public class AgentLoop {
     @Inject
     IntentClassificationService intentClassificationService;
 
+    @Inject
+    ChatMemoryWriter chatMemoryWriter;
+
+    @Inject
+    Instance<DirectiveFeedbackPort> directiveFeedbackPortInstance;
+
     private LoopResultHandler loopResultHandler;
 
     private LoopResultHandler getLoopResultHandler() {
         var h = this.loopResultHandler;
         if (h == null) {
-            h = new LoopResultHandler(agentStore, agentSseService, channelPluginRegistry, intentClassificationService);
+            h = new LoopResultHandler(
+                    agentStore, agentSseService, channelPluginRegistry, intentClassificationService, chatMemoryWriter);
             this.loopResultHandler = h;
         }
         return h;
@@ -182,11 +192,28 @@ public class AgentLoop {
         sessionLifecycleCoordinator.setupMdc(sessionId, canonicalRole, capturedUserId);
 
         AgentResult result = null;
+        boolean exceptionCaught = false;
         List<ReasoningStep> resumedHistory = new ArrayList<>();
+        String effectiveGoal = goal;
 
         Span span = observabilityManager.beginSession(sessionId, capturedUserId, canonicalRole);
         try (Scope _ = span.makeCurrent()) {
             try {
+                if (intentClassificationService.isResumeCommand(goal)) {
+                    String restoredGoal = agentStore
+                            .findLatestNonArchivedCheckpoint(sessionId)
+                            .or(() -> agentStore.findLatestCheckpoint(sessionId))
+                            .map(AgentCheckpoint::getOriginalGoal)
+                            .filter(g -> g != null && !g.isBlank() && !intentClassificationService.isResumeCommand(g))
+                            .orElse(null);
+                    if (restoredGoal != null && !restoredGoal.isBlank()) {
+                        effectiveGoal = restoredGoal;
+                        log.infof(
+                                "[AgentLoop] Resume command detected for session %s - restoring original goal: %s",
+                                sessionId, effectiveGoal);
+                    }
+                }
+
                 var decision = checkpointResumeCoordinator.resolveResumePath(
                         sessionId, canonicalRole, capturedUserId, context);
 
@@ -216,7 +243,7 @@ public class AgentLoop {
                         sessionId,
                         capturedUserId,
                         effectiveRole,
-                        goal,
+                        effectiveGoal,
                         systemNote,
                         maxIterations,
                         context,
@@ -228,7 +255,7 @@ public class AgentLoop {
                         resumedHistory,
                         context,
                         engine,
-                        goal,
+                        effectiveGoal,
                         sessionId,
                         canonicalRole,
                         capturedUserId);
@@ -247,18 +274,20 @@ public class AgentLoop {
                                     capturedUserId,
                                     agentExecutionContext.autonomyLevel(),
                                     result,
-                                    goal);
+                                    effectiveGoal);
                 }
 
                 return result;
 
             } catch (StructuredOutputException e) {
+                exceptionCaught = true;
                 String msg = AgentErrorMessageUtil.safeMessage(e);
                 log.errorf("Structured output failure for session %s: %s", sessionId, msg);
                 result = AgentResult.failed(msg, AgentResult.FailureCategory.SCHEMA_ERROR, List.copyOf(resumedHistory));
                 return result;
 
             } catch (BudgetExceededException e) {
+                exceptionCaught = true;
                 meterRegistry
                         .counter(
                                 "amsha.agent.loop.failure",
@@ -270,13 +299,16 @@ public class AgentLoop {
                 throw e;
 
             } catch (BudgetWarningException e) {
+                exceptionCaught = true;
                 throw e;
 
             } catch (ComplianceViolationException cve) {
+                exceptionCaught = true;
                 result = getLoopResultHandler().handleComplianceViolation(sessionId, canonicalRole, cve);
                 return result;
 
             } catch (Exception e) {
+                exceptionCaught = true;
                 meterRegistry
                         .counter(
                                 "amsha.agent.loop.failure",
@@ -290,7 +322,17 @@ public class AgentLoop {
 
             } finally {
                 try {
-                    String goalHash = hashUtil.sha256hex(goal);
+                    boolean isTerminal = (result != null
+                                    && !(result instanceof AgentResult.AwaitingApproval)
+                                    && !(result instanceof AgentResult.AwaitingRetry))
+                            || exceptionCaught;
+                    if (isTerminal) {
+                        boolean success = !exceptionCaught
+                                && (result instanceof AgentResult.Finished
+                                        || result instanceof AgentResult.StructuredFinished);
+                        recordDirectiveOutcome(sessionId, capturedUserId, success);
+                    }
+                    String goalHash = hashUtil.sha256hex(effectiveGoal);
                     observabilityManager.notifyLoopComplete(sessionId, capturedUserId, canonicalRole, goalHash, result);
                 } finally {
                     observabilityManager.endSession(sessionId);
@@ -416,5 +458,20 @@ public class AgentLoop {
         }
         String text = context.getMessage().text();
         return text != null && !text.isBlank() && intentClassificationService.isContinuationCommand(text);
+    }
+
+    private void recordDirectiveOutcome(String sessionId, String userId, boolean success) {
+        if (directiveFeedbackPortInstance == null
+                || directiveFeedbackPortInstance.isUnsatisfied()
+                || sessionId == null
+                || userId == null
+                || userId.isBlank()) {
+            return;
+        }
+        try {
+            directiveFeedbackPortInstance.get().recordSessionOutcome(sessionId, userId, success);
+        } catch (Exception e) {
+            log.debugf("Directive feedback skipped for session %s: %s", sessionId, LogUtil.rootMessage(e));
+        }
     }
 }

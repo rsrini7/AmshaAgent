@@ -354,6 +354,7 @@ schema) and must match the model used by every active provider.
 | Variable | Default | Description |
 |---|---|---|
 | `AMSHA_CHAT_MEMORY_MAX_MESSAGES` | `20` | Max messages in chat memory before compaction |
+| `AMSHA_CHAT_RECOVERED_OBSERVATION_MAX_CHARS` | `2000` | Max chars kept when recovering a malformed final answer from tool output |
 | `AMSHA_CHAT_MEMORY_RETENTION_DAYS` | `30` | Chat memory retention (days) |
 
 ## Audit

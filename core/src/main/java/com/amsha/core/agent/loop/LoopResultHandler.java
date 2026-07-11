@@ -34,16 +34,19 @@ public class LoopResultHandler {
     private final AgentSseService agentSseService;
     private final ChannelPluginRegistry channelPluginRegistry;
     private final IntentClassificationService intentClassificationService;
+    private final ChatMemoryWriter chatMemoryWriter;
 
     public LoopResultHandler(
             StatefulAgentStore agentStore,
             AgentSseService agentSseService,
             ChannelPluginRegistry channelPluginRegistry,
-            IntentClassificationService intentClassificationService) {
+            IntentClassificationService intentClassificationService,
+            ChatMemoryWriter chatMemoryWriter) {
         this.agentStore = agentStore;
         this.agentSseService = agentSseService;
         this.channelPluginRegistry = channelPluginRegistry;
         this.intentClassificationService = intentClassificationService;
+        this.chatMemoryWriter = chatMemoryWriter;
     }
 
     public void updateStoreForRetry(
@@ -77,6 +80,15 @@ public class LoopResultHandler {
             AgentResult result,
             String goal) {
         if (result instanceof AgentResult.Finished) {
+            persistTerminalAnswer(sessionId, result);
+            agentStore.saveAndFinalize(
+                    sessionId, canonicalRole, userId, autonomy, result.steps(), CheckpointStatus.COMPLETED, goal);
+            agentSseService.publish(
+                    sessionId,
+                    new AgentSseService.AgentStatusEvent(
+                            sessionId, canonicalRole, CheckpointStatus.COMPLETED.name(), Instant.now()));
+        } else if (result instanceof AgentResult.StructuredFinished) {
+            persistTerminalAnswer(sessionId, result);
             agentStore.saveAndFinalize(
                     sessionId, canonicalRole, userId, autonomy, result.steps(), CheckpointStatus.COMPLETED, goal);
             agentSseService.publish(
@@ -91,6 +103,10 @@ public class LoopResultHandler {
                     new AgentSseService.AgentStatusEvent(
                             sessionId, canonicalRole, CheckpointStatus.FAILED.name(), Instant.now()));
         } else if (result instanceof AgentResult.LoopExceeded l) {
+            // Quarantine only the failed turn's dangling tool requests. Preserve the
+            // session history and completed tool results so the same session can recover
+            // on its next goal without replaying an invalid/pending call.
+            chatMemoryWriter.scrubUnfulfilledToolCalls(sessionId);
             var cp = agentStore.save(sessionId, canonicalRole, userId, autonomy, result.steps(), goal);
             agentStore.markFailed(cp.getId(), "Max iterations (" + l.maxIterations() + ") exceeded");
             agentSseService.publish(
@@ -98,6 +114,19 @@ public class LoopResultHandler {
                     new AgentSseService.AgentStatusEvent(
                             sessionId, canonicalRole, CheckpointStatus.FAILED.name(), Instant.now()));
         }
+    }
+
+    private void persistTerminalAnswer(String sessionId, AgentResult result) {
+        if (chatMemoryWriter == null) {
+            return;
+        }
+        String answer =
+                switch (result) {
+                    case AgentResult.Finished f -> f.answer();
+                    case AgentResult.StructuredFinished sf -> sf.answer();
+                    default -> null;
+                };
+        chatMemoryWriter.saveAnswer(sessionId, answer);
     }
 
     public AgentResult handleComplianceViolation(

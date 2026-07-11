@@ -230,6 +230,24 @@ class FinishActionHandlerTest {
     }
 
     @Test
+    void testHandleBlocksContractedHallucinatedScheduling() {
+        AgentExecutionContext ctx = mock(AgentExecutionContext.class);
+        when(ctx.sessionId()).thenReturn("s1");
+        when(ctx.agentRole()).thenReturn("coordinator");
+
+        ReasoningStep step = ReasoningStep.pending(
+                "thought",
+                ReasoningStep.FINISH,
+                Map.of("answer", "I've scheduled the recurring task for you. It will run every 3 minutes."),
+                0,
+                0);
+
+        FinishActionHandler.FinishOutcome outcome = handler.handle(ctx, List.of(), step, 0);
+
+        assertTrue(outcome instanceof FinishActionHandler.FinishOutcome.Correction);
+    }
+
+    @Test
     void testHandleBlocksHallucinatedSchedulingWhenParallelBatchScheduleFailed() {
         AgentExecutionContext ctx = mock(AgentExecutionContext.class);
         when(ctx.sessionId()).thenReturn("s1");

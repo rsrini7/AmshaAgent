@@ -35,6 +35,8 @@ import java.util.UUID;
  * @param maxIterations Maximum allowed execution loops before halting.
  * @param systemPrompt The actual LLM prompt instruction block.
  * @param skillHome Optional filesystem path where skill companion scripts/references are extracted.
+ * @param browserPreview Whether generated browser artifacts should be auto-opened and protected from chat flooding.
+ * @param templateDir Optional skill-home-relative template directory.
  */
 public record SkillDefinition(
         String id,
@@ -44,7 +46,9 @@ public record SkillDefinition(
         List<String> toolCapabilities,
         int maxIterations,
         String systemPrompt,
-        String skillHome) {
+        String skillHome,
+        boolean browserPreview,
+        String templateDir) {
     /**
      * Compact constructor enforcing non-null/non-blank rules and deep immutability.
      */
@@ -57,5 +61,51 @@ public record SkillDefinition(
         toolCapabilities = toolCapabilities == null ? List.of() : List.copyOf(toolCapabilities);
         if (maxIterations <= 0) maxIterations = 5;
         if (id == null || id.isBlank()) id = UUID.randomUUID().toString();
+    }
+
+    /** Backward-compatible constructor for callers that do not declare artifact behavior. */
+    public SkillDefinition(
+            String id,
+            String name,
+            String description,
+            List<String> triggerPatterns,
+            List<String> toolCapabilities,
+            int maxIterations,
+            String systemPrompt,
+            String skillHome) {
+        this(
+                id,
+                name,
+                description,
+                triggerPatterns,
+                toolCapabilities,
+                maxIterations,
+                systemPrompt,
+                skillHome,
+                false,
+                null);
+    }
+
+    public SkillDefinition(
+            String id,
+            String name,
+            String description,
+            List<String> triggerPatterns,
+            List<String> toolCapabilities,
+            int maxIterations,
+            String systemPrompt,
+            String skillHome,
+            boolean browserPreview) {
+        this(
+                id,
+                name,
+                description,
+                triggerPatterns,
+                toolCapabilities,
+                maxIterations,
+                systemPrompt,
+                skillHome,
+                browserPreview,
+                null);
     }
 }

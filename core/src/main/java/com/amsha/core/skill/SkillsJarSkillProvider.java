@@ -19,10 +19,12 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Enumeration;
 import java.util.List;
+import java.util.Locale;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Stream;
 
 import com.amsha.common.util.LogUtil;
 
@@ -60,6 +62,9 @@ public class SkillsJarSkillProvider implements SkillProvider {
         }
 
         loadFromClasspath(skills);
+        if (skills.isEmpty()) {
+            loadFromExtractedSkills(skills);
+        }
         return skills;
     }
 
@@ -77,12 +82,51 @@ public class SkillsJarSkillProvider implements SkillProvider {
             while ((line = reader.readLine()) != null) {
                 line = line.trim();
                 if (line.isEmpty() || line.startsWith("#")) continue;
-                loadSkillFromResource("/" + line, skills);
+                loadIndexedSkill(line, skills);
             }
         } catch (Exception e) {
             LOG.errorf("Failure reading SkillsJars index %s: %s", INDEX_PATH, LogUtil.rootMessage(e));
         }
         return !skills.isEmpty();
+    }
+
+    /** Loads an indexed resource and extracts its companion files for native/indexed mode. */
+    private void loadIndexedSkill(String resourcePath, List<SkillDefinition> skills) {
+        String classpathPath = "/" + resourcePath;
+        try {
+            URL resource = Thread.currentThread().getContextClassLoader().getResource(resourcePath);
+            if (resource != null && "jar".equals(resource.getProtocol())) {
+                URLConnection connection = resource.openConnection();
+                if (connection instanceof JarURLConnection jarConnection) {
+                    try (JarFile jarFile = jarConnection.getJarFile()) {
+                        String skillHome = extractSkillAssets(jarFile, resourcePath);
+                        loadSkillFromResource(classpathPath, skills, skillHome);
+                        return;
+                    }
+                }
+            }
+            // Exploded classpaths have no JarFile to extract; use the parent directory directly.
+            if (resource != null && "file".equals(resource.getProtocol())) {
+                Path file = Path.of(resource.toURI());
+                loadSkillFromFile(file, skills);
+                return;
+            }
+
+            // GraalVM native images expose indexed resources through getResourceAsStream()
+            // without a URL. Reuse the stable extraction location populated by the build/JVM
+            // loader so host_exec receives real output/template paths instead of dist-relative ones.
+            String skillName = resourcePath.substring(0, resourcePath.lastIndexOf('/'));
+            skillName = skillName.substring(skillName.lastIndexOf('/') + 1);
+            Path extractedSkill =
+                    Path.of(System.getProperty("user.home"), ".amsha", "skills", "skillsjars", skillName, "SKILL.md");
+            if (Files.isRegularFile(extractedSkill)) {
+                loadSkillFromFile(extractedSkill, skills);
+                return;
+            }
+        } catch (Exception e) {
+            LOG.warnf("Failed to extract indexed SkillsJar skill %s: %s", resourcePath, LogUtil.rootMessage(e));
+        }
+        loadSkillFromResource(classpathPath, skills);
     }
 
     private void loadFromClasspath(List<SkillDefinition> skills) {
@@ -256,6 +300,28 @@ public class SkillsJarSkillProvider implements SkillProvider {
         }
     }
 
+    /**
+     * Native Image cannot enumerate dependency JAR directories. Skills that a JVM
+     * run previously extracted to the stable SkillsJars home remain usable by the
+     * native distribution as a fallback.
+     */
+    private void loadFromExtractedSkills(List<SkillDefinition> skills) {
+        Path skillsHome = Path.of(System.getProperty("user.home"), ".amsha", "skills", "skillsjars");
+        if (!Files.isDirectory(skillsHome)) {
+            return;
+        }
+        try (Stream<Path> children = Files.list(skillsHome)) {
+            children.map(path -> path.resolve("SKILL.md"))
+                    .filter(Files::isRegularFile)
+                    .forEach(skillFile -> loadSkillFromFile(skillFile, skills));
+        } catch (Exception e) {
+            LOG.warnf("Failed to load extracted SkillsJars from %s: %s", skillsHome, e.getMessage());
+        }
+        if (!skills.isEmpty()) {
+            LOG.infof("Loaded %d SkillsJars skill(s) from extracted skill home", skills.size());
+        }
+    }
+
     private void loadSkillFromResource(String classpathPath, List<SkillDefinition> skills) {
         loadSkillFromResource(classpathPath, skills, null);
     }
@@ -267,6 +333,24 @@ public class SkillsJarSkillProvider implements SkillProvider {
                 return;
             }
             String content = new String(stream.readAllBytes(), StandardCharsets.UTF_8);
+            loadSkillContent(content, classpathPath, skills, skillHome);
+        } catch (Exception e) {
+            LOG.warnf("Failed to load SkillsJar skill %s: %s", classpathPath, LogUtil.rootMessage(e));
+        }
+    }
+
+    private void loadSkillFromFile(Path skillFile, List<SkillDefinition> skills) {
+        try {
+            String content = Files.readString(skillFile, StandardCharsets.UTF_8);
+            loadSkillContent(
+                    content, skillFile.toString(), skills, skillFile.getParent().toString());
+        } catch (Exception e) {
+            LOG.warnf("Failed to load extracted SkillsJar skill %s: %s", skillFile, LogUtil.rootMessage(e));
+        }
+    }
+
+    private void loadSkillContent(String content, String source, List<SkillDefinition> skills, String skillHome) {
+        try {
 
             // Inject execution override at the TOP of the system prompt (before any decision tree)
             if (skillHome != null && !skillHome.isBlank()) {
@@ -277,7 +361,7 @@ public class SkillsJarSkillProvider implements SkillProvider {
                         // Adaptive mode: let the LLM adapt the skill for the environment
                         // Only strip conflicting sections, don't add overrides
                         content = stripConflictingSections(content);
-                        LOG.infof("[SkillsJar] Adaptive mode enabled for '%s' — LLM will adapt", classpathPath);
+                        LOG.infof("[SkillsJar] Adaptive mode enabled for '%s' — LLM will adapt", source);
                     } else {
                         // Non-adaptive mode: apply our overrides
                         content = stripConflictingSections(content);
@@ -296,9 +380,9 @@ public class SkillsJarSkillProvider implements SkillProvider {
             }
 
             SkillDefinition definition = parser.parse(content, skillHome);
-            skills.add(maybeAugmentBrowserPreview(definition, content, skillHome));
+            skills.add(maybeAugmentBrowserPreview(definition, skillHome));
         } catch (Exception e) {
-            LOG.warnf("Failed to load SkillsJar skill %s: %s", classpathPath, LogUtil.rootMessage(e));
+            LOG.warnf("Failed to parse SkillsJar skill %s: %s", source, LogUtil.rootMessage(e));
         }
     }
 
@@ -342,21 +426,25 @@ public class SkillsJarSkillProvider implements SkillProvider {
         return result.toString();
     }
 
-    static SkillDefinition maybeAugmentBrowserPreview(SkillDefinition definition, String rawContent, String skillHome) {
-        if (definition == null || rawContent == null || rawContent.isBlank()) {
+    static SkillDefinition maybeAugmentBrowserPreview(SkillDefinition definition, String skillHome) {
+        if (definition == null) {
             return definition;
         }
-        if (!shouldEnableBrowserPreview(rawContent)) {
+        if (!definition.browserPreview()) {
             return definition;
         }
 
         String outputDir = skillHome != null && !skillHome.isBlank() ? skillHome + "/output" : "output";
+        String templateDir = resolveTemplateDir(definition, skillHome);
+        String templateInstruction = templateDir == null
+                ? ""
+                : "2. Read the starter templates under `" + templateDir
+                        + "` only when needed; never open a template file in a browser.\n";
         String browserOverride = """
 
                 # BROWSER PREVIEW RULES (OVERRIDE ALL BELOW)
                 1. When you generate HTML, JS, or CSS artifacts, write them into `%s`.
-                2. Read the starter template under `templates/` once as reference, but never open that template file in a browser.
-                3. Do not paste raw HTML into Telegram or the final answer when the artifact is meant for the browser.
+                %s3. Do not paste raw HTML into Telegram or the final answer when the artifact is meant for the browser.
                 4. Use `host_exec` to list the files in `%s` and open the generated `.html` artifact with the host's default browser opener (`open` on macOS, `xdg-open` on Linux, `start` on Windows).
                 5. If multiple HTML files exist, open the main viewer file you just created.
                 6. If the browser fails to open, keep the artifact in `%s` and reply with a brief summary only.
@@ -364,7 +452,8 @@ public class SkillsJarSkillProvider implements SkillProvider {
 
                 """;
         String systemPrompt =
-                String.format(browserOverride, outputDir, outputDir, outputDir, outputDir) + definition.systemPrompt();
+                String.format(browserOverride, outputDir, templateInstruction, outputDir, outputDir, outputDir)
+                        + definition.systemPrompt();
         return new SkillDefinition(
                 definition.id(),
                 definition.name(),
@@ -373,13 +462,38 @@ public class SkillsJarSkillProvider implements SkillProvider {
                 definition.toolCapabilities(),
                 definition.maxIterations(),
                 systemPrompt,
-                definition.skillHome());
+                definition.skillHome(),
+                true,
+                definition.templateDir());
     }
 
-    private static boolean shouldEnableBrowserPreview(String rawContent) {
-        return rawContent.contains("<html")
-                || rawContent.contains(".html")
-                || rawContent.contains("open in browser")
-                || rawContent.contains("browser preview");
+    private static String resolveTemplateDir(SkillDefinition definition, String skillHome) {
+        String relative = definition.templateDir();
+        if (relative == null || relative.isBlank()) return null;
+        Path path = Path.of(relative);
+        if (!path.isAbsolute() && skillHome != null && !skillHome.isBlank())
+            path = Path.of(skillHome).resolve(path);
+        return path.normalize().toString();
+    }
+
+    /** @deprecated use metadata-driven overload; retained for source compatibility with extensions/tests. */
+    @Deprecated
+    static SkillDefinition maybeAugmentBrowserPreview(SkillDefinition definition, String rawContent, String skillHome) {
+        if (definition != null
+                && rawContent != null
+                && (rawContent.contains(".html")
+                        || rawContent.toLowerCase(Locale.ROOT).contains("browser preview"))) {
+            definition = new SkillDefinition(
+                    definition.id(),
+                    definition.name(),
+                    definition.description(),
+                    definition.triggerPatterns(),
+                    definition.toolCapabilities(),
+                    definition.maxIterations(),
+                    definition.systemPrompt(),
+                    definition.skillHome(),
+                    true);
+        }
+        return maybeAugmentBrowserPreview(definition, skillHome);
     }
 }

@@ -18,6 +18,7 @@ public class StateContext {
     private String transientError;
     private AgentResult finalResult;
     private boolean browserPreflightChecked;
+    private int noProgressCount;
 
     public StateContext(AgentExecutionContext executionContext, ReasoningEngine engine, List<ReasoningStep> history) {
         this.executionContext = executionContext;
@@ -30,6 +31,7 @@ public class StateContext {
         this.transientError = null;
         this.finalResult = null;
         this.browserPreflightChecked = false;
+        this.noProgressCount = 0;
     }
 
     public AgentExecutionContext executionContext() {
@@ -102,5 +104,17 @@ public class StateContext {
 
     public void setBrowserPreflightChecked(boolean browserPreflightChecked) {
         this.browserPreflightChecked = browserPreflightChecked;
+    }
+
+    public int noProgressCount() {
+        return noProgressCount;
+    }
+
+    public int recordNoProgress() {
+        return ++noProgressCount;
+    }
+
+    public void resetNoProgress() {
+        noProgressCount = 0;
     }
 }

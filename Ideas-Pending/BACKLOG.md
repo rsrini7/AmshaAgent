@@ -2,6 +2,80 @@
 
 These are architectural evolution items, not urgent fixes.
 
+### Cross-Channel `/newsession` Session Rotation
+
+**Problem:** `/reset` and `/resethard` mutate the current session, but there is
+no command to start a new session while preserving the old session's persisted
+history. CLI currently generates a new UUID only when the process starts;
+Telegram and UI/WebSocket sessions are managed by their channel adapters.
+
+**Direction:** Add a shared session-rotation service and a `/newsession`
+command. The service must create a new session mapping while retaining the old
+session in persistence, then let each adapter update its active context:
+
+- CLI replaces its interactive session ID and continues in the same process.
+- Telegram creates a new user/chat session mapping.
+- UI/WebSocket receives a session-rotated event and switches its active ID.
+
+**Acceptance criteria:**
+- `/newsession` preserves the old session and its history.
+- `/history` in the new session starts empty; resuming the old ID still shows its history.
+- HITL checkpoints, workspace state, and role context do not leak across sessions.
+- CLI, Telegram, and UI/WebSocket expose consistent behavior and messaging.
+- Existing `/reset` and `/resethard` semantics remain unchanged.
+
+### Persistent Session Catalog and Resume Picker
+
+**Problem:** Explicit CLI resume is available with `--session-id`, but users
+cannot discover historical sessions or select the most recent session. The
+current session service only lists active sessions, and each channel owns its
+session mapping differently.
+
+**Direction:** Add a shared `SessionCatalog` persistence port with SQLite,
+PostgreSQL, and filesystem adapters. Store owner identity, channel/chat scope,
+session ID, last-used timestamp, role, and a safe goal preview. Expose this
+through consistent channel commands and options:
+
+- `/sessions` — list recent sessions scoped to the current user/chat.
+- `/resume <id|number>` — select a persisted session.
+- CLI `--last-session` — resume the most recent eligible session.
+- CLI `--new-session` — explicitly avoid automatic last-session reuse.
+- Telegram/UI session pickers use the same catalog and ownership checks.
+
+**Acceptance criteria:**
+- Historical sessions remain discoverable after restart and native rebuilds.
+- No session from another user or chat is listed or resumable.
+- A new session starts empty while the selected old session retains history.
+- SQLite, PostgreSQL, and filesystem backends provide equivalent behavior.
+- `/newsession` and existing `/reset`/`/resethard` semantics remain distinct.
+
+### Unify Channel Dispatch and Intent Classification
+
+**Problem:** WebSocket and Telegram messages enter through `ChannelServices` and
+the shared `MessagePipeline`, while interactive CLI chat, `ask`, and some REST
+operations call `AgentLoop` directly. Direct entry points can therefore skip
+skill-aware intent detection, destructive-vocabulary checks, command handling,
+and other pipeline behavior. This caused CLI prompts naming
+`algorithmic-art` to fall back to the coordinator and then delegate to Brahma,
+even though the skill was loaded.
+
+**Direction:** Extract a shared application-level dispatch service responsible
+for canonical role resolution, intent/skill classification, session context,
+and agent-loop invocation. Keep channel-specific adapters for synchronous CLI
+output, HITL approval, REST responses, and asynchronous WebSocket/Telegram
+delivery, but make them all call the shared service.
+
+**Acceptance criteria:**
+- CLI chat, `ask`, REST, WebSocket, and Telegram use the same role-resolution path.
+- Explicit role overrides remain authoritative.
+- Skill names and trigger patterns resolve to `skill:<name>` consistently.
+- HITL behavior and existing channel response semantics remain unchanged.
+- Add entry-point tests that verify identical routing for a skill prompt.
+
+**Current mitigation:** CLI chat performs skill-aware classification before its
+direct `AgentLoop` call. This is intentionally temporary until the shared
+dispatch service is implemented.
+
 ### 7. Agent Loop → Graph-Based Orchestration (DAG)
 After the GoF State pattern is in place (P1), the next evolution is a full directed graph model similar to LangGraph.
 

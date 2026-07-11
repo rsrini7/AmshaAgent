@@ -146,7 +146,18 @@ public class EngineStepHandler {
                             ? String.valueOf(finish.actionInput().get(ToolCallJsonKeys.ANSWER))
                             : "";
                     if (RawJsonGuard.looksLikeRawToolJson(answer)) {
-                        return StepDecision.retryEngine(hintBuilder.buildRawJsonInAnswerHint(), llmSchemaErrorCount);
+                        int nextSchemaErrorCount = llmSchemaErrorCount + 1;
+                        int schemaRetryBudget = resolveSchemaRetryBudget(context.structuredOutputMode());
+                        log.warnf(
+                                "[STATE-MACHINE] session %s: FINISH answer looked like raw tool JSON; retry %d/%d",
+                                context.sessionId(), nextSchemaErrorCount, schemaRetryBudget);
+                        if (nextSchemaErrorCount >= schemaRetryBudget) {
+                            return StepDecision.terminal(AgentResult.failed(
+                                    "The agent encountered repeated raw JSON responses instead of a final answer.",
+                                    AgentResult.FailureCategory.SCHEMA_ERROR,
+                                    List.copyOf(history)));
+                        }
+                        return StepDecision.retryEngine(hintBuilder.buildRawJsonInAnswerHint(), nextSchemaErrorCount);
                     }
                 }
 

@@ -6,7 +6,7 @@ import com.amsha.selfevolve.api.SynthesizedDirective;
 
 import org.jdbi.v3.sqlobject.config.RegisterConstructorMapper;
 import org.jdbi.v3.sqlobject.customizer.Bind;
-import org.jdbi.v3.sqlobject.customizer.BindBean;
+import org.jdbi.v3.sqlobject.customizer.BindMethods;
 import org.jdbi.v3.sqlobject.statement.SqlQuery;
 import org.jdbi.v3.sqlobject.statement.SqlUpdate;
 
@@ -24,7 +24,7 @@ public interface PostgresDirectiveJdbiDao {
                     :synthesisPromptHash, :evaluationHits, :evaluationMisses, :createdAt, :updatedAt)
             ON CONFLICT (user_id, text) DO NOTHING
             """)
-    int insert(@BindBean SynthesizedDirective directive);
+    int insert(@BindMethods SynthesizedDirective directive);
 
     @SqlUpdate("""
             UPDATE synthesized_directives
@@ -33,7 +33,7 @@ public interface PostgresDirectiveJdbiDao {
                 updated_at = :updatedAt
             WHERE id = :id
             """)
-    int update(@BindBean SynthesizedDirective directive);
+    int update(@BindMethods SynthesizedDirective directive);
 
     @SqlQuery("""
             SELECT id, user_id, text, state, confidence, source_record_ids, synthesis_prompt_hash,

@@ -59,16 +59,33 @@ if ($srcItem) {
 
         mise use --path mise.toml java@graalvm-community-25.0.2
         # ... jenv bypass ...
-        $graalPath = (mise where java@graalvm-community-25.0.2).Trim()
-        $env:GRAALVM_HOME = $graalPath
-        $env:JAVA_HOME = $graalPath
+    $graalPath = (mise where java@graalvm-community-25.0.2).Trim()
+    $env:GRAALVM_HOME = $graalPath
+    $env:JAVA_HOME = $graalPath
+    $nativeAdditionalBuildArgs = @()
+    if ($IsMacOS -and $env:PATH -like '*nix/store*') {
+        $zlib = Get-ChildItem '/nix/store' -Filter 'libz.dylib' -Recurse -ErrorAction SilentlyContinue |
+            Where-Object { $_.FullName -like '*-zlib-*/lib/libz.dylib' } |
+            Select-Object -First 1
+        if ($zlib) {
+            $zlibLibDir = $zlib.DirectoryName
+            if ($env:NIX_LDFLAGS -notlike "*$zlibLibDir*") {
+                $env:NIX_LDFLAGS = "$env:NIX_LDFLAGS -L$zlibLibDir".Trim()
+            }
+            $nativeAdditionalBuildArgs += "-Dquarkus.native.additional-build-args=-H:CLibraryPath=$zlibLibDir"
+            Write-Host "ℹ️   Added zlib linker path for Nix clang: $zlibLibDir"
+        }
+    }
 
-        $env:MAVEN_OPTS = '--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow'
-        & $mvnw clean package -Pnative -pl app -am -DskipTests "-Damsha.build.backend=sqlite" "-Damsha.persistence.backend=sqlite" "-Dquarkus.profile=prod" '-Dquarkus.native.container-build=false' "-Dquarkus.native.native-image-xmx=${targetGB}g"
+    $env:MAVEN_OPTS = '--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow'
+    & $mvnw clean package -Pnative -pl app -am -DskipTests "-Damsha.build.backend=sqlite" "-Damsha.persistence.backend=sqlite" "-Dquarkus.profile=prod" '-Dquarkus.native.container-build=false' "-Dquarkus.native.native-image-xmx=${targetGB}g" @nativeAdditionalBuildArgs
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     Write-Host "✅  Native build complete [local]: app/target/amsha-app-0.1.0-SNAPSHOT$suffix"
-    Write-Host '▶   Assembling dist/ folder...'
-    mise run dist:dist
+    if ($args -contains '--clean' -or $args -contains '-c') {
+        mise run dist:dist -- --clean
+    } else {
+        mise run dist:dist
+    }
 } finally {
     if ($envBackup -eq $true -and (Test-Path '.env.build-backup')) { Rename-Item '.env.build-backup' '.env'; Write-Host 'ℹ️   .env restored.' }
     elseif ($envBackup -eq 'build.env') { Remove-Item '.env' -ErrorAction SilentlyContinue; Write-Host 'ℹ️   Temporary build.env copy removed.' }

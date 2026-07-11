@@ -7,23 +7,15 @@ import dev.langchain4j.model.chat.response.ChatResponse;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
-import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
-import java.util.Objects;
-import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 
-import com.amsha.common.util.LogUtil;
 import com.amsha.core.agent.role.AgentRoleEnum;
 import com.amsha.core.agent.role.ToolCapability;
 import com.amsha.core.scope.WorkspaceContext;
 import com.amsha.core.util.TextPatternUtils;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.jboss.logging.Logger;
 
@@ -47,24 +39,24 @@ public class ReasoningStepParser {
             "(?m)^\\s*(?:Response|Final (?:Answer|Decision|Response)|Output)\\s*[:.]\\s*$",
             Pattern.MULTILINE | Pattern.CASE_INSENSITIVE);
 
-    private static final Pattern LANGUAGE_FIELD_PATTERN = Pattern.compile("\"language\"\\s*:\\s*\"([^\"]+)\"");
-    private static final Pattern RELATIVE_SCHEDULE_PATTERN = Pattern.compile(
-            "\\b(in\\s+\\d+\\s*(min|mins|minute|minutes|hour|hours)|in\\s+one\\s+(min|minute|hour))\\b");
-    private static final Pattern ABSOLUTE_SCHEDULE_PATTERN = Pattern.compile(
-            "\\b(at\\s+\\d{1,2}(:\\d{2})?\\s*(am|pm)?|every\\s+(day|hour|minute|week|month|monday|tuesday|wednesday|thursday|friday|saturday|sunday))\\b");
-
-    private final ObjectMapper objectMapper;
     private final TextPatternUtils textPatternUtils;
+    private final ToolCallParameterParser parameterParser;
+    private final ParallelToolCallCollapser parallelCollapser;
 
     protected ReasoningStepParser() {
-        this.objectMapper = null;
         this.textPatternUtils = null;
+        this.parameterParser = null;
+        this.parallelCollapser = null;
     }
 
     @Inject
-    public ReasoningStepParser(ObjectMapper objectMapper, TextPatternUtils textPatternUtils) {
-        this.objectMapper = objectMapper;
+    public ReasoningStepParser(
+            TextPatternUtils textPatternUtils,
+            ToolCallParameterParser parameterParser,
+            ParallelToolCallCollapser parallelCollapser) {
         this.textPatternUtils = textPatternUtils;
+        this.parameterParser = parameterParser;
+        this.parallelCollapser = parallelCollapser;
     }
 
     public ReasoningStep parse(String sessionId, String agentRole, ChatResponse response) {
@@ -150,7 +142,7 @@ public class ReasoningStepParser {
                 interceptUnrequestedExecution(toolName, agentRole, req, aiMessage, inputTokens, outputTokens);
         if (intercepted != null) return intercepted;
 
-        Map<String, Object> actionInput = deserializeParams(sessionId, toolName, req.arguments());
+        Map<String, Object> actionInput = parameterParser.deserializeParams(sessionId, toolName, req.arguments());
         if (actionInput.containsKey("__error")) {
             return ReasoningStep.schemaError(
                     "System: Your previous response contained invalid JSON. " + "Correct the format and retry. Error: "
@@ -184,7 +176,7 @@ public class ReasoningStepParser {
         String rawGoal = WorkspaceContext.RAW_USER_GOAL.isBound() ? WorkspaceContext.RAW_USER_GOAL.get() : null;
         if (textPatternUtils.goalRequestsExecution(rawGoal)) return null;
 
-        String code = recoverCodeForDisplay(req.arguments());
+        String code = parameterParser.recoverCodeForDisplay(req.arguments());
         if (code == null || code.isBlank()) return null;
 
         log.infof("Intercepted unrequested execution call; converting to FINISH step with code display.");
@@ -237,254 +229,7 @@ public class ReasoningStepParser {
             List<ToolExecutionRequest> requests,
             int inputTokens,
             int outputTokens) {
-        log.infof(
-                "[PARALLEL-TOOLS] session=%s role=%s: LLM issued %d parallel "
-                        + "tool calls: %s - routing to ParallelToolStepExecutor.",
-                sessionId,
-                agentRole,
-                requests.size(),
-                requests.stream().map(r -> sanitizeToolName(r.name())).collect(Collectors.joining(", ")));
-
-        List<ParallelToolCall> calls = new ArrayList<>();
-        String rawGoal = WorkspaceContext.RAW_USER_GOAL.isBound() ? WorkspaceContext.RAW_USER_GOAL.get() : null;
-
-        if (isSchedulingGoal(rawGoal)) {
-            ToolExecutionRequest scheduleRequest = requests.stream()
-                    .filter(r -> ToolCapability.SCHEDULE_TASK.toolName().equals(r.name()))
-                    .findFirst()
-                    .orElse(null);
-            if (scheduleRequest != null) {
-                log.warnf(
-                        "[PARALLEL-TOOLS] session=%s scheduling goal emitted mixed parallel tools; "
-                                + "collapsing to schedule_task only.",
-                        sessionId);
-                Map<String, Object> actionInput =
-                        deserializeParams(sessionId, scheduleRequest.name(), scheduleRequest.arguments());
-                if (actionInput.containsKey("__error")) {
-                    return ReasoningStep.schemaError(
-                            "System: Your previous response contained invalid JSON. "
-                                    + "Correct the format and retry. Error: " + actionInput.get("__error"),
-                            inputTokens,
-                            outputTokens);
-                }
-                return ReasoningStep.pending(
-                        aiMessage.text(), scheduleRequest.name(), actionInput, inputTokens, outputTokens);
-            }
-        }
-
-        if (requests.stream()
-                .allMatch(r -> ToolCapability.INGEST_DOCUMENT.toolName().equals(r.name()))) {
-            log.warnf("[PARALLEL-TOOLS] session=%s: LLM violated anti-parallel storage rule. Merging.", sessionId);
-            String mergedText = requests.stream()
-                    .map(r -> deserializeParams(sessionId, r.name(), r.arguments()))
-                    .filter(p -> !p.containsKey("__error"))
-                    .map(p -> p.get("text") != null
-                            ? p.get("text")
-                            : (p.get("content") != null
-                                    ? p.get("content")
-                                    : (p.get("value") != null
-                                            ? p.get("value")
-                                            : (p.get("document") != null
-                                                    ? p.get("document")
-                                                    : (p.get("doc") != null ? p.get("doc") : p.get("data"))))))
-                    .filter(Objects::nonNull)
-                    .map(Object::toString)
-                    .collect(Collectors.joining(", "));
-            String mergedLabel = requests.stream()
-                    .map(r -> deserializeParams(sessionId, r.name(), r.arguments()))
-                    .filter(p -> !p.containsKey("__error"))
-                    .map(p -> p.get("label") != null ? p.get("label") : p.get("category"))
-                    .filter(Objects::nonNull)
-                    .map(Object::toString)
-                    .findFirst()
-                    .orElse("user_facts");
-            Map<String, Object> mergedParams = Map.of("label", mergedLabel, "text", mergedText);
-            return ReasoningStep.pending(
-                    aiMessage.text(),
-                    ToolCapability.INGEST_DOCUMENT.toolName(),
-                    mergedParams,
-                    inputTokens,
-                    outputTokens);
-        }
-
-        if (requests.stream()
-                .allMatch(r -> ToolCapability.SELF_EVOLVE_REFLECT.toolName().equals(r.name()))) {
-            log.warnf(
-                    "[PARALLEL-TOOLS] session=%s: LLM emitted multiple self_evolve_reflect calls; collapsing to one action.",
-                    sessionId);
-            ToolExecutionRequest selected = requests.stream()
-                    .filter(r -> isSelfEvolveStatusAction(sessionId, r))
-                    .findFirst()
-                    .orElse(requests.getFirst());
-            Map<String, Object> actionInput = deserializeParams(sessionId, selected.name(), selected.arguments());
-            if (actionInput.containsKey("__error")) {
-                return ReasoningStep.schemaError(
-                        "System: Your previous response contained invalid JSON. "
-                                + "Correct the format and retry. Error: " + actionInput.get("__error"),
-                        inputTokens,
-                        outputTokens);
-            }
-            return ReasoningStep.pending(
-                    aiMessage.text(), sanitizeToolName(selected.name()), actionInput, inputTokens, outputTokens);
-        }
-
-        for (int i = 0; i < requests.size(); i++) {
-            ToolExecutionRequest req = requests.get(i);
-            String name = sanitizeToolName(req.name());
-            String callId = req.id() != null ? req.id() : name + "-" + UUID.randomUUID();
-            Map<String, Object> params = deserializeParams(sessionId, name, req.arguments());
-            String paramsJson = "{}";
-            try {
-                paramsJson = objectMapper.writeValueAsString(params);
-            } catch (Exception e) {
-                log.warnf("Failed to serialize params for tool %s: %s", name, LogUtil.rootMessage(e));
-            }
-            calls.add(ParallelToolCall.pending(callId, name, params, paramsJson));
-        }
-
-        Map<String, Object> batchPayload;
-        try {
-            String batchJson = objectMapper.writeValueAsString(calls);
-            batchPayload = Map.of("batch", batchJson);
-        } catch (Exception e) {
-            log.errorf("Failed to serialize parallel batch for session %s: %s", sessionId, LogUtil.rootMessage(e));
-            ToolExecutionRequest req = requests.getFirst();
-            String name = sanitizeToolName(req.name());
-            Map<String, Object> actionInput = deserializeParams(sessionId, name, req.arguments());
-            return ReasoningStep.pending(aiMessage.text(), name, actionInput, inputTokens, outputTokens);
-        }
-
-        return ReasoningStep.parallelBatch(aiMessage.text(), batchPayload, inputTokens, outputTokens);
-    }
-
-    private boolean isSelfEvolveStatusAction(String sessionId, ToolExecutionRequest request) {
-        Map<String, Object> params = deserializeParams(sessionId, request.name(), request.arguments());
-        Object action = params.get("action");
-        return action != null && "status".equalsIgnoreCase(action.toString());
-    }
-
-    private Map<String, Object> deserializeParams(String sessionId, String toolName, String argsJson) {
-        if (argsJson == null || argsJson.isBlank()) return Map.of();
-
-        // Phase 1: Try direct parse
-        try {
-            return doDeserialize(argsJson);
-        } catch (Exception e) {
-            log.warnf(
-                    "Initial JSON parse failed for session %s: %s. Attempting repair.",
-                    sessionId, LogUtil.rootMessage(e));
-
-            // Phase 2: Repair and retry
-            try {
-                String repaired = sanitizeJson(argsJson);
-                return doDeserialize(repaired);
-            } catch (Exception e2) {
-                if (ToolCapability.SANDBOX_EXEC.toolName().equals(toolName)) {
-                    Map<String, Object> recovered = recoverSandboxExecParams(argsJson);
-                    if (!recovered.isEmpty()) {
-                        log.warnf("Recovered malformed sandbox_exec parameters for session %s", sessionId);
-                        return recovered;
-                    }
-                }
-                log.errorf("JSON repair failed for session %s: %s", sessionId, LogUtil.rootMessage(e2));
-                return Map.of("__error", e.getMessage(), "parameters", argsJson);
-            }
-        }
-    }
-
-    private Map<String, Object> doDeserialize(String json) throws Exception {
-        Map<String, Object> parsed = objectMapper.readValue(json, new TypeReference<Map<String, Object>>() {});
-        if (parsed != null) {
-            coerceBooleans(parsed);
-        }
-        return parsed != null ? parsed : Map.of();
-    }
-
-    private void coerceBooleans(Map<String, Object> map) {
-        ReasoningStepParserUtils.coerceBooleans(map);
-    }
-
-    private String sanitizeJson(String json) {
-        return ReasoningStepParserUtils.sanitizeJson(json);
-    }
-
-    private Map<String, Object> recoverSandboxExecParams(String argsJson) {
-        if (argsJson == null || argsJson.isBlank()) return Map.of();
-
-        int codeKey = argsJson.indexOf("\"code\"");
-        if (codeKey < 0) return Map.of();
-
-        int codeStart = argsJson.indexOf('"', argsJson.indexOf(':', codeKey) + 1);
-        if (codeStart < 0) return Map.of();
-
-        String rawCode;
-        String language = null;
-
-        int languageKey = argsJson.lastIndexOf("\"language\"");
-        if (languageKey >= 0 && languageKey > codeStart) {
-            int codeEnd = argsJson.lastIndexOf("\",", languageKey);
-            if (codeEnd >= 0 && codeEnd > codeStart) {
-                rawCode = argsJson.substring(codeStart + 1, codeEnd);
-                Matcher matcher = LANGUAGE_FIELD_PATTERN.matcher(argsJson);
-                if (matcher.find()) {
-                    language = matcher.group(1);
-                }
-            } else {
-                // language field exists but code field is truncated or messed up
-                rawCode = argsJson.substring(codeStart + 1);
-            }
-        } else {
-            // No language field - assume truncated
-            rawCode = argsJson.substring(codeStart + 1);
-        }
-
-        String code = rawCode.replace("\\r", "\r")
-                .replace("\\n", "\n")
-                .replace("\\\"", "\"")
-                .replace("\\\\", "\\");
-
-        // Clean up trailing garbage from truncation (quotes and commas only)
-        // DO NOT strip '}' as it might be a valid block end.
-        if (code.endsWith("\"") || code.endsWith(",")) {
-            code = code.substring(0, code.length() - 1);
-        }
-
-        if (language == null || language.isBlank()) {
-            language = textPatternUtils.inferLanguage(code);
-        }
-
-        if (code.isBlank() || language == null || language.isBlank()) return Map.of();
-        return Map.of("code", code, "language", language);
-    }
-
-    private String recoverCodeForDisplay(String argsJson) {
-        if (argsJson == null || argsJson.isBlank()) return null;
-        if (objectMapper != null) {
-            try {
-                Map<String, Object> parsed = doDeserialize(argsJson);
-                Object code = parsed.get("code");
-                if (code != null && !code.toString().isBlank()) {
-                    return code.toString();
-                }
-            } catch (Exception _) {
-                // Fall through to malformed sandbox_exec recovery below.
-            }
-        }
-        Map<String, Object> recovered = recoverSandboxExecParams(argsJson);
-        return (String) recovered.get("code");
-    }
-
-    private boolean isSchedulingGoal(String rawGoal) {
-        if (rawGoal == null || rawGoal.isBlank()) return false;
-        String lower = rawGoal.toLowerCase(Locale.ROOT);
-        boolean hasScheduleVerb = lower.contains("schedule")
-                || lower.contains("remind")
-                || lower.contains("alarm")
-                || lower.contains("notify me")
-                || lower.contains("set up");
-        return hasScheduleVerb
-                || RELATIVE_SCHEDULE_PATTERN.matcher(lower).find()
-                || ABSOLUTE_SCHEDULE_PATTERN.matcher(lower).find();
+        return parallelCollapser.collapse(sessionId, agentRole, aiMessage, requests, inputTokens, outputTokens);
     }
 
     private boolean isUnicodeCorrupted(String text) {

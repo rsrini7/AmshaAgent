@@ -15,22 +15,25 @@ import com.amsha.core.agent.role.AgentRoleEnum;
 import com.amsha.core.skill.CompiledSkillEntry;
 import com.amsha.core.skill.SkillRegistry;
 
+import org.jboss.logging.Logger;
+
 import io.quarkus.arc.Unremovable;
 
 /**
- * An alternative intent classifier that sits in front of the default
- * {@link IntentDetectorService}.
- * <p>
- * Evaluates user input against the rapidly executable pre-compiled regex
- * trigger patterns
- * stored in the {@link SkillRegistry}. If a match is found, it bypasses the LLM
- * completely and routes directly to the mapped dynamic role ("skill:name").
+ * Skill-first intent detector.
+ *
+ * <p>Checks loaded skills before delegating to the LLM-backed detector. Exact
+ * trigger-pattern matches win first; if no trigger matches, the skill name is
+ * matched fuzzily so prompts like "use algorithmic art" and
+ * "use skill:algorithmic-art" still route to the skill role.
  */
 @ApplicationScoped
 @Alternative
 @Priority(1)
 @Unremovable
 public class SkillAwareIntentDetector implements IntentDetector {
+
+    private static final Logger LOG = Logger.getLogger(SkillAwareIntentDetector.class);
 
     @Inject
     SkillRegistry skillRegistry;
@@ -45,34 +48,40 @@ public class SkillAwareIntentDetector implements IntentDetector {
         }
 
         List<CompiledSkillEntry> snapshot = skillRegistry.currentSnapshot();
+
         for (CompiledSkillEntry entry : snapshot) {
             if (entry.matches(userMessage)) {
-                return AgentRoleEnum.SKILL_PREFIX + entry.definition().name();
+                return skillRole(entry, "trigger pattern", userMessage);
             }
         }
 
-        // Second chance: name-based fuzzy match for skills with zero trigger patterns.
-        // e.g. "use remote-browser to navigate ..." should route to skill:remote-browser
-        // even when the skill has no regex routes defined.
-        // Sort by name length descending so that longer/more specific names match first.
-        List<CompiledSkillEntry> sortedByLength = snapshot.stream()
+        for (CompiledSkillEntry entry : snapshot.stream()
                 .sorted((e1, e2) -> Integer.compare(
                         e2.definition().name().length(), e1.definition().name().length()))
-                .toList();
-
-        for (CompiledSkillEntry entry : sortedByLength) {
-            String name = entry.definition().name();
-            if (name != null && !name.isBlank()) {
-                String[] segments = name.split("[-_]");
-                String regexName = Arrays.stream(segments).map(Pattern::quote).collect(Collectors.joining("[\\s_-]+"));
-                Pattern boundaryPattern = Pattern.compile("\\b" + regexName + "\\b", Pattern.CASE_INSENSITIVE);
-                if (boundaryPattern.matcher(userMessage).find()) {
-                    return AgentRoleEnum.SKILL_PREFIX + entry.definition().name();
-                }
+                .toList()) {
+            if (matchesSkillName(userMessage, entry.definition().name())) {
+                return skillRole(entry, "skill name", userMessage);
             }
         }
 
-        // No skill match - fallback to expensive LLM classification
         return fallbackService.classify(userMessage);
+    }
+
+    private static boolean matchesSkillName(String userMessage, String skillName) {
+        if (skillName == null || skillName.isBlank()) {
+            return false;
+        }
+
+        String[] segments = skillName.split("[-_]");
+        String pattern = Arrays.stream(segments).map(Pattern::quote).collect(Collectors.joining("[\\s_-]+"));
+
+        Pattern boundaryPattern = Pattern.compile("\\b" + pattern + "\\b", Pattern.CASE_INSENSITIVE);
+        return boundaryPattern.matcher(userMessage).find();
+    }
+
+    private static String skillRole(CompiledSkillEntry entry, String matchType, String userMessage) {
+        String role = AgentRoleEnum.SKILL_PREFIX + entry.definition().name();
+        LOG.infof("Skill intent matched via %s: role=%s message='%s'", matchType, role, userMessage);
+        return role;
     }
 }

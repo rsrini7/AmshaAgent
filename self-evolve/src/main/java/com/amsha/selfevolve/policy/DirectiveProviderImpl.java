@@ -1,6 +1,6 @@
 package com.amsha.selfevolve.policy;
 
-import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.context.RequestScoped;
 import jakarta.inject.Inject;
 
 import java.util.List;
@@ -8,16 +8,18 @@ import java.util.List;
 import com.amsha.core.config.SelfEvolveConfig;
 import com.amsha.core.memory.tiered.DirectiveProvider;
 import com.amsha.selfevolve.api.DirectiveBundle;
-import com.amsha.selfevolve.api.SynthesizedDirective;
 
 /**
  * CDI implementation of {@link DirectiveProvider} backed by the self-evolve directive store.
  * <p>
- * Consolidates both active and shadow directive retrieval into a single
- * {@code buildDirectives()} call to avoid double DB queries when both methods
- * are called in the same prompt assembly cycle.
+ * This bean is {@link RequestScoped} and implements turn-level caching of directives
+ * to avoid duplicate database queries across multiple iterations of the same request turn.
+ * <p>
+ * WARNING: This bean requires an active request context (e.g. active under `@ActivateRequestContext`
+ * in `AgentLoop.runWithRole`). Do not inject this bean directly into threads/contexts that do not
+ * have an active request context (such as Quartz scheduler threads).
  */
-@ApplicationScoped
+@RequestScoped
 public class DirectiveProviderImpl implements DirectiveProvider {
 
     @Inject
@@ -26,36 +28,31 @@ public class DirectiveProviderImpl implements DirectiveProvider {
     @Inject
     SelfEvolveConfig config;
 
-    /**
-     * Returns active directive texts for authoritative prompt injection.
-     */
-    @Override
-    public List<String> getInjectableDirectives(String userId) {
-        if (!config.enabled() || !config.directivesEnabled()) {
-            return List.of();
-        }
-        DirectiveBundle bundle = synthesizer.buildDirectives(userId);
-        return bundle.activeDirectives().stream()
-                .map(SynthesizedDirective::text)
-                .toList();
-    }
+    private String cachedUserId;
+    private DirectivesResult cachedResult;
 
-    /**
-     * Returns shadow directive texts for evaluation-mode prompt injection.
-     * <p>
-     * Note: This makes a separate DB call from {@link #getInjectableDirectives(String)}.
-     * If both are called in the same prompt assembly, consider using
-     * {@link InteractionPolicySynthesizer#buildDirectives(String)} directly
-     * and consuming the {@link DirectiveBundle} to avoid the duplicate query.
-     */
     @Override
-    public List<String> getShadowDirectives(String userId) {
+    public DirectivesResult getDirectives(String userId) {
         if (!config.enabled() || !config.directivesEnabled()) {
-            return List.of();
+            return new DirectivesResult(List.of(), List.of());
         }
+
+        if (cachedResult != null && userId != null && userId.equals(cachedUserId)) {
+            return cachedResult;
+        }
+
         DirectiveBundle bundle = synthesizer.buildDirectives(userId);
-        return bundle.shadowDirectives().stream()
-                .map(SynthesizedDirective::text)
+
+        List<DirectiveInfo> active = bundle.activeDirectives().stream()
+                .map(d -> new DirectiveInfo(d.id(), d.text()))
                 .toList();
+
+        List<DirectiveInfo> shadow = bundle.shadowDirectives().stream()
+                .map(d -> new DirectiveInfo(d.id(), d.text()))
+                .toList();
+
+        cachedUserId = userId;
+        cachedResult = new DirectivesResult(active, shadow);
+        return cachedResult;
     }
 }

@@ -9,7 +9,7 @@ dependency-reduced-pom.xml
 buildNumber.properties
 
 # Native 
-dist/
+/dist/
 
 # IDE - VSCode
 .vscode/
@@ -54,6 +54,7 @@ lib/
 node_modules/
 dist-tsc/
 dist-ssr/
+/ui/dist/
 node/
 npm/
 *.tsbuildinfo

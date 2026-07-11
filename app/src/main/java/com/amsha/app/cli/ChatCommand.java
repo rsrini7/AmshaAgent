@@ -34,6 +34,7 @@ import com.amsha.core.lifecycle.WorkspaceManager;
 import com.amsha.core.pipeline.MessageContext;
 import com.amsha.core.reflex.ReflexRegistry;
 import com.amsha.core.reflex.ReflexResult;
+import com.amsha.core.routing.SkillAwareIntentDetector;
 import com.amsha.core.scope.WorkspaceContext;
 import com.amsha.core.security.AutonomyLevel;
 import com.amsha.core.state.StatefulAgentStore;
@@ -64,6 +65,11 @@ public class ChatCommand implements Runnable {
             defaultValue = AgentRoleEnum.COORDINATOR_ID)
     String role = AgentRoleEnum.COORDINATOR_ID;
 
+    @CommandLine.Option(
+            names = {"-s", "--session-id"},
+            description = "Resume an existing persisted session by ID; generates a new CLI session when omitted.")
+    String requestedSessionId;
+
     @Inject
     Logger log;
 
@@ -87,6 +93,9 @@ public class ChatCommand implements Runnable {
 
     @Inject
     CliResultBridge cliResultBridge;
+
+    @Inject
+    SkillAwareIntentDetector skillAwareIntentDetector;
 
     private volatile String currentCliSessionId;
 
@@ -120,7 +129,9 @@ public class ChatCommand implements Runnable {
     @Override
     @ActivateRequestContext
     public void run() {
-        String sessionId = "cli-" + UUID.randomUUID();
+        String sessionId = requestedSessionId == null || requestedSessionId.isBlank()
+                ? "cli-" + UUID.randomUUID()
+                : requestedSessionId.trim();
         this.currentCliSessionId = sessionId;
 
         // Install Jansi ANSI support — auto-detects terminal capabilities.
@@ -128,6 +139,7 @@ public class ChatCommand implements Runnable {
         // disables them for piped output / CI logs.
         AnsiConsole.systemInstall();
 
+        log.infof("Starting CLI chat session %s with role %s", sessionId, role);
         System.out.println("✦ Amsha Agent Interactive Terminal");
         System.out.println("   Session : " + sessionId);
         System.out.println("   Role    : " + role);
@@ -148,6 +160,7 @@ public class ChatCommand implements Runnable {
             AnsiConsole.systemUninstall();
         }
 
+        log.infof("CLI chat session %s terminated", sessionId);
         System.out.println("\n[Terminated]");
     }
 
@@ -230,6 +243,7 @@ public class ChatCommand implements Runnable {
             }
 
             if ("/exit".equalsIgnoreCase(input) || "/quit".equalsIgnoreCase(input)) {
+                log.infof("CLI chat session %s exiting on user command", sessionId);
                 terminal.writer().println("Goodbye.");
                 break;
             }
@@ -261,6 +275,7 @@ public class ChatCommand implements Runnable {
                     if (input.startsWith("/approve") || input.startsWith("/deny")) {
                         hitlPending = false;
                     }
+                    log.infof("CLI reflex response for session %s: %s", sessionId, response);
                     terminal.writer().println("\n▶ Amsha Agent> " + response);
                 }
                 continue;
@@ -335,6 +350,7 @@ public class ChatCommand implements Runnable {
     private List<String> extractSlashCommands() {
         return List.of(
                 "/approve",
+                "/approvals",
                 "/commands",
                 "/crons",
                 "/deletecron",
@@ -353,7 +369,22 @@ public class ChatCommand implements Runnable {
 
     private void dispatchToAgent(String sessionId, String input, MessageContext context) {
         try {
+            log.infof("CLI chat session %s dispatching input: %s", sessionId, input);
             System.out.println("⚡ Thinking...");
+
+            // ChatCommand invokes AgentLoop directly and therefore bypasses the
+            // message pipeline's IntentClassificationHandler. Resolve skill
+            // roles here when using the default coordinator role; an explicit
+            // --role remains authoritative for existing CLI workflows.
+            String dispatchRole = role;
+            if (AgentRoleEnum.COORDINATOR_ID.equalsIgnoreCase(role)) {
+                String detectedRole = skillAwareIntentDetector.classify(input);
+                if (detectedRole != null && !detectedRole.isBlank()) {
+                    dispatchRole = detectedRole;
+                    context.setAgentRole(detectedRole);
+                    log.infof("CLI skill-aware role selection: input='%s' role=%s", input, detectedRole);
+                }
+            }
 
             // Register BEFORE agentLoop.run() so the future exists even if
             // complete() fires on a REST thread before we reach the switch below.
@@ -362,7 +393,7 @@ public class ChatCommand implements Runnable {
 
             hitlResultPrinted = false; // reset for this dispatch cycle
 
-            AgentResult result = agentLoop.run(sessionId, role, input, reasoningEngine, maxIterations, context);
+            AgentResult result = agentLoop.run(sessionId, dispatchRole, input, reasoningEngine, maxIterations, context);
 
             String output =
                     switch (result) {
@@ -384,6 +415,9 @@ public class ChatCommand implements Runnable {
                                     "\n▶ Amsha Agent> ⏸ Approval needed for tool: " + a.toolName() + "\n   Params: "
                                             + truncatedParams
                                             + "\n   Type /approve or /deny (or approve via REST/UI - result will appear automatically)");
+                            log.infof(
+                                    "CLI approval needed for session %s tool=%s params=%s",
+                                    sessionId, a.toolName(), truncatedParams);
 
                             // Spawn a virtual thread that holds the pre-registered future directly.
                             // This is race-safe: even if complete() fires before get() is called,
@@ -406,6 +440,7 @@ public class ChatCommand implements Runnable {
                                                 default -> null;
                                             };
                                     if (hitlOutput != null) {
+                                        log.infof("CLI HITL result for session %s: %s", sessionId, hitlOutput);
                                         LineReader lr = lineReader;
                                         if (lr != null) {
                                             lr.printAbove("\n▶ Amsha Agent> " + hitlOutput);
@@ -442,6 +477,7 @@ public class ChatCommand implements Runnable {
             }
 
             if (output != null) {
+                log.infof("CLI agent output for session %s: %s", sessionId, output);
                 System.out.println("\n▶ Amsha Agent> " + output);
             }
 

@@ -148,10 +148,10 @@ public class StepDecisionRouter {
             }
             return Optional.of(RoutingOutcome.terminal(res));
         } else if (outcome instanceof FinishActionHandler.FinishOutcome.Correction correction) {
-            history.add(correction.correctedStep());
+            history.add(nonTerminalCorrectionStep(correction.correctedStep()));
             return Optional.of(RoutingOutcome.retryEngine(correction.correctionHint(), llmSchemaErrorCount + 1));
         } else if (outcome instanceof FinishActionHandler.FinishOutcome.RetryLeak rl) {
-            history.add(rl.correctedStep());
+            history.add(nonTerminalCorrectionStep(rl.correctedStep()));
             return Optional.of(RoutingOutcome.retryEngine(rl.correctionHint(), llmSchemaErrorCount + 1));
         } else if (outcome instanceof FinishActionHandler.FinishOutcome.SalvageFailed sf) {
             history.add(currentStep.withObservation("Salvage failed."));
@@ -201,6 +201,20 @@ public class StepDecisionRouter {
             return Optional.of(invocationResult);
         }
         return Optional.empty();
+    }
+
+    private static ReasoningStep nonTerminalCorrectionStep(ReasoningStep correctedStep) {
+        if (correctedStep instanceof ReasoningStep.FinishStep finish) {
+            Object answer = finish.actionInput() != null
+                    ? finish.actionInput().get(ReasoningStep.ACTION_INPUT_ANSWER_KEY)
+                    : null;
+            String rejectedAnswer = answer != null ? String.valueOf(answer).strip() : finish.thought();
+            String observation = rejectedAnswer == null || rejectedAnswer.isBlank()
+                    ? "Rejected FINISH answer; retrying with corrective guidance."
+                    : "Rejected FINISH answer; retrying with corrective guidance. Answer was: " + rejectedAnswer;
+            return ReasoningStep.systemMessage(observation);
+        }
+        return correctedStep;
     }
 
     private RoutingOutcome handleToolInvocation(

@@ -1,12 +1,17 @@
 package com.amsha.core.util;
 
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.regex.Pattern;
 
 import com.amsha.core.agent.AgentSentinels;
 import com.amsha.core.agent.reasoning.ReasoningStep;
 import com.amsha.core.agent.result.AgentResult;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import org.eclipse.microprofile.config.ConfigProvider;
 
 /**
  * Shared logic for rendering {@link AgentResult} to user-friendly text.
@@ -17,6 +22,13 @@ import com.amsha.core.agent.result.AgentResult;
  * it followed the format schema strictly; OpenRouter free models do not.
  */
 public class AgentResultFormatter {
+    private AgentResultFormatter() {
+        /* This utility class should not be instantiated */
+    }
+
+    private static final String MALFORMED_TOOL_OUTPUT = "[Tool output was malformed - no answer text was generated.]";
+    private static final String RECOVERED_OBSERVATION_MAX_CHARS_PROP = "amsha.chat.recovered-observation-max-chars";
+    private static final int MAX_RECOVERED_OBSERVATION_CHARS = 2_000;
 
     // TOOLCALL sanitization patterns
 
@@ -58,8 +70,9 @@ public class AgentResultFormatter {
     private static String format(AgentResult result, boolean basic) {
         String reply =
                 switch (result) {
-                    case AgentResult.Finished f -> sanitize(f.answer());
-                    case AgentResult.StructuredFinished sf -> sanitize(sf.answer());
+                    case AgentResult.Finished f -> recoverMalformedToolOutput(sanitize(f.answer()), f.steps());
+                    case AgentResult.StructuredFinished sf ->
+                        recoverMalformedToolOutput(sanitize(sf.answer()), sf.steps());
                     case AgentResult.AwaitingApproval a -> {
                         boolean isCron =
                                 a.sessionId() != null && a.sessionId().startsWith(AgentSentinels.CRON_SESSION_PREFIX);
@@ -85,6 +98,130 @@ public class AgentResultFormatter {
         return reply;
     }
 
+    private static String recoverMalformedToolOutput(String formattedAnswer, List<ReasoningStep> steps) {
+        if (!MALFORMED_TOOL_OUTPUT.equals(formattedAnswer) || steps == null || steps.isEmpty()) {
+            return formattedAnswer;
+        }
+
+        return steps.reversed().stream()
+                .filter(step -> !ReasoningStep.OBSERVE.equals(step.action()))
+                .filter(step -> !ReasoningStep.FINISH.equals(step.action()))
+                .filter(step -> Boolean.TRUE.equals(step.success()))
+                .map(ReasoningStep::observation)
+                .filter(obs -> obs != null && !obs.isBlank())
+                .findFirst()
+                .map(AgentResultFormatter::formatRecoveredObservation)
+                .orElse(formattedAnswer);
+    }
+
+    private static String formatRecoveredObservation(String observation) {
+        String trimmed = observation.strip();
+        String jsonSummary = summarizeJsonObservation(trimmed);
+        if (jsonSummary != null && !jsonSummary.isBlank()) {
+            return jsonSummary;
+        }
+        int maxChars = ConfigProvider.getConfig()
+                .getOptionalValue(RECOVERED_OBSERVATION_MAX_CHARS_PROP, Integer.class)
+                .orElse(MAX_RECOVERED_OBSERVATION_CHARS);
+        if (trimmed.length() > maxChars) {
+            return trimmed.substring(0, Math.max(0, maxChars)).stripTrailing() + "...";
+        }
+        return trimmed;
+    }
+
+    private static String summarizeJsonObservation(String observation) {
+        try {
+            JsonNode root = new ObjectMapper().readTree(observation);
+            if (root.isArray()) {
+                return summarizeJsonArray(root);
+            }
+            if (root.isObject()) {
+                return summarizeJsonObject(root);
+            }
+        } catch (Exception _) {
+            return null;
+        }
+        return null;
+    }
+
+    private static String summarizeJsonArray(JsonNode root) {
+        if (root.isEmpty()) {
+            return "Tool completed successfully. No records were returned.";
+        }
+
+        StringBuilder sb = new StringBuilder("Tool completed successfully.\n\n");
+        int count = Math.min(root.size(), 5);
+        for (int i = 0; i < count; i++) {
+            JsonNode item = root.get(i);
+            sb.append(i + 1).append(". ").append(titleForJsonItem(item)).append("\n");
+            appendField(sb, item, "description", "Description");
+            appendField(sb, item, "created_at", "Created");
+            appendFiles(sb, item);
+        }
+        return sb.toString().stripTrailing();
+    }
+
+    private static String summarizeJsonObject(JsonNode root) {
+        StringBuilder sb = new StringBuilder("Tool completed successfully.");
+        String title = titleForJsonItem(root);
+        if (!title.isBlank()) {
+            sb.append("\n\n").append(title);
+        }
+        appendField(sb, root, "description", "Description");
+        appendField(sb, root, "created_at", "Created");
+        appendFiles(sb, root);
+        return sb.toString().stripTrailing();
+    }
+
+    private static String titleForJsonItem(JsonNode item) {
+        if (item == null || !item.isObject()) {
+            return "Result";
+        }
+        for (String field : List.of("title", "name", "description", "id")) {
+            JsonNode value = item.get(field);
+            if (value != null && value.isTextual() && !value.asText().isBlank()) {
+                return value.asText();
+            }
+        }
+        JsonNode files = item.get("files");
+        if (files != null && files.isArray() && !files.isEmpty()) {
+            JsonNode first = files.get(0);
+            if (first != null && first.isTextual() && !first.asText().isBlank()) {
+                return first.asText();
+            }
+        }
+        return "Result";
+    }
+
+    private static void appendField(StringBuilder sb, JsonNode item, String field, String label) {
+        if (item == null || !item.isObject()) {
+            return;
+        }
+        JsonNode value = item.get(field);
+        if (value != null && value.isTextual() && !value.asText().isBlank()) {
+            sb.append("   ").append(label).append(": ").append(value.asText()).append("\n");
+        }
+    }
+
+    private static void appendFiles(StringBuilder sb, JsonNode item) {
+        if (item == null || !item.isObject()) {
+            return;
+        }
+        JsonNode files = item.get("files");
+        if (files == null || !files.isArray() || files.isEmpty()) {
+            return;
+        }
+        String joined = "";
+        for (JsonNode file : files) {
+            if (file != null && file.isTextual() && !file.asText().isBlank()) {
+                joined = joined.isBlank() ? file.asText() : joined + ", " + file.asText();
+            }
+        }
+        if (!joined.isBlank()) {
+            sb.append("   Files: ").append(joined).append("\n");
+        }
+    }
+
     /**
      * Strips raw TOOLCALL markup that LLMs occasionally embed in FINISH answers.
      * Safe to call with null or blank - returns as-is.
@@ -100,14 +237,14 @@ public class AgentResultFormatter {
 
         // 2. Bare JSON tool-array that IS the entire answer string
         if (BARE_TOOL_JSON_ARRAY.matcher(cleaned).matches()) {
-            return "[Tool output was malformed - no answer text was generated.]";
+            return MALFORMED_TOOL_OUTPUT;
         }
 
         // 2b. JSON wrapper {"response":"..."} — unwrap to plain text
         var responseWrapper = RESPONSE_JSON_WRAPPER.matcher(cleaned);
         if (responseWrapper.matches()) {
             String unwrapped = responseWrapper.group(1).replace("\\\"", "\"").strip();
-            return unwrapped.isBlank() ? "[Tool output was malformed - no answer text was generated.]" : unwrapped;
+            return unwrapped.isBlank() ? MALFORMED_TOOL_OUTPUT : unwrapped;
         }
 
         // 3. Trailing/leading fragment from a split TOOLCALL block
@@ -123,7 +260,7 @@ public class AgentResultFormatter {
         // Telegram does not dump the generated page body as chat text.
         cleaned = HtmlArtifactUtil.collapseHtmlArtifact(cleaned);
 
-        return cleaned.isBlank() ? "[Tool output was malformed - no answer text was generated.]" : cleaned;
+        return cleaned.isBlank() ? MALFORMED_TOOL_OUTPUT : cleaned;
     }
 
     private static String stripDsmlLeakBlock(String text) {

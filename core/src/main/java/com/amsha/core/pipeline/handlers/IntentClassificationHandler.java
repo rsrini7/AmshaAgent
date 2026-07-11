@@ -11,7 +11,6 @@ import java.util.regex.Pattern;
 
 import com.amsha.channel.api.ChannelMessage;
 import com.amsha.channel.api.ChannelPlugin;
-import com.amsha.channel.api.IntentDetector;
 import com.amsha.common.util.LogUtil;
 import com.amsha.core.agent.AgentSentinels;
 import com.amsha.core.agent.IntentClassificationService;
@@ -21,6 +20,7 @@ import com.amsha.core.channel.ChannelPluginRegistry;
 import com.amsha.core.pipeline.HandleResult;
 import com.amsha.core.pipeline.MessageContext;
 import com.amsha.core.pipeline.MessageHandler;
+import com.amsha.core.routing.SkillAwareIntentDetector;
 import com.amsha.core.security.DestructiveVocabularyFilter;
 import com.amsha.core.util.AgentErrorMessageUtil;
 
@@ -37,7 +37,7 @@ public class IntentClassificationHandler implements MessageHandler {
     private static final Pattern TRAILING_PUNCTUATION_PATTERN = Pattern.compile("[/?\\s]+$");
 
     @Inject
-    IntentDetector classifier;
+    SkillAwareIntentDetector classifier;
 
     @Inject
     DestructiveVocabularyFilter destructiveVocabularyFilter;

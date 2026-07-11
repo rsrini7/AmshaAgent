@@ -644,7 +644,7 @@ class LangChainReasoningEngineTest {
     IntentClassificationService intentDetector;
 
     @Test
-    void testWriteIntentForcesIngestDocumentCorrection() {
+    void testWriteIntentSynthesizesIngestDocumentFallback() {
         // Arrange
         String sessionId = "write-intent-test";
         String goal = "save my name as Srini";
@@ -672,14 +672,13 @@ class LangChainReasoningEngineTest {
         when(historyAssembler.assemble(any(), any(), any())).thenReturn(List.of());
 
         // Act
-        ReasoningStep resultStep = reasoningEngine.nextStep(createCtx(sessionId), "coordinator", goal, List.of());
+        ReasoningStep resultStep = reasoningEngine.nextStep(createCtx(sessionId, goal), "coordinator", goal, List.of());
 
         // Assert
         // Should be intercepted and turned into an OBSERVE step with a correction hint
-        assertEquals("OBSERVE", resultStep.action());
-        assertTrue(resultStep
-                .observation()
-                .contains("CORRECTION: The user wants to STORE data. Call ingest_document RIGHT NOW."));
+        assertEquals(ToolCapability.INGEST_DOCUMENT.toolName(), resultStep.action());
+        assertEquals("my name as Srini", resultStep.actionInput().get("text"));
+        assertEquals("user_memory", resultStep.actionInput().get("label"));
     }
 
     @Test

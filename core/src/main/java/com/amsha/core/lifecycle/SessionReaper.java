@@ -30,6 +30,7 @@ import com.amsha.core.state.StatefulAgentStore;
 import com.amsha.core.state.ToolDecision;
 import com.amsha.core.util.BatchDecisionUtil;
 import com.amsha.core.util.CronScheduleUtil;
+import com.amsha.core.util.DatabaseSafetyGuard;
 import com.amsha.persistence.api.CheckpointDto;
 import com.amsha.persistence.api.CheckpointStorePort;
 import com.amsha.persistence.api.CronRunDto;
@@ -227,6 +228,7 @@ public class SessionReaper {
                 auditSequencer.releaseStaleSession(sessionId);
             });
         } catch (RuntimeException e) {
+            if (DatabaseSafetyGuard.checkDatabaseFailure(e)) return;
             String msg = e.getMessage() != null ? e.getMessage() : "";
             boolean isShutdown = shuttingDown || msg.contains("pool is closed") || msg.contains("database closed");
             if (!isShutdown) {
@@ -237,6 +239,7 @@ public class SessionReaper {
                 log.debugf("Full shutdown race details:\n%s", LogUtil.trimmedStack(e));
             }
         } catch (Exception e) {
+            if (DatabaseSafetyGuard.checkDatabaseFailure(e)) return;
             log.error("SessionReaper: gcSweep failed", e);
         }
     }
@@ -274,6 +277,7 @@ public class SessionReaper {
                 markApprovalTimedOut(cp);
             }
         } catch (RuntimeException e) {
+            if (DatabaseSafetyGuard.checkDatabaseFailure(e)) return;
             String msg = e.getMessage() != null ? e.getMessage() : "";
             boolean isShutdown = shuttingDown || msg.contains("pool is closed") || msg.contains("database closed");
             if (!isShutdown) {
@@ -284,6 +288,7 @@ public class SessionReaper {
                 log.debugf("Full shutdown race details:\n%s", LogUtil.trimmedStack(e));
             }
         } catch (Exception e) {
+            if (DatabaseSafetyGuard.checkDatabaseFailure(e)) return;
             log.error("SessionReaper: sweepTimedOutApprovals failed", e);
         }
     }

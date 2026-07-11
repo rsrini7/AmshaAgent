@@ -20,7 +20,7 @@ class LeakedToolCallParserTest {
         ToolRegistry registry = new ToolRegistry() {
             @Override
             public List<String> listTools() {
-                return List.of("garuda", "sandbox_exec", "github", "host_exec");
+                return List.of("garuda", "sandbox_exec", "github", "host_exec", "recall_memory_search");
             }
         };
         parser = new LeakedToolCallParser(registry);
@@ -110,6 +110,40 @@ class LeakedToolCallParserTest {
         assertEquals("host_exec", result.get().toolName());
         assertEquals("ls -la /tmp", result.get().arguments().get("code"));
         assertEquals("bash", result.get().arguments().get("language"));
+    }
+
+    @Test
+    void extractLeakedToolCall_xmlJsonFormat() {
+        String answer = """
+                <tool_call>
+                {"name": "recall_memory_search", "arguments": {"query": "first discussion"}}
+                </tool_call>
+                """;
+
+        Optional<LeakedToolCall> result = parser.extractLeakedToolCall(answer);
+
+        assertTrue(result.isPresent());
+        assertEquals("recall_memory_search", result.get().toolName());
+        assertEquals("first discussion", result.get().arguments().get("query"));
+    }
+
+    @Test
+    void extractLeakedToolCall_xmlToolNameParametersFormat() {
+        String answer = """
+                <tool_call>
+                <tool_name>recall_memory_search</tool_name>
+                <parameters>
+                {"query": "first conversation initial discussion"}</parameters>
+                </tool_call>
+                """;
+
+        Optional<LeakedToolCall> result = parser.extractLeakedToolCall(answer);
+
+        assertTrue(result.isPresent());
+        assertEquals("recall_memory_search", result.get().toolName());
+        assertEquals(
+                "first conversation initial discussion",
+                result.get().arguments().get("query"));
     }
 
     @Test

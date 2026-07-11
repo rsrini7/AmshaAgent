@@ -8,7 +8,7 @@ import com.amsha.selfevolve.api.MemoryRecordType;
 /**
  * Persistence port for extracted memories from rule-based extraction (Phase 9).
  * Implementations: SQLite, PostgreSQL, Filesystem.
- * NoOp implementation returned when self-evolve is disabled.
+ * NoOp implementation is returned when self-evolve is disabled.
  */
 public interface ExtractedMemoryStorePort {
 
@@ -36,12 +36,19 @@ public interface ExtractedMemoryStorePort {
     List<ExtractedMemory> getByType(MemoryRecordType recordType, int limit);
 
     /**
+     * Lists distinct user IDs with extracted memories.
+     *
+     * @param limit maximum number of user IDs to return. A value <= 0 represents no limit.
+     */
+    List<String> listUserIds(int limit);
+
+    /**
      * Checks if a memory with the given content hash already exists for a session.
      */
     boolean existsByHash(String sessionId, String contentHash);
 
     /**
-     * Purges extracted memories older than the specified retention days.
+     * Purges extracted memories older than specified retention days.
      */
     int purgeExpired(int retentionDays);
 }

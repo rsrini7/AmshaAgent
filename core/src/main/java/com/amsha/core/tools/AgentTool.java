@@ -108,6 +108,11 @@ public interface AgentTool {
         return null;
     }
 
+    /** Optional cheap validation performed before governance/HITL approval. */
+    default String validateParameters(Map<String, Object> params) {
+        return null;
+    }
+
     /**
      * Optional post-processing of raw sandbox output before it is returned to the
      * agent.

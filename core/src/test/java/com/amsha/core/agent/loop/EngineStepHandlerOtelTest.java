@@ -1,5 +1,7 @@
 package com.amsha.core.agent.loop;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.times;
@@ -14,6 +16,7 @@ import java.util.Map;
 import com.amsha.core.agent.reasoning.ReasoningEngine;
 import com.amsha.core.agent.reasoning.ReasoningStep;
 import com.amsha.core.agent.reasoning.StructuredOutputMode;
+import com.amsha.core.agent.result.AgentResult;
 import com.amsha.core.governance.GovernanceStrategy;
 import com.amsha.core.observability.AgentOtelContext;
 import com.amsha.core.security.AutonomyLevel;
@@ -65,5 +68,59 @@ public class EngineStepHandlerOtelTest {
         // recordLlmCall should be called EXACTLY once (from the observer loop).
         // If there were a direct call to mockOtelContext.recordLlmCall, it would be twice.
         verify(mockOtelContext, times(1)).recordLlmCall("test-session", 10, 20);
+    }
+
+    @Test
+    void rawToolJsonFinishIncrementsSchemaRetryCount() {
+        ReasoningStep step = ReasoningStep.pending(
+                "thought", "FINISH", Map.of("answer", "{\"agent\":\"brahma\",\"goal\":\"write code\"}"), 10, 20);
+        when(engine.nextStep(any(), anyString(), anyString(), any())).thenReturn(step);
+
+        AgentExecutionContext context = new AgentExecutionContext(
+                "test-session",
+                "user",
+                "chat",
+                "coder",
+                "goal",
+                AutonomyLevel.FULL,
+                StructuredOutputMode.NATIVE,
+                5,
+                0,
+                null,
+                null,
+                null,
+                null);
+
+        StepDecision decision = handler.processEngineStep(context, engine, Collections.emptyList(), null, 0, 1);
+
+        assertEquals(DecisionType.CONTINUE, decision.type());
+        assertEquals(1, decision.llmSchemaErrorCount());
+    }
+
+    @Test
+    void rawToolJsonFinishStopsAtSchemaRetryBudget() {
+        ReasoningStep step = ReasoningStep.pending(
+                "thought", "FINISH", Map.of("answer", "{\"agent\":\"brahma\",\"goal\":\"write code\"}"), 10, 20);
+        when(engine.nextStep(any(), anyString(), anyString(), any())).thenReturn(step);
+
+        AgentExecutionContext context = new AgentExecutionContext(
+                "test-session",
+                "user",
+                "chat",
+                "coder",
+                "goal",
+                AutonomyLevel.FULL,
+                StructuredOutputMode.NATIVE,
+                5,
+                0,
+                null,
+                null,
+                null,
+                null);
+
+        StepDecision decision = handler.processEngineStep(context, engine, Collections.emptyList(), null, 3, 1);
+
+        assertEquals(DecisionType.TERMINAL, decision.type());
+        assertTrue(decision.result() instanceof AgentResult.Failed);
     }
 }

@@ -138,8 +138,8 @@ public class SandboxExecTool implements AgentTool {
         return JsonObjectSchema.builder()
                 .addStringProperty("code", "The source code to execute")
                 .addStringProperty("command", "Alias for 'code'. The command or script to execute.")
-                .addStringProperty("language", "The programming language (python, java, go, node, bash). Default: bash")
-                .required("code")
+                .addStringProperty("language", "The programming language (python, python3, java, go, node, bash).")
+                .required("code", "language")
                 .build();
     }
 
@@ -160,7 +160,7 @@ public class SandboxExecTool implements AgentTool {
         if (code == null) throw new IllegalArgumentException("Parameter 'code' is required.");
         String lang = (String) params.get("language");
         if (lang == null || lang.isBlank()) {
-            lang = "bash";
+            throw new IllegalArgumentException("Parameter 'language' is required.");
         }
         lang = lang.toLowerCase(Locale.ROOT);
 
@@ -207,9 +207,7 @@ public class SandboxExecTool implements AgentTool {
     public void prepareWorkspace(Path workspaceRoot, Map<String, Object> params) throws IOException {
         normalizeParams(params);
         String lang = (String) params.get("language");
-        if (lang == null) {
-            lang = "bash";
-        }
+        if (lang == null || lang.isBlank()) throw new IllegalArgumentException("Parameter 'language' is required.");
         String code = (String) params.get("code");
         if (code == null) return;
         lang = lang.toLowerCase(Locale.ROOT);
@@ -257,7 +255,7 @@ public class SandboxExecTool implements AgentTool {
             String lang = (String) params.get("language");
             if (code == null) return ToolResponse.failure(1, "Parameter 'code' is required.");
             if (lang == null || lang.isBlank()) {
-                lang = "bash";
+                return ToolResponse.failure(1, "Parameter 'language' is required.");
             }
             lang = lang.toLowerCase(Locale.ROOT);
 

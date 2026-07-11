@@ -32,6 +32,11 @@ public class NoOpExtractedMemoryStore implements ExtractedMemoryStorePort {
     }
 
     @Override
+    public List<String> listUserIds(int limit) {
+        return List.of();
+    }
+
+    @Override
     public boolean existsByHash(String sessionId, String contentHash) {
         return false;
     }

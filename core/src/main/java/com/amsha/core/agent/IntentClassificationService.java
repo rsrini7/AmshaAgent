@@ -26,7 +26,7 @@ public class IntentClassificationService {
                     + "(?:[.!?]+\\s*)?(?:\\s+.*)?$");
 
     private static final Pattern TOOL_VERB_PATTERN = Pattern.compile(
-            "\\b(search|find|fetch|list|get|github|gh|repo|read|browse|open|go to|url|site|web|run|exec|code|script|program|schedule|at|every|after|in|save|store|ingest|remember|note|weather|news|price|latest|stock|status|info|history|check|bullet|recap|summarize|summary)\\b",
+            "\\b(search|find|fetch|list|get|github|gh|repo|read|browse|open|go to|url|site|web|run|exec|execute|code|script|program|schedule|at|every|after|in|save|store|ingest|remember|note|weather|news|price|latest|stock|status|info|history|check|bullet|recap|summarize|summary)\\b",
             Pattern.CASE_INSENSITIVE);
 
     private static final Pattern HISTORY_QUERY_PATTERN = Pattern.compile(
@@ -107,12 +107,15 @@ public class IntentClassificationService {
         // § Bug 2: Identity queries should not be classified as chitchat because they require memory lookup
         if (isIdentityQuery(text)) return false;
 
+        // Execution follow-ups must retain context and tool availability.
+        if (isFollowUpHeuristic(text)) return false;
+
         if (text.length() > 60) return false;
         return !TOOL_VERB_PATTERN.matcher(text).find();
     }
 
     private static final Pattern FOLLOWUP_PATTERN = Pattern.compile(
-            "(?i)^\\s*(do\\s+)?(same|again|retry|execute|run|use\\s+sandbox|in\\s+(java|go|python|typescript|kotlin|rust|bash))\\b.*");
+            "(?i)^\\s*(?:do\\s+it|(?:do\\s+)?(?:same|again|retry|execute|run|use\\s+sandbox|in\\s+(java|go|python|typescript|kotlin|rust|bash)))\\b.*");
 
     private static final Pattern CHITCHAT_EXCLUSION_PATTERN =
             Pattern.compile("(?i)^\\s*(thanks|thank\\s+you|ok|okay|cancel|stop|bye|hello|hi|hey)[.!?]?\\s*$");

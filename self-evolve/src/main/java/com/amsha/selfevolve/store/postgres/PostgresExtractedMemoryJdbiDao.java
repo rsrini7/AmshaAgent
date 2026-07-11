@@ -53,6 +53,15 @@ public interface PostgresExtractedMemoryJdbiDao {
     List<ExtractedMemory> getByType(@Bind("recordType") String recordType, @Bind("limit") int limit);
 
     @SqlQuery("""
+            SELECT DISTINCT user_id
+            FROM extracted_memories
+            WHERE user_id IS NOT NULL AND BTRIM(user_id) <> ''
+            ORDER BY user_id
+            LIMIT :limit
+            """)
+    List<String> listUserIds(@Bind("limit") int limit);
+
+    @SqlQuery("""
             SELECT COUNT(*) > 0
             FROM extracted_memories
             WHERE session_id = :sessionId AND content_hash = :contentHash

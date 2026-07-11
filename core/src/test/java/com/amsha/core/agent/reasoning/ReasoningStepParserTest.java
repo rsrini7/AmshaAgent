@@ -34,7 +34,10 @@ class ReasoningStepParserTest {
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
-        parser = new ReasoningStepParser(objectMapper, new TextPatternUtils());
+        TextPatternUtils textPatternUtils = new TextPatternUtils();
+        ToolCallParameterParser parameterParser = new ToolCallParameterParser(objectMapper, textPatternUtils);
+        ParallelToolCallCollapser parallelCollapser = new ParallelToolCallCollapser(objectMapper, parameterParser);
+        parser = new ReasoningStepParser(textPatternUtils, parameterParser, parallelCollapser);
     }
 
     @Test
@@ -420,5 +423,34 @@ class ReasoningStepParserTest {
                         .call(() -> parser.parse("s1", "coordinator", response)));
 
         assertEquals(ToolCapability.SCHEDULE_TASK.toolName(), step.action());
+    }
+
+    @Test
+    void testParse_mixedIngestBatchForNonStorageGoalDropsStaleIngest() throws Exception {
+        ToolExecutionRequest ingestReq = ToolExecutionRequest.builder()
+                .id("call_ingest")
+                .name(ToolCapability.INGEST_DOCUMENT.toolName())
+                .arguments("{\"text\":\"user_name=Srini\",\"label\":\"user_identity\"}")
+                .build();
+        ToolExecutionRequest delegateReq = ToolExecutionRequest.builder()
+                .id("call_delegate")
+                .name(ToolCapability.DELEGATE_TO_AGENT.toolName())
+                .arguments("{\"agent\":\"saraswati\",\"goal\":\"Find Spring Boot and Quarkus LTS versions\"}")
+                .build();
+        AiMessage aiMessage = AiMessage.aiMessage("thinking", List.of(ingestReq, delegateReq));
+        ChatResponse response = ChatResponse.builder().aiMessage(aiMessage).build();
+
+        ReasoningStep step = WorkspaceContext.runWithFullAutonomy(
+                "s1",
+                "user-1",
+                "chat-1",
+                "coordinator",
+                () -> ScopedValue.where(
+                                WorkspaceContext.RAW_USER_GOAL,
+                                "do real time search on getting spring boot and quarkus LTS version")
+                        .call(() -> parser.parse("s1", "coordinator", response)));
+
+        assertEquals(ToolCapability.DELEGATE_TO_AGENT.toolName(), step.action());
+        assertEquals("saraswati", step.actionInput().get("agent"));
     }
 }

@@ -24,6 +24,7 @@ import com.amsha.persistence.api.SkillStorePort;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 
 import io.quarkus.arc.ClientProxy;
 import io.quarkus.test.InjectMock;
@@ -50,9 +51,23 @@ class SkillLoaderTest {
     @InjectMock
     TelemetryAuditService telemetryAuditService;
 
+    @InjectMock
+    ClasspathSkillProvider classpathSkillProvider;
+
+    @InjectMock
+    SkillsJarSkillProvider skillsJarSkillProvider;
+
     @BeforeEach
     @Transactional
     void setup() {
+        Mockito.when(classpathSkillProvider.sourceName()).thenReturn("classpath");
+        Mockito.when(classpathSkillProvider.priority()).thenReturn(100);
+        Mockito.when(classpathSkillProvider.load()).thenReturn(List.of());
+
+        Mockito.when(skillsJarSkillProvider.sourceName()).thenReturn("skillsjars");
+        Mockito.when(skillsJarSkillProvider.priority()).thenReturn(50);
+        Mockito.when(skillsJarSkillProvider.load()).thenReturn(List.of());
+
         skillStore.deleteAll();
         skillLoader.reloadAll(false);
     }

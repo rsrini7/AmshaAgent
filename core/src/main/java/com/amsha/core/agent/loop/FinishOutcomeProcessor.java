@@ -9,6 +9,7 @@ import java.util.regex.Pattern;
 import com.amsha.core.agent.AgentSentinels;
 import com.amsha.core.agent.reasoning.ReasoningStep;
 import com.amsha.core.agent.result.AgentResult;
+import com.amsha.core.agent.role.AgentRoleEnum;
 import com.amsha.core.agent.role.ToolCapability;
 import com.amsha.core.governance.RateLimitTracker;
 import com.amsha.core.routing.InfiniteLoopChatModel;
@@ -37,11 +38,11 @@ public class FinishOutcomeProcessor {
             Pattern.compile("(?s)\\{\\s*\"(tool|action|function|callId|content|metadata)\"\\s*:.*?\\}", Pattern.DOTALL);
 
     private static final Pattern PREFIX_TOKEN_LEAK = Pattern.compile(
-            "(?i)^(\\s*[*_]*(FINISH:?|Action:\\s*FINISH|Answer:|Final Answer:|Response:)[*_]*\\s*)+",
+            "(?i)^(\\s*[*_]*(FINISH:?|Action:\\s*FINISH|Answer:|Final Answer:|Response:|<\\s*finn?ish\\s*/?\\s*>)[*_]*\\s*)+",
             Pattern.MULTILINE);
 
-    private static final Pattern SUFFIX_TOKEN_LEAK =
-            Pattern.compile("(?i)\\s*[*_]*(FINISH:?|Action:\\s*FINISH)[*_]*\\s*$", Pattern.MULTILINE);
+    private static final Pattern SUFFIX_TOKEN_LEAK = Pattern.compile(
+            "(?i)\\s*[*_]*(FINISH:?|Action:\\s*FINISH|<\\s*finn?ish\\s*/?\\s*>)[*_]*\\s*$", Pattern.MULTILINE);
 
     private static final Pattern FENCE_ONLY_PATTERN =
             Pattern.compile("^\\s*```[a-z]*\\s*[}\\]]*\\s*```\\s*$", Pattern.CASE_INSENSITIVE);
@@ -115,7 +116,12 @@ public class FinishOutcomeProcessor {
     }
 
     public FinishActionHandler.FinishOutcome applyCodePolicy(
-            String sessionId, String agentRole, List<ReasoningStep> history, String answer, ReasoningStep step) {
+            String sessionId,
+            String agentRole,
+            String goal,
+            List<ReasoningStep> history,
+            String answer,
+            ReasoningStep step) {
         if (answer != null
                 && codePolicy.isGeneratedCodeBlock(answer, agentRole)
                 && !codePolicy.canGenerateCode(agentRole)) {
@@ -135,18 +141,28 @@ public class FinishOutcomeProcessor {
                         + "You CANNOT delegate to a coder. FINISH now with a plain text summary of "
                         + "what was accomplished, what the issue is, and what remains to be done. "
                         + "Do NOT output code blocks. Do NOT use garuda.";
+                return new FinishActionHandler.FinishOutcome.Correction(cleanStep, hint);
             } else {
-                hint = "System: You attempted to output code in your FINISH answer, but your role (" + agentRole
-                        + ") cannot generate code. " + codePolicy.buildRefusalMessage(agentRole)
-                        + " Do NOT tell the user to ask them separately. "
-                        + "Instead, use the `garuda` tool NOW with agent='coder' and a complete goal "
-                        + "that includes the full code generation, execution, and result-checking request. "
-                        + "Wait for coder's response, then FINISH with the result.";
+                Map<String, Object> args = new HashMap<>();
+                args.put(
+                        "agent",
+                        AgentRoleEnum.CODER.definition().aliases().stream()
+                                .findFirst()
+                                .orElse(AgentRoleEnum.CODER.id()));
+                args.put("goal", buildCoderDelegationGoal(goal, answer));
+                return new FinishActionHandler.FinishOutcome.InjectToolCall(
+                        ToolCapability.DELEGATE_TO_AGENT.toolName(), args, cleanStep);
             }
-
-            return new FinishActionHandler.FinishOutcome.Correction(cleanStep, hint);
         }
         return null;
+    }
+
+    private String buildCoderDelegationGoal(String goal, String blockedAnswer) {
+        String baseGoal =
+                goal != null && !goal.isBlank() ? goal.strip() : "Complete the user's code generation request.";
+        return baseGoal + "\n\nThe coordinator attempted to answer directly but is not allowed to emit code. "
+                + "Use the draft below only as context; produce the final code answer yourself.\n\n"
+                + blockedAnswer.strip();
     }
 
     public String sanitizeErrorForUser(String answer, String sessionId) {

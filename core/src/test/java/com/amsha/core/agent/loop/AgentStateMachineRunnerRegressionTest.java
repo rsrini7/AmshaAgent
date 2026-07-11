@@ -171,17 +171,16 @@ class AgentStateMachineRunnerRegressionTest {
 
         meterRegistry = new SimpleMeterRegistry();
         ToolStepHandler toolStepHandler = new ToolStepHandler(
-                toolRegistry,
                 observers,
                 guard,
                 invoker,
                 writer,
-                dynamicToolLookup,
                 checkpointManager,
                 parallelExecutor,
                 meterRegistry,
                 mock(ExecutionFailureRecoveryService.class),
-                mock(PersonaEscalationService.class));
+                new ToolStepValidator(toolRegistry, observers, dynamicToolLookup),
+                mock(ToolStepEscalationHandler.class));
 
         StepDecisionRouter stepDecisionRouter =
                 new StepDecisionRouter(finishActionHandler, toolStepHandler, writer, engineStepHandler);

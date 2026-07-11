@@ -39,6 +39,10 @@ public class GlobalKnowledgeBase {
     int embedDimensions;
 
     public String ingest(String text) {
+        if (text == null || text.isBlank()) {
+            log.debug("GlobalKnowledgeBase: skipping blank ingest text.");
+            return null;
+        }
         if (!ftsInterceptor.isVectorSearchEnabled()) {
             log.debugf("GlobalKnowledgeBase: vec0 not available, skipping ingest.");
             return null;
@@ -71,6 +75,9 @@ public class GlobalKnowledgeBase {
     }
 
     public List<MemoryChunkDto> search(String query, int topN) {
+        if (query == null || query.isBlank()) {
+            return List.of();
+        }
         if (!ftsInterceptor.isVectorSearchEnabled()) {
             return List.of();
         }

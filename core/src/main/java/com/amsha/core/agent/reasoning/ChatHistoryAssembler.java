@@ -25,6 +25,7 @@ import com.amsha.core.agent.AgentSentinels;
 import com.amsha.core.config.TieredMemoryConfig;
 import com.amsha.core.memory.tiered.CoreMemoryPromptRenderer;
 import com.amsha.core.memory.tiered.CoreMemoryService;
+import com.amsha.core.memory.tiered.DirectiveFeedbackPort;
 import com.amsha.core.memory.tiered.DirectiveProvider;
 import com.amsha.core.memory.tiered.PromptBudgetManager;
 import com.amsha.core.scope.WorkspaceContext;
@@ -71,6 +72,9 @@ public class ChatHistoryAssembler {
 
     @Inject
     Instance<DirectiveProvider> directiveProviderInstance;
+
+    @Inject
+    Instance<DirectiveFeedbackPort> directiveFeedbackPortInstance;
 
     @ConfigProperty(name = "amsha.chat.default-observation-max-length", defaultValue = "4000")
     int defaultObservationMaxLength;
@@ -187,21 +191,28 @@ public class ChatHistoryAssembler {
         String userId = WorkspaceContext.getUserIdOrUnknown();
         try {
             DirectiveProvider provider = directiveProviderInstance.get();
+            DirectiveProvider.DirectivesResult result = provider.getDirectives(userId);
+
             // Active directives (authoritative)
-            List<String> active = provider.getInjectableDirectives(userId);
+            List<DirectiveProvider.DirectiveInfo> active = result.active();
             if (!active.isEmpty()) {
                 StringBuilder sb = new StringBuilder("[BEHAVIORAL DIRECTIVES]\n");
-                for (String d : active) {
-                    sb.append("- ").append(d).append("\n");
+                for (DirectiveProvider.DirectiveInfo d : active) {
+                    sb.append("- ").append(d.text()).append("\n");
                 }
                 messages.add(SystemMessage.systemMessage(sb.toString()));
             }
             // Shadow directives (evaluation)
-            List<String> shadow = provider.getShadowDirectives(userId);
+            List<DirectiveProvider.DirectiveInfo> shadow = result.shadow();
             if (!shadow.isEmpty()) {
+                List<String> shadowIds =
+                        shadow.stream().map(DirectiveProvider.DirectiveInfo::id).toList();
+                if (directiveFeedbackPortInstance != null && !directiveFeedbackPortInstance.isUnsatisfied()) {
+                    directiveFeedbackPortInstance.get().noteShadowDirectivesInjected(sessionId, userId, shadowIds);
+                }
                 StringBuilder sb = new StringBuilder("[BEHAVIORAL DIRECTIVES - EVALUATION]\n");
-                for (String d : shadow) {
-                    sb.append("- [EVAL] ").append(d).append("\n");
+                for (DirectiveProvider.DirectiveInfo d : shadow) {
+                    sb.append("- [EVAL] ").append(d.text()).append("\n");
                 }
                 messages.add(SystemMessage.systemMessage(sb.toString()));
             }

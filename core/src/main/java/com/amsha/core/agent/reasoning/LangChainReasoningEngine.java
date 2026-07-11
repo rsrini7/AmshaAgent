@@ -1,9 +1,5 @@
 package com.amsha.core.agent.reasoning;
 
-import dev.langchain4j.data.message.AiMessage;
-import dev.langchain4j.data.message.SystemMessage;
-import dev.langchain4j.data.message.ToolExecutionResultMessage;
-import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.model.chat.request.ChatRequest;
 import dev.langchain4j.model.chat.response.ChatResponse;
 
@@ -56,6 +52,7 @@ public class LangChainReasoningEngine implements ReasoningEngine {
     private final ReasoningStepParser stepParser;
     private final ReasoningMessageAssembler messageAssembler;
     private final RecoveryProcessor recoveryProcessor;
+    private final ReasoningRecoveryHandler recoveryHandler;
     private final StructuredOutputProcessor structuredOutputProcessor;
     private final ReasoningValidator validator;
     private final GuardrailCoordinator guardrailCoordinator;
@@ -75,6 +72,7 @@ public class LangChainReasoningEngine implements ReasoningEngine {
             ReasoningStepParser stepParser,
             ReasoningMessageAssembler messageAssembler,
             RecoveryProcessor recoveryProcessor,
+            ReasoningRecoveryHandler recoveryHandler,
             StructuredOutputProcessor structuredOutputProcessor,
             ReasoningValidator validator,
             GuardrailCoordinator guardrailCoordinator) {
@@ -88,13 +86,45 @@ public class LangChainReasoningEngine implements ReasoningEngine {
         this.stepParser = stepParser;
         this.messageAssembler = messageAssembler;
         this.recoveryProcessor = recoveryProcessor;
+        this.recoveryHandler = recoveryHandler;
         this.structuredOutputProcessor = structuredOutputProcessor;
         this.validator = validator;
         this.guardrailCoordinator = guardrailCoordinator;
     }
 
+    public LangChainReasoningEngine(
+            LlmProviderPort llmProviderPort,
+            RoleRegistry roleRegistry,
+            SystemPromptBuilder promptBuilder,
+            RateLimitTracker rateLimitTracker,
+            IntentClassificationService intentClassifier,
+            MeterRegistry meterRegistry,
+            TextPatternUtils textPatternUtils,
+            ReasoningStepParser stepParser,
+            ReasoningMessageAssembler messageAssembler,
+            RecoveryProcessor recoveryProcessor,
+            StructuredOutputProcessor structuredOutputProcessor,
+            ReasoningValidator validator,
+            GuardrailCoordinator guardrailCoordinator) {
+        this(
+                llmProviderPort,
+                roleRegistry,
+                promptBuilder,
+                rateLimitTracker,
+                intentClassifier,
+                meterRegistry,
+                textPatternUtils,
+                stepParser,
+                messageAssembler,
+                recoveryProcessor,
+                new ReasoningRecoveryHandler(recoveryProcessor, validator, textPatternUtils),
+                structuredOutputProcessor,
+                validator,
+                guardrailCoordinator);
+    }
+
     protected LangChainReasoningEngine() {
-        this(null, null, null, null, null, null, null, null, null, null, null, null, null);
+        this(null, null, null, null, null, null, null, null, null, null, null, null, null, null);
     }
 
     @Override
@@ -272,8 +302,8 @@ public class LangChainReasoningEngine implements ReasoningEngine {
         Span span = otelContext.childSpan(context.sessionId(), AgentOTelConstants.SPAN_LLM_PROVIDER_CALL);
         try {
             int msgCount = request.messages() != null ? request.messages().size() : 0;
-            int estTokens = estimateTokens(request);
-            int totalChars = countChars(request);
+            int estTokens = ChatRequestMetrics.estimateTokens(request);
+            int totalChars = ChatRequestMetrics.countChars(request);
             if (span != null) {
                 span.setAttribute(AgentOTelConstants.ATTR_LLM_WRITE_INTENT, isWriteIntent);
                 span.setAttribute("amsha.llm.is_compact", isCompact);
@@ -326,7 +356,7 @@ public class LangChainReasoningEngine implements ReasoningEngine {
         if (effective instanceof LlmMalformedResponseException ex) throw ex;
 
         if (effective instanceof LlmToolCallException ex) {
-            return handleLlmToolCallException(
+            return recoveryHandler.handleLlmToolCallException(
                     ex, history, sessionId, targetLanguage, context, goal, isWriteIntent, agentRole);
         }
 
@@ -337,124 +367,6 @@ public class LangChainReasoningEngine implements ReasoningEngine {
         }
         if (effective instanceof RuntimeException re) throw re;
         throw new RuntimeException(effective);
-    }
-
-    private ReasoningStep handleLlmToolCallException(
-            LlmToolCallException ex,
-            List<ReasoningStep> history,
-            String sessionId,
-            String targetLanguage,
-            AgentExecutionContext context,
-            String goal,
-            boolean isWriteIntent,
-            String agentRole) {
-        String msg = ex.getMessage();
-        if (!recoveryProcessor.isProseGenerationFailure(msg)) throw ex;
-
-        String extractedProse = recoveryProcessor.extractProseFromFailedGeneration(msg);
-        int truncationRetryCount = validator.countTruncationAttempts(history);
-
-        ReasoningStep recoveryStep = tryCodeRecovery(extractedProse, truncationRetryCount, targetLanguage, sessionId);
-        if (recoveryStep != null) return recoveryStep;
-
-        if (extractedProse != null && recoveryProcessor.looksLikeTruncatedOrPartialCode(extractedProse)) {
-            log.warnf("[LangChainReasoningEngine] Truncated/partial code detected for session %s", sessionId);
-            context.incrementTruncationRetry();
-            return ReasoningStep.pending("Response was truncated", "OBSERVE", Map.of(), 0, 0)
-                    .withTruncationRecovery(true)
-                    .withObservation(
-                            "Your previous response was cut off. provide the code using a FINISH answer first.");
-        }
-
-        ReasoningStep proseStep =
-                routeExtractedProse(extractedProse, goal, isWriteIntent, agentRole, history, sessionId);
-        if (proseStep != null) return proseStep;
-
-        return ReasoningStep.pending("Generated raw text instead of FINISH", "OBSERVE", Map.of(), 0, 0)
-                .withObservation("You must respond using FINISH[answer=<content>].");
-    }
-
-    private ReasoningStep tryCodeRecovery(
-            String extractedProse, int truncationRetryCount, String targetLanguage, String sessionId) {
-        if (extractedProse == null
-                || (!recoveryProcessor.containsEmbeddedSandboxToolCall(extractedProse) && truncationRetryCount < 2))
-            return null;
-
-        String partialCode = recoveryProcessor.extractPartialCodeFromTruncatedJson(extractedProse);
-        if (partialCode == null && truncationRetryCount >= 2) partialCode = extractedProse.strip();
-
-        if (partialCode == null || partialCode.isBlank()) return null;
-
-        String lang = textPatternUtils.inferLanguage(partialCode);
-        boolean looksLikeCode = partialCode.contains("func ")
-                || partialCode.contains("package ")
-                || partialCode.contains("def ")
-                || partialCode.contains("public class ");
-        if (targetLanguage != null && !targetLanguage.equalsIgnoreCase(lang) && !(lang == null && looksLikeCode))
-            return null;
-
-        log.infof("[LangChainReasoningEngine] Recovered partial code from truncation for session %s", sessionId);
-        RecoveryProcessor.CodeBlock extracted = recoveryProcessor.extractCodeBlockFromText(partialCode);
-        if (extracted != null && extracted.code() != null) {
-            partialCode = extracted.code();
-            lang = extracted.language();
-        }
-        String markdown = String.format("```%s\n%s\n```", lang != null ? lang : "", partialCode);
-        return ReasoningStep.pending(
-                "Extracted code after repeated truncation attempts.",
-                ReasoningStep.FINISH,
-                Map.of(ReasoningStep.ACTION_INPUT_ANSWER_KEY, markdown),
-                0,
-                0);
-    }
-
-    private ReasoningStep routeExtractedProse(
-            String extractedProse,
-            String goal,
-            boolean isWriteIntent,
-            String agentRole,
-            List<ReasoningStep> history,
-            String _sessionId) {
-        if (extractedProse == null || extractedProse.isBlank()) return null;
-
-        if (recoveryProcessor.containsEmbeddedSandboxToolCall(extractedProse)) {
-            return ReasoningStep.pending("Embedded sandbox_exec call", "OBSERVE", Map.of(), 0, 0)
-                    .withObservation("CORRECTION: Call sandbox_exec DIRECTLY as your only output.");
-        }
-
-        if (textPatternUtils.goalRequestsExecution(goal)) {
-            String errorObs = history.stream()
-                    .filter(s -> Boolean.FALSE.equals(s.success()) && s.observation() != null)
-                    .map(ReasoningStep::observation)
-                    .reduce((first, second) -> second)
-                    .orElse(null);
-            String hint = "STOP. EXECUTE the code - not explain it. Call sandbox_exec RIGHT NOW.";
-            if (errorObs != null) hint = "Previous execution failed:\n" + errorObs + "\n\n" + hint;
-            return ReasoningStep.pending("LLM returned prose instead of executing", "OBSERVE", Map.of(), 0, 0)
-                    .withObservation(hint);
-        }
-
-        if (isWriteIntent && !validator.historyAlreadyContains(history, ToolCapability.INGEST_DOCUMENT.toolName())) {
-            return ReasoningStep.pending("LLM wrote prose for write-intent", "OBSERVE", Map.of(), 0, 0)
-                    .withObservation("CORRECTION: The user wants to STORE data. Call ingest_document RIGHT NOW.");
-        }
-
-        if (AgentRoleEnum.COORDINATOR.id().equals(agentRole)) {
-            return ReasoningStep.pending(
-                    "LLM generated valid prose",
-                    "FINISH",
-                    Map.of(ReasoningStep.ACTION_INPUT_ANSWER_KEY, extractedProse),
-                    0,
-                    0);
-        }
-
-        if (AgentRoleEnum.CODER.id().equals(agentRole)
-                && textPatternUtils.goalRequestsExecution(goal)
-                && recoveryProcessor.proseIsUnexecutedCodePlan(extractedProse)) {
-            return ReasoningStep.systemMessage("STOP. You must EXECUTE code. Call sandbox_exec RIGHT NOW.");
-        }
-
-        return null;
     }
 
     private ReasoningStep parseAndValidateStep(
@@ -480,8 +392,8 @@ public class LangChainReasoningEngine implements ReasoningEngine {
         if (ReasoningStep.FINISH.equals(parsedStep.action())
                 && isWriteIntent
                 && !validator.historyAlreadyContains(history, ToolCapability.INGEST_DOCUMENT.toolName())) {
-            return ReasoningStep.systemMessage(
-                    "CORRECTION: The user wants to STORE data. Call ingest_document RIGHT NOW.");
+            return recoveryHandler.buildWriteFallbackStep(
+                    context.goal(), sessionId, "model returned FINISH instead of a write tool");
         }
 
         if (ReasoningStep.FINISH.equals(parsedStep.action())
@@ -500,35 +412,5 @@ public class LangChainReasoningEngine implements ReasoningEngine {
             }
         }
         return parsedStep;
-    }
-
-    /** Estimate tokens from all messages using chars/4 heuristic (matches PromptBudgetManager). */
-    private static int estimateTokens(ChatRequest request) {
-        if (request.messages() == null) return 0;
-        int total = 0;
-        for (var msg : request.messages()) {
-            String text = null;
-            if (msg instanceof SystemMessage sm) text = sm.text();
-            else if (msg instanceof UserMessage um) text = um.singleText();
-            else if (msg instanceof AiMessage am) text = am.text();
-            else if (msg instanceof ToolExecutionResultMessage tm) text = tm.text();
-            if (text != null) total += text.length() / 4;
-        }
-        return total;
-    }
-
-    /** Count total characters across all message texts. */
-    private static int countChars(ChatRequest request) {
-        if (request.messages() == null) return 0;
-        int total = 0;
-        for (var msg : request.messages()) {
-            String text = null;
-            if (msg instanceof SystemMessage sm) text = sm.text();
-            else if (msg instanceof UserMessage um) text = um.singleText();
-            else if (msg instanceof AiMessage am) text = am.text();
-            else if (msg instanceof ToolExecutionResultMessage tm) text = tm.text();
-            total += text != null ? text.length() : 0;
-        }
-        return total;
     }
 }

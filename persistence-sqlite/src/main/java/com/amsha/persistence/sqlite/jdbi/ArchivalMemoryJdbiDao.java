@@ -34,10 +34,10 @@ public interface ArchivalMemoryJdbiDao {
     void upsert(@BindMethods ArchivalChunkDto dto);
 
     @SqlQuery("""
-            SELECT chunk_id AS "chunkId", user_id AS "userId", content, chunk_type AS "chunkType",
-                   source_session AS "sourceSession", source_message AS "sourceMessage",
-                   tags, confidence, access_count AS "accessCount",
-                   created_at AS "createdAt", updated_at AS "updatedAt"
+            SELECT c.chunk_id AS "chunkId", c.user_id AS "userId", c.content, c.chunk_type AS "chunkType",
+                   c.source_session AS "sourceSession", c.source_message AS "sourceMessage",
+                   c.tags, c.confidence, c.access_count AS "accessCount",
+                   c.created_at AS "createdAt", c.updated_at AS "updatedAt"
             FROM archival_chunks c
             JOIN archival_chunks_fts fts ON c.rowid = fts.rowid
             WHERE c.user_id = :userId
@@ -49,10 +49,10 @@ public interface ArchivalMemoryJdbiDao {
             @Bind("userId") String userId, @Bind("query") String query, @Bind("limit") int limit);
 
     @SqlQuery("""
-            SELECT chunk_id AS "chunkId", user_id AS "userId", content, chunk_type AS "chunkType",
-                   source_session AS "sourceSession", source_message AS "sourceMessage",
-                   tags, confidence, access_count AS "accessCount",
-                   created_at AS "createdAt", updated_at AS "updatedAt"
+            SELECT c.chunk_id AS "chunkId", c.user_id AS "userId", c.content, c.chunk_type AS "chunkType",
+                   c.source_session AS "sourceSession", c.source_message AS "sourceMessage",
+                   c.tags, c.confidence, c.access_count AS "accessCount",
+                   c.created_at AS "createdAt", c.updated_at AS "updatedAt"
             FROM archival_chunks c
             JOIN archival_chunks_fts fts ON c.rowid = fts.rowid
             WHERE c.user_id = :userId

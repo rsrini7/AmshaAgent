@@ -301,6 +301,7 @@ The system has a compact prompt path (`amsha.llm.compact-prompt-enabled` / `AMSH
   - **Verification**: `grep -rn '@IfBuildProperty.*sqlite\|@IfBuildProperty.*postgres\|@IfBuildProperty.*fs' --include='*Store*.java'` should return matches for all 3 backends per port.
   - **Known failures**: P104 (self-evolve FS missed), P104b (tiered memory FS missed), P104c (`%filesystem` profile missing `amsha.memory.tiered.backend`). This rule prevents recurrence.
 * **JDBI constructor mapper registration**: Every JDBI DAO interface that returns records/DTOs from `@SqlQuery` methods MUST declare `@RegisterConstructorMapper(TheRecord.class)` at the interface level. The global `JdbiProducer` registers argument factories and column mappers, but it does **not** auto-register row mappers for records. Missing this annotation causes runtime failures such as `No mapper registered for type com.amsha.selfevolve.api.ExtractedMemory`. Apply the annotation to both SQLite and PostgreSQL DAOs (e.g., `ExtractedMemoryJdbiDao` and `PostgresExtractedMemoryJdbiDao`).
+* **JDBI producer and record binding**: CDI persistence stores MUST inject the backend-configured `Jdbi` from `JdbiProducer`; do NOT create an ad hoc `Jdbi.create(dataSource).installPlugin(new SqlObjectPlugin())` instance. The producer carries required backend mappers (notably SQLite `Instant` conversion), and bypassing it causes runtime record-mapping failures. Use `@BindMethods` for Java records passed to `@SqlUpdate`/`@SqlBatch`; `@BindBean` only supports JavaBean getters. Keep this rule in parity across SQLite and PostgreSQL adapters.
 * **Module CDI discovery**: Every non-app, non-deployment Maven module with CDI beans MUST include:
   1. `jandex-maven-plugin` in `<build><plugins>` section
   2. `src/main/resources/META-INF/beans.xml` with `bean-discovery-mode="annotated"`
@@ -530,5 +531,7 @@ Before adding a SkillsJar to `app/pom.xml`, **extract and read** the skill's `SK
 - Does it require cloud API keys or paid SaaS authentication?
 - Are all CLI dependencies installable in `Dockerfile.toolrunner`?
 
-**Cloud-only skills MUST NOT be bundled** unless the API key is provisioned in `.env` and injected via `SandboxSecretResolver`. A skill that silently fails without an API key triggers infinite Shiva auto-heal loops (`heal:shiva:...:heal:shiva:...`) until workspace paths exceed OS limits. See `docs/Architecture_Invariants.md` §24.5.
+### Native SkillsJar Index Parity
+Every SkillsJar dependency added to or removed from `app/pom.xml` **MUST** be added to or removed from `app/src/main/resources/META-INF/skills/skills-index.txt` in the same change. Run `python3 ./verify_skillsjar_index.py --fix` to generate the index from the resolved local JARs, then run `python3 ./verify_skillsjar_index.py` to validate it. JVM mode can scan JAR directories, but GraalVM Native Image cannot enumerate them; it loads SkillsJars only through this index. Keep `META-INF/skills/**` in `quarkus.native.resources.includes`.
 
+**Cloud-only skills MUST NOT be bundled** unless the API key is provisioned in `.env` and injected via `SandboxSecretResolver`. A skill that silently fails without an API key triggers infinite Shiva auto-heal loops (`heal:shiva:...:heal:shiva:...`) until workspace paths exceed OS limits. See `docs/Architecture_Invariants.md` §24.5.

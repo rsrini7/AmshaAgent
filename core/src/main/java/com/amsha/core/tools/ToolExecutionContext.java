@@ -19,7 +19,8 @@ public record ToolExecutionContext(
         String suggestedCron,
         String suggestedNextFireTime,
         String suggestedCronSource,
-        String skillHome) {
+        String skillHome,
+        boolean browserPreview) {
 
     public ToolExecutionContext(
             String sessionId,
@@ -47,6 +48,39 @@ public record ToolExecutionContext(
                 suggestedCron,
                 suggestedNextFireTime,
                 suggestedCronSource,
-                null);
+                null,
+                false);
+    }
+
+    /** Compatibility constructor for callers that already supplied skillHome. */
+    public ToolExecutionContext(
+            String sessionId,
+            String userId,
+            String chatId,
+            String agentRole,
+            AutonomyLevel autonomyLevel,
+            String traceId,
+            String channelType,
+            String channelPlatformId,
+            String rawUserGoal,
+            String suggestedCron,
+            String suggestedNextFireTime,
+            String suggestedCronSource,
+            String skillHome) {
+        this(
+                sessionId,
+                userId,
+                chatId,
+                agentRole,
+                autonomyLevel,
+                traceId,
+                channelType,
+                channelPlatformId,
+                rawUserGoal,
+                suggestedCron,
+                suggestedNextFireTime,
+                suggestedCronSource,
+                skillHome,
+                false);
     }
 }

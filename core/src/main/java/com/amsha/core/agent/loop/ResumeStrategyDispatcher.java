@@ -323,6 +323,12 @@ class ResumeStrategyDispatcher {
                 sessionId);
         String originalCode = extractParam(paramsJson, "code");
         String language = extractParam(paramsJson, "language");
+        if (language == null || language.isBlank()) {
+            log.warnf(
+                    "[AutoHeal-Resume] Skipping recovery for session %s because sandbox_exec language is missing",
+                    sessionId);
+            return null;
+        }
 
         ExecutionFailureRecoveryService.RecoveryResult recovery = recoveryService.attemptRecovery(
                 sessionId,
