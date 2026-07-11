@@ -135,7 +135,8 @@ public class SystemPromptBuilder {
         boolean isSkillRole = AgentRoleEnum.isSkillRole(agentRole);
         boolean isSimpleChitchat =
                 !isSkillRole && intentService != null && intentService.isSimpleConversational(detectionGoal);
-        boolean isCompact = compactPromptEnabled || isTruncationRecovery;
+        boolean isRuntimeRecovery = context != null && context.isForceFinishRetry();
+        boolean isCompact = compactPromptEnabled || isTruncationRecovery || isRuntimeRecovery;
 
         log.infof(
                 "[SystemPrompt] Building prompt for session %s (role=%s, compact=%s, configCompact=%s, truncationRecovery=%s, simpleChitchat=%s, contextWindow=%s)",
