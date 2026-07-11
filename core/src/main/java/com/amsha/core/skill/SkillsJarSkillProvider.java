@@ -19,6 +19,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Enumeration;
 import java.util.List;
+import java.util.Locale;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
 import java.util.regex.Matcher;
@@ -116,8 +117,8 @@ public class SkillsJarSkillProvider implements SkillProvider {
             // loader so host_exec receives real output/template paths instead of dist-relative ones.
             String skillName = resourcePath.substring(0, resourcePath.lastIndexOf('/'));
             skillName = skillName.substring(skillName.lastIndexOf('/') + 1);
-            Path extractedSkill = Path.of(
-                    System.getProperty("user.home"), ".amsha", "skills", "skillsjars", skillName, "SKILL.md");
+            Path extractedSkill =
+                    Path.of(System.getProperty("user.home"), ".amsha", "skills", "skillsjars", skillName, "SKILL.md");
             if (Files.isRegularFile(extractedSkill)) {
                 loadSkillFromFile(extractedSkill, skills);
                 return;
@@ -435,8 +436,10 @@ public class SkillsJarSkillProvider implements SkillProvider {
 
         String outputDir = skillHome != null && !skillHome.isBlank() ? skillHome + "/output" : "output";
         String templateDir = resolveTemplateDir(definition, skillHome);
-        String templateInstruction = templateDir == null ? ""
-                : "2. Read the starter templates under `" + templateDir + "` only when needed; never open a template file in a browser.\n";
+        String templateInstruction = templateDir == null
+                ? ""
+                : "2. Read the starter templates under `" + templateDir
+                        + "` only when needed; never open a template file in a browser.\n";
         String browserOverride = """
 
                 # BROWSER PREVIEW RULES (OVERRIDE ALL BELOW)
@@ -448,8 +451,9 @@ public class SkillsJarSkillProvider implements SkillProvider {
                 7. Never dump the generated HTML back into Telegram when a browser preview is possible.
 
                 """;
-        String systemPrompt = String.format(browserOverride, outputDir, templateInstruction, outputDir, outputDir, outputDir)
-                + definition.systemPrompt();
+        String systemPrompt =
+                String.format(browserOverride, outputDir, templateInstruction, outputDir, outputDir, outputDir)
+                        + definition.systemPrompt();
         return new SkillDefinition(
                 definition.id(),
                 definition.name(),
@@ -467,18 +471,28 @@ public class SkillsJarSkillProvider implements SkillProvider {
         String relative = definition.templateDir();
         if (relative == null || relative.isBlank()) return null;
         Path path = Path.of(relative);
-        if (!path.isAbsolute() && skillHome != null && !skillHome.isBlank()) path = Path.of(skillHome).resolve(path);
+        if (!path.isAbsolute() && skillHome != null && !skillHome.isBlank())
+            path = Path.of(skillHome).resolve(path);
         return path.normalize().toString();
     }
 
     /** @deprecated use metadata-driven overload; retained for source compatibility with extensions/tests. */
     @Deprecated
     static SkillDefinition maybeAugmentBrowserPreview(SkillDefinition definition, String rawContent, String skillHome) {
-        if (definition != null && rawContent != null && (rawContent.contains(".html")
-                || rawContent.toLowerCase(java.util.Locale.ROOT).contains("browser preview"))) {
-            definition = new SkillDefinition(definition.id(), definition.name(), definition.description(),
-                    definition.triggerPatterns(), definition.toolCapabilities(), definition.maxIterations(),
-                    definition.systemPrompt(), definition.skillHome(), true);
+        if (definition != null
+                && rawContent != null
+                && (rawContent.contains(".html")
+                        || rawContent.toLowerCase(Locale.ROOT).contains("browser preview"))) {
+            definition = new SkillDefinition(
+                    definition.id(),
+                    definition.name(),
+                    definition.description(),
+                    definition.triggerPatterns(),
+                    definition.toolCapabilities(),
+                    definition.maxIterations(),
+                    definition.systemPrompt(),
+                    definition.skillHome(),
+                    true);
         }
         return maybeAugmentBrowserPreview(definition, skillHome);
     }

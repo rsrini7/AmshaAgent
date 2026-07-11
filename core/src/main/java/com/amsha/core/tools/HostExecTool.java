@@ -226,9 +226,8 @@ public class HostExecTool implements AgentTool {
                     postProcessOutput(rawOutput, Map.of()) + "\nOpened browser preview: " + openedArtifact);
         }
         if (requiresBrowserArtifact(ctx)) {
-            return ToolResponse.success(
-                    postProcessOutput(rawOutput, Map.of())
-                            + "\nHost command completed; no new HTML artifact was detected.");
+            return ToolResponse.success(postProcessOutput(rawOutput, Map.of())
+                    + "\nHost command completed; no new HTML artifact was detected.");
         }
         return ToolResponse.success(postProcessOutput(rawOutput, Map.of()));
     }
@@ -276,7 +275,10 @@ public class HostExecTool implements AgentTool {
         // fallback for non-skill callers and older integrations that do not carry metadata.
         return ctx != null
                 && (ctx.browserPreview()
-                        || (ctx.rawUserGoal() != null && BROWSER_PREVIEW_GOAL_PATTERN.matcher(ctx.rawUserGoal()).find()));
+                        || (ctx.rawUserGoal() != null
+                                && BROWSER_PREVIEW_GOAL_PATTERN
+                                        .matcher(ctx.rawUserGoal())
+                                        .find()));
     }
 
     private Map<Path, Long> snapshotHtmlArtifacts(ToolExecutionContext ctx, Path workspaceRoot) {

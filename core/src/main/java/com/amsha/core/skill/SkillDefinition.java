@@ -64,15 +64,48 @@ public record SkillDefinition(
     }
 
     /** Backward-compatible constructor for callers that do not declare artifact behavior. */
-    public SkillDefinition(String id, String name, String description, List<String> triggerPatterns,
-            List<String> toolCapabilities, int maxIterations, String systemPrompt, String skillHome) {
-        this(id, name, description, triggerPatterns, toolCapabilities, maxIterations, systemPrompt, skillHome, false, null);
+    public SkillDefinition(
+            String id,
+            String name,
+            String description,
+            List<String> triggerPatterns,
+            List<String> toolCapabilities,
+            int maxIterations,
+            String systemPrompt,
+            String skillHome) {
+        this(
+                id,
+                name,
+                description,
+                triggerPatterns,
+                toolCapabilities,
+                maxIterations,
+                systemPrompt,
+                skillHome,
+                false,
+                null);
     }
 
-    public SkillDefinition(String id, String name, String description, List<String> triggerPatterns,
-            List<String> toolCapabilities, int maxIterations, String systemPrompt, String skillHome,
+    public SkillDefinition(
+            String id,
+            String name,
+            String description,
+            List<String> triggerPatterns,
+            List<String> toolCapabilities,
+            int maxIterations,
+            String systemPrompt,
+            String skillHome,
             boolean browserPreview) {
-        this(id, name, description, triggerPatterns, toolCapabilities, maxIterations, systemPrompt, skillHome,
-                browserPreview, null);
+        this(
+                id,
+                name,
+                description,
+                triggerPatterns,
+                toolCapabilities,
+                maxIterations,
+                systemPrompt,
+                skillHome,
+                browserPreview,
+                null);
     }
 }

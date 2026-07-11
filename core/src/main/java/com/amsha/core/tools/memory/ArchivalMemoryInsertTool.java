@@ -94,7 +94,8 @@ public class ArchivalMemoryInsertTool implements AgentTool {
         if (!(type instanceof String value) || !ALLOWED_CHUNK_TYPES.contains(value.toUpperCase(Locale.ROOT))) {
             return "'chunk_type' must be one of: " + ALLOWED_CHUNK_TYPES;
         }
-        if (text.length() > MAX_CONTENT_CHARS) return "Content exceeds max length of " + MAX_CONTENT_CHARS + " characters.";
+        if (text.length() > MAX_CONTENT_CHARS)
+            return "Content exceeds max length of " + MAX_CONTENT_CHARS + " characters.";
         return null;
     }
 

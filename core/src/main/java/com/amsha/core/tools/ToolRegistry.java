@@ -257,7 +257,10 @@ public class ToolRegistry {
         String agentRole = WorkspaceContext.AGENT_ROLE.isBound() ? WorkspaceContext.AGENT_ROLE.get() : null;
         if (agentRole == null || !AgentRoleEnum.isSkillRole(agentRole)) return false;
         String skillName = AgentRoleEnum.skillName(agentRole);
-        return skillRegistry.findByName(skillName).map(entry -> entry.definition().browserPreview()).orElse(false);
+        return skillRegistry
+                .findByName(skillName)
+                .map(entry -> entry.definition().browserPreview())
+                .orElse(false);
     }
 
     private ToolResponse invokeDirect(ToolExecutionContext ctx, AgentTool tool, Map<String, Object> params) {

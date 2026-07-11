@@ -1,5 +1,15 @@
 package com.amsha.core.agent.loop;
 
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.inject.Instance;
+import jakarta.inject.Inject;
+
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+
 import com.amsha.common.util.LogUtil;
 import com.amsha.core.agent.AgentSentinels;
 import com.amsha.core.agent.reasoning.ReasoningStep;
@@ -11,23 +21,11 @@ import com.amsha.core.scope.WorkspaceContext;
 import com.amsha.core.security.AutonomyLevel;
 import com.amsha.core.skill.CompiledSkillEntry;
 import com.amsha.core.tools.ToolResponse;
-import io.micrometer.core.instrument.MeterRegistry;
-import io.micrometer.core.instrument.Timer;
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.enterprise.inject.Instance;
-import jakarta.inject.Inject;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
+
 import org.jboss.logging.Logger;
 
-
-
-
-
-
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
 
 /**
  * Handles tool name validation, 4-phase tool invocation,

@@ -38,6 +38,7 @@ public class SystemPromptBuilder {
 
     private final int contextWindow;
     private final boolean compactPromptEnabled;
+    private final int compactPromptMaxChars;
     private final Instance<StructuredOutputMode> structuredOutputModeInstance;
     private final Instance<RolePromptSection> rolePromptSections;
     private final PromptSectionBuilder sharedSectionBuilder;
@@ -54,6 +55,8 @@ public class SystemPromptBuilder {
             @ConfigProperty(name = "amsha.llm.context-window", defaultValue = "128000") int contextWindow,
             @ConfigProperty(name = "amsha.llm.compact-prompt-enabled", defaultValue = "false")
                     boolean compactPromptEnabled,
+            @ConfigProperty(name = "amsha.llm.compact-prompt-max-chars", defaultValue = "32000")
+                    int compactPromptMaxChars,
             @Identifier("agent-output-mode") Instance<StructuredOutputMode> structuredOutputModeInstance,
             Instance<RolePromptSection> rolePromptSections,
             PromptSectionBuilder sharedSectionBuilder,
@@ -66,6 +69,7 @@ public class SystemPromptBuilder {
             Instance<ContextEnricher> contextEnrichers) {
         this.contextWindow = contextWindow;
         this.compactPromptEnabled = compactPromptEnabled;
+        this.compactPromptMaxChars = Math.max(8000, compactPromptMaxChars);
         this.structuredOutputModeInstance = structuredOutputModeInstance;
         this.rolePromptSections = rolePromptSections;
         this.sharedSectionBuilder = sharedSectionBuilder;
@@ -79,7 +83,37 @@ public class SystemPromptBuilder {
     }
 
     protected SystemPromptBuilder() {
-        this(128000, false, null, null, null, null, null, null, null, null, null, null);
+        this(128000, false, 32000, null, null, null, null, null, null, null, null, null, null);
+    }
+
+    /** Backward-compatible constructor for embedded callers and tests. */
+    public SystemPromptBuilder(
+            int contextWindow,
+            boolean compactPromptEnabled,
+            Instance<StructuredOutputMode> structuredOutputModeInstance,
+            Instance<RolePromptSection> rolePromptSections,
+            PromptSectionBuilder sharedSectionBuilder,
+            PromptInstructionLibrary instructionLibrary,
+            AgentPersonaRegistry agentPersonaRegistry,
+            PromptTemplateEngine promptTemplateEngine,
+            SkillRegistry skillRegistry,
+            RoleRegistry roleRegistry,
+            IntentClassificationService intentService,
+            Instance<ContextEnricher> contextEnrichers) {
+        this(
+                contextWindow,
+                compactPromptEnabled,
+                32000,
+                structuredOutputModeInstance,
+                rolePromptSections,
+                sharedSectionBuilder,
+                instructionLibrary,
+                agentPersonaRegistry,
+                promptTemplateEngine,
+                skillRegistry,
+                roleRegistry,
+                intentService,
+                contextEnrichers);
     }
 
     /**
@@ -249,6 +283,18 @@ public class SystemPromptBuilder {
             for (ContextEnricher enricher : contextEnrichers) {
                 finalPrompt = enricher.enrich(sessionId, userId, goal, finalPrompt);
             }
+        }
+
+        if (isCompact && finalPrompt.length() > compactPromptMaxChars) {
+            int originalLength = finalPrompt.length();
+            int head = (int) (compactPromptMaxChars * 0.75);
+            int tail = compactPromptMaxChars - head;
+            finalPrompt = finalPrompt.substring(0, head)
+                    + "\n\n[COMPACT PROMPT: middle context omitted to stay within the recovery budget]\n\n"
+                    + finalPrompt.substring(finalPrompt.length() - tail);
+            log.warnf(
+                    "[SystemPrompt] Compact prompt truncated from %d to %d chars for session %s",
+                    originalLength, compactPromptMaxChars, sessionId);
         }
 
         log.debugf("[SystemPrompt] Completed build for session %s. Length: %d chars", sessionId, finalPrompt.length());

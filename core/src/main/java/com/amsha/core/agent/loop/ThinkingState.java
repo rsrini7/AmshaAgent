@@ -31,8 +31,8 @@ public class ThinkingState implements RunnerState {
                             context.engine(),
                             context.history(),
                             currentTransientError,
-                    context.llmSchemaErrorCount(),
-                    context.iteration());
+                            context.llmSchemaErrorCount(),
+                            context.iteration());
 
             if (engineDecision.type() == DecisionType.CONTINUE) {
                 if (context.history().size() == historySizeBefore) {

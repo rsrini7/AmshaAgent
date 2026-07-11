@@ -334,6 +334,7 @@ amsha:
     temperature: ${AMSHA_LLM_TEMPERATURE:0.1}
     context-window: ${AMSHA_LLM_CONTEXT_WINDOW:128000}
     compact-prompt-enabled: ${AMSHA_LLM_COMPACT_PROMPT_ENABLED:false}
+    compact-prompt-max-chars: ${AMSHA_LLM_COMPACT_PROMPT_MAX_CHARS:32000}
     structured-output-mode: ${AMSHA_LLM_STRUCTURED_OUTPUT_MODE:NATIVE}
     circuit-breaker:
       enabled: ${AMSHA_LLM_CIRCUIT_BREAKER_ENABLED:true}
