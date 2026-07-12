@@ -40,7 +40,7 @@
 
 ## Quick Smoke Test (10 minutes)
 
-For rapid regression, use `telegram-test-amsha.txt` — a numbered list of 146 messages covering all major features. Paste messages into Telegram sequentially and verify responses match expectations.
+For rapid regression, use `telegram-test-amsha.txt` — a numbered list of 126 messages covering major Telegram features. Paste messages into Telegram sequentially and verify responses match expectations.
 
 **What it covers:**
 - Identity extraction and memory (messages 1-9, 57-66)
@@ -48,6 +48,7 @@ For rapid regression, use `telegram-test-amsha.txt` — a numbered list of 146 m
 - Tool usage: GitHub, web search, sandbox_exec (messages 19, 23, 39, 53)
 - Cron scheduling and management (messages 14, 27, 37, 101, 129-135)
 - Reflexes: /crons, /status, /history, /reset (messages 29-31, 77)
+- Session catalog lifecycle: `/sessions`, `/newsession`, and `/resume` (messages 3-9)
 - Vault: store and retrieve secrets (messages 16, 43-49, 69-74)
 - PII redaction (messages 110-112)
 - Prompt injection blocking (messages 114-118)
