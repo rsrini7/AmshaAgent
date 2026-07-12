@@ -20,7 +20,7 @@ public class NewSessionReflex implements AgentReflex {
     @Override
     public ReflexResult execute(String sessionId, String userId, String chatId, String input, MessageContext context) {
         String next = sessions.rotate(
-                context.getUser().channel().id(), context.getUser().channelId(), userId);
+                context.getUser().channel().id(), context.getUser().channelId(), userId, sessionId);
         context.setSessionId(next);
         return ReflexResult.respond("Started a new session: " + next, context);
     }

@@ -38,7 +38,7 @@ class SessionCatalogServiceTest {
     void rotateActivatesNewScopedSessionAndFlushesNotifications() {
         SessionCatalogService service = new SessionCatalogService(store, legacyResolver, heartbeats, notifications);
 
-        String sessionId = service.rotate("TELEGRAM", "chat-1", "user-1");
+        String sessionId = service.rotate("TELEGRAM", "chat-1", "user-1", "old-session");
 
         ArgumentCaptor<SessionCatalogEntry> entry = ArgumentCaptor.forClass(SessionCatalogEntry.class);
         verify(store).activateNew(entry.capture());

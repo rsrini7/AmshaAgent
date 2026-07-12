@@ -663,9 +663,18 @@ calls `AgentLoop.run()` directly, because it runs inside a scheduled
 
 ## Session & Workspace Lifecycle
 
-### Session Identity
+### Session Identity & Catalog
 
-`SessionRegistry.resolveOrCreate(channelType, channelId, userId)` maps the triple to a stable `sessionId` stored in `session_registry` SQLite table, with a Caffeine in-memory write-through cache.
+The application manages durable session mappings using the **Session Catalog**. 
+
+* **Legacy Session Lookup:** `SessionRegistry.resolveOrCreate(channelType, channelId, userId)` maps the scope triple to a stable `sessionId` stored in the legacy `session_registry` table with fallbacks for case-insensitive lookup (normalizing channel names like `CLI` and `TELEGRAM`).
+* **Session Catalog:** The `SessionCatalogStore` maps `(ownerKey, channelType, channelId)` to a sequence of `SessionCatalogEntry` records. Every session (CLI, Telegram, Web, REST) is "catalogued from birth" as either `ACTIVE`, `INACTIVE`, or `ARCHIVED`.
+* **Atomic Session Rotation:** Users can rotate their active session (e.g. via `/newsession`). The `SessionCatalogService.rotate()` operation atomically:
+  1. Deactivates siblings and activates a new session in the persistent store.
+  2. Flushes any pending human-in-the-loop (HITL) approval notifications.
+  3. Rebinds the session ID in the in-memory heartbeat tracker.
+  4. Publishes a `SessionRotatedEvent` via the CDI event bus to notify channel adapters (like `WebChatEndpoint` WebSocket connections to sync client state).
+* **Scheduled Archival:** The `SessionReaper` periodically sweeps the catalog to archive sessions that have been inactive for more than `archive-after-days` (default 90).
 
 ### WorkspaceContext Scoping
 
@@ -973,7 +982,8 @@ Exported to Jaeger via OTLP at `http://localhost:4317`.
 
 | Table | Purpose |
 |---|---|
-| `session_registry` | `(channelType, channelId, userId)` → `sessionId` mapping |
+| `session_registry` | Legacy `(channelType, channelId, userId)` → `sessionId` mapping |
+| `session_catalog` | Durable session catalog entries mapping scopes to active/inactive/archived sessions |
 | `agent_checkpoint` | Checkpoint state machine; `ReasoningStep[]` JSON; batch tool decisions |
 | `agent_cron` / `agent_cron_run` | Cron job definitions + execution history |
 | `chat_memory` | Persistent `ChatMemory` for all sessions |

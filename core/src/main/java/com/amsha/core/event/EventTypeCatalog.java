@@ -1,6 +1,7 @@
 package com.amsha.core.event;
 
 import com.amsha.channel.api.hitl.ApprovalDecisionEvent;
+import com.amsha.channel.api.session.SessionRotatedEvent;
 import com.amsha.core.agent.event.AgentStateChangedEvent;
 import com.amsha.core.compaction.CompactionRequest;
 import com.amsha.core.config.ConfigurationChangedEvent;
@@ -56,6 +57,9 @@ public final class EventTypeCatalog {
 
     /** Fired for critical and telemetry persistence events. */
     public static final Class<PersistenceEvent> PERSISTENCE = PersistenceEvent.class;
+
+    /** Fired when a session is rotated so channel adapters can repoint active identity. */
+    public static final Class<SessionRotatedEvent> SESSION_ROTATED = SessionRotatedEvent.class;
 
     private EventTypeCatalog() {}
 }

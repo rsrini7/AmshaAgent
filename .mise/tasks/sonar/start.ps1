@@ -12,6 +12,13 @@ if ($running) {
     exit 0
 }
 
+# Remove any stopped/exited container with the same name
+podman container exists sonarqube
+if ($LASTEXITCODE -eq 0) {
+    Write-Host '🧹  Removing stopped sonarqube container...'
+    podman rm sonarqube 2>&1 | Out-Null
+}
+
 # Pull image if not present
 podman image exists sonarqube:latest
 if ($LASTEXITCODE -ne 0) {

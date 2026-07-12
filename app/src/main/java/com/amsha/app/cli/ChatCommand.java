@@ -35,6 +35,7 @@ import com.amsha.core.pipeline.TurnDispatchService;
 import com.amsha.core.pipeline.TurnRequest;
 import com.amsha.core.scope.WorkspaceContext;
 import com.amsha.core.security.AutonomyLevel;
+import com.amsha.core.session.SessionCatalogService;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.fusesource.jansi.AnsiConsole;
@@ -66,6 +67,16 @@ public class ChatCommand implements Runnable {
             description = "Resume an existing persisted session by ID; generates a new CLI session when omitted.")
     String requestedSessionId;
 
+    @CommandLine.Option(
+            names = {"--last-session"},
+            description = "Resume the most recently active CLI session from the catalog.")
+    boolean lastSession;
+
+    @CommandLine.Option(
+            names = {"--new-session"},
+            description = "Start a fresh catalogued session (default behaviour).")
+    boolean newSession;
+
     @Inject
     Logger log;
 
@@ -80,6 +91,9 @@ public class ChatCommand implements Runnable {
 
     @Inject
     TurnDispatchService turnDispatchService;
+
+    @Inject
+    SessionCatalogService sessionCatalogService;
 
     private volatile String currentCliSessionId;
 
@@ -102,9 +116,24 @@ public class ChatCommand implements Runnable {
     @Override
     @ActivateRequestContext
     public void run() {
-        String sessionId = requestedSessionId == null || requestedSessionId.isBlank()
-                ? "cli-" + UUID.randomUUID()
-                : requestedSessionId.trim();
+        // 1. Resolve initial session — priority: --session-id > --new-session > --last-session > default new
+        String sessionId;
+        if (requestedSessionId != null && !requestedSessionId.isBlank()) {
+            sessionId = sessionCatalogService.registerOrResumeSession(
+                    requestedSessionId.trim(), CLI_USER_ID, ChannelType.CLI.id(), CLI_CHAT_ID);
+        } else if (newSession) {
+            sessionId = sessionCatalogService.createSession(CLI_USER_ID, ChannelType.CLI.id(), CLI_CHAT_ID);
+        } else if (lastSession) {
+            sessionId = sessionCatalogService
+                    .latestResumableScoped(CLI_USER_ID, ChannelType.CLI.id(), CLI_CHAT_ID)
+                    .map(entry -> sessionCatalogService.resume(
+                            entry.sessionId(), CLI_USER_ID, ChannelType.CLI.id(), CLI_CHAT_ID))
+                    .orElseGet(
+                            () -> sessionCatalogService.createSession(CLI_USER_ID, ChannelType.CLI.id(), CLI_CHAT_ID));
+        } else {
+            sessionId = sessionCatalogService.registerOrResumeSession(
+                    "cli-" + UUID.randomUUID(), CLI_USER_ID, ChannelType.CLI.id(), CLI_CHAT_ID);
+        }
         this.currentCliSessionId = sessionId;
 
         // Install Jansi ANSI support — auto-detects terminal capabilities.
@@ -126,9 +155,10 @@ public class ChatCommand implements Runnable {
             log.errorf("Fatal error in chat session %s:\n%s", sessionId, LogUtil.trimmedStack(e));
             System.err.println("❌ Fatal: " + e.getMessage());
         } finally {
-            if (this.currentCliSessionId != null) {
+            String terminatingId = this.currentCliSessionId;
+            if (terminatingId != null) {
                 this.currentCliSessionId = null;
-                workspaceManager.terminateSession(sessionId);
+                workspaceManager.terminateSession(terminatingId);
             }
             AnsiConsole.systemUninstall();
         }
@@ -158,25 +188,17 @@ public class ChatCommand implements Runnable {
     }
 
     private void runChatLoop(String sessionId) {
+        heartbeatTracker.recordHeartbeat(sessionId);
         try {
-            heartbeatTracker.recordHeartbeat(sessionId);
-            WorkspaceContext.run(
-                    sessionId,
-                    CLI_USER_ID,
-                    CLI_CHAT_ID,
-                    AutonomyLevel.SUPERVISED,
-                    AgentRoleEnum.COORDINATOR.toScopedName(),
-                    () -> {
-                        chatLoop(sessionId);
-                        return null;
-                    });
+            ScopedValue.where(WorkspaceContext.CHANNEL_TYPE, ChannelType.CLI.id())
+                    .run(() -> chatLoop());
         } catch (Exception e) {
-            log.errorf("Error in WorkspaceContext for session %s:\n%s", sessionId, LogUtil.trimmedStack(e));
-            System.err.println("❌ Session error: " + e.getMessage());
+            log.errorf("Error in chat loop:\n%s", LogUtil.trimmedStack(e));
+            System.err.println("❌ Chat error: " + e.getMessage());
         }
     }
 
-    private void chatLoop(String sessionId) {
+    private void chatLoop() {
         try (Terminal terminal = TerminalBuilder.builder().system(true).build()) {
 
             List<String> slashCommands = extractSlashCommands();
@@ -190,17 +212,17 @@ public class ChatCommand implements Runnable {
                     .build();
 
             this.lineReader = reader;
-            chatLoopInner(sessionId, reader, terminal);
+            chatLoopInner(reader, terminal);
 
         } catch (Exception e) {
             log.warnf("JLine3 terminal init failed (%s), falling back to raw input", e.getMessage());
-            chatLoopFallback(sessionId);
+            chatLoopFallback();
         } finally {
             this.lineReader = null;
         }
     }
 
-    private void chatLoopInner(String sessionId, LineReader reader, Terminal terminal) {
+    private void chatLoopInner(LineReader reader, Terminal terminal) {
         while (true) {
             String input;
             try {
@@ -210,12 +232,11 @@ public class ChatCommand implements Runnable {
             } catch (EndOfFileException _) {
                 break;
             } catch (UserInterruptException _) {
-                // Ctrl+C during line editing - continue loop
                 continue;
             }
 
             if ("/exit".equalsIgnoreCase(input) || "/quit".equalsIgnoreCase(input)) {
-                log.infof("CLI chat session %s exiting on user command", sessionId);
+                log.infof("CLI chat session %s exiting on user command", currentCliSessionId);
                 terminal.writer().println("Goodbye.");
                 break;
             }
@@ -230,12 +251,12 @@ public class ChatCommand implements Runnable {
                 }
             }
 
-            dispatchToWorkflow(sessionId, input);
+            dispatchToWorkflow(input);
         }
     }
 
     /** Fallback for non-TTY environments (CI, piped stdin, Docker without -t). */
-    private void chatLoopFallback(String sessionId) {
+    private void chatLoopFallback() {
         Console console = System.console();
         BufferedReader fallbackReader =
                 (console == null) ? new BufferedReader(new InputStreamReader(System.in, StandardCharsets.UTF_8)) : null;
@@ -270,7 +291,7 @@ public class ChatCommand implements Runnable {
                 }
             }
 
-            dispatchToWorkflow(sessionId, input);
+            dispatchToWorkflow(input);
         }
     }
 
@@ -286,15 +307,19 @@ public class ChatCommand implements Runnable {
                 "/halt",
                 "/help",
                 "/history",
+                "/newsession",
                 "/quit",
                 "/reset",
+                "/resume",
                 "/retry",
+                "/sessions",
                 "/status",
                 "/store",
                 "/vault");
     }
 
-    private void dispatchToWorkflow(String sessionId, String input) {
+    private void dispatchToWorkflow(String input) {
+        var sessionId = currentCliSessionId;
         try {
             log.infof("CLI chat session %s dispatching input: %s", sessionId, input);
             System.out.println("⚡ Thinking...");
@@ -303,12 +328,19 @@ public class ChatCommand implements Runnable {
                     input,
                     sessionId,
                     Instant.now());
-            TurnDispatchResult result = turnDispatchService.dispatch(new TurnRequest(
-                    message,
+            TurnDispatchResult result = WorkspaceContext.run(
+                    sessionId,
+                    CLI_USER_ID,
                     CLI_CHAT_ID,
-                    Optional.of(sessionId),
-                    Optional.ofNullable(role),
-                    Optional.of(maxIterations)));
+                    AutonomyLevel.SUPERVISED,
+                    canonicalRole(role),
+                    ChannelType.CLI.id(),
+                    () -> turnDispatchService.dispatch(new TurnRequest(
+                            message,
+                            CLI_CHAT_ID,
+                            Optional.of(sessionId),
+                            Optional.ofNullable(role),
+                            Optional.of(maxIterations))));
             hitlPending = result.agentResult()
                     .map(AgentResult.AwaitingApproval.class::isInstance)
                     .orElse(false);
@@ -318,6 +350,15 @@ public class ChatCommand implements Runnable {
             if (input.startsWith("/approve") || input.startsWith("/deny")) {
                 hitlPending = false;
             }
+            // Session rotation: NewSessionReflex changes the active session on disk;
+            // sync the local field so subsequent turns use the new id.
+            result.sessionId().ifPresent(id -> {
+                if (!id.equals(sessionId)) {
+                    currentCliSessionId = id;
+                    heartbeatTracker.recordHeartbeat(id);
+                    System.out.println("Session " + sessionId + " saved; now active: " + id);
+                }
+            });
 
         } catch (Exception e) {
             log.errorf("Agent error in session %s:\n%s", sessionId, LogUtil.trimmedStack(e));
@@ -361,5 +402,21 @@ public class ChatCommand implements Runnable {
             case AgentResult.AwaitingRetry r -> "⏳ Rate limit hit. Retry in " + (r.retryAfterMs() / 1000) + "s...";
             case AgentResult.AwaitingApproval _ -> null;
         };
+    }
+
+    /**
+     * Canonicalizes the CLI role argument using {@link AgentRoleEnum}:
+     * null / blank → COORDINATOR; known built-in → scoped name; unknown → pass-through.
+     */
+    private static String canonicalRole(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return AgentRoleEnum.COORDINATOR.toScopedName();
+        }
+        try {
+            return AgentRoleEnum.fromString(raw).toScopedName();
+        } catch (IllegalArgumentException _) {
+            // Dynamic / skill role — preserve as-is.
+            return raw.trim();
+        }
     }
 }
