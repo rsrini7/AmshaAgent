@@ -50,16 +50,33 @@ Any handler can return `HandleResult.STOP` to short-circuit the chain (e.g., `Al
 
 ### Inbound Message Paths
 
-Three distinct ingestion paths all converge on the same `MessagePipeline`:
+All user-initiated turns converge on a single transport-neutral
+`TurnDispatchService.dispatch(TurnRequest)` entry point, which delegates to the
+shared `MessagePipeline`. Channel adapters (Telegram, WebSocket) and the
+synchronous CLI/REST adapters differ only in how they build the `TurnRequest`
+(session identity, optional explicit role, max iterations) and how they render
+the resulting `TurnDispatchResult`; none of them re-implements command dispatch,
+intent/skill classification, or a direct `AgentLoop` invocation.
 
 **REST API:**
 ```
 POST /api/v1/sessions/{id}/run
   → ApiKeyAuthFilter (HMAC-SHA256 against stored digest; raw key never stored)
   → ApiKeyRegistry.isAllowed() + isMutationAllowed() (custom rate limiter)
-  → AgentSessionService.runSync()
-  → WorkspaceScopeHolder.call() → WorkspaceContext.run(...)
-  → AgentLoop.run(...)
+  → AgentSessionService.runSync() / runAgentAsync()
+  → TurnDispatchService.dispatch(TurnRequest)
+  → MessagePipeline → AgentDispatchHandler → AgentLoop.run(...)
+```
+
+**CLI `chat` / `ask`:**
+```
+amsha chat [--role <role>] [--session-id <uuid>]
+  → ChatCommand / AskCommand
+  → TurnDispatchService.dispatch(TurnRequest)   (no direct AgentLoop call)
+  → MessagePipeline → AgentDispatchHandler → AgentLoop.run(...)
+  → HITL approval rendered via CliChannelPlugin + CliReplyRenderer; the
+    interactive waiter is cancelled by ResumeResultHelper before resume so the
+    terminal result prints exactly once.
 ```
 
 **Telegram:**
@@ -68,9 +85,8 @@ Telegram Bot API → Apache Camel long-poll
   → TelegramChannelRoute → TelegramAgentHandler
   → TelegramAllowlistGuard (numeric userId check)
   → ChannelServices.processAsync(ChannelMessage)
-  → SkillAwareIntentDetector.classify(text)    ← compiled Pattern[] fast-path
-  → IntentDetectorService.classify(text)       ← LLM-backed fallback
-  → AgentDispatchHandler → AgentLoop.run(...)
+  → TurnDispatchService.dispatchAsync(TurnRequest)
+  → MessagePipeline → AgentDispatchHandler → AgentLoop.run(...)
 ```
 
 **WebSocket:**
@@ -79,6 +95,8 @@ ws://host/ws/chat
   → WebChatEndpoint.onOpen()
   → API key validation (X-Amsha-API-Key header or Sec-WebSocket-Protocol)
   → ChannelMessage.WebSocketMessage → ChannelServices.processAsync(msg)
+  → TurnDispatchService.dispatchAsync(TurnRequest)
+  → MessagePipeline → AgentDispatchHandler → AgentLoop.run(...)
 ```
 
 **Cron:**
@@ -629,22 +647,34 @@ Note: `session_registry` table is created by Flyway baseline migration (`V1__bas
 
 ## Entry Points (Picocli Command Tree)
 
-Four leaf subcommands all converge on `AgentLoop.run()`:
+All four leaf subcommands converge on `TurnDispatchService.dispatch()` →
+`MessagePipeline` → `AgentLoop.run()` (the cron path is the only one that still
+calls `AgentLoop.run()` directly, because it runs inside a scheduled
+`WorkspaceContext` with a CRON CONSTRAINT directive):
 
 | Mode | Command | Behaviour |
 |---|---|---|
 | `serve` | `amsha serve` | Quarkus HTTP server on port 8080; Telegram route self-registers via `@StartupEvent` |
-| `ask` | `amsha ask "goal"` | UUID session → `AgentLoop.run()` → print answer → terminate |
-| `chat` | `amsha chat [--role <role>] [--session-id <uuid>]` | Interactive REPL; input passes through `ReflexRegistry.processIfReflex()` first. `--session-id` resumes an existing persisted session. |
+| `ask` | `amsha ask "goal"` | UUID session → `TurnDispatchService.dispatch()` → pipeline → print answer → terminate |
+| `chat` | `amsha chat [--role <role>] [--session-id <uuid>]` | Interactive REPL; every input is a `TurnRequest` through `TurnDispatchService`. `--session-id` resumes an existing persisted session. HITL approval is rendered through `CliChannelPlugin` and the interactive waiter is cancelled by `ResumeResultHelper` on `/approve` or `/deny` so the terminal result prints exactly once. |
 | `attach` | `amsha attach <channel>` | Discovers matching `ChannelDaemon` CDI bean by `channelId()` → `daemon.start()` |
 
 ---
 
 ## Session & Workspace Lifecycle
 
-### Session Identity
+### Session Identity & Catalog
 
-`SessionRegistry.resolveOrCreate(channelType, channelId, userId)` maps the triple to a stable `sessionId` stored in `session_registry` SQLite table, with a Caffeine in-memory write-through cache.
+The application manages durable session mappings using the **Session Catalog**. 
+
+* **Legacy Session Lookup:** `SessionRegistry.resolveOrCreate(channelType, channelId, userId)` is used only when a scope has no catalog entry, preserving and lazily migrating legacy `session_registry` mappings. New catalog-created sessions do not write this table. The lookup supports case-insensitive legacy channel names such as `CLI` and `TELEGRAM`.
+* **Session Catalog:** The `SessionCatalogStore` maps `(ownerKey, channelType, channelId)` to a sequence of `SessionCatalogEntry` records. Every session (CLI, Telegram, Web, REST) is "catalogued from birth" as either `ACTIVE`, `INACTIVE`, or `ARCHIVED`.
+* **Atomic Session Rotation:** Users can rotate their active session (e.g. via `/newsession`). The `SessionCatalogService.rotate()` operation atomically:
+  1. Deactivates siblings and activates a new session in the persistent store.
+  2. Flushes any pending human-in-the-loop (HITL) approval notifications.
+  3. Rebinds the session ID in the in-memory heartbeat tracker.
+  4. Publishes a `SessionRotatedEvent` via the CDI event bus to notify channel adapters (like `WebChatEndpoint` WebSocket connections to sync client state).
+* **Scheduled Archival:** The `SessionReaper` periodically sweeps the catalog to archive sessions that have been inactive for more than `archive-after-days` (default 90).
 
 ### WorkspaceContext Scoping
 
@@ -952,7 +982,8 @@ Exported to Jaeger via OTLP at `http://localhost:4317`.
 
 | Table | Purpose |
 |---|---|
-| `session_registry` | `(channelType, channelId, userId)` → `sessionId` mapping |
+| `session_registry` | Legacy `(channelType, channelId, userId)` → `sessionId` mapping |
+| `session_catalog` | Durable session catalog entries mapping scopes to active/inactive/archived sessions |
 | `agent_checkpoint` | Checkpoint state machine; `ReasoningStep[]` JSON; batch tool decisions |
 | `agent_cron` / `agent_cron_run` | Cron job definitions + execution history |
 | `chat_memory` | Persistent `ChatMemory` for all sessions |
@@ -1055,14 +1086,16 @@ graph TD
         REST[REST POST] --> AUTH[ApiKeyAuthFilter + Bucket4j]
         TG[Telegram long-poll] --> TGG[TelegramAllowlistGuard]
         WS[WebSocket ws:] --> WSA[API key validation]
+        CLI["CLI chat / ask"] --> TD[TurnDispatchService]
         CRON["@Scheduled (30s poll)"] --> CRONP[AgentCronScheduler]
     end
 
     subgraph MessagePipeline
-        AUTH --> MP[MessagePipeline]
-        TGG --> MP
-        WSA --> MP
-        CRONP --> MP
+        AUTH --> TD
+        TGG --> TD
+        WSA --> TD
+        CRONP --> MP[MessagePipeline]
+        TD --> MP
         MP --> H10[AllowlistHandler p10]
         H10 --> H40[SessionResolutionHandler p40]
         H40 --> H45[CommandDispatchHandler p45]

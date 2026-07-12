@@ -177,9 +177,9 @@ public class ChannelContractTest {
 
     @Test
     void testAllBuiltInCommandTypesAreSealedPermits() {
-        // Verify all 10 built-in command types are sealed permits of BuiltInChannelCommand
+        // Verify all 13 built-in command types are sealed permits of BuiltInChannelCommand
         assertEquals(
-                10,
+                13,
                 ChannelCommand.BuiltInChannelCommand.class.getPermittedSubclasses().length,
                 "Adding a new built-in command type requires adding it to the permits clause "
                         + "of BuiltInChannelCommand. If you see this failure, add the new record "

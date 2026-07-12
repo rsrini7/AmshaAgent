@@ -15,7 +15,6 @@ import java.util.Map;
 import java.util.Optional;
 
 import com.amsha.app.security.ApiKeyRegistry;
-import com.amsha.core.agent.loop.AgentExecutionContext;
 import com.amsha.core.agent.loop.AgentLoop;
 import com.amsha.core.agent.reasoning.ReasoningEngine;
 import com.amsha.core.agent.reasoning.ReasoningStep;
@@ -24,6 +23,8 @@ import com.amsha.core.agent.role.AgentRoleEnum;
 import com.amsha.core.api.dto.RunAgentRequest;
 import com.amsha.core.domain.model.AgentCheckpoint;
 import com.amsha.core.lifecycle.SessionHeartbeatTracker;
+import com.amsha.core.pipeline.TurnDispatchResult;
+import com.amsha.core.pipeline.TurnDispatchService;
 import com.amsha.core.state.CheckpointStatus;
 import com.amsha.core.state.StatefulAgentStore;
 import com.amsha.persistence.api.CheckpointCrudPort;
@@ -48,6 +49,9 @@ class AgentResourceTest {
     AgentLoop agentLoop;
 
     @InjectMock
+    TurnDispatchService turnDispatchService;
+
+    @InjectMock
     StatefulAgentStore agentStore;
 
     @InjectMock
@@ -64,13 +68,10 @@ class AgentResourceTest {
         // Ensure sessions exist by default so we don't hit 404 in validateSession
         Mockito.when(heartbeatTracker.exists(anyString())).thenReturn(true);
 
-        ReasoningStep finishStep =
-                ReasoningStep.pending("Calculated final answer", ReasoningStep.FINISH, Map.of("response", "42"), 0, 0);
-        Mockito.when(reasoningEngine.nextStep(any(AgentExecutionContext.class), anyString(), anyString(), any()))
-                .thenReturn(finishStep);
-
-        Mockito.when(agentLoop.run(anyString(), anyString(), anyString(), any(), Mockito.anyInt(), any()))
-                .thenReturn(AgentResult.finished("42", List.of()));
+        // The unified dispatch service (TurnDispatchService) is the single entry
+        // point used by AgentSessionService; mock it directly so we control the
+        // AgentResult that drives HTTP status + error-body mapping.
+        stubDispatch(AgentResult.finished("42", List.of()));
 
         Mockito.when(apiKeyRegistry.isValidKey(anyString())).thenReturn(true);
         Mockito.when(apiKeyRegistry.isAllowed(anyString())).thenReturn(true);
@@ -155,6 +156,12 @@ class AgentResourceTest {
         Mockito.when(agentStore.load(Mockito.eq("fake-id-123"), anyString())).thenReturn(Optional.empty());
     }
 
+    private void stubDispatch(AgentResult result) {
+        Mockito.when(turnDispatchService.dispatch(any()))
+                .thenReturn(new TurnDispatchResult(
+                        Optional.of("test-id"), Optional.of("coordinator"), Optional.of(result), Optional.empty()));
+    }
+
     @Test
     void testFullAgentLifecycle() {
         // 1. Create Session
@@ -168,7 +175,7 @@ class AgentResourceTest {
                 .extract()
                 .path("sessionId");
 
-        // 2. Sync Run (Should use the DefaultReasoningEngine stub returning FINISH)
+        // 2. Sync Run (Should use the default dispatch stub returning FINISH)
         RunAgentRequest request = new RunAgentRequest("Hello, World!", "coordinator", 3);
 
         given().header("X-Amsha-API-Key", "test-key")
@@ -261,9 +268,8 @@ class AgentResourceTest {
 
     @Test
     void testComplianceViolationReturns451() {
-        Mockito.when(agentLoop.run(anyString(), anyString(), anyString(), any(), Mockito.anyInt(), any()))
-                .thenReturn(AgentResult.failed(
-                        "Blocked by policy", AgentResult.FailureCategory.COMPLIANCE_VIOLATION, List.of()));
+        stubDispatch(
+                AgentResult.failed("Blocked by policy", AgentResult.FailureCategory.COMPLIANCE_VIOLATION, List.of()));
 
         given().header("X-Amsha-API-Key", "test-key")
                 .contentType(ContentType.JSON)
@@ -277,8 +283,7 @@ class AgentResourceTest {
 
     @Test
     void testBudgetExceededReturns429() {
-        Mockito.when(agentLoop.run(anyString(), anyString(), anyString(), any(), Mockito.anyInt(), any()))
-                .thenReturn(AgentResult.failed("Token limit", AgentResult.FailureCategory.BUDGET_EXCEEDED, List.of()));
+        stubDispatch(AgentResult.failed("Token limit", AgentResult.FailureCategory.BUDGET_EXCEEDED, List.of()));
 
         given().header("X-Amsha-API-Key", "test-key")
                 .contentType(ContentType.JSON)
@@ -292,8 +297,7 @@ class AgentResourceTest {
 
     @Test
     void testUserDeniedReturns422() {
-        Mockito.when(agentLoop.run(anyString(), anyString(), anyString(), any(), Mockito.anyInt(), any()))
-                .thenReturn(AgentResult.failed("User said no", AgentResult.FailureCategory.USER_DENIED, List.of()));
+        stubDispatch(AgentResult.failed("User said no", AgentResult.FailureCategory.USER_DENIED, List.of()));
 
         given().header("X-Amsha-API-Key", "test-key")
                 .contentType(ContentType.JSON)
@@ -307,8 +311,7 @@ class AgentResourceTest {
 
     @Test
     void testSchemaErrorReturns422() {
-        Mockito.when(agentLoop.run(anyString(), anyString(), anyString(), any(), Mockito.anyInt(), any()))
-                .thenReturn(AgentResult.failed("Bad tool params", AgentResult.FailureCategory.SCHEMA_ERROR, List.of()));
+        stubDispatch(AgentResult.failed("Bad tool params", AgentResult.FailureCategory.SCHEMA_ERROR, List.of()));
 
         given().header("X-Amsha-API-Key", "test-key")
                 .contentType(ContentType.JSON)
@@ -322,8 +325,7 @@ class AgentResourceTest {
 
     @Test
     void testSystemErrorReturns500() {
-        Mockito.when(agentLoop.run(anyString(), anyString(), anyString(), any(), Mockito.anyInt(), any()))
-                .thenReturn(AgentResult.failed("Internal crash", AgentResult.FailureCategory.SYSTEM_ERROR, List.of()));
+        stubDispatch(AgentResult.failed("Internal crash", AgentResult.FailureCategory.SYSTEM_ERROR, List.of()));
 
         given().header("X-Amsha-API-Key", "test-key")
                 .contentType(ContentType.JSON)
@@ -337,8 +339,7 @@ class AgentResourceTest {
 
     @Test
     void testLoopExceededReturns408() {
-        Mockito.when(agentLoop.run(anyString(), anyString(), anyString(), any(), Mockito.anyInt(), any()))
-                .thenReturn(AgentResult.loopExceeded(5, List.of()));
+        stubDispatch(AgentResult.loopExceeded(5, List.of()));
 
         given().header("X-Amsha-API-Key", "test-key")
                 .contentType(ContentType.JSON)
@@ -352,8 +353,7 @@ class AgentResourceTest {
 
     @Test
     void testApprovalRequiredReturns202WithShape() {
-        Mockito.when(agentLoop.run(anyString(), anyString(), anyString(), any(), Mockito.anyInt(), any()))
-                .thenReturn(AgentResult.awaitingApproval("gh-tool", "{}", "sess-123", List.of()));
+        stubDispatch(AgentResult.awaitingApproval("gh-tool", "{}", "sess-123", List.of()));
 
         given().header("X-Amsha-API-Key", "test-key")
                 .contentType(ContentType.JSON)

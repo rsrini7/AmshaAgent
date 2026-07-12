@@ -24,6 +24,7 @@ import com.amsha.core.pipeline.HandleResult;
 import com.amsha.core.pipeline.MessageContext;
 import com.amsha.core.pipeline.MessageHandler;
 import com.amsha.core.pipeline.SessionContext;
+import com.amsha.core.pipeline.TurnDispatchService;
 import com.amsha.core.scope.WorkspaceContext;
 import com.amsha.core.security.InputSanitizer;
 import com.amsha.core.skill.SkillRegistry;
@@ -90,7 +91,7 @@ public class AgentDispatchHandler implements MessageHandler {
         String role = context.getAgentRole().orElse(AgentRoleEnum.COORDINATOR.toScopedName());
 
         String goal = resolveGoal(context, session, sessionId);
-        int maxIterations = resolveMaxIterations(role, sessionId);
+        int maxIterations = resolveMaxIterations(context, role, sessionId);
         String chatId = resolveChatId(context);
 
         AgentResult result;
@@ -102,6 +103,7 @@ public class AgentDispatchHandler implements MessageHandler {
             return handleRunException(context, goal, e);
         }
 
+        context.setData(TurnDispatchService.DATA_AGENT_RESULT, result);
         formatAndSendReply(context, result, sessionId);
         return HandleResult.STOP;
     }
@@ -164,7 +166,11 @@ public class AgentDispatchHandler implements MessageHandler {
         return goal;
     }
 
-    private int resolveMaxIterations(String role, String sessionId) {
+    private int resolveMaxIterations(MessageContext context, String role, String sessionId) {
+        Object requestedMax = context.getData(TurnDispatchService.DATA_MAX_ITERATIONS);
+        if (requestedMax instanceof Integer maxIterations && maxIterations > 0) {
+            return maxIterations;
+        }
         int maxIterations = DEFAULT_MAX_ITERATIONS;
         if (AgentRoleEnum.isSkillRole(role)) {
             String skillName = AgentRoleEnum.skillName(role);

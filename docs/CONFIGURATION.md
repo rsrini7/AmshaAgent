@@ -261,6 +261,8 @@ schema) and must match the model used by every active provider.
 | `AMSHA_MEMORY_RETENTION_RECALL_RETENTION_DAYS` | `30` | Daily purge window for recall messages (days) |
 | `AMSHA_MEMORY_RETENTION_ARCHIVAL_EVICTION_THRESHOLD` | `0.3` | Daily purge threshold for low-confidence archival context |
 | `AMSHA_MEMORY_RETENTION_ARCHIVAL_MIN_AGE_DAYS` | `30` | Minimum age before low-confidence archival context is purged |
+| `AMSHA_SESSION_CATALOG_ARCHIVE_AFTER_DAYS` | `90` | Inactivity threshold (days) before catalog sessions are archived |
+| `AMSHA_WORKSPACE_SESSION_TTL_MINUTES` | `30` | Time-to-live in minutes for active sessions since the last heartbeat |
 | `AMSHA_RAG_VEC_PATH` | `./lib/vec0` | Path to sqlite-vec native extension |
 
 ## Self-Evolution

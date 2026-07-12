@@ -34,6 +34,9 @@ public interface ChannelCommand {
                     ChannelCommand.Halt,
                     ChannelCommand.Reset,
                     ChannelCommand.History,
+                    ChannelCommand.NewSession,
+                    ChannelCommand.Sessions,
+                    ChannelCommand.Resume,
                     ChannelCommand.CronTasks,
                     ChannelCommand.DeleteCron,
                     ChannelCommand.Start,
@@ -44,7 +47,7 @@ public interface ChannelCommand {
     // Group 2: first token (id or toolName)
     // Group 3: rest of the line (optional reason)
     Pattern CMD_PATTERN = Pattern.compile(
-            "^/(start|approve|deny|status|halt|reset|history|cron|crons|deletecron|list(?:tasks?)?)(?:\\s+(\\S+))?(?:\\s+(.*))?",
+            "^/(start|approve|deny|status|halt|reset|history|newsession|sessions|resume|cron|crons|deletecron|list(?:tasks?)?)(?:\\s+(\\S+))?(?:\\s+(.*))?",
             Pattern.CASE_INSENSITIVE);
 
     Pattern WHITESPACE_PATTERN = Pattern.compile("\\s+");
@@ -105,6 +108,9 @@ public interface ChannelCommand {
             case "halt" -> new Halt();
             case "reset" -> new Reset();
             case "history" -> new History();
+            case "newsession" -> new NewSession();
+            case "sessions" -> new Sessions();
+            case "resume" -> new Resume(optArg);
             case "crons" -> new CronTasks();
             case "start" -> new Start(optArg);
             case "cron" -> parseCronCommand(arg, input);
@@ -184,6 +190,15 @@ public interface ChannelCommand {
 
     /** Shows conversation history for the current session. */
     record History() implements BuiltInChannelCommand {}
+
+    /** Opens a fresh catalogued session while preserving the current history. */
+    record NewSession() implements BuiltInChannelCommand {}
+
+    /** Lists the caller's historical sessions in this channel scope. */
+    record Sessions() implements BuiltInChannelCommand {}
+
+    /** Resumes a session by ID or its scoped sequence number. */
+    record Resume(Optional<String> target) implements BuiltInChannelCommand {}
 
     /**
      * Deletes a scheduled cron task.

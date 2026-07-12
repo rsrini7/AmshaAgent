@@ -8,6 +8,7 @@ import com.amsha.core.cron.AgentJobCompleted;
 import com.amsha.core.cron.CronTaskScheduled;
 import com.amsha.core.lifecycle.ApprovalTimedOutEvent;
 import com.amsha.core.persistence.PersistenceEvent;
+import com.amsha.core.session.SessionRotatedEvent;
 import com.amsha.core.tools.CheckListEvent;
 
 /**
@@ -56,6 +57,9 @@ public final class EventTypeCatalog {
 
     /** Fired for critical and telemetry persistence events. */
     public static final Class<PersistenceEvent> PERSISTENCE = PersistenceEvent.class;
+
+    /** Fired when a session is rotated so channel adapters can repoint active identity. */
+    public static final Class<SessionRotatedEvent> SESSION_ROTATED = SessionRotatedEvent.class;
 
     private EventTypeCatalog() {}
 }

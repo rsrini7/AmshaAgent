@@ -11,6 +11,7 @@ import com.amsha.core.channel.ChannelPluginRegistry;
 import com.amsha.core.pipeline.HandleResult;
 import com.amsha.core.pipeline.MessageContext;
 import com.amsha.core.pipeline.MessageHandler;
+import com.amsha.core.pipeline.TurnDispatchService;
 import com.amsha.core.pipeline.parsers.CommandParserRegistry;
 import com.amsha.core.reflex.ReflexRegistry;
 import com.amsha.core.reflex.ReflexResult;
@@ -77,6 +78,20 @@ public class CommandDispatchHandler implements MessageHandler {
                 }
                 case ChannelCommand.History _ -> {
                     dispatch(context, "/history");
+                    yield HandleResult.STOP;
+                }
+                case ChannelCommand.NewSession _ -> {
+                    dispatch(context, "/newsession");
+                    yield HandleResult.STOP;
+                }
+                case ChannelCommand.Sessions _ -> {
+                    dispatch(context, "/sessions");
+                    yield HandleResult.STOP;
+                }
+                case ChannelCommand.Resume resume -> {
+                    dispatch(
+                            context,
+                            resume.target().map(value -> "/resume " + value).orElse("/resume"));
                     yield HandleResult.STOP;
                 }
                 case ChannelCommand.Halt _ -> {
@@ -243,6 +258,7 @@ public class CommandDispatchHandler implements MessageHandler {
         if (result != null) {
             result.commandResponse().ifPresent(response -> {
                 if (response.isBlank()) return;
+                context.setData(TurnDispatchService.DATA_COMMAND_RESPONSE, response);
                 channelPluginRegistry
                         .find(context.getChannelType())
                         .map(ChannelPlugin::sender)

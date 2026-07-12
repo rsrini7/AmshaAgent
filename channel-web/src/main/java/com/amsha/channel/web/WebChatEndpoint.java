@@ -1,6 +1,7 @@
 package com.amsha.channel.web;
 
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.event.Observes;
 import jakarta.inject.Inject;
 import jakarta.json.Json;
 import jakarta.json.JsonObject;
@@ -19,6 +20,7 @@ import com.amsha.channel.api.ChannelMessage;
 import com.amsha.channel.api.ChannelServices;
 import com.amsha.channel.api.ChannelType;
 import com.amsha.channel.api.ChannelUser;
+import com.amsha.channel.api.session.SessionRotatedEvent;
 import com.amsha.common.util.LogUtil;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
@@ -239,5 +241,32 @@ public class WebChatEndpoint {
                 .add("platformId", platformId) // WebSocket connection reference
                 .build()
                 .toString();
+    }
+
+    void onSessionRotated(@Observes SessionRotatedEvent event) {
+        connections.forEach((connId, state) -> {
+            if (state.amshaSessionId().equals(event.oldSessionId())) {
+                ConnectionState updated =
+                        new ConnectionState(state.platformId(), event.newSessionId(), state.authenticated());
+                connections.put(connId, updated);
+                sessionStore.updateAmshaSession(state.platformId(), event.newSessionId());
+                log.infof(
+                        "WebSocket: rotated session for connId=%s %s → %s",
+                        connId, event.oldSessionId(), event.newSessionId());
+
+                sessionStore.get(state.platformId()).ifPresent(conn -> {
+                    conn.sendText(Json.createObjectBuilder()
+                                    .add("type", "session-rotated")
+                                    .add("sessionId", event.newSessionId())
+                                    .build()
+                                    .toString())
+                            .subscribe()
+                            .with(
+                                    v -> {},
+                                    err -> log.warnf(
+                                            "Failed to send session-rotated to %s: %s", conn.id(), err.getMessage()));
+                });
+            }
+        });
     }
 }

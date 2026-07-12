@@ -92,4 +92,13 @@ public class WebSocketSessionStore {
         platformToAmsha.clear();
         connIdToConnection.clear();
     }
+
+    public void updateAmshaSession(String platformId, String newAmshaSessionId) {
+        WebSocketConnection conn = platformToSession.get(platformId);
+        if (conn != null) {
+            connToAmshaSession.put(conn.id(), newAmshaSessionId);
+            connIdToConnection.put(conn.id(), conn);
+        }
+        platformToAmsha.put(platformId, newAmshaSessionId);
+    }
 }

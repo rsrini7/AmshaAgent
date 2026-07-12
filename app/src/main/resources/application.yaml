@@ -468,6 +468,8 @@ amsha:
   chat-memory:
     max-messages: ${AMSHA_CHAT_MEMORY_MAX_MESSAGES:20}
     retention-days: ${AMSHA_CHAT_MEMORY_RETENTION_DAYS:30}
+  session-catalog:
+    archive-after-days: ${AMSHA_SESSION_CATALOG_ARCHIVE_AFTER_DAYS:90}
   self-evolve:
     enabled: ${AMSHA_SELF_EVOLVE_ENABLED:false}
     backend: ${AMSHA_SELF_EVOLVE_BACKEND:sqlite}

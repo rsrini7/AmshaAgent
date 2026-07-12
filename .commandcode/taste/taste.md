@@ -12,4 +12,7 @@
 - Skip DB data migration documentation for the project — during active development, delete the data folder instead of running DB migrations. Confidence: 0.75
 
 # architecture
+- When adding a new BuiltInChannelCommand sealed permit, update all three locations: the permits clause, ChannelCommand.parse() switch, and CommandDispatchHandler.handle switch — and bump the count in ChannelContractTest. Confidence: 0.70
 - Never hardcode logic for specific skills — all skill-related code must be generic and extensible, not coupled to any single skill's behavior. Confidence: 0.80
+- All user-facing interfaces (CLI, REST, Telegram, WebSocket) must route through a single transport-neutral TurnDispatchService — no interface may bypass it with bespoke workflow logic. Confidence: 0.85
+- User-initiated adapters must not directly inject AgentLoop, ReasoningEngine, ReflexRegistry, or SkillAwareIntentDetector — they must call the TurnDispatchService dispatcher. Confidence: 0.80

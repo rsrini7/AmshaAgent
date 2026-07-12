@@ -4,6 +4,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
 import com.amsha.channel.api.ChannelType;
+import com.amsha.core.agent.role.AgentRoleEnum;
 import com.amsha.core.lifecycle.SessionHeartbeatTracker;
 import com.amsha.core.pipeline.HandleResult;
 import com.amsha.core.pipeline.MessageContext;
@@ -11,6 +12,8 @@ import com.amsha.core.pipeline.MessageHandler;
 import com.amsha.core.pipeline.SessionContext;
 import com.amsha.core.pipeline.SessionIdResolver;
 import com.amsha.core.security.AutonomyLevel;
+import com.amsha.core.security.InputSanitizer;
+import com.amsha.core.session.SessionCatalogService;
 import com.amsha.core.state.StatefulAgentStore;
 
 import org.jboss.logging.Logger;
@@ -30,21 +33,37 @@ public class SessionResolutionHandler implements MessageHandler {
     private final StatefulAgentStore agentStore;
     private final SessionHeartbeatTracker heartbeatTracker;
     private final SessionIdResolver sessionIdResolver;
+    private final SessionCatalogService sessionCatalogService;
+    private final InputSanitizer piiSanitizer;
 
     protected SessionResolutionHandler() {
         this.agentStore = null;
         this.heartbeatTracker = null;
         this.sessionIdResolver = null;
+        this.sessionCatalogService = null;
+        this.piiSanitizer = null;
     }
 
     @Inject
     public SessionResolutionHandler(
             StatefulAgentStore agentStore,
             SessionHeartbeatTracker heartbeatTracker,
-            SessionIdResolver sessionIdResolver) {
+            SessionIdResolver sessionIdResolver,
+            SessionCatalogService sessionCatalogService,
+            @InputSanitizer.PII InputSanitizer piiSanitizer) {
         this.agentStore = agentStore;
         this.heartbeatTracker = heartbeatTracker;
         this.sessionIdResolver = sessionIdResolver;
+        this.sessionCatalogService = sessionCatalogService;
+        this.piiSanitizer = piiSanitizer;
+    }
+
+    /** Compatibility constructor retained for focused unit tests. */
+    public SessionResolutionHandler(
+            StatefulAgentStore agentStore,
+            SessionHeartbeatTracker heartbeatTracker,
+            SessionIdResolver sessionIdResolver) {
+        this(agentStore, heartbeatTracker, sessionIdResolver, null, null);
     }
 
     @Override
@@ -58,9 +77,27 @@ public class SessionResolutionHandler implements MessageHandler {
         String userId = context.getUser().platformId();
         String channelType = context.getUser().channel().name();
 
-        String sessionId = sessionIdResolver.resolveOrCreate(channelType, channelId, userId);
+        // A synchronous adapter (CLI resume or REST session endpoint) may have
+        // already selected an owned session. Do not replace it with the channel
+        // mapping; mapped channels still use the resolver as before.
+        String sessionId = context.getSessionId()
+                .filter(id -> !id.isBlank())
+                .orElseGet(() -> sessionCatalogService != null
+                        ? sessionCatalogService.resolveOrCreateSession(channelType, channelId, userId)
+                        : sessionIdResolver.resolveOrCreate(channelType, channelId, userId));
 
         context.setSessionId(sessionId);
+        if (sessionCatalogService != null) {
+            String text = (context.getMessage() != null) ? context.getMessage().text() : null;
+            String sanitized = (text != null && piiSanitizer != null) ? piiSanitizer.sanitize(text) : text;
+            sessionCatalogService.touch(
+                    sessionId,
+                    userId,
+                    channelType,
+                    channelId,
+                    context.getAgentRole().orElse(AgentRoleEnum.COORDINATOR.toScopedName()),
+                    sanitized);
+        }
         log.debugf("Resolved session %s for [%s/%s/%s]", sessionId, channelType, channelId, userId);
 
         // Load stored autonomy level - three-tier resolution:

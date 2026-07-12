@@ -51,6 +51,12 @@ amsha:
     max-lookback-window: PT999H
       
 quarkus:
+  flyway:
+    # Explicitly enabled so the Flyway build step never vetoes @IfBuildProperty
+    # beans (e.g. HitlService). Migrations live in the persistence-sqlite
+    # dependency on the test classpath; pinning this prevents the ArchUnit
+    # test-discovery failure described in Ideas-Pending/BACKLOG.md (#8).
+    enabled: true
   arc:
     # Exclude channel impl beans from CDI during tests - their dependencies
     # (ChannelServices, ApprovalGateway) live in amsha-core which is a Quarkus

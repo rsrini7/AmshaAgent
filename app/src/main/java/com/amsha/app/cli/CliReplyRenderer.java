@@ -44,7 +44,13 @@ public class CliReplyRenderer implements ReplyRenderer {
     @Override
     public String renderInteraction(InteractionNode node) {
         if (node instanceof ApprovalPrompt ap) {
-            return "[Approval Required] Tool: " + ap.toolName();
+            String params = ap.paramsJson();
+            if (params != null && params.length() > 200) {
+                params = params.substring(0, 200) + "... [truncated]";
+            }
+            return "⏸ Approval needed for tool: " + ap.toolName()
+                    + "\n   Params: " + (params == null || params.isBlank() ? "(none)" : params)
+                    + "\n   Type /approve or /deny (or approve via REST/UI - result will appear automatically)";
         }
         return node.fallbackText();
     }

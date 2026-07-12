@@ -36,6 +36,8 @@ import com.amsha.persistence.api.CheckpointStorePort;
 import com.amsha.persistence.api.CronRunDto;
 import com.amsha.persistence.api.CronRunStorePort;
 import com.amsha.persistence.api.CronStorePort;
+import com.amsha.persistence.api.SessionCatalogEntry;
+import com.amsha.persistence.api.SessionCatalogStore;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
@@ -105,6 +107,9 @@ public class SessionReaper {
     @Inject
     AuditService auditService;
 
+    @Inject
+    SessionCatalogStore sessionCatalogStore;
+
     @ConfigProperty(name = "amsha.workspace.session-ttl-minutes", defaultValue = "30")
     long sessionTtlMinutes;
 
@@ -113,6 +118,9 @@ public class SessionReaper {
 
     @ConfigProperty(name = "amsha.chat-memory.retention-days", defaultValue = "30")
     long retentionDays;
+
+    @ConfigProperty(name = "amsha.session-catalog.archive-after-days", defaultValue = "90")
+    long archiveAfterDays;
 
     void onShutdown(@Observes ShutdownEvent event) {
         shuttingDown = true;
@@ -400,6 +408,29 @@ public class SessionReaper {
             checkpointStore.purgeOldChatHistory(cutoff);
         } catch (Exception e) {
             log.warnf("Failed to purge old chat history: %s", LogUtil.rootMessage(e));
+        }
+    }
+
+    @Scheduled(every = "24h", delayed = "PT15M")
+    public void archiveInactiveCatalogSessions() {
+        if (shuttingDown) return;
+
+        Instant cutoff = Instant.now().minus(Duration.ofDays(archiveAfterDays));
+        log.infof("Archiving session catalog entries inactive since %s", cutoff);
+
+        try {
+            List<SessionCatalogEntry> inactive = sessionCatalogStore.listInactiveBefore(cutoff);
+            for (var entry : inactive) {
+                try {
+                    sessionCatalogStore.archive(entry.sessionId());
+                    log.debugf("Archived catalog session %s", entry.sessionId());
+                } catch (Exception e) {
+                    log.warnf("Failed to archive catalog session %s: %s", entry.sessionId(), LogUtil.rootMessage(e));
+                }
+            }
+            log.infof("Catalog archive sweep: %d sessions archived", inactive.size());
+        } catch (Exception e) {
+            log.warnf("Failed to sweep catalog archive: %s", LogUtil.rootMessage(e));
         }
     }
 }
