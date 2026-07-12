@@ -46,21 +46,28 @@ See [docs/QUICK_START.md](./docs/QUICK_START.md) for detailed setup options.
 
 ## Key Capabilities
 
-- **ReAct agent loop** over Groq, OpenAI, OpenRouter, Ollama, Gemini, Claude, and more (10 providers)
+- **ReAct agent loop** across 11 LLM providers, with per-persona model routing and resilient multi-provider fallback
 - **12 specialist personas** with per-role tool schemas and Qute-rendered system prompts
 - **Realm-based grouped agents** — personas organized into 4 Lokas (Kailasa, Brahmaloka, Vaikunta, Loka-Bahir) with group leads that consult family members
 - **Agent delegation** — any role can delegate via `garuda`; capability-subset enforcement prevents privilege escalation
 - **Group consultation** — `mode='group_consult'` triggers parallel family huddle with virtual threads; dynamic group formation for cross-realm tasks
 - **Persona escalation** — auto-routes tasks when a persona hits its capability boundary; group-aware fallback prefers intra-realm routing
 - **Parallel tool execution** — N tool calls in one LLM turn, concurrent with Virtual Threads
-- **17 deterministic reflexes** — zero-token fast-path for commands, PII redaction, injection blocking, vault ops
+- **18 deterministic reflexes** — zero-token fast-path for commands, PII redaction, injection blocking, vault ops
+- **Human-in-the-loop and budget governance** — approval checkpoints, autonomy controls, durable resume/recovery, and per-session spend limits
+- **Durable scheduling** — cron-backed agent tasks with execution history and bounded concurrent dispatch
 - **Hexagonal persistence** — SQLite (default), PostgreSQL, or filesystem; swappable without core changes
 - **Podman rootless sandbox** for code execution (Python, Java, Go, Node, Bash)
+- **Browser and web tools** — optional Playwright automation, lightweight web fetch, and Brave/Serper real-time search
 - **AES-256-GCM-SIV vault** with Argon2id key derivation — secrets never stored in plaintext
 - **Tamper-evident HMAC audit chain** — every action logged as append-only, verifiable record
-- **Two-tier RAG memory** — FTS5 keyword + sqlite-vec embeddings merged via Reciprocal Rank Fusion
+- **MemGPT-style three-tier memory** — prompt-injected Core context, exact-turn Recall history, and semantic Archival knowledge; retrieval combines FTS5 and sqlite-vec with Reciprocal Rank Fusion
+- **Document ingestion** — add knowledge to the RAG store for retrieval in future agent turns
+- **Extensible Skills system** — YAML/Markdown custom roles from database, classpath, or SkillsJars with hot reload and optional adaptive execution
+- **Behavioral self-evolution** — opt-in trace capture, pattern extraction, and reviewed directives that improve future interactions
 - **MCP integration** — both inbound MCP server and outbound MCP client for dynamic tool loading; discovered tools default to the network bulkhead and can be categorized at registration
 - **Multi-channel** — REST API, CLI REPL, Telegram bot, WebSocket web UI, one-shot `ask` mode
+- **Guided setup and observability** — onboarding wizard, encrypted provider settings, OpenTelemetry tracing, SSE status updates, and web management panels
 
 ---
 
@@ -75,7 +82,8 @@ See [docs/QUICK_START.md](./docs/QUICK_START.md) for detailed setup options.
 | `persistence-*/` | Hexagonal persistence: API ports + SQLite / PostgreSQL / FS adapters |
 | `channel-*/` | Channel adapters: Telegram, WebSocket |
 | `ui/` | Lit 3.x + TypeScript web frontend |
-| `mcp/`, `rag/`, `tool-playwright/`, `self-evolve/` | Optional runtime and self-evolution modules |
+| `mcp/`, `rag/`, `tool-playwright/`, `self-evolve/` | Optional runtime modules for MCP, retrieval, browser automation, and self-evolution |
+| `onboarding/` | Guided provider, credential, prompt, and MCP setup wizard |
 
 ---
 
@@ -162,6 +170,8 @@ Set `AMSHA_UI_SKIP_ONBOARDING=true` if you want the web UI to skip the setup wiz
 |-----|---------------|
 | [QUICK_START.md](./docs/QUICK_START.md) | Dev mode, packaged JAR, native image, Docker Compose |
 | [SETUP.md](./docs/SETUP.md) | Manual setup, prerequisites, OS-specific, troubleshooting |
+| [MANUAL_SETUP.md](./docs/MANUAL_SETUP.md) | Detailed configuration and optional dependency setup |
+| [MISE_SETUP.md](./docs/MISE_SETUP.md) | Mise-based development environment and task automation |
 | [CONFIGURATION.md](./docs/CONFIGURATION.md) | All environment variables reference |
 
 ### 🏗️ Architecture
@@ -201,4 +211,4 @@ Set `AMSHA_UI_SKIP_ONBOARDING=true` if you want the web UI to skip the setup wiz
 
 ---
 
-> **Last updated**: Amsha Agent V0.1.0 · Quarkus 3.27.2 · JDK 25 · 17 modules · 21 tools · 17 reflexes · 11 LLM providers
+> **Last updated**: Amsha Agent V0.1.0 · Quarkus 3.27.2 · JDK 25 · 18 modules · 21 tools · 18 reflexes · 11 LLM providers

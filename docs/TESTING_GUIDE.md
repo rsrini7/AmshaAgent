@@ -151,7 +151,7 @@ All HTTP test files live in `rest-http/`. See [rest-http/README.md](../rest-http
 | `01_system_health.http` | Liveness, readiness, metrics, SQLite smoke, observability stack |
 | `02_auth_security.http` | API key auth, public bypasses, rate limiting, key isolation |
 | `03_session_lifecycle.http` | Session CRUD, sync/async run, multi-turn memory, isolation |
-| `04_agent_roles.http` | All 6 roles + deity aliases, tool schema structural guarantees |
+| `04_agent_roles.http` | All 12 roles + deity aliases, tool schema structural guarantees |
 | `05_hitl_governance.http` | HITL approve/deny (REST + goal-string), timeout flow |
 | `06_reflex_commands.http` | All reflexes: /status /reset /halt /history /crons /skills /mcp store |
 | `07_pii_prompt_injection.http` | PII redaction (8 types), store bypass, injection blocking (4 categories) |
@@ -2284,4 +2284,4 @@ For `AMSHA_VAULT_PEPPER` and `AMSHA_AUDIT_HMAC_KEY`, use stable 32+ character va
 
 ---
 
-*Last updated: Amsha Agent V0.1.0 · Quarkus 3.27.2 · JDK 25 · 1664 tests · 17 modules · 15 tools · 10 LLM providers · Tiered Memory · Answer Quality Guard*
+*Last updated: Amsha Agent V0.1.0 · Quarkus 3.27.2 · JDK 25 · 1664 tests · 18 modules · 21 tools · 11 LLM providers · Tiered Memory · Answer Quality Guard*

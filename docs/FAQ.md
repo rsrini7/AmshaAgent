@@ -28,9 +28,10 @@
 
 ### Q: Why is Amsha Agent structured as a multi-module Maven reactor instead of a single application?
 
-The reactor enforces strict architectural separation that prevents accidental dependency creep. The 17 modules are:
+The reactor enforces strict architectural separation that prevents accidental dependency creep. The 18 modules are:
 
 - **`amsha-channel-api`** - Channel SPI contracts (6 interfaces: `ChannelPlugin`, `ChannelSender`, `ReplyRenderer`, `ChannelAllowlist`, `ChannelJobNotifier`, `ChannelDaemon`) plus structured output types. Zero implementation — allows `amsha-core` to reference channel concepts without coupling to any specific adapter.
+- **`amsha-common`** - Shared utilities and cross-module constants.
 - **`amsha-persistence-api`** - Hexagonal architecture port interfaces (`CheckpointStorePort`, `ChatMemoryStorePort`, `CronStorePort`, `SecretStorePort`, `SkillStorePort`, `AuditEventStorePort`, `AuditSchemaPort`, `CompactionStorePort`, `MemoryRetrievalPort`, `AdvisoryLockPort`, `PersistenceAdapterPort`). Core depends on ports, not implementations.
 - **`amsha-persistence-common`** - Shared JDBI records/DTOs and `SessionKnowledgeBase` (in-memory embedding store) used by all persistence adapters.
 - **`amsha-core`** - Agent runtime kernel. Domain logic, tools, reflexes, governance, sandbox, pipeline, and CDI interfaces. Has zero awareness of REST, Telegram, or CLI.
@@ -43,6 +44,7 @@ The reactor enforces strict architectural separation that prevents accidental de
 - **`amsha-channel-web`** - WebSocket-based web channel. Can be excluded for Telegram-only or API-only deployments.
 - **`amsha-channel-telegram`** - Full Telegram channel implementation with its own test suite. Can be excluded for non-Telegram deployments.
 - **`amsha-tool-playwright`** - Playwright browser automation tool. Optional; requires Playwright CLI binary.
+- **`amsha-self-evolve`** - Optional trace capture, pattern extraction, and behavioral-directive synthesis.
 - **`amsha-deployment`** - Quarkus build-time processors. Contains the `@BuildStep` logic that wires up `@WorkspaceScoped`, `AgentFunctionProcessor`, `RestResourceBuildStep`, MCP build steps, and RAG resource steps.
 - **`ui`** - Frontend (Lit 3.x Web Components + TypeScript + Vite). No Java source; excluded from Maven build.
 - **`amsha-app`** - the entry point. Owns all application-layer concerns: REST resources, Telegram routes, CLI commands, scheduler, security filters. It depends on all other modules but **no module depends on `amsha-app`**.
@@ -57,7 +59,7 @@ Amsha Agent relies on `StatefulAgentStore` to checkpoint the LLM's `ReasoningSte
 
 1. **Zero-latency:** Writing to a local SQLite file avoids network round-trips during the high-speed Agent Loop. Each checkpoint is a single write; adding a network hop would double iteration latency.
 2. **Concurrency:** SQLite's WAL (Write-Ahead Logging) mode allows concurrent readers while a single writer commits. Amsha Agent's `AsyncPersistenceEngine` serializes all writes through a `LinkedBlockingQueue` backed by a single virtual thread, eliminating WAL contention entirely.
-3. **Portability:** Amsha Agent deploys as a single, self-contained binary (118 MB) with no external service dependencies. A PostgreSQL sidecar would eliminate that advantage.
+3. **Portability:** Amsha Agent deploys as a single, self-contained native binary with no external service dependencies. A PostgreSQL sidecar would eliminate that advantage.
 
 The dual-database design (`amsha-meta.db` for structured state, `amsha-fts.db` for FTS5 full-text search) keeps the schema clean and prevents FTS index operations from locking the primary checkpoint tables.
 
