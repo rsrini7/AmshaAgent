@@ -1,7 +1,6 @@
 package com.amsha.core.event;
 
 import com.amsha.channel.api.hitl.ApprovalDecisionEvent;
-import com.amsha.channel.api.session.SessionRotatedEvent;
 import com.amsha.core.agent.event.AgentStateChangedEvent;
 import com.amsha.core.compaction.CompactionRequest;
 import com.amsha.core.config.ConfigurationChangedEvent;
@@ -9,6 +8,7 @@ import com.amsha.core.cron.AgentJobCompleted;
 import com.amsha.core.cron.CronTaskScheduled;
 import com.amsha.core.lifecycle.ApprovalTimedOutEvent;
 import com.amsha.core.persistence.PersistenceEvent;
+import com.amsha.core.session.SessionRotatedEvent;
 import com.amsha.core.tools.CheckListEvent;
 
 /**

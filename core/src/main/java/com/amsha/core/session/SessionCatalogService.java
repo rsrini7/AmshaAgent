@@ -9,7 +9,6 @@ import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
 
-import com.amsha.channel.api.session.SessionRotatedEvent;
 import com.amsha.core.event.DomainEventBus;
 import com.amsha.core.event.EventTypeCatalog;
 import com.amsha.core.lifecycle.SessionHeartbeatTracker;

@@ -25,6 +25,7 @@ public class ResumeReflex implements AgentReflex {
         if (target.matches("\\d+")) {
             int sequence = Integer.parseInt(target);
             target = sessions.listScoped(userId, channelType, channelId).stream()
+                    .filter(e -> !"ARCHIVED".equals(e.status()))
                     .filter(e -> e.seq() == sequence)
                     .findFirst()
                     .map(e -> e.sessionId())

@@ -667,7 +667,7 @@ calls `AgentLoop.run()` directly, because it runs inside a scheduled
 
 The application manages durable session mappings using the **Session Catalog**. 
 
-* **Legacy Session Lookup:** `SessionRegistry.resolveOrCreate(channelType, channelId, userId)` maps the scope triple to a stable `sessionId` stored in the legacy `session_registry` table with fallbacks for case-insensitive lookup (normalizing channel names like `CLI` and `TELEGRAM`).
+* **Legacy Session Lookup:** `SessionRegistry.resolveOrCreate(channelType, channelId, userId)` is used only when a scope has no catalog entry, preserving and lazily migrating legacy `session_registry` mappings. New catalog-created sessions do not write this table. The lookup supports case-insensitive legacy channel names such as `CLI` and `TELEGRAM`.
 * **Session Catalog:** The `SessionCatalogStore` maps `(ownerKey, channelType, channelId)` to a sequence of `SessionCatalogEntry` records. Every session (CLI, Telegram, Web, REST) is "catalogued from birth" as either `ACTIVE`, `INACTIVE`, or `ARCHIVED`.
 * **Atomic Session Rotation:** Users can rotate their active session (e.g. via `/newsession`). The `SessionCatalogService.rotate()` operation atomically:
   1. Deactivates siblings and activates a new session in the persistent store.

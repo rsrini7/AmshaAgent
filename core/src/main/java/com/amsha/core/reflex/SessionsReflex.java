@@ -19,8 +19,15 @@ public class SessionsReflex implements AgentReflex {
 
     @Override
     public ReflexResult execute(String sessionId, String userId, String chatId, String input, MessageContext context) {
-        var entries = sessions.listScoped(
-                userId, context.getUser().channel().id(), context.getUser().channelId());
+        var entries =
+                sessions
+                        .listScoped(
+                                userId,
+                                context.getUser().channel().id(),
+                                context.getUser().channelId())
+                        .stream()
+                        .filter(e -> !"ARCHIVED".equals(e.status()))
+                        .toList();
         if (entries.isEmpty()) return ReflexResult.respond("No saved sessions.", context);
         String reply = entries.stream()
                 .map(e -> "%d. %s %s — %s"

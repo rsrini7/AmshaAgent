@@ -4,6 +4,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
 import com.amsha.channel.api.ChannelType;
+import com.amsha.core.agent.role.AgentRoleEnum;
 import com.amsha.core.lifecycle.SessionHeartbeatTracker;
 import com.amsha.core.pipeline.HandleResult;
 import com.amsha.core.pipeline.MessageContext;
@@ -89,7 +90,13 @@ public class SessionResolutionHandler implements MessageHandler {
         if (sessionCatalogService != null) {
             String text = (context.getMessage() != null) ? context.getMessage().text() : null;
             String sanitized = (text != null && piiSanitizer != null) ? piiSanitizer.sanitize(text) : text;
-            sessionCatalogService.touch(sessionId, userId, channelType, channelId, null, sanitized);
+            sessionCatalogService.touch(
+                    sessionId,
+                    userId,
+                    channelType,
+                    channelId,
+                    context.getAgentRole().orElse(AgentRoleEnum.COORDINATOR.toScopedName()),
+                    sanitized);
         }
         log.debugf("Resolved session %s for [%s/%s/%s]", sessionId, channelType, channelId, userId);
 
