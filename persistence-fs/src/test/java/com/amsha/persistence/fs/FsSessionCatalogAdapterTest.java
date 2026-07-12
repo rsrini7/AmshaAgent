@@ -66,7 +66,6 @@ class FsSessionCatalogAdapterTest {
 
         adapter.activateNew(entry("new-sess", true, "ACTIVE", 0));
 
-        @SuppressWarnings("unchecked")
         ArgumentCaptor<SessionCatalogEntry> captor = ArgumentCaptor.forClass(SessionCatalogEntry.class);
         verify(store, times(2)).write(any(), captor.capture());
         List<SessionCatalogEntry> written = captor.getAllValues();
@@ -90,7 +89,6 @@ class FsSessionCatalogAdapterTest {
 
         adapter.archive("sess-1");
 
-        @SuppressWarnings("unchecked")
         ArgumentCaptor<SessionCatalogEntry> captor = ArgumentCaptor.forClass(SessionCatalogEntry.class);
         verify(store).write(any(), captor.capture());
 
@@ -157,7 +155,6 @@ class FsSessionCatalogAdapterTest {
 
         adapter.activateNew(entry("sess-1", true, "ACTIVE", 0));
 
-        @SuppressWarnings("unchecked")
         ArgumentCaptor<SessionCatalogEntry> captor = ArgumentCaptor.forClass(SessionCatalogEntry.class);
         verify(store).write(any(), captor.capture());
         assertEquals(1, captor.getValue().seq());

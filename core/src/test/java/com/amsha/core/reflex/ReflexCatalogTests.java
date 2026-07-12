@@ -113,6 +113,7 @@ class ReflexCatalogTests {
 
         ReflexResult result = reflex.execute("sess-1", "user-1", "chat-1", "/resume 3", ctx);
 
+        assertTrue(result.commandResponse().isPresent());
         assertEquals(Optional.of("sess-3"), ctx.getSessionId());
         verify(catalog).resume("sess-3", "user-1", "cli", "chat-1");
     }
