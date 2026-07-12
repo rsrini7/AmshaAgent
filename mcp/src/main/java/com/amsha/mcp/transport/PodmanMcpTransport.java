@@ -180,7 +180,7 @@ public class PodmanMcpTransport {
                         tool.has("inputSchema") ? tool.get("inputSchema").toString() : "{}";
 
                 DynamicToolCapability cap = new DynamicToolCapability(
-                        name, desc, config.serverName(), McpTransportType.STDIO, false, schema);
+                        name, desc, config.serverName(), McpTransportType.STDIO, false, schema, config.category());
                 registry.register(cap);
             }
         }

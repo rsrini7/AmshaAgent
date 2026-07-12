@@ -2,6 +2,8 @@ package com.amsha.mcp.tool;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import com.amsha.core.tools.ToolCategory;
+
 import org.junit.jupiter.api.Test;
 
 class DynamicToolCapabilityTest {
@@ -16,6 +18,15 @@ class DynamicToolCapabilityTest {
         assertEquals(McpTransportType.STDIO, capability.transport());
         assertFalse(capability.requiresApproval());
         assertEquals("{}", capability.inputSchema());
+        assertEquals(ToolCategory.NETWORK, capability.category());
+    }
+
+    @Test
+    void testExplicitCategory() {
+        DynamicToolCapability capability = new DynamicToolCapability(
+                "query", "desc", "server", McpTransportType.HTTP_SSE, false, "{}", ToolCategory.DATABASE);
+
+        assertEquals(ToolCategory.DATABASE, capability.category());
     }
 
     @Test
@@ -44,5 +55,12 @@ class DynamicToolCapabilityTest {
         assertThrows(
                 NullPointerException.class,
                 () -> new DynamicToolCapability("tool", "desc", "server", null, false, "{}"));
+    }
+
+    @Test
+    void testNullCategory() {
+        assertThrows(
+                NullPointerException.class,
+                () -> new DynamicToolCapability("tool", "desc", "server", McpTransportType.STDIO, false, "{}", null));
     }
 }

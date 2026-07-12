@@ -1087,6 +1087,16 @@ After connecting a server via REST (`POST /api/v1/mcp/connect`), the dynamic too
 available to the agent. The coordinator can invoke them naturally without needing to know
 they are remote.
 
+To register a server directly through chat and choose its execution bulkhead, send a request such as:
+
+```
+Register the HTTP MCP server named reporting at http://localhost:3000/mcp with category DATABASE.
+```
+
+Approve the registration. Valid categories are `NETWORK`, `COMPUTE`, `DATABASE`, and
+`INTERNAL`; omitted category defaults discovered tools to `NETWORK`. Verify the assigned
+category through `GET /api/v1/mcp/tools` (see the MCP API testing guide).
+
 **Test after connecting self (see 12_mcp.http):**
 ```
 List all GitHub repositories for user rsrini7.

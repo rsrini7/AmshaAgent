@@ -6,6 +6,8 @@ import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
+import com.amsha.core.tools.ToolCategory;
+
 /**
  * Metadata for auto-registering a tool's capability and default role grants.
  * <p>
@@ -32,4 +34,7 @@ public @interface ToolMetadata {
      * should be granted this capability by default.
      */
     String[] defaultRoles() default {};
+
+    /** Execution bulkhead category. INTERNAL preserves existing behavior. */
+    ToolCategory category() default ToolCategory.INTERNAL;
 }

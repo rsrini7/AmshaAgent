@@ -28,6 +28,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.ReentrantLock;
 
 import com.amsha.common.util.LogUtil;
+import com.amsha.core.tools.ToolCategory;
 import com.amsha.mcp.tool.DynamicToolCapability;
 import com.amsha.mcp.tool.DynamicToolCapabilityRegistry;
 import com.amsha.mcp.tool.McpTransportType;
@@ -91,7 +92,7 @@ public class McpClientService {
     @ConfigProperty(name = "amsha.mcp.health-check-interval-ms", defaultValue = "15000")
     long healthCheckIntervalMs;
 
-    private record StdioConfig(String command, List<String> args, Map<String, String> env) {}
+    private record StdioConfig(String command, List<String> args, Map<String, String> env, ToolCategory category) {}
 
     @PostConstruct
     void init() {
@@ -124,7 +125,7 @@ public class McpClientService {
                     lock.lock();
                     try {
                         cleanupStdio(serverName);
-                        connectStdio(serverName, cfg.command(), cfg.args(), cfg.env());
+                        connectStdio(serverName, cfg.command(), cfg.args(), cfg.env(), cfg.category());
                     } catch (Exception e) {
                         log.errorf("Health check reconnect failed for %s: %s", serverName, LogUtil.rootMessage(e));
                     } finally {
@@ -141,6 +142,10 @@ public class McpClientService {
     @Retry(maxRetries = 2, delay = 500)
     @CircuitBreaker(requestVolumeThreshold = 5, failureRatio = 0.6, delay = 30000)
     public void connect(String serverName, String serverUrl) {
+        connect(serverName, serverUrl, ToolCategory.NETWORK);
+    }
+
+    public void connect(String serverName, String serverUrl, ToolCategory category) {
         serverUrls.put(serverName, serverUrl);
         try {
             ObjectNode initParams = createInitParams();
@@ -171,7 +176,7 @@ public class McpClientService {
                         "MCP tools/list failed [" + toolsResp.statusCode() + "] for: " + serverName);
             }
             JsonNode payload = objectMapper.readTree(toolsResp.body());
-            registerTools(serverName, payload.path("result"), McpTransportType.HTTP_SSE);
+            registerTools(serverName, payload.path("result"), McpTransportType.HTTP_SSE, category);
 
             log.infof(
                     "Connected to HTTP/SSE MCP server '%s', registered tools: %d",
@@ -198,7 +203,12 @@ public class McpClientService {
      * Starts a sub-process and performs the MCP handshake over its stdin/stdout.
      */
     public void connectStdio(String serverName, String command, List<String> args, Map<String, String> env) {
-        stdioConfigs.put(serverName, new StdioConfig(command, args, env));
+        connectStdio(serverName, command, args, env, ToolCategory.NETWORK);
+    }
+
+    public void connectStdio(
+            String serverName, String command, List<String> args, Map<String, String> env, ToolCategory category) {
+        stdioConfigs.put(serverName, new StdioConfig(command, args, env, category));
         try {
             ProcessBuilder pb = new ProcessBuilder();
             List<String> fullCmd = new ArrayList<>();
@@ -224,7 +234,7 @@ public class McpClientService {
 
             // 3. List tools
             JsonNode toolsResult = sendRequestStdio(serverName, "tools/list", objectMapper.createObjectNode());
-            registerTools(serverName, toolsResult, McpTransportType.STDIO);
+            registerTools(serverName, toolsResult, McpTransportType.STDIO, category);
 
             log.infof(
                     "Connected to STDIO MCP server '%s', registered tools: %d",
@@ -277,7 +287,7 @@ public class McpClientService {
                 if (!processes.containsKey(serverName) && stdioConfigs.containsKey(serverName)) {
                     log.infof("reconnecting dead MCP server: %s", serverName);
                     StdioConfig cfg = stdioConfigs.get(serverName);
-                    connectStdio(serverName, cfg.command(), cfg.args(), cfg.env());
+                    connectStdio(serverName, cfg.command(), cfg.args(), cfg.env(), cfg.category());
                 }
             } finally {
                 lock.unlock();
@@ -374,14 +384,14 @@ public class McpClientService {
         httpClient.send(req.build(), HttpResponse.BodyHandlers.discarding());
     }
 
-    private void registerTools(String serverName, JsonNode result, McpTransportType transport) {
+    private void registerTools(String serverName, JsonNode result, McpTransportType transport, ToolCategory category) {
         JsonNode tools = result.path("tools");
         if (!tools.isArray()) return;
         for (JsonNode tool : tools) {
             String name = tool.path("name").asText();
             String desc = tool.path("description").asText("");
             String schema = tool.has("inputSchema") ? tool.path("inputSchema").toString() : "{}";
-            registry.register(new DynamicToolCapability(name, desc, serverName, transport, false, schema));
+            registry.register(new DynamicToolCapability(name, desc, serverName, transport, false, schema, category));
         }
     }
 

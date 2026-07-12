@@ -41,6 +41,9 @@ public class ToolContractExporter {
     @Inject
     ToolDiscoveryService discoveryService;
 
+    @Inject
+    ToolCategoryMapper categoryMapper;
+
     @ConfigProperty(name = "amsha.data-dir", defaultValue = "./data")
     String dataDir;
 
@@ -78,6 +81,7 @@ public class ToolContractExporter {
         Map<String, Object> contract = new LinkedHashMap<>();
         contract.put("name", tool.name());
         contract.put("description", tool.description());
+        contract.put("category", categoryMapper.categoryFor(tool.name()).name());
 
         // @ToolMetadata annotation
         ToolMetadata meta = findAnnotation(tool.getClass(), ToolMetadata.class);

@@ -879,7 +879,30 @@ curl -s http://localhost:8080/api/v1/mcp/tools \
   -H "X-Amsha-API-Key: key-internal-changeme" | jq .registeredDynamicTools
 ```
 
-**Expect:** Array with `mcpServerName:"self"` and `transport:"HTTP_SSE"`.
+**Expect:** Array with `mcpServerName:"self"`, `transport:"HTTP_SSE"`, and
+`category:"NETWORK"`. `NETWORK` is the default for discovered MCP tools.
+
+### 9.6.1 Register a categorized MCP server through chat
+
+Ask the agent to register a reachable MCP server, for example:
+
+```
+Register the HTTP MCP server named reporting at http://localhost:3000/mcp with category DATABASE.
+```
+
+Approve the resulting `register_mcp_server` request. Registration always requires
+human approval. The permitted categories are `NETWORK`, `COMPUTE`, `DATABASE`,
+and `INTERNAL`; omitting the category selects `NETWORK`.
+
+Then inspect the registered tools:
+
+```bash
+curl -s http://localhost:8080/api/v1/mcp/tools \
+  -H "X-Amsha-API-Key: key-internal-changeme" | jq .registeredDynamicTools
+```
+
+**Expect:** Every tool discovered from `reporting` has `category:"DATABASE"`.
+An invalid category, such as `FAST`, is rejected with a validation error.
 
 ---
 

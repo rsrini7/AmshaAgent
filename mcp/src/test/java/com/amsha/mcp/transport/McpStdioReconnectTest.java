@@ -15,6 +15,7 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Stream;
 
+import com.amsha.core.tools.ToolCategory;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.eclipse.microprofile.context.ManagedExecutor;
@@ -70,7 +71,7 @@ public class McpStdioReconnectTest {
         McpClientService spyService = Mockito.spy(service);
         // We can't really call the real connectStdio in a unit test easily as it starts a process
         // but we want to verify it's CALLED.
-        doNothing().when(spyService).connectStdio(anyString(), anyString(), anyList(), anyMap());
+        doNothing().when(spyService).connectStdio(anyString(), anyString(), anyList(), anyMap(), any());
 
         // 3. Invoke. First attempt fails due to EOF in sendRequestStdio.
         // cleanupStdio(serverName) is called.
@@ -93,7 +94,7 @@ public class McpStdioReconnectTest {
         Class<?> configClass = Class.forName("com.amsha.mcp.transport.McpClientService$StdioConfig");
         var ctor = configClass.getDeclaredConstructors()[0];
         ctor.setAccessible(true);
-        return ctor.newInstance(cmd, args, env);
+        return ctor.newInstance(cmd, args, env, ToolCategory.NETWORK);
     }
 
     private void setPrivateField(Object target, String fieldName, Object value) throws Exception {
