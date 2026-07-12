@@ -10,3 +10,6 @@
 
 # workflow
 - Skip DB data migration documentation for the project — during active development, delete the data folder instead of running DB migrations. Confidence: 0.75
+
+# architecture
+- Never hardcode logic for specific skills — all skill-related code must be generic and extensible, not coupled to any single skill's behavior. Confidence: 0.80

@@ -231,11 +231,12 @@ The LLM can request multiple tools in one step. Parallel batches:
 
 ### Agent-Loop Guards & Safety
 
-Three cooperative guards protect the loop from runaway execution and context flooding:
+Four cooperative guards protect the loop from runaway execution and context flooding:
 
 - **`PreflightState`** (runner state, runs at loop entry) — checks the global iteration budget via `WorkspaceContext.incrementAndCheckGlobalIterations()` before each iteration; exceeding it terminates the session as `FAILED`/`LOOP_EXCEEDED`. Also halts on `WorkspaceManager.isSessionHalted()` or `AgentGuards.isShuttingDown()`. See `AGENTS.md` §1.18.
 - **`LoopStuckDetector`** — stateless inspects recent `ReasoningStep[]` history; injects a corrective hint when the agent repeats non-progressing tool calls. Thresholds: 2 identical tool-input repeats, or 3 read-only-only repeats (`cat`, `grep`, `ls`, …). Hints derive from the actual repeated input (no hard-coded skill paths).
 - **`HtmlArtifactTransformer`** (`ObservationTransformer`, priority 40) — collapses generated HTML artifacts from `host_exec`/`sandbox_exec` output into a short browser-preview notice via `HtmlArtifactUtil.collapseHtmlArtifact()`. The HTML is mirrored to a browser-preview target (see `HostExecTool` `BROWSER_PREVIEW_GOAL_PATTERN`) rather than echoed into chat. Disabling it floods the context window and breaks the FINISH flow. See `AGENTS.md` §1.19.
+- **`ToolStepValidator`** — validates tool calls against role constraints before governance/HITL. Enforces coordinator-GitHub redirect, react-keyword detection, and delegates to `AgentTool.validateParameters()` for tool-specific input validation (e.g., `SandboxExecTool` requires `language` parameter). See `AGENTS.md` §1.18.
 
 ### Browser Preview (HostExec)
 
@@ -556,7 +557,7 @@ Roles with `requiresApproval=false` in their `RoleDefinition` skip non-sensitive
 | Mode | Command | Behaviour |
 |---|---|---|
 | `ask` | `ask "goal" --role coordinator` | One-shot: run agent, print answer, exit |
-| `chat` | `chat` | Interactive REPL with full multi-turn memory |
+| `chat` | `chat [--role <role>] [--session-id <uuid>]` | Interactive REPL with full multi-turn memory. `--session-id` resumes an existing persisted session. |
 | `serve` | `serve` | Long-running REST daemon on port 8080 |
 | `attach` | `attach telegram` | Long-running daemon with channel adapters |
 
@@ -634,7 +635,7 @@ Four leaf subcommands all converge on `AgentLoop.run()`:
 |---|---|---|
 | `serve` | `amsha serve` | Quarkus HTTP server on port 8080; Telegram route self-registers via `@StartupEvent` |
 | `ask` | `amsha ask "goal"` | UUID session → `AgentLoop.run()` → print answer → terminate |
-| `chat` | `amsha chat` | Interactive REPL; input passes through `ReflexRegistry.processIfReflex()` first |
+| `chat` | `amsha chat [--role <role>] [--session-id <uuid>]` | Interactive REPL; input passes through `ReflexRegistry.processIfReflex()` first. `--session-id` resumes an existing persisted session. |
 | `attach` | `amsha attach <channel>` | Discovers matching `ChannelDaemon` CDI bean by `channelId()` → `daemon.start()` |
 
 ---

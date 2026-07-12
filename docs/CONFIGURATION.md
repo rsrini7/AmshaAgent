@@ -19,6 +19,7 @@ Generate secrets: `openssl rand -base64 32` (Linux/macOS) or `[Convert]::ToBase6
 | `AMSHA_LLM_CONTEXT_WINDOW` | `128000` | Context window size (tokens) |
 | `AMSHA_LLM_LOG_HTTP` | `false` | Enable HTTP-level logging for LLM calls |
 | `AMSHA_LLM_COMPACT_PROMPT_ENABLED` | `false` | Use compact prompt format |
+| `AMSHA_LLM_COMPACT_PROMPT_MAX_CHARS` | `32000` | Max chars for compact prompt format |
 | `AMSHA_LLM_STRUCTURED_OUTPUT_MODE` | `NATIVE` | Structured output mode: `NATIVE`, `STRICT`, `LENIENT`, `PROMPT_DIRECTIVE`. `PROMPT_DIRECTIVE` forces JSON-only instructions (use when provider rejects native JSON mode with tools) |
 | `AMSHA_LLM_VAULT_PRIORITY` | `false` | Vault operations get priority LLM access |
 | `AMSHA_LLM_CIRCUIT_BREAKER_ENABLED` | `true` | Enable per-model circuit breaker isolation |
@@ -331,6 +332,8 @@ schema) and must match the model used by every active provider.
 | `AMSHA_TOOLS_HOST_EXEC_SKILLS` | `jdb-debugger` | Skills allowed to use host_exec tool (comma-separated) |
 | `AMSHA_HOST_EXEC_MAX_OUTPUT_CHARS` | `8192` | Max output chars for host_exec tool (falls back to sandbox max) |
 | `AMSHA_HOST_EXEC_PYTHON_EXECUTABLE` | — | Python executable path for host_exec (falls back to sandbox python) |
+| `AMSHA_HOST_EXEC_JAVA_EXECUTABLE` | — | Java executable path for host_exec |
+| `AMSHA_HOST_EXEC_GO_EXECUTABLE` | — | Go executable path for host_exec |
 
 ## Skills & SkillsJars
 
@@ -410,19 +413,6 @@ schema) and must match the model used by every active provider.
 | `AMSHA_PHOENIX_ENDPOINT` | `http://localhost:4318/v1/traces` | Phoenix OTLP HTTP endpoint |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | `http://localhost:4317` | OpenTelemetry collector endpoint |
 | `OTEL_SDK_DISABLED` | `false` | Disable OpenTelemetry SDK |
-
-## Self Evolution
-
-| Variable | Default | Description |
-|---|---|---|
-| `AMSHA_SELF_EVOLVE_ENABLED` | `false` | Enable self-evolution system |
-| `AMSHA_SELF_EVOLVE_BACKEND` | `sqlite` | Self-evolution storage backend |
-| `AMSHA_SELF_EVOLVE_BUFFER_SIZE` | `50` | Self-evolution buffer size |
-| `AMSHA_SELF_EVOLVE_DEFAULT_SEARCH_LIMIT` | `8` | Self-evolution default search limit |
-| `AMSHA_SELF_EVOLVE_DIRECTIVES_ENABLED` | `true` | Enable self-evolution directives |
-| `AMSHA_SELF_EVOLVE_FLUSH_IDLE_MS` | `300000` | Self-evolution flush idle (ms) |
-| `AMSHA_SELF_EVOLVE_FLUSH_MAX_EVENTS` | `12` | Self-evolution max events per flush |
-| `AMSHA_SELF_EVOLVE_SYNTHESIS_TRIGGER` | `manual` | Self-evolution synthesis trigger |
 
 ## Retry
 

@@ -96,7 +96,7 @@ Standard CDI scopes (`@RequestScoped`, `@SessionScoped`) are tied to HTTP lifecy
 | Mode | Command | Behaviour |
 |---|---|---|
 | `ask` | `ask "goal" --role coordinator` | One-shot: run agent, print answer, exit. Ideal for CI/CD scripts. |
-| `chat` | `chat` | Interactive REPL with full multi-turn memory, all reflexes, and HITL approval. |
+| `chat` | `chat [--role <role>] [--session-id <uuid>]` | Interactive REPL with full multi-turn memory, all reflexes, and HITL approval. `--session-id` resumes an existing persisted session. |
 | `serve` | `serve` | Long-running REST daemon on port 8080. No channel adapters; for direct API access. |
 | `attach` | `attach telegram` | Long-running daemon with channel adapters active. Cron scheduler runs in this mode. |
 
@@ -699,7 +699,7 @@ The entire reflex system, skill routing, intent classification, session routing,
 
 ### Q: How does session continuity work across Telegram bot restarts?
 
-Sessions are identified using `UUID.nameUUIDFromBytes(chatId + ":" + userId)`. This is a **deterministic** UUID derived from the Telegram chat and user identity - it produces the same session ID every time for the same user, whether the bot has been restarted, redeployed, or migrated. As long as `amsha-meta.db` is mounted from a persistent volume, the user's conversation history and pending checkpoints survive any JVM restart.
+Session IDs are stored in a `session_registry` table (keyed on `channelType + channelId + userId`) and are **random UUIDs**. As long as `amsha-meta.db` is mounted from a persistent volume, the same session UUID is returned for the same `(TELEGRAM, chatId, userId)` triplet across bot restarts. The session ID is no longer derived via `UUID.nameUUIDFromBytes` — it is a stored random value.
 
 ---
 
