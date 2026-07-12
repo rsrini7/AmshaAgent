@@ -1838,6 +1838,125 @@ curl -s -X POST "http://localhost:8080/api/v1/sessions/$SESSION_READONLY/run" \
 
 ---
 
+## 18-A. Session Catalog & Reflex Tests
+
+The session catalog (`session_catalog` table) records every session across CLI, Telegram,
+WebSocket, and REST. Use these reflex commands to verify catalog operations.
+
+### 18-A.1 List sessions (`/sessions`)
+
+```bash
+SESSION=$(curl -s -X POST http://localhost:8080/api/v1/sessions \
+  -H "X-Amsha-API-Key: key-internal-changeme" \
+  -H "Content-Type: application/json" \
+  -d '{"agentRole":"coordinator"}' | jq -r '.sessionId')
+
+# List all sessions for the current scope
+curl -s -X POST "http://localhost:8080/api/v1/sessions/$SESSION/run" \
+  -H "X-Amsha-API-Key: key-internal-changeme" \
+  -H "Content-Type: application/json" \
+  -d '{"goal":"/sessions","agentRole":"coordinator","maxIterations":1}' | jq .
+```
+
+**Expect:** Returns numbered list of sessions for `(ownerKey, channelType, channelId)`.
+Active session is marked `(active)`. Sessions from other users/chats are not listed.
+
+### 18-A.2 New session rotation (`/newsession`) — preserves history
+
+```bash
+# Run a task in the current session to generate history
+curl -s -X POST "http://localhost:8080/api/v1/sessions/$SESSION/run" \
+  -H "X-Amsha-API-Key: key-internal-changeme" \
+  -H "Content-Type: application/json" \
+  -d '{"goal":"Say hello","agentRole":"coordinator","maxIterations":1}' | jq .
+
+# Rotate to a new session
+curl -s -X POST "http://localhost:8080/api/v1/sessions/$SESSION/run" \
+  -H "X-Amsha-API-Key: key-internal-changeme" \
+  -H "Content-Type: application/json" \
+  -d '{"goal":"/newsession","agentRole":"coordinator","maxIterations":1}' | jq .
+```
+
+**Expect:** Rotation response includes the new session ID. `/sessions` shows both old
+(INACTIVE) and new (ACTIVE) entries. Old session history is preserved — a subsequent
+`/resume` back to the old session ID restores its checkpoints.
+
+### 18-A.3 Resume by session ID (`/resume <id>`)
+
+```bash
+# Get the old session ID from /sessions response
+OLD_SESSION_ID="..."
+
+curl -s -X POST "http://localhost:8080/api/v1/sessions/$SESSION/run" \
+  -H "X-Amsha-API-Key: key-internal-changeme" \
+  -H "Content-Type: application/json" \
+  -d "{\"goal\":\"/resume $OLD_SESSION_ID\",\"agentRole\":\"coordinator\",\"maxIterations\":1}" | jq .
+```
+
+**Expect:** "Resumed session: <id>". Subsequent turns execute in the resumed session.
+Active flag flips in the catalog.
+
+### 18-A.4 Resume by sequence number (`/resume <seq>`)
+
+```bash
+# Resume by the sequence number shown in /sessions
+curl -s -X POST "http://localhost:8080/api/v1/sessions/$SESSION/run" \
+  -H "X-Amsha-API-Key: key-internal-changeme" \
+  -H "Content-Type: application/json" \
+  -d '{"goal":"/resume 1","agentRole":"coordinator","maxIterations":1}' | jq .
+```
+
+**Expect:** Same behavior as resume-by-ID — the reflex translates the sequence number to
+a session ID internally.
+
+### 18-A.5 Cross-scope resume rejection
+
+```bash
+# Create a session in a different scope
+SESSION_B=$(curl -s -X POST http://localhost:8080/api/v1/sessions \
+  -H "X-Amsha-API-Key: key-internal-changeme" \
+  -H "Content-Type: application/json" \
+  -d '{"agentRole":"coordinator"}' | jq -r '.sessionId')
+
+# Attempt to resume SESSION_B from SESSION's scope
+curl -s -X POST "http://localhost:8080/api/v1/sessions/$SESSION/run" \
+  -H "X-Amsha-API-Key: key-internal-changeme" \
+  -H "Content-Type: application/json" \
+  -d "{\"goal\":\"/resume $SESSION_B\",\"agentRole\":\"coordinator\",\"maxIterations\":1}" | jq .
+```
+
+**Expect:** "Session is outside this channel scope" — cross-scope resume is rejected.
+
+### 18-A.6 Archived session resume rejection
+
+```bash
+# Manually archive a session in the database
+# SQLite: UPDATE session_catalog SET status='ARCHIVED', active=0 WHERE session_id='<id>';
+# Then attempt /resume — must be rejected with "Archived sessions cannot be resumed"
+```
+
+**Expect:** `"Archived sessions cannot be resumed"` — archived sessions are permanently
+read-only.
+
+### 18-A.7 CLI `--last-session` and `--new-session`
+
+```bash
+# Start CLI with the most recent catalogued session
+./amsha chat --last-session
+
+# Start CLI with a fresh catalogued session (skips --last-session)
+./amsha chat --new-session
+
+# Inside chat, rotate and verify the prompt shows the new ID
+/newsession
+```
+
+**Expect:** `--last-session` resumes the most recently active CLI-scoped catalog entry.
+`--new-session` creates a fresh entry. After `/newsession`, the prompt reflects the new
+session ID and tab-completion lists `/newsession`, `/sessions`, `/resume`.
+
+---
+
 ## 19. Budget Governance Tests
 
 > **Phase 64-A1 fix**: Hard USD limit is now checked **before** the soft warning. A single call that exceeds both thresholds fires `BudgetExceededException`, not `BudgetWarningException`. Previously, the session ran one call over budget before the hard stop.

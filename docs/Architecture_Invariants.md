@@ -964,6 +964,60 @@ This rule prevents recurrence of all three patterns.
 
 ---
 
+### 5.27 Session Catalog Invariants (§5.27 INVARIANT)
+
+The `SessionCatalogStore` port maps `(ownerKey, channelType, channelId)` scopes to durable
+`SessionCatalogEntry` records. Every session (CLI, Telegram, WebSocket, REST) is catalogued
+from birth with status `ACTIVE`, `INACTIVE`, or `ARCHIVED`.
+
+**Partial unique index — "at most one active per scope":**
+
+Both migrations (`V4__session_catalog.sql`) MUST contain the partial unique index, not a
+plain `UNIQUE` on `(owner_key, channel_type, channel_id, active)`. A plain 4-tuple UNIQUE
+would reject rotation — multiple inactive siblings share `active = false`:
+
+```sql
+-- SQLite
+CREATE UNIQUE INDEX IF NOT EXISTS idx_session_catalog_active
+    ON session_catalog(owner_key, channel_type, channel_id) WHERE active = 1;
+
+-- PostgreSQL
+CREATE UNIQUE INDEX idx_session_catalog_active
+    ON session_catalog(owner_key, channel_type, channel_id) WHERE active = TRUE;
+```
+
+**`activateNew` atomicity:** all three adapters (SQLite, PostgreSQL, FS) MUST implement
+`activateNew(...)` as an atomic deactivate-then-insert operation. The SQL adapters use a
+single JDBI `useTransaction` block; the FS adapter uses `FsLockManager.tryLock`. This
+prevents a concurrent insert from violating the partial unique index.
+
+**`seq` is adapter-assigned:** the store adapter computes `seq = max(seq in scope) + 1`
+when the provided value is `0`/unset. The service layer never computes `seq`. This keeps
+`/resume <number>` consistent across all three backends.
+
+**Backend parity:** `SessionCatalogStore` has three adapter implementations
+(`SqliteSessionCatalogAdapter`, `PostgresSessionCatalogAdapter`, `FsSessionCatalogAdapter`).
+All three must be created/updated simultaneously per §5.26.
+
+**`touch` never inserts:** `touch(...)` updates `lastUsedAt` on an existing row. It MUST
+NOT insert a new row — creation of missing catalog rows is handled exclusively by
+`resolveOrCreateSession` through `activateNew`. A bare-active insert from `touch` would
+violate the partial unique index on a fully populated scope.
+
+**Archiving is non-resumable:** `archive(sessionId)` sets `status = 'ARCHIVED'` and
+`active = false`. Any attempt to `resume(...)` an `ARCHIVED` session MUST be rejected.
+The `SessionReaper` daily sweep calls `listInactiveBefore(cutoff)` and archives each
+inactive entry older than `amsha.session-catalog.archive-after-days` (default 90).
+Active and awaiting-approval sessions are never candidates.
+
+**Legacy migration:** `SessionCatalogService.resolveOrCreateSession` queries the catalog
+first. If a scope has no catalog entry, it falls back to the pre-existing
+`SessionIdResolver.resolveOrCreate(...)` and lazily migrates the legacy session ID
+into the catalog through `activateNew`. This keeps `SessionRegistry` (SQL) and
+`FallbackSessionIdResolver` (FS) unchanged as pre-catalog fallbacks.
+
+---
+
 ## 6. Native image and reflection rules
 
 ### 6.1 Reflection safety

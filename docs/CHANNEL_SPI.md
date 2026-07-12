@@ -117,7 +117,13 @@ For channels that listen for messages (like Telegram), the `ChannelDaemon.start(
 1. **Implement a Route/Listener**: Use Camel, JDA, WebSocket, or a raw listener to receive messages.
 2. **Map to ChannelUser**: Construct a `ChannelUser` from the native platform message.
 3. **Build MessageContext**: Create a `MessageContext` with the `ChannelUser`, message text, and any metadata.
-4. **Dispatch to Pipeline**: Inject `MessagePipeline` and call `pipeline.process(messageContext)`.
+4. **Dispatch through TurnDispatchService**: Inject `TurnDispatchService` and call
+   `turnDispatchService.dispatchAsync(TurnRequest.mapped(message, message.correlationId()))`.
+   Adapters MUST NOT inject `AgentLoop`, `ReasoningEngine`, `ReflexRegistry`,
+   `SkillAwareIntentDetector`, or `MessagePipeline` directly. The `TurnDispatchService`
+   dispatcher is the single transport-neutral entry point for all user-initiated turns
+   — command parsing, intent classification, compaction, and agent dispatch all happen
+   inside the shared pipeline without adapter involvement.
 
 The `ChannelPluginRegistry` discovers all `ChannelPlugin` implementations via CDI `@Any Instance<ChannelPlugin>` at startup. Duplicate channel type registrations fail fast.
 
@@ -274,7 +280,7 @@ public class DiscordDaemon implements ChannelDaemon {
     @ConfigProperty(name = "amsha.channel.discord.token")
     Optional<String> token;
 
-    @Inject MessagePipeline pipeline;
+    @Inject TurnDispatchService turnDispatchService;
 
     @Override
     public String channelId() { return "discord"; }
@@ -285,7 +291,8 @@ public class DiscordDaemon implements ChannelDaemon {
     @Override
     public void start() throws Exception {
         // Connect to Discord gateway, listen for messages
-        // On message: pipeline.process(new MessageContext(...))
+        // On message: turnDispatchService.dispatchAsync(
+        //     TurnRequest.mapped(msg, msg.correlationId()));
     }
 }
 ```
