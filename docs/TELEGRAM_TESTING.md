@@ -133,11 +133,10 @@ Before running any section of this guide, confirm:
 
 ## 3. How to Find Your Session UUID
 
-> **⚠️ Phase 64-B change:** Session IDs are now stored in a `session_registry` table
-> (keyed on `channelType + channelId + userId`) and are **random UUIDs**, not MD5-derived.
-> The old Python derivation formula below is **only valid before Phase 64-B** is deployed.
-> After Phase 64-B, the only reliable way to find your session UUID is from the logs or the
-> `session_registry` table in SQLite.
+> **Session Catalog:** The active Telegram session is stored in `session_catalog`, scoped by
+> `(owner_key, channel_type, channel_id)`. `session_registry` is retained only as a lazy
+> migration fallback for pre-catalog mappings. Use `/sessions` and `/resume` instead of
+> querying storage for normal recovery.
 
 **From logs (always works, any version):**
 
@@ -145,12 +144,13 @@ Before running any section of this guide, confirm:
 DEBUG [SessionResolutionHandler] Resolved session <uuid> for chat <chatId>
 ```
 
-**From SQLite (after Phase 64-B):**
+**From SQLite (catalog):**
 
 ```sql
 -- In sqlite3 ./data/amsha-meta.db
-SELECT session_id FROM session_registry
-WHERE channel_type='TELEGRAM' AND channel_id='<your chatId>' AND user_id='<your userId>';
+SELECT session_id, seq, active, status FROM session_catalog
+WHERE channel_type='telegram' AND channel_id='<your chatId>' AND owner_key='<your userId>'
+ORDER BY seq DESC;
 ```
 
 **Legacy formula (before Phase 64-B only - UUID v3 / MD5-based):**
@@ -164,10 +164,9 @@ key = f"{chat_id}:{user_id}"
 print(uuid.UUID(bytes=hashlib.md5(key.encode()).digest(), version=3))
 ```
 
-> **One-time migration note**: On first message after Phase 64-B deployment, existing sessions
-> will not be found in `session_registry` and a new random UUID is created. Prior session
-> context (chat memory, checkpoints) will not carry over to the new session UUID. This is a
-> known, intentional one-time side effect.
+> **Catalog upgrade note**: On the first post-upgrade message, a legacy mapping is lazily
+> recorded in `session_catalog` with the same session ID. Existing history and checkpoints
+> therefore remain attached to that session.
 
 ---
 
@@ -188,8 +187,8 @@ Send any message. In logs:
 DEBUG [SessionResolutionHandler] Resolved session <uuid> for chat <chatId>
 ```
 
-The same UUID appears every time you message from the same Telegram account (stored in
-`session_registry` since Phase 64-B; previously MD5-derived from `chatId:userId`).
+The same UUID appears while that catalog scope remains active. `/newsession` deliberately
+changes it while preserving the prior row and history; `/resume` activates a listed prior row.
 
 ### 4.3 Intent classification auto-routes free text
 
