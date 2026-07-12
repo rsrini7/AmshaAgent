@@ -13,3 +13,5 @@
 
 # architecture
 - Never hardcode logic for specific skills — all skill-related code must be generic and extensible, not coupled to any single skill's behavior. Confidence: 0.80
+- All user-facing interfaces (CLI, REST, Telegram, WebSocket) must route through a single transport-neutral TurnDispatchService — no interface may bypass it with bespoke workflow logic. Confidence: 0.85
+- User-initiated adapters must not directly inject AgentLoop, ReasoningEngine, ReflexRegistry, or SkillAwareIntentDetector — they must call the TurnDispatchService dispatcher. Confidence: 0.80

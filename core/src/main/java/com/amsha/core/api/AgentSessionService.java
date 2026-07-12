@@ -5,7 +5,6 @@ import jakarta.inject.Inject;
 
 import java.time.Instant;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -35,8 +34,9 @@ import com.amsha.core.governance.BudgetExceededException;
 import com.amsha.core.lifecycle.SessionHeartbeatTracker;
 import com.amsha.core.lifecycle.WorkspaceManager;
 import com.amsha.core.pipeline.MessageContext;
-import com.amsha.core.reflex.ReflexRegistry;
-import com.amsha.core.reflex.ReflexResult;
+import com.amsha.core.pipeline.TurnDispatchResult;
+import com.amsha.core.pipeline.TurnDispatchService;
+import com.amsha.core.pipeline.TurnRequest;
 import com.amsha.core.scope.WorkspaceContext;
 import com.amsha.core.scope.WorkspaceScopeHolder;
 import com.amsha.core.security.AutonomyLevel;
@@ -57,19 +57,17 @@ public class AgentSessionService {
 
     private final Logger log;
     private final AgentLoop agentLoop;
+    private final TurnDispatchService turnDispatchService;
     private final ReasoningEngine reasoningEngine;
     private final StatefulAgentStore agentStore;
     private final WorkspaceManager workspaceManager;
     private final SessionHeartbeatTracker heartbeatTracker;
     private final AgentResponseMapper responseMapper;
-    private final ReflexRegistry reflexRegistry;
     private final CheckpointResumeHandler checkpointResumeHandler;
     private final CheckpointApprovalService checkpointApprovalService;
     private final AuditService auditService;
     private final ExecutorService vThreads;
     private final int maxResumeIterations;
-
-    private static final List<String> NON_SLASH_REFLEX_PREFIXES = List.of("deletecron");
 
     private static final String REST_USER_ID = ApiConstants.REST_USER_ID;
     private static final String REST_USER_NAME = ApiConstants.REST_USER_NAME;
@@ -79,12 +77,12 @@ public class AgentSessionService {
     protected AgentSessionService() {
         this.log = null;
         this.agentLoop = null;
+        this.turnDispatchService = null;
         this.reasoningEngine = null;
         this.agentStore = null;
         this.workspaceManager = null;
         this.heartbeatTracker = null;
         this.responseMapper = null;
-        this.reflexRegistry = null;
         this.checkpointResumeHandler = null;
         this.checkpointApprovalService = null;
         this.auditService = null;
@@ -96,12 +94,12 @@ public class AgentSessionService {
     public AgentSessionService(
             Logger log,
             AgentLoop agentLoop,
+            TurnDispatchService turnDispatchService,
             ReasoningEngine reasoningEngine,
             StatefulAgentStore agentStore,
             WorkspaceManager workspaceManager,
             SessionHeartbeatTracker heartbeatTracker,
             AgentResponseMapper responseMapper,
-            ReflexRegistry reflexRegistry,
             CheckpointResumeHandler checkpointResumeHandler,
             CheckpointApprovalService checkpointApprovalService,
             AuditService auditService,
@@ -110,12 +108,12 @@ public class AgentSessionService {
                     int maxResumeIterations) {
         this.log = log;
         this.agentLoop = agentLoop;
+        this.turnDispatchService = turnDispatchService;
         this.reasoningEngine = reasoningEngine;
         this.agentStore = agentStore;
         this.workspaceManager = workspaceManager;
         this.heartbeatTracker = heartbeatTracker;
         this.responseMapper = responseMapper;
-        this.reflexRegistry = reflexRegistry;
         this.checkpointResumeHandler = checkpointResumeHandler;
         this.checkpointApprovalService = checkpointApprovalService;
         this.auditService = auditService;
@@ -161,9 +159,6 @@ public class AgentSessionService {
             return ServiceResult.error("FORK_BOMB_REJECTED", "Reserved goal prefix");
         }
 
-        var commandResponse = handleSlashCommand(sessionId, request);
-        if (commandResponse.isPresent()) return commandResponse.get();
-
         String canonicalRole = AgentRoleEnum.fromString(request.agentRole()).toScopedName();
         int maxIterations = request.maxIterations() != null ? request.maxIterations() : 5;
 
@@ -173,20 +168,9 @@ public class AgentSessionService {
         }
 
         try {
-            Callable<ServiceResult<Object>> op = () -> {
-                AutonomyLevel level = getOrDefaultAutonomy(sessionId);
-                String channel = ChannelType.REST_API.name();
-
-                return WorkspaceContext.<ServiceResult<Object>>run(
-                        sessionId, REST_USER_ID, sessionId, level, canonicalRole, channel, () -> {
-                            MessageContext context = createRestContext(sessionId, request.goal());
-                            context.setAutonomyLevel(level);
-                            AgentResult result = agentLoop.run(
-                                    sessionId, canonicalRole, request.goal(), reasoningEngine, maxIterations, context);
-                            return new ServiceResult<>(responseMapper.mapResult(result, false), null, null);
-                        });
-            };
-            return WorkspaceScopeHolder.call(sessionId, op);
+            TurnDispatchResult dispatched = WorkspaceScopeHolder.call(
+                    sessionId, () -> dispatchRestTurn(sessionId, request, canonicalRole, maxIterations));
+            return toServiceResult(dispatched, false);
         } catch (BudgetExceededException e) {
             return ServiceResult.error("BUDGET", e.getMessage());
         } catch (Exception e) {
@@ -211,12 +195,6 @@ public class AgentSessionService {
 
         vThreads.execute(() -> WorkspaceScopeHolder.run(sessionId, () -> {
             try {
-                var commandResponse = handleSlashCommand(sessionId, request);
-                if (commandResponse.isPresent()) {
-                    callback.accept(commandResponse.get());
-                    return;
-                }
-
                 String goal = request.goal() != null ? request.goal().trim() : "";
                 if ("approve".equalsIgnoreCase(goal) || "/approve".equalsIgnoreCase(goal)) {
                     AgentCheckpoint cp = checkpointApprovalService.approveAll(sessionId, "Human approved via REST");
@@ -231,21 +209,11 @@ public class AgentSessionService {
                     return;
                 }
 
-                AutonomyLevel sessionLevel = getOrDefaultAutonomy(sessionId);
                 String canonicalRole =
                         AgentRoleEnum.fromString(request.agentRole()).toScopedName();
-                String channel = ChannelType.REST_API.name();
                 int maxIterations = request.maxIterations() != null ? request.maxIterations() : 5;
-
-                WorkspaceContext.<Void>run(
-                        sessionId, REST_USER_ID, sessionId, sessionLevel, canonicalRole, channel, () -> {
-                            MessageContext context = createRestContext(sessionId, request.goal());
-                            context.setAutonomyLevel(sessionLevel);
-                            AgentResult result = agentLoop.run(
-                                    sessionId, canonicalRole, request.goal(), reasoningEngine, maxIterations, context);
-                            callback.accept(new ServiceResult<>(responseMapper.mapResult(result, true), null, null));
-                            return null;
-                        });
+                callback.accept(
+                        toServiceResult(dispatchRestTurn(sessionId, request, canonicalRole, maxIterations), true));
             } catch (Exception e) {
                 log.errorf("Async agent run failed: %s", LogUtil.rootMessage(e));
                 callback.accept(
@@ -361,6 +329,29 @@ public class AgentSessionService {
         return new MessageContext(REST_CHAT_SESSION_PREFIX + sessionId, user, msg);
     }
 
+    private TurnDispatchResult dispatchRestTurn(
+            String sessionId, RunAgentRequest request, String canonicalRole, int maxIterations) {
+        MessageContext context = createRestContext(sessionId, request.goal());
+        return turnDispatchService.dispatch(new TurnRequest(
+                context.getMessage(),
+                context.getChatId(),
+                Optional.of(sessionId),
+                Optional.of(canonicalRole),
+                Optional.of(maxIterations)));
+    }
+
+    private ServiceResult<Object> toServiceResult(TurnDispatchResult dispatched, boolean asynchronous) {
+        if (dispatched.commandResponse().isPresent()) {
+            return ServiceResult.success(Map.of(
+                    "status", "OK", "message", dispatched.commandResponse().get()));
+        }
+        return dispatched
+                .agentResult()
+                .<ServiceResult<Object>>map(
+                        result -> new ServiceResult<>(responseMapper.mapResult(result, asynchronous), null, null))
+                .orElseGet(() -> ServiceResult.error("SYSTEM", "Turn completed without a result"));
+    }
+
     private Optional<ServiceResult<Object>> validateRole(String role) {
         if (!AgentRoleEnum.isKnownRole(role)) {
             return Optional.of(ServiceResult.error("UNKNOWN_ROLE", "Unknown role: " + role));
@@ -392,38 +383,5 @@ public class AgentSessionService {
             }
         }
         return Optional.empty();
-    }
-
-    private Optional<ServiceResult<Object>> handleSlashCommand(String sessionId, RunAgentRequest request) {
-        String goal = request.goal();
-        if (goal == null
-                || (!goal.startsWith("/")
-                        && NON_SLASH_REFLEX_PREFIXES.stream().noneMatch(goal.toLowerCase(Locale.ROOT)::startsWith)))
-            return Optional.empty();
-
-        try {
-            Callable<ServiceResult<Object>> op = () -> {
-                String canonicalRole =
-                        AgentRoleEnum.fromString(request.agentRole()).toScopedName();
-                String channel = ChannelType.REST_API.name();
-                return WorkspaceContext.<ServiceResult<Object>>run(
-                        sessionId, REST_USER_ID, sessionId, AutonomyLevel.FULL, canonicalRole, channel, () -> {
-                            MessageContext context = createRestContext(sessionId, goal);
-                            ReflexResult result =
-                                    reflexRegistry.processIfReflex(sessionId, REST_USER_ID, sessionId, goal, context);
-                            return result.commandResponse()
-                                    .map(r -> ServiceResult.success((Object) Map.of("status", "OK", "message", r)))
-                                    .orElse(null);
-                        });
-            };
-            return Optional.ofNullable(WorkspaceScopeHolder.call(sessionId, op));
-        } catch (Exception e) {
-            return Optional.empty();
-        }
-    }
-
-    private AutonomyLevel getOrDefaultAutonomy(String sessionId) {
-        AutonomyLevel level = heartbeatTracker.getAutonomyLevel(sessionId);
-        return (level != null) ? level : AutonomyLevel.SUPERVISED;
     }
 }

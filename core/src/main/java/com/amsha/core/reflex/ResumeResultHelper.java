@@ -23,7 +23,10 @@ public class ResumeResultHelper {
     StatefulAgentStore statefulAgentStore;
 
     public String runSync(String sessionId, String activeRole, String userId, String chatId) {
-        var _ = cliResultBridge.register(sessionId);
+        // A CLI /approve or /deny renders the synchronous reflex response itself.
+        // Cancel the interactive waiter's future before resuming so LoopExitPublisher
+        // cannot wake it and print the same terminal result a second time.
+        cliResultBridge.cancel(sessionId);
         try {
             AgentResult result =
                     checkpointResumeHandler.resumeAfterBatchDecisionSync(sessionId, activeRole, userId, chatId, "cli");

@@ -31,7 +31,7 @@ import com.amsha.core.audit.SecurityEventType;
 import com.amsha.core.domain.model.AgentCheckpoint;
 import com.amsha.core.lifecycle.SessionHeartbeatTracker;
 import com.amsha.core.lifecycle.WorkspaceManager;
-import com.amsha.core.reflex.ReflexRegistry;
+import com.amsha.core.pipeline.TurnDispatchService;
 import com.amsha.core.security.AutonomyLevel;
 import com.amsha.core.state.CheckpointStatus;
 import com.amsha.core.state.StatefulAgentStore;
@@ -48,12 +48,12 @@ class AgentSessionServiceDeepTest {
 
     private Logger log;
     private AgentLoop agentLoop;
+    private TurnDispatchService turnDispatchService;
     private ReasoningEngine reasoningEngine;
     private StatefulAgentStore agentStore;
     private WorkspaceManager workspaceManager;
     private SessionHeartbeatTracker heartbeatTracker;
     private AgentResponseMapper responseMapper;
-    private ReflexRegistry reflexRegistry;
     private CheckpointResumeHandler checkpointResumeHandler;
     private CheckpointApprovalService checkpointApprovalService;
     private AuditService auditService;
@@ -65,12 +65,12 @@ class AgentSessionServiceDeepTest {
     void setUp() {
         log = mock(Logger.class);
         agentLoop = mock(AgentLoop.class);
+        turnDispatchService = mock(TurnDispatchService.class);
         reasoningEngine = mock(ReasoningEngine.class);
         agentStore = mock(StatefulAgentStore.class);
         workspaceManager = mock(WorkspaceManager.class);
         heartbeatTracker = mock(SessionHeartbeatTracker.class);
         responseMapper = mock(AgentResponseMapper.class);
-        reflexRegistry = mock(ReflexRegistry.class);
         checkpointResumeHandler = mock(CheckpointResumeHandler.class);
         checkpointApprovalService = mock(CheckpointApprovalService.class);
         auditService = mock(AuditService.class);
@@ -79,12 +79,12 @@ class AgentSessionServiceDeepTest {
         service = new AgentSessionService(
                 log,
                 agentLoop,
+                turnDispatchService,
                 reasoningEngine,
                 agentStore,
                 workspaceManager,
                 heartbeatTracker,
                 responseMapper,
-                reflexRegistry,
                 checkpointResumeHandler,
                 checkpointApprovalService,
                 auditService,

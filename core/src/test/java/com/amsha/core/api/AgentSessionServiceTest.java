@@ -4,7 +4,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
@@ -31,7 +30,8 @@ import com.amsha.core.domain.model.AgentCheckpoint;
 import com.amsha.core.domain.model.AgentCheckpointRecord;
 import com.amsha.core.lifecycle.SessionHeartbeatTracker;
 import com.amsha.core.lifecycle.WorkspaceManager;
-import com.amsha.core.reflex.ReflexRegistry;
+import com.amsha.core.pipeline.TurnDispatchResult;
+import com.amsha.core.pipeline.TurnDispatchService;
 import com.amsha.core.scope.WorkspaceContext;
 import com.amsha.core.scope.WorkspaceScopeHolder;
 import com.amsha.core.security.AutonomyLevel;
@@ -61,6 +61,9 @@ class AgentSessionServiceTest {
     AgentLoop agentLoop;
 
     @Mock
+    TurnDispatchService turnDispatchService;
+
+    @Mock
     ReasoningEngine reasoningEngine;
 
     @Mock
@@ -74,9 +77,6 @@ class AgentSessionServiceTest {
 
     @Mock
     AgentResponseMapper responseMapper;
-
-    @Mock
-    ReflexRegistry reflexRegistry;
 
     @Mock
     CheckpointResumeHandler checkpointResumeHandler;
@@ -104,12 +104,12 @@ class AgentSessionServiceTest {
         service = new AgentSessionService(
                 log,
                 agentLoop,
+                turnDispatchService,
                 reasoningEngine,
                 agentStore,
                 workspaceManager,
                 heartbeatTracker,
                 responseMapper,
-                reflexRegistry,
                 checkpointResumeHandler,
                 checkpointApprovalService,
                 auditService,
@@ -185,8 +185,9 @@ class AgentSessionServiceTest {
     void testRunSync_finished_returns200() {
         RunAgentRequest request = new RunAgentRequest("goal", "coordinator", 5);
         AgentResult result = mock(AgentResult.Finished.class);
-        when(agentLoop.run(anyString(), anyString(), anyString(), any(), anyInt(), any()))
-                .thenReturn(result);
+        when(turnDispatchService.dispatch(any()))
+                .thenReturn(new TurnDispatchResult(
+                        Optional.of("sess1"), Optional.of("coordinator"), Optional.of(result), Optional.empty()));
         AgentResponseMapper.MappedResult mapped =
                 new AgentResponseMapper.MappedResult(new AgentResponseMapper.AgentResponse("done", 10, 5), 200);
         when(responseMapper.mapResult(any(), any(Boolean.class))).thenReturn(mapped);
@@ -201,8 +202,9 @@ class AgentSessionServiceTest {
     void testRunSync_complianceViolation_returns451() {
         RunAgentRequest request = new RunAgentRequest("goal", "coordinator", 5);
         AgentResult result = mock(AgentResult.Failed.class);
-        when(agentLoop.run(anyString(), anyString(), anyString(), any(), anyInt(), any()))
-                .thenReturn(result);
+        when(turnDispatchService.dispatch(any()))
+                .thenReturn(new TurnDispatchResult(
+                        Optional.of("sess1"), Optional.of("coordinator"), Optional.of(result), Optional.empty()));
         AgentResponseMapper.MappedResult mapped =
                 new AgentResponseMapper.MappedResult(new AmshaErrorResponse("Violation"), 451);
         when(responseMapper.mapResult(any(), any(Boolean.class))).thenReturn(mapped);

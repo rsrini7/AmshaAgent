@@ -10,12 +10,10 @@ import com.amsha.channel.api.ChannelMessage;
 import com.amsha.channel.api.ChannelServices;
 import com.amsha.core.lifecycle.SessionHeartbeatTracker;
 import com.amsha.core.lifecycle.WorkspaceManager;
-import com.amsha.core.pipeline.MessageContext;
-import com.amsha.core.pipeline.MessagePipeline;
 import com.amsha.core.pipeline.SessionIdResolver;
+import com.amsha.core.pipeline.TurnDispatchService;
+import com.amsha.core.pipeline.TurnRequest;
 import com.amsha.core.security.SessionOwnerResolver;
-
-import org.eclipse.microprofile.context.ManagedExecutor;
 
 /**
  * Implementation of ChannelServices that bridges to Amsha Agent Core internals.
@@ -24,7 +22,7 @@ import org.eclipse.microprofile.context.ManagedExecutor;
 public class ChannelServicesImpl implements ChannelServices {
 
     @Inject
-    MessagePipeline messagePipeline;
+    TurnDispatchService turnDispatchService;
 
     @Inject
     WorkspaceManager workspaceManager;
@@ -38,9 +36,6 @@ public class ChannelServicesImpl implements ChannelServices {
     @Inject
     Instance<SessionOwnerResolver> ownerResolver;
 
-    @Inject
-    ManagedExecutor executor;
-
     @Override
     public String resolveOrCreateSession(String channelType, String channelId, String userId) {
         return sessionIdResolver.resolveOrCreate(channelType, channelId, userId);
@@ -48,9 +43,9 @@ public class ChannelServicesImpl implements ChannelServices {
 
     @Override
     public CompletableFuture<Void> processAsync(ChannelMessage message) {
-        MessageContext context = new MessageContext(message.correlationId(), message.sender(), message);
-
-        return executor.runAsync(() -> messagePipeline.process(context));
+        return turnDispatchService
+                .dispatchAsync(TurnRequest.mapped(message, message.correlationId()))
+                .thenApply(_ -> null);
     }
 
     @Override

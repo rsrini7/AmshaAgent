@@ -11,6 +11,7 @@ import com.amsha.core.channel.ChannelPluginRegistry;
 import com.amsha.core.pipeline.HandleResult;
 import com.amsha.core.pipeline.MessageContext;
 import com.amsha.core.pipeline.MessageHandler;
+import com.amsha.core.pipeline.TurnDispatchService;
 import com.amsha.core.pipeline.parsers.CommandParserRegistry;
 import com.amsha.core.reflex.ReflexRegistry;
 import com.amsha.core.reflex.ReflexResult;
@@ -243,6 +244,7 @@ public class CommandDispatchHandler implements MessageHandler {
         if (result != null) {
             result.commandResponse().ifPresent(response -> {
                 if (response.isBlank()) return;
+                context.setData(TurnDispatchService.DATA_COMMAND_RESPONSE, response);
                 channelPluginRegistry
                         .find(context.getChannelType())
                         .map(ChannelPlugin::sender)

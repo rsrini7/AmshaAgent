@@ -58,7 +58,12 @@ public class SessionResolutionHandler implements MessageHandler {
         String userId = context.getUser().platformId();
         String channelType = context.getUser().channel().name();
 
-        String sessionId = sessionIdResolver.resolveOrCreate(channelType, channelId, userId);
+        // A synchronous adapter (CLI resume or REST session endpoint) may have
+        // already selected an owned session. Do not replace it with the channel
+        // mapping; mapped channels still use the resolver as before.
+        String sessionId = context.getSessionId()
+                .filter(id -> !id.isBlank())
+                .orElseGet(() -> sessionIdResolver.resolveOrCreate(channelType, channelId, userId));
 
         context.setSessionId(sessionId);
         log.debugf("Resolved session %s for [%s/%s/%s]", sessionId, channelType, channelId, userId);

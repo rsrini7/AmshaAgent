@@ -72,9 +72,14 @@ delivery, but make them all call the shared service.
 - HITL behavior and existing channel response semantics remain unchanged.
 - Add entry-point tests that verify identical routing for a skill prompt.
 
-**Current mitigation:** CLI chat performs skill-aware classification before its
-direct `AgentLoop` call. This is intentionally temporary until the shared
-dispatch service is implemented.
+**Status:** ✅ Implemented (branch `P106`). `TurnDispatchService.dispatch(TurnRequest)` is the single
+transport-neutral entry point; `ChatCommand`, `AskCommand`, `AgentSessionService`, and
+`ChannelServicesImpl` all delegate to it instead of calling `AgentLoop` directly. `SessionResolutionHandler`
+preserves a caller-supplied session, and `ResumeResultHelper` cancels the CLI HITL waiter before resume so
+the terminal result prints exactly once.
+
+**Current mitigation:** Removed — CLI chat no longer performs bespoke skill-aware classification before a
+direct `AgentLoop` call; it relies on the shared `IntentClassificationHandler` via `TurnDispatchService`.
 
 ### 7. Agent Loop → Graph-Based Orchestration (DAG)
 After the GoF State pattern is in place (P1), the next evolution is a full directed graph model similar to LangGraph.
