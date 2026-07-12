@@ -1,6 +1,16 @@
 package com.amsha.core.tools;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
+
+import jakarta.enterprise.inject.Instance;
+
+import java.util.Map;
+import java.util.Optional;
+
+import com.amsha.core.agent.role.ToolMetadata;
+import com.amsha.core.security.ToolOperation;
+import com.amsha.core.tool.DynamicToolCategoryLookup;
 
 import org.junit.jupiter.api.Test;
 
@@ -52,5 +62,95 @@ class ToolCategoryMapperTest {
     void categoryFor_stripsPrefix() {
         assertEquals(ToolCategory.NETWORK, mapper.categoryFor("mcp:browser_navigate"));
         assertEquals(ToolCategory.INTERNAL, mapper.categoryFor("mcp:github"));
+    }
+
+    @Test
+    void testAgentToolCategoryOverride() {
+        ToolRegistry registry = mock(ToolRegistry.class);
+        AgentTool tool = mock(AgentTool.class);
+        when(tool.category()).thenReturn(ToolCategory.DATABASE);
+        when(registry.findTool("test_tool")).thenReturn(Optional.of(tool));
+
+        ToolCategoryMapper customMapper = new ToolCategoryMapper();
+        customMapper.toolRegistry = registry;
+
+        assertEquals(ToolCategory.DATABASE, customMapper.categoryFor("test_tool"));
+    }
+
+    @Test
+    void testToolMetadataCategoryOverride() {
+        ToolRegistry registry = mock(ToolRegistry.class);
+        AgentTool tool = new AnnotatedTool();
+        when(registry.findTool("annotated_tool")).thenReturn(Optional.of(tool));
+
+        ToolCategoryMapper customMapper = new ToolCategoryMapper();
+        customMapper.toolRegistry = registry;
+
+        assertEquals(ToolCategory.COMPUTE, customMapper.categoryFor("annotated_tool"));
+    }
+
+    @Test
+    void testDynamicCategoryLookup() {
+        Instance<DynamicToolCategoryLookup> lookups = mock(Instance.class);
+        DynamicToolCategoryLookup lookup = mock(DynamicToolCategoryLookup.class);
+        when(lookups.isUnsatisfied()).thenReturn(false);
+        when(lookups.get()).thenReturn(lookup);
+        when(lookup.categoryFor("dynamic_tool")).thenReturn(Optional.of(ToolCategory.DATABASE));
+
+        ToolCategoryMapper customMapper = new ToolCategoryMapper();
+        customMapper.dynamicCategoryLookups = lookups;
+
+        assertEquals(ToolCategory.DATABASE, customMapper.categoryFor("dynamic_tool"));
+    }
+
+    @Test
+    void testKnownToolResolvesToInternalSilently() {
+        ToolRegistry registry = mock(ToolRegistry.class);
+        AgentTool tool = mock(AgentTool.class);
+        when(tool.category()).thenReturn(ToolCategory.INTERNAL);
+        when(registry.findTool("known_internal")).thenReturn(Optional.of(tool));
+
+        ToolCategoryMapper customMapper = new ToolCategoryMapper();
+        customMapper.toolRegistry = registry;
+
+        assertEquals(ToolCategory.INTERNAL, customMapper.categoryFor("known_internal"));
+        verify(registry, atLeastOnce()).findTool("known_internal");
+    }
+
+    @Test
+    void testDynamicToolInternalReturnsInternal() {
+        Instance<DynamicToolCategoryLookup> lookups = mock(Instance.class);
+        DynamicToolCategoryLookup lookup = mock(DynamicToolCategoryLookup.class);
+        when(lookups.isUnsatisfied()).thenReturn(false);
+        when(lookups.get()).thenReturn(lookup);
+        when(lookup.categoryFor("dyn_internal")).thenReturn(Optional.of(ToolCategory.INTERNAL));
+
+        ToolCategoryMapper customMapper = new ToolCategoryMapper();
+        customMapper.dynamicCategoryLookups = lookups;
+
+        assertEquals(ToolCategory.INTERNAL, customMapper.categoryFor("dyn_internal"));
+    }
+
+    @ToolMetadata(capabilityId = "annotated_tool", description = "Test tool", category = ToolCategory.COMPUTE)
+    static class AnnotatedTool implements AgentTool {
+        @Override
+        public String name() {
+            return "annotated_tool";
+        }
+
+        @Override
+        public String description() {
+            return "Test tool description";
+        }
+
+        @Override
+        public ToolOperation requiredOperation() {
+            return ToolOperation.READ_FS;
+        }
+
+        @Override
+        public ToolResponse execute(ToolExecutionContext ctx, Map<String, Object> params) {
+            return ToolResponse.success("ok");
+        }
     }
 }

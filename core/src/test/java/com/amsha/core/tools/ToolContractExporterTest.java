@@ -32,6 +32,9 @@ class ToolContractExporterTest {
         ToolContractExporter exporter = new ToolContractExporter();
         exporter.toolRegistry = registry;
         exporter.discoveryService = discovery;
+        ToolCategoryMapper mapper = new ToolCategoryMapper();
+        mapper.toolRegistry = registry;
+        exporter.categoryMapper = mapper;
         exporter.dataDir = tempDir.toString();
 
         exporter.onStart(null);

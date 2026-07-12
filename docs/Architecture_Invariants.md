@@ -125,6 +125,23 @@ three-tuple `(channelType, channelId, userId)`.
 - All tool execution MUST flow through `ToolRegistry` and `ToolInvoker` (see the [Tool Governance & Sandbox Execution Flow Diagram](assets/amsha_tool_governance.svg) for visual context).
 - Do not bypass guard, audit, sanitization, or approval logic by calling tool implementation classes directly.
 
+### 3.2.1 Tool execution-category routing
+
+- `ToolCategoryMapper` is the single resolver from a tool name to the
+  category-specific executor bulkhead. Do not add a second tool-name-to-executor
+  mapping in a transport, tool adapter, or coordinator.
+- Registered tools may declare a non-`INTERNAL` category through
+  `AgentTool.category()` or inherited `@ToolMetadata.category()`. The explicit
+  `AgentTool` result takes precedence; `ToolCapability.category()` remains the
+  compatibility source for built-in tools.
+- Discovered MCP tools carry their category on `DynamicToolCapability`. They
+  default to `NETWORK`; `register_mcp_server` may assign `NETWORK`, `COMPUTE`,
+  `DATABASE`, or `INTERNAL` for all tools discovered from that server.
+- `ParallelToolStepExecutor` MUST select its `ManagedExecutor` through
+  `ToolCategoryMapper`. Sequential execution is not currently category-bulkheaded;
+  do not describe this mechanism as applying to every sequential tool call until
+  that path is explicitly changed and verified.
+
 ### 3.3 Tool observation sanitization
 - Every tool response MUST be sanitized before history append.
 - No tool type is exempt, including GitHub, MCP, sandbox, or internal tools.

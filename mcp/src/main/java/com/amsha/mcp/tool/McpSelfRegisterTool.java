@@ -8,6 +8,7 @@ import jakarta.inject.Inject;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.regex.Pattern;
 
@@ -17,6 +18,7 @@ import com.amsha.core.audit.AuditService;
 import com.amsha.core.audit.SecurityEventType;
 import com.amsha.core.security.ToolOperation;
 import com.amsha.core.tools.AgentTool;
+import com.amsha.core.tools.ToolCategory;
 import com.amsha.core.tools.ToolExecutionContext;
 import com.amsha.core.tools.ToolResponse;
 import com.amsha.mcp.transport.McpClientService;
@@ -32,12 +34,14 @@ import com.amsha.mcp.transport.McpClientService;
 @ToolMetadata(
         capabilityId = "register_mcp_server",
         description = "Register a new MCP server",
-        defaultRoles = {"coder", "debugger"})
+        defaultRoles = {"coder", "debugger"},
+        category = ToolCategory.NETWORK)
 public class McpSelfRegisterTool implements AgentTool {
 
     private static final Pattern SAFE_NAME_PATTERN = Pattern.compile("^[a-zA-Z0-9_-]+$");
     private static final String PARAM_NAME = "name";
     private static final String PARAM_TRANSPORT = "transport";
+    private static final String PARAM_CATEGORY = "category";
 
     @Inject
     McpClientService mcpClientService;
@@ -86,6 +90,10 @@ public class McpSelfRegisterTool implements AgentTool {
                 .addStringProperty("command", "The command to run for STDIO transport (e.g., npx, python, docker).")
                 .addStringProperty("args", "Comma-separated arguments for the command.")
                 .addStringProperty("env", "Environment variables (KEY=VALUE lines).")
+                .addEnumProperty(
+                        PARAM_CATEGORY,
+                        List.of("NETWORK", "COMPUTE", "DATABASE", "INTERNAL"),
+                        "Execution category for discovered tools.")
                 .required(PARAM_NAME, PARAM_TRANSPORT)
                 .build();
     }
@@ -108,6 +116,14 @@ public class McpSelfRegisterTool implements AgentTool {
         }
 
         String transportStr = (String) params.get(PARAM_TRANSPORT);
+        ToolCategory category;
+        try {
+            category = params.containsKey(PARAM_CATEGORY)
+                    ? ToolCategory.valueOf(((String) params.get(PARAM_CATEGORY)).toUpperCase(Locale.ROOT))
+                    : ToolCategory.NETWORK;
+        } catch (IllegalArgumentException | ClassCastException e) {
+            return ToolResponse.failure(400, "Invalid category. Must be NETWORK, COMPUTE, DATABASE, or INTERNAL.");
+        }
 
         try {
             if ("http".equalsIgnoreCase(transportStr)) {
@@ -115,7 +131,7 @@ public class McpSelfRegisterTool implements AgentTool {
                 if (url == null || url.isBlank()) {
                     return ToolResponse.failure(400, "url is required for http transport.");
                 }
-                mcpClientService.connect(name, url);
+                mcpClientService.connect(name, url, category);
             } else if ("stdio".equalsIgnoreCase(transportStr)) {
                 String command = (String) params.get("command");
                 if (command == null || command.isBlank()) {
@@ -143,7 +159,7 @@ public class McpSelfRegisterTool implements AgentTool {
                     }
                 }
 
-                mcpClientService.connectStdio(name, command, argsList, envMap);
+                mcpClientService.connectStdio(name, command, argsList, envMap, category);
             } else {
                 return ToolResponse.failure(400, "Unsupported transport: " + transportStr);
             }

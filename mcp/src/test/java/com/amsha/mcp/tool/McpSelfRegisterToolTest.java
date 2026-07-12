@@ -14,6 +14,7 @@ import com.amsha.core.audit.AuditService;
 import com.amsha.core.audit.SecurityEventType;
 import com.amsha.core.scope.WorkspaceContext;
 import com.amsha.core.security.AutonomyLevel;
+import com.amsha.core.tools.ToolCategory;
 import com.amsha.core.tools.ToolExecutionContext;
 import com.amsha.core.tools.ToolResponse;
 import com.amsha.mcp.transport.McpClientService;
@@ -53,7 +54,7 @@ class McpSelfRegisterToolTest {
                 () -> tool.execute(ctx("session-456", "user-123"), params));
 
         assertEquals(0, resp.exitCode());
-        verify(mcpClientService, times(1)).connect("my-server", "http://localhost:3000/mcp");
+        verify(mcpClientService, times(1)).connect("my-server", "http://localhost:3000/mcp", ToolCategory.NETWORK);
         verify(auditService, times(1))
                 .record(
                         eq("session-456"),
@@ -82,6 +83,44 @@ class McpSelfRegisterToolTest {
     }
 
     @Test
+    void testExplicitCategory() throws Exception {
+        Map<String, Object> params = Map.of(
+                "name", "database-server",
+                "transport", "http",
+                "url", "http://localhost:3000/mcp",
+                "category", "DATABASE");
+
+        WorkspaceContext.run(
+                "session-456",
+                "user-123",
+                "chat-789",
+                AutonomyLevel.FULL,
+                "COORDINATOR",
+                () -> tool.execute(ctx("session-456", "user-123"), params));
+
+        verify(mcpClientService).connect("database-server", "http://localhost:3000/mcp", ToolCategory.DATABASE);
+    }
+
+    @Test
+    void testInvalidCategory() throws Exception {
+        Map<String, Object> params = Map.of(
+                "name", "server",
+                "transport", "http",
+                "url", "http://localhost:3000/mcp",
+                "category", "invalid");
+
+        ToolResponse response = WorkspaceContext.run(
+                "session-456",
+                "user-123",
+                "chat-789",
+                AutonomyLevel.FULL,
+                "COORDINATOR",
+                () -> tool.execute(ctx("session-456", "user-123"), params));
+
+        assertEquals(400, response.exitCode());
+    }
+
+    @Test
     void testBlankUserIdFails() throws Exception {
         Map<String, Object> params = Map.of(
                 "name", "server",
@@ -104,7 +143,7 @@ class McpSelfRegisterToolTest {
     void testMcpConnectionExceptionPropagation() throws Exception {
         doThrow(new RuntimeException("Connection refused"))
                 .when(mcpClientService)
-                .connect(eq("fail-server"), anyString());
+                .connect(eq("fail-server"), anyString(), eq(ToolCategory.NETWORK));
 
         Map<String, Object> params = Map.of(
                 "name", "fail-server",

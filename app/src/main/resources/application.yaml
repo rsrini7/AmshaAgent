@@ -489,7 +489,9 @@ amsha:
       mutation-per-minute: 10
   
   tools:
-    # Per-category thread pool isolation to prevent cross-category starvation
+    # Per-category thread pool isolation to prevent cross-category starvation.
+    # Discovered MCP tools default to network; register_mcp_server can assign
+    # NETWORK, COMPUTE, DATABASE, or INTERNAL for all tools from that server.
     bulkhead:
       network:
         max-async: 8

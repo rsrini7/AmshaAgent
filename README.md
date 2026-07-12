@@ -59,7 +59,7 @@ See [docs/QUICK_START.md](./docs/QUICK_START.md) for detailed setup options.
 - **AES-256-GCM-SIV vault** with Argon2id key derivation — secrets never stored in plaintext
 - **Tamper-evident HMAC audit chain** — every action logged as append-only, verifiable record
 - **Two-tier RAG memory** — FTS5 keyword + sqlite-vec embeddings merged via Reciprocal Rank Fusion
-- **MCP integration** — both inbound MCP server and outbound MCP client for dynamic tool loading
+- **MCP integration** — both inbound MCP server and outbound MCP client for dynamic tool loading; discovered tools default to the network bulkhead and can be categorized at registration
 - **Multi-channel** — REST API, CLI REPL, Telegram bot, WebSocket web UI, one-shot `ask` mode
 
 ---
