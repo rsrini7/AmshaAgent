@@ -109,6 +109,17 @@ After the GoF State pattern is in place (P1), the next evolution is a full direc
 
 **Verification:** After fix, `./mvnw test -pl app` should complete without ArchUnit discovery errors.
 
+**Status:** ✅ Resolved — no longer reproducible. Running the full `app` module test suite
+(454 tests) completes without any `TestEngine with ID 'archunit' failed to discover tests`
+error. The precondition in the root cause no longer holds: the `app` module carries no
+migration files of its own, but Flyway migrations are on the test classpath via the
+`persistence-sqlite` dependency, so `quarkus.flyway.enabled` resolves to `true` and
+`HitlService` (declared with `enableIfMissing = true`) loads normally. As defensive
+hardening against regression, `quarkus.flyway.enabled: true` is now set explicitly in
+`app/src/test/resources/application.yaml`. The recommended code move (Option A) is not
+needed because it would break the module layering (`HitlService` lives in `app`, which
+`persistence-sqlite` does not depend on).
+
 ---
 
 ## Backlog note
