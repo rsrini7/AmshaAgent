@@ -133,11 +133,11 @@ class ReasoningMessageAssemblerTest {
 
     private static boolean containsHint(ReasoningMessageAssembler.AssembledMessages result, String marker) {
         boolean inSystem = result.messages().stream()
-                .filter(m -> m instanceof SystemMessage sm)
+                .filter(m -> m instanceof SystemMessage _)
                 .map(m -> ((SystemMessage) m).text())
                 .anyMatch(text -> text.contains(marker));
         boolean inUser = result.messages().stream()
-                .filter(m -> m instanceof UserMessage um)
+                .filter(m -> m instanceof UserMessage _)
                 .map(m -> ((UserMessage) m).singleText())
                 .anyMatch(text -> text.contains(marker));
         return inSystem || inUser;

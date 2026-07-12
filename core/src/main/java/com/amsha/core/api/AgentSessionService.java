@@ -40,6 +40,7 @@ import com.amsha.core.pipeline.TurnRequest;
 import com.amsha.core.scope.WorkspaceContext;
 import com.amsha.core.scope.WorkspaceScopeHolder;
 import com.amsha.core.security.AutonomyLevel;
+import com.amsha.core.session.SessionCatalogService;
 import com.amsha.core.state.CheckpointStatus;
 import com.amsha.core.state.StatefulAgentStore;
 import com.amsha.core.state.ToolDecision;
@@ -66,6 +67,7 @@ public class AgentSessionService {
     private final CheckpointResumeHandler checkpointResumeHandler;
     private final CheckpointApprovalService checkpointApprovalService;
     private final AuditService auditService;
+    private final SessionCatalogService sessionCatalogService;
     private final ExecutorService vThreads;
     private final int maxResumeIterations;
 
@@ -86,6 +88,7 @@ public class AgentSessionService {
         this.checkpointResumeHandler = null;
         this.checkpointApprovalService = null;
         this.auditService = null;
+        this.sessionCatalogService = null;
         this.vThreads = null;
         this.maxResumeIterations = 0;
     }
@@ -103,6 +106,7 @@ public class AgentSessionService {
             CheckpointResumeHandler checkpointResumeHandler,
             CheckpointApprovalService checkpointApprovalService,
             AuditService auditService,
+            SessionCatalogService sessionCatalogService,
             @VirtualThreads ExecutorService vThreads,
             @ConfigProperty(name = "amsha.approval.max-resume-iterations", defaultValue = "5")
                     int maxResumeIterations) {
@@ -117,12 +121,51 @@ public class AgentSessionService {
         this.checkpointResumeHandler = checkpointResumeHandler;
         this.checkpointApprovalService = checkpointApprovalService;
         this.auditService = auditService;
+        this.sessionCatalogService = sessionCatalogService;
         this.vThreads = vThreads;
         this.maxResumeIterations = maxResumeIterations;
     }
 
+    /** Compatibility constructor retained for focused unit tests. */
+    public AgentSessionService(
+            Logger log,
+            AgentLoop agentLoop,
+            TurnDispatchService turnDispatchService,
+            ReasoningEngine reasoningEngine,
+            StatefulAgentStore agentStore,
+            WorkspaceManager workspaceManager,
+            SessionHeartbeatTracker heartbeatTracker,
+            AgentResponseMapper responseMapper,
+            CheckpointResumeHandler checkpointResumeHandler,
+            CheckpointApprovalService checkpointApprovalService,
+            AuditService auditService,
+            @VirtualThreads ExecutorService vThreads,
+            int maxResumeIterations) {
+        this(
+                log,
+                agentLoop,
+                turnDispatchService,
+                reasoningEngine,
+                agentStore,
+                workspaceManager,
+                heartbeatTracker,
+                responseMapper,
+                checkpointResumeHandler,
+                checkpointApprovalService,
+                auditService,
+                null,
+                vThreads,
+                maxResumeIterations);
+    }
+
     public String createSession(String userId, AutonomyLevel autonomyLevel) {
-        String sessionId = UUID.randomUUID().toString();
+        return createSession(userId, autonomyLevel, ChannelType.REST_API.id(), "rest-chat");
+    }
+
+    public String createSession(String userId, AutonomyLevel autonomyLevel, String channelType, String channelId) {
+        String sessionId = sessionCatalogService != null
+                ? sessionCatalogService.createSession(userId, channelType, channelId)
+                : UUID.randomUUID().toString();
         AutonomyLevel level = (autonomyLevel != null) ? autonomyLevel : AutonomyLevel.SUPERVISED;
         log.infof("Creating new session: %s (autonomy=%s)", sessionId, level);
         heartbeatTracker.recordHeartbeat(sessionId, level);

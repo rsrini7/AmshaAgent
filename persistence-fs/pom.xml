@@ -131,7 +131,11 @@
                     <systemPropertyVariables>
                         <java.util.logging.manager>org.jboss.logmanager.LogManager</java.util.logging.manager>
                         <maven.home>${maven.home}</maven.home>
+                        <amsha.persistence.backend>fs</amsha.persistence.backend>
                     </systemPropertyVariables>
+                    <environmentVariables>
+                        <AMSHA_PERSISTENCE_BACKEND>fs</AMSHA_PERSISTENCE_BACKEND>
+                    </environmentVariables>
                     <parallel>none</parallel>
                     <threadCount>1</threadCount>
                     <forkCount>1</forkCount>

@@ -32,6 +32,7 @@ import com.amsha.core.tools.SandboxExecTool;
 import com.amsha.core.tools.ScheduleTaskTool;
 import com.amsha.core.tools.ToolRegistry;
 import com.amsha.core.tools.ToolResponse;
+import com.amsha.persistence.api.SessionCatalogEntry;
 
 import io.quarkus.runtime.annotations.RegisterForReflection;
 
@@ -84,7 +85,8 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             GroupConsultationEngine.GroupConsultationResult.class,
             GroupConsultationService.TriageResult.class,
             GroupAnalyticsService.DomainComboStats.class,
-            TaskClassifierService.TaskDomain.class
+            TaskClassifierService.TaskDomain.class,
+            SessionCatalogEntry.class
         },
         classNames = {
             "com.github.benmanes.caffeine.cache.SSLMSA",

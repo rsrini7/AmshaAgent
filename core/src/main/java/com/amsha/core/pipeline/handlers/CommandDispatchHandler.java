@@ -80,6 +80,20 @@ public class CommandDispatchHandler implements MessageHandler {
                     dispatch(context, "/history");
                     yield HandleResult.STOP;
                 }
+                case ChannelCommand.NewSession _ -> {
+                    dispatch(context, "/newsession");
+                    yield HandleResult.STOP;
+                }
+                case ChannelCommand.Sessions _ -> {
+                    dispatch(context, "/sessions");
+                    yield HandleResult.STOP;
+                }
+                case ChannelCommand.Resume resume -> {
+                    dispatch(
+                            context,
+                            resume.target().map(value -> "/resume " + value).orElse("/resume"));
+                    yield HandleResult.STOP;
+                }
                 case ChannelCommand.Halt _ -> {
                     dispatch(context, "/halt");
                     yield HandleResult.STOP;
