@@ -41,8 +41,8 @@ import io.opentelemetry.context.Context;
  * <p>When the caller submits work to a {@code ManagedExecutor}, the current
  * OTel {@link Context} must be captured on the <em>calling thread</em> before
  * the {@code submit()} call via {@link #captureContext()}.
- * {@code ContextAwareExecutorService} propagates only
- * {@code WorkspaceScopeHolder} - it does <strong>not</strong> propagate OTel
+ * {@code ContextAwareExecutorService} propagates workspace context, but it does
+ * <strong>not</strong> propagate OTel
  * {@code ThreadLocal}s.
  *
  * <pre>{@code

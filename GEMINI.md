@@ -1,32 +1,19 @@
-# Rule Guidelines for Gemini (GEMINI.md)
+# Gemini Project Rules
 
-## 1. Windows OS Shell Restrictions
-In Windows, do not use `dir /s /b` or `grep` (which are prone to failure). 
-* Use powershell-friendly commands to find files.
-* Use `rg` (ripgrep) which is pre-installed as the replacement for `grep`.
-* Do not use `cat -n`; instead use powershell equivalent if running inside a Windows terminal.
+Read [AGENTS.md](AGENTS.md) for the canonical project rules and required checks.
 
-## 2. SQLite Database Diagnostics
-* **Metadata db**: `sqlite3 data/amsha-meta.db ".tables"`
-* **Search / Vector db**: `sqlite3 data/amsha-fts.db ".tables"`
-* Query directly to inspect database structures and states.
+## Windows shell
 
-## 3. Project Architectural Invariants & Patterns
-Refer to [AGENTS.md](./AGENTS.md) for full developer instructions, including:
-* Module CDI discovery: every module with CDI beans MUST have `jandex-maven-plugin` + `beans.xml`. Compilation ≠ proof. Verify startup logs. (§4, `docs/Architecture_Invariants.md` §15).
-* Backend parity: when adding/updating any `*StorePort`, create ALL 3 backends (SQLite, Postgres, FS) simultaneously. P104 lesson: FS was missed for self-evolve. (§4, §5.26).
-* Compact prompt parity: when changing prompt rules, keep compact-mode prompts behaviorally aligned with the full prompt. Critical rules such as termination (`FINISH`), skill-role self-execution, and execution-boundary semantics must remain present in compact mode. Verify with `./mvnw -pl core -Dtest=SystemPromptBuilderTest test -q`.
-* Native SkillsJar parity: when changing a SkillsJar dependency in `app/pom.xml`, update `app/src/main/resources/META-INF/skills/skills-index.txt` with its exact `SKILL.md` path; Native Image cannot scan skill directories.
-* The Transaction-Free Zone (no high-latency network/LLM calls inside DB transactions).
-* Exception Classification Chain of Responsibility.
-* Inbound Message Pipeline abstractions.
-* Continuity intent vs follow-up heuristics (only `isExplicitContinuity` restores old goal; execution follow-ups use new goal).
-* Role-based tool governance bypass (trusted roles skip non-sensitive op checks; `NETWORK_OUTBOUND` and `EXECUTE_SHELL` always require HITL).
-* Garuda removed from HITL-exempt tools list.
-* Telegram garbled line stripping filter for outbound messages.
-* Zombie recovery auto-denies ALL channels (CLI, Telegram, WebSocket UI) on restart.
-* Saraswati role disabled from delegation (`requiresApproval=false`).
+- Use `rg` for file and text search; avoid `dir /s /b`, `grep`, and `cat -n`.
+- Prefer PowerShell-compatible commands when working in a Windows terminal.
 
-## 4. Security & Planning Best Practices
-* **Defense-in-Depth Sanitization**: Never rely solely on client-side HTML sanitization (e.g., DOMPurify). Ensure that LLM-generated output or rich text is sanitized server-side (e.g., using `HtmlSanitizerService` / OWASP HTML Sanitizer) before being broadcast to clients or persisted.
-* **Holistic Planning**: When writing implementation plans, review the entire project tree, not just the primary module. Cross-reference architectural reviews to ensure backend channel adapters are updated in lockstep with frontend changes.
+## Diagnostics
+
+- Metadata database: `sqlite3 data/amsha-meta.db ".tables"`
+- Search/vector database: `sqlite3 data/amsha-fts.db ".tables"`
+
+## Extra safety
+
+- Sanitize LLM-generated rich text on the server as well as in the UI.
+- For cross-cutting changes, inspect all affected modules, persistence backends,
+  channels, and UI adapters before implementation.

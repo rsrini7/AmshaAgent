@@ -91,12 +91,12 @@ These are NOT interchangeable.
 - To test unauthorized/unbound-like behavior, use blank values intentionally rather than silently omitting required binding.
 
 ### 2.7 Asynchronous Thread Context Propagation (§2.7 INVARIANT)
-- Any asynchronous execution that schedules work on a different thread (e.g., via `ContextAwareExecutorService`) MUST explicitly capture and propagate all 6 context identifiers from `WorkspaceContext`: `sessionId`, `userId`, `chatId`, `autonomyLevel`, `agentRole`, and `channelType`.
-- The captured context MUST be restored on the background thread using the comprehensive `WorkspaceContext.run(...)` overload before invoking the background task.
-- Failure to propagate the complete context results in loss of identity, breaking role-based access control, tool governance, and audit logging for background tasks (e.g., cron jobs, background MCP execution).
+- Async work that needs workspace context MUST be submitted through `ContextAwareExecutorService` (or explicitly wrapped with `WorkspaceScopeHolder.wrap()`).
+- The wrapper captures and re-binds the active session, user, chat, autonomy, agent role, channel type, and channel platform ID when they are bound. Do not bypass it for workspace-aware work.
+- Missing this binding can lose identity, breaking role-based access control, tool governance, and audit logging for background work.
 
 > **`AsyncPersistenceEngine` exception:** The drain threads of `AsyncPersistenceEngine`
-> are exempt from the 6-context `WorkspaceContext.run(...)` requirement because they
+> are exempt from the full `WorkspaceContext.run(...)` requirement because they
 > process events from many sessions simultaneously. They bind only `WorkspaceScopeHolder`
 > per event (session scope), not the full workspace context. This is intentional and is
 > the only legitimate multi-session background binding pattern. See §5.17.
@@ -988,7 +988,7 @@ This rule prevents recurrence of all three patterns.
 - MUST NOT store JDK or library objects that require run-time initialization (e.g. `java.net.http.HttpClient`, `java.lang.Thread`, or descriptors) in `static` or `static final` fields when building for native-image.
 - GraalVM attempts to store these objects in the "image heap" at build time, leading to `UnsupportedFeatureException` (An object of type ... was found in the image heap).
 - Use `@ApplicationScoped` instance fields or `@PostConstruct` lazy initialization to ensure these objects are created at run-time.
-- **6.7 Module-specific Reflection Config**: New modules that introduce CDI beans, DTOs (for JSON/REST), or external libraries that use reflection MUST include a dedicated `*ReflectionConfig` class annotated with `@RegisterForReflection` in a `.config` subpackage. This centralizes reachability for GraalVM and prevents dead-code elimination of critical runtime components across module boundaries. JVM-mode success is NOT evidence that these registrations are unnecessary. See [AGENTS.md §8](../AGENTS.md#8-graalvm-native-image-reflection-registration) for the complete checklist of what needs registration (records: YES, enums: NO, CDI beans: only in persistence modules, JDBI DAOs: YES).
+- **6.7 Module-specific Reflection Config**: Evaluate every new type for native-image reflection. Records used for JSON/JDBI, JDBI DAOs, JDBI DTO rows, and persistence-module CDI beans require registration; ordinary CDI beans, enums, config mappings, and qualifiers do not. Add registrations to the module’s existing `*ReflectionConfig` when needed. See [AGENTS.md §8](../AGENTS.md#8-graalvm-native-image-reflection-registration).
 - **6.8 Native-Image Runtime Initialization**: Libraries using Foreign Function & Memory (FFM) API, `MethodHandle`, or native access (e.g., Lucene 10.x `PosixNativeAccess`) MUST be marked for run-time initialization in `app/src/main/resources/META-INF/native-image/com.amsha/app/native-image.properties`. Mark the **entire package** (`--initialize-at-run-time=org.apache.lucene`), not individual classes — GraalVM embeds static fields from build-time classes into the image heap, causing whack-a-mole errors when marking classes individually. Also mark any CDI beans with `@PostConstruct` that trigger the library. Do NOT use `pom.xml` `additional-build-args` for this — Quarkus splits on commas, breaking args that contain commas. See [AGENTS.md §8](../AGENTS.md#8-graalvm-native-image-reflection-registration) for detailed guidance.
 
 ### 6.9 Lucene `TestSecrets` Class.forName Registration (§6.9 INVARIANT)
@@ -1130,8 +1130,7 @@ The `embedding vector(768)` column and HNSW index MUST be similarly guarded with
      to virtual threads. Capture io.opentelemetry.context.Context.current()
      on the calling thread BEFORE submitting to the executor. Restore it
      inside each virtual thread via context.makeCurrent(). ContextAwareExecutorService
-     propagates WorkspaceScoped session context (ScopedValue) only - it
-     does NOT propagate OTel ThreadLocal spans.
+     propagates workspace context but does NOT propagate OTel ThreadLocal spans.
      (P81 Confirmation: Verified in ParallelToolStepExecutor.java lines 173/192)
 
 7.14 INVARIANT: ReasoningStep history is the in-memory source of truth
@@ -1314,7 +1313,7 @@ The guardrail layer sits between the existing reflex pipeline (Layers 2–3 via 
 
 5. **Existing reflexes MUST NOT be replaced.** The guardrail adapters (e.g., `InjectionInputGuard`) reuse reflex logic at the LLM boundary without removing the reflexes from the earlier pipeline layers. Both layers remain active.
 
-6. **MUST NOT exceed one retry** per output guard invocation. Multiple retries are the responsibility of the calling `LangChainReasoningEngine`, not the guard layer.
+6. **Retry policy belongs to the reasoning loop.** Guards report a `Retry` decision; they do not invoke the model themselves.
 
 7. **Streamed responses** MUST be fully accumulated before `PostLlmGuard` runs. The guard layer operates on the complete response, not partial chunks.
 
@@ -1662,9 +1661,11 @@ ONLY use JDK features FULLY FINALIZED (non-preview) in their respective release.
 
 FORBIDDEN - preview or unfinalized:
 - ❌ StructuredTaskScope / Structured Concurrency (still preview in JDK 25)
-- ❌ Flexible Constructor Bodies (treat as FORBIDDEN until confirmed final)
 - ❌ Any feature requiring `--enable-preview` compiler flag
 - ❌ value classes / primitive types (preview in JDK 25)
+
+Flexible constructor bodies are finalized in JDK 25 and may be used without
+preview flags.
 
 Do NOT add `--enable-preview` to any `pom.xml` compiler or surefire configuration.
 `StructuredTaskScope` is FORBIDDEN. Use `ManagedExecutor` + virtual threads instead.

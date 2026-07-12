@@ -1,59 +1,17 @@
-# CLAUDE.md — Quick Rules for Claude
+# Claude Project Rules
 
-**Always read [AGENTS.md](./AGENTS.md) before making code changes.** Key rules:
+Read [AGENTS.md](AGENTS.md) before making changes; it is the canonical guide.
 
-* **No hardcoded strings**: `ToolCapability.ENUM.toolName()`, not `"sandbox_exec"`.
-* **No hardcoded channel types**: `ChannelType.CLI.id()`, not `"cli"`.
-* **Use LogUtil**: `LogUtil.rootMessage(e)`, never raw `e.getMessage()`.
-* **Transaction-Free Zone**: No LLM/network/tool calls inside `@Transactional`.
-* **Null-safe sealed interfaces**: `Boolean.TRUE.equals(x)`, never auto-unbox. §1.5
-* **JDK 25 GA only**: No preview features (structured concurrency, stream gatherers, module imports, value classes). §1.6
-* **Continuity vs follow-up**: Only `isExplicitContinuity` restores old goal. §1.7
-* **Governance bypass**: Trusted roles skip non-sensitive ops; `NETWORK_OUTBOUND` + `EXECUTE_SHELL` always need HITL. §2.9
-* **Garble-strip Telegram**: `stripGarbledLines()` before sending. §3.2
-* **Zombie recovery**: Auto-deny ALL stale approvals across all channels. §3.3
-* **Saraswati disabled**: `requiresApproval=false` — no delegation to researcher. §3.4
-* **Import alignment**: `python3 ./fix_fqns.py && ./mvnw spotless:apply -q`
-* **Doc verification**: `python3 ./verify_docs.py` after editing `.md` files.
-* **SonarQube**: `mise run sonar:issues` before committing. Fix BLOCKERs.
-* **Module CDI discovery**: `jandex-maven-plugin` + `beans.xml` REQUIRED. Grep startup logs for bean init. §4, `docs/Architecture_Invariants.md` §15.
-* **Backend parity**: When adding/updating any `*StorePort`, create ALL 3 backends (SQLite, Postgres, FS) simultaneously. P104 lesson: FS was missed for self-evolve stores. §4, §5.26.
-* **JDBI stores**: Inject the backend `JdbiProducer` instance; never construct ad hoc JDBI in CDI stores. Use `@BindMethods` for record writes and `@RegisterConstructorMapper` for record query results.
-* **Compact prompt parity**: When changing prompt rules, keep compact-mode prompts behaviorally aligned with the full prompt. Critical rules such as termination (`FINISH`), skill-role self-execution, and execution-boundary semantics must remain present in compact mode. Verify with `./mvnw -pl core -Dtest=SystemPromptBuilderTest test -q`.
-* **Native SkillsJar parity**: Any SkillsJar dependency change in `app/pom.xml` requires the matching exact `SKILL.md` path in `app/src/main/resources/META-INF/skills/skills-index.txt`; Native Image cannot scan skill directories.
+## Local reminders
 
-## ReplyNode Pattern
-`ReplyNode` is a sealed union of `ContentNode` and `InteractionNode`. Always use `switch` with pattern matching:
-```java
-return switch (node) {
-    case ContentNode.Text t -> t.content();
-    case ContentNode.Heading h -> h.text();
-    case ContentNode.CodeBlock cb -> cb.code();
-};
-```
-Never call methods on the base `ReplyNode` — concrete methods live on the subtype.
-
-## PMD Gates
-Max: 500 lines/file · 80 lines/method · cognitive complexity ≤ 15.
-
-## SQLite Diagnostics
-`sqlite3 data/amsha-meta.db ".tables"` · `sqlite3 data/amsha-fts.db ".tables"`
+- Use `ToolCapability.toolName()`, `ChannelType.*.id()`, and
+  `LogUtil.rootMessage(e)` instead of duplicated literals or raw exception messages.
+- `ReplyNode` is sealed: use a pattern-matching `switch` on concrete node types.
+- PMD limits: 500 lines per file, 80 per method, cognitive complexity 15.
+- SQLite diagnostics: `sqlite3 data/amsha-meta.db ".tables"` and
+  `sqlite3 data/amsha-fts.db ".tables"`.
 
 ## Babysitter
-Amsha Agent is babysitter-enabled. Use `/skill:babysit` to orchestrate complex workflows via babysitter runs.
 
-**Recommended processes** for this project:
-- `gsd` — day-to-day development workflow for Pxxx phase-based work
-- `spec-driven-development` — quality gates for mature codebase
-- `evolutionary.js` — iterative refinement matching phase-based workflow
-
-**Recommended skills**: `code-review-pipeline`, `research-first-dev`, `continuous-learning`, `security-scanning`
-
-**Methodology**: evolutionary with spec-driven refinement
-
-**Project profile**: `.a5c/project-profile.json`
-
-**Babysitter mode**: semi-autonomous
-
-## See Also
-[AGENTS.md](./AGENTS.md) — full developer guide with invariants, patterns, and checklists.
+For complex workflows, use `/skill:babysit`. This project uses semi-autonomous,
+evolutionary, spec-driven refinement; see `.a5c/project-profile.json` and `.a5c/`.
