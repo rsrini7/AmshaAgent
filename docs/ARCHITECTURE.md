@@ -20,7 +20,7 @@
 | `amsha-persistence-postgres` | PostgreSQL adapter |
 | `amsha-persistence-fs` | Filesystem-based adapter (Lucene BM25) + tiered memory (Core/Recall/Archival) + self-evolve (Events/Extracted) |
 | `amsha-rag` | Two-tier vector (vec0) + FTS5 RAG memory |
-| `amsha-mcp` | MCP server bridge + dynamic client tool loading |
+| `amsha-mcp` | MCP server bridge + dynamic client tool loading + durable credentialed connections |
 | `amsha-onboarding` | 5-step setup wizard REST API + /complete |
 | `amsha-tool-playwright` | Playwright browser automation tool |
 | `amsha-self-evolve` | Self-Evolution trace capture and learning loop |
@@ -774,15 +774,43 @@ The `SkillAdaptationManager` enables adaptive skill execution — dynamically ad
 
 ### Amsha Agent as MCP Client (Dynamic Tool Loading)
 
+Outbound MCP connections register a remote server's tools into the agent loop.
+
 ```
-POST /api/v1/mcp/connect  {name, url}
-  → McpClientService.connect(name, url)
-  → SSE handshake with remote MCP server
-  → Discover tool list from server
+POST /api/v1/mcp/connect  {name, url, headers?}
+  → McpConnectionLifecycleService.validateHttpRegistration(url, headers)
+  → McpClientService.connectForUser(name, userId, url, category, headers)
+  → SSE handshake with remote MCP server (initialize → initialized → tools/list)
   → ExternalMcpToolAdapter wraps each as AgentTool
   → DynamicToolCapabilityRegistry.register(toolDef)
+  → Persist connection + vault-backed header refs (McpConnectionStorePort)
   → Available as tools in agent roles at next invocation
 ```
+
+`GET /api/v1/mcp/connect` lists currently connected servers (persisted + transient,
+credentials stripped). `DELETE /api/v1/mcp/connect/{name}` disconnects, deregisters
+tools, deletes the durable connection, and removes its vault references.
+
+#### Authenticated HTTP MCP connections (credential headers)
+
+Connections may carry HTTP header credentials (API keys, bearer tokens, tenant IDs).
+Header **values** are never stored in the connection record, config, logs, audit
+payloads, or API responses — only an opaque, owner-scoped `SecretVault` reference
+(`USER:<userId>` partition) and the normalized, non-secret header name. At request time
+`McpConnectionCredentialPort.resolveHeaders(connectionId)` resolves the values into an
+`AutoCloseable ResolvedMcpHeaders` that zeroes its secret bytes after the request.
+Header names are validated against the RFC 7230 token grammar, lower-cased for
+case-insensitive uniqueness, and rejected if they collide with transport-owned / hop-by-hop
+/ framing headers (`Content-Type`, `Accept`, `Mcp-Session-Id`, `Host`, `Content-Length`,
+`Connection`, `Transfer-Encoding`, `Upgrade`, …). Endpoint URLs must not contain user-info
+credentials. Registration is a sensitive operation (`NETWORK_OUTBOUND` HITL / admin API key).
+
+Durable connections are stored via `McpConnectionStorePort` with SQLite, PostgreSQL, and
+filesystem adapters (paired `V5__mcp_connections` Flyway migrations). On startup
+`McpConnectionLifecycleService.reconnectEnabledConnections()` restores enabled HTTP/SSE
+connections from durable metadata; failed reconnects are logged and retried. Failed or
+cancelled credential cleanup is persisted as an owner-scoped, idempotent retry record
+(`MCP_CREDENTIAL_CLEANUP_FAILED`) and retried on startup before reconnect.
 
 Self-connect smoke test: connecting to `http://localhost:8080/mcp` makes Amsha Agent's own tools discoverable as dynamic tools.
 
@@ -911,7 +939,7 @@ AuditService.record(sessionId, userId, agentRole, SecurityEventType, detail)
 
 ### Security Events Audited
 
-56 event types across categories: loop events, tool events, approval events, injection/PII, vault, checkpoint, cron, skill, MCP, session, settings, and more.
+66 event types across categories: loop events, tool events, approval events, injection/PII, vault, checkpoint, cron, skill, MCP, session, settings, and more.
 
 ---
 

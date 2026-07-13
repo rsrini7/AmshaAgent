@@ -766,7 +766,7 @@ MUST NOT use `getFirstResult()` or `stream().findFirst()` without an explicit OR
 
 ## 5.20 SecretVault Transaction Contract
 
-SecretVault **mutation** operations (`store()`, `storeSystemKey()`, `removeSystemKey()`) MUST use `@Transactional(REQUIRES_NEW)` to prevent nesting with active tool or checkpoint transactions.
+SecretVault **mutation** operations (`store()`, `storeSystemKey()`, `removeSystemKey()`, and the user-scoped `remove(keyName, userId)`) MUST use `@Transactional(REQUIRES_NEW)` to prevent nesting with active tool or checkpoint transactions. User-scoped `store`/`get`/`remove(keyName, userId)` resolve a stable `USER:<userId>` partition (independent of the transient chat session) so durable MCP header credentials survive reconnect, async cleanup, rotation, and restart.
 
 - Caller transactions MUST NOT rely on vault writes rolling back with their transaction. Vault writes are committed immediately.
 - Calling `vault.store(...)` from within a `REQUIRED` transaction suspends the outer transaction and gets its own write lock, preventing `SQLITE_BUSY` errors during concurrent tool execution or onboarding initialization.
