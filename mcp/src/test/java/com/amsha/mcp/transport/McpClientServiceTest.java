@@ -11,15 +11,24 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import jakarta.enterprise.inject.Instance;
 import jakarta.enterprise.util.AnnotationLiteral;
 
+import java.time.Instant;
+import java.util.List;
+import java.util.Map;
 import java.util.stream.Stream;
 
+import com.amsha.core.scope.WorkspaceContext;
+import com.amsha.core.security.AutonomyLevel;
+import com.amsha.core.tools.ToolCategory;
 import com.amsha.mcp.tool.DynamicToolCapabilityRegistry;
 import com.amsha.mcp.tool.McpTransportType;
+import com.amsha.persistence.api.McpConnectionHeaderSecretRefDto;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
 
@@ -48,6 +57,8 @@ class McpClientServiceTest {
         service.registry = registry;
         service.objectMapper = new ObjectMapper();
         service.meterRegistry = new SimpleMeterRegistry();
+        service.credentialPort = mock(McpConnectionCredentialPort.class);
+        when(service.credentialPort.resolveHeaders(any())).thenReturn(ResolvedMcpHeaders.empty());
 
         service.managedExecutors = mock(Instance.class);
         ManagedExecutor mockExec = ManagedExecutor.builder().build();
@@ -96,6 +107,35 @@ class McpClientServiceTest {
     }
 
     @Test
+    void testConnectSendsDirectHandshakeHeaders() {
+        wireMock.stubFor(post(urlEqualTo("/"))
+                .withRequestBody(containing("\"initialize\""))
+                .withHeader("X-API-Key", equalTo("secret"))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withHeader("Mcp-Session-Id", "session-with-header")
+                        .withBody("{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{"
+                                + "\"protocolVersion\":\"2024-11-05\",\"capabilities\":{},"
+                                + "\"serverInfo\":{\"name\":\"test\",\"version\":\"1.0\"}}}")));
+        wireMock.stubFor(post(urlEqualTo("/"))
+                .withRequestBody(containing("\"notifications/initialized\""))
+                .withHeader("X-API-Key", equalTo("secret"))
+                .willReturn(aResponse().withStatus(200).withBody("")));
+        wireMock.stubFor(post(urlEqualTo("/"))
+                .withRequestBody(containing("\"tools/list\""))
+                .withHeader("X-API-Key", equalTo("secret"))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody("{\"jsonrpc\":\"2.0\",\"id\":2,\"result\":{\"tools\":[]}}")));
+
+        service.connect("header-server", wireMock.baseUrl(), ToolCategory.NETWORK, Map.of("X-API-Key", "secret"));
+
+        assertTrue(registry.getAll().isEmpty());
+    }
+
+    @Test
     void testConnectStoresSessionIdAndSendsItOnToolsCall() {
         stubFullConnect("my-session-id-xyz");
         wireMock.stubFor(post(urlEqualTo("/"))
@@ -137,5 +177,42 @@ class McpClientServiceTest {
 
         service.connect("empty-server", wireMock.baseUrl());
         assertTrue(registry.getAll().isEmpty());
+    }
+
+    @Test
+    void testStoredHeadersAreResolvedOnlyForCurrentWorkspaceOwner() throws Exception {
+        stubFullConnect("shared-session");
+        wireMock.stubFor(post(urlEqualTo("/"))
+                .withRequestBody(containing("\"tools/call\""))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody("{\"jsonrpc\":\"2.0\",\"id\":3,\"result\":{\"content\":"
+                                + "[{\"type\":\"text\",\"text\":\"owner result\"}]}}")));
+
+        service.connectForUser("shared", "user-a", wireMock.baseUrl(), ToolCategory.NETWORK, Map.of());
+        service.configureHeaderSecretRefs(
+                "shared", "user-a", List.of(headerRef("ref-a", "conn-a", "user-a", "authorization", "vault-a")));
+        service.connectForUser("shared", "user-b", wireMock.baseUrl(), ToolCategory.NETWORK, Map.of());
+        service.configureHeaderSecretRefs(
+                "shared", "user-b", List.of(headerRef("ref-b", "conn-b", "user-b", "authorization", "vault-b")));
+
+        String result = WorkspaceContext.run(
+                "session-a",
+                "user-a",
+                "chat-a",
+                AutonomyLevel.FULL,
+                "COORDINATOR",
+                () -> service.invoke("shared", "external_search", "{}"));
+
+        assertEquals("owner result", result);
+        verify(service.credentialPort).resolveHeaders("conn-a");
+        verify(service.credentialPort, never()).resolveHeaders("conn-b");
+    }
+
+    private static McpConnectionHeaderSecretRefDto headerRef(
+            String id, String connectionId, String userId, String headerName, String vaultKeyRef) {
+        Instant now = Instant.now();
+        return new McpConnectionHeaderSecretRefDto(id, connectionId, userId, headerName, vaultKeyRef, now, now);
     }
 }

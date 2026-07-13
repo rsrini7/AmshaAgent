@@ -11,7 +11,6 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
-import java.util.concurrent.atomic.AtomicReference;
 
 import com.amsha.channel.api.ChannelMessage;
 import com.amsha.channel.api.ChannelType;
@@ -83,7 +82,6 @@ class CronDecisionRouterRunStatusTest {
                 0,
                 BigDecimal.ZERO,
                 Instant.parse("2026-07-10T03:42:01Z"));
-        AtomicReference<CronRunDto> savedRun = new AtomicReference<>();
 
         when(router.statefulAgentStore.isSessionActive(anyString())).thenReturn(false);
         when(router.statefulAgentStore.findLatestAwaitingApprovalBySessionContaining(cronId))

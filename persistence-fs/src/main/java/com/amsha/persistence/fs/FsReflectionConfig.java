@@ -1,5 +1,9 @@
 package com.amsha.persistence.fs;
 
+import com.amsha.persistence.api.McpConnectionCleanupFailureDto;
+import com.amsha.persistence.api.McpConnectionDto;
+import com.amsha.persistence.api.McpConnectionHeaderSecretRefDto;
+
 import io.quarkus.runtime.annotations.RegisterForReflection;
 
 @RegisterForReflection(
@@ -17,13 +21,17 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             FsMemoryRetrievalAdapter.class,
             FsPersistenceAdapter.class,
             FsPromptStoreAdapter.class,
+            FsMcpConnectionStoreAdapter.class,
             FsLockManager.class,
             FilesystemFileStore.class,
             FsEvolutionEventStore.class,
             FsExtractedMemoryStore.class,
             FsCoreMemoryStore.class,
             FsRecallMemoryStore.class,
-            FsArchivalMemoryStore.class
+            FsArchivalMemoryStore.class,
+            McpConnectionDto.class,
+            McpConnectionHeaderSecretRefDto.class,
+            McpConnectionCleanupFailureDto.class
         },
         classNames = {
             "org.apache.lucene.search.BoostAttribute",

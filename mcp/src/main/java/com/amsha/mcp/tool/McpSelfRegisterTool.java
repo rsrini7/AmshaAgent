@@ -1,5 +1,6 @@
 package com.amsha.mcp.tool;
 
+import dev.langchain4j.model.chat.request.json.JsonArraySchema;
 import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
 
 import jakarta.enterprise.context.ApplicationScoped;
@@ -22,6 +23,7 @@ import com.amsha.core.tools.ToolCategory;
 import com.amsha.core.tools.ToolExecutionContext;
 import com.amsha.core.tools.ToolResponse;
 import com.amsha.mcp.transport.McpClientService;
+import com.amsha.mcp.transport.McpConnectionLifecycleService;
 
 /**
  * Component A4 - McpSelfRegisterTool.
@@ -42,12 +44,16 @@ public class McpSelfRegisterTool implements AgentTool {
     private static final String PARAM_NAME = "name";
     private static final String PARAM_TRANSPORT = "transport";
     private static final String PARAM_CATEGORY = "category";
+    private static final String PARAM_HEADERS = "headers";
 
     @Inject
     McpClientService mcpClientService;
 
     @Inject
     AuditService auditService;
+
+    @Inject
+    McpConnectionLifecycleService lifecycleService;
 
     @Override
     public String name() {
@@ -87,6 +93,15 @@ public class McpSelfRegisterTool implements AgentTool {
                         List.of("http", "stdio"),
                         "Transport type: http (SSE) or stdio (local process).")
                 .addStringProperty("url", "The URL for HTTP/SSE transport (e.g., http://localhost:3000/mcp).")
+                .addProperty(
+                        PARAM_HEADERS,
+                        JsonArraySchema.builder()
+                                .items(JsonObjectSchema.builder()
+                                        .addStringProperty("name", "HTTP header name.")
+                                        .addStringProperty("value", "HTTP header value.")
+                                        .required("name", "value")
+                                        .build())
+                                .build())
                 .addStringProperty("command", "The command to run for STDIO transport (e.g., npx, python, docker).")
                 .addStringProperty("args", "Comma-separated arguments for the command.")
                 .addStringProperty("env", "Environment variables (KEY=VALUE lines).")
@@ -131,7 +146,16 @@ public class McpSelfRegisterTool implements AgentTool {
                 if (url == null || url.isBlank()) {
                     return ToolResponse.failure(400, "url is required for http transport.");
                 }
-                mcpClientService.connect(name, url, category);
+                Map<String, String> headers = parseHeaders(params.get(PARAM_HEADERS));
+                lifecycleService.validateHttpRegistration(url, headers);
+                mcpClientService.connectForUser(name, userId, url, category, headers);
+                try {
+                    var persisted = lifecycleService.persistSuccessfulHttp(name, url, category, userId, headers);
+                    mcpClientService.configureHeaderSecretRefs(name, userId, persisted.headerSecretRefs());
+                } catch (RuntimeException e) {
+                    mcpClientService.clearHttpConnectionState(name, userId);
+                    throw e;
+                }
             } else if ("stdio".equalsIgnoreCase(transportStr)) {
                 String command = (String) params.get("command");
                 if (command == null || command.isBlank()) {
@@ -174,8 +198,31 @@ public class McpSelfRegisterTool implements AgentTool {
             return ToolResponse.success(
                     "MCP server '" + name + "' registered successfully. tools/list handshake completed.");
 
+        } catch (IllegalArgumentException e) {
+            return ToolResponse.failure(400, "Invalid MCP registration: " + e.getMessage());
         } catch (Exception e) {
             return ToolResponse.failure(502, "MCP connection failed: " + e.getMessage());
         }
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, String> parseHeaders(Object raw) {
+        if (raw == null) return Map.of();
+        if (!(raw instanceof List<?> entries)) {
+            throw new IllegalArgumentException("headers must be an array of {name,value} objects.");
+        }
+        Map<String, String> headers = new HashMap<>();
+        for (Object entry : entries) {
+            if (!(entry instanceof Map<?, ?> map)) {
+                throw new IllegalArgumentException("headers entries must be objects.");
+            }
+            Object name = map.get("name");
+            Object value = map.get("value");
+            if (!(name instanceof String nameString) || !(value instanceof String valueString)) {
+                throw new IllegalArgumentException("headers entries require string name and value.");
+            }
+            headers.put(nameString, valueString);
+        }
+        return headers;
     }
 }

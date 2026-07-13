@@ -82,8 +82,21 @@ public enum SecurityEventType {
     SKILL_DELETED, // skill deleted via REST
 
     // MCP admin operations (REST)
+    MCP_CONNECTION_REQUESTED, // outbound MCP connection requested
     MCP_SERVER_CONNECTED, // remote MCP server connected
     MCP_SERVER_DISCONNECTED, // remote MCP server disconnected
+    MCP_CONNECTION_VALIDATION_FAILED, // outbound MCP handshake failed
+    MCP_CREDENTIAL_CONFIGURED, // vault-backed MCP credential created
+    MCP_CREDENTIAL_ROTATED, // vault-backed MCP credential replaced
+    MCP_CREDENTIAL_REMOVED, // vault-backed MCP credential removed
+    MCP_CREDENTIAL_CLEANUP_FAILED, // vault-backed MCP credential cleanup failed and was queued
+
+    // Onboarding extension lifecycle (telemetry)
+    ONBOARDING_EXTENSION_SHOWN,
+    ONBOARDING_EXTENSION_SKIPPED,
+    ONBOARDING_EXTENSION_VALIDATED,
+    ONBOARDING_EXTENSION_COMMITTED,
+    ONBOARDING_EXTENSION_FAILED,
 
     // Auth
     AUTH_REJECTED, // API key auth failed (invalid/missing/rate-limited)
@@ -128,6 +141,12 @@ public enum SecurityEventType {
                     SKILL_DELETED,
                     MCP_SERVER_CONNECTED,
                     MCP_SERVER_DISCONNECTED,
+                    MCP_CONNECTION_REQUESTED,
+                    MCP_CONNECTION_VALIDATION_FAILED,
+                    MCP_CREDENTIAL_CONFIGURED,
+                    MCP_CREDENTIAL_ROTATED,
+                    MCP_CREDENTIAL_REMOVED,
+                    MCP_CREDENTIAL_CLEANUP_FAILED,
                     DELEGATION_DISPATCHED -> true;
             default -> false;
         };

@@ -6,6 +6,9 @@ import com.amsha.persistence.api.ChatMemoryDto;
 import com.amsha.persistence.api.CheckpointDto;
 import com.amsha.persistence.api.CompactionSummaryDto;
 import com.amsha.persistence.api.CronRunDto;
+import com.amsha.persistence.api.McpConnectionCleanupFailureDto;
+import com.amsha.persistence.api.McpConnectionDto;
+import com.amsha.persistence.api.McpConnectionHeaderSecretRefDto;
 import com.amsha.persistence.api.MemoryChunkDto;
 import com.amsha.persistence.api.PromptDto;
 import com.amsha.persistence.api.ReasoningStepDto;
@@ -20,6 +23,7 @@ import com.amsha.persistence.postgres.jdbi.CronJdbiDao;
 import com.amsha.persistence.postgres.jdbi.CronRunJdbiDao;
 import com.amsha.persistence.postgres.jdbi.JdbiProducer;
 import com.amsha.persistence.postgres.jdbi.LockJdbiDao;
+import com.amsha.persistence.postgres.jdbi.McpConnectionJdbiDao;
 import com.amsha.persistence.postgres.jdbi.PromptJdbiDao;
 import com.amsha.persistence.postgres.jdbi.RagChunkJdbiDao;
 import com.amsha.persistence.postgres.jdbi.RecallMemoryJdbiDao;
@@ -42,6 +46,9 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             CronRunDto.class,
             PromptDto.class,
             MemoryChunkDto.class,
+            McpConnectionCleanupFailureDto.class,
+            McpConnectionDto.class,
+            McpConnectionHeaderSecretRefDto.class,
             // JDBI DAOs (SQL Object proxies)
             CheckpointJdbiDao.class,
             CronJdbiDao.class,
@@ -56,6 +63,7 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             PromptJdbiDao.class,
             RagChunkJdbiDao.class,
             ArchivalMemoryJdbiDao.class,
+            McpConnectionJdbiDao.class,
             // JDBI infrastructure
             JdbiProducer.class,
             // Store adapters (CDI beans)
@@ -72,6 +80,7 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             PostgresPromptStoreAdapter.class,
             PostgresSecretStoreAdapter.class,
             PostgresSkillStoreAdapter.class,
+            PostgresMcpConnectionStoreAdapter.class,
             PostgresAdvisoryLockAdapter.class,
             PostgresRecallMemoryStore.class,
             RecallMemoryJdbiDao.class

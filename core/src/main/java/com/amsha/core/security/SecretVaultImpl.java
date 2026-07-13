@@ -98,10 +98,7 @@ public class SecretVaultImpl implements SecretVault {
     @Override
     @Transactional(Transactional.TxType.REQUIRES_NEW)
     public void store(String keyName, byte[] secret, String userId) {
-        String sessionId = WorkspaceContext.SESSION_ID.isBound()
-                ? WorkspaceContext.SESSION_ID.get()
-                : VaultConstants.SYSTEM_SESSION_ID;
-        store(keyName, secret, userId, sessionId);
+        store(keyName, secret, userId, userVaultScope(userId));
     }
 
     private void store(String keyName, byte[] secret, String userId, String sessionId) {
@@ -156,10 +153,7 @@ public class SecretVaultImpl implements SecretVault {
 
     @Override
     public Optional<VaultKey> get(String keyName, String userId) {
-        String sessionId = WorkspaceContext.SESSION_ID.isBound()
-                ? WorkspaceContext.SESSION_ID.get()
-                : VaultConstants.SYSTEM_SESSION_ID;
-        return get(keyName, userId, sessionId);
+        return get(keyName, userId, userVaultScope(userId));
     }
 
     @SuppressWarnings("java:S2093") // VaultKey lifecycle managed by VaultKeyCache, not local scope
@@ -225,6 +219,29 @@ public class SecretVaultImpl implements SecretVault {
             if (span != null) span.end();
         }
         // sessionKey NOT auto-closed here
+    }
+
+    @Override
+    @Transactional(Transactional.TxType.REQUIRES_NEW)
+    public void remove(String keyName, String userId) {
+        String sessionId = userVaultScope(userId);
+
+        secretStore.delete(sessionId, keyName);
+        if (!VaultConstants.SYSTEM_SESSION_ID.equals(sessionId)) {
+            auditService.record(
+                    sessionId,
+                    userId,
+                    AgentSentinels.SYSTEM_ROLE,
+                    SecurityEventType.VAULT_ACCESS,
+                    AUDIT_KEY_NAME_PREFIX + keyName + " op=DELETE");
+        }
+    }
+
+    private static String userVaultScope(String userId) {
+        if (userId == null || userId.isBlank()) {
+            throw new IllegalArgumentException("userId is required for a user-scoped vault operation");
+        }
+        return VaultConstants.USER_VAULT_SCOPE_PREFIX + userId;
     }
 
     @Override

@@ -6,6 +6,9 @@ import com.amsha.persistence.api.ChatMemoryDto;
 import com.amsha.persistence.api.CheckpointDto;
 import com.amsha.persistence.api.CompactionSummaryDto;
 import com.amsha.persistence.api.CronRunDto;
+import com.amsha.persistence.api.McpConnectionCleanupFailureDto;
+import com.amsha.persistence.api.McpConnectionDto;
+import com.amsha.persistence.api.McpConnectionHeaderSecretRefDto;
 import com.amsha.persistence.api.PromptDto;
 import com.amsha.persistence.api.ReasoningStepDto;
 import com.amsha.persistence.api.SecretDto;
@@ -21,6 +24,7 @@ import com.amsha.persistence.sqlite.jdbi.CronJdbiDao;
 import com.amsha.persistence.sqlite.jdbi.CronRunJdbiDao;
 import com.amsha.persistence.sqlite.jdbi.JdbiProducer;
 import com.amsha.persistence.sqlite.jdbi.LockJdbiDao;
+import com.amsha.persistence.sqlite.jdbi.McpConnectionJdbiDao;
 import com.amsha.persistence.sqlite.jdbi.PromptJdbiDao;
 import com.amsha.persistence.sqlite.jdbi.RecallMemoryJdbiDao;
 import com.amsha.persistence.sqlite.jdbi.SecretJdbiDao;
@@ -41,6 +45,9 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             ReasoningStepDto.class,
             CronRunDto.class,
             PromptDto.class,
+            McpConnectionCleanupFailureDto.class,
+            McpConnectionDto.class,
+            McpConnectionHeaderSecretRefDto.class,
             // JDBI DAOs (SQL Object proxies)
             CheckpointJdbiDao.class,
             CronJdbiDao.class,
@@ -56,6 +63,7 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             CoreMemoryJdbiDao.class,
             RecallMemoryJdbiDao.class,
             ArchivalMemoryJdbiDao.class,
+            McpConnectionJdbiDao.class,
             // JDBI infrastructure
             JdbiProducer.class,
             JdbiRetryWrapper.class,
@@ -76,6 +84,7 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             SqlitePromptStoreAdapter.class,
             SqliteSecretStoreAdapter.class,
             SqliteSkillStoreAdapter.class,
+            SqliteMcpConnectionStoreAdapter.class,
             SqliteAdvisoryLockAdapter.class,
             // Existing infrastructure
             GlobalKnowledgeBase.class,

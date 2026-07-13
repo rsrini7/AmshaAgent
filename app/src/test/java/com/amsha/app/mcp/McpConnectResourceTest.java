@@ -7,13 +7,17 @@ import jakarta.ws.rs.core.Response;
 
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 
 import com.amsha.core.audit.AuditService;
+import com.amsha.core.tools.ToolCategory;
 import com.amsha.mcp.config.McpToolAllowlist;
 import com.amsha.mcp.tool.DynamicToolCapability;
 import com.amsha.mcp.tool.DynamicToolCapabilityRegistry;
 import com.amsha.mcp.transport.McpClientService;
 import com.amsha.mcp.transport.McpConnectionException;
+import com.amsha.mcp.transport.McpConnectionLifecycleService;
+import com.amsha.mcp.transport.McpConnectionLifecycleService.PersistedConnection;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -36,6 +40,9 @@ class McpConnectResourceTest {
     @Mock
     AuditService auditService;
 
+    @Mock
+    McpConnectionLifecycleService lifecycleService;
+
     McpConnectResource resource;
 
     private static final String SERVER_NAME = "test-server";
@@ -48,18 +55,23 @@ class McpConnectResourceTest {
         setField(resource, "registry", registry);
         setField(resource, "config", config);
         setField(resource, "auditService", auditService);
+        setField(resource, "lifecycleService", lifecycleService);
     }
 
     @Test
     void connectReturns200OnSuccess() throws McpConnectionException {
         when(config.serverEnabled()).thenReturn(true);
         when(registry.getAll()).thenReturn(List.of());
+        when(lifecycleService.persistSuccessfulHttp(SERVER_NAME, SERVER_URL, ToolCategory.NETWORK, "unknown", Map.of()))
+                .thenReturn(new PersistedConnection(null, List.of()));
         McpConnectResource.ConnectRequest request = new McpConnectResource.ConnectRequest(SERVER_NAME, SERVER_URL);
 
         Response resp = resource.connect(request);
 
         assertEquals(200, resp.getStatus());
-        verify(mcpClientService).connect(SERVER_NAME, SERVER_URL);
+        verify(mcpClientService).connectForUser(SERVER_NAME, "unknown", SERVER_URL, ToolCategory.NETWORK, Map.of());
+        verify(lifecycleService)
+                .persistSuccessfulHttp(SERVER_NAME, SERVER_URL, ToolCategory.NETWORK, "unknown", Map.of());
     }
 
     @Test
@@ -98,12 +110,13 @@ class McpConnectResourceTest {
         when(registry.getAll()).thenReturn(List.of());
         doThrow(new McpConnectionException("Connection refused"))
                 .when(mcpClientService)
-                .connect(SERVER_NAME, SERVER_URL);
+                .connectForUser(SERVER_NAME, "unknown", SERVER_URL, ToolCategory.NETWORK, Map.of());
 
         McpConnectResource.ConnectRequest request = new McpConnectResource.ConnectRequest(SERVER_NAME, SERVER_URL);
         Response resp = resource.connect(request);
 
         assertEquals(502, resp.getStatus());
+        verify(lifecycleService, never()).persistSuccessfulHttp(anyString(), anyString(), any(), anyString(), any());
     }
 
     @Test
@@ -113,6 +126,7 @@ class McpConnectResourceTest {
         when(tool.toolName()).thenReturn("tool-1");
         Collection<DynamicToolCapability> tools = List.of(tool);
         when(registry.getAll()).thenReturn(tools);
+        when(lifecycleService.deleteByNameAndUserId(SERVER_NAME, "unknown")).thenReturn(true);
 
         Response resp = resource.disconnect(SERVER_NAME);
 
@@ -125,6 +139,7 @@ class McpConnectResourceTest {
     @Test
     void disconnectReturns404WhenNoServerFound() {
         when(registry.getAll()).thenReturn(List.of());
+        when(lifecycleService.deleteByNameAndUserId("nonexistent", "unknown")).thenReturn(false);
 
         Response resp = resource.disconnect("nonexistent");
 
@@ -138,6 +153,7 @@ class McpConnectResourceTest {
         when(tool1.mcpServerName()).thenReturn("server-a");
         when(tool2.mcpServerName()).thenReturn("server-a");
         when(registry.getAll()).thenReturn(List.of(tool1, tool2));
+        when(lifecycleService.listByUserId("unknown")).thenReturn(List.of());
 
         Response resp = resource.listConnected();
 
@@ -147,6 +163,7 @@ class McpConnectResourceTest {
     @Test
     void listConnectedReturns200WithEmptyRegistry() {
         when(registry.getAll()).thenReturn(List.of());
+        when(lifecycleService.listByUserId("unknown")).thenReturn(List.of());
 
         Response resp = resource.listConnected();
 

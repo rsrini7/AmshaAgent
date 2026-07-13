@@ -10,9 +10,9 @@ class ChannelTypeTest {
 
     @Test
     void testFromString_validTypes() {
-        assertEquals(Optional.of(ChannelType.TELEGRAM), ChannelType.fromString("TELEGRAM"));
-        assertEquals(Optional.of(ChannelType.DISCORD), ChannelType.fromString("discord"));
-        assertEquals(Optional.of(ChannelType.SLACK), ChannelType.fromString("Slack"));
+        assertEquals(Optional.<ChannelType>of(ChannelType.TELEGRAM), ChannelType.fromString("TELEGRAM"));
+        assertEquals(Optional.<ChannelType>of(ChannelType.DISCORD), ChannelType.fromString("discord"));
+        assertEquals(Optional.<ChannelType>of(ChannelType.SLACK), ChannelType.fromString("Slack"));
     }
 
     @Test
@@ -34,7 +34,8 @@ class ChannelTypeTest {
 
     @Test
     void testFallbackPattern() {
-        ChannelType ch = ChannelType.fromString(null).orElse(ChannelType.TELEGRAM);
+        Optional<ChannelType> maybeChannelType = ChannelType.fromString(null);
+        ChannelType ch = maybeChannelType.orElse(ChannelType.TELEGRAM);
         assertEquals(ChannelType.TELEGRAM, ch);
     }
 

@@ -223,6 +223,28 @@ public class SecretVaultImplTest {
     }
 
     @Test
+    void testUserScopedRemoveCannotDeleteAnotherUsersSecret() {
+        String owner = "owner-user";
+        String otherUser = "other-user";
+        WorkspaceContext.runWithFullAutonomy(TEST_SESSION_ID, owner, "test-chat", "test-role", () -> {
+            cleanDb();
+            vault.store(API_KEY_NAME, SECRET_PAYLOAD, owner);
+        });
+
+        WorkspaceContext.runWithFullAutonomy("other-session", otherUser, "test-chat", "test-role", () -> {
+            assertTrue(vault.get(API_KEY_NAME, otherUser).isEmpty(), "Other user must not retrieve the owner's secret");
+            vault.remove(API_KEY_NAME, otherUser);
+        });
+
+        WorkspaceContext.runWithFullAutonomy(TEST_SESSION_ID, owner, "test-chat", "test-role", () -> {
+            assertTrue(vault.get(API_KEY_NAME, owner).isPresent(), "Other user must not remove the owner's secret");
+            vault.remove(API_KEY_NAME, owner);
+
+            assertTrue(vault.get(API_KEY_NAME, owner).isEmpty(), "Owner should remove their scoped secret");
+        });
+    }
+
+    @Test
     void testVaultWriteDuringToolExecution() {
         // Enclosing transaction simulates tool execution
         // We Use manual transaction to avoid REQUIRED -> REQUIRES_NEW deadlock on
