@@ -14,6 +14,8 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.Timer;
+import java.util.TimerTask;
 import java.util.UUID;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -22,7 +24,9 @@ import com.amsha.common.util.LogUtil;
 import com.amsha.core.agent.AgentSentinels;
 import com.amsha.core.audit.AuditService;
 import com.amsha.core.audit.SecurityEventType;
+import com.amsha.core.scope.WorkspaceScopeHolder;
 import com.amsha.core.security.SecretVault;
+import com.amsha.core.security.VaultConstants;
 import com.amsha.core.tools.ToolCategory;
 import com.amsha.mcp.tool.McpTransportType;
 import com.amsha.persistence.api.McpConnectionCleanupFailureDto;
@@ -69,9 +73,26 @@ public class McpConnectionLifecycleService {
     @Inject
     McpClientService mcpClientService;
 
+    /**
+     * Delay before reconciling durable connections at boot. The MCP/HTTP server may
+     * not be listening yet when {@link StartupEvent} fires, so reconnecting a
+     * localhost/self durable connection immediately fails with connection-refused
+     * and logs a misleading WARN. Waiting a moment lets the server come up so
+     * self/local connections reconcile successfully.
+     */
+    private static final long STARTUP_RECONNECT_DELAY_MS = 2_000;
+
     void onStartup(@Observes StartupEvent event) {
-        retryCleanupFailures();
-        reconnectEnabledConnections();
+        new Timer("mcp-startup-reconnect", true)
+                .schedule(
+                        new TimerTask() {
+                            @Override
+                            public void run() {
+                                retryCleanupFailures();
+                                reconnectEnabledConnections();
+                            }
+                        },
+                        STARTUP_RECONNECT_DELAY_MS);
     }
 
     public int retryCleanupFailures() {
@@ -80,7 +101,8 @@ public class McpConnectionLifecycleService {
         int cleaned = 0;
         for (McpConnectionCleanupFailureDto failure : store.get().listCleanupFailures()) {
             try {
-                secretVault.remove(failure.vaultKeyRef(), failure.userId());
+                runInUserVaultScope(
+                        failure.userId(), () -> secretVault.remove(failure.vaultKeyRef(), failure.userId()));
                 store.get().deleteCleanupFailure(failure.id(), failure.userId());
                 auditService.recordMandatory(
                         AgentSentinels.SYSTEM_SESSION,
@@ -121,7 +143,9 @@ public class McpConnectionLifecycleService {
             try {
                 List<McpConnectionHeaderSecretRefDto> refs =
                         store.get().listHeaderSecretRefs(connection.id(), connection.userId());
-                mcpClientService.configureHeaderSecretRefs(connection.name(), connection.userId(), refs);
+                runInUserVaultScope(
+                        connection.userId(),
+                        () -> mcpClientService.configureHeaderSecretRefs(connection.name(), connection.userId(), refs));
                 mcpClientService.connectForUser(
                         connection.name(),
                         connection.userId(),
@@ -209,7 +233,9 @@ public class McpConnectionLifecycleService {
         return headers.stream()
                 .map(header -> {
                     String vaultKey = vaultKeyRef(connectionId, header.normalizedName());
-                    secretVault.store(vaultKey, header.value().getBytes(StandardCharsets.UTF_8), userId);
+                    runInUserVaultScope(
+                            userId,
+                            () -> secretVault.store(vaultKey, header.value().getBytes(StandardCharsets.UTF_8), userId));
                     auditService.recordMandatory(
                             AgentSentinels.SYSTEM_SESSION,
                             userId,
@@ -336,7 +362,7 @@ public class McpConnectionLifecycleService {
     private void removeVaultSecretOrRecordFailure(
             McpConnectionStorePort port, String userId, McpConnectionHeaderSecretRefDto ref) {
         try {
-            secretVault.remove(ref.vaultKeyRef(), userId);
+            runInUserVaultScope(userId, () -> secretVault.remove(ref.vaultKeyRef(), userId));
             auditService.recordMandatory(
                     AgentSentinels.SYSTEM_SESSION,
                     userId,
@@ -395,6 +421,19 @@ public class McpConnectionLifecycleService {
 
     private static String safeReason(String reason) {
         return reason == null || reason.isBlank() ? "cleanup failed" : reason;
+    }
+
+    /**
+     * Runs vault operations inside an active workspace scope.
+     *
+     * <p>{@link SecretVault} derives and caches per-user keys through the {@code @WorkspaceScoped}
+     * {@link com.amsha.core.security.VaultKeyCache}. REST/admin entry points and the startup
+     * reconnect path execute outside any workspace context, so the scope must be activated
+     * explicitly. The vault key is derived from the stable per-user scope id, keeping secrets
+     * decryptable across restarts and requests.
+     */
+    private void runInUserVaultScope(String userId, Runnable action) {
+        WorkspaceScopeHolder.run(VaultConstants.USER_VAULT_SCOPE_PREFIX + userId, userId, null, action);
     }
 
     public record PersistedConnection(

@@ -39,7 +39,16 @@
 
 @adminBase = http://localhost:8080/api/v1
 @mcpBase   = http://localhost:8080
-# @validKey  = internal
+# API key for the running instance. Set this to the value configured via
+# amsha.api.keys / AMSHA_API_KEYS (the token used to launch the native binary).
+# @validKey  = <your-api-key>
+# Secret sent as an outbound MCP Authorization header. Stored ENCRYPTED in the
+# vault (SecretVault) and referenced per connection; never logged in plaintext.
+# This is the auth credential the REMOTE MCP server expects (its API key / bearer
+# token / custom header value) - obtain it from that server's operator or docs.
+# Amsha does not mint it; you supply the value and Amsha encrypts + attaches it.
+# For a self-connect smoke test any non-empty value works (the local /mcp ignores it).
+# @mcpSecret = <remote-mcp-server-token>
 
 ### ════════════════════════════════════════════════════════════════
 ### FLOW A - MCP ADMIN (run as health checks before any protocol tests)
@@ -276,6 +285,8 @@ Mcp-Session-Id: {{mcpSessionId}}
 ### Self-connect smoke test - no external MCP server needed.
 ### MCP-CLIENT-1 connects Amsha Agent to itself at localhost:8080/mcp.
 ### After success: dynamic tools are registered in DynamicToolCapabilityRegistry.
+### The connect body also accepts an optional "headers" map of auth secrets
+### (stored encrypted in the vault); see FLOW F for the secure-header path.
 ### ════════════════════════════════════════════════════════════════
 
 ### [MCP-CLIENT-1] Self-connect - Amsha Agent as client to itself
@@ -366,6 +377,92 @@ X-Amsha-API-Key: {{validKey}}
 # }
 
 ###
+
+### ════════════════════════════════════════════════════════════════
+### FLOW F - SECURE OUTBOUND CONNECTION (header secret management)
+###
+### The enhanced POST /api/v1/mcp/connect accepts an optional "headers" map.
+### Each header value is stored as an ENCRYPTED SECRET in the vault
+### (SecretVault -> @WorkspaceScoped VaultKeyCache, scoped per user) and tracked
+### by McpConnectionHeaderSecretRefDto. On connect/reconnect the secret is
+### resolved and attached to outbound HTTP requests to the remote server.
+###
+### Validation (McpConnectionLifecycleService.validateHeaders):
+###   - header names must match the RFC 7230 token subset; transport-owned /
+###     forbidden names (content-type, host, mcp-session-id, connection, ...) are
+###     rejected.
+###   - header values containing ${, $( or backticks are rejected (no injection).
+###   - duplicate header names are rejected.
+###
+### Vault ops run inside WorkspaceScopeHolder so the workspace-scoped key cache
+### is reachable from the REST request thread. Without it the connect 500s with
+### "WorkspaceScoped context was not active". Connections + secret refs survive
+### restart; the lifecycle service reconnects enabled HTTP connections and
+### re-resolves secrets (audit: MCP_CREDENTIAL_CONFIGURED / _REMOVED).
+
+### [MCP-CLIENT-SEC-1] Secure connect with an Authorization header secret
+# Expect 200: {"name":"secure","url":"...","toolsRegistered":N,"status":"connected"}
+# Proves: McpConnectResource -> lifecycleService.persistSuccessfulHttp()
+#   -> validateHeaders() -> storeHeaderSecrets() -> secretVault.store()
+#   (wrapped in WorkspaceScopeHolder). Audit: MCP_CREDENTIAL_CONFIGURED.
+POST {{adminBase}}/mcp/connect
+Content-Type: application/json
+X-Amsha-API-Key: {{validKey}}
+
+{
+  "name": "secure",
+  "url": "http://localhost:8080/mcp",
+  "headers": {
+    "Authorization": "Bearer {{mcpSecret}}"
+  }
+}
+
+###
+
+### [MCP-CLIENT-SEC-2] Verify dynamic tools registered for the secure server
+# Expect 200: registeredDynamicTools contains tools with mcpServerName="secure"
+GET {{adminBase}}/mcp/tools
+Accept: application/json
+X-Amsha-API-Key: {{validKey}}
+
+###
+
+### [MCP-CLIENT-SEC-3] Disconnect the secure server (also purges the vault secret)
+# Expect 200: {"name":"secure","deregistered":true,"toolsRemoved":N}
+# Vault secret removal is audited MCP_CREDENTIAL_REMOVED.
+DELETE {{adminBase}}/mcp/connect/secure
+Accept: application/json
+X-Amsha-API-Key: {{validKey}}
+
+###
+
+### [MCP-CLIENT-SEC-ERR-1] Connect with forbidden header (content-type) -> 400
+# validateHeaders() rejects transport-owned header names.
+POST {{adminBase}}/mcp/connect
+Content-Type: application/json
+X-Amsha-API-Key: {{validKey}}
+
+{
+  "name": "forbidden",
+  "url": "http://localhost:8080/mcp",
+  "headers": { "Content-Type": "application/json" }
+}
+
+###
+
+### [MCP-CLIENT-SEC-ERR-2] Connect with injection-prone header value -> 400
+# containsUnsafeHeaderValue() rejects ${, $( and backticks.
+POST {{adminBase}}/mcp/connect
+Content-Type: application/json
+X-Amsha-API-Key: {{validKey}}
+
+{
+  "name": "injection",
+  "url": "http://localhost:8080/mcp",
+  "headers": { "X-Evil": "$(curl evil)" }
+}
+
+### ════════════════════════════════════════════════════════════════
 
 ### ════════════════════════════════════════════════════════════════
 ### FLOW E - MCP CLIENT ERROR / EDGE CASES
