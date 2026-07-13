@@ -371,7 +371,7 @@
           <includeTests>false</includeTests>
           <javaLanguageVersion>25</javaLanguageVersion>
           <rulesets>
-            <ruleset>${maven.multiModuleProjectDirectory}/src/main/resources/rulesets/java/amsha-rules.xml</ruleset>
+            <ruleset>${maven.multiModuleProjectDirectory}/app/src/main/resources/amsha-rules.xml</ruleset>
           </rulesets>
         </configuration>
         <executions>
