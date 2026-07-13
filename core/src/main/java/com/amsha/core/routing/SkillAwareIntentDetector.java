@@ -7,6 +7,7 @@ import jakarta.inject.Inject;
 
 import java.util.Arrays;
 import java.util.List;
+import java.util.Optional;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
@@ -47,11 +48,29 @@ public class SkillAwareIntentDetector implements IntentDetector {
             return fallbackService.classify(userMessage);
         }
 
+        Optional<String> skillMatch = findSkillMatch(userMessage);
+        if (skillMatch.isPresent()) {
+            return skillMatch.get();
+        }
+
+        return fallbackService.classify(userMessage);
+    }
+
+    /**
+     * Checks skill trigger patterns and fuzzy name matches only — no LLM
+     * fallback. Use this when the caller already has a default role and
+     * only wants to detect skill overrides.
+     */
+    public Optional<String> findSkillMatch(String userMessage) {
+        if (userMessage == null || userMessage.isBlank()) {
+            return Optional.empty();
+        }
+
         List<CompiledSkillEntry> snapshot = skillRegistry.currentSnapshot();
 
         for (CompiledSkillEntry entry : snapshot) {
             if (entry.matches(userMessage)) {
-                return skillRole(entry, "trigger pattern", userMessage);
+                return Optional.of(skillRole(entry, "trigger pattern", userMessage));
             }
         }
 
@@ -60,11 +79,11 @@ public class SkillAwareIntentDetector implements IntentDetector {
                         e2.definition().name().length(), e1.definition().name().length()))
                 .toList()) {
             if (matchesSkillName(userMessage, entry.definition().name())) {
-                return skillRole(entry, "skill name", userMessage);
+                return Optional.of(skillRole(entry, "skill name", userMessage));
             }
         }
 
-        return fallbackService.classify(userMessage);
+        return Optional.empty();
     }
 
     private static boolean matchesSkillName(String userMessage, String skillName) {
