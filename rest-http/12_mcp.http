@@ -37,9 +37,9 @@
 ### Prerequisites: Amsha Agent running in serve mode, amsha.mcp.server-enabled=true (default)
 ### ═══════════════════════════════════════════════════════════════
 
-# @adminBase = http://localhost:8080/api/v1
-# @mcpBase   = http://localhost:8080
-# @validKey  = key-internal-cWevfEoRvstUv0PqGpf02LzDY5kPNaz1y9GSl0LZOwU=
+@adminBase = http://localhost:8080/api/v1
+@mcpBase   = http://localhost:8080
+# @validKey  = internal
 
 ### ════════════════════════════════════════════════════════════════
 ### FLOW A - MCP ADMIN (run as health checks before any protocol tests)
@@ -315,13 +315,13 @@ X-Amsha-API-Key: {{validKey}}
 # After self-connect, the agent's tool schema includes the dynamic tools.
 # This test exercises the full agent → dynamic tool → MCP client path.
 # @name mcpAgentSession
-POST {{adminBase}}/../api/v1/sessions
+POST {{adminBase}}/sessions
 Content-Type: application/json
 X-Amsha-API-Key: {{validKey}}
 
 ###
 
-POST http://localhost:8080/api/v1/sessions/{{mcpAgentSession.response.body.sessionId}}/run
+POST {{adminBase}}/sessions/{{mcpAgentSession.response.body.sessionId}}/run
 Content-Type: application/json
 X-Amsha-API-Key: {{validKey}}
 
@@ -333,7 +333,7 @@ X-Amsha-API-Key: {{validKey}}
 
 ###
 
-DELETE http://localhost:8080/api/v1/sessions/{{mcpAgentSession.response.body.sessionId}}
+DELETE {{adminBase}}/sessions/{{mcpAgentSession.response.body.sessionId}}
 X-Amsha-API-Key: {{validKey}}
 
 ###
