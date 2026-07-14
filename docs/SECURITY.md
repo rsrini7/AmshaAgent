@@ -48,7 +48,7 @@ AuditService.record(sessionId, userId, agentRole, SecurityEventType, detail)
 ```
 
 - **Tamper detection**: `AuditVerifier.verifyChain(sessionId)` re-computes HMAC for all events and confirms no tampering
-- **61 event types**: loop events, tool events, approval events, injection/PII, vault, cron, skill, MCP, session, etc.
+- **66 event types**: loop events, tool events, approval events, injection/PII, vault, cron, skill, MCP, session, etc.
 - **Dual drain threads**: `AsyncPersistenceEngine` drains two virtual threads (critical path / telemetry path)
 - **Fail-closed**: `ComplianceViolationException` thrown when a mandatory audit write fails after all retries
 
@@ -70,6 +70,10 @@ AuditService.record(sessionId, userId, agentRole, SecurityEventType, detail)
 - Language runtimes: Python, Java, Node.js, Go, Bash
 
 **Secret transport**: Tool runtime secrets are resolved from `SecretVault` and injected into the sandbox container via a memory-wiped `.env` file on a tmpfs mount — they never appear in process arguments or environment variables visible to host processes.
+
+### MCP credential headers
+
+Outbound HTTP MCP connections may carry credential headers (API keys, bearer tokens, tenant IDs). Header **values** live only in `SecretVault` under a stable owner-scoped partition (`USER:<userId>`); the durable connection record stores only an opaque vault reference and the normalized, non-secret header name. Values are resolved just-in-time into an `AutoCloseable` holder that zeroes its secret bytes after each request, and are never written to config files, logs, audit payloads, tool results, or API responses. Header names follow the RFC 7230 token grammar, are lower-cased for case-insensitive uniqueness, and reject transport-owned / hop-by-hop / framing names. Registration is a sensitive, HITL-gated operation.
 
 ---
 

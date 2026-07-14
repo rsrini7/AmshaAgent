@@ -50,7 +50,9 @@ import io.smallrye.common.annotation.Identifier;
 public class CompactionService {
 
     private static final int MAX_SUMMARY_CODEPOINTS = 1985;
+    private static final int MAX_COMPACTION_RETRIES = 3;
     private static final String TRUNCATION_SUFFIX = "...[truncated]";
+    private static final List<String> SUMMARY_RESPONSE_FIELDS = List.of("summary", "content", "result");
 
     @ConfigProperty(name = "amsha.memory.compaction.max-chars", defaultValue = "96000")
     long maxCharsBeforeCompaction;
@@ -280,75 +282,94 @@ public class CompactionService {
     }
 
     private String executeCompactionTurn(String sessionId, String prompt) {
-        String newSummary = "";
-        int maxRetries = 3;
-        for (int i = 1; i <= maxRetries; i++) {
+        for (int attempt = 1; attempt <= MAX_COMPACTION_RETRIES; attempt++) {
             try {
-                String responseText = compactionModel
-                        .chat(UserMessage.userMessage(prompt))
-                        .aiMessage()
-                        .text();
-
-                if (responseText == null || responseText.isBlank()) {
-                    newSummary = "";
-                } else if (resolveCompactionMode() == StructuredOutputMode.NATIVE) {
-                    try {
-                        JsonNode node = objectMapper.readTree(responseText);
-                        JsonNode summaryNode = node.get("summary");
-                        if (summaryNode == null) summaryNode = node.get("content");
-                        if (summaryNode == null) summaryNode = node.get("result");
-
-                        newSummary = (summaryNode != null && summaryNode.isTextual())
-                                ? summaryNode.asText().trim()
-                                : responseText.trim();
-                    } catch (Exception e) {
-                        log.warnf(
-                                "Failed to parse compaction JSON for session %s (attempt %d/%d): %s",
-                                sessionId, i, maxRetries, LogUtil.rootMessage(e));
-
-                        if (i < maxRetries) {
-                            log.info("Retrying compaction with PROMPT_DIRECTIVE fallback to avoid JSON errors.");
-                            // Temporarily switch to prompt directive for the retry
-                            String fallbackPrompt =
-                                    "CRITICAL: You MUST respond ONLY with the summary prose. Do not use JSON.\n\n"
-                                            + prompt;
-                            newSummary = executeCompactionTurn(sessionId, fallbackPrompt, i + 1, maxRetries);
-                            return newSummary;
-                        }
-
-                        newSummary = responseText.trim();
-                    }
-                } else {
-                    newSummary = responseText.trim();
-                }
-                break; // success
+                return summarizeCompactionResponse(sessionId, prompt, attempt);
             } catch (Exception e) {
-                if (isRateLimit(e) || isJsonError(e)) {
-                    if (isRateLimit(e)) {
-                        rateLimitTracker.recordHit("compaction");
-                    }
-                    String errorType = isRateLimit(e) ? "rate-limited" : "JSON validation failed";
-                    if (i < maxRetries) {
-                        // Exponential Backoff: base * 2^attempt
-                        // Safety: attempt is capped by Strategy.maxAttempts (clamped to 10), so no overflow risk.
-                        long expDelay = Math.min(maxBackoffMs, 1000L * (1L << i));
-                        log.warnf(
-                                "CompactionService: %s for session %s (attempt %d/%d). Retrying in %d ms...",
-                                errorType, sessionId, i, maxRetries, expDelay);
-                        try {
-                            Thread.sleep(expDelay);
-                        } catch (InterruptedException ie) {
-                            Thread.currentThread().interrupt();
-                            throw new CompactionAbortedException("Interrupted during compaction backoff", ie);
-                        }
-                        continue;
-                    }
-                    throw new CompactionAbortedException(errorType + " during compaction", e);
+                boolean jsonError = isJsonError(e);
+                boolean rateLimited = isRateLimit(e);
+                if (!jsonError && !rateLimited) {
+                    throw e;
                 }
-                throw e;
+                if (rateLimited) rateLimitTracker.recordHit("compaction");
+                if (jsonError) return fallbackAfterJsonValidationFailure(sessionId, prompt, attempt, e);
+                retryRateLimitedCompaction(sessionId, attempt, e);
             }
         }
-        return newSummary;
+        return "";
+    }
+
+    private String summarizeCompactionResponse(String sessionId, String prompt, int attempt) {
+        String responseText = compactionModel
+                .chat(UserMessage.userMessage(prompt))
+                .aiMessage()
+                .text();
+        if (responseText == null || responseText.isBlank()) return "";
+        if (resolveCompactionMode() != StructuredOutputMode.NATIVE) return responseText.trim();
+        return extractNativeSummary(sessionId, prompt, responseText, attempt);
+    }
+
+    private String extractNativeSummary(String sessionId, String prompt, String responseText, int attempt) {
+        try {
+            JsonNode summaryNode = firstSummaryNode(objectMapper.readTree(responseText));
+            return summaryNode != null && summaryNode.isTextual()
+                    ? summaryNode.asText().trim()
+                    : responseText.trim();
+        } catch (Exception e) {
+            log.warnf(
+                    "Failed to parse compaction JSON for session %s (attempt %d/%d): %s",
+                    sessionId, attempt, MAX_COMPACTION_RETRIES, LogUtil.rootMessage(e));
+            if (attempt < MAX_COMPACTION_RETRIES) {
+                log.info("Retrying compaction with PROMPT_DIRECTIVE fallback to avoid JSON errors.");
+                return executeCompactionTurn(
+                        sessionId, nativeJsonFallbackPrompt(prompt), attempt + 1, MAX_COMPACTION_RETRIES);
+            }
+            return responseText.trim();
+        }
+    }
+
+    private static JsonNode firstSummaryNode(JsonNode node) {
+        for (String field : SUMMARY_RESPONSE_FIELDS) {
+            JsonNode candidate = node.get(field);
+            if (candidate != null) return candidate;
+        }
+        return null;
+    }
+
+    private String fallbackAfterJsonValidationFailure(String sessionId, String prompt, int attempt, Exception cause) {
+        if (attempt >= MAX_COMPACTION_RETRIES) {
+            throw new CompactionAbortedException("JSON validation failed during compaction", cause);
+        }
+        log.warnf(
+                "CompactionService: JSON validation failed for session %s (attempt %d/%d). "
+                        + "Falling back to PROMPT_DIRECTIVE mode.",
+                sessionId, attempt, MAX_COMPACTION_RETRIES);
+        return executeCompactionTurn(
+                sessionId, validationJsonFallbackPrompt(prompt), attempt + 1, MAX_COMPACTION_RETRIES);
+    }
+
+    private void retryRateLimitedCompaction(String sessionId, int attempt, Exception cause) {
+        if (attempt >= MAX_COMPACTION_RETRIES) {
+            throw new CompactionAbortedException("rate-limited during compaction", cause);
+        }
+        long expDelay = Math.min(maxBackoffMs, 1000L * (1L << attempt));
+        log.warnf(
+                "CompactionService: rate-limited for session %s (attempt %d/%d). Retrying in %d ms...",
+                sessionId, attempt, MAX_COMPACTION_RETRIES, expDelay);
+        try {
+            Thread.sleep(expDelay);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new CompactionAbortedException("Interrupted during compaction backoff", e);
+        }
+    }
+
+    private static String nativeJsonFallbackPrompt(String prompt) {
+        return "CRITICAL: You MUST respond ONLY with the summary prose. Do not use JSON.\n\n" + prompt;
+    }
+
+    private static String validationJsonFallbackPrompt(String prompt) {
+        return "CRITICAL: Respond ONLY with the summary prose. Do not use JSON. Do not use code fences.\n\n" + prompt;
     }
 
     private String executeCompactionTurn(String _sessionId, String prompt, int attempt, int maxRetries) {

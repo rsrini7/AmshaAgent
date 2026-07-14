@@ -197,6 +197,7 @@ public class CommandDispatchHandler implements MessageHandler {
 
         if (result != null && result.commandResponse().isPresent()) {
             String response = result.commandResponse().get();
+            context.setData(TurnDispatchService.DATA_COMMAND_RESPONSE, response);
             channelPluginRegistry
                     .find(context.getChannelType())
                     .map(ChannelPlugin::sender)

@@ -125,6 +125,8 @@
   <line x1="550" y1="350" x2="622" y2="392" stroke="#9c9a92" stroke-width="1" stroke-dasharray="4 3" marker-end="url(#arrow)"/>
   <!-- core → mcp -->
   <line x1="550" y1="136" x2="680" y2="95" stroke="#9c9a92" stroke-width="1" stroke-dasharray="4 3" marker-end="url(#arrow)"/>
+  <!-- mcp → persistence-api -->
+  <line x1="710" y1="118" x2="600" y2="298" stroke="#9c9a92" stroke-width="1.5" marker-end="url(#arrow)"/>
   <!-- core → rag -->
   <line x1="550" y1="150" x2="680" y2="151" stroke="#9c9a92" stroke-width="1" stroke-dasharray="4 3" marker-end="url(#arrow)"/>
   <!-- core → self-evolve (optional runtime event dependency) -->

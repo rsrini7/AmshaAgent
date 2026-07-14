@@ -10,19 +10,25 @@ import jakarta.ws.rs.POST;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.PathParam;
 import jakarta.ws.rs.Produces;
+import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
+import jakarta.ws.rs.core.SecurityContext;
 
+import java.util.ArrayList;
 import java.util.Map;
 import java.util.stream.Collectors;
 
 import com.amsha.core.api.dto.AmshaErrorResponse;
 import com.amsha.core.audit.AuditService;
 import com.amsha.core.audit.SecurityEventType;
+import com.amsha.core.scope.WorkspaceContext;
+import com.amsha.core.tools.ToolCategory;
 import com.amsha.mcp.config.McpToolAllowlist;
 import com.amsha.mcp.tool.DynamicToolCapabilityRegistry;
 import com.amsha.mcp.transport.McpClientService;
 import com.amsha.mcp.transport.McpConnectionException;
+import com.amsha.mcp.transport.McpConnectionLifecycleService;
 
 import org.eclipse.microprofile.openapi.annotations.Operation;
 
@@ -60,10 +66,24 @@ public class McpConnectResource {
     @Inject
     AuditService auditService;
 
+    @Inject
+    McpConnectionLifecycleService lifecycleService;
+
+    @Context
+    SecurityContext securityContext;
+
     // ── request / response records ────────────────────────────────────────────
 
     public record ConnectRequest(
-            @NotBlank String name, @NotBlank String url) {}
+            @NotBlank String name, @NotBlank String url, Map<String, String> headers) {
+        public ConnectRequest(String name, String url) {
+            this(name, url, Map.of());
+        }
+
+        public Map<String, String> headersOrEmpty() {
+            return headers == null ? Map.of() : headers;
+        }
+    }
 
     public record ConnectResponse(String name, String url, int toolsRegistered, String status) {}
 
@@ -87,6 +107,7 @@ public class McpConnectResource {
     @Consumes(MediaType.APPLICATION_JSON)
     @Operation(summary = "Connect to a remote MCP server (HTTP/SSE)")
     public Response connect(ConnectRequest request) {
+        String userId = resolveUserId();
         if (!config.serverEnabled()) {
             return Response.status(Response.Status.SERVICE_UNAVAILABLE)
                     .entity(new AmshaErrorResponse("MCP server is disabled", "enable amsha.mcp.server-enabled"))
@@ -102,14 +123,35 @@ public class McpConnectResource {
                     .entity(new AmshaErrorResponse("url is required"))
                     .build();
         }
+        try {
+            lifecycleService.validateHttpRegistration(request.url(), request.headersOrEmpty());
+        } catch (IllegalArgumentException e) {
+            return Response.status(Response.Status.BAD_REQUEST)
+                    .entity(new AmshaErrorResponse("Invalid MCP registration", e.getMessage()))
+                    .build();
+        }
 
         long toolsBefore = registry.getAll().stream()
                 .filter(t -> t.mcpServerName().equals(request.name()))
                 .count();
 
+        auditService.recordMandatory(
+                "mcp-connect",
+                userId,
+                "system",
+                SecurityEventType.MCP_CONNECTION_REQUESTED,
+                "server=" + request.name() + " url=" + request.url());
+
         try {
-            mcpClientService.connect(request.name(), request.url());
+            mcpClientService.connectForUser(
+                    request.name(), userId, request.url(), ToolCategory.NETWORK, request.headersOrEmpty());
         } catch (McpConnectionException e) {
+            auditService.recordMandatory(
+                    "mcp-connect",
+                    userId,
+                    "system",
+                    SecurityEventType.MCP_CONNECTION_VALIDATION_FAILED,
+                    "server=" + request.name() + " reason=" + e.getMessage());
             return Response.status(Response.Status.BAD_GATEWAY)
                     .entity(new AmshaErrorResponse("MCP handshake failed", e.getMessage()))
                     .build();
@@ -122,10 +164,18 @@ public class McpConnectResource {
         int newTools = (int) (toolsAfter - toolsBefore);
         auditService.recordMandatory(
                 "mcp-connect",
-                "admin",
+                userId,
                 "system",
                 SecurityEventType.MCP_SERVER_CONNECTED,
                 "server=" + request.name() + " url=" + request.url() + " tools=" + newTools);
+        try {
+            var persisted = lifecycleService.persistSuccessfulHttp(
+                    request.name(), request.url(), ToolCategory.NETWORK, userId, request.headersOrEmpty());
+            mcpClientService.configureHeaderSecretRefs(request.name(), userId, persisted.headerSecretRefs());
+        } catch (RuntimeException e) {
+            mcpClientService.clearHttpConnectionState(request.name(), userId);
+            throw e;
+        }
 
         return Response.ok(new ConnectResponse(
                         request.name(), request.url(), (int) (toolsAfter - toolsBefore), "connected"))
@@ -140,11 +190,14 @@ public class McpConnectResource {
     @Path("/{name}")
     @Operation(summary = "Disconnect an MCP server and deregister its tools")
     public Response disconnect(@PathParam("name") String name) {
+        String userId = resolveUserId();
         long toolsBefore = registry.getAll().stream()
                 .filter(t -> t.mcpServerName().equals(name))
                 .count();
 
-        if (toolsBefore == 0) {
+        boolean durableDeleted = lifecycleService.deleteByNameAndUserId(name, userId);
+        mcpClientService.clearHttpConnectionState(name, userId);
+        if (toolsBefore == 0 && !durableDeleted) {
             return Response.status(Response.Status.NOT_FOUND)
                     .entity(new AmshaErrorResponse("No connected server found", "name: " + name))
                     .build();
@@ -159,7 +212,7 @@ public class McpConnectResource {
 
         auditService.recordMandatory(
                 "mcp-disconnect",
-                "admin",
+                userId,
                 "system",
                 SecurityEventType.MCP_SERVER_DISCONNECTED,
                 "server=" + name + " toolsRemoved=" + toolsBefore);
@@ -175,12 +228,26 @@ public class McpConnectResource {
     @GET
     @Operation(summary = "List all currently connected remote MCP servers")
     public Response listConnected() {
+        String userId = resolveUserId();
         var grouped = registry.getAll().stream()
                 .collect(Collectors.groupingBy(t -> t.mcpServerName(), Collectors.counting()));
 
-        var entries = grouped.entrySet().stream()
-                .map(e -> new ServerEntry(e.getKey(), "(url not stored)", e.getValue()))
+        var durableEntries = lifecycleService.listByUserId(userId).stream()
+                .map(connection -> new ServerEntry(
+                        connection.name(), connection.endpoint(), grouped.getOrDefault(connection.name(), 0L)))
                 .collect(Collectors.toList());
+
+        var transientEntries = grouped.entrySet().stream()
+                .filter(e -> durableEntries.stream()
+                        .noneMatch(stored -> stored.name().equals(e.getKey())))
+                .map(e -> {
+                    var url = mcpClientService.httpServerUrl(e.getKey());
+                    return new ServerEntry(e.getKey(), url == null ? null : url.orElse(null), e.getValue());
+                })
+                .toList();
+
+        var entries = new ArrayList<ServerEntry>(durableEntries);
+        entries.addAll(transientEntries);
 
         return Response.ok(Map.of(
                         "connectedServers",
@@ -188,5 +255,12 @@ public class McpConnectResource {
                         "totalDynamicTools",
                         registry.getAll().size()))
                 .build();
+    }
+
+    private String resolveUserId() {
+        if (securityContext != null && securityContext.getUserPrincipal() != null) {
+            return securityContext.getUserPrincipal().getName();
+        }
+        return WorkspaceContext.getUserIdOrUnknown();
     }
 }

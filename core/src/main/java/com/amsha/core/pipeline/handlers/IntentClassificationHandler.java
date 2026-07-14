@@ -58,13 +58,11 @@ public class IntentClassificationHandler implements MessageHandler {
 
     @Override
     public HandleResult handle(MessageContext context) {
-        if (context.getAgentRole().isPresent()) {
-            return HandleResult.CONTINUE;
-        }
-
         ChannelMessage message = context.getMessage();
         if (message == null || message.text() == null || message.text().isBlank()) {
-            context.setAgentRole(AgentRoleEnum.COORDINATOR.toScopedName());
+            if (context.getAgentRole().isEmpty()) {
+                context.setAgentRole(AgentRoleEnum.COORDINATOR.toScopedName());
+            }
             return HandleResult.CONTINUE;
         }
 
@@ -78,6 +76,19 @@ public class IntentClassificationHandler implements MessageHandler {
                     .map(ChannelPlugin::sender)
                     .ifPresent(s -> s.sendRaw(context.getUser(), DESTRUCTIVE_GUARD_REPLY));
             return HandleResult.STOP;
+        }
+
+        // Always check for skill matches — overrides any pre-set role (e.g. from REST API)
+        classifier.findSkillMatch(message.text()).ifPresent(skillRole -> {
+            String previous = context.getAgentRole().orElse("none");
+            log.infof(
+                    "[IntentClassificationHandler] Skill %s matched, overriding role from '%s'.", skillRole, previous);
+            context.setAgentRole(skillRole);
+        });
+
+        // If role already set (and no skill override), skip LLM classification
+        if (context.getAgentRole().isPresent()) {
+            return HandleResult.CONTINUE;
         }
 
         try {

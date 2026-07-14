@@ -20,6 +20,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -28,10 +29,12 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.ReentrantLock;
 
 import com.amsha.common.util.LogUtil;
+import com.amsha.core.scope.WorkspaceContext;
 import com.amsha.core.tools.ToolCategory;
 import com.amsha.mcp.tool.DynamicToolCapability;
 import com.amsha.mcp.tool.DynamicToolCapabilityRegistry;
 import com.amsha.mcp.tool.McpTransportType;
+import com.amsha.persistence.api.McpConnectionHeaderSecretRefDto;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -50,6 +53,7 @@ import io.smallrye.common.annotation.Identifier;
 
 @ApplicationScoped
 @Unremovable
+@SuppressWarnings("PMD.ExcessiveClassLength") // Transport coordinator keeps HTTP and STDIO handshake state together.
 public class McpClientService {
 
     private static final Logger log = Logger.getLogger(McpClientService.class);
@@ -71,6 +75,9 @@ public class McpClientService {
     @Inject
     Instance<ManagedExecutor> managedExecutors;
 
+    @Inject
+    McpConnectionCredentialPort credentialPort;
+
     private ManagedExecutor getExecutor() {
         return managedExecutors.select(Identifier.Literal.of("external-tool-executor")).stream()
                 .findFirst()
@@ -81,6 +88,7 @@ public class McpClientService {
     private final ConcurrentHashMap<String, StdioConfig> stdioConfigs = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, String> serverUrls = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, String> sessionIds = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, String> serverCredentialIds = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, Process> processes = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, OutputStream> processWriters = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, BufferedReader> processReaders = new ConcurrentHashMap<>();
@@ -146,10 +154,34 @@ public class McpClientService {
     }
 
     public void connect(String serverName, String serverUrl, ToolCategory category) {
-        serverUrls.put(serverName, serverUrl);
+        connect(serverName, serverUrl, category, Map.of());
+    }
+
+    public void connect(
+            String serverName, String serverUrl, ToolCategory category, Map<String, String> handshakeHeaders) {
+        connectInternal(serverName, serverName, serverUrl, category, handshakeHeaders);
+    }
+
+    public void connectForUser(
+            String serverName,
+            String userId,
+            String serverUrl,
+            ToolCategory category,
+            Map<String, String> handshakeHeaders) {
+        connectInternal(serverName, runtimeKey(serverName, userId), serverUrl, category, handshakeHeaders);
+    }
+
+    private void connectInternal(
+            String serverName,
+            String runtimeKey,
+            String serverUrl,
+            ToolCategory category,
+            Map<String, String> handshakeHeaders) {
+        serverUrls.put(runtimeKey, serverUrl);
         try {
             ObjectNode initParams = createInitParams();
-            HttpResponse<String> initResp = postJsonRpc(serverUrl, "initialize", initParams, null);
+            HttpResponse<String> initResp =
+                    postJsonRpc(runtimeKey, serverUrl, "initialize", initParams, null, handshakeHeaders);
             if (initResp.statusCode() != 200) {
                 if (meterRegistry != null) {
                     meterRegistry
@@ -159,13 +191,13 @@ public class McpClientService {
                 throw new McpConnectionException(
                         "MCP initialize failed [" + initResp.statusCode() + "] for: " + serverName);
             }
-            initResp.headers().firstValue("Mcp-Session-Id").ifPresent(sid -> sessionIds.put(serverName, sid));
+            initResp.headers().firstValue("Mcp-Session-Id").ifPresent(sid -> sessionIds.put(runtimeKey, sid));
 
-            String sessionId = sessionIds.get(serverName);
-            postNotification(serverUrl, "notifications/initialized", sessionId);
+            String sessionId = sessionIds.get(runtimeKey);
+            postNotification(runtimeKey, serverUrl, "notifications/initialized", sessionId, handshakeHeaders);
 
-            HttpResponse<String> toolsResp =
-                    postJsonRpc(serverUrl, "tools/list", objectMapper.createObjectNode(), sessionId);
+            HttpResponse<String> toolsResp = postJsonRpc(
+                    runtimeKey, serverUrl, "tools/list", objectMapper.createObjectNode(), sessionId, handshakeHeaders);
             if (toolsResp.statusCode() != 200) {
                 if (meterRegistry != null) {
                     meterRegistry
@@ -196,6 +228,46 @@ public class McpClientService {
             if (e instanceof InterruptedException) Thread.currentThread().interrupt();
             throw new McpConnectionException("Failed to connect to HTTP MCP server: " + serverName, e);
         }
+    }
+
+    public void configureHeaderSecretRefs(
+            String serverName, String userId, List<McpConnectionHeaderSecretRefDto> refs) {
+        if (credentialPort == null) return;
+        String runtimeKey = runtimeKey(serverName, userId);
+        if (refs == null || refs.isEmpty()) {
+            String previousConnectionId = serverCredentialIds.remove(runtimeKey);
+            if (previousConnectionId != null) credentialPort.deleteHeaders(previousConnectionId);
+            return;
+        }
+        if (refs.stream().anyMatch(ref -> !userId.equals(ref.userId()))) {
+            throw new McpConnectionException("MCP credential owner mismatch for server: " + serverName);
+        }
+        String connectionId = refs.getFirst().connectionId();
+        migratePendingHttpState(serverName, runtimeKey);
+        serverCredentialIds.put(runtimeKey, connectionId);
+        credentialPort.replaceHeaders(
+                connectionId,
+                userId,
+                refs.stream().map(HeaderSecretReference::from).toList());
+    }
+
+    public void clearHttpConnectionState(String serverName) {
+        clearHttpConnectionStateForKey(serverName);
+    }
+
+    public void clearHttpConnectionState(String serverName, String userId) {
+        clearHttpConnectionStateForKey(runtimeKey(serverName, userId));
+    }
+
+    private void clearHttpConnectionStateForKey(String runtimeKey) {
+        serverUrls.remove(runtimeKey);
+        sessionIds.remove(runtimeKey);
+        String connectionId = serverCredentialIds.remove(runtimeKey);
+        if (credentialPort != null && connectionId != null) credentialPort.deleteHeaders(connectionId);
+    }
+
+    public Optional<String> httpServerUrl(String serverName) {
+        return Optional.ofNullable(serverUrls.get(resolveHttpRuntimeKey(serverName)));
     }
 
     /**
@@ -296,14 +368,16 @@ public class McpClientService {
             if (processes.containsKey(serverName)) {
                 return invokeStdio(serverName, toolName, paramsJson);
             }
-            String url = serverUrls.get(serverName);
+            String runtimeKey = resolveHttpRuntimeKey(serverName);
+            String url = serverUrls.get(runtimeKey);
             if (url == null) {
                 throw new McpConnectionException("No URL registered for HTTP MCP server: " + serverName);
             }
 
             ObjectNode callParams = createCallParams(toolName, paramsJson);
 
-            HttpResponse<String> resp = postJsonRpc(url, "tools/call", callParams, sessionIds.get(serverName));
+            HttpResponse<String> resp =
+                    postJsonRpc(runtimeKey, url, "tools/call", callParams, sessionIds.get(runtimeKey), Map.of());
             if (resp.statusCode() != 200) {
                 throw new RuntimeException("tools/call failed [" + resp.statusCode() + "] for: " + toolName);
             }
@@ -352,7 +426,13 @@ public class McpClientService {
         return result.toString();
     }
 
-    private HttpResponse<String> postJsonRpc(String baseUrl, String method, ObjectNode params, String sessionId)
+    private HttpResponse<String> postJsonRpc(
+            String runtimeKey,
+            String baseUrl,
+            String method,
+            ObjectNode params,
+            String sessionId,
+            Map<String, String> directHeaders)
             throws Exception {
         ObjectNode rpc = objectMapper.createObjectNode();
         rpc.put("jsonrpc", "2.0");
@@ -366,10 +446,16 @@ public class McpClientService {
                 .header("Accept", "application/json, text/event-stream")
                 .POST(HttpRequest.BodyPublishers.ofString(objectMapper.writeValueAsString(rpc)));
         if (sessionId != null) req.header("Mcp-Session-Id", sessionId);
-        return httpClient.send(req.build(), HttpResponse.BodyHandlers.ofString());
+        applyDirectHeaders(req, directHeaders);
+        try (ResolvedMcpHeaders resolvedHeaders = resolveConfiguredHeaders(runtimeKey, directHeaders)) {
+            resolvedHeaders.applyTo(req);
+            return httpClient.send(req.build(), HttpResponse.BodyHandlers.ofString());
+        }
     }
 
-    private void postNotification(String baseUrl, String method, String sessionId) throws Exception {
+    private void postNotification(
+            String runtimeKey, String baseUrl, String method, String sessionId, Map<String, String> directHeaders)
+            throws Exception {
         ObjectNode notification = objectMapper.createObjectNode();
         notification.put("jsonrpc", "2.0");
         notification.put("method", method);
@@ -381,7 +467,60 @@ public class McpClientService {
                 .header("Accept", "application/json, text/event-stream")
                 .POST(HttpRequest.BodyPublishers.ofString(objectMapper.writeValueAsString(notification)));
         if (sessionId != null) req.header("Mcp-Session-Id", sessionId);
-        httpClient.send(req.build(), HttpResponse.BodyHandlers.discarding());
+        applyDirectHeaders(req, directHeaders);
+        try (ResolvedMcpHeaders resolvedHeaders = resolveConfiguredHeaders(runtimeKey, directHeaders)) {
+            resolvedHeaders.applyTo(req);
+            httpClient.send(req.build(), HttpResponse.BodyHandlers.discarding());
+        }
+    }
+
+    private void applyDirectHeaders(HttpRequest.Builder req, Map<String, String> directHeaders) {
+        if (directHeaders == null || directHeaders.isEmpty()) return;
+        // Direct headers are accepted only from validated registration/handshake paths.
+        // Agent-controlled tool invocation always passes Map.of() and resolves stored vault refs instead.
+        directHeaders.forEach(req::header);
+    }
+
+    private ResolvedMcpHeaders resolveConfiguredHeaders(String runtimeKey, Map<String, String> directHeaders) {
+        if (directHeaders != null && !directHeaders.isEmpty()) return ResolvedMcpHeaders.empty();
+        if (credentialPort == null) return ResolvedMcpHeaders.empty();
+        String connectionId = serverCredentialIds.get(runtimeKey);
+        if (connectionId == null) return ResolvedMcpHeaders.empty();
+        return credentialPort.resolveHeaders(connectionId);
+    }
+
+    private void migratePendingHttpState(String serverName, String runtimeKey) {
+        if (runtimeKey.equals(serverName)) return;
+        String pendingUrl = serverUrls.remove(serverName);
+        if (pendingUrl != null) serverUrls.put(runtimeKey, pendingUrl);
+        String pendingSessionId = sessionIds.remove(serverName);
+        if (pendingSessionId != null) sessionIds.put(runtimeKey, pendingSessionId);
+    }
+
+    private String resolveHttpRuntimeKey(String serverName) {
+        String userId = WorkspaceContext.getUserIdOrUnknown();
+        if (isKnownUser(userId)) {
+            String ownerKey = runtimeKey(serverName, userId);
+            if (serverUrls.containsKey(ownerKey) || serverCredentialIds.containsKey(ownerKey)) return ownerKey;
+            if (!hasOwnerScopedHttpState(serverName) && serverUrls.containsKey(serverName)) return serverName;
+            return ownerKey;
+        }
+        return serverName;
+    }
+
+    private boolean hasOwnerScopedHttpState(String serverName) {
+        String suffix = "@" + serverName;
+        return serverUrls.keySet().stream().anyMatch(key -> key.endsWith(suffix))
+                || serverCredentialIds.keySet().stream().anyMatch(key -> key.endsWith(suffix));
+    }
+
+    private static String runtimeKey(String serverName, String userId) {
+        if (!isKnownUser(userId)) return serverName;
+        return userId + "@" + serverName;
+    }
+
+    private static boolean isKnownUser(String userId) {
+        return userId != null && !userId.isBlank() && !"unknown".equals(userId);
     }
 
     private void registerTools(String serverName, JsonNode result, McpTransportType transport, ToolCategory category) {

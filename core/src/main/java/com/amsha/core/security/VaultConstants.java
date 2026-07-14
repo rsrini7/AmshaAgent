@@ -18,6 +18,11 @@ public final class VaultConstants {
     public static final String SYSTEM_SESSION_ID = "SYSTEM";
 
     /**
+     * Stable SecretVault partition for user-owned credentials that must survive a chat-session restart.
+     */
+    public static final String USER_VAULT_SCOPE_PREFIX = "USER:";
+
+    /**
      * System-level key for Claude Code OAuth provider.
      */
     public static final String CLAUDE_CODE_OAUTH_TOKEN_KEY = "claude-code-oauth-token";

@@ -10,6 +10,7 @@ import com.amsha.core.agent.reasoning.ReasoningStepDeserializer;
 import com.amsha.core.agent.reasoning.ReasoningStepSerializer;
 import com.amsha.core.agent.result.AgentResult;
 import com.amsha.core.api.AgentResponseMapper;
+import com.amsha.core.api.dto.AmshaErrorResponse;
 import com.amsha.core.api.dto.AuditEventResponse;
 import com.amsha.core.api.dto.CreateSessionRequest;
 import com.amsha.core.api.dto.CreateSessionResponse;
@@ -46,6 +47,7 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             AgentResponseMapper.AgentResponse.class,
             AgentResponseMapper.ApprovalRequiredResponse.class,
             AgentResponseMapper.AgentErrorResponse.class,
+            AmshaErrorResponse.class,
             AgentResult.Finished.class,
             AgentResult.AwaitingApproval.class,
             AgentResult.Failed.class,

@@ -7,7 +7,9 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
+import java.util.List;
 import java.util.Map;
 
 import com.amsha.core.audit.AuditService;
@@ -18,6 +20,8 @@ import com.amsha.core.tools.ToolCategory;
 import com.amsha.core.tools.ToolExecutionContext;
 import com.amsha.core.tools.ToolResponse;
 import com.amsha.mcp.transport.McpClientService;
+import com.amsha.mcp.transport.McpConnectionLifecycleService;
+import com.amsha.mcp.transport.McpConnectionLifecycleService.PersistedConnection;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -35,6 +39,9 @@ class McpSelfRegisterToolTest {
     @Mock
     AuditService auditService;
 
+    @Mock
+    McpConnectionLifecycleService lifecycleService;
+
     @InjectMocks
     McpSelfRegisterTool tool;
 
@@ -44,6 +51,9 @@ class McpSelfRegisterToolTest {
                 "name", "my-server",
                 "transport", "http",
                 "url", "http://localhost:3000/mcp");
+        when(lifecycleService.persistSuccessfulHttp(
+                        "my-server", "http://localhost:3000/mcp", ToolCategory.NETWORK, "user-123", Map.of()))
+                .thenReturn(new PersistedConnection(null, List.of()));
 
         ToolResponse resp = WorkspaceContext.run(
                 "session-456",
@@ -54,7 +64,8 @@ class McpSelfRegisterToolTest {
                 () -> tool.execute(ctx("session-456", "user-123"), params));
 
         assertEquals(0, resp.exitCode());
-        verify(mcpClientService, times(1)).connect("my-server", "http://localhost:3000/mcp", ToolCategory.NETWORK);
+        verify(mcpClientService, times(1))
+                .connectForUser("my-server", "user-123", "http://localhost:3000/mcp", ToolCategory.NETWORK, Map.of());
         verify(auditService, times(1))
                 .record(
                         eq("session-456"),
@@ -89,6 +100,9 @@ class McpSelfRegisterToolTest {
                 "transport", "http",
                 "url", "http://localhost:3000/mcp",
                 "category", "DATABASE");
+        when(lifecycleService.persistSuccessfulHttp(
+                        "database-server", "http://localhost:3000/mcp", ToolCategory.DATABASE, "user-123", Map.of()))
+                .thenReturn(new PersistedConnection(null, List.of()));
 
         WorkspaceContext.run(
                 "session-456",
@@ -98,7 +112,9 @@ class McpSelfRegisterToolTest {
                 "COORDINATOR",
                 () -> tool.execute(ctx("session-456", "user-123"), params));
 
-        verify(mcpClientService).connect("database-server", "http://localhost:3000/mcp", ToolCategory.DATABASE);
+        verify(mcpClientService)
+                .connectForUser(
+                        "database-server", "user-123", "http://localhost:3000/mcp", ToolCategory.DATABASE, Map.of());
     }
 
     @Test
@@ -143,7 +159,7 @@ class McpSelfRegisterToolTest {
     void testMcpConnectionExceptionPropagation() throws Exception {
         doThrow(new RuntimeException("Connection refused"))
                 .when(mcpClientService)
-                .connect(eq("fail-server"), anyString(), eq(ToolCategory.NETWORK));
+                .connectForUser(eq("fail-server"), eq("user-123"), anyString(), eq(ToolCategory.NETWORK), eq(Map.of()));
 
         Map<String, Object> params = Map.of(
                 "name", "fail-server",

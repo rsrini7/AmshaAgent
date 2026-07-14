@@ -1,0 +1,256 @@
+### ═══════════════════════════════════════════════════════════════
+### 18 - ADMIN REST RESOURCES
+###
+### Tests for administrative resources including:
+###   1. Behavioral Directives (self-evolve) CRUD, synthesis, reconciliation
+###   2. System Prompt Registry CRUD, cache refreshing
+###   3. Tiered Memory Admin: Core, Archival, Recall
+###
+### Prerequisites: Amsha Agent running in serve mode
+### ═══════════════════════════════════════════════════════════════
+
+@baseUrl    = http://localhost:8080
+@validKey   = cWevfEoRvstUv0PqGpf02LzDY5kPNaz1y9GSl0LZOwU=
+@ciKey      = JV/qXAikcUoSCCUsqYxLvNjxW/N3KROQtawg3VRFrJs=
+
+# ─────────────────────────────────────────────────────────────────
+# FLOW A: BEHAVIORAL DIRECTIVES (SELF-EVOLVE)
+# ─────────────────────────────────────────────────────────────────
+
+### [ADMIN-DIR-1] List directives
+GET {{baseUrl}}/api/v1/admin/memory/directives
+X-Amsha-API-Key: {{validKey}}
+
+###
+
+### [ADMIN-DIR-2] Synthesize directives (unauthorized with CI key)
+# Expect 403 Forbidden
+POST {{baseUrl}}/api/v1/admin/memory/directives/synthesize
+Content-Type: application/json
+X-Amsha-API-Key: {{ciKey}}
+
+###
+
+### [ADMIN-DIR-3] Synthesize directives (authorized with internal key)
+# Expect 200 OK
+POST {{baseUrl}}/api/v1/admin/memory/directives/synthesize
+Content-Type: application/json
+X-Amsha-API-Key: {{validKey}}
+
+###
+
+### [ADMIN-DIR-4] Reconcile directives (unauthorized with CI key)
+# Expect 403 Forbidden
+POST {{baseUrl}}/api/v1/admin/memory/directives/reconcile
+Content-Type: application/json
+X-Amsha-API-Key: {{ciKey}}
+
+###
+
+### [ADMIN-DIR-5] Reconcile directives (authorized with internal key)
+# Expect 200 OK
+POST {{baseUrl}}/api/v1/admin/memory/directives/reconcile
+Content-Type: application/json
+X-Amsha-API-Key: {{validKey}}
+
+###
+
+
+# ─────────────────────────────────────────────────────────────────
+# FLOW B: SYSTEM PROMPT REGISTRY CRUD
+# ─────────────────────────────────────────────────────────────────
+
+### [ADMIN-PRM-1] List prompts
+GET {{baseUrl}}/api/v1/admin/prompts
+X-Amsha-API-Key: {{validKey}}
+
+###
+
+### [ADMIN-PRM-2] Create prompt (unauthorized with CI key)
+# Expect 403 Forbidden
+POST {{baseUrl}}/api/v1/admin/prompts
+Content-Type: application/json
+X-Amsha-API-Key: {{ciKey}}
+
+{
+    "roleId": "coordinator",
+    "sectionKey": "test_section",
+    "content": "This is a test prompt content.",
+    "version": 1,
+    "status": "ACTIVE",
+    "rolloutPercentage": 100
+}
+
+###
+
+### [ADMIN-PRM-3] Create prompt (authorized with internal key)
+# Expect 201 Created with Location header
+# @name createPrompt
+POST {{baseUrl}}/api/v1/admin/prompts
+Content-Type: application/json
+X-Amsha-API-Key: {{validKey}}
+
+{
+    "roleId": "coordinator",
+    "sectionKey": "test_section",
+    "content": "This is a test prompt content.",
+    "version": 1,
+    "status": "ACTIVE",
+    "rolloutPercentage": 100
+}
+
+###
+
+### [ADMIN-PRM-4] Get specific prompt
+# Expect 200 OK
+GET {{baseUrl}}/api/v1/admin/prompts/test_section
+X-Amsha-API-Key: {{validKey}}
+
+###
+
+### [ADMIN-PRM-5] Update prompt (unauthorized with CI key)
+# Expect 403 Forbidden
+PUT {{baseUrl}}/api/v1/admin/prompts/test_section
+Content-Type: application/json
+X-Amsha-API-Key: {{ciKey}}
+
+{
+    "content": "Updated test prompt content."
+}
+
+###
+
+### [ADMIN-PRM-6] Update prompt (authorized with internal key)
+# Expect 200 OK
+PUT {{baseUrl}}/api/v1/admin/prompts/test_section
+Content-Type: application/json
+X-Amsha-API-Key: {{validKey}}
+
+{
+    "content": "Updated test prompt content."
+}
+
+###
+
+### [ADMIN-PRM-7] Refresh cache
+# Expect 200 OK
+POST {{baseUrl}}/api/v1/admin/prompts/refresh
+X-Amsha-API-Key: {{validKey}}
+
+###
+
+### [ADMIN-PRM-8] Delete prompt (unauthorized with CI key)
+# Expect 403 Forbidden
+DELETE {{baseUrl}}/api/v1/admin/prompts/test_section
+X-Amsha-API-Key: {{ciKey}}
+
+###
+
+### [ADMIN-PRM-9] Delete prompt (authorized with internal key)
+# Expect 204 No Content
+DELETE {{baseUrl}}/api/v1/admin/prompts/test_section
+X-Amsha-API-Key: {{validKey}}
+
+###
+
+
+# ─────────────────────────────────────────────────────────────────
+# FLOW C: TIERED MEMORY ADMIN
+# ─────────────────────────────────────────────────────────────────
+
+# --- Core Memory Blocks ---
+
+### [ADMIN-MEM-CORE-1] List core memory blocks
+GET {{baseUrl}}/api/v1/admin/memory/core
+X-Amsha-API-Key: {{validKey}}
+
+###
+
+### [ADMIN-MEM-CORE-2] Upsert block (unauthorized with CI key)
+# Expect 403 Forbidden
+PUT {{baseUrl}}/api/v1/admin/memory/core/test_block
+Content-Type: application/json
+X-Amsha-API-Key: {{ciKey}}
+
+{
+    "content": "test block content"
+}
+
+###
+
+### [ADMIN-MEM-CORE-3] Upsert block (authorized with internal key)
+# Expect 200 OK
+PUT {{baseUrl}}/api/v1/admin/memory/core/test_block
+Content-Type: application/json
+X-Amsha-API-Key: {{validKey}}
+
+{
+    "content": "test block content"
+}
+
+###
+
+### [ADMIN-MEM-CORE-4] Get specific block
+# Expect 200 OK
+GET {{baseUrl}}/api/v1/admin/memory/core/test_block
+X-Amsha-API-Key: {{validKey}}
+
+###
+
+### [ADMIN-MEM-CORE-5] Delete block (unauthorized with CI key)
+# Expect 403 Forbidden
+DELETE {{baseUrl}}/api/v1/admin/memory/core/test_block
+X-Amsha-API-Key: {{ciKey}}
+
+###
+
+### [ADMIN-MEM-CORE-6] Delete block (authorized with internal key)
+# Expect 204 No Content
+DELETE {{baseUrl}}/api/v1/admin/memory/core/test_block
+X-Amsha-API-Key: {{validKey}}
+
+###
+
+# --- Archival Memory Chunks ---
+
+### [ADMIN-MEM-ARCH-1] Search archival memory chunks
+GET {{baseUrl}}/api/v1/admin/memory/archival/search?query=test
+X-Amsha-API-Key: {{validKey}}
+
+###
+
+### [ADMIN-MEM-ARCH-2] Evict low-confidence chunks (unauthorized with CI key)
+# Expect 403 Forbidden
+POST {{baseUrl}}/api/v1/admin/memory/archival/evict?threshold=0.5&minAgeDays=30
+X-Amsha-API-Key: {{ciKey}}
+
+###
+
+### [ADMIN-MEM-ARCH-3] Evict low-confidence chunks (authorized with internal key)
+# Expect 200 OK
+POST {{baseUrl}}/api/v1/admin/memory/archival/evict?threshold=0.5&minAgeDays=30
+X-Amsha-API-Key: {{validKey}}
+
+###
+
+# --- Recall Memory Messages ---
+
+### [ADMIN-MEM-RCL-1] Search recall memory messages
+GET {{baseUrl}}/api/v1/admin/memory/recall/search?query=test
+X-Amsha-API-Key: {{validKey}}
+
+###
+
+### [ADMIN-MEM-RCL-2] Purge recall memory messages (unauthorized with CI key)
+# Expect 403 Forbidden
+POST {{baseUrl}}/api/v1/admin/memory/recall/purge?retentionDays=30
+X-Amsha-API-Key: {{ciKey}}
+
+###
+
+### [ADMIN-MEM-RCL-3] Purge recall memory messages (authorized with internal key)
+# Expect 200 OK
+POST {{baseUrl}}/api/v1/admin/memory/recall/purge?retentionDays=30
+X-Amsha-API-Key: {{validKey}}
+
+###

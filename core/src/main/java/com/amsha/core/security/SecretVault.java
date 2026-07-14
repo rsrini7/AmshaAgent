@@ -18,6 +18,9 @@ public interface SecretVault {
      */
     void store(String keyName, byte[] secret);
 
+    /**
+     * Stores a secret in the stable vault scope of {@code userId}, independent of the active chat session.
+     */
     void store(String keyName, byte[] secret, String userId);
 
     /**
@@ -28,7 +31,15 @@ public interface SecretVault {
      */
     Optional<VaultKey> get(String keyName);
 
+    /**
+     * Retrieves a secret from the stable vault scope of {@code userId}.
+     */
     Optional<VaultKey> get(String keyName, String userId);
+
+    /**
+     * Removes a secret from the stable vault scope of {@code userId}.
+     */
+    void remove(String keyName, String userId);
 
     // rotateSecrets removed as per key-rotation policy deferral
     /**

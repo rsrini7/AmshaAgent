@@ -70,9 +70,16 @@ public class ToolInvoker {
             String sanitizedObservation = observationSanitizer.sanitize(toolName, rawObservation);
 
             if (response instanceof ToolResponse.ToolFailure failure) {
-                log.errorf(
-                        "Tool '%s' execution failed in session %s: %s (exitCode=%d)",
-                        toolName, sessionId, sanitizedObservation, failure.exitCode());
+                int exit = failure.exitCode();
+                if (exit == 403) {
+                    log.warnf(
+                            "Tool '%s' denied by capability/permission in session %s: %s (exitCode=%d)",
+                            toolName, sessionId, sanitizedObservation, exit);
+                } else {
+                    log.errorf(
+                            "Tool '%s' execution failed in session %s: %s (exitCode=%d)",
+                            toolName, sessionId, sanitizedObservation, exit);
+                }
             }
 
             ToolResponse result =

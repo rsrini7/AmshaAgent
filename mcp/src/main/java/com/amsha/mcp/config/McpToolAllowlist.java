@@ -25,4 +25,23 @@ public interface McpToolAllowlist {
      */
     @WithDefault("true")
     boolean serverEnabled();
+
+    /**
+     * Interval to check health of active SSE/HTTP outbound MCP connections.
+     */
+    @WithDefault("15000")
+    long healthCheckIntervalMs();
+
+    /**
+     * Podman/Stdio MCP transport settings.
+     */
+    Podman podman();
+
+    interface Podman {
+        /**
+         * Interval to check health of active Podman/Stdio outbound MCP connections.
+         */
+        @WithDefault("15000")
+        long healthCheckIntervalMs();
+    }
 }

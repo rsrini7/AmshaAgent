@@ -5,6 +5,7 @@
 ###
 ###   A) MCP SERVER (inbound - Amsha Agent as server, external client calls it)
 ###      Endpoint: /mcp  (Quarkiverse MCP extension)
+###      Also available: /mcp/sse (legacy SSE stream)
 ###      Protocol: JSON-RPC 2.0 over HTTP (supports SSE for streaming)
 ###      Session: Mcp-Session-Id header (captured from MCP-1 response)
 ###      Handshake: initialize → notifications/initialized → tools/list → tools/call
@@ -16,6 +17,8 @@
 ###      DELETE /api/v1/mcp/connect/{name} → disconnect + deregister tools
 ###      GET    /api/v1/mcp/connect        → list connected servers
 ###      After connecting: dynamic tools appear in agent's tool schema automatically.
+###      (The agent tool "register_mcp_server" is the LLM-driven equivalent - see FLOW G;
+###       it adds STDIO/Podman transports and an explicit execution category.)
 ###
 ###   C) MCP ADMIN (read-only status/tool inspection)
 ###      GET /api/v1/mcp/status  → enabled flag + dynamic tool count
@@ -35,11 +38,23 @@
 ### Telegram: /mcp reflex shows live MCP status (zero LLM tokens).
 ###
 ### Prerequisites: Amsha Agent running in serve mode, amsha.mcp.server-enabled=true (default)
+###
+### Rate limits: the API key allows ~20 requests/min (10 mutations/min). Running the
+### whole file back-to-back triggers 429s - run flow-by-flow, or space requests out.
 ### ═══════════════════════════════════════════════════════════════
 
-# @adminBase = http://localhost:8080/api/v1
-# @mcpBase   = http://localhost:8080
-# @validKey  = key-internal-cWevfEoRvstUv0PqGpf02LzDY5kPNaz1y9GSl0LZOwU=
+@adminBase = http://localhost:8080/api/v1
+@mcpBase   = http://localhost:8080
+# API key for the running instance. Set this to the value configured via
+# amsha.api.keys / AMSHA_API_KEYS (the token used to launch the native binary).
+# @validKey  = <your-api-key>
+# Secret sent as an outbound MCP Authorization header. Stored ENCRYPTED in the
+# vault (SecretVault) and referenced per connection; never logged in plaintext.
+# This is the auth credential the REMOTE MCP server expects (its API key / bearer
+# token / custom header value) - obtain it from that server's operator or docs.
+# Amsha does not mint it; you supply the value and Amsha encrypts + attaches it.
+# For a self-connect smoke test any non-empty value works (the local /mcp ignores it).
+# @mcpSecret = <remote-mcp-server-token>
 
 ### ════════════════════════════════════════════════════════════════
 ### FLOW A - MCP ADMIN (run as health checks before any protocol tests)
@@ -165,9 +180,11 @@ Mcp-Session-Id: {{mcpSessionId}}
 ###
 
 ### [MCP-5] tools/call - invoke github
-# Expect 200: result.content[0].text = github output
-# Returns an error string inside content if GH_TOKEN not seeded - still HTTP 200
-# (JSON-RPC errors are always HTTP 200 per spec).
+# Expect 200: result.content[0].text carries the github output (or an approval
+# message). GitHub is a HITL-approved tool, so without an approved session the
+# content carries an "requires human approval" message rather than live data -
+# still HTTP 200. (JSON-RPC results are always HTTP 200 per spec; isError
+# reflects an actual tool failure.)
 POST {{mcpBase}}/mcp
 Content-Type: application/json
 Accept: application/json, text/event-stream
@@ -195,9 +212,9 @@ Mcp-Session-Id: {{mcpSessionId}}
 
 ### [MCP-ERR-1] Call a tool NOT in the allowlist
 # Expect 200 HTTP with JSON-RPC error body (per spec, errors are HTTP 200)
-# {"jsonrpc":"2.0","id":5,"error":{"code":...,"message":"Tool not in allowlist"}}
-# After Phase 64-D7: SANDBOX_EXEC removed from ToolCapability enum.
-# Any reference to sandbox_exec must return an allowlist error.
+# {"jsonrpc":"2.0","id":5,"error":{"code":-32602,"message":"Invalid tool name: sandbox_exec"}}
+# SANDBOX_EXEC was removed from the ToolCapability enum, so any reference to it is
+# rejected as an unknown/invalid tool name.
 POST {{mcpBase}}/mcp
 Content-Type: application/json
 Accept: application/json, text/event-stream
@@ -216,9 +233,12 @@ Mcp-Session-Id: {{mcpSessionId}}
 
 ###
 
-### [MCP-ERR-2] tools/list without session ID → expect 4xx
-# Quarkiverse MCP session validation rejects missing Mcp-Session-Id.
-# A new session must be initialized before any protocol call.
+### [MCP-ERR-2] tools/list without session ID
+# With a valid Accept header the server treats this as a fresh connection that
+# must start with initialize, so it returns HTTP 200 with a JSON-RPC error:
+# {"jsonrpc":"2.0","id":6,"error":{"code":-32601,"message":"The first message from the client must be \"initialize\": tools/list"}}
+# A 4xx is only returned when the Accept header is missing/invalid (not from the
+# missing session id).
 POST {{mcpBase}}/mcp
 Content-Type: application/json
 Accept: application/json, text/event-stream
@@ -233,8 +253,8 @@ X-Amsha-API-Key: {{validKey}}
 
 ###
 
-### [MCP-ERR-3] notifications/initialized without prior initialize → expect 4xx
-# Session does not exist - notification should be rejected.
+### [MCP-ERR-3] notifications/initialized without prior initialize → 404
+# Session does not exist - notification is rejected with HTTP 404 (empty body).
 POST {{mcpBase}}/mcp
 Content-Type: application/json
 Accept: application/json, text/event-stream
@@ -251,7 +271,7 @@ Mcp-Session-Id: 00000000-dead-beef-0000-000000000000
 
 ### [MCP-ERR-4] tools/call on unknown tool name
 # Expect 200 HTTP with JSON-RPC error body
-# {"error":{"code":-32601,"message":"Tool not found: does_not_exist"}}
+# {"jsonrpc":"2.0","id":7,"error":{"code":-32602,"message":"Invalid tool name: does_not_exist"}}
 POST {{mcpBase}}/mcp
 Content-Type: application/json
 Accept: application/json, text/event-stream
@@ -276,6 +296,8 @@ Mcp-Session-Id: {{mcpSessionId}}
 ### Self-connect smoke test - no external MCP server needed.
 ### MCP-CLIENT-1 connects Amsha Agent to itself at localhost:8080/mcp.
 ### After success: dynamic tools are registered in DynamicToolCapabilityRegistry.
+### The connect body also accepts an optional "headers" map of auth secrets
+### (stored encrypted in the vault); see FLOW F for the secure-header path.
 ### ════════════════════════════════════════════════════════════════
 
 ### [MCP-CLIENT-1] Self-connect - Amsha Agent as client to itself
@@ -314,14 +336,20 @@ X-Amsha-API-Key: {{validKey}}
 ### [MCP-CLIENT-4] Agent can use dynamic MCP tool
 # After self-connect, the agent's tool schema includes the dynamic tools.
 # This test exercises the full agent → dynamic tool → MCP client path.
+# Requires a configured LLM (the coordinator decides which tool to call).
+# NOTE: session creation REQUIRES autonomyLevel (returns 400 otherwise).
 # @name mcpAgentSession
-POST {{adminBase}}/../api/v1/sessions
+POST {{adminBase}}/sessions
 Content-Type: application/json
 X-Amsha-API-Key: {{validKey}}
 
+{
+  "autonomyLevel": "READONLY"
+}
+
 ###
 
-POST http://localhost:8080/api/v1/sessions/{{mcpAgentSession.response.body.sessionId}}/run
+POST {{adminBase}}/sessions/{{mcpAgentSession.response.body.sessionId}}/run
 Content-Type: application/json
 X-Amsha-API-Key: {{validKey}}
 
@@ -333,7 +361,7 @@ X-Amsha-API-Key: {{validKey}}
 
 ###
 
-DELETE http://localhost:8080/api/v1/sessions/{{mcpAgentSession.response.body.sessionId}}
+DELETE {{adminBase}}/sessions/{{mcpAgentSession.response.body.sessionId}}
 X-Amsha-API-Key: {{validKey}}
 
 ###
@@ -366,6 +394,92 @@ X-Amsha-API-Key: {{validKey}}
 # }
 
 ###
+
+### ════════════════════════════════════════════════════════════════
+### FLOW F - SECURE OUTBOUND CONNECTION (header secret management)
+###
+### The enhanced POST /api/v1/mcp/connect accepts an optional "headers" map.
+### Each header value is stored as an ENCRYPTED SECRET in the vault
+### (SecretVault -> @WorkspaceScoped VaultKeyCache, scoped per user) and tracked
+### by McpConnectionHeaderSecretRefDto. On connect/reconnect the secret is
+### resolved and attached to outbound HTTP requests to the remote server.
+###
+### Validation (McpConnectionLifecycleService.validateHeaders):
+###   - header names must match the RFC 7230 token subset; transport-owned /
+###     forbidden names (content-type, host, mcp-session-id, connection, ...) are
+###     rejected.
+###   - header values containing ${, $( or backticks are rejected (no injection).
+###   - duplicate header names are rejected.
+###
+### Vault ops run inside WorkspaceScopeHolder so the workspace-scoped key cache
+### is reachable from the REST request thread. Without it the connect 500s with
+### "WorkspaceScoped context was not active". Connections + secret refs survive
+### restart; the lifecycle service reconnects enabled HTTP connections and
+### re-resolves secrets (audit: MCP_CREDENTIAL_CONFIGURED / _REMOVED).
+
+### [MCP-CLIENT-SEC-1] Secure connect with an Authorization header secret
+# Expect 200: {"name":"secure","url":"...","toolsRegistered":N,"status":"connected"}
+# Proves: McpConnectResource -> lifecycleService.persistSuccessfulHttp()
+#   -> validateHeaders() -> storeHeaderSecrets() -> secretVault.store()
+#   (wrapped in WorkspaceScopeHolder). Audit: MCP_CREDENTIAL_CONFIGURED.
+POST {{adminBase}}/mcp/connect
+Content-Type: application/json
+X-Amsha-API-Key: {{validKey}}
+
+{
+  "name": "secure",
+  "url": "http://localhost:8080/mcp",
+  "headers": {
+    "Authorization": "Bearer {{mcpSecret}}"
+  }
+}
+
+###
+
+### [MCP-CLIENT-SEC-2] Verify dynamic tools registered for the secure server
+# Expect 200: registeredDynamicTools contains tools with mcpServerName="secure"
+GET {{adminBase}}/mcp/tools
+Accept: application/json
+X-Amsha-API-Key: {{validKey}}
+
+###
+
+### [MCP-CLIENT-SEC-3] Disconnect the secure server (also purges the vault secret)
+# Expect 200: {"name":"secure","deregistered":true,"toolsRemoved":N}
+# Vault secret removal is audited MCP_CREDENTIAL_REMOVED.
+DELETE {{adminBase}}/mcp/connect/secure
+Accept: application/json
+X-Amsha-API-Key: {{validKey}}
+
+###
+
+### [MCP-CLIENT-SEC-ERR-1] Connect with forbidden header (content-type) -> 400
+# validateHeaders() rejects transport-owned header names.
+POST {{adminBase}}/mcp/connect
+Content-Type: application/json
+X-Amsha-API-Key: {{validKey}}
+
+{
+  "name": "forbidden",
+  "url": "http://localhost:8080/mcp",
+  "headers": { "Content-Type": "application/json" }
+}
+
+###
+
+### [MCP-CLIENT-SEC-ERR-2] Connect with injection-prone header value -> 400
+# containsUnsafeHeaderValue() rejects ${, $( and backticks.
+POST {{adminBase}}/mcp/connect
+Content-Type: application/json
+X-Amsha-API-Key: {{validKey}}
+
+{
+  "name": "injection",
+  "url": "http://localhost:8080/mcp",
+  "headers": { "X-Evil": "$(curl evil)" }
+}
+
+### ════════════════════════════════════════════════════════════════
 
 ### ════════════════════════════════════════════════════════════════
 ### FLOW E - MCP CLIENT ERROR / EDGE CASES
@@ -403,9 +517,10 @@ X-Amsha-API-Key: {{validKey}}
 
 ###
 
-### [MCP-CLIENT-ERR-4] Connect duplicate server name → expect 409 or overwrite
-# Connecting to "self" again after MCP-CLIENT-5 disconnected it is OK (reconnect).
-# Connecting when already connected should either overwrite or return 409 CONFLICT.
+### [MCP-CLIENT-ERR-4] Connect duplicate server name → overwrite (HTTP 200)
+# Connecting to "self" again while it is already connected OVERWRITES the existing
+# registration: HTTP 200 with toolsRegistered: 0 (tools are already registered).
+# Use a distinct name to avoid clobbering an active connection.
 POST {{adminBase}}/mcp/connect
 Content-Type: application/json
 X-Amsha-API-Key: {{validKey}}
@@ -432,5 +547,73 @@ Content-Type: application/json
   "name": "unauth",
   "url": "http://localhost:8080/mcp"
 }
+
+###
+
+### ════════════════════════════════════════════════════════════════
+### FLOW G - AGENT-FACING MCP REGISTRATION (register_mcp_server tool)
+###
+### The agent tool "register_mcp_server" is the PRIMARY user-facing way to add an
+### MCP server. Unlike the admin REST /api/v1/mcp/connect (HTTP/SSE only, fixed
+### NETWORK category - see FLOW D/F), this tool also supports:
+###   - STDIO transports (local process via command/args/env, incl. Podman-managed)
+###   - per-header auth secrets (same encrypted vault storage as FLOW F)
+###   - an explicit execution CATEGORY: NETWORK | COMPUTE | DATABASE | INTERNAL
+### It is invoked by the coordinator through natural language, so it REQUIRES a
+### configured LLM and a non-READONLY session (SUPERVISED/FULL) with the tool
+### granted to the role. There is no direct REST endpoint for it.
+###
+### Tool parameters (from GET /api/v1/tools):
+###   name*      unique server name (alphanumeric / _ / -)
+###   transport* http | stdio
+###   url        HTTP/SSE endpoint, e.g. http://host:3000/mcp
+###   headers[]  [{name, value}] auth headers (stored encrypted, like FLOW F)
+###   command    STDIO: binary to run (npx, python, docker)
+###   args       STDIO: comma-separated arguments
+###   env        STDIO: KEY=VALUE lines
+###   category   NETWORK | COMPUTE | DATABASE | INTERNAL
+###
+### Example chat goal (LLM-driven):
+###   "Register an MCP server named 'local' over http at http://localhost:8080/mcp
+###    with category NETWORK."
+### This yields the same dynamic-tool registration as FLOW D/F, plus the stdio /
+### podman and category-routing options the REST endpoint does not expose.
+
+### [MCP-REG-1] Confirm the register_mcp_server tool is registered
+# Expect 200: the tool list contains "register_mcp_server".
+GET {{adminBase}}/tools
+Accept: application/json
+X-Amsha-API-Key: {{validKey}}
+
+###
+
+### [MCP-REG-2] Register via agent (LLM-driven, needs SUPERVISED+ session)
+# Create a non-readonly session, then ask the coordinator to register the server.
+# Requires a configured LLM and the tool granted to the role.
+# @name mcpRegSession
+POST {{adminBase}}/sessions
+Content-Type: application/json
+X-Amsha-API-Key: {{validKey}}
+
+{
+  "autonomyLevel": "SUPERVISED"
+}
+
+###
+
+POST {{adminBase}}/sessions/{{mcpRegSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-Amsha-API-Key: {{validKey}}
+
+{
+  "goal": "Register an MCP server named 'local' over http at http://localhost:8080/mcp with category NETWORK.",
+  "agentRole": "coordinator",
+  "maxIterations": 3
+}
+
+###
+
+DELETE {{adminBase}}/sessions/{{mcpRegSession.response.body.sessionId}}
+X-Amsha-API-Key: {{validKey}}
 
 ###

@@ -1137,30 +1137,58 @@ curl -s -X POST "http://localhost:8080/api/v1/sessions/$SESSION/run" \
 
 ---
 
-### 11.2 List cron jobs via reflex
+### 11.2 Programmatic REST API Lifecycle
 
+Programmatic cron job lifecycle management is supported through standard JAX-RS REST endpoints at `/api/v1/cron`.
+
+#### List Cron Jobs
 ```bash
-curl -s -X POST "http://localhost:8080/api/v1/sessions/$SESSION/run" \
-  -H "X-Amsha-API-Key: key-internal-changeme" \
-  -H "Content-Type: application/json" \
-  -d '{"goal":"/crons","agentRole":"coordinator","maxIterations":1}' | jq .
+curl -s -X GET "http://localhost:8080/api/v1/cron" \
+  -H "X-Amsha-API-Key: key-internal-changeme" | jq .
 ```
+**Expect:** `HTTP 200` with the list of active cron jobs registered for the calling API key.
 
-**Expect:** Answer lists all cron jobs for the session's userId. **Note**: there is no `GET /api/v1/sessions/*/crons` REST endpoint - listing goes through the `/crons` reflex or `ManageScheduleTool`.
-
----
-
-### 11.3 Delete a cron job
-
+#### Get Single Job Details
 ```bash
-# Via reflex (fastest)
-curl -s -X POST "http://localhost:8080/api/v1/sessions/$SESSION/run" \
-  -H "X-Amsha-API-Key: key-internal-changeme" \
-  -H "Content-Type: application/json" \
-  -d "{\"goal\":\"deletecron $CRON_ID\",\"agentRole\":\"coordinator\",\"maxIterations\":1}" | jq .
+curl -s -X GET "http://localhost:8080/api/v1/cron/$CRON_ID" \
+  -H "X-Amsha-API-Key: key-internal-changeme" | jq .
 ```
+**Expect:** `HTTP 200` detailing the schedule definition, status, and goal of the job.
 
-**Expect:** Answer confirms deletion. Audit event: `CRONDELETED`.
+#### Pause Cron Job
+```bash
+curl -s -X POST "http://localhost:8080/api/v1/cron/$CRON_ID/pause" \
+  -H "X-Amsha-API-Key: key-internal-changeme" | jq .
+```
+**Expect:** `HTTP 200`. Changes the cron job's status to `COMPLETED` to suspend execution.
+
+#### Resume Cron Job
+```bash
+curl -s -X POST "http://localhost:8080/api/v1/cron/$CRON_ID/resume" \
+  -H "X-Amsha-API-Key: key-internal-changeme" | jq .
+```
+**Expect:** `HTTP 200`. Reactivates the paused job, shifting status back to `ACTIVE`.
+
+#### Force-Fire/Trigger Job
+```bash
+curl -s -X POST "http://localhost:8080/api/v1/cron/$CRON_ID/trigger" \
+  -H "X-Amsha-API-Key: key-internal-changeme" | jq .
+```
+**Expect:** `HTTP 200`. Forces the background scheduler to run the cron job's goal immediately on a separate thread.
+
+#### View Run History
+```bash
+curl -s -X GET "http://localhost:8080/api/v1/cron/$CRON_ID/runs?page=0&size=10" \
+  -H "X-Amsha-API-Key: key-internal-changeme" | jq .
+```
+**Expect:** `HTTP 200` with pagination info showing historic fire events, execution logs, and final status outcomes.
+
+#### Delete Cron Job
+```bash
+curl -s -X DELETE "http://localhost:8080/api/v1/cron/$CRON_ID" \
+  -H "X-Amsha-API-Key: key-internal-changeme" | jq .
+```
+**Expect:** `HTTP 200` with confirmation that the job has been deleted.
 
 ---
 

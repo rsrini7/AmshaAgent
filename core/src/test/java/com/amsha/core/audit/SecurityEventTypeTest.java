@@ -16,11 +16,24 @@ class SecurityEventTypeTest {
         assertTrue(SecurityEventType.PROMPT_INJECTION_BLOCKED.isMandatory());
         assertTrue(SecurityEventType.APPROVAL_GRANTED.isMandatory());
         assertTrue(SecurityEventType.APPROVAL_DENIED.isMandatory());
+        assertTrue(SecurityEventType.MCP_SERVER_CONNECTED.isMandatory());
+        assertTrue(SecurityEventType.MCP_SERVER_DISCONNECTED.isMandatory());
+        assertTrue(SecurityEventType.MCP_CONNECTION_REQUESTED.isMandatory());
+        assertTrue(SecurityEventType.MCP_CONNECTION_VALIDATION_FAILED.isMandatory());
+        assertTrue(SecurityEventType.MCP_CREDENTIAL_CONFIGURED.isMandatory());
+        assertTrue(SecurityEventType.MCP_CREDENTIAL_ROTATED.isMandatory());
+        assertTrue(SecurityEventType.MCP_CREDENTIAL_REMOVED.isMandatory());
+        assertTrue(SecurityEventType.MCP_CREDENTIAL_CLEANUP_FAILED.isMandatory());
 
         // Non-mandatory - fire-and-forget
         assertFalse(SecurityEventType.REFLEX_COMMAND.isMandatory());
         assertFalse(SecurityEventType.CONTEXT_COMPACTED.isMandatory());
         assertFalse(SecurityEventType.LOOP_FINISH.isMandatory());
         assertFalse(SecurityEventType.LOOP_ERROR.isMandatory());
+        assertFalse(SecurityEventType.ONBOARDING_EXTENSION_SHOWN.isMandatory());
+        assertFalse(SecurityEventType.ONBOARDING_EXTENSION_SKIPPED.isMandatory());
+        assertFalse(SecurityEventType.ONBOARDING_EXTENSION_VALIDATED.isMandatory());
+        assertFalse(SecurityEventType.ONBOARDING_EXTENSION_COMMITTED.isMandatory());
+        assertFalse(SecurityEventType.ONBOARDING_EXTENSION_FAILED.isMandatory());
     }
 }

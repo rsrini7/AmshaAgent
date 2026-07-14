@@ -199,10 +199,12 @@ See `.mise/tasks/headroom/README.md` for setup and usage.
 
 ## Security & Vault
 
+> **Required (no production default):** `AMSHA_VAULT_PEPPER` and `AMSHA_AUDIT_HMAC_KEY` are hard-required at startup (enforced by `CliUtils.validateRequiredEnvVars`). The `dev-...` placeholders shown below apply only to local dev fallbacks; in any real deployment you MUST set them or the app fails to boot. Generating them: `openssl rand -base64 32`.
+
 | Variable | Default | Description |
 |---|---|---|
-| `AMSHA_VAULT_PEPPER` | `dev-pepper-...` | 32+ char random string for Argon2id key derivation (**change for production**) |
-| `AMSHA_AUDIT_HMAC_KEY` | `dev-audit-hmac-key-...` | 32+ char random string for HMAC audit chain (**change for production**) |
+| `AMSHA_VAULT_PEPPER` | `dev-pepper-...` *(dev only)* | **Required.** 32+ char random string for Argon2id key derivation. Never change after first boot — it decrypts stored secrets. |
+| `AMSHA_AUDIT_HMAC_KEY` | `dev-audit-hmac-key-...` *(dev only)* | **Required.** 32+ char random string for HMAC audit chain. Never change after first boot — it signs the audit trail. |
 | `AMSHA_PII_MODE` | `REDACT_AND_FORWARD` | PII mode: REDACT_AND_FORWARD, BLOCK_AND_NOTIFY, OFF |
 | `AMSHA_AUTO_SEED_SECRETS` | `false` | Auto-seed development secrets on startup |
 
@@ -330,6 +332,9 @@ schema) and must match the model used by every active provider.
 | `AMSHA_TOOLS_PLAYWRIGHT_MCP_HEADLESS` | `true` | MCP browser headless mode |
 | `AMSHA_TOOLS_PLAYWRIGHT_MCP_COMMAND` | `npx` | MCP server launch command |
 | `AMSHA_TOOLS_PLAYWRIGHT_MCP_ARGS` | `@playwright/mcp` | MCP server args |
+| `AMSHA_MCP_SERVER_ENABLED` | `true` | Enable the outbound MCP client REST API for connecting to remote servers |
+| `AMSHA_MCP_HEALTH_CHECK_INTERVAL_MS` | `15000` | How often to check health of active SSE/HTTP outbound MCP connections (ms) |
+| `AMSHA_MCP_PODMAN_HEALTH_CHECK_INTERVAL_MS` | `15000` | How often to check health of active Podman/Stdio outbound MCP connections (ms) |
 | `AMSHA_TOOLS_PLAYWRIGHT_RESUMPTION_STALE_MARK_SECONDS` | `300` | Playwright resume staleness (s) |
 | `AMSHA_TOOLS_HOST_EXEC_SKILLS` | `jdb-debugger` | Skills allowed to use host_exec tool (comma-separated) |
 | `AMSHA_HOST_EXEC_MAX_OUTPUT_CHARS` | `8192` | Max output chars for host_exec tool (falls back to sandbox max) |
@@ -366,15 +371,17 @@ schema) and must match the model used by every active provider.
 
 | Variable | Default | Description |
 |---|---|---|
-| `AMSHA_AUDIT_HMAC_KEY` | `dev-audit-hmac-key-...` | HMAC key for audit chain (**change for production**) |
+| `AMSHA_AUDIT_HMAC_KEY` | `dev-audit-hmac-key-...` *(dev only)* | **Required.** HMAC key for audit chain (see Security & Vault; no production default) |
 | `AMSHA_AUDIT_IDLE_TIMEOUT_MS` | `10000` | Audit drain idle timeout (ms) |
 
 ## API & Auth
 
+> **Required (no production default):** `AMSHA_API_KEYS_INTERNAL` and `AMSHA_API_KEYS_CI` are hard-required at startup (enforced by `CliUtils.validateRequiredEnvVars`). Generate: `openssl rand -base64 32`.
+
 | Variable | Default | Description |
 |---|---|---|
-| `AMSHA_API_KEYS_INTERNAL` | `key-internal-changeme` | Internal API keys for admin endpoints |
-| `AMSHA_API_KEYS_CI` | `key-ci-changeme` | CI API key |
+| `AMSHA_API_KEYS_INTERNAL` | `key-internal-changeme` *(dev only)* | **Required.** Internal API keys for admin endpoints (`Authorization: Bearer <token>`) |
+| `AMSHA_API_KEYS_CI` | `key-ci-changeme` *(dev only)* | **Required.** CI API key (read-only) |
 
 ## Resumption
 

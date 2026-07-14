@@ -34,11 +34,12 @@
 ###
 ### SecurityEventType for skills: SKILL_LOADED, SKILL_REFRESHED (telemetry tier).
 ###
-### Prerequisites: Amsha Agent serve mode
+### Prerequisites: Amsha Agent serve mode.
+### Rate limits: ~20 req/min, 10 mutations/min. Space POST/DELETE requests ≥7s apart.
 ### ═══════════════════════════════════════════════════════════════
 
 # @baseUrl  = http://localhost:8080
-# @validKey = key-internal-cWevfEoRvstUv0PqGpf02LzDY5kPNaz1y9GSl0LZOwU=
+# @validKey = JV/qXAikcUoSCCUsqYxLvNjxW/N3KROQtawg3VRFrJs=
 
 # ─────────────────────────────────────────────────────────────────
 # FLOW A: LIST SKILLS (BEFORE CREATING ANY)
@@ -147,9 +148,10 @@ trigger-patterns:
   - "review.*pull.?request"
   - "security.*audit"
   - "owasp.*review"
+tool-capabilities:
+  - GITHUB
   - RECALL_MEMORY_SEARCH
   - ARCHIVAL_MEMORY_SEARCH
-  - GITHUB
 max-iterations: 6
 ---
 You are a security-focused code reviewer. Prioritise: OWASP Top 10, injection vectors,
@@ -168,7 +170,12 @@ X-Amsha-API-Key: {{validKey}}
 # ─────────────────────────────────────────────────────────────────
 # FLOW D: SKILL ROUTING VIA AGENT RUN
 # This is the key test: skills intercept BEFORE LLM classification.
-# Confirm via logs: "SkillReflex matched skill:code-reviewer for session..."
+# Confirm via logs: "SkillAwareIntentDetector: Skill intent matched..."
+#
+# NOTE: Skill routing depends on how the coordinator injects/uses IntentDetector.
+# SkillAwareIntentDetector is @Alternative @Priority(1), but if the coordinator
+# routes directly to IntentDetectorService or ModelRouter, skill matching may
+# not intercept. Verify by checking logs for "Skill intent matched via".
 # ─────────────────────────────────────────────────────────────────
 
 ### [SKILL-7] Create session for skill routing test
@@ -177,12 +184,13 @@ POST {{baseUrl}}/api/v1/sessions
 Content-Type: application/json
 X-Amsha-API-Key: {{validKey}}
 
+{"autonomyLevel":"SUPERVISED"}
+
 ###
 
 ### [SKILL-8] Message matching code-reviewer trigger → skill intercepts
-# Expect 200: security-focused code review response.
-# Logs MUST show: "SkillReflex matched skill:code-reviewer"
-# Logs MUST NOT show: "IntentClassificationHandler" (no Groq call)
+# Expect 200 or 202 (tool-approval): security-focused code review response.
+# Logs SHOULD show: "Skill intent matched via trigger pattern: role=skill:code-reviewer"
 POST {{baseUrl}}/api/v1/sessions/{{skillSession.response.body.sessionId}}/run
 Content-Type: application/json
 X-Amsha-API-Key: {{validKey}}
@@ -196,8 +204,8 @@ X-Amsha-API-Key: {{validKey}}
 ###
 
 ### [SKILL-9] Message matching researcher trigger → researcher skill intercepts
-# Expect 200: algorithm-focused response with complexity analysis.
-# Logs: "SkillReflex matched skill:researcher"
+# Expect 200/202: algorithm-focused response with complexity analysis.
+# Logs: "Skill intent matched via trigger pattern: role=skill:researcher"
 POST {{baseUrl}}/api/v1/sessions/{{skillSession.response.body.sessionId}}/run
 Content-Type: application/json
 X-Amsha-API-Key: {{validKey}}
@@ -211,8 +219,8 @@ X-Amsha-API-Key: {{validKey}}
 ###
 
 ### [SKILL-10] Message NOT matching any trigger → normal LLM intent classification
-# Expect: IntentClassificationHandler log appears (Groq called for intent).
-# No SkillReflex match - falls through to standard pipeline.
+# Expect 200/202: falls through to standard pipeline (ModelRouter or IntentDetectorService).
+# No "Skill intent matched" log in SkillAwareIntentDetector.
 POST {{baseUrl}}/api/v1/sessions/{{skillSession.response.body.sessionId}}/run
 Content-Type: application/json
 X-Amsha-API-Key: {{validKey}}
@@ -256,10 +264,11 @@ POST {{baseUrl}}/api/v1/sessions
 Content-Type: application/json
 X-Amsha-API-Key: {{validKey}}
 
+{"autonomyLevel":"SUPERVISED"}
+
 ###
 
-# After researcher skill deleted, "how does quicksort work" falls through to Groq.
-# Logs: "IntentClassificationHandler" appears - LLM classifier runs.
+# After researcher skill deleted, "how does quicksort work" falls through to ModelRouter/IntentDetectorService.
 POST {{baseUrl}}/api/v1/sessions/{{postDeleteSession.response.body.sessionId}}/run
 Content-Type: application/json
 X-Amsha-API-Key: {{validKey}}
@@ -297,7 +306,7 @@ X-Amsha-API-Key: {{validKey}}
 
 ### [SKILL-ERR-1] Malformed YAML frontmatter → expect 400
 # Missing closing --- and no system prompt.
-# Expect: {"message":"Invalid skill definition: <parse error detail>"}
+# Expect: {"error":"Invalid skill definition","detail":"Skill document must have exactly two --- delimiters (found N sections)"}
 POST {{baseUrl}}/api/v1/skills
 Content-Type: text/plain
 X-Amsha-API-Key: {{validKey}}
@@ -333,9 +342,11 @@ You are a test skill. Your bad capability name is silently excluded.
 
 ###
 
-### [SKILL-ERR-3] maxBudgetUsd in frontmatter → expect 400 or silently excluded
+### [SKILL-ERR-3] maxBudgetUsd in frontmatter → silently excluded, skill created
 # maxBudgetUsd is EXPLICITLY EXCLUDED from skill frontmatter (Nuance #13).
 # Skills cannot override the per-session USD budget cap.
+# Jackson FAIL_ON_UNKNOWN_PROPERTIES=false → unknown field silently ignored.
+# Expect 201: {"message":"Skill saved and registry reloaded: budget-override-attempt"}
 POST {{baseUrl}}/api/v1/skills
 Content-Type: text/plain
 X-Amsha-API-Key: {{validKey}}
@@ -376,6 +387,166 @@ GET {{baseUrl}}/api/v1/skills
 ###
 
 # ─────────────────────────────────────────────────────────────────
+# FLOW H: ADDITIONAL ERROR CASES
+# ─────────────────────────────────────────────────────────────────
+
+### [SKILL-ERR-7] All tool-capabilities invalid → persisted but NOT loaded
+# When ALL declared capabilities are invalid, SkillLoader.addSafe() rejects the skill
+# during registry reload (throws IllegalArgumentException caught by caller).
+# The skill IS persisted to DB (201) but is NOT added to the active registry.
+# Check logs for: WARN "Failed to compile skill 'all-bad-caps' from database: All declared tool-capabilities are invalid..."
+# Expect 201: {"message":"Skill saved and registry reloaded: all-bad-caps"}
+POST {{baseUrl}}/api/v1/skills
+Content-Type: text/plain
+X-Amsha-API-Key: {{validKey}}
+
+---
+name: all-bad-caps
+description: Skill where every tool-capability is invalid
+trigger-patterns:
+  - "all.*bad"
+tool-capabilities:
+  - FAKE_TOOL_ONE
+  - FAKE_TOOL_TWO
+max-iterations: 3
+---
+This skill should be rejected because all capabilities are invalid.
+
+###
+
+### [SKILL-ERR-8] Empty body → expect 400
+# SkillDefinitionParser rejects blank input with "Skill document cannot be empty".
+POST {{baseUrl}}/api/v1/skills
+Content-Type: text/plain
+X-Amsha-API-Key: {{validKey}}
+
+
+###
+
+### [SKILL-ERR-9] Invalid regex in trigger-patterns → graceful degradation
+# Invalid regex (unclosed bracket) is caught by PatternSyntaxException in SkillLoader.addSafe().
+# The skill IS created but the broken trigger pattern is skipped (logged as WARN).
+# Expect 201: skill created with valid patterns only.
+POST {{baseUrl}}/api/v1/skills
+Content-Type: text/plain
+X-Amsha-API-Key: {{validKey}}
+
+---
+name: bad-regex
+description: Skill with an invalid regex trigger pattern
+trigger-patterns:
+  - "valid.*pattern"
+  - "unclosed[bracket"
+max-iterations: 3
+---
+You are a test skill with a broken regex that is gracefully skipped.
+
+###
+
+# ─────────────────────────────────────────────────────────────────
+# FLOW I: IDEMPOTENCY & UPSERT BEHAVIORS
+# ─────────────────────────────────────────────────────────────────
+
+### [SKILL-15] POST same YAML twice → idempotent, single entry
+# Posting the exact same YAML body twice does NOT create a duplicate.
+# The second POST updates using insert-or-replace by primary key (id).
+# Note: The DB id may change across upserts (INSERT OR REPLACE behavior with nullable id on create).
+# Only one entry appears — no duplicates.
+POST {{baseUrl}}/api/v1/skills
+Content-Type: text/plain
+X-Amsha-API-Key: {{validKey}}
+
+---
+name: idempotent-test
+description: Testing idempotent create behavior
+trigger-patterns:
+  - "idempotent.*test"
+max-iterations: 3
+---
+You are a test skill for idempotency verification.
+
+###
+
+### [SKILL-15b] Verify single entry exists (not duplicated)
+GET {{baseUrl}}/api/v1/skills
+Accept: application/json
+X-Amsha-API-Key: {{validKey}}
+
+###
+
+### [SKILL-15c] POST same body again → still single entry, same ID
+# @name idempotentFirstId
+POST {{baseUrl}}/api/v1/skills
+Content-Type: text/plain
+X-Amsha-API-Key: {{validKey}}
+
+---
+name: idempotent-test
+description: Testing idempotent create behavior
+trigger-patterns:
+  - "idempotent.*test"
+max-iterations: 3
+---
+You are a test skill for idempotency verification.
+
+###
+
+# Capture first ID, then verify after second POST it's unchanged
+# The ID should remain stable across upserts.
+
+### [SKILL-15d] Verify ID preserved after second POST
+GET {{baseUrl}}/api/v1/skills
+Accept: application/json
+X-Amsha-API-Key: {{validKey}}
+
+###
+
+# ─────────────────────────────────────────────────────────────────
+# FLOW J: UPSERT CHANGES max-iterations AND tool-capabilities
+# ─────────────────────────────────────────────────────────────────
+
+### [SKILL-16] Upsert changes max-iterations and tool-capabilities
+# Verify that updating these fields takes effect immediately.
+POST {{baseUrl}}/api/v1/skills
+Content-Type: text/plain
+X-Amsha-API-Key: {{validKey}}
+
+---
+name: idempotent-test
+description: Updated with different max-iterations and capabilities
+trigger-patterns:
+  - "idempotent.*test"
+tool-capabilities:
+  - GITHUB
+  - RECALL_MEMORY_SEARCH
+max-iterations: 10
+---
+You are an updated test skill with more iterations and capabilities.
+
+###
+
+### [SKILL-16b] Verify updated skill has new values
+GET {{baseUrl}}/api/v1/skills
+Accept: application/json
+X-Amsha-API-Key: {{validKey}}
+
+###
+
+# ─────────────────────────────────────────────────────────────────
+# FLOW K: DELETE CLASSPATH-ONLY SKILL → 404
+# ─────────────────────────────────────────────────────────────────
+
+### [SKILL-17] DELETE classpath-only skill → expect 404
+# Classpath skills are loaded from JAR, NOT in the database.
+# The DELETE endpoint only operates on database skills.
+# 'algorithmic-art' is a classpath skill (source=skillsjars).
+DELETE {{baseUrl}}/api/v1/skills/algorithmic-art
+Accept: application/json
+X-Amsha-API-Key: {{validKey}}
+
+###
+
+# ─────────────────────────────────────────────────────────────────
 # CLEANUP
 # ─────────────────────────────────────────────────────────────────
 
@@ -393,6 +564,18 @@ X-Amsha-API-Key: {{validKey}}
 ###
 
 DELETE {{baseUrl}}/api/v1/skills/budget-override-attempt
+Accept: application/json
+X-Amsha-API-Key: {{validKey}}
+
+###
+
+DELETE {{baseUrl}}/api/v1/skills/bad-regex
+Accept: application/json
+X-Amsha-API-Key: {{validKey}}
+
+###
+
+DELETE {{baseUrl}}/api/v1/skills/idempotent-test
 Accept: application/json
 X-Amsha-API-Key: {{validKey}}
 

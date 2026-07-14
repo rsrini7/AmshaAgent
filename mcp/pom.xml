@@ -20,6 +20,11 @@
       <artifactId>amsha-core</artifactId>
     </dependency>
     <dependency>
+      <groupId>com.amsha</groupId>
+      <artifactId>amsha-persistence-api</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
       <groupId>io.quarkus</groupId>
       <artifactId>quarkus-rest</artifactId>
     </dependency>

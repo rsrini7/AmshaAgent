@@ -2,7 +2,6 @@ package com.amsha.app.skill;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
-import jakarta.transaction.Transactional;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.DELETE;
 import jakarta.ws.rs.GET;
@@ -67,7 +66,6 @@ public class SkillResource {
 
     @POST
     @Consumes(MediaType.TEXT_PLAIN)
-    @Transactional
     @Operation(summary = "Create or update a skill from YAML definition")
     public Response upsertSkill(String rawYamlDoc) {
         try {
@@ -91,7 +89,7 @@ public class SkillResource {
                     "skills",
                     "admin",
                     "system",
-                    existingOptional.isPresent() ? SecurityEventType.SKILL_CREATED : SecurityEventType.SKILL_CREATED,
+                    SecurityEventType.SKILL_CREATED,
                     "skill=" + def.name() + " op=" + (existingOptional.isPresent() ? "update" : "create"));
 
             return Response.status(Response.Status.CREATED)
@@ -107,7 +105,6 @@ public class SkillResource {
 
     @DELETE
     @Path("/{name}")
-    @Transactional
     @Operation(summary = "Delete a skill and reload registry")
     public Response deleteSkill(@PathParam("name") String name) {
         var existing = skillStore.findByName(name);

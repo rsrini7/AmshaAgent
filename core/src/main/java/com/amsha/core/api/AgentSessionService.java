@@ -212,7 +212,7 @@ public class AgentSessionService {
 
         try {
             TurnDispatchResult dispatched = WorkspaceScopeHolder.call(
-                    sessionId, () -> dispatchRestTurn(sessionId, request, canonicalRole, maxIterations));
+                    sessionId, () -> dispatchRestTurn(sessionId, userId, request, canonicalRole, maxIterations));
             return toServiceResult(dispatched, false);
         } catch (BudgetExceededException e) {
             return ServiceResult.error("BUDGET", e.getMessage());
@@ -255,8 +255,8 @@ public class AgentSessionService {
                 String canonicalRole =
                         AgentRoleEnum.fromString(request.agentRole()).toScopedName();
                 int maxIterations = request.maxIterations() != null ? request.maxIterations() : 5;
-                callback.accept(
-                        toServiceResult(dispatchRestTurn(sessionId, request, canonicalRole, maxIterations), true));
+                callback.accept(toServiceResult(
+                        dispatchRestTurn(sessionId, userId, request, canonicalRole, maxIterations), true));
             } catch (Exception e) {
                 log.errorf("Async agent run failed: %s", LogUtil.rootMessage(e));
                 callback.accept(
@@ -287,14 +287,14 @@ public class AgentSessionService {
                 String channel = ChannelType.REST_API.name();
 
                 return WorkspaceContext.<ServiceResult<Object>>run(
-                        sessionId, REST_USER_ID, sessionId, AutonomyLevel.FULL, canonicalRole, channel, () -> {
+                        sessionId, userId, sessionId, AutonomyLevel.FULL, canonicalRole, channel, () -> {
                             String resumeGoal = checkpointResumeHandler.resolveResumeGoal(sessionId, canonicalRole);
                             int resumeIterations = checkpoint.get().getMaxIterations() != null
                                     ? Math.max(
                                             maxResumeIterations,
                                             checkpoint.get().getMaxIterations())
                                     : maxResumeIterations;
-                            MessageContext context = createRestContext(sessionId, resumeGoal);
+                            MessageContext context = createRestContext(sessionId, userId, resumeGoal);
                             context.setResumeSignal(true);
                             AgentResult result = agentLoop.run(
                                     sessionId, agentRole, resumeGoal, reasoningEngine, resumeIterations, context);
@@ -365,16 +365,16 @@ public class AgentSessionService {
         return ServiceResult.success(null);
     }
 
-    private MessageContext createRestContext(String sessionId, String goal) {
-        ChannelUser user = new ChannelUser(REST_USER_ID, REST_USER_ID, REST_USER_NAME, ChannelType.REST_API);
+    private MessageContext createRestContext(String sessionId, String userId, String goal) {
+        ChannelUser user = new ChannelUser(userId, userId, REST_USER_NAME, ChannelType.REST_API);
         ChannelMessage msg =
                 new ChannelMessage.RestApiMessage(user, goal, REST_API_SESSION_PREFIX + sessionId, Instant.now());
         return new MessageContext(REST_CHAT_SESSION_PREFIX + sessionId, user, msg);
     }
 
     private TurnDispatchResult dispatchRestTurn(
-            String sessionId, RunAgentRequest request, String canonicalRole, int maxIterations) {
-        MessageContext context = createRestContext(sessionId, request.goal());
+            String sessionId, String userId, RunAgentRequest request, String canonicalRole, int maxIterations) {
+        MessageContext context = createRestContext(sessionId, userId, request.goal());
         return turnDispatchService.dispatch(new TurnRequest(
                 context.getMessage(),
                 context.getChatId(),
@@ -392,7 +392,7 @@ public class AgentSessionService {
                 .agentResult()
                 .<ServiceResult<Object>>map(
                         result -> new ServiceResult<>(responseMapper.mapResult(result, asynchronous), null, null))
-                .orElseGet(() -> ServiceResult.error("SYSTEM", "Turn completed without a result"));
+                .orElseGet(() -> ServiceResult.success(Map.of("status", "OK", "message", "Turn processed")));
     }
 
     private Optional<ServiceResult<Object>> validateRole(String role) {

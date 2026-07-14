@@ -6,6 +6,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -27,6 +28,7 @@ class PersistencePortContractTest {
     private InMemoryCronStore cronStore;
     private InMemoryAuditEventStore auditStore;
     private InMemoryAdvisoryLock advisoryLock;
+    private InMemoryMcpConnectionStore mcpConnectionStore;
 
     @BeforeEach
     void setUp() {
@@ -34,6 +36,7 @@ class PersistencePortContractTest {
         cronStore = new InMemoryCronStore();
         auditStore = new InMemoryAuditEventStore();
         advisoryLock = new InMemoryAdvisoryLock();
+        mcpConnectionStore = new InMemoryMcpConnectionStore();
     }
 
     // ── CheckpointStorePort contract ──
@@ -354,6 +357,104 @@ class PersistencePortContractTest {
         assertFalse(advisoryLock.isLocked("nonexistent"));
     }
 
+    // ── McpConnectionStorePort contract ──
+
+    @Test
+    void mcpConnectionSaveFindAndListAreOwnerScoped() {
+        McpConnectionDto userOneConnection = createMcpConnection("mcp-1", "user-1", "docs", true);
+        McpConnectionDto userTwoConnection = createMcpConnection("mcp-2", "user-2", "docs", true);
+
+        mcpConnectionStore.save(userOneConnection);
+        mcpConnectionStore.save(userTwoConnection);
+
+        assertEquals(Optional.of(userOneConnection), mcpConnectionStore.findByIdAndUserId("mcp-1", "user-1"));
+        assertTrue(mcpConnectionStore.findByIdAndUserId("mcp-1", "user-2").isEmpty());
+        assertEquals(Optional.of(userTwoConnection), mcpConnectionStore.findByNameAndUserId("docs", "user-2"));
+        assertEquals(List.of(userOneConnection), mcpConnectionStore.listByUserId("user-1"));
+    }
+
+    @Test
+    void mcpConnectionListEnabledOnlyReturnsEnabledConnectionsAcrossOwners() {
+        McpConnectionDto enabledOne = createMcpConnection("mcp-1", "user-1", "docs", true);
+        McpConnectionDto disabled = createMcpConnection("mcp-2", "user-1", "disabled", false);
+        McpConnectionDto enabledTwo = createMcpConnection("mcp-3", "user-2", "ops", true);
+
+        mcpConnectionStore.save(enabledOne);
+        mcpConnectionStore.save(disabled);
+        mcpConnectionStore.save(enabledTwo);
+
+        assertEquals(Set.of(enabledOne, enabledTwo), Set.copyOf(mcpConnectionStore.listEnabled()));
+    }
+
+    @Test
+    void mcpHeaderSecretRefsAreOwnerScopedAndHeaderNamesAreNormalized() {
+        McpConnectionDto connection = createMcpConnection("mcp-1", "user-1", "docs", true);
+        mcpConnectionStore.save(connection);
+
+        mcpConnectionStore.replaceHeaderSecretRefs(
+                connection.id(),
+                "user-1",
+                List.of(createMcpHeaderRef("ref-1", connection.id(), "user-1", "Authorization", "vault-auth")));
+
+        List<McpConnectionHeaderSecretRefDto> refs = mcpConnectionStore.listHeaderSecretRefs(connection.id(), "user-1");
+        assertEquals(1, refs.size());
+        assertEquals("authorization", refs.getFirst().headerName());
+        assertTrue(mcpConnectionStore
+                .listHeaderSecretRefs(connection.id(), "user-2")
+                .isEmpty());
+    }
+
+    @Test
+    void mcpHeaderSecretRefsRejectCaseInsensitiveDuplicateHeaderNames() {
+        McpConnectionDto connection = createMcpConnection("mcp-1", "user-1", "docs", true);
+        mcpConnectionStore.save(connection);
+
+        IllegalArgumentException thrown = assertThrows(
+                IllegalArgumentException.class,
+                () -> mcpConnectionStore.replaceHeaderSecretRefs(
+                        connection.id(),
+                        "user-1",
+                        List.of(
+                                createMcpHeaderRef("ref-1", connection.id(), "user-1", "Authorization", "vault-auth-1"),
+                                createMcpHeaderRef(
+                                        "ref-2", connection.id(), "user-1", "authorization", "vault-auth-2"))));
+
+        assertTrue(thrown.getMessage().contains("Duplicate MCP header name"));
+    }
+
+    @Test
+    void mcpConnectionDeleteRemovesConnectionAndHeaderRefsForOwnerOnly() {
+        McpConnectionDto owned = createMcpConnection("mcp-1", "user-1", "docs", true);
+        McpConnectionDto other = createMcpConnection("mcp-2", "user-2", "docs", true);
+        mcpConnectionStore.save(owned);
+        mcpConnectionStore.save(other);
+        mcpConnectionStore.replaceHeaderSecretRefs(
+                owned.id(),
+                "user-1",
+                List.of(createMcpHeaderRef("ref-1", owned.id(), "user-1", "Authorization", "vault-auth")));
+
+        assertEquals(0, mcpConnectionStore.deleteByIdAndUserId(owned.id(), "user-2"));
+        assertEquals(1, mcpConnectionStore.deleteByIdAndUserId(owned.id(), "user-1"));
+
+        assertTrue(mcpConnectionStore.findByIdAndUserId(owned.id(), "user-1").isEmpty());
+        assertTrue(mcpConnectionStore.listHeaderSecretRefs(owned.id(), "user-1").isEmpty());
+        assertEquals(Optional.of(other), mcpConnectionStore.findByIdAndUserId(other.id(), "user-2"));
+    }
+
+    @Test
+    void mcpCleanupFailuresCanBeSavedListedAndDeleted() {
+        McpConnectionCleanupFailureDto failure =
+                createMcpCleanupFailure("failure-1", "mcp-1", "user-1", "authorization", "vault-auth", 1);
+
+        mcpConnectionStore.saveCleanupFailure(failure);
+
+        assertEquals(List.of(failure), mcpConnectionStore.listCleanupFailures());
+        assertEquals(0, mcpConnectionStore.deleteCleanupFailure(failure.id(), "other-user"));
+        assertEquals(List.of(failure), mcpConnectionStore.listCleanupFailures());
+        assertEquals(1, mcpConnectionStore.deleteCleanupFailure(failure.id(), failure.userId()));
+        assertTrue(mcpConnectionStore.listCleanupFailures().isEmpty());
+    }
+
     // ── Helper factory methods ──
 
     private CheckpointDto createCheckpoint(String sessionId, String status) {
@@ -464,7 +565,136 @@ class PersistencePortContractTest {
                 null);
     }
 
+    private McpConnectionDto createMcpConnection(String id, String userId, String name, boolean enabled) {
+        Instant now = Instant.now();
+        return new McpConnectionDto(
+                id, userId, name, "HTTP_SSE", "https://example.test/" + id, "NETWORK", enabled, now, now);
+    }
+
+    private McpConnectionHeaderSecretRefDto createMcpHeaderRef(
+            String id, String connectionId, String userId, String headerName, String vaultKeyRef) {
+        Instant now = Instant.now();
+        return new McpConnectionHeaderSecretRefDto(id, connectionId, userId, headerName, vaultKeyRef, now, now);
+    }
+
+    private McpConnectionCleanupFailureDto createMcpCleanupFailure(
+            String id, String connectionId, String userId, String headerName, String vaultKeyRef, int attempts) {
+        Instant now = Instant.now();
+        return new McpConnectionCleanupFailureDto(
+                id, connectionId, userId, headerName, vaultKeyRef, "cleanup failed", attempts, now, now);
+    }
+
     // ── In-memory mock implementations ──
+
+    static class InMemoryMcpConnectionStore implements McpConnectionStorePort {
+        final Map<String, McpConnectionDto> connections = new ConcurrentHashMap<>();
+        final Map<String, List<McpConnectionHeaderSecretRefDto>> headerRefs = new ConcurrentHashMap<>();
+        final Map<String, McpConnectionCleanupFailureDto> cleanupFailures = new ConcurrentHashMap<>();
+
+        @Override
+        public void save(McpConnectionDto connection) {
+            connections.put(connection.id(), connection);
+        }
+
+        @Override
+        public Optional<McpConnectionDto> findByIdAndUserId(String id, String userId) {
+            return Optional.ofNullable(connections.get(id)).filter(connection -> userId.equals(connection.userId()));
+        }
+
+        @Override
+        public Optional<McpConnectionDto> findByNameAndUserId(String name, String userId) {
+            return connections.values().stream()
+                    .filter(connection -> userId.equals(connection.userId()))
+                    .filter(connection -> name.equals(connection.name()))
+                    .findFirst();
+        }
+
+        @Override
+        public List<McpConnectionDto> listByUserId(String userId) {
+            return connections.values().stream()
+                    .filter(connection -> userId.equals(connection.userId()))
+                    .toList();
+        }
+
+        @Override
+        public List<McpConnectionDto> listEnabled() {
+            return connections.values().stream()
+                    .filter(McpConnectionDto::enabled)
+                    .toList();
+        }
+
+        @Override
+        public int deleteByIdAndUserId(String id, String userId) {
+            Optional<McpConnectionDto> existing = findByIdAndUserId(id, userId);
+            if (existing.isEmpty()) return 0;
+            connections.remove(id);
+            headerRefs.remove(id);
+            return 1;
+        }
+
+        @Override
+        public void replaceHeaderSecretRefs(
+                String connectionId, String userId, List<McpConnectionHeaderSecretRefDto> references) {
+            if (findByIdAndUserId(connectionId, userId).isEmpty()) {
+                throw new IllegalArgumentException("MCP connection not found: " + connectionId);
+            }
+            headerRefs.put(connectionId, normalizeAndValidate(connectionId, userId, references));
+        }
+
+        @Override
+        public List<McpConnectionHeaderSecretRefDto> listHeaderSecretRefs(String connectionId, String userId) {
+            if (findByIdAndUserId(connectionId, userId).isEmpty()) return List.of();
+            return headerRefs.getOrDefault(connectionId, List.of()).stream()
+                    .filter(reference -> userId.equals(reference.userId()))
+                    .toList();
+        }
+
+        @Override
+        public void saveCleanupFailure(McpConnectionCleanupFailureDto failure) {
+            cleanupFailures.put(failure.id(), failure);
+        }
+
+        @Override
+        public List<McpConnectionCleanupFailureDto> listCleanupFailures() {
+            return cleanupFailures.values().stream().toList();
+        }
+
+        @Override
+        public int deleteCleanupFailure(String id, String userId) {
+            McpConnectionCleanupFailureDto failure = cleanupFailures.get(id);
+            if (failure == null || !failure.userId().equals(userId)) return 0;
+            cleanupFailures.remove(id);
+            return 1;
+        }
+
+        private static List<McpConnectionHeaderSecretRefDto> normalizeAndValidate(
+                String connectionId, String userId, List<McpConnectionHeaderSecretRefDto> references) {
+            Set<String> normalizedNames = ConcurrentHashMap.newKeySet();
+            return references.stream()
+                    .map(reference -> normalizeReference(connectionId, userId, reference))
+                    .peek(reference -> {
+                        if (!normalizedNames.add(reference.headerName())) {
+                            throw new IllegalArgumentException("Duplicate MCP header name: " + reference.headerName());
+                        }
+                    })
+                    .toList();
+        }
+
+        private static McpConnectionHeaderSecretRefDto normalizeReference(
+                String connectionId, String userId, McpConnectionHeaderSecretRefDto reference) {
+            if (!connectionId.equals(reference.connectionId()) || !userId.equals(reference.userId())) {
+                throw new IllegalArgumentException("MCP header reference owner mismatch");
+            }
+            return new McpConnectionHeaderSecretRefDto(
+                    reference.id(),
+                    reference.connectionId(),
+                    reference.userId(),
+                    reference.headerName().toLowerCase(Locale.ROOT),
+                    reference.vaultKeyRef(),
+                    reference.createdAt(),
+                    reference.updatedAt());
+        }
+    }
 
     static class InMemoryCheckpointStore implements CheckpointStorePort {
         private static final Set<String> TERMINAL_STATUSES = Set.of(
