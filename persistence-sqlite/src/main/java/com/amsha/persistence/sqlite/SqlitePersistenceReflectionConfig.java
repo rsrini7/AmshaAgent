@@ -1,11 +1,17 @@
 package com.amsha.persistence.sqlite;
 
 import com.amsha.persistence.api.AgentCronDto;
+import com.amsha.persistence.api.ApiCredentialDto;
 import com.amsha.persistence.api.AuditEventDto;
+import com.amsha.persistence.api.BootstrapStateDto;
 import com.amsha.persistence.api.ChatMemoryDto;
 import com.amsha.persistence.api.CheckpointDto;
 import com.amsha.persistence.api.CompactionSummaryDto;
 import com.amsha.persistence.api.CronRunDto;
+import com.amsha.persistence.api.ExternalIdentityDto;
+import com.amsha.persistence.api.IdentityInvitationDto;
+import com.amsha.persistence.api.IdentityUserDto;
+import com.amsha.persistence.api.IdentityWorkspaceDto;
 import com.amsha.persistence.api.McpConnectionCleanupFailureDto;
 import com.amsha.persistence.api.McpConnectionDto;
 import com.amsha.persistence.api.McpConnectionHeaderSecretRefDto;
@@ -13,15 +19,21 @@ import com.amsha.persistence.api.PromptDto;
 import com.amsha.persistence.api.ReasoningStepDto;
 import com.amsha.persistence.api.SecretDto;
 import com.amsha.persistence.api.SkillDto;
+import com.amsha.persistence.api.WebSessionDto;
+import com.amsha.persistence.api.WorkspaceMembershipDto;
 import com.amsha.persistence.common.SessionKnowledgeBase;
+import com.amsha.persistence.sqlite.jdbi.ApiCredentialJdbiDao;
 import com.amsha.persistence.sqlite.jdbi.ArchivalMemoryJdbiDao;
 import com.amsha.persistence.sqlite.jdbi.AuditJdbiDao;
+import com.amsha.persistence.sqlite.jdbi.BootstrapStateJdbiDao;
 import com.amsha.persistence.sqlite.jdbi.ChatMemoryJdbiDao;
 import com.amsha.persistence.sqlite.jdbi.CheckpointJdbiDao;
 import com.amsha.persistence.sqlite.jdbi.CompactionJdbiDao;
 import com.amsha.persistence.sqlite.jdbi.CoreMemoryJdbiDao;
 import com.amsha.persistence.sqlite.jdbi.CronJdbiDao;
 import com.amsha.persistence.sqlite.jdbi.CronRunJdbiDao;
+import com.amsha.persistence.sqlite.jdbi.IdentityInvitationJdbiDao;
+import com.amsha.persistence.sqlite.jdbi.IdentityJdbiDao;
 import com.amsha.persistence.sqlite.jdbi.JdbiProducer;
 import com.amsha.persistence.sqlite.jdbi.LockJdbiDao;
 import com.amsha.persistence.sqlite.jdbi.McpConnectionJdbiDao;
@@ -29,6 +41,7 @@ import com.amsha.persistence.sqlite.jdbi.PromptJdbiDao;
 import com.amsha.persistence.sqlite.jdbi.RecallMemoryJdbiDao;
 import com.amsha.persistence.sqlite.jdbi.SecretJdbiDao;
 import com.amsha.persistence.sqlite.jdbi.SkillJdbiDao;
+import com.amsha.persistence.sqlite.jdbi.WebSessionJdbiDao;
 
 import io.quarkus.runtime.annotations.RegisterForReflection;
 
@@ -48,6 +61,14 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             McpConnectionCleanupFailureDto.class,
             McpConnectionDto.class,
             McpConnectionHeaderSecretRefDto.class,
+            IdentityUserDto.class,
+            ExternalIdentityDto.class,
+            IdentityWorkspaceDto.class,
+            WorkspaceMembershipDto.class,
+            ApiCredentialDto.class,
+            WebSessionDto.class,
+            IdentityInvitationDto.class,
+            BootstrapStateDto.class,
             // JDBI DAOs (SQL Object proxies)
             CheckpointJdbiDao.class,
             CronJdbiDao.class,
@@ -64,6 +85,11 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             RecallMemoryJdbiDao.class,
             ArchivalMemoryJdbiDao.class,
             McpConnectionJdbiDao.class,
+            IdentityJdbiDao.class,
+            ApiCredentialJdbiDao.class,
+            WebSessionJdbiDao.class,
+            IdentityInvitationJdbiDao.class,
+            BootstrapStateJdbiDao.class,
             // JDBI infrastructure
             JdbiProducer.class,
             JdbiRetryWrapper.class,
@@ -86,6 +112,11 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             SqliteSkillStoreAdapter.class,
             SqliteMcpConnectionStoreAdapter.class,
             SqliteAdvisoryLockAdapter.class,
+            SqliteIdentityStoreAdapter.class,
+            SqliteApiCredentialStoreAdapter.class,
+            SqliteWebSessionStoreAdapter.class,
+            SqliteIdentityInvitationStoreAdapter.class,
+            SqliteBootstrapStateStoreAdapter.class,
             // Existing infrastructure
             GlobalKnowledgeBase.class,
             SessionKnowledgeBase.class,

@@ -29,6 +29,11 @@ class PersistencePortContractTest {
     private InMemoryAuditEventStore auditStore;
     private InMemoryAdvisoryLock advisoryLock;
     private InMemoryMcpConnectionStore mcpConnectionStore;
+    private InMemoryIdentityStore identityStore;
+    private InMemoryApiCredentialStore apiCredentialStore;
+    private InMemoryWebSessionStore webSessionStore;
+    private InMemoryIdentityInvitationStore identityInvitationStore;
+    private InMemoryBootstrapStateStore bootstrapStateStore;
 
     @BeforeEach
     void setUp() {
@@ -37,6 +42,11 @@ class PersistencePortContractTest {
         auditStore = new InMemoryAuditEventStore();
         advisoryLock = new InMemoryAdvisoryLock();
         mcpConnectionStore = new InMemoryMcpConnectionStore();
+        identityStore = new InMemoryIdentityStore();
+        apiCredentialStore = new InMemoryApiCredentialStore();
+        webSessionStore = new InMemoryWebSessionStore();
+        identityInvitationStore = new InMemoryIdentityInvitationStore();
+        bootstrapStateStore = new InMemoryBootstrapStateStore();
     }
 
     // ── CheckpointStorePort contract ──
@@ -453,6 +463,189 @@ class PersistencePortContractTest {
         assertEquals(List.of(failure), mcpConnectionStore.listCleanupFailures());
         assertEquals(1, mcpConnectionStore.deleteCleanupFailure(failure.id(), failure.userId()));
         assertTrue(mcpConnectionStore.listCleanupFailures().isEmpty());
+    }
+
+    // ── IdentityStorePort contract ──
+
+    @Test
+    void identityStoreUserContract() {
+        IdentityUserDto user = new IdentityUserDto("user-100", "Alice", "ACTIVE", Instant.now(), Instant.now());
+        identityStore.saveUser(user);
+        Optional<IdentityUserDto> found = identityStore.findUserById("user-100");
+        assertTrue(found.isPresent());
+        assertEquals("Alice", found.get().displayName());
+        assertEquals(1, identityStore.listUsers().size());
+    }
+
+    @Test
+    void identityStoreExternalIdentityContract() {
+        ExternalIdentityDto ext = new ExternalIdentityDto(
+                "provider-1", "issuer-1", "sub-1", "user-100", "{}", Instant.now(), Instant.now());
+        identityStore.saveExternalIdentity(ext);
+        Optional<ExternalIdentityDto> found = identityStore.findExternalIdentity("provider-1", "issuer-1", "sub-1");
+        assertTrue(found.isPresent());
+        assertEquals("user-100", found.get().userId());
+
+        Optional<ExternalIdentityDto> foundByUser =
+                identityStore.findExternalIdentityByUserId("provider-1", "user-100");
+        assertTrue(foundByUser.isPresent());
+
+        assertEquals(1, identityStore.listExternalIdentitiesByUserId("user-100").size());
+        identityStore.deleteExternalIdentity("provider-1", "issuer-1", "sub-1");
+        assertTrue(identityStore
+                .findExternalIdentity("provider-1", "issuer-1", "sub-1")
+                .isEmpty());
+    }
+
+    @Test
+    void identityStoreWorkspaceContract() {
+        IdentityWorkspaceDto ws =
+                new IdentityWorkspaceDto("ws-1", "My Workspace", "user-100", Instant.now(), Instant.now());
+        identityStore.saveWorkspace(ws);
+        Optional<IdentityWorkspaceDto> found = identityStore.findWorkspaceById("ws-1");
+        assertTrue(found.isPresent());
+        assertEquals("My Workspace", found.get().displayName());
+        assertEquals(1, identityStore.listWorkspaces().size());
+    }
+
+    @Test
+    void identityStoreMembershipContract() {
+        WorkspaceMembershipDto mem =
+                new WorkspaceMembershipDto("ws-1", "user-100", "OWNER", "ACTIVE", 0, Instant.now(), Instant.now());
+        identityStore.saveMembership(mem);
+        Optional<WorkspaceMembershipDto> found = identityStore.findMembership("ws-1", "user-100");
+        assertTrue(found.isPresent());
+        assertEquals("OWNER", found.get().role());
+        assertEquals(1, identityStore.listMembershipsByWorkspaceId("ws-1").size());
+        assertEquals(1, identityStore.listMembershipsByUserId("user-100").size());
+
+        identityStore.deleteMembership("ws-1", "user-100");
+        assertTrue(identityStore.findMembership("ws-1", "user-100").isEmpty());
+    }
+
+    // ── ApiCredentialStorePort contract ──
+
+    @Test
+    void apiCredentialContract() {
+        ApiCredentialDto cred = new ApiCredentialDto(
+                "cred-1", "user-100", "digest-1", "OWNER", 0, null, null, Instant.now(), Instant.now());
+        apiCredentialStore.save(cred);
+        Optional<ApiCredentialDto> found = apiCredentialStore.findById("cred-1");
+        assertTrue(found.isPresent());
+        assertEquals("user-100", found.get().userId());
+
+        Optional<ApiCredentialDto> foundByDigest = apiCredentialStore.findByKeyDigest("digest-1");
+        assertTrue(foundByDigest.isPresent());
+
+        assertEquals(1, apiCredentialStore.listByUserId("user-100").size());
+        apiCredentialStore.deleteById("cred-1");
+        assertTrue(apiCredentialStore.findById("cred-1").isEmpty());
+    }
+
+    // ── WebSessionStorePort contract ──
+
+    @Test
+    void webSessionContract() {
+        Instant now = Instant.now();
+        WebSessionDto session = new WebSessionDto(
+                "sess-100",
+                "user-100",
+                "token-digest-1",
+                "csrf-1",
+                now.plusSeconds(3600),
+                now.plusSeconds(7200),
+                null,
+                null,
+                null,
+                0,
+                now,
+                now);
+        webSessionStore.save(session);
+        Optional<WebSessionDto> found = webSessionStore.findById("sess-100");
+        assertTrue(found.isPresent());
+        assertEquals("user-100", found.get().userId());
+
+        Optional<WebSessionDto> foundByToken = webSessionStore.findByTokenDigest("token-digest-1");
+        assertTrue(foundByToken.isPresent());
+
+        assertEquals(1, webSessionStore.listByUserId("user-100").size());
+
+        webSessionStore.deleteExpired(now.plusSeconds(10000));
+        assertTrue(webSessionStore.findById("sess-100").isEmpty());
+    }
+
+    // ── IdentityInvitationStorePort contract ──
+
+    @Test
+    void identityInvitationContract() {
+        Instant now = Instant.now();
+        IdentityInvitationDto invitation = new IdentityInvitationDto(
+                "inv-1", "ws-1", "ADMIN", "token-digest-1", null, now.plusSeconds(3600), null, null, 0, now, now);
+        identityInvitationStore.save(invitation);
+        Optional<IdentityInvitationDto> found = identityInvitationStore.findById("inv-1");
+        assertTrue(found.isPresent());
+        assertEquals("ws-1", found.get().workspaceId());
+
+        Optional<IdentityInvitationDto> foundByToken = identityInvitationStore.findByTokenDigest("token-digest-1");
+        assertTrue(foundByToken.isPresent());
+
+        assertEquals(1, identityInvitationStore.listByWorkspaceId("ws-1").size());
+
+        identityInvitationStore.deleteExpired(now.plusSeconds(10000));
+        assertTrue(identityInvitationStore.findById("inv-1").isEmpty());
+    }
+
+    // ── BootstrapStateStorePort contract ──
+
+    @Test
+    void bootstrapStateContract() {
+        BootstrapStateDto state =
+                new BootstrapStateDto("bootstrap", "UNCLAIMED", "user-100", "digest-1", null, null, 0, Instant.now());
+        bootstrapStateStore.save(state);
+        Optional<BootstrapStateDto> found = bootstrapStateStore.getState();
+        assertTrue(found.isPresent());
+        assertEquals("UNCLAIMED", found.get().status());
+    }
+
+    @Test
+    void bootstrapStateClaimIsAtomic() {
+        Instant now = Instant.now();
+        assertTrue(bootstrapStateStore.claimFirstOwner("owner-a", "digest-a", now));
+        assertFalse(bootstrapStateStore.claimFirstOwner("owner-b", "digest-b", now));
+
+        Optional<BootstrapStateDto> claimed = bootstrapStateStore.getState();
+        assertTrue(claimed.isPresent());
+        assertEquals("CREDENTIAL_ISSUED", claimed.get().status());
+        assertEquals("owner-a", claimed.get().ownerId());
+        assertEquals(1, claimed.get().revision());
+
+        assertTrue(bootstrapStateStore.confirmClaim(claimed.get().revision(), now, now));
+        Optional<BootstrapStateDto> confirmed = bootstrapStateStore.getState();
+        assertEquals("CLAIMED", confirmed.get().status());
+
+        assertFalse(bootstrapStateStore.confirmClaim(1, now, now));
+    }
+
+    @Test
+    void identityMembershipRevisionBumpsOnSaveAndRejectsStale() {
+        WorkspaceMembershipDto mem =
+                new WorkspaceMembershipDto("ws-cas", "user-cas", "OWNER", "ACTIVE", 0, Instant.now(), Instant.now());
+        assertTrue(identityStore.saveMembership(mem));
+        WorkspaceMembershipDto saved =
+                identityStore.findMembership("ws-cas", "user-cas").get();
+        assertEquals(0, saved.revision());
+
+        WorkspaceMembershipDto updated =
+                new WorkspaceMembershipDto("ws-cas", "user-cas", "MEMBER", "ACTIVE", 0, Instant.now(), Instant.now());
+        assertTrue(identityStore.saveMembership(updated));
+        WorkspaceMembershipDto after =
+                identityStore.findMembership("ws-cas", "user-cas").get();
+        assertEquals(1, after.revision());
+        assertEquals("MEMBER", after.role());
+
+        WorkspaceMembershipDto stale =
+                new WorkspaceMembershipDto("ws-cas", "user-cas", "OWNER", "ACTIVE", 0, Instant.now(), Instant.now());
+        assertFalse(identityStore.saveMembership(stale));
     }
 
     // ── Helper factory methods ──
@@ -1345,6 +1538,319 @@ class PersistencePortContractTest {
         @Override
         public boolean isLocked(String lockKey) {
             return locks.containsKey(lockKey);
+        }
+    }
+
+    static class InMemoryIdentityStore implements IdentityStorePort {
+        final Map<String, IdentityUserDto> users = new ConcurrentHashMap<>();
+        final Map<String, ExternalIdentityDto> externalIdentities = new ConcurrentHashMap<>();
+        final Map<String, IdentityWorkspaceDto> workspaces = new ConcurrentHashMap<>();
+        final Map<String, WorkspaceMembershipDto> memberships = new ConcurrentHashMap<>();
+
+        @Override
+        public void saveUser(IdentityUserDto user) {
+            users.put(user.userId(), user);
+        }
+
+        @Override
+        public Optional<IdentityUserDto> findUserById(String userId) {
+            return Optional.ofNullable(users.get(userId));
+        }
+
+        @Override
+        public List<IdentityUserDto> listUsers() {
+            return new ArrayList<>(users.values());
+        }
+
+        @Override
+        public void saveExternalIdentity(ExternalIdentityDto identity) {
+            String key = identity.providerId() + "_" + identity.issuer() + "_" + identity.subject();
+            externalIdentities.put(key, identity);
+        }
+
+        @Override
+        public Optional<ExternalIdentityDto> findExternalIdentity(String providerId, String issuer, String subject) {
+            String key = providerId + "_" + issuer + "_" + subject;
+            return Optional.ofNullable(externalIdentities.get(key));
+        }
+
+        @Override
+        public Optional<ExternalIdentityDto> findExternalIdentityByUserId(String providerId, String userId) {
+            return externalIdentities.values().stream()
+                    .filter(identity -> providerId.equals(identity.providerId()) && userId.equals(identity.userId()))
+                    .findFirst();
+        }
+
+        @Override
+        public List<ExternalIdentityDto> listExternalIdentitiesByUserId(String userId) {
+            return externalIdentities.values().stream()
+                    .filter(identity -> userId.equals(identity.userId()))
+                    .toList();
+        }
+
+        @Override
+        public void deleteExternalIdentity(String providerId, String issuer, String subject) {
+            String key = providerId + "_" + issuer + "_" + subject;
+            externalIdentities.remove(key);
+        }
+
+        @Override
+        public void saveWorkspace(IdentityWorkspaceDto workspace) {
+            workspaces.put(workspace.workspaceId(), workspace);
+        }
+
+        @Override
+        public Optional<IdentityWorkspaceDto> findWorkspaceById(String workspaceId) {
+            return Optional.ofNullable(workspaces.get(workspaceId));
+        }
+
+        @Override
+        public List<IdentityWorkspaceDto> listWorkspaces() {
+            return new ArrayList<>(workspaces.values());
+        }
+
+        @Override
+        public boolean saveMembership(WorkspaceMembershipDto membership) {
+            String key = membership.workspaceId() + "_" + membership.userId();
+            WorkspaceMembershipDto existing = memberships.get(key);
+            if (existing != null && existing.revision() != membership.revision()) {
+                return false;
+            }
+            WorkspaceMembershipDto toStore = existing == null
+                    ? membership
+                    : new WorkspaceMembershipDto(
+                            membership.workspaceId(),
+                            membership.userId(),
+                            membership.role(),
+                            membership.status(),
+                            membership.revision() + 1,
+                            membership.createdAt(),
+                            membership.updatedAt());
+            memberships.put(key, toStore);
+            return true;
+        }
+
+        @Override
+        public Optional<WorkspaceMembershipDto> findMembership(String workspaceId, String userId) {
+            String key = workspaceId + "_" + userId;
+            return Optional.ofNullable(memberships.get(key));
+        }
+
+        @Override
+        public List<WorkspaceMembershipDto> listMembershipsByWorkspaceId(String workspaceId) {
+            return memberships.values().stream()
+                    .filter(m -> workspaceId.equals(m.workspaceId()))
+                    .toList();
+        }
+
+        @Override
+        public List<WorkspaceMembershipDto> listMembershipsByUserId(String userId) {
+            return memberships.values().stream()
+                    .filter(m -> userId.equals(m.userId()))
+                    .toList();
+        }
+
+        @Override
+        public int deleteMembership(String workspaceId, String userId) {
+            String key = workspaceId + "_" + userId;
+            return memberships.remove(key) != null ? 1 : 0;
+        }
+    }
+
+    static class InMemoryApiCredentialStore implements ApiCredentialStorePort {
+        final Map<String, ApiCredentialDto> store = new ConcurrentHashMap<>();
+
+        @Override
+        public boolean save(ApiCredentialDto credential) {
+            store.put(credential.credentialId(), credential);
+            return true;
+        }
+
+        @Override
+        public Optional<ApiCredentialDto> findById(String credentialId) {
+            return Optional.ofNullable(store.get(credentialId));
+        }
+
+        @Override
+        public Optional<ApiCredentialDto> findByKeyDigest(String keyDigest) {
+            return store.values().stream()
+                    .filter(c -> keyDigest.equals(c.keyDigest()))
+                    .findFirst();
+        }
+
+        @Override
+        public List<ApiCredentialDto> listByUserId(String userId) {
+            return store.values().stream()
+                    .filter(c -> userId.equals(c.userId()))
+                    .toList();
+        }
+
+        @Override
+        public int deleteById(String credentialId) {
+            return store.remove(credentialId) != null ? 1 : 0;
+        }
+    }
+
+    static class InMemoryWebSessionStore implements WebSessionStorePort {
+        final Map<String, WebSessionDto> store = new ConcurrentHashMap<>();
+
+        @Override
+        public boolean save(WebSessionDto session) {
+            store.put(session.sessionId(), session);
+            return true;
+        }
+
+        @Override
+        public Optional<WebSessionDto> findById(String sessionId) {
+            return Optional.ofNullable(store.get(sessionId));
+        }
+
+        @Override
+        public Optional<WebSessionDto> findByTokenDigest(String tokenDigest) {
+            return store.values().stream()
+                    .filter(s -> tokenDigest.equals(s.tokenDigest()))
+                    .findFirst();
+        }
+
+        @Override
+        public List<WebSessionDto> listByUserId(String userId) {
+            return store.values().stream()
+                    .filter(s -> userId.equals(s.userId()))
+                    .toList();
+        }
+
+        @Override
+        public int deleteById(String sessionId) {
+            return store.remove(sessionId) != null ? 1 : 0;
+        }
+
+        @Override
+        public int deleteByUserId(String userId) {
+            List<String> toRemove = store.values().stream()
+                    .filter(s -> userId.equals(s.userId()))
+                    .map(WebSessionDto::sessionId)
+                    .toList();
+            toRemove.forEach(store::remove);
+            return toRemove.size();
+        }
+
+        @Override
+        public int deleteExpired(Instant now) {
+            List<String> toRemove = store.values().stream()
+                    .filter(s -> s.idleExpiresAt().isBefore(now)
+                            || s.absoluteExpiresAt().isBefore(now))
+                    .map(WebSessionDto::sessionId)
+                    .toList();
+            toRemove.forEach(store::remove);
+            return toRemove.size();
+        }
+    }
+
+    static class InMemoryIdentityInvitationStore implements IdentityInvitationStorePort {
+        final Map<String, IdentityInvitationDto> store = new ConcurrentHashMap<>();
+
+        @Override
+        public boolean save(IdentityInvitationDto invitation) {
+            store.put(invitation.invitationId(), invitation);
+            return true;
+        }
+
+        @Override
+        public Optional<IdentityInvitationDto> findById(String invitationId) {
+            return Optional.ofNullable(store.get(invitationId));
+        }
+
+        @Override
+        public Optional<IdentityInvitationDto> findByTokenDigest(String tokenDigest) {
+            return store.values().stream()
+                    .filter(i -> tokenDigest.equals(i.tokenDigest()))
+                    .findFirst();
+        }
+
+        @Override
+        public List<IdentityInvitationDto> listByWorkspaceId(String workspaceId) {
+            return store.values().stream()
+                    .filter(i -> workspaceId.equals(i.workspaceId()))
+                    .toList();
+        }
+
+        @Override
+        public int deleteById(String invitationId) {
+            return store.remove(invitationId) != null ? 1 : 0;
+        }
+
+        @Override
+        public int deleteExpired(Instant now) {
+            List<String> toRemove = store.values().stream()
+                    .filter(i -> i.expiresAt().isBefore(now))
+                    .map(IdentityInvitationDto::invitationId)
+                    .toList();
+            toRemove.forEach(store::remove);
+            return toRemove.size();
+        }
+    }
+
+    static class InMemoryBootstrapStateStore implements BootstrapStateStorePort {
+        private static final String UNCLAIMED = "UNCLAIMED";
+        private static final String CREDENTIAL_ISSUED = "CREDENTIAL_ISSUED";
+
+        private BootstrapStateDto state;
+
+        @Override
+        public void save(BootstrapStateDto state) {
+            this.state = state;
+        }
+
+        @Override
+        public boolean claimFirstOwner(String ownerId, String credentialDigest, Instant issuedAt) {
+            if (state != null && !UNCLAIMED.equals(state.status())) {
+                return false;
+            }
+            int nextRevision = (state == null ? 0 : state.revision()) + 1;
+            state = new BootstrapStateDto(
+                    "bootstrap", CREDENTIAL_ISSUED, ownerId, credentialDigest, issuedAt, null, nextRevision, issuedAt);
+            return true;
+        }
+
+        @Override
+        public boolean confirmClaim(int expectedRevision, Instant claimedAt, Instant updatedAt) {
+            if (state == null || !CREDENTIAL_ISSUED.equals(state.status()) || state.revision() != expectedRevision) {
+                return false;
+            }
+            state = new BootstrapStateDto(
+                    "bootstrap",
+                    "CLAIMED",
+                    state.ownerId(),
+                    state.credentialDigest(),
+                    state.issuedAt(),
+                    claimedAt,
+                    state.revision() + 1,
+                    updatedAt);
+            return true;
+        }
+
+        @Override
+        public boolean replaceCredential(int expectedRevision, String newDigest, Instant issuedAt, Instant updatedAt) {
+            if (state == null
+                    || (!UNCLAIMED.equals(state.status()) && !CREDENTIAL_ISSUED.equals(state.status()))
+                    || state.revision() != expectedRevision) {
+                return false;
+            }
+            state = new BootstrapStateDto(
+                    "bootstrap",
+                    state.status(),
+                    state.ownerId(),
+                    newDigest,
+                    issuedAt,
+                    state.claimedAt(),
+                    state.revision() + 1,
+                    updatedAt);
+            return true;
+        }
+
+        @Override
+        public Optional<BootstrapStateDto> getState() {
+            return Optional.ofNullable(state);
         }
     }
 }

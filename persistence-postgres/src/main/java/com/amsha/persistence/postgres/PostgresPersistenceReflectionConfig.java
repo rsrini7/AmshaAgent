@@ -1,11 +1,17 @@
 package com.amsha.persistence.postgres;
 
 import com.amsha.persistence.api.AgentCronDto;
+import com.amsha.persistence.api.ApiCredentialDto;
 import com.amsha.persistence.api.AuditEventDto;
+import com.amsha.persistence.api.BootstrapStateDto;
 import com.amsha.persistence.api.ChatMemoryDto;
 import com.amsha.persistence.api.CheckpointDto;
 import com.amsha.persistence.api.CompactionSummaryDto;
 import com.amsha.persistence.api.CronRunDto;
+import com.amsha.persistence.api.ExternalIdentityDto;
+import com.amsha.persistence.api.IdentityInvitationDto;
+import com.amsha.persistence.api.IdentityUserDto;
+import com.amsha.persistence.api.IdentityWorkspaceDto;
 import com.amsha.persistence.api.McpConnectionCleanupFailureDto;
 import com.amsha.persistence.api.McpConnectionDto;
 import com.amsha.persistence.api.McpConnectionHeaderSecretRefDto;
@@ -14,13 +20,19 @@ import com.amsha.persistence.api.PromptDto;
 import com.amsha.persistence.api.ReasoningStepDto;
 import com.amsha.persistence.api.SecretDto;
 import com.amsha.persistence.api.SkillDto;
+import com.amsha.persistence.api.WebSessionDto;
+import com.amsha.persistence.api.WorkspaceMembershipDto;
+import com.amsha.persistence.postgres.jdbi.ApiCredentialJdbiDao;
 import com.amsha.persistence.postgres.jdbi.ArchivalMemoryJdbiDao;
 import com.amsha.persistence.postgres.jdbi.AuditJdbiDao;
+import com.amsha.persistence.postgres.jdbi.BootstrapStateJdbiDao;
 import com.amsha.persistence.postgres.jdbi.ChatMemoryJdbiDao;
 import com.amsha.persistence.postgres.jdbi.CheckpointJdbiDao;
 import com.amsha.persistence.postgres.jdbi.CompactionJdbiDao;
 import com.amsha.persistence.postgres.jdbi.CronJdbiDao;
 import com.amsha.persistence.postgres.jdbi.CronRunJdbiDao;
+import com.amsha.persistence.postgres.jdbi.IdentityInvitationJdbiDao;
+import com.amsha.persistence.postgres.jdbi.IdentityJdbiDao;
 import com.amsha.persistence.postgres.jdbi.JdbiProducer;
 import com.amsha.persistence.postgres.jdbi.LockJdbiDao;
 import com.amsha.persistence.postgres.jdbi.McpConnectionJdbiDao;
@@ -29,6 +41,7 @@ import com.amsha.persistence.postgres.jdbi.RagChunkJdbiDao;
 import com.amsha.persistence.postgres.jdbi.RecallMemoryJdbiDao;
 import com.amsha.persistence.postgres.jdbi.SecretJdbiDao;
 import com.amsha.persistence.postgres.jdbi.SkillJdbiDao;
+import com.amsha.persistence.postgres.jdbi.WebSessionJdbiDao;
 
 import io.quarkus.runtime.annotations.RegisterForReflection;
 
@@ -49,6 +62,14 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             McpConnectionCleanupFailureDto.class,
             McpConnectionDto.class,
             McpConnectionHeaderSecretRefDto.class,
+            IdentityUserDto.class,
+            ExternalIdentityDto.class,
+            IdentityWorkspaceDto.class,
+            WorkspaceMembershipDto.class,
+            ApiCredentialDto.class,
+            WebSessionDto.class,
+            IdentityInvitationDto.class,
+            BootstrapStateDto.class,
             // JDBI DAOs (SQL Object proxies)
             CheckpointJdbiDao.class,
             CronJdbiDao.class,
@@ -64,6 +85,11 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             RagChunkJdbiDao.class,
             ArchivalMemoryJdbiDao.class,
             McpConnectionJdbiDao.class,
+            IdentityJdbiDao.class,
+            ApiCredentialJdbiDao.class,
+            WebSessionJdbiDao.class,
+            IdentityInvitationJdbiDao.class,
+            BootstrapStateJdbiDao.class,
             // JDBI infrastructure
             JdbiProducer.class,
             // Store adapters (CDI beans)
@@ -83,6 +109,11 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             PostgresMcpConnectionStoreAdapter.class,
             PostgresAdvisoryLockAdapter.class,
             PostgresRecallMemoryStore.class,
-            RecallMemoryJdbiDao.class
+            RecallMemoryJdbiDao.class,
+            PostgresIdentityStoreAdapter.class,
+            PostgresApiCredentialStoreAdapter.class,
+            PostgresWebSessionStoreAdapter.class,
+            PostgresIdentityInvitationStoreAdapter.class,
+            PostgresBootstrapStateStoreAdapter.class
         })
 public class PostgresPersistenceReflectionConfig {}
