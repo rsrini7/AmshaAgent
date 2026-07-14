@@ -26,6 +26,7 @@ ROLES_SCRIPT="$SCRIPT_DIR/validate_roles.sh"
 ADMIN_SCRIPT="$SCRIPT_DIR/validate_admin.sh"
 AUTH_SESSION_SCRIPT="$SCRIPT_DIR/validate_auth_session.sh"
 PII_INJECTION_AUDIT_SCRIPT="$SCRIPT_DIR/validate_pii_injection_audit.sh"
+CRON_SCRIPT="$SCRIPT_DIR/validate_cron.sh"
 
 check_app() {
   curl -s -m 3 -o /dev/null -w "%{http_code}" "http://localhost:8080/api/v1/mcp/status" \
@@ -64,8 +65,9 @@ for arg in "$@"; do
     --admin)  RUN_ALL=false; RUN_ADMIN=true ;;
     --auth-session) RUN_ALL=false; RUN_AUTH_SESSION=true ;;
     --pii-audit)    RUN_ALL=false; RUN_PII_AUDIT=true ;;
+    --cron)         RUN_ALL=false; RUN_CRON=true ;;
     --fast)   FAST=true; RUN_ALL=false; RUN_REFLEX=true; RUN_SKILLS=true; RUN_ADMIN=true; RUN_AUTH_SESSION=true; RUN_PII_AUDIT=true ;;
-    --llm)    LLM=true; RUN_ALL=false; RUN_MEMORY=true; RUN_WEB=true; RUN_ROLES=true ;;
+    --llm)    LLM=true; RUN_ALL=false; RUN_MEMORY=true; RUN_WEB=true; RUN_ROLES=true; RUN_CRON=true ;;
     --list)
       echo "Available validators:"
       echo "  --reflex       validate_reflex.sh             (zero-token, ~30s)"
@@ -77,14 +79,15 @@ for arg in "$@"; do
       echo "  --admin        validate_admin.sh              (admin endpoints, fast)"
       echo "  --auth-session validate_auth_session.sh       (auth & session lifecycle, fast)"
       echo "  --pii-audit    validate_pii_injection_audit.sh (pii + injection + audit, fast)"
+      echo "  --cron         validate_cron.sh               (programmatic cron resource REST APIs, needs LLM)"
       echo "  --fast         reflex + skills + admin + auth-session + pii-audit"
-      echo "  --llm          memory + web + roles"
+      echo "  --llm          memory + web + roles + cron"
       echo "  (no args)      run ALL validators"
       exit 0
       ;;
     --help)
       echo "Usage: bash run_all_validations.sh [options]"
-      echo "Options: --reflex --skills --mcp --memory --web --roles --admin --auth-session --pii-audit --fast --llm --list --help"
+      echo "Options: --reflex --skills --mcp --memory --web --roles --admin --auth-session --pii-audit --cron --fast --llm --list --help"
       exit 0
       ;;
   esac
@@ -150,6 +153,10 @@ fi
 
 if [ "$RUN_PII_AUDIT" = true ] || [ "$RUN_ALL" = true ]; then
   run_validator "PII, INJECTION, & AUDIT" "$PII_INJECTION_AUDIT_SCRIPT"
+fi
+
+if [ "$RUN_CRON" = true ] || [ "$RUN_ALL" = true ]; then
+  run_validator "CRON REST RESOURCE" "$CRON_SCRIPT"
 fi
 
 # ── Summary ──

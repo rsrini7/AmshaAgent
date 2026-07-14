@@ -338,6 +338,53 @@ X-Amsha-API-Key: {{validKey}}
 ###
 
 # ─────────────────────────────────────────────────────────────────
+# PROGRAMMATIC REST CRON RESOURCE LIFECYCLE
+# ─────────────────────────────────────────────────────────────────
+
+### [CRON-19] List all scheduled cron jobs via JAX-RS REST
+GET {{baseUrl}}/api/v1/cron
+X-Amsha-API-Key: {{validKey}}
+
+###
+
+### [CRON-20] Get single cron details
+# @cronId = 64d90d81-8728-4ef8-bc48-f993f4da991f
+GET {{baseUrl}}/api/v1/cron/{{cronId}}
+X-Amsha-API-Key: {{validKey}}
+
+###
+
+### [CRON-21] Pause the cron job
+POST {{baseUrl}}/api/v1/cron/{{cronId}}/pause
+X-Amsha-API-Key: {{validKey}}
+
+###
+
+### [CRON-22] Resume the paused cron job
+POST {{baseUrl}}/api/v1/cron/{{cronId}}/resume
+X-Amsha-API-Key: {{validKey}}
+
+###
+
+### [CRON-23] Force-fire trigger the cron job immediately
+POST {{baseUrl}}/api/v1/cron/{{cronId}}/trigger
+X-Amsha-API-Key: {{validKey}}
+
+###
+
+### [CRON-24] Retrieve execution runs history for the cron job
+GET {{baseUrl}}/api/v1/cron/{{cronId}}/runs?page=0&size=10
+X-Amsha-API-Key: {{validKey}}
+
+###
+
+### [CRON-25] Programmatically delete the cron job
+DELETE {{baseUrl}}/api/v1/cron/{{cronId}}
+X-Amsha-API-Key: {{validKey}}
+
+###
+
+# ─────────────────────────────────────────────────────────────────
 # CLEANUP
 # IMPORTANT: Delete all cron jobs BEFORE deleting sessions,
 # otherwise every-minute jobs will keep firing after the session is gone.
