@@ -17,8 +17,19 @@
 ###   /mcp           → McpReflex       - show MCP connection status (zero token)
 ###   /approve       → ApproveReflex   - approve AWAITING_APPROVAL checkpoint
 ###   /deny          → DenyReflex      - deny AWAITING_APPROVAL checkpoint
-###   deletecron <id>→ DeleteCronReflex- delete cron job by ID
-###   store KEY=VAL  → VaultStoreHandler - store secret (bypasses PII scan)
+###   deletecron <id>→ DeleteCronReflex- delete cron job by ID (also: deletecron all, /deletecron)
+###   store KEY=VAL  → VaultStoreHandler- store secret (bypasses PII scan)
+###   /sessions      → SessionsReflex  - list active sessions with indices
+###   /newsession    → NewSessionReflex- create a new session via reflex
+###   /resume <n>    → ResumeReflex    - resume session by index
+###   /reflex        → ListReflexesReflex- list all registered reflexes
+###   /reflexes      → ListReflexesReflex- alias for /reflex
+###   /commands      → ListReflexesReflex- alias for /reflex (command reference)
+###   /help          → ListReflexesReflex- alias for /reflex (help text)
+###
+### NOTE: PiiScanReflex and PromptInjectionReflex are automatic (triggered by
+### content patterns, not explicit commands). Tested in 07_pii_prompt_injection.http.
+### /github commands are handled by CommandDispatchHandler → agent tools, not reflexes.
 ###
 ### PiiScanReflex and PromptInjectionReflex are covered in 07_pii_prompt_injection.http
 ###
@@ -427,6 +438,155 @@ X-Amsha-API-Key: {{validKey}}
 
 {
     "goal": "/deny",
+    "agentRole": "coordinator",
+    "maxIterations": 1
+}
+
+###
+
+# ─────────────────────────────────────────────────────────────────
+# /SESSIONS - list active sessions with indices (SessionsReflex)
+# ─────────────────────────────────────────────────────────────────
+
+### [REFLEX-18] /sessions - list active sessions
+# Expect: numbered list of sessions with index numbers (zero-token reflex).
+POST {{baseUrl}}/api/v1/sessions/{{reflexSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-Amsha-API-Key: {{validKey}}
+
+{
+    "goal": "/sessions",
+    "agentRole": "coordinator",
+    "maxIterations": 1
+}
+
+###
+
+# ─────────────────────────────────────────────────────────────────
+# /NEWSESSION - create a new session via reflex (NewSessionReflex)
+# ─────────────────────────────────────────────────────────────────
+
+### [REFLEX-19] /newsession - create session via reflex
+# Expect: new session ID returned (zero-token reflex).
+POST {{baseUrl}}/api/v1/sessions/{{reflexSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-Amsha-API-Key: {{validKey}}
+
+{
+    "goal": "/newsession",
+    "agentRole": "coordinator",
+    "maxIterations": 1
+}
+
+###
+
+# ─────────────────────────────────────────────────────────────────
+# /RESUME <n> - resume session by index (ResumeReflex)
+# ─────────────────────────────────────────────────────────────────
+
+### [REFLEX-20] /resume 1 - resume session by index
+# Expect: resumes the indexed session, or "no session found at index N" (zero-token).
+POST {{baseUrl}}/api/v1/sessions/{{reflexSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-Amsha-API-Key: {{validKey}}
+
+{
+    "goal": "/resume 1",
+    "agentRole": "coordinator",
+    "maxIterations": 1
+}
+
+###
+
+# ─────────────────────────────────────────────────────────────────
+# /REFLEX, /COMMANDS, /HELP - list registered reflexes (ListReflexesReflex)
+# ─────────────────────────────────────────────────────────────────
+
+### [REFLEX-21] /reflex - list available reflexes
+# Expect: table of registered reflex commands with purpose (zero-token).
+POST {{baseUrl}}/api/v1/sessions/{{reflexSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-Amsha-API-Key: {{validKey}}
+
+{
+    "goal": "/reflex",
+    "agentRole": "coordinator",
+    "maxIterations": 1
+}
+
+###
+
+### [REFLEX-22] /commands - command reference (alias for /reflex)
+POST {{baseUrl}}/api/v1/sessions/{{reflexSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-Amsha-API-Key: {{validKey}}
+
+{
+    "goal": "/commands",
+    "agentRole": "coordinator",
+    "maxIterations": 1
+}
+
+###
+
+### [REFLEX-23] /help - help text (alias for /reflex)
+POST {{baseUrl}}/api/v1/sessions/{{reflexSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-Amsha-API-Key: {{validKey}}
+
+{
+    "goal": "/help",
+    "agentRole": "coordinator",
+    "maxIterations": 1
+}
+
+###
+
+# ─────────────────────────────────────────────────────────────────
+# BULK DELETE CRON - deletecron all (DeleteCronReflex)
+# ─────────────────────────────────────────────────────────────────
+
+### [REFLEX-24] deletecron all - bulk delete all cron jobs
+# Expect: "All %d cron jobs deleted" or "No cron jobs found" (zero-token).
+POST {{baseUrl}}/api/v1/sessions/{{reflexSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-Amsha-API-Key: {{validKey}}
+
+{
+    "goal": "deletecron all",
+    "agentRole": "coordinator",
+    "maxIterations": 1
+}
+
+###
+
+# ─────────────────────────────────────────────────────────────────
+# GITHUB COMMANDS (handled by CommandDispatchHandler → agent tools)
+# These are NOT zero-token reflexes but command-dispatch patterns.
+# ─────────────────────────────────────────────────────────────────
+
+### [GITHUB-1] /github list repos
+# Expect: lists GitHub repos (requires GITHUB_TOKEN in vault).
+POST {{baseUrl}}/api/v1/sessions/{{reflexSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-Amsha-API-Key: {{validKey}}
+
+{
+    "goal": "/github list rsrini7 repos",
+    "agentRole": "coordinator",
+    "maxIterations": 1
+}
+
+###
+
+### [GITHUB-2] /github view README
+# Expect: fetches README from specified repo.
+POST {{baseUrl}}/api/v1/sessions/{{reflexSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-Amsha-API-Key: {{validKey}}
+
+{
+    "goal": "/github view rsrini7/AmshaAgentInternal readme",
     "agentRole": "coordinator",
     "maxIterations": 1
 }

@@ -1,0 +1,198 @@
+### ═══════════════════════════════════════════════════════════════
+### 17 - WEB TOOLS (SEARCH, FETCH, BROWSE, SSRF)
+###
+### Tests for web-facing tools available to agent roles:
+###   brave_web_search  - Brave Search API (researcher, synthesizer)
+###   serper_web_search - Serper.dev search (researcher, synthesizer)
+###   web_fetch         - Fetch arbitrary URL content
+###   browser_navigate  - Headless browser navigation
+###
+### SSRF protection: internal network fetches (169.254.x.x) must be blocked.
+###
+### Prerequisites: Amsha Agent serve mode with LLM configured.
+### Rate limits: ~20 req/min, 10 mutations/min. Space requests ≥7s apart.
+### ═══════════════════════════════════════════════════════════════
+
+# @baseUrl  = http://localhost:8080
+# @validKey = JV/qXAikcUoSCCUsqYxLvNjxW/N3KROQtawg3VRFrJs=
+
+# ─────────────────────────────────────────────────────────────────
+# FLOW A: WEB SEARCH VIA AGENT RUN
+# ─────────────────────────────────────────────────────────────────
+
+### [WEB-1] Create session for web search tests
+# @name webSearchSession
+POST {{baseUrl}}/api/v1/sessions
+Content-Type: application/json
+X-Amsha-API-Key: {{validKey}}
+
+{"autonomyLevel":"SUPERVISED"}
+
+###
+
+### [WEB-2] brave_web_search - query via researcher
+# Expect: web search results returned (or tool-approval 202 requiring HITL).
+# Researcher has brave_web_search capability.
+POST {{baseUrl}}/api/v1/sessions/{{webSearchSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-Amsha-API-Key: {{validKey}}
+
+{
+    "goal": "do a web search on spring boot and quarkus LTS version",
+    "agentRole": "researcher",
+    "maxIterations": 3
+}
+
+###
+
+### [WEB-3] serper_web_search - query via researcher
+# Expect: web search results returned via Serper.dev.
+POST {{baseUrl}}/api/v1/sessions/{{webSearchSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-Amsha-API-Key: {{validKey}}
+
+{
+    "goal": "search for top quarkus features using serper",
+    "agentRole": "researcher",
+    "maxIterations": 3
+}
+
+###
+
+### [WEB-4] Confirm role without search capability cannot search
+# Coordinator does NOT have brave_web_search or serper_web_search by default.
+# Expect: tool blocked / error if attempted.
+POST {{baseUrl}}/api/v1/sessions/{{webSearchSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-Amsha-API-Key: {{validKey}}
+
+{
+    "goal": "search the web for latest spring boot news",
+    "agentRole": "coordinator",
+    "maxIterations": 2
+}
+
+###
+
+DELETE {{baseUrl}}/api/v1/sessions/{{webSearchSession.response.body.sessionId}}
+X-Amsha-API-Key: {{validKey}}
+
+###
+
+# ─────────────────────────────────────────────────────────────────
+# FLOW B: WEB FETCH / BROWSE VIA AGENT RUN
+# ─────────────────────────────────────────────────────────────────
+
+### [WEB-5] Create session for fetch/browse tests
+# @name fetchSession
+POST {{baseUrl}}/api/v1/sessions
+Content-Type: application/json
+X-Amsha-API-Key: {{validKey}}
+
+{"autonomyLevel":"SUPERVISED"}
+
+###
+
+### [WEB-6] web_fetch - fetch public URL content
+# Expect: fetched content from httpbin.org.
+POST {{baseUrl}}/api/v1/sessions/{{fetchSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-Amsha-API-Key: {{validKey}}
+
+{
+    "goal": "fetch https://httpbin.org/ip and show the response",
+    "agentRole": "researcher",
+    "maxIterations": 3
+}
+
+###
+
+### [WEB-7] browser_navigate - browse a URL
+# Expect: navigates to quarkus.io and extracts content.
+POST {{baseUrl}}/api/v1/sessions/{{fetchSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-Amsha-API-Key: {{validKey}}
+
+{
+    "goal": "browse https://quarkus.io/blog get top 3 blogs titles",
+    "agentRole": "researcher",
+    "maxIterations": 3
+}
+
+###
+
+# ─────────────────────────────────────────────────────────────────
+# FLOW C: SSRF PROTECTION
+# ─────────────────────────────────────────────────────────────────
+
+### [WEB-8] SSRF block - fetch internal network address must fail
+# 169.254.169.254 is the AWS metadata endpoint (in link-local range).
+# The fetch tool must block internal/private network addresses.
+# Expect: tool blocked with security error, or HTTP 403/error response.
+POST {{baseUrl}}/api/v1/sessions/{{fetchSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-Amsha-API-Key: {{validKey}}
+
+{
+    "goal": "fetch http://169.254.169.254/latest/meta-data/ should be blocked",
+    "agentRole": "researcher",
+    "maxIterations": 2
+}
+
+###
+
+### [WEB-9] SSRF block - link-local IP must fail
+# 127.0.0.1 / localhost must also be blocked.
+POST {{baseUrl}}/api/v1/sessions/{{fetchSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-Amsha-API-Key: {{validKey}}
+
+{
+    "goal": "fetch http://127.0.0.1:8080/api/v1/health",
+    "agentRole": "researcher",
+    "maxIterations": 2
+}
+
+###
+
+# ─────────────────────────────────────────────────────────────────
+# FLOW D: WEB TOOL ERROR CASES
+# ─────────────────────────────────────────────────────────────────
+
+### [WEB-ERR-1] fetch invalid URL → graceful error
+# Expect: tool error or agent explains the URL is invalid.
+POST {{baseUrl}}/api/v1/sessions/{{fetchSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-Amsha-API-Key: {{validKey}}
+
+{
+    "goal": "fetch not-a-valid-url!!! and show response",
+    "agentRole": "researcher",
+    "maxIterations": 2
+}
+
+###
+
+### [WEB-ERR-2] role without fetch capability attempts fetch
+# Coordinator does NOT have web_fetch capability.
+# Expect: tool blocked.
+POST {{baseUrl}}/api/v1/sessions/{{fetchSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-Amsha-API-Key: {{validKey}}
+
+{
+    "goal": "fetch https://example.com",
+    "agentRole": "coordinator",
+    "maxIterations": 2
+}
+
+###
+
+# ─────────────────────────────────────────────────────────────────
+# CLEANUP
+# ─────────────────────────────────────────────────────────────────
+
+DELETE {{baseUrl}}/api/v1/sessions/{{fetchSession.response.body.sessionId}}
+X-Amsha-API-Key: {{validKey}}
+
+###

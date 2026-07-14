@@ -35,6 +35,17 @@
 ###   Input: {query: "<search terms>"}
 ###   Returns: top-N matching compaction summaries (after Phase 64-C3: RAG not mixed in)
 ###
+### ArchivalMemorySearchTool (tool name: "archival_memory_search"):
+###   Queries archival knowledge base for stored facts/patterns.
+###   Available to: coordinator, researcher, architect, synthesizer.
+###   Input: {query: "<search terms>", type: "FACT"|"PATTERN"|"CODE"|null}
+###   Returns: matching archival entries.
+###
+### Core memory blocks (user_profile, active_task, constraints):
+###   Structured user memory stored as key-value blocks.
+###   read_core_memory → reads all blocks or specific block.
+###   core_memory_append, core_memory_replace → modify blocks.
+###
 ### Conversation continuity:
 ###   Chat memory (ChatMemoryStore) is NOT wiped on session soft-reset (/reset).
 ###   Only the ReAct checkpoint state is cleared. LLM retains conversational context.
@@ -683,6 +694,255 @@ X-Amsha-API-Key: {{validKey}}
 ###
 
 DELETE {{baseUrl}}/api/v1/sessions/{{isoSessionB.response.body.sessionId}}
+X-Amsha-API-Key: {{validKey}}
+
+###
+
+# ─────────────────────────────────────────────────────────────────
+# FLOW: ARCHIVAL MEMORY SEARCH
+# archival_memory_search queries the archival knowledge base.
+# ─────────────────────────────────────────────────────────────────
+
+### [ARCHIVAL-1] Create session for archival tests
+# @name archivalSession
+POST {{baseUrl}}/api/v1/sessions
+Content-Type: application/json
+X-Amsha-API-Key: {{validKey}}
+
+{"autonomyLevel":"SUPERVISED"}
+
+###
+
+### [ARCHIVAL-2] Store fact in archival memory
+# Store a FACT-type entry in archival memory.
+POST {{baseUrl}}/api/v1/sessions/{{archivalSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-Amsha-API-Key: {{validKey}}
+
+{
+    "goal": "store this in archival memory: Amsha Agent uses Quarkus with SQLite WAL mode. Type FACT",
+    "agentRole": "coordinator",
+    "maxIterations": 2
+}
+
+###
+
+### [ARCHIVAL-3] Store pattern in archival memory
+POST {{baseUrl}}/api/v1/sessions/{{archivalSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-Amsha-API-Key: {{validKey}}
+
+{
+    "goal": "store this in long-term memory: Always use sealed classes for type hierarchies. Type PATTERN",
+    "agentRole": "coordinator",
+    "maxIterations": 2
+}
+
+###
+
+### [ARCHIVAL-4] archival_memory_search - search by query
+# Expect: returns stored archival entries matching "Quarkus".
+POST {{baseUrl}}/api/v1/sessions/{{archivalSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-Amsha-API-Key: {{validKey}}
+
+{
+    "goal": "search archival for Quarkus with limit 3",
+    "agentRole": "coordinator",
+    "maxIterations": 2
+}
+
+###
+
+### [ARCHIVAL-5] archival_memory_search - search for PATTERN type chunks
+# Expect: returns entries matching "patterns" with PATTERN type.
+POST {{baseUrl}}/api/v1/sessions/{{archivalSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-Amsha-API-Key: {{validKey}}
+
+{
+    "goal": "search my archival knowledge for patterns",
+    "agentRole": "coordinator",
+    "maxIterations": 2
+}
+
+###
+
+### [ARCHIVAL-6] archival_memory_search - type-filtered CODE search
+POST {{baseUrl}}/api/v1/sessions/{{archivalSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-Amsha-API-Key: {{validKey}}
+
+{
+    "goal": "search my archival for CODE type chunks",
+    "agentRole": "coordinator",
+    "maxIterations": 2
+}
+
+###
+
+### [ARCHIVAL-ERR-1] Archival store with invalid TYPE
+# Expect: graceful error or agent explains TYPE is invalid.
+POST {{baseUrl}}/api/v1/sessions/{{archivalSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-Amsha-API-Key: {{validKey}}
+
+{
+    "goal": "store this in archival memory: some fact. Type INVALID_TYPE",
+    "agentRole": "coordinator",
+    "maxIterations": 2
+}
+
+###
+
+DELETE {{baseUrl}}/api/v1/sessions/{{archivalSession.response.body.sessionId}}
+X-Amsha-API-Key: {{validKey}}
+
+###
+
+# ─────────────────────────────────────────────────────────────────
+# FLOW: CORE MEMORY BLOCKS
+# Core memory stores structured user data in named blocks.
+# ─────────────────────────────────────────────────────────────────
+
+### [CORE-1] Create session for core memory tests
+# @name coreSession
+POST {{baseUrl}}/api/v1/sessions
+Content-Type: application/json
+X-Amsha-API-Key: {{validKey}}
+
+{"autonomyLevel":"SUPERVISED"}
+
+###
+
+### [CORE-2] Read core memory (may be empty for new user)
+POST {{baseUrl}}/api/v1/sessions/{{coreSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-Amsha-API-Key: {{validKey}}
+
+{
+    "goal": "read my core memory",
+    "agentRole": "coordinator",
+    "maxIterations": 2
+}
+
+###
+
+### [CORE-3] Store user profile info (sets user_profile block)
+POST {{baseUrl}}/api/v1/sessions/{{coreSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-Amsha-API-Key: {{validKey}}
+
+{
+    "goal": "my name is Srini, my email is test@example.com, and I love to study and teach kids",
+    "agentRole": "coordinator",
+    "maxIterations": 3
+}
+
+###
+
+### [CORE-4] Set active task
+POST {{baseUrl}}/api/v1/sessions/{{coreSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-Amsha-API-Key: {{validKey}}
+
+{
+    "goal": "my active task is implementing tiered memory architecture",
+    "agentRole": "coordinator",
+    "maxIterations": 2
+}
+
+###
+
+### [CORE-5] Set constraints / preferences
+POST {{baseUrl}}/api/v1/sessions/{{coreSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-Amsha-API-Key: {{validKey}}
+
+{
+    "goal": "update my constraints to: always use CAS for concurrent writes",
+    "agentRole": "coordinator",
+    "maxIterations": 2
+}
+
+###
+
+### [CORE-6] Read core memory - verify blocks are populated
+# Expect: user_profile, active_task, constraints blocks present.
+POST {{baseUrl}}/api/v1/sessions/{{coreSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-Amsha-API-Key: {{validKey}}
+
+{
+    "goal": "read my core memory show me my active_task block",
+    "agentRole": "coordinator",
+    "maxIterations": 2
+}
+
+###
+
+### [CORE-7] Read specific block: user_profile
+POST {{baseUrl}}/api/v1/sessions/{{coreSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-Amsha-API-Key: {{validKey}}
+
+{
+    "goal": "show me my user_profile block",
+    "agentRole": "coordinator",
+    "maxIterations": 2
+}
+
+###
+
+### [CORE-ERR-1] Store in invalid block name
+# Expect: error message about invalid block key or graceful rejection.
+POST {{baseUrl}}/api/v1/sessions/{{coreSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-Amsha-API-Key: {{validKey}}
+
+{
+    "goal": "store something in block invalid_key",
+    "agentRole": "coordinator",
+    "maxIterations": 2
+}
+
+###
+
+DELETE {{baseUrl}}/api/v1/sessions/{{coreSession.response.body.sessionId}}
+X-Amsha-API-Key: {{validKey}}
+
+###
+
+# ─────────────────────────────────────────────────────────────────
+# FLOW: MEMORY SEARCH WITH ARABIC (NON-ASCII PHASE 64-A3)
+# ─────────────────────────────────────────────────────────────────
+
+### [MEM-ARABIC] Create session for Arabic memory search
+# @name arabicSession
+POST {{baseUrl}}/api/v1/sessions
+Content-Type: application/json
+X-Amsha-API-Key: {{validKey}}
+
+{"autonomyLevel":"SUPERVISED"}
+
+###
+
+### [MEM-ARABIC-1] Arabic memory search
+# Phase 64-A3: Non-ASCII queries must not silently return empty.
+# Expect: meaningful search results or agent response.
+POST {{baseUrl}}/api/v1/sessions/{{arabicSession.response.body.sessionId}}/run
+Content-Type: application/json
+X-Amsha-API-Key: {{validKey}}
+
+{
+    "goal": "ابحث في ذاكرتك عن معلومات حول بنية Amsha Agent.",
+    "agentRole": "coordinator",
+    "maxIterations": 2
+}
+
+###
+
+DELETE {{baseUrl}}/api/v1/sessions/{{arabicSession.response.body.sessionId}}
 X-Amsha-API-Key: {{validKey}}
 
 ###
