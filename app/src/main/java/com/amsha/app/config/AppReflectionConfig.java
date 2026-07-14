@@ -1,5 +1,10 @@
 package com.amsha.app.config;
 
+import com.amsha.app.api.AdminDirectiveResource;
+import com.amsha.app.api.ArchivalMemoryAdminResource;
+import com.amsha.app.api.CoreMemoryAdminResource;
+import com.amsha.app.api.PromptAdminResource;
+import com.amsha.app.api.RecallMemoryAdminResource;
 import com.amsha.app.mcp.McpConnectResource;
 import com.amsha.app.security.AuthErrorResponse;
 import com.amsha.app.security.RateLimitErrorResponse;
@@ -33,5 +38,10 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             PendingApprovalDto.class,
             PageDto.class,
             ChatMessageDto.class,
+            AdminDirectiveResource.ReconcileResponse.class,
+            ArchivalMemoryAdminResource.EvictResponse.class,
+            RecallMemoryAdminResource.PurgeResponse.class,
+            CoreMemoryAdminResource.CoreMemoryUpdateRequest.class,
+            PromptAdminResource.PromptUpdateRequest.class,
         })
 public class AppReflectionConfig {}

@@ -8,7 +8,8 @@
 #   bash run_all_validations.sh --web            → web search + fetch + SSRF (~2min)
 #   bash run_all_validations.sh --roles          → secondary agents + aliases (~4min)
 #   bash run_all_validations.sh --mcp            → MCP protocol tests (~2min)
-#   bash run_all_validations.sh --fast           → reflex + skills only (no LLM wait)
+#   bash run_all_validations.sh --admin          → Admin endpoints validation (fast)
+#   bash run_all_validations.sh --fast           → reflex + skills + admin (no LLM wait)
 #   bash run_all_validations.sh --llm            → memory + web + roles (needs LLM)
 #   bash run_all_validations.sh --list           → list available validators
 
@@ -20,6 +21,7 @@ MCP_SCRIPT="$SCRIPT_DIR/validate_mcp.sh"
 MEMORY_SCRIPT="$SCRIPT_DIR/validate_memory.sh"
 WEB_SCRIPT="$SCRIPT_DIR/validate_web.sh"
 ROLES_SCRIPT="$SCRIPT_DIR/validate_roles.sh"
+ADMIN_SCRIPT="$SCRIPT_DIR/validate_admin.sh"
 
 check_app() {
   curl -s -m 3 -o /dev/null -w "%{http_code}" "http://localhost:8080/api/v1/mcp/status" \
@@ -55,7 +57,8 @@ for arg in "$@"; do
     --memory) RUN_ALL=false; RUN_MEMORY=true ;;
     --web)    RUN_ALL=false; RUN_WEB=true ;;
     --roles)  RUN_ALL=false; RUN_ROLES=true ;;
-    --fast)   FAST=true; RUN_ALL=false; RUN_REFLEX=true; RUN_SKILLS=true ;;
+    --admin)  RUN_ALL=false; RUN_ADMIN=true ;;
+    --fast)   FAST=true; RUN_ALL=false; RUN_REFLEX=true; RUN_SKILLS=true; RUN_ADMIN=true ;;
     --llm)    LLM=true; RUN_ALL=false; RUN_MEMORY=true; RUN_WEB=true; RUN_ROLES=true ;;
     --list)
       echo "Available validators:"
@@ -65,14 +68,15 @@ for arg in "$@"; do
       echo "  --memory    validate_memory.sh   (archival + core, ~3min)"
       echo "  --web       validate_web.sh      (search + fetch, ~2min)"
       echo "  --roles     validate_roles.sh    (agents + aliases, ~4min)"
-      echo "  --fast      reflex + skills only"
+      echo "  --admin     validate_admin.sh    (admin endpoints, fast)"
+      echo "  --fast      reflex + skills + admin"
       echo "  --llm       memory + web + roles"
       echo "  (no args)   run ALL validators"
       exit 0
       ;;
     --help)
       echo "Usage: bash run_all_validations.sh [options]"
-      echo "Options: --reflex --skills --mcp --memory --web --roles --fast --llm --list --help"
+      echo "Options: --reflex --skills --mcp --memory --web --roles --admin --fast --llm --list --help"
       exit 0
       ;;
   esac
@@ -94,11 +98,11 @@ else
 fi
 
 if [ "$FAST" = true ]; then
-  echo "Mode: --fast (reflex + skills, no LLM)"
+  echo "Mode: --fast (reflex + skills + admin, no LLM)"
 elif [ "$LLM" = true ]; then
   echo "Mode: --llm (memory + web + roles, needs LLM)"
 elif [ "$RUN_ALL" = true ]; then
-  echo "Mode: ALL (reflex + skills + MCP + memory + web + roles)"
+  echo "Mode: ALL (reflex + skills + MCP + memory + web + roles + admin)"
 fi
 
 TOTAL=0; PASSED=0; FAILED=0
@@ -126,6 +130,10 @@ fi
 
 if [ "$RUN_ROLES" = true ] || [ "$RUN_ALL" = true ]; then
   run_validator "AGENT ROLES" "$ROLES_SCRIPT"
+fi
+
+if [ "$RUN_ADMIN" = true ] || [ "$RUN_ALL" = true ]; then
+  run_validator "ADMIN ENDPOINTS" "$ADMIN_SCRIPT"
 fi
 
 # ── Summary ──
