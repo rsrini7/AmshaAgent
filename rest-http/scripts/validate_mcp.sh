@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set +e
-KEY="JV/qXAikcUoSCCUsqYxLvNjxW/N3KROQtawg3VRFrJs="
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/common_env.sh"
 SECRET="$KEY"
-B=http://localhost:8080
 AB=$B/api/v1
 hdr(){ printf "\n### %s\n" "$1"; }
 code(){

@@ -5,8 +5,8 @@
 # Usage: bash validate_reflex.sh
 
 set +e
-KEY="JV/qXAikcUoSCCUsqYxLvNjxW/N3KROQtawg3VRFrJs="
-B="http://localhost:8080"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/common_env.sh"
 FAIL=0; PASS=0
 SP=7            # sleep before each mutating call to respect 10 mutations/min
 RL_WAIT=62     # wait on 429 (retry-after ~60s)

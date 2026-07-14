@@ -4,8 +4,8 @@
 # Zero LLM token cost. Runs instantly.
 
 set +e
-VALID_KEY="cWevfEoRvstUv0PqGpf02LzDY5kPNaz1y9GSl0LZOwU="
-B="http://localhost:8080"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/common_env.sh"
 FAIL=0; PASS=0
 SLEEP=1
 

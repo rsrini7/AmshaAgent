@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set +e
-KEY="JV/qXAikcUoSCCUsqYxLvNjxW/N3KROQtawg3VRFrJs="
-B=http://localhost:8080
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/common_env.sh"
 SK=$B/api/v1/skills
 hdr(){ printf "\n### %s\n" "$1"; }
 code(){ curl -s -m 20 -o /tmp/b -w "HTTP %{http_code}" "$@"; printf "  "; head -c 300 /tmp/b; echo; }

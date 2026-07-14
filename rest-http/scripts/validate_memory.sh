@@ -9,8 +9,8 @@
 # Usage: bash validate_memory.sh [--archival] [--core] [--arabic]
 
 set +e
-KEY="JV/qXAikcUoSCCUsqYxLvNjxW/N3KROQtawg3VRFrJs="
-B="http://localhost:8080"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/common_env.sh"
 FAIL=0; PASS=0; SLEEP=7; RL_WAIT=62
 
 info()  { printf "%-4s %-35s " "" "$1"; }
