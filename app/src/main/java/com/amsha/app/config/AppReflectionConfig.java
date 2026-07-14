@@ -17,6 +17,7 @@ import com.amsha.app.ui.dto.CheckpointApprovalRequest;
 import com.amsha.app.ui.dto.CheckpointApprovalResponse;
 import com.amsha.app.ui.dto.PageDto;
 import com.amsha.app.ui.dto.PendingApprovalDto;
+import com.amsha.core.api.dto.ActiveAgentResponse;
 
 import io.quarkus.runtime.annotations.RegisterForReflection;
 
@@ -43,5 +44,6 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             RecallMemoryAdminResource.PurgeResponse.class,
             CoreMemoryAdminResource.CoreMemoryUpdateRequest.class,
             PromptAdminResource.PromptUpdateRequest.class,
+            ActiveAgentResponse.class,
         })
 public class AppReflectionConfig {}
