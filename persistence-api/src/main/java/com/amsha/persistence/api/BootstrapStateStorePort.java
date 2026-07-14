@@ -9,6 +9,12 @@ import java.util.Optional;
 public interface BootstrapStateStorePort {
     Optional<BootstrapStateDto> getState();
 
+    /**
+     * Seed-only initialization of the bootstrap row (typically UNCLAIMED). This must NOT be used to
+     * mutate an already-claimed state — all transitions go through {@link #claimFirstOwner},
+     * {@link #confirmClaim} and {@link #replaceCredential}. Implementations must not overwrite an
+     * existing row.
+     */
     void save(BootstrapStateDto state);
 
     /**

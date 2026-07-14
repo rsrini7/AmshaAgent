@@ -28,7 +28,9 @@ public class FsBootstrapStateStoreAdapter implements BootstrapStateStorePort {
 
     @Override
     public void save(BootstrapStateDto state) {
-        store.write(List.of(DOMAIN, STATE_FILE), state);
+        if (getState().isEmpty()) {
+            store.write(List.of(DOMAIN, STATE_FILE), state);
+        }
     }
 
     @Override

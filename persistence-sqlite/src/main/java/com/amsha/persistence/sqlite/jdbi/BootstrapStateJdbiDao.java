@@ -17,8 +17,7 @@ public interface BootstrapStateJdbiDao {
     @SqlUpdate(
             "INSERT INTO bootstrap_state (id, status, owner_id, credential_digest, issued_at, claimed_at, revision, updated_at) "
                     + "VALUES (:id, :status, :ownerId, :credentialDigest, :issuedAt, :claimedAt, :revision, :updatedAt) "
-                    + "ON CONFLICT(id) DO UPDATE SET status = excluded.status, owner_id = excluded.owner_id, credential_digest = excluded.credential_digest, "
-                    + "issued_at = excluded.issued_at, claimed_at = excluded.claimed_at, revision = excluded.revision, updated_at = excluded.updated_at")
+                    + "ON CONFLICT(id) DO NOTHING")
     void save(@BindMethods BootstrapStateDto state);
 
     @SqlUpdate(

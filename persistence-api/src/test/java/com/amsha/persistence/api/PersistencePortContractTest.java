@@ -648,6 +648,102 @@ class PersistencePortContractTest {
         assertFalse(identityStore.saveMembership(stale));
     }
 
+    @Test
+    void apiCredentialRevisionBumpsOnSaveAndRejectsStale() {
+        String credId = "cred-cas";
+        ApiCredentialDto cred = new ApiCredentialDto(
+                credId, "user-cas", "digest-cas", "OWNER", 0, null, null, Instant.now(), Instant.now());
+        assertTrue(apiCredentialStore.save(cred));
+        assertEquals(0, apiCredentialStore.findById(credId).get().revision());
+
+        ApiCredentialDto rotated = new ApiCredentialDto(
+                credId, "user-cas", "digest-cas2", "OWNER", 0, null, null, Instant.now(), Instant.now());
+        assertTrue(apiCredentialStore.save(rotated));
+        ApiCredentialDto after = apiCredentialStore.findById(credId).get();
+        assertEquals(1, after.revision());
+        assertEquals("digest-cas2", after.keyDigest());
+
+        ApiCredentialDto stale = new ApiCredentialDto(
+                credId, "user-cas", "digest-cas3", "OWNER", 0, null, null, Instant.now(), Instant.now());
+        assertFalse(apiCredentialStore.save(stale));
+    }
+
+    @Test
+    void webSessionRevisionBumpsOnSaveAndRejectsStale() {
+        String sessionId = "sess-cas";
+        Instant now = Instant.now();
+        WebSessionDto session = new WebSessionDto(
+                sessionId,
+                "user-cas",
+                "token-cas",
+                "csrf-cas",
+                now.plusSeconds(3600),
+                now.plusSeconds(7200),
+                null,
+                null,
+                null,
+                0,
+                now,
+                now);
+        assertTrue(webSessionStore.save(session));
+        assertEquals(0, webSessionStore.findById(sessionId).get().revision());
+
+        WebSessionDto rotated = new WebSessionDto(
+                sessionId,
+                "user-cas",
+                "token-cas2",
+                "csrf-cas",
+                now.plusSeconds(3600),
+                now.plusSeconds(7200),
+                null,
+                null,
+                null,
+                0,
+                now,
+                now);
+        assertTrue(webSessionStore.save(rotated));
+        WebSessionDto after = webSessionStore.findById(sessionId).get();
+        assertEquals(1, after.revision());
+        assertEquals("token-cas2", after.tokenDigest());
+
+        WebSessionDto stale = new WebSessionDto(
+                sessionId,
+                "user-cas",
+                "token-cas3",
+                "csrf-cas",
+                now.plusSeconds(3600),
+                now.plusSeconds(7200),
+                null,
+                null,
+                null,
+                0,
+                now,
+                now);
+        assertFalse(webSessionStore.save(stale));
+    }
+
+    @Test
+    void identityInvitationRevisionBumpsOnSaveAndRejectsStale() {
+        String invitationId = "inv-cas";
+        Instant now = Instant.now();
+        IdentityInvitationDto invitation = new IdentityInvitationDto(
+                invitationId, "ws-cas", "MEMBER", "token-cas", null, now.plusSeconds(3600), null, null, 0, now, now);
+        assertTrue(identityInvitationStore.save(invitation));
+        assertEquals(0, identityInvitationStore.findById(invitationId).get().revision());
+
+        IdentityInvitationDto rotated = new IdentityInvitationDto(
+                invitationId, "ws-cas", "ADMIN", "token-cas2", null, now.plusSeconds(3600), null, null, 0, now, now);
+        assertTrue(identityInvitationStore.save(rotated));
+        IdentityInvitationDto after =
+                identityInvitationStore.findById(invitationId).get();
+        assertEquals(1, after.revision());
+        assertEquals("ADMIN", after.role());
+
+        IdentityInvitationDto stale = new IdentityInvitationDto(
+                invitationId, "ws-cas", "MEMBER", "token-cas3", null, now.plusSeconds(3600), null, null, 0, now, now);
+        assertFalse(identityInvitationStore.save(stale));
+    }
+
     // ── Helper factory methods ──
 
     private CheckpointDto createCheckpoint(String sessionId, String status) {
@@ -1662,7 +1758,23 @@ class PersistencePortContractTest {
 
         @Override
         public boolean save(ApiCredentialDto credential) {
-            store.put(credential.credentialId(), credential);
+            ApiCredentialDto existing = store.get(credential.credentialId());
+            if (existing != null && existing.revision() != credential.revision()) {
+                return false;
+            }
+            ApiCredentialDto toStore = existing == null
+                    ? credential
+                    : new ApiCredentialDto(
+                            credential.credentialId(),
+                            credential.userId(),
+                            credential.keyDigest(),
+                            credential.roleSet(),
+                            credential.revision() + 1,
+                            credential.expiresAt(),
+                            credential.revokedAt(),
+                            credential.createdAt(),
+                            credential.updatedAt());
+            store.put(credential.credentialId(), toStore);
             return true;
         }
 
@@ -1696,7 +1808,26 @@ class PersistencePortContractTest {
 
         @Override
         public boolean save(WebSessionDto session) {
-            store.put(session.sessionId(), session);
+            WebSessionDto existing = store.get(session.sessionId());
+            if (existing != null && existing.revision() != session.revision()) {
+                return false;
+            }
+            WebSessionDto toStore = existing == null
+                    ? session
+                    : new WebSessionDto(
+                            session.sessionId(),
+                            session.userId(),
+                            session.tokenDigest(),
+                            session.csrfDigest(),
+                            session.idleExpiresAt(),
+                            session.absoluteExpiresAt(),
+                            session.rotatedAt(),
+                            session.revokedAt(),
+                            session.safeClientMetadata(),
+                            session.revision() + 1,
+                            session.createdAt(),
+                            session.updatedAt());
+            store.put(session.sessionId(), toStore);
             return true;
         }
 
@@ -1751,7 +1882,25 @@ class PersistencePortContractTest {
 
         @Override
         public boolean save(IdentityInvitationDto invitation) {
-            store.put(invitation.invitationId(), invitation);
+            IdentityInvitationDto existing = store.get(invitation.invitationId());
+            if (existing != null && existing.revision() != invitation.revision()) {
+                return false;
+            }
+            IdentityInvitationDto toStore = existing == null
+                    ? invitation
+                    : new IdentityInvitationDto(
+                            invitation.invitationId(),
+                            invitation.workspaceId(),
+                            invitation.role(),
+                            invitation.tokenDigest(),
+                            invitation.optionalEmailConstraint(),
+                            invitation.expiresAt(),
+                            invitation.acceptedBy(),
+                            invitation.revokedAt(),
+                            invitation.revision() + 1,
+                            invitation.createdAt(),
+                            invitation.updatedAt());
+            store.put(invitation.invitationId(), toStore);
             return true;
         }
 
@@ -1798,7 +1947,9 @@ class PersistencePortContractTest {
 
         @Override
         public void save(BootstrapStateDto state) {
-            this.state = state;
+            if (this.state == null) {
+                this.state = state;
+            }
         }
 
         @Override
