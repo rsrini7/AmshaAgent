@@ -16,7 +16,7 @@ public interface ApiCredentialJdbiDao {
 
     @SqlUpdate(
             "INSERT INTO api_credential (credential_id, user_id, key_digest, role_set, revision, expires_at, revoked_at, created_at, updated_at) "
-                    + "VALUES (:credentialId, :userId, :keyDigest, :roleSet, 0, :expiresAt, :revokedAt, :createdAt, :updatedAt) "
+                    + "VALUES (:credentialId, :userId, :keyDigest, :roleSet, :revision, :expiresAt, :revokedAt, :createdAt, :updatedAt) "
                     + "ON CONFLICT(credential_id) DO UPDATE SET user_id = excluded.user_id, key_digest = excluded.key_digest, role_set = excluded.role_set, "
                     + "revision = api_credential.revision + 1, expires_at = excluded.expires_at, revoked_at = excluded.revoked_at, updated_at = excluded.updated_at "
                     + "WHERE api_credential.revision = excluded.revision")

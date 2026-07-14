@@ -25,7 +25,8 @@ class ApiKeyRegistryVaryingLengthKeyTest {
             return Map.of(
                     "amsha.api.keys.k1", "ab",
                     "amsha.api.keys.k2", "abcdef012345",
-                    "amsha.audit.hmac-key", "test-hmac-key-for-registry-tests");
+                    "amsha.audit.hmac-key", "test-hmac-key-for-registry-tests",
+                    "amsha.auth.hmac-key", "test-hmac-key-for-registry-tests");
         }
     }
 

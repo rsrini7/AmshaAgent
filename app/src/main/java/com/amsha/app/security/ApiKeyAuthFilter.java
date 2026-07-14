@@ -19,6 +19,7 @@ import java.security.Principal;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -27,8 +28,10 @@ import com.amsha.core.audit.AuditService;
 import com.amsha.core.audit.SecurityEventType;
 import com.amsha.core.util.HttpConstants;
 import com.amsha.core.util.MdcKeys;
+import com.amsha.persistence.api.IdentityStorePort;
 import com.amsha.persistence.api.WebSessionDto;
 import com.amsha.persistence.api.WebSessionStorePort;
+import com.amsha.persistence.api.WorkspaceMembershipDto;
 
 import org.jboss.logging.Logger;
 import org.jboss.logging.MDC;
@@ -60,12 +63,34 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
     @Inject
     Instance<WebSessionStorePort> webSessionStore;
 
+    @Inject
+    Instance<IdentityStorePort> identityStore;
+
     @Override
     public void filter(ContainerRequestContext requestContext) {
         long startTime = System.currentTimeMillis();
         String finalPath = getNormalizedPath(uriInfo.getPath());
 
         if (finalPath.startsWith("/info") || finalPath.startsWith("/onboarding")) {
+            return;
+        }
+        if (finalPath.startsWith("/auth/providers")
+                || finalPath.startsWith("/auth/login")
+                || finalPath.startsWith("/auth/callback")) {
+            String ip =
+                    request.remoteAddress() != null ? request.remoteAddress().host() : "unknown";
+            if (!apiKeyRegistry.isAllowed("auth-ip:" + ip)) {
+                requestContext.abortWith(Response.status(429)
+                        .header("Retry-After", "60")
+                        .type(MediaType.APPLICATION_JSON)
+                        .entity(new RateLimitErrorResponse(
+                                "RATE_LIMITED",
+                                "Too many requests. Retry after 60 seconds.",
+                                60,
+                                clock.instant().toString()))
+                        .build());
+                return;
+            }
             return;
         }
 
@@ -141,7 +166,7 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
                             session.rotatedAt(),
                             session.revokedAt(),
                             session.safeClientMetadata(),
-                            session.revision() + 1,
+                            session.revision(),
                             session.createdAt(),
                             now);
                     webSessionStore.get().save(updatedSession);
@@ -159,9 +184,7 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
 
                         @Override
                         public boolean isUserInRole(String role) {
-                            // First owner/admin resolution: for simplicity, sessions grant internal UI/admin role
-                            // as long as the user belongs to the default workspace or is the bootstrap owner.
-                            return "OWNER".equalsIgnoreCase(role) || "internal".equalsIgnoreCase(role);
+                            return hasUserRole(session.userId(), role);
                         }
 
                         @Override
@@ -258,6 +281,19 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
         }
 
         logAudit(safeKey, finalPath, method, "ACCEPTED", ip, System.currentTimeMillis() - startTime);
+    }
+
+    private boolean hasUserRole(String userId, String role) {
+        List<WorkspaceMembershipDto> memberships = identityStore.get().listMembershipsByUserId(userId);
+        boolean hasRole = memberships.stream()
+                .filter(m -> "ACTIVE".equalsIgnoreCase(m.status()))
+                .anyMatch(m -> m.role().equalsIgnoreCase(role));
+        if (!hasRole && "internal".equalsIgnoreCase(role)) {
+            hasRole = memberships.stream()
+                    .filter(m -> "ACTIVE".equalsIgnoreCase(m.status()))
+                    .anyMatch(m -> m.role().equalsIgnoreCase("OWNER"));
+        }
+        return hasRole;
     }
 
     private String getNormalizedPath(String path) {

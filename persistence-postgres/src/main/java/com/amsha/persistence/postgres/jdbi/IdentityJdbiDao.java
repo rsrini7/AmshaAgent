@@ -86,7 +86,7 @@ public interface IdentityJdbiDao {
     // WorkspaceMembership
     @SqlUpdate(
             "INSERT INTO workspace_membership (workspace_id, user_id, role, status, revision, created_at, updated_at) "
-                    + "VALUES (:workspaceId, :userId, :role, :status, 0, :createdAt, :updatedAt) "
+                    + "VALUES (:workspaceId, :userId, :role, :status, :revision, :createdAt, :updatedAt) "
                     + "ON CONFLICT(workspace_id, user_id) DO UPDATE SET role = EXCLUDED.role, status = EXCLUDED.status, "
                     + "revision = workspace_membership.revision + 1, updated_at = EXCLUDED.updated_at "
                     + "WHERE workspace_membership.revision = EXCLUDED.revision")

@@ -37,7 +37,7 @@ public class ApiKeyRegistry {
     @ConfigProperty(name = "amsha.api.keys")
     Optional<Map<String, String>> apiKeys;
 
-    @ConfigProperty(name = "amsha.audit.hmac-key")
+    @ConfigProperty(name = "amsha.auth.hmac-key")
     String hmacSecret;
 
     @ConfigProperty(name = "amsha.api.rate-limit.requests-per-minute", defaultValue = "20")
@@ -84,6 +84,15 @@ public class ApiKeyRegistry {
     public synchronized void unregister(String rawKey) {
         Map<String, String> mutable = new LinkedHashMap<>(this.hmacToKeyName);
         mutable.remove(toHex(hmac(rawKey)));
+        this.hmacToKeyName = Collections.unmodifiableMap(mutable);
+    }
+
+    public synchronized void unregisterByDigest(String digestHex) {
+        if (digestHex == null) {
+            return;
+        }
+        Map<String, String> mutable = new LinkedHashMap<>(this.hmacToKeyName);
+        mutable.remove(digestHex);
         this.hmacToKeyName = Collections.unmodifiableMap(mutable);
     }
 

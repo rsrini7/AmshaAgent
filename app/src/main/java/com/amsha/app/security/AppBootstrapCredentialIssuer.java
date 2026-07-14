@@ -30,7 +30,7 @@ public class AppBootstrapCredentialIssuer implements BootstrapCredentialIssuer {
     @Inject
     ApiKeyRegistry apiKeyRegistry;
 
-    @ConfigProperty(name = "amsha.audit.hmac-key")
+    @ConfigProperty(name = "amsha.auth.hmac-key")
     String hmacSecret;
 
     @Override

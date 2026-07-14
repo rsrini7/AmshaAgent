@@ -205,6 +205,7 @@ See `.mise/tasks/headroom/README.md` for setup and usage.
 |---|---|---|
 | `AMSHA_VAULT_PEPPER` | `dev-pepper-...` *(dev only)* | **Required.** 32+ char random string for Argon2id key derivation. Never change after first boot — it decrypts stored secrets. |
 | `AMSHA_AUDIT_HMAC_KEY` | `dev-audit-hmac-key-...` *(dev only)* | **Required.** 32+ char random string for HMAC audit chain. Never change after first boot — it signs the audit trail. |
+| `AMSHA_AUTH_HMAC_KEY` | `dev-auth-hmac-key-...` *(dev only)* | **Required.** 32+ char random string for user session, invite, and API key digests. |
 | `AMSHA_PII_MODE` | `REDACT_AND_FORWARD` | PII mode: REDACT_AND_FORWARD, BLOCK_AND_NOTIFY, OFF |
 | `AMSHA_AUTO_SEED_SECRETS` | `false` | Auto-seed development secrets on startup |
 
@@ -382,6 +383,7 @@ schema) and must match the model used by every active provider.
 |---|---|---|
 | `AMSHA_API_KEYS_INTERNAL` | `key-internal-changeme` *(dev only)* | **Required.** Internal API keys for admin endpoints (`Authorization: Bearer <token>`) |
 | `AMSHA_API_KEYS_CI` | `key-ci-changeme` *(dev only)* | **Required.** CI API key (read-only) |
+| `AMSHA_AUTH_HMAC_KEY` | `dev-auth-hmac-key-...` *(dev only)* | **Required.** HMAC key for session and API key digests |
 
 ## Resumption
 

@@ -17,7 +17,7 @@ public interface WebSessionJdbiDao {
 
     @SqlUpdate(
             "INSERT INTO web_session (session_id, user_id, token_digest, csrf_digest, idle_expires_at, absolute_expires_at, rotated_at, revoked_at, safe_client_metadata, revision, created_at, updated_at) "
-                    + "VALUES (:sessionId, :userId, :tokenDigest, :csrfDigest, :idleExpiresAt, :absoluteExpiresAt, :rotatedAt, :revokedAt, :safeClientMetadata, 0, :createdAt, :updatedAt) "
+                    + "VALUES (:sessionId, :userId, :tokenDigest, :csrfDigest, :idleExpiresAt, :absoluteExpiresAt, :rotatedAt, :revokedAt, :safeClientMetadata, :revision, :createdAt, :updatedAt) "
                     + "ON CONFLICT(session_id) DO UPDATE SET user_id = excluded.user_id, token_digest = excluded.token_digest, csrf_digest = excluded.csrf_digest, "
                     + "idle_expires_at = excluded.idle_expires_at, absolute_expires_at = excluded.absolute_expires_at, rotated_at = excluded.rotated_at, "
                     + "revoked_at = excluded.revoked_at, safe_client_metadata = excluded.safe_client_metadata, revision = web_session.revision + 1, updated_at = excluded.updated_at "

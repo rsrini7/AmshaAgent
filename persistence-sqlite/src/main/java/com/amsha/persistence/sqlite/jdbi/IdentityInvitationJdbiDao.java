@@ -17,7 +17,7 @@ public interface IdentityInvitationJdbiDao {
 
     @SqlUpdate(
             "INSERT INTO identity_invitation (invitation_id, workspace_id, role, token_digest, optional_email_constraint, expires_at, accepted_by, revoked_at, revision, created_at, updated_at) "
-                    + "VALUES (:invitationId, :workspaceId, :role, :tokenDigest, :optionalEmailConstraint, :expiresAt, :acceptedBy, :revokedAt, 0, :createdAt, :updatedAt) "
+                    + "VALUES (:invitationId, :workspaceId, :role, :tokenDigest, :optionalEmailConstraint, :expiresAt, :acceptedBy, :revokedAt, :revision, :createdAt, :updatedAt) "
                     + "ON CONFLICT(invitation_id) DO UPDATE SET workspace_id = excluded.workspace_id, role = excluded.role, token_digest = excluded.token_digest, "
                     + "optional_email_constraint = excluded.optional_email_constraint, expires_at = excluded.expires_at, accepted_by = excluded.accepted_by, "
                     + "revoked_at = excluded.revoked_at, revision = identity_invitation.revision + 1, updated_at = excluded.updated_at "

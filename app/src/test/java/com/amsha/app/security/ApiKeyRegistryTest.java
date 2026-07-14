@@ -31,6 +31,7 @@ class ApiKeyRegistryTest {
                     "amsha.api.keys.user-a", "aaaa-bbbb-cccc-dddd",
                     "amsha.api.keys.user-b", "eeee-ffff-gggg-hhhh",
                     "amsha.audit.hmac-key", "test-hmac-key-for-registry-tests",
+                    "amsha.auth.hmac-key", "test-hmac-key-for-registry-tests",
                     "amsha.api.rate-limit.requests-per-minute", "20");
         }
     }
