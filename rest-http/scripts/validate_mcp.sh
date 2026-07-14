@@ -5,7 +5,16 @@ SECRET="$KEY"
 B=http://localhost:8080
 AB=$B/api/v1
 hdr(){ printf "\n### %s\n" "$1"; }
-code(){ curl -s -m 20 -o /tmp/body -w "HTTP %{http_code}" "$@"; printf "  body="; head -c 320 /tmp/body; echo; }
+code(){
+  local c
+  c=$(curl -s -m 20 -o /tmp/body -w "%{http_code}" "$@")
+  if [ "$c" = "429" ]; then           # rate limited: wait out the window and retry once
+    printf "  (429, waiting 62s) "
+    sleep 62
+    c=$(curl -s -m 20 -o /tmp/body -w "%{http_code}" "$@")
+  fi
+  printf "HTTP %s  body=" "$c"; head -c 320 /tmp/body; echo
+}
 
 hdr "FLOW A-1 status"
 code -H "X-Amsha-API-Key: $KEY" -H "Accept: application/json" $AB/mcp/status
