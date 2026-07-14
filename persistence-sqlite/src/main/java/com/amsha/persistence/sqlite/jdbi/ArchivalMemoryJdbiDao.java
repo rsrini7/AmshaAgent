@@ -65,7 +65,7 @@ public interface ArchivalMemoryJdbiDao {
             @Bind("userId") String userId,
             @Bind("query") String query,
             @Bind("limit") int limit,
-            @Bind("chunkTypes") List<String> chunkTypes);
+            @BindList("chunkTypes") List<String> chunkTypes);
 
     @SqlQuery("""
         SELECT chunk_id AS "chunkId", user_id AS "userId", content, chunk_type AS "chunkType",

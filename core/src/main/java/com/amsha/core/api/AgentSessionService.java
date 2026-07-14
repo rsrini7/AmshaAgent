@@ -392,7 +392,7 @@ public class AgentSessionService {
                 .agentResult()
                 .<ServiceResult<Object>>map(
                         result -> new ServiceResult<>(responseMapper.mapResult(result, asynchronous), null, null))
-                .orElseGet(() -> ServiceResult.error("SYSTEM", "Turn completed without a result"));
+                .orElseGet(() -> ServiceResult.success(Map.of("status", "OK", "message", "Turn processed")));
     }
 
     private Optional<ServiceResult<Object>> validateRole(String role) {
