@@ -308,45 +308,6 @@ public class AuthResource {
                 .build();
     }
 
-    @POST
-    @Path("/sessions/revoke-all")
-    public Response revokeAllSessions() {
-        String userId = securityContext.getUserPrincipal().getName();
-        if (userId == null || "anonymous".equals(userId)) {
-            return Response.status(Response.Status.UNAUTHORIZED).build();
-        }
-
-        Instant now = Instant.now();
-        List<WebSessionDto> sessions = webSessionStore.listByUserId(userId);
-        for (WebSessionDto session : sessions) {
-            if (session.revokedAt() == null) {
-                WebSessionDto revoked = new WebSessionDto(
-                        session.sessionId(),
-                        session.userId(),
-                        session.tokenDigest(),
-                        session.csrfDigest(),
-                        session.idleExpiresAt(),
-                        session.absoluteExpiresAt(),
-                        session.rotatedAt(),
-                        now,
-                        session.safeClientMetadata(),
-                        session.revision(),
-                        session.createdAt(),
-                        now);
-                webSessionStore.save(revoked);
-            }
-        }
-
-        auditService.recordMandatory(
-                "revoke-all-sessions",
-                userId,
-                "system",
-                SecurityEventType.AUTH_REJECTED,
-                "action=revoke_all_sessions count=" + sessions.size());
-
-        return Response.ok(new RevokeAllResponse(true)).build();
-    }
-
     private String randomUrlSafe(int length) {
         byte[] bytes = new byte[length];
         secureRandom.nextBytes(bytes);
@@ -498,6 +459,4 @@ public class AuthResource {
     public record ErrorResponse(String code, String message) {}
 
     public record LogoutResponse(boolean success) {}
-
-    public record RevokeAllResponse(boolean success) {}
 }

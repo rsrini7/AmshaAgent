@@ -1,0 +1,206 @@
+### ═══════════════════════════════════════════════════════════════
+### 19 - IDENTITY, ACCESS & WORKSPACE SHARING  (Branch P109)
+###
+### Covers the NEW identity/access surface introduced by P109:
+###   - First-owner bootstrap claim  (com.amsha.onboarding.BootstrapResource)
+###   - Identity / profiles / workspace membership
+###   - Invitations, member removal, ownership transfer
+###   - Personal API credential issue/revoke
+###   - Workspace credential rotation
+###
+### These endpoints live UNDER the new auth filter (ApiKeyAuthFilter)
+### and require an authenticated principal (API key OR web session
+### cookie). In this deployment they are served under the /api/v1
+### context path: /api/v1/identity, /api/v1/onboarding/bootstrap, etc.
+### (Set baseUrl accordingly.)
+###
+### PREREQUISITES
+###   1. Fresh serve mode on http://localhost:8080 (UNCLAIMED state).
+###      Bootstrap claim MUTATES durable state — run once per DB.
+###   2. The first-owner key is returned ONLY in the `AMSHA_API_KEY`
+###      Set-Cookie (httpOnly + secure + SameSite=Strict, by design:
+###      the raw key is intentionally NOT in the JSON body). Copy the
+###      value and paste it into @ownerApiKey below.
+###
+###      # capture from a shell:
+###      curl -s -i -X POST http://localhost:8080/onboarding/bootstrap/claim \
+###        | grep -i 'set-cookie'
+###
+### ROLE MODEL (P109): OWNER > ADMIN > MEMBER. Only an ACTIVE member
+### may call workspace-scoped endpoints; only OWNER/ADMIN may invite;
+### only OWNER may invite OWNERs, transfer ownership, or rotate
+### workspace credentials.
+### ═══════════════════════════════════════════════════════════════
+
+# @baseUrl    = http://localhost:8080
+# @validKey   = key-internal-cWevfEoRvstUv0PqGpf02LzDY5kPNaz1y9GSl0LZOwU=
+# @ciKey      = key-ci-JV/qXAikcUoSCCUsqYxLvNjxW/N3KROQtawg3VRFrJs=
+# @invalidKey = totally-wrong-key
+
+# ── PASTE first-owner key from the bootstrap claim Set-Cookie here ──
+# @ownerApiKey = sk-PASTE_RAW_KEY_FROM_SET_COOKIE
+
+# ─────────────────────────────────────────────────────────────────
+# A. FIRST-OWNER BOOTSTRAP CLAIM  (loopback-only, once per DB)
+# ─────────────────────────────────────────────────────────────────
+
+### [A1] Bootstrap status on fresh DB → 200, status "UNCLAIMED"
+GET {{baseUrl}}/api/v1/onboarding/bootstrap/status
+
+### [A2] Claim first owner → 200 {ownerId, workspaceId}
+###      Sets cookie: AMSHA_API_KEY=<rawKey>; HttpOnly; Secure; SameSite=Strict
+###      (rawKey is deliberately absent from the JSON body)
+###      Loopback-only: a non-loopback caller would get 403 FORBIDDEN.
+# @name bootstrapClaim
+POST {{baseUrl}}/api/v1/onboarding/bootstrap/claim
+
+### [A3] Status after claim → 200, status CLAIMED or CREDENTIAL_ISSUED
+GET {{baseUrl}}/api/v1/onboarding/bootstrap/status
+
+### [A4] Re-claim → 409 ALREADY_CLAIMED (idempotency guard)
+POST {{baseUrl}}/api/v1/onboarding/bootstrap/claim
+
+### [A5] Confirm claim → 200 {success:true}
+POST {{baseUrl}}/api/v1/onboarding/bootstrap/confirm
+Content-Type: application/json
+
+{ "expectedRevision": 1 }
+
+### [A6] Confirm again → 400 INVALID_STATE (state already moved past CREDENTIAL_ISSUED)
+POST {{baseUrl}}/api/v1/onboarding/bootstrap/confirm
+Content-Type: application/json
+
+{ "expectedRevision": 1 }
+
+# ─────────────────────────────────────────────────────────────────
+# B. IDENTITY /me
+# ─────────────────────────────────────────────────────────────────
+
+### [B1] /identity/me with first-owner key → 200 {user, memberships[]}
+GET {{baseUrl}}/api/v1/identity/me
+X-Amsha-API-Key: {{ownerApiKey}}
+
+### [B2] /identity/me with NO key → 401
+GET {{baseUrl}}/api/v1/identity/me
+
+### [B3] /identity/me with invalid key → 401
+GET {{baseUrl}}/api/v1/identity/me
+X-Amsha-API-Key: {{invalidKey}}
+
+# ─────────────────────────────────────────────────────────────────
+# C. WORKSPACE MEMBERS  (needs ownerKey; wsId from claim body)
+# ─────────────────────────────────────────────────────────────────
+
+### [C1] List members of own workspace → 200 [ {role:"OWNER",...} ]
+GET {{baseUrl}}/api/v1/identity/workspaces/{{bootstrapClaim.response.body.workspaceId}}/members
+X-Amsha-API-Key: {{ownerApiKey}}
+
+### [C2] List members with NO key → 401
+GET {{baseUrl}}/api/v1/identity/workspaces/{{bootstrapClaim.response.body.workspaceId}}/members
+
+### [C3] List members of unknown workspace → 403 (not an active member)
+GET {{baseUrl}}/api/v1/identity/workspaces/ws_doesnotexist/members
+X-Amsha-API-Key: {{ownerApiKey}}
+
+# ─────────────────────────────────────────────────────────────────
+# D. INVITATIONS
+# ─────────────────────────────────────────────────────────────────
+
+### [D1] Owner creates a MEMBER invitation → 200 {invitationId, rawToken, expiresAt}
+# @name invite
+POST {{baseUrl}}/api/v1/identity/workspaces/{{bootstrapClaim.response.body.workspaceId}}/invitations
+X-Amsha-API-Key: {{ownerApiKey}}
+Content-Type: application/json
+
+{ "role": "MEMBER" }
+
+### [D2] Owner creates an OWNER invitation → 200 (owner may grant OWNER)
+POST {{baseUrl}}/api/v1/identity/workspaces/{{bootstrapClaim.response.body.workspaceId}}/invitations
+X-Amsha-API-Key: {{ownerApiKey}}
+Content-Type: application/json
+
+{ "role": "OWNER" }
+
+### [D3] Invalid role → 403 FORBIDDEN
+POST {{baseUrl}}/api/v1/identity/workspaces/{{bootstrapClaim.response.body.workspaceId}}/invitations
+X-Amsha-API-Key: {{ownerApiKey}}
+Content-Type: application/json
+
+{ "role": "WIZARD" }
+
+### [D4] Accept with bogus token → 404 INVITATION_NOT_FOUND
+POST {{baseUrl}}/api/v1/identity/invitations/bogus-token/accept
+X-Amsha-API-Key: {{ownerApiKey}}
+
+### [D5] Accept the real token (requires a SECOND registered user;
+###      with only the first owner this re-adds owner as member).
+###      In a single-owner DB this is a no-op success: 200.
+POST {{baseUrl}}/api/v1/identity/invitations/{{invite.response.body.rawToken}}/accept
+X-Amsha-API-Key: {{ownerApiKey}}
+
+# ─────────────────────────────────────────────────────────────────
+# E. PERSONAL API CREDENTIALS
+# ─────────────────────────────────────────────────────────────────
+
+### [E1] Create credential with OWNER role (owner holds OWNER) → 200 {credentialId, rawKey, expiresAt}
+# @name cred
+POST {{baseUrl}}/api/v1/identity/api-credentials
+X-Amsha-API-Key: {{ownerApiKey}}
+Content-Type: application/json
+
+{ "roleSet": "OWNER", "expiresInSeconds": 3600 }
+
+### [E2] Cannot grant INTERNAL role → 403 FORBIDDEN_ROLE
+POST {{baseUrl}}/api/v1/identity/api-credentials
+X-Amsha-API-Key: {{ownerApiKey}}
+Content-Type: application/json
+
+{ "roleSet": "INTERNAL" }
+
+### [E3] Cannot grant a role the caller does not hold (ADMIN) → 403 FORBIDDEN_ROLE
+POST {{baseUrl}}/api/v1/identity/api-credentials
+X-Amsha-API-Key: {{ownerApiKey}}
+Content-Type: application/json
+
+{ "roleSet": "ADMIN" }
+
+### [E4] Revoke the credential → 200 {success:true}
+DELETE {{baseUrl}}/api/v1/identity/api-credentials/{{cred.response.body.credentialId}}
+X-Amsha-API-Key: {{ownerApiKey}}
+
+### [E5] Revoke non-existent → 404
+DELETE {{baseUrl}}/api/v1/identity/api-credentials/cred_doesnotexist
+X-Amsha-API-Key: {{ownerApiKey}}
+
+# ─────────────────────────────────────────────────────────────────
+# F. MEMBER REMOVAL  (last-owner guard)
+# ─────────────────────────────────────────────────────────────────
+
+### [F1] Remove a non-member → 404 (target not found)
+DELETE {{baseUrl}}/api/v1/identity/workspaces/{{bootstrapClaim.response.body.workspaceId}}/members/usr_doesnotexist
+X-Amsha-API-Key: {{ownerApiKey}}
+
+### [F2] Remove the only OWNER → 400 LAST_OWNER_REMOVAL_BLOCKED
+DELETE {{baseUrl}}/api/v1/identity/workspaces/{{bootstrapClaim.response.body.workspaceId}}/members/{{bootstrapClaim.response.body.ownerId}}
+X-Amsha-API-Key: {{ownerApiKey}}
+
+# ─────────────────────────────────────────────────────────────────
+# G. OWNERSHIP TRANSFER  (needs a second ACTIVE member — negative here)
+# ─────────────────────────────────────────────────────────────────
+
+### [G1] Transfer to a non-member → 400 TARGET_NOT_MEMBER
+POST {{baseUrl}}/api/v1/identity/workspaces/{{bootstrapClaim.response.body.workspaceId}}/owner/transfer
+X-Amsha-API-Key: {{ownerApiKey}}
+Content-Type: application/json
+
+{ "targetUserId": "usr_doesnotexist" }
+
+# ─────────────────────────────────────────────────────────────────
+# H. WORKSPACE CREDENTIAL ROTATION  (RUN LAST — revokes ALL creds)
+# ─────────────────────────────────────────────────────────────────
+
+### [H1] Owner rotates workspace credentials → 200 {success, revokedCount}
+###      WARNING: this revokes the first-owner bootstrap credential too.
+###      Place last so @ownerApiKey is not invalidated mid-suite.
+POST {{baseUrl}}/api/v1/identity/workspaces/{{bootstrapClaim.response.body.workspaceId}}/credentials/rotate
+X-Amsha-API-Key: {{ownerApiKey}}

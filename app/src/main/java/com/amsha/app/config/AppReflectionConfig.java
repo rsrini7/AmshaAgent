@@ -2,9 +2,12 @@ package com.amsha.app.config;
 
 import com.amsha.app.api.AdminDirectiveResource;
 import com.amsha.app.api.ArchivalMemoryAdminResource;
+import com.amsha.app.api.AuthResource;
 import com.amsha.app.api.CoreMemoryAdminResource;
+import com.amsha.app.api.IdentityResource;
 import com.amsha.app.api.PromptAdminResource;
 import com.amsha.app.api.RecallMemoryAdminResource;
+import com.amsha.app.api.SessionResource;
 import com.amsha.app.mcp.McpConnectResource;
 import com.amsha.app.security.AuthErrorResponse;
 import com.amsha.app.security.RateLimitErrorResponse;
@@ -18,6 +21,11 @@ import com.amsha.app.ui.dto.CheckpointApprovalResponse;
 import com.amsha.app.ui.dto.PageDto;
 import com.amsha.app.ui.dto.PendingApprovalDto;
 import com.amsha.core.api.dto.ActiveAgentResponse;
+import com.amsha.onboarding.BootstrapResource;
+import com.amsha.persistence.api.ExternalIdentityDto;
+import com.amsha.persistence.api.IdentityInvitationDto;
+import com.amsha.persistence.api.IdentityUserDto;
+import com.amsha.persistence.api.WorkspaceMembershipDto;
 
 import io.quarkus.runtime.annotations.RegisterForReflection;
 
@@ -45,5 +53,34 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             CoreMemoryAdminResource.CoreMemoryUpdateRequest.class,
             PromptAdminResource.PromptUpdateRequest.class,
             ActiveAgentResponse.class,
+            // ── P109: Identity / Access / Workspace Sharing / Bootstrap ──
+            // Onboarding bootstrap records
+            BootstrapResource.BootstrapStatusResponse.class,
+            BootstrapResource.ClaimResponse.class,
+            BootstrapResource.ConfirmRequest.class,
+            BootstrapResource.ConfirmResponse.class,
+            BootstrapResource.ErrorResponse.class,
+            // Identity resource records (response + request DTOs)
+            IdentityResource.ErrorResponse.class,
+            IdentityResource.MeResponse.class,
+            IdentityResource.CreateInvitationRequest.class,
+            IdentityResource.CreateInvitationResponse.class,
+            IdentityResource.AcceptInvitationResponse.class,
+            IdentityResource.CreateApiCredentialRequest.class,
+            IdentityResource.CreateApiCredentialResponse.class,
+            IdentityResource.RevokeResponse.class,
+            IdentityResource.TransferOwnerRequest.class,
+            IdentityResource.TransferOwnerResponse.class,
+            IdentityResource.RotateCredentialsResponse.class,
+            // Auth resource records
+            AuthResource.ErrorResponse.class,
+            AuthResource.LogoutResponse.class,
+            // revoke-all-sessions moved to SessionResource
+            SessionResource.RevokeAllResponse.class,
+            // Persistence DTOs serialized inside identity responses
+            IdentityUserDto.class,
+            WorkspaceMembershipDto.class,
+            ExternalIdentityDto.class,
+            IdentityInvitationDto.class,
         })
 public class AppReflectionConfig {}

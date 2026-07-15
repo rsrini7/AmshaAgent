@@ -4,7 +4,7 @@
 > **Version**: V0.1.0 (current)  
 > **Base URL**: `http://localhost:8080`
 
-This directory contains 17 `.http` files covering every REST API surface of Amsha Agent. Run them in the order listed below - health and auth first, then the feature-specific flows, and the Phase 64 regression suite last.
+This directory contains `.http` files covering every REST API surface of Amsha Agent. Run them in the order listed below - health and auth first, then the feature-specific flows, and the Phase 64 regression suite last.
 
 ---
 
@@ -68,6 +68,9 @@ GITHUB_TOKEN=ghp_...    # required for GithubTool tests in 04, 05, 09, 12
 | 14 | `14_budget_governance.http` | Budget soft/hard limits, SUPERVISED/FULL/READONLY autonomy | AMSHA_LLM_API_KEY | A1, A2 |
 | 15 | `15_phase64_regression.http` | Full regression suite for all Phase 64 fixes A1–A7, B1–B3, C1–C3, D smoke | AMSHA_LLM_API_KEY | All tiers |
 | 16 | `16_ui_settings_onboarding.http` | UI status/SSE streams, settings CRUD, onboarding wizard, HITL task-id approval, WS token | AMSHA_LLM_API_KEY | Post-Phase 64 |
+| 19 | `19_identity_access.http` | **P109** first-owner bootstrap claim, `/identity/me`, workspace members, invitations, personal API credentials, last-owner guard, ownership transfer, workspace credential rotation | Fresh DB (UNCLAIMED) | New in P109 |
+| 20 | `20_auth_oauth_session.http` | **P109** `/auth/providers` discovery, OAuth login/callback negative paths, web-session rotate, CSRF enforcement, logout, revoke-all | Server up | New in P109 |
+| 21 | `21_self_evolve.http` | **Self-evolve** behavioral directive REST surface: list/get, synthesize, reconcile, disable, delete + internal-key-only auth model | Server up | New (dedicated coverage) |
 
 ---
 
@@ -257,6 +260,64 @@ FROM session_registry ORDER BY created_at DESC LIMIT 10;
 - RAG chunks in dedicated `rag_chunk` table, fully isolated from compaction
 
 ---
+
+## P109 — Identity, Access & Workspace Sharing (NEW)
+
+Branch P109 introduces a complete identity/access layer **not covered by any
+pre-Phase-64 file** (those reference the old `/api/v1/onboarding/*` UI wizard,
+which is distinct from the new `/onboarding/bootstrap/*` first-owner claim).
+
+### New resources (no `/api/v1` prefix)
+
+| Resource | Path | Auth |
+|---|---|---|
+| Bootstrap (first-owner claim) | `/onboarding/bootstrap/{status,claim,confirm}` | Public, loopback-only |
+| Identity | `/identity/me`, `/identity/workspaces/{id}/members` | API key or session |
+| Invitations | `/identity/workspaces/{id}/invitations`, `/identity/invitations/{token}/accept` | API key or session |
+| Members | `DELETE /identity/workspaces/{id}/members/{memberId}` | API key or session |
+| Ownership | `POST /identity/workspaces/{id}/owner/transfer` | API key or session |
+| Workspace creds | `POST /identity/workspaces/{id}/credentials/rotate` | API key or session |
+| API credentials | `/identity/api-credentials` (`POST`/`DELETE`) | API key or session |
+| Auth providers | `/auth/providers`, `/auth/login/{p}`, `/auth/callback/{p}` | Public |
+| Sessions | `/auth/session/rotate`, `/auth/logout`, `/auth/session/revoke-all` | Session cookie (+CSRF) |
+
+### Running the P109 suite
+
+```bash
+# Requires a FRESH serve-mode DB so bootstrap state is UNCLAIMED
+bash rest-http/scripts/validate_identity_access.sh
+# or via the master runner:
+bash rest-http/scripts/run_all_validations.sh --identity
+```
+
+The script claims the first owner, extracts the raw key from the
+`Set-Cookie: AMSHA_API_KEY=...` response header (the key is deliberately
+**not** in the JSON body), and exercises every automatable path.
+
+### Key P109 behaviors asserted
+
+- Bootstrap claim is loopback-only and idempotent (`409 ALREADY_CLAIMED`).
+- Raw key is returned only in a `HttpOnly; Secure; SameSite=Strict` cookie.
+- `/identity/me` requires an authenticated principal (`401` otherwise).
+- Only `OWNER`/`ADMIN` may invite; only `OWNER` may invite `OWNER`, transfer
+  ownership, or rotate workspace credentials.
+- Personal API credentials cannot grant `INTERNAL`; only roles the caller
+  holds may be granted.
+- Removing or transferring the **last active OWNER** is blocked
+  (`400 LAST_OWNER_REMOVAL_BLOCKED`).
+- Web-session mutations require `X-CSRF-Token`; missing/invalid → `403`.
+- `GET /auth/login/{unknown}` → `404 PROVIDER_NOT_FOUND`;
+  `GET /auth/callback/{p}?state=bad` → `400 INVALID_STATE`.
+
+### New P109 config flags (also in `.env.example`)
+
+```
+AMSHA_AUTH_HMAC_KEY=...
+AMSHA_AUTH_SESSION_IDLE_MINUTES=720
+AMSHA_AUTH_SESSION_ROTATION_GRACE_SECONDS=30
+AMSHA_AUTH_IDP_OIDC_ENABLED=false
+AMSHA_AUTH_IDP_GITHUB_ENABLED=false
+```
 
 ## Running a Full Regression Pass
 

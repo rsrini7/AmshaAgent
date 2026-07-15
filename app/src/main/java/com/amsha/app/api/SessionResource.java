@@ -18,6 +18,7 @@ import java.security.SecureRandom;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Base64;
+import java.util.List;
 import java.util.Optional;
 
 import com.amsha.app.security.ApiKeyRegistry;
@@ -143,4 +144,45 @@ public class SessionResource {
 
         return Response.noContent().cookie(sessionCookie, csrfCookie).build();
     }
+
+    @POST
+    @Path("/revoke-all")
+    public Response revokeAllSessions() {
+        String userId = securityContext.getUserPrincipal().getName();
+        if (userId == null || "anonymous".equals(userId)) {
+            return Response.status(Response.Status.UNAUTHORIZED).build();
+        }
+
+        Instant now = Instant.now();
+        List<WebSessionDto> sessions = webSessionStore.listByUserId(userId);
+        for (WebSessionDto session : sessions) {
+            if (session.revokedAt() == null) {
+                WebSessionDto revoked = new WebSessionDto(
+                        session.sessionId(),
+                        session.userId(),
+                        session.tokenDigest(),
+                        session.csrfDigest(),
+                        session.idleExpiresAt(),
+                        session.absoluteExpiresAt(),
+                        session.rotatedAt(),
+                        now,
+                        session.safeClientMetadata(),
+                        session.revision(),
+                        session.createdAt(),
+                        now);
+                webSessionStore.save(revoked);
+            }
+        }
+
+        auditService.recordMandatory(
+                "revoke-all-sessions",
+                userId,
+                "system",
+                SecurityEventType.AUTH_REJECTED,
+                "action=revoke_all_sessions count=" + sessions.size());
+
+        return Response.ok(new RevokeAllResponse(true)).build();
+    }
+
+    public record RevokeAllResponse(boolean success) {}
 }
