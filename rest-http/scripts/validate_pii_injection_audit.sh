@@ -64,7 +64,7 @@ fi
 echo "── FLOW A: Prompt Injection Blocking ──"
 
 info "INJ-1: Benign request succeeds"
-CODE=$(run_req POST "$VALID_KEY" "$B/api/v1/sessions/$SESS_ID/run" '{"goal":"Suggest a safety check protocol for code review","agentRole":"coordinator","maxIterations":1}')
+CODE=$(run_req POST "$VALID_KEY" "$B/api/v1/sessions/$SESS_ID/run" '{"goal":"Suggest a safety check protocol for code review","agentRole":"coordinator","maxIterations":5}')
 # Tolerating 000 if backend has network/socket timeouts under load, but 200/202 is expected
 [ "$CODE" = "200" ] || [ "$CODE" = "202" ] || [ "$CODE" = "000" ] && ok "$CODE" || fail "$CODE"
 sleep $SLEEP
@@ -81,7 +81,7 @@ sleep $SLEEP
 echo "── FLOW B: PII Scanner & Redaction ──"
 
 info "PII-1: Send message with PII data"
-CODE=$(run_req POST "$VALID_KEY" "$B/api/v1/sessions/$SESS_ID/run" '{"goal":"my phone is +919876543210 and my social security is 000-12-3456","agentRole":"coordinator","maxIterations":1}')
+CODE=$(run_req POST "$VALID_KEY" "$B/api/v1/sessions/$SESS_ID/run" '{"goal":"my phone is +919876543210 and my social security is 000-12-3456","agentRole":"coordinator","maxIterations":5}')
 [ "$CODE" = "200" ] || [ "$CODE" = "202" ] || [ "$CODE" = "000" ] && ok "$CODE" || fail "$CODE"
 sleep $SLEEP
 
