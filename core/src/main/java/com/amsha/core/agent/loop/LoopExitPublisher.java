@@ -93,8 +93,17 @@ public class LoopExitPublisher {
         if (context == null) return;
         // Delegate sub-sessions don't use the CLI bridge.
         if (context.sessionId().contains(AgentSentinels.DELEGATE_SESSION_SENTINEL)) return;
-        // Approval pauses are handled by the HITL path, not the CLI bridge.
-        if (result instanceof AgentResult.AwaitingApproval) return;
+        // Approval pauses are handled by the HITL path, not the CLI bridge. Mark the
+        // session as awaiting approval so a later completion is allowed to buffer/signal
+        // the bridge (and stale normal-turn results are not replayed).
+        if (result instanceof AgentResult.AwaitingApproval) {
+            // The bridge is CLI-only; only mark a pending approval for CLI sessions.
+            // Web/Telegram deliver the approval and its result through their own senders.
+            if (ChannelType.CLI.id().equalsIgnoreCase(context.channelType())) {
+                cliResultBridge.markAwaitingApproval(context.sessionId());
+            }
+            return;
+        }
 
         if (ChannelType.CLI.id().equalsIgnoreCase(context.channelType())) {
             cliResultBridge.complete(context.sessionId(), result);
