@@ -77,7 +77,7 @@ SEED="$SCRIPT_DIR/data/seed_self_evolve.sql"
 # (or when no DB path is supplied / sqlite3 missing) we skip seeding and rely on
 # whatever data already exists — the HTTP checks remain valid either way.
 if [ -n "$DB" ] && command -v sqlite3 >/dev/null 2>&1 && [ -f "$SEED" ]; then
-  OWNER=$(sqlite3 "$DB" "SELECT owner_id FROM bootstrap_state WHERE status='CLAIMED' LIMIT 1;" 2>/dev/null)
+  OWNER=$(sqlite3 "$DB" "SELECT owner_id FROM bootstrap_state WHERE owner_id IS NOT NULL AND owner_id <> '' LIMIT 1;" 2>/dev/null)
   if [ -n "$OWNER" ]; then
     echo "  Seeding extracted_memories + SHADOW directives for user: $OWNER (sqlite: $DB)"
     SED_TMP=$(mktemp)
@@ -85,7 +85,7 @@ if [ -n "$DB" ] && command -v sqlite3 >/dev/null 2>&1 && [ -f "$SEED" ]; then
     sqlite3 "$DB" ".timeout 15000" ".read $SED_TMP" 2>&1 | grep -v '^10000$' || true
     rm -f "$SED_TMP"
   else
-    echo "  ⚠️  No CLAIMED bootstrap_state.owner_id found — skipping seed"
+    echo "  ⚠️  No bootstrapped owner_id found in bootstrap_state — skipping seed"
   fi
 else
   echo "  ℹ️  No sqlite DB at \$AMSHA_DATA_DIR/amsha-meta.db — skipping seed; running HTTP checks only."

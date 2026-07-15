@@ -11,7 +11,7 @@
 - Before implementing from an ADR, ensure the ADR has been reviewed for blocking gaps (categorized as blocking/should-fix/nice-to-have) and updated to resolve all blocking issues. Confidence: 0.70
 
 # workflow
-- Skip DB data migration documentation for the project — during active development, delete the data folder instead of running DB migrations. Confidence: 0.75
+- Skip DB data migration documentation for the project — during active development, delete the data folder instead of running DB migrations. Confidence: 0.80
 - Store reusable seed/test SQL files under script/data/ for shell script reuse. Confidence: 0.70
 - Shell scripts and tests (validators, runners) must be generic and work with both jar and native binary deployments — do not hardcode assumptions about dist paths or binary type. Confidence: 0.65
 - When a script needs a data directory path, ask the user to provide it rather than auto-detecting from the running process. Confidence: 0.75
