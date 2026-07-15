@@ -71,7 +71,6 @@ public class AgentSessionService {
     private final ExecutorService vThreads;
     private final int maxResumeIterations;
 
-    private static final String REST_USER_ID = ApiConstants.REST_USER_ID;
     private static final String REST_USER_NAME = ApiConstants.REST_USER_NAME;
     private static final String REST_API_SESSION_PREFIX = "rest-api-";
     private static final String REST_CHAT_SESSION_PREFIX = "rest-chat-";
@@ -384,9 +383,9 @@ public class AgentSessionService {
     }
 
     private ServiceResult<Object> toServiceResult(TurnDispatchResult dispatched, boolean asynchronous) {
-        if (dispatched.commandResponse().isPresent()) {
-            return ServiceResult.success(Map.of(
-                    "status", "OK", "message", dispatched.commandResponse().get()));
+        Optional<String> commandResponse = dispatched.commandResponse();
+        if (commandResponse.isPresent()) {
+            return ServiceResult.success(Map.of("status", "OK", "message", commandResponse.get()));
         }
         return dispatched
                 .agentResult()
