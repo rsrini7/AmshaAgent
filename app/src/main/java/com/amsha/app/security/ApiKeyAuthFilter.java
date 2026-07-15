@@ -33,6 +33,7 @@ import com.amsha.persistence.api.WebSessionDto;
 import com.amsha.persistence.api.WebSessionStorePort;
 import com.amsha.persistence.api.WorkspaceMembershipDto;
 
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 import org.jboss.logging.MDC;
 
@@ -54,6 +55,9 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
     @Inject
     Clock clock;
 
+    @ConfigProperty(name = "amsha.auth.session.idle-timeout-minutes", defaultValue = "720")
+    int idleTimeoutMinutes;
+
     @Context
     UriInfo uriInfo;
 
@@ -71,33 +75,57 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
         long startTime = System.currentTimeMillis();
         String finalPath = getNormalizedPath(uriInfo.getPath());
 
-        if (finalPath.startsWith("/info") || finalPath.startsWith("/onboarding")) {
-            return;
-        }
-        if (finalPath.startsWith("/auth/providers")
-                || finalPath.startsWith("/auth/login")
-                || finalPath.startsWith("/auth/callback")) {
-            String ip =
-                    request.remoteAddress() != null ? request.remoteAddress().host() : "unknown";
-            if (!apiKeyRegistry.isAllowed("auth-ip:" + ip)) {
-                requestContext.abortWith(Response.status(429)
-                        .header("Retry-After", "60")
-                        .type(MediaType.APPLICATION_JSON)
-                        .entity(new RateLimitErrorResponse(
-                                "RATE_LIMITED",
-                                "Too many requests. Retry after 60 seconds.",
-                                60,
-                                clock.instant().toString()))
-                        .build());
-                return;
+        if (isPublicPath(finalPath)) {
+            if (isAuthPath(finalPath)) {
+                String ip = remoteIp();
+                if (!apiKeyRegistry.isAllowed("auth-ip:" + ip)) {
+                    logAudit(
+                            "auth-rate-limit",
+                            finalPath,
+                            requestContext.getMethod(),
+                            "RATE_LIMITED",
+                            ip,
+                            System.currentTimeMillis() - startTime);
+                    requestContext.abortWith(Response.status(429)
+                            .header("Retry-After", "60")
+                            .type(MediaType.APPLICATION_JSON)
+                            .entity(new RateLimitErrorResponse(
+                                    "RATE_LIMITED",
+                                    "Too many requests. Retry after 60 seconds.",
+                                    60,
+                                    clock.instant().toString()))
+                            .build());
+                    return;
+                }
             }
             return;
         }
 
-        String ip = request.remoteAddress() != null ? request.remoteAddress().host() : "unknown";
+        String ip = remoteIp();
         String method = requestContext.getMethod();
 
-        // 1. Try Browser Web Session Authentication
+        if (trySessionAuth(requestContext, finalPath, method, ip, startTime)) {
+            return;
+        }
+        tryApiKeyAuth(requestContext, finalPath, method, ip, startTime);
+    }
+
+    private boolean isPublicPath(String path) {
+        return path.startsWith("/info") || path.startsWith("/onboarding") || isAuthPath(path);
+    }
+
+    private boolean isAuthPath(String path) {
+        return path.startsWith("/auth/providers")
+                || path.startsWith("/auth/login")
+                || path.startsWith("/auth/callback");
+    }
+
+    private String remoteIp() {
+        return request.remoteAddress() != null ? request.remoteAddress().host() : "unknown";
+    }
+
+    private boolean trySessionAuth(
+            ContainerRequestContext requestContext, String finalPath, String method, String ip, long startTime) {
         Cookie sessionCookie = requestContext.getCookies().get("AMSHA_SESSION_ID");
         String sessionToken = null;
         if (sessionCookie != null && !sessionCookie.getValue().isBlank()) {
@@ -109,102 +137,115 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
             }
         }
 
-        if (sessionToken != null && webSessionStore.isResolvable()) {
-            String digest = apiKeyRegistry.computeDigest(sessionToken);
-            Optional<WebSessionDto> optSession = webSessionStore.get().findByTokenDigest(digest);
-            if (optSession.isPresent()) {
-                WebSessionDto session = optSession.get();
-                Instant now = clock.instant();
-
-                if (session.revokedAt() == null
-                        && !session.idleExpiresAt().isBefore(now)
-                        && !session.absoluteExpiresAt().isBefore(now)) {
-
-                    // Validate CSRF for mutations
-                    if (Set.of("POST", "PUT", "DELETE", "PATCH").contains(method)) {
-                        String csrfHeader = requestContext.getHeaderString("X-CSRF-Token");
-                        if (csrfHeader == null || csrfHeader.isBlank()) {
-                            logAudit(
-                                    "session",
-                                    finalPath,
-                                    method,
-                                    "REJECTED_CSRF_MISSING",
-                                    ip,
-                                    System.currentTimeMillis() - startTime);
-                            requestContext.abortWith(Response.status(Response.Status.FORBIDDEN)
-                                    .type(MediaType.APPLICATION_JSON)
-                                    .entity(new AuthErrorResponse("FORBIDDEN", "CSRF token is missing", now.toString()))
-                                    .build());
-                            return;
-                        }
-                        String csrfDigest = apiKeyRegistry.computeDigest(csrfHeader);
-                        if (!csrfDigest.equals(session.csrfDigest())) {
-                            logAudit(
-                                    "session",
-                                    finalPath,
-                                    method,
-                                    "REJECTED_CSRF_INVALID",
-                                    ip,
-                                    System.currentTimeMillis() - startTime);
-                            requestContext.abortWith(Response.status(Response.Status.FORBIDDEN)
-                                    .type(MediaType.APPLICATION_JSON)
-                                    .entity(new AuthErrorResponse("FORBIDDEN", "CSRF token is invalid", now.toString()))
-                                    .build());
-                            return;
-                        }
-                    }
-
-                    // Refresh idle expiration (e.g. sliding window of 30 minutes)
-                    Instant newIdleExpiry = now.plus(Duration.ofMinutes(30));
-                    WebSessionDto updatedSession = new WebSessionDto(
-                            session.sessionId(),
-                            session.userId(),
-                            session.tokenDigest(),
-                            session.csrfDigest(),
-                            newIdleExpiry,
-                            session.absoluteExpiresAt(),
-                            session.rotatedAt(),
-                            session.revokedAt(),
-                            session.safeClientMetadata(),
-                            session.revision(),
-                            session.createdAt(),
-                            now);
-                    webSessionStore.get().save(updatedSession);
-
-                    // Set security context and populate MDC
-                    MDC.put(MdcKeys.REQUEST_ID, UUID.randomUUID().toString());
-                    MDC.put(MdcKeys.USER_ID, session.userId());
-
-                    final SecurityContext originalContext = requestContext.getSecurityContext();
-                    requestContext.setSecurityContext(new SecurityContext() {
-                        @Override
-                        public Principal getUserPrincipal() {
-                            return session::userId;
-                        }
-
-                        @Override
-                        public boolean isUserInRole(String role) {
-                            return hasUserRole(session.userId(), role);
-                        }
-
-                        @Override
-                        public boolean isSecure() {
-                            return originalContext.isSecure();
-                        }
-
-                        @Override
-                        public String getAuthenticationScheme() {
-                            return "SESSION";
-                        }
-                    });
-
-                    logAudit("session", finalPath, method, "ACCEPTED", ip, System.currentTimeMillis() - startTime);
-                    return;
-                }
-            }
+        if (sessionToken == null || !webSessionStore.isResolvable()) {
+            return false;
         }
 
-        // 2. Fall back to existing API Key authentication
+        String digest = apiKeyRegistry.computeDigest(sessionToken);
+        Optional<WebSessionDto> optSession = webSessionStore.get().findByTokenDigest(digest);
+        if (optSession.isEmpty()) {
+            Optional<String> rotatedId = apiKeyRegistry.findRotatedSessionId(digest);
+            if (rotatedId.isPresent()) {
+                optSession = webSessionStore.get().findById(rotatedId.get());
+            }
+        }
+        if (optSession.isEmpty()) {
+            return false;
+        }
+
+        WebSessionDto session = optSession.get();
+        Instant now = clock.instant();
+
+        if (session.revokedAt() != null
+                || session.idleExpiresAt().isBefore(now)
+                || session.absoluteExpiresAt().isBefore(now)) {
+            return false;
+        }
+
+        if (!validateCsrf(requestContext, session, method, finalPath, ip, startTime, now)) {
+            return true;
+        }
+
+        Instant newIdleExpiry = now.plus(Duration.ofMinutes(Math.max(5, Math.min(idleTimeoutMinutes, 1440))));
+        WebSessionDto updatedSession = new WebSessionDto(
+                session.sessionId(),
+                session.userId(),
+                session.tokenDigest(),
+                session.csrfDigest(),
+                newIdleExpiry,
+                session.absoluteExpiresAt(),
+                session.rotatedAt(),
+                session.revokedAt(),
+                session.safeClientMetadata(),
+                session.revision(),
+                session.createdAt(),
+                now);
+        webSessionStore.get().save(updatedSession);
+
+        MDC.put(MdcKeys.REQUEST_ID, UUID.randomUUID().toString());
+        MDC.put(MdcKeys.USER_ID, session.userId());
+
+        final SecurityContext originalContext = requestContext.getSecurityContext();
+        requestContext.setSecurityContext(new SecurityContext() {
+            @Override
+            public Principal getUserPrincipal() {
+                return session::userId;
+            }
+
+            @Override
+            public boolean isUserInRole(String role) {
+                return hasUserRole(session.userId(), role);
+            }
+
+            @Override
+            public boolean isSecure() {
+                return originalContext.isSecure();
+            }
+
+            @Override
+            public String getAuthenticationScheme() {
+                return "SESSION";
+            }
+        });
+
+        logAudit("session", finalPath, method, "ACCEPTED", ip, System.currentTimeMillis() - startTime);
+        return true;
+    }
+
+    private boolean validateCsrf(
+            ContainerRequestContext requestContext,
+            WebSessionDto session,
+            String method,
+            String finalPath,
+            String ip,
+            long startTime,
+            Instant now) {
+        if (!Set.of("POST", "PUT", "DELETE", "PATCH").contains(method)) {
+            return true;
+        }
+        String csrfHeader = requestContext.getHeaderString("X-CSRF-Token");
+        if (csrfHeader == null || csrfHeader.isBlank()) {
+            logAudit("session", finalPath, method, "REJECTED_CSRF_MISSING", ip, System.currentTimeMillis() - startTime);
+            requestContext.abortWith(Response.status(Response.Status.FORBIDDEN)
+                    .type(MediaType.APPLICATION_JSON)
+                    .entity(new AuthErrorResponse("FORBIDDEN", "CSRF token is missing", now.toString()))
+                    .build());
+            return false;
+        }
+        String csrfDigest = apiKeyRegistry.computeDigest(csrfHeader);
+        if (!csrfDigest.equals(session.csrfDigest())) {
+            logAudit("session", finalPath, method, "REJECTED_CSRF_INVALID", ip, System.currentTimeMillis() - startTime);
+            requestContext.abortWith(Response.status(Response.Status.FORBIDDEN)
+                    .type(MediaType.APPLICATION_JSON)
+                    .entity(new AuthErrorResponse("FORBIDDEN", "CSRF token is invalid", now.toString()))
+                    .build());
+            return false;
+        }
+        return true;
+    }
+
+    private void tryApiKeyAuth(
+            ContainerRequestContext requestContext, String finalPath, String method, String ip, long startTime) {
         String apiKey = resolveApiKey(requestContext);
 
         String safeKey = apiKey != null ? apiKey.substring(0, Math.min(4, apiKey.length())) + "****" : "null";

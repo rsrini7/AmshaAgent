@@ -46,6 +46,9 @@ public class ApiKeyRegistry {
     @ConfigProperty(name = "amsha.api.rate-limit.mutation-per-minute", defaultValue = "10")
     int mutationPerMinute;
 
+    @ConfigProperty(name = "amsha.auth.session.rotation-grace-seconds", defaultValue = "30")
+    int rotationGraceSeconds;
+
     @Inject
     Instance<ApiCredentialStorePort> apiCredentialStore;
 
@@ -64,6 +67,8 @@ public class ApiKeyRegistry {
 
     private volatile Map<String, String> hmacToKeyName;
 
+    private Cache<String, String> rotatedSessionCache;
+
     @PostConstruct
     void initHmacs() {
         Map<String, String> reverse = new LinkedHashMap<>();
@@ -73,6 +78,10 @@ public class ApiKeyRegistry {
             }
         }
         this.hmacToKeyName = Collections.unmodifiableMap(reverse);
+        this.rotatedSessionCache = Caffeine.newBuilder()
+                .maximumSize(10_000)
+                .expireAfterWrite(Duration.ofSeconds(Math.max(1, rotationGraceSeconds)))
+                .build();
     }
 
     public synchronized void register(String keyName, String rawKey) {
@@ -247,5 +256,24 @@ public class ApiKeyRegistry {
                                 .build())
                         .build());
         return bucket.tryConsume(1);
+    }
+
+    /**
+     * Records a rotated-away session token digest so the previous token keeps resolving
+     * to its session for a short grace window (prevents mid-flight request failures).
+     * @param oldDigestHex the HMAC hex of the previous session token
+     * @param sessionId the session the token maps to
+     */
+    public void registerRotatedSession(String oldDigestHex, String sessionId) {
+        if (oldDigestHex == null || sessionId == null) return;
+        rotatedSessionCache.put(oldDigestHex, sessionId);
+    }
+
+    /**
+     * Resolves a previously-rotated session token digest to its session id, if still within grace.
+     */
+    public Optional<String> findRotatedSessionId(String digestHex) {
+        if (digestHex == null) return Optional.empty();
+        return Optional.ofNullable(rotatedSessionCache.getIfPresent(digestHex));
     }
 }

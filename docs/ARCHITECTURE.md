@@ -676,6 +676,40 @@ The application manages durable session mappings using the **Session Catalog**.
   4. Publishes a `SessionRotatedEvent` via the CDI event bus to notify channel adapters (like `WebChatEndpoint` WebSocket connections to sync client state).
 * **Scheduled Archival:** The `SessionReaper` periodically sweeps the catalog to archive sessions that have been inactive for more than `archive-after-days` (default 90).
 
+### Web Authentication & Session Lifecycle
+
+The following diagram illustrates the interaction between the user browser, JAX-RS resources, external identity providers, and the persistence stores during OIDC login and web session token validation:
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Browser as User Browser
+    participant AuthRes as AuthResource
+    participant IdP as OidcIdentityProvider
+    participant DB as Persistence Stores
+    participant Filter as ApiKeyAuthFilter
+
+    Browser->>AuthRes: GET /auth/login/{providerId} (initiates OIDC)
+    AuthRes->>IdP: getAuthorizationUrl(state, PKCE challenge)
+    IdP-->>AuthRes: Redirect URL
+    AuthRes-->>Browser: HTTP 303 Redirect to IdP
+    Browser->>Browser: User authenticates at OIDC Provider
+    Browser->>AuthRes: GET /auth/callback/{providerId}?code=...&state=...
+    AuthRes->>IdP: authenticate(code, PKCE verifier)
+    IdP->>IdP: Fetch tokens & verify ID token signature (RS256)
+    IdP-->>AuthRes: ExternalUserProfile (email, name, sub)
+    AuthRes->>DB: Check/Link ExternalIdentity or accept invitation
+    AuthRes->>DB: Save WebSessionDto (opaque digest)
+    AuthRes-->>Browser: Set-Cookie: AMSHA_SESSION_ID=sess-... (HttpOnly, Secure)
+    
+    Note over Browser, Filter: Subsequent REST requests
+    Browser->>Filter: Request with AMSHA_SESSION_ID + X-CSRF-Token
+    Filter->>DB: findByTokenDigest(sha256(token))
+    Filter->>DB: listMembershipsByUserId(userId)
+    Filter->>Filter: Verify roles & CSRF double-submit
+    Filter-->>Browser: Proceed to API Resource
+```
+
 ### WorkspaceContext Scoping
 
 ```java

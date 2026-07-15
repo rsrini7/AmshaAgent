@@ -9,6 +9,7 @@ import jakarta.ws.rs.Path;
 import jakarta.ws.rs.PathParam;
 import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.QueryParam;
+import jakarta.ws.rs.WebApplicationException;
 import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.Cookie;
 import jakarta.ws.rs.core.HttpHeaders;
@@ -19,6 +20,8 @@ import jakarta.ws.rs.core.SecurityContext;
 import jakarta.ws.rs.core.UriInfo;
 
 import java.net.URI;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.security.SecureRandom;
 import java.time.Duration;
 import java.time.Instant;
@@ -45,6 +48,8 @@ import com.amsha.persistence.api.WorkspaceMembershipDto;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 
+import org.eclipse.microprofile.config.inject.ConfigProperty;
+
 import io.smallrye.common.annotation.RunOnVirtualThread;
 
 @Path("/auth")
@@ -55,10 +60,20 @@ public class AuthResource {
 
     private final SecureRandom secureRandom = new SecureRandom();
 
+    @Inject
+    @ConfigProperty(name = "amsha.auth.session.idle-timeout-minutes", defaultValue = "720")
+    int idleTimeoutMinutes;
+
     private final Cache<String, String> stateCache =
             Caffeine.newBuilder().expireAfterWrite(5, TimeUnit.MINUTES).build();
 
     private final Cache<String, String> invitationCache =
+            Caffeine.newBuilder().expireAfterWrite(10, TimeUnit.MINUTES).build();
+
+    private final Cache<String, String> pkceCache =
+            Caffeine.newBuilder().expireAfterWrite(10, TimeUnit.MINUTES).build();
+
+    private final Cache<String, String> nonceCache =
             Caffeine.newBuilder().expireAfterWrite(10, TimeUnit.MINUTES).build();
 
     @Inject
@@ -91,8 +106,10 @@ public class AuthResource {
     @GET
     @Path("/providers")
     public Response listProviders() {
-        List<String> activeList =
-                providers.stream().map(ExternalIdentityProvider::getProviderId).collect(Collectors.toList());
+        List<String> activeList = providers.stream()
+                .filter(ExternalIdentityProvider::isEnabled)
+                .map(ExternalIdentityProvider::getProviderId)
+                .collect(Collectors.toList());
         return Response.ok(activeList).build();
     }
 
@@ -111,8 +128,21 @@ public class AuthResource {
                     .build();
         }
 
+        if (!providerOpt.get().isEnabled()) {
+            return Response.status(Response.Status.NOT_FOUND)
+                    .entity(new ErrorResponse("PROVIDER_DISABLED", "Provider is disabled: " + providerId))
+                    .build();
+        }
+
         String state = UUID.randomUUID().toString();
         stateCache.put(state, providerId);
+
+        // PKCE + nonce (consumed by OIDC; providers without support ignore them)
+        String codeVerifier = randomUrlSafe(32);
+        String codeChallenge = s256(codeVerifier);
+        String nonce = randomUrlSafe(32);
+        pkceCache.put(state, codeVerifier);
+        nonceCache.put(state, nonce);
 
         if (invitationToken != null && !invitationToken.isBlank()) {
             invitationCache.put(state, invitationToken);
@@ -120,7 +150,7 @@ public class AuthResource {
 
         String redirectUri =
                 uriInfo.getBaseUri().resolve("auth/callback/" + providerId).toString();
-        String url = providerOpt.get().getAuthorizationUrl(state, redirectUri);
+        String url = providerOpt.get().getAuthorizationUrl(state, redirectUri, codeChallenge, nonce);
 
         return Response.seeOther(URI.create(url)).build();
     }
@@ -143,6 +173,11 @@ public class AuthResource {
         }
         stateCache.invalidate(state);
 
+        String codeVerifier = pkceCache.getIfPresent(state);
+        String nonce = nonceCache.getIfPresent(state);
+        pkceCache.invalidate(state);
+        nonceCache.invalidate(state);
+
         Optional<ExternalIdentityProvider> providerOpt = providers.stream()
                 .filter(p -> p.getProviderId().equalsIgnoreCase(providerId))
                 .findFirst();
@@ -155,110 +190,12 @@ public class AuthResource {
 
         String redirectUri =
                 uriInfo.getBaseUri().resolve("auth/callback/" + providerId).toString();
-        ExternalUserProfile profile = providerOpt.get().authenticate(code, redirectUri);
+        ExternalUserProfile profile = providerOpt.get().authenticate(code, redirectUri, codeVerifier, nonce);
 
         Instant now = Instant.now();
         String issuer = providerId;
-        Optional<ExternalIdentityDto> externalOpt =
-                identityStore.findExternalIdentity(providerId, issuer, profile.providerUserId());
 
-        String userId;
-
-        if (externalOpt.isPresent()) {
-            userId = externalOpt.get().userId();
-        } else {
-            // Check for Account Linking (already logged in)
-            if (activeSessionToken != null && !activeSessionToken.isBlank()) {
-                String sessionDigest = apiKeyRegistry.computeDigest(activeSessionToken);
-                Optional<WebSessionDto> sessionOpt = webSessionStore.findByTokenDigest(sessionDigest);
-                if (sessionOpt.isPresent() && sessionOpt.get().revokedAt() == null) {
-                    userId = sessionOpt.get().userId();
-                    // Link new external identity
-                    identityStore.saveExternalIdentity(new ExternalIdentityDto(
-                            providerId, issuer, profile.providerUserId(), userId, "{}", now, now));
-                    auditService.recordMandatory(
-                            "account-link",
-                            userId,
-                            "system",
-                            SecurityEventType.SECURITY,
-                            "action=link provider=" + providerId + " sub=" + profile.providerUserId());
-                } else {
-                    return Response.status(Response.Status.FORBIDDEN)
-                            .entity(new ErrorResponse("LINK_FAILED", "Invalid session context during linking."))
-                            .build();
-                }
-            } else {
-                // Check if registration invitation is present
-                String invitationToken = invitationCache.getIfPresent(state);
-                if (invitationToken != null) {
-                    invitationCache.invalidate(state);
-                    String tokenDigest = apiKeyRegistry.computeDigest(invitationToken);
-                    Optional<IdentityInvitationDto> invitationOpt = invitationStore.findByTokenDigest(tokenDigest);
-
-                    if (invitationOpt.isPresent()) {
-                        IdentityInvitationDto invitation = invitationOpt.get();
-                        if (invitation.revokedAt() == null
-                                && !invitation.expiresAt().isBefore(now)) {
-                            // Register new user
-                            userId = "usr_"
-                                    + UUID.randomUUID()
-                                            .toString()
-                                            .replace("-", "")
-                                            .substring(0, 16);
-                            identityStore.saveUser(new IdentityUserDto(
-                                    userId,
-                                    profile.displayName() != null ? profile.displayName() : profile.email(),
-                                    "ACTIVE",
-                                    now,
-                                    now));
-                            identityStore.saveExternalIdentity(new ExternalIdentityDto(
-                                    providerId, issuer, profile.providerUserId(), userId, "{}", now, now));
-
-                            // Accept invitation and update its state
-                            IdentityInvitationDto acceptedInv = new IdentityInvitationDto(
-                                    invitation.invitationId(),
-                                    invitation.workspaceId(),
-                                    invitation.role(),
-                                    invitation.tokenDigest(),
-                                    invitation.optionalEmailConstraint(),
-                                    invitation.expiresAt(),
-                                    userId,
-                                    invitation.revokedAt(),
-                                    invitation.revision(),
-                                    invitation.createdAt(),
-                                    now);
-                            invitationStore.save(acceptedInv);
-
-                            // Save default workspace membership
-                            WorkspaceMembershipDto membership = new WorkspaceMembershipDto(
-                                    invitation.workspaceId(), userId, invitation.role(), "ACTIVE", 0, now, now);
-                            identityStore.saveMembership(membership);
-
-                            auditService.recordMandatory(
-                                    "user-register-invite",
-                                    userId,
-                                    "system",
-                                    SecurityEventType.ONBOARDING_COMPLETED,
-                                    "action=invite_register workspace=" + invitation.workspaceId() + " role="
-                                            + invitation.role());
-                        } else {
-                            return Response.status(Response.Status.FORBIDDEN)
-                                    .entity(new ErrorResponse(
-                                            "INVITATION_EXPIRED", "Invitation is expired or revoked."))
-                                    .build();
-                        }
-                    } else {
-                        return Response.status(Response.Status.FORBIDDEN)
-                                .entity(new ErrorResponse("INVITATION_INVALID", "Invalid invitation token digest."))
-                                .build();
-                    }
-                } else {
-                    return Response.status(Response.Status.FORBIDDEN)
-                            .entity(new ErrorResponse("UNAUTHORIZED", "Registration requires an active invitation."))
-                            .build();
-                }
-            }
-        }
+        String userId = resolveOrRegisterUser(providerId, issuer, profile, activeSessionToken, state, now);
 
         // Establish secure browser session
         byte[] sessionBytes = new byte[32];
@@ -277,7 +214,8 @@ public class AuthResource {
                 userId,
                 sessionDigest,
                 csrfDigest,
-                now.plus(Duration.ofMinutes(30)), // 30 min idle
+                now.plus(Duration.ofMinutes(
+                        Math.max(5, Math.min(idleTimeoutMinutes, 1440)))), // idle (default 12h, bounded 5m-24h)
                 now.plus(Duration.ofDays(7)), // 7 days absolute
                 null,
                 null,
@@ -287,12 +225,14 @@ public class AuthResource {
                 now);
         webSessionStore.save(newSession);
 
+        boolean secureCookie = "https".equalsIgnoreCase(uriInfo.getBaseUri().getScheme());
+
         NewCookie sessionCookie = new NewCookie.Builder("AMSHA_SESSION_ID")
                 .value(sessionToken)
                 .path("/")
                 .maxAge(3600 * 24 * 7)
                 .httpOnly(true)
-                .secure(true)
+                .secure(secureCookie)
                 .sameSite(NewCookie.SameSite.LAX)
                 .build();
 
@@ -301,7 +241,7 @@ public class AuthResource {
                 .path("/")
                 .maxAge(3600 * 24 * 7)
                 .httpOnly(false)
-                .secure(true)
+                .secure(secureCookie)
                 .sameSite(NewCookie.SameSite.LAX)
                 .build();
 
@@ -313,6 +253,7 @@ public class AuthResource {
     @POST
     @Path("/logout")
     public Response logout() {
+        boolean secureCookie = "https".equalsIgnoreCase(uriInfo.getBaseUri().getScheme());
         Cookie incomingSessionCookie = httpHeaders.getCookies().get("AMSHA_SESSION_ID");
         String sessionToken = incomingSessionCookie != null ? incomingSessionCookie.getValue() : null;
         if (sessionToken != null && !sessionToken.isBlank()) {
@@ -349,7 +290,7 @@ public class AuthResource {
                 .path("/")
                 .maxAge(0)
                 .httpOnly(true)
-                .secure(true)
+                .secure(secureCookie)
                 .sameSite(NewCookie.SameSite.LAX)
                 .build();
 
@@ -358,7 +299,7 @@ public class AuthResource {
                 .path("/")
                 .maxAge(0)
                 .httpOnly(false)
-                .secure(true)
+                .secure(secureCookie)
                 .sameSite(NewCookie.SameSite.LAX)
                 .build();
 
@@ -404,6 +345,154 @@ public class AuthResource {
                 "action=revoke_all_sessions count=" + sessions.size());
 
         return Response.ok(new RevokeAllResponse(true)).build();
+    }
+
+    private String randomUrlSafe(int length) {
+        byte[] bytes = new byte[length];
+        secureRandom.nextBytes(bytes);
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
+    }
+
+    private static String s256(String verifier) {
+        try {
+            MessageDigest md = MessageDigest.getInstance("SHA-256");
+            return Base64.getUrlEncoder()
+                    .withoutPadding()
+                    .encodeToString(md.digest(verifier.getBytes(StandardCharsets.US_ASCII)));
+        } catch (Exception e) {
+            throw new IllegalStateException("SHA-256 unavailable", e);
+        }
+    }
+
+    private String resolveOrRegisterUser(
+            String providerId,
+            String issuer,
+            ExternalUserProfile profile,
+            String activeSessionToken,
+            String state,
+            Instant now) {
+        Optional<ExternalIdentityDto> externalOpt =
+                identityStore.findExternalIdentity(providerId, issuer, profile.providerUserId());
+
+        if (externalOpt.isPresent()) {
+            return externalOpt.get().userId();
+        }
+
+        // Check for Account Linking (already logged in)
+        if (activeSessionToken != null && !activeSessionToken.isBlank()) {
+            String sessionDigest = apiKeyRegistry.computeDigest(activeSessionToken);
+            Optional<WebSessionDto> sessionOpt = webSessionStore.findByTokenDigest(sessionDigest);
+            if (sessionOpt.isPresent() && sessionOpt.get().revokedAt() == null) {
+                String userId = sessionOpt.get().userId();
+                // Link new external identity
+                String safeClaimsJson = profile.email() != null
+                        ? "{\"email\":\"" + profile.email().replace("\"", "\\\"") + "\"}"
+                        : "{}";
+                identityStore.saveExternalIdentity(new ExternalIdentityDto(
+                        providerId, issuer, profile.providerUserId(), userId, safeClaimsJson, now, now));
+                auditService.recordMandatory(
+                        "account-link",
+                        userId,
+                        "system",
+                        SecurityEventType.SECURITY,
+                        "action=link provider=" + providerId + " sub=" + profile.providerUserId());
+                return userId;
+            } else {
+                throw new WebApplicationException(Response.status(Response.Status.FORBIDDEN)
+                        .entity(new ErrorResponse("LINK_FAILED", "Invalid session context during linking."))
+                        .build());
+            }
+        }
+
+        // Check if registration invitation is present
+        String invitationToken = invitationCache.getIfPresent(state);
+        if (invitationToken != null) {
+            invitationCache.invalidate(state);
+            String tokenDigest = apiKeyRegistry.computeDigest(invitationToken);
+            Optional<IdentityInvitationDto> invitationOpt = invitationStore.findByTokenDigest(tokenDigest);
+
+            if (invitationOpt.isPresent()) {
+                IdentityInvitationDto invitation = invitationOpt.get();
+                if (invitation.acceptedBy() != null) {
+                    throw new WebApplicationException(Response.status(Response.Status.GONE)
+                            .entity(new ErrorResponse("INVITATION_ACCEPTED", "Invitation has already been used."))
+                            .build());
+                }
+                if (invitation.revokedAt() == null && !invitation.expiresAt().isBefore(now)) {
+                    // Enforce invitation email constraint
+                    if (isEmailConstraintViolated(invitation, profile.email())) {
+                        throw new WebApplicationException(Response.status(Response.Status.FORBIDDEN)
+                                .entity(new ErrorResponse(
+                                        "EMAIL_CONSTRAINT_MISMATCH",
+                                        "This invitation is restricted to a different email address."))
+                                .build());
+                    }
+                    // Register new user
+                    String userId = "usr_"
+                            + UUID.randomUUID().toString().replace("-", "").substring(0, 16);
+                    identityStore.saveUser(new IdentityUserDto(
+                            userId,
+                            profile.displayName() != null ? profile.displayName() : profile.email(),
+                            "ACTIVE",
+                            now,
+                            now));
+                    String safeClaimsJson = profile.email() != null
+                            ? "{\"email\":\"" + profile.email().replace("\"", "\\\"") + "\"}"
+                            : "{}";
+                    identityStore.saveExternalIdentity(new ExternalIdentityDto(
+                            providerId, issuer, profile.providerUserId(), userId, safeClaimsJson, now, now));
+
+                    // Accept invitation and update its state
+                    IdentityInvitationDto acceptedInv = new IdentityInvitationDto(
+                            invitation.invitationId(),
+                            invitation.workspaceId(),
+                            invitation.role(),
+                            invitation.tokenDigest(),
+                            invitation.optionalEmailConstraint(),
+                            invitation.expiresAt(),
+                            userId,
+                            invitation.revokedAt(),
+                            invitation.revision(),
+                            invitation.createdAt(),
+                            now);
+                    invitationStore.save(acceptedInv);
+
+                    // Save default workspace membership
+                    WorkspaceMembershipDto membership = new WorkspaceMembershipDto(
+                            invitation.workspaceId(), userId, invitation.role(), "ACTIVE", 0, now, now);
+                    identityStore.saveMembership(membership);
+
+                    auditService.recordMandatory(
+                            "user-register-invite",
+                            userId,
+                            "system",
+                            SecurityEventType.ONBOARDING_COMPLETED,
+                            "action=invite_register workspace=" + invitation.workspaceId() + " role="
+                                    + invitation.role());
+                    return userId;
+                } else {
+                    throw new WebApplicationException(Response.status(Response.Status.FORBIDDEN)
+                            .entity(new ErrorResponse("INVITATION_EXPIRED", "Invitation is expired or revoked."))
+                            .build());
+                }
+            } else {
+                throw new WebApplicationException(Response.status(Response.Status.FORBIDDEN)
+                        .entity(new ErrorResponse("INVITATION_INVALID", "Invalid invitation token digest."))
+                        .build());
+            }
+        } else {
+            throw new WebApplicationException(Response.status(Response.Status.FORBIDDEN)
+                    .entity(new ErrorResponse("UNAUTHORIZED", "Registration requires an active invitation."))
+                    .build());
+        }
+    }
+
+    private boolean isEmailConstraintViolated(IdentityInvitationDto invitation, String email) {
+        if (invitation.optionalEmailConstraint() == null
+                || invitation.optionalEmailConstraint().isBlank()) {
+            return false;
+        }
+        return email == null || !invitation.optionalEmailConstraint().equalsIgnoreCase(email.trim());
     }
 
     public record ErrorResponse(String code, String message) {}

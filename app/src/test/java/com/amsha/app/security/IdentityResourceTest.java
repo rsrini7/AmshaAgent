@@ -9,6 +9,7 @@ import java.time.Instant;
 import java.util.UUID;
 
 import com.amsha.app.api.IdentityResource.*;
+import com.amsha.persistence.api.ApiCredentialStorePort;
 import com.amsha.persistence.api.IdentityStorePort;
 import com.amsha.persistence.api.IdentityUserDto;
 import com.amsha.persistence.api.IdentityWorkspaceDto;
@@ -29,6 +30,9 @@ class IdentityResourceTest {
 
     @Inject
     WebSessionStorePort webSessionStore;
+
+    @Inject
+    ApiCredentialStorePort apiCredentialStore;
 
     @Inject
     ApiKeyRegistry apiKeyRegistry;
@@ -232,5 +236,112 @@ class IdentityResourceTest {
                 .put("/api/v1/admin/prompts/test-id")
                 .then()
                 .statusCode(404);
+    }
+
+    @Test
+    void testOwnershipTransferAndCredentialRotation() {
+        String sessionToken = "sess-" + UUID.randomUUID().toString();
+        String csrfToken = "csrf-" + UUID.randomUUID().toString();
+        String ownerId = "usr_xfer_owner";
+        String memberId = "usr_xfer_member";
+        String workspaceId = "ws_xfer_1";
+        Instant now = Instant.now();
+
+        identityStore.saveUser(new IdentityUserDto(ownerId, "Owner", "ACTIVE", now, now));
+        identityStore.saveUser(new IdentityUserDto(memberId, "Member", "ACTIVE", now, now));
+        identityStore.saveWorkspace(new IdentityWorkspaceDto(workspaceId, "Xfer WS", ownerId, now, now));
+        identityStore.saveMembership(new WorkspaceMembershipDto(workspaceId, ownerId, "OWNER", "ACTIVE", 1, now, now));
+        identityStore.saveMembership(
+                new WorkspaceMembershipDto(workspaceId, memberId, "MEMBER", "ACTIVE", 1, now, now));
+        webSessionStore.save(new WebSessionDto(
+                "sess-xfer-owner",
+                ownerId,
+                apiKeyRegistry.computeDigest(sessionToken),
+                apiKeyRegistry.computeDigest(csrfToken),
+                now.plusSeconds(3600),
+                now.plusSeconds(7200),
+                null,
+                null,
+                null,
+                1,
+                now,
+                now));
+
+        String memberSession = "sess-" + UUID.randomUUID().toString();
+        String memberCsrf = "csrf-" + UUID.randomUUID().toString();
+        webSessionStore.save(new WebSessionDto(
+                "sess-xfer-member",
+                memberId,
+                apiKeyRegistry.computeDigest(memberSession),
+                apiKeyRegistry.computeDigest(memberCsrf),
+                now.plusSeconds(3600),
+                now.plusSeconds(7200),
+                null,
+                null,
+                null,
+                1,
+                now,
+                now));
+
+        // Member cannot transfer ownership
+        given().cookie("AMSHA_SESSION_ID", memberSession)
+                .header("X-CSRF-Token", memberCsrf)
+                .contentType(ContentType.JSON)
+                .body(new TransferOwnerRequest(ownerId))
+                .when()
+                .post("/api/v1/identity/workspaces/" + workspaceId + "/owner/transfer")
+                .then()
+                .statusCode(403);
+
+        // Member creates an API credential (to be rotated later)
+        var cred = given().cookie("AMSHA_SESSION_ID", memberSession)
+                .header("X-CSRF-Token", memberCsrf)
+                .contentType(ContentType.JSON)
+                .body(new CreateApiCredentialRequest("MEMBER", null))
+                .when()
+                .post("/api/v1/identity/api-credentials")
+                .then()
+                .statusCode(200)
+                .body("credentialId", notNullValue())
+                .extract();
+        String credentialId = cred.path("credentialId");
+
+        // Owner transfers ownership to the member
+        given().cookie("AMSHA_SESSION_ID", sessionToken)
+                .header("X-CSRF-Token", csrfToken)
+                .contentType(ContentType.JSON)
+                .body(new TransferOwnerRequest(memberId))
+                .when()
+                .post("/api/v1/identity/workspaces/" + workspaceId + "/owner/transfer")
+                .then()
+                .statusCode(200)
+                .body("success", is(true))
+                .body("newOwnerId", is(memberId));
+
+        // Previous owner is now ADMIN and can no longer transfer
+        given().cookie("AMSHA_SESSION_ID", sessionToken)
+                .header("X-CSRF-Token", csrfToken)
+                .contentType(ContentType.JSON)
+                .body(new TransferOwnerRequest(memberId))
+                .when()
+                .post("/api/v1/identity/workspaces/" + workspaceId + "/owner/transfer")
+                .then()
+                .statusCode(403);
+
+        // New owner rotates all workspace credentials
+        given().cookie("AMSHA_SESSION_ID", memberSession)
+                .header("X-CSRF-Token", memberCsrf)
+                .contentType(ContentType.JSON)
+                .when()
+                .post("/api/v1/identity/workspaces/" + workspaceId + "/credentials/rotate")
+                .then()
+                .statusCode(200)
+                .body("success", is(true))
+                .body("revokedCount", greaterThanOrEqualTo(1));
+
+        // The member's credential is now revoked
+        var revoked = apiCredentialStore.findById(credentialId);
+        assert revoked.isPresent();
+        assert revoked.get().revokedAt() != null;
     }
 }

@@ -21,14 +21,13 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 import com.amsha.app.security.ApiKeyRegistry;
 import com.amsha.core.audit.AuditService;
 import com.amsha.core.audit.SecurityEventType;
 import com.amsha.persistence.api.ApiCredentialDto;
 import com.amsha.persistence.api.ApiCredentialStorePort;
+import com.amsha.persistence.api.ExternalIdentityDto;
 import com.amsha.persistence.api.IdentityInvitationDto;
 import com.amsha.persistence.api.IdentityInvitationStorePort;
 import com.amsha.persistence.api.IdentityStorePort;
@@ -214,6 +213,30 @@ public class IdentityResource {
                     .build();
         }
 
+        // Validate email constraint if present
+        if (invitation.optionalEmailConstraint() != null
+                && !invitation.optionalEmailConstraint().isBlank()) {
+            List<ExternalIdentityDto> externalIds = identityStore.listExternalIdentitiesByUserId(userId);
+            boolean emailMatched = false;
+            for (ExternalIdentityDto ext : externalIds) {
+                String claims = ext.safeClaims();
+                if (claims != null && claims.contains("\"email\"")) {
+                    String email = parseEmailFromClaims(claims);
+                    if (email != null && invitation.optionalEmailConstraint().equalsIgnoreCase(email.trim())) {
+                        emailMatched = true;
+                        break;
+                    }
+                }
+            }
+            if (!emailMatched) {
+                return Response.status(Response.Status.FORBIDDEN)
+                        .entity(new ErrorResponse(
+                                "EMAIL_CONSTRAINT_MISMATCH",
+                                "This invitation is restricted to a different email address."))
+                        .build();
+            }
+        }
+
         // Add user to workspace membership
         WorkspaceMembershipDto membership =
                 new WorkspaceMembershipDto(invitation.workspaceId(), userId, invitation.role(), "ACTIVE", 1, now, now);
@@ -244,125 +267,6 @@ public class IdentityResource {
 
         return Response.ok(new AcceptInvitationResponse(true, invitation.workspaceId(), invitation.role()))
                 .build();
-    }
-
-    @POST
-    @Path("/api-credentials")
-    public Response createApiCredential(CreateApiCredentialRequest req) {
-        String userId = securityContext.getUserPrincipal().getName();
-        if (userId == null || "anonymous".equals(userId)) {
-            return Response.status(Response.Status.UNAUTHORIZED).build();
-        }
-
-        // Validate requested roleSet to prevent escalation
-        String roleSet = req.roleSet();
-        if (roleSet == null || roleSet.isBlank()) {
-            return Response.status(Response.Status.BAD_REQUEST)
-                    .entity(new ErrorResponse("INVALID_ROLES", "Role set cannot be empty."))
-                    .build();
-        }
-        List<String> requestedRoles = Stream.of(roleSet.split(","))
-                .map(String::trim)
-                .filter(s -> !s.isEmpty())
-                .toList();
-        if (requestedRoles.isEmpty()) {
-            return Response.status(Response.Status.BAD_REQUEST)
-                    .entity(new ErrorResponse("INVALID_ROLES", "Role set cannot be empty."))
-                    .build();
-        }
-
-        List<WorkspaceMembershipDto> memberships = identityStore.listMembershipsByUserId(userId);
-        Set<String> allowedRoles = memberships.stream()
-                .filter(m -> "ACTIVE".equalsIgnoreCase(m.status()))
-                .map(WorkspaceMembershipDto::role)
-                .map(String::toUpperCase)
-                .collect(Collectors.toSet());
-
-        for (String r : requestedRoles) {
-            String upper = r.toUpperCase();
-            if ("INTERNAL".equals(upper)) {
-                return Response.status(Response.Status.FORBIDDEN)
-                        .entity(new ErrorResponse(
-                                "FORBIDDEN_ROLE", "The 'internal' role cannot be granted to API credentials."))
-                        .build();
-            }
-            if (!allowedRoles.contains(upper)) {
-                return Response.status(Response.Status.FORBIDDEN)
-                        .entity(new ErrorResponse(
-                                "FORBIDDEN_ROLE",
-                                "You cannot grant the role '" + r + "' as you do not hold it in any active workspace."))
-                        .build();
-            }
-        }
-
-        byte[] keyBytes = new byte[32];
-        secureRandom.nextBytes(keyBytes);
-        String rawKey = "sk-" + Base64.getUrlEncoder().withoutPadding().encodeToString(keyBytes);
-        String keyDigest = apiKeyRegistry.computeDigest(rawKey);
-
-        Instant now = Instant.now();
-        Instant expiresAt = req.expiresInSeconds() != null ? now.plusSeconds(req.expiresInSeconds()) : null;
-
-        String credentialId =
-                "cred_" + UUID.randomUUID().toString().replace("-", "").substring(0, 16);
-        ApiCredentialDto cred =
-                new ApiCredentialDto(credentialId, userId, keyDigest, req.roleSet(), 0, expiresAt, null, now, now);
-        apiCredentialStore.save(cred);
-
-        // Register in cache
-        apiKeyRegistry.register(userId, rawKey);
-
-        auditService.recordMandatory(
-                "create-api-credential",
-                userId,
-                "system",
-                SecurityEventType.SECURITY,
-                "action=create_api_credential credentialId=" + credentialId);
-
-        return Response.ok(new CreateApiCredentialResponse(credentialId, rawKey, expiresAt))
-                .build();
-    }
-
-    @DELETE
-    @Path("/api-credentials/{credentialId}")
-    public Response revokeApiCredential(@PathParam("credentialId") String credentialId) {
-        String userId = securityContext.getUserPrincipal().getName();
-        if (userId == null || "anonymous".equals(userId)) {
-            return Response.status(Response.Status.UNAUTHORIZED).build();
-        }
-
-        Optional<ApiCredentialDto> credOpt = apiCredentialStore.findById(credentialId);
-        if (credOpt.isEmpty()) {
-            return Response.status(Response.Status.NOT_FOUND).build();
-        }
-
-        ApiCredentialDto cred = credOpt.get();
-        if (!cred.userId().equals(userId)) {
-            return Response.status(Response.Status.FORBIDDEN).build();
-        }
-
-        Instant now = Instant.now();
-        ApiCredentialDto revoked = new ApiCredentialDto(
-                cred.credentialId(),
-                cred.userId(),
-                cred.keyDigest(),
-                cred.roleSet(),
-                cred.revision(),
-                cred.expiresAt(),
-                now,
-                cred.createdAt(),
-                cred.updatedAt());
-        apiCredentialStore.save(revoked);
-        apiKeyRegistry.unregisterByDigest(cred.keyDigest());
-
-        auditService.recordMandatory(
-                "revoke-api-credential",
-                userId,
-                "system",
-                SecurityEventType.AUTH_REJECTED,
-                "action=revoke_api_credential credentialId=" + credentialId);
-
-        return Response.ok(new RevokeResponse(true)).build();
     }
 
     @DELETE
@@ -421,6 +325,141 @@ public class IdentityResource {
         return Response.ok(new RevokeResponse(true)).build();
     }
 
+    @POST
+    @Path("/workspaces/{workspaceId}/owner/transfer")
+    public Response transferOwnership(@PathParam("workspaceId") String workspaceId, TransferOwnerRequest req) {
+        String userId = securityContext.getUserPrincipal().getName();
+        if (userId == null || "anonymous".equals(userId)) {
+            return Response.status(Response.Status.UNAUTHORIZED).build();
+        }
+        String targetUserId = req.targetUserId();
+        if (targetUserId == null || targetUserId.isBlank()) {
+            return Response.status(Response.Status.BAD_REQUEST)
+                    .entity(new ErrorResponse("INVALID_TARGET", "targetUserId is required"))
+                    .build();
+        }
+
+        Optional<WorkspaceMembershipDto> callerMembership = identityStore.findMembership(workspaceId, userId);
+        if (callerMembership.isEmpty()
+                || !"ACTIVE".equals(callerMembership.get().status())
+                || !"OWNER".equals(callerMembership.get().role())) {
+            return Response.status(Response.Status.FORBIDDEN)
+                    .entity(new ErrorResponse("FORBIDDEN", "Only an active owner can transfer ownership."))
+                    .build();
+        }
+
+        Optional<WorkspaceMembershipDto> targetMembership = identityStore.findMembership(workspaceId, targetUserId);
+        if (targetMembership.isEmpty()
+                || !"ACTIVE".equals(targetMembership.get().status())) {
+            return Response.status(Response.Status.BAD_REQUEST)
+                    .entity(new ErrorResponse("TARGET_NOT_MEMBER", "Target must be an active member of the workspace."))
+                    .build();
+        }
+
+        Instant now = Instant.now();
+        identityStore.saveMembership(new WorkspaceMembershipDto(
+                workspaceId,
+                targetUserId,
+                "OWNER",
+                targetMembership.get().status(),
+                targetMembership.get().revision(),
+                targetMembership.get().createdAt(),
+                now));
+
+        if (!userId.equals(targetUserId)) {
+            identityStore.saveMembership(new WorkspaceMembershipDto(
+                    workspaceId,
+                    userId,
+                    "ADMIN",
+                    callerMembership.get().status(),
+                    callerMembership.get().revision(),
+                    callerMembership.get().createdAt(),
+                    now));
+        }
+
+        auditService.recordMandatory(
+                "transfer-ownership",
+                userId,
+                "system",
+                SecurityEventType.SECURITY,
+                "action=transfer_ownership workspaceId=" + workspaceId + " toUserId=" + targetUserId);
+
+        return Response.ok(new TransferOwnerResponse(true, targetUserId)).build();
+    }
+
+    @POST
+    @Path("/workspaces/{workspaceId}/credentials/rotate")
+    public Response rotateWorkspaceCredentials(@PathParam("workspaceId") String workspaceId) {
+        String userId = securityContext.getUserPrincipal().getName();
+        if (userId == null || "anonymous".equals(userId)) {
+            return Response.status(Response.Status.UNAUTHORIZED).build();
+        }
+
+        Optional<WorkspaceMembershipDto> callerMembership = identityStore.findMembership(workspaceId, userId);
+        if (callerMembership.isEmpty()
+                || !"ACTIVE".equals(callerMembership.get().status())
+                || !"OWNER".equals(callerMembership.get().role())) {
+            return Response.status(Response.Status.FORBIDDEN)
+                    .entity(new ErrorResponse("FORBIDDEN", "Only an active owner can rotate workspace credentials."))
+                    .build();
+        }
+
+        List<WorkspaceMembershipDto> members = identityStore.listMembershipsByWorkspaceId(workspaceId);
+        Instant now = Instant.now();
+        int revokedCount = 0;
+        for (WorkspaceMembershipDto member : members) {
+            if (!"ACTIVE".equals(member.status())) {
+                continue;
+            }
+            for (ApiCredentialDto cred : apiCredentialStore.listByUserId(member.userId())) {
+                if (cred.revokedAt() != null) {
+                    continue;
+                }
+                if (cred.expiresAt() != null && cred.expiresAt().isBefore(now)) {
+                    continue;
+                }
+                apiCredentialStore.save(new ApiCredentialDto(
+                        cred.credentialId(),
+                        cred.userId(),
+                        cred.keyDigest(),
+                        cred.roleSet(),
+                        cred.revision(),
+                        cred.expiresAt(),
+                        now,
+                        cred.createdAt(),
+                        now));
+                apiKeyRegistry.unregisterByDigest(cred.keyDigest());
+                revokedCount++;
+            }
+        }
+
+        auditService.recordMandatory(
+                "rotate-workspace-credentials",
+                userId,
+                "system",
+                SecurityEventType.SECURITY,
+                "action=rotate_workspace_credentials workspaceId=" + workspaceId + " count=" + revokedCount);
+
+        return Response.ok(new RotateCredentialsResponse(true, revokedCount)).build();
+    }
+
+    private String parseEmailFromClaims(String claims) {
+        if (claims == null) return null;
+        try {
+            int idx = claims.indexOf("\"email\"");
+            if (idx == -1) return null;
+            int colonIdx = claims.indexOf(":", idx);
+            if (colonIdx == -1) return null;
+            int startQuote = claims.indexOf("\"", colonIdx);
+            if (startQuote == -1) return null;
+            int endQuote = claims.indexOf("\"", startQuote + 1);
+            if (endQuote == -1) return null;
+            return claims.substring(startQuote + 1, endQuote);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
     public record ErrorResponse(String code, String message) {}
 
     public record MeResponse(IdentityUserDto user, List<WorkspaceMembershipDto> memberships) {}
@@ -436,4 +475,10 @@ public class IdentityResource {
     public record CreateApiCredentialResponse(String credentialId, String rawKey, Instant expiresAt) {}
 
     public record RevokeResponse(boolean success) {}
+
+    public record TransferOwnerRequest(String targetUserId) {}
+
+    public record TransferOwnerResponse(boolean success, String newOwnerId) {}
+
+    public record RotateCredentialsResponse(boolean success, int revokedCount) {}
 }

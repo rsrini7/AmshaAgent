@@ -1,6 +1,6 @@
 # ADR: Identity, Web Sessions, Multi-Admin Access, and Workspace Sharing
 
-- Status: Approved
+- Status: Implemented
 - Date: 2026-07-14
 - Decision owners: Amsha Agent maintainers
 - Required by: `ADR-Onboarding-Multi-Agent-Provider-Model.md`

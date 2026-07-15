@@ -851,6 +851,9 @@ mp:
       hmac-key: "${AMSHA_AUDIT_HMAC_KEY:dev-audit-hmac-key-min-32-bytes-00000}"
     auth:
       hmac-key: "${AMSHA_AUTH_HMAC_KEY:dev-auth-hmac-key-min-32-bytes-0000000}"
+    session:
+      idle-timeout-minutes: ${AMSHA_AUTH_SESSION_IDLE_MINUTES:720}
+      rotation-grace-seconds: ${AMSHA_AUTH_SESSION_ROTATION_GRACE_SECONDS:30}
     channel:
       telegram:
         enabled: false
@@ -940,13 +943,18 @@ mp:
           enabled: ${AMSHA_AUTH_IDP_OIDC_ENABLED:false}
           client-id: "${AMSHA_AUTH_IDP_OIDC_CLIENT_ID:}"
           client-secret: "${AMSHA_AUTH_IDP_OIDC_CLIENT_SECRET:}"
+          client-secret-vault-key: "${AMSHA_AUTH_IDP_OIDC_CLIENT_SECRET_VAULT_KEY:}"
           authorization-url: "${AMSHA_AUTH_IDP_OIDC_AUTHORIZATION_URL:}"
           token-url: "${AMSHA_AUTH_IDP_OIDC_TOKEN_URL:}"
           userinfo-url: "${AMSHA_AUTH_IDP_OIDC_USERINFO_URL:}"
+          issuer: "${AMSHA_AUTH_IDP_OIDC_ISSUER:}"
+          jwks-url: "${AMSHA_AUTH_IDP_OIDC_JWKS_URL:}"
+          redirect-uri: "${AMSHA_AUTH_IDP_OIDC_REDIRECT_URI:}"
         github:
           enabled: ${AMSHA_AUTH_IDP_GITHUB_ENABLED:false}
           client-id: "${AMSHA_AUTH_IDP_GITHUB_CLIENT_ID:}"
           client-secret: "${AMSHA_AUTH_IDP_GITHUB_CLIENT_SECRET:}"
+          redirect-uri: "${AMSHA_AUTH_IDP_GITHUB_REDIRECT_URI:}"
 
 # =============================================================================
 # ALTERNATIVE PERSISTENCE BACKENDS

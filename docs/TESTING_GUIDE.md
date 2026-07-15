@@ -33,6 +33,7 @@
 21. [Phase 64 Regression Checklist](#21-phase-64-regression-checklist)
 22. [Full Regression Suite Checklist](#22-full-regression-suite-checklist)
 23. [Answer Quality Guard](#23-answer-quality-guard)
+24. [Testing Identity, OIDC, Web Sessions, and Multi-Admin](#24-testing-identity-oidc-web-sessions-and-multi-admin)
 
 ---
 
@@ -2287,6 +2288,59 @@ curl -s -X POST "http://localhost:8080/api/v1/sessions/$SESSION/run" \
 ```
 
 **Expect:** Answer does NOT contain raw compaction summary text like "Summary of previous conversation:".
+
+## 24. Testing Identity, OIDC, Web Sessions, and Multi-Admin
+
+To verify the complete identity subsystem, browser authentication, and multi-admin scopes in real-time, follow these manual test scenarios.
+
+### 24.1 Running the Integration Test Suites
+You can run the dedicated automated identity verification test suite to validate OIDC security, session rotation, CSRF prevention, invitation acceptance, and rate limiting:
+```bash
+./mvnw test -pl app -Dtest="AuthResourceTest,IdentityResourceTest,ApiKeyAuthFilterTest,WebSessionAuthFilterTest"
+```
+
+### 24.2 Loopback First-Owner Claim (Bootstrap)
+On a fresh deployment with an unclaimed state, bootstrap the initial owner:
+1. Ensure `AMSHA_API_KEYS_INTERNAL` and `AMSHA_AUTH_HMAC_KEY` are set in `.env` (min 32 bytes).
+2. Call the `/claim` API from localhost:
+```bash
+curl -i -X POST "http://localhost:8080/onboarding/bootstrap/claim" \
+  -H "Content-Type: application/json"
+```
+* **Expect:** `200 OK` JSON body with `ownerId` and `workspaceId`. A secure, httpOnly cookie `AMSHA_SESSION_ID` will be set on the response header.
+* **Test Recovery Mode:** If you re-run this `/claim` endpoint, the bootstrap status goes into `CREDENTIAL_ISSUED`. Re-running it will regenerate the owner's API key via the fallback flow.
+* **Confirm the claim:**
+```bash
+curl -i -X POST "http://localhost:8080/onboarding/bootstrap/confirm" \
+  -H "Content-Type: application/json" \
+  -d '{"expectedRevision":1}'
+```
+* **Expect:** `200 OK` response. Repeating this check will yield a mismatch block since the status is now `CLAIMED`.
+
+### 24.3 Testing Multi-Admin Invitations and Constraints
+1. As the OWNER, generate an invitation for a new `MEMBER` with an email constraint:
+```bash
+curl -i -X POST "http://localhost:8080/api/v1/identity/workspaces/<workspaceId>/invitations" \
+  -H "Cookie: AMSHA_SESSION_ID=<ownerSessionToken>" \
+  -H "X-CSRF-Token: <ownerCsrfToken>" \
+  -H "Content-Type: application/json" \
+  -d '{"role":"MEMBER","optionalEmailConstraint":"member@example.com"}'
+```
+* **Expect:** `200 OK` JSON response containing the generated one-time `invitationId` and raw token.
+2. Accept the invitation as a logged-in user:
+```bash
+curl -i -X POST "http://localhost:8080/api/v1/identity/invitations/<token>/accept" \
+  -H "Cookie: AMSHA_SESSION_ID=<userSessionToken>" \
+  -H "X-CSRF-Token: <userCsrfToken>"
+```
+* **Expect:** If the logged-in user's primary/verified OIDC/GitHub email doesn't match `member@example.com`, the system rejects the acceptance with `403 Forbidden` (`EMAIL_CONSTRAINT_MISMATCH`). If it matches, the user is successfully joined to the workspace.
+
+### 24.4 Testing Rate Limiting
+1. Make rapid, unauthenticated requests to the OIDC auth public routes (e.g. `/auth/providers` or `/auth/login/oidc`):
+```bash
+for i in {1..25}; do curl -i "http://localhost:8080/api/v1/auth/providers"; done
+```
+* **Expect:** Initial requests return the list of providers. Once the rate limit threshold is crossed (governed by `AMSHA_API_RATE_LIMIT_REQUESTS_PER_MINUTE`), subsequent requests return `429 Too Many Requests` with a structured `RateLimitErrorResponse` payload.
 
 ---
 

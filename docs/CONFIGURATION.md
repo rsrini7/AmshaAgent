@@ -206,6 +206,22 @@ See `.mise/tasks/headroom/README.md` for setup and usage.
 | `AMSHA_VAULT_PEPPER` | `dev-pepper-...` *(dev only)* | **Required.** 32+ char random string for Argon2id key derivation. Never change after first boot — it decrypts stored secrets. |
 | `AMSHA_AUDIT_HMAC_KEY` | `dev-audit-hmac-key-...` *(dev only)* | **Required.** 32+ char random string for HMAC audit chain. Never change after first boot — it signs the audit trail. |
 | `AMSHA_AUTH_HMAC_KEY` | `dev-auth-hmac-key-...` *(dev only)* | **Required.** 32+ char random string for user session, invite, and API key digests. |
+| `AMSHA_AUTH_SESSION_IDLE_MINUTES` | `720` *(dev only)* | Web-session idle timeout in minutes (default 720 = 12h). Bounded 5–1440 (5m–24h). |
+| `AMSHA_AUTH_SESSION_ROTATION_GRACE_SECONDS` | `30` *(dev only)* | Seconds a prior session token stays valid after rotation (overlap window for in-flight requests). |
+| `AMSHA_AUTH_IDP_OIDC_ENABLED` | `false` | Enable the OIDC external identity provider. |
+| `AMSHA_AUTH_IDP_OIDC_CLIENT_ID` | — | OIDC client id. |
+| `AMSHA_AUTH_IDP_OIDC_CLIENT_SECRET` | — | OIDC client secret (plaintext; prefer the vault key below). |
+| `AMSHA_AUTH_IDP_OIDC_CLIENT_SECRET_VAULT_KEY` | — | Vault system-key name holding the OIDC client secret (preferred over plaintext). |
+| `AMSHA_AUTH_IDP_OIDC_AUTHORIZATION_URL` | — | OIDC authorization endpoint. |
+| `AMSHA_AUTH_IDP_OIDC_TOKEN_URL` | — | OIDC token endpoint. |
+| `AMSHA_AUTH_IDP_OIDC_USERINFO_URL` | — | OIDC userinfo endpoint (used only when no `id_token` is returned). |
+| `AMSHA_AUTH_IDP_OIDC_ISSUER` | — | Expected `iss` of the OIDC `id_token` (validated when set). |
+| `AMSHA_AUTH_IDP_OIDC_JWKS_URL` | — | OIDC JWKS URL; when set, `id_token` signatures are verified (RS256). |
+| `AMSHA_AUTH_IDP_OIDC_REDIRECT_URI` | *(derived)* | Fixed, pre-registered redirect URI sent to the provider (prevents open-redirect). Defaults to the server-derived callback. |
+| `AMSHA_AUTH_IDP_GITHUB_ENABLED` | `false` | Enable the GitHub OAuth identity provider. |
+| `AMSHA_AUTH_IDP_GITHUB_CLIENT_ID` | — | GitHub OAuth client ID. |
+| `AMSHA_AUTH_IDP_GITHUB_CLIENT_SECRET` | — | GitHub OAuth client secret. |
+| `AMSHA_AUTH_IDP_GITHUB_REDIRECT_URI` | *(derived)* | Fixed, pre-registered redirect URI sent to GitHub. Defaults to the server-derived callback. |
 | `AMSHA_PII_MODE` | `REDACT_AND_FORWARD` | PII mode: REDACT_AND_FORWARD, BLOCK_AND_NOTIFY, OFF |
 | `AMSHA_AUTO_SEED_SECRETS` | `false` | Auto-seed development secrets on startup |
 

@@ -1,5 +1,6 @@
 package com.amsha.app.security;
 
+import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.ws.rs.client.Client;
 import jakarta.ws.rs.client.ClientBuilder;
@@ -34,6 +35,9 @@ public class GithubIdentityProvider implements ExternalIdentityProvider {
     @ConfigProperty(name = "amsha.auth.idp.github.client-secret")
     Optional<String> clientSecret;
 
+    @ConfigProperty(name = "amsha.auth.idp.github.redirect-uri")
+    Optional<String> redirectUriConfig;
+
     private final Client httpClient = ClientBuilder.newBuilder()
             .connectTimeout(5, TimeUnit.SECONDS)
             .readTimeout(5, TimeUnit.SECONDS)
@@ -42,6 +46,16 @@ public class GithubIdentityProvider implements ExternalIdentityProvider {
     @Override
     public String getProviderId() {
         return "github";
+    }
+
+    @Override
+    public boolean isEnabled() {
+        return enabled;
+    }
+
+    @PreDestroy
+    void close() {
+        httpClient.close();
     }
 
     private static String encode(String value) {
@@ -55,7 +69,7 @@ public class GithubIdentityProvider implements ExternalIdentityProvider {
         }
         return "https://github.com/login/oauth/authorize"
                 + "?client_id=" + clientId.orElse("")
-                + "&redirect_uri=" + encode(redirectUri)
+                + "&redirect_uri=" + encode(resolveRedirectUri(redirectUri))
                 + "&scope=read:user+user:email"
                 + "&state=" + encode(state);
     }
@@ -72,7 +86,7 @@ public class GithubIdentityProvider implements ExternalIdentityProvider {
                     .param("client_id", clientId.orElse(""))
                     .param("client_secret", clientSecret.orElse(""))
                     .param("code", code)
-                    .param("redirect_uri", redirectUri);
+                    .param("redirect_uri", resolveRedirectUri(redirectUri));
 
             Map<?, ?> tokenResponse = httpClient
                     .target("https://github.com/login/oauth/access_token")
@@ -131,5 +145,11 @@ public class GithubIdentityProvider implements ExternalIdentityProvider {
             log.error("GitHub OAuth authentication failed: " + e.getMessage(), e);
             throw new IllegalStateException("Failed to authenticate with GitHub provider", e);
         }
+    }
+
+    private String resolveRedirectUri(String requestRedirectUri) {
+        return redirectUriConfig.isPresent() && !redirectUriConfig.get().isBlank()
+                ? redirectUriConfig.get()
+                : requestRedirectUri;
     }
 }

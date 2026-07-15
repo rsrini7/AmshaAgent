@@ -98,6 +98,35 @@ Outbound HTTP MCP connections may carry credential headers (API keys, bearer tok
 
 ---
 
+## Authentication, Identity, and Multi-Admin Security
+
+Amsha Agent adopts an **OIDC-first identity model with API-key operator fallback** to govern dashboard access, multi-user resource sharing, and system administration.
+
+### 1. External Identity Providers (IdP)
+- **Generic OIDC**: Supports OIDC authorization code flow with PKCE (RFC 7636) for standards-compliant identity managers (Keycloak, Authentik, Google). Asserts `RS256` asymmetric signatures for ID token validation against public JWKS.
+- **GitHub OAuth**: A lightweight standalone adapter to authenticate GitHub users and securely retrieve verified primary emails.
+- **Fixed Redirect URIs**: Callback endpoints are strictly constrained on the deployment side (`amsha.auth.idp.oidc.redirect-uri` / `amsha.auth.idp.github.redirect-uri`) to prevent open-redirect exploits.
+
+### 2. Browser Session Lifecycle & CSRF
+- **Opaque Sessions**: Human UI logins establish server-side revocable web sessions represented by high-entropy random session tokens. Only token SHA-256 digests are stored at rest.
+- **Cookie Security**: Session tokens are delivered via `HttpOnly`, `SameSite=Lax`, and `Secure` cookies.
+- **Token Rotation**: Sessions rotate after successful authentication, privilege upgrades, or periodically. A 30-second single-use grace overlap window allows in-flight concurrent requests to pass without interruption.
+- **CSRF Protection**: All mutating endpoints require matching `X-CSRF-Token` header validation.
+
+### 3. Role Hierarchy & Invitations
+- **Workspace Roles**: Every deployment supports `OWNER`, `ADMIN`, and `MEMBER` privileges.
+  - `OWNER`: Full administrative rights, workspace-wide credential rotation, invitation issuance, and ownership transfer.
+  - `ADMIN`: Resource configuration, integration management, and non-owner member management.
+  - `MEMBER`: Read-only/execution privileges over workspace connection channels without credential visibility.
+- **Invitations**: expirable (24 hours), single-use invitation tokens allows adding administrators or members. Optional email constraints are cryptographically verified upon callback acceptance.
+- **Last Owner Invariant**: The system blocks any demotion, deletion, or inactivation that would leave a workspace with zero active `OWNER` users.
+
+### 4. First-Owner Bootstrap & Recovery
+- Fresh deployments start in the `UNCLAIMED` status. The first caller on the loopback interface (`localhost`/`127.0.0.1`) can claim initial system ownership, generating a default workspace, the first `OWNER` identity, and an API credential.
+- If the initial credential delivery fails, an owner may initiate a retry recovery from the loopback interface when in the `CREDENTIAL_ISSUED` state.
+
+---
+
 ## Related Docs
 
 | Doc | What it covers |
