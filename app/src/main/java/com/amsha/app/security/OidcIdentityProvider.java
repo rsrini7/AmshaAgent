@@ -27,6 +27,7 @@ import com.amsha.core.security.ExternalIdentityProvider;
 import com.amsha.core.security.ExternalUserProfile;
 import com.amsha.core.security.SecretVault;
 import com.amsha.core.security.VaultKey;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
@@ -243,7 +244,7 @@ public class OidcIdentityProvider implements ExternalIdentityProvider {
         try {
             Map<String, Object> jwks = fetchJwks();
             Map<String, Object> key = findJwksKey(jwks, (String) header.get("kid"));
-            if (key == null) {
+            if (key == null || key.isEmpty()) {
                 throw new IllegalStateException("OIDC JWKS key not found for kid=" + header.get("kid"));
             }
             byte[] n = Base64.getUrlDecoder().decode((String) key.get("n"));
@@ -289,7 +290,7 @@ public class OidcIdentityProvider implements ExternalIdentityProvider {
     private Map<String, Object> findJwksKey(Map<String, Object> jwks, String kid) {
         Object keysObj = jwks.get("keys");
         if (!(keysObj instanceof List<?> keys)) {
-            return null;
+            return Map.of();
         }
         for (Object k : keys) {
             if (k instanceof Map<?, ?> m && kid != null && kid.equals(m.get("kid"))) {
@@ -302,12 +303,12 @@ public class OidcIdentityProvider implements ExternalIdentityProvider {
                 return (Map<String, Object>) m;
             }
         }
-        return null;
+        return Map.of();
     }
 
     private static Map<String, Object> decodeJson(String b64) {
         try {
-            return JSON.readValue(Base64.getUrlDecoder().decode(b64), Map.class);
+            return JSON.readValue(Base64.getUrlDecoder().decode(b64), new TypeReference<Map<String, Object>>() {});
         } catch (Exception e) {
             throw new IllegalStateException("Failed to decode OIDC JWT segment", e);
         }
