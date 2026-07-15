@@ -12,6 +12,9 @@
 
 # workflow
 - Skip DB data migration documentation for the project — during active development, delete the data folder instead of running DB migrations. Confidence: 0.75
+- Store reusable seed/test SQL files under script/data/ for shell script reuse. Confidence: 0.70
+- Shell scripts and tests (validators, runners) must be generic and work with both jar and native binary deployments — do not hardcode assumptions about dist paths or binary type. Confidence: 0.65
+- When a script needs a data directory path, ask the user to provide it rather than auto-detecting from the running process. Confidence: 0.75
 
 # architecture
 - When adding a new BuiltInChannelCommand sealed permit, update all three locations: the permits clause, ChannelCommand.parse() switch, and CommandDispatchHandler.handle switch — and bump the count in ChannelContractTest. Confidence: 0.70

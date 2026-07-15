@@ -1,8 +1,9 @@
 import re
 import os
 
-app_yaml_path = "/Users/srinivasanragothaman/ws/AmshaAgentInternal/app/src/main/resources/application.yaml"
-env_example_path = "/Users/srinivasanragothaman/ws/AmshaAgentInternal/.env.example"
+REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+app_yaml_path = os.path.join(REPO_ROOT, "app", "src", "main", "resources", "application.yaml")
+env_example_path = os.path.join(REPO_ROOT, ".env.example")
 
 # Extract all AMSHA_ env vars from application.yaml
 with open(app_yaml_path) as f:

@@ -309,6 +309,30 @@ The script claims the first owner, extracts the raw key from the
 - `GET /auth/login/{unknown}` → `404 PROVIDER_NOT_FOUND`;
   `GET /auth/callback/{p}?state=bad` → `400 INVALID_STATE`.
 
+### Running the Self-Evolve (behavioral directives) suite
+
+```bash
+# Works for jar OR native, sqlite/postgres/fs. Requires a running serve-mode
+# server on :8080 with self-evolve enabled.
+#
+# For a sqlite backend, pass the data dir so the script can seed extracted_memories
+# + SHADOW directives and exercise the full lifecycle (synthesize/reconcile/disable/
+# delete). Without it, only the pure-HTTP checks run.
+AMSHA_DATA_DIR=/path/to/data bash rest-http/scripts/validate_self_evolve.sh
+# or directly:
+bash rest-http/scripts/validate_self_evolve.sh --data-dir /path/to/data
+# via the master runner (uses AMSHA_DATA_DIR):
+AMSHA_DATA_DIR=/path/to/data bash rest-http/scripts/run_all_validations.sh --self-evolve
+```
+
+The script resolves the runtime user (the `bootstrap_state.owner_id` the internal
+API key maps to), rewrites `scripts/data/seed_self_evolve.sql` with that user, and
+applies it to `amsha-meta.db`. It then runs: list/get, synthesize (LLM → SHADOW
+directives), reconcile (promotes/disables by evaluation history), disable, delete,
+plus the internal-key-only `403` auth model and `404` checks. Synthesize depends on
+the configured LLM; a transient backend error is retried once. Reused seed data lives
+in `scripts/data/seed_self_evolve.sql`.
+
 ### New P109 config flags (also in `.env.example`)
 
 ```
