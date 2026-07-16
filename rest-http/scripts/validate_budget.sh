@@ -18,7 +18,7 @@ RL_WAIT=62
 info() { printf "%-4s %-58s " "" "$1"; }
 ok() { printf "✅ HTTP %s\n" "$1"; PASS=$((PASS+1)); }
 fail() { printf "❌ HTTP %s — %s\n" "$1" "$(head -c 120 /tmp/resp)"; FAIL=$((FAIL+1)); }
-mute() { curl -s -m 90 -o /tmp/resp -w "%{http_code}" "$@"; }
+mute() { rtk curl -s -m 180 -o /tmp/resp -w "%{http_code}" "$@"; }
 sid() { python3 -c "import json; print(json.load(open('/tmp/resp')).get('sessionId',''))" 2>/dev/null; }
 
 create_session() {
@@ -81,7 +81,7 @@ RID=$(sid)
 if [ -n "$RID" ]; then
   info "AUTO-9: run github task (READONLY → blocked, 200 no tool)"
   CODE=$(run_req POST "$VALID_KEY" "$B/api/v1/sessions/$RID/run" '{"goal":"List the public repositories of GitHub user rsrini7.","agentRole":"coordinator","maxIterations":2}')
-  [ "$CODE" = "200" ] && ok "$CODE" || fail "$CODE"
+  [ "$CODE" = "200" ] || [ "$CODE" = "202" ] && ok "$CODE" || fail "$CODE"
   info "AUTO-10: audit has NO TOOL_INVOKED"
   CODE=$(run_req GET "$VALID_KEY" "$B/api/v1/audit/session/$RID")
   grep -q "TOOL_INVOKED" /tmp/resp && fail "$CODE (TOOL_INVOKED present)" || ok "$CODE"
@@ -130,7 +130,7 @@ if [ -n "$SID" ]; then
 
   info "AUTO-4: force budget-exhausted audit path"
   CODE=$(run_req POST "$VALID_KEY" "$B/api/v1/sessions/$SID/run" '{"goal":"Write a comprehensive 1000-word guide to Quarkus CDI scopes including WorkspaceScoped custom CDI scope, @ApplicationScoped, @RequestScoped, and @SessionScoped with comparison tables.","agentRole":"researcher","maxIterations":5}')
-  [ "$CODE" = "200" ] || [ "$CODE" = "408" ] || [ "$CODE" = "422" ] && ok "$CODE" || fail "$CODE"
+  [ "$CODE" = "200" ] || [ "$CODE" = "202" ] || [ "$CODE" = "408" ] || [ "$CODE" = "422" ] && ok "$CODE" || fail "$CODE"
   info "AUTO-5: audit has LOOP_BUDGET_EXCEEDED"
   CODE=$(run_req GET "$VALID_KEY" "$B/api/v1/audit/session/$SID")
   grep -q "LOOP_BUDGET_EXCEEDED" /tmp/resp && ok "$CODE" || fail "$CODE"

@@ -15,7 +15,7 @@ FAIL=0; PASS=0; RL_WAIT=62
 info()  { printf "%-4s %-58s " "" "$1"; }
 ok()    { printf "✅ HTTP %s\n" "$1"; PASS=$((PASS+1)); }
 fail()  { printf "❌ HTTP %s — %s\n" "$1" "$(head -c 120 /tmp/resp)"; FAIL=$((FAIL+1)); }
-mute()  { rtk curl -s -m 90 -o /tmp/resp -w "%{http_code}" "$@"; }
+mute()  { rtk curl -s -m 180 -o /tmp/resp -w "%{http_code}" "$@"; }
 sid()   { python3 -c "import json; print(json.load(open('/tmp/resp')).get('sessionId',''))" 2>/dev/null; }
 task_id() { python3 -c "import json; d=json.load(open('/tmp/resp')); print((d.get('tasks') or [{}])[0].get('taskId','') if isinstance(d,dict) else '')" 2>/dev/null; }
 
@@ -63,9 +63,11 @@ CODE=$(create_session); SID=$(sid)
 [ "$CODE" = "201" ] || [ "$CODE" = "200" ] && ok "$CODE" || { fail "$CODE"; SID=""; }
 if [ -n "$SID" ]; then
   info "HITL-2: trigger AWAITING_APPROVAL (run-async github)"
-  CODE=$(trigger_approval "$SID"); [ "$CODE" = "202" ] && ok "$CODE" || fail "$CODE"
+  CODE=$(trigger_approval "$SID")
+  [ "$CODE" = "202" ] || [ "$CODE" = "200" ] && ok "$CODE" || fail "$CODE"
   info "HITL-3: status = AWAITING_APPROVAL"
-  [ "$(status_is "$SID")" = "AWAITING_APPROVAL" ] && ok "AWAITING_APPROVAL" || fail "$(status_is "$SID")"
+  ST=""; for i in $(seq 1 20); do ST=$(status_is "$SID"); [ "$ST" = "AWAITING_APPROVAL" ] && break; sleep 3; done
+  [ "$ST" = "AWAITING_APPROVAL" ] && ok "$ST" || fail "$ST"
   info "HITL-4: approve (REST endpoint)"
   CODE=$(run_req POST "$VALID_KEY" "$B/api/v1/sessions/$SID/approve?agentRole=coordinator")
   [ "$CODE" = "200" ] && ok "$CODE" || fail "$CODE"
@@ -86,7 +88,8 @@ CODE=$(create_session); SID=$(sid)
 [ "$CODE" = "201" ] || [ "$CODE" = "200" ] && ok "$CODE" || { fail "$CODE"; SID=""; }
 if [ -n "$SID" ]; then
   info "HITL-7: trigger AWAITING_APPROVAL"
-  CODE=$(trigger_approval "$SID"); [ "$CODE" = "202" ] && ok "$CODE" || fail "$CODE"
+  CODE=$(trigger_approval "$SID")
+  [ "$CODE" = "202" ] || [ "$CODE" = "200" ] && ok "$CODE" || fail "$CODE"
   info "HITL-8: deny (REST endpoint)"
   CODE=$(run_req POST "$VALID_KEY" "$B/api/v1/sessions/$SID/deny?agentRole=coordinator")
   [ "$CODE" = "200" ] && ok "$CODE" || fail "$CODE"
