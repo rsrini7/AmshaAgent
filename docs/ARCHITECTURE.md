@@ -383,6 +383,8 @@ The `CompactionEventBridge` uses a `CountDownLatch` per session to prevent a rac
 
 ### Behavioral Self-Evolution System
 
+![Self-evolution lifecycle](./assets/amsha_self_evolve.svg)
+
 The `amsha-self-evolve` module captures a complete persistent history of agent reasoning and tool executions. This trace dataset is used for offline extraction of common failure/success patterns and synthesis of behavioral directives to optimize future interactions.
 
 ```mermaid
@@ -594,6 +596,8 @@ Roles with `requiresApproval=false` in their `RoleDefinition` skip non-sensitive
 | `attach` | `attach telegram` | Long-running daemon with channel adapters |
 
 ### Persistence Backend Selection
+
+![Backend selection timing](./assets/amsha_backend_selection.svg)
 
 ```bash
 # Default: SQLite (zero config)
@@ -816,6 +820,8 @@ The `SkillAdaptationManager` enables adaptive skill execution — dynamically ad
 
 ## MCP (Model Context Protocol) Integration
 
+![MCP dynamic tool execution](./assets/amsha_mcp_execution.svg)
+
 ### Amsha Agent as MCP Server
 
 `McpAdminResource` (`GET /mcp/tools`) exposes Amsha Agent's internal tools as MCP-compatible descriptors. `AgentFunctionProcessor` (build-time) generates JSON schemas from `@AgentFunction`-annotated SAM interfaces.
@@ -1021,6 +1027,8 @@ Exported to Jaeger via OTLP at `http://localhost:4317`.
 ---
 
 ## Frontend (Lit Web Components)
+
+![Channel execution flow](./assets/amsha_channel_execution.svg)
 
 | Component | Role |
 |---|---|
