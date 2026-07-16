@@ -96,7 +96,12 @@ public class BootstrapResource {
         if (existing.isPresent() && "CREDENTIAL_ISSUED".equals(existing.get().status())) {
             BootstrapStateDto state = existing.get();
             String recoveryOwnerId = state.ownerId();
-            // Re-issue credential (persisted & registered first)
+            // PostgreSQL enforces the credential -> identity user foreign key.
+            identityStore.saveUser(new IdentityUserDto(recoveryOwnerId, "Initial Owner", "ACTIVE", now, now));
+            identityStore.saveWorkspace(
+                    new IdentityWorkspaceDto(workspaceId, "Default Workspace", recoveryOwnerId, now, now));
+            identityStore.saveMembership(
+                    new WorkspaceMembershipDto(workspaceId, recoveryOwnerId, "OWNER", "ACTIVE", 1, now, now));
             IssuedCredential newIssued = credentialIssuer.get().issueCredential(recoveryOwnerId);
             try {
                 boolean replaced =
@@ -110,13 +115,6 @@ public class BootstrapResource {
                             .entity(new ErrorResponse("ALREADY_CLAIMED", "Bootstrap claim lost in concurrent race."))
                             .build();
                 }
-
-                // Overwrite the identities since this is a recovery overwrite
-                identityStore.saveUser(new IdentityUserDto(recoveryOwnerId, "Initial Owner", "ACTIVE", now, now));
-                identityStore.saveWorkspace(
-                        new IdentityWorkspaceDto(workspaceId, "Default Workspace", recoveryOwnerId, now, now));
-                identityStore.saveMembership(
-                        new WorkspaceMembershipDto(workspaceId, recoveryOwnerId, "OWNER", "ACTIVE", 1, now, now));
 
                 auditService.recordMandatory(
                         "bootstrap-recovery",
@@ -164,6 +162,10 @@ public class BootstrapResource {
                     .build();
         }
 
+        // PostgreSQL enforces the credential -> identity user foreign key.
+        identityStore.saveUser(new IdentityUserDto(ownerId, "Initial Owner", "ACTIVE", now, now));
+        identityStore.saveWorkspace(new IdentityWorkspaceDto(workspaceId, "Default Workspace", ownerId, now, now));
+        identityStore.saveMembership(new WorkspaceMembershipDto(workspaceId, ownerId, "OWNER", "ACTIVE", 1, now, now));
         IssuedCredential issued = credentialIssuer.get().issueCredential(ownerId);
         try {
             boolean claimed = bootstrapStateStore.claimFirstOwner(ownerId, issued.keyDigest(), now);
@@ -174,11 +176,6 @@ public class BootstrapResource {
                         .entity(new ErrorResponse("ALREADY_CLAIMED", "Owner claim lost in concurrent race."))
                         .build();
             }
-
-            identityStore.saveUser(new IdentityUserDto(ownerId, "Initial Owner", "ACTIVE", now, now));
-            identityStore.saveWorkspace(new IdentityWorkspaceDto(workspaceId, "Default Workspace", ownerId, now, now));
-            identityStore.saveMembership(
-                    new WorkspaceMembershipDto(workspaceId, ownerId, "OWNER", "ACTIVE", 1, now, now));
 
             auditService.recordMandatory(
                     "bootstrap-claim",

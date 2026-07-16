@@ -7,6 +7,7 @@ import com.amsha.persistence.api.BootstrapStateDto;
 import com.amsha.persistence.api.ChatMemoryDto;
 import com.amsha.persistence.api.CheckpointDto;
 import com.amsha.persistence.api.CompactionSummaryDto;
+import com.amsha.persistence.api.CoreMemoryBlockDto;
 import com.amsha.persistence.api.CronRunDto;
 import com.amsha.persistence.api.ExternalIdentityDto;
 import com.amsha.persistence.api.IdentityInvitationDto;
@@ -29,6 +30,7 @@ import com.amsha.persistence.postgres.jdbi.BootstrapStateJdbiDao;
 import com.amsha.persistence.postgres.jdbi.ChatMemoryJdbiDao;
 import com.amsha.persistence.postgres.jdbi.CheckpointJdbiDao;
 import com.amsha.persistence.postgres.jdbi.CompactionJdbiDao;
+import com.amsha.persistence.postgres.jdbi.CoreMemoryJdbiDao;
 import com.amsha.persistence.postgres.jdbi.CronJdbiDao;
 import com.amsha.persistence.postgres.jdbi.CronRunJdbiDao;
 import com.amsha.persistence.postgres.jdbi.IdentityInvitationJdbiDao;
@@ -55,6 +57,7 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             SecretDto.class,
             SkillDto.class,
             CompactionSummaryDto.class,
+            CoreMemoryBlockDto.class,
             ReasoningStepDto.class,
             CronRunDto.class,
             PromptDto.class,
@@ -78,6 +81,7 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             SecretJdbiDao.class,
             SecretJdbiDao.SecretDtoRow.class,
             CompactionJdbiDao.class,
+            CoreMemoryJdbiDao.class,
             AuditJdbiDao.class,
             ChatMemoryJdbiDao.class,
             SkillJdbiDao.class,
@@ -97,6 +101,7 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             PostgresAuditEventStoreAdapter.class,
             PostgresAuditSchemaEnforcer.class,
             PostgresChatMemoryStoreAdapter.class,
+            PostgresCoreMemoryStore.class,
             PostgresCheckpointStoreAdapter.class,
             PostgresCompactionStoreAdapter.class,
             PostgresCronStoreAdapter.class,
