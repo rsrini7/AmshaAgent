@@ -16,6 +16,13 @@ public class TemporalUtils {
             DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSSX").withZone(ZoneOffset.UTC);
 
     /**
+     * Fallback for SQLite {@code datetime('now')} values, which render as
+     * {@code yyyy-MM-dd HH:mm:ss} (space separator, no offset).
+     */
+    private static final DateTimeFormatter SQLITE_DATETIME_FORMATTER =
+            DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss").withZone(ZoneOffset.UTC);
+
+    /**
      * Formats an {@link Instant} as a fixed-width ISO 8601 string.
      * Guaranteed lexicographical sorting (string compare == temporal compare).
      *
@@ -37,11 +44,16 @@ public class TemporalUtils {
         try {
             return Instant.from(ISO_LEX_FORMATTER.parse(text));
         } catch (Exception e) {
-            // Fallback for legacy data stored as epoch milliseconds
+            // Fallback for SQLite datetime('now') values: "yyyy-MM-dd HH:mm:ss"
             try {
-                return Instant.ofEpochMilli(Long.parseLong(text));
-            } catch (NumberFormatException nfe) {
-                throw new RuntimeException("Failed to parse instant: " + text, e);
+                return Instant.from(SQLITE_DATETIME_FORMATTER.parse(text));
+            } catch (Exception ignored) {
+                // Fallback for legacy data stored as epoch milliseconds
+                try {
+                    return Instant.ofEpochMilli(Long.parseLong(text));
+                } catch (NumberFormatException nfe) {
+                    throw new RuntimeException("Failed to parse instant: " + text, e);
+                }
             }
         }
     }

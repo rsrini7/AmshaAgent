@@ -19,7 +19,6 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Enumeration;
 import java.util.List;
-import java.util.Locale;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
 import java.util.regex.Matcher;
@@ -474,26 +473,5 @@ public class SkillsJarSkillProvider implements SkillProvider {
         if (!path.isAbsolute() && skillHome != null && !skillHome.isBlank())
             path = Path.of(skillHome).resolve(path);
         return path.normalize().toString();
-    }
-
-    /** @deprecated use metadata-driven overload; retained for source compatibility with extensions/tests. */
-    @Deprecated
-    static SkillDefinition maybeAugmentBrowserPreview(SkillDefinition definition, String rawContent, String skillHome) {
-        if (definition != null
-                && rawContent != null
-                && (rawContent.contains(".html")
-                        || rawContent.toLowerCase(Locale.ROOT).contains("browser preview"))) {
-            definition = new SkillDefinition(
-                    definition.id(),
-                    definition.name(),
-                    definition.description(),
-                    definition.triggerPatterns(),
-                    definition.toolCapabilities(),
-                    definition.maxIterations(),
-                    definition.systemPrompt(),
-                    definition.skillHome(),
-                    true);
-        }
-        return maybeAugmentBrowserPreview(definition, skillHome);
     }
 }

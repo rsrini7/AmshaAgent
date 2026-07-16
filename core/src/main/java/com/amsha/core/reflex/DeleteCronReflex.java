@@ -68,6 +68,17 @@ public class DeleteCronReflex implements AgentReflex {
             return ReflexResult.respond(USAGE_DELETE_CRON, context);
         }
 
+        if ("all".equalsIgnoreCase(cronId)) {
+            long deletedCount = cronStore.deleteAllByUserId(uid);
+            auditService.record(
+                    sessionId,
+                    uid,
+                    AgentRoleEnum.COORDINATOR.toScopedName(),
+                    SecurityEventType.CRONDELETED,
+                    "cronId=all deletedCount=" + deletedCount + " via=reflex");
+            return ReflexResult.respond(String.format("All %d cron jobs deleted", deletedCount), context);
+        }
+
         // UUID format guard - prevents DB roundtrip for garbage input
         if (!cronId.matches("[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")) {
             return ReflexResult.respond(UserMessages.cronInvalid(cronId), context);

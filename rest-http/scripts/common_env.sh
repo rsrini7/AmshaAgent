@@ -10,5 +10,5 @@ INVALID_KEY="totally-wrong-key"
 KEY="$CI_KEY"
 
 # Target Server Base URL
-B="http://localhost:8080"
+B="${TEST_BASE:-http://localhost:8080}"
 BASE_URL="$B"

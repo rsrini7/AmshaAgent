@@ -1,8 +1,16 @@
 package com.amsha.persistence.fs;
 
+import com.amsha.persistence.api.ApiCredentialDto;
+import com.amsha.persistence.api.BootstrapStateDto;
+import com.amsha.persistence.api.ExternalIdentityDto;
+import com.amsha.persistence.api.IdentityInvitationDto;
+import com.amsha.persistence.api.IdentityUserDto;
+import com.amsha.persistence.api.IdentityWorkspaceDto;
 import com.amsha.persistence.api.McpConnectionCleanupFailureDto;
 import com.amsha.persistence.api.McpConnectionDto;
 import com.amsha.persistence.api.McpConnectionHeaderSecretRefDto;
+import com.amsha.persistence.api.WebSessionDto;
+import com.amsha.persistence.api.WorkspaceMembershipDto;
 
 import io.quarkus.runtime.annotations.RegisterForReflection;
 
@@ -29,9 +37,22 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             FsCoreMemoryStore.class,
             FsRecallMemoryStore.class,
             FsArchivalMemoryStore.class,
+            FsIdentityStoreAdapter.class,
+            FsApiCredentialStoreAdapter.class,
+            FsWebSessionStoreAdapter.class,
+            FsIdentityInvitationStoreAdapter.class,
+            FsBootstrapStateStoreAdapter.class,
             McpConnectionDto.class,
             McpConnectionHeaderSecretRefDto.class,
-            McpConnectionCleanupFailureDto.class
+            McpConnectionCleanupFailureDto.class,
+            IdentityUserDto.class,
+            ExternalIdentityDto.class,
+            IdentityWorkspaceDto.class,
+            WorkspaceMembershipDto.class,
+            ApiCredentialDto.class,
+            WebSessionDto.class,
+            IdentityInvitationDto.class,
+            BootstrapStateDto.class
         },
         classNames = {
             "org.apache.lucene.search.BoostAttribute",

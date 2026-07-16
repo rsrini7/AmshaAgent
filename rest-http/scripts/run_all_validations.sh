@@ -10,6 +10,7 @@
 #   bash run_all_validations.sh --mcp            → MCP protocol tests (~2min)
 #   bash run_all_validations.sh --admin          → Admin endpoints validation (fast)
 #   bash run_all_validations.sh --auth-session   → API Key Auth + Session lifecycle (fast)
+#   bash run_all_validations.sh --identity       → P109 Identity/Access/bootstrap + OAuth negative (fast)
 #   bash run_all_validations.sh --pii-audit      → PII scanner + Prompt injection + Audit verify (fast)
 #   bash run_all_validations.sh --fast           → all fast/zero-token validators (no LLM wait)
 #   bash run_all_validations.sh --llm            → memory + web + roles (needs LLM)
@@ -27,9 +28,16 @@ ADMIN_SCRIPT="$SCRIPT_DIR/validate_admin.sh"
 AUTH_SESSION_SCRIPT="$SCRIPT_DIR/validate_auth_session.sh"
 PII_INJECTION_AUDIT_SCRIPT="$SCRIPT_DIR/validate_pii_injection_audit.sh"
 CRON_SCRIPT="$SCRIPT_DIR/validate_cron.sh"
+SELF_EVOLVE_SCRIPT="$SCRIPT_DIR/validate_self_evolve.sh"
+IDENTITY_SCRIPT="$SCRIPT_DIR/validate_identity_access.sh"
+HITL_SCRIPT="$SCRIPT_DIR/validate_hitl.sh"
+RAG_SCRIPT="$SCRIPT_DIR/validate_rag.sh"
+BUDGET_SCRIPT="$SCRIPT_DIR/validate_budget.sh"
+SSE_SETTINGS_SCRIPT="$SCRIPT_DIR/validate_sse_settings.sh"
 
 check_app() {
-  curl -s -m 3 -o /dev/null -w "%{http_code}" "http://localhost:8080/api/v1/mcp/status" \
+  local check_base="${TEST_BASE:-http://localhost:8080}"
+  curl -s -m 3 -o /dev/null -w "%{http_code}" "$check_base/api/v1/mcp/status" \
     -H "X-Amsha-API-Key: JV/qXAikcUoSCCUsqYxLvNjxW/N3KROQtawg3VRFrJs=" 2>/dev/null
 }
 
@@ -66,8 +74,14 @@ for arg in "$@"; do
     --auth-session) RUN_ALL=false; RUN_AUTH_SESSION=true ;;
     --pii-audit)    RUN_ALL=false; RUN_PII_AUDIT=true ;;
     --cron)         RUN_ALL=false; RUN_CRON=true ;;
-    --fast)   FAST=true; RUN_ALL=false; RUN_REFLEX=true; RUN_SKILLS=true; RUN_ADMIN=true; RUN_AUTH_SESSION=true; RUN_PII_AUDIT=true ;;
-    --llm)    LLM=true; RUN_ALL=false; RUN_MEMORY=true; RUN_WEB=true; RUN_ROLES=true; RUN_CRON=true ;;
+    --identity)     RUN_ALL=false; RUN_IDENTITY=true ;;
+    --self-evolve)  RUN_ALL=false; RUN_SELF_EVOLVE=true ;;
+    --hitl)         RUN_ALL=false; RUN_HITL=true ;;
+    --rag)          RUN_ALL=false; RUN_RAG=true ;;
+    --budget)       RUN_ALL=false; RUN_BUDGET=true ;;
+    --sse-settings) RUN_ALL=false; RUN_SSE_SETTINGS=true ;;
+    --fast)   FAST=true; RUN_ALL=false; RUN_REFLEX=true; RUN_SKILLS=true; RUN_ADMIN=true; RUN_AUTH_SESSION=true; RUN_IDENTITY=true; RUN_PII_AUDIT=true; RUN_SELF_EVOLVE=true; RUN_SSE_SETTINGS=true ;;
+    --llm)    LLM=true; RUN_ALL=false; RUN_MEMORY=true; RUN_WEB=true; RUN_ROLES=true; RUN_CRON=true; RUN_RAG=true; RUN_BUDGET=true; RUN_HITL=true ;;
     --list)
       echo "Available validators:"
       echo "  --reflex       validate_reflex.sh             (zero-token, ~30s)"
@@ -78,16 +92,22 @@ for arg in "$@"; do
       echo "  --roles        validate_roles.sh              (agents + aliases, ~4min)"
       echo "  --admin        validate_admin.sh              (admin endpoints, fast)"
       echo "  --auth-session validate_auth_session.sh       (auth & session lifecycle, fast)"
+      echo "  --identity     validate_identity_access.sh     (P109 identity/access/bootstrap, fast)"
       echo "  --pii-audit    validate_pii_injection_audit.sh (pii + injection + audit, fast)"
+      echo "  --self-evolve  validate_self_evolve.sh         (behavioral directives REST, fast)"
+      echo "  --hitl         validate_hitl.sh                (approve/deny + taskId governance, needs LLM)"
+      echo "  --rag          validate_rag.sh                 (ingest → approve → recall, needs LLM)"
+      echo "  --budget       validate_budget.sh              (budget + autonomy SUPERVISED/FULL/READONLY, needs LLM)"
+      echo "  --sse-settings validate_sse_settings.sh        (UI SSE streams + ws-token + settings CRUD, fast)"
       echo "  --cron         validate_cron.sh               (programmatic cron resource REST APIs, needs LLM)"
-      echo "  --fast         reflex + skills + admin + auth-session + pii-audit"
-      echo "  --llm          memory + web + roles + cron"
+      echo "  --fast         reflex + skills + admin + auth-session + identity + pii-audit + self-evolve + sse-settings"
+      echo "  --llm          memory + web + roles + cron + rag + budget + hitl"
       echo "  (no args)      run ALL validators"
       exit 0
       ;;
     --help)
       echo "Usage: bash run_all_validations.sh [options]"
-      echo "Options: --reflex --skills --mcp --memory --web --roles --admin --auth-session --pii-audit --cron --fast --llm --list --help"
+      echo "Options: --reflex --skills --mcp --memory --web --roles --admin --auth-session --identity --pii-audit --self-evolve --hitl --rag --budget --sse-settings --cron --fast --llm --list --help"
       exit 0
       ;;
   esac
@@ -113,7 +133,7 @@ if [ "$FAST" = true ]; then
 elif [ "$LLM" = true ]; then
   echo "Mode: --llm (memory + web + roles, needs LLM)"
 elif [ "$RUN_ALL" = true ]; then
-  echo "Mode: ALL (reflex + skills + MCP + memory + web + roles + admin + auth-session + pii-audit)"
+  echo "Mode: ALL (reflex + skills + MCP + memory + web + roles + admin + auth-session + identity + pii-audit)"
 fi
 
 TOTAL=0; PASSED=0; FAILED=0
@@ -155,8 +175,32 @@ if [ "$RUN_PII_AUDIT" = true ] || [ "$RUN_ALL" = true ]; then
   run_validator "PII, INJECTION, & AUDIT" "$PII_INJECTION_AUDIT_SCRIPT"
 fi
 
+if [ "$RUN_IDENTITY" = true ] || [ "$RUN_ALL" = true ]; then
+  run_validator "P109 IDENTITY / ACCESS" "$IDENTITY_SCRIPT"
+fi
+
 if [ "$RUN_CRON" = true ] || [ "$RUN_ALL" = true ]; then
   run_validator "CRON REST RESOURCE" "$CRON_SCRIPT"
+fi
+
+if [ "$RUN_SELF_EVOLVE" = true ] || [ "$RUN_ALL" = true ]; then
+  run_validator "SELF-EVOLVE DIRECTIVES" "$SELF_EVOLVE_SCRIPT"
+fi
+
+if [ "$RUN_HITL" = true ] || [ "$RUN_ALL" = true ]; then
+  run_validator "HITL GOVERNANCE" "$HITL_SCRIPT"
+fi
+
+if [ "$RUN_RAG" = true ] || [ "$RUN_ALL" = true ]; then
+  run_validator "RAG INGEST→RECALL" "$RAG_SCRIPT"
+fi
+
+if [ "$RUN_BUDGET" = true ] || [ "$RUN_ALL" = true ]; then
+  run_validator "BUDGET & AUTONOMY" "$BUDGET_SCRIPT"
+fi
+
+if [ "$RUN_SSE_SETTINGS" = true ] || [ "$RUN_ALL" = true ]; then
+  run_validator "UI SSE & SETTINGS" "$SSE_SETTINGS_SCRIPT"
 fi
 
 # ── Summary ──
@@ -167,3 +211,5 @@ echo "   Suites: $TOTAL run"
 echo "   Passed: $PASSED"
 echo "   Failed: $FAILED"
 echo "═══════════════════════════════════════════"
+
+exit "$FAILED"

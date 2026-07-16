@@ -74,6 +74,14 @@ public class CliUtils {
                 "  Linux/macOS:  openssl rand -base64 32",
                 "  Windows:      [Convert]::ToBase64String((1..32 | %{[byte](Get-Random -Max 256)}))",
                 "Then add:  AMSHA_API_KEYS_CI=<generated value>"),
+        new VarSpec(
+                "AMSHA_AUTH_HMAC_KEY",
+                "HMAC key for user session and invitation token integrity (>=32 random characters).",
+                "Generate one with:",
+                "  Linux/macOS:  openssl rand -base64 32",
+                "  Windows:      [Convert]::ToBase64String((1..32 | %{[byte](Get-Random -Max 256)}))",
+                "Then add:  AMSHA_AUTH_HMAC_KEY=<generated value>",
+                "WARNING: Never change this after first boot - it signs your session and invitation tokens."),
     };
 
     /** Required for attach mode (hard) and validated for serve mode (soft). */

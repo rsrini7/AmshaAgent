@@ -136,7 +136,7 @@ public class McpSelfRegisterTool implements AgentTool {
             category = params.containsKey(PARAM_CATEGORY)
                     ? ToolCategory.valueOf(((String) params.get(PARAM_CATEGORY)).toUpperCase(Locale.ROOT))
                     : ToolCategory.NETWORK;
-        } catch (IllegalArgumentException | ClassCastException e) {
+        } catch (IllegalArgumentException | ClassCastException _) {
             return ToolResponse.failure(400, "Invalid category. Must be NETWORK, COMPUTE, DATABASE, or INTERNAL.");
         }
 
@@ -205,7 +205,6 @@ public class McpSelfRegisterTool implements AgentTool {
         }
     }
 
-    @SuppressWarnings("unchecked")
     private static Map<String, String> parseHeaders(Object raw) {
         if (raw == null) return Map.of();
         if (!(raw instanceof List<?> entries)) {

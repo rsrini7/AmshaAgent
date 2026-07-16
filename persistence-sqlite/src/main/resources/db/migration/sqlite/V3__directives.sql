@@ -9,8 +9,8 @@ CREATE TABLE IF NOT EXISTS synthesized_directives (
     synthesis_prompt_hash TEXT,
     evaluation_hits      INTEGER NOT NULL DEFAULT 0,
     evaluation_misses    INTEGER NOT NULL DEFAULT 0,
-    created_at           TEXT NOT NULL DEFAULT (datetime('now')),
-    updated_at           TEXT NOT NULL DEFAULT (datetime('now')),
+    created_at           TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+    updated_at           TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
     UNIQUE(user_id, text)
 );
 

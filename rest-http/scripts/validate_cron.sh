@@ -5,16 +5,17 @@
 set +e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/common_env.sh"
-FAIL=0; PASS=0
+
+FAIL=0
+PASS=0
 SLEEP=1
 
-info()  { printf "%-4s %-60s " "" "$1"; }
-ok()    { printf "✅ HTTP %s\n" "$1"; PASS=$((PASS+1)); }
-fail()  { printf "❌ HTTP %s — %s\n" "$1" "$(head -c 120 /tmp/resp)"; FAIL=$((FAIL+1)); }
-mute()  { curl -s -m 60 -o /tmp/resp -w "%{http_code}" "$@"; }
+info() { printf "%-4s %-60s " "" "$1"; }
+ok() { printf "✅ HTTP %s\n" "$1"; PASS=$((PASS+1)); }
+fail() { printf "❌ HTTP %s — %s\n" "$1" "$(head -c 120 /tmp/resp)"; FAIL=$((FAIL+1)); }
+mute() { rtk curl -s -m 180 -o /tmp/resp -w "%{http_code}" "$@"; }
 sid_from_response() { python3 -c "import json; print(json.load(open('/tmp/resp')).get('sessionId',''))" 2>/dev/null; }
 
-# Retry helper for standard requests
 run_req() {
   local method="$1" key="$2" url="$3" data="$4"
   local c
@@ -29,7 +30,7 @@ run_req() {
       c=$(mute -X "$method" -H "X-Amsha-API-Key: $key" -H "Content-Type: application/json" -d "$data" "$url")
     else
       c=$(mute -X "$method" -H "X-Amsha-API-Key: $key" "$url")
-  fi
+    fi
   fi
   echo "$c"
 }
@@ -39,77 +40,50 @@ echo " PROGRAMMATIC CRON REST API VALIDATOR"
 echo "═══════════════════════════════════════════"
 echo ""
 
-# Create session
-curl -s -i -m 60 -X POST -H "X-Amsha-API-Key: $VALID_KEY" -H "Content-Type: application/json" \
-  -d '{"autonomyLevel":"FULL"}' "$B/api/v1/sessions" > /tmp/resp_headers_cron
-HTTP_LINE=$(grep -i '^HTTP/' /tmp/resp_headers_cron | tail -n 1)
-CODE=$(echo "$HTTP_LINE" | awk '{print $2}')
-if [ "$CODE" = "429" ]; then
-  sleep 62
-  curl -s -i -m 60 -X POST -H "X-Amsha-API-Key: $VALID_KEY" -H "Content-Type: application/json" \
-    -d '{"autonomyLevel":"FULL"}' "$B/api/v1/sessions" > /tmp/resp_headers_cron
-  HTTP_LINE=$(grep -i '^HTTP/' /tmp/resp_headers_cron | tail -n 1)
-  CODE=$(echo "$HTTP_LINE" | awk '{print $2}')
-fi
-tail -n 1 /tmp/resp_headers_cron > /tmp/resp
+info "CRON-REST-1: Instruct agent schedule cron"
+CODE=$(run_req POST "$VALID_KEY" "$B/api/v1/sessions" '{"autonomyLevel":"FULL"}')
 SESS_ID=$(sid_from_response)
+[ "$CODE" = "201" ] || [ "$CODE" = "200" ] && ok "$CODE" || { fail "$CODE"; exit 1; }
 
-if [ -z "$SESS_ID" ]; then
-  echo "❌ Failed to create session (HTTP $CODE)"
-  exit 1
-fi
-
-# ── FLOW A: Schedule a cron job via Agent ──
-echo "── FLOW A: Schedule Cron Job via Agent ──"
-
-info "CRON-REST-1: Instruct agent to schedule cron"
-CODE=$(run_req POST "$VALID_KEY" "$B/api/v1/sessions/$SESS_ID/run" '{"goal":"Schedule a task to run every 10 minutes that echoes Hello. Make sure to specify the schedule.","agentRole":"coordinator","maxIterations":3}')
-# Tolerating 200, 202, or 408 (if loop limit reached but task registered)
+CODE=$(run_req POST "$VALID_KEY" "$B/api/v1/sessions/$SESS_ID/run" '{"goal":"Schedule a task in 10 minutes that echoes Hello. Make sure to specify the schedule explicitly.","agentRole":"coordinator","maxIterations":3}')
 [ "$CODE" = "200" ] || [ "$CODE" = "202" ] || [ "$CODE" = "408" ] && ok "$CODE" || fail "$CODE"
-sleep $SLEEP
-
-
-# ── FLOW B: REST API Lifecycle Operations ──
-echo "── FLOW B: REST API Lifecycle Operations ──"
+sleep "$SLEEP"
 
 info "CRON-REST-2: List cron jobs via GET /cron"
 CODE=$(run_req GET "$VALID_KEY" "$B/api/v1/cron")
 [ "$CODE" = "200" ] && ok "$CODE" || fail "$CODE"
 
-# Extract cron ID from the JAX-RS REST response
 CRON_ID=$(python3 -c "import json; crons=json.load(open('/tmp/resp')).get('crons',[]); print(crons[0].get('id','') if crons else '')" 2>/dev/null)
-
 if [ -z "$CRON_ID" ]; then
-  echo "⚠️  No active cron job found in the list. Skipping REST API verification checks."
+  echo "  ⚠️  No active cron job found in list. Skipping REST API verification checks."
   run_req DELETE "$VALID_KEY" "$B/api/v1/sessions/$SESS_ID" >/dev/null 2>&1
   exit 0
 fi
 
-info "CRON-REST-3: Get single cron detail (GET /cron/{id})"
+info "CRON-REST-3: Get single cron detail"
 CODE=$(run_req GET "$VALID_KEY" "$B/api/v1/cron/$CRON_ID")
 [ "$CODE" = "200" ] && ok "$CODE" || fail "$CODE"
 
-info "CRON-REST-4: Pause the cron job (POST /cron/{id}/pause)"
+info "CRON-REST-4: Pause cron job"
 CODE=$(run_req POST "$VALID_KEY" "$B/api/v1/cron/$CRON_ID/pause")
 [ "$CODE" = "200" ] && ok "$CODE" || fail "$CODE"
 
-info "CRON-REST-5: Resume the cron job (POST /cron/{id}/resume)"
+info "CRON-REST-5: Resume cron job"
 CODE=$(run_req POST "$VALID_KEY" "$B/api/v1/cron/$CRON_ID/resume")
 [ "$CODE" = "200" ] && ok "$CODE" || fail "$CODE"
 
-info "CRON-REST-6: Trigger the cron job immediately (POST /cron/{id}/trigger)"
+info "CRON-REST-6: Trigger cron job immediately"
 CODE=$(run_req POST "$VALID_KEY" "$B/api/v1/cron/$CRON_ID/trigger")
 [ "$CODE" = "200" ] && ok "$CODE" || fail "$CODE"
 
-info "CRON-REST-7: Retrieve cron run history (GET /cron/{id}/runs)"
+info "CRON-REST-7: Get execution history"
 CODE=$(run_req GET "$VALID_KEY" "$B/api/v1/cron/$CRON_ID/runs?page=0&size=5")
 [ "$CODE" = "200" ] && ok "$CODE" || fail "$CODE"
 
-info "CRON-REST-8: Programmatically delete cron job (DELETE /cron/{id})"
+info "CRON-REST-8: Delete cron job"
 CODE=$(run_req DELETE "$VALID_KEY" "$B/api/v1/cron/$CRON_ID")
 [ "$CODE" = "200" ] && ok "$CODE" || fail "$CODE"
 
-# Cleanup
 run_req DELETE "$VALID_KEY" "$B/api/v1/sessions/$SESS_ID" >/dev/null 2>&1
 
 echo "───────────────────────────────────────────"

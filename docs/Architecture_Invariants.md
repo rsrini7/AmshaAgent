@@ -427,6 +427,12 @@ The agent loop has three cooperative guards that MUST remain in place (see `AGEN
 - Identity columns use `INTEGER PRIMARY KEY AUTOINCREMENT` (SQLite) or `BIGSERIAL` (PostgreSQL) in DDL.
 - `@Version` optimistic locking is not used — JDBI-based adapters manage concurrency via explicit SQL conditions (e.g., `WHERE status = :expectedStatus` in status transitions).
 
+#### Identity membership concurrency
+
+- Removing a membership must use the atomic `deleteMembershipIfNotLastOwner` port operation, not a separate owner count followed by a delete.
+- SQLite performs the conditional delete in one statement; PostgreSQL serializes the owner check with an advisory lock; the filesystem adapter synchronizes the check and delete.
+- Every implementation must preserve the invariant that concurrent requests cannot remove the final active `OWNER` from a workspace.
+
 ## 5.7 EncryptedSecret version field ownership (REMOVED — JDBI Migration)
 
 `EncryptedSecret.ormVersion` was Hibernate-managed and is now **removed**. Both `SqliteSecretStoreAdapter` and `PostgresSecretStoreAdapter` use `SecretJdbiDao` directly via the `SecretDtoRow` record, bypassing all JPA entity classes. The `ormVersion` column no longer exists in the schema — both backends use JDBI exclusively.
@@ -845,6 +851,30 @@ export AMSHA_PERSISTENCE_BACKEND=postgres
 | **SQLite** (default) | None — zero config | Data stored in `./amsha-data/` by default |
 | **PostgreSQL** | `QUARKUS_DATASOURCE_JDBC_URL`, `QUARKUS_DATASOURCE_USERNAME`, `QUARKUS_DATASOURCE_PASSWORD` | Flyway auto-creates schema on startup |
 | **Filesystem** | `AMSHA_FS_DATA_DIR` (optional, default `./data/fs`) | Uses Lucene index for BM25 search |
+
+### Persistence Implementation Parity
+
+![Identity persistence parity](assets/amsha_persistence_parity.svg)
+
+Every persistence port used by identity and workspace access must have all
+three implementations enabled and kept semantically aligned:
+
+| Backend | Implementation | Concurrency mechanism for identity membership removal |
+|---|---|---|
+| SQLite | `persistence-sqlite` `SqliteIdentityStoreAdapter` | Atomic conditional delete in one SQL statement |
+| PostgreSQL | `persistence-postgres` `PostgresIdentityStoreAdapter` | Transaction-scoped advisory lock plus conditional owner count |
+| Filesystem | `persistence-fs` `FsIdentityStoreAdapter` | Synchronized owner-count check and delete |
+
+In particular, `IdentityStorePort.deleteMembershipIfNotLastOwner(...)` must
+never be implemented as a separate owner count followed by an unconditional
+delete. Concurrent requests must not remove the final active `OWNER`, and
+external identity ownership must not be reassigned silently when the provider,
+issuer, and subject key already belongs to another user.
+
+Backend selection changes the active storage implementation; it does not copy
+or migrate existing data. Switching an existing deployment therefore requires
+an explicit data migration or a newly initialized backend, plus its backend-
+specific connection or data-directory configuration.
 
 ### Why SQLite Is the Default
 

@@ -17,7 +17,11 @@ class CliUtilsTest {
     // Default per-slot API keys resolved by the per-provider logic in ProviderKeySpecs.
     // Tests below set AMSHA_INFINITE_LOOP_*_PROVIDERS to switch slot providers.
     private static final String[] CORE_KEYS = {
-        "AMSHA_VAULT_PEPPER", "AMSHA_AUDIT_HMAC_KEY", "AMSHA_API_KEYS_INTERNAL", "AMSHA_API_KEYS_CI",
+        "AMSHA_VAULT_PEPPER",
+        "AMSHA_AUDIT_HMAC_KEY",
+        "AMSHA_API_KEYS_INTERNAL",
+        "AMSHA_API_KEYS_CI",
+        "AMSHA_AUTH_HMAC_KEY",
     };
 
     private static final String[] PER_PROVIDER_KEYS = {

@@ -319,11 +319,25 @@ All 12 roles have `garuda` for delegation. Tool schemas dynamically assembled vi
 
 Port interfaces in `amsha-persistence-api`, three adapter implementations:
 
+![Identity persistence parity](./assets/amsha_persistence_parity.svg)
+
 | Backend | Storage | Best For |
 |---|---|---|
 | **SQLite** (default) | WAL mode + FTS5 + sqlite-vec | Zero-config, embedded, single binary |
 | **PostgreSQL** | Native timestamptz, pgvector | Production deployments |
 | **Filesystem** | JSON files + Lucene BM25 | Environments without SQL |
+
+Identity and workspace access use the same `IdentityStorePort` contract across
+all three adapters. The last-owner membership delete is atomic in each backend:
+SQLite uses a conditional SQL delete, PostgreSQL uses a transaction-scoped
+advisory lock with a conditional owner count, and filesystem storage synchronizes
+the owner check with the delete. External identity ownership is also protected
+from silent reassignment in every adapter.
+
+Selecting another backend changes the active adapter but does not migrate
+existing data. JVM mode selects the backend at startup; native images require a
+rebuild because the CDI selection is fixed at build time. Use an explicit data
+migration and backend-specific configuration when moving an existing deployment.
 
 ### Tiered Memory System
 
@@ -368,6 +382,8 @@ The `CompactionEventBridge` uses a `CountDownLatch` per session to prevent a rac
 ---
 
 ### Behavioral Self-Evolution System
+
+![Self-evolution lifecycle](./assets/amsha_self_evolve.svg)
 
 The `amsha-self-evolve` module captures a complete persistent history of agent reasoning and tool executions. This trace dataset is used for offline extraction of common failure/success patterns and synthesis of behavioral directives to optimize future interactions.
 
@@ -581,6 +597,8 @@ Roles with `requiresApproval=false` in their `RoleDefinition` skip non-sensitive
 
 ### Persistence Backend Selection
 
+![Backend selection timing](./assets/amsha_backend_selection.svg)
+
 ```bash
 # Default: SQLite (zero config)
 amsha chat
@@ -676,6 +694,40 @@ The application manages durable session mappings using the **Session Catalog**.
   4. Publishes a `SessionRotatedEvent` via the CDI event bus to notify channel adapters (like `WebChatEndpoint` WebSocket connections to sync client state).
 * **Scheduled Archival:** The `SessionReaper` periodically sweeps the catalog to archive sessions that have been inactive for more than `archive-after-days` (default 90).
 
+### Web Authentication & Session Lifecycle
+
+The following diagram illustrates the interaction between the user browser, JAX-RS resources, external identity providers, and the persistence stores during OIDC login and web session token validation:
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Browser as User Browser
+    participant AuthRes as AuthResource
+    participant IdP as OidcIdentityProvider
+    participant DB as Persistence Stores
+    participant Filter as ApiKeyAuthFilter
+
+    Browser->>AuthRes: GET /auth/login/{providerId} (initiates OIDC)
+    AuthRes->>IdP: getAuthorizationUrl(state, PKCE challenge)
+    IdP-->>AuthRes: Redirect URL
+    AuthRes-->>Browser: HTTP 303 Redirect to IdP
+    Browser->>Browser: User authenticates at OIDC Provider
+    Browser->>AuthRes: GET /auth/callback/{providerId}?code=...&state=...
+    AuthRes->>IdP: authenticate(code, PKCE verifier)
+    IdP->>IdP: Fetch tokens & verify ID token signature (RS256)
+    IdP-->>AuthRes: ExternalUserProfile (email, name, sub)
+    AuthRes->>DB: Check/Link ExternalIdentity or accept invitation
+    AuthRes->>DB: Save WebSessionDto (opaque digest)
+    AuthRes-->>Browser: Set-Cookie: AMSHA_SESSION_ID=sess-... (HttpOnly, Secure)
+    
+    Note over Browser, Filter: Subsequent REST requests
+    Browser->>Filter: Request with AMSHA_SESSION_ID + X-CSRF-Token
+    Filter->>DB: findByTokenDigest(sha256(token))
+    Filter->>DB: listMembershipsByUserId(userId)
+    Filter->>Filter: Verify roles & CSRF double-submit
+    Filter-->>Browser: Proceed to API Resource
+```
+
 ### WorkspaceContext Scoping
 
 ```java
@@ -767,6 +819,8 @@ The `SkillAdaptationManager` enables adaptive skill execution — dynamically ad
 ---
 
 ## MCP (Model Context Protocol) Integration
+
+![MCP dynamic tool execution](./assets/amsha_mcp_execution.svg)
 
 ### Amsha Agent as MCP Server
 
@@ -973,6 +1027,8 @@ Exported to Jaeger via OTLP at `http://localhost:4317`.
 ---
 
 ## Frontend (Lit Web Components)
+
+![Channel execution flow](./assets/amsha_channel_execution.svg)
 
 | Component | Role |
 |---|---|

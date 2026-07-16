@@ -48,5 +48,4 @@ POST /api/v1/mcp/connect
 - `McpConnectionStorePort` + `McpConnectionDto` / `McpConnectionHeaderSecretRefDto` —
   persistence port and non-secret DTOs (three backend adapters).
 
-See [Architecture_Invariants.md](../docs/Architecture_Invariants.md) §5.20 and the ADR
-`Ideas-Pending/ADR-JavaClaw-Selective-Port.md`.
+See [Architecture_Invariants.md](../docs/Architecture_Invariants.md) §5.20.

@@ -5,9 +5,12 @@ import javax.crypto.spec.SecretKeySpec;
 
 import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.inject.Instance;
+import jakarta.inject.Inject;
 
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -15,6 +18,9 @@ import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 
 import com.amsha.core.security.CryptoConstants;
+import com.amsha.persistence.api.ApiCredentialDto;
+import com.amsha.persistence.api.ApiCredentialStorePort;
+import com.amsha.persistence.api.BootstrapStateStorePort;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 
@@ -31,7 +37,7 @@ public class ApiKeyRegistry {
     @ConfigProperty(name = "amsha.api.keys")
     Optional<Map<String, String>> apiKeys;
 
-    @ConfigProperty(name = "amsha.audit.hmac-key")
+    @ConfigProperty(name = "amsha.auth.hmac-key")
     String hmacSecret;
 
     @ConfigProperty(name = "amsha.api.rate-limit.requests-per-minute", defaultValue = "20")
@@ -39,6 +45,15 @@ public class ApiKeyRegistry {
 
     @ConfigProperty(name = "amsha.api.rate-limit.mutation-per-minute", defaultValue = "10")
     int mutationPerMinute;
+
+    @ConfigProperty(name = "amsha.auth.session.rotation-grace-seconds", defaultValue = "30")
+    int rotationGraceSeconds;
+
+    @Inject
+    Instance<ApiCredentialStorePort> apiCredentialStore;
+
+    @Inject
+    Instance<BootstrapStateStorePort> bootstrapStateStore;
 
     private final Cache<String, Bucket> rateLimiter = Caffeine.newBuilder()
             .maximumSize(10_000)
@@ -50,7 +65,9 @@ public class ApiKeyRegistry {
             .expireAfterAccess(1, TimeUnit.HOURS)
             .build();
 
-    private Map<String, String> hmacToKeyName;
+    private volatile Map<String, String> hmacToKeyName;
+
+    private Cache<String, String> rotatedSessionCache;
 
     @PostConstruct
     void initHmacs() {
@@ -61,12 +78,36 @@ public class ApiKeyRegistry {
             }
         }
         this.hmacToKeyName = Collections.unmodifiableMap(reverse);
+        this.rotatedSessionCache = Caffeine.newBuilder()
+                .maximumSize(10_000)
+                .expireAfterWrite(Duration.ofSeconds(Math.max(1, rotationGraceSeconds)))
+                .build();
     }
 
-    public void register(String keyName, String rawKey) {
+    public synchronized void register(String keyName, String rawKey) {
         Map<String, String> mutable = new LinkedHashMap<>(this.hmacToKeyName);
         mutable.put(toHex(hmac(rawKey)), keyName);
         this.hmacToKeyName = Collections.unmodifiableMap(mutable);
+    }
+
+    public synchronized void unregister(String rawKey) {
+        Map<String, String> mutable = new LinkedHashMap<>(this.hmacToKeyName);
+        mutable.remove(toHex(hmac(rawKey)));
+        this.hmacToKeyName = Collections.unmodifiableMap(mutable);
+    }
+
+    public synchronized void unregisterByDigest(String digestHex) {
+        if (digestHex == null) {
+            return;
+        }
+        Map<String, String> mutable = new LinkedHashMap<>(this.hmacToKeyName);
+        mutable.remove(digestHex);
+        this.hmacToKeyName = Collections.unmodifiableMap(mutable);
+    }
+
+    public String computeDigest(String value) {
+        if (value == null) return null;
+        return toHex(hmac(value));
     }
 
     private static String toHex(byte[] bytes) {
@@ -94,19 +135,88 @@ public class ApiKeyRegistry {
         for (String storedHex : hmacToKeyName.keySet()) {
             found |= constantTimeEquals(storedHex, inputHex);
         }
-        return found;
+        if (found) {
+            return true;
+        }
+        if (apiCredentialStore.isResolvable()) {
+            Optional<ApiCredentialDto> optCred = apiCredentialStore.get().findByKeyDigest(inputHex);
+            if (optCred.isPresent()) {
+                ApiCredentialDto cred = optCred.get();
+                Instant now = Instant.now();
+                return (cred.expiresAt() == null || !cred.expiresAt().isBefore(now)) && cred.revokedAt() == null;
+            }
+        }
+        return false;
     }
 
+    /**
+     * Resolves the key label or userId.
+     * Note: Assumes {@link #isValidKey(String)} has already gated expiry and revocation check.
+     */
     public String getKeyName(String key) {
         if (key == null) return null;
         String inputHex = toHex(hmac(key));
-        String result = null;
         for (Map.Entry<String, String> entry : hmacToKeyName.entrySet()) {
             if (constantTimeEquals(entry.getKey(), inputHex)) {
-                result = entry.getValue();
+                String name = entry.getValue();
+                if ("internal".equals(name)) {
+                    if (bootstrapStateStore.isResolvable()) {
+                        return bootstrapStateStore
+                                .get()
+                                .getState()
+                                .map(state -> {
+                                    String oid = state.ownerId();
+                                    return (oid == null || oid.isBlank()) ? "internal" : oid;
+                                })
+                                .orElse("internal");
+                    }
+                    return "internal";
+                }
+                return name;
             }
         }
-        return result;
+        if (apiCredentialStore.isResolvable()) {
+            Optional<ApiCredentialDto> optCred = apiCredentialStore.get().findByKeyDigest(inputHex);
+            if (optCred.isPresent()) {
+                ApiCredentialDto cred = optCred.get();
+                return cred.userId();
+            }
+        }
+        return null;
+    }
+
+    public boolean hasRole(String key, String role) {
+        if (key == null) return false;
+        String inputHex = toHex(hmac(key));
+        for (Map.Entry<String, String> entry : hmacToKeyName.entrySet()) {
+            if (constantTimeEquals(entry.getKey(), inputHex)) {
+                String name = entry.getValue();
+                if ("internal".equals(name)) {
+                    return "OWNER".equalsIgnoreCase(role) || "internal".equalsIgnoreCase(role);
+                }
+                return "SERVICE".equalsIgnoreCase(role) || name.equalsIgnoreCase(role);
+            }
+        }
+        if (apiCredentialStore.isResolvable()) {
+            Optional<ApiCredentialDto> optCred = apiCredentialStore.get().findByKeyDigest(inputHex);
+            if (optCred.isPresent()) {
+                ApiCredentialDto cred = optCred.get();
+                Instant now = Instant.now();
+                if ((cred.expiresAt() == null || !cred.expiresAt().isBefore(now)) && cred.revokedAt() == null) {
+                    String roleSet = cred.roleSet();
+                    if (roleSet != null) {
+                        for (String r : roleSet.split(",")) {
+                            String trimmed = r.trim();
+                            if (trimmed.equalsIgnoreCase(role)
+                                    || ("OWNER".equalsIgnoreCase(trimmed) && "internal".equalsIgnoreCase(role))) {
+                                return true;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return false;
     }
 
     private static boolean constantTimeEquals(String a, String b) {
@@ -146,5 +256,24 @@ public class ApiKeyRegistry {
                                 .build())
                         .build());
         return bucket.tryConsume(1);
+    }
+
+    /**
+     * Records a rotated-away session token digest so the previous token keeps resolving
+     * to its session for a short grace window (prevents mid-flight request failures).
+     * @param oldDigestHex the HMAC hex of the previous session token
+     * @param sessionId the session the token maps to
+     */
+    public void registerRotatedSession(String oldDigestHex, String sessionId) {
+        if (oldDigestHex == null || sessionId == null) return;
+        rotatedSessionCache.put(oldDigestHex, sessionId);
+    }
+
+    /**
+     * Resolves a previously-rotated session token digest to its session id, if still within grace.
+     */
+    public Optional<String> findRotatedSessionId(String digestHex) {
+        if (digestHex == null) return Optional.empty();
+        return Optional.ofNullable(rotatedSessionCache.getIfPresent(digestHex));
     }
 }

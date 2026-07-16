@@ -40,6 +40,14 @@ public class CliResultBridge {
     /** Prevents result corruption from duplicate complete() calls. */
     private final Set<String> signaled = Collections.newSetFromMap(new ConcurrentHashMap<>());
 
+    /**
+     * Tracks sessions with an active HITL pause. Results are only buffered/signaled
+     * for these sessions; a normal-turn (Finished) result has no CLI waiter and must
+     * not be buffered, otherwise the next approval turn's register() would consume
+     * the stale buffer and replay the previous answer.
+     */
+    private final ConcurrentHashMap<String, Boolean> pendingApproval = new ConcurrentHashMap<>();
+
     // -------------------------------------------------------------------------
     // Public API
     // -------------------------------------------------------------------------
@@ -57,12 +65,27 @@ public class CliResultBridge {
 
         AgentResult buffered = bufferedResults.remove(sessionId);
         if (buffered != null) {
-            signaled.remove(sessionId); // Allow next turn
-            log.infof("CliResultBridge: delivering buffered result for session %s immediately", sessionId);
-            return CompletableFuture.completedFuture(buffered);
+            if (pendingApproval.getOrDefault(sessionId, Boolean.FALSE)) {
+                pendingApproval.remove(sessionId);
+                signaled.remove(sessionId); // Allow next turn
+                log.infof("CliResultBridge: delivering buffered result for session %s immediately", sessionId);
+                return CompletableFuture.completedFuture(buffered);
+            }
+            // Stale buffer from a prior non-HITL turn: drop it so the next approval
+            // turn never replays the previous answer.
+            log.debugf("CliResultBridge: discarding stale buffered result for session %s", sessionId);
         }
 
         return waiters.computeIfAbsent(sessionId, _ -> new CompletableFuture<>());
+    }
+
+    /**
+     * Marks a session as paused for human approval. Only after this flag is set will
+     * {@link #complete(String, AgentResult)} buffer or deliver a result for the
+     * session, preventing normal-turn results from being replayed by a later approval.
+     */
+    public void markAwaitingApproval(String sessionId) {
+        pendingApproval.put(sessionId, Boolean.TRUE);
     }
 
     /**
@@ -73,6 +96,13 @@ public class CliResultBridge {
      * waitForResult() call.
      */
     public void complete(String sessionId, AgentResult result) {
+        if (!pendingApproval.getOrDefault(sessionId, Boolean.FALSE)) {
+            // No HITL pause is pending for this session. A normal-turn (Finished) result
+            // is already delivered through the dispatch path, so do not buffer it here -
+            // buffering would let the next approval turn replay the previous answer.
+            log.debugf("CliResultBridge: ignoring complete() for session %s (no pending approval)", sessionId);
+            return;
+        }
         if (!signaled.add(sessionId)) {
             log.debugf("CliResultBridge: duplicate complete() ignored for session %s", sessionId);
             return;
@@ -80,6 +110,7 @@ public class CliResultBridge {
         CompletableFuture<AgentResult> waiter = waiters.remove(sessionId);
         if (waiter != null) {
             signaled.remove(sessionId); // Result consumed by active waiter
+            pendingApproval.remove(sessionId);
             log.infof("CliResultBridge: signaling active waiter for session %s", sessionId);
             waiter.complete(result);
         } else {
@@ -119,6 +150,7 @@ public class CliResultBridge {
      */
     public void cancel(String sessionId) {
         signaled.remove(sessionId);
+        pendingApproval.remove(sessionId);
         CompletableFuture<AgentResult> waiter = waiters.remove(sessionId);
         if (waiter != null) {
             log.debugf("CliResultBridge: cancelling active waiter for session %s", sessionId);

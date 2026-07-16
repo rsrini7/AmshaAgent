@@ -36,6 +36,8 @@ amsha:
       ci: "key-ci-changeme"
   audit:
     hmac-key: "${AMSHA_AUDIT_HMAC_KEY:dev-audit-hmac-key-min-32-bytes-00000}"
+  auth:
+    hmac-key: "${AMSHA_AUTH_HMAC_KEY:dev-auth-hmac-key-min-32-bytes-0000000}"
   channel:
     telegram:
       enabled: false

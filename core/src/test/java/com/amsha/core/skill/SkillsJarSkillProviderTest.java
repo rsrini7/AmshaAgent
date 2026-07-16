@@ -89,10 +89,10 @@ class SkillsJarSkillProviderTest {
                 List.of(),
                 5,
                 "BASE SYSTEM PROMPT",
-                skillHome.toString());
+                skillHome.toString(),
+                true);
 
-        SkillDefinition augmented = SkillsJarSkillProvider.maybeAugmentBrowserPreview(
-                base, "This skill generates .html files and browser artifacts.", skillHome.toString());
+        SkillDefinition augmented = SkillsJarSkillProvider.maybeAugmentBrowserPreview(base, skillHome.toString());
 
         assertTrue(augmented.systemPrompt().contains("BROWSER PREVIEW RULES"));
         assertTrue(augmented.systemPrompt().contains(skillHome.resolve("output").toString()));
@@ -110,10 +110,10 @@ class SkillsJarSkillProviderTest {
                 List.of(),
                 5,
                 "BASE SYSTEM PROMPT",
-                skillHome.toString());
+                skillHome.toString(),
+                false);
 
-        SkillDefinition augmented = SkillsJarSkillProvider.maybeAugmentBrowserPreview(
-                base, "This skill only reads text.", skillHome.toString());
+        SkillDefinition augmented = SkillsJarSkillProvider.maybeAugmentBrowserPreview(base, skillHome.toString());
 
         assertSame(base, augmented, "Non-HTML skills should be returned unchanged");
     }

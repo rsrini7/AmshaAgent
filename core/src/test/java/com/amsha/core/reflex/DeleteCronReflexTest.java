@@ -181,4 +181,33 @@ class DeleteCronReflexTest {
             verify(cronStore).deleteByIdAndUserId(VALID_UUID, "user1");
         }
     }
+
+    @Test
+    void executeHandlesDeleteAllCrons() {
+        try (MockedStatic<Arc> arcStatic = mockStatic(Arc.class)) {
+            ArcContainer mockContainer = mock(ArcContainer.class);
+            ManagedContext mockContext = mock(ManagedContext.class);
+            arcStatic.when(Arc::container).thenReturn(mockContainer);
+            when(mockContainer.requestContext()).thenReturn(mockContext);
+            when(mockContext.isActive()).thenReturn(false);
+
+            when(cronStore.deleteAllByUserId("user1")).thenReturn(5L);
+
+            ReflexResult[] resultHolder = new ReflexResult[1];
+            WorkspaceScopeHolder.run("sess-1", "user1", "chat1", () -> {
+                String input = "deletecron all";
+                resultHolder[0] = reflex.execute("sess-1", "user1", "chat1", input, context(input));
+            });
+
+            assertTrue(resultHolder[0].commandResponse().get().contains("All 5 cron jobs deleted"));
+            verify(cronStore).deleteAllByUserId("user1");
+            verify(auditService)
+                    .record(
+                            eq("sess-1"),
+                            eq("user1"),
+                            anyString(),
+                            eq(SecurityEventType.CRONDELETED),
+                            contains("cronId=all"));
+        }
+    }
 }

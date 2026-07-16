@@ -4,7 +4,7 @@
 > **Version**: V0.1.0 (current)  
 > **Base URL**: `http://localhost:8080`
 
-This directory contains 17 `.http` files covering every REST API surface of Amsha Agent. Run them in the order listed below - health and auth first, then the feature-specific flows, and the Phase 64 regression suite last.
+This directory contains `.http` files covering every REST API surface of Amsha Agent. Run them in the order listed below - health and auth first, then the feature-specific flows, and the Phase 64 regression suite last.
 
 ---
 
@@ -68,6 +68,9 @@ GITHUB_TOKEN=ghp_...    # required for GithubTool tests in 04, 05, 09, 12
 | 14 | `14_budget_governance.http` | Budget soft/hard limits, SUPERVISED/FULL/READONLY autonomy | AMSHA_LLM_API_KEY | A1, A2 |
 | 15 | `15_phase64_regression.http` | Full regression suite for all Phase 64 fixes A1–A7, B1–B3, C1–C3, D smoke | AMSHA_LLM_API_KEY | All tiers |
 | 16 | `16_ui_settings_onboarding.http` | UI status/SSE streams, settings CRUD, onboarding wizard, HITL task-id approval, WS token | AMSHA_LLM_API_KEY | Post-Phase 64 |
+| 19 | `19_identity_access.http` | **P109** first-owner bootstrap claim, `/identity/me`, workspace members, invitations, personal API credentials, last-owner guard, ownership transfer, workspace credential rotation | Fresh DB (UNCLAIMED) | New in P109 |
+| 20 | `20_auth_oauth_session.http` | **P109** `/auth/providers` discovery, OAuth login/callback negative paths, web-session rotate, CSRF enforcement, logout, revoke-all | Server up | New in P109 |
+| 21 | `21_self_evolve.http` | **Self-evolve** behavioral directive REST surface: list/get, synthesize, reconcile, disable, delete + internal-key-only auth model | Server up | New (dedicated coverage) |
 
 ---
 
@@ -257,6 +260,149 @@ FROM session_registry ORDER BY created_at DESC LIMIT 10;
 - RAG chunks in dedicated `rag_chunk` table, fully isolated from compaction
 
 ---
+
+## P109 — Identity, Access & Workspace Sharing (NEW)
+
+Branch P109 introduces a complete identity/access layer **not covered by any
+pre-Phase-64 file** (those reference the old `/api/v1/onboarding/*` UI wizard,
+which is distinct from the new `/onboarding/bootstrap/*` first-owner claim).
+
+### New resources (no `/api/v1` prefix)
+
+| Resource | Path | Auth |
+|---|---|---|
+| Bootstrap (first-owner claim) | `/onboarding/bootstrap/{status,claim,confirm}` | Public, loopback-only |
+| Identity | `/identity/me`, `/identity/workspaces/{id}/members` | API key or session |
+| Invitations | `/identity/workspaces/{id}/invitations`, `/identity/invitations/{token}/accept` | API key or session |
+| Members | `DELETE /identity/workspaces/{id}/members/{memberId}` | API key or session |
+| Ownership | `POST /identity/workspaces/{id}/owner/transfer` | API key or session |
+| Workspace creds | `POST /identity/workspaces/{id}/credentials/rotate` | API key or session |
+| API credentials | `/identity/api-credentials` (`POST`/`DELETE`) | API key or session |
+| Auth providers | `/auth/providers`, `/auth/login/{p}`, `/auth/callback/{p}` | Public |
+| Sessions | `/auth/session/rotate`, `/auth/logout`, `/auth/session/revoke-all` | Session cookie (+CSRF) |
+
+### Running the P109 suite
+
+```bash
+# Requires a FRESH serve-mode DB so bootstrap state is UNCLAIMED
+bash rest-http/scripts/validate_identity_access.sh
+# or via the master runner:
+bash rest-http/scripts/run_all_validations.sh --identity
+```
+
+The script claims the first owner, extracts the raw key from the
+`Set-Cookie: AMSHA_API_KEY=...` response header (the key is deliberately
+**not** in the JSON body), and exercises every automatable path.
+
+All validators default to `http://localhost:8080`. To validate another running
+instance, set `TEST_BASE`; the value is shared by the master preflight and every
+child validator:
+
+```bash
+TEST_BASE=http://localhost:8081 bash rest-http/scripts/run_all_validations.sh --identity
+TEST_BASE=http://localhost:8081 bash rest-http/scripts/run_all_validations.sh --auth-session
+```
+
+The master runner exits nonzero when one or more suites fail. The identity suite
+requires a fresh database; use an isolated `AMSHA_DATA_DIR` when validating a
+rebuilt native binary so the normal `dist/data` is not modified.
+
+The shell suite is an automatable smoke/contract subset, not complete endpoint
+coverage. It does not perform workspace credential rotation, a successful
+ownership transfer, separate-user invitation acceptance, or concurrent
+last-owner race. Session logout/rotation and CSRF success paths are covered by
+the Java security tests and the HTTP client scenarios.
+
+Seeded advanced checks are available through
+`rest-http/scripts/validate_advanced_identity.sh`. They run two concurrent
+owner-removal requests and optionally verify a second user's workspace access:
+
+```bash
+TEST_BASE=http://localhost:8080 \
+TEST_OWNER_KEY=... TEST_WORKSPACE_ID=... TEST_OWNER_IDS=owner-a,owner-b \
+TEST_SECOND_OWNER_KEY=... TEST_SECOND_OWNER_ID=owner-b \
+bash rest-http/scripts/validate_advanced_identity.sh
+```
+
+The fixture must contain two active owners in an isolated workspace. OAuth and
+CSRF-positive flows require a mock identity provider and web-session cookie
+fixture; the advanced script deliberately fails fast instead of claiming those
+flows are covered without those prerequisites.
+
+### Key P109 behaviors asserted
+
+- Bootstrap claim is loopback-only and idempotent (`409 ALREADY_CLAIMED`).
+- Raw key is returned only in a `HttpOnly; Secure; SameSite=Strict` cookie.
+- `/identity/me` requires an authenticated principal (`401` otherwise).
+- Only `OWNER`/`ADMIN` may invite; only `OWNER` may invite `OWNER`, transfer
+  ownership, or rotate workspace credentials.
+- Personal API credentials cannot grant `INTERNAL`; only roles the caller
+  holds may be granted.
+- Removing or transferring the **last active OWNER** is blocked
+  (`400 LAST_OWNER_REMOVAL_BLOCKED`).
+- Web-session mutations require `X-CSRF-Token`; missing/invalid → `403`.
+- `GET /auth/login/{unknown}` → `404 PROVIDER_NOT_FOUND`;
+  `GET /auth/callback/{p}?state=bad` → `400 INVALID_STATE`.
+
+### Running the Self-Evolve (behavioral directives) suite
+
+```bash
+# Works for jar OR native, sqlite/postgres/fs. Requires a running serve-mode
+# server on :8080 with self-evolve enabled.
+#
+# For a sqlite backend, pass the data dir so the script can seed extracted_memories
+# + SHADOW directives and exercise the full lifecycle (synthesize/reconcile/disable/
+# delete). Without it, only the pure-HTTP checks run.
+AMSHA_DATA_DIR=/path/to/data bash rest-http/scripts/validate_self_evolve.sh
+# or directly:
+bash rest-http/scripts/validate_self_evolve.sh --data-dir /path/to/data
+# via the master runner (uses AMSHA_DATA_DIR):
+AMSHA_DATA_DIR=/path/to/data bash rest-http/scripts/run_all_validations.sh --self-evolve
+```
+
+The script resolves the runtime user (the `bootstrap_state.owner_id` the internal
+API key maps to), rewrites `scripts/data/seed_self_evolve.sql` with that user, and
+applies it to `amsha-meta.db`. It then runs: list/get, synthesize (LLM → SHADOW
+directives), reconcile (promotes/disables by evaluation history), disable, delete,
+plus the internal-key-only `403` auth model and `404` checks. Synthesize depends on
+the configured LLM; a transient backend error is retried once. Reused seed data lives
+in `scripts/data/seed_self_evolve.sql`.
+
+### Shell validators (scripts/*.sh)
+
+Each validator is a standalone `bash` script that `curl`s a running server (no VS Code
+needed). Run individually or via the master runner `run_all_validations.sh`.
+
+| Flag | Script | Coverage | Cost |
+|---|---|---|---|
+| `--reflex` | `validate_reflex.sh` | Reflex commands via goal text | zero-token |
+| `--skills` | `validate_skill.sh` | Skill CRUD, routing, errors | low |
+| `--mcp` | `validate_mcp.sh` | MCP JSON-RPC protocol + connect | low |
+| `--memory` | `validate_memory.sh` | Archival/core memory + Arabic search (HITL-aware) | LLM |
+| `--web` | `validate_web.sh` | Web search/fetch/SSRF blocks (HITL-aware) | LLM |
+| `--roles` | `validate_roles.sh` | Agent roles + aliases (HITL-aware) | LLM |
+| `--admin` | `validate_admin.sh` | Directives/prompts/tiered-memory admin | fast |
+| `--auth-session` | `validate_auth_session.sh` | API-key auth + session lifecycle | fast |
+| `--identity` | `validate_identity_access.sh` | P109 bootstrap/identity/OAuth | fast |
+| `--pii-audit` | `validate_pii_injection_audit.sh` | PII redaction + injection + audit HMAC | fast |
+| `--self-evolve` | `validate_self_evolve.sh` | Directives lifecycle (seeds when `--data-dir` given) | LLM |
+| `--hitl` | `validate_hitl.sh` | Approve/deny (REST + goal-string + taskId), 401/409 | LLM |
+| `--rag` | `validate_rag.sh` | Ingest → approve → recall + rag_chunk isolation | LLM |
+| `--budget` | `validate_budget.sh` | Budget limits + autonomy SUPERVISED/FULL/READONLY | LLM |
+| `--sse-settings` | `validate_sse_settings.sh` | UI SSE streams, ws-token, settings CRUD | fast |
+| `--cron` | `validate_cron.sh` | Programmatic cron REST lifecycle | LLM |
+| `--fast` | `(master)` | all fast/zero-token validators | mixed |
+| `--llm` | `(master)` | memory + web + roles + cron + rag + budget + hitl | LLM |
+
+### New P109 config flags (also in `.env.example`)
+
+```
+AMSHA_AUTH_HMAC_KEY=...
+AMSHA_AUTH_SESSION_IDLE_MINUTES=720
+AMSHA_AUTH_SESSION_ROTATION_GRACE_SECONDS=30
+AMSHA_AUTH_IDP_OIDC_ENABLED=false
+AMSHA_AUTH_IDP_GITHUB_ENABLED=false
+```
 
 ## Running a Full Regression Pass
 

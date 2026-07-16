@@ -1,0 +1,84 @@
+### ═══════════════════════════════════════════════════════════════
+### 20 - AUTH PROVIDERS, WEB SESSIONS & CSRF  (Branch P109)
+###
+### Covers the OAuth/OIDC discovery + web-session surface of P109:
+###   - GET  /api/v1/auth/providers            (public)
+###   - GET  /api/v1/auth/login/{providerId}   (public, 302 → IdP or 404)
+###   - GET  /api/v1/auth/callback/{providerId} (public, 400 on bad state)
+###   - POST /api/v1/auth/session/rotate        (session cookie + CSRF)
+###   - POST /api/v1/auth/logout                (clears cookies)
+###   - POST /api/v1/auth/session/revoke-all   (authenticated)
+###
+### A NEW ContainerRequestFilter (ApiKeyAuthFilter) gates everything:
+###   - public:  /info, /onboarding/**, /auth/providers, /auth/login,
+###              /auth/callback  (all under the /api/v1 context path)
+###   - API key: X-Amsha-API-Key | cookie AMSHA_API_KEY | ?apiKey=
+###   - web session: cookie AMSHA_SESSION_ID (+ X-CSRF-Token for
+###     POST/PUT/DELETE) or "Bearer sess-..." in Authorization.
+###   - CSRF: mutating requests with a session cookie but missing/
+###     invalid X-CSRF-Token → 403 FORBIDDEN.
+###
+### No external IdP is configured by default, so login/callback happy
+### paths are NOT automatable here — only discovery + negative paths.
+### A real web session cookie is minted only by a successful OIDC/GitHub
+### callback; the CSRF-positive test [S3] therefore needs that cookie.
+### ═══════════════════════════════════════════════════════════════
+
+# @baseUrl    = http://localhost:8080
+# @validKey   = key-internal-cWevfEoRvstUv0PqGpf02LzDY5kPNaz1y9GSl0LZOwU=
+# @ciKey      = key-ci-JV/qXAikcUoSCCUsqYxLvNjxW/N3KROQtawg3VRFrJs=
+# @invalidKey = totally-wrong-key
+
+# Paste a real web session cookie (from an OIDC/GitHub callback) to
+# exercise the CSRF-positive path. Leave blank to skip [S3]/[S4].
+# @sessionCookie = sess-PASTE_FROM_AUTH_CALLBACK
+# @csrfToken     = csrf-PASTE_FROM_AUTH_CALLBACK
+
+# ─────────────────────────────────────────────────────────────────
+# P. PROVIDER DISCOVERY & OAUTH NEGATIVE PATHS
+# ─────────────────────────────────────────────────────────────────
+
+### [P1] List enabled providers → 200 (JSON array; empty if none configured)
+GET {{baseUrl}}/api/v1/auth/providers
+
+### [P2] Login with unknown provider → 404 PROVIDER_NOT_FOUND
+GET {{baseUrl}}/api/v1/auth/login/doesnotexist
+
+### [P3] Login with disabled provider (oidc off by default) → 404 PROVIDER_DISABLED
+###      (If AMSHA_AUTH_IDP_OIDC_ENABLED=true this returns 302 → IdP.)
+GET {{baseUrl}}/api/v1/auth/login/oidc
+
+### [P4] Callback with unknown state → 400 INVALID_STATE
+GET {{baseUrl}}/api/v1/auth/callback/oidc?code=abc&state=unknown-state-token
+
+# ─────────────────────────────────────────────────────────────────
+# S. WEB SESSION LIFECYCLE & CSRF
+# ─────────────────────────────────────────────────────────────────
+
+### [S1] Rotate with NO session cookie → 401 UNAUTHORIZED
+POST {{baseUrl}}/api/v1/auth/session/rotate
+
+### [S2] Rotate with session cookie but NO CSRF token → 403 FORBIDDEN
+###      (Requires @sessionCookie from a real callback.)
+POST {{baseUrl}}/api/v1/auth/session/rotate
+Cookie: AMSHA_SESSION_ID={{sessionCookie}}
+
+### [S3] Rotate with valid session + CSRF → 204 (new cookies set)
+###      (Requires @sessionCookie and @csrfToken from a real callback.)
+POST {{baseUrl}}/api/v1/auth/session/rotate
+Cookie: AMSHA_SESSION_ID={{sessionCookie}}
+X-CSRF-Token: {{csrfToken}}
+
+### [S4] Logout with NO cookie → 200 (idempotent; clears cookies)
+POST {{baseUrl}}/api/v1/auth/logout
+
+### [S5] Logout with session cookie → 200 (revokes session, clears cookies)
+POST {{baseUrl}}/api/v1/auth/logout
+Cookie: AMSHA_SESSION_ID={{sessionCookie}}
+
+### [S6] Revoke-all sessions with NO auth → 401
+POST {{baseUrl}}/api/v1/auth/session/revoke-all
+
+### [S7] Revoke-all sessions with API key → 200 {success:true}
+POST {{baseUrl}}/api/v1/auth/session/revoke-all
+X-Amsha-API-Key: {{validKey}}

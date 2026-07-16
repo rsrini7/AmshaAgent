@@ -25,7 +25,8 @@ class ApiKeyRegistryLookupTest {
             return Map.of(
                     "amsha.api.keys.admin", "sk-admin-123",
                     "amsha.api.keys.node-1", "sk-node-456",
-                    "amsha.audit.hmac-key", "test-secret");
+                    "amsha.audit.hmac-key", "test-secret",
+                    "amsha.auth.hmac-key", "test-secret");
         }
     }
 
