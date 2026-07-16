@@ -852,6 +852,30 @@ export AMSHA_PERSISTENCE_BACKEND=postgres
 | **PostgreSQL** | `QUARKUS_DATASOURCE_JDBC_URL`, `QUARKUS_DATASOURCE_USERNAME`, `QUARKUS_DATASOURCE_PASSWORD` | Flyway auto-creates schema on startup |
 | **Filesystem** | `AMSHA_FS_DATA_DIR` (optional, default `./data/fs`) | Uses Lucene index for BM25 search |
 
+### Persistence Implementation Parity
+
+![Identity persistence parity](assets/amsha_persistence_parity.svg)
+
+Every persistence port used by identity and workspace access must have all
+three implementations enabled and kept semantically aligned:
+
+| Backend | Implementation | Concurrency mechanism for identity membership removal |
+|---|---|---|
+| SQLite | `persistence-sqlite` `SqliteIdentityStoreAdapter` | Atomic conditional delete in one SQL statement |
+| PostgreSQL | `persistence-postgres` `PostgresIdentityStoreAdapter` | Transaction-scoped advisory lock plus conditional owner count |
+| Filesystem | `persistence-fs` `FsIdentityStoreAdapter` | Synchronized owner-count check and delete |
+
+In particular, `IdentityStorePort.deleteMembershipIfNotLastOwner(...)` must
+never be implemented as a separate owner count followed by an unconditional
+delete. Concurrent requests must not remove the final active `OWNER`, and
+external identity ownership must not be reassigned silently when the provider,
+issuer, and subject key already belongs to another user.
+
+Backend selection changes the active storage implementation; it does not copy
+or migrate existing data. Switching an existing deployment therefore requires
+an explicit data migration or a newly initialized backend, plus its backend-
+specific connection or data-directory configuration.
+
 ### Why SQLite Is the Default
 
 - `enableIfMissing = true` on the SQLite adapter means: if the property is not set at all, SQLite activates.

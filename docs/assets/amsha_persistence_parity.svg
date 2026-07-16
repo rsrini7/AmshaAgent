@@ -1,0 +1,42 @@
+<svg width="100%" viewBox="0 0 960 500" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M2 1L8 5L2 9" fill="none" stroke="#9c9a92" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+  </defs>
+  <rect width="960" height="500" fill="#171715"/>
+  <g font-family="'Segoe UI', system-ui, sans-serif">
+    <text x="480" y="38" text-anchor="middle" font-size="22" font-weight="600" fill="#f2f0e9">Identity Persistence Parity</text>
+    <text x="480" y="62" text-anchor="middle" font-size="12" fill="#b8b5aa">One port contract, three interchangeable storage implementations</text>
+
+    <rect x="285" y="92" width="390" height="70" rx="10" fill="#3c3489" stroke="#afa9ec" stroke-width="0.7"/>
+    <text x="480" y="119" text-anchor="middle" font-size="16" font-weight="600" fill="#cecbf6">IdentityStorePort</text>
+    <text x="480" y="141" text-anchor="middle" font-size="12" fill="#afa9ec">users · external identities · memberships · invitations</text>
+
+    <line x1="385" y1="162" x2="170" y2="230" stroke="#9c9a92" marker-end="url(#arrow)"/>
+    <line x1="480" y1="162" x2="480" y2="230" stroke="#9c9a92" marker-end="url(#arrow)"/>
+    <line x1="575" y1="162" x2="790" y2="230" stroke="#9c9a92" marker-end="url(#arrow)"/>
+
+    <rect x="35" y="230" width="270" height="128" rx="10" fill="#184d42" stroke="#63c7b7" stroke-width="0.7"/>
+    <text x="170" y="260" text-anchor="middle" font-size="16" font-weight="600" fill="#9fe1d5">SQLite</text>
+    <text x="170" y="283" text-anchor="middle" font-size="12" fill="#74c7b8">SqliteIdentityStoreAdapter</text>
+    <text x="170" y="315" text-anchor="middle" font-size="11" fill="#b5e8df">conditional DELETE</text>
+    <text x="170" y="335" text-anchor="middle" font-size="11" fill="#b5e8df">single SQL statement</text>
+
+    <rect x="345" y="230" width="270" height="128" rx="10" fill="#995700" stroke="#ef9f27" stroke-width="0.7"/>
+    <text x="480" y="260" text-anchor="middle" font-size="16" font-weight="600" fill="#fac775">PostgreSQL</text>
+    <text x="480" y="283" text-anchor="middle" font-size="12" fill="#efb35f">PostgresIdentityStoreAdapter</text>
+    <text x="480" y="315" text-anchor="middle" font-size="11" fill="#f6d39a">advisory transaction lock</text>
+    <text x="480" y="335" text-anchor="middle" font-size="11" fill="#f6d39a">conditional owner count</text>
+
+    <rect x="655" y="230" width="270" height="128" rx="10" fill="#24507a" stroke="#71b7ee" stroke-width="0.7"/>
+    <text x="790" y="260" text-anchor="middle" font-size="16" font-weight="600" fill="#acd9f7">Filesystem</text>
+    <text x="790" y="283" text-anchor="middle" font-size="12" fill="#8bc5ee">FsIdentityStoreAdapter</text>
+    <text x="790" y="315" text-anchor="middle" font-size="11" fill="#c0e2f8">synchronized check</text>
+    <text x="790" y="335" text-anchor="middle" font-size="11" fill="#c0e2f8">and delete</text>
+
+    <rect x="125" y="400" width="710" height="58" rx="10" fill="#403e38" stroke="#9c9a92" stroke-width="0.7"/>
+    <text x="480" y="424" text-anchor="middle" font-size="13" font-weight="600" fill="#f2f0e9">Shared invariant</text>
+    <text x="480" y="444" text-anchor="middle" font-size="11" fill="#d5d1c6">Concurrent requests cannot remove the final active OWNER</text>
+  </g>
+</svg>

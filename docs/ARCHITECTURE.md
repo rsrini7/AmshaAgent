@@ -319,11 +319,25 @@ All 12 roles have `garuda` for delegation. Tool schemas dynamically assembled vi
 
 Port interfaces in `amsha-persistence-api`, three adapter implementations:
 
+![Identity persistence parity](./assets/amsha_persistence_parity.svg)
+
 | Backend | Storage | Best For |
 |---|---|---|
 | **SQLite** (default) | WAL mode + FTS5 + sqlite-vec | Zero-config, embedded, single binary |
 | **PostgreSQL** | Native timestamptz, pgvector | Production deployments |
 | **Filesystem** | JSON files + Lucene BM25 | Environments without SQL |
+
+Identity and workspace access use the same `IdentityStorePort` contract across
+all three adapters. The last-owner membership delete is atomic in each backend:
+SQLite uses a conditional SQL delete, PostgreSQL uses a transaction-scoped
+advisory lock with a conditional owner count, and filesystem storage synchronizes
+the owner check with the delete. External identity ownership is also protected
+from silent reassignment in every adapter.
+
+Selecting another backend changes the active adapter but does not migrate
+existing data. JVM mode selects the backend at startup; native images require a
+rebuild because the CDI selection is fixed at build time. Use an explicit data
+migration and backend-specific configuration when moving an existing deployment.
 
 ### Tiered Memory System
 
