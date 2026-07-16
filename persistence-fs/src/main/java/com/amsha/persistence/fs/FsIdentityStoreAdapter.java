@@ -48,7 +48,7 @@ public class FsIdentityStoreAdapter implements IdentityStorePort {
     }
 
     @Override
-    public void saveExternalIdentity(ExternalIdentityDto identity) {
+    public synchronized void saveExternalIdentity(ExternalIdentityDto identity) {
         String key = identity.providerId() + "_" + identity.issuer() + "_" + identity.subject();
         List<String> path = List.of(DOMAIN, EXTERNAL_IDENTITIES, key + ".json");
         Optional<ExternalIdentityDto> existing = store.readOptional(path, ExternalIdentityDto.class);
