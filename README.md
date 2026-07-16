@@ -56,7 +56,8 @@ See [docs/QUICK_START.md](./docs/QUICK_START.md) for detailed setup options.
 - **18 deterministic reflexes** — zero-token fast-path for commands, PII redaction, injection blocking, vault ops
 - **Human-in-the-loop and budget governance** — approval checkpoints, autonomy controls, durable resume/recovery, and per-session spend limits
 - **Durable scheduling** — cron-backed agent tasks with execution history and bounded concurrent dispatch
-- **Hexagonal persistence** — SQLite (default), PostgreSQL, or filesystem; swappable without core changes
+- **Identity and workspace access** — first-owner bootstrap, API credentials, OIDC/GitHub providers, web sessions with CSRF, invitations, role-based membership, ownership transfer, and last-owner protection
+- **Hexagonal persistence** — SQLite (default), PostgreSQL, or filesystem with aligned identity, memory, audit, MCP, and self-evolution stores; backend switching requires explicit data migration
 - **Podman rootless sandbox** for code execution (Python, Java, Go, Node, Bash)
 - **Browser and web tools** — optional Playwright automation, lightweight web fetch, and Brave/Serper real-time search
 - **AES-256-GCM-SIV vault** with Argon2id key derivation — secrets never stored in plaintext
@@ -68,6 +69,7 @@ See [docs/QUICK_START.md](./docs/QUICK_START.md) for detailed setup options.
 - **MCP integration** — both inbound MCP server and outbound MCP client for dynamic tool loading; discovered tools default to the network bulkhead and can be categorized at registration
 - **Multi-channel** — REST API, CLI REPL, Telegram bot, WebSocket web UI, one-shot `ask` mode
 - **Guided setup and observability** — onboarding wizard, encrypted provider settings, OpenTelemetry tracing, SSE status updates, and web management panels
+- **Backend-aware deployment** — JVM backend selection at startup, native backend selection at build time, with PostgreSQL and filesystem runtime profiles
 
 ---
 
