@@ -191,9 +191,14 @@ claim test.
 
 These scripts are smoke/contract validators rather than exhaustive endpoint
 coverage. Workspace credential rotation, successful ownership transfer,
-separate-user invitation acceptance, concurrent last-owner races, and the
-positive CSRF/logout/session-rotation flows remain in the Java security tests
-and HTTP client scenarios.
+separate-user invitation acceptance, and the positive CSRF/logout/session-
+rotation flows remain in the Java security tests and HTTP client scenarios.
+
+For seeded integration fixtures, run
+`rest-http/scripts/validate_advanced_identity.sh`. It automates concurrent
+last-owner deletion and optional second-user authorization checks. OAuth and
+positive CSRF testing require a mock provider/session fixture and are not
+silently treated as covered by this script.
 
 ---
 

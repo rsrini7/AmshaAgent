@@ -313,6 +313,22 @@ ownership transfer, separate-user invitation acceptance, or concurrent
 last-owner race. Session logout/rotation and CSRF success paths are covered by
 the Java security tests and the HTTP client scenarios.
 
+Seeded advanced checks are available through
+`rest-http/scripts/validate_advanced_identity.sh`. They run two concurrent
+owner-removal requests and optionally verify a second user's workspace access:
+
+```bash
+TEST_BASE=http://localhost:8080 \
+TEST_OWNER_KEY=... TEST_WORKSPACE_ID=... TEST_OWNER_IDS=owner-a,owner-b \
+TEST_SECOND_OWNER_KEY=... TEST_SECOND_OWNER_ID=owner-b \
+bash rest-http/scripts/validate_advanced_identity.sh
+```
+
+The fixture must contain two active owners in an isolated workspace. OAuth and
+CSRF-positive flows require a mock identity provider and web-session cookie
+fixture; the advanced script deliberately fails fast instead of claiming those
+flows are covered without those prerequisites.
+
 ### Key P109 behaviors asserted
 
 - Bootstrap claim is loopback-only and idempotent (`409 ALREADY_CLAIMED`).
