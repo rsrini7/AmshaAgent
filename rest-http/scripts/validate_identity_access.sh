@@ -8,7 +8,8 @@
 #   bootstrap status/claim/confirm, /identity/me, workspace members,
 #   invitations, personal API credentials, last-owner guard, ownership
 #   transfer negative path, provider discovery, OAuth negative paths,
-#   and revoke-all-sessions.
+#   and revoke-all-sessions. Workspace credential rotation runs last because
+#   it revokes the bootstrap owner's active API credential.
 
 set +e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

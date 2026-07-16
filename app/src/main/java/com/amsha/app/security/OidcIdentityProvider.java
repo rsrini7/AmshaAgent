@@ -175,8 +175,12 @@ public class OidcIdentityProvider implements ExternalIdentityProvider {
             if (sub == null) {
                 throw new IllegalStateException("Subject (sub) missing from OIDC userinfo response");
             }
-            return new ExternalUserProfile(sub, (String) userInfo.get("email"), (String) userInfo.get("name"), (String)
-                    userInfo.get("picture"));
+            return new ExternalUserProfile(
+                    sub,
+                    (String) userInfo.get("email"),
+                    Boolean.TRUE.equals(userInfo.get("email_verified")),
+                    (String) userInfo.get("name"),
+                    (String) userInfo.get("picture"));
 
         } catch (Exception e) {
             log.error("OIDC authentication failed: " + e.getMessage(), e);
@@ -236,7 +240,11 @@ public class OidcIdentityProvider implements ExternalIdentityProvider {
             throw new IllegalStateException("OIDC id_token missing sub");
         }
         return new ExternalUserProfile(
-                sub, (String) claims.get("email"), (String) claims.get("name"), (String) claims.get("picture"));
+                sub,
+                (String) claims.get("email"),
+                Boolean.TRUE.equals(claims.get("email_verified")),
+                (String) claims.get("name"),
+                (String) claims.get("picture"));
     }
 
     private void verifyIdTokenSignature(Map<String, Object> header, String idToken) {
@@ -345,7 +353,10 @@ public class OidcIdentityProvider implements ExternalIdentityProvider {
     static void validateIdTokenClaims(
             Map<String, Object> claims, String expectedIssuer, String clientId, String expectedNonce) {
         Object expObj = claims.get("exp");
-        if (expObj instanceof Number exp && Instant.now().getEpochSecond() > exp.longValue()) {
+        if (!(expObj instanceof Number exp)) {
+            throw new IllegalStateException("OIDC id_token expiration is missing or invalid");
+        }
+        if (Instant.now().getEpochSecond() > exp.longValue()) {
             throw new IllegalStateException("OIDC id_token expired");
         }
         if (expectedIssuer != null && !expectedIssuer.isBlank()) {

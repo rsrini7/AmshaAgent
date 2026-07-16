@@ -110,36 +110,39 @@ public class GithubIdentityProvider implements ExternalIdentityProvider {
             String name = (String) userProfile.get("name");
             String avatarUrl = (String) userProfile.get("avatar_url");
             String email = (String) userProfile.get("email");
+            boolean emailVerified = false;
 
             if (providerUserId == null) {
                 throw new IllegalStateException("GitHub user ID missing from profile response");
             }
 
-            // If email is null or private, fetch emails list
-            if (email == null) {
-                try {
-                    List<?> emails = httpClient
-                            .target("https://api.github.com/user/emails")
-                            .request(MediaType.APPLICATION_JSON_TYPE)
-                            .header("Authorization", "token " + accessToken)
-                            .get(List.class);
+            // GitHub's profile response does not expose verification status. Resolve it from the
+            // email endpoint even when the profile email is public.
+            try {
+                List<?> emails = httpClient
+                        .target("https://api.github.com/user/emails")
+                        .request(MediaType.APPLICATION_JSON_TYPE)
+                        .header("Authorization", "token " + accessToken)
+                        .get(List.class);
 
-                    for (Object item : emails) {
-                        if (item instanceof Map<?, ?> map) {
-                            Boolean primary = (Boolean) map.get("primary");
-                            Boolean verified = (Boolean) map.get("verified");
-                            if (Boolean.TRUE.equals(primary) && Boolean.TRUE.equals(verified)) {
-                                email = (String) map.get("email");
-                                break;
-                            }
+                for (Object item : emails) {
+                    if (item instanceof Map<?, ?> map && Boolean.TRUE.equals(map.get("verified"))) {
+                        String candidate = (String) map.get("email");
+                        if (candidate != null && candidate.equalsIgnoreCase(email)) {
+                            emailVerified = true;
+                        }
+                        if (candidate != null && Boolean.TRUE.equals(map.get("primary"))) {
+                            email = candidate;
+                            emailVerified = true;
+                            break;
                         }
                     }
-                } catch (Exception e) {
-                    log.warn("Failed to fetch secondary emails from GitHub: " + e.getMessage());
                 }
+            } catch (Exception e) {
+                log.warn("Failed to verify email with GitHub: " + e.getMessage());
             }
 
-            return new ExternalUserProfile(providerUserId, email, name, avatarUrl);
+            return new ExternalUserProfile(providerUserId, email, emailVerified, name, avatarUrl);
 
         } catch (Exception e) {
             log.error("GitHub OAuth authentication failed: " + e.getMessage(), e);

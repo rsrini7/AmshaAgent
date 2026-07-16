@@ -84,7 +84,7 @@ class IdentityResourceTest {
         var inviteResponse = given().cookie("AMSHA_SESSION_ID", sessionToken)
                 .header("X-CSRF-Token", csrfToken)
                 .contentType(ContentType.JSON)
-                .body(new CreateInvitationRequest("MEMBER", null))
+                .body(new CreateInvitationRequest("member", null))
                 .when()
                 .post("/api/v1/identity/workspaces/" + workspaceId + "/invitations")
                 .then()
@@ -215,6 +215,19 @@ class IdentityResourceTest {
                 .post("/api/v1/identity/workspaces/" + workspaceId + "/invitations")
                 .then()
                 .statusCode(403);
+
+        // Admin cannot remove an owner, even when another active owner exists.
+        String secondOwnerId = "usr_owner_second";
+        identityStore.saveUser(new IdentityUserDto(secondOwnerId, "Second Owner", "ACTIVE", now, now));
+        identityStore.saveMembership(
+                new WorkspaceMembershipDto(workspaceId, secondOwnerId, "OWNER", "ACTIVE", 1, now, now));
+        given().cookie("AMSHA_SESSION_ID", adminUserSessionToken)
+                .header("X-CSRF-Token", adminUserCsrfToken)
+                .when()
+                .delete("/api/v1/identity/workspaces/" + workspaceId + "/members/" + userId)
+                .then()
+                .statusCode(403)
+                .body("code", is("FORBIDDEN"));
 
         // [F0 Test] Member user2SessionToken is blocked from admin endpoints (mutating PUT)
         given().cookie("AMSHA_SESSION_ID", user2SessionToken)

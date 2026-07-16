@@ -50,7 +50,11 @@ public class FsIdentityStoreAdapter implements IdentityStorePort {
     @Override
     public void saveExternalIdentity(ExternalIdentityDto identity) {
         String key = identity.providerId() + "_" + identity.issuer() + "_" + identity.subject();
-        store.write(List.of(DOMAIN, EXTERNAL_IDENTITIES, key + ".json"), identity);
+        List<String> path = List.of(DOMAIN, EXTERNAL_IDENTITIES, key + ".json");
+        Optional<ExternalIdentityDto> existing = store.readOptional(path, ExternalIdentityDto.class);
+        if (existing.isEmpty() || existing.get().userId().equals(identity.userId())) {
+            store.write(path, identity);
+        }
     }
 
     @Override
@@ -152,5 +156,18 @@ public class FsIdentityStoreAdapter implements IdentityStorePort {
         String key = workspaceId + "_" + userId;
         boolean deleted = store.delete(List.of(DOMAIN, MEMBERSHIPS, key + ".json"));
         return deleted ? 1 : 0;
+    }
+
+    @Override
+    public synchronized int deleteMembershipIfNotLastOwner(String workspaceId, String userId) {
+        Optional<WorkspaceMembershipDto> target = findMembership(workspaceId, userId);
+        if (target.isEmpty()) return 0;
+        if ("OWNER".equalsIgnoreCase(target.get().role())) {
+            long activeOwners = listMembershipsByWorkspaceId(workspaceId).stream()
+                    .filter(m -> "OWNER".equalsIgnoreCase(m.role()) && "ACTIVE".equalsIgnoreCase(m.status()))
+                    .count();
+            if (activeOwners <= 1) return 0;
+        }
+        return deleteMembership(workspaceId, userId);
     }
 }

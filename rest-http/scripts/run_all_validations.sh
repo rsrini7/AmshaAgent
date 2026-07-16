@@ -36,7 +36,8 @@ BUDGET_SCRIPT="$SCRIPT_DIR/validate_budget.sh"
 SSE_SETTINGS_SCRIPT="$SCRIPT_DIR/validate_sse_settings.sh"
 
 check_app() {
-  curl -s -m 3 -o /dev/null -w "%{http_code}" "http://localhost:8080/api/v1/mcp/status" \
+  local check_base="${TEST_BASE:-http://localhost:8080}"
+  curl -s -m 3 -o /dev/null -w "%{http_code}" "$check_base/api/v1/mcp/status" \
     -H "X-Amsha-API-Key: JV/qXAikcUoSCCUsqYxLvNjxW/N3KROQtawg3VRFrJs=" 2>/dev/null
 }
 
@@ -210,3 +211,5 @@ echo "   Suites: $TOTAL run"
 echo "   Passed: $PASSED"
 echo "   Failed: $FAILED"
 echo "═══════════════════════════════════════════"
+
+exit "$FAILED"

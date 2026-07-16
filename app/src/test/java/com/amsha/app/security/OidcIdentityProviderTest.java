@@ -131,6 +131,22 @@ class OidcIdentityProviderTest {
     }
 
     @Test
+    void rejectsMissingExpiration() throws Exception {
+        Map<String, Object> claims = Map.of(
+                "sub", "user-123",
+                "iss", "https://issuer.example.com",
+                "aud", "my-client-id",
+                "nonce", "abc-nonce");
+        assertThrows(
+                IllegalStateException.class,
+                () -> OidcIdentityProvider.validateIdTokenClaims(
+                        OidcIdentityProvider.decodeJwtPayload(idToken(claims)),
+                        "https://issuer.example.com",
+                        "my-client-id",
+                        "abc-nonce"));
+    }
+
+    @Test
     void rejectsNoneAlgIdToken() {
         Map<String, Object> header = Map.of("alg", "none", "typ", "JWT");
         assertThrows(IllegalStateException.class, () -> OidcIdentityProvider.assertRsaSigned(header));

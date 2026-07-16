@@ -1751,6 +1751,22 @@ class PersistencePortContractTest {
             String key = workspaceId + "_" + userId;
             return memberships.remove(key) != null ? 1 : 0;
         }
+
+        @Override
+        public synchronized int deleteMembershipIfNotLastOwner(String workspaceId, String userId) {
+            String key = workspaceId + "_" + userId;
+            WorkspaceMembershipDto target = memberships.get(key);
+            if (target == null) return 0;
+            if ("OWNER".equalsIgnoreCase(target.role())) {
+                long activeOwners = memberships.values().stream()
+                        .filter(m -> workspaceId.equals(m.workspaceId()))
+                        .filter(m -> "OWNER".equalsIgnoreCase(m.role()))
+                        .filter(m -> "ACTIVE".equalsIgnoreCase(m.status()))
+                        .count();
+                if (activeOwners <= 1) return 0;
+            }
+            return memberships.remove(key, target) ? 1 : 0;
+        }
     }
 
     static class InMemoryApiCredentialStore implements ApiCredentialStorePort {

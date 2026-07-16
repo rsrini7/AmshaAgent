@@ -223,7 +223,7 @@ class AuthResourceTest {
 
         @Override
         public ExternalUserProfile authenticate(String code, String redirectUri) {
-            return new ExternalUserProfile("mock_user_123", "mock@user.com", "Mock User", "https://avatar.url");
+            return new ExternalUserProfile("mock_user_123", "mock@user.com", true, "Mock User", "https://avatar.url");
         }
     }
 }

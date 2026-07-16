@@ -41,7 +41,8 @@ public interface IdentityJdbiDao {
     @SqlUpdate(
             "INSERT INTO external_identity (provider_id, issuer, subject, user_id, safe_claims, created_at, updated_at) "
                     + "VALUES (:providerId, :issuer, :subject, :userId, :safeClaims, :createdAt, :updatedAt) "
-                    + "ON CONFLICT(provider_id, issuer, subject) DO UPDATE SET user_id = excluded.user_id, safe_claims = excluded.safe_claims, updated_at = excluded.updated_at")
+                    + "ON CONFLICT(provider_id, issuer, subject) DO UPDATE SET safe_claims = excluded.safe_claims, updated_at = excluded.updated_at "
+                    + "WHERE external_identity.user_id = excluded.user_id")
     void saveExternalIdentity(@BindMethods ExternalIdentityDto identity);
 
     @SqlQuery(
@@ -110,4 +111,9 @@ public interface IdentityJdbiDao {
 
     @SqlUpdate("DELETE FROM workspace_membership WHERE workspace_id = :workspaceId AND user_id = :userId")
     int deleteMembership(@Bind("workspaceId") String workspaceId, @Bind("userId") String userId);
+
+    @SqlUpdate("DELETE FROM workspace_membership WHERE workspace_id = :workspaceId AND user_id = :userId "
+            + "AND (role <> 'OWNER' OR (SELECT COUNT(*) FROM workspace_membership "
+            + "WHERE workspace_id = :workspaceId AND role = 'OWNER' AND status = 'ACTIVE') > 1)")
+    int deleteMembershipIfNotLastOwner(@Bind("workspaceId") String workspaceId, @Bind("userId") String userId);
 }

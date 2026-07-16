@@ -16,8 +16,11 @@ import jakarta.ws.rs.core.SecurityContext;
 
 import java.security.SecureRandom;
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.Base64;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -33,6 +36,8 @@ import com.amsha.persistence.api.IdentityInvitationStorePort;
 import com.amsha.persistence.api.IdentityStorePort;
 import com.amsha.persistence.api.IdentityUserDto;
 import com.amsha.persistence.api.WorkspaceMembershipDto;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import io.smallrye.common.annotation.RunOnVirtualThread;
 
@@ -43,7 +48,7 @@ import io.smallrye.common.annotation.RunOnVirtualThread;
 @RunOnVirtualThread
 public class IdentityResource {
 
-    private final SecureRandom secureRandom = new SecureRandom();
+    private static final ObjectMapper JSON = new ObjectMapper();
 
     @Inject
     IdentityStorePort identityStore;
@@ -127,15 +132,24 @@ public class IdentityResource {
                     .build();
         }
 
+        if (req == null
+                || req.role() == null
+                || !Set.of("OWNER", "ADMIN", "MEMBER").contains(req.role().toUpperCase(Locale.ROOT))) {
+            return Response.status(Response.Status.FORBIDDEN)
+                    .entity(new ErrorResponse("INVALID_ROLE", "Invalid membership role requested."))
+                    .build();
+        }
+        String invitedRole = req.role().toUpperCase(Locale.ROOT);
+
         // Only OWNER can invite/grant OWNER role
-        if ("OWNER".equalsIgnoreCase(req.role()) && !"OWNER".equals(role)) {
+        if ("OWNER".equals(invitedRole) && !"OWNER".equals(role)) {
             return Response.status(Response.Status.FORBIDDEN)
                     .entity(new ErrorResponse("FORBIDDEN", "Only workspace owners can invite new owners."))
                     .build();
         }
         // Inviter can only grant roles they hold (OWNER holds OWNER, ADMIN, MEMBER; ADMIN holds ADMIN, MEMBER)
         if (!"OWNER".equals(role)) {
-            if (!"ADMIN".equalsIgnoreCase(req.role()) && !"MEMBER".equalsIgnoreCase(req.role())) {
+            if (!"ADMIN".equals(invitedRole) && !"MEMBER".equals(invitedRole)) {
                 return Response.status(Response.Status.FORBIDDEN)
                         .entity(new ErrorResponse(
                                 "FORBIDDEN", "You cannot invite a user with a role higher than yours."))
@@ -145,26 +159,24 @@ public class IdentityResource {
 
         // Create invitation
         byte[] tokenBytes = new byte[32];
-        secureRandom.nextBytes(tokenBytes);
-        String rawToken = "inv-" + Base64.getUrlEncoder().withoutPadding().encodeToString(tokenBytes);
+        String rawToken;
+        try {
+            new SecureRandom().nextBytes(tokenBytes);
+            rawToken = "inv-" + Base64.getUrlEncoder().withoutPadding().encodeToString(tokenBytes);
+        } finally {
+            Arrays.fill(tokenBytes, (byte) 0);
+        }
         String tokenDigest = apiKeyRegistry.computeDigest(rawToken);
 
         Instant now = Instant.now();
         Instant expiresAt = now.plusSeconds(3600 * 24); // 24 hours
-
-        if (req.role() == null
-                || !Set.of("OWNER", "ADMIN", "MEMBER").contains(req.role().toUpperCase())) {
-            return Response.status(Response.Status.FORBIDDEN)
-                    .entity(new ErrorResponse("FORBIDDEN", "Invalid membership role requested."))
-                    .build();
-        }
 
         String invitationId =
                 "inv_" + UUID.randomUUID().toString().replace("-", "").substring(0, 16);
         IdentityInvitationDto invitation = new IdentityInvitationDto(
                 invitationId,
                 workspaceId,
-                req.role(),
+                invitedRole,
                 tokenDigest,
                 req.optionalEmailConstraint(),
                 expiresAt,
@@ -181,7 +193,7 @@ public class IdentityResource {
                 "system",
                 SecurityEventType.SECURITY,
                 "action=create_invitation invitationId=" + invitationId + " workspaceId=" + workspaceId + " role="
-                        + req.role());
+                        + invitedRole);
 
         return Response.ok(new CreateInvitationResponse(invitationId, rawToken, expiresAt))
                 .build();
@@ -221,8 +233,12 @@ public class IdentityResource {
             for (ExternalIdentityDto ext : externalIds) {
                 String claims = ext.safeClaims();
                 if (claims != null && claims.contains("\"email\"")) {
-                    String email = parseEmailFromClaims(claims);
-                    if (email != null && invitation.optionalEmailConstraint().equalsIgnoreCase(email.trim())) {
+                    VerifiedEmail verifiedEmail = parseVerifiedEmail(claims);
+                    if (verifiedEmail != null
+                            && verifiedEmail.verified()
+                            && invitation
+                                    .optionalEmailConstraint()
+                                    .equalsIgnoreCase(verifiedEmail.email().trim())) {
                         emailMatched = true;
                         break;
                     }
@@ -237,12 +253,7 @@ public class IdentityResource {
             }
         }
 
-        // Add user to workspace membership
-        WorkspaceMembershipDto membership =
-                new WorkspaceMembershipDto(invitation.workspaceId(), userId, invitation.role(), "ACTIVE", 1, now, now);
-        identityStore.saveMembership(membership);
-
-        // Update invitation as accepted
+        // Claim the invitation before granting access. The revision check makes replay atomic.
         IdentityInvitationDto accepted = new IdentityInvitationDto(
                 invitation.invitationId(),
                 invitation.workspaceId(),
@@ -255,7 +266,19 @@ public class IdentityResource {
                 invitation.revision(),
                 invitation.createdAt(),
                 now);
-        invitationStore.save(accepted);
+        if (!invitationStore.save(accepted)) {
+            return Response.status(Response.Status.CONFLICT)
+                    .entity(new ErrorResponse("INVITATION_CONFLICT", "Invitation was accepted by another request."))
+                    .build();
+        }
+
+        WorkspaceMembershipDto membership =
+                new WorkspaceMembershipDto(invitation.workspaceId(), userId, invitation.role(), "ACTIVE", 0, now, now);
+        if (!identityStore.saveMembership(membership)) {
+            return Response.status(Response.Status.CONFLICT)
+                    .entity(new ErrorResponse("MEMBERSHIP_CONFLICT", "Workspace membership changed concurrently."))
+                    .build();
+        }
 
         auditService.recordMandatory(
                 "accept-invitation",
@@ -298,6 +321,12 @@ public class IdentityResource {
             return Response.status(Response.Status.NOT_FOUND).build();
         }
 
+        if ("ADMIN".equals(role) && "OWNER".equals(targetMembership.get().role())) {
+            return Response.status(Response.Status.FORBIDDEN)
+                    .entity(new ErrorResponse("FORBIDDEN", "Admins cannot remove workspace owners."))
+                    .build();
+        }
+
         // Last active owner protection
         if ("OWNER".equals(targetMembership.get().role())) {
             List<WorkspaceMembershipDto> workspaceMembers = identityStore.listMembershipsByWorkspaceId(workspaceId);
@@ -313,7 +342,11 @@ public class IdentityResource {
             }
         }
 
-        identityStore.deleteMembership(workspaceId, memberId);
+        if (identityStore.deleteMembershipIfNotLastOwner(workspaceId, memberId) == 0) {
+            return Response.status(Response.Status.CONFLICT)
+                    .entity(new ErrorResponse("MEMBERSHIP_CONFLICT", "Membership changed concurrently."))
+                    .build();
+        }
 
         auditService.recordMandatory(
                 "remove-member",
@@ -357,7 +390,7 @@ public class IdentityResource {
         }
 
         Instant now = Instant.now();
-        identityStore.saveMembership(new WorkspaceMembershipDto(
+        boolean promoted = identityStore.saveMembership(new WorkspaceMembershipDto(
                 workspaceId,
                 targetUserId,
                 "OWNER",
@@ -365,9 +398,14 @@ public class IdentityResource {
                 targetMembership.get().revision(),
                 targetMembership.get().createdAt(),
                 now));
+        if (!promoted) {
+            return Response.status(Response.Status.CONFLICT)
+                    .entity(new ErrorResponse("MEMBERSHIP_CONFLICT", "Target membership changed concurrently."))
+                    .build();
+        }
 
         if (!userId.equals(targetUserId)) {
-            identityStore.saveMembership(new WorkspaceMembershipDto(
+            boolean demoted = identityStore.saveMembership(new WorkspaceMembershipDto(
                     workspaceId,
                     userId,
                     "ADMIN",
@@ -375,6 +413,11 @@ public class IdentityResource {
                     callerMembership.get().revision(),
                     callerMembership.get().createdAt(),
                     now));
+            if (!demoted) {
+                return Response.status(Response.Status.CONFLICT)
+                        .entity(new ErrorResponse("MEMBERSHIP_CONFLICT", "Owner membership changed concurrently."))
+                        .build();
+            }
         }
 
         auditService.recordMandatory(
@@ -443,22 +486,19 @@ public class IdentityResource {
         return Response.ok(new RotateCredentialsResponse(true, revokedCount)).build();
     }
 
-    private String parseEmailFromClaims(String claims) {
+    private static VerifiedEmail parseVerifiedEmail(String claims) {
         if (claims == null) return null;
         try {
-            int idx = claims.indexOf("\"email\"");
-            if (idx == -1) return null;
-            int colonIdx = claims.indexOf(":", idx);
-            if (colonIdx == -1) return null;
-            int startQuote = claims.indexOf("\"", colonIdx);
-            if (startQuote == -1) return null;
-            int endQuote = claims.indexOf("\"", startQuote + 1);
-            if (endQuote == -1) return null;
-            return claims.substring(startQuote + 1, endQuote);
+            Map<String, Object> parsed = JSON.readValue(claims, new TypeReference<Map<String, Object>>() {});
+            Object email = parsed.get("email");
+            if (!(email instanceof String value) || value.isBlank()) return null;
+            return new VerifiedEmail(value, Boolean.TRUE.equals(parsed.get("email_verified")));
         } catch (Exception e) {
             return null;
         }
     }
+
+    private record VerifiedEmail(String email, boolean verified) {}
 
     public record ErrorResponse(String code, String message) {}
 

@@ -24,7 +24,7 @@ public class FsIdentityInvitationStoreAdapter implements IdentityInvitationStore
     FilesystemFileStore store;
 
     @Override
-    public boolean save(IdentityInvitationDto invitation) {
+    public synchronized boolean save(IdentityInvitationDto invitation) {
         List<String> path = List.of(DOMAIN, invitation.invitationId() + ".json");
         Optional<IdentityInvitationDto> existing = store.readOptional(path, IdentityInvitationDto.class);
         if (existing.isEmpty()) {

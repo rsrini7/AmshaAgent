@@ -25,8 +25,10 @@ import java.security.MessageDigest;
 import java.security.SecureRandom;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.Base64;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
@@ -45,6 +47,8 @@ import com.amsha.persistence.api.IdentityUserDto;
 import com.amsha.persistence.api.WebSessionDto;
 import com.amsha.persistence.api.WebSessionStorePort;
 import com.amsha.persistence.api.WorkspaceMembershipDto;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 
@@ -58,7 +62,7 @@ import io.smallrye.common.annotation.RunOnVirtualThread;
 @RunOnVirtualThread
 public class AuthResource {
 
-    private final SecureRandom secureRandom = new SecureRandom();
+    private static final ObjectMapper JSON = new ObjectMapper();
 
     @Inject
     @ConfigProperty(name = "amsha.auth.session.idle-timeout-minutes", defaultValue = "720")
@@ -198,13 +202,8 @@ public class AuthResource {
         String userId = resolveOrRegisterUser(providerId, issuer, profile, activeSessionToken, state, now);
 
         // Establish secure browser session
-        byte[] sessionBytes = new byte[32];
-        byte[] csrfBytes = new byte[32];
-        secureRandom.nextBytes(sessionBytes);
-        secureRandom.nextBytes(csrfBytes);
-
-        String sessionToken = "sess-" + Base64.getUrlEncoder().withoutPadding().encodeToString(sessionBytes);
-        String csrfToken = "csrf-" + Base64.getUrlEncoder().withoutPadding().encodeToString(csrfBytes);
+        String sessionToken = "sess-" + randomUrlSafe(32);
+        String csrfToken = "csrf-" + randomUrlSafe(32);
 
         String sessionDigest = apiKeyRegistry.computeDigest(sessionToken);
         String csrfDigest = apiKeyRegistry.computeDigest(csrfToken);
@@ -310,8 +309,12 @@ public class AuthResource {
 
     private String randomUrlSafe(int length) {
         byte[] bytes = new byte[length];
-        secureRandom.nextBytes(bytes);
-        return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
+        try {
+            new SecureRandom().nextBytes(bytes);
+            return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
+        } finally {
+            Arrays.fill(bytes, (byte) 0);
+        }
     }
 
     private static String s256(String verifier) {
@@ -343,14 +346,21 @@ public class AuthResource {
         if (activeSessionToken != null && !activeSessionToken.isBlank()) {
             String sessionDigest = apiKeyRegistry.computeDigest(activeSessionToken);
             Optional<WebSessionDto> sessionOpt = webSessionStore.findByTokenDigest(sessionDigest);
-            if (sessionOpt.isPresent() && sessionOpt.get().revokedAt() == null) {
+            if (sessionOpt.isPresent() && isActive(sessionOpt.get(), now)) {
                 String userId = sessionOpt.get().userId();
                 // Link new external identity
-                String safeClaimsJson = profile.email() != null
-                        ? "{\"email\":\"" + profile.email().replace("\"", "\\\"") + "\"}"
-                        : "{}";
+                String safeClaimsJson = safeClaims(profile);
                 identityStore.saveExternalIdentity(new ExternalIdentityDto(
                         providerId, issuer, profile.providerUserId(), userId, safeClaimsJson, now, now));
+                if (identityStore
+                        .findExternalIdentity(providerId, issuer, profile.providerUserId())
+                        .map(ExternalIdentityDto::userId)
+                        .filter(userId::equals)
+                        .isEmpty()) {
+                    throw new WebApplicationException(Response.status(Response.Status.CONFLICT)
+                            .entity(new ErrorResponse("IDENTITY_CONFLICT", "External identity is already linked."))
+                            .build());
+                }
                 auditService.recordMandatory(
                         "account-link",
                         userId,
@@ -381,7 +391,7 @@ public class AuthResource {
                 }
                 if (invitation.revokedAt() == null && !invitation.expiresAt().isBefore(now)) {
                     // Enforce invitation email constraint
-                    if (isEmailConstraintViolated(invitation, profile.email())) {
+                    if (isEmailConstraintViolated(invitation, profile)) {
                         throw new WebApplicationException(Response.status(Response.Status.FORBIDDEN)
                                 .entity(new ErrorResponse(
                                         "EMAIL_CONSTRAINT_MISMATCH",
@@ -391,19 +401,7 @@ public class AuthResource {
                     // Register new user
                     String userId = "usr_"
                             + UUID.randomUUID().toString().replace("-", "").substring(0, 16);
-                    identityStore.saveUser(new IdentityUserDto(
-                            userId,
-                            profile.displayName() != null ? profile.displayName() : profile.email(),
-                            "ACTIVE",
-                            now,
-                            now));
-                    String safeClaimsJson = profile.email() != null
-                            ? "{\"email\":\"" + profile.email().replace("\"", "\\\"") + "\"}"
-                            : "{}";
-                    identityStore.saveExternalIdentity(new ExternalIdentityDto(
-                            providerId, issuer, profile.providerUserId(), userId, safeClaimsJson, now, now));
 
-                    // Accept invitation and update its state
                     IdentityInvitationDto acceptedInv = new IdentityInvitationDto(
                             invitation.invitationId(),
                             invitation.workspaceId(),
@@ -416,12 +414,41 @@ public class AuthResource {
                             invitation.revision(),
                             invitation.createdAt(),
                             now);
-                    invitationStore.save(acceptedInv);
+                    if (!invitationStore.save(acceptedInv)) {
+                        throw new WebApplicationException(Response.status(Response.Status.CONFLICT)
+                                .entity(new ErrorResponse(
+                                        "INVITATION_CONFLICT", "Invitation was accepted by another request."))
+                                .build());
+                    }
+
+                    identityStore.saveUser(new IdentityUserDto(
+                            userId,
+                            profile.displayName() != null ? profile.displayName() : profile.email(),
+                            "ACTIVE",
+                            now,
+                            now));
+                    String safeClaimsJson = safeClaims(profile);
+                    identityStore.saveExternalIdentity(new ExternalIdentityDto(
+                            providerId, issuer, profile.providerUserId(), userId, safeClaimsJson, now, now));
+                    if (identityStore
+                            .findExternalIdentity(providerId, issuer, profile.providerUserId())
+                            .map(ExternalIdentityDto::userId)
+                            .filter(userId::equals)
+                            .isEmpty()) {
+                        throw new WebApplicationException(Response.status(Response.Status.CONFLICT)
+                                .entity(new ErrorResponse("IDENTITY_CONFLICT", "External identity is already linked."))
+                                .build());
+                    }
 
                     // Save default workspace membership
                     WorkspaceMembershipDto membership = new WorkspaceMembershipDto(
                             invitation.workspaceId(), userId, invitation.role(), "ACTIVE", 0, now, now);
-                    identityStore.saveMembership(membership);
+                    if (!identityStore.saveMembership(membership)) {
+                        throw new WebApplicationException(Response.status(Response.Status.CONFLICT)
+                                .entity(new ErrorResponse(
+                                        "MEMBERSHIP_CONFLICT", "Workspace membership changed concurrently."))
+                                .build());
+                    }
 
                     auditService.recordMandatory(
                             "user-register-invite",
@@ -448,12 +475,33 @@ public class AuthResource {
         }
     }
 
-    private boolean isEmailConstraintViolated(IdentityInvitationDto invitation, String email) {
+    private static boolean isActive(WebSessionDto session, Instant now) {
+        return session.revokedAt() == null
+                && !session.idleExpiresAt().isBefore(now)
+                && !session.absoluteExpiresAt().isBefore(now);
+    }
+
+    private static boolean isEmailConstraintViolated(IdentityInvitationDto invitation, ExternalUserProfile profile) {
         if (invitation.optionalEmailConstraint() == null
                 || invitation.optionalEmailConstraint().isBlank()) {
             return false;
         }
-        return email == null || !invitation.optionalEmailConstraint().equalsIgnoreCase(email.trim());
+        return !profile.emailVerified()
+                || profile.email() == null
+                || !invitation
+                        .optionalEmailConstraint()
+                        .equalsIgnoreCase(profile.email().trim());
+    }
+
+    private static String safeClaims(ExternalUserProfile profile) {
+        if (profile.email() == null) {
+            return "{}";
+        }
+        try {
+            return JSON.writeValueAsString(Map.of("email", profile.email(), "email_verified", profile.emailVerified()));
+        } catch (JsonProcessingException e) {
+            throw new IllegalStateException("Failed to serialize safe identity claims", e);
+        }
     }
 
     public record ErrorResponse(String code, String message) {}

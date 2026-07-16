@@ -165,6 +165,36 @@ All HTTP test files live in `rest-http/`. See [rest-http/README.md](../rest-http
 | `14_budget_governance.http` | Budget soft/hard limits, SUPERVISED/FULL/READONLY autonomy |
 | `15_phase64_regression.http` | Full Phase 64 regression suite (A1–A7, B1–B3, C1–C3, D smoke) |
 
+### P109 Identity and REST Validation
+
+The P109 shell validators exercise bootstrap ownership, identity and workspace
+authorization, invitations, API credentials, OAuth negative paths, sessions,
+CSRF enforcement, and last-owner protection. Run them against a running jar or
+native serve-mode instance:
+
+```bash
+# The identity suite needs a fresh database.
+AMSHA_DATA_DIR=/tmp/amsha-p109-validation \
+TEST_BASE=http://localhost:8081 \
+bash rest-http/scripts/run_all_validations.sh --identity
+
+TEST_BASE=http://localhost:8081 \
+bash rest-http/scripts/run_all_validations.sh --auth-session
+```
+
+`TEST_BASE` defaults to `http://localhost:8080` and is inherited by the master
+preflight and every child validator through
+`rest-http/scripts/common_env.sh`. The master runner returns a nonzero exit code
+if any selected suite fails. Use an isolated `AMSHA_DATA_DIR` for rebuilt
+native binaries; do not reuse the normal `dist/data` for the fresh identity
+claim test.
+
+These scripts are smoke/contract validators rather than exhaustive endpoint
+coverage. Workspace credential rotation, successful ownership transfer,
+separate-user invitation acceptance, concurrent last-owner races, and the
+positive CSRF/logout/session-rotation flows remain in the Java security tests
+and HTTP client scenarios.
+
 ---
 
 ## 3. REST API - Base URL & Authentication

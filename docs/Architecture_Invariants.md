@@ -427,6 +427,12 @@ The agent loop has three cooperative guards that MUST remain in place (see `AGEN
 - Identity columns use `INTEGER PRIMARY KEY AUTOINCREMENT` (SQLite) or `BIGSERIAL` (PostgreSQL) in DDL.
 - `@Version` optimistic locking is not used — JDBI-based adapters manage concurrency via explicit SQL conditions (e.g., `WHERE status = :expectedStatus` in status transitions).
 
+#### Identity membership concurrency
+
+- Removing a membership must use the atomic `deleteMembershipIfNotLastOwner` port operation, not a separate owner count followed by a delete.
+- SQLite performs the conditional delete in one statement; PostgreSQL serializes the owner check with an advisory lock; the filesystem adapter synchronizes the check and delete.
+- Every implementation must preserve the invariant that concurrent requests cannot remove the final active `OWNER` from a workspace.
+
 ## 5.7 EncryptedSecret version field ownership (REMOVED — JDBI Migration)
 
 `EncryptedSecret.ormVersion` was Hibernate-managed and is now **removed**. Both `SqliteSecretStoreAdapter` and `PostgresSecretStoreAdapter` use `SecretJdbiDao` directly via the `SecretDtoRow` record, bypassing all JPA entity classes. The `ormVersion` column no longer exists in the schema — both backends use JDBI exclusively.

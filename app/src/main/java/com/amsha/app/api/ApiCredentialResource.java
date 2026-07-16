@@ -15,6 +15,7 @@ import jakarta.ws.rs.core.SecurityContext;
 
 import java.security.SecureRandom;
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.Base64;
 import java.util.List;
 import java.util.Optional;
@@ -54,8 +55,6 @@ public class ApiCredentialResource {
 
     @Context
     SecurityContext securityContext;
-
-    private final SecureRandom secureRandom = new SecureRandom();
 
     @POST
     public Response createApiCredential(IdentityResource.CreateApiCredentialRequest req) {
@@ -105,8 +104,13 @@ public class ApiCredentialResource {
         }
 
         byte[] keyBytes = new byte[32];
-        secureRandom.nextBytes(keyBytes);
-        String rawKey = "sk-" + Base64.getUrlEncoder().withoutPadding().encodeToString(keyBytes);
+        String rawKey;
+        try {
+            new SecureRandom().nextBytes(keyBytes);
+            rawKey = "sk-" + Base64.getUrlEncoder().withoutPadding().encodeToString(keyBytes);
+        } finally {
+            Arrays.fill(keyBytes, (byte) 0);
+        }
         String keyDigest = apiKeyRegistry.computeDigest(rawKey);
 
         Instant now = Instant.now();
@@ -116,7 +120,12 @@ public class ApiCredentialResource {
                 "cred_" + UUID.randomUUID().toString().replace("-", "").substring(0, 16);
         ApiCredentialDto cred =
                 new ApiCredentialDto(credentialId, userId, keyDigest, req.roleSet(), 0, expiresAt, null, now, now);
-        apiCredentialStore.save(cred);
+        if (!apiCredentialStore.save(cred)) {
+            return Response.status(Response.Status.CONFLICT)
+                    .entity(new IdentityResource.ErrorResponse(
+                            "CREDENTIAL_CONFLICT", "Credential changed concurrently."))
+                    .build();
+        }
 
         apiKeyRegistry.register(userId, rawKey);
 

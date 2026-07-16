@@ -294,6 +294,25 @@ The script claims the first owner, extracts the raw key from the
 `Set-Cookie: AMSHA_API_KEY=...` response header (the key is deliberately
 **not** in the JSON body), and exercises every automatable path.
 
+All validators default to `http://localhost:8080`. To validate another running
+instance, set `TEST_BASE`; the value is shared by the master preflight and every
+child validator:
+
+```bash
+TEST_BASE=http://localhost:8081 bash rest-http/scripts/run_all_validations.sh --identity
+TEST_BASE=http://localhost:8081 bash rest-http/scripts/run_all_validations.sh --auth-session
+```
+
+The master runner exits nonzero when one or more suites fail. The identity suite
+requires a fresh database; use an isolated `AMSHA_DATA_DIR` when validating a
+rebuilt native binary so the normal `dist/data` is not modified.
+
+The shell suite is an automatable smoke/contract subset, not complete endpoint
+coverage. It does not perform workspace credential rotation, a successful
+ownership transfer, separate-user invitation acceptance, or concurrent
+last-owner race. Session logout/rotation and CSRF success paths are covered by
+the Java security tests and the HTTP client scenarios.
+
 ### Key P109 behaviors asserted
 
 - Bootstrap claim is loopback-only and idempotent (`409 ALREADY_CLAIMED`).

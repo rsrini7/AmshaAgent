@@ -44,4 +44,6 @@ public interface IdentityStorePort {
     List<WorkspaceMembershipDto> listMembershipsByUserId(String userId);
 
     int deleteMembership(String workspaceId, String userId);
+
+    int deleteMembershipIfNotLastOwner(String workspaceId, String userId);
 }

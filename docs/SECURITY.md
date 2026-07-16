@@ -103,8 +103,8 @@ Outbound HTTP MCP connections may carry credential headers (API keys, bearer tok
 Amsha Agent adopts an **OIDC-first identity model with API-key operator fallback** to govern dashboard access, multi-user resource sharing, and system administration.
 
 ### 1. External Identity Providers (IdP)
-- **Generic OIDC**: Supports OIDC authorization code flow with PKCE (RFC 7636) for standards-compliant identity managers (Keycloak, Authentik, Google). Asserts `RS256` asymmetric signatures for ID token validation against public JWKS.
-- **GitHub OAuth**: A lightweight standalone adapter to authenticate GitHub users and securely retrieve verified primary emails.
+- **Generic OIDC**: Supports OIDC authorization code flow with PKCE (RFC 7636) for standards-compliant identity managers (Keycloak, Authentik, Google). Asserts `RS256` asymmetric signatures for ID token validation against public JWKS and requires a valid, non-expired `exp` claim.
+- **GitHub OAuth**: A lightweight standalone adapter to authenticate GitHub users and securely retrieve verified primary emails. Provider email verification is retained on the external profile and is not inferred merely from an email string.
 - **Fixed Redirect URIs**: Callback endpoints are strictly constrained on the deployment side (`amsha.auth.idp.oidc.redirect-uri` / `amsha.auth.idp.github.redirect-uri`) to prevent open-redirect exploits.
 
 ### 2. Browser Session Lifecycle & CSRF
@@ -118,8 +118,8 @@ Amsha Agent adopts an **OIDC-first identity model with API-key operator fallback
   - `OWNER`: Full administrative rights, workspace-wide credential rotation, invitation issuance, and ownership transfer.
   - `ADMIN`: Resource configuration, integration management, and non-owner member management.
   - `MEMBER`: Read-only/execution privileges over workspace connection channels without credential visibility.
-- **Invitations**: expirable (24 hours), single-use invitation tokens allows adding administrators or members. Optional email constraints are cryptographically verified upon callback acceptance.
-- **Last Owner Invariant**: The system blocks any demotion, deletion, or inactivation that would leave a workspace with zero active `OWNER` users.
+- **Invitations**: expirable (24 hours), single-use invitation tokens allow adding administrators or members. Optional email constraints are accepted only when the authenticated provider profile reports a verified email address; an email value alone is insufficient.
+- **Last Owner Invariant**: The system blocks any demotion, deletion, or inactivation that would leave a workspace with zero active `OWNER` users. The membership delete-and-count check is atomic across SQLite, PostgreSQL, and filesystem persistence implementations, preventing concurrent requests from removing the final owner.
 
 ### 4. First-Owner Bootstrap & Recovery
 - Fresh deployments start in the `UNCLAIMED` status. The first caller on the loopback interface (`localhost`/`127.0.0.1`) can claim initial system ownership, generating a default workspace, the first `OWNER` identity, and an API credential.

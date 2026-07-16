@@ -17,6 +17,7 @@ import jakarta.ws.rs.core.UriInfo;
 import java.security.SecureRandom;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.Base64;
 import java.util.List;
 import java.util.Optional;
@@ -59,8 +60,6 @@ public class SessionResource {
     @ConfigProperty(name = "amsha.auth.session.idle-timeout-minutes", defaultValue = "720")
     int idleTimeoutMinutes;
 
-    private final SecureRandom secureRandom = new SecureRandom();
-
     @POST
     @Path("/rotate")
     public Response rotateSession() {
@@ -81,23 +80,20 @@ public class SessionResource {
                     .build();
         }
         WebSessionDto session = sessionOpt.get();
-        if (session.revokedAt() != null) {
+        Instant now = Instant.now();
+        if (session.revokedAt() != null
+                || session.idleExpiresAt().isBefore(now)
+                || session.absoluteExpiresAt().isBefore(now)) {
             return Response.status(Response.Status.UNAUTHORIZED)
-                    .entity(new AuthErrorResponse(
-                            "UNAUTHORIZED", "Session revoked", Instant.now().toString()))
+                    .entity(new AuthErrorResponse("UNAUTHORIZED", "Session is revoked or expired", now.toString()))
                     .build();
         }
 
-        byte[] sessionBytes = new byte[32];
-        secureRandom.nextBytes(sessionBytes);
-        String newToken = "sess-" + Base64.getUrlEncoder().withoutPadding().encodeToString(sessionBytes);
-        byte[] csrfBytes = new byte[32];
-        secureRandom.nextBytes(csrfBytes);
-        String newCsrf = "csrf-" + Base64.getUrlEncoder().withoutPadding().encodeToString(csrfBytes);
+        String newToken = "sess-" + randomUrlSafe(32);
+        String newCsrf = "csrf-" + randomUrlSafe(32);
 
         String newSessionDigest = apiKeyRegistry.computeDigest(newToken);
         String newCsrfDigest = apiKeyRegistry.computeDigest(newCsrf);
-        Instant now = Instant.now();
         WebSessionDto rotated = new WebSessionDto(
                 session.sessionId(),
                 session.userId(),
@@ -111,7 +107,14 @@ public class SessionResource {
                 session.revision(),
                 session.createdAt(),
                 now);
-        webSessionStore.save(rotated);
+        if (!webSessionStore.save(rotated)) {
+            return Response.status(Response.Status.CONFLICT)
+                    .entity(new AuthErrorResponse(
+                            "SESSION_CONFLICT",
+                            "Session changed concurrently; retry with the current token",
+                            now.toString()))
+                    .build();
+        }
 
         apiKeyRegistry.registerRotatedSession(oldDigest, session.sessionId());
 
@@ -182,6 +185,16 @@ public class SessionResource {
                 "action=revoke_all_sessions count=" + sessions.size());
 
         return Response.ok(new RevokeAllResponse(true)).build();
+    }
+
+    private static String randomUrlSafe(int length) {
+        byte[] bytes = new byte[length];
+        try {
+            new SecureRandom().nextBytes(bytes);
+            return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
+        } finally {
+            Arrays.fill(bytes, (byte) 0);
+        }
     }
 
     public record RevokeAllResponse(boolean success) {}

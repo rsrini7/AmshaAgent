@@ -12,6 +12,7 @@ import java.util.UUID;
 import com.amsha.app.api.IdentityResource.*;
 import com.amsha.core.security.ExternalIdentityProvider;
 import com.amsha.core.security.ExternalUserProfile;
+import com.amsha.persistence.api.ExternalIdentityDto;
 import com.amsha.persistence.api.IdentityInvitationDto;
 import com.amsha.persistence.api.IdentityInvitationStorePort;
 import com.amsha.persistence.api.IdentityStorePort;
@@ -228,6 +229,46 @@ class IdentitySecurityIntegrationTest {
                 .body("code", is("INVITATION_EXPIRED"));
     }
 
+    @Test
+    void constrainedInvitationRejectsUnverifiedEmail() {
+        String workspaceId = "ws_verified_email";
+        String ownerId = "usr_verified_owner";
+        seedOwner(ownerId, workspaceId);
+        String[] owner = sessionCookie(ownerId, workspaceId).split(":");
+
+        var invite = given().cookie("AMSHA_SESSION_ID", owner[0])
+                .header("X-CSRF-Token", owner[1])
+                .contentType(ContentType.JSON)
+                .body(new CreateInvitationRequest("MEMBER", "member@example.com"))
+                .post("/api/v1/identity/workspaces/" + workspaceId + "/invitations")
+                .then()
+                .statusCode(200)
+                .extract();
+
+        String userId = "usr_unverified_email";
+        Instant now = Instant.now();
+        identityStore.saveUser(new IdentityUserDto(userId, userId, "ACTIVE", now, now));
+        identityStore.saveExternalIdentity(new ExternalIdentityDto(
+                "oidc",
+                "issuer",
+                "subject",
+                userId,
+                "{\"email\":\"member@example.com\",\"email_verified\":false}",
+                now,
+                now));
+        String[] user = sessionCookie(userId, workspaceId).split(":");
+
+        given().cookie("AMSHA_SESSION_ID", user[0])
+                .header("X-CSRF-Token", user[1])
+                .contentType(ContentType.JSON)
+                .post("/api/v1/identity/invitations/" + invite.path("rawToken") + "/accept")
+                .then()
+                .statusCode(403)
+                .body("code", is("EMAIL_CONSTRAINT_MISMATCH"));
+
+        assert identityStore.findMembership(workspaceId, userId).isEmpty();
+    }
+
     @ApplicationScoped
     @Mock
     public static class MockExternalIdentityProvider implements ExternalIdentityProvider {
@@ -243,7 +284,7 @@ class IdentitySecurityIntegrationTest {
 
         @Override
         public ExternalUserProfile authenticate(String code, String redirectUri) {
-            return new ExternalUserProfile("mock_user_123", "mock@user.com", "Mock User", "https://avatar.url");
+            return new ExternalUserProfile("mock_user_123", "mock@user.com", true, "Mock User", "https://avatar.url");
         }
     }
 }

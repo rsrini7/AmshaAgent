@@ -133,3 +133,11 @@ and the memory section in `docs/Architecture_Invariants.md`.
 | Markdown | `python3 ./verify_docs.py` |
 | Native-sensitive code | `./mvnw compile -DskipTests -q`; use `mise build:native-local` when applicable |
 | SkillsJar dependencies | `python3 ./verify_skillsjar_index.py` |
+
+### REST validation
+
+- Shell validators default to `http://localhost:8080`; set `TEST_BASE` when
+  targeting another runtime. The shared value must reach both
+  `rest-http/scripts/run_all_validations.sh` and child scripts through
+  `rest-http/scripts/common_env.sh`.
+- The master validator must return a nonzero exit code when any suite fails.

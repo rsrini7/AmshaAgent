@@ -124,6 +124,13 @@ public class SqliteIdentityStoreAdapter implements IdentityStorePort {
         return jdbi.withExtension(IdentityJdbiDao.class, dao -> dao.deleteMembership(workspaceId, userId));
     }
 
+    @Override
+    public int deleteMembershipIfNotLastOwner(String workspaceId, String userId) {
+        if (isBlank(workspaceId) || isBlank(userId)) return 0;
+        return jdbi.withExtension(
+                IdentityJdbiDao.class, dao -> dao.deleteMembershipIfNotLastOwner(workspaceId, userId));
+    }
+
     private static boolean isBlank(String value) {
         return value == null || value.isBlank();
     }
