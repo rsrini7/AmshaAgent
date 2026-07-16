@@ -333,6 +333,32 @@ plus the internal-key-only `403` auth model and `404` checks. Synthesize depends
 the configured LLM; a transient backend error is retried once. Reused seed data lives
 in `scripts/data/seed_self_evolve.sql`.
 
+### Shell validators (scripts/*.sh)
+
+Each validator is a standalone `bash` script that `curl`s a running server (no VS Code
+needed). Run individually or via the master runner `run_all_validations.sh`.
+
+| Flag | Script | Coverage | Cost |
+|---|---|---|---|
+| `--reflex` | `validate_reflex.sh` | Reflex commands via goal text | zero-token |
+| `--skills` | `validate_skill.sh` | Skill CRUD, routing, errors | low |
+| `--mcp` | `validate_mcp.sh` | MCP JSON-RPC protocol + connect | low |
+| `--memory` | `validate_memory.sh` | Archival/core memory + Arabic search (HITL-aware) | LLM |
+| `--web` | `validate_web.sh` | Web search/fetch/SSRF blocks (HITL-aware) | LLM |
+| `--roles` | `validate_roles.sh` | Agent roles + aliases (HITL-aware) | LLM |
+| `--admin` | `validate_admin.sh` | Directives/prompts/tiered-memory admin | fast |
+| `--auth-session` | `validate_auth_session.sh` | API-key auth + session lifecycle | fast |
+| `--identity` | `validate_identity_access.sh` | P109 bootstrap/identity/OAuth | fast |
+| `--pii-audit` | `validate_pii_injection_audit.sh` | PII redaction + injection + audit HMAC | fast |
+| `--self-evolve` | `validate_self_evolve.sh` | Directives lifecycle (seeds when `--data-dir` given) | LLM |
+| `--hitl` | `validate_hitl.sh` | Approve/deny (REST + goal-string + taskId), 401/409 | LLM |
+| `--rag` | `validate_rag.sh` | Ingest → approve → recall + rag_chunk isolation | LLM |
+| `--budget` | `validate_budget.sh` | Budget limits + autonomy SUPERVISED/FULL/READONLY | LLM |
+| `--sse-settings` | `validate_sse_settings.sh` | UI SSE streams, ws-token, settings CRUD | fast |
+| `--cron` | `validate_cron.sh` | Programmatic cron REST lifecycle | LLM |
+| `--fast` | `(master)` | all fast/zero-token validators | mixed |
+| `--llm` | `(master)` | memory + web + roles + cron + rag + budget + hitl | LLM |
+
 ### New P109 config flags (also in `.env.example`)
 
 ```
