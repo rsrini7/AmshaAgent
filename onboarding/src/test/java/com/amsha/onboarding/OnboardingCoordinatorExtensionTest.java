@@ -130,6 +130,7 @@ class OnboardingCoordinatorExtensionTest {
         coordinator.extensions = exts;
         coordinator.scrubber = scrubber;
         coordinator.commitSaga = commitSaga;
+        coordinator.profileExporter = new OnboardingProfileExporter();
     }
 
     private OnboardingDraftDto draft(String id, OnboardingDraftState state, List<String> completed) {

@@ -93,15 +93,18 @@ public class OnboardingCommitSaga {
             throw new IllegalStateException("Extension commit failed: " + e.getMessage(), e);
         }
 
-        activateLlmSettings(d);
-
-        OnboardingDraftDto updated = markCompleted(d);
-        if (draftStore.update(updated, d.revision())) {
-            return Optional.of(updated);
+        try {
+            activateLlmSettings(d);
+            OnboardingDraftDto updated = markCompleted(d);
+            if (draftStore.update(updated, d.revision())) {
+                return Optional.of(updated);
+            }
+            throw new IllegalStateException("Draft update failed after extension commits");
+        } catch (Exception e) {
+            log.errorf("Draft completion failed for %s; compensating extensions: %s", draftId, e.getMessage());
+            compensateAll(activeCommits, draftId);
+            throw new IllegalStateException("Onboarding completion failed: " + e.getMessage(), e);
         }
-        log.errorf("Draft update failed after extension commits for draft %s; compensating", draftId);
-        compensateAll(activeCommits, draftId);
-        return draftStore.findById(draftId);
     }
 
     /**
@@ -133,7 +136,7 @@ public class OnboardingCommitSaga {
                 });
             }
         } catch (Exception e) {
-            log.error("Failed to activate LLM configuration on draft commit", e);
+            throw new IllegalStateException("Failed to activate LLM configuration on draft commit", e);
         }
     }
 
@@ -192,7 +195,13 @@ public class OnboardingCommitSaga {
 
         persistReceipt(extId, d.draftId(), operationId, "", "PREPARED");
         String receipt = commit.commit(operationId);
-        persistReceipt(extId, d.draftId(), operationId, receipt, "COMMITTED");
+        try {
+            persistReceipt(extId, d.draftId(), operationId, receipt, "COMMITTED");
+        } catch (Exception receiptFailure) {
+            compensateAfterReceiptFailure(commit, operationId, extId, d.draftId(), receipt, receiptFailure);
+            throw new IllegalStateException(
+                    "Could not persist committed receipt for extension " + extId, receiptFailure);
+        }
         log.infof("[ONBOARDING] Committed extension %s receipt=%s for draft %s", extId, receipt, d.draftId());
         return new ActiveCommit(extId, operationId, receipt, commit);
     }
@@ -233,6 +242,26 @@ public class OnboardingCommitSaga {
                         "Compensation failed for extension %s draft %s: %s",
                         ac.extensionId(), draftId, ce.getMessage());
                 persistReceipt(ac.extensionId(), draftId, ac.operationId(), ac.receipt(), "COMPENSATION_FAILED");
+            }
+        }
+    }
+
+    private void compensateAfterReceiptFailure(
+            CompensatableOnboardingCommit commit,
+            String operationId,
+            String extensionId,
+            String draftId,
+            String receipt,
+            Exception receiptFailure) {
+        try {
+            commit.compensate(operationId, receipt);
+            persistReceipt(extensionId, draftId, operationId, receipt, "COMPENSATED");
+        } catch (Exception compensationFailure) {
+            receiptFailure.addSuppressed(compensationFailure);
+            try {
+                persistReceipt(extensionId, draftId, operationId, receipt, "COMPENSATION_FAILED");
+            } catch (Exception persistenceFailure) {
+                receiptFailure.addSuppressed(persistenceFailure);
             }
         }
     }

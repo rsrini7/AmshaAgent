@@ -19,6 +19,7 @@ import com.amsha.persistence.api.McpConnectionDto;
 import com.amsha.persistence.api.McpConnectionHeaderSecretRefDto;
 import com.amsha.persistence.api.ModelProfileDto;
 import com.amsha.persistence.api.ModelRouteAssignmentDto;
+import com.amsha.persistence.api.OnboardingCommitReceiptDto;
 import com.amsha.persistence.api.OnboardingDraftDto;
 import com.amsha.persistence.api.OnboardingDraftPurpose;
 import com.amsha.persistence.api.OnboardingDraftState;
@@ -47,6 +48,7 @@ import com.amsha.persistence.sqlite.jdbi.JdbiProducer;
 import com.amsha.persistence.sqlite.jdbi.LlmProfileJdbiDao;
 import com.amsha.persistence.sqlite.jdbi.LockJdbiDao;
 import com.amsha.persistence.sqlite.jdbi.McpConnectionJdbiDao;
+import com.amsha.persistence.sqlite.jdbi.OnboardingCommitReceiptJdbiDao;
 import com.amsha.persistence.sqlite.jdbi.OnboardingDraftJdbiDao;
 import com.amsha.persistence.sqlite.jdbi.OnboardingExtensionStateJdbiDao;
 import com.amsha.persistence.sqlite.jdbi.PromptJdbiDao;
@@ -82,6 +84,7 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             IdentityInvitationDto.class,
             BootstrapStateDto.class,
             OnboardingDraftDto.class,
+            OnboardingCommitReceiptDto.class,
             OnboardingDraftPurpose.class,
             OnboardingDraftState.class,
             OnboardingExtensionStateDto.class,
@@ -112,6 +115,7 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             IdentityInvitationJdbiDao.class,
             BootstrapStateJdbiDao.class,
             OnboardingDraftJdbiDao.class,
+            OnboardingCommitReceiptJdbiDao.class,
             OnboardingDraftJdbiDao.DraftRowMapper.class,
             OnboardingExtensionStateJdbiDao.class,
             LlmProfileJdbiDao.class,
@@ -143,6 +147,7 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             SqliteIdentityInvitationStoreAdapter.class,
             SqliteBootstrapStateStoreAdapter.class,
             SqliteOnboardingDraftStoreAdapter.class,
+            SqliteOnboardingCommitReceiptStoreAdapter.class,
             SqliteOnboardingExtensionStateStoreAdapter.class,
             SqliteLlmProfileStoreAdapter.class,
             // Existing infrastructure

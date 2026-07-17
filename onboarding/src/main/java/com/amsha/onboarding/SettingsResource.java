@@ -67,7 +67,7 @@ public class SettingsResource {
     @ConfigProperty(name = "quarkus.application.version", defaultValue = "dev")
     String appVersion;
 
-    @ConfigProperty(name = "amsha.api.keys.internal", defaultValue = "dev-key")
+    @ConfigProperty(name = "amsha.api.keys.internal", defaultValue = "key-internal-changeme")
     String internalApiKey;
 
     @Context

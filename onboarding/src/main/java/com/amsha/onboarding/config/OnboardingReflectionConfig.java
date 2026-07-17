@@ -2,6 +2,7 @@ package com.amsha.onboarding.config;
 
 import com.amsha.core.security.PreparedBootstrapCredential;
 import com.amsha.onboarding.OnboardingCoordinator;
+import com.amsha.onboarding.OnboardingProfileExporter;
 import com.amsha.onboarding.OnboardingResource;
 import com.amsha.onboarding.dto.OnboardingStatusDto;
 import com.amsha.onboarding.dto.PromptUpdateRequest;
@@ -31,6 +32,7 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             PromptUpdateRequest.class,
             SettingsDto.class,
             OnboardingCoordinator.class,
+            OnboardingProfileExporter.class,
             OnboardingContext.class,
             OnboardingExtension.class,
             OnboardingFieldDescriptor.class,

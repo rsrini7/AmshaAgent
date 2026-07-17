@@ -13,6 +13,7 @@ import com.amsha.persistence.api.McpConnectionDto;
 import com.amsha.persistence.api.McpConnectionHeaderSecretRefDto;
 import com.amsha.persistence.api.ModelProfileDto;
 import com.amsha.persistence.api.ModelRouteAssignmentDto;
+import com.amsha.persistence.api.OnboardingCommitReceiptDto;
 import com.amsha.persistence.api.OnboardingDraftDto;
 import com.amsha.persistence.api.OnboardingDraftPurpose;
 import com.amsha.persistence.api.OnboardingDraftState;
@@ -52,6 +53,7 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             FsIdentityInvitationStoreAdapter.class,
             FsBootstrapStateStoreAdapter.class,
             FsOnboardingDraftStoreAdapter.class,
+            FsOnboardingCommitReceiptStoreAdapter.class,
             FsOnboardingExtensionStateStoreAdapter.class,
             FsLlmProfileStoreAdapter.class,
             McpConnectionDto.class,
@@ -66,6 +68,7 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             IdentityInvitationDto.class,
             BootstrapStateDto.class,
             OnboardingDraftDto.class,
+            OnboardingCommitReceiptDto.class,
             OnboardingDraftPurpose.class,
             OnboardingDraftState.class,
             OnboardingExtensionStateDto.class,

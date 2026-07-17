@@ -21,8 +21,13 @@ import org.jdbi.v3.sqlobject.statement.SqlQuery;
 import org.jdbi.v3.sqlobject.statement.SqlUpdate;
 
 /**
- * SQLite has no native array type, so {@code List<String>} draft columns are stored as JSON text.
- * The adapter serializes/deserializes; the DAO binds them as plain TEXT strings.
+ * SQLite has no native array type, so {@code List<String>} draft columns (completedStepIds,
+ * selectedNonSecretIds, pendingApprovalIds) are stored as JSON text and {@code purpose}/{@code state}
+ * are stored as enum names. A custom {@link DraftRowMapper} is therefore required instead of
+ * {@code @RegisterConstructorMapper}: the constructor mapper cannot deserialize JSON arrays or coerce
+ * the enum/Instant columns. {@code DraftRowMapper} is registered for native reflection in
+ * {@code SqlitePersistenceReflectionConfig}, so this is an intentional, documented deviation from the
+ * usual JDBI record-mapping convention (not a missing registration).
  */
 public interface OnboardingDraftJdbiDao {
 

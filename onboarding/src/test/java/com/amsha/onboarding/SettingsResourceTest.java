@@ -27,7 +27,7 @@ public class SettingsResourceTest {
     @InjectMock
     LlmValidationGateway llmValidationGateway;
 
-    @ConfigProperty(name = "amsha.api.keys.internal", defaultValue = "dev-key")
+    @ConfigProperty(name = "amsha.api.keys.internal", defaultValue = "key-internal-changeme")
     String internalApiKey;
 
     @BeforeEach

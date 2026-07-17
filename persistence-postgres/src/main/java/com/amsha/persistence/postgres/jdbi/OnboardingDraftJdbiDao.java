@@ -21,7 +21,12 @@ import org.jdbi.v3.sqlobject.statement.SqlQuery;
 import org.jdbi.v3.sqlobject.statement.SqlUpdate;
 
 /**
- * PostgreSQL stores the {@code List<String>} draft columns as JSON text for parity with SQLite.
+ * PostgreSQL stores the {@code List<String>} draft columns as JSON text for parity with SQLite, and
+ * {@code purpose}/{@code state} as enum names. A custom {@link DraftRowMapper} is therefore required
+ * instead of {@code @RegisterConstructorMapper}: the constructor mapper cannot deserialize JSON arrays
+ * or coerce the enum/Instant columns. {@code DraftRowMapper} is registered for native reflection in
+ * {@code PostgresPersistenceReflectionConfig}, so this is an intentional, documented deviation from
+ * the usual JDBI record-mapping convention (not a missing registration).
  */
 public interface OnboardingDraftJdbiDao {
 
