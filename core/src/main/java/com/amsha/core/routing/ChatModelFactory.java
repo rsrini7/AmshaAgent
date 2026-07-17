@@ -1,7 +1,9 @@
 package com.amsha.core.routing;
 
+import dev.langchain4j.model.anthropic.AnthropicChatModel;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.request.ResponseFormat;
+import dev.langchain4j.model.ollama.OllamaChatModel;
 import dev.langchain4j.model.openai.OpenAiChatModel;
 import dev.langchain4j.model.openai.OpenAiChatRequestParameters;
 
@@ -11,15 +13,19 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.function.BiFunction;
 import java.util.regex.Pattern;
 
 import com.amsha.common.util.LogUtil;
+import com.amsha.core.agent.reasoning.AgentLlmConfig;
 import com.amsha.core.agent.reasoning.StructuredOutputMode;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.jboss.logging.Logger;
+
+import io.quarkiverse.langchain4j.ai.runtime.gemini.AiGeminiChatLanguageModel;
 
 /**
  * Shared factory for building LangChain4j ChatModel instances.
@@ -284,5 +290,86 @@ public final class ChatModelFactory {
         }
 
         return entries;
+    }
+
+    /**
+     * Builds a {@link ChatModel} for a resolved profile credential, honoring the persisted provider
+     * adapter ID. OpenAI-compatible adapters (groq, openai, openrouter, cerebras, nvidia, omlx,
+     * generic-openai, llamacpp, etc.) use the OpenAI chat protocol; gemini, anthropic/claude, and
+     * ollama use their native LangChain4j builders. This is the runtime factory path required by the
+     * onboarding ADR: clients are built from a short-lived, closable credential view rather than the
+     * deployment {@code AgentChatModelProvider.create(model)} path that reads deployment config.
+     *
+     * @param adapterId the persisted provider adapter ID (e.g. "openai", "gemini", "anthropic")
+     * @param baseUrl   resolved base URL (adapter default or connection customBaseUrl)
+     * @param apiKey    plaintext key from the closable {@link com.amsha.core.routing.ResolvedCredential}
+     * @param model     model id from the resolved profile
+     * @param config    shared LLM tuning config
+     * @return a configured ChatModel
+     */
+    public static ChatModel createForAdapter(
+            String adapterId, String baseUrl, String apiKey, String model, AgentLlmConfig config) {
+        String adapter = adapterId == null ? "" : adapterId.toLowerCase();
+        return switch (adapter) {
+            case "gemini" -> createGemini(baseUrl, apiKey, model, config);
+            case "anthropic", "claude", "claude-code" -> createAnthropic(baseUrl, apiKey, model, config);
+            case "ollama" -> createOllama(baseUrl, model, config);
+            default ->
+                createOpenAi(
+                        baseUrl,
+                        apiKey,
+                        model,
+                        config.maxTokens(),
+                        config.timeout(),
+                        config.maxRetries(),
+                        config.temperature(),
+                        config.logHttp());
+        };
+    }
+
+    /** Builds a Gemini ChatModel from a resolved credential. */
+    public static ChatModel createGemini(String baseUrl, String apiKey, String model, AgentLlmConfig config) {
+        String modelName = (model == null || model.isBlank()) ? "gemini-2.5-flash-lite" : model;
+        AiGeminiChatLanguageModel.Builder builder = AiGeminiChatLanguageModel.builder()
+                .key(apiKey)
+                .modelId(modelName)
+                .temperature(config.temperature())
+                .maxOutputTokens(config.maxTokens())
+                .timeout(config.timeout())
+                .logRequests(config.logHttp())
+                .logResponses(config.logHttp());
+        // Honor a persisted custom endpoint; otherwise the adapter default is used.
+        if (baseUrl != null && !baseUrl.isBlank()) {
+            builder.baseUrl(Optional.of(baseUrl));
+        }
+        return builder.build();
+    }
+
+    /** Builds an Anthropic/Claude ChatModel from a resolved credential. */
+    public static ChatModel createAnthropic(String baseUrl, String apiKey, String model, AgentLlmConfig config) {
+        String modelName = (model == null || model.isBlank()) ? "claude-sonnet-4-5" : model;
+        AnthropicChatModel.AnthropicChatModelBuilder builder = AnthropicChatModel.builder()
+                .apiKey(apiKey)
+                .modelName(modelName)
+                .timeout(config.timeout())
+                .logRequests(config.logHttp())
+                .logResponses(config.logHttp());
+        // Honor a persisted custom endpoint; otherwise the Anthropic default is used.
+        if (baseUrl != null && !baseUrl.isBlank()) {
+            builder.baseUrl(baseUrl);
+        }
+        return builder.build();
+    }
+
+    /** Builds an Ollama ChatModel from a resolved credential. */
+    public static ChatModel createOllama(String baseUrl, String model, AgentLlmConfig config) {
+        String url = (baseUrl == null || baseUrl.isBlank()) ? "http://localhost:11434" : baseUrl;
+        String modelName = (model == null || model.isBlank()) ? "mistral-small:latest" : model;
+        return OllamaChatModel.builder()
+                .baseUrl(url)
+                .modelName(modelName)
+                .logRequests(config.logHttp())
+                .logResponses(config.logHttp())
+                .build();
     }
 }

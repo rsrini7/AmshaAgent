@@ -1,14 +1,17 @@
 package com.amsha.onboarding;
 
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 
-import java.io.InputStream;
-import java.nio.charset.StandardCharsets;
+import java.util.List;
+
+import com.amsha.core.routing.provider.LlmProviderDescriptor;
+import com.amsha.core.routing.provider.LlmProviderOnboardingAdapter;
 
 import org.jboss.logging.Logger;
 
@@ -21,26 +24,18 @@ import io.smallrye.common.annotation.RunOnVirtualThread;
 public class ProviderCatalogResource {
 
     private static final Logger log = Logger.getLogger(ProviderCatalogResource.class);
-    private String cachedCatalog;
+
+    @Inject
+    LlmProviderOnboardingAdapter providerAdapter;
 
     @GET
     public Response getCatalog() {
-        if (cachedCatalog == null) {
-            try (InputStream is =
-                    Thread.currentThread().getContextClassLoader().getResourceAsStream("provider-catalog.json")) {
-                if (is == null) {
-                    return Response.status(404)
-                            .entity("{\"error\":\"Catalog not found\"}")
-                            .build();
-                }
-                cachedCatalog = new String(is.readAllBytes(), StandardCharsets.UTF_8);
-            } catch (Exception e) {
-                log.error("Failed to load provider catalog", e);
-                return Response.status(500)
-                        .entity("{\"error\":\"Internal error loading catalog\"}")
-                        .build();
-            }
+        List<LlmProviderDescriptor> descriptors = providerAdapter.descriptors();
+        if (descriptors.isEmpty()) {
+            return Response.status(404)
+                    .entity("{\"error\":\"No provider descriptors available\"}")
+                    .build();
         }
-        return Response.ok(cachedCatalog).build();
+        return Response.ok(descriptors).build();
     }
 }

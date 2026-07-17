@@ -12,9 +12,13 @@ import com.amsha.persistence.api.ExternalIdentityDto;
 import com.amsha.persistence.api.IdentityInvitationDto;
 import com.amsha.persistence.api.IdentityUserDto;
 import com.amsha.persistence.api.IdentityWorkspaceDto;
+import com.amsha.persistence.api.LlmConnectionDto;
+import com.amsha.persistence.api.LlmConnectionSecretRefDto;
 import com.amsha.persistence.api.McpConnectionCleanupFailureDto;
 import com.amsha.persistence.api.McpConnectionDto;
 import com.amsha.persistence.api.McpConnectionHeaderSecretRefDto;
+import com.amsha.persistence.api.ModelProfileDto;
+import com.amsha.persistence.api.ModelRouteAssignmentDto;
 import com.amsha.persistence.api.OnboardingDraftDto;
 import com.amsha.persistence.api.OnboardingDraftPurpose;
 import com.amsha.persistence.api.OnboardingDraftState;
@@ -24,6 +28,7 @@ import com.amsha.persistence.api.ReasoningStepDto;
 import com.amsha.persistence.api.SecretDto;
 import com.amsha.persistence.api.SkillDto;
 import com.amsha.persistence.api.WebSessionDto;
+import com.amsha.persistence.api.WorkspaceConnectionGrantDto;
 import com.amsha.persistence.api.WorkspaceMembershipDto;
 import com.amsha.persistence.common.SessionKnowledgeBase;
 import com.amsha.persistence.sqlite.jdbi.ApiCredentialJdbiDao;
@@ -39,6 +44,7 @@ import com.amsha.persistence.sqlite.jdbi.CronRunJdbiDao;
 import com.amsha.persistence.sqlite.jdbi.IdentityInvitationJdbiDao;
 import com.amsha.persistence.sqlite.jdbi.IdentityJdbiDao;
 import com.amsha.persistence.sqlite.jdbi.JdbiProducer;
+import com.amsha.persistence.sqlite.jdbi.LlmProfileJdbiDao;
 import com.amsha.persistence.sqlite.jdbi.LockJdbiDao;
 import com.amsha.persistence.sqlite.jdbi.McpConnectionJdbiDao;
 import com.amsha.persistence.sqlite.jdbi.OnboardingDraftJdbiDao;
@@ -79,6 +85,11 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             OnboardingDraftPurpose.class,
             OnboardingDraftState.class,
             OnboardingExtensionStateDto.class,
+            LlmConnectionDto.class,
+            LlmConnectionSecretRefDto.class,
+            ModelProfileDto.class,
+            ModelRouteAssignmentDto.class,
+            WorkspaceConnectionGrantDto.class,
             // JDBI DAOs (SQL Object proxies)
             CheckpointJdbiDao.class,
             CronJdbiDao.class,
@@ -103,6 +114,7 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             OnboardingDraftJdbiDao.class,
             OnboardingDraftJdbiDao.DraftRowMapper.class,
             OnboardingExtensionStateJdbiDao.class,
+            LlmProfileJdbiDao.class,
             // JDBI infrastructure
             JdbiProducer.class,
             JdbiRetryWrapper.class,
@@ -132,6 +144,7 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             SqliteBootstrapStateStoreAdapter.class,
             SqliteOnboardingDraftStoreAdapter.class,
             SqliteOnboardingExtensionStateStoreAdapter.class,
+            SqliteLlmProfileStoreAdapter.class,
             // Existing infrastructure
             GlobalKnowledgeBase.class,
             SessionKnowledgeBase.class,

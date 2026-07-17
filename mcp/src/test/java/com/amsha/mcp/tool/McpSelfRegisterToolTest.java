@@ -65,7 +65,8 @@ class McpSelfRegisterToolTest {
 
         assertEquals(0, resp.exitCode());
         verify(mcpClientService, times(1))
-                .connectForUser("my-server", "user-123", "http://localhost:3000/mcp", ToolCategory.NETWORK, Map.of());
+                .connectForUser(
+                        "my-server", "user-123", "http://localhost:3000/mcp", ToolCategory.NETWORK, Map.of(), true);
         verify(auditService, times(1))
                 .record(
                         eq("session-456"),
@@ -114,7 +115,12 @@ class McpSelfRegisterToolTest {
 
         verify(mcpClientService)
                 .connectForUser(
-                        "database-server", "user-123", "http://localhost:3000/mcp", ToolCategory.DATABASE, Map.of());
+                        "database-server",
+                        "user-123",
+                        "http://localhost:3000/mcp",
+                        ToolCategory.DATABASE,
+                        Map.of(),
+                        true);
     }
 
     @Test
@@ -159,7 +165,13 @@ class McpSelfRegisterToolTest {
     void testMcpConnectionExceptionPropagation() throws Exception {
         doThrow(new RuntimeException("Connection refused"))
                 .when(mcpClientService)
-                .connectForUser(eq("fail-server"), eq("user-123"), anyString(), eq(ToolCategory.NETWORK), eq(Map.of()));
+                .connectForUser(
+                        eq("fail-server"),
+                        eq("user-123"),
+                        anyString(),
+                        eq(ToolCategory.NETWORK),
+                        eq(Map.of()),
+                        eq(true));
 
         Map<String, Object> params = Map.of(
                 "name", "fail-server",

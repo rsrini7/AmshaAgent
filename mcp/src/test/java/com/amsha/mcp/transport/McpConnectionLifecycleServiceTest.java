@@ -2,6 +2,7 @@ package com.amsha.mcp.transport;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
@@ -76,7 +77,12 @@ class McpConnectionLifecycleServiceTest {
         verify(mcpClientService).configureHeaderSecretRefs(connection.name(), connection.userId(), refs);
         verify(mcpClientService)
                 .connectForUser(
-                        connection.name(), connection.userId(), connection.endpoint(), ToolCategory.NETWORK, Map.of());
+                        connection.name(),
+                        connection.userId(),
+                        connection.endpoint(),
+                        ToolCategory.NETWORK,
+                        Map.of(),
+                        true);
         verify(auditService)
                 .recordMandatory(
                         anyString(),
@@ -94,7 +100,8 @@ class McpConnectionLifecycleServiceTest {
         int reconnected = service.reconnectEnabledConnections();
 
         assertEquals(0, reconnected);
-        verify(mcpClientService, never()).connectForUser(anyString(), anyString(), anyString(), any(), any());
+        verify(mcpClientService, never())
+                .connectForUser(anyString(), anyString(), anyString(), any(), any(), anyBoolean());
         verify(mcpClientService, never()).configureHeaderSecretRefs(anyString(), anyString(), any());
     }
 

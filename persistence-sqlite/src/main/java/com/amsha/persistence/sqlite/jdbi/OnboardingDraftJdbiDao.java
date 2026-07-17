@@ -110,7 +110,7 @@ public interface OnboardingDraftJdbiDao {
             if (json == null || json.isBlank()) return List.of();
             try {
                 return MAPPER.readValue(json, LIST);
-            } catch (Exception e) {
+            } catch (Exception _) {
                 return List.of();
             }
         }

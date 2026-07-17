@@ -80,7 +80,7 @@ public class BackendValidator {
             Properties props = new Properties();
             props.load(is);
             return props.getProperty("quarkus.amsha.build.backend", "default");
-        } catch (IOException e) {
+        } catch (IOException _) {
             log.debugf("BackendValidator: could not read build-info.properties — assuming JVM mode.");
             return "default";
         }

@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.*;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -29,7 +30,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
-import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -131,8 +131,7 @@ class ToolStepHandlerGuardTest {
         ReasoningStep step =
                 ReasoningStep.pending("thought", ToolCapability.GITHUB.toolName(), Map.of("query", "main"));
 
-        when(toolRegistry.findTool(ToolCapability.GITHUB.toolName()))
-                .thenReturn(Optional.of(Mockito.mock(AgentTool.class)));
+        when(toolRegistry.findTool(ToolCapability.GITHUB.toolName())).thenReturn(Optional.of(mock(AgentTool.class)));
 
         StepDecision decision = handler.validateTool(ctx, List.of(), step, 0);
 
@@ -145,8 +144,7 @@ class ToolStepHandlerGuardTest {
         ReasoningStep step =
                 ReasoningStep.pending("thought", ToolCapability.GITHUB.toolName(), Map.of("repo", "rsrini7/config"));
 
-        when(toolRegistry.findTool(ToolCapability.GITHUB.toolName()))
-                .thenReturn(Optional.of(Mockito.mock(AgentTool.class)));
+        when(toolRegistry.findTool(ToolCapability.GITHUB.toolName())).thenReturn(Optional.of(mock(AgentTool.class)));
 
         StepDecision decision = handler.validateTool(ctx, List.of(), step, 0);
 
@@ -159,8 +157,7 @@ class ToolStepHandlerGuardTest {
         ReasoningStep step = ReasoningStep.pending(
                 "thought", ToolCapability.GITHUB.toolName(), Map.of("query", "NullPointerException"));
 
-        when(toolRegistry.findTool(ToolCapability.GITHUB.toolName()))
-                .thenReturn(Optional.of(Mockito.mock(AgentTool.class)));
+        when(toolRegistry.findTool(ToolCapability.GITHUB.toolName())).thenReturn(Optional.of(mock(AgentTool.class)));
 
         StepDecision decision = handler.validateTool(ctx, List.of(), step, 0);
 
@@ -174,7 +171,7 @@ class ToolStepHandlerGuardTest {
         ReasoningStep step =
                 ReasoningStep.pending("thought", ToolCapability.GITHUB.toolName(), Map.of("target", "rsrini7"));
 
-        Mockito.lenient()
+        lenient()
                 .doReturn(new ToolInvocationGuard.GuardDecision.PauseForApproval(
                         ToolCapability.GITHUB.toolName(), "{\"target\":\"rsrini7\"}"))
                 .when(guard)

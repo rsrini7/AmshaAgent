@@ -2,6 +2,7 @@ package com.amsha.app.mcp;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.*;
 
 import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
 
@@ -16,7 +17,6 @@ import com.amsha.core.tools.ToolRegistry;
 import com.amsha.core.tools.ToolResponse;
 
 import org.junit.jupiter.api.*;
-import org.mockito.Mockito;
 
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
@@ -50,17 +50,17 @@ class McpServerE2ETest {
 
     @BeforeEach
     void setup() {
-        Mockito.when(apiKeyRegistry.isValidKey(anyString())).thenReturn(true);
-        Mockito.when(apiKeyRegistry.isAllowed(anyString())).thenReturn(true);
-        Mockito.doNothing().when(persistenceEngine).submitCritical(any());
-        Mockito.when(toolRegistry.invokeTool(anyString(), anyString(), anyString()))
+        when(apiKeyRegistry.isValidKey(anyString())).thenReturn(true);
+        when(apiKeyRegistry.isAllowed(anyString())).thenReturn(true);
+        doNothing().when(persistenceEngine).submitCritical(any());
+        when(toolRegistry.invokeTool(anyString(), anyString(), anyString()))
                 .thenReturn(ToolResponse.success("mock-tool-result"));
 
-        AgentTool mockTool = Mockito.mock(AgentTool.class);
+        AgentTool mockTool = mock(AgentTool.class);
         JsonObjectSchema schema = JsonObjectSchema.builder().build();
-        Mockito.when(mockTool.parametersSchema()).thenReturn(schema);
-        Mockito.when(mockTool.name()).thenReturn("mock-tool");
-        Mockito.when(toolRegistry.findTool(anyString())).thenReturn(Optional.of(mockTool));
+        when(mockTool.parametersSchema()).thenReturn(schema);
+        when(mockTool.name()).thenReturn("mock-tool");
+        when(toolRegistry.findTool(anyString())).thenReturn(Optional.of(mockTool));
     }
 
     @Test
@@ -180,7 +180,7 @@ class McpServerE2ETest {
                 json.contains("\"content\"") || json.contains("mock-tool-result"),
                 "tools/call result must contain content. Got: " + json);
 
-        Mockito.verify(toolRegistry)
+        verify(toolRegistry)
                 .invokeTool(eq(ToolCapability.RECALL_MEMORY_SEARCH.toolName()), anyString(), eq("mcp-server"));
     }
 }

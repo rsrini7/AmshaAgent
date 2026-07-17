@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.*;
 import static org.mockito.Mockito.when;
 
 import dev.langchain4j.agent.tool.ToolExecutionRequest;
@@ -48,7 +49,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.ArgumentMatchers;
-import org.mockito.Mockito;
 
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
@@ -194,7 +194,7 @@ class LangChainReasoningEngineTest {
     @Test
     void testSkillRoleDoesNotUseSimpleChitchatPromptPath() {
         // Arrange
-        AgentTool execTool = Mockito.mock(AgentTool.class);
+        AgentTool execTool = mock(AgentTool.class);
         when(execTool.isEnabled()).thenReturn(true);
         when(toolRegistry.findTool(ToolCapability.HOST_EXEC.toolName())).thenReturn(Optional.of(execTool));
         when(roleRegistry.resolvePermittedTools("skill:algorithmic-art"))
@@ -440,10 +440,10 @@ class LangChainReasoningEngineTest {
                 .thenReturn(Set.of(ToolCapability.GITHUB.toolName(), ToolCapability.RECALL_MEMORY_SEARCH.toolName()));
 
         // Mock ToolRegistry to return available tools
-        AgentTool github = Mockito.mock(AgentTool.class);
+        AgentTool github = mock(AgentTool.class);
         when(github.name()).thenReturn(ToolCapability.GITHUB.toolName());
         when(github.isEnabled()).thenReturn(true);
-        AgentTool memorySearch = Mockito.mock(AgentTool.class);
+        AgentTool memorySearch = mock(AgentTool.class);
         when(memorySearch.name()).thenReturn(ToolCapability.RECALL_MEMORY_SEARCH.toolName());
         when(memorySearch.isEnabled()).thenReturn(true);
 
@@ -547,13 +547,13 @@ class LangChainReasoningEngineTest {
                         ToolCapability.MANAGE_SCHEDULE.toolName()));
 
         // Mock ToolRegistry to return available tools
-        AgentTool github = Mockito.mock(AgentTool.class);
+        AgentTool github = mock(AgentTool.class);
         when(github.name()).thenReturn(ToolCapability.GITHUB.toolName());
         when(github.isEnabled()).thenReturn(true);
-        AgentTool sched = Mockito.mock(AgentTool.class);
+        AgentTool sched = mock(AgentTool.class);
         when(sched.name()).thenReturn(ToolCapability.SCHEDULE_TASK.toolName());
         when(sched.isEnabled()).thenReturn(true);
-        AgentTool manage = Mockito.mock(AgentTool.class);
+        AgentTool manage = mock(AgentTool.class);
         when(manage.name()).thenReturn(ToolCapability.MANAGE_SCHEDULE.toolName());
         when(manage.isEnabled()).thenReturn(true);
 
@@ -786,7 +786,7 @@ class LangChainReasoningEngineTest {
                 List.of(priorCode, failedExec));
 
         assertEquals("write_code", step.action());
-        Mockito.verify(llmProviderPort).nextStep(any(ChatRequest.class), any(String.class));
+        verify(llmProviderPort).nextStep(any(ChatRequest.class), any(String.class));
     }
 
     @Test

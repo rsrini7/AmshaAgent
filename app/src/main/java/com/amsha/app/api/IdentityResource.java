@@ -493,7 +493,7 @@ public class IdentityResource {
             Object email = parsed.get("email");
             if (!(email instanceof String value) || value.isBlank()) return null;
             return new VerifiedEmail(value, Boolean.TRUE.equals(parsed.get("email_verified")));
-        } catch (Exception e) {
+        } catch (Exception _) {
             return null;
         }
     }

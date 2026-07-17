@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.*;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
@@ -49,7 +50,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentMatchers;
 import org.mockito.Mock;
 import org.mockito.MockedStatic;
-import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
@@ -178,7 +178,7 @@ class AgentSessionServiceTest {
         MDC.remove(MdcKeys.USER_ID);
         String sessionId = service.createSession("unknown", AutonomyLevel.SUPERVISED);
         assertNotNull(sessionId);
-        verify(heartbeatTracker, Mockito.never()).tryBindOwner(anyString(), anyString());
+        verify(heartbeatTracker, never()).tryBindOwner(anyString(), anyString());
     }
 
     @Test
@@ -270,14 +270,14 @@ class AgentSessionServiceTest {
         AgentCheckpoint cp = new AgentCheckpointRecord();
         when(checkpointApprovalService.denyAll(anyString(), anyString())).thenReturn(cp);
 
-        Mockito.doAnswer(inv -> {
+        doAnswer(inv -> {
                     ((Runnable) inv.getArgument(0)).run();
                     return null;
                 })
                 .when(vThreads)
                 .execute(any(Runnable.class));
 
-        Consumer<ServiceResult<Object>> callback = Mockito.mock(Consumer.class);
+        Consumer<ServiceResult<Object>> callback = mock(Consumer.class);
         service.runAsync("sess1", TEST_USER, request, callback);
 
         verify(checkpointApprovalService).denyAll("sess1", "Human denied via REST");
@@ -292,14 +292,14 @@ class AgentSessionServiceTest {
         AgentCheckpoint cp = new AgentCheckpointRecord();
         when(checkpointApprovalService.approveAll(anyString(), anyString())).thenReturn(cp);
 
-        Mockito.doAnswer(inv -> {
+        doAnswer(inv -> {
                     ((Runnable) inv.getArgument(0)).run();
                     return null;
                 })
                 .when(vThreads)
                 .execute(any(Runnable.class));
 
-        Consumer<ServiceResult<Object>> callback = Mockito.mock(Consumer.class);
+        Consumer<ServiceResult<Object>> callback = mock(Consumer.class);
         service.runAsync("sess1", TEST_USER, request, callback);
 
         verify(checkpointApprovalService).approveAll("sess1", "Human approved via REST");

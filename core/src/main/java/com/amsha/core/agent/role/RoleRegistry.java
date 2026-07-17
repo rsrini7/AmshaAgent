@@ -96,6 +96,18 @@ public class RoleRegistry {
     }
 
     /**
+     * @param roleName a raw role name (built-in id, alias, or {@code skill:}-prefixed dynamic role)
+     * @return true if the role is a currently registered dynamic skill role (not merely a
+     *     syntactically valid {@code skill:} string). Built-in roles and unknown strings return false.
+     */
+    public boolean isRegisteredDynamic(String roleName) {
+        if (roleName == null || roleName.isBlank()) {
+            return false;
+        }
+        return dynamicRoles.containsKey(roleName);
+    }
+
+    /**
      * @return All currently registered dynamic roles.
      */
     public Collection<RoleDefinition> getDynamicRoles() {

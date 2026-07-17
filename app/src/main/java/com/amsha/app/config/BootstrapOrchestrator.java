@@ -80,6 +80,9 @@ public class BootstrapOrchestrator {
             pb.environment().put("AMSHA_LD_PRELOAD_SET", "1");
             pb.inheritIO();
             System.exit(pb.start().waitFor());
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            log.error("Interrupted while re-exec-ing with LD_PRELOAD", e);
         } catch (Exception e) {
             log.error("Failed to re-exec with LD_PRELOAD", e);
         }

@@ -1,27 +1,35 @@
 package com.amsha.onboarding;
 
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
-import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
-import com.amsha.core.security.SecretVault;
-import com.amsha.core.security.VaultConstants;
-import com.amsha.core.security.VaultKey;
+import com.amsha.onboarding.spi.OnboardingContext;
+import com.amsha.onboarding.spi.OnboardingExtension;
+import com.amsha.onboarding.spi.OnboardingInput;
+import com.amsha.onboarding.spi.OnboardingStepDescriptor;
+import com.amsha.onboarding.spi.OnboardingValidationResult;
+import com.amsha.onboarding.spi.PreparedOnboardingStep;
 import com.amsha.persistence.api.BootstrapStateDto;
 import com.amsha.persistence.api.BootstrapStateStorePort;
+import com.amsha.persistence.api.LlmConnectionDto;
+import com.amsha.persistence.api.LlmProfileStorePort;
+import com.amsha.persistence.api.ModelProfileDto;
+import com.amsha.persistence.api.ModelRouteAssignmentDto;
 import com.amsha.persistence.api.OnboardingDraftDto;
 import com.amsha.persistence.api.OnboardingDraftPurpose;
 import com.amsha.persistence.api.OnboardingDraftState;
 import com.amsha.persistence.api.OnboardingDraftStorePort;
-import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.jboss.logging.Logger;
 
@@ -29,6 +37,12 @@ import org.jboss.logging.Logger;
  * Coordinator owning the durable onboarding draft lifecycle. It is the single source of truth: the
  * legacy Caffeine-backed wizard state is removed. The first authenticated draft creation confirms
  * the bootstrap CLAIMED transition for the same principal.
+ *
+ * <p>Heavy operations are delegated to focused beans:
+ * <ul>
+ *   <li>{@link OnboardingSelectionScrubber} — secret scrubbing, vault resolution, connection validation</li>
+ *   <li>{@link OnboardingCommitSaga} — crash-safe extension commit orchestration</li>
+ * </ul>
  */
 @ApplicationScoped
 public class OnboardingCoordinator {
@@ -57,10 +71,13 @@ public class OnboardingCoordinator {
     BootstrapStateStorePort bootstrapStateStore;
 
     @Inject
-    SecretVault vault;
+    Instance<OnboardingExtension> extensions;
 
     @Inject
-    ObjectMapper objectMapper;
+    OnboardingSelectionScrubber scrubber;
+
+    @Inject
+    OnboardingCommitSaga commitSaga;
 
     /**
      * Finds or creates the owner's first-run draft. On first creation it performs the
@@ -154,19 +171,18 @@ public class OnboardingCoordinator {
         if (existing.isEmpty() || !PLAN.contains(targetStepId)) return existing;
         OnboardingDraftDto d = existing.get();
 
-        // Index-based transition checks
         int targetIdx = PLAN.indexOf(targetStepId);
         int connectionsIdx = PLAN.indexOf("connections");
         int routesIdx = PLAN.indexOf("routes");
         if (targetIdx > connectionsIdx
                 && !d.completedStepIds().contains("connections")
                 && !d.currentStepId().equals("connections")) {
-            return Optional.empty(); // block skipping connections
+            return Optional.empty();
         }
         if (targetIdx > routesIdx
                 && !d.completedStepIds().contains("routes")
                 && !d.currentStepId().equals("routes")) {
-            return Optional.empty(); // block skipping routes
+            return Optional.empty();
         }
 
         List<String> completed = new ArrayList<>(d.completedStepIds());
@@ -174,8 +190,31 @@ public class OnboardingCoordinator {
             completed.add(d.currentStepId());
         }
 
-        List<String> processedSelections =
-                processAndScrubSecrets(d.ownerId(), selections != null ? selections : d.selectedNonSecretIds());
+        List<String> processedSelections = scrubber.processAndScrubSecrets(
+                d.ownerId(), selections != null ? selections : d.selectedNonSecretIds());
+
+        if ("connections".equals(targetStepId) && processedSelections != null && !processedSelections.isEmpty()) {
+            String errors = scrubber.validateConnections(processedSelections);
+            if (errors != null) {
+                OnboardingDraftDto withErrors = new OnboardingDraftDto(
+                        d.draftId(),
+                        d.ownerId(),
+                        d.purpose(),
+                        d.planFingerprint(),
+                        d.currentStepId(),
+                        d.completedStepIds(),
+                        processedSelections,
+                        errors,
+                        d.pendingApprovalIds(),
+                        d.state(),
+                        d.revision(),
+                        d.expiresAt(),
+                        d.createdAt(),
+                        Instant.now());
+                draftStore.update(withErrors, d.revision());
+                return Optional.of(withErrors);
+            }
+        }
 
         OnboardingDraftDto updated = new OnboardingDraftDto(
                 d.draftId(),
@@ -198,55 +237,8 @@ public class OnboardingCoordinator {
         return draftStore.findById(draftId);
     }
 
-    private List<String> processAndScrubSecrets(String ownerId, List<String> selections) {
-        if (selections == null || selections.isEmpty()) {
-            return selections;
-        }
-        List<String> scrubbed = new ArrayList<>();
-        for (String selection : selections) {
-            try {
-                Map<String, Object> payload = objectMapper.readValue(selection, Map.class);
-                List<Map<String, Object>> connections = (List<Map<String, Object>>) payload.get("connections");
-                boolean modified = false;
-                if (connections != null) {
-                    for (Map<String, Object> conn : connections) {
-                        String apiKey = (String) conn.get("apiKey");
-                        String vaultRef = (String) conn.get("apiKeyVaultRef");
-                        if (apiKey != null && !apiKey.isBlank()) {
-                            if (vaultRef == null || vaultRef.isBlank() || vaultRef.startsWith("staged-ref-")) {
-                                vaultRef = "vault-key-"
-                                        + UUID.randomUUID()
-                                                .toString()
-                                                .replace("-", "")
-                                                .substring(0, 16);
-                                conn.put("apiKeyVaultRef", vaultRef);
-                            }
-                            vault.store(vaultRef, apiKey.getBytes(StandardCharsets.UTF_8), ownerId);
-                            conn.remove("apiKey");
-                            modified = true;
-                        } else {
-                            if (conn.containsKey("apiKey")) {
-                                conn.remove("apiKey");
-                                modified = true;
-                            }
-                        }
-                    }
-                }
-                if (modified) {
-                    scrubbed.add(objectMapper.writeValueAsString(payload));
-                } else {
-                    scrubbed.add(selection);
-                }
-            } catch (Exception e) {
-                throw new IllegalArgumentException("Onboarding selections must be valid JSON", e);
-            }
-        }
-        return scrubbed;
-    }
-
     /**
-     * Persists a draft mutation using optimistic concurrency on its revision. Used by the legacy
-     * numbered-step façade that delegates to the durable draft instead of Caffeine state.
+     * Persists a draft mutation using optimistic concurrency on its revision.
      */
     public boolean replaceDraft(OnboardingDraftDto draft) {
         return draftStore.update(draft, draft.revision());
@@ -281,58 +273,16 @@ public class OnboardingCoordinator {
     }
 
     /**
-     * Finalizes the draft: marks it COMPLETED. Staged/activated records (connections, profiles, routes)
-     * are committed by their own ports in later phases; O1 finalization simply closes the draft.
+     * Finalizes the draft: marks it COMPLETED. Activates LLM settings from selections.
      */
     public Optional<OnboardingDraftDto> commit(String draftId) {
         Optional<OnboardingDraftDto> existing = draftStore.findById(draftId);
         if (existing.isEmpty()) return existing;
         OnboardingDraftDto d = existing.get();
-
         if (!"review".equals(d.currentStepId())) {
             throw new IllegalStateException("Draft cannot be committed unless in review stage");
         }
-
-        // Activate connection settings on commit
-        if (d.selectedNonSecretIds() != null && !d.selectedNonSecretIds().isEmpty()) {
-            try {
-                String payloadStr = d.selectedNonSecretIds().get(0);
-                Map<String, Object> payload = objectMapper.readValue(payloadStr, Map.class);
-                List<Map<String, Object>> connections = (List<Map<String, Object>>) payload.get("connections");
-                Map<String, Object> concernRoutes = (Map<String, Object>) payload.get("concernRoutes");
-                if (connections != null && concernRoutes != null) {
-                    List<Integer> agentLoopIndices = (List<Integer>) concernRoutes.get("agentLoop");
-                    if (agentLoopIndices != null && !agentLoopIndices.isEmpty()) {
-                        int activeIdx = agentLoopIndices.get(0);
-                        if (activeIdx >= 0 && activeIdx < connections.size()) {
-                            Map<String, Object> activeConn = connections.get(activeIdx);
-                            String provider = (String) activeConn.get("provider");
-                            String modelId = (String) activeConn.get("modelId");
-                            String vaultRef = (String) activeConn.get("apiKeyVaultRef");
-
-                            if (provider != null) {
-                                vault.storeSystemKey(
-                                        VaultConstants.LLM_PROVIDER_KEY, provider.getBytes(StandardCharsets.UTF_8));
-                            }
-                            if (modelId != null) {
-                                vault.storeSystemKey(
-                                        VaultConstants.LLM_MODEL_KEY, modelId.getBytes(StandardCharsets.UTF_8));
-                            }
-                            if (vaultRef != null) {
-                                vault.get(vaultRef, d.ownerId()).ifPresent(vk -> {
-                                    try (VaultKey k = vk) {
-                                        vault.storeSystemKey(VaultConstants.LLM_API_KEY, k.get());
-                                    }
-                                });
-                            }
-                        }
-                    }
-                }
-            } catch (Exception e) {
-                log.error("Failed to activate LLM configuration on draft commit", e);
-            }
-        }
-
+        commitSaga.activateLlmSettings(d);
         OnboardingDraftDto updated = new OnboardingDraftDto(
                 d.draftId(),
                 d.ownerId(),
@@ -359,7 +309,210 @@ public class OnboardingCoordinator {
         if (draft.isEmpty() || !draft.get().ownerId().equals(ownerId)) {
             return false;
         }
+        scrubber.cleanupStagedSecrets(draft.get());
         return draftStore.delete(draftId) > 0;
+    }
+
+    public int cleanupExpiredDrafts() {
+        return 0;
+    }
+
+    // ---- extension discovery and saga lifecycle ----
+
+    public List<String> effectivePlan() {
+        List<String> merged = new ArrayList<>(PLAN);
+        for (OnboardingExtension ext : extensions) {
+            OnboardingStepDescriptor d = ext.descriptor();
+            if (d.optional() && !merged.contains(d.extensionId())) {
+                int insertIdx = Math.min(d.order() / 10, merged.size() - 1);
+                if (insertIdx < 0) insertIdx = 0;
+                merged.add(insertIdx, d.extensionId());
+            }
+        }
+        return List.copyOf(merged);
+    }
+
+    private Optional<OnboardingExtension> extensionForStep(String stepId) {
+        for (OnboardingExtension ext : extensions) {
+            if (ext.descriptor().extensionId().equals(stepId)) {
+                return Optional.of(ext);
+            }
+        }
+        return Optional.empty();
+    }
+
+    public Optional<PreparedOnboardingStep> prepareExtension(
+            String draftId, String stepId, String ownerId, String sessionId) {
+        return extensionForStep(stepId).map(ext -> ext.prepare(new OnboardingContext(ownerId, sessionId, stepId)));
+    }
+
+    public Optional<OnboardingValidationResult> validateExtension(
+            String draftId, String stepId, String ownerId, String sessionId, String jsonPayload) {
+        return extensionForStep(stepId).map(ext -> {
+            OnboardingContext ctx = new OnboardingContext(ownerId, sessionId, stepId);
+            PreparedOnboardingStep prepared = ext.prepare(ctx);
+            return ext.validate(ctx, prepared, new OnboardingInput(stepId, jsonPayload));
+        });
+    }
+
+    /** Delegates crash-safe commit to the saga. */
+    public Optional<OnboardingDraftDto> commitDraft(String draftId) {
+        return commitSaga.commitDraft(draftId);
+    }
+
+    /** Extracts the sub-payload for a specific extension from the combined selections list. */
+    public String extractExtensionPayload(List<String> selections, String extensionId) {
+        return scrubber.extractExtensionPayload(selections, extensionId);
+    }
+
+    // ---- O5: re-onboarding, export/import ----
+
+    public OnboardingDraftDto getOrCreateReonboardingDraft(String ownerId, OnboardingDraftPurpose purpose) {
+        Optional<OnboardingDraftDto> existing = draftStore.findActiveByOwner(ownerId, Instant.now());
+        if (existing.isPresent() && existing.get().purpose() == purpose) {
+            return existing.get();
+        }
+        Instant now = Instant.now();
+        String planFingerprint = String.join("->", effectivePlan());
+        OnboardingDraftDto draft = new OnboardingDraftDto(
+                "draft_" + UUID.randomUUID().toString().replace("-", "").substring(0, 16),
+                ownerId,
+                purpose,
+                planFingerprint,
+                "connections",
+                List.of(),
+                List.of(),
+                null,
+                null,
+                OnboardingDraftState.DRAFT,
+                1,
+                now.plus(DRAFT_TTL),
+                now,
+                now);
+        if (!draftStore.save(draft)) {
+            return draftStore.findActiveByOwner(ownerId, Instant.now()).orElse(draft);
+        }
+        return draft;
+    }
+
+    public Map<String, Object> exportProfiles(String ownerId, LlmProfileStorePort profileStore) {
+        List<LlmConnectionDto> connections = profileStore.listConnectionsByCreatedBy(ownerId);
+        List<Map<String, Object>> connMaps = new ArrayList<>();
+        for (LlmConnectionDto c : connections) {
+            connMaps.add(Map.of(
+                    "id",
+                    c.id(),
+                    "scopeType",
+                    c.scopeType(),
+                    "scopeId",
+                    c.scopeId(),
+                    "displayName",
+                    c.displayName() == null ? "" : c.displayName(),
+                    "providerAdapterId",
+                    c.providerAdapterId(),
+                    "state",
+                    c.state()));
+        }
+        List<Map<String, Object>> profileMaps = new ArrayList<>();
+        List<Map<String, Object>> routeMaps = new ArrayList<>();
+        Set<String> scopesSeen = new HashSet<>();
+        for (LlmConnectionDto c : connections) {
+            for (ModelProfileDto p : profileStore.listModelProfilesByConnection(c.id())) {
+                profileMaps.add(Map.of(
+                        "id",
+                        p.id(),
+                        "connectionId",
+                        p.connectionId(),
+                        "modelId",
+                        p.modelId(),
+                        "structuredOutputMode",
+                        p.structuredOutputMode() == null ? "" : p.structuredOutputMode(),
+                        "enabled",
+                        p.enabled()));
+            }
+            String scopeKey = c.scopeType() + ":" + c.scopeId();
+            if (scopesSeen.add(scopeKey)) {
+                for (ModelRouteAssignmentDto r : profileStore.listRoutesByScope(c.scopeType(), c.scopeId())) {
+                    routeMaps.add(Map.of(
+                            "id",
+                            r.id(),
+                            "scopeType",
+                            r.scopeType(),
+                            "scopeId",
+                            r.scopeId(),
+                            "targetKind",
+                            r.targetKind(),
+                            "targetId",
+                            r.targetId() == null ? "" : r.targetId(),
+                            "orderedProfileIds",
+                            r.orderedProfileIds(),
+                            "enabled",
+                            r.enabled()));
+                }
+            }
+        }
+        return Map.of("connections", connMaps, "profiles", profileMaps, "routes", routeMaps);
+    }
+
+    @SuppressWarnings("unchecked")
+    public void importProfiles(String ownerId, Map<String, Object> data, LlmProfileStorePort profileStore) {
+        List<Map<String, Object>> connections = (List<Map<String, Object>>) data.getOrDefault("connections", List.of());
+        List<Map<String, Object>> profiles = (List<Map<String, Object>>) data.getOrDefault("profiles", List.of());
+        Instant now = Instant.now();
+        for (Map<String, Object> c : connections) {
+            String connId = (String) c.get("id");
+            if (connId == null || connId.isBlank()) continue;
+            profileStore.saveConnection(new LlmConnectionDto(
+                    connId,
+                    (String) c.getOrDefault("scopeType", "USER"),
+                    (String) c.getOrDefault("scopeId", ownerId),
+                    ownerId,
+                    (String) c.getOrDefault("displayName", connId),
+                    (String) c.getOrDefault("providerAdapterId", "openai"),
+                    null,
+                    null,
+                    "API_KEY",
+                    null,
+                    "STAGED",
+                    1,
+                    now,
+                    now));
+        }
+        for (Map<String, Object> p : profiles) {
+            String profileId = (String) p.get("id");
+            String connId = (String) p.get("connectionId");
+            if (profileId == null || connId == null) continue;
+            profileStore.saveModelProfile(new ModelProfileDto(
+                    profileId,
+                    connId,
+                    (String) p.getOrDefault("modelId", "gpt-4o"),
+                    (String) p.getOrDefault("structuredOutputMode", "NATIVE"),
+                    null,
+                    null,
+                    false,
+                    1,
+                    now,
+                    now));
+        }
+        List<Map<String, Object>> routes = (List<Map<String, Object>>) data.getOrDefault("routes", List.of());
+        for (Map<String, Object> r : routes) {
+            String routeId = (String) r.get("id");
+            String scopeType = (String) r.get("scopeType");
+            String scopeId = (String) r.get("scopeId");
+            String targetKind = (String) r.get("targetKind");
+            if (routeId == null || scopeType == null || scopeId == null || targetKind == null) continue;
+            profileStore.saveRouteAssignment(new ModelRouteAssignmentDto(
+                    routeId,
+                    scopeType,
+                    scopeId,
+                    targetKind,
+                    (String) r.get("targetId"),
+                    (List<String>) r.getOrDefault("orderedProfileIds", List.of()),
+                    Boolean.TRUE.equals(r.get("enabled")),
+                    1,
+                    now,
+                    now));
+        }
     }
 
     private void confirmBootstrapIfNeeded(String ownerId) {

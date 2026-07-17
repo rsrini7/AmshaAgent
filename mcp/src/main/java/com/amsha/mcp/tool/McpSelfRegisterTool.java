@@ -148,7 +148,7 @@ public class McpSelfRegisterTool implements AgentTool {
                 }
                 Map<String, String> headers = parseHeaders(params.get(PARAM_HEADERS));
                 lifecycleService.validateHttpRegistration(url, headers);
-                mcpClientService.connectForUser(name, userId, url, category, headers);
+                mcpClientService.connectForUser(name, userId, url, category, headers, true);
                 try {
                     var persisted = lifecycleService.persistSuccessfulHttp(name, url, category, userId, headers);
                     mcpClientService.configureHeaderSecretRefs(name, userId, persisted.headerSecretRefs());

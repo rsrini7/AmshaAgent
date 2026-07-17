@@ -20,7 +20,10 @@ import java.util.Optional;
 import com.amsha.core.api.dto.AmshaErrorResponse;
 import com.amsha.core.audit.AuditService;
 import com.amsha.core.audit.SecurityEventType;
+import com.amsha.core.routing.ChatModelPool;
 import com.amsha.onboarding.dto.OnboardingStatusDto;
+import com.amsha.onboarding.spi.OnboardingValidationResult;
+import com.amsha.persistence.api.LlmProfileStorePort;
 import com.amsha.persistence.api.OnboardingDraftDto;
 import com.amsha.persistence.api.OnboardingDraftState;
 
@@ -50,6 +53,12 @@ public class OnboardingResource {
     @Inject
     AuditService auditService;
 
+    @Inject
+    ChatModelPool modelPool;
+
+    @Inject
+    LlmProfileStorePort profileStore;
+
     @Context
     SecurityContext securityContext;
 
@@ -66,7 +75,7 @@ public class OnboardingResource {
         }
         OnboardingDraftDto draft = coordinator.getOrCreateFirstRunDraft(ownerId);
         OnboardingStatusDto dto = new OnboardingStatusDto(
-                OnboardingCoordinator.PLAN.indexOf(draft.currentStepId()) + 1,
+                coordinator.effectivePlan().indexOf(draft.currentStepId()) + 1,
                 draft.currentStepId(),
                 draft.selectedNonSecretIds().isEmpty()
                         ? null
@@ -152,6 +161,22 @@ public class OnboardingResource {
                     .build();
         }
         List<String> selections = (request != null) ? request.selectedNonSecretIds() : null;
+
+        // Validate extension steps before advancing.
+        if (selections != null && !selections.isEmpty()) {
+            String extPayload = coordinator.extractExtensionPayload(selections, stepId);
+            Optional<OnboardingValidationResult> validationResult =
+                    coordinator.validateExtension(draftId, stepId, ownerId, draftId, extPayload);
+            if (validationResult.isPresent() && !validationResult.get().valid()) {
+                return Response.status(Response.Status.BAD_REQUEST)
+                        .entity(new AmshaErrorResponse(
+                                "Bad Request",
+                                "Extension validation failed: "
+                                        + validationResult.get().safeFieldErrors()))
+                        .build();
+            }
+        }
+
         Optional<OnboardingDraftDto> moved;
         try {
             moved = coordinator.updateStep(draftId, stepId, selections);
@@ -189,18 +214,77 @@ public class OnboardingResource {
                     .entity(new AmshaErrorResponse("Not Found", "Draft not found"))
                     .build();
         }
-        Optional<OnboardingDraftDto> committed = coordinator.commit(draftId);
-        auditService.recordMandatory(
-                "onboarding",
-                ownerId,
-                "system",
-                SecurityEventType.ONBOARDING_COMPLETED,
-                "action=commit_draft draftId=" + draftId);
+        Optional<OnboardingDraftDto> committed;
+        try {
+            committed = coordinator.commitDraft(draftId);
+        } catch (IllegalStateException e) {
+            log.warnf("Onboarding draft commit failed draftId=%s owner=%s: %s", draftId, ownerId, e.getMessage());
+            return Response.status(409)
+                    .entity(new AmshaErrorResponse("Conflict", "Commit failed: " + e.getMessage()))
+                    .build();
+        }
         return committed
-                .map(d -> Response.ok(d).build())
+                .filter(d -> d.state() == OnboardingDraftState.COMPLETED)
+                .map(d -> {
+                    auditService.recordMandatory(
+                            "onboarding",
+                            ownerId,
+                            "system",
+                            SecurityEventType.ONBOARDING_COMPLETED,
+                            "action=commit_draft draftId=" + draftId);
+                    return Response.ok(d).build();
+                })
                 .orElse(Response.status(409)
                         .entity(new AmshaErrorResponse("Conflict", "Commit failed"))
                         .build());
+    }
+
+    @GET
+    @Path("/health/routing")
+    @Operation(summary = "Routing health: pooled model count and profile-route status")
+    public Response routingHealth() {
+        String ownerId = requireOwner();
+        if (ownerId == null) {
+            return Response.status(401)
+                    .entity(new AmshaErrorResponse("Unauthorized", "Authentication required"))
+                    .build();
+        }
+        Map<String, Object> health = Map.of(
+                "pooledModelCount", modelPool.size(),
+                "effectivePlan", coordinator.effectivePlan(),
+                "status", "ok");
+        return Response.ok(health).build();
+    }
+
+    @GET
+    @Path("/export")
+    @Operation(
+            summary = "Export non-secret profile records (connections, profiles, routes) for the authenticated owner")
+    public Response exportProfiles() {
+        String ownerId = requireOwner();
+        if (ownerId == null) {
+            return Response.status(401)
+                    .entity(new AmshaErrorResponse("Unauthorized", "Authentication required"))
+                    .build();
+        }
+        Map<String, Object> exported = coordinator.exportProfiles(ownerId, profileStore);
+        return Response.ok(exported).build();
+    }
+
+    @POST
+    @Path("/import")
+    @Operation(
+            summary =
+                    "Import non-secret profile records. Connections are saved as STAGED; secrets must be supplied via a follow-up draft.")
+    public Response importProfiles(Map<String, Object> data) {
+        String ownerId = requireOwner();
+        if (ownerId == null) {
+            return Response.status(401)
+                    .entity(new AmshaErrorResponse("Unauthorized", "Authentication required"))
+                    .build();
+        }
+        coordinator.importProfiles(ownerId, data, profileStore);
+        return Response.ok(Map.of("imported", true)).build();
     }
 
     @POST

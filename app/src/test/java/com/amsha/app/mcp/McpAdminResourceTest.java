@@ -4,6 +4,7 @@ import static io.restassured.RestAssured.given;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.Matchers.hasKey;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.*;
 
 import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
 
@@ -16,7 +17,6 @@ import com.amsha.core.tools.ToolRegistry;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.Mockito;
 
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
@@ -42,14 +42,14 @@ class McpAdminResourceTest {
 
     @BeforeEach
     void setup() {
-        Mockito.when(apiKeyRegistry.isValidKey(anyString())).thenReturn(true);
-        Mockito.when(apiKeyRegistry.isAllowed(anyString())).thenReturn(true);
+        when(apiKeyRegistry.isValidKey(anyString())).thenReturn(true);
+        when(apiKeyRegistry.isAllowed(anyString())).thenReturn(true);
 
-        AgentTool mockTool = Mockito.mock(AgentTool.class);
+        AgentTool mockTool = mock(AgentTool.class);
         JsonObjectSchema schema = JsonObjectSchema.builder().build();
-        Mockito.when(mockTool.parametersSchema()).thenReturn(schema);
-        Mockito.when(mockTool.name()).thenReturn("mock-tool");
-        Mockito.when(toolRegistry.findTool(anyString())).thenReturn(Optional.of(mockTool));
+        when(mockTool.parametersSchema()).thenReturn(schema);
+        when(mockTool.name()).thenReturn("mock-tool");
+        when(toolRegistry.findTool(anyString())).thenReturn(Optional.of(mockTool));
     }
 
     @Test

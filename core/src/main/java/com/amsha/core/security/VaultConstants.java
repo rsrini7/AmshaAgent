@@ -22,6 +22,9 @@ public final class VaultConstants {
      */
     public static final String USER_VAULT_SCOPE_PREFIX = "USER:";
 
+    /** Stable SecretVault partition for credentials shared by an authorized workspace. */
+    public static final String WORKSPACE_VAULT_SCOPE_PREFIX = "WORKSPACE:";
+
     /**
      * System-level key for Claude Code OAuth provider.
      */

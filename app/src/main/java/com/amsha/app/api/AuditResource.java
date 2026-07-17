@@ -104,7 +104,7 @@ public class AuditResource {
                     .orElse(Response.status(Response.Status.NOT_FOUND)
                             .entity(new AmshaErrorResponse("Audit event not found: " + id))
                             .build());
-        } catch (IllegalArgumentException e) {
+        } catch (IllegalArgumentException _) {
             return Response.status(Response.Status.BAD_REQUEST)
                     .entity(new AmshaErrorResponse("Invalid audit event ID: " + id))
                     .build();
@@ -195,7 +195,7 @@ public class AuditResource {
     private AuditOutcome parseAuditOutcome(String value) {
         try {
             return AuditOutcome.valueOf(value);
-        } catch (IllegalArgumentException e) {
+        } catch (IllegalArgumentException _) {
             return null;
         }
     }
@@ -203,7 +203,7 @@ public class AuditResource {
     private SecurityEventType parseSecurityEventType(String value) {
         try {
             return SecurityEventType.valueOf(value);
-        } catch (IllegalArgumentException e) {
+        } catch (IllegalArgumentException _) {
             return null;
         }
     }

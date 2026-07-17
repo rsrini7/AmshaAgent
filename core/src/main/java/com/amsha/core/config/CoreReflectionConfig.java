@@ -21,7 +21,14 @@ import com.amsha.core.audit.AuditVerifier;
 import com.amsha.core.audit.SecurityEventType;
 import com.amsha.core.cron.AgentJobCompleted;
 import com.amsha.core.cron.CronTaskScheduled;
+import com.amsha.core.routing.ModelProfileCredentialResolver;
+import com.amsha.core.routing.ModelProfileResolverImpl;
 import com.amsha.core.routing.ModelRouter;
+import com.amsha.core.routing.ModelRoutingException;
+import com.amsha.core.routing.OrderedFailoverChatModel;
+import com.amsha.core.routing.ResolvedCredential;
+import com.amsha.core.routing.ResolvedProfile;
+import com.amsha.core.routing.RouteResolution;
 import com.amsha.core.sandbox.SandboxResult;
 import com.amsha.core.skill.CompiledSkillEntry;
 import com.amsha.core.skill.SkillDefinition;
@@ -84,6 +91,14 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             ReasoningStepDeserializer.class,
             ReasoningStepSerializer.class,
             ModelRouter.ModelConfig.class,
+            OrderedFailoverChatModel.class,
+            OrderedFailoverChatModel.Entry.class,
+            ResolvedProfile.class,
+            RouteResolution.class,
+            ResolvedCredential.class,
+            ModelProfileResolverImpl.class,
+            ModelProfileCredentialResolver.class,
+            ModelRoutingException.class,
             GroupConsultationEngine.GroupConsultationResult.class,
             GroupConsultationService.TriageResult.class,
             GroupAnalyticsService.DomainComboStats.class,

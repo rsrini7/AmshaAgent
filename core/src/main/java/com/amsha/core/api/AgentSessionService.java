@@ -37,6 +37,7 @@ import com.amsha.core.pipeline.MessageContext;
 import com.amsha.core.pipeline.TurnDispatchResult;
 import com.amsha.core.pipeline.TurnDispatchService;
 import com.amsha.core.pipeline.TurnRequest;
+import com.amsha.core.scope.ActiveWorkspaceContext;
 import com.amsha.core.scope.WorkspaceContext;
 import com.amsha.core.scope.WorkspaceScopeHolder;
 import com.amsha.core.security.AutonomyLevel;
@@ -69,6 +70,7 @@ public class AgentSessionService {
     private final AuditService auditService;
     private final SessionCatalogService sessionCatalogService;
     private final ExecutorService vThreads;
+    private final ActiveWorkspaceContext activeWorkspaceContext;
     private final int maxResumeIterations;
 
     private static final String REST_USER_NAME = ApiConstants.REST_USER_NAME;
@@ -89,6 +91,7 @@ public class AgentSessionService {
         this.auditService = null;
         this.sessionCatalogService = null;
         this.vThreads = null;
+        this.activeWorkspaceContext = null;
         this.maxResumeIterations = 0;
     }
 
@@ -106,6 +109,7 @@ public class AgentSessionService {
             CheckpointApprovalService checkpointApprovalService,
             AuditService auditService,
             SessionCatalogService sessionCatalogService,
+            ActiveWorkspaceContext activeWorkspaceContext,
             @VirtualThreads ExecutorService vThreads,
             @ConfigProperty(name = "amsha.approval.max-resume-iterations", defaultValue = "5")
                     int maxResumeIterations) {
@@ -121,6 +125,7 @@ public class AgentSessionService {
         this.checkpointApprovalService = checkpointApprovalService;
         this.auditService = auditService;
         this.sessionCatalogService = sessionCatalogService;
+        this.activeWorkspaceContext = activeWorkspaceContext;
         this.vThreads = vThreads;
         this.maxResumeIterations = maxResumeIterations;
     }
@@ -152,6 +157,7 @@ public class AgentSessionService {
                 checkpointResumeHandler,
                 checkpointApprovalService,
                 auditService,
+                null,
                 null,
                 vThreads,
                 maxResumeIterations);
@@ -210,8 +216,8 @@ public class AgentSessionService {
         }
 
         try {
-            TurnDispatchResult dispatched = WorkspaceScopeHolder.call(
-                    sessionId, () -> dispatchRestTurn(sessionId, userId, request, canonicalRole, maxIterations));
+            TurnDispatchResult dispatched = withSelectedWorkspace(() -> WorkspaceScopeHolder.call(
+                    sessionId, () -> dispatchRestTurn(sessionId, userId, request, canonicalRole, maxIterations)));
             return toServiceResult(dispatched, false);
         } catch (BudgetExceededException e) {
             return ServiceResult.error("BUDGET", e.getMessage());
@@ -235,7 +241,8 @@ public class AgentSessionService {
             return;
         }
 
-        vThreads.execute(() -> WorkspaceScopeHolder.run(sessionId, () -> {
+        String activeWorkspaceId = selectedWorkspaceId();
+        Runnable dispatch = () -> WorkspaceScopeHolder.run(sessionId, () -> {
             try {
                 String goal = request.goal() != null ? request.goal().trim() : "";
                 if ("approve".equalsIgnoreCase(goal) || "/approve".equalsIgnoreCase(goal)) {
@@ -261,7 +268,12 @@ public class AgentSessionService {
                 callback.accept(
                         ServiceResult.error("SYSTEM", e.getMessage() != null ? e.getMessage() : "Internal error"));
             }
-        }));
+        });
+        if (activeWorkspaceId == null) {
+            vThreads.execute(dispatch);
+        } else {
+            vThreads.execute(() -> WorkspaceContext.runWithActiveWorkspace(activeWorkspaceId, dispatch));
+        }
     }
 
     public ServiceResult<Object> approve(String sessionId, String userId, String agentRole) {
@@ -300,7 +312,7 @@ public class AgentSessionService {
                             return new ServiceResult<>(responseMapper.mapResult(result, false), null, null);
                         });
             };
-            return WorkspaceScopeHolder.call(sessionId, op);
+            return withSelectedWorkspace(() -> WorkspaceScopeHolder.call(sessionId, op));
         } catch (Exception e) {
             log.errorf("Approve failed: %s", LogUtil.rootMessage(e));
             return ServiceResult.error("SYSTEM", e.getMessage() != null ? e.getMessage() : "Internal error");
@@ -328,7 +340,7 @@ public class AgentSessionService {
                 checkpointApprovalService.triggerResume(cp);
                 return ServiceResult.success(Map.of("status", ToolDecision.DENIED.name(), "session", sessionId));
             };
-            return WorkspaceScopeHolder.call(sessionId, op);
+            return withSelectedWorkspace(() -> WorkspaceScopeHolder.call(sessionId, op));
         } catch (Exception e) {
             log.errorf("Deny failed: %s", LogUtil.rootMessage(e));
             return ServiceResult.error("SYSTEM", e.getMessage() != null ? e.getMessage() : "Internal error");
@@ -369,6 +381,17 @@ public class AgentSessionService {
         ChannelMessage msg =
                 new ChannelMessage.RestApiMessage(user, goal, REST_API_SESSION_PREFIX + sessionId, Instant.now());
         return new MessageContext(REST_CHAT_SESSION_PREFIX + sessionId, user, msg);
+    }
+
+    private String selectedWorkspaceId() {
+        return activeWorkspaceContext == null
+                ? null
+                : activeWorkspaceContext.workspaceId().orElse(null);
+    }
+
+    private <T> T withSelectedWorkspace(Callable<T> task) throws Exception {
+        String workspaceId = selectedWorkspaceId();
+        return workspaceId == null ? task.call() : WorkspaceContext.callWithActiveWorkspace(workspaceId, task);
     }
 
     private TurnDispatchResult dispatchRestTurn(
