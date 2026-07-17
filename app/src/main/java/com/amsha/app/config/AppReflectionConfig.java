@@ -57,7 +57,6 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             // Onboarding bootstrap records
             BootstrapResource.BootstrapStatusResponse.class,
             BootstrapResource.ClaimResponse.class,
-            BootstrapResource.ConfirmRequest.class,
             BootstrapResource.ConfirmResponse.class,
             BootstrapResource.ErrorResponse.class,
             // Identity resource records (response + request DTOs)

@@ -111,7 +111,12 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
     }
 
     private boolean isPublicPath(String path) {
-        return path.startsWith("/info") || path.startsWith("/onboarding") || isAuthPath(path);
+        // Only the bootstrap pre-draft status/claim endpoints are public. All other
+        // /onboarding/** endpoints (including recovery, drafts, steps, commit, cancel)
+        // require an authenticated principal.
+        boolean bootstrapPublic =
+                path.startsWith("/onboarding/bootstrap/status") || path.startsWith("/onboarding/bootstrap/claim");
+        return path.startsWith("/info") || bootstrapPublic || isAuthPath(path);
     }
 
     private boolean isAuthPath(String path) {

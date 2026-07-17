@@ -1,210 +1,206 @@
 import { LitElement, css, html } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
 import { ArcClient } from '../api/client';
-import { McpServerRequest } from '../api/generated/models/McpServerRequest';
-import './arc-onboarding-step1';
-import './arc-onboarding-step2';
-import './arc-onboarding-step3';
-import './arc-onboarding-step4';
-import './arc-onboarding-step5';
-import './arc-onboarding-step6';
+import { O1DraftPayload, ConnectionDraft } from '../api/types';
+import { formStyles } from './arc-onboarding-styles';
+import './onboarding/arc-onboarding-plan-stepper';
+import './onboarding/arc-onboarding-step-welcome';
+import './onboarding/arc-onboarding-step-connections';
+import './onboarding/arc-onboarding-step-concern-routing';
+import './onboarding/arc-onboarding-step-persona-routing';
+import './onboarding/arc-onboarding-step-mcp';
+import './onboarding/arc-onboarding-step-integrations';
+import './onboarding/arc-onboarding-step-advanced-settings';
+import './onboarding/arc-onboarding-step-memory';
+import './onboarding/arc-onboarding-step-security';
+import './onboarding/arc-onboarding-step-channels';
+import './onboarding/arc-onboarding-step-identity';
+import './onboarding/arc-onboarding-step-review';
 
 @customElement('arc-onboarding')
 export class ArcOnboarding extends LitElement {
-  private _client: ArcClient = new ArcClient('/api/v1');
+  private _client = new ArcClient('/api/v1');
 
-  @state() private _currentStep = 1;
+  @state() private _draftId = '';
+  @state() private _currentStepId = 'welcome';
+  @state() private _planStages: string[] = [];
+  @state() private _draftPayload: O1DraftPayload = {
+    connections: [],
+    concernRoutes: { agentLoop: [], compaction: [], classifier: [], embedding: [] }
+  };
+  @state() private _catalog: any[] = [];
   @state() private _loading = false;
   @state() private _error = '';
+  @state() private _isAdvanced = false;
 
-  @state() private _provider = 'groq';
-  @state() private _model = '';
-  @state() private _apiKey = '';
-  @state() private _systemPrompt = 'You are Amsha Agent, a helpful AI assistant.';
-  @state() private _mcpServers: McpServerRequest[] = [];
-  @state() private _validationOk = false;
+  static styles = [
+    formStyles,
+    css`
+      :host {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 100%;
+        background: var(--bg-base);
+        font-family: var(--font-family);
+        padding: var(--space-6) var(--space-4);
+      }
 
-  private readonly DEFAULT_MODELS: Record<string, string> = {
-    groq: 'meta-llama/llama-4-scout-17b-16e-instruct',
-    openai: 'gpt-4o-mini',
-    ollama: 'mistral-small:latest',
-    anthropic: 'claude-haiku-4-5',
-    'claude-code': 'claude-sonnet-4-5',
-    openrouter: 'openai/gpt-oss-20b:free',
-    nvidia: 'bytedance/seed-oss-36b-instruct',
-    cerebras: 'qwen-3-235b-a22b-instruct-2507',
-    gemini: 'gemini-2.5-flash-lite',
-    omlx: 'mlx-community/Qwen3.6-35B-A3B-4bit',
-  };
+      .wizard-card {
+        width: 100%;
+        max-width: 520px;
+        background: var(--bg-surface);
+        border: 1px solid var(--border-card);
+        border-radius: var(--radius-xl);
+        box-shadow: var(--shadow-lg), var(--shadow-glow);
+        overflow: hidden;
+        position: relative;
+        animation: card-in 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+        transition: max-width var(--transition);
+      }
 
-  static styles = css`
-  :host {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    min-height: 100%;
-    background: var(--bg-base);
-    font-family: var(--font-family);
-    padding: var(--space-6) var(--space-4);
-  }
+      .wizard-card.wide {
+        max-width: 800px;
+      }
 
-  .wizard-card {
-    width: 100%;
-    max-width: 480px;
-    background: var(--bg-surface);
-    border: 1px solid var(--border-card);
-    border-radius: var(--radius-xl);
-    box-shadow: var(--shadow-lg), var(--shadow-glow);
-    overflow: hidden;
-    position: relative;
-    animation: card-in 0.4s cubic-bezier(0.16,1,0.3,1) both;
-    transition: max-width var(--transition);
-  }
+      [data-theme='dark'] .wizard-card {
+        background: linear-gradient(145deg, #13151f 0%, #111318 100%);
+        border-color: rgba(255, 255, 255, 0.06);
+      }
 
-  .wizard-card.wide {
-    max-width: 600px;
-  }
+      @keyframes card-in {
+        from {
+          opacity: 0;
+          transform: translateY(20px) scale(0.98);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0) scale(1);
+        }
+      }
 
-  [data-theme="dark"] .wizard-card,
-  :host-context([data-theme="dark"]) .wizard-card {
-    background: linear-gradient(145deg, #13151f 0%, #111318 100%);
-    border-color: rgba(255,255,255,0.06);
-  }
+      .wizard-card::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 3px;
+        background: linear-gradient(90deg, var(--accent) 0%, var(--accent-secondary) 100%);
+      }
 
-  @keyframes card-in {
-    from { opacity: 0; transform: translateY(20px) scale(0.98); }
-    to   { opacity: 1; transform: translateY(0)   scale(1); }
-  }
+      .wizard-header {
+        padding: var(--space-8) var(--space-8) var(--space-4);
+        text-align: center;
+      }
 
-  .wizard-card::before {
-    content: "";
-    position: absolute; top: 0; left: 0; right: 0; height: 2px;
-    background: linear-gradient(90deg,
-      var(--accent) 0%, var(--accent-secondary) 100%);
-  }
+      .brand-mark {
+        width: 44px;
+        height: 44px;
+        margin: 0 auto var(--space-4);
+        background: linear-gradient(135deg, var(--accent) 0%, var(--accent-secondary) 100%);
+        border-radius: var(--radius-md);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 8px 24px var(--accent-glow);
+      }
 
-  .wizard-header {
-    padding: var(--space-8) var(--space-8) var(--space-6);
-    text-align: center;
-  }
+      .brand-mark svg {
+        color: #fff;
+      }
 
-  .brand-mark {
-    width: 44px; height: 44px;
-    margin: 0 auto var(--space-4);
-    background: linear-gradient(135deg,
-      var(--accent) 0%, var(--accent-secondary) 100%);
-    border-radius: var(--radius-md);
-    display: flex; align-items: center; justify-content: center;
-    box-shadow: 0 8px 24px var(--accent-glow);
-  }
+      .wizard-title {
+        font-size: var(--font-size-2xl);
+        font-weight: var(--font-weight-bold);
+        color: var(--text-primary);
+        letter-spacing: -0.02em;
+        line-height: 1.2;
+        margin-bottom: var(--space-2);
+      }
 
-  .brand-mark svg { color: #fff; }
+      .wizard-subtitle {
+        font-size: var(--font-size-sm);
+        color: var(--text-muted);
+        line-height: 1.5;
+      }
 
-  .wizard-title {
-    font-size: var(--font-size-2xl);
-    font-weight: var(--font-weight-bold);
-    color: var(--text-primary);
-    letter-spacing: -0.02em;
-    line-height: 1.2;
-    margin-bottom: var(--space-2);
-  }
+      .wizard-body {
+        padding: 0 var(--space-8) var(--space-8);
+      }
 
-  .wizard-subtitle {
-    font-size: var(--font-size-sm);
-    color: var(--text-muted);
-    line-height: 1.5;
-  }
+      .wizard-footer {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: var(--space-4) var(--space-8);
+        background: color-mix(in srgb, var(--bg-elevated) 40%, transparent);
+        border-top: 1px solid var(--border);
+      }
 
-  .stepper {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 0;
-    padding: 0 var(--space-8) var(--space-6);
-  }
+      .mode-toggle {
+        font-size: var(--font-size-xs);
+        color: var(--text-muted);
+        background: none;
+        border: none;
+        cursor: pointer;
+        font-weight: var(--font-weight-medium);
+        text-decoration: underline;
+      }
 
-  .step-dot-wrap {
-    display: flex; align-items: center; flex: 1;
-  }
-  .step-dot-wrap:last-child { flex: none; }
-
-  .step-dot {
-    width: 28px; height: 28px; flex-shrink: 0;
-    border-radius: var(--radius-full);
-    border: 2px solid var(--border);
-    background: var(--bg-elevated);
-    display: flex; align-items: center; justify-content: center;
-    font-size: var(--font-size-xs);
-    font-weight: var(--font-weight-semi);
-    color: var(--text-muted);
-    transition: all var(--transition);
-    position: relative; z-index: 1;
-  }
-
-  .step-dot.active {
-    border-color: var(--accent);
-    background: var(--accent);
-    color: #fff;
-    box-shadow: 0 0 0 4px var(--accent-glow);
-  }
-
-  .step-dot.done {
-    border-color: var(--accent-secondary);
-    background: var(--accent-secondary);
-    color: #fff;
-  }
-
-  .step-connector {
-    flex: 1; height: 2px;
-    background: var(--border);
-    margin: 0 -1px;
-    transition: background var(--transition-slow);
-  }
-
-  .step-connector.done {
-    background: linear-gradient(90deg,
-      var(--accent-secondary) 0%, var(--accent) 100%);
-  }
-
-  .wizard-body {
-    padding: 0 var(--space-8) var(--space-8);
-  }
-  `;
+      .mode-toggle:hover {
+        color: var(--accent);
+      }
+    `
+  ];
 
   async connectedCallback() {
     super.connectedCallback();
-    await this._fetchStatus();
+    await this._initDraft();
   }
 
-  private async _fetchStatus() {
+  private async _initDraft() {
     this._loading = true;
+    this._error = '';
     try {
-      const status = await this._client.onboardingStatus();
-      this._currentStep = status.step;
-      if (status.model) this._model = status.model;
+      const boot = await this._client.getBootstrapStatus();
+      if (boot.status === 'UNCLAIMED' || boot.status === 'CLAIMING') {
+        await this._client.claimFirstOwner();
+      }
+
+      this._catalog = await this._client.getProviderCatalog();
+
+      const res = await this._client.createOrResumeDraft();
+      this._draftId = res.draftId;
+      this._currentStepId = res.currentStepId;
+      this._planStages = res.planFingerprint.split('->');
+      if (res.selectedNonSecretIds && res.selectedNonSecretIds.length > 0) {
+        try {
+          this._draftPayload = JSON.parse(res.selectedNonSecretIds[0]);
+        } catch (_) {
+          // Payload is clean/empty
+        }
+      }
     } catch (e: any) {
-      this._error = `Setup Error: ${e.message}`;
+      this._error = `Failed to load draft: ${e.message}`;
     } finally {
       this._loading = false;
     }
   }
 
-  private async _next(body?: object) {
+  private async _saveAndNavigate(targetStepId: string, payloadUpdates?: Partial<O1DraftPayload>) {
     this._loading = true;
     this._error = '';
     try {
-      const res = await this._client.onboardingStep(this._currentStep, body);
-      if (this._currentStep === 3) {
-        if (res.valid === false) {
-          this._error = res.error || 'Invalid API Key';
-          return;
-        } else {
-          this._validationOk = true;
-          this._error = 'Key is valid!';
-          await new Promise(r => setTimeout(r, 600));
-        }
-      }
-      this._currentStep = res.nextStep;
+      const newPayload = { ...this._draftPayload, ...payloadUpdates };
+      const serialized = JSON.stringify(newPayload);
+      
+      const res = await this._client.updateDraftStep(this._draftId, targetStepId, {
+        selectedNonSecretIds: [serialized]
+      });
+      
+      this._currentStepId = res.currentStepId;
+      this._draftPayload = newPayload;
     } catch (e: any) {
       this._error = e.message;
     } finally {
@@ -212,138 +208,313 @@ export class ArcOnboarding extends LitElement {
     }
   }
 
-  private async _finish() {
+  private async _discard() {
+    if (!confirm('Are you sure you want to discard your progress and restart?')) return;
+    this._loading = true;
     try {
-      const result = await this._client.onboardingComplete();
-      this.dispatchEvent(new CustomEvent('api-key-set', {
-        bubbles: true, composed: true,
-        detail: { key: result.serviceKey }
-      }));
+      await this._client.discardDraft();
+      await this._initDraft();
     } catch (e: any) {
-      this._error = `Finalizing Error: ${e.message}`;
-    }
-  }
-
-  private _back() {
-    if (this._currentStep > 1) {
-      this._currentStep--;
-      this._error = '';
+      this._error = e.message;
+    } finally {
       this._loading = false;
-      this._validationOk = false;
     }
   }
 
-  private _onStepEvent = (e: CustomEvent) => {
-    switch (this._currentStep) {
-      case 1: {
-        if (e.type === 'next') {
-          this._next();
-        }
-        break;
-      }
-      case 2: {
-        const { provider, model } = (e as CustomEvent<{ provider: string; model: string }>).detail || {};
-        if (e.type === 'provider-change') {
-          this._provider = provider;
-          this._model = model;
-          this._validationOk = false;
-          this._error = '';
-        } else if (e.type === 'model-change') {
-          this._model = model;
-        } else if (e.type === 'next') {
-          this._next({ provider: this._provider, model: this._model });
-        }
-        break;
-      }
-      case 3: {
-        if (e.type === 'key-change') {
-          this._apiKey = (e as CustomEvent<{ apiKey: string }>).detail.apiKey;
-        } else if (e.type === 'validate') {
-          this._next({ apiKey: this._apiKey });
-        } else if (e.type === 'back') {
-          this._back();
-        }
-        break;
-      }
-      case 4: {
-        if (e.type === 'prompt-change') {
-          this._systemPrompt = (e as CustomEvent<{ systemPrompt: string }>).detail.systemPrompt;
-        } else if (e.type === 'next') {
-          this._next({ systemPrompt: this._systemPrompt });
-        } else if (e.type === 'back') {
-          this._back();
-        }
-        break;
-      }
-      case 5: {
-        if (e.type === 'mcp-add' || e.type === 'mcp-remove') {
-          this._mcpServers = (e as CustomEvent<{ mcpServers: McpServerRequest[] }>).detail.mcpServers;
-        } else if (e.type === 'next') {
-          this._next({ mcpServers: this._mcpServers });
-        } else if (e.type === 'skip') {
-          this._next({ mcpServers: [] });
-        } else if (e.type === 'back') {
-          this._back();
-        }
-        break;
-      }
+  private async _commit() {
+    this._loading = true;
+    this._error = '';
+    try {
+      await this._client.commitDraft(this._draftId);
+      this.dispatchEvent(
+        new CustomEvent('api-key-set', {
+          bubbles: true,
+          composed: true,
+          detail: { key: 'authenticated' }
+        })
+      );
+    } catch (e: any) {
+      this._error = `Commit failed: ${e.message}`;
+    } finally {
+      this._loading = false;
     }
-  };
+  }
 
-  private _onFinish = () => {
-    this._finish();
-  };
+  private _navigateNext() {
+    const idx = this._planStages.indexOf(this._currentStepId);
+    if (idx !== -1 && idx < this._planStages.length - 1) {
+      let nextStep = this._planStages[idx + 1];
+      if (!this._isAdvanced) {
+        while (nextStep !== 'review' && nextStep !== 'complete' && idx < this._planStages.length - 1) {
+          const nextIdx = this._planStages.indexOf(nextStep);
+          nextStep = this._planStages[nextIdx + 1];
+        }
+      }
+      this._saveAndNavigate(nextStep);
+    }
+  }
+
+  private _navigateBack() {
+    const idx = this._planStages.indexOf(this._currentStepId);
+    if (idx > 0) {
+      let prevStep = this._planStages[idx - 1];
+      if (!this._isAdvanced) {
+        while (prevStep !== 'connections' && prevStep !== 'welcome' && prevStep !== 'routes') {
+          const prevIdx = this._planStages.indexOf(prevStep);
+          prevStep = this._planStages[prevIdx - 1];
+        }
+      }
+      this._saveAndNavigate(prevStep);
+    }
+  }
+
+  private _handleQuickStart() {
+    const groq = this._catalog.find(p => p.id === 'groq') || {};
+    const defaultConn: ConnectionDraft = {
+      provider: 'groq',
+      modelId: groq.defaultModel || 'meta-llama/llama-4-scout-17b-16e-instruct',
+      contextWindow: 8192,
+      structuredOutputMode: 'NATIVE',
+      capabilities: ['tool-calling']
+    };
+
+    const ollama = this._catalog.find(p => p.id === 'ollama') || {};
+    const defaultEmbed: ConnectionDraft = {
+      provider: 'ollama',
+      modelId: ollama.defaultModel || 'mistral-small:latest',
+      contextWindow: 8192,
+      structuredOutputMode: 'NATIVE',
+      capabilities: []
+    };
+    
+    const preseededPayload: O1DraftPayload = {
+      connections: [defaultConn, defaultEmbed],
+      concernRoutes: {
+        agentLoop: [0],
+        compaction: [0],
+        classifier: [0],
+        embedding: [1]
+      }
+    };
+
+    this._saveAndNavigate('connections', preseededPayload);
+  }
+
+  private _handleAdvancedStart() {
+    this._isAdvanced = true;
+    this._saveAndNavigate('connections');
+  }
+
+  private _handleUpdateConnections(e: CustomEvent) {
+    this._draftPayload = { ...this._draftPayload, connections: e.detail.connections };
+  }
+
+  private _handleUpdateRoutes(e: CustomEvent) {
+    this._draftPayload = { ...this._draftPayload, concernRoutes: e.detail.concernRoutes };
+  }
+
+  private _handleUpdatePersonaRoutes(e: CustomEvent) {
+    this._draftPayload = { ...this._draftPayload, personaRoutes: e.detail.personaRoutes };
+  }
+
+  private _handleUpdateMcp(e: CustomEvent) {
+    this._draftPayload = { ...this._draftPayload, mcpServers: e.detail.mcpServers };
+  }
+
+  private _handleUpdateIntegrations(e: CustomEvent) {
+    this._draftPayload = { ...this._draftPayload, integrations: e.detail.integrations };
+  }
+
+  private _handleUpdateAdvanced(e: CustomEvent) {
+    this._draftPayload = { ...this._draftPayload, advanced: e.detail.advanced };
+  }
+
+  private _handleUpdateMemory(e: CustomEvent) {
+    this._draftPayload = { ...this._draftPayload, memory: e.detail.memory };
+  }
+
+  private _handleUpdateSecurity(e: CustomEvent) {
+    this._draftPayload = { ...this._draftPayload, security: e.detail.security };
+  }
+
+  private _handleUpdateChannels(e: CustomEvent) {
+    this._draftPayload = { ...this._draftPayload, channels: e.detail.channels };
+  }
+
+  private _handleUpdateIdentity(e: CustomEvent) {
+    this._draftPayload = { ...this._draftPayload, identity: e.detail.identity };
+  }
 
   render() {
-    return html`
-      <div class="wizard-card ${this._currentStep === 5 ? 'wide' : ''}">
-        ${this._currentStep !== 6 ? html`
-          <div class="wizard-header">
-            <div class="brand-mark">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
-              </svg>
-            </div>
-            <h1 class="wizard-title">Amsha Agent</h1>
-            <p class="wizard-subtitle">AI Agent Infrastructure</p>
-          </div>
-          <div class="stepper">
-            ${[1, 2, 3, 4, 5].map(s => html`
-              <div class="step-dot-wrap">
-                <div class="step-dot ${this._currentStep === s ? 'active' : this._currentStep > s ? 'done' : ''}">
-                  ${this._currentStep > s ? '✓' : s}
-                </div>
-                ${s < 5 ? html`<div class="step-connector ${this._currentStep > s ? 'done' : ''}"></div>` : ''}
-              </div>
-            `)}
-          </div>
-        ` : ''}
+    const isWide = ['connections', 'routes', 'persona-routing', 'review'].includes(this._currentStepId);
 
-        <div class="wizard-body" @next="${this._onStepEvent}" @back="${this._onStepEvent}"
-             @provider-change="${this._onStepEvent}" @model-change="${this._onStepEvent}"
-             @key-change="${this._onStepEvent}" @validate="${this._onStepEvent}"
-             @prompt-change="${this._onStepEvent}"
-             @mcp-add="${this._onStepEvent}" @mcp-remove="${this._onStepEvent}"
-             @skip="${this._onStepEvent}" @finish="${this._onFinish}">
-          ${this._currentStep === 1 ? html`
-            <arc-onboarding-step1></arc-onboarding-step1>
-          ` : this._currentStep === 2 ? html`
-            <arc-onboarding-step2 .provider="${this._provider}" .model="${this._model}"
-              .defaultModels="${this.DEFAULT_MODELS}"></arc-onboarding-step2>
-          ` : this._currentStep === 3 ? html`
-            <arc-onboarding-step3 .provider="${this._provider}" .apiKey="${this._apiKey}"
-              .loading="${this._loading}" .error="${this._error}"
-              .validationOk="${this._validationOk}"></arc-onboarding-step3>
-          ` : this._currentStep === 4 ? html`
-            <arc-onboarding-step4 .systemPrompt="${this._systemPrompt}"></arc-onboarding-step4>
-          ` : this._currentStep === 5 ? html`
-            <arc-onboarding-step5 .mcpServers="${this._mcpServers}"
-              .loading="${this._loading}"></arc-onboarding-step5>
-          ` : html`
-            <arc-onboarding-step6></arc-onboarding-step6>
-          `}
+    return html`
+      <div class="wizard-card ${isWide ? 'wide' : ''}">
+        <div class="wizard-header">
+          <div class="brand-mark">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
+            </svg>
+          </div>
+          <h1 class="wizard-title">Amsha Agent</h1>
+          <p class="wizard-subtitle">AI Agent Infrastructure Onboarding</p>
+        </div>
+
+        ${this._planStages.length > 0
+          ? html`
+              <arc-onboarding-plan-stepper
+                .planStages="${this._planStages}"
+                .currentStepId="${this._currentStepId}"
+              ></arc-onboarding-plan-stepper>
+            `
+          : ''}
+
+        <div class="wizard-body">
+          ${this._error ? html`<div class="status-msg error">${this._error}</div>` : ''}
+          ${this._loading ? html`<div class="status-msg loading"><div class="spinner"></div> Loading...</div>` : ''}
+          
+          <div style="margin-top: var(--space-4);">
+            ${this._renderStepContent()}
+          </div>
+        </div>
+
+        <div class="wizard-footer">
+          <button class="mode-toggle" @click="${() => (this._isAdvanced = !this._isAdvanced)}">
+            ${this._isAdvanced ? 'Switch to Quick Start' : 'Enable Advanced Setup'}
+          </button>
+          ${this._currentStepId !== 'welcome' && this._currentStepId !== 'complete'
+            ? html`
+                <button class="mode-toggle" style="color: var(--error);" @click="${this._discard}">
+                  Discard & Restart
+                </button>
+              `
+            : ''}
         </div>
       </div>
     `;
+  }
+
+  private _renderStepContent() {
+    switch (this._currentStepId) {
+      case 'welcome':
+        return html`
+          <arc-onboarding-step-welcome
+            @quick-start="${this._handleQuickStart}"
+            @advanced-start="${this._handleAdvancedStart}"
+          ></arc-onboarding-step-welcome>
+        `;
+      case 'connections':
+        return html`
+          <arc-onboarding-step-connections
+            .connections="${this._draftPayload.connections || []}"
+            .catalog="${this._catalog}"
+            @update-connections="${this._handleUpdateConnections}"
+            @next="${this._navigateNext}"
+          ></arc-onboarding-step-connections>
+        `;
+      case 'routes':
+        return html`
+          <arc-onboarding-step-concern-routing
+            .connections="${this._draftPayload.connections || []}"
+            .catalog="${this._catalog}"
+            .concernRoutes="${this._draftPayload.concernRoutes}"
+            @update-routes="${this._handleUpdateRoutes}"
+            @next="${this._navigateNext}"
+          ></arc-onboarding-step-concern-routing>
+        `;
+      case 'persona-routing':
+        return html`
+          <arc-onboarding-step-persona-routing
+            .connections="${this._draftPayload.connections || []}"
+            .catalog="${this._catalog}"
+            .personaRoutes="${this._draftPayload.personaRoutes || {}}"
+            @update-persona-routes="${this._handleUpdatePersonaRoutes}"
+            @next="${this._navigateNext}"
+            @back="${this._navigateBack}"
+          ></arc-onboarding-step-persona-routing>
+        `;
+      case 'mcp':
+        return html`
+          <arc-onboarding-step-mcp
+            .mcpServers="${this._draftPayload.mcpServers || []}"
+            @update-mcp="${this._handleUpdateMcp}"
+            @next="${this._navigateNext}"
+            @back="${this._navigateBack}"
+          ></arc-onboarding-step-mcp>
+        `;
+      case 'integrations':
+        return html`
+          <arc-onboarding-step-integrations
+            .integrations="${this._draftPayload.integrations || { playwrightEnabled: false, playwrightHeaded: false, skillsjarsApprovalRequired: true }}"
+            @update-integrations="${this._handleUpdateIntegrations}"
+            @next="${this._navigateNext}"
+            @back="${this._navigateBack}"
+          ></arc-onboarding-step-integrations>
+        `;
+      case 'advanced-settings':
+        return html`
+          <arc-onboarding-step-advanced-settings
+            .advanced="${this._draftPayload.advanced || {}}"
+            @update-advanced="${this._handleUpdateAdvanced}"
+            @next="${this._navigateNext}"
+            @back="${this._navigateBack}"
+          ></arc-onboarding-step-advanced-settings>
+        `;
+      case 'memory':
+        return html`
+          <arc-onboarding-step-memory
+            .memory="${this._draftPayload.memory || { tieredEnabled: true, selfEvolveEnabled: false }}"
+            @update-memory="${this._handleUpdateMemory}"
+            @next="${this._navigateNext}"
+            @back="${this._navigateBack}"
+          ></arc-onboarding-step-memory>
+        `;
+      case 'security':
+        return html`
+          <arc-onboarding-step-security
+            .security="${this._draftPayload.security || {}}"
+            @update-security="${this._handleUpdateSecurity}"
+            @next="${this._navigateNext}"
+            @back="${this._navigateBack}"
+          ></arc-onboarding-step-security>
+        `;
+      case 'channels':
+        return html`
+          <arc-onboarding-step-channels
+            .channels="${this._draftPayload.channels || { telegramEnabled: false, webEnabled: true, webRequireAuth: true, phoenixEnabled: false }}"
+            @update-channels="${this._handleUpdateChannels}"
+            @next="${this._navigateNext}"
+            @back="${this._navigateBack}"
+          ></arc-onboarding-step-channels>
+        `;
+      case 'identity':
+        return html`
+          <arc-onboarding-step-identity
+            .identity="${this._draftPayload.identity || {}}"
+            @update-identity="${this._handleUpdateIdentity}"
+            @next="${this._navigateNext}"
+            @back="${this._navigateBack}"
+          ></arc-onboarding-step-identity>
+        `;
+      case 'review':
+        return html`
+          <arc-onboarding-step-review
+            .connections="${this._draftPayload.connections || []}"
+            .catalog="${this._catalog}"
+            .concernRoutes="${this._draftPayload.concernRoutes}"
+            @finish="${this._commit}"
+          ></arc-onboarding-step-review>
+        `;
+      default:
+        return html`
+          <div style="text-align: center; color: var(--text-muted); padding: var(--space-8) 0;">
+            <p>Stage: <strong>${this._currentStepId}</strong></p>
+            <p style="margin-top: var(--space-4);">
+              <button class="btn-ghost" @click="${this._navigateBack}">Back</button>
+              <button class="btn-primary" @click="${this._navigateNext}">Continue</button>
+            </p>
+          </div>
+        `;
+    }
   }
 }

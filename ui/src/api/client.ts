@@ -65,8 +65,50 @@ export class ArcClient {
   }
 
   // Onboarding
-  async onboardingStatus(): Promise<import('./types').OnboardingStatusDto> {
-    return this.request<import('./types').OnboardingStatusDto>('/onboarding/status');
+  async getBootstrapStatus(): Promise<any> {
+    return this.request<any>('/onboarding/bootstrap/status');
+  }
+
+  async claimFirstOwner(): Promise<any> {
+    return this.request<any>('/onboarding/bootstrap/claim', {
+      method: 'POST'
+    });
+  }
+
+  async getActiveDraftId(): Promise<string> {
+    return this.request<string>('/onboarding/drafts');
+  }
+
+  async createOrResumeDraft(): Promise<any> {
+    return this.request<any>('/onboarding/drafts', { method: 'POST' });
+  }
+
+  async getDraft(draftId: string): Promise<any> {
+    return this.request<any>(`/onboarding/drafts/${draftId}`);
+  }
+
+  async updateDraftStep(draftId: string, stepId: string, payload: any): Promise<any> {
+    return this.request<any>(`/onboarding/drafts/${draftId}/steps/${stepId}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload)
+    });
+  }
+
+  async commitDraft(draftId: string): Promise<any> {
+    return this.request<any>(`/onboarding/drafts/${draftId}/commit`, { method: 'POST' });
+  }
+
+  async discardDraft(): Promise<any> {
+    return this.request<any>('/onboarding/drafts/discard', { method: 'POST' });
+  }
+
+  async getProviderCatalog(): Promise<any> {
+    return this.request<any>('/onboarding/provider-catalog');
+  }
+
+  // Deprecated legacy facade methods (retained for backward compatibility during migration)
+  async onboardingStatus(): Promise<any> {
+    return this.request<any>('/onboarding/status');
   }
 
   async onboardingStep(step: number, body?: object): Promise<any> {
@@ -76,8 +118,8 @@ export class ArcClient {
     });
   }
 
-  async onboardingComplete(): Promise<import('./types').OnboardingCompleteDto> {
-    return this.request<import('./types').OnboardingCompleteDto>('/onboarding/complete');
+  async onboardingComplete(): Promise<any> {
+    return this.request<any>('/onboarding/complete');
   }
 
   // Settings

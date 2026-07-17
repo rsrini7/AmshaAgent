@@ -1,430 +1,229 @@
 package com.amsha.onboarding;
 
 import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.enterprise.inject.Any;
-import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
-import jakarta.ws.rs.Consumes;
-import jakarta.ws.rs.CookieParam;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.POST;
+import jakarta.ws.rs.PUT;
 import jakarta.ws.rs.Path;
+import jakarta.ws.rs.PathParam;
 import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.Context;
-import jakarta.ws.rs.core.Cookie;
-import jakarta.ws.rs.core.HttpHeaders;
 import jakarta.ws.rs.core.MediaType;
-import jakarta.ws.rs.core.NewCookie;
 import jakarta.ws.rs.core.Response;
+import jakarta.ws.rs.core.SecurityContext;
 
-import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Comparator;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
-import java.util.stream.StreamSupport;
+import java.util.Optional;
 
-import com.amsha.common.util.LogUtil;
-import com.amsha.core.api.AgentResponseMapper;
 import com.amsha.core.api.dto.AmshaErrorResponse;
 import com.amsha.core.audit.AuditService;
 import com.amsha.core.audit.SecurityEventType;
-import com.amsha.core.llm.LlmValidationGateway;
-import com.amsha.core.security.SecretVault;
-import com.amsha.core.security.VaultConstants;
-import com.amsha.core.util.HttpConstants;
-import com.amsha.mcp.transport.McpClientService;
-import com.amsha.onboarding.OnboardingSessionRegistry.OnboardingState;
-import com.amsha.onboarding.OnboardingSessionRegistry.OnboardingState.Step;
-import com.amsha.onboarding.dto.CompleteResponse;
-import com.amsha.onboarding.dto.McpServerRequest;
 import com.amsha.onboarding.dto.OnboardingStatusDto;
-import com.amsha.onboarding.dto.PluginStepDto;
-import com.amsha.onboarding.dto.Step2Request;
-import com.amsha.onboarding.dto.Step3Request;
-import com.amsha.onboarding.dto.Step3Response;
-import com.amsha.onboarding.dto.Step4Request;
-import com.amsha.onboarding.dto.Step5Request;
-import com.amsha.onboarding.dto.Step5Response;
-import com.amsha.onboarding.dto.StepResponse;
-import com.amsha.onboarding.spi.OnboardingStepProvider;
+import com.amsha.persistence.api.OnboardingDraftDto;
+import com.amsha.persistence.api.OnboardingDraftState;
 
-import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.eclipse.microprofile.openapi.annotations.Operation;
 import org.jboss.logging.Logger;
 
 import io.smallrye.common.annotation.RunOnVirtualThread;
 
+/**
+ * Onboarding resource. The durable draft (via {@link OnboardingCoordinator}) is the single source of
+ * truth; the legacy Caffeine-backed session registry and numbered-step wizard have been removed. All
+ * reads/mutations authorize the authenticated owner; no anonymous or synthetic-owner state exists.
+ */
 @Path("/onboarding")
 @Produces(MediaType.APPLICATION_JSON)
 @ApplicationScoped
 @RunOnVirtualThread
 public class OnboardingResource {
 
+    public static record StepUpdateRequest(List<String> selectedNonSecretIds) {}
+
     private static final Logger log = Logger.getLogger(OnboardingResource.class);
-    private static final String COOKIE_NAME = "AMSHA_ONBOARDING_SID";
 
     @Inject
-    OnboardingSessionRegistry registry;
-
-    @Inject
-    SecretVault vault;
-
-    @Inject
-    LlmValidationGateway llmValidationGateway;
-
-    @Inject
-    @Any
-    Instance<OnboardingStepProvider> pluginProviders;
-
-    @Inject
-    McpClientService mcpClientService;
+    OnboardingCoordinator coordinator;
 
     @Inject
     AuditService auditService;
 
-    @ConfigProperty(name = "amsha.llm.provider", defaultValue = "groq")
-    String configuredProvider;
-
-    @ConfigProperty(name = "amsha.llm.vault-priority", defaultValue = "false")
-    boolean vaultPriority;
-
-    @ConfigProperty(name = "amsha.ui.skip-onboarding", defaultValue = "false")
-    boolean skipOnboarding;
-
-    @ConfigProperty(name = "amsha.api.keys.internal", defaultValue = "key-internal-changeme")
-    String internalApiKey;
-
-    private static final Map<String, String> DEFAULT_MODELS = Map.ofEntries(
-            Map.entry("groq", "meta-llama/llama-4-scout-17b-16e-instruct"),
-            Map.entry("openai", "gpt-4o-mini"),
-            Map.entry("ollama", "mistral-small:latest"),
-            Map.entry("anthropic", "claude-haiku-4-5"),
-            Map.entry("claude-code", "claude-sonnet-4-5"),
-            Map.entry("openrouter", "openai/gpt-oss-20b:free"),
-            Map.entry("nvidia", "bytedance/seed-oss-36b-instruct"),
-            Map.entry("cerebras", "llama-3.3-70b"),
-            Map.entry("gemini", "gemini-2.0-flash"),
-            Map.entry("omlx", "mlx-community/gemma-4-26b-a4b-it-4bit"),
-            Map.entry("llamacpp", "qwen3"),
-            Map.entry("generic-openai", ""));
+    @Context
+    SecurityContext securityContext;
 
     @GET
     @Path("/status")
-    @Operation(summary = "Get current onboarding session status and step")
-    public Response status(@CookieParam(COOKIE_NAME) Cookie cookie, @Context HttpHeaders headers) {
-        String sid = resolveSessionId(cookie, headers);
-        OnboardingState state = registry.getOrCreate(sid);
-
-        if (state.currentStep == OnboardingState.Step.WELCOME && (skipOnboarding || backendLlmConfigured())) {
-            state.currentStep = OnboardingState.Step.COMPLETE;
-            state.credentialsValidated = true;
-            if (state.selectedProvider == null || state.selectedProvider.isBlank()) {
-                state.selectedProvider = configuredProvider;
-            }
+    @Operation(summary = "Get current onboarding draft status and step")
+    public Response status() {
+        String ownerId = requireOwner();
+        if (ownerId == null) {
+            log.warnf("Onboarding /status denied: missing or invalid principal");
+            return Response.status(401)
+                    .entity(new AmshaErrorResponse("Unauthorized", "Authentication required"))
+                    .build();
         }
-
-        log.infof("status: sid=%s, currentStep=%s", sid, state.currentStep);
-
+        OnboardingDraftDto draft = coordinator.getOrCreateFirstRunDraft(ownerId);
         OnboardingStatusDto dto = new OnboardingStatusDto(
-                state.currentStep.number,
-                state.currentStep.name(),
-                state.selectedProvider,
-                state.selectedModel,
-                state.credentialsValidated);
-
-        Response.ResponseBuilder rb = Response.ok(dto).cookie(createCookie(sid));
-        if (state.currentStep == OnboardingState.Step.COMPLETE) {
-            rb.cookie(createApiCookie(internalApiKey));
-        }
-        return rb.build();
-    }
-
-    private boolean backendLlmConfigured() {
-        if (skipOnboarding) {
-            return true;
-        }
-
-        if (vault.systemKeyExists(VaultConstants.LLM_API_KEY)) {
-            return true;
-        }
-
-        String provider = configuredProvider != null ? configuredProvider.trim() : "";
-        if (provider.isBlank()) {
-            return false;
-        }
-
-        if (provider.equalsIgnoreCase("ollama")
-                || provider.equalsIgnoreCase("claude-code")
-                || provider.equalsIgnoreCase("omlx")
-                || provider.equalsIgnoreCase("llamacpp")) {
-            return true;
-        }
-
-        String apiKey = System.getProperty("AMSHA_LLM_API_KEY", System.getenv("AMSHA_LLM_API_KEY"));
-        if (apiKey != null && !apiKey.isBlank()) {
-            return true;
-        }
-
-        if (!vaultPriority && provider.equalsIgnoreCase("infinite-loop")) {
-            String providers = System.getProperty(
-                    "AMSHA_INFINITE_LOOP_LLM_PROVIDERS", System.getenv("AMSHA_INFINITE_LOOP_LLM_PROVIDERS"));
-            return providers != null && !providers.isBlank();
-        }
-
-        return false;
-    }
-
-    @POST
-    @Path("/step/1")
-    @Operation(summary = "Start onboarding and move to Provider selection")
-    @SuppressWarnings("java:S1192")
-    public Response step1(@CookieParam(COOKIE_NAME) Cookie cookie, @Context HttpHeaders headers) {
-        String sid = resolveSessionId(cookie, headers);
-        OnboardingState state = registry.getOrCreate(sid);
-
-        log.infof("step1: sid=%s, currentStep=%s", sid, state.currentStep);
-
-        if (!state.canProceedTo(OnboardingSessionRegistry.OnboardingState.Step.PROVIDER)) {
-            log.warnf("Forbidden jump: sid=%s tries to reach PROVIDER while at %s", sid, state.currentStep);
-            return Response.status(403)
-                    .entity(new AmshaErrorResponse("Forbidden", "Onboarding step out of sequence"))
-                    .cookie(createCookie(sid))
-                    .build();
-        }
-
-        state.advance();
-        return Response.ok(new StepResponse(2)).cookie(createCookie(sid)).build();
-    }
-
-    @POST
-    @Path("/step/2")
-    @Consumes(MediaType.APPLICATION_JSON)
-    @Operation(summary = "Select LLM provider and model")
-    public Response step2(Step2Request req, @CookieParam(COOKIE_NAME) Cookie cookie, @Context HttpHeaders headers) {
-        String sid = resolveSessionId(cookie, headers);
-        OnboardingState state = registry.getOrCreate(sid);
-
-        log.infof("step2: sid=%s, currentStep=%s", sid, state.currentStep);
-
-        if (!state.canProceedTo(OnboardingSessionRegistry.OnboardingState.Step.CREDENTIALS)) {
-            log.warnf("Forbidden jump: sid=%s tries to reach CREDENTIALS while at %s", sid, state.currentStep);
-            return Response.status(403)
-                    .entity(new AgentResponseMapper.AgentErrorResponse("Forbidden", "Onboarding step out of sequence"))
-                    .cookie(createCookie(sid))
-                    .build();
-        }
-
-        String model = (req.model() != null && !req.model().isBlank())
-                ? req.model()
-                : DEFAULT_MODELS.getOrDefault(req.provider(), "");
-
-        state.selectedProvider = req.provider();
-        state.selectedModel = model;
-        state.advance();
-
-        return Response.ok(new StepResponse(3)).cookie(createCookie(sid)).build();
-    }
-
-    @POST
-    @Path("/step/3")
-    @Consumes(MediaType.APPLICATION_JSON)
-    @Operation(summary = "Validate credentials and move to System Prompt step")
-    public Response step3(Step3Request req, @CookieParam(COOKIE_NAME) Cookie cookie, @Context HttpHeaders headers) {
-        String sid = resolveSessionId(cookie, headers);
-        OnboardingState state = registry.getOrCreate(sid);
-
-        if (!state.canProceedTo(OnboardingSessionRegistry.OnboardingState.Step.SYSTEM_PROMPT)) {
-            log.warnf("Forbidden jump: sid=%s tries to reach SYSTEM_PROMPT while at %s", sid, state.currentStep);
-            return Response.status(403)
-                    .entity(new AmshaErrorResponse("Forbidden", "Onboarding step out of sequence"))
-                    .cookie(createCookie(sid))
-                    .build();
-        }
-
-        String provider = state.selectedProvider;
-
-        try {
-            boolean valid = llmValidationGateway.validate(provider, state.selectedModel, req.apiKey());
-
-            log.infof("step3 validation: sid=%s, provider=%s, valid=%b", sid, provider, valid);
-
-            if (!valid) {
-                return Response.ok(new Step3Response(3, false, "Invalid API key or model combination"))
-                        .cookie(createCookie(sid))
-                        .build();
-            }
-
-            state.credentialsValidated = true;
-            state.advance();
-
-            vault.storeSystemKey(VaultConstants.LLM_API_KEY, req.apiKey().getBytes(StandardCharsets.UTF_8));
-            vault.storeSystemKey(VaultConstants.LLM_PROVIDER_KEY, provider.getBytes(StandardCharsets.UTF_8));
-
-            auditService.recordMandatory(
-                    "onboarding-" + sid,
-                    "onboarding-user",
-                    "system",
-                    SecurityEventType.ONBOARDING_COMPLETED,
-                    "step=3 provider=" + provider + " model=" + state.selectedModel);
-
-            return Response.ok(new Step3Response(4, true, null))
-                    .cookie(createCookie(sid))
-                    .build();
-
-        } catch (Exception e) {
-            log.errorf("Validation error for sid=%s: %s", sid, LogUtil.rootMessage(e));
-            return Response.status(400)
-                    .entity(new Step3Response(3, false, e.getMessage()))
-                    .build();
-        }
-    }
-
-    @POST
-    @Path("/step/4")
-    @Consumes(MediaType.APPLICATION_JSON)
-    @Operation(summary = "Configure default system prompt and move to MCP step")
-    public Response step4(Step4Request req, @CookieParam(COOKIE_NAME) Cookie cookie, @Context HttpHeaders headers) {
-        String sid = resolveSessionId(cookie, headers);
-        OnboardingState state = registry.getOrCreate(sid);
-
-        if (!state.canProceedTo(Step.MCP))
-            return Response.status(403)
-                    .entity(new AmshaErrorResponse("Forbidden", "Onboarding step out of sequence"))
-                    .cookie(createCookie(sid))
-                    .build();
-
-        String prompt = (req.systemPrompt() == null || req.systemPrompt().isBlank())
-                ? "You are Amsha Agent, a helpful AI assistant."
-                : req.systemPrompt();
-
-        vault.storeSystemKey(VaultConstants.SYSTEM_PROMPT_KEY, prompt.getBytes(StandardCharsets.UTF_8));
-        state.advance();
-
-        return Response.ok(new StepResponse(5)).cookie(createCookie(sid)).build();
-    }
-
-    @POST
-    @Path("/step/5")
-    @Consumes(MediaType.APPLICATION_JSON)
-    @Operation(summary = "Register MCP servers and complete onboarding")
-    public Response step5(Step5Request req, @CookieParam(COOKIE_NAME) Cookie cookie, @Context HttpHeaders headers) {
-        String sid = resolveSessionId(cookie, headers);
-        OnboardingState state = registry.getOrCreate(sid);
-
-        if (!state.canProceedTo(Step.COMPLETE))
-            return Response.status(403)
-                    .entity(new AmshaErrorResponse("Forbidden", "Onboarding step out of sequence"))
-                    .cookie(createCookie(sid))
-                    .build();
-
-        List<String> registered = new ArrayList<>();
-
-        if (req.mcpServers() != null) {
-            for (McpServerRequest s : req.mcpServers()) {
-                try {
-                    if ("stdio".equals(s.transport())) {
-                        List<String> argList = (s.args() != null && !s.args().isBlank())
-                                ? Arrays.asList(s.args().split("\\s+"))
-                                : List.of();
-                        Map<String, String> envMap = new HashMap<>();
-                        if (s.env() != null && !s.env().isBlank()) {
-                            for (String line : s.env().split("\\n", -1)) {
-                                String[] parts = line.split("=", 2);
-                                if (parts.length == 2) envMap.put(parts[0].trim(), parts[1].trim());
-                            }
-                        }
-                        mcpClientService.connectStdio(s.name(), s.command(), argList, envMap);
-                    } else {
-                        mcpClientService.connect(s.name(), s.url());
-                    }
-                    registered.add(s.name());
-                } catch (Exception e) {
-                    log.warnf("MCP registration failed for %s: %s", s.name(), LogUtil.rootMessage(e));
-                }
-            }
-        }
-
-        state.advance();
-
-        if (!registered.isEmpty()) {
-            auditService.recordMandatory(
-                    "onboarding-" + sid,
-                    "onboarding-user",
-                    "system",
-                    SecurityEventType.MCP_SERVER_CONNECTED,
-                    "via=onboarding servers=" + String.join(",", registered));
-        }
-
-        return Response.ok(new Step5Response(6, registered))
-                .cookie(createCookie(sid))
-                .build();
+                OnboardingCoordinator.PLAN.indexOf(draft.currentStepId()) + 1,
+                draft.currentStepId(),
+                draft.selectedNonSecretIds().isEmpty()
+                        ? null
+                        : draft.selectedNonSecretIds().get(0),
+                draft.selectedNonSecretIds().size() > 1
+                        ? draft.selectedNonSecretIds().get(1)
+                        : null,
+                draft.state() != OnboardingDraftState.DRAFT);
+        return Response.ok(dto).build();
     }
 
     @GET
-    @Path("/complete")
-    @Operation(summary = "Finalize setup and retrieve API keys for the UI")
-    public Response complete(@CookieParam(COOKIE_NAME) Cookie cookie, @Context HttpHeaders headers) {
-        String sid = resolveSessionId(cookie, headers);
-        OnboardingState state = registry.getOrCreate(sid);
+    @Path("/drafts")
+    @Operation(summary = "Get the authenticated owner's active onboarding draft id (or empty)")
+    public Response listDrafts() {
+        String ownerId = requireOwner();
+        if (ownerId == null) {
+            log.warnf("Onboarding /drafts denied: missing or invalid principal");
+            return Response.status(401)
+                    .entity(new AmshaErrorResponse("Unauthorized", "Authentication required"))
+                    .build();
+        }
+        return Response.ok(coordinator
+                        .findActive(ownerId)
+                        .map(OnboardingDraftDto::draftId)
+                        .orElse(""))
+                .build();
+    }
 
-        List<PluginStepDto> plugins = StreamSupport.stream(pluginProviders.spliterator(), false)
-                .sorted(Comparator.comparingInt(OnboardingStepProvider::order))
-                .map(p -> new PluginStepDto(p.stepId(), p.title(), p.isConfigured()))
-                .toList();
+    @POST
+    @Path("/drafts")
+    @Operation(summary = "Create or resume the owner's first-run draft")
+    public Response createDraft() {
+        String ownerId = requireOwner();
+        if (ownerId == null) {
+            log.warnf("Onboarding /drafts POST denied: missing or invalid principal");
+            return Response.status(401)
+                    .entity(new AmshaErrorResponse("Unauthorized", "Authentication required"))
+                    .build();
+        }
+        log.infof("Onboarding draft created/resumed for owner=%s", ownerId);
+        return Response.ok(coordinator.getOrCreateFirstRunDraft(ownerId)).build();
+    }
 
+    @GET
+    @Path("/drafts/{draftId}")
+    @Operation(summary = "Get a draft by id (owner-scoped)")
+    public Response getDraft(@PathParam("draftId") String draftId) {
+        String ownerId = requireOwner();
+        if (ownerId == null) {
+            log.warnf("Onboarding /drafts/{draftId} GET denied: missing or invalid principal");
+            return Response.status(401)
+                    .entity(new AmshaErrorResponse("Unauthorized", "Authentication required"))
+                    .build();
+        }
+        Optional<OnboardingDraftDto> draft = coordinator.findById(draftId);
+        if (draft.isEmpty() || !draft.get().ownerId().equals(ownerId)) {
+            log.warnf("Onboarding draft not found or owner mismatch draftId=%s owner=%s", draftId, ownerId);
+            return Response.status(404)
+                    .entity(new AmshaErrorResponse("Not Found", "Draft not found"))
+                    .build();
+        }
+        return Response.ok(draft.get()).build();
+    }
+
+    @PUT
+    @Path("/drafts/{draftId}/steps/{stepId}")
+    @Operation(summary = "Advance the draft to a target step (index-based plan guard)")
+    public Response goToStep(
+            @PathParam("draftId") String draftId, @PathParam("stepId") String stepId, StepUpdateRequest request) {
+        String ownerId = requireOwner();
+        if (ownerId == null) {
+            log.warnf("Onboarding /drafts/{draftId}/steps/{stepId} PUT denied: missing or invalid principal");
+            return Response.status(401)
+                    .entity(new AmshaErrorResponse("Unauthorized", "Authentication required"))
+                    .build();
+        }
+        Optional<OnboardingDraftDto> draft = coordinator.findById(draftId);
+        if (draft.isEmpty() || !draft.get().ownerId().equals(ownerId)) {
+            log.warnf("Onboarding draft not found or owner mismatch draftId=%s owner=%s", draftId, ownerId);
+            return Response.status(404)
+                    .entity(new AmshaErrorResponse("Not Found", "Draft not found"))
+                    .build();
+        }
+        List<String> selections = (request != null) ? request.selectedNonSecretIds() : null;
+        Optional<OnboardingDraftDto> moved;
+        try {
+            moved = coordinator.updateStep(draftId, stepId, selections);
+        } catch (IllegalArgumentException e) {
+            return Response.status(Response.Status.BAD_REQUEST)
+                    .entity(new AmshaErrorResponse("Bad Request", e.getMessage()))
+                    .build();
+        }
+        if (moved.isPresent()) {
+            log.infof("Onboarding draft %s advanced to step=%s owner=%s", draftId, stepId, ownerId);
+        } else {
+            log.warnf("Onboarding step transition failed draftId=%s stepId=%s owner=%s", draftId, stepId, ownerId);
+        }
+        return moved.map(d -> Response.ok(d).build())
+                .orElse(Response.status(409)
+                        .entity(new AmshaErrorResponse("Conflict", "Step transition failed"))
+                        .build());
+    }
+
+    @POST
+    @Path("/drafts/{draftId}/commit")
+    @Operation(summary = "Finalize the draft")
+    public Response commitDraft(@PathParam("draftId") String draftId) {
+        String ownerId = requireOwner();
+        if (ownerId == null) {
+            log.warnf("Onboarding /drafts/{draftId}/commit denied: missing or invalid principal");
+            return Response.status(401)
+                    .entity(new AmshaErrorResponse("Unauthorized", "Authentication required"))
+                    .build();
+        }
+        Optional<OnboardingDraftDto> draft = coordinator.findById(draftId);
+        if (draft.isEmpty() || !draft.get().ownerId().equals(ownerId)) {
+            log.warnf("Onboarding draft not found or owner mismatch draftId=%s owner=%s", draftId, ownerId);
+            return Response.status(404)
+                    .entity(new AmshaErrorResponse("Not Found", "Draft not found"))
+                    .build();
+        }
+        Optional<OnboardingDraftDto> committed = coordinator.commit(draftId);
         auditService.recordMandatory(
-                "onboarding-" + sid,
-                "onboarding-user",
+                "onboarding",
+                ownerId,
                 "system",
                 SecurityEventType.ONBOARDING_COMPLETED,
-                "step=complete provider=" + state.selectedProvider + " model=" + state.selectedModel);
-
-        CompleteResponse dto = new CompleteResponse(
-                true, "/#/chat", state.selectedProvider, state.selectedModel, internalApiKey, plugins);
-
-        return Response.ok(dto)
-                .cookie(createCookie(sid))
-                .cookie(createApiCookie(internalApiKey))
-                .build();
+                "action=commit_draft draftId=" + draftId);
+        return committed
+                .map(d -> Response.ok(d).build())
+                .orElse(Response.status(409)
+                        .entity(new AmshaErrorResponse("Conflict", "Commit failed"))
+                        .build());
     }
 
-    private String resolveSessionId(Cookie cookie, HttpHeaders headers) {
-        if (cookie != null && cookie.getValue() != null && !cookie.getValue().isBlank()) {
-            return cookie.getValue();
+    @POST
+    @Path("/drafts/discard")
+    @Operation(summary = "Discard the owner's active draft (resumable cleanup)")
+    public Response discard() {
+        String ownerId = requireOwner();
+        if (ownerId == null) {
+            log.warnf("Onboarding /drafts/discard denied: missing or invalid principal");
+            return Response.status(401)
+                    .entity(new AmshaErrorResponse("Unauthorized", "Authentication required"))
+                    .build();
         }
-        if (headers != null) {
-            Map<String, Cookie> cookies = headers.getCookies();
-            if (cookies != null && cookies.containsKey(COOKIE_NAME)) {
-                Cookie c = cookies.get(COOKIE_NAME);
-                if (c != null && c.getValue() != null && !c.getValue().isBlank()) {
-                    return c.getValue();
-                }
-            }
-        }
-        return UUID.randomUUID().toString();
+        coordinator.findActive(ownerId).ifPresent(d -> {
+            coordinator.discard(d.draftId(), ownerId);
+            log.infof("Onboarding draft discarded draftId=%s owner=%s", d.draftId(), ownerId);
+        });
+        return Response.ok(Map.of("discarded", true)).build();
     }
 
-    private NewCookie createCookie(String sid) {
-        return new NewCookie.Builder(COOKIE_NAME)
-                .value(sid)
-                .path("/")
-                .maxAge(3600)
-                .httpOnly(true)
-                .sameSite(NewCookie.SameSite.STRICT)
-                .build();
-    }
-
-    private NewCookie createApiCookie(String key) {
-        return new NewCookie.Builder(HttpConstants.COOKIE_AMSHA_API_KEY)
-                .value(key)
-                .path("/")
-                .maxAge(3600 * 24 * 30) // 30 days
-                .httpOnly(true)
-                .sameSite(NewCookie.SameSite.STRICT)
-                .build();
+    private String requireOwner() {
+        return securityContext.getUserPrincipal() != null
+                ? securityContext.getUserPrincipal().getName()
+                : null;
     }
 }

@@ -17,6 +17,10 @@ import com.amsha.persistence.api.McpConnectionCleanupFailureDto;
 import com.amsha.persistence.api.McpConnectionDto;
 import com.amsha.persistence.api.McpConnectionHeaderSecretRefDto;
 import com.amsha.persistence.api.MemoryChunkDto;
+import com.amsha.persistence.api.OnboardingDraftDto;
+import com.amsha.persistence.api.OnboardingDraftPurpose;
+import com.amsha.persistence.api.OnboardingDraftState;
+import com.amsha.persistence.api.OnboardingExtensionStateDto;
 import com.amsha.persistence.api.PromptDto;
 import com.amsha.persistence.api.ReasoningStepDto;
 import com.amsha.persistence.api.SecretDto;
@@ -38,6 +42,8 @@ import com.amsha.persistence.postgres.jdbi.IdentityJdbiDao;
 import com.amsha.persistence.postgres.jdbi.JdbiProducer;
 import com.amsha.persistence.postgres.jdbi.LockJdbiDao;
 import com.amsha.persistence.postgres.jdbi.McpConnectionJdbiDao;
+import com.amsha.persistence.postgres.jdbi.OnboardingDraftJdbiDao;
+import com.amsha.persistence.postgres.jdbi.OnboardingExtensionStateJdbiDao;
 import com.amsha.persistence.postgres.jdbi.PromptJdbiDao;
 import com.amsha.persistence.postgres.jdbi.RagChunkJdbiDao;
 import com.amsha.persistence.postgres.jdbi.RecallMemoryJdbiDao;
@@ -73,6 +79,10 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             WebSessionDto.class,
             IdentityInvitationDto.class,
             BootstrapStateDto.class,
+            OnboardingDraftDto.class,
+            OnboardingDraftPurpose.class,
+            OnboardingDraftState.class,
+            OnboardingExtensionStateDto.class,
             // JDBI DAOs (SQL Object proxies)
             CheckpointJdbiDao.class,
             CronJdbiDao.class,
@@ -94,6 +104,9 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             WebSessionJdbiDao.class,
             IdentityInvitationJdbiDao.class,
             BootstrapStateJdbiDao.class,
+            OnboardingDraftJdbiDao.class,
+            OnboardingDraftJdbiDao.DraftRowMapper.class,
+            OnboardingExtensionStateJdbiDao.class,
             // JDBI infrastructure
             JdbiProducer.class,
             // Store adapters (CDI beans)
@@ -119,6 +132,8 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             PostgresApiCredentialStoreAdapter.class,
             PostgresWebSessionStoreAdapter.class,
             PostgresIdentityInvitationStoreAdapter.class,
-            PostgresBootstrapStateStoreAdapter.class
+            PostgresBootstrapStateStoreAdapter.class,
+            PostgresOnboardingDraftStoreAdapter.class,
+            PostgresOnboardingExtensionStateStoreAdapter.class
         })
 public class PostgresPersistenceReflectionConfig {}

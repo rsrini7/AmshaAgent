@@ -83,6 +83,7 @@ public class SettingsResourceTest {
         when(llmValidationGateway.validate(anyString(), anyString(), anyString()))
                 .thenReturn(false);
 
+        // Provider mutation now opens a durable draft and does not write the legacy vault directly.
         ProviderUpdateRequest req = new ProviderUpdateRequest("openai", "gpt-4o", "bad-key");
         givenAuth()
                 .contentType(ContentType.JSON)
@@ -90,7 +91,8 @@ public class SettingsResourceTest {
                 .when()
                 .patch("/settings/provider")
                 .then()
-                .statusCode(422);
+                .statusCode(200)
+                .body("draft", is("opened"));
     }
 
     @Test

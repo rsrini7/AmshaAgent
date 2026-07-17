@@ -15,6 +15,10 @@ import com.amsha.persistence.api.IdentityWorkspaceDto;
 import com.amsha.persistence.api.McpConnectionCleanupFailureDto;
 import com.amsha.persistence.api.McpConnectionDto;
 import com.amsha.persistence.api.McpConnectionHeaderSecretRefDto;
+import com.amsha.persistence.api.OnboardingDraftDto;
+import com.amsha.persistence.api.OnboardingDraftPurpose;
+import com.amsha.persistence.api.OnboardingDraftState;
+import com.amsha.persistence.api.OnboardingExtensionStateDto;
 import com.amsha.persistence.api.PromptDto;
 import com.amsha.persistence.api.ReasoningStepDto;
 import com.amsha.persistence.api.SecretDto;
@@ -37,6 +41,8 @@ import com.amsha.persistence.sqlite.jdbi.IdentityJdbiDao;
 import com.amsha.persistence.sqlite.jdbi.JdbiProducer;
 import com.amsha.persistence.sqlite.jdbi.LockJdbiDao;
 import com.amsha.persistence.sqlite.jdbi.McpConnectionJdbiDao;
+import com.amsha.persistence.sqlite.jdbi.OnboardingDraftJdbiDao;
+import com.amsha.persistence.sqlite.jdbi.OnboardingExtensionStateJdbiDao;
 import com.amsha.persistence.sqlite.jdbi.PromptJdbiDao;
 import com.amsha.persistence.sqlite.jdbi.RecallMemoryJdbiDao;
 import com.amsha.persistence.sqlite.jdbi.SecretJdbiDao;
@@ -69,6 +75,10 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             WebSessionDto.class,
             IdentityInvitationDto.class,
             BootstrapStateDto.class,
+            OnboardingDraftDto.class,
+            OnboardingDraftPurpose.class,
+            OnboardingDraftState.class,
+            OnboardingExtensionStateDto.class,
             // JDBI DAOs (SQL Object proxies)
             CheckpointJdbiDao.class,
             CronJdbiDao.class,
@@ -90,6 +100,9 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             WebSessionJdbiDao.class,
             IdentityInvitationJdbiDao.class,
             BootstrapStateJdbiDao.class,
+            OnboardingDraftJdbiDao.class,
+            OnboardingDraftJdbiDao.DraftRowMapper.class,
+            OnboardingExtensionStateJdbiDao.class,
             // JDBI infrastructure
             JdbiProducer.class,
             JdbiRetryWrapper.class,
@@ -117,6 +130,8 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             SqliteWebSessionStoreAdapter.class,
             SqliteIdentityInvitationStoreAdapter.class,
             SqliteBootstrapStateStoreAdapter.class,
+            SqliteOnboardingDraftStoreAdapter.class,
+            SqliteOnboardingExtensionStateStoreAdapter.class,
             // Existing infrastructure
             GlobalKnowledgeBase.class,
             SessionKnowledgeBase.class,

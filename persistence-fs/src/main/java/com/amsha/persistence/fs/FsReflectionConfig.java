@@ -9,6 +9,10 @@ import com.amsha.persistence.api.IdentityWorkspaceDto;
 import com.amsha.persistence.api.McpConnectionCleanupFailureDto;
 import com.amsha.persistence.api.McpConnectionDto;
 import com.amsha.persistence.api.McpConnectionHeaderSecretRefDto;
+import com.amsha.persistence.api.OnboardingDraftDto;
+import com.amsha.persistence.api.OnboardingDraftPurpose;
+import com.amsha.persistence.api.OnboardingDraftState;
+import com.amsha.persistence.api.OnboardingExtensionStateDto;
 import com.amsha.persistence.api.WebSessionDto;
 import com.amsha.persistence.api.WorkspaceMembershipDto;
 
@@ -42,6 +46,8 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             FsWebSessionStoreAdapter.class,
             FsIdentityInvitationStoreAdapter.class,
             FsBootstrapStateStoreAdapter.class,
+            FsOnboardingDraftStoreAdapter.class,
+            FsOnboardingExtensionStateStoreAdapter.class,
             McpConnectionDto.class,
             McpConnectionHeaderSecretRefDto.class,
             McpConnectionCleanupFailureDto.class,
@@ -52,7 +58,11 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             ApiCredentialDto.class,
             WebSessionDto.class,
             IdentityInvitationDto.class,
-            BootstrapStateDto.class
+            BootstrapStateDto.class,
+            OnboardingDraftDto.class,
+            OnboardingDraftPurpose.class,
+            OnboardingDraftState.class,
+            OnboardingExtensionStateDto.class
         },
         classNames = {
             "org.apache.lucene.search.BoostAttribute",

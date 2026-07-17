@@ -599,8 +599,8 @@ class PersistencePortContractTest {
 
     @Test
     void bootstrapStateContract() {
-        BootstrapStateDto state =
-                new BootstrapStateDto("bootstrap", "UNCLAIMED", "user-100", "digest-1", null, null, 0, Instant.now());
+        BootstrapStateDto state = new BootstrapStateDto(
+                "bootstrap", "UNCLAIMED", "user-100", null, "digest-1", null, null, 0, Instant.now());
         bootstrapStateStore.save(state);
         Optional<BootstrapStateDto> found = bootstrapStateStore.getState();
         assertTrue(found.isPresent());
@@ -608,22 +608,33 @@ class PersistencePortContractTest {
     }
 
     @Test
-    void bootstrapStateClaimIsAtomic() {
+    void bootstrapReservationIsAtomic() {
         Instant now = Instant.now();
-        assertTrue(bootstrapStateStore.claimFirstOwner("owner-a", "digest-a", now));
-        assertFalse(bootstrapStateStore.claimFirstOwner("owner-b", "digest-b", now));
+        // Reserve: only one winner reaches CLAIMING
+        Optional<Integer> revA = bootstrapStateStore.reserveFirstOwner("owner-a", "ws-a", now);
+        assertTrue(revA.isPresent());
+        Optional<Integer> revB = bootstrapStateStore.reserveFirstOwner("owner-b", "ws-b", now);
+        assertFalse(revB.isPresent());
 
-        Optional<BootstrapStateDto> claimed = bootstrapStateStore.getState();
-        assertTrue(claimed.isPresent());
-        assertEquals("CREDENTIAL_ISSUED", claimed.get().status());
-        assertEquals("owner-a", claimed.get().ownerId());
-        assertEquals(1, claimed.get().revision());
+        Optional<BootstrapStateDto> reserved = bootstrapStateStore.getState();
+        assertTrue(reserved.isPresent());
+        assertEquals("CLAIMING", reserved.get().status());
+        assertEquals("owner-a", reserved.get().ownerId());
 
-        assertTrue(bootstrapStateStore.confirmClaim(claimed.get().revision(), now, now));
+        // Issue credential for the reserved owner
+        assertTrue(bootstrapStateStore.recordCredentialIssued(revA.get(), "digest-a", now));
+        Optional<BootstrapStateDto> issued = bootstrapStateStore.getState();
+        assertEquals("CREDENTIAL_ISSUED", issued.get().status());
+        assertEquals(2, issued.get().revision());
+
+        // Confirm bound to the reserved owner
+        assertTrue(bootstrapStateStore.confirmClaim(issued.get().revision(), "owner-a", now));
         Optional<BootstrapStateDto> confirmed = bootstrapStateStore.getState();
         assertEquals("CLAIMED", confirmed.get().status());
 
-        assertFalse(bootstrapStateStore.confirmClaim(1, now, now));
+        // Stale/foreign confirm rejected
+        assertFalse(bootstrapStateStore.confirmClaim(1, "owner-a", now));
+        assertFalse(bootstrapStateStore.confirmClaim(confirmed.get().revision(), "owner-b", now));
     }
 
     @Test
@@ -1957,7 +1968,9 @@ class PersistencePortContractTest {
 
     static class InMemoryBootstrapStateStore implements BootstrapStateStorePort {
         private static final String UNCLAIMED = "UNCLAIMED";
+        private static final String CLAIMING = "CLAIMING";
         private static final String CREDENTIAL_ISSUED = "CREDENTIAL_ISSUED";
+        private static final String CLAIMED = "CLAIMED";
 
         private BootstrapStateDto state;
 
@@ -1969,37 +1982,69 @@ class PersistencePortContractTest {
         }
 
         @Override
-        public boolean claimFirstOwner(String ownerId, String credentialDigest, Instant issuedAt) {
+        public Optional<Integer> reserveFirstOwner(String ownerId, String workspaceId, Instant reservedAt) {
             if (state != null && !UNCLAIMED.equals(state.status())) {
-                return false;
+                return Optional.empty();
             }
             int nextRevision = (state == null ? 0 : state.revision()) + 1;
             state = new BootstrapStateDto(
-                    "bootstrap", CREDENTIAL_ISSUED, ownerId, credentialDigest, issuedAt, null, nextRevision, issuedAt);
-            return true;
+                    "bootstrap", CLAIMING, ownerId, workspaceId, null, null, null, nextRevision, reservedAt);
+            return Optional.of(nextRevision);
         }
 
         @Override
-        public boolean confirmClaim(int expectedRevision, Instant claimedAt, Instant updatedAt) {
-            if (state == null || !CREDENTIAL_ISSUED.equals(state.status()) || state.revision() != expectedRevision) {
+        public boolean recordCredentialIssued(int expectedRevision, String credentialDigest, Instant issuedAt) {
+            if (state == null || !CLAIMING.equals(state.status()) || state.revision() != expectedRevision) {
                 return false;
             }
             state = new BootstrapStateDto(
                     "bootstrap",
-                    "CLAIMED",
+                    CREDENTIAL_ISSUED,
                     state.ownerId(),
+                    state.workspaceId(),
+                    credentialDigest,
+                    issuedAt,
+                    null,
+                    state.revision() + 1,
+                    issuedAt);
+            return true;
+        }
+
+        @Override
+        public boolean confirmClaim(int expectedRevision, String authenticatedOwnerId, Instant claimedAt) {
+            if (state == null
+                    || !CREDENTIAL_ISSUED.equals(state.status())
+                    || state.revision() != expectedRevision
+                    || !authenticatedOwnerId.equals(state.ownerId())) {
+                return false;
+            }
+            state = new BootstrapStateDto(
+                    "bootstrap",
+                    CLAIMED,
+                    state.ownerId(),
+                    state.workspaceId(),
                     state.credentialDigest(),
                     state.issuedAt(),
                     claimedAt,
                     state.revision() + 1,
-                    updatedAt);
+                    claimedAt);
+            return true;
+        }
+
+        @Override
+        public boolean rollbackClaiming(int expectedRevision, Instant rolledBackAt) {
+            if (state == null || !CLAIMING.equals(state.status()) || state.revision() != expectedRevision) {
+                return false;
+            }
+            state = new BootstrapStateDto(
+                    "bootstrap", UNCLAIMED, null, null, null, null, null, state.revision() + 1, rolledBackAt);
             return true;
         }
 
         @Override
         public boolean replaceCredential(int expectedRevision, String newDigest, Instant issuedAt, Instant updatedAt) {
             if (state == null
-                    || (!UNCLAIMED.equals(state.status()) && !CREDENTIAL_ISSUED.equals(state.status()))
+                    || (!CREDENTIAL_ISSUED.equals(state.status()) && !CLAIMING.equals(state.status()))
                     || state.revision() != expectedRevision) {
                 return false;
             }
@@ -2007,6 +2052,7 @@ class PersistencePortContractTest {
                     "bootstrap",
                     state.status(),
                     state.ownerId(),
+                    state.workspaceId(),
                     newDigest,
                     issuedAt,
                     state.claimedAt(),

@@ -7,11 +7,11 @@
 
 ## Context
 
-The remaining product work is primarily onboarding, but the repository is no longer at the pre-identity baseline assumed by the first draft of this ADR. Identity users/workspaces/memberships, API credentials, opaque web sessions, external-login providers, invitations, `BootstrapStateStorePort` with three persistence adapters, `BootstrapResource`, and the app-owned `BootstrapCredentialIssuer` implementation now exist. The current vault still has only system, chat-session, and stable user addressing; the distinct active identity-workspace binding and `WORKSPACE` secret scope/grants required by this ADR are not complete.
+The remaining product work is primarily the profile/routing and lifecycle work described below. Identity users/workspaces/memberships, API credentials, opaque web sessions, external-login providers, invitations, `BootstrapStateStorePort` with three persistence adapters, `BootstrapResource`, and the app-owned `BootstrapCredentialIssuer` implementation now exist. The current vault still has only system, chat-session, and stable user addressing; the distinct active identity-workspace binding and `WORKSPACE` secret scope/grants required by this ADR are not complete.
 
-The user-visible implementation remains a fixed, in-memory six-step wizard. It selects one provider and one model, stores system-scoped LLM values, uses numeric step advancement, and only lists optional plugin metadata after completion. It cannot safely configure several provider accounts, map models to several agent roles, preserve an incomplete setup across restart, or let a module contribute a real setup flow. The new bootstrap resource currently runs beside that legacy wizard: `/onboarding/**` is still wholly public in `ApiKeyAuthFilter`, the numbered flow still owns Caffeine state, and completion still returns the configured internal key. This partial foundation must be migrated, not treated as completed Phase 1 behavior.
+The delivered O1 slice replaces the in-memory numbered wizard with an authenticated, durable draft flow and a draft-driven Lit wizard. It provides a static provider catalog, multiple draft connection rows, concern-routing selections, optional configuration screens, server-side secret scrubbing into owner-scoped vault entries, and a review-gated commit that activates the selected default LLM values. This is deliberately an interim O1 payload format, not the ADR's final connection/profile/route model: it does not yet create `LlmConnection`, `ModelProfile`, or `ModelRouteAssignment` records; it does not activate the optional-stage payloads; and it does not provide the extension saga, validation/HITL lifecycle, workspace grants, or runtime profile routing.
 
-The numbered flow also still uses `onboarding-user` even though durable human identity now exists. That synthetic owner and the anonymous onboarding cookie are unsuitable for owner-scoped credentials: a browser/session correlation ID cannot become a durable principal or a vault partition. A community deployment must establish and authenticate its first administrator before it configures integrations.
+The numbered flow, its synthetic `onboarding-user`, Caffeine registry, and raw completion key are removed. A deployment establishes and authenticates its first administrator before a durable owner-scoped draft is created.
 
 Amsha already has the runtime pieces that make a richer design useful:
 
@@ -93,10 +93,13 @@ rollbackClaiming(expectedRevision, rolledBackAt)
 replaceCredential(expectedRevision, newDigest, issuedAt, updatedAt)
   compare-and-set CREDENTIAL_ISSUED -> CREDENTIAL_ISSUED for the reserved owner;
   UNCLAIMED is unreachable after the first reserve, so the old UNCLAIMED-or-CREDENTIAL_ISSUED
-  guard is narrowed to CREDENTIAL_ISSUED only (CLAIMING may also be permitted at operator discretion)
+  guard is narrowed to CREDENTIAL_ISSUED only. Permitting CLAIMING is an explicit, operator-only
+  recovery widening (see the recovery paragraph): a reserved-but-never-activated owner may be
+  re-issued before the reissue TTL expires. It is NOT a general claim path and must not be opened
+  to the public claim endpoint or any non-operator principal.
 ```
 
-This replaces the current `claimFirstOwner(ownerId, credentialDigest, issuedAt)` and changes the existing `confirmClaim(int expectedRevision, Instant claimedAt, Instant updatedAt)` signature by adding `authenticatedOwnerId` so confirmation is bound to the reserved owner; the current `replaceCredential(int, String, Instant, Instant)` is retained but its guard is narrowed as above. `rollbackClaiming` is the missing counterpart to the line-95 recovery statement: a stale `CLAIMING` reservation (crashed coordinator, expired reservation TTL) is returned to `UNCLAIMED` idempotently, never leaving orphan identity/workspace rows because the winner creates them only after the `CREDENTIAL_ISSUED` transition.
+This replaces the current `claimFirstOwner(ownerId, credentialDigest, issuedAt)` and changes the existing `confirmClaim(int expectedRevision, Instant claimedAt, Instant updatedAt)` signature by adding `authenticatedOwnerId` so confirmation is bound to the reserved owner; the current `replaceCredential(int, String, Instant, Instant)` is retained but its guard is narrowed as above. `rollbackClaiming` is the missing counterpart to the line-95 recovery statement: a stale `CLAIMING` reservation (crashed coordinator, expired reservation TTL) is returned to `UNCLAIMED` idempotently, never leaving orphan identity/workspace rows because the winner creates them only after the `CREDENTIAL_ISSUED` transition. The operator-only `CLAIMING` widening on `replaceCredential` is a deliberate re-issue path for a reserved-but-never-activated owner within its reissue TTL; adapters must not expose it on the public claim endpoint or to any non-operator principal, or the reservation contract's race guard is silently defeated.
 
 The coordinator reserves `CLAIMING` **before** creating identity rows or credentials. The winner idempotently creates that exact user, workspace, and membership; a loser creates nothing. The app-owned credential SPI then prepares the raw key and digest for a typed bootstrap reservation without persisting or registering them. The coordinator records `CREDENTIAL_ISSUED` and calls the SPI's activation operation; the app implementation verifies the same reservation owner/revision/digest, durably writes the matching API credential, and only then registers it in `ApiKeyRegistry`. The coordinator returns the raw key only after activation succeeds. `ApiKeyRegistry` must accept the bootstrap credential only when both the credential record and a matching `CREDENTIAL_ISSUED`/`CLAIMED` bootstrap digest exist; a generic durable-credential lookup cannot bypass bootstrap state. A crash after recording the digest but before activation leaves no usable key and enters normal reissue recovery; a crash after the credential write but before cache registration is restart-recoverable through the state-bound durable lookup.
 
@@ -407,7 +410,143 @@ Identity phases are prefixed `I`; onboarding phases are prefixed `O`. A phase ca
 | O4 MCP + extensions | O1, O3, I5 | Uses the shared saga and the same private/workspace authorization model. |
 | O5 operations/removal | O2, O3, O4 | Health, re-entry, import/export, and façade removal require stable runtime paths. |
 
-Current implementation checkpoint: substantial I1-I4 code foundations and an initial three-backend bootstrap port/resource are present; this does not assert that every phase acceptance criterion is complete. I5 is not complete because `SecretVault` has no typed `WORKSPACE` scope and the runtime context has no distinct active identity-workspace binding. The existing bootstrap resource is provisional O1 code, not a completed O1: it must adopt the reservation state machine, state-bound credential activation, authenticated confirmation, stable workspace recovery, safe cookie policy, and narrowed public paths described above.
+Current implementation checkpoint: substantial I1–I3 identity foundations, the reservation-based bootstrap port/resource, durable draft/extension-state persistence, and the O1 Lit wizard are implemented in `core`, `persistence-*`, `onboarding`, and `ui`. This does not assert that every phase acceptance criterion is complete. I5 is not complete because `SecretVault` has no typed `WORKSPACE` scope and the runtime context has no distinct active identity-workspace binding; that blocks O2/O3/O4. Bootstrap now has a reservation state machine, state-bound credential activation/reissue, authenticated confirmation/recovery, safe cookie policy, and narrowed public paths. The draft service is the sole onboarding state store: `OnboardingSessionRegistry` and the numbered-step façade are removed, `SettingsResource` opens/updates a durable draft, and `CompleteResponse.serviceKey` is removed. O2 (typed LLM profiles), O3 (runtime routing), O4 (MCP/extensions), and O5 remain open.
+
+**Implementation status (as of 2026-07-17):**
+
+| Item | Status |
+| --- | --- |
+| §0 Bootstrap reservation state machine (`UNCLAIMED→CLAIMING→CREDENTIAL_ISSUED→CLAIMED`) in `BootstrapStateStorePort` + 3 adapters (sqlite/postgres/fs) | Done |
+| Two-phase `BootstrapCredentialIssuer` SPI (`prepare`/`activate`), `PreparedBootstrapCredential`, app `ApiKeyRegistry` state-bound gate | Done |
+| `BootstrapResource` (status/claim/recovery/confirm), loopback + internal-key recovery audit, narrowed `ApiKeyAuthFilter` public paths | Done |
+| `OnboardingDraftStorePort` + `OnboardingExtensionStateStorePort` + 3 adapters each, V8 migrations (sqlite/postgres), JSON list columns | Done |
+| `OnboardingCoordinator` (create/get/move-to-step/commit/discard, owner guard, server-side secret scrubbing, review-gated system LLM activation) + extension SPI types (`OnboardingExtension`, `OnboardingContext`, `PreparedOnboardingStep`, `OnboardingValidationResult`, `ValidatedOnboardingInput`, `CompensatableOnboardingCommit`, `OnboardingStepDescriptor`, `OnboardingFieldDescriptor`) | Done for the O1 draft payload; saga wiring, expiry cleanup, idempotency, and extension execution remain pending |
+| `OnboardingResource` draft endpoints (`POST /drafts`, `GET /drafts/{id}`, `PUT …/steps/{stepId}`, `POST …/commit`, `POST …/discard`) replacing numbered façade | Done |
+| `OnboardingSessionRegistry` + Caffeine state + legacy numbered-step DTOs removed | Done |
+| `SettingsResource` provider update delegated to a durable draft; prompt compatibility endpoint remains | Partial — prompt still writes the legacy system-prompt vault key |
+| Contract tests: `PersistencePortContractTest` (bootstrap reservation + draft), `BootstrapResourceTest`, `OnboardingResourceTest`, `SettingsResourceTest` | Present; focused resource checks are green |
+| **Lit onboarding wizard UI** (replaces numbered `arc-onboarding-step1..6`) | Done for the O1 draft payload: welcome, connections, routing, optional-stage forms, review, resume/discard, static catalog |
+| O1 gaps: typed descriptors/i18n/accessibility tests, revision/idempotency, expiry/staged-secret cleanup, validation/HITL, complete optional-stage activation, and extension saga | Pending |
+| O2 `LlmProfileStorePort` + adapters/migrations, provider adapters, tiered validation | Pending |
+| O3 `ModelProfileResolver` / `OrderedFailoverChatModel` / routing cutover | Pending |
+| O4 MCP + reference extension on shared saga | Pending |
+| O5 ops dashboard, import/export, façade removal by recorded version | Pending |
+
+### UI implementation record and remaining O1 work
+
+The legacy `arc-onboarding-step1..6` components and numbered endpoint flow are removed. `arc-onboarding.ts` now drives the durable draft API and composes plan-stepper, welcome, connections, concern-routing, persona-routing, MCP, integrations, advanced-settings, memory, security, channels, identity, and review components. The current implementation covers the O1 payload and commits only the selected default provider/model/API-key to the legacy system LLM keys. The remaining configuration screens are draft capture only until their typed O2–O4 activation paths exist.
+
+#### Configuration surfaces requiring onboarding paths
+
+| Domain | `.env` surface | How the wizard covers it |
+| --- | --- | --- |
+| **LLM connections** | 12 providers (`groq`, `gemini`, `openrouter`, `ollama`, `openai`, `omlx`, `nvidia`, `cerebras`, `generic-openai`, `llamacpp`, `infinite-loop`, `claude-code`/`anthropic`) — each has `_API_KEY`, `_BASE_URL`, `_MODEL`, `_MAX_RETRIES` | Connection step: select provider adapter → enter API key(s) (comma‑separated → multiple slots) → optional base‑URL override → optional headroom‑proxy toggle (if enabled in deployment config) → timeout/retry tuning |
+| **Model profiles** | Per‑provider models (e.g. `GROQ_MODEL`, `CEREBRAS_MODEL`, `OMLX_MODEL`), context‑window auto‑bootstrap, structured‑output mode (`PROMPT_DIRECTIVE` vs `NATIVE`/`LENIENT`) | Model‑profile step (per connection): select or enter model ID → context window (auto‑detected or manual) → structured‑output mode → capability checkboxes (tool‑calling, vision, etc.) |
+| **Concern routing** | 4 independent provider lists: `INFINITE_LOOP_LLM_PROVIDERS` (agent loop), `INFINITE_LOOP_COMPACTION_PROVIDERS`, `INFINITE_LOOP_CLASSIFIER_PROVIDERS`, `INFINITE_LOOP_EMBEDDING_PROVIDERS` — plus per‑concern per‑provider keys/models/base‑URLs (e.g. `COMPACTION_GROQ_API_KEY`, `CLASSIFIER_GROQ_API_KEY`, `EMBEDDING_OLLAMA_MODEL`) | Concern‑routing step: assign an ordered provider+model chain per concern (agent loop / compaction / classifier / embedding) with explicit failover order. Quick‑start pre‑fills all concerns from one connection; advanced allows independent concern routing. |
+| **Persona / group routing** | `AMSHA_LLM_PERSONA_MODELS_{ROLE}_{N}_PROVIDER/MODEL`, `AMSHA_LLM_GROUP_MODELS_{GROUP}_PROVIDER/MODEL` (per‑persona primary + numbered failover, per‑group default) | Role‑assignment step (advanced): present canonical roles/groups, allow per‑role primary model + ordered failover chain, per‑group default. |
+| **MCP servers / outbound integrations** | `MCP_SERVER_ENABLED`, `MCP_HEALTH_CHECK_INTERVAL_MS`, `MCP_PODMAN_HEALTH_CHECK_INTERVAL_MS` + per‑server command/args | MCP step: add SSE, HTTP, Stdio, or Podman MCP servers with connection strings, credentials, and health‑check intervals. |
+| **Tool integrations** | `TOOLS_PLAYWRIGHT_*` (headed/headless, MCP mode), `TOOLS_BRAVE_API_KEY`, `TOOLS_SERPER_API_KEY`, `TOOLS_GITHUB_TOKEN`, `SKILLSJARS_REQUIRE_APPROVAL_FOR_SENSITIVE`, `SKILLS_ADAPTIVE_*` | Integrations step: enable/configure Playwright, web‑search providers, GitHub token, SkillsJars policy, executable overrides (Python/Go/Java), sandbox strategy picker. |
+| **Runtime tuning** | `LLM_TEMPERATURE`, `LLM_MAX_OUTPUT_TOKENS`, `LLM_TIMEOUT`, `LLM_MAX_RETRIES`, `LLM_COMPACT_PROMPT_ENABLED`, `LLM_CIRCUIT_BREAKER_ENABLED`, `AGENT_SCHEMA_CORRECTION_*`, `AGENT_MAX_RATELIMIT_RETRIES`, `DELEGATION_MAX_DEPTH`, `HITL_EXEMPT_TOOLS`, `BUDGET_LIMIT`/`BUDGET_ACTION` | Optional advanced‑settings step (collapsed by default): expose common knobs (temperature, max‑tokens, timeout, circuit‑breaker, delegation‑depth, budget‑limit, HITL exempt‑tools) as categorized toggle/input groups with safe defaults. |
+| **Memory / self‑evolve** | `MEMORY_TIERED_ENABLED`, `MEMORY_CORE_*`, `MEMORY_RECALL_*`, `MEMORY_ARCHIVAL_*`, `MEMORY_RETENTION_*`, `SELF_EVOLVE_*`, `EMBED_DIMENSIONS`, `RAG_VEC_PATH` | Memory step (advanced): enable tiered memory, core‑memory limits, recall retention, archival eviction thresholds, self‑evolve toggle, embedding dimension, RAG vec path. |
+| **Security / governance** | `VAULT_PEPPER`, `AUDIT_HMAC_KEY`, `AUTH_HMAC_KEY`, `API_KEYS_INTERNAL`, `API_RATE_LIMIT_*`, `AUTH_SESSION_*`, `SANDBOX_*` (strategy, network, memory/CPU limits, timeouts, circuit‑breaker), `7Z_PASS` | Security step (advanced): internal API keys, rate limits (requests/mutation per minute), session idle‑timeout, sandbox strategy and resource caps, archive password, host‑exec skills. |
+| **Channels** | Telegram (`TELEGRAM_BOT_TOKEN`, `ALLOWED_USER_IDS`, `ALLOWED_USERS`, `MAX_LENGTH`), Web (`WEB_ENABLED`, `WEB_REQUIRE_AUTH`), scheduling (`DEFAULT_TIMEZONE`, `CRON_STARTUP_DELAY_MS`), observability (`OTEL_*`, `PHOENIX_*`) | Channels step (advanced): enable Telegram with bot token and allowed‑user filtering, web‑chat toggle + auth, timezone, cron startup, Phoenix / OTLP observability. |
+| **OIDC / external login** | `AUTH_IDP_OIDC_*` (client‑id/secret, auth/token/userinfo URLs, JWKS, redirect), `AUTH_IDP_GITHUB_*` (client‑id/secret, redirect) | Identity step (advanced, if OIDC/github auth is configured on the backend): OIDC provider setup, GitHub OAuth, redirect URIs. |
+
+#### Wizard structure (Lit components)
+
+The new wizard replaces `arc-onboarding.ts` and `arc-onboarding-step1..6.ts` with a schema‑driven draft‑driven wrapper that renders back‑end plan stages as Lit sub‑components. The route `#/onboarding` still gates access; after bootstrap claim, the wizard creates or resumes a persisted draft via `POST /onboarding/drafts` and advances through the plan with `PUT …/steps/{stepId}`.
+
+```
+<arc-onboarding-wizard>                        ← entry point, replaces arc-onboarding.ts
+  <arc-onboarding-draft-loader>                ← loads/resumes the draft from GET /drafts/{id}
+  <arc-onboarding-plan-stepper>                ← renders plan stages as a Lit stepper (horizontal or vertical, depending on viewport)
+
+  Core stages (always present in plan):
+    <arc-onboarding-step-welcome>              ← intro card; quick‑start button seeds defaults and skips optional stages
+    <arc-onboarding-step-connections>          ← multi‑connection table: add/edit/remove/validate per provider
+      <arc-onboarding-connection-card>         ← provider selector, API‑key input(s), base‑URL, headroom toggle, timeout/retry
+      <arc-onboarding-model-profile-card>      ← per‑connection model selector, context, structured‑output mode, capabilities
+    <arc-onboarding-step-concern-routing>      ← grid: Agent Loop | Compaction | Classifier | Embedding, each with ordered provider+model chain
+    <arc-onboarding-step-review>               ← cross‑stage summary, redacted connection list, route topology
+
+  Optional stages (appear in plan only when relevant deployment config or the user opts in):
+    <arc-onboarding-step-persona-routing>      ← per‑role/per‑group primary model + failover chains
+    <arc-onboarding-step-mcp>                  ← MCP server add/health‑check UI
+    <arc-onboarding-step-integrations>         ← Playwright, web‑search, GitHub, SkillsJars, executable overrides
+    <arc-onboarding-step-advanced-settings>    ← temperature, max‑tokens, timeout, circuit‑breaker, delegation, budget, HITL
+    <arc-onboarding-step-memory>               ← tiered‑memory, self‑evolve, embedding, RAG
+    <arc-onboarding-step-security>             ← internal keys, rate limits, sandbox, session, archive password, host‑exec
+    <arc-onboarding-step-channels>             ← Telegram, Web, timezone, cron, observability
+    <arc-onboarding-step-identity>             ← OIDC / GitHub OAuth (active only when backend IDP config exists)
+
+  <arc-onboarding-commit-button>               ← POST /onboarding/drafts/{id}/commit
+</arc-onboarding-wizard>
+```
+
+#### Quick‑start vs advanced
+
+**Quick‑start** (triggered from the welcome step) pre‑seeds the draft with:
+- 1 connection (the first provider the user configures in a compact form)
+- 1 model profile for that connection
+- All 4 concerns (agent loop, compaction, classifier, embedding) default to that one profile
+- All optional stages marked SKIPPED in the draft plan
+
+The quick‑start connection card collects provider, API key, and model in one compact form — it creates the same draft records as the full connections step, just with fewer fields exposed. The user can switch to **advanced** at any step by clicking the "Advanced setup" toggle, which exposes the full stage list and all configuration fields.
+
+#### Draft data contract (O1 schema)
+
+Until O2 (`LlmProfileStorePort`) delivers typed backend records, the draft carries the full wizard state in its safe non‑secret fields (extending `selectedNonSecretIds` and `safeFieldErrors` with a structured JSON payload under a reserved draft key). Secrets are staged via the draft's secret‑input handle (vault reference placeholders). The API between the UI and the draft endpoints is:
+
+```
+POST /onboarding/drafts                              → create/get‑or‑resume draft
+GET  /onboarding/drafts/{id}                         → read current state (plan stages, selected IDs, field errors)
+PUT  /onboarding/drafts/{id}/steps/{stepId}          → advance to step; payload may include step‑specific safe field updates
+POST /onboarding/drafts/{id}/commit                  → atomically activate all staged records, mark draft COMPLETED
+POST /onboarding/drafts/discard                      → discard active draft (cleanup staged refs)
+```
+
+The draft DTO `selectedNonSecretIds` carries a JSON‑serialized `O1DraftPayload` with:
+
+```
+{
+  connections: [{provider, apiKeyVaultRef?, baseUrl?, modelId, contextWindow, structuredOutputMode, capabilities[], headroomEnabled?, timeoutMs?, retries?}],
+  concernRoutes: { agentLoop: [profileIdx...], compaction: [profileIdx...], classifier: [profileIdx...], embedding: [profileIdx...] },
+  personaRoutes: { roleId: { primary: profileIdx, failover: [profileIdx...] } },
+  groupRoutes: { groupId: { default: profileIdx } },
+  mcpServers: [{name, transport, command?, args?, url?, envVars?, healthCheckIntervalMs?}],
+  integrations: { playwrightEnabled, playwrightHeaded, braveApiKeyVaultRef?, serperApiKeyVaultRef?, githubTokenVaultRef?, skillsjarsApprovalRequired, skillsMaxIterations },
+  advanced: { temperature, maxOutputTokens, timeoutMs, maxRetries, compactPrompt, circuitBreaker, delegationDepth, budgetLimit..., hitlExemptTools[] },
+  memory: { tieredEnabled, coreMaxBlocks..., recallRetention..., archivalEnabled..., selfEvolveEnabled, embedDimensions, ragVecPath },
+  security: { rateLimitRequestsPerMin, rateLimitMutationsPerMin, sessionIdleMinutes, sandboxStrategy, sandboxMemoryLimit..., sandboxCpuLimit..., archivePassVaultRef?, hostExecSkills[] },
+  channels: { telegramEnabled, telegramBotTokenVaultRef?, telegramAllowedIds[], webEnabled, webRequireAuth, timezone, cronStartupMs, phoenixEnabled, phoenixEndpoint }
+}
+```
+
+Secrets (API keys, bot tokens, OIDC client‑secrets, passwords) are submitted via a scoped secret‑input handle: the UI sends the credential, the backend creates a staged vault reference and records only the opaque ref in the draft's selected IDs. The UI never echoes or stores the raw secret. This prepares the draft for O2's `LlmConnectionSecretRef` migration without changing the wire contract.
+
+#### Removed from the codebase
+
+The six numbered step components, Caffeine session registry, numbered resource DTOs, and numbered resource methods are removed. `arc-onboarding.ts` remains the Lit entry point and now composes the durable-plan child components under `ui/src/components/onboarding/`; `arc-shell.ts` routes onboarding to that element. The deprecated `client.ts` numbered-flow helpers remain temporarily as unused compatibility methods and should be removed when downstream callers are confirmed migrated. After bootstrap claim, the shell uses the HttpOnly cookie rather than `OnboardingCompleteDto.serviceKey`.
+
+#### Remaining dependencies
+
+- **Provider adapter list**: until O2 delivers `LlmProviderOnboardingAdapter` CDI beans, the wizard uses the static `GET /onboarding/provider-catalog` endpoint backed by `onboarding/src/main/resources/provider-catalog.json`. It provides the current known provider IDs, safe defaults, and form metadata; it is not adapter discovery or a typed capability contract.
+- **Role / group list**: persona/group routing is captured in the O1 payload. Authoritative role/group discovery and validation remain O2/O3 work.
+- **Model discovery**: incremental — the O1 UI allows free‑text model‑ID entry with format validation; O2 adds adapter‑driven catalog/metadata.
+- **Draft plan generation**: `OnboardingCoordinator.getOrCreateFirstRunDraft` seeds the current fixed O1 stage list and persists it as the draft plan fingerprint. Dynamic descriptor-driven plans remain pending.
+
+#### Verified contract (backend to UI)
+
+```
+1. POST /onboarding/bootstrap/claim     → 200, cookie AMSHA_API_KEY, {ownerId, workspaceId}
+2. POST /onboarding/drafts              → 200, {draftId, currentStepId:"welcome", planFingerprint:"…", selectedNonSecretIds:[…]}
+3. PUT  /onboarding/drafts/{id}/steps/{stepId}  {…step-specific updates…}  → 200, updated draft
+4. PUT  /onboarding/drafts/{id}/steps/{stepId}  {…step-specific updates…}  → 200 (repeat per stage)
+5. POST /onboarding/drafts/{id}/commit  → 200, {state:"COMPLETED"}
+6. POST /onboarding/drafts/discard      → 200, {discarded:true}
+```
+
+Back-end tests cover bootstrap, durable draft persistence, draft navigation, commit, discard, and malformed payload rejection. UI production compilation is covered; browser-level Playwright/Lit end-to-end and accessibility coverage remain pending.
 
 **Safe start order.** The dependency column is a hard sequencing rule, not a suggestion. Work may begin now in parallel on Identity I4 (OIDC/multi-admin) and Onboarding O1 (safe bootstrap + durable drafts), because both build only on the already-present I1–I3 foundation. Onboarding O2, O3, and O4 must NOT start until Identity I5 (distinct active identity-workspace context, `WORKSPACE` vault scope, and connection grants) is complete: those phases reference `WORKSPACE`-scoped vault partitions and the active identity-workspace accessor that do not yet exist, and building against the current `USER`/session-only `SecretVault` would force a rework. O5 depends on O2–O4 and follows naturally. A phase may be developed behind its disabled flag or as inert records earlier, but it cannot reach production-complete status until every dependency in its row is done.
 
