@@ -2,20 +2,24 @@ package com.amsha.mcp.tool;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import com.amsha.core.audit.AuditService;
 import com.amsha.core.audit.SecurityEventType;
 import com.amsha.core.scope.WorkspaceContext;
 import com.amsha.core.security.AutonomyLevel;
+import com.amsha.core.security.http.ApprovalReceiptIssuer;
 import com.amsha.core.tools.ToolCategory;
 import com.amsha.core.tools.ToolExecutionContext;
 import com.amsha.core.tools.ToolResponse;
@@ -23,6 +27,7 @@ import com.amsha.mcp.transport.McpClientService;
 import com.amsha.mcp.transport.McpConnectionLifecycleService;
 import com.amsha.mcp.transport.McpConnectionLifecycleService.PersistedConnection;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -42,8 +47,19 @@ class McpSelfRegisterToolTest {
     @Mock
     McpConnectionLifecycleService lifecycleService;
 
+    @Mock
+    ApprovalReceiptIssuer approvalReceiptIssuer;
+
     @InjectMocks
     McpSelfRegisterTool tool;
+
+    @BeforeEach
+    void setUp() {
+        lenient()
+                .when(approvalReceiptIssuer.issueForApprovedCheckpoint(
+                        anyString(), anyString(), anyString(), anyString(), any(), anyString()))
+                .thenReturn(Optional.of("approved-token"));
+    }
 
     @Test
     void testValidHttpRegistration() throws Exception {
@@ -66,7 +82,12 @@ class McpSelfRegisterToolTest {
         assertEquals(0, resp.exitCode());
         verify(mcpClientService, times(1))
                 .connectForUser(
-                        "my-server", "user-123", "http://localhost:3000/mcp", ToolCategory.NETWORK, Map.of(), true);
+                        "my-server",
+                        "user-123",
+                        "http://localhost:3000/mcp",
+                        ToolCategory.NETWORK,
+                        Map.of(),
+                        "approved-token");
         verify(auditService, times(1))
                 .record(
                         eq("session-456"),
@@ -120,7 +141,7 @@ class McpSelfRegisterToolTest {
                         "http://localhost:3000/mcp",
                         ToolCategory.DATABASE,
                         Map.of(),
-                        true);
+                        "approved-token");
     }
 
     @Test
@@ -171,7 +192,7 @@ class McpSelfRegisterToolTest {
                         anyString(),
                         eq(ToolCategory.NETWORK),
                         eq(Map.of()),
-                        eq(true));
+                        eq("approved-token"));
 
         Map<String, Object> params = Map.of(
                 "name", "fail-server",

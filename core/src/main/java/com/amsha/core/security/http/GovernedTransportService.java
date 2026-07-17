@@ -48,6 +48,9 @@ public class GovernedTransportService {
     @Inject
     AuditService auditService;
 
+    @Inject
+    ApprovalReceiptIssuer approvalReceiptIssuer;
+
     /**
      * Executes a governed HTTP request with full policy enforcement.
      *
@@ -70,15 +73,47 @@ public class GovernedTransportService {
             boolean preApproved,
             HttpRequest request,
             HttpResponse.BodyHandler<T> bodyHandler) {
+        return send(url, purpose, connection, actorUserId, preApproved, null, request, bodyHandler);
+    }
+
+    /**
+     * Executes a governed HTTP request, consuming a checkpoint-issued single-use approval token when
+     * supplied. A valid token authorizes exactly this purpose+host and sets the effective actor; an
+     * invalid/expired/mismatched token is rejected as HITL-required. When {@code approvalToken} is
+     * null the {@code preApproved} flag is used as-is.
+     */
+    public <T> HttpResponse<T> send(
+            String url,
+            OutboundPurpose purpose,
+            LlmConnectionDto connection,
+            String actorUserId,
+            boolean preApproved,
+            String approvalToken,
+            HttpRequest request,
+            HttpResponse.BodyHandler<T> bodyHandler) {
+        boolean effectivePreApproved = preApproved;
+        String effectiveActor = actorUserId;
+        if (approvalToken != null) {
+            OutboundApprovalReceipt receipt = approvalReceiptIssuer.verifyAndConsume(
+                    approvalToken, purpose, URI.create(url).getHost());
+            if (receipt == null) {
+                throw OutboundHttpException.hitl("Approval token is invalid, expired, or does not match this request");
+            }
+            if (actorUserId != null && !actorUserId.equals(receipt.approvedByUserId())) {
+                throw OutboundHttpException.hitl("Approval token belongs to a different actor");
+            }
+            effectivePreApproved = true;
+            effectiveActor = receipt.approvedByUserId();
+        }
         log.debugf(
                 "Sending governed request to %s (purpose: %s, actor: %s, preApproved: %b)",
-                url, purpose, actorUserId, preApproved);
+                url, purpose, effectiveActor, effectivePreApproved);
         GovernedHttpClient client = GovernedHttpClient.builder(policyService)
                 .vault(vault)
                 .purpose(purpose)
                 .connection(connection)
-                .actor(actorUserId)
-                .preApproved(preApproved)
+                .actor(effectiveActor)
+                .preApproved(effectivePreApproved)
                 .build();
         auditService.record(
                 "governed-transport",
@@ -94,13 +129,34 @@ public class GovernedTransportService {
      */
     public HttpResponse<String> get(
             String url, OutboundPurpose purpose, LlmConnectionDto connection, String actorUserId, boolean preApproved) {
+        return get(url, purpose, connection, actorUserId, preApproved, null);
+    }
+
+    /**
+     * Convenience method for GET requests with string response, consuming an approval token.
+     */
+    public HttpResponse<String> get(
+            String url,
+            OutboundPurpose purpose,
+            LlmConnectionDto connection,
+            String actorUserId,
+            boolean preApproved,
+            String approvalToken) {
         HttpRequest request = HttpRequest.newBuilder(URI.create(url))
                 .timeout(Duration.ofMillis(GovernedHttpClient.DEFAULT_READ_TIMEOUT_MS))
                 .header("Accept", "application/json, text/plain, */*")
                 .header("User-Agent", "Amsha Agent/1.0 (+https://github.com/amsha)")
                 .GET()
                 .build();
-        return send(url, purpose, connection, actorUserId, preApproved, request, HttpResponse.BodyHandlers.ofString());
+        return send(
+                url,
+                purpose,
+                connection,
+                actorUserId,
+                preApproved,
+                approvalToken,
+                request,
+                HttpResponse.BodyHandlers.ofString());
     }
 
     /**
@@ -114,6 +170,22 @@ public class GovernedTransportService {
             LlmConnectionDto connection,
             String actorUserId,
             boolean preApproved) {
+        return post(url, body, contentType, purpose, connection, actorUserId, preApproved, null);
+    }
+
+    /**
+     * Convenience method for POST requests with string body and string response, consuming an
+     * approval token.
+     */
+    public HttpResponse<String> post(
+            String url,
+            String body,
+            String contentType,
+            OutboundPurpose purpose,
+            LlmConnectionDto connection,
+            String actorUserId,
+            boolean preApproved,
+            String approvalToken) {
         HttpRequest request = HttpRequest.newBuilder(URI.create(url))
                 .timeout(Duration.ofMillis(GovernedHttpClient.DEFAULT_READ_TIMEOUT_MS))
                 .header("Content-Type", contentType)
@@ -121,6 +193,14 @@ public class GovernedTransportService {
                 .header("User-Agent", "Amsha Agent/1.0 (+https://github.com/amsha)")
                 .POST(HttpRequest.BodyPublishers.ofString(body))
                 .build();
-        return send(url, purpose, connection, actorUserId, preApproved, request, HttpResponse.BodyHandlers.ofString());
+        return send(
+                url,
+                purpose,
+                connection,
+                actorUserId,
+                preApproved,
+                approvalToken,
+                request,
+                HttpResponse.BodyHandlers.ofString());
     }
 }

@@ -45,6 +45,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
@@ -68,6 +69,7 @@ class OnboardingCoordinatorExtensionTest {
     McpOnboardingExtension mcpExtension;
     InMemoryReceiptStore receiptStore;
     SecretVault vault;
+    Instance<OnboardingExtension> exts;
 
     static final class InMemoryReceiptStore implements OnboardingCommitReceiptStorePort {
         final Map<String, OnboardingCommitReceiptDto> receipts = new LinkedHashMap<>();
@@ -102,8 +104,7 @@ class OnboardingCoordinatorExtensionTest {
         mcpExtension = new McpOnboardingExtension();
         mcpExtension.setLifecycleService(lifecycleService);
 
-        @SuppressWarnings("unchecked")
-        Instance<OnboardingExtension> exts = mock(Instance.class);
+        exts = mock(Instance.class);
         when(exts.iterator())
                 .thenReturn(List.<OnboardingExtension>of(mcpExtension).iterator());
 
@@ -514,5 +515,63 @@ class OnboardingCoordinatorExtensionTest {
         OnboardingCommitReceiptDto receipt =
                 receiptStore.findByOperationId("d-prep:mcp").orElseThrow();
         assertEquals("COMMITTED", receipt.state());
+    }
+
+    @Test
+    void commitDraft_processRestart_reusesCommittedReceipt() {
+        String mcpPayload =
+                "{\"mcp\":{\"name\":\"svc\",\"endpoint\":\"https://mcp.example.com\",\"category\":\"NETWORK\"}}";
+        OnboardingDraftDto d = new OnboardingDraftDto(
+                "d-restart",
+                "owner-1",
+                OnboardingDraftPurpose.FIRST_RUN,
+                "fingerprint",
+                "review",
+                List.of("connections", "routes", "mcp"),
+                List.of(mcpPayload),
+                null,
+                null,
+                OnboardingDraftState.DRAFT,
+                1,
+                Instant.now().plus(Duration.ofDays(7)),
+                Instant.now(),
+                Instant.now());
+        when(draftStore.findById("d-restart")).thenReturn(Optional.of(d));
+        when(draftStore.update(any(), anyInt())).thenReturn(true);
+        doNothing().when(lifecycleService).validateHttpRegistration(any(), anyMap());
+        when(lifecycleService.persistSuccessfulHttp(any(), any(), any(), any(), any()))
+                .thenReturn(new McpConnectionLifecycleService.PersistedConnection(null, List.of()));
+
+        // First run (original process) commits and persists a COMMITTED receipt.
+        coordinator.commitDraft("d-restart");
+        verify(lifecycleService)
+                .persistSuccessfulHttp(
+                        eq("svc"), eq("https://mcp.example.com"), eq(ToolCategory.NETWORK), eq("owner-1"), any());
+
+        // Simulate a process restart: a brand-new saga instance sharing the same durable stores.
+        OnboardingCommitSaga restartedSaga = new OnboardingCommitSaga();
+        restartedSaga.draftStore = draftStore;
+        restartedSaga.receiptStore = receiptStore;
+        restartedSaga.vault = vault;
+        restartedSaga.objectMapper = new ObjectMapper();
+        restartedSaga.extensions = exts;
+        restartedSaga.scrubber = scrubber;
+
+        OnboardingCoordinator restartedCoordinator = new OnboardingCoordinator();
+        restartedCoordinator.draftStore = draftStore;
+        restartedCoordinator.bootstrapStateStore = mock(BootstrapStateStorePort.class);
+        restartedCoordinator.extensions = exts;
+        restartedCoordinator.scrubber = scrubber;
+        restartedCoordinator.commitSaga = restartedSaga;
+
+        // Re-stub the lifecycle service for the restarted coordinator; the COMMITTED receipt must
+        // cause the saga to skip re-execution entirely.
+        Mockito.reset(lifecycleService);
+        doNothing().when(lifecycleService).validateHttpRegistration(any(), anyMap());
+        when(lifecycleService.persistSuccessfulHttp(any(), any(), any(), any(), any()))
+                .thenReturn(new McpConnectionLifecycleService.PersistedConnection(null, List.of()));
+
+        restartedCoordinator.commitDraft("d-restart");
+        verify(lifecycleService, never()).persistSuccessfulHttp(any(), any(), any(), any(), any());
     }
 }

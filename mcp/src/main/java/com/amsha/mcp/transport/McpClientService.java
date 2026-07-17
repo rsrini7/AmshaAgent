@@ -33,7 +33,9 @@ import com.amsha.core.scope.WorkspaceContext;
 import com.amsha.core.security.OutboundHttpPolicyService;
 import com.amsha.core.security.OutboundPurpose;
 import com.amsha.core.security.SecretVault;
+import com.amsha.core.security.http.ApprovalReceiptIssuer;
 import com.amsha.core.security.http.GovernedHttpClient;
+import com.amsha.core.security.http.OutboundApprovalReceipt;
 import com.amsha.core.security.http.OutboundHttpException;
 import com.amsha.core.tools.ToolCategory;
 import com.amsha.mcp.tool.DynamicToolCapability;
@@ -87,6 +89,9 @@ public class McpClientService {
     OutboundHttpPolicyService outboundPolicyService;
 
     @Inject
+    ApprovalReceiptIssuer approvalReceiptIssuer;
+
+    @Inject
     SecretVault secretVault;
 
     private ManagedExecutor getExecutor() {
@@ -135,16 +140,26 @@ public class McpClientService {
                 log.warnf("Health check: MCP STDIO server '%s' process is dead, initiating reconnect", serverName);
                 StdioConfig cfg = stdioConfigs.get(serverName);
                 if (cfg != null) {
+                    // Free the scheduler thread: release the dead process synchronously, then
+                    // perform the blocking subprocess re-spawn on the managed external-tool executor.
                     ReentrantLock lock = stdioLocks.computeIfAbsent(serverName, k -> new ReentrantLock());
                     lock.lock();
                     try {
                         cleanupStdio(serverName);
-                        connectStdio(serverName, cfg.command(), cfg.args(), cfg.env(), cfg.category());
-                    } catch (Exception e) {
-                        log.errorf("Health check reconnect failed for %s: %s", serverName, LogUtil.rootMessage(e));
                     } finally {
                         lock.unlock();
                     }
+                    getExecutor().execute(() -> {
+                        ReentrantLock reconnectLock = stdioLocks.computeIfAbsent(serverName, k -> new ReentrantLock());
+                        reconnectLock.lock();
+                        try {
+                            connectStdio(serverName, cfg.command(), cfg.args(), cfg.env(), cfg.category());
+                        } catch (Exception e) {
+                            log.errorf("Health check reconnect failed for %s: %s", serverName, LogUtil.rootMessage(e));
+                        } finally {
+                            reconnectLock.unlock();
+                        }
+                    });
                 } else {
                     cleanupStdio(serverName);
                 }
@@ -185,6 +200,34 @@ public class McpClientService {
             ToolCategory category,
             Map<String, String> handshakeHeaders,
             boolean preApproved) {
+        connectInternal(serverName, runtimeKey(serverName, userId), serverUrl, category, handshakeHeaders, preApproved);
+    }
+
+    /**
+     * Connects after the caller presents a checkpoint-issued single-use approval token (minted when
+     * the MCP connection was committed through the onboarding saga). The token is consumed exactly
+     * once here to authorize the whole handshake: a valid token sets the connection as pre-approved,
+     * while an invalid/expired/mismatched token fails closed to a non-approved connect. When no token
+     * is supplied the caller falls back to the unapproved path and must clear HITL on each request.
+     */
+    public void connectForUser(
+            String serverName,
+            String userId,
+            String serverUrl,
+            ToolCategory category,
+            Map<String, String> handshakeHeaders,
+            String approvalToken) {
+        boolean preApproved = false;
+        if (approvalToken != null && approvalReceiptIssuer != null) {
+            OutboundApprovalReceipt receipt = approvalReceiptIssuer.verifyAndConsume(
+                    approvalToken,
+                    OutboundPurpose.MCP_CONNECT,
+                    URI.create(serverUrl).getHost());
+            if (receipt == null || !userId.equals(receipt.approvedByUserId())) {
+                throw new McpConnectionException("MCP connection requires an approval for the requesting user");
+            }
+            preApproved = true;
+        }
         connectInternal(serverName, runtimeKey(serverName, userId), serverUrl, category, handshakeHeaders, preApproved);
     }
 
@@ -713,7 +756,7 @@ public class McpClientService {
                 if (!healthCheckExecutor.awaitTermination(2, TimeUnit.SECONDS)) {
                     healthCheckExecutor.shutdownNow();
                 }
-            } catch (InterruptedException e) {
+            } catch (InterruptedException _) {
                 Thread.currentThread().interrupt();
                 healthCheckExecutor.shutdownNow();
             }
@@ -724,7 +767,7 @@ public class McpClientService {
                 if (!process.waitFor(3, TimeUnit.SECONDS)) {
                     process.destroyForcibly();
                 }
-            } catch (InterruptedException e) {
+            } catch (InterruptedException _) {
                 Thread.currentThread().interrupt();
                 process.destroyForcibly();
             }

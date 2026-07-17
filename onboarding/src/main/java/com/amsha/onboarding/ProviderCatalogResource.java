@@ -32,10 +32,12 @@ public class ProviderCatalogResource {
     public Response getCatalog() {
         List<LlmProviderDescriptor> descriptors = providerAdapter.descriptors();
         if (descriptors.isEmpty()) {
+            log.warnf("Provider catalog requested but no provider descriptors are available");
             return Response.status(404)
                     .entity("{\"error\":\"No provider descriptors available\"}")
                     .build();
         }
+        log.infof("Serving provider catalog with %d descriptor(s)", descriptors.size());
         return Response.ok(descriptors).build();
     }
 }

@@ -30,6 +30,15 @@ import com.amsha.core.routing.ResolvedCredential;
 import com.amsha.core.routing.ResolvedProfile;
 import com.amsha.core.routing.RouteResolution;
 import com.amsha.core.sandbox.SandboxResult;
+import com.amsha.core.security.ExternalIdentityProvider;
+import com.amsha.core.security.OutboundHttpPolicyService;
+import com.amsha.core.security.OutboundPolicyDecision;
+import com.amsha.core.security.OutboundPurpose;
+import com.amsha.core.security.http.ApprovalReceiptIssuer;
+import com.amsha.core.security.http.GovernedHttpClient;
+import com.amsha.core.security.http.GovernedTransportService;
+import com.amsha.core.security.http.OutboundApprovalReceipt;
+import com.amsha.core.security.http.OutboundHttpException;
 import com.amsha.core.skill.CompiledSkillEntry;
 import com.amsha.core.skill.SkillDefinition;
 import com.amsha.core.skill.SkillFrontmatter;
@@ -103,7 +112,16 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             GroupConsultationService.TriageResult.class,
             GroupAnalyticsService.DomainComboStats.class,
             TaskClassifierService.TaskDomain.class,
-            SessionCatalogEntry.class
+            SessionCatalogEntry.class,
+            OutboundHttpPolicyService.class,
+            OutboundPolicyDecision.class,
+            OutboundPurpose.class,
+            ApprovalReceiptIssuer.class,
+            OutboundApprovalReceipt.class,
+            GovernedHttpClient.class,
+            GovernedTransportService.class,
+            OutboundHttpException.class,
+            ExternalIdentityProvider.class
         },
         classNames = {
             "com.github.benmanes.caffeine.cache.SSLMSA",

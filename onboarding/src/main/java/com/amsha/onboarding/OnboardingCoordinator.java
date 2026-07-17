@@ -14,6 +14,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
+import com.amsha.core.routing.provider.NetworkProfilePolicy;
 import com.amsha.onboarding.spi.OnboardingContext;
 import com.amsha.onboarding.spi.OnboardingExtension;
 import com.amsha.onboarding.spi.OnboardingInput;
@@ -30,8 +31,13 @@ import com.amsha.persistence.api.OnboardingDraftDto;
 import com.amsha.persistence.api.OnboardingDraftPurpose;
 import com.amsha.persistence.api.OnboardingDraftState;
 import com.amsha.persistence.api.OnboardingDraftStorePort;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import org.jboss.logging.Logger;
+
+import io.micrometer.core.instrument.MeterRegistry;
 
 /**
  * Coordinator owning the durable onboarding draft lifecycle. It is the single source of truth: the
@@ -79,6 +85,12 @@ public class OnboardingCoordinator {
     @Inject
     OnboardingCommitSaga commitSaga;
 
+    @Inject
+    ObjectMapper objectMapper;
+
+    @Inject
+    MeterRegistry meterRegistry;
+
     /**
      * Finds or creates the owner's first-run draft. On first creation it performs the
      * CREDENTIAL_ISSUED -> CLAIMED bootstrap transition for the authenticated owner.
@@ -108,6 +120,7 @@ public class OnboardingCoordinator {
         if (!draftStore.save(draft)) {
             return draftStore.findActiveByOwner(ownerId, Instant.now()).orElse(draft);
         }
+        incrementCounter("amsha.onboarding.draft.created");
         return draft;
     }
 
@@ -299,6 +312,7 @@ public class OnboardingCoordinator {
                 d.createdAt(),
                 Instant.now());
         if (draftStore.update(updated, d.revision())) {
+            incrementCounter("amsha.onboarding.draft.committed");
             return Optional.of(updated);
         }
         return draftStore.findById(draftId);
@@ -310,7 +324,70 @@ public class OnboardingCoordinator {
             return false;
         }
         scrubber.cleanupStagedSecrets(draft.get());
-        return draftStore.delete(draftId) > 0;
+        boolean removed = draftStore.delete(draftId) > 0;
+        if (removed) {
+            incrementCounter("amsha.onboarding.draft.discarded");
+        }
+        return removed;
+    }
+
+    /**
+     * Persists a per-connection {@code networkProfileJson} (TLS trust mode, timeouts, proxy,
+     * no-proxy hosts) into the owner's active draft. {@code connectionIndex} selects which
+     * connection entry is updated; {@code -1} targets the first connection. Returns the updated
+     * draft, or empty when no connections selection or valid index exists.
+     */
+    public Optional<OnboardingDraftDto> updateConnectionNetworkProfile(
+            String draftId, int connectionIndex, String networkProfileJson) {
+        Optional<OnboardingDraftDto> existing = draftStore.findById(draftId);
+        if (existing.isEmpty()
+                || networkProfileJson == null
+                || networkProfileJson.isBlank()
+                || !NetworkProfilePolicy.isValidJson(networkProfileJson)) {
+            return existing;
+        }
+        OnboardingDraftDto d = existing.get();
+        List<String> selections = d.selectedNonSecretIds();
+        if (selections == null || selections.isEmpty()) {
+            return Optional.empty();
+        }
+        String connPayload = selections.stream()
+                .filter(s -> s.contains("\"connections\""))
+                .findFirst()
+                .orElse(null);
+        if (connPayload == null) {
+            return Optional.empty();
+        }
+        try {
+            JsonNode node = objectMapper.readTree(connPayload);
+            JsonNode conns = node.path("connections");
+            if (!conns.isArray() || conns.isEmpty()) {
+                return Optional.empty();
+            }
+            int idx = connectionIndex == -1 ? 0 : connectionIndex;
+            if (idx < 0) {
+                return Optional.empty();
+            }
+            if (idx >= conns.size()) {
+                return Optional.empty();
+            }
+            ((ObjectNode) conns.get(idx)).put("networkProfileJson", networkProfileJson);
+            String updated = objectMapper.writeValueAsString(node);
+            List<String> newSelections = new ArrayList<>(selections);
+            newSelections.set(selections.indexOf(connPayload), updated);
+            Optional<OnboardingDraftDto> result = updateSelections(draftId, newSelections);
+            incrementCounter("amsha.onboarding.connection.network-profile.updated");
+            return result;
+        } catch (Exception e) {
+            log.errorf("Failed to update connection network profile for draft %s: %s", draftId, e.getMessage());
+            return Optional.empty();
+        }
+    }
+
+    private void incrementCounter(String name) {
+        if (meterRegistry != null) {
+            meterRegistry.counter(name).increment();
+        }
     }
 
     public int cleanupExpiredDrafts() {
@@ -357,7 +434,13 @@ public class OnboardingCoordinator {
 
     /** Delegates crash-safe commit to the saga. */
     public Optional<OnboardingDraftDto> commitDraft(String draftId) {
-        return commitSaga.commitDraft(draftId);
+        Optional<OnboardingDraftDto> result = commitSaga.commitDraft(draftId);
+        result.ifPresent(d -> {
+            if (d.state() == OnboardingDraftState.COMPLETED) {
+                incrementCounter("amsha.onboarding.draft.committed");
+            }
+        });
+        return result;
     }
 
     /** Extracts the sub-payload for a specific extension from the combined selections list. */

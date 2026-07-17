@@ -6,6 +6,7 @@ import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
+import java.net.URI;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
@@ -17,7 +18,9 @@ import com.amsha.core.agent.role.ToolCapability;
 import com.amsha.core.agent.role.ToolMetadata;
 import com.amsha.core.audit.AuditService;
 import com.amsha.core.audit.SecurityEventType;
+import com.amsha.core.security.OutboundPurpose;
 import com.amsha.core.security.ToolOperation;
+import com.amsha.core.security.http.ApprovalReceiptIssuer;
 import com.amsha.core.tools.AgentTool;
 import com.amsha.core.tools.ToolCategory;
 import com.amsha.core.tools.ToolExecutionContext;
@@ -54,6 +57,9 @@ public class McpSelfRegisterTool implements AgentTool {
 
     @Inject
     McpConnectionLifecycleService lifecycleService;
+
+    @Inject
+    ApprovalReceiptIssuer approvalReceiptIssuer;
 
     @Override
     public String name() {
@@ -148,7 +154,17 @@ public class McpSelfRegisterTool implements AgentTool {
                 }
                 Map<String, String> headers = parseHeaders(params.get(PARAM_HEADERS));
                 lifecycleService.validateHttpRegistration(url, headers);
-                mcpClientService.connectForUser(name, userId, url, category, headers, true);
+                String approvalToken = approvalReceiptIssuer
+                        .issueForApprovedCheckpoint(
+                                userId,
+                                sessionId,
+                                ctx.agentRole(),
+                                name(),
+                                OutboundPurpose.MCP_CONNECT,
+                                URI.create(url).getHost())
+                        .orElseThrow(
+                                () -> new SecurityException("Approved checkpoint is required for MCP registration"));
+                mcpClientService.connectForUser(name, userId, url, category, headers, approvalToken);
                 try {
                     var persisted = lifecycleService.persistSuccessfulHttp(name, url, category, userId, headers);
                     mcpClientService.configureHeaderSecretRefs(name, userId, persisted.headerSecretRefs());

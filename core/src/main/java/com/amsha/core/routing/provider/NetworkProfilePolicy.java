@@ -2,6 +2,7 @@ package com.amsha.core.routing.provider;
 
 import java.net.URI;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 
@@ -137,6 +138,45 @@ public final class NetworkProfilePolicy {
         } catch (Exception e) {
             return allowAll();
         }
+    }
+
+    /** Returns whether a submitted network-profile document has a safe, supported shape. */
+    public static boolean isValidJson(String json) {
+        if (json == null || json.isBlank()) return false;
+        try {
+            Map<String, Object> node = MAPPER.readValue(json, new TypeReference<Map<String, Object>>() {});
+            Object rawMode = node.get("egressMode");
+            EgressMode mode = rawMode instanceof String value
+                    ? EgressMode.valueOf(value.toUpperCase(Locale.ROOT))
+                    : EgressMode.ALLOW_ALL;
+            Object rawTls = node.get("tlsTrustMode");
+            TlsTrustMode tls = rawTls instanceof String value
+                    ? TlsTrustMode.valueOf(value.toUpperCase(Locale.ROOT))
+                    : TlsTrustMode.SYSTEM;
+            if (mode == EgressMode.ALLOW_LIST
+                    && (!(node.get("allowedHosts") instanceof List<?> hosts) || hosts.isEmpty())) return false;
+            if (Boolean.TRUE.equals(node.get("requireProxy")) && !isAbsoluteHttpUri(node.get("proxyUrl"))) return false;
+            if (tls == TlsTrustMode.CUSTOM_CA
+                    && (!(node.get("customCaVaultRef") instanceof String ref) || ref.isBlank())) return false;
+            return positiveOrAbsent(node.get("connectTimeoutMs")) && positiveOrAbsent(node.get("readTimeoutMs"));
+        } catch (Exception _) {
+            return false;
+        }
+    }
+
+    private static boolean isAbsoluteHttpUri(Object value) {
+        if (!(value instanceof String raw) || raw.isBlank()) return false;
+        try {
+            URI uri = URI.create(raw);
+            return uri.getHost() != null
+                    && ("http".equalsIgnoreCase(uri.getScheme()) || "https".equalsIgnoreCase(uri.getScheme()));
+        } catch (Exception _) {
+            return false;
+        }
+    }
+
+    private static boolean positiveOrAbsent(Object value) {
+        return value == null || (value instanceof Number number && number.intValue() > 0);
     }
 
     private static int asInt(Object raw, int fallback) {

@@ -19,14 +19,17 @@ import jakarta.ws.rs.core.SecurityContext;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import com.amsha.core.api.dto.AmshaErrorResponse;
 import com.amsha.core.audit.AuditService;
 import com.amsha.core.audit.SecurityEventType;
 import com.amsha.core.event.DomainEventBus;
+import com.amsha.core.routing.provider.NetworkProfilePolicy;
 import com.amsha.core.security.SecretVault;
 import com.amsha.core.security.VaultConstants;
 import com.amsha.core.security.VaultKey;
+import com.amsha.onboarding.dto.NetworkProfileUpdateRequest;
 import com.amsha.onboarding.dto.PromptUpdateRequest;
 import com.amsha.onboarding.dto.ProviderUpdateRequest;
 import com.amsha.onboarding.dto.SettingsDto;
@@ -149,6 +152,44 @@ public class SettingsResource {
                 "field=provider draft=opened provider=" + req.provider());
         return Response.ok(Map.of("draft", "opened", "provider", req.provider()))
                 .build();
+    }
+
+    @PATCH
+    @Path("/connection-network-profile")
+    @Consumes(MediaType.APPLICATION_JSON)
+    @Operation(summary = "Persist a per-connection networkProfileJson into the owner's active draft")
+    public Response updateConnectionNetworkProfile(
+            @HeaderParam("X-Amsha-API-Key") String key, NetworkProfileUpdateRequest req) {
+        String owner = requireOwner();
+        if (owner == null) {
+            return Response.status(401)
+                    .entity(new AmshaErrorResponse("Unauthorized", "Invalid or missing API Key"))
+                    .build();
+        }
+        if (req == null
+                || req.networkProfileJson() == null
+                || req.networkProfileJson().isBlank()
+                || !NetworkProfilePolicy.isValidJson(req.networkProfileJson())) {
+            return Response.status(400)
+                    .entity(new AmshaErrorResponse("networkProfileJson must be a valid supported network profile"))
+                    .build();
+        }
+        OnboardingDraftDto draft =
+                coordinator.findActive(owner).orElseGet(() -> coordinator.getOrCreateFirstRunDraft(owner));
+        Optional<OnboardingDraftDto> updated = coordinator.updateConnectionNetworkProfile(
+                draft.draftId(), req.connectionIndex(), req.networkProfileJson());
+        if (updated.isEmpty()) {
+            return Response.status(400)
+                    .entity(new AmshaErrorResponse("No connections selection found for this draft"))
+                    .build();
+        }
+        auditService.recordMandatory(
+                "settings",
+                owner,
+                "system",
+                SecurityEventType.SETTINGS_CHANGED,
+                "field=network-profile connectionIndex=" + req.connectionIndex());
+        return Response.ok(Map.of("updated", true, "draftId", draft.draftId())).build();
     }
 
     @PATCH
