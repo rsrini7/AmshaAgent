@@ -26,8 +26,14 @@ incidents live in [Architecture Invariants](docs/Architecture_Invariants.md).
   `AMSHA_PERSISTENCE_BACKEND`; native binaries select it at build time. See
   [§5.24](docs/Architecture_Invariants.md#524-persistence-backend-selection-524-invariant).
 - Review every new Java type for native reflection. JSON/JDBI records, JDBI DAOs,
-  JDBI DTO rows, and persistence CDI beans require registration. Mark native-access
-  libraries for run-time initialization by package, not individual classes.
+  JDBI DTO rows, and persistence CDI beans require registration in the owning
+  module's dedicated `*ReflectionConfig`. Do not place `@RegisterForReflection`
+  directly on individual application types. Add accessible types to `targets`;
+  add private, nested, or dependency types to `classNames` using their binary name
+  (for example, `Outer$Inner`). If a module has no reflection config, create one
+  central config for that module rather than adding type-level annotations. Mark
+  native-access libraries for run-time initialization by package, not individual
+  classes.
 
 ### Context, execution, and safety
 
@@ -115,7 +121,10 @@ and metadata lists have no compile-time safety.
 ## 8. GraalVM Native-Image Reflection Registration
 
 Review every new type using the reflection rules above. Use the module's existing
-`*ReflectionConfig`, and keep native-access libraries initialized at run time.
+`*ReflectionConfig`; never use a type-level `@RegisterForReflection` as a shortcut.
+Register accessible application classes through `targets` and inaccessible,
+private nested, or third-party classes through `classNames` with exact binary
+names. Keep native-access libraries initialized at run time.
 
 ### Persistence or memory
 

@@ -25,6 +25,20 @@ class ProviderOnboardingAdapterTest {
     }
 
     @Test
+    void descriptorsLoadWithoutThreadContextClassLoader() {
+        Thread thread = Thread.currentThread();
+        ClassLoader originalClassLoader = thread.getContextClassLoader();
+        try {
+            thread.setContextClassLoader(null);
+            assertFalse(
+                    adapter.descriptors().isEmpty(),
+                    "catalog loading must not depend on the thread context classloader");
+        } finally {
+            thread.setContextClassLoader(originalClassLoader);
+        }
+    }
+
+    @Test
     void descriptor_caseInsensitiveLookup() {
         Optional<LlmProviderDescriptor> openai = adapter.descriptor("OpenAI");
         assertTrue(openai.isPresent());

@@ -119,6 +119,7 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
         // authenticated principal.
         boolean bootstrapPublic = path.startsWith("/onboarding/bootstrap/status")
                 || path.startsWith("/onboarding/bootstrap/claim")
+                || path.startsWith("/onboarding/status")
                 || path.startsWith("/onboarding/provider-catalog")
                 || path.startsWith("/onboarding/drafts");
         return path.startsWith("/info") || bootstrapPublic || isAuthPath(path);

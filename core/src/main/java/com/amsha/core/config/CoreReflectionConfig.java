@@ -29,6 +29,8 @@ import com.amsha.core.routing.OrderedFailoverChatModel;
 import com.amsha.core.routing.ResolvedCredential;
 import com.amsha.core.routing.ResolvedProfile;
 import com.amsha.core.routing.RouteResolution;
+import com.amsha.core.routing.provider.LlmProviderDescriptor;
+import com.amsha.core.routing.provider.ModelEntry;
 import com.amsha.core.sandbox.SandboxResult;
 import com.amsha.core.security.ExternalIdentityProvider;
 import com.amsha.core.security.OutboundHttpPolicyService;
@@ -108,6 +110,8 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             ModelProfileResolverImpl.class,
             ModelProfileCredentialResolver.class,
             ModelRoutingException.class,
+            LlmProviderDescriptor.class,
+            ModelEntry.class,
             GroupConsultationEngine.GroupConsultationResult.class,
             GroupConsultationService.TriageResult.class,
             GroupAnalyticsService.DomainComboStats.class,
@@ -124,6 +128,7 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             ExternalIdentityProvider.class
         },
         classNames = {
+            "com.amsha.core.routing.provider.StaticProviderCatalogAdapter$RawProvider",
             "com.github.benmanes.caffeine.cache.SSLMSA",
             "com.github.benmanes.caffeine.cache.SSLMS",
             "com.github.benmanes.caffeine.cache.SSMS",

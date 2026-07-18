@@ -40,7 +40,7 @@ public class StaticProviderCatalogAdapter implements LlmProviderOnboardingAdapte
     }
 
     private List<LlmProviderDescriptor> load() {
-        try (InputStream is = Thread.currentThread().getContextClassLoader().getResourceAsStream(CATALOG_RESOURCE)) {
+        try (InputStream is = StaticProviderCatalogAdapter.class.getResourceAsStream("/" + CATALOG_RESOURCE)) {
             if (is == null) {
                 log.errorf("Provider catalog resource %s not found on classpath", CATALOG_RESOURCE);
                 return List.of();
