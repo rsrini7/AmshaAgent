@@ -111,11 +111,17 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
     }
 
     private boolean isPublicPath(String path) {
-        // Only the bootstrap pre-draft status/claim endpoints are public. All other
-        // /onboarding/** endpoints (including recovery, drafts, steps, commit, cancel)
-        // require an authenticated principal.
+        // The bootstrap pre-draft status/claim endpoints are always public (loopback-gated in the
+        // resource). The unauthenticated setup wizard also needs the read/setup endpoints
+        // (provider catalog + draft resume/create) before any credential exists; these are
+        // reached before the claim cookie is issued and on already-bootstrapped systems where the
+        // claim is skipped. Mutations (steps, commit, complete, recovery, cancel) still require an
+        // authenticated principal.
         boolean bootstrapPublic =
-                path.startsWith("/onboarding/bootstrap/status") || path.startsWith("/onboarding/bootstrap/claim");
+                path.startsWith("/onboarding/bootstrap/status")
+                        || path.startsWith("/onboarding/bootstrap/claim")
+                        || path.startsWith("/onboarding/provider-catalog")
+                        || path.startsWith("/onboarding/drafts");
         return path.startsWith("/info") || bootstrapPublic || isAuthPath(path);
     }
 

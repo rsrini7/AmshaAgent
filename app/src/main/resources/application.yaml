@@ -214,10 +214,13 @@ smallrye:
       includes:
         - "META-INF/services/*"
         - "META-INF/native-image/**"
-        - "skills/index.txt"
-        - "skills/**.md"
+        - "META-INF/skills/**"
+        - "skills/**"
+        - "templates/**"
+        - "prompts/**"
         - "env-example"
         - "native/vec0/**"
+        - "provider-catalog.json"
 
   # ---------------------------------------------------------------------------
   # LOGGING
