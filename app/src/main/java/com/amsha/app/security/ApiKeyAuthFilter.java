@@ -117,11 +117,10 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
         // reached before the claim cookie is issued and on already-bootstrapped systems where the
         // claim is skipped. Mutations (steps, commit, complete, recovery, cancel) still require an
         // authenticated principal.
-        boolean bootstrapPublic =
-                path.startsWith("/onboarding/bootstrap/status")
-                        || path.startsWith("/onboarding/bootstrap/claim")
-                        || path.startsWith("/onboarding/provider-catalog")
-                        || path.startsWith("/onboarding/drafts");
+        boolean bootstrapPublic = path.startsWith("/onboarding/bootstrap/status")
+                || path.startsWith("/onboarding/bootstrap/claim")
+                || path.startsWith("/onboarding/provider-catalog")
+                || path.startsWith("/onboarding/drafts");
         return path.startsWith("/info") || bootstrapPublic || isAuthPath(path);
     }
 

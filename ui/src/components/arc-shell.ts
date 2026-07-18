@@ -190,7 +190,7 @@ export class ArcShell extends LitElement {
 
     try {
       const status = await this._client!.onboardingStatus();
-      if (status.credentialsValidated) {
+      if (status.credentialsValidated || status.skipOnboarding) {
         this._apiKey = 'authenticated';
         this._client = new ArcClient('/api/v1', this._apiKey);
         this._updateContext();
