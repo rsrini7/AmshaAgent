@@ -319,11 +319,19 @@ The legacy session registry and numbered-step wizard were removed.
 ### Running the P110 suite
 
 ```bash
-# Covers draft lifecycle, provider catalog, network-profile, recovery authz, workspace filter.
-# Requires the app bootstrapped with a usable VALID_KEY owner.
+# Covers pre-auth skip/cookie authentication, negative and successful draft commits,
+# strict typed provider catalog, import/export persistence, network-profile positive
+# and negative behavior, recovery authz/state, and workspace filtering.
+# Uses the skip cookie when enabled; otherwise requires a usable VALID_KEY owner.
 bash rest-http/scripts/validate_onboarding.sh
 # or via the master runner (runs after the identity/bootstrap suite):
 bash rest-http/scripts/run_all_validations.sh --onboarding
+
+# Require the skip-onboarding branch rather than accepting the expected 401 when disabled:
+EXPECT_SKIP_ONBOARDING=true bash rest-http/scripts/run_all_validations.sh --onboarding
+
+# Override credentials without editing common_env.sh:
+VALID_KEY='<active-owner-key>' bash rest-http/scripts/run_all_validations.sh --onboarding
 ```
 
 ### Running the P109 suite

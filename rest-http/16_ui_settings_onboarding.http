@@ -171,6 +171,13 @@ GET {{baseUrl}}/api/v1/settings/prompt
 ###    REMOVED in P110)
 ### ═══════════════════════════════════════════════════════════════
 
+### [ONBOARD-0] Pre-auth status. With AMSHA_UI_SKIP_ONBOARDING=true this returns
+###   skipOnboarding=true, credentialsOk=true, and an AMSHA_API_KEY cookie.
+###   REST clients that retain cookies use it for the following requests.
+GET {{baseUrl}}/api/v1/onboarding/status
+
+###
+
 ### [ONBOARD-1] Check onboarding status (creates first-run draft)
 GET {{baseUrl}}/api/v1/onboarding/status
 X-Amsha-API-Key: {{validKey}}
@@ -197,8 +204,33 @@ X-Amsha-API-Key: {{validKey}}
 
 ###
 
-### [ONBOARD-5] Advance to a step (selectedNonSecretIds optional).
-###   NOTE: POST .../commit requires currentStepId == "review"; advance here first.
+### [ONBOARD-5] Premature commit must return 409.
+POST {{baseUrl}}/api/v1/onboarding/drafts/{{onboardDraft.response.body.draftId}}/commit
+X-Amsha-API-Key: {{validKey}}
+
+###
+
+### [ONBOARD-6] Advance through the guarded connections and routes steps.
+PUT {{baseUrl}}/api/v1/onboarding/drafts/{{onboardDraft.response.body.draftId}}/steps/connections
+Content-Type: application/json
+X-Amsha-API-Key: {{validKey}}
+
+{
+  "selectedNonSecretIds": []
+}
+
+###
+
+PUT {{baseUrl}}/api/v1/onboarding/drafts/{{onboardDraft.response.body.draftId}}/steps/routes
+Content-Type: application/json
+X-Amsha-API-Key: {{validKey}}
+
+{
+  "selectedNonSecretIds": []
+}
+
+###
+
 PUT {{baseUrl}}/api/v1/onboarding/drafts/{{onboardDraft.response.body.draftId}}/steps/review
 Content-Type: application/json
 X-Amsha-API-Key: {{validKey}}
@@ -209,62 +241,100 @@ X-Amsha-API-Key: {{validKey}}
 
 ###
 
-### [ONBOARD-6] Commit the draft (requires currentStepId == review)
+### [ONBOARD-7] Commit the draft; response state must be COMPLETED.
 POST {{baseUrl}}/api/v1/onboarding/drafts/{{onboardDraft.response.body.draftId}}/commit
 X-Amsha-API-Key: {{validKey}}
 
 ###
 
-### [ONBOARD-7] Routing health (pooled model count + effective plan)
+### [ONBOARD-8] Routing health (pooled model count + effective plan)
 GET {{baseUrl}}/api/v1/onboarding/health/routing
 X-Amsha-API-Key: {{validKey}}
 
 ###
 
-### [ONBOARD-8] Provider catalog (UI stepper dropdown source)
+### [ONBOARD-9] Provider catalog. Expect 200 with non-empty typed descriptors,
+### including openai and groq; 404 is a failure.
 GET {{baseUrl}}/api/v1/onboarding/provider-catalog
 X-Amsha-API-Key: {{validKey}}
 
 ###
 
-### [ONBOARD-9] Export non-secret profiles
-GET {{baseUrl}}/api/v1/onboarding/export
-X-Amsha-API-Key: {{validKey}}
-
-###
-
-### [ONBOARD-10] Import profiles (connections staged; secrets supplied later)
+### [ONBOARD-10] Import a non-empty graph (connections are staged).
 POST {{baseUrl}}/api/v1/onboarding/import
 Content-Type: application/json
 X-Amsha-API-Key: {{validKey}}
 
 {
-  "connections": [],
-  "profiles": [],
+  "connections": [
+    {
+      "id": "conn_rest_manual",
+      "displayName": "REST manual import",
+      "providerAdapterId": "ollama"
+    }
+  ],
+  "profiles": [
+    {
+      "id": "profile_rest_manual",
+      "connectionId": "conn_rest_manual",
+      "modelId": "llama3"
+    }
+  ],
   "routes": []
 }
 
 ###
 
-### [ONBOARD-11] Persist a per-connection network profile (settings)
+### [ONBOARD-11] Export must contain conn_rest_manual and profile_rest_manual.
+GET {{baseUrl}}/api/v1/onboarding/export
+X-Amsha-API-Key: {{validKey}}
+
+###
+
+### [ONBOARD-12] Open a provider-change draft with a selected connection.
+PATCH {{baseUrl}}/api/v1/settings/provider
+Content-Type: application/json
+X-Amsha-API-Key: {{validKey}}
+
+{
+  "provider": "ollama",
+  "model": "llama3"
+}
+
+###
+
+### [ONBOARD-13] Persist a valid per-connection network profile; expect
+### updated=true and a non-empty draftId.
 PATCH {{baseUrl}}/api/v1/settings/connection-network-profile
 Content-Type: application/json
 X-Amsha-API-Key: {{validKey}}
 
 {
-  "connectionIndex": -1,
+  "connectionIndex": 0,
   "networkProfileJson": "{\"egressMode\":\"ALLOW_ALL\",\"tlsTrustMode\":\"SYSTEM\"}"
 }
 
 ###
 
-### [ONBOARD-12] Discard the active draft
+### [ONBOARD-14] Malformed network profile must return 400.
+PATCH {{baseUrl}}/api/v1/settings/connection-network-profile
+Content-Type: application/json
+X-Amsha-API-Key: {{validKey}}
+
+{
+  "connectionIndex": 0,
+  "networkProfileJson": "not-json"
+}
+
+###
+
+### [ONBOARD-15] Discard the active draft
 POST {{baseUrl}}/api/v1/onboarding/drafts/discard
 X-Amsha-API-Key: {{validKey}}
 
 ###
 
-### [ONBOARD-13] Workspace scoping via ActiveWorkspaceFilter (P110):
+### [ONBOARD-16] Workspace scoping via ActiveWorkspaceFilter (P110):
 ###   header present + non-member -> 403; header present + no key -> 401
 GET {{baseUrl}}/api/v1/onboarding/status
 X-Amsha-Workspace-Id: ws_validator_bogus

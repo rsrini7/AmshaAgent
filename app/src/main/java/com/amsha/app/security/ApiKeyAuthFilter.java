@@ -98,6 +98,16 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
                     return;
                 }
             }
+            // The onboarding status endpoint is callable before credentials exist so it can
+            // advertise skip-onboarding. When a key/cookie is present, still resolve it so the
+            // resource can return owner-scoped state and ActiveWorkspaceFilter can authorize an
+            // explicit workspace.
+            if (finalPath.startsWith("/onboarding/status")) {
+                String apiKey = resolveApiKey(requestContext);
+                if (apiKey != null && !apiKey.isBlank()) {
+                    tryApiKeyAuth(requestContext, finalPath, requestContext.getMethod(), remoteIp(), startTime);
+                }
+            }
             return;
         }
 
@@ -120,8 +130,7 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
         boolean bootstrapPublic = path.startsWith("/onboarding/bootstrap/status")
                 || path.startsWith("/onboarding/bootstrap/claim")
                 || path.startsWith("/onboarding/status")
-                || path.startsWith("/onboarding/provider-catalog")
-                || path.startsWith("/onboarding/drafts");
+                || path.startsWith("/onboarding/provider-catalog");
         return path.startsWith("/info") || bootstrapPublic || isAuthPath(path);
     }
 

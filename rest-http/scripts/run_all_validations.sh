@@ -110,7 +110,7 @@ for arg in "$@"; do
       ;;
     --help)
       echo "Usage: bash run_all_validations.sh [options]"
-      echo "Options: --reflex --skills --mcp --memory --web --roles --admin --auth-session --identity --pii-audit --self-evolve --hitl --rag --budget --sse-settings --cron --fast --llm --list --help"
+      echo "Options: --reflex --skills --mcp --memory --web --roles --admin --auth-session --identity --pii-audit --self-evolve --hitl --rag --budget --sse-settings --onboarding --cron --fast --llm --list --help"
       exit 0
       ;;
   esac
@@ -132,7 +132,7 @@ else
 fi
 
 if [ "$FAST" = true ]; then
-  echo "Mode: --fast (reflex + skills + admin + auth-session + pii-audit, no LLM)"
+  echo "Mode: --fast (reflex + skills + admin + auth-session + identity + pii-audit + self-evolve + sse-settings + onboarding, no LLM)"
 elif [ "$LLM" = true ]; then
   echo "Mode: --llm (memory + web + roles, needs LLM)"
 elif [ "$RUN_ALL" = true ]; then
