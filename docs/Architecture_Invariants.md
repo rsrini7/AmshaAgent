@@ -1667,7 +1667,8 @@ Always verify with a runtime startup log check when adding CDI beans from a new 
 | Run agent (sync) | `POST /api/v1/sessions/{id}/run` | `200` |
 | Approve | `POST /api/v1/sessions/{id}/approve` | `200` |
 | Onboarding Status | `GET /onboarding/status` | `200` |
-| Advance Wizard | `POST /onboarding/step/{N}` | `200` |
+| Advance step | `PUT /api/v1/onboarding/drafts/{draftId}/steps/{stepId}` | `200` |
+| Commit draft | `POST /api/v1/onboarding/drafts/{draftId}/commit` | `200` (`409` if not at review) |
 | Session not found | any session endpoint | `404` |
 | Cross-key access | any session endpoint | `401` + `code=SESSION_ACCESS_DENIED` |
 | Terminate session (owner)   | `DELETE /api/v1/sessions/{id}` | `204` |

@@ -34,6 +34,7 @@ HITL_SCRIPT="$SCRIPT_DIR/validate_hitl.sh"
 RAG_SCRIPT="$SCRIPT_DIR/validate_rag.sh"
 BUDGET_SCRIPT="$SCRIPT_DIR/validate_budget.sh"
 SSE_SETTINGS_SCRIPT="$SCRIPT_DIR/validate_sse_settings.sh"
+ONBOARDING_SCRIPT="$SCRIPT_DIR/validate_onboarding.sh"
 
 check_app() {
   local check_base="${TEST_BASE:-http://localhost:8080}"
@@ -80,7 +81,8 @@ for arg in "$@"; do
     --rag)          RUN_ALL=false; RUN_RAG=true ;;
     --budget)       RUN_ALL=false; RUN_BUDGET=true ;;
     --sse-settings) RUN_ALL=false; RUN_SSE_SETTINGS=true ;;
-    --fast)   FAST=true; RUN_ALL=false; RUN_REFLEX=true; RUN_SKILLS=true; RUN_ADMIN=true; RUN_AUTH_SESSION=true; RUN_IDENTITY=true; RUN_PII_AUDIT=true; RUN_SELF_EVOLVE=true; RUN_SSE_SETTINGS=true ;;
+    --onboarding)   RUN_ALL=false; RUN_ONBOARDING=true ;;
+    --fast)   FAST=true; RUN_ALL=false; RUN_REFLEX=true; RUN_SKILLS=true; RUN_ADMIN=true; RUN_AUTH_SESSION=true; RUN_IDENTITY=true; RUN_PII_AUDIT=true; RUN_SELF_EVOLVE=true; RUN_SSE_SETTINGS=true; RUN_ONBOARDING=true ;;
     --llm)    LLM=true; RUN_ALL=false; RUN_MEMORY=true; RUN_WEB=true; RUN_ROLES=true; RUN_CRON=true; RUN_RAG=true; RUN_BUDGET=true; RUN_HITL=true ;;
     --list)
       echo "Available validators:"
@@ -99,6 +101,7 @@ for arg in "$@"; do
       echo "  --rag          validate_rag.sh                 (ingest → approve → recall, needs LLM)"
       echo "  --budget       validate_budget.sh              (budget + autonomy SUPERVISED/FULL/READONLY, needs LLM)"
       echo "  --sse-settings validate_sse_settings.sh        (UI SSE streams + ws-token + settings CRUD, fast)"
+      echo "  --onboarding  validate_onboarding.sh         (P110 draft/saga + provider-catalog + workspace filter, fast)"
       echo "  --cron         validate_cron.sh               (programmatic cron resource REST APIs, needs LLM)"
       echo "  --fast         reflex + skills + admin + auth-session + identity + pii-audit + self-evolve + sse-settings"
       echo "  --llm          memory + web + roles + cron + rag + budget + hitl"
@@ -201,6 +204,10 @@ fi
 
 if [ "$RUN_SSE_SETTINGS" = true ] || [ "$RUN_ALL" = true ]; then
   run_validator "UI SSE & SETTINGS" "$SSE_SETTINGS_SCRIPT"
+fi
+
+if [ "$RUN_ONBOARDING" = true ] || [ "$RUN_ALL" = true ]; then
+  run_validator "P110 ONBOARDING / PROVIDER / WORKSPACE" "$ONBOARDING_SCRIPT"
 fi
 
 # ── Summary ──

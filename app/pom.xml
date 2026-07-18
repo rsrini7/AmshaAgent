@@ -559,7 +559,8 @@ paths: {}</echo>
           templates/**,
           prompts/**,
           skills/**,
-          META-INF/skills/**
+          META-INF/skills/**,
+          provider-catalog.json
         </quarkus.native.resources.includes>
       </properties>
     </profile>
