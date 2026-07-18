@@ -63,7 +63,7 @@ All properties are prefixed with `amsha.self-evolve`.
 
 ## 3. Database Schema
 
-Traces are stored in the `evolution_events` table (defined in Flyway migrations V1__baseline.sql):
+Traces are stored in the `evolution_events` table (defined in `V5__self_evolution.sql`):
 
 | Column | SQLite Type | PostgreSQL Type | Description |
 |---|---|---|---|

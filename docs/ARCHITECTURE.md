@@ -655,7 +655,7 @@ Runs **before** Quarkus CDI container boots:
 | Unordered | `StartupSecurityValidator` | **Hard gate in prod:** throws if vault pepper equals dev default, HMAC key absent, or allowlist has usernames instead of numeric IDs |
 | Unordered | `AgentCronScheduler` (on `StartupEvent`) | Restores persisted cron jobs so scheduled tasks survive restarts |
 
-Note: `session_registry` table is created by Flyway baseline migration (`V1__baseline.sql`), not a CDI observer.
+Note: `session_registry` is created by the Flyway interaction-catalog migration (`V6__interaction_catalog.sql`), not a CDI observer.
 
 ### Build-Time Processors (`amsha-deployment`)
 
@@ -860,7 +860,7 @@ case-insensitive uniqueness, and rejected if they collide with transport-owned /
 credentials. Registration is a sensitive operation (`NETWORK_OUTBOUND` HITL / admin API key).
 
 Durable connections are stored via `McpConnectionStorePort` with SQLite, PostgreSQL, and
-filesystem adapters (paired `V5__mcp_connections` Flyway migrations). On startup
+filesystem adapters (paired `V6__interaction_catalog.sql` Flyway migrations). On startup
 `McpConnectionLifecycleService.reconnectEnabledConnections()` restores enabled HTTP/SSE
 connections from durable metadata; failed reconnects are logged and retried. Failed or
 cancelled credential cleanup is persisted as an owner-scoped, idempotent retry record

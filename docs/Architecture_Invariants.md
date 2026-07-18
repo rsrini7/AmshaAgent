@@ -1019,7 +1019,7 @@ from birth with status `ACTIVE`, `INACTIVE`, or `ARCHIVED`.
 
 **Partial unique index — "at most one active per scope":**
 
-Both migrations (`V4__session_catalog.sql`) MUST contain the partial unique index, not a
+Both migrations (`V6__interaction_catalog.sql`) MUST contain the partial unique index, not a
 plain `UNIQUE` on `(owner_key, channel_type, channel_id, active)`. A plain 4-tuple UNIQUE
 would reject rotation — multiple inactive siblings share `active = false`:
 
@@ -1129,7 +1129,7 @@ stmt.execute("DROP TABLE IF EXISTS vec_archival");
 
 ### 6.11 pgvector Graceful Degradation in Flyway (§6.11 INVARIANT)
 
-The `CREATE EXTENSION IF NOT EXISTS vector` statement in `V1__baseline.sql` MUST be wrapped in a `DO $$ EXCEPTION WHEN OTHERS $$` block so Flyway migration completes successfully in environments where pgvector is not installed (e.g., embedded Postgres in tests, CI without pgvector):
+The `CREATE EXTENSION IF NOT EXISTS vector` statement in `V4__memory.sql` MUST be wrapped in a `DO $$ EXCEPTION WHEN OTHERS $$` block so Flyway migration completes successfully in environments where pgvector is not installed (e.g., embedded Postgres in tests, CI without pgvector):
 
 ```sql
 DO $$ BEGIN
