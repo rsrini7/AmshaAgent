@@ -101,6 +101,7 @@ CREATE TABLE bootstrap_state (
     id TEXT PRIMARY KEY,
     status TEXT NOT NULL,
     owner_id TEXT,
+    workspace_id TEXT,
     credential_digest TEXT,
     issued_at TEXT,
     claimed_at TEXT,
