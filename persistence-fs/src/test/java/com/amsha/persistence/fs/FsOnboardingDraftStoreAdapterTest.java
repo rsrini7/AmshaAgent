@@ -97,7 +97,9 @@ class FsOnboardingDraftStoreAdapterTest {
         assertTrue(found.isPresent());
         assertEquals("owner-1", found.get().ownerId());
 
-        OnboardingDraftDto bumped = new OnboardingDraftDto(
+        // Pass an UNBUMPED draft (revision still 1, matching expectedRevision). The adapter must
+        // bump it to 2 on write, mirroring the SQL backends' optimistic-lock contract.
+        OnboardingDraftDto unbumped = new OnboardingDraftDto(
                 d.draftId(),
                 d.ownerId(),
                 d.purpose(),
@@ -108,16 +110,18 @@ class FsOnboardingDraftStoreAdapterTest {
                 d.safeFieldErrors(),
                 d.pendingApprovalIds(),
                 OnboardingDraftState.RESUMABLE,
-                d.revision() + 1,
+                d.revision(),
                 d.expiresAt(),
                 d.createdAt(),
                 Instant.now());
-        assertTrue(adapter.update(bumped, 1));
-        assertFalse(adapter.update(bumped, 1), "stale revision must fail");
+        assertTrue(adapter.update(unbumped, 1));
 
         OnboardingDraftDto updated = adapter.findById("d-1").orElseThrow();
         assertEquals("step-2", updated.currentStepId());
-        assertEquals(2, updated.revision());
+        assertEquals(2, updated.revision(), "adapter must bump revision on update");
+
+        // Now the persisted revision is 2; a stale update with expectedRevision=1 must fail.
+        assertFalse(adapter.update(unbumped, 1), "stale revision must fail");
 
         assertEquals(1, adapter.delete("d-1"));
         assertTrue(adapter.findById("d-1").isEmpty());

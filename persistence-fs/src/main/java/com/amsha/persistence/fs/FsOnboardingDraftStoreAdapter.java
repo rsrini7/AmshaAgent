@@ -84,7 +84,24 @@ public class FsOnboardingDraftStoreAdapter implements OnboardingDraftStorePort {
         if (existing.isEmpty() || existing.get().revision() != expectedRevision) {
             return false;
         }
-        store.write(List.of(DOMAIN, DRAFTS_DIR, draft.draftId() + ".json"), draft);
+        // Mirror the SQL backends' `revision = revision + 1` so persisted drafts stay consistent
+        // with the optimistic-lock contract documented on OnboardingDraftStorePort.update().
+        OnboardingDraftDto bumped = new OnboardingDraftDto(
+                draft.draftId(),
+                draft.ownerId(),
+                draft.purpose(),
+                draft.planFingerprint(),
+                draft.currentStepId(),
+                draft.completedStepIds(),
+                draft.selectedNonSecretIds(),
+                draft.safeFieldErrors(),
+                draft.pendingApprovalIds(),
+                draft.state(),
+                expectedRevision + 1,
+                draft.expiresAt(),
+                draft.createdAt(),
+                draft.updatedAt());
+        store.write(List.of(DOMAIN, DRAFTS_DIR, draft.draftId() + ".json"), bumped);
         return true;
     }
 
