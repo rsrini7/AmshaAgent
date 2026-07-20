@@ -22,6 +22,36 @@ import com.amsha.persistence.api.WorkspaceMembershipDto;
 import io.opentelemetry.api.trace.Span;
 import io.opentelemetry.api.trace.StatusCode;
 
+/**
+ * Encryption-at-rest vault backed by {@link SecretStorePort}.
+ *
+ * <h3>{@code @Transactional(REQUIRES_NEW)} rationale</h3>
+ * Every mutating method ({@code store}, {@code remove}, {@code storeSystemKey},
+ * {@code storeWorkspace}, {@code removeWorkspace}) uses {@code REQUIRES_NEW} to
+ * ensure each secret write commits atomically, independently of any outer
+ * transaction the caller may hold. This is intentional:
+ * <ul>
+ *   <li>Cryptographic writes must never be partially rolled back — a failed
+ *       audit write or session cleanup in the caller must not lose a key
+ *       that was already encrypted and persisted.</li>
+ *   <li>Callers (onboarding saga, DevSecretSeeder, VaultStoreReflex) invoke
+ *       vault methods as standalone operations, not nested inside long-running
+ *       write transactions.</li>
+ *   <li>The agent loop (§3.2) is explicitly transaction-free, so vault writes
+ *       from tool execution never encounter a pre-existing transaction.</li>
+ * </ul>
+ *
+ * <strong>WARNING:</strong> Do not call these methods from inside a long-running
+ * {@code @Transactional(REQUIRED)} write path — the {@code REQUIRES_NEW} will
+ * split the outer transaction unexpectedly. If that pattern is ever needed,
+ * extract the vault write into a separate CDI bean without the outer annotation.
+ *
+ * <h3>{@code auditService.record()} inside the transaction</h3>
+ * Audit writes occur within the same {@code REQUIRES_NEW} transaction. This is
+ * safe because the audit table uses append-only semantics (no nested REQUIRES_NEW
+ * conflict) and SQLite/PostgreSQL handle nested inserts on the same connection
+ * correctly. If this ever changes, move the audit call outside the transaction.
+ */
 @ApplicationScoped
 public class SecretVaultImpl implements SecretVault {
 

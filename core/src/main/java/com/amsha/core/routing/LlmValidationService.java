@@ -12,6 +12,7 @@ import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -31,6 +32,9 @@ public class LlmValidationService implements LlmValidationGateway {
 
     @Inject
     LlmModelFactory modelFactory;
+
+    @Inject
+    Executor validationExecutor;
 
     @ConfigProperty(name = "AMSHA_GENERIC_OPENAI_BASE_URL")
     Optional<String> genericOpenAiBaseUrl;
@@ -73,8 +77,8 @@ public class LlmValidationService implements LlmValidationGateway {
                     "ollama".equalsIgnoreCase(provider) ? effectiveBaseUrl : null,
                     "ollama".equalsIgnoreCase(provider) ? model : null);
 
-            var future =
-                    CompletableFuture.supplyAsync(() -> chatModel.chat("hi")).orTimeout(15, TimeUnit.SECONDS);
+            var future = CompletableFuture.supplyAsync(() -> chatModel.chat("hi"), validationExecutor)
+                    .orTimeout(15, TimeUnit.SECONDS);
             String reply = future.join();
             return reply != null;
         } catch (Exception e) {
