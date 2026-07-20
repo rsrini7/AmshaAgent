@@ -11,30 +11,19 @@ import com.amsha.core.lifecycle.SessionHeartbeatTracker;
 import com.amsha.core.observability.AgentOtelContext;
 import com.amsha.core.state.CheckpointStatus;
 import com.amsha.persistence.api.CheckpointDto;
+import com.amsha.persistence.api.CheckpointStorePort;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
-import org.jdbi.v3.core.Handle;
-import org.jdbi.v3.core.HandleCallback;
-import org.jdbi.v3.core.Jdbi;
-import org.jdbi.v3.core.mapper.RowMapperFactory;
-import org.jdbi.v3.core.result.ResultIterable;
-import org.jdbi.v3.core.statement.Query;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
-public class HitlServicePerToolApprovalTest {
+class HitlServicePerToolApprovalTest {
 
     @Mock
-    Jdbi jdbi;
-
-    @Mock
-    Handle handle;
-
-    @Mock
-    Query query;
+    CheckpointStorePort checkpointStorePort;
 
     @Mock
     CheckpointApprovalService checkpointApprovalService;
@@ -54,21 +43,9 @@ public class HitlServicePerToolApprovalTest {
     @BeforeEach
     void setup() {
         MockitoAnnotations.openMocks(this);
-
-        // Stub withHandle
-        when(jdbi.withHandle(any())).thenAnswer(invocation -> {
-            HandleCallback<?, Exception> callback = invocation.getArgument(0);
-            return callback.withHandle(handle);
-        });
-
-        when(handle.createQuery(anyString())).thenReturn(query);
-        when(query.bind(anyString(), any(Object.class))).thenReturn(query);
-        when(query.bind(anyString(), any(Long.class))).thenReturn(query);
-        when(query.registerRowMapper(any(RowMapperFactory.class))).thenReturn(query);
     }
 
     @Test
-    @SuppressWarnings("unchecked")
     void test_resolve_perToolApprove_delegatesCorrectly() {
         CheckpointDto cp = new CheckpointDto(
                 1L,
@@ -100,9 +77,7 @@ public class HitlServicePerToolApprovalTest {
                 null,
                 null);
 
-        ResultIterable<CheckpointDto> resultIterable = mock(ResultIterable.class);
-        when(query.mapTo(CheckpointDto.class)).thenReturn(resultIterable);
-        when(resultIterable.findOne()).thenReturn(Optional.of(cp));
+        when(checkpointStorePort.findById(1L)).thenReturn(Optional.of(cp));
 
         hitlService.resolve("1", ToolCapability.GITHUB.toolName(), true, "approved github");
 
@@ -111,7 +86,6 @@ public class HitlServicePerToolApprovalTest {
     }
 
     @Test
-    @SuppressWarnings("unchecked")
     void test_resolve_perToolDeny_delegatesCorrectly() {
         CheckpointDto cp = new CheckpointDto(
                 1L,
@@ -143,9 +117,7 @@ public class HitlServicePerToolApprovalTest {
                 null,
                 null);
 
-        ResultIterable<CheckpointDto> resultIterable = mock(ResultIterable.class);
-        when(query.mapTo(CheckpointDto.class)).thenReturn(resultIterable);
-        when(resultIterable.findOne()).thenReturn(Optional.of(cp));
+        when(checkpointStorePort.findById(1L)).thenReturn(Optional.of(cp));
 
         hitlService.resolve("1", "sandboxexec", false, "unsafe");
 
@@ -154,7 +126,6 @@ public class HitlServicePerToolApprovalTest {
     }
 
     @Test
-    @SuppressWarnings("unchecked")
     void test_resolve_bulkApprove_stillWorks() {
         CheckpointDto cp = new CheckpointDto(
                 1L,
@@ -186,9 +157,7 @@ public class HitlServicePerToolApprovalTest {
                 null,
                 null);
 
-        ResultIterable<CheckpointDto> resultIterable = mock(ResultIterable.class);
-        when(query.mapTo(CheckpointDto.class)).thenReturn(resultIterable);
-        when(resultIterable.findOne()).thenReturn(Optional.of(cp));
+        when(checkpointStorePort.findById(1L)).thenReturn(Optional.of(cp));
 
         hitlService.resolve("1", null, true, "bulk");
 

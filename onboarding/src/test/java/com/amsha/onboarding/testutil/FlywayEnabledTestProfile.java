@@ -11,11 +11,16 @@ import io.quarkus.test.junit.QuarkusTestProfile;
  */
 public class FlywayEnabledTestProfile implements QuarkusTestProfile {
 
+    static {
+        System.setProperty("AMSHA_LLM_API_KEY", "");
+    }
+
     @Override
     public Map<String, String> getConfigOverrides() {
         return Map.of(
                 "quarkus.flyway.enabled", "true",
                 "quarkus.flyway.migrate-at-start", "true",
-                "amsha.ui.skip-onboarding", "false");
+                "amsha.ui.skip-onboarding", "false",
+                "amsha.llm.provider", "mock-provider");
     }
 }

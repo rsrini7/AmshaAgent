@@ -8,6 +8,7 @@ import com.amsha.persistence.api.ReasoningStepDto;
 
 import org.jdbi.v3.sqlobject.config.RegisterConstructorMapper;
 import org.jdbi.v3.sqlobject.customizer.Bind;
+import org.jdbi.v3.sqlobject.customizer.BindList;
 import org.jdbi.v3.sqlobject.customizer.BindMethods;
 import org.jdbi.v3.sqlobject.statement.SqlQuery;
 import org.jdbi.v3.sqlobject.statement.SqlUpdate;
@@ -105,6 +106,18 @@ public interface CheckpointJdbiDao {
             "SELECT " + ALL_COLUMNS
                     + " FROM agent_checkpoint WHERE session_id LIKE '%' || :segment || '%' AND status IN ('AWAITING_APPROVAL', 'RESUMING', 'IN_PROGRESS') ORDER BY checkpoint_id DESC LIMIT 1")
     Optional<CheckpointDto> findLatestAwaitingBySegment(@Bind("segment") String segment);
+
+    @SqlQuery(
+            "SELECT " + ALL_COLUMNS
+                    + " FROM agent_checkpoint WHERE status = :status AND session_id IN (<sessionIds>) ORDER BY checkpoint_id DESC LIMIT :limit OFFSET :offset")
+    List<CheckpointDto> findByStatusAndSessionIds(
+            @Bind("status") String status,
+            @BindList("sessionIds") List<String> sessionIds,
+            @Bind("limit") int limit,
+            @Bind("offset") int offset);
+
+    @SqlQuery("SELECT COUNT(*) FROM agent_checkpoint WHERE status = :status AND session_id IN (<sessionIds>)")
+    long countByStatusAndSessionIds(@Bind("status") String status, @BindList("sessionIds") List<String> sessionIds);
 
     @SqlQuery(
             "SELECT COUNT(*) FROM agent_checkpoint WHERE channel_platform_id = :chatId AND status = 'AWAITING_APPROVAL' AND session_id NOT LIKE 'cron-%'")

@@ -26,6 +26,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+import com.amsha.common.util.LogUtil;
 import com.amsha.core.routing.provider.NetworkProfilePolicy;
 import com.amsha.core.security.OutboundHttpPolicyService;
 import com.amsha.core.security.OutboundPolicyDecision;
@@ -123,16 +124,16 @@ public final class GovernedHttpClient {
         try {
             response = client.send(request, bodyHandler);
         } catch (HttpTimeoutException e) {
-            log.warnf(e, "Request timed out: %s", request.uri().getHost());
+            log.warnf("Request timed out: %s (%s)", request.uri().getHost(), LogUtil.rootMessage(e));
             throw OutboundHttpException.timeout(
                     "Request timed out: " + request.uri().getHost());
         } catch (IOException e) {
-            log.warnf(e, "Transport I/O failure to %s", request.uri().getHost());
+            log.warnf("Transport I/O failure to %s (%s)", request.uri().getHost(), LogUtil.rootMessage(e));
             throw OutboundHttpException.io(
                     "Transport I/O failure to " + request.uri().getHost(), e);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            log.warnf(e, "Interrupted during request to %s", request.uri().getHost());
+            log.warnf("Interrupted during request to %s (%s)", request.uri().getHost(), LogUtil.rootMessage(e));
             throw OutboundHttpException.io(
                     "Interrupted during request to " + request.uri().getHost(), e);
         }

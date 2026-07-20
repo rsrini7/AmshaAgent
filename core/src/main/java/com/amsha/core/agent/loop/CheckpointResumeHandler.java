@@ -138,7 +138,9 @@ public class CheckpointResumeHandler {
                         return;
                     }
 
-                    ChannelType cType = ChannelType.fromString(channelType).orElse(ChannelType.WEBSOCKET);
+                    ChannelType cType = (channelType == null || channelType.isBlank())
+                            ? ChannelType.WEBSOCKET
+                            : ChannelType.of(channelType);
                     ChannelUser user = new ChannelUser(userId, chatId, "Operator", cType);
                     context = prepareResumeMessageContext(chatId, user, cType, resumeGoal);
 
@@ -166,11 +168,12 @@ public class CheckpointResumeHandler {
             String chatId, ChannelUser user, ChannelType cType, String goal) {
         ChannelMessage msg =
                 switch (cType.id()) {
+                    case "telegram" -> new ChannelMessage.TelegramMessage(user, goal, chatId, Instant.now());
                     case "discord" -> new ChannelMessage.DiscordMessage(user, goal, chatId, chatId, Instant.now());
                     case "rest_api" -> new ChannelMessage.RestApiMessage(user, goal, chatId, Instant.now());
                     case "cli" -> new ChannelMessage.CliMessage(user, goal, chatId, Instant.now());
                     case "websocket" -> new ChannelMessage.WebSocketMessage(user, goal, chatId, Instant.now());
-                    default -> new ChannelMessage.TelegramMessage(user, goal, chatId, Instant.now());
+                    default -> new ChannelMessage.GenericChannelMessage(user, goal, chatId, Instant.now(), cType);
                 };
         MessageContext context = new MessageContext(chatId, user, msg);
         context.setResumeSignal(true);

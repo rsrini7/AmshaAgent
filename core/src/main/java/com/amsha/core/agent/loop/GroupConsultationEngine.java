@@ -1,13 +1,15 @@
 package com.amsha.core.agent.loop;
 
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.event.Observes;
 import jakarta.inject.Inject;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.Executor;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 
 import com.amsha.core.agent.role.AgentGroup;
@@ -16,6 +18,8 @@ import com.amsha.core.agent.role.AgentRoleEnum;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
+
+import io.quarkus.runtime.ShutdownEvent;
 
 /**
  * Engine for parallel multi-agent group consultation. When a group lead
@@ -56,7 +60,20 @@ public class GroupConsultationEngine {
     @ConfigProperty(name = "amsha.group.consult.timeout-seconds", defaultValue = "60")
     int timeoutSeconds;
 
-    private final Executor virtualThreadExecutor = Executors.newVirtualThreadPerTaskExecutor();
+    private final ExecutorService virtualThreadExecutor = Executors.newVirtualThreadPerTaskExecutor();
+
+    void shutdown(@Observes ShutdownEvent ev) {
+        log.info("[GROUP-ENGINE] Shutting down virtualThreadExecutor...");
+        virtualThreadExecutor.shutdown();
+        try {
+            if (!virtualThreadExecutor.awaitTermination(5, TimeUnit.SECONDS)) {
+                virtualThreadExecutor.shutdownNow();
+            }
+        } catch (InterruptedException e) {
+            virtualThreadExecutor.shutdownNow();
+            Thread.currentThread().interrupt();
+        }
+    }
 
     /**
      * Result of a group consultation.
@@ -128,6 +145,7 @@ public class GroupConsultationEngine {
                 groupId, subTasks.size(), effectiveConcurrency);
 
         // Spawn parallel sub-agents
+        Semaphore semaphore = new Semaphore(effectiveConcurrency);
         Map<String, CompletableFuture<String>> futures = new LinkedHashMap<>();
         for (Map.Entry<String, String> entry : subTasks.entrySet()) {
             String memberId = entry.getKey();
@@ -136,7 +154,15 @@ public class GroupConsultationEngine {
             CompletableFuture<String> future = CompletableFuture.supplyAsync(
                             () -> {
                                 try {
-                                    return runMemberAgent(memberId, memberGoal, agentRunner);
+                                    semaphore.acquire();
+                                    try {
+                                        return runMemberAgent(memberId, memberGoal, agentRunner);
+                                    } finally {
+                                        semaphore.release();
+                                    }
+                                } catch (InterruptedException e) {
+                                    Thread.currentThread().interrupt();
+                                    throw new RuntimeException("Sub-agent execution interrupted", e);
                                 } catch (Exception e) {
                                     if (e instanceof RuntimeException re) throw re;
                                     throw new RuntimeException(e);

@@ -100,6 +100,24 @@ public class FsCheckpointStoreAdapter implements CheckpointStorePort {
     }
 
     @Override
+    public List<CheckpointDto> findByStatusAndSessionIds(
+            String status, List<String> sessionIds, int limit, int offset) {
+        return helper.loadAll().stream()
+                .filter(c -> status.equals(c.status()) && sessionIds.contains(c.sessionId()))
+                .sorted(Comparator.comparing(CheckpointDto::id).reversed())
+                .skip(offset)
+                .limit(limit)
+                .toList();
+    }
+
+    @Override
+    public long countByStatusAndSessionIds(String status, List<String> sessionIds) {
+        return helper.loadAll().stream()
+                .filter(c -> status.equals(c.status()) && sessionIds.contains(c.sessionId()))
+                .count();
+    }
+
+    @Override
     public void transitionStatus(Long id, String newStatus) {
         findById(id).ifPresent(cp -> save(withNewStatus(cp, newStatus)));
     }

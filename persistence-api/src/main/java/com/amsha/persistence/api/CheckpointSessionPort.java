@@ -15,4 +15,8 @@ public interface CheckpointSessionPort {
     void markCheckpointsFailed(String sessionId);
 
     void purgeOldChatHistory(Instant cutoff);
+
+    List<CheckpointDto> findByStatusAndSessionIds(String status, List<String> sessionIds, int limit, int offset);
+
+    long countByStatusAndSessionIds(String status, List<String> sessionIds);
 }

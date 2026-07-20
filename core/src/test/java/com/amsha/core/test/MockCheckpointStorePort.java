@@ -100,6 +100,24 @@ public class MockCheckpointStorePort implements CheckpointStorePort {
     }
 
     @Override
+    public List<CheckpointDto> findByStatusAndSessionIds(
+            String status, List<String> sessionIds, int limit, int offset) {
+        return store.values().stream()
+                .filter(c -> status.equals(c.status()) && sessionIds.contains(c.sessionId()))
+                .sorted((c1, c2) -> Long.compare(c2.id(), c1.id()))
+                .skip(offset)
+                .limit(limit)
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public long countByStatusAndSessionIds(String status, List<String> sessionIds) {
+        return store.values().stream()
+                .filter(c -> status.equals(c.status()) && sessionIds.contains(c.sessionId()))
+                .count();
+    }
+
+    @Override
     public void transitionStatus(Long id, String newStatus) {
         CheckpointDto existing = store.get(id);
         if (existing != null) {

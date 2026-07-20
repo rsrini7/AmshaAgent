@@ -3,10 +3,15 @@ package com.amsha.core.tools;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+
+import com.amsha.core.agent.loop.ToolInvocationGuard;
+import com.amsha.core.agent.loop.ToolInvoker;
+import com.amsha.core.governance.RequiresApprovalException;
 
 import org.jboss.logging.Logger;
 
@@ -17,7 +22,10 @@ public class SandboxVerificationGate implements VerificationGate {
     private static final Pattern CODE_BLOCK_PATTERN = Pattern.compile("```(\\w+)?\\n(.*?)\\n```", Pattern.DOTALL);
 
     @Inject
-    SandboxExecTool sandboxExecTool;
+    ToolInvocationGuard toolInvocationGuard;
+
+    @Inject
+    ToolInvoker toolInvoker;
 
     @Override
     public VerificationResult verify(ToolExecutionContext ctx, String output) {
@@ -45,11 +53,30 @@ public class SandboxVerificationGate implements VerificationGate {
                     "[VerificationGate] Intercepted executable code block (lang=%s). Running in sandbox verification gate...",
                     lang);
             try {
-                ToolResponse response = sandboxExecTool.execute(
-                        ctx,
-                        Map.of(
-                                "code", code,
-                                "language", lang));
+                Map<String, Object> params = Map.of(
+                        "code", code,
+                        "language", lang);
+
+                ToolInvocationGuard.GuardDecision decision = toolInvocationGuard.evaluate(
+                        ctx.sessionId(),
+                        ctx.agentRole(),
+                        ctx.autonomyLevel(),
+                        "sandbox_exec",
+                        params,
+                        List.of(),
+                        ctx.rawUserGoal(),
+                        List.of());
+
+                ToolResponse response;
+                if (decision instanceof ToolInvocationGuard.GuardDecision.Deduplicate d) {
+                    response = ToolResponse.success(d.cachedObservation());
+                } else if (decision instanceof ToolInvocationGuard.GuardDecision.Blocked b) {
+                    throw new SecurityException("Tool execution blocked by guard: " + b.observation());
+                } else if (decision instanceof ToolInvocationGuard.GuardDecision.PauseForApproval p) {
+                    throw new RequiresApprovalException(p.frame(), ctx.sessionId());
+                } else {
+                    response = toolInvoker.invoke("sandbox_exec", params, ctx.sessionId());
+                }
 
                 if (!response.success()) {
                     log.warnf("[VerificationGate] Sandbox verification failed: %s", response.output());
