@@ -302,10 +302,15 @@ class OnboardingCoordinatorExtensionTest {
 
         Map<String, Object> exported = coordinator.exportProfiles("owner-1", profileStore);
         assertFalse(exported.isEmpty());
-        List<Map<String, Object>> conns = (List<Map<String, Object>>) exported.get("connections");
+        List<Map<String, Object>> conns = uncheckedConnections(exported);
         assertEquals(1, conns.size());
         assertFalse(conns.get(0).containsKey("authScheme"), "export must not include auth scheme details");
         assertFalse(conns.get(0).containsKey("apiKey"), "export must never include secret material");
+    }
+
+    @SuppressWarnings("unchecked")
+    private static List<Map<String, Object>> uncheckedConnections(Map<String, Object> exported) {
+        return (List<Map<String, Object>>) exported.get("connections");
     }
 
     @Test
