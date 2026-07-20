@@ -57,7 +57,6 @@ export interface OnboardingCompleteDto {
   chatUrl: string;
   provider: string;
   model: string;
-  serviceKey: string;
   pluginSteps: Array<{stepId:string; title:string; isConfigured:boolean}>;
 }
 
