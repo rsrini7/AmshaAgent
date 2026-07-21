@@ -127,13 +127,6 @@ export class ArcClient {
     return this.request<any>('/settings');
   }
 
-  async patchProvider(body: object): Promise<any> {
-    return this.request<any>('/settings/provider', {
-      method: 'PATCH',
-      body: JSON.stringify(body)
-    });
-  }
-
   async patchPrompt(prompt: string): Promise<any> {
     return this.request<any>('/settings/prompt', {
       method: 'PATCH',

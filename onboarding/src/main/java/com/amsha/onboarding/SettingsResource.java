@@ -77,6 +77,9 @@ public class SettingsResource {
     @ConfigProperty(name = "amsha.llm.vault-priority", defaultValue = "false")
     boolean vaultPriority;
 
+    @ConfigProperty(name = "amsha.ui.skip-onboarding", defaultValue = "false")
+    boolean skipOnboarding;
+
     @Context
     SecurityContext securityContext;
 
@@ -92,6 +95,30 @@ public class SettingsResource {
             return "internal";
         }
         return null;
+    }
+
+    private boolean backendLlmConfigured() {
+        if (skipOnboarding) {
+            return true;
+        }
+        if (vault.systemKeyExists(VaultConstants.LLM_API_KEY)) {
+            return true;
+        }
+        String provider = configuredProvider != null ? configuredProvider.trim() : "";
+        if (provider.isBlank()) {
+            return false;
+        }
+        if (provider.equalsIgnoreCase("ollama")
+                || provider.equalsIgnoreCase("claude-code")
+                || provider.equalsIgnoreCase("omlx")
+                || provider.equalsIgnoreCase("llamacpp")) {
+            return true;
+        }
+        String apiKey = System.getProperty("AMSHA_LLM_API_KEY", System.getenv("AMSHA_LLM_API_KEY"));
+        if (apiKey != null && !apiKey.isBlank()) {
+            return true;
+        }
+        return false;
     }
 
     @GET
@@ -118,7 +145,8 @@ public class SettingsResource {
         String prompt = readVaultString(VaultConstants.SYSTEM_PROMPT_KEY, "");
         boolean hasKey = vault.systemKeyExists(VaultConstants.LLM_API_KEY);
         String displayPrompt = prompt.length() > 200 ? prompt.substring(0, 199) + "…" : prompt;
-        return new SettingsDto(provider, model, displayPrompt, hasKey, appVersion);
+        return new SettingsDto(
+                provider, model, displayPrompt, hasKey, appVersion, skipOnboarding || backendLlmConfigured());
     }
 
     @GET
