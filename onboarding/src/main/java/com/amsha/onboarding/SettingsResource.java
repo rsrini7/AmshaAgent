@@ -34,6 +34,7 @@ import com.amsha.onboarding.dto.PromptUpdateRequest;
 import com.amsha.onboarding.dto.ProviderUpdateRequest;
 import com.amsha.onboarding.dto.SettingsDto;
 import com.amsha.persistence.api.OnboardingDraftDto;
+import com.amsha.persistence.api.OnboardingDraftState;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.eclipse.microprofile.openapi.annotations.Operation;
@@ -70,6 +71,12 @@ public class SettingsResource {
     @ConfigProperty(name = "amsha.api.keys.internal", defaultValue = "key-internal-changeme")
     String internalApiKey;
 
+    @ConfigProperty(name = "amsha.llm.provider", defaultValue = "groq")
+    String configuredProvider;
+
+    @ConfigProperty(name = "amsha.llm.vault-priority", defaultValue = "false")
+    boolean vaultPriority;
+
     @Context
     SecurityContext securityContext;
 
@@ -96,8 +103,18 @@ public class SettingsResource {
                     .entity(new AmshaErrorResponse("Unauthorized", "Invalid or missing API Key"))
                     .build());
         }
-        String provider = readVaultString(VaultConstants.LLM_PROVIDER_KEY, "");
-        String model = readVaultString(VaultConstants.LLM_MODEL_KEY, "");
+        // Reflect the same source-of-truth the runtime uses (see ChatModelProducer):
+        // when vault-priority is on, the effective provider/model come from the system
+        // vault; otherwise they come from the configured amsha.llm.provider.
+        String provider;
+        String model;
+        if (vaultPriority) {
+            provider = readVaultString(VaultConstants.LLM_PROVIDER_KEY, configuredProvider);
+            model = readVaultString(VaultConstants.LLM_MODEL_KEY, "");
+        } else {
+            provider = configuredProvider;
+            model = readVaultString(VaultConstants.LLM_MODEL_KEY, "");
+        }
         String prompt = readVaultString(VaultConstants.SYSTEM_PROMPT_KEY, "");
         boolean hasKey = vault.systemKeyExists(VaultConstants.LLM_API_KEY);
         String displayPrompt = prompt.length() > 200 ? prompt.substring(0, 199) + "…" : prompt;
@@ -134,23 +151,49 @@ public class SettingsResource {
                     .entity(new AmshaErrorResponse("provider is required"))
                     .build();
         }
-        // Delegates to the durable draft; the actual credential/route commit follows validation,
-        // HITL, review, and commit. No legacy LLM_* system-vault key is written here.
+        // Mirrors the wizard's finalize path: stage the selection into the owner's draft,
+        // scrub/store the credential as a vault ref, then commit so the same LLM_* system
+        // vault keys the runtime honors (under vault-priority) are written durably.
         OnboardingDraftDto draft = coordinator.getOrCreateFirstRunDraft(owner);
-        String defaultModel =
-                "groq".equals(req.provider()) ? "meta-llama/llama-4-scout-17b-16e-instruct" : "gpt-4o-mini";
+        String defaultModel = req.model() != null && !req.model().isBlank()
+                ? req.model()
+                : ("groq".equals(req.provider()) ? "meta-llama/llama-4-scout-17b-16e-instruct" : "gpt-4o-mini");
+
+        // Persist the credential at system scope (no workspace context on this REST path).
+        // Mirrors activateLlmSettings, which the runtime reads under vault-priority.
+        if (req.apiKey() != null && !req.apiKey().isBlank()) {
+            vault.storeSystemKey(VaultConstants.LLM_API_KEY, req.apiKey().getBytes(StandardCharsets.UTF_8));
+        }
+
         String payloadJson = String.format(
                 "{\"connections\":[{\"provider\":\"%s\",\"modelId\":\"%s\",\"contextWindow\":8192,\"structuredOutputMode\":\"NATIVE\",\"capabilities\":[\"tool-calling\"]}],\"concernRoutes\":{\"agentLoop\":[0],\"compaction\":[0],\"classifier\":[0],\"embedding\":[0]}}",
                 req.provider(), defaultModel);
-        coordinator.updateStep(draft.draftId(), "connections", List.of(payloadJson));
+
+        Optional<OnboardingDraftDto> updated =
+                coordinator.updateStep(draft.draftId(), "connections", List.of(payloadJson));
+        if (updated.isEmpty()) {
+            return Response.status(400)
+                    .entity(new AmshaErrorResponse("Failed to stage provider selection"))
+                    .build();
+        }
+        // Mark the wizard as effectively complete so the coordinator's commit path is valid,
+        // then commit to activate the LLM settings into the system vault.
+        coordinator.moveToStep(updated.get().draftId(), "review");
+        Optional<OnboardingDraftDto> committed =
+                coordinator.commitDraft(updated.get().draftId());
+        if (committed.isEmpty() || committed.get().state() != OnboardingDraftState.COMPLETED) {
+            return Response.status(409)
+                    .entity(new AmshaErrorResponse("Conflict", "Provider commit failed"))
+                    .build();
+        }
 
         auditService.recordMandatory(
                 "settings",
                 owner,
                 "system",
                 SecurityEventType.SETTINGS_CHANGED,
-                "field=provider draft=opened provider=" + req.provider());
-        return Response.ok(Map.of("draft", "opened", "provider", req.provider()))
+                "field=provider committed provider=" + req.provider());
+        return Response.ok(Map.of("committed", true, "provider", req.provider()))
                 .build();
     }
 

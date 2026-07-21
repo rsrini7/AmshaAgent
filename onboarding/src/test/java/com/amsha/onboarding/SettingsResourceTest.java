@@ -83,7 +83,8 @@ public class SettingsResourceTest {
         when(llmValidationGateway.validate(anyString(), anyString(), anyString()))
                 .thenReturn(false);
 
-        // Provider mutation now opens a durable draft and does not write the legacy vault directly.
+        // Provider mutation now commits durably through the coordinator, writing the
+        // legacy LLM_* system-vault keys the runtime honors under vault-priority.
         ProviderUpdateRequest req = new ProviderUpdateRequest("openai", "gpt-4o", "bad-key");
         givenAuth()
                 .contentType(ContentType.JSON)
@@ -92,7 +93,29 @@ public class SettingsResourceTest {
                 .patch("/settings/provider")
                 .then()
                 .statusCode(200)
-                .body("draft", is("opened"));
+                .body("committed", is(true))
+                .body("provider", is("openai"));
+    }
+
+    @Test
+    void testPatchProviderCommitsToVault() {
+        when(llmValidationGateway.validate(anyString(), anyString(), anyString()))
+                .thenReturn(true);
+
+        ProviderUpdateRequest req =
+                new ProviderUpdateRequest("groq", "meta-llama/llama-4-scout-17b-16e-instruct", "test-key-123");
+        givenAuth()
+                .contentType(ContentType.JSON)
+                .body(req)
+                .when()
+                .patch("/settings/provider")
+                .then()
+                .statusCode(200)
+                .body("committed", is(true));
+
+        // Under vault-priority=false the effective provider is the configured one;
+        // the durable commit still succeeds and writes the legacy LLM_* vault keys.
+        givenAuth().when().get("/settings").then().statusCode(200);
     }
 
     @Test

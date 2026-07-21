@@ -141,6 +141,10 @@ export class ArcClient {
     });
   }
 
+  async getPrompt(): Promise<{ systemPrompt: string }> {
+    return this.request<{ systemPrompt: string }>('/settings/prompt');
+  }
+
   async resetOnboarding(): Promise<any> {
     return this.request<any>('/settings/reset', {
       method: 'POST'

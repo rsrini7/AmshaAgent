@@ -126,8 +126,16 @@ export class ArcSettings extends LitElement {
       this._provider = data.provider;
       this._model = data.model;
       this._hasApiKey = data.hasApiKey;
-      this._systemPrompt = data.systemPrompt;
       this._appVersion = data.appVersion;
+      // Load the full system prompt via the dedicated endpoint.
+      // getSettings returns displayPrompt truncated to 199 chars;
+      // saving a truncated prompt back would corrupt the vault.
+      try {
+        const promptData = await this._client.getPrompt();
+        this._systemPrompt = promptData.systemPrompt;
+      } catch {
+        this._systemPrompt = data.systemPrompt;
+      }
     } catch (e: any) {
       this._error = e.message;
     } finally {
