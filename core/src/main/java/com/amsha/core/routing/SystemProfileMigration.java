@@ -93,7 +93,7 @@ public class SystemProfileMigration {
                     VaultConstants.LLM_API_KEY);
             return;
         }
-        String modelId = model.filter(m -> !m.isBlank()).orElse("gpt-4o");
+        String modelId = model.filter(m -> !m.isBlank()).orElse(ModelDefaults.DEFAULT_OPENAI_MODEL);
         Instant now = Instant.now();
         LlmConnectionDto connection = new LlmConnectionDto(
                 SYSTEM_CONN_ID,

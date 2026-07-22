@@ -106,6 +106,10 @@ export class ArcClient {
     return this.request<any>('/onboarding/provider-catalog');
   }
 
+  async getModelDefaults(): Promise<Record<string, { defaultModel: string; defaultBaseUrl?: string }>> {
+    return this.request<Record<string, { defaultModel: string; defaultBaseUrl?: string }>>('/model-defaults');
+  }
+
   // Deprecated legacy facade methods (retained for backward compatibility during migration)
   async onboardingStatus(): Promise<any> {
     return this.request<any>('/onboarding/status');

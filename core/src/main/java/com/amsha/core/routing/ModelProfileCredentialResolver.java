@@ -150,15 +150,15 @@ public class ModelProfileCredentialResolver {
 
     /** Maps known provider adapter IDs to their default OpenAI-compatible base URLs. */
     enum ProviderBaseUrl {
-        GROQ("https://api.groq.com/openai/v1"),
-        OPENAI("https://api.openai.com/v1"),
-        OPENROUTER("https://openrouter.ai/api/v1"),
-        CEREBRAS("https://api.cerebras.ai/v1"),
-        NVIDIA("https://integrate.api.nvidia.com/v1"),
-        GEMINI("https://generativelanguage.googleapis.com/v1beta"),
-        OLLAMA("http://localhost:11434"),
-        OMLX("http://127.0.0.1:8000/v1"),
-        LLAMACPP("http://127.0.0.1:8080/v1"),
+        GROQ(ModelDefaults.DEFAULT_GROQ_BASE_URL),
+        OPENAI(ModelDefaults.DEFAULT_OPENAI_BASE_URL),
+        OPENROUTER(ModelDefaults.DEFAULT_OPENROUTER_BASE_URL),
+        CEREBRAS(ModelDefaults.DEFAULT_CEREBRAS_BASE_URL),
+        NVIDIA(ModelDefaults.DEFAULT_NVIDIA_BASE_URL),
+        GEMINI(ModelDefaults.DEFAULT_GEMINI_BASE_URL),
+        OLLAMA(ModelDefaults.DEFAULT_OLLAMA_BASE_URL),
+        OMLX(ModelDefaults.DEFAULT_OMLX_BASE_URL),
+        LLAMACPP(ModelDefaults.DEFAULT_LLAMACPP_BASE_URL),
         GENERIC_OPENAI("");
 
         private final String defaultUrl;

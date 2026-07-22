@@ -29,6 +29,7 @@ export class ArcOnboarding extends LitElement {
     concernRoutes: { agentLoop: [], compaction: [], classifier: [], embedding: [] }
   };
   @state() private _catalog: any[] = [];
+  @state() private _modelDefaults: Record<string, { defaultModel: string; defaultBaseUrl?: string }> = {};
   @state() private _loading = false;
   @state() private _error = '';
   @state() private _isAdvanced = false;
@@ -169,6 +170,11 @@ export class ArcOnboarding extends LitElement {
       }
 
       this._catalog = await this._client.getProviderCatalog();
+      try {
+        this._modelDefaults = await this._client.getModelDefaults();
+      } catch (_) {
+        // Model defaults endpoint may not be available in older backends
+      }
 
       const res = await this._client.createOrResumeDraft();
       this._draftId = res.draftId;
@@ -270,18 +276,20 @@ export class ArcOnboarding extends LitElement {
 
   private _handleQuickStart() {
     const groq = this._catalog.find(p => p.id === 'groq') || {};
+    const groqDefault = this._modelDefaults['groq'] || {};
     const defaultConn: ConnectionDraft = {
       provider: 'groq',
-      modelId: groq.defaultModel || 'meta-llama/llama-4-scout-17b-16e-instruct',
+      modelId: groq.defaultModel || groqDefault.defaultModel || 'meta-llama/llama-4-scout-17b-16e-instruct',
       contextWindow: 8192,
       structuredOutputMode: 'NATIVE',
       capabilities: ['tool-calling']
     };
 
     const ollama = this._catalog.find(p => p.id === 'ollama') || {};
+    const ollamaDefault = this._modelDefaults['ollama'] || {};
     const defaultEmbed: ConnectionDraft = {
       provider: 'ollama',
-      modelId: ollama.defaultModel || 'mistral-small:latest',
+      modelId: ollama.defaultModel || ollamaDefault.defaultModel || 'mistral-small:latest',
       contextWindow: 8192,
       structuredOutputMode: 'NATIVE',
       capabilities: []

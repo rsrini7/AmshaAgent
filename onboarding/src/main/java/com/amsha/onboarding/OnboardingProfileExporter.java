@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import com.amsha.core.routing.ModelDefaults;
 import com.amsha.persistence.api.LlmConnectionDto;
 import com.amsha.persistence.api.LlmProfileStorePort;
 import com.amsha.persistence.api.ModelProfileDto;
@@ -110,7 +111,7 @@ public class OnboardingProfileExporter {
             profileStore.saveModelProfile(new ModelProfileDto(
                     profileId,
                     connId,
-                    (String) p.getOrDefault("modelId", "gpt-4o"),
+                    (String) p.getOrDefault("modelId", ModelDefaults.DEFAULT_OPENAI_MODEL),
                     (String) p.getOrDefault("structuredOutputMode", "NATIVE"),
                     null,
                     null,

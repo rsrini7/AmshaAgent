@@ -6,6 +6,8 @@ import dev.langchain4j.model.openai.OpenAiChatModel;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
+import com.amsha.core.routing.ModelDefaults;
+
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 /**
@@ -18,15 +20,15 @@ public class LlamaCppProviderFactory implements AgentChatModelProvider {
     @Inject
     AgentLlmConfig agentConfig;
 
-    @ConfigProperty(name = "AMSHA_LLAMACPP_BASE_URL", defaultValue = "http://localhost:9000/v1")
+    @ConfigProperty(name = "AMSHA_LLAMACPP_BASE_URL", defaultValue = ModelDefaults.DEFAULT_LLAMACPP_BASE_URL)
     String baseUrl;
 
-    @ConfigProperty(name = "AMSHA_LLAMACPP_MODEL", defaultValue = "qwen3")
+    @ConfigProperty(name = "AMSHA_LLAMACPP_MODEL", defaultValue = ModelDefaults.DEFAULT_LLAMACPP_MODEL)
     String modelId;
 
     @Override
     public String providerName() {
-        return "llamacpp";
+        return ModelDefaults.PROVIDER_LLAMACPP;
     }
 
     @Override

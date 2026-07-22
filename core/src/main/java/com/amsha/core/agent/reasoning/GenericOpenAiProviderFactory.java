@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Optional;
 
 import com.amsha.core.routing.ChatModelFactory;
+import com.amsha.core.routing.ModelDefaults;
 import com.amsha.core.routing.MultiModelChatModel;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
@@ -39,7 +40,7 @@ public class GenericOpenAiProviderFactory implements AgentChatModelProvider {
 
     @Override
     public String providerName() {
-        return "generic-openai";
+        return ModelDefaults.PROVIDER_GENERIC_OPENAI;
     }
 
     @Override

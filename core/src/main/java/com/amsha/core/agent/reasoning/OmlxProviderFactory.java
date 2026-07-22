@@ -10,6 +10,7 @@ import java.util.Map;
 import java.util.Optional;
 
 import com.amsha.core.routing.ChatModelFactory;
+import com.amsha.core.routing.ModelDefaults;
 import com.amsha.core.routing.MultiModelChatModel;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
@@ -23,7 +24,7 @@ public class OmlxProviderFactory implements AgentChatModelProvider {
     @ConfigProperty(name = "AMSHA_OMLX_API_KEY", defaultValue = "not-needed")
     String apiKey;
 
-    @ConfigProperty(name = "AMSHA_OMLX_BASE_URL", defaultValue = "http://127.0.0.1:8000/v1")
+    @ConfigProperty(name = "AMSHA_OMLX_BASE_URL", defaultValue = ModelDefaults.DEFAULT_OMLX_BASE_URL)
     String baseUrl;
 
     @ConfigProperty(name = "AMSHA_OMLX_MODEL")
@@ -31,7 +32,7 @@ public class OmlxProviderFactory implements AgentChatModelProvider {
 
     @Override
     public String providerName() {
-        return "omlx";
+        return ModelDefaults.PROVIDER_OMLX;
     }
 
     @Override

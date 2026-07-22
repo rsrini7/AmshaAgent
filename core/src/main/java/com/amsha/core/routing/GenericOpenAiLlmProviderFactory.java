@@ -17,7 +17,7 @@ public class GenericOpenAiLlmProviderFactory implements RoutingChatModelProvider
 
     @Override
     public String providerId() {
-        return "generic-openai";
+        return ModelDefaults.PROVIDER_GENERIC_OPENAI;
     }
 
     @Override

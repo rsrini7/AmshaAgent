@@ -17,7 +17,7 @@ public class OpenRouterLlmProviderFactory implements RoutingChatModelProvider {
 
     @Override
     public String providerId() {
-        return "openrouter";
+        return ModelDefaults.PROVIDER_OPENROUTER;
     }
 
     @Override

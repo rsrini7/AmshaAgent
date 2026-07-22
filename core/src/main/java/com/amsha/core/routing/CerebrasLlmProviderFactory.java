@@ -15,7 +15,7 @@ public class CerebrasLlmProviderFactory implements RoutingChatModelProvider {
 
     @Override
     public String providerId() {
-        return "cerebras";
+        return ModelDefaults.PROVIDER_CEREBRAS;
     }
 
     @Override

@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Optional;
 
 import com.amsha.core.routing.ChatModelFactory;
+import com.amsha.core.routing.ModelDefaults;
 import com.amsha.core.routing.MultiModelChatModel;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
@@ -22,15 +23,15 @@ public class GroqProviderFactory implements AgentChatModelProvider {
     @ConfigProperty(name = "AMSHA_GROQ_API_KEY")
     Optional<String> apiKey;
 
-    @ConfigProperty(name = "AMSHA_GROQ_BASE_URL", defaultValue = "https://api.groq.com/openai/v1")
+    @ConfigProperty(name = "AMSHA_GROQ_BASE_URL", defaultValue = ModelDefaults.DEFAULT_GROQ_BASE_URL)
     String baseUrl;
 
-    @ConfigProperty(name = "AMSHA_GROQ_MODEL", defaultValue = "meta-llama/llama-4-scout-17b-16e-instruct")
+    @ConfigProperty(name = "AMSHA_GROQ_MODEL", defaultValue = ModelDefaults.DEFAULT_GROQ_MODEL)
     String modelName;
 
     @Override
     public String providerName() {
-        return "groq";
+        return ModelDefaults.PROVIDER_GROQ;
     }
 
     @Override

@@ -34,10 +34,12 @@ public class IntentDetectorModelProducer {
     String structuredOutputMode;
 
     // Fallback safety-net config (Ollama) — used when all infinite-loop slots are exhausted
-    @ConfigProperty(name = "quarkus.langchain4j.ollama.base-url", defaultValue = "http://localhost:11434")
+    @ConfigProperty(name = "quarkus.langchain4j.ollama.base-url", defaultValue = ModelDefaults.DEFAULT_OLLAMA_BASE_URL)
     String ollamaBaseUrl;
 
-    @ConfigProperty(name = "amsha.routing.intent-classifier.ollama-model", defaultValue = "mistral-small:latest")
+    @ConfigProperty(
+            name = "amsha.routing.intent-classifier.ollama-model",
+            defaultValue = ModelDefaults.DEFAULT_OLLAMA_MODEL)
     String ollamaModelId;
 
     @Inject

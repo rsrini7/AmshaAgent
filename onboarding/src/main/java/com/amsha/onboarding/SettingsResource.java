@@ -25,6 +25,7 @@ import com.amsha.core.api.dto.AmshaErrorResponse;
 import com.amsha.core.audit.AuditService;
 import com.amsha.core.audit.SecurityEventType;
 import com.amsha.core.event.DomainEventBus;
+import com.amsha.core.routing.ModelDefaults;
 import com.amsha.core.routing.provider.NetworkProfilePolicy;
 import com.amsha.core.security.SecretVault;
 import com.amsha.core.security.VaultConstants;
@@ -185,7 +186,7 @@ public class SettingsResource {
         OnboardingDraftDto draft = coordinator.getOrCreateFirstRunDraft(owner);
         String defaultModel = req.model() != null && !req.model().isBlank()
                 ? req.model()
-                : ("groq".equals(req.provider()) ? "meta-llama/llama-4-scout-17b-16e-instruct" : "gpt-4o-mini");
+                : ModelDefaults.defaultModelForProvider(req.provider());
 
         // Persist the credential at system scope (no workspace context on this REST path).
         // Mirrors activateLlmSettings, which the runtime reads under vault-priority.

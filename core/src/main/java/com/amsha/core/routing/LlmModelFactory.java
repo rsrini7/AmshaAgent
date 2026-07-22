@@ -116,20 +116,20 @@ public class LlmModelFactory {
     }
 
     private static final Map<String, String> URL_PROVIDER_MAP = Map.of(
-            "openai.com", "openai",
-            "groq.com", "groq",
-            "nvidia.com", "nvidia",
-            "cerebras.ai", "cerebras",
-            "googleapis.com", "gemini",
-            "localhost:11434", "ollama",
-            "localhost:9000", "llamacpp");
+            "openai.com", ModelDefaults.PROVIDER_OPENAI,
+            "groq.com", ModelDefaults.PROVIDER_GROQ,
+            "nvidia.com", ModelDefaults.PROVIDER_NVIDIA,
+            "cerebras.ai", ModelDefaults.PROVIDER_CEREBRAS,
+            "googleapis.com", ModelDefaults.PROVIDER_GEMINI,
+            "localhost:11434", ModelDefaults.PROVIDER_OLLAMA,
+            "localhost:9000", ModelDefaults.PROVIDER_LLAMACPP);
 
     public static String inferProviderFromUrl(String baseUrl) {
-        if (baseUrl == null || baseUrl.isBlank()) return "openrouter";
+        if (baseUrl == null || baseUrl.isBlank()) return ModelDefaults.PROVIDER_OPENROUTER;
         return URL_PROVIDER_MAP.entrySet().stream()
                 .filter(entry -> baseUrl.contains(entry.getKey()))
                 .map(Map.Entry::getValue)
                 .findFirst()
-                .orElse("openrouter");
+                .orElse(ModelDefaults.PROVIDER_OPENROUTER);
     }
 }

@@ -7,7 +7,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
-import java.security.SecureRandom;
 import java.util.Base64;
 import java.util.Set;
 import java.util.regex.Matcher;
@@ -67,9 +66,8 @@ public class EnvConfigInitializer {
         }
     }
 
-    public static void validateAndAutoFixSecurityKeys(Path binaryDir) {
+    public static void validateSecurityKeys(Path binaryDir) {
         Path envFile = binaryDir.resolve(".env");
-        boolean anyFixed = false;
         for (String key : BASE64_KEYS) {
             String value = System.getProperty(key, System.getenv(key));
             if (value == null || value.isBlank()) continue;
@@ -78,41 +76,45 @@ public class EnvConfigInitializer {
                 byte[] decoded = Base64.getDecoder().decode(value);
                 valid = decoded.length >= 16;
             } catch (IllegalArgumentException e) {
-                log.warnf("Invalid Base64 for key %s, will regenerate: %s", key, LogUtil.rootMessage(e));
+                log.warnf("Invalid Base64 for key %s: %s", key, LogUtil.rootMessage(e));
             }
             if (!valid) {
-                try {
-                    String generated = Base64.getEncoder()
-                            .encodeToString(SecureRandom.getInstanceStrong().generateSeed(32));
-                    System.err.println("[Amsha Agent] ⚠️  " + key + " invalid Base64 - regenerating.");
-                    patchEnvFile(envFile, key, generated, PatchMode.UPDATE);
-                    System.setProperty(key, generated);
-                    anyFixed = true;
-                } catch (Exception e) {
-                    System.err.println(
-                            "[Amsha Agent] ❌ Failed to generate security key for " + key + ": " + e.getMessage());
-                }
+                System.err.println();
+                System.err.println("[Amsha Agent] ❌ INVALID SECURITY KEY");
+                System.err.println("  Key: " + key);
+                System.err.println("  Reason: Invalid Base64 value (too short or malformed)");
+                System.err.println("  Fix: Generate a new key and update your .env manually:");
+                System.err.println("    openssl rand -base64 32");
+                System.err.println("  Then set: " + key + "=<generated value>");
+                System.err.println("  File: " + envFile.toAbsolutePath());
+                System.err.println();
             }
         }
-        if (anyFixed) loadDotEnv(binaryDir);
     }
 
-    public static void validateAndAutoFixEmbeddingConfig(Path binaryDir) {
+    public static void validateEmbeddingConfig(Path binaryDir) {
         Path envFile = binaryDir.resolve(".env");
         String provider = System.getProperty("AMSHA_EMBED_PROVIDER", System.getenv("AMSHA_EMBED_PROVIDER"));
         String baseUrl = System.getProperty("AMSHA_EMBED_BASE_URL", System.getenv("AMSHA_EMBED_BASE_URL"));
 
         if (baseUrl != null && baseUrl.contains("jina.ai") && !"jina".equalsIgnoreCase(provider)) {
-            System.err.println("[Amsha Agent] ℹ️  Embedding provider mismatch - auto-fixing to 'jina'.");
-            patchEnvFile(envFile, "AMSHA_EMBED_PROVIDER", "jina", PatchMode.FORCE);
-            System.setProperty("AMSHA_EMBED_PROVIDER", "jina");
+            System.err.println();
+            System.err.println("[Amsha Agent] ⚠️  EMBEDDING CONFIG MISMATCH");
+            System.err.println(
+                    "  Issue: AMSHA_EMBED_BASE_URL points to jina.ai but AMSHA_EMBED_PROVIDER is '" + provider + "'");
+            System.err.println("  Fix: Set AMSHA_EMBED_PROVIDER=jina in your .env");
+            System.err.println("  File: " + envFile.toAbsolutePath());
+            System.err.println();
         }
 
         if ("ollama".equalsIgnoreCase(provider) && (baseUrl == null || baseUrl.contains("jina.ai"))) {
-            String defaultOllamaUrl = "http://localhost:11434";
-            System.err.println("[Amsha Agent] ℹ️  Ollama embedding URL missing - auto-setting to: " + defaultOllamaUrl);
-            patchEnvFile(envFile, "AMSHA_EMBED_BASE_URL", defaultOllamaUrl, PatchMode.UPDATE);
-            System.setProperty("AMSHA_EMBED_BASE_URL", defaultOllamaUrl);
+            System.err.println();
+            System.err.println("[Amsha Agent] ⚠️  EMBEDDING CONFIG INCOMPLETE");
+            System.err.println(
+                    "  Issue: Ollama embedding provider selected but AMSHA_EMBED_BASE_URL is missing or incorrect");
+            System.err.println("  Fix: Set AMSHA_EMBED_BASE_URL=http://localhost:11434 in your .env");
+            System.err.println("  File: " + envFile.toAbsolutePath());
+            System.err.println();
         }
     }
 

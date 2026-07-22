@@ -329,7 +329,7 @@ public final class ChatModelFactory {
 
     /** Builds a Gemini ChatModel from a resolved credential. */
     public static ChatModel createGemini(String baseUrl, String apiKey, String model, AgentLlmConfig config) {
-        String modelName = (model == null || model.isBlank()) ? "gemini-2.5-flash-lite" : model;
+        String modelName = (model == null || model.isBlank()) ? ModelDefaults.DEFAULT_GEMINI_MODEL : model;
         AiGeminiChatLanguageModel.Builder builder = AiGeminiChatLanguageModel.builder()
                 .key(apiKey)
                 .modelId(modelName)
@@ -347,7 +347,7 @@ public final class ChatModelFactory {
 
     /** Builds an Anthropic/Claude ChatModel from a resolved credential. */
     public static ChatModel createAnthropic(String baseUrl, String apiKey, String model, AgentLlmConfig config) {
-        String modelName = (model == null || model.isBlank()) ? "claude-sonnet-4-5" : model;
+        String modelName = (model == null || model.isBlank()) ? ModelDefaults.DEFAULT_CLAUDE_CODE_MODEL : model;
         AnthropicChatModel.AnthropicChatModelBuilder builder = AnthropicChatModel.builder()
                 .apiKey(apiKey)
                 .modelName(modelName)
@@ -363,8 +363,8 @@ public final class ChatModelFactory {
 
     /** Builds an Ollama ChatModel from a resolved credential. */
     public static ChatModel createOllama(String baseUrl, String model, AgentLlmConfig config) {
-        String url = (baseUrl == null || baseUrl.isBlank()) ? "http://localhost:11434" : baseUrl;
-        String modelName = (model == null || model.isBlank()) ? "mistral-small:latest" : model;
+        String url = (baseUrl == null || baseUrl.isBlank()) ? ModelDefaults.DEFAULT_OLLAMA_BASE_URL : baseUrl;
+        String modelName = (model == null || model.isBlank()) ? ModelDefaults.DEFAULT_OLLAMA_MODEL : model;
         return OllamaChatModel.builder()
                 .baseUrl(url)
                 .modelName(modelName)

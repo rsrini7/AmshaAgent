@@ -11,7 +11,7 @@ public class NvidiaLlmProviderFactory implements RoutingChatModelProvider {
 
     @Override
     public String providerId() {
-        return "nvidia";
+        return ModelDefaults.PROVIDER_NVIDIA;
     }
 
     @Override

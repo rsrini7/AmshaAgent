@@ -15,7 +15,7 @@ public class GroqLlmProviderFactory implements RoutingChatModelProvider {
 
     @Override
     public String providerId() {
-        return "groq";
+        return ModelDefaults.PROVIDER_GROQ;
     }
 
     @Override
