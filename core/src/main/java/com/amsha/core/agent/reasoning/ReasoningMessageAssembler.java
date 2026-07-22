@@ -41,6 +41,7 @@ import org.jboss.logging.Logger;
 public class ReasoningMessageAssembler {
 
     private static final Logger log = Logger.getLogger(ReasoningMessageAssembler.class);
+    private static final int CHITCHAT_CONTEXT_MESSAGES = 2;
 
     private final ChatHistoryAssembler historyAssembler;
     private final ToolRegistry toolRegistry;
@@ -114,6 +115,7 @@ public class ReasoningMessageAssembler {
                 filterHistory(filteredAssembled, isSimpleChitchat, context.isForceFinishRetry());
 
         if (isSimpleChitchat && !isHistoryQuery) {
+            messages.addAll(recentConversationContext(historyToInclude, goal));
             messages.add(UserMessage.userMessage(goal));
         } else {
             messages.addAll(historyToInclude);
@@ -141,6 +143,15 @@ public class ReasoningMessageAssembler {
                 messages.size(), toolSpecifications.size(), sessionId);
 
         return new AssembledMessages(messages, toolSpecifications);
+    }
+
+    private List<ChatMessage> recentConversationContext(List<ChatMessage> history, String goal) {
+        List<ChatMessage> conversation = history.stream()
+                .filter(m -> m instanceof UserMessage || m instanceof AiMessage)
+                .filter(m -> !(m instanceof UserMessage user && Objects.equals(user.singleText(), goal)))
+                .toList();
+        int fromIndex = Math.max(0, conversation.size() - CHITCHAT_CONTEXT_MESSAGES);
+        return conversation.subList(fromIndex, conversation.size());
     }
 
     private String resolveSystemPrompt(

@@ -5,6 +5,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import dev.langchain4j.data.message.AiMessage;
+import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.SystemMessage;
 import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
@@ -29,6 +31,22 @@ import com.amsha.core.tools.search.ToolSearchIndex;
 import org.junit.jupiter.api.Test;
 
 class ReasoningMessageAssemblerTest {
+
+    @Test
+    void assemble_simpleChitchatRetainsPreviousExchangeForPronounResolution() throws Exception {
+        ChatHistoryAssembler historyAssembler = mock(ChatHistoryAssembler.class);
+        when(historyAssembler.assemble("sess-1", "Did Edison cheat him?", Collections.emptyList()))
+                .thenReturn(List.of(
+                        UserMessage.userMessage("Who invented AC current?"),
+                        AiMessage.aiMessage("Nikola Tesla developed the practical polyphase AC system.")));
+        ReasoningMessageAssembler assembler = createAssembler(historyAssembler);
+
+        ReasoningMessageAssembler.AssembledMessages result = assemble(assembler, "Did Edison cheat him?", true);
+
+        assertTrue(containsText(result.messages(), "Who invented AC current?"));
+        assertTrue(containsText(result.messages(), "Nikola Tesla developed"));
+        assertTrue(containsText(result.messages(), "Did Edison cheat him?"));
+    }
 
     @Test
     void assemble_injectsLoopStuckHintForRepeatedIdenticalToolCalls() throws Exception {
@@ -78,6 +96,11 @@ class ReasoningMessageAssemblerTest {
         when(historyAssembler.assemble("sess-1", "goal", Collections.emptyList()))
                 .thenReturn(Collections.emptyList());
 
+        return createAssembler(historyAssembler);
+    }
+
+    private static ReasoningMessageAssembler createAssembler(ChatHistoryAssembler historyAssembler) throws Exception {
+
         AgentTool mockTool = mock(AgentTool.class);
         when(mockTool.name()).thenReturn(ToolCapability.SANDBOX_EXEC.toolName());
         when(mockTool.description()).thenReturn("sandbox exec tool");
@@ -104,12 +127,22 @@ class ReasoningMessageAssemblerTest {
 
     private static ReasoningMessageAssembler.AssembledMessages assemble(
             ReasoningMessageAssembler assembler, List<ReasoningStep> history) {
+        return assemble(assembler, "goal", false, history);
+    }
+
+    private static ReasoningMessageAssembler.AssembledMessages assemble(
+            ReasoningMessageAssembler assembler, String goal, boolean simpleChitchat) {
+        return assemble(assembler, goal, simpleChitchat, Collections.emptyList());
+    }
+
+    private static ReasoningMessageAssembler.AssembledMessages assemble(
+            ReasoningMessageAssembler assembler, String goal, boolean simpleChitchat, List<ReasoningStep> history) {
         AgentExecutionContext context = new AgentExecutionContext(
                 "sess-1",
                 "user-1",
                 "chat-1",
                 "skill:test",
-                "goal",
+                goal,
                 AutonomyLevel.FULL,
                 StructuredOutputMode.NATIVE,
                 10,
@@ -122,13 +155,17 @@ class ReasoningMessageAssemblerTest {
         return assembler.assemble(
                 context,
                 "skill:test",
-                "goal",
+                goal,
                 history,
                 "system prompt",
                 Set.of(ToolCapability.SANDBOX_EXEC.toolName()),
                 false,
-                false,
+                simpleChitchat,
                 false);
+    }
+
+    private static boolean containsText(List<ChatMessage> messages, String expected) {
+        return messages.stream().anyMatch(message -> message.toString().contains(expected));
     }
 
     private static boolean containsHint(ReasoningMessageAssembler.AssembledMessages result, String marker) {
