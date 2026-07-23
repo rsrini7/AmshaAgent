@@ -4,6 +4,7 @@
 #   bash run_all_validations.sh                  → run all validators
 #   bash run_all_validations.sh --reflex         → reflex commands only (fast, ~30s)
 #   bash run_all_validations.sh --skills         → skill CRUD + errors (~90s)
+#   bash run_all_validations.sh --skills-admission → SkillsJar admission API (fast)
 #   bash run_all_validations.sh --memory         → archival + core + Arabic (~3min)
 #   bash run_all_validations.sh --web            → web search + fetch + SSRF (~2min)
 #   bash run_all_validations.sh --roles          → secondary agents + aliases (~4min)
@@ -20,6 +21,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 REFLEX_SCRIPT="$SCRIPT_DIR/validate_reflex.sh"
 SKILL_SCRIPT="$SCRIPT_DIR/validate_skill.sh"
+SKILLS_ADMISSION_SCRIPT="$SCRIPT_DIR/validate_skillsjar_admission.sh"
 MCP_SCRIPT="$SCRIPT_DIR/validate_mcp.sh"
 MEMORY_SCRIPT="$SCRIPT_DIR/validate_memory.sh"
 WEB_SCRIPT="$SCRIPT_DIR/validate_web.sh"
@@ -67,6 +69,7 @@ for arg in "$@"; do
   case $arg in
     --reflex) RUN_ALL=false; RUN_REFLEX=true ;;
     --skills) RUN_ALL=false; RUN_SKILLS=true ;;
+    --skills-admission) RUN_ALL=false; RUN_SKILLS_ADMISSION=true ;;
     --mcp)    RUN_ALL=false; RUN_MCP=true ;;
     --memory) RUN_ALL=false; RUN_MEMORY=true ;;
     --web)    RUN_ALL=false; RUN_WEB=true ;;
@@ -82,12 +85,13 @@ for arg in "$@"; do
     --budget)       RUN_ALL=false; RUN_BUDGET=true ;;
     --sse-settings) RUN_ALL=false; RUN_SSE_SETTINGS=true ;;
     --onboarding)   RUN_ALL=false; RUN_ONBOARDING=true ;;
-    --fast)   FAST=true; RUN_ALL=false; RUN_REFLEX=true; RUN_SKILLS=true; RUN_ADMIN=true; RUN_AUTH_SESSION=true; RUN_IDENTITY=true; RUN_PII_AUDIT=true; RUN_SELF_EVOLVE=true; RUN_SSE_SETTINGS=true; RUN_ONBOARDING=true ;;
+    --fast)   FAST=true; RUN_ALL=false; RUN_REFLEX=true; RUN_SKILLS=true; RUN_SKILLS_ADMISSION=true; RUN_ADMIN=true; RUN_AUTH_SESSION=true; RUN_IDENTITY=true; RUN_PII_AUDIT=true; RUN_SELF_EVOLVE=true; RUN_SSE_SETTINGS=true; RUN_ONBOARDING=true ;;
     --llm)    LLM=true; RUN_ALL=false; RUN_MEMORY=true; RUN_WEB=true; RUN_ROLES=true; RUN_CRON=true; RUN_RAG=true; RUN_BUDGET=true; RUN_HITL=true ;;
     --list)
       echo "Available validators:"
       echo "  --reflex       validate_reflex.sh             (zero-token, ~30s)"
       echo "  --skills       validate_skill.sh              (CRUD + errors, ~90s)"
+      echo "  --skills-admission validate_skillsjar_admission.sh (admission/quarantine, fast)"
       echo "  --mcp          validate_mcp.sh                (MCP protocol, ~2min)"
       echo "  --memory       validate_memory.sh             (archival + core, ~3min)"
       echo "  --web          validate_web.sh                (search + fetch, ~2min)"
@@ -103,14 +107,14 @@ for arg in "$@"; do
       echo "  --sse-settings validate_sse_settings.sh        (UI SSE streams + ws-token + settings CRUD, fast)"
       echo "  --onboarding  validate_onboarding.sh         (P110 draft/saga + provider-catalog + workspace filter, fast)"
       echo "  --cron         validate_cron.sh               (programmatic cron resource REST APIs, needs LLM)"
-      echo "  --fast         reflex + skills + admin + auth-session + identity + pii-audit + self-evolve + sse-settings"
+      echo "  --fast         reflex + skills + SkillsJar admission + admin + auth-session + identity + pii-audit + self-evolve + sse-settings"
       echo "  --llm          memory + web + roles + cron + rag + budget + hitl"
       echo "  (no args)      run ALL validators"
       exit 0
       ;;
     --help)
       echo "Usage: bash run_all_validations.sh [options]"
-      echo "Options: --reflex --skills --mcp --memory --web --roles --admin --auth-session --identity --pii-audit --self-evolve --hitl --rag --budget --sse-settings --onboarding --cron --fast --llm --list --help"
+      echo "Options: --reflex --skills --skills-admission --mcp --memory --web --roles --admin --auth-session --identity --pii-audit --self-evolve --hitl --rag --budget --sse-settings --onboarding --cron --fast --llm --list --help"
       exit 0
       ;;
   esac
@@ -148,6 +152,10 @@ fi
 
 if [ "$RUN_SKILLS" = true ] || [ "$RUN_ALL" = true ]; then
   run_validator "SKILLS CRUD" "$SKILL_SCRIPT"
+fi
+
+if [ "$RUN_SKILLS_ADMISSION" = true ] || [ "$RUN_ALL" = true ]; then
+  run_validator "SKILLSJAR ADMISSION" "$SKILLS_ADMISSION_SCRIPT"
 fi
 
 if [ "$RUN_MCP" = true ] || [ "$RUN_ALL" = true ]; then

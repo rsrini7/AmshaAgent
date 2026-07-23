@@ -64,6 +64,17 @@ public class SkillResource {
                 .collect(Collectors.toList());
     }
 
+    @GET
+    @Path("/admission")
+    @Operation(summary = "List active and quarantined skill admission results")
+    public SkillAdmissionResponse admissionStatus() {
+        List<SkillResponse> active = listSkills();
+        List<QuarantinedSkillResponse> quarantined = skillLoader.quarantinedSkills().stream()
+                .map(skill -> new QuarantinedSkillResponse(skill.name(), skill.source(), skill.reasons()))
+                .toList();
+        return new SkillAdmissionResponse(active, quarantined);
+    }
+
     @POST
     @Consumes(MediaType.TEXT_PLAIN)
     @Operation(summary = "Create or update a skill from YAML definition")
@@ -139,4 +150,8 @@ public class SkillResource {
             String id, String name, String description, String source, List<String> triggerPatterns) {}
 
     public record MessageResponse(String message) {}
+
+    public record QuarantinedSkillResponse(String name, String source, List<String> reasons) {}
+
+    public record SkillAdmissionResponse(List<SkillResponse> active, List<QuarantinedSkillResponse> quarantined) {}
 }

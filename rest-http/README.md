@@ -430,6 +430,7 @@ needed). Run individually or via the master runner `run_all_validations.sh`.
 |---|---|---|---|
 | `--reflex` | `validate_reflex.sh` | Reflex commands via goal text | zero-token |
 | `--skills` | `validate_skill.sh` | Skill CRUD, routing, errors | low |
+| `--skills-admission` | `validate_skillsjar_admission.sh` | SkillsJar admission, quarantine schema, refresh stability | zero-token |
 | `--mcp` | `validate_mcp.sh` | MCP JSON-RPC protocol + connect | low |
 | `--memory` | `validate_memory.sh` | Archival/core memory + Arabic search (HITL-aware) | LLM |
 | `--web` | `validate_web.sh` | Web search/fetch/SSRF blocks (HITL-aware) | LLM |

@@ -1,41 +1,66 @@
 package com.amsha.core.skill;
 
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
-import jakarta.inject.Inject;
+import java.util.List;
+import java.util.Optional;
 
 import com.amsha.core.agent.role.CapabilityRegistry;
+import com.amsha.core.agent.role.ToolCapability;
 
 import org.junit.jupiter.api.Test;
 
-import io.quarkus.test.junit.QuarkusTest;
-
-/**
- * Verifies that the default {@code amsha.tools.host-exec.skills=jdb-debugger}
- * config results in the {@code skill:jdb-debugger} role receiving the
- * {@code host_exec} tool capability at startup, while unrelated skill roles
- * do not.
- */
-@QuarkusTest
 class HostExecSkillGrantTest {
 
-    @Inject
-    CapabilityRegistry capabilityRegistry;
-
     @Test
-    void jdbDebuggerSkillReceivesHostExec() {
-        assertTrue(
-                capabilityRegistry.getSupplementalTools("skill:jdb-debugger").contains("host_exec"),
-                "skill:jdb-debugger should have host_exec granted via amsha.tools.host-exec.skills");
+    void admittedSkillsJarReceivesConfiguredHostExecGrant() {
+        CapabilityRegistry capabilities = mock(CapabilityRegistry.class);
+        SkillRegistry skills = mock(SkillRegistry.class);
+        CompiledSkillEntry admitted = mock(CompiledSkillEntry.class);
+        when(admitted.source()).thenReturn("skillsjars");
+        when(skills.findByName("jdb-debugger")).thenReturn(Optional.of(admitted));
+        HostExecSkillGrant grant = grant(capabilities, skills, List.of("jdb-debugger"));
+
+        grant.onStart(null);
+
+        verify(capabilities).grant("skill:jdb-debugger", ToolCapability.HOST_EXEC.toolName());
     }
 
     @Test
-    void unrelatedSkillDoesNotReceiveHostExec() {
-        assertFalse(
-                capabilityRegistry
-                        .getSupplementalTools("skill:some-other-skill")
-                        .contains("host_exec"),
-                "skill:some-other-skill should NOT have host_exec granted");
+    void absentOrQuarantinedSkillDoesNotReceiveConfiguredGrant() {
+        CapabilityRegistry capabilities = mock(CapabilityRegistry.class);
+        SkillRegistry skills = mock(SkillRegistry.class);
+        when(skills.findByName("algorithmic-art")).thenReturn(Optional.empty());
+        HostExecSkillGrant grant = grant(capabilities, skills, List.of("algorithmic-art"));
+
+        grant.onStart(null);
+
+        verify(capabilities, never()).grant("skill:algorithmic-art", ToolCapability.HOST_EXEC.toolName());
+    }
+
+    @Test
+    void nonSkillsJarSkillDoesNotReceiveConfiguredGrant() {
+        CapabilityRegistry capabilities = mock(CapabilityRegistry.class);
+        SkillRegistry skills = mock(SkillRegistry.class);
+        CompiledSkillEntry databaseSkill = mock(CompiledSkillEntry.class);
+        when(databaseSkill.source()).thenReturn("database");
+        when(skills.findByName("jdb-debugger")).thenReturn(Optional.of(databaseSkill));
+        HostExecSkillGrant grant = grant(capabilities, skills, List.of("jdb-debugger"));
+
+        grant.onStart(null);
+
+        verify(capabilities, never()).grant("skill:jdb-debugger", ToolCapability.HOST_EXEC.toolName());
+    }
+
+    private static HostExecSkillGrant grant(
+            CapabilityRegistry capabilities, SkillRegistry skills, List<String> configuredSkills) {
+        HostExecSkillGrant grant = new HostExecSkillGrant();
+        grant.capabilityRegistry = capabilities;
+        grant.skillRegistry = skills;
+        grant.hostExecSkills = configuredSkills;
+        return grant;
     }
 }

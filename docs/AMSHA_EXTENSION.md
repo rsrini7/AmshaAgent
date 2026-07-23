@@ -807,7 +807,7 @@ public class S3SkillProvider implements SkillProvider {
 
 Lower priority = processed first, wins on name collision. Use values between 10 and 100 for custom providers.
 
-When adding or removing a SkillsJar dependency in `app/pom.xml`, run `python3 ./verify_skillsjar_index.py --fix` and commit the resulting `app/src/main/resources/META-INF/skills/skills-index.txt`. Native Image cannot enumerate `META-INF/skills/` at runtime, so its exact `SKILL.md` path must be indexed and `META-INF/skills/**` must remain included as a native resource.
+When adding or removing a SkillsJar dependency in `app/pom.xml`, run `python3 ./verify_skillsjar_index.py --fix` and commit the resulting `app/src/main/resources/META-INF/skills/skills-index.txt`. Native Image cannot enumerate `META-INF/skills/` at runtime, so its exact `SKILL.md` path must be indexed and `META-INF/skills/**` must remain included as a native resource. See [SkillsJar Admission and Quarantine](SKILLSJAR_ADMISSION.md) for compatibility requirements, rejection rules, package structure, and runtime inspection.
 
 ---
 

@@ -2,6 +2,7 @@
 """Validate or regenerate the native SkillsJar resource index."""
 
 import argparse
+import re
 import sys
 import xml.etree.ElementTree as ET
 import zipfile
@@ -15,6 +16,16 @@ M2_REPOSITORY = Path.home() / ".m2" / "repository"
 INDEX_HEADER = (
     "# SkillsJars resources that must be loaded explicitly in GraalVM native images.\n"
     "# Native Image cannot enumerate META-INF/skills directory resources at runtime.\n"
+)
+UNSUPPORTED_AGENT_TOOL = re.compile(
+    r"(?:using|use|with)\s+(?:the\s+)?`?(?:read|write|edit|glob|grep)`?\s+tool|"
+    r"\b(?:read|write|edit|glob|grep)\s*\([^)]*\)",
+    re.IGNORECASE,
+)
+ARTIFACT_OUTPUT = re.compile(
+    r"\b(?:create|generate|write|save|output|produce)\b.{0,80}"
+    r"\b(?:file|html|javascript|artifact|image|pdf|document|viewer)\b",
+    re.IGNORECASE | re.DOTALL,
 )
 
 
@@ -48,16 +59,45 @@ def skillsjar_dependencies():
     return dependencies
 
 
-def skill_paths_in_jar(artifact, version):
+def jar_path(artifact, version):
     jar = M2_REPOSITORY / "com" / "skillsjars" / artifact / version / f"{artifact}-{version}.jar"
     if not jar.is_file():
         raise FileNotFoundError(f"SkillsJar is not in the local Maven repository: {jar}")
+    return jar
+
+
+def skill_paths_in_jar(artifact, version):
+    jar = jar_path(artifact, version)
     with zipfile.ZipFile(jar) as archive:
         return {
             name.removeprefix("META-INF/skills/")
             for name in archive.namelist()
             if name.startswith("META-INF/skills/") and name.endswith("/SKILL.md")
         }
+
+
+def quality_rejections(artifact, version):
+    jar = jar_path(artifact, version)
+    rejected = []
+    with zipfile.ZipFile(jar) as archive:
+        names = set(archive.namelist())
+        skill_paths = sorted(
+            name for name in names if name.startswith("META-INF/skills/") and name.endswith("/SKILL.md")
+        )
+        for skill_path in skill_paths:
+            content = archive.read(skill_path).decode("utf-8")
+            skill_root = skill_path.removesuffix("SKILL.md")
+            has_scripts = any(
+                name.startswith(f"{skill_root}scripts/") and not name.endswith("/") for name in names
+            )
+            reasons = []
+            if UNSUPPORTED_AGENT_TOOL.search(content):
+                reasons.append("requires unsupported agent tools (Read/Write/Edit/Glob/Grep)")
+            if ARTIFACT_OUTPUT.search(content) and not has_scripts:
+                reasons.append("artifact-producing workflow has no one-shot scripts/ entry point")
+            if reasons:
+                rejected.append((skill_path, reasons))
+    return rejected
 
 
 def indexed_paths():
@@ -84,6 +124,13 @@ def main():
         expected = set()
         for artifact, version in skillsjar_dependencies():
             expected.update(skill_paths_in_jar(artifact, version))
+            rejected = quality_rejections(artifact, version)
+            if rejected:
+                for path, reasons in rejected:
+                    print(f"REJECTED SkillsJar {artifact}:{version} ({path}):", file=sys.stderr)
+                    for reason in reasons:
+                        print(f"  - {reason}", file=sys.stderr)
+                return 3
     except (ET.ParseError, ValueError, FileNotFoundError, zipfile.BadZipFile) as error:
         print(f"ERROR: {error}", file=sys.stderr)
         return 2

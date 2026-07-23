@@ -42,8 +42,10 @@ import com.amsha.core.security.http.GovernedTransportService;
 import com.amsha.core.security.http.OutboundApprovalReceipt;
 import com.amsha.core.security.http.OutboundHttpException;
 import com.amsha.core.skill.CompiledSkillEntry;
+import com.amsha.core.skill.SkillAdmissionEvaluator;
 import com.amsha.core.skill.SkillDefinition;
 import com.amsha.core.skill.SkillFrontmatter;
+import com.amsha.core.skill.SkillLoader;
 import com.amsha.core.skill.SkillPromptParams;
 import com.amsha.core.tools.GithubTool;
 import com.amsha.core.tools.ManageScheduleTool;
@@ -89,6 +91,8 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             ScheduleTaskTool.class,
             ManageScheduleTool.class,
             SkillDefinition.class,
+            SkillAdmissionEvaluator.AdmissionDecision.class,
+            SkillLoader.QuarantinedSkill.class,
             SkillFrontmatter.class,
             CompiledSkillEntry.class,
             SkillPromptParams.class,

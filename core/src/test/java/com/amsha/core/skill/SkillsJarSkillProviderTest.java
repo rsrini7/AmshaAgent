@@ -4,10 +4,13 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.lang.reflect.Method;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.jar.JarFile;
 import java.util.jar.JarOutputStream;
@@ -19,6 +22,28 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 class SkillsJarSkillProviderTest {
+
+    @Test
+    void load_emptyAuthoritativeIndexIsStillAuthoritative() throws Exception {
+        SkillsJarSkillProvider provider = new SkillsJarSkillProvider();
+        Method loadFromIndex = SkillsJarSkillProvider.class.getDeclaredMethod("loadFromIndex", List.class);
+        loadFromIndex.setAccessible(true);
+        ClassLoader original = Thread.currentThread().getContextClassLoader();
+        Thread.currentThread().setContextClassLoader(new ClassLoader(original) {
+            @Override
+            public InputStream getResourceAsStream(String name) {
+                if ("META-INF/skills/skills-index.txt".equals(name)) {
+                    return new ByteArrayInputStream("# intentionally empty\n".getBytes());
+                }
+                return super.getResourceAsStream(name);
+            }
+        });
+        try {
+            assertTrue((boolean) loadFromIndex.invoke(provider, new ArrayList<SkillDefinition>()));
+        } finally {
+            Thread.currentThread().setContextClassLoader(original);
+        }
+    }
 
     private Path tempHome;
     private String originalUserHome;

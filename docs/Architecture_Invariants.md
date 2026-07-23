@@ -1964,6 +1964,8 @@ Before adding a SkillsJar dependency to `app/pom.xml`, the skill's `SKILL.md` in
   - Does it need network access beyond the sandbox?
   - Are all CLI dependencies installable in the `Dockerfile.toolrunner`?
   - Has its exact `SKILL.md` path been added to `app/src/main/resources/META-INF/skills/skills-index.txt` for the native image?
+- **Automated admission**: `python3 ./verify_skillsjar_index.py` rejects indexed dependencies that require unsupported agent tools or advertise artifact generation without a one-shot `scripts/` entry point. Runtime loading applies the same compatibility rules and quarantines rejected skills before role registration or capability grants. Inspect runtime results through `GET /skills/admission`.
+- **No implicit execution capability**: SkillsJars that declare no valid tool capability remain prompt-only. The loader MUST NOT infer or grant `host_exec` merely because the source is a SkillsJar.
 - **Auto-heal loop prevention**: If a skill's CLI tool fails with an authentication or configuration error (not a code error), `ExecutionFailureRecoveryService` should NOT trigger Shiva auto-heal — the error is environmental, not fixable by code changes.
 
 **Why**: The `browser-use` skill (removed in P105) appeared to be a local CLI tool but actually required a paid Browser Use Cloud API key. Without it, the LLM entered an infinite Shiva auto-heal loop (`heal:shiva:...:heal:shiva:...`) that grew session IDs until macOS rejected the workspace directory path with `File name too long`.
