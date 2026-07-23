@@ -168,6 +168,16 @@ fi
 echo "── FLOW 2: Settings Connection Network Profile ──"
 info "NET-1: PATCH /settings/provider opens draft with connection"
 CODE=$(req PATCH "$VALID_KEY" "$R/settings/provider" '{"provider":"ollama","model":"llama3"}'); exp "$CODE" "200"
+info "NET-1b: create active draft and stage a connection selection"
+CODE=$(req POST "$VALID_KEY" "$R/onboarding/drafts")
+NET_DRAFT_ID=$(json draftId)
+if [ "$CODE" = "200" ] && [ -n "$NET_DRAFT_ID" ]; then
+  CONNECTION_SELECTION='{"selectedNonSecretIds":["{\"connections\":[{\"provider\":\"ollama\",\"modelId\":\"llama3\",\"contextWindow\":8192,\"structuredOutputMode\":\"NATIVE\",\"capabilities\":[\"tool-calling\"]}],\"concernRoutes\":{\"agentLoop\":[0],\"compaction\":[0],\"classifier\":[0],\"embedding\":[0]}}"]}'
+  CODE=$(req PUT "$VALID_KEY" "$R/onboarding/drafts/$NET_DRAFT_ID/steps/connections" "$CONNECTION_SELECTION")
+  exp "$CODE" "200"
+else
+  fail "$CODE (active draft was not created)"
+fi
 info "NET-2: PATCH /settings/connection-network-profile persists valid profile"
 CODE=$(req PATCH "$VALID_KEY" "$R/settings/connection-network-profile" '{"connectionIndex":0,"networkProfileJson":"{\"egressMode\":\"ALLOW_ALL\",\"tlsTrustMode\":\"SYSTEM\"}"}')
 if [ "$CODE" = "200" ] && json_assert "d.get('updated') is True and bool(d.get('draftId'))"; then

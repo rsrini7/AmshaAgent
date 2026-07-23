@@ -63,7 +63,15 @@ echo ""
 echo "── FLOW A: First-Owner Bootstrap Claim ──"
 
 info "A1: bootstrap status (fresh)"
-CODE=$(req GET "" "$R/onboarding/bootstrap/status"); exp "$CODE" "200"
+CODE=$(req GET "" "$R/onboarding/bootstrap/status")
+ST=$(json status)
+if [ "$CODE" = "200" ] && [ "$ST" = "UNCLAIMED" ]; then
+  ok "$CODE ($ST)"
+else
+  fail "$CODE ($ST; requires a fresh UNCLAIMED database)"
+  echo "Identity validation stopped: bootstrap ownership tests are destructive and require a fresh database."
+  exit 1
+fi
 
 info "A2: claim first owner"
 HTTP=$(raw -X POST "$R/onboarding/bootstrap/claim")
@@ -77,6 +85,8 @@ if [ "$CODE" = "200" ] && [ -n "$OWNER_KEY" ] && [ -n "$OWNER_ID" ]; then
   ok "$CODE (owner=$OWNER_ID ws=$WS_ID)"
 else
   fail "$CODE (key=${OWNER_KEY:-MISSING})"
+  echo "Identity validation stopped: first-owner claim did not issue a usable credential."
+  exit 1
 fi
 
 info "A3: bootstrap status after claim"
@@ -86,16 +96,23 @@ if [ "$CODE" = "200" ] && { [ "$ST" = "CLAIMED" ] || [ "$ST" = "CREDENTIAL_ISSUE
   ok "$CODE ($ST)"; else fail "$CODE ($ST)"; fi
 
 info "A4: re-claim (CREDENTIAL_ISSUED) → 200 recovery re-issue"
-CODE=$(req POST "" "$R/onboarding/bootstrap/claim"); exp "$CODE" "200"
-# NOTE: the recovery re-issue returns a fresh key, but we keep the A2 owner key
-# for subsequent owner-scoped calls (it carries the OWNER role); the re-issued
-# key is only exercised for bootstrap-state coverage, not role-gated flows.
+HTTP=$(raw -X POST "$R/onboarding/bootstrap/claim")
+CODE=$(echo "$HTTP" | tail -n1)
+RECOVERED_KEY=$(grep -i 'set-cookie' /tmp/headers | grep -i 'AMSHA_API_KEY=' \
+                | sed -E 's/.*AMSHA_API_KEY=([^; ]+).*/\1/' | head -n1)
+if [ "$CODE" = "200" ] && [ -n "$RECOVERED_KEY" ]; then
+  OWNER_KEY="$RECOVERED_KEY"
+  ok "$CODE (credential re-issued)"
+else
+  fail "$CODE (re-issued key missing)"
+  exit 1
+fi
 
 info "A5: confirm claim"
-CODE=$(req POST "" "$R/onboarding/bootstrap/confirm" '{"expectedRevision":1}'); exp "$CODE" "200"
+CODE=$(req POST "$OWNER_KEY" "$R/onboarding/bootstrap/confirm" '{}'); exp "$CODE" "200"
 
 info "A6: confirm again → 400 (state no longer CREDENTIAL_ISSUED)"
-CODE=$(req POST "" "$R/onboarding/bootstrap/confirm" '{"expectedRevision":1}'); exp "$CODE" "400"
+CODE=$(req POST "$OWNER_KEY" "$R/onboarding/bootstrap/confirm" '{}'); exp "$CODE" "400"
 
 echo ""
 

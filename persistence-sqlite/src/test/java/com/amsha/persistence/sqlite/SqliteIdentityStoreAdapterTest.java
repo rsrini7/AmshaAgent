@@ -23,6 +23,7 @@ import com.amsha.persistence.api.WebSessionStorePort;
 import com.amsha.persistence.api.WorkspaceMembershipDto;
 import com.amsha.persistence.sqlite.testutil.FlywayEnabledTestProfile;
 
+import org.jdbi.v3.core.Jdbi;
 import org.junit.jupiter.api.Test;
 
 import io.quarkus.test.junit.QuarkusTest;
@@ -46,6 +47,30 @@ class SqliteIdentityStoreAdapterTest {
 
     @Inject
     BootstrapStateStorePort bootstrapStateStore;
+
+    @Inject
+    Jdbi jdbi;
+
+    @Test
+    void reserveFirstOwnerCreatesMissingBootstrapStateAtomically() {
+        jdbi.useHandle(handle -> handle.execute("DELETE FROM bootstrap_state"));
+        try {
+            Instant now = Instant.now();
+
+            Optional<Integer> revision = bootstrapStateStore.reserveFirstOwner("owner-fresh", "workspace-fresh", now);
+
+            assertEquals(Optional.of(1), revision);
+            BootstrapStateDto state = bootstrapStateStore.getState().orElseThrow();
+            assertEquals(BootstrapStateDto.STATUS_CLAIMING, state.status());
+            assertEquals("owner-fresh", state.ownerId());
+            assertEquals("workspace-fresh", state.workspaceId());
+            assertTrue(bootstrapStateStore
+                    .reserveFirstOwner("owner-loser", "workspace-loser", now)
+                    .isEmpty());
+        } finally {
+            jdbi.useHandle(handle -> handle.execute("DELETE FROM bootstrap_state"));
+        }
+    }
 
     @Test
     void testIdentityUserOperations() {

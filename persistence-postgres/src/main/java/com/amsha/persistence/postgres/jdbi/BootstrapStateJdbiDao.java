@@ -20,9 +20,14 @@ public interface BootstrapStateJdbiDao {
                     + "ON CONFLICT(id) DO NOTHING")
     void save(@BindMethods BootstrapStateDto state);
 
-    @SqlUpdate("UPDATE bootstrap_state SET status = 'CLAIMING', owner_id = :ownerId, workspace_id = :workspaceId, "
+    @SqlUpdate("INSERT INTO bootstrap_state "
+            + "(id, status, owner_id, workspace_id, credential_digest, issued_at, claimed_at, revision, updated_at) "
+            + "VALUES ('bootstrap', 'CLAIMING', :ownerId, :workspaceId, NULL, NULL, NULL, 1, :reservedAt) "
+            + "ON CONFLICT(id) DO UPDATE SET status = 'CLAIMING', owner_id = :ownerId, "
+            + "workspace_id = :workspaceId, credential_digest = NULL, issued_at = NULL, claimed_at = NULL, "
             + "revision = bootstrap_state.revision + 1, updated_at = :reservedAt "
-            + "WHERE id = 'bootstrap' AND status = 'UNCLAIMED' AND (owner_id IS NULL OR owner_id = '')")
+            + "WHERE bootstrap_state.status = 'UNCLAIMED' "
+            + "AND (bootstrap_state.owner_id IS NULL OR bootstrap_state.owner_id = '')")
     int reserveFirstOwner(
             @Bind("ownerId") String ownerId,
             @Bind("workspaceId") String workspaceId,

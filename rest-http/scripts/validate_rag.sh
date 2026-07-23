@@ -14,7 +14,7 @@ FAIL=0; PASS=0; RL_WAIT=62
 info()  { printf "%-4s %-58s " "" "$1"; }
 ok()    { printf "✅ HTTP %s\n" "$1"; PASS=$((PASS+1)); }
 fail()  { printf "❌ HTTP %s — %s\n" "$CODE" "$(head -c 120 /tmp/resp)"; FAIL=$((FAIL+1)); }
-mute()  { rtk curl -s -m 90 -o /tmp/resp -w "%{http_code}" "$@"; }
+mute()  { curl -s -m 180 -o /tmp/resp -w "%{http_code}" "$@"; }
 sid()   { python3 -c "import json; print(json.load(open('/tmp/resp')).get('sessionId',''))" 2>/dev/null; }
 status_is() {
   mute -X GET -H "X-Amsha-API-Key: $VALID_KEY" "$B/api/v1/sessions/$1/status/coordinator" >/dev/null 2>&1

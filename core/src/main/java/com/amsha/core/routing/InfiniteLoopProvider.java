@@ -35,7 +35,6 @@ public class InfiniteLoopProvider<T, R> {
     private static final Logger log = Logger.getLogger(InfiniteLoopProvider.class);
     private static final long MAX_COOLDOWN_WAIT_MS = 300_000L;
     private static final int QUALITY_FAILURE_THRESHOLD = 3;
-    private static final int MAX_CONSECUTIVE_TRANSIENT_FAILURES = 3;
 
     /** Functional interface for invoking a model with a request. */
     @FunctionalInterface
@@ -223,10 +222,13 @@ public class InfiniteLoopProvider<T, R> {
                     long elapsedMs = System.currentTimeMillis() - startMs;
                     if (maxLatencyMs > 0 && elapsedMs > maxLatencyMs) {
                         log.warnf(
-                                "InfiniteLoop: Slot [%s] responded in %dms (threshold %dms), treating as slow failure.",
+                                "InfiniteLoop: Slot [%s] responded in %dms (threshold %dms); "
+                                        + "returning the valid response and cooling the slot before its next use.",
                                 slot.name(), elapsedMs, maxLatencyMs);
                         h.recordTransientFailure(cooldownTransientSeconds, cooldownBaseSeconds, cooldownMaxSeconds);
-                        continue;
+                        currentIndex.set(idx);
+                        lastUsedSlots.get().put(loopId, slot.name());
+                        return response;
                     }
                     h.recordSuccess();
                     currentIndex.set(idx);
@@ -302,15 +304,9 @@ public class InfiniteLoopProvider<T, R> {
             log.errorf("InfiniteLoop: Slot [%s] permanently disabled (tool_use_failed): %s", slotName, msg);
         } else {
             h.recordTransientFailure(cooldownTransientSeconds, cooldownBaseSeconds, cooldownMaxSeconds);
-            if (h.isPermanentlyDisabled()) {
-                log.errorf(
-                        "InfiniteLoop: Slot [%s] permanently disabled after %d consecutive transient errors: %s",
-                        slotName, MAX_CONSECUTIVE_TRANSIENT_FAILURES, msg);
-            } else {
-                log.warnf(
-                        "InfiniteLoop: Slot [%s] transient error, cooling down %ds. %s",
-                        slotName, h.cooldownRemainingMs() / 1000, msg);
-            }
+            log.warnf(
+                    "InfiniteLoop: Slot [%s] transient error, cooling down %ds. %s",
+                    slotName, h.cooldownRemainingMs() / 1000, msg);
         }
     }
 
@@ -322,15 +318,9 @@ public class InfiniteLoopProvider<T, R> {
                         || msg.contains("timeout")
                         || msg.contains("ECONNREFUSED"))) {
             h.recordTransientFailure(cooldownTransientSeconds, cooldownBaseSeconds, cooldownMaxSeconds);
-            if (h.isPermanentlyDisabled()) {
-                log.errorf(
-                        "InfiniteLoop: Slot [%s] permanently disabled after %d consecutive connection failures: %s",
-                        slotName, MAX_CONSECUTIVE_TRANSIENT_FAILURES, msg);
-            } else {
-                log.warnf(
-                        "InfiniteLoop: Slot [%s] connection error, cooling down %ds. %s",
-                        slotName, h.cooldownRemainingMs() / 1000, msg);
-            }
+            log.warnf(
+                    "InfiniteLoop: Slot [%s] connection error, cooling down %ds. %s",
+                    slotName, h.cooldownRemainingMs() / 1000, msg);
         } else {
             h.recordUnknownFailure(cooldownBaseSeconds, cooldownMaxSeconds);
             log.warnf(
@@ -396,11 +386,6 @@ public class InfiniteLoopProvider<T, R> {
         synchronized void recordTransientFailure(int transientSeconds, int baseSeconds, int maxSeconds) {
             consecutiveFailures++;
             consecutiveTransientFailures++;
-            if (consecutiveTransientFailures >= MAX_CONSECUTIVE_TRANSIENT_FAILURES) {
-                permanentlyDisabled = true;
-                cooldownUntilEpochMs = 0;
-                return;
-            }
             // Exponential backoff: base * 2^(failures-1), capped at max
             long delay = (long) baseSeconds * (1L << Math.min(consecutiveTransientFailures - 1, 30));
             if (delay > maxSeconds) delay = maxSeconds;
