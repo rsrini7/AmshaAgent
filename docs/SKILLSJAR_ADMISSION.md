@@ -1,5 +1,7 @@
 # SkillsJar Admission and Quarantine
 
+> **Docs**: [README](../README.md) · [Extension Guide](./AMSHA_EXTENSION.md) · [Architecture Invariants](./Architecture_Invariants.md) · [Testing Guide](./TESTING_GUIDE.md)
+
 Amsha treats every third-party SkillsJar as an untrusted candidate. A JAR being
 valid Maven content, containing a parseable `SKILL.md`, or working in another
 agent host does not make it compatible with Amsha.
