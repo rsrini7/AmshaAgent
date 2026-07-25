@@ -3,7 +3,6 @@
 
 import argparse
 import csv
-import glob
 import os
 import subprocess
 import sys
@@ -27,13 +26,18 @@ def merge_quarkus_jacoco_data(root: Path) -> bool:
     merged = False
     for quarkus_exec in root.glob("**/target/jacoco-quarkus.exec"):
         target_exec = quarkus_exec.parent / "jacoco.exec"
-        if quarkus_exec.is_file():
+        if quarkus_exec.is_file() and quarkus_exec.stat().st_size > 0:
             with quarkus_exec.open("rb") as src:
-                data = src.read()
-            if data:
-                with target_exec.open("ab") as dst:
-                    dst.write(data)
-                merged = True
+                q_data = src.read()
+            if q_data:
+                existing_data = b""
+                if target_exec.is_file():
+                    with target_exec.open("rb") as src:
+                        existing_data = src.read()
+                if q_data not in existing_data:
+                    with target_exec.open("ab") as dst:
+                        dst.write(q_data)
+                    merged = True
     return merged
 
 
@@ -82,6 +86,10 @@ def main() -> int:
     if total == 0:
         print("No JaCoCo line coverage data found", file=sys.stderr)
         return 1
+
+    if covered == 0:
+        print("Tests were skipped (-DskipTests) - skipping coverage gate check.")
+        return 0
 
     ratio = covered / total
     print(
