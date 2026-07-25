@@ -73,4 +73,22 @@ class EnvFileValidatorTest {
 
         assertEquals(3, result.malformedLines().size());
     }
+
+    @Test
+    void testPrintReport(@TempDir Path tempDir) throws IOException {
+        Path envFile = tempDir.resolve(".env");
+        Files.write(
+                envFile,
+                List.of(
+                        "KEY_A=val1",
+                        "KEY_A=val2",
+                        "MALFORMED_LINE",
+                        "AMSHA_VAULT_PEPPER=changeme",
+                        "AMSHA_GROQ_API_KEY="));
+
+        EnvFileValidator.ValidationResult result = EnvFileValidator.validate(envFile);
+        assertTrue(result.hasIssues());
+        // Verify printReport runs without throwing
+        EnvFileValidator.printReport(result, envFile);
+    }
 }

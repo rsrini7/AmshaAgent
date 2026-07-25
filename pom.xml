@@ -65,6 +65,7 @@
     <jline.version>3.30.11</jline.version>
     <jansi.version>2.4.3</jansi.version>
     <jacoco.version>0.8.14</jacoco.version>
+    <jacoco.minimum.line.coverage>0.50</jacoco.minimum.line.coverage>
     <bytebuddy.version>1.17.6</bytebuddy.version>
     <maven.surefire.argLine>-javaagent:${settings.localRepository}/net/bytebuddy/byte-buddy-agent/${bytebuddy.version}/byte-buddy-agent-${bytebuddy.version}.jar --add-opens java.base/java.lang=ALL-UNNAMED --add-opens java.base/java.nio=ALL-UNNAMED --add-opens java.base/sun.nio.ch=ALL-UNNAMED --add-opens java.base/jdk.internal.misc=ALL-UNNAMED -Dnet.bytebuddy.experimental=true --enable-native-access=ALL-UNNAMED -XX:+EnableDynamicAgentLoading -Djdk.attach.allowAttachSelf=true -XX:+StartAttachListener</maven.surefire.argLine>
   </properties>
@@ -421,6 +422,27 @@
             <id>report</id>
             <phase>verify</phase>
             <goals><goal>report</goal></goals>
+          </execution>
+        </executions>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-antrun-plugin</artifactId>
+        <version>3.2.0</version>
+        <executions>
+          <execution>
+            <id>initialize-jacoco-data</id>
+            <phase>initialize</phase>
+            <goals>
+              <goal>run</goal>
+            </goals>
+            <configuration>
+              <target>
+                <!-- JaCoCo otherwise skips reports for modules with no tests,
+                     which would inflate the aggregate coverage ratio. -->
+                <touch file="${project.build.directory}/jacoco.exec"/>
+              </target>
+            </configuration>
           </execution>
         </executions>
       </plugin>

@@ -109,9 +109,13 @@ class SqliteSessionCatalogAdapterTest {
         adapter.activateNew(makeEntry(sid, scopeOwner, "telegram", scopeCid));
         adapter.setActive(sid, false);
 
-        var match = adapter.listInactiveBefore(Instant.now().plusSeconds(3600));
+        var match = adapter.listInactiveBefore(Instant.now().plusSeconds(3600)).stream()
+                .filter(e -> sid.equals(e.sessionId()))
+                .toList();
         assertFalse(match.isEmpty());
-        var empty = adapter.listInactiveBefore(Instant.now().minusSeconds(3600));
+        var empty = adapter.listInactiveBefore(Instant.now().minusSeconds(3600)).stream()
+                .filter(e -> sid.equals(e.sessionId()))
+                .toList();
         assertTrue(empty.isEmpty());
     }
 
