@@ -12,14 +12,17 @@ import com.amsha.core.state.CheckpointStatus;
 import com.amsha.persistence.api.CheckpointDto;
 import com.amsha.persistence.api.CheckpointUpsertResult;
 import com.amsha.persistence.api.ReasoningStepDto;
+import com.amsha.persistence.sqlite.testutil.FlywayEnabledTestProfile;
 
 import org.jdbi.v3.core.Jdbi;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import io.quarkus.test.junit.QuarkusTest;
+import io.quarkus.test.junit.TestProfile;
 
 @QuarkusTest
+@TestProfile(FlywayEnabledTestProfile.class)
 class SqliteCheckpointStoreAdapterDirectTest {
 
     @Inject

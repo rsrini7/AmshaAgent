@@ -2,6 +2,7 @@ package com.amsha.app.security;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -62,6 +63,88 @@ class ApiKeyRegistryTest {
 
         // 21st request should be limited
         assertFalse(registry.isAllowed(key));
+    }
+
+    @Test
+    void testIsMutationAllowedWithNullReturnsFalse() {
+        assertFalse(registry.isMutationAllowed(null));
+    }
+
+    @Test
+    void testIsMutationAllowedLimitsAfterThreshold() {
+        String key = "mutation-test-key";
+        for (int i = 0; i < 10; i++) {
+            assertTrue(registry.isMutationAllowed(key), "Should be allowed before 10 mutations. Failed at " + i);
+        }
+        assertFalse(registry.isMutationAllowed(key));
+    }
+
+    @Test
+    void testComputeDigestReturnsHexString() {
+        String digest = registry.computeDigest("some-value");
+        assertNotNull(digest);
+        assertTrue(digest.matches("[0-9a-f]+"), "Digest should be hex: " + digest);
+    }
+
+    @Test
+    void testComputeDigestReturnsNullForNull() {
+        assertNull(registry.computeDigest(null));
+    }
+
+    @Test
+    void testRegisterAddsNewKey() {
+        registry.register("new-user", "new-key-value");
+        assertTrue(registry.isValidKey("new-key-value"));
+    }
+
+    @Test
+    void testUnregisterRemovesKey() {
+        registry.register("temp-user", "temp-key");
+        assertTrue(registry.isValidKey("temp-key"));
+        registry.unregister("temp-key");
+        assertFalse(registry.isValidKey("temp-key"));
+    }
+
+    @Test
+    void testUnregisterByDigestRemovesKey() {
+        registry.register("digest-user", "digest-key");
+        String digest = registry.computeDigest("digest-key");
+        registry.unregisterByDigest(digest);
+        assertFalse(registry.isValidKey("digest-key"));
+    }
+
+    @Test
+    void testUnregisterByDigestWithNullDoesNothing() {
+        registry.unregisterByDigest(null);
+        // existing keys still work
+        assertTrue(registry.isValidKey("aaaa-bbbb-cccc-dddd"));
+    }
+
+    @Test
+    void testHasRoleForInternalKey() {
+        // The internal key from config isn't set, but we can test with a registered key
+        registry.register("my-service", "service-key");
+        assertTrue(registry.hasRole("service-key", "SERVICE"));
+    }
+
+    @Test
+    void testHasRoleReturnsFalseForNull() {
+        assertFalse(registry.hasRole(null, "OWNER"));
+    }
+
+    @Test
+    void testIsAllowedWithNullReturnsFalse() {
+        assertFalse(registry.isAllowed(null));
+    }
+
+    @Test
+    void testIsValidKeyWithNullReturnsFalse() {
+        assertFalse(registry.isValidKey(null));
+    }
+
+    @Test
+    void testIsValidKeyWithEmptyReturnsFalse() {
+        assertFalse(registry.isValidKey(""));
     }
 
     @Test

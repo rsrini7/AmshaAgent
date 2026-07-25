@@ -3,6 +3,8 @@ package com.amsha.onboarding;
 import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.*;
 
+import java.util.Map;
+
 import com.amsha.onboarding.testutil.FlywayEnabledTestProfile;
 
 import org.junit.jupiter.api.Test;
@@ -18,10 +20,24 @@ class OnboardingResourceTest {
     private static final String INTERNAL_KEY = "key-internal-changeme";
 
     @Test
-    void testDraftLifecycle() {
-        // Unauthenticated status -> 401
+    void testUnauthenticatedDenials() {
         given().when().get("/onboarding/status").then().statusCode(401);
+        given().when().get("/onboarding/drafts").then().statusCode(401);
+        given().when().post("/onboarding/drafts").then().statusCode(401);
+        given().when().get("/onboarding/drafts/invalid-draft").then().statusCode(401);
+        given().when().get("/onboarding/health/routing").then().statusCode(401);
+        given().when().get("/onboarding/export").then().statusCode(401);
+        given().when()
+                .contentType(ContentType.JSON)
+                .body(Map.of())
+                .post("/onboarding/import")
+                .then()
+                .statusCode(401);
+        given().when().post("/onboarding/drafts/discard").then().statusCode(401);
+    }
 
+    @Test
+    void testDraftLifecycle() {
         // Create draft with internal key (resolved as owner "internal")
         String draftId = given().header("X-Amsha-API-Key", INTERNAL_KEY)
                 .when()
@@ -33,6 +49,29 @@ class OnboardingResourceTest {
                 .extract()
                 .path("draftId");
 
+        // List drafts
+        given().header("X-Amsha-API-Key", INTERNAL_KEY)
+                .when()
+                .get("/onboarding/drafts")
+                .then()
+                .statusCode(200)
+                .body(is(draftId));
+
+        // Get draft by ID
+        given().header("X-Amsha-API-Key", INTERNAL_KEY)
+                .when()
+                .get("/onboarding/drafts/" + draftId)
+                .then()
+                .statusCode(200)
+                .body("draftId", is(draftId));
+
+        // Get non-existent draft
+        given().header("X-Amsha-API-Key", INTERNAL_KEY)
+                .when()
+                .get("/onboarding/drafts/non-existent-draft-id")
+                .then()
+                .statusCode(404);
+
         // Status reflects the draft
         given().header("X-Amsha-API-Key", INTERNAL_KEY)
                 .when()
@@ -40,6 +79,29 @@ class OnboardingResourceTest {
                 .then()
                 .statusCode(200)
                 .body("stepName", is("welcome"));
+
+        // Routing health & Export/Import
+        given().header("X-Amsha-API-Key", INTERNAL_KEY)
+                .when()
+                .get("/onboarding/health/routing")
+                .then()
+                .statusCode(200)
+                .body("status", is("ok"));
+
+        given().header("X-Amsha-API-Key", INTERNAL_KEY)
+                .when()
+                .get("/onboarding/export")
+                .then()
+                .statusCode(200);
+
+        given().header("X-Amsha-API-Key", INTERNAL_KEY)
+                .contentType(ContentType.JSON)
+                .body(Map.of())
+                .when()
+                .post("/onboarding/import")
+                .then()
+                .statusCode(200)
+                .body("imported", is(true));
 
         // Advance to connections step (index-based plan guard)
         given().header("X-Amsha-API-Key", INTERNAL_KEY)

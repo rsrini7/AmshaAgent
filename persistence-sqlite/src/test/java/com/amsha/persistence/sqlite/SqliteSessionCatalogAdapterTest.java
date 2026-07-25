@@ -10,6 +10,7 @@ import java.time.Instant;
 import java.util.UUID;
 
 import com.amsha.persistence.api.SessionCatalogEntry;
+import com.amsha.persistence.api.SessionCatalogStore;
 import com.amsha.persistence.sqlite.testutil.FlywayEnabledTestProfile;
 
 import org.junit.jupiter.api.Test;
@@ -22,7 +23,7 @@ import io.quarkus.test.junit.TestProfile;
 class SqliteSessionCatalogAdapterTest {
 
     @Inject
-    SqliteSessionCatalogAdapter adapter;
+    SessionCatalogStore adapter;
 
     private final Instant now = Instant.now();
 

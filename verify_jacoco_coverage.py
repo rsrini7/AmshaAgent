@@ -3,6 +3,9 @@
 
 import argparse
 import csv
+import glob
+import os
+import subprocess
 import sys
 import xml.etree.ElementTree as ET
 from pathlib import Path
@@ -17,6 +20,21 @@ def reactor_modules(root: Path) -> list[Path]:
 def has_production_classes(module: Path) -> bool:
     classes = module / "target" / "classes"
     return classes.is_dir() and any(classes.rglob("*.class"))
+
+
+def merge_quarkus_jacoco_data(root: Path) -> bool:
+    """Merge Quarkus test execution data (jacoco-quarkus.exec) into jacoco.exec."""
+    merged = False
+    for quarkus_exec in root.glob("**/target/jacoco-quarkus.exec"):
+        target_exec = quarkus_exec.parent / "jacoco.exec"
+        if quarkus_exec.is_file():
+            with quarkus_exec.open("rb") as src:
+                data = src.read()
+            if data:
+                with target_exec.open("ab") as dst:
+                    dst.write(data)
+                merged = True
+    return merged
 
 
 def line_counts(report: Path) -> tuple[int, int]:
@@ -38,6 +56,11 @@ def main() -> int:
         parser.error("--minimum must be between 0 and 1")
 
     root = Path(__file__).resolve().parent
+
+    # Auto-merge Quarkus test coverage execution data if present
+    if merge_quarkus_jacoco_data(root):
+        subprocess.run(["./mvnw", "jacoco:report", "-q"], cwd=root, check=False)
+
     missed = 0
     covered = 0
     missing = []
