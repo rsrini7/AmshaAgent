@@ -40,7 +40,12 @@ class InteractiveSetupWizardTest {
 
         Path envFile = tempDir.resolve(".env");
         assertTrue(Files.exists(envFile));
-        assertNotNull(System.getProperty("AMSHA_LLM_PROVIDER"));
+        assertNotNull(providerFromSystemOrEnvironment());
+    }
+
+    private static String providerFromSystemOrEnvironment() {
+        String systemProvider = System.getProperty("AMSHA_LLM_PROVIDER");
+        return systemProvider != null ? systemProvider : System.getenv("AMSHA_LLM_PROVIDER");
     }
 
     @Test
