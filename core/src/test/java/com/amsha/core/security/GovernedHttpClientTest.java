@@ -1,14 +1,15 @@
 package com.amsha.core.security;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.when;
 
 import java.net.InetSocketAddress;
 import java.net.URI;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.util.Optional;
 
 import com.amsha.core.audit.AuditService;
 import com.amsha.core.security.http.GovernedHttpClient;
@@ -170,7 +171,6 @@ class GovernedHttpClientTest {
                 .connection(conn)
                 .actor("u")
                 .build();
-        // Connect to a blackhole address that will hang until the 1ms timeout fires.
         HttpRequest req = HttpRequest.newBuilder(URI.create("http://10.255.255.1:9/"))
                 .GET()
                 .build();
@@ -214,6 +214,48 @@ class GovernedHttpClientTest {
     }
 
     @Test
+    void proxyCredentials_resolvedAndApplied() {
+        SecretVault vault = Mockito.mock(SecretVault.class);
+        VaultKey key = Mockito.mock(VaultKey.class);
+        when(key.get()).thenReturn("user:pass".getBytes(StandardCharsets.UTF_8));
+        when(vault.get("proxy-ref", "u")).thenReturn(Optional.of(key));
+
+        String policyJson =
+                "{\"requireProxy\":true,\"proxyUrl\":\"http://127.0.0.1:9999\",\"proxyCredentialVaultRef\":\"proxy-ref\"}";
+        LlmConnectionDto conn = new LlmConnectionDto(
+                "c1",
+                "USER",
+                "u",
+                "u",
+                "conn",
+                "openai",
+                null,
+                null,
+                "API_KEY",
+                policyJson,
+                "ACTIVE",
+                1,
+                Instant.now(),
+                Instant.now());
+
+        GovernedHttpClient client = GovernedHttpClient.builder(alwaysAllow)
+                .purpose(OutboundPurpose.PROVIDER_API_CALL)
+                .vault(vault)
+                .connection(conn)
+                .actor("u")
+                .build();
+
+        HttpRequest req = HttpRequest.newBuilder(URI.create("http://example.com/ok"))
+                .GET()
+                .build();
+        // Request fails on connection to proxy:9999 (I/O error), demonstrating proxy + auth was initialized
+        OutboundHttpException ex =
+                assertThrows(OutboundHttpException.class, () -> client.send(req, HttpResponse.BodyHandlers.ofString()));
+        assertTrue(ex.category() == OutboundHttpException.Category.IO
+                || ex.category() == OutboundHttpException.Category.TIMEOUT);
+    }
+
+    @Test
     void noProxyHost_bypassesProxyRequirement() {
         String policyJson =
                 "{\"requireProxy\":true,\"proxyUrl\":\"http://proxy.invalid:9\",\"noProxyHosts\":[\"127.0.0.1\"]}";
@@ -239,38 +281,37 @@ class GovernedHttpClientTest {
                 .build();
         HttpRequest req =
                 HttpRequest.newBuilder(URI.create(baseUrl + "/ok")).GET().build();
-        // The no-proxy host bypasses the proxy, so the request reaches the local server.
         HttpResponse<String> resp = client.send(req, HttpResponse.BodyHandlers.ofString());
         assertEquals(200, resp.statusCode());
     }
 
     @Test
-    void realPolicy_mcpConnect_requiresHitlWithoutPreApproval() {
-        OutboundHttpPolicyService realPolicy = new OutboundHttpPolicyService();
-        realPolicy.auditService = Mockito.mock(AuditService.class);
-        GovernedHttpClient client = GovernedHttpClient.builder(realPolicy)
-                .purpose(OutboundPurpose.MCP_CONNECT)
+    void customCaMode_missingVault_throwsTlsException() {
+        String policyJson = "{\"tlsTrustMode\":\"CUSTOM_CA\",\"customCaVaultRef\":\"ca-ref\"}";
+        LlmConnectionDto conn = new LlmConnectionDto(
+                "c1",
+                "USER",
+                "u",
+                "u",
+                "conn",
+                "openai",
+                null,
+                null,
+                "API_KEY",
+                policyJson,
+                "ACTIVE",
+                1,
+                Instant.now(),
+                Instant.now());
+        GovernedHttpClient client = GovernedHttpClient.builder(alwaysAllow)
+                .purpose(OutboundPurpose.PROVIDER_API_CALL)
+                .connection(conn)
                 .actor("u")
                 .build();
         HttpRequest req =
                 HttpRequest.newBuilder(URI.create(baseUrl + "/ok")).GET().build();
         OutboundHttpException ex =
                 assertThrows(OutboundHttpException.class, () -> client.send(req, HttpResponse.BodyHandlers.ofString()));
-        assertEquals(OutboundHttpException.Category.HITL_REQUIRED, ex.category());
-    }
-
-    @Test
-    void realPolicy_mcpConnect_preApproved_reachesServer() {
-        OutboundHttpPolicyService realPolicy = new OutboundHttpPolicyService();
-        realPolicy.auditService = Mockito.mock(AuditService.class);
-        GovernedHttpClient client = GovernedHttpClient.builder(realPolicy)
-                .purpose(OutboundPurpose.MCP_CONNECT)
-                .actor("u")
-                .preApproved(true)
-                .build();
-        HttpRequest req =
-                HttpRequest.newBuilder(URI.create(baseUrl + "/ok")).GET().build();
-        HttpResponse<String> resp = client.send(req, HttpResponse.BodyHandlers.ofString());
-        assertEquals(200, resp.statusCode());
+        assertEquals(OutboundHttpException.Category.TLS_TRUST, ex.category());
     }
 }

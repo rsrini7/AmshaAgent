@@ -85,7 +85,7 @@ quarkus:
       artifact-id: amsha-channel-api
   http:
     host: "localhost"
-    port: 8081
+    test-port: 0
   management:
     host: "localhost"
     port: 9000

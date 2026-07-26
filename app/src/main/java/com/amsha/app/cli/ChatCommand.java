@@ -393,7 +393,7 @@ public class ChatCommand implements Runnable {
         });
     }
 
-    private static String formatTerminalResult(AgentResult result) {
+    static String formatTerminalResult(AgentResult result) {
         return switch (result) {
             case AgentResult.Finished f -> f.answer();
             case AgentResult.StructuredFinished sf -> sf.answer();
@@ -408,7 +408,7 @@ public class ChatCommand implements Runnable {
      * Canonicalizes the CLI role argument using {@link AgentRoleEnum}:
      * null / blank → COORDINATOR; known built-in → scoped name; unknown → pass-through.
      */
-    private static String canonicalRole(String raw) {
+    static String canonicalRole(String raw) {
         if (raw == null || raw.isBlank()) {
             return AgentRoleEnum.COORDINATOR.toScopedName();
         }

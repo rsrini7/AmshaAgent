@@ -8,6 +8,10 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.math.BigDecimal;
+import java.util.List;
+
+import com.amsha.core.agent.result.AgentResult;
 import com.amsha.core.config.SystemMetadataRegistry;
 import com.amsha.core.domain.model.AuditEvent;
 import com.amsha.core.persistence.AsyncPersistenceEngine;
@@ -58,6 +62,39 @@ class TelemetryAuditServiceTest {
     }
 
     @Test
+    void testRecordLoopCompletionFinished() {
+        doNothing().when(persistenceEngine).submitTelemetry(any());
+        when(registry.getAppVersion()).thenReturn("0.1.0");
+
+        AgentResult result = AgentResult.finished("done", List.of());
+        telemetryAuditService.recordLoopCompletion(
+                "s-loop", "u1", "coder", "hash123", result, 100, 50, new BigDecimal("0.01"));
+
+        ArgumentCaptor<PersistenceEvent> captor = ArgumentCaptor.forClass(PersistenceEvent.class);
+        verify(persistenceEngine).submitTelemetry(captor.capture());
+
+        captor.getValue().getDbAction().execute();
+        verify(auditEventRecorder).record(any());
+    }
+
+    @Test
+    void testRecordLoopCompletionFailed() {
+        doNothing().when(persistenceEngine).submitTelemetry(any());
+        when(registry.getAppVersion()).thenReturn("0.1.0");
+
+        AgentResult result =
+                AgentResult.failed("compilation error", AgentResult.FailureCategory.SYSTEM_ERROR, List.of());
+        telemetryAuditService.recordLoopCompletion(
+                "s-loop2", "u1", "coder", "hash123", result, 100, 50, new BigDecimal("0.01"));
+
+        ArgumentCaptor<PersistenceEvent> captor = ArgumentCaptor.forClass(PersistenceEvent.class);
+        verify(persistenceEngine).submitTelemetry(captor.capture());
+
+        captor.getValue().getDbAction().execute();
+        verify(auditEventRecorder).record(any());
+    }
+
+    @Test
     void testRecordSwallowsExceptions() {
         doThrow(new RuntimeException("[TEST-EXPECTED] mock telemetry failure"))
                 .when(persistenceEngine)
@@ -66,5 +103,11 @@ class TelemetryAuditServiceTest {
         // Must not throw - caller must not be affected by TELEMETRY failures
         assertDoesNotThrow(() -> telemetryAuditService.record(
                 "ses-5", "u1", "debugger", SecurityEventType.CONTEXT_COMPACTED, "compacted"));
+    }
+
+    @Test
+    void testWaitForIdle() {
+        telemetryAuditService.waitForIdle();
+        verify(persistenceEngine).waitForIdle();
     }
 }

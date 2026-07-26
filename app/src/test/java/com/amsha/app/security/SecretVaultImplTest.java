@@ -20,6 +20,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
+import com.amsha.common.util.LogUtil;
 import com.amsha.core.audit.AuditService;
 import com.amsha.core.audit.SecurityEventType;
 import com.amsha.core.scope.WorkspaceContext;
@@ -181,8 +182,7 @@ public class SecretVaultImplTest {
                     vault.store(key, SECRET_PAYLOAD);
                 });
             } catch (Exception e) {
-                e.printStackTrace();
-                fail("No exception should be thrown during concurrent store: " + e.getMessage());
+                fail("No exception should be thrown during concurrent store: " + LogUtil.rootMessage(e));
             } finally {
                 doneLatch.countDown();
             }

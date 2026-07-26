@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import jakarta.inject.Inject;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -146,5 +147,52 @@ class SqliteCheckpointStoreAdapterDirectTest {
 
         boolean claimAgain = adapter.claimForResume(sessionId, "coordinator");
         assertFalse(claimAgain);
+    }
+
+    @Test
+    void testTransitionsAndDeletions() {
+        CheckpointDto dto = new CheckpointDto(
+                null,
+                sessionId,
+                "coder",
+                CheckpointStatus.AWAITING_APPROVAL.name(),
+                "FULL",
+                "{}",
+                "p1",
+                "CLI",
+                "Goal",
+                null,
+                null,
+                null,
+                "tool",
+                "{}",
+                "{}",
+                null,
+                10,
+                1,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                0,
+                null,
+                null);
+        CheckpointDto saved = adapter.save(dto);
+
+        assertTrue(adapter.atomicTransition(saved.id(), "AWAITING_APPROVAL", "RESUMING"));
+        adapter.markCompleted(saved.id());
+        adapter.markFailed(saved.id(), "err", "CODE", "trace", "Class");
+        adapter.markOrphaned(saved.id(), "orphan");
+        adapter.archive(saved.id());
+        adapter.stampChannelInfo(saved.id(), "web", "platform");
+
+        adapter.deleteSteps(saved.id());
+        adapter.deleteCheckpoint(sessionId, "coder");
+        adapter.purgeOldChatHistory(Instant.now().plusSeconds(3600));
+
+        assertFalse(adapter.findById(saved.id()).isPresent());
     }
 }

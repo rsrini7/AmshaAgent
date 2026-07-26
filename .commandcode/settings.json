@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Shell(./mvnw:*)",
+      "Shell(grep:*)",
+      "Shell(lsof:*)"
+    ],
+    "deny": [],
+    "defaultMode": "default"
+  }
+}

@@ -3,14 +3,14 @@ package com.amsha.core.agent.loop;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 
 import jakarta.enterprise.inject.Instance;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -24,6 +24,7 @@ import com.amsha.core.security.AutonomyLevel;
 import com.amsha.core.tool.DynamicToolLookup;
 import com.amsha.core.tools.AgentTool;
 import com.amsha.core.tools.ToolRegistry;
+import com.amsha.core.tools.ToolResponse;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -88,7 +89,6 @@ class ToolStepHandlerGuardTest {
 
     @BeforeEach
     void setup() {
-        // Build ToolStepValidator with real logic but mocked dependencies
         ToolStepValidator validator = new ToolStepValidator(toolRegistry, observers, dynamicToolLookup);
 
         handler = new ToolStepHandler(
@@ -112,15 +112,11 @@ class ToolStepHandlerGuardTest {
 
         StepDecision decision = handler.validateTool(ctx, List.of(), step, 0);
 
-        // Silently rewrites to garuda instead of blocking with hint
         assertEquals(DecisionType.PROCEED, decision.type());
         assertEquals(
                 ToolCapability.DELEGATE_TO_AGENT.toolName(), decision.step().action());
-        // Thought is preserved from original step
         assertEquals("thought", decision.step().thought());
-        // Parameter 'agent' should be 'researcher'
         assertEquals("researcher", decision.step().actionInput().get("agent"));
-        // Parameter 'goal' should contain 'github'
         assertTrue(
                 String.valueOf(decision.step().actionInput().get("goal")).contains(ToolCapability.GITHUB.toolName()));
     }
@@ -198,5 +194,75 @@ class ToolStepHandlerGuardTest {
         assertEquals(
                 ToolCapability.GITHUB.toolName(),
                 historyCaptor.getValue().getFirst().action());
+    }
+
+    @Test
+    void invokeToolAndObserve_deduplicate() {
+        AgentExecutionContext ctx = createCtx("researcher", "cached call");
+        ReasoningStep step = ReasoningStep.pending("thought", "cached_tool", Map.of());
+
+        when(guard.evaluate(anyString(), anyString(), any(), anyString(), any(), anyList(), anyString(), anyList()))
+                .thenReturn(new ToolInvocationGuard.GuardDecision.Deduplicate("cached observation"));
+
+        List<ReasoningStep> history = new ArrayList<>();
+        StepDecision decision = handler.invokeToolAndObserve(ctx, history, step, 0, List.of());
+
+        assertEquals(DecisionType.PROCEED, decision.type());
+        assertEquals(1, history.size());
+    }
+
+    @Test
+    void invokeToolAndObserve_successfulInvocation() {
+        AgentExecutionContext ctx = createCtx("researcher", "execute tool");
+        ReasoningStep step = ReasoningStep.pending("thought", "my_tool", Map.of("key", "val"));
+
+        when(guard.evaluate(anyString(), anyString(), any(), anyString(), any(), anyList(), anyString(), anyList()))
+                .thenReturn(null);
+        when(invoker.invoke(eq("my_tool"), any(), anyString())).thenReturn(ToolResponse.success("Tool Output"));
+
+        List<ReasoningStep> history = new ArrayList<>();
+        StepDecision decision = handler.invokeToolAndObserve(ctx, history, step, 0, List.of());
+
+        assertEquals(DecisionType.PROCEED, decision.type());
+        verify(guard).recordToolCall(eq("sess1"), eq("my_tool"), any(), anyString());
+    }
+
+    @Test
+    void invokeToolAndObserve_readonlyAutonomyLevel() {
+        AgentExecutionContext readonlyCtx = new AgentExecutionContext(
+                "sess1",
+                "user1",
+                "chat1",
+                "researcher",
+                "read task",
+                AutonomyLevel.READONLY,
+                StructuredOutputMode.NATIVE,
+                5,
+                0,
+                null,
+                null,
+                null,
+                null);
+        ReasoningStep step = ReasoningStep.pending("thought", "my_tool", Map.of());
+
+        List<ReasoningStep> history = new ArrayList<>();
+        StepDecision decision = handler.invokeToolAndObserve(readonlyCtx, history, step, 0, List.of());
+
+        assertEquals(DecisionType.CONTINUE, decision.type());
+        assertEquals(1, history.size());
+        assertTrue(history.get(0).observation().contains("READONLY"));
+    }
+
+    @Test
+    void invokeToolAndObserve_parallelBatchDelegatesToParallelExecutor() {
+        AgentExecutionContext ctx = createCtx("researcher", "parallel batch");
+        ReasoningStep batchStep = ReasoningStep.parallelBatch("thought", Map.of("batch", List.of()), 0, 0);
+
+        when(parallelExecutor.execute(eq(ctx), anyList(), eq(batchStep), anyInt()))
+                .thenReturn(StepDecision.terminal(AgentResult.finished("Parallel batch complete", List.of())));
+
+        StepDecision decision = handler.invokeToolAndObserve(ctx, new ArrayList<>(), batchStep, 0, List.of());
+        assertEquals(DecisionType.TERMINAL, decision.type());
+        verify(parallelExecutor).execute(eq(ctx), anyList(), eq(batchStep), eq(0));
     }
 }

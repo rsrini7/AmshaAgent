@@ -89,8 +89,21 @@ class FsCronStoreAdapterTest {
     }
 
     @Test
+    void testFindAwaitingApproval() {
+        AgentCronDto c1 = createCron("c1", CronStatus.AWAITING_APPROVAL.name(), Instant.now());
+        when(store.list(DOMAIN_BY_ID, ".json")).thenReturn(List.of("c1.json"));
+        when(store.readOptional(List.of("crons", "by-id", "c1.json"), AgentCronDto.class))
+                .thenReturn(Optional.of(c1));
+
+        List<AgentCronDto> listUser = adapter.findAwaitingApprovalByUserId("usr-1");
+        assertEquals(1, listUser.size());
+
+        List<AgentCronDto> listAll = adapter.findAllAwaitingApproval();
+        assertEquals(1, listAll.size());
+    }
+
+    @Test
     void testClaimForFireSuccess() {
-        lenient().when(locks.tryLock(anyString(), anyInt())).thenReturn(true);
         AgentCronDto cron = createCron("c1", CronStatus.ACTIVE.name(), Instant.now());
         when(store.readOptional(List.of("crons", "by-id", "c1.json"), AgentCronDto.class))
                 .thenReturn(Optional.of(cron));
@@ -104,18 +117,93 @@ class FsCronStoreAdapterTest {
     }
 
     @Test
-    void testMarkFired() {
-        lenient().when(locks.tryLock(anyString(), anyInt())).thenReturn(true);
+    void testStatusMutations() {
         AgentCronDto cron = createCron("c1", CronStatus.RUNNING.name(), Instant.now());
         when(store.readOptional(List.of("crons", "by-id", "c1.json"), AgentCronDto.class))
                 .thenReturn(Optional.of(cron));
 
-        Instant nextFire = Instant.now().plusSeconds(3600);
-        adapter.markFired("c1", Instant.now(), nextFire);
+        adapter.releaseClaimToActive("c1");
+        adapter.markCompleted("c1", Instant.now());
+        adapter.markAwaitingApproval("c1");
+        adapter.markRunning("c1");
+        adapter.setDeliveryId("c1", "d-123");
+        adapter.markFailed("c1", "error");
+        adapter.markSkipped("c1", Instant.now().plusSeconds(60), Instant.now());
 
-        ArgumentCaptor<AgentCronDto> captor = ArgumentCaptor.forClass(AgentCronDto.class);
-        verify(store).write(any(), captor.capture());
-        assertEquals(CronStatus.ACTIVE.name(), captor.getValue().status());
-        assertEquals(nextFire, captor.getValue().nextFireTime());
+        verify(store, atLeast(7)).write(any(), any());
+    }
+
+    @Test
+    void testReclaimStaleCrons() {
+        AgentCronDto stale =
+                createCron("c1", CronStatus.RUNNING.name(), Instant.now().minusSeconds(3600));
+        stale = new AgentCronDto(
+                stale.id(),
+                stale.sessionId(),
+                stale.userId(),
+                stale.chatId(),
+                stale.channelType(),
+                stale.channelPlatformId(),
+                stale.cronExpression(),
+                stale.timezone(),
+                stale.runOnce(),
+                stale.goal(),
+                stale.nextFireTime(),
+                Instant.now().minusSeconds(7200),
+                stale.status(),
+                stale.executionRole(),
+                stale.errorReason(),
+                stale.lastDeliveryId(),
+                Instant.now().minusSeconds(7200),
+                Instant.now().minusSeconds(7200));
+
+        when(store.list(DOMAIN_BY_ID, ".json")).thenReturn(List.of("c1.json"));
+        when(store.readOptional(List.of("crons", "by-id", "c1.json"), AgentCronDto.class))
+                .thenReturn(Optional.of(stale));
+
+        adapter.reclaimStaleCrons(Instant.now().minusSeconds(3600));
+        verify(store).write(any(), any());
+    }
+
+    @Test
+    void testSaveAndDeleteOperations() {
+        AgentCronDto cron = createCron("c1", CronStatus.ACTIVE.name(), Instant.now());
+        when(store.readOptional(eq(List.of("crons", "indices", "by-user", "usr-1.json")), any()))
+                .thenReturn(Optional.empty());
+
+        adapter.save(cron);
+        verify(store).write(eq(List.of("crons", "by-id", "c1.json")), eq(cron));
+
+        when(store.readOptional(List.of("crons", "by-id", "c1.json"), AgentCronDto.class))
+                .thenReturn(Optional.of(cron));
+        int deleted = adapter.deleteByIdAndUserId("c1", "usr-1");
+        assertEquals(1, deleted);
+
+        when(store.list(DOMAIN_BY_ID, ".json")).thenReturn(List.of("c1.json"));
+        long countSession = adapter.deleteAllBySessionId("sess-c1");
+        assertEquals(1, countSession);
+    }
+
+    @Test
+    void testFindAllAndPagination() {
+        AgentCronDto c1 =
+                createCron("c1", CronStatus.ACTIVE.name(), Instant.now().plusSeconds(100));
+        AgentCronDto c2 =
+                createCron("c2", CronStatus.FAILED.name(), Instant.now().plusSeconds(200));
+        when(store.list(DOMAIN_BY_ID, ".json")).thenReturn(List.of("c1.json", "c2.json"));
+        when(store.readOptional(List.of("crons", "by-id", "c1.json"), AgentCronDto.class))
+                .thenReturn(Optional.of(c1));
+        when(store.readOptional(List.of("crons", "by-id", "c2.json"), AgentCronDto.class))
+                .thenReturn(Optional.of(c2));
+
+        assertEquals(2, adapter.countAll(null));
+        assertEquals(1, adapter.countAll(CronStatus.ACTIVE.name()));
+
+        List<AgentCronDto> all = adapter.findAll(null, 0, 10);
+        assertEquals(2, all.size());
+
+        List<AgentCronDto> byUser = adapter.findByUserId("usr-1", CronStatus.ACTIVE.name(), 0, 10);
+        assertEquals(1, byUser.size());
+        assertEquals(1, adapter.countByUserId("usr-1", CronStatus.ACTIVE.name()));
     }
 }

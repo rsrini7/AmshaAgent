@@ -65,7 +65,7 @@
     <jline.version>3.30.11</jline.version>
     <jansi.version>2.4.3</jansi.version>
     <jacoco.version>0.8.14</jacoco.version>
-    <jacoco.minimum.line.coverage>0.60</jacoco.minimum.line.coverage>
+    <jacoco.minimum.line.coverage>0.70</jacoco.minimum.line.coverage>
     <bytebuddy.version>1.17.6</bytebuddy.version>
     <maven.surefire.argLine>-javaagent:${settings.localRepository}/net/bytebuddy/byte-buddy-agent/${bytebuddy.version}/byte-buddy-agent-${bytebuddy.version}.jar --add-opens java.base/java.lang=ALL-UNNAMED --add-opens java.base/java.nio=ALL-UNNAMED --add-opens java.base/sun.nio.ch=ALL-UNNAMED --add-opens java.base/jdk.internal.misc=ALL-UNNAMED -Dnet.bytebuddy.experimental=true --enable-native-access=ALL-UNNAMED -XX:+EnableDynamicAgentLoading -Djdk.attach.allowAttachSelf=true -XX:+StartAttachListener</maven.surefire.argLine>
   </properties>
@@ -332,6 +332,7 @@
             <systemPropertyVariables>
               <java.util.logging.manager>org.jboss.logmanager.LogManager</java.util.logging.manager>
               <maven.home>${maven.home}</maven.home>
+              <quarkus.http.test-port>0</quarkus.http.test-port>
             </systemPropertyVariables>
           </configuration>
         </plugin>

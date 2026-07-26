@@ -98,6 +98,33 @@ class McpSelfRegisterToolTest {
     }
 
     @Test
+    void testValidStdioRegistration() throws Exception {
+        Map<String, Object> params = Map.of(
+                "name", "stdio-server",
+                "transport", "stdio",
+                "command", "npx",
+                "args", "-y, @mcp/server",
+                "env", "FOO=BAR\nBAZ=QUX");
+
+        ToolResponse resp = WorkspaceContext.run(
+                "session-456",
+                "user-123",
+                "chat-789",
+                AutonomyLevel.FULL,
+                "COORDINATOR",
+                () -> tool.execute(ctx("session-456", "user-123"), params));
+
+        assertEquals(0, resp.exitCode());
+        verify(mcpClientService)
+                .connectStdio(
+                        eq("stdio-server"),
+                        eq("npx"),
+                        eq(List.of("-y", "@mcp/server")),
+                        eq(Map.of("FOO", "BAR", "BAZ", "QUX")),
+                        eq(ToolCategory.NETWORK));
+    }
+
+    @Test
     void testInvalidName() throws Exception {
         Map<String, Object> params = Map.of(
                 "name", "invalid name!",
@@ -170,7 +197,6 @@ class McpSelfRegisterToolTest {
                 "transport", "http",
                 "url", "http://host");
 
-        // Blank userId in run() should trigger the guard in execute()
         ToolResponse resp = WorkspaceContext.run(
                 "session-456",
                 "",

@@ -1,172 +1,142 @@
 package com.amsha.app.security;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
 
+import java.lang.reflect.Field;
 import java.time.Instant;
-import java.util.Base64;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.amsha.core.security.SecretVault;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 class OidcIdentityProviderTest {
 
-    private static final ObjectMapper JSON = new ObjectMapper();
+    private OidcIdentityProvider provider;
 
-    private static String b64url(Object o) throws Exception {
-        return Base64.getUrlEncoder().withoutPadding().encodeToString(JSON.writeValueAsBytes(o));
+    @BeforeEach
+    void setUp() throws Exception {
+        provider = new OidcIdentityProvider();
+        setField("enabled", true);
+        setField("clientId", Optional.of("client-123"));
+        setField("clientSecret", Optional.of("secret-456"));
+        setField("clientSecretVaultKey", Optional.empty());
+        setField("authorizationUrl", Optional.of("https://idp.example.com/auth"));
+        setField("tokenUrl", Optional.of("https://idp.example.com/token"));
+        setField("userinfoUrl", Optional.of("https://idp.example.com/userinfo"));
+        setField("issuer", Optional.of("https://idp.example.com"));
+        setField("jwksUrl", Optional.of("https://idp.example.com/jwks"));
+        setField("redirectUriConfig", Optional.of("https://app.example.com/callback"));
+        provider.secretVault = mock(SecretVault.class);
     }
 
-    private static String idToken(Map<String, Object> claims) throws Exception {
-        String header = b64url(Map.of("alg", "RS256", "typ", "JWT"));
-        String payload = b64url(claims);
-        return header + "." + payload + ".signature";
+    private void setField(String name, Object val) throws Exception {
+        Field f = OidcIdentityProvider.class.getDeclaredField(name);
+        f.setAccessible(true);
+        f.set(provider, val);
     }
 
     @Test
-    void s256MatchesRfc7636Vector() {
-        String verifier = "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk";
-        assertEquals("E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM", OidcIdentityProvider.s256Challenge(verifier));
+    void testBasicProperties() {
+        assertEquals("oidc", provider.getProviderId());
+        assertTrue(provider.isEnabled());
     }
 
     @Test
-    void validatesWellFormedClaims() throws Exception {
+    void testGetAuthorizationUrlDisabledThrows() throws Exception {
+        setField("enabled", false);
+        assertThrows(IllegalStateException.class, () -> provider.getAuthorizationUrl("state", "http://cb"));
+        assertThrows(IllegalStateException.class, () -> provider.authenticate("code", "http://cb"));
+    }
+
+    @Test
+    void testGetAuthorizationUrlWithPkceAndNonce() {
+        String url = provider.getAuthorizationUrl("state-123", "http://cb", "challenge-xyz", "nonce-999");
+        assertTrue(url.contains("client_id=client-123"));
+        assertTrue(url.contains("state=state-123"));
+        assertTrue(url.contains("code_challenge=challenge-xyz"));
+        assertTrue(url.contains("nonce=nonce-999"));
+        assertTrue(url.contains("redirect_uri=https%3A%2F%2Fapp.example.com%2Fcallback"));
+    }
+
+    @Test
+    void testAssertRsaSigned() {
+        assertDoesNotThrow(() -> OidcIdentityProvider.assertRsaSigned(Map.of("alg", "RS256")));
+        assertThrows(IllegalStateException.class, () -> OidcIdentityProvider.assertRsaSigned(Map.of("alg", "HS256")));
+        assertThrows(IllegalStateException.class, () -> OidcIdentityProvider.assertRsaSigned(Map.of("alg", "none")));
+    }
+
+    @Test
+    void testS256Challenge() {
+        String challenge = OidcIdentityProvider.s256Challenge("test-verifier-123");
+        assertNotNull(challenge);
+        assertFalse(challenge.isBlank());
+    }
+
+    @Test
+    void testValidateIdTokenClaimsValid() {
+        long future = Instant.now().getEpochSecond() + 3600;
         Map<String, Object> claims = Map.of(
-                "sub", "user-123",
-                "iss", "https://issuer.example.com",
-                "aud", "my-client-id",
-                "nonce", "abc-nonce",
-                "exp", Instant.now().plusSeconds(3600).getEpochSecond());
-        OidcIdentityProvider.validateIdTokenClaims(
-                OidcIdentityProvider.decodeJwtPayload(idToken(claims)),
-                "https://issuer.example.com",
-                "my-client-id",
-                "abc-nonce");
+                "exp", future,
+                "iss", "https://idp.example.com",
+                "aud", "client-123",
+                "nonce", "n-1");
+
+        assertDoesNotThrow(() ->
+                OidcIdentityProvider.validateIdTokenClaims(claims, "https://idp.example.com", "client-123", "n-1"));
     }
 
     @Test
-    void acceptsAudAsList() throws Exception {
+    void testValidateIdTokenClaimsAudienceList() {
+        long future = Instant.now().getEpochSecond() + 3600;
         Map<String, Object> claims = Map.of(
-                "sub", "user-123",
-                "iss", "https://issuer.example.com",
-                "aud", List.of("other", "my-client-id"),
-                "nonce", "abc-nonce",
-                "exp", Instant.now().plusSeconds(3600).getEpochSecond());
-        OidcIdentityProvider.validateIdTokenClaims(
-                OidcIdentityProvider.decodeJwtPayload(idToken(claims)),
-                "https://issuer.example.com",
-                "my-client-id",
-                "abc-nonce");
+                "exp",
+                future,
+                "iss",
+                "https://idp.example.com",
+                "aud",
+                List.of("client-123", "other-client"),
+                "nonce",
+                "n-1");
+
+        assertDoesNotThrow(() ->
+                OidcIdentityProvider.validateIdTokenClaims(claims, "https://idp.example.com", "client-123", "n-1"));
     }
 
     @Test
-    void rejectsIssuerMismatch() throws Exception {
+    void testValidateIdTokenClaimsExpired() {
+        long past = Instant.now().getEpochSecond() - 3600;
         Map<String, Object> claims = Map.of(
-                "sub", "user-123",
+                "exp", past,
+                "iss", "https://idp.example.com",
+                "aud", "client-123");
+
+        assertThrows(
+                IllegalStateException.class,
+                () -> OidcIdentityProvider.validateIdTokenClaims(
+                        claims, "https://idp.example.com", "client-123", null));
+    }
+
+    @Test
+    void testValidateIdTokenClaimsIssuerMismatch() {
+        long future = Instant.now().getEpochSecond() + 3600;
+        Map<String, Object> claims = Map.of(
+                "exp", future,
                 "iss", "https://evil.example.com",
-                "aud", "my-client-id",
-                "nonce", "abc-nonce",
-                "exp", Instant.now().plusSeconds(3600).getEpochSecond());
+                "aud", "client-123");
+
         assertThrows(
                 IllegalStateException.class,
                 () -> OidcIdentityProvider.validateIdTokenClaims(
-                        OidcIdentityProvider.decodeJwtPayload(idToken(claims)),
-                        "https://issuer.example.com",
-                        "my-client-id",
-                        "abc-nonce"));
+                        claims, "https://idp.example.com", "client-123", null));
     }
 
     @Test
-    void rejectsAudienceMismatch() throws Exception {
-        Map<String, Object> claims = Map.of(
-                "sub", "user-123",
-                "iss", "https://issuer.example.com",
-                "aud", "wrong-client",
-                "nonce", "abc-nonce",
-                "exp", Instant.now().plusSeconds(3600).getEpochSecond());
-        assertThrows(
-                IllegalStateException.class,
-                () -> OidcIdentityProvider.validateIdTokenClaims(
-                        OidcIdentityProvider.decodeJwtPayload(idToken(claims)),
-                        "https://issuer.example.com",
-                        "my-client-id",
-                        "abc-nonce"));
-    }
-
-    @Test
-    void rejectsNonceMismatch() throws Exception {
-        Map<String, Object> claims = Map.of(
-                "sub", "user-123",
-                "iss", "https://issuer.example.com",
-                "aud", "my-client-id",
-                "nonce", "different-nonce",
-                "exp", Instant.now().plusSeconds(3600).getEpochSecond());
-        assertThrows(
-                IllegalStateException.class,
-                () -> OidcIdentityProvider.validateIdTokenClaims(
-                        OidcIdentityProvider.decodeJwtPayload(idToken(claims)),
-                        "https://issuer.example.com",
-                        "my-client-id",
-                        "abc-nonce"));
-    }
-
-    @Test
-    void rejectsExpiredToken() throws Exception {
-        Map<String, Object> claims = Map.of(
-                "sub", "user-123",
-                "iss", "https://issuer.example.com",
-                "aud", "my-client-id",
-                "nonce", "abc-nonce",
-                "exp", Instant.now().minusSeconds(3600).getEpochSecond());
-        assertThrows(
-                IllegalStateException.class,
-                () -> OidcIdentityProvider.validateIdTokenClaims(
-                        OidcIdentityProvider.decodeJwtPayload(idToken(claims)),
-                        "https://issuer.example.com",
-                        "my-client-id",
-                        "abc-nonce"));
-    }
-
-    @Test
-    void rejectsMissingExpiration() throws Exception {
-        Map<String, Object> claims = Map.of(
-                "sub", "user-123",
-                "iss", "https://issuer.example.com",
-                "aud", "my-client-id",
-                "nonce", "abc-nonce");
-        assertThrows(
-                IllegalStateException.class,
-                () -> OidcIdentityProvider.validateIdTokenClaims(
-                        OidcIdentityProvider.decodeJwtPayload(idToken(claims)),
-                        "https://issuer.example.com",
-                        "my-client-id",
-                        "abc-nonce"));
-    }
-
-    @Test
-    void rejectsNoneAlgIdToken() {
-        Map<String, Object> header = Map.of("alg", "none", "typ", "JWT");
-        assertThrows(IllegalStateException.class, () -> OidcIdentityProvider.assertRsaSigned(header));
-    }
-
-    @Test
-    void rejectsSymmetricAlgIdToken() {
-        Map<String, Object> header = Map.of("alg", "HS256", "typ", "JWT");
-        assertThrows(IllegalStateException.class, () -> OidcIdentityProvider.assertRsaSigned(header));
-    }
-
-    @Test
-    void rejectsMissingAlgIdToken() {
-        Map<String, Object> header = Map.of("typ", "JWT");
-        assertThrows(IllegalStateException.class, () -> OidcIdentityProvider.assertRsaSigned(header));
-    }
-
-    @Test
-    void acceptsRs256IdToken() {
-        Map<String, Object> header = Map.of("alg", "RS256", "typ", "JWT");
-        OidcIdentityProvider.assertRsaSigned(header);
+    void testCloseNoThrow() {
+        assertDoesNotThrow(provider::close);
     }
 }

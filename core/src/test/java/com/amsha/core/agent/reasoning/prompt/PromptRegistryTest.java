@@ -1,11 +1,18 @@
 package com.amsha.core.agent.reasoning.prompt;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 import jakarta.enterprise.inject.Instance;
 
 import java.lang.reflect.Field;
+import java.time.Instant;
+import java.util.List;
+import java.util.Optional;
+
+import com.amsha.persistence.api.PromptDto;
+import com.amsha.persistence.api.PromptStorePort;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -15,7 +22,10 @@ import org.mockito.MockitoAnnotations;
 class PromptRegistryTest {
 
     @Mock
-    Instance<?> storeInstance;
+    Instance<PromptStorePort> storeInstance;
+
+    @Mock
+    PromptStorePort store;
 
     private PromptRegistry registry;
 
@@ -66,6 +76,42 @@ class PromptRegistryTest {
     @Test
     void delete_returnsFalse_whenNoStore() {
         assertFalse(registry.delete("some-id"));
+    }
+
+    @Test
+    void testWithStorePresent() {
+        when(storeInstance.isUnsatisfied()).thenReturn(false);
+        when(storeInstance.get()).thenReturn(store);
+
+        PromptDto dto = new PromptDto(
+                "id-1", "coordinator", "key-1", "Content", 1, "ACTIVE", 100, "{}", Instant.now(), Instant.now());
+        when(store.findActive("coordinator", "key-1")).thenReturn(Optional.of(dto));
+        when(store.findAll()).thenReturn(List.of(dto));
+        when(store.findByRole("coordinator")).thenReturn(List.of(dto));
+        when(store.findById("id-1")).thenReturn(Optional.of(dto));
+
+        assertEquals("Content", registry.get("coordinator", "key-1", "fallback"));
+        assertTrue(registry.getDto("coordinator", "key-1").isPresent());
+        assertEquals(1, registry.list().size());
+        assertEquals(1, registry.listByRole("coordinator").size());
+        assertTrue(registry.getById("id-1").isPresent());
+
+        when(store.deleteById("id-1")).thenReturn(true);
+        assertTrue(registry.delete("id-1"));
+
+        registry.save(dto);
+        verify(store).save(dto);
+        registry.refresh();
+    }
+
+    @Test
+    void testOnStartAndSyncFromClasspath() {
+        when(storeInstance.isUnsatisfied()).thenReturn(false);
+        when(storeInstance.get()).thenReturn(store);
+        when(store.findActive(anyString(), anyString())).thenReturn(Optional.empty());
+
+        assertDoesNotThrow(() -> registry.onStart(null));
+        verify(store, atLeastOnce()).save(any());
     }
 
     @Test

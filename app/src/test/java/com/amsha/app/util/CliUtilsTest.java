@@ -280,6 +280,23 @@ class CliUtilsTest {
         assertTrue(missing.isEmpty());
     }
 
+    @Test
+    void testWarnTelegramIfPartial() throws Exception {
+        Method warnMethod = CliUtils.class.getDeclaredMethod("warnTelegramIfPartial");
+        warnMethod.setAccessible(true);
+
+        assertDoesNotThrow(() -> warnMethod.invoke(null));
+
+        System.setProperty("AMSHA_TELEGRAM_ENABLED", "true");
+        assertDoesNotThrow(() -> warnMethod.invoke(null));
+
+        System.setProperty("TELEGRAM_BOT_TOKEN", "bot123");
+        assertDoesNotThrow(() -> warnMethod.invoke(null));
+
+        System.clearProperty("AMSHA_TELEGRAM_ENABLED");
+        assertDoesNotThrow(() -> warnMethod.invoke(null));
+    }
+
     // -----------------------------------------------------------------------
     // validateRequiredEnvVars — tests the happy path (no exit)
     // -----------------------------------------------------------------------
@@ -310,6 +327,12 @@ class CliUtilsTest {
         // When all vars are set, empty args (no mode) should not exit
         setAllVars();
         assertDoesNotThrow(() -> CliUtils.validateRequiredEnvVars(new String[] {}));
+    }
+
+    @Test
+    void validateRequiredEnvVars_serveMode_doesNotExit() {
+        setAllVars();
+        assertDoesNotThrow(() -> CliUtils.validateRequiredEnvVars(new String[] {"serve"}));
     }
 
     // -----------------------------------------------------------------------

@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
 
+import com.amsha.channel.api.ApprovalPrompt;
 import com.amsha.channel.api.ChannelType;
 import com.amsha.channel.api.ContentNode;
 
@@ -48,5 +49,15 @@ class CliReplyRendererTest {
         assertTrue(rendered.contains("val"));
         assertTrue(rendered.contains("---"));
         assertTrue(rendered.contains("Something failed"));
+    }
+
+    @Test
+    void testRenderInteractionApprovalPrompt() {
+        CliReplyRenderer renderer = new CliReplyRenderer();
+        ApprovalPrompt ap = new ApprovalPrompt("web_search", "{\"q\":\"test\"}", "sess-1");
+
+        String rendered = renderer.renderInteraction(ap);
+        assertTrue(rendered.contains("Approval needed for tool: web_search"));
+        assertTrue(rendered.contains("Params: {\"q\":\"test\"}"));
     }
 }

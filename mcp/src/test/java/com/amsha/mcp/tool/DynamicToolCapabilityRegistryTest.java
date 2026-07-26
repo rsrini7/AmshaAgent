@@ -98,7 +98,6 @@ class DynamicToolCapabilityRegistryTest {
                         }
                     }
                 } catch (Exception e) {
-                    e.printStackTrace();
                     failures.incrementAndGet();
                 } finally {
                     latch.countDown();

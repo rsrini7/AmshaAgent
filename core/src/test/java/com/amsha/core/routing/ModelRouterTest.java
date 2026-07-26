@@ -10,6 +10,7 @@ import jakarta.enterprise.inject.Instance;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Optional;
+import java.util.function.Supplier;
 
 import com.amsha.core.agent.reasoning.AgentChatModelProvider;
 import com.amsha.core.agent.reasoning.AgentLlmConfig;
@@ -87,7 +88,6 @@ class ModelRouterTest {
 
     @Test
     void resolve_globalFallback_whenNoPersonaOrGroupConfig() {
-        // No persona or group config → falls back to global
         when(modelPool.getOrCreate(anyString(), any())).thenReturn(groqModel);
 
         ChatModel result = router.resolve("coder");
@@ -97,12 +97,9 @@ class ModelRouterTest {
 
     @Test
     void resolve_configs_returnsEmptyListForNoConfig() {
-        // When no persona or group config, resolveConfigs should return empty
         List<ModelRouter.ModelConfig> configs = router.resolveConfigs("coder");
 
         assertNotNull(configs);
-        // Will be empty since no SmallRye config is available in test
-        // The actual config reading happens via SmallRyeConfigProviderResolver
     }
 
     @Test
@@ -141,7 +138,6 @@ class ModelRouterTest {
 
         ChatModel result = router.resolve("coder");
 
-        // With flag off, resolver must never be consulted.
         verifyNoInteractions(profileResolver);
         assertSame(groqModel, result);
     }
@@ -195,10 +191,19 @@ class ModelRouterTest {
 
         ChatModel result = router.resolve("coder");
 
-        // The lightweight-task shortcut (which would resolve to globalProvider#globalModel) must
-        // NOT be reached when an eligible scoped profile route exists.
         assertSame(failover, result);
         verify(modelPool, never()).getOrCreate(eq("groq#llama-3.3"), any());
         verify(modelPool).getOrCreateProfileRoute(eq("tier-1:USER:u-1:coder"), any());
+    }
+
+    @Test
+    void resolve_unknownProvider_throwsModelRoutingException() {
+        router.globalProvider = "unknown_provider";
+        when(modelPool.getOrCreate(anyString(), any())).thenAnswer(inv -> {
+            var supplier = inv.getArgument(1, Supplier.class);
+            return supplier.get();
+        });
+
+        assertThrows(ModelRoutingException.class, () -> router.resolve("coder"));
     }
 }

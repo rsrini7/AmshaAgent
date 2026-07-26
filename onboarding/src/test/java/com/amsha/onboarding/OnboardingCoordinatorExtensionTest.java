@@ -1,19 +1,8 @@
 package com.amsha.onboarding;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.ArgumentMatchers.anyMap;
-import static org.mockito.ArgumentMatchers.argThat;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.doNothing;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.*;
 
 import jakarta.enterprise.inject.Instance;
 
@@ -106,7 +95,7 @@ class OnboardingCoordinatorExtensionTest {
 
         exts = mock(Instance.class);
         when(exts.iterator())
-                .thenReturn(List.<OnboardingExtension>of(mcpExtension).iterator());
+                .thenAnswer(inv -> List.<OnboardingExtension>of(mcpExtension).iterator());
 
         vault = mock(SecretVault.class);
         receiptStore = new InMemoryReceiptStore();
@@ -131,6 +120,7 @@ class OnboardingCoordinatorExtensionTest {
         coordinator.scrubber = scrubber;
         coordinator.commitSaga = commitSaga;
         coordinator.profileExporter = new OnboardingProfileExporter();
+        coordinator.objectMapper = objectMapper;
     }
 
     private OnboardingDraftDto draft(String id, OnboardingDraftState state, List<String> completed) {
@@ -150,6 +140,75 @@ class OnboardingCoordinatorExtensionTest {
                 now.plus(Duration.ofDays(7)),
                 now,
                 now);
+    }
+
+    @Test
+    void testGetOrCreateFirstRunDraft() {
+        when(draftStore.findActiveByOwner(eq("owner-1"), any())).thenReturn(Optional.empty());
+        when(draftStore.save(any())).thenReturn(true);
+
+        OnboardingDraftDto d = coordinator.getOrCreateFirstRunDraft("owner-1");
+        assertNotNull(d);
+        assertEquals("owner-1", d.ownerId());
+        assertEquals(OnboardingDraftPurpose.FIRST_RUN, d.purpose());
+    }
+
+    @Test
+    void testAdvanceStepAndMoveToStep() {
+        OnboardingDraftDto d = draft("d-adv", OnboardingDraftState.DRAFT, List.of("welcome"));
+        when(draftStore.findById("d-adv")).thenReturn(Optional.of(d));
+        when(draftStore.update(any(), anyInt())).thenReturn(true);
+
+        Optional<OnboardingDraftDto> moved = coordinator.moveToStep("d-adv", "connections");
+        assertTrue(moved.isPresent());
+
+        Optional<OnboardingDraftDto> advanced = coordinator.advanceStep("d-adv", "welcome");
+        assertTrue(advanced.isPresent());
+    }
+
+    @Test
+    void testFindActiveAndFindById() {
+        OnboardingDraftDto d = draft("d-active", OnboardingDraftState.DRAFT, List.of("welcome"));
+        when(draftStore.findActiveByOwner(eq("owner-1"), any())).thenReturn(Optional.of(d));
+        when(draftStore.findById("d-active")).thenReturn(Optional.of(d));
+
+        assertTrue(coordinator.findActive("owner-1").isPresent());
+        assertTrue(coordinator.findById("d-active").isPresent());
+    }
+
+    @Test
+    void testPrepareAndValidateExtension() {
+        var prep = coordinator.prepareExtension("d1", "mcp", "owner-1", "sess-1");
+        assertTrue(prep.isPresent());
+
+        var val = coordinator.validateExtension("d1", "mcp", "owner-1", "sess-1", "{}");
+        assertTrue(val.isPresent());
+    }
+
+    @Test
+    void testUpdateConnectionNetworkProfile() {
+        String connPayload = "{\"connections\":[{\"name\":\"c1\"}]}";
+        OnboardingDraftDto d = new OnboardingDraftDto(
+                "d-net",
+                "owner-1",
+                OnboardingDraftPurpose.FIRST_RUN,
+                "fingerprint",
+                "connections",
+                List.of("welcome"),
+                List.of(connPayload),
+                null,
+                null,
+                OnboardingDraftState.DRAFT,
+                1,
+                Instant.now().plus(Duration.ofDays(7)),
+                Instant.now(),
+                Instant.now());
+        when(draftStore.findById("d-net")).thenReturn(Optional.of(d));
+        when(draftStore.update(any(), anyInt())).thenReturn(true);
+
+        String netProfileJson = "{\"tlsTrustMode\":\"SYSTEM\"}";
+        Optional<OnboardingDraftDto> res = coordinator.updateConnectionNetworkProfile("d-net", 0, netProfileJson);
+        assertTrue(res.isPresent());
     }
 
     // ---- extension plan ----
