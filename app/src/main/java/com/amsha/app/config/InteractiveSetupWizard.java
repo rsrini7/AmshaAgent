@@ -1,10 +1,9 @@
 package com.amsha.app.config;
 
-import java.io.BufferedReader;
+import java.io.ByteArrayOutputStream;
 import java.io.Console;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -327,8 +326,12 @@ public class InteractiveSetupWizard {
         if (console != null) return console.readLine(prompt);
         System.err.print(prompt);
         System.err.flush();
-        try {
-            return new BufferedReader(new InputStreamReader(System.in, StandardCharsets.UTF_8)).readLine();
+        try (ByteArrayOutputStream line = new ByteArrayOutputStream()) {
+            int next;
+            while ((next = System.in.read()) != -1 && next != '\n') {
+                if (next != '\r') line.write(next);
+            }
+            return next == -1 && line.size() == 0 ? null : line.toString(StandardCharsets.UTF_8);
         } catch (IOException _) {
             return null;
         }
