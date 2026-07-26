@@ -22,8 +22,12 @@ class RecallMessageMapperTest {
         var result = RecallMessageMapper.map("session", "user", messages, 7);
 
         assertAll(
-                () -> assertEquals(List.of(7, 8, 9), result.stream().map(r -> r.turnNumber()).toList()),
-                () -> assertEquals(List.of("user", "agent", "system"), result.stream().map(r -> r.role()).toList()),
+                () -> assertEquals(
+                        List.of(7, 8, 9),
+                        result.stream().map(r -> r.turnNumber()).toList()),
+                () -> assertEquals(
+                        List.of("user", "agent", "system"),
+                        result.stream().map(r -> r.role()).toList()),
                 () -> assertEquals(
                         List.of("USER_MESSAGE", "AGENT_MESSAGE", "SYSTEM_NOTE"),
                         result.stream().map(r -> r.messageType()).toList()),
@@ -35,13 +39,13 @@ class RecallMessageMapperTest {
 
     @Test
     void handlesEmptyAiContentAndCreatesCompactionSummary() {
-        var empty = RecallMessageMapper.map("session", "user", List.of(AiMessage.from(""))).getFirst();
+        var empty = RecallMessageMapper.map("session", "user", List.of(AiMessage.from("")))
+                .getFirst();
         var summary = RecallMessageMapper.compactionSummary("session", "user", 12, "summary");
 
         assertAll(
                 () -> assertEquals(
-                        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-                        empty.contentHash()),
+                        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", empty.contentHash()),
                 () -> assertEquals("COMPACTION_SUMMARY", summary.messageType()),
                 () -> assertEquals("system", summary.role()),
                 () -> assertEquals(12, summary.turnNumber()),

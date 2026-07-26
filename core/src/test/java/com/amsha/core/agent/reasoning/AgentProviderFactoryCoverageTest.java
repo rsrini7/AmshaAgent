@@ -12,6 +12,7 @@ import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.mockito.Mockito;
 
 class AgentProviderFactoryCoverageTest {
 
@@ -79,8 +80,8 @@ class AgentProviderFactoryCoverageTest {
             field.setAccessible(true);
             if (field.getType() == AgentLlmConfig.class) {
                 AgentLlmConfig config = mock(AgentLlmConfig.class);
-                org.mockito.Mockito.when(config.timeout()).thenReturn(Duration.ofSeconds(1));
-                org.mockito.Mockito.when(config.structuredOutputMode()).thenReturn(StructuredOutputMode.NATIVE);
+                Mockito.when(config.timeout()).thenReturn(Duration.ofSeconds(1));
+                Mockito.when(config.structuredOutputMode()).thenReturn(StructuredOutputMode.NATIVE);
                 field.set(target, config);
             } else if (field.getType() == Optional.class) {
                 field.set(target, Optional.empty());

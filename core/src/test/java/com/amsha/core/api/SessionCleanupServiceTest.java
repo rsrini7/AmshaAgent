@@ -3,6 +3,8 @@ package com.amsha.core.api;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
+import java.util.Optional;
+
 import com.amsha.channel.api.ChannelMessage;
 import com.amsha.core.audit.AuditService;
 import com.amsha.core.lifecycle.SessionHeartbeatTracker;
@@ -34,16 +36,22 @@ class SessionCleanupServiceTest {
     @Test
     void validatesRolesAndSessions() {
         assertTrue(service.validateRole("coder").isEmpty());
-        assertEquals("UNKNOWN_ROLE", service.validateRole("missing-role").orElseThrow().errorCode());
+        assertEquals(
+                "UNKNOWN_ROLE",
+                service.validateRole("missing-role").orElseThrow().errorCode());
 
-        assertEquals("SESSION_NOT_FOUND", service.validateSession("missing").orElseThrow().errorCode());
+        assertEquals(
+                "SESSION_NOT_FOUND",
+                service.validateSession("missing").orElseThrow().errorCode());
         when(heartbeatTracker.exists("owned")).thenReturn(true);
-        when(heartbeatTracker.getOwner("owned")).thenReturn(java.util.Optional.of("owner"));
+        when(heartbeatTracker.getOwner("owned")).thenReturn(Optional.of("owner"));
         assertTrue(service.validateSession("owned").isEmpty());
 
         when(heartbeatTracker.exists("foreign")).thenReturn(true);
-        when(heartbeatTracker.getOwner("foreign")).thenReturn(java.util.Optional.of("someone-else"));
-        assertEquals("SESSION_ACCESS_DENIED", service.validateSession("foreign").orElseThrow().errorCode());
+        when(heartbeatTracker.getOwner("foreign")).thenReturn(Optional.of("someone-else"));
+        assertEquals(
+                "SESSION_ACCESS_DENIED",
+                service.validateSession("foreign").orElseThrow().errorCode());
         verify(auditService).recordMandatory(anyString(), anyString(), anyString(), any(), anyString());
     }
 
