@@ -77,7 +77,8 @@ class SessionResourceTest {
 
     @Test
     void testRotateSessionSuccess() {
-        Cookie cookie = new Cookie("AMSHA_SESSION_ID", "old-token");
+        Cookie cookie =
+                new Cookie.Builder("AMSHA_SESSION_ID").value("old-token").build();
         when(httpHeaders.getCookies()).thenReturn(Map.of("AMSHA_SESSION_ID", cookie));
         when(apiKeyRegistry.computeDigest(anyString())).thenAnswer(i -> "digest-" + i.getArgument(0));
 

@@ -131,7 +131,8 @@ class AuthResourceUnitTest {
     @Test
     void testLogout_WithSessionCookie() {
         when(uriInfo.getBaseUri()).thenReturn(URI.create("http://localhost:8080/"));
-        Cookie sessionCookie = new Cookie("AMSHA_SESSION_ID", "sess-123");
+        Cookie sessionCookie =
+                new Cookie.Builder("AMSHA_SESSION_ID").value("sess-123").build();
         when(httpHeaders.getCookies()).thenReturn(Map.of("AMSHA_SESSION_ID", sessionCookie));
         when(apiKeyRegistry.computeDigest("sess-123")).thenReturn("digest-123");
 
