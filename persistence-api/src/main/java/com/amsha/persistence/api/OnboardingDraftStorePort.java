@@ -33,4 +33,10 @@ public interface OnboardingDraftStorePort {
     boolean update(OnboardingDraftDto draft, int expectedRevision);
 
     int delete(String draftId);
+
+    /**
+     * Finds all drafts that have expired (expiresAt before the given instant). Used by the
+     * scheduled cleanup job to discard stale drafts and their staged vault secrets.
+     */
+    List<OnboardingDraftDto> findExpired(Instant now);
 }

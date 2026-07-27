@@ -100,4 +100,9 @@ public class SqliteOnboardingDraftStoreAdapter implements OnboardingDraftStorePo
     public int delete(String draftId) {
         return jdbi.withExtension(OnboardingDraftJdbiDao.class, dao -> dao.delete(draftId));
     }
+
+    @Override
+    public List<OnboardingDraftDto> findExpired(Instant now) {
+        return jdbi.withExtension(OnboardingDraftJdbiDao.class, dao -> dao.findExpired(now));
+    }
 }

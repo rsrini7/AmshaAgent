@@ -98,4 +98,31 @@ class PostgresOnboardingDraftStoreAdapterTest {
         assertTrue(active.isPresent());
         assertEquals(OnboardingDraftState.RESUMABLE, active.get().state());
     }
+
+    @Test
+    void findExpiredReturnsOnlyPastDeadlines() {
+        OnboardingDraftDto future = draft("pg-future", "owner", OnboardingDraftState.DRAFT);
+        Instant now = Instant.now();
+        OnboardingDraftDto expired = new OnboardingDraftDto(
+                "pg-expired",
+                "owner",
+                OnboardingDraftPurpose.FIRST_RUN,
+                "fp-expired",
+                "step-1",
+                List.of(),
+                List.of(),
+                null,
+                null,
+                OnboardingDraftState.DRAFT,
+                1,
+                now.minusSeconds(1),
+                now.minusSeconds(10),
+                now.minusSeconds(10));
+        assertTrue(store.save(future));
+        assertTrue(store.save(expired));
+
+        assertEquals(
+                List.of("pg-expired"),
+                store.findExpired(now).stream().map(OnboardingDraftDto::draftId).toList());
+    }
 }

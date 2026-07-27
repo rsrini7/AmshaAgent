@@ -135,5 +135,10 @@ class SqliteOnboardingDraftStoreAdapterTest {
                 Instant.now().minusSeconds(100));
         store.save(expired);
         assertTrue(store.findActiveByOwner("owner-x", Instant.now()).isEmpty());
+        assertEquals(
+                List.of("expired-1"),
+                store.findExpired(Instant.now()).stream()
+                        .map(OnboardingDraftDto::draftId)
+                        .toList());
     }
 }

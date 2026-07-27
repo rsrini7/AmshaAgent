@@ -13,6 +13,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
+import com.amsha.common.util.LogUtil;
 import com.amsha.core.security.SecretVault;
 import com.amsha.core.security.VaultConstants;
 import com.amsha.core.security.VaultKey;
@@ -88,9 +89,11 @@ public class OnboardingCommitSaga {
                 }
             }
         } catch (Exception e) {
-            log.errorf("Extension commit failed for draft %s; compensating in reverse: %s", draftId, e.getMessage());
+            log.errorf(
+                    "Extension commit failed for draft %s; compensating in reverse: %s",
+                    draftId, LogUtil.rootMessage(e));
             compensateAll(activeCommits, draftId);
-            throw new IllegalStateException("Extension commit failed: " + e.getMessage(), e);
+            throw new IllegalStateException("Extension commit failed: " + LogUtil.rootMessage(e), e);
         }
 
         try {
@@ -101,9 +104,9 @@ public class OnboardingCommitSaga {
             }
             throw new IllegalStateException("Draft update failed after extension commits");
         } catch (Exception e) {
-            log.errorf("Draft completion failed for %s; compensating extensions: %s", draftId, e.getMessage());
+            log.errorf("Draft completion failed for %s; compensating extensions: %s", draftId, LogUtil.rootMessage(e));
             compensateAll(activeCommits, draftId);
-            throw new IllegalStateException("Onboarding completion failed: " + e.getMessage(), e);
+            throw new IllegalStateException("Onboarding completion failed: " + LogUtil.rootMessage(e), e);
         }
     }
 
@@ -117,18 +120,26 @@ public class OnboardingCommitSaga {
         try {
             String payloadStr = d.selectedNonSecretIds().get(0);
             Map<String, Object> payload = objectMapper.readValue(payloadStr, Map.class);
-            List<Map<String, Object>> connections = (List<Map<String, Object>>) payload.get("connections");
-            Map<String, Object> concernRoutes = (Map<String, Object>) payload.get("concernRoutes");
-            if (connections == null || concernRoutes == null) return;
-            List<Integer> agentLoopIndices = (List<Integer>) concernRoutes.get("agentLoop");
-            if (agentLoopIndices == null || agentLoopIndices.isEmpty()) return;
-            int activeIdx = agentLoopIndices.get(0);
-            if (activeIdx < 0 || activeIdx >= connections.size()) return;
-            Map<String, Object> activeConn = connections.get(activeIdx);
+            Object connectionsRaw = payload.get("connections");
+            Object concernRoutesRaw = payload.get("concernRoutes");
+            if (!(connectionsRaw instanceof List<?> connectionsList)
+                    || !(concernRoutesRaw instanceof Map<?, ?> concernRoutes)) {
+                return;
+            }
+            Map<String, Object> concernRoutesMap = (Map<String, Object>) concernRoutes;
+            Object agentLoopRaw = concernRoutesMap.get("agentLoop");
+            if (!(agentLoopRaw instanceof List<?> agentLoopList) || agentLoopList.isEmpty()) return;
+            Object firstIdx = agentLoopList.get(0);
+            if (!(firstIdx instanceof Number)) return;
+            int activeIdx = ((Number) firstIdx).intValue();
+            if (activeIdx < 0 || activeIdx >= connectionsList.size()) return;
+            Object activeConnectionRaw = connectionsList.get(activeIdx);
+            if (!(activeConnectionRaw instanceof Map<?, ?> activeConnection)) return;
+            Map<String, Object> activeConn = (Map<String, Object>) activeConnection;
             storeSystemSetting(activeConn, "provider", VaultConstants.LLM_PROVIDER_KEY);
             storeSystemSetting(activeConn, "modelId", VaultConstants.LLM_MODEL_KEY);
-            String vaultRef = (String) activeConn.get("apiKeyVaultRef");
-            if (vaultRef != null) {
+            Object vaultRefRaw = activeConn.get("apiKeyVaultRef");
+            if (vaultRefRaw instanceof String vaultRef && !vaultRef.isBlank()) {
                 vault.get(vaultRef, d.ownerId()).ifPresent(vk -> {
                     try (VaultKey k = vk) {
                         vault.storeSystemKey(VaultConstants.LLM_API_KEY, k.get());
@@ -240,7 +251,7 @@ public class OnboardingCommitSaga {
             } catch (Exception ce) {
                 log.errorf(
                         "Compensation failed for extension %s draft %s: %s",
-                        ac.extensionId(), draftId, ce.getMessage());
+                        ac.extensionId(), draftId, LogUtil.rootMessage(ce));
                 persistReceipt(ac.extensionId(), draftId, ac.operationId(), ac.receipt(), "COMPENSATION_FAILED");
             }
         }

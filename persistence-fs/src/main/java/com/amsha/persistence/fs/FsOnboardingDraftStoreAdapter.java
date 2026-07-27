@@ -117,4 +117,22 @@ public class FsOnboardingDraftStoreAdapter implements OnboardingDraftStorePort {
         }
         return 0;
     }
+
+    @Override
+    public synchronized List<OnboardingDraftDto> findExpired(Instant now) {
+        File dir = store.resolve(List.of(DOMAIN, DRAFTS_DIR)).toFile();
+        if (!dir.isDirectory()) return List.of();
+        List<OnboardingDraftDto> expired = new ArrayList<>();
+        File[] files = dir.listFiles((_, name) -> name.endsWith(".json"));
+        if (files == null) return List.of();
+        for (File f : files) {
+            store.readOptional(List.of(DOMAIN, DRAFTS_DIR, f.getName()), OnboardingDraftDto.class)
+                    .ifPresent(d -> {
+                        if (d.expiresAt() != null && d.expiresAt().isBefore(now)) {
+                            expired.add(d);
+                        }
+                    });
+        }
+        return expired;
+    }
 }

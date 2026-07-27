@@ -177,6 +177,51 @@ class OnboardingCoordinatorExtensionTest {
     }
 
     @Test
+    void cleanupExpiredDraftsScrubsAndDeletesWhileContinuingAfterFailure() {
+        OnboardingDraftDto cleaned = draft("expired-cleaned", OnboardingDraftState.DRAFT, List.of());
+        OnboardingDraftDto failed = draft("expired-failed", OnboardingDraftState.DRAFT, List.of());
+        coordinator.scrubber = mock(OnboardingSelectionScrubber.class);
+        when(draftStore.findExpired(any())).thenReturn(List.of(cleaned, failed));
+        when(draftStore.delete("expired-cleaned")).thenReturn(1);
+        doThrow(new IllegalStateException("scrub failed"))
+                .when(coordinator.scrubber)
+                .cleanupStagedSecrets(failed);
+
+        assertEquals(1, coordinator.cleanupExpiredDrafts());
+        verify(coordinator.scrubber).cleanupStagedSecrets(cleaned);
+        verify(draftStore).delete("expired-cleaned");
+        verify(draftStore, never()).delete("expired-failed");
+    }
+
+    @Test
+    void activateLlmSettingsPreservesConnectionIndicesWhenEarlierEntryIsMalformed() {
+        OnboardingDraftDto base = draft("indexed-route", OnboardingDraftState.DRAFT, List.of());
+        String payload = """
+                {"connections":["malformed",{"provider":"groq","modelId":"model"}],
+                 "concernRoutes":{"agentLoop":[1]}}
+                """;
+        OnboardingDraftDto selected = new OnboardingDraftDto(
+                base.draftId(),
+                base.ownerId(),
+                base.purpose(),
+                base.planFingerprint(),
+                base.currentStepId(),
+                base.completedStepIds(),
+                List.of(payload),
+                base.safeFieldErrors(),
+                base.pendingApprovalIds(),
+                base.state(),
+                base.revision(),
+                base.expiresAt(),
+                base.createdAt(),
+                base.updatedAt());
+
+        commitSaga.activateLlmSettings(selected);
+
+        verify(vault, times(2)).storeSystemKey(anyString(), any());
+    }
+
+    @Test
     void testPrepareAndValidateExtension() {
         var prep = coordinator.prepareExtension("d1", "mcp", "owner-1", "sess-1");
         assertTrue(prep.isPresent());

@@ -96,6 +96,7 @@ class NetworkProfilePolicyTest {
                 Instant.now(),
                 Instant.now());
         enforcer.assertEgressAllowed(conn, "https://anything.example.com/v1");
+        enforcer.assertEgressAllowed(conn, "http://[::1]:11434/v1");
     }
 
     @Test

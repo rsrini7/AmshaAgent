@@ -88,6 +88,10 @@ public interface OnboardingDraftJdbiDao {
     @SqlUpdate("DELETE FROM onboarding_draft WHERE draft_id = :draftId")
     int delete(@Bind("draftId") String draftId);
 
+    @SqlQuery("SELECT * FROM onboarding_draft WHERE expires_at IS NOT NULL AND expires_at < :now")
+    @RegisterRowMapper(DraftRowMapper.class)
+    List<OnboardingDraftDto> findExpired(@Bind("now") Instant now);
+
     class DraftRowMapper implements RowMapper<OnboardingDraftDto> {
         private static final TypeReference<List<String>> LIST = new TypeReference<>() {};
 

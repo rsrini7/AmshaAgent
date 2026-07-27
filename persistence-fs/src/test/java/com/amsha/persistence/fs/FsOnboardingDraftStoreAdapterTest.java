@@ -162,5 +162,10 @@ class FsOnboardingDraftStoreAdapterTest {
                 Instant.now().minusSeconds(100));
         adapter.save(expired);
         assertTrue(adapter.findActiveByOwner("owner-x", Instant.now()).isEmpty());
+        assertEquals(
+                List.of("expired-1"),
+                adapter.findExpired(Instant.now()).stream()
+                        .map(OnboardingDraftDto::draftId)
+                        .toList());
     }
 }

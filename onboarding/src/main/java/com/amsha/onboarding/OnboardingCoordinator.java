@@ -12,6 +12,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
+import com.amsha.common.util.LogUtil;
 import com.amsha.core.routing.provider.NetworkProfilePolicy;
 import com.amsha.onboarding.spi.OnboardingContext;
 import com.amsha.onboarding.spi.OnboardingExtension;
@@ -389,7 +390,26 @@ public class OnboardingCoordinator {
     }
 
     public int cleanupExpiredDrafts() {
-        return 0;
+        Instant now = Instant.now();
+        List<OnboardingDraftDto> expired = draftStore.findExpired(now);
+        if (expired.isEmpty()) {
+            return 0;
+        }
+        int cleaned = 0;
+        for (OnboardingDraftDto d : expired) {
+            try {
+                scrubber.cleanupStagedSecrets(d);
+                int deleted = draftStore.delete(d.draftId());
+                if (deleted > 0) {
+                    cleaned++;
+                    incrementCounter("amsha.onboarding.draft.expired.cleaned");
+                    log.infof("[ONBOARDING] Cleaned expired draft %s (owner=%s)", d.draftId(), d.ownerId());
+                }
+            } catch (Exception e) {
+                log.warnf("[ONBOARDING] Failed to clean expired draft %s: %s", d.draftId(), LogUtil.rootMessage(e));
+            }
+        }
+        return cleaned;
     }
 
     // ---- extension discovery and saga lifecycle ----

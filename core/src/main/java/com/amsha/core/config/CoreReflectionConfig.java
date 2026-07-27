@@ -8,6 +8,7 @@ import com.amsha.core.agent.reasoning.ParallelToolCall;
 import com.amsha.core.agent.reasoning.ReasoningStep;
 import com.amsha.core.agent.reasoning.ReasoningStepDeserializer;
 import com.amsha.core.agent.reasoning.ReasoningStepSerializer;
+import com.amsha.core.agent.reasoning.error.LlmModelExhaustedException;
 import com.amsha.core.agent.result.AgentResult;
 import com.amsha.core.api.AgentResponseMapper;
 import com.amsha.core.api.dto.AmshaErrorResponse;
@@ -21,6 +22,8 @@ import com.amsha.core.audit.AuditVerifier;
 import com.amsha.core.audit.SecurityEventType;
 import com.amsha.core.cron.AgentJobCompleted;
 import com.amsha.core.cron.CronTaskScheduled;
+import com.amsha.core.routing.ModelCacheInvalidator;
+import com.amsha.core.routing.ModelDefaults;
 import com.amsha.core.routing.ModelProfileCredentialResolver;
 import com.amsha.core.routing.ModelProfileResolverImpl;
 import com.amsha.core.routing.ModelRouter;
@@ -29,8 +32,16 @@ import com.amsha.core.routing.OrderedFailoverChatModel;
 import com.amsha.core.routing.ResolvedCredential;
 import com.amsha.core.routing.ResolvedProfile;
 import com.amsha.core.routing.RouteResolution;
+import com.amsha.core.routing.SystemProfileMigration;
+import com.amsha.core.routing.provider.ConnectionValidationRequest;
 import com.amsha.core.routing.provider.LlmProviderDescriptor;
+import com.amsha.core.routing.provider.LlmProviderOnboardingAdapter;
 import com.amsha.core.routing.provider.ModelEntry;
+import com.amsha.core.routing.provider.NetworkPolicyEnforcer;
+import com.amsha.core.routing.provider.NetworkPolicyViolation;
+import com.amsha.core.routing.provider.NetworkProfilePolicy;
+import com.amsha.core.routing.provider.ProviderValidationResult;
+import com.amsha.core.routing.provider.StaticProviderCatalogAdapter;
 import com.amsha.core.sandbox.SandboxResult;
 import com.amsha.core.security.ExternalIdentityProvider;
 import com.amsha.core.security.OutboundHttpPolicyService;
@@ -114,8 +125,19 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             ModelProfileResolverImpl.class,
             ModelProfileCredentialResolver.class,
             ModelRoutingException.class,
+            SystemProfileMigration.class,
+            ModelCacheInvalidator.class,
+            ModelDefaults.class,
             LlmProviderDescriptor.class,
             ModelEntry.class,
+            LlmProviderOnboardingAdapter.class,
+            StaticProviderCatalogAdapter.class,
+            ConnectionValidationRequest.class,
+            ProviderValidationResult.class,
+            NetworkPolicyEnforcer.class,
+            NetworkPolicyViolation.class,
+            NetworkProfilePolicy.class,
+            LlmModelExhaustedException.class,
             GroupConsultationEngine.GroupConsultationResult.class,
             GroupConsultationService.TriageResult.class,
             GroupAnalyticsService.DomainComboStats.class,

@@ -2,6 +2,7 @@ package com.amsha.app.config;
 
 import com.amsha.app.api.AdminDirectiveResource;
 import com.amsha.app.api.ArchivalMemoryAdminResource;
+import com.amsha.app.api.AuditResource;
 import com.amsha.app.api.AuthResource;
 import com.amsha.app.api.CoreMemoryAdminResource;
 import com.amsha.app.api.IdentityResource;
@@ -78,6 +79,8 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             AuthResource.LogoutResponse.class,
             // revoke-all-sessions moved to SessionResource
             SessionResource.RevokeAllResponse.class,
+            AuditResource.class,
+            SessionResource.class,
             // Persistence DTOs serialized inside identity responses
             IdentityUserDto.class,
             WorkspaceMembershipDto.class,

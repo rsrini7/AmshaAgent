@@ -13,6 +13,7 @@ import com.amsha.core.agent.reasoning.error.LlmAuthenticationException;
 import com.amsha.core.agent.reasoning.error.LlmContentFilterException;
 import com.amsha.core.agent.reasoning.error.LlmExceptionClassifier;
 import com.amsha.core.agent.reasoning.error.LlmMalformedResponseException;
+import com.amsha.core.agent.reasoning.error.LlmModelExhaustedException;
 import com.amsha.core.agent.reasoning.error.LlmProviderException;
 import com.amsha.core.agent.reasoning.error.LlmRateLimitException;
 import com.amsha.core.agent.reasoning.error.LlmServiceUnavailableException;
@@ -97,7 +98,7 @@ public class OrderedFailoverChatModel implements ChatModel {
                 }
             }
         }
-        throw new RuntimeException("OrderedFailover[" + routeKey + "] all profiles exhausted or disabled");
+        throw new LlmModelExhaustedException("OrderedFailover[" + routeKey + "] all profiles exhausted or disabled");
     }
 
     private void classifyAndHandle(String label, Health h, Throwable t) {

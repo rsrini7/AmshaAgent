@@ -1,6 +1,6 @@
 package com.amsha.core.agent.reasoning.error;
 
-public final class LlmServiceUnavailableException extends LlmProviderException {
+public non-sealed class LlmServiceUnavailableException extends LlmProviderException {
     public LlmServiceUnavailableException(String message) {
         super(message);
     }

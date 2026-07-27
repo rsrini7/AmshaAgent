@@ -14,6 +14,7 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import com.amsha.core.agent.reasoning.error.LlmAuthenticationException;
+import com.amsha.core.agent.reasoning.error.LlmModelExhaustedException;
 import com.amsha.core.agent.reasoning.error.LlmServiceUnavailableException;
 
 import org.junit.jupiter.api.Test;
@@ -120,7 +121,7 @@ class OrderedFailoverChatModelTest {
                 List.of(new OrderedFailoverChatModel.Entry("a", a), new OrderedFailoverChatModel.Entry("b", b)),
                 30);
 
-        RuntimeException ex = assertThrows(RuntimeException.class, () -> model.chat(request()));
+        LlmModelExhaustedException ex = assertThrows(LlmModelExhaustedException.class, () -> model.chat(request()));
         assertTrue(ex.getMessage().contains("all profiles exhausted"));
         assertEquals(1, a.calls.get());
         assertEquals(1, b.calls.get());

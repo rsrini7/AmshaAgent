@@ -103,6 +103,9 @@ public class NetworkPolicyEnforcer {
 
     private static boolean isLocalhost(String url) {
         String host = hostOf(url);
-        return host != null && (host.equals("localhost") || host.equals("127.0.0.1") || host.equals("::1"));
+        if (host == null) return false;
+        // Normalize IPv6 bracket-wrapped form to match OutboundHttpPolicyService.
+        String normalized = host.startsWith("[") && host.endsWith("]") ? host.substring(1, host.length() - 1) : host;
+        return normalized.equals("localhost") || normalized.equals("127.0.0.1") || normalized.equals("::1");
     }
 }

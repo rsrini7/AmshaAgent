@@ -7,5 +7,5 @@
 - Store reusable seed/test SQL files under script/data/ for shell script reuse. Confidence: 0.70
 - Shell scripts and tests (validators, runners) must be generic and work with both jar and native binary deployments — do not hardcode assumptions about dist paths or binary type. Confidence: 0.65
 - When a script needs a data directory path, ask the user to provide it rather than auto-detecting from the running process. Confidence: 0.75
-- Maintain minimum test coverage of 70%, keeping a buffer above the threshold so small changes do not trigger coverage-reduction reports. Confidence: 0.90
+- Maintain minimum test coverage of 70%, keeping a buffer above the threshold so small changes do not trigger coverage-reduction reports. When adding new files, write test coverage for them as part of the implementation — don't let new files reduce the overall coverage percentage. Confidence: 0.92
 - Proactively fix deprecation warnings as they appear across the codebase. Confidence: 0.85
