@@ -330,9 +330,39 @@ class CliUtilsTest {
     }
 
     @Test
-    void validateRequiredEnvVars_serveMode_doesNotExit() {
+    void getMissingVarSpecs_otherLlmProviders() {
         setAllVars();
-        assertDoesNotThrow(() -> CliUtils.validateRequiredEnvVars(new String[] {"serve"}));
+        String[] providers = {"openrouter", "openai", "gemini", "nvidia", "cerebras", "omlx", "ollama"};
+        for (String p : providers) {
+            System.setProperty("AMSHA_LLM_PROVIDER", p);
+            // Should not throw and should handle provider resolution
+            List<VarSpec> missing = CliUtils.getMissingVarSpecs(new String[] {});
+            assertNotNull(missing);
+        }
+    }
+
+    @Test
+    void getMissingVarSpecs_customSlotProviders() {
+        setAllVars();
+        System.setProperty("AMSHA_INFINITE_LOOP_COMPACTION_PROVIDERS", "cerebras,groq");
+        System.setProperty("AMSHA_INFINITE_LOOP_CLASSIFIER_PROVIDERS", "openrouter,ollama");
+        System.setProperty("AMSHA_INFINITE_LOOP_EMBEDDING_PROVIDERS", "openai");
+        List<VarSpec> missing = CliUtils.getMissingVarSpecs(new String[] {});
+        assertNotNull(missing);
+    }
+
+    @Test
+    void getMissingVarSpecs_optionalToolsMissing_returnsMissingSpecs() {
+        setAllVars();
+        System.setProperty("AMSHA_TOOLS_GITHUB_TOKEN", "");
+        System.setProperty("AMSHA_TOOLS_SERPER_API_KEY", "");
+        System.setProperty("AMSHA_TOOLS_BRAVE_API_KEY", "");
+
+        List<VarSpec> missing = CliUtils.getMissingVarSpecs(new String[] {});
+        assertEquals(3, missing.size());
+        assertTrue(missing.stream().anyMatch(s -> s.key().equals("AMSHA_TOOLS_GITHUB_TOKEN")));
+        assertTrue(missing.stream().anyMatch(s -> s.key().equals("AMSHA_TOOLS_SERPER_API_KEY")));
+        assertTrue(missing.stream().anyMatch(s -> s.key().equals("AMSHA_TOOLS_BRAVE_API_KEY")));
     }
 
     // -----------------------------------------------------------------------

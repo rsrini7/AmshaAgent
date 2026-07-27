@@ -206,4 +206,34 @@ class ModelRouterTest {
 
         assertThrows(ModelRoutingException.class, () -> router.resolve("coder"));
     }
+
+    @Test
+    void resolve_profileRoutingEnabled_noConnection_fallsBackToLegacy() {
+        router.profileRoutingEnabled = true;
+        ResolvedProfile profile =
+                new ResolvedProfile("prof-1", "conn-missing", "gpt-4o", "openai", "USER", "u-1", 1, 1, true);
+        when(profileResolver.resolve("coder")).thenReturn(RouteResolution.of("tier-1", List.of(profile)));
+        when(profileStore.findConnection("conn-missing")).thenReturn(Optional.empty());
+        when(modelPool.getOrCreate(anyString(), any())).thenReturn(groqModel);
+
+        ChatModel result = router.resolve("coder");
+
+        assertSame(groqModel, result);
+    }
+
+    @Test
+    void resolve_profileRoutingEnabled_noCredential_fallsBackToLegacy() {
+        router.profileRoutingEnabled = true;
+        ResolvedProfile profile =
+                new ResolvedProfile("prof-1", "conn-1", "gpt-4o", "openai", "USER", "u-1", 1, 1, true);
+        LlmConnectionDto conn = mock(LlmConnectionDto.class);
+        when(profileResolver.resolve("coder")).thenReturn(RouteResolution.of("tier-1", List.of(profile)));
+        when(profileStore.findConnection("conn-1")).thenReturn(Optional.of(conn));
+        when(credentialResolver.resolve(any(), any())).thenReturn(Optional.empty());
+        when(modelPool.getOrCreate(anyString(), any())).thenReturn(groqModel);
+
+        ChatModel result = router.resolve("coder");
+
+        assertSame(groqModel, result);
+    }
 }

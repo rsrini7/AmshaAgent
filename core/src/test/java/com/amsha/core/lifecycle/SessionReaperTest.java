@@ -1,5 +1,6 @@
 package com.amsha.core.lifecycle;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
@@ -196,5 +197,101 @@ class SessionReaperTest {
         reaper.onShutdown(new ShutdownEvent());
         reaper.gcSweep();
         verify(heartbeatTracker, never()).activeSessionCount();
+    }
+
+    @Test
+    void testGcSweepSkipsAwaitingApprovalAndResuming() {
+        when(heartbeatTracker.activeSessionCount()).thenReturn(2);
+        CheckpointDto mockCp = mock(CheckpointDto.class);
+        when(mockCp.sessionId()).thenReturn("awaiting-sess");
+        when(checkpointStore.findByStatus(CheckpointStatus.AWAITING_APPROVAL.name()))
+                .thenReturn(List.of(mockCp));
+        when(agentStore.isBatchResuming("resuming-sess")).thenReturn(true);
+
+        doAnswer(invocation -> {
+                    var consumer = invocation.getArgument(1, Consumer.class);
+                    consumer.accept("awaiting-sess");
+                    consumer.accept("resuming-sess");
+                    return null;
+                })
+                .when(heartbeatTracker)
+                .forEachExpired(any(Instant.class), any());
+
+        reaper.gcSweep();
+
+        verify(workspaceManager, never()).terminateSession(anyString());
+    }
+
+    @Test
+    void testSweepTimedOutApprovalsWithBatchToolDecisionsAndCronSession() {
+        AgentCheckpoint cp = mock(AgentCheckpoint.class);
+        String cronSessId = "cron-12345678-1234-1234-1234-123456789012_run-1";
+        when(cp.getSessionId()).thenReturn(cronSessId);
+        when(cp.getAgentRole()).thenReturn("DEFAULT");
+        when(cp.getPendingToolName()).thenReturn("tool1");
+        when(cp.getId()).thenReturn(100L);
+        when(cp.getChannelType()).thenReturn("CLI");
+        when(cp.getChannelPlatformId()).thenReturn("p1");
+        when(cp.hasBatchToolDecisions()).thenReturn(true);
+
+        when(agentStore.findStaleAwaitingApproval(any(Instant.class))).thenReturn(List.of(cp));
+        when(meterRegistry.counter(anyString(), anyString(), anyString())).thenReturn(counter);
+
+        reaper.sweepTimedOutApprovals();
+
+        verify(agentStore).markFailed(eq(100L), anyString());
+        verify(workspaceManager).terminateSession(cronSessId);
+    }
+
+    @Test
+    void testOnStartupExceptionHandledSafely() {
+        when(checkpointStore.recoverInProgressZombies(any(Instant.class), anyString()))
+                .thenThrow(new RuntimeException("Database error during startup"));
+
+        assertDoesNotThrow(() -> reaper.onStartup(new StartupEvent()));
+    }
+
+    @Test
+    void testPurgeOldChatHistoryExceptionHandledSafely() {
+        doThrow(new RuntimeException("Purge error")).when(checkpointStore).purgeOldChatHistory(any(Instant.class));
+        assertDoesNotThrow(() -> reaper.purgeOldChatHistory());
+    }
+
+    @Test
+    void testArchiveInactiveCatalogSessionsWithIndividualException() {
+        SessionCatalogEntry entry1 = new SessionCatalogEntry(
+                "sess-1",
+                "owner",
+                "CLI",
+                "ch1",
+                "sess-1",
+                "role",
+                "goal",
+                Instant.now().minusSeconds(100000),
+                Instant.now().minusSeconds(100000),
+                1,
+                false,
+                "ACTIVE");
+        SessionCatalogEntry entry2 = new SessionCatalogEntry(
+                "sess-2",
+                "owner",
+                "CLI",
+                "ch1",
+                "sess-2",
+                "role",
+                "goal",
+                Instant.now().minusSeconds(100000),
+                Instant.now().minusSeconds(100000),
+                1,
+                false,
+                "ACTIVE");
+
+        when(sessionCatalogStore.listInactiveBefore(any(Instant.class))).thenReturn(List.of(entry1, entry2));
+        doThrow(new RuntimeException("Archive failed"))
+                .when(sessionCatalogStore)
+                .archive("sess-1");
+
+        assertDoesNotThrow(() -> reaper.archiveInactiveCatalogSessions());
+        verify(sessionCatalogStore).archive("sess-2");
     }
 }

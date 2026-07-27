@@ -167,4 +167,35 @@ class ApiKeyRegistryTest {
         latch.await();
         assertEquals(20, successCount.get(), "Exactly 20 out of 25 concurrent requests should succeed");
     }
+
+    @Test
+    void testRotatedSessionCache() {
+        assertFalse(registry.findRotatedSessionId("old-digest-1").isPresent());
+        assertFalse(registry.findRotatedSessionId(null).isPresent());
+
+        registry.registerRotatedSession("old-digest-1", "sess-id-100");
+        assertTrue(registry.findRotatedSessionId("old-digest-1").isPresent());
+        assertEquals(
+                "sess-id-100", registry.findRotatedSessionId("old-digest-1").get());
+
+        // Null parameters should be safe no-ops
+        registry.registerRotatedSession(null, "sess-id");
+        registry.registerRotatedSession("digest", null);
+    }
+
+    @Test
+    void testHasRoleWithInternalKey() {
+        registry.register("internal", "internal-raw-key");
+        assertTrue(registry.hasRole("internal-raw-key", "OWNER"));
+        assertTrue(registry.hasRole("internal-raw-key", "internal"));
+        assertFalse(registry.hasRole("internal-raw-key", "SERVICE"));
+    }
+
+    @Test
+    void testHasRoleServiceMismatch() {
+        registry.register("some-service", "service-key-123");
+        assertTrue(registry.hasRole("service-key-123", "SERVICE"));
+        assertTrue(registry.hasRole("service-key-123", "some-service"));
+        assertFalse(registry.hasRole("service-key-123", "OWNER"));
+    }
 }

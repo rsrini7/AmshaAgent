@@ -154,4 +154,85 @@ class PersonaEscalationServiceTest {
         assertTrue(goal.contains("ESCALATION FROM Brahma (The Creator)"));
         assertTrue(goal.contains("Saraswati (The Researcher)"));
     }
+
+    @Test
+    void determineEscalationTarget_debuggerRules() {
+        assertEquals("researcher", service.determineEscalationTarget("debugger", "unable to diagnose error", null));
+        assertEquals("coder", service.determineEscalationTarget("debugger", "fundamental flaw", null));
+        assertEquals(
+                "optimizer",
+                service.determineEscalationTarget("debugger", "error in algorithm", "complex logic obstacle"));
+        assertEquals(
+                "sentinel",
+                service.determineEscalationTarget("debugger", "vulnerability detected", "security injection"));
+    }
+
+    @Test
+    void determineEscalationTarget_architectAndResearcherRules() {
+        assertEquals("coder", service.determineEscalationTarget("architect", "design ready", "implement the feature"));
+        assertEquals(
+                "researcher",
+                service.determineEscalationTarget("architect", "design unclear", "research best practices"));
+        assertEquals(
+                "coder",
+                service.determineEscalationTarget("researcher", "findings attached", "write code for solution"));
+    }
+
+    @Test
+    void determineEscalationTarget_nullOrUniversalFallback() {
+        assertNull(service.determineEscalationTarget(null, "error", "goal"));
+        assertNull(service.determineEscalationTarget("coder", null, "goal"));
+        assertEquals(
+                "debugger", service.determineEscalationTarget("unknown_role", "compilation error in main.java", null));
+    }
+
+    @Test
+    void testFormatAgentResultError() {
+        AgentResult.Failed failed = mock(AgentResult.Failed.class);
+        when(failed.reason()).thenReturn("some failure");
+        assertEquals("some failure", service.formatAgentResultError(failed));
+
+        AgentResult.LoopExceeded loopExceeded = mock(AgentResult.LoopExceeded.class);
+        when(loopExceeded.maxIterations()).thenReturn(10);
+        assertEquals("Agent exceeded max iterations (10)", service.formatAgentResultError(loopExceeded));
+
+        AgentResult.AwaitingApproval awaitingApproval = mock(AgentResult.AwaitingApproval.class);
+        when(awaitingApproval.toolName()).thenReturn("sandbox_exec");
+        assertEquals(
+                "Agent requires human approval for tool: sandbox_exec",
+                service.formatAgentResultError(awaitingApproval));
+
+        AgentResult.AwaitingRetry awaitingRetry = mock(AgentResult.AwaitingRetry.class);
+        when(awaitingRetry.retryAfterMs()).thenReturn(5000);
+        assertEquals("Agent hit rate limit, retry after 5s", service.formatAgentResultError(awaitingRetry));
+    }
+
+    @Test
+    void attemptEscalation_secondaryEscalationSuccess() {
+        AgentResult.Finished firstResult =
+                new AgentResult.Finished("I cannot solve this - insufficient information", List.of(), 3, 3);
+        AgentResult.Finished secondResult =
+                new AgentResult.Finished("Final answer after secondary escalation", List.of(), 4, 4);
+
+        when(agentLoop.run(anyString(), eq("debugger"), anyString(), eq(reasoningEngine), anyInt()))
+                .thenReturn(firstResult);
+        when(agentLoop.run(anyString(), eq("researcher"), anyString(), eq(reasoningEngine), anyInt()))
+                .thenReturn(secondResult);
+
+        var res = service.attemptEscalation(
+                "sess-1",
+                "usr-1",
+                "chat-1",
+                "coder",
+                "debugger",
+                "syntax error",
+                "fix compilation",
+                null,
+                null,
+                "cli",
+                "cli");
+        assertTrue(res.success());
+        assertEquals("researcher", res.targetPersona());
+        assertEquals("Final answer after secondary escalation", res.result());
+    }
 }
