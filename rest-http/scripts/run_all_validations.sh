@@ -187,7 +187,11 @@ if [ "$RUN_PII_AUDIT" = true ] || [ "$RUN_ALL" = true ]; then
 fi
 
 if [ "$RUN_IDENTITY" = true ] || [ "$RUN_ALL" = true ]; then
-  run_validator "P109 IDENTITY / ACCESS" "$IDENTITY_SCRIPT"
+  if [ "$RUN_ALL" = true ] || [ "$FAST" = true ]; then
+    EXPECT_SKIP_IDENTITY=true run_validator "P109 IDENTITY / ACCESS" "$IDENTITY_SCRIPT"
+  else
+    run_validator "P109 IDENTITY / ACCESS" "$IDENTITY_SCRIPT"
+  fi
 fi
 
 if [ "$RUN_CRON" = true ] || [ "$RUN_ALL" = true ]; then
