@@ -7,6 +7,7 @@
 
 # code-style
 - Use `%n` instead of `\n` for platform-specific line separators when constructing format strings. Confidence: 0.65
+- Remove unused imports instead of leaving them in the codebase. Confidence: 0.80
 
 # documentation
 - Maintain architecture invariants and cross-referencing docs (agents.md, invariants) to capture all backend implementations when adding new store ports, preventing single-backend gaps. Confidence: 0.72
