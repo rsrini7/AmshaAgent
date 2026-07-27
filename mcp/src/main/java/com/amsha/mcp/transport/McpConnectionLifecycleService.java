@@ -25,6 +25,9 @@ import com.amsha.core.agent.AgentSentinels;
 import com.amsha.core.audit.AuditService;
 import com.amsha.core.audit.SecurityEventType;
 import com.amsha.core.scope.WorkspaceScopeHolder;
+import com.amsha.core.security.OutboundHttpPolicyService;
+import com.amsha.core.security.OutboundPolicyDecision;
+import com.amsha.core.security.OutboundPurpose;
 import com.amsha.core.security.SecretVault;
 import com.amsha.core.security.VaultConstants;
 import com.amsha.core.tools.ToolCategory;
@@ -72,6 +75,9 @@ public class McpConnectionLifecycleService {
 
     @Inject
     McpClientService mcpClientService;
+
+    @Inject
+    OutboundHttpPolicyService outboundHttpPolicyService;
 
     /**
      * Delay before reconciling durable connections at boot. The MCP/HTTP server may
@@ -151,7 +157,8 @@ public class McpConnectionLifecycleService {
                         connection.userId(),
                         connection.endpoint(),
                         ToolCategory.valueOf(connection.category()),
-                        Map.of());
+                        Map.of(),
+                        true);
                 auditService.recordMandatory(
                         AgentSentinels.SYSTEM_SESSION,
                         connection.userId(),
@@ -197,6 +204,14 @@ public class McpConnectionLifecycleService {
     }
 
     public void validateHttpRegistration(String url, Map<String, String> headers) {
+        if (outboundHttpPolicyService != null) {
+            OutboundPolicyDecision decision =
+                    outboundHttpPolicyService.evaluate(url, OutboundPurpose.MCP_TOOL_CALL, null, null);
+            if (decision.isDenied()) {
+                throw new IllegalArgumentException("MCP endpoint rejected by outbound policy: "
+                        + decision.reason().orElse("POLICY_DENIED"));
+            }
+        }
         validateEndpoint(url);
         validateHeaders(headers);
     }

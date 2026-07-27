@@ -214,10 +214,13 @@ smallrye:
       includes:
         - "META-INF/services/*"
         - "META-INF/native-image/**"
-        - "skills/index.txt"
-        - "skills/**.md"
+        - "META-INF/skills/**"
+        - "skills/**"
+        - "templates/**"
+        - "prompts/**"
         - "env-example"
         - "native/vec0/**"
+        - "provider-catalog.json"
 
   # ---------------------------------------------------------------------------
   # LOGGING
@@ -322,11 +325,13 @@ amsha:
     vector-dimension: "${AMSHA_FS_VECTOR_DIMENSION:768}"
   delegation:
     max-depth: ${AMSHA_DELEGATION_MAX_DEPTH:3}
+  ui:
+    skip-onboarding: ${AMSHA_UI_SKIP_ONBOARDING:false}
   llm:
     provider: ${AMSHA_LLM_PROVIDER:groq}
+    profile-routing:
+      enabled: ${AMSHA_LLM_PROFILE_ROUTING_ENABLED:false}
     vault-priority: ${AMSHA_LLM_VAULT_PRIORITY:false}
-    ui:
-      skip-onboarding: ${AMSHA_UI_SKIP_ONBOARDING:false}
     log-http: ${AMSHA_LLM_LOG_HTTP:false}
     max-retries: ${AMSHA_LLM_MAX_RETRIES:3}
     max-output-tokens: ${AMSHA_LLM_MAX_OUTPUT_TOKENS:8192}

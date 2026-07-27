@@ -10,6 +10,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.Optional;
 
 import com.amsha.core.routing.ClaudeCodeOAuthTokenExtractor;
+import com.amsha.core.routing.ModelDefaults;
 import com.amsha.core.security.SecretVault;
 import com.amsha.core.security.VaultConstants;
 import com.amsha.core.security.VaultKey;
@@ -35,12 +36,12 @@ public class ClaudeCodeProviderFactory implements AgentChatModelProvider {
     @Inject
     SecretVault secretVault;
 
-    @ConfigProperty(name = "amsha.llm.model-name", defaultValue = "claude-sonnet-4-5")
+    @ConfigProperty(name = "amsha.llm.model-name", defaultValue = ModelDefaults.DEFAULT_CLAUDE_CODE_MODEL)
     String modelName;
 
     @Override
     public String providerName() {
-        return "claude-code";
+        return ModelDefaults.PROVIDER_CLAUDE_CODE;
     }
 
     @Override
@@ -82,7 +83,7 @@ public class ClaudeCodeProviderFactory implements AgentChatModelProvider {
 
         String resolvedModel = overrideModel != null ? overrideModel : modelName;
         if (resolvedModel == null || resolvedModel.isBlank() || "mistral-small".equalsIgnoreCase(resolvedModel)) {
-            resolvedModel = "claude-sonnet-4-5";
+            resolvedModel = ModelDefaults.DEFAULT_CLAUDE_CODE_MODEL;
         }
 
         return AnthropicChatModel.builder()

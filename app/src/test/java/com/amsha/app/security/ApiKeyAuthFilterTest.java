@@ -14,6 +14,7 @@ import org.junit.jupiter.api.Test;
 
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
+import io.restassured.response.Response;
 
 @QuarkusTest
 class ApiKeyAuthFilterTest {
@@ -25,6 +26,8 @@ class ApiKeyAuthFilterTest {
     void setup() {
         when(apiKeyRegistryMock.isValidKey("valid-key")).thenReturn(true);
         when(apiKeyRegistryMock.isAllowed("valid-key")).thenReturn(true);
+        when(apiKeyRegistryMock.isMutationAllowed("valid-key")).thenReturn(true);
+        when(apiKeyRegistryMock.getKeyName("valid-key")).thenReturn("internal");
 
         when(apiKeyRegistryMock.isValidKey("rate-limited-key")).thenReturn(true);
         when(apiKeyRegistryMock.isAllowed("rate-limited-key")).thenReturn(false);
@@ -77,6 +80,25 @@ class ApiKeyAuthFilterTest {
     void testInfoEndpointSkipsAuth() {
         // /api/v1/info should skip the filter even without a key
         given().when().get("/api/v1/info").then().statusCode(200);
+    }
+
+    @Test
+    void testOnboardingStatusSkipsAuthFilter() {
+        Response response = given().when().get("/api/v1/onboarding/status");
+        Assertions.assertTrue(
+                response.statusCode() == 200
+                        || (response.statusCode() == 401
+                                && "Unauthorized".equals(response.jsonPath().getString("error"))),
+                "Onboarding status must reach its resource instead of being rejected by the API-key filter");
+    }
+
+    @Test
+    void testOnboardingDraftAuthenticatesPresentedKey() {
+        given().header("X-Amsha-API-Key", "valid-key")
+                .when()
+                .post("/api/v1/onboarding/drafts")
+                .then()
+                .statusCode(Matchers.not(401));
     }
 
     @Test

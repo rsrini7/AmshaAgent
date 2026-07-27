@@ -1,0 +1,67 @@
+package com.amsha.persistence.sqlite;
+
+import static org.junit.jupiter.api.Assertions.*;
+
+import jakarta.inject.Inject;
+
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+
+import com.amsha.persistence.api.CronRunDto;
+import com.amsha.persistence.sqlite.testutil.FlywayEnabledTestProfile;
+
+import org.junit.jupiter.api.Test;
+
+import io.quarkus.test.junit.QuarkusTest;
+import io.quarkus.test.junit.TestProfile;
+
+@QuarkusTest
+@TestProfile(FlywayEnabledTestProfile.class)
+class SqliteCronRunStoreAdapterTest {
+
+    @Inject
+    SqliteCronRunStoreAdapter store;
+
+    @Test
+    void testCronRunStoreOperations() {
+        String cronId = "cron-" + UUID.randomUUID();
+        String runId = "run-" + UUID.randomUUID();
+
+        CronRunDto dto = new CronRunDto(
+                runId,
+                cronId,
+                "session-123",
+                "SUCCESS",
+                Instant.now(),
+                Instant.now().plusMillis(500),
+                null,
+                1,
+                100,
+                50,
+                BigDecimal.valueOf(0.01),
+                Instant.now());
+
+        store.save(dto);
+
+        Optional<CronRunDto> byId = store.findById(runId);
+        assertTrue(byId.isPresent());
+        assertEquals("SUCCESS", byId.get().status());
+
+        List<CronRunDto> byCronId = store.findByCronId(cronId, 0, 10);
+        assertEquals(1, byCronId.size());
+
+        assertEquals(1, store.countByCronId(cronId));
+
+        List<CronRunDto> allSuccess = store.findAll("SUCCESS", 0, 10);
+        assertFalse(allSuccess.isEmpty());
+
+        assertTrue(store.countAll("SUCCESS") >= 1);
+        assertTrue(store.countAll(null) >= 1);
+
+        // Blank/null check safety
+        assertTrue(store.findById(null).isEmpty());
+    }
+}

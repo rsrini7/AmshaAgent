@@ -20,19 +20,20 @@ fail()  { printf "❌ HTTP %s — %s\n" "$1" "$(head -c 120 /tmp/resp)"; FAIL=$(
 # SSE probe: open the stream, capture first bytes within 3s, report status.
 sse() {
   local url="$1"
-  rtk curl -s -m 3 -o /tmp/sse_out -w "%{http_code}" -H "X-Amsha-API-Key: $VALID_KEY" "$url" 2>/dev/null
+  curl -sS -N -m 3 -o /tmp/sse_out -w "%{http_code}" \
+    -H "X-Amsha-API-Key: $VALID_KEY" "$url" 2>/dev/null
 }
 run_req() {
   local method="$1" key="$2" url="$3" data="$4"
   local c
   if [ -n "$data" ]; then
-    c=$(rtk curl -s -m 30 -o /tmp/resp -w "%{http_code}" -X "$method" -H "X-Amsha-API-Key: $key" -H "Content-Type: application/json" -d "$data" "$url")
+    c=$(curl -s -m 30 -o /tmp/resp -w "%{http_code}" -X "$method" -H "X-Amsha-API-Key: $key" -H "Content-Type: application/json" -d "$data" "$url")
   else
-    c=$(rtk curl -s -m 30 -o /tmp/resp -w "%{http_code}" -X "$method" -H "X-Amsha-API-Key: $key" "$url")
+    c=$(curl -s -m 30 -o /tmp/resp -w "%{http_code}" -X "$method" -H "X-Amsha-API-Key: $key" "$url")
   fi
   if [ "$c" = "429" ]; then sleep $RL_WAIT
-    if [ -n "$data" ]; then c=$(rtk curl -s -m 30 -o /tmp/resp -w "%{http_code}" -X "$method" -H "X-Amsha-API-Key: $key" -H "Content-Type: application/json" -d "$data" "$url")
-    else c=$(rtk curl -s -m 30 -o /tmp/resp -w "%{http_code}" -X "$method" -H "X-Amsha-API-Key: $key" "$url"); fi
+    if [ -n "$data" ]; then c=$(curl -s -m 30 -o /tmp/resp -w "%{http_code}" -X "$method" -H "X-Amsha-API-Key: $key" -H "Content-Type: application/json" -d "$data" "$url")
+    else c=$(curl -s -m 30 -o /tmp/resp -w "%{http_code}" -X "$method" -H "X-Amsha-API-Key: $key" "$url"); fi
   fi
   echo "$c"
 }
@@ -93,7 +94,7 @@ CODE=$(run_req PATCH "$VALID_KEY" "$B/api/v1/settings/prompt" '{"systemPrompt":"
 info "SETTINGS-5: POST /settings/reset"
 CODE=$(run_req POST "$VALID_KEY" "$B/api/v1/settings/reset"); [ "$CODE" = "200" ] && ok "$CODE" || fail "$CODE"
 info "SETTINGS-6: GET /settings without key → 401"
-CODE=$(rtk curl -s -m 15 -o /tmp/resp -w "%{http_code}" "$B/api/v1/settings"); [ "$CODE" = "401" ] && ok "$CODE" || fail "$CODE"
+CODE=$(curl -s -m 15 -o /tmp/resp -w "%{http_code}" "$B/api/v1/settings"); [ "$CODE" = "401" ] && ok "$CODE" || fail "$CODE"
 
 echo "───────────────────────────────────────────"
 echo " SSE/Settings Results: $PASS passed, $FAIL failed"

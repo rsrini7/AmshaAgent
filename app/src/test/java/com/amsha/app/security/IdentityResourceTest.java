@@ -2,6 +2,8 @@ package com.amsha.app.security;
 
 import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import jakarta.inject.Inject;
 
@@ -102,6 +104,10 @@ class IdentityResourceTest {
         String user2Id = "usr_member456";
 
         identityStore.saveUser(new IdentityUserDto(user2Id, "New Member", "ACTIVE", now, now));
+        WorkspaceMembershipDto existingMembership =
+                new WorkspaceMembershipDto(workspaceId, user2Id, "ADMIN", "ACTIVE", 0, now, now);
+        assertTrue(identityStore.saveMembership(existingMembership));
+        assertTrue(identityStore.saveMembership(existingMembership));
         WebSessionDto session2 = new WebSessionDto(
                 "session-member-456",
                 user2Id,
@@ -127,6 +133,9 @@ class IdentityResourceTest {
                 .body("success", is(true))
                 .body("workspaceId", is(workspaceId))
                 .body("role", is("MEMBER"));
+        assertEquals(
+                2,
+                identityStore.findMembership(workspaceId, user2Id).orElseThrow().revision());
 
         // 4. DELETE last active owner -> 400 Bad Request
         given().cookie("AMSHA_SESSION_ID", sessionToken)

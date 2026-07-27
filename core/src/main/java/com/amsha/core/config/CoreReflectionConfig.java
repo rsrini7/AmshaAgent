@@ -8,6 +8,7 @@ import com.amsha.core.agent.reasoning.ParallelToolCall;
 import com.amsha.core.agent.reasoning.ReasoningStep;
 import com.amsha.core.agent.reasoning.ReasoningStepDeserializer;
 import com.amsha.core.agent.reasoning.ReasoningStepSerializer;
+import com.amsha.core.agent.reasoning.error.LlmModelExhaustedException;
 import com.amsha.core.agent.result.AgentResult;
 import com.amsha.core.api.AgentResponseMapper;
 import com.amsha.core.api.dto.AmshaErrorResponse;
@@ -21,11 +22,41 @@ import com.amsha.core.audit.AuditVerifier;
 import com.amsha.core.audit.SecurityEventType;
 import com.amsha.core.cron.AgentJobCompleted;
 import com.amsha.core.cron.CronTaskScheduled;
+import com.amsha.core.routing.ModelCacheInvalidator;
+import com.amsha.core.routing.ModelDefaults;
+import com.amsha.core.routing.ModelProfileCredentialResolver;
+import com.amsha.core.routing.ModelProfileResolverImpl;
 import com.amsha.core.routing.ModelRouter;
+import com.amsha.core.routing.ModelRoutingException;
+import com.amsha.core.routing.OrderedFailoverChatModel;
+import com.amsha.core.routing.ResolvedCredential;
+import com.amsha.core.routing.ResolvedProfile;
+import com.amsha.core.routing.RouteResolution;
+import com.amsha.core.routing.SystemProfileMigration;
+import com.amsha.core.routing.provider.ConnectionValidationRequest;
+import com.amsha.core.routing.provider.LlmProviderDescriptor;
+import com.amsha.core.routing.provider.LlmProviderOnboardingAdapter;
+import com.amsha.core.routing.provider.ModelEntry;
+import com.amsha.core.routing.provider.NetworkPolicyEnforcer;
+import com.amsha.core.routing.provider.NetworkPolicyViolation;
+import com.amsha.core.routing.provider.NetworkProfilePolicy;
+import com.amsha.core.routing.provider.ProviderValidationResult;
+import com.amsha.core.routing.provider.StaticProviderCatalogAdapter;
 import com.amsha.core.sandbox.SandboxResult;
+import com.amsha.core.security.ExternalIdentityProvider;
+import com.amsha.core.security.OutboundHttpPolicyService;
+import com.amsha.core.security.OutboundPolicyDecision;
+import com.amsha.core.security.OutboundPurpose;
+import com.amsha.core.security.http.ApprovalReceiptIssuer;
+import com.amsha.core.security.http.GovernedHttpClient;
+import com.amsha.core.security.http.GovernedTransportService;
+import com.amsha.core.security.http.OutboundApprovalReceipt;
+import com.amsha.core.security.http.OutboundHttpException;
 import com.amsha.core.skill.CompiledSkillEntry;
+import com.amsha.core.skill.SkillAdmissionEvaluator;
 import com.amsha.core.skill.SkillDefinition;
 import com.amsha.core.skill.SkillFrontmatter;
+import com.amsha.core.skill.SkillLoader;
 import com.amsha.core.skill.SkillPromptParams;
 import com.amsha.core.tools.GithubTool;
 import com.amsha.core.tools.ManageScheduleTool;
@@ -71,6 +102,8 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             ScheduleTaskTool.class,
             ManageScheduleTool.class,
             SkillDefinition.class,
+            SkillAdmissionEvaluator.AdmissionDecision.class,
+            SkillLoader.QuarantinedSkill.class,
             SkillFrontmatter.class,
             CompiledSkillEntry.class,
             SkillPromptParams.class,
@@ -84,13 +117,44 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             ReasoningStepDeserializer.class,
             ReasoningStepSerializer.class,
             ModelRouter.ModelConfig.class,
+            OrderedFailoverChatModel.class,
+            OrderedFailoverChatModel.Entry.class,
+            ResolvedProfile.class,
+            RouteResolution.class,
+            ResolvedCredential.class,
+            ModelProfileResolverImpl.class,
+            ModelProfileCredentialResolver.class,
+            ModelRoutingException.class,
+            SystemProfileMigration.class,
+            ModelCacheInvalidator.class,
+            ModelDefaults.class,
+            LlmProviderDescriptor.class,
+            ModelEntry.class,
+            LlmProviderOnboardingAdapter.class,
+            StaticProviderCatalogAdapter.class,
+            ConnectionValidationRequest.class,
+            ProviderValidationResult.class,
+            NetworkPolicyEnforcer.class,
+            NetworkPolicyViolation.class,
+            NetworkProfilePolicy.class,
+            LlmModelExhaustedException.class,
             GroupConsultationEngine.GroupConsultationResult.class,
             GroupConsultationService.TriageResult.class,
             GroupAnalyticsService.DomainComboStats.class,
             TaskClassifierService.TaskDomain.class,
-            SessionCatalogEntry.class
+            SessionCatalogEntry.class,
+            OutboundHttpPolicyService.class,
+            OutboundPolicyDecision.class,
+            OutboundPurpose.class,
+            ApprovalReceiptIssuer.class,
+            OutboundApprovalReceipt.class,
+            GovernedHttpClient.class,
+            GovernedTransportService.class,
+            OutboundHttpException.class,
+            ExternalIdentityProvider.class
         },
         classNames = {
+            "com.amsha.core.routing.provider.StaticProviderCatalogAdapter$RawProvider",
             "com.github.benmanes.caffeine.cache.SSLMSA",
             "com.github.benmanes.caffeine.cache.SSLMS",
             "com.github.benmanes.caffeine.cache.SSMS",

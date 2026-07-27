@@ -82,4 +82,20 @@ public class ContextAwareExecutorScopedValuePropagationTest {
         // Assert
         assertTrue(future.get(), "Autonomy level was not propagated correctly to the executor thread");
     }
+
+    @Test
+    void propagatesExplicitActiveIdentityWorkspace() throws Exception {
+        Future<String> future = WorkspaceContext.callWithActiveWorkspace(
+                "workspace-1",
+                () -> WorkspaceContext.run(
+                        "s1",
+                        "u1",
+                        "c1",
+                        AutonomyLevel.FULL,
+                        "coordinator",
+                        () -> contextAwareExecutor.submit(
+                                () -> WorkspaceContext.activeWorkspaceId().orElseThrow())));
+
+        assertEquals("workspace-1", future.get());
+    }
 }

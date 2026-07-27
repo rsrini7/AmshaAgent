@@ -14,12 +14,44 @@ import com.amsha.core.audit.SecurityEventType;
 import com.amsha.core.observability.AgentOTelConstants;
 import com.amsha.core.observability.AgentOtelContext;
 import com.amsha.core.scope.WorkspaceContext;
+import com.amsha.persistence.api.IdentityStorePort;
 import com.amsha.persistence.api.SecretDto;
 import com.amsha.persistence.api.SecretStorePort;
+import com.amsha.persistence.api.WorkspaceMembershipDto;
 
 import io.opentelemetry.api.trace.Span;
 import io.opentelemetry.api.trace.StatusCode;
 
+/**
+ * Encryption-at-rest vault backed by {@link SecretStorePort}.
+ *
+ * <h3>{@code @Transactional(REQUIRES_NEW)} rationale</h3>
+ * Every mutating method ({@code store}, {@code remove}, {@code storeSystemKey},
+ * {@code storeWorkspace}, {@code removeWorkspace}) uses {@code REQUIRES_NEW} to
+ * ensure each secret write commits atomically, independently of any outer
+ * transaction the caller may hold. This is intentional:
+ * <ul>
+ *   <li>Cryptographic writes must never be partially rolled back — a failed
+ *       audit write or session cleanup in the caller must not lose a key
+ *       that was already encrypted and persisted.</li>
+ *   <li>Callers (onboarding saga, DevSecretSeeder, VaultStoreReflex) invoke
+ *       vault methods as standalone operations, not nested inside long-running
+ *       write transactions.</li>
+ *   <li>The agent loop (§3.2) is explicitly transaction-free, so vault writes
+ *       from tool execution never encounter a pre-existing transaction.</li>
+ * </ul>
+ *
+ * <strong>WARNING:</strong> Do not call these methods from inside a long-running
+ * {@code @Transactional(REQUIRED)} write path — the {@code REQUIRES_NEW} will
+ * split the outer transaction unexpectedly. If that pattern is ever needed,
+ * extract the vault write into a separate CDI bean without the outer annotation.
+ *
+ * <h3>{@code auditService.record()} inside the transaction</h3>
+ * Audit writes occur within the same {@code REQUIRES_NEW} transaction. This is
+ * safe because the audit table uses append-only semantics (no nested REQUIRES_NEW
+ * conflict) and SQLite/PostgreSQL handle nested inserts on the same connection
+ * correctly. If this ever changes, move the audit call outside the transaction.
+ */
 @ApplicationScoped
 public class SecretVaultImpl implements SecretVault {
 
@@ -36,6 +68,9 @@ public class SecretVaultImpl implements SecretVault {
 
     @Inject
     SecretStorePort secretStore;
+
+    @Inject
+    IdentityStorePort identityStore;
 
     @Inject
     AuditService auditService;
@@ -237,11 +272,68 @@ public class SecretVaultImpl implements SecretVault {
         }
     }
 
+    @Override
+    @Transactional(Transactional.TxType.REQUIRES_NEW)
+    public void storeWorkspace(String keyName, byte[] secret, String workspaceId, String actorUserId) {
+        // Rotation of a shared workspace secret requires owner/admin authority, not mere membership.
+        requireWorkspaceOwnerOrAdmin(workspaceId, actorUserId);
+        store(keyName, secret, actorUserId, workspaceVaultScope(workspaceId));
+    }
+
+    @Override
+    public Optional<VaultKey> getWorkspace(String keyName, String workspaceId, String actorUserId) {
+        // Members may read (use) the shared workspace secret.
+        requireActiveWorkspaceMember(workspaceId, actorUserId);
+        return get(keyName, actorUserId, workspaceVaultScope(workspaceId));
+    }
+
+    @Override
+    @Transactional(Transactional.TxType.REQUIRES_NEW)
+    public void removeWorkspace(String keyName, String workspaceId, String actorUserId) {
+        // Deletion of a shared workspace secret requires owner/admin authority, not mere membership.
+        requireWorkspaceOwnerOrAdmin(workspaceId, actorUserId);
+        secretStore.delete(workspaceVaultScope(workspaceId), keyName);
+    }
+
+    private void requireWorkspaceOwnerOrAdmin(String workspaceId, String actorUserId) {
+        if (workspaceId == null || workspaceId.isBlank() || actorUserId == null || actorUserId.isBlank()) {
+            throw new IllegalArgumentException(
+                    "workspaceId and actorUserId are required for a workspace vault operation");
+        }
+        Optional<WorkspaceMembershipDto> membership = identityStore.findMembership(workspaceId, actorUserId);
+        boolean authorized = membership
+                .map(m -> "ACTIVE".equalsIgnoreCase(m.status())
+                        && ("OWNER".equalsIgnoreCase(m.role()) || "ADMIN".equalsIgnoreCase(m.role())))
+                .orElse(false);
+        if (!authorized) {
+            throw new SecurityException(
+                    "Actor is not an owner/admin of the workspace; rotation/deletion of shared secrets requires owner/admin role");
+        }
+    }
+
     private static String userVaultScope(String userId) {
         if (userId == null || userId.isBlank()) {
             throw new IllegalArgumentException("userId is required for a user-scoped vault operation");
         }
         return VaultConstants.USER_VAULT_SCOPE_PREFIX + userId;
+    }
+
+    private void requireActiveWorkspaceMember(String workspaceId, String actorUserId) {
+        if (workspaceId == null || workspaceId.isBlank() || actorUserId == null || actorUserId.isBlank()) {
+            throw new IllegalArgumentException(
+                    "workspaceId and actorUserId are required for a workspace vault operation");
+        }
+        boolean active = identityStore
+                .findMembership(workspaceId, actorUserId)
+                .map(membership -> "ACTIVE".equalsIgnoreCase(membership.status()))
+                .orElse(false);
+        if (!active) {
+            throw new SecurityException("Actor is not an active member of the workspace");
+        }
+    }
+
+    private static String workspaceVaultScope(String workspaceId) {
+        return VaultConstants.WORKSPACE_VAULT_SCOPE_PREFIX + workspaceId;
     }
 
     @Override

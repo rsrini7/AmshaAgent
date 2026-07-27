@@ -28,6 +28,7 @@
 ###   POST   /api/v1/skills          → create or update skill (upsert by name)
 ###   DELETE /api/v1/skills/{name}   → delete skill by name
 ###   GET    /api/v1/skills/refresh  → reload registry from classpath + database
+###   GET    /api/v1/skills/admission → active + quarantined admission results
 ###
 ### Hot-reload: every POST/DELETE triggers an immediate registry refresh.
 ### No restart needed.
@@ -50,6 +51,24 @@
 # Expect 200: empty array [] or classpath-only skills if any are bundled.
 # source="classpath" → bundled in JAR; source="database" → dynamic.
 GET {{baseUrl}}/api/v1/skills
+Accept: application/json
+X-Amsha-API-Key: {{validKey}}
+
+###
+
+# ─────────────────────────────────────────────────────────────────
+# FLOW A2: SKILLSJAR ADMISSION AND QUARANTINE
+# ─────────────────────────────────────────────────────────────────
+
+### [SKILLSJAR-ADMISSION-1] Inspect active and quarantined skills
+# Expect 200 with:
+# {
+#   "active": [...],
+#   "quarantined": [...]
+# }
+# Every quarantined entry contains name, source, and nonempty reasons.
+# algorithmic-art must not appear in active after its dependency was rejected.
+GET {{baseUrl}}/api/v1/skills/admission
 Accept: application/json
 X-Amsha-API-Key: {{validKey}}
 
@@ -539,7 +558,8 @@ X-Amsha-API-Key: {{validKey}}
 ### [SKILL-17] DELETE classpath-only skill → expect 404
 # Classpath skills are loaded from JAR, NOT in the database.
 # The DELETE endpoint only operates on database skills.
-# 'algorithmic-art' is a classpath skill (source=skillsjars).
+# Rejected or removed SkillsJars are not database skills and cannot be deleted
+# through this endpoint.
 DELETE {{baseUrl}}/api/v1/skills/algorithmic-art
 Accept: application/json
 X-Amsha-API-Key: {{validKey}}

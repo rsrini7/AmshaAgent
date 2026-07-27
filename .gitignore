@@ -99,3 +99,5 @@ autotest/logs/
 headroom_memory.db
 .tokensave/
 .m2/
+
+__pycache__/

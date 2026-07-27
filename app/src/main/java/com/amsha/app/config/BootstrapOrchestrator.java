@@ -26,14 +26,21 @@ public class BootstrapOrchestrator {
         reexecWithLdPreloadIfNeeded(args);
         EnvConfigInitializer.loadDotEnv(binaryDir);
 
+        // Validate .env structure and report issues to user (read-only, no modifications)
+        Path envFile = binaryDir.resolve(".env");
+        if (Files.exists(envFile)) {
+            EnvFileValidator.ValidationResult envResult = EnvFileValidator.validate(envFile);
+            EnvFileValidator.printReport(envResult, envFile);
+        }
+
         normalizePlaywrightPath(binaryDir);
         PlaywrightCliInstaller.ensureCliInstalled();
 
         ensureFallbackLlmDefaults();
-        EnvConfigInitializer.validateAndAutoFixSecurityKeys(binaryDir);
+        EnvConfigInitializer.validateSecurityKeys(binaryDir);
 
-        LlmConfigAutoFixer.validateAndAutoFixLlmConfig(binaryDir);
-        EnvConfigInitializer.validateAndAutoFixEmbeddingConfig(binaryDir);
+        LlmConfigValidator.validateLlmConfig(binaryDir);
+        EnvConfigInitializer.validateEmbeddingConfig(binaryDir);
 
         SandboxValidator.validateSandboxTools(binaryDir);
         MandatoryConfigValidator.validateMandatoryConfig();
@@ -80,6 +87,9 @@ public class BootstrapOrchestrator {
             pb.environment().put("AMSHA_LD_PRELOAD_SET", "1");
             pb.inheritIO();
             System.exit(pb.start().waitFor());
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            log.error("Interrupted while re-exec-ing with LD_PRELOAD", e);
         } catch (Exception e) {
             log.error("Failed to re-exec with LD_PRELOAD", e);
         }

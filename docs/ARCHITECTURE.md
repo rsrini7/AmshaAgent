@@ -21,7 +21,7 @@
 | `amsha-persistence-fs` | Filesystem-based adapter (Lucene BM25) + tiered memory (Core/Recall/Archival) + self-evolve (Events/Extracted) |
 | `amsha-rag` | Two-tier vector (vec0) + FTS5 RAG memory |
 | `amsha-mcp` | MCP server bridge + dynamic client tool loading + durable credentialed connections |
-| `amsha-onboarding` | 5-step setup wizard REST API + /complete |
+| `amsha-onboarding` | Durable draft/saga onboarding REST API (legacy numbered-step wizard + `/complete` removed in P110) |
 | `amsha-tool-playwright` | Playwright browser automation tool |
 | `amsha-self-evolve` | Self-Evolution trace capture and learning loop |
 | `amsha-common` | Shared utilities (LogUtil, constants) |
@@ -655,7 +655,7 @@ Runs **before** Quarkus CDI container boots:
 | Unordered | `StartupSecurityValidator` | **Hard gate in prod:** throws if vault pepper equals dev default, HMAC key absent, or allowlist has usernames instead of numeric IDs |
 | Unordered | `AgentCronScheduler` (on `StartupEvent`) | Restores persisted cron jobs so scheduled tasks survive restarts |
 
-Note: `session_registry` table is created by Flyway baseline migration (`V1__baseline.sql`), not a CDI observer.
+Note: `session_registry` is created by the Flyway interaction-catalog migration (`V6__interaction_catalog.sql`), not a CDI observer.
 
 ### Build-Time Processors (`amsha-deployment`)
 
@@ -799,7 +799,7 @@ Skills can be packaged as JAR files under `META-INF/skills/`. The `SkillsJarSkil
 - **Index path** (`META-INF/skills/skills-index.txt`): optional pre-indexed list of `SKILL.md` paths. When present, skills are loaded via the index (fast path, avoids classpath scanning).
 - **Fallback**: classpath scanning of `META-INF/skills/` for `SKILL.md` files.
 
-For every SkillsJar dependency change in `app/pom.xml`, regenerate `app/src/main/resources/META-INF/skills/skills-index.txt` with `python3 ./verify_skillsjar_index.py --fix`, then validate it without `--fix`. This is mandatory for native builds: GraalVM Native Image cannot enumerate classpath resource directories, so it cannot use the fallback scan. `META-INF/skills/**` must also remain in `quarkus.native.resources.includes`.
+For every SkillsJar dependency change in `app/pom.xml`, regenerate `app/src/main/resources/META-INF/skills/skills-index.txt` with `python3 ./scripts/verify_skillsjar_index.py --fix`, then validate it without `--fix`. This is mandatory for native builds: GraalVM Native Image cannot enumerate classpath resource directories, so it cannot use the fallback scan. `META-INF/skills/**` must also remain in `quarkus.native.resources.includes`.
 
 Each SkillsJar contains:
 - `META-INF/skills/<skill-name>/SKILL.md` — YAML-fronted markdown defining system prompt, trigger patterns, tool capabilities, and max iterations.
@@ -860,7 +860,7 @@ case-insensitive uniqueness, and rejected if they collide with transport-owned /
 credentials. Registration is a sensitive operation (`NETWORK_OUTBOUND` HITL / admin API key).
 
 Durable connections are stored via `McpConnectionStorePort` with SQLite, PostgreSQL, and
-filesystem adapters (paired `V5__mcp_connections` Flyway migrations). On startup
+filesystem adapters (paired `V6__interaction_catalog.sql` Flyway migrations). On startup
 `McpConnectionLifecycleService.reconnectEnabledConnections()` restores enabled HTTP/SSE
 connections from durable metadata; failed reconnects are logged and retried. Failed or
 cancelled credential cleanup is persisted as an owner-scoped, idempotent retry record
@@ -1034,7 +1034,7 @@ Exported to Jaeger via OTLP at `http://localhost:4317`.
 |---|---|
 | `arc-chat-interface` | Main chat UI; WebSocket + HITL approval cards via SSE |
 | `arc-settings` | LLM provider switch, API key update, system prompt edit |
-| `arc-onboarding` | 5-step wizard calling `/onboarding/step*` + `/complete` endpoints |
+| `arc-onboarding` | Durable draft/saga onboarding UI; posts to `/api/v1/onboarding/drafts*` (legacy `/onboarding/step/{N}` + `/complete` removed in P110) |
 | `arc-agent-status` | Live agent status via REST poll + SSE |
 | `arc-audit-panel` | WORM audit chain event display |
 | `arc-scheduler-panel` | Cron job management |
@@ -1045,20 +1045,26 @@ Exported to Jaeger via OTLP at `http://localhost:4317`.
 
 ---
 
-## Onboarding Wizard
+## Onboarding (Durable Draft / Saga)
 
-5-step REST wizard at `/onboarding`:
+P110 replaced the numbered-step wizard with a durable, resumable draft. The
+`OnboardingCoordinator` owns the draft (the single source of truth); a saga
+(`OnboardingCommitSaga`) commits each extension with checkpoint-bound approval
+receipts (`OnboardingCommitReceiptStorePort`). UI components post to the draft
+API instead of the removed `/onboarding/step/{N}` + `/onboarding/complete` flow.
 
-| Step | Endpoint | Action |
+| Operation | Endpoint | Notes |
 |---|---|---|
-| 1 | `POST /onboarding/step/1` | Advances from WELCOME to PROVIDER state |
-| 2 | `POST /onboarding/step/2` | Saves LLM provider/model selection |
-| 3 | `POST /onboarding/step/3` | Validates credential via `LlmValidationGateway`; encrypts in vault |
-| 4 | `POST /onboarding/step/4` | Persists custom system prompt |
-| 5 | `POST /onboarding/step/5` | Registers MCP server connections |
-| — | `GET /onboarding/complete` | Finalizes onboarding |
+| Status / create draft | `GET`/`POST /api/v1/onboarding/status`, `/drafts` | owner-scoped |
+| Advance step | `PUT /api/v1/onboarding/drafts/{draftId}/steps/{stepId}` | validates extension, sets current step |
+| Commit | `POST /api/v1/onboarding/drafts/{draftId}/commit` | requires `currentStepId == review` |
+| Provider catalog | `GET /api/v1/onboarding/provider-catalog` | UI stepper source |
+| Export / Import | `GET`/`POST /api/v1/onboarding/export`, `/import` | non-secret profile portability |
+| Connection network policy | `PATCH /api/v1/settings/connection-network-profile` | per-connection egress policy |
+| Discard | `POST /api/v1/onboarding/drafts/discard` | resumable cleanup |
 
-`OnboardingStepProvider` SPI allows future steps to self-register ("5 core steps").
+`OnboardingExtension` SPI (via `OnboardingSelectionScrubber`) allows future
+steps to self-register into the effective plan.
 
 ---
 

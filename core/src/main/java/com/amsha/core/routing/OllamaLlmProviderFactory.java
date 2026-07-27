@@ -10,7 +10,7 @@ public class OllamaLlmProviderFactory implements RoutingChatModelProvider {
 
     @Override
     public String providerId() {
-        return "ollama";
+        return ModelDefaults.PROVIDER_OLLAMA;
     }
 
     @Override

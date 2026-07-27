@@ -13,6 +13,8 @@ import java.lang.reflect.Proxy;
 import java.util.Collections;
 import java.util.Map;
 
+import com.amsha.core.routing.ModelDefaults;
+
 import org.junit.jupiter.api.Test;
 
 /**
@@ -78,7 +80,7 @@ class ChatModelProducerTest {
     @Test
     void providerBaseUrls_containsLlamacpp() throws Exception {
         Map<String, String> urls = getProviderBaseUrls();
-        assertEquals("http://127.0.0.1:8080/v1", urls.get("llamacpp"));
+        assertEquals(ModelDefaults.DEFAULT_LLAMACPP_BASE_URL, urls.get("llamacpp"));
     }
 
     @Test

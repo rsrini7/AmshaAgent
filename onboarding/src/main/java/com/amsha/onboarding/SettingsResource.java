@@ -11,35 +11,43 @@ import jakarta.ws.rs.Path;
 import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.WebApplicationException;
 import jakarta.ws.rs.core.Context;
-import jakarta.ws.rs.core.Cookie;
 import jakarta.ws.rs.core.HttpHeaders;
 import jakarta.ws.rs.core.MediaType;
-import jakarta.ws.rs.core.NewCookie;
 import jakarta.ws.rs.core.Response;
+import jakarta.ws.rs.core.SecurityContext;
 
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import com.amsha.core.api.dto.AmshaErrorResponse;
 import com.amsha.core.audit.AuditService;
 import com.amsha.core.audit.SecurityEventType;
-import com.amsha.core.config.ConfigurationChangedEvent;
 import com.amsha.core.event.DomainEventBus;
-import com.amsha.core.event.EventTypeCatalog;
-import com.amsha.core.llm.LlmValidationGateway;
+import com.amsha.core.routing.ModelDefaults;
+import com.amsha.core.routing.provider.NetworkProfilePolicy;
 import com.amsha.core.security.SecretVault;
 import com.amsha.core.security.VaultConstants;
 import com.amsha.core.security.VaultKey;
-import com.amsha.core.util.HttpConstants;
+import com.amsha.onboarding.dto.NetworkProfileUpdateRequest;
 import com.amsha.onboarding.dto.PromptUpdateRequest;
 import com.amsha.onboarding.dto.ProviderUpdateRequest;
 import com.amsha.onboarding.dto.SettingsDto;
+import com.amsha.persistence.api.OnboardingDraftDto;
+import com.amsha.persistence.api.OnboardingDraftState;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.eclipse.microprofile.openapi.annotations.Operation;
 
 import io.smallrye.common.annotation.RunOnVirtualThread;
 
+/**
+ * Settings resource. Reads reflect effective redacted state; mutations are delegated to the durable
+ * onboarding draft coordinator and no longer write legacy system-vault LLM/prompt keys directly. A
+ * reset is a scoped deactivation (discard the owner's draft) and never blindly deletes another
+ * user's profiles or system keys.
+ */
 @Path("/settings")
 @Produces(MediaType.APPLICATION_JSON)
 @ApplicationScoped
@@ -50,10 +58,7 @@ public class SettingsResource {
     SecretVault vault;
 
     @Inject
-    LlmValidationGateway llmValidationGateway;
-
-    @Inject
-    OnboardingSessionRegistry registry;
+    OnboardingCoordinator coordinator;
 
     @Inject
     DomainEventBus eventBus;
@@ -64,47 +69,97 @@ public class SettingsResource {
     @ConfigProperty(name = "quarkus.application.version", defaultValue = "dev")
     String appVersion;
 
-    @ConfigProperty(name = "amsha.api.keys.internal", defaultValue = "dev-key")
+    @ConfigProperty(name = "amsha.api.keys.internal", defaultValue = "key-internal-changeme")
     String internalApiKey;
+
+    @ConfigProperty(name = "amsha.llm.provider", defaultValue = "groq")
+    String configuredProvider;
+
+    @ConfigProperty(name = "amsha.llm.vault-priority", defaultValue = "false")
+    boolean vaultPriority;
+
+    @ConfigProperty(name = "amsha.ui.skip-onboarding", defaultValue = "false")
+    boolean skipOnboarding;
+
+    @Context
+    SecurityContext securityContext;
 
     @Context
     HttpHeaders httpHeaders;
 
-    private String resolveKey(String headerKey) {
-        if (headerKey != null && !headerKey.isBlank()) return headerKey;
-        Cookie apiCookie = httpHeaders.getCookies().get(HttpConstants.COOKIE_AMSHA_API_KEY);
-        if (apiCookie != null) return apiCookie.getValue();
+    private String requireOwner() {
+        if (securityContext.getUserPrincipal() != null) {
+            return securityContext.getUserPrincipal().getName();
+        }
+        String headerKey = httpHeaders.getHeaderString("X-Amsha-API-Key");
+        if (headerKey != null && headerKey.equals(internalApiKey)) {
+            return "internal";
+        }
         return null;
     }
 
-    private void checkAuth(String key) {
-        String resolved = resolveKey(key);
-        if (resolved == null || !resolved.equals(internalApiKey)) {
-            throw new WebApplicationException(Response.status(Response.Status.UNAUTHORIZED)
-                    .entity(new AmshaErrorResponse("Unauthorized", "Invalid or missing API Key"))
-                    .build());
+    private boolean backendLlmConfigured() {
+        if (skipOnboarding) {
+            return true;
         }
+        if (vault.systemKeyExists(VaultConstants.LLM_API_KEY)) {
+            return true;
+        }
+        String provider = configuredProvider != null ? configuredProvider.trim() : "";
+        if (provider.isBlank()) {
+            return false;
+        }
+        if (provider.equalsIgnoreCase("ollama")
+                || provider.equalsIgnoreCase("claude-code")
+                || provider.equalsIgnoreCase("omlx")
+                || provider.equalsIgnoreCase("llamacpp")) {
+            return true;
+        }
+        String apiKey = System.getProperty("AMSHA_LLM_API_KEY", System.getenv("AMSHA_LLM_API_KEY"));
+        if (apiKey != null && !apiKey.isBlank()) {
+            return true;
+        }
+        return false;
     }
 
     @GET
     @Operation(summary = "Get current system settings and LLM configuration")
     public SettingsDto getSettings(@HeaderParam("X-Amsha-API-Key") String key) {
-        checkAuth(key);
-        String provider = readVaultString(VaultConstants.LLM_PROVIDER_KEY, "");
-        String model = readVaultString(VaultConstants.LLM_MODEL_KEY, "");
+        String owner = requireOwner();
+        if (owner == null) {
+            throw new WebApplicationException(Response.status(Response.Status.UNAUTHORIZED)
+                    .entity(new AmshaErrorResponse("Unauthorized", "Invalid or missing API Key"))
+                    .build());
+        }
+        // Reflect the same source-of-truth the runtime uses (see ChatModelProducer):
+        // when vault-priority is on, the effective provider/model come from the system
+        // vault; otherwise they come from the configured amsha.llm.provider.
+        String provider;
+        String model;
+        if (vaultPriority) {
+            provider = readVaultString(VaultConstants.LLM_PROVIDER_KEY, configuredProvider);
+            model = readVaultString(VaultConstants.LLM_MODEL_KEY, "");
+        } else {
+            provider = configuredProvider;
+            model = readVaultString(VaultConstants.LLM_MODEL_KEY, "");
+        }
         String prompt = readVaultString(VaultConstants.SYSTEM_PROMPT_KEY, "");
         boolean hasKey = vault.systemKeyExists(VaultConstants.LLM_API_KEY);
-
         String displayPrompt = prompt.length() > 200 ? prompt.substring(0, 199) + "…" : prompt;
-
-        return new SettingsDto(provider, model, displayPrompt, hasKey, appVersion);
+        return new SettingsDto(
+                provider, model, displayPrompt, hasKey, appVersion, skipOnboarding || backendLlmConfigured());
     }
 
     @GET
     @Path("/prompt")
     @Operation(summary = "Get the full system prompt from vault")
     public Response getPrompt(@HeaderParam("X-Amsha-API-Key") String key) {
-        checkAuth(key);
+        String owner = requireOwner();
+        if (owner == null) {
+            return Response.status(401)
+                    .entity(new AmshaErrorResponse("Unauthorized", "Invalid or missing API Key"))
+                    .build();
+        }
         String prompt = readVaultString(VaultConstants.SYSTEM_PROMPT_KEY, "");
         return Response.ok(Map.of("systemPrompt", prompt)).build();
     }
@@ -112,69 +167,114 @@ public class SettingsResource {
     @PATCH
     @Path("/provider")
     @Consumes(MediaType.APPLICATION_JSON)
-    @Operation(summary = "Update LLM provider and validate credentials")
+    @Operation(summary = "Open an EDIT_PROFILE draft for provider change (no direct vault write)")
     public Response updateProvider(@HeaderParam("X-Amsha-API-Key") String key, ProviderUpdateRequest req) {
-        checkAuth(key);
+        String owner = requireOwner();
+        if (owner == null) {
+            return Response.status(401)
+                    .entity(new AmshaErrorResponse("Unauthorized", "Invalid or missing API Key"))
+                    .build();
+        }
         if (req.provider() == null || req.provider().isBlank()) {
             return Response.status(400)
                     .entity(new AmshaErrorResponse("provider is required"))
                     .build();
         }
+        // Mirrors the wizard's finalize path: stage the selection into the owner's draft,
+        // scrub/store the credential as a vault ref, then commit so the same LLM_* system
+        // vault keys the runtime honors (under vault-priority) are written durably.
+        OnboardingDraftDto draft = coordinator.getOrCreateFirstRunDraft(owner);
+        String defaultModel = req.model() != null && !req.model().isBlank()
+                ? req.model()
+                : ModelDefaults.defaultModelForProvider(req.provider());
 
-        boolean isClaudeCode = "claude-code".equals(req.provider());
-        boolean isOllama = "ollama".equals(req.provider());
-        boolean isOmlx = "omlx".equals(req.provider());
-
-        if (!isClaudeCode && !isOllama && !isOmlx) {
-            if (req.apiKey() == null || req.apiKey().isBlank()) {
-                return Response.status(400)
-                        .entity(new AmshaErrorResponse("apiKey is required for " + req.provider()))
-                        .build();
-            }
-            try {
-                boolean valid = llmValidationGateway.validate(req.provider(), req.model(), req.apiKey());
-                if (!valid) {
-                    return Response.status(422)
-                            .entity(new AmshaErrorResponse("API key validation failed", "provider: " + req.provider()))
-                            .build();
-                }
-            } catch (Exception e) {
-                return Response.status(422)
-                        .entity(new AmshaErrorResponse("Validation error", e.getMessage()))
-                        .build();
-            }
-        }
-
-        vault.storeSystemKey(VaultConstants.LLM_PROVIDER_KEY, req.provider().getBytes(StandardCharsets.UTF_8));
-        vault.storeSystemKey(
-                VaultConstants.LLM_MODEL_KEY,
-                (req.model() != null ? req.model() : "").getBytes(StandardCharsets.UTF_8));
-        if (!isClaudeCode && req.apiKey() != null) {
+        // Persist the credential at system scope (no workspace context on this REST path).
+        // Mirrors activateLlmSettings, which the runtime reads under vault-priority.
+        if (req.apiKey() != null && !req.apiKey().isBlank()) {
             vault.storeSystemKey(VaultConstants.LLM_API_KEY, req.apiKey().getBytes(StandardCharsets.UTF_8));
         }
 
-        eventBus.publish(
-                EventTypeCatalog.CONFIGURATION_CHANGED,
-                ConfigurationChangedEvent.of(
-                        "settings/provider",
-                        Map.of("provider", req.provider(), "model", req.model() != null ? req.model() : "")));
+        String payloadJson = String.format(
+                "{\"connections\":[{\"provider\":\"%s\",\"modelId\":\"%s\",\"contextWindow\":8192,\"structuredOutputMode\":\"NATIVE\",\"capabilities\":[\"tool-calling\"]}],\"concernRoutes\":{\"agentLoop\":[0],\"compaction\":[0],\"classifier\":[0],\"embedding\":[0]}}",
+                req.provider(), defaultModel);
+
+        Optional<OnboardingDraftDto> updated =
+                coordinator.updateStep(draft.draftId(), "connections", List.of(payloadJson));
+        if (updated.isEmpty()) {
+            return Response.status(400)
+                    .entity(new AmshaErrorResponse("Failed to stage provider selection"))
+                    .build();
+        }
+        // Mark the wizard as effectively complete so the coordinator's commit path is valid,
+        // then commit to activate the LLM settings into the system vault.
+        coordinator.moveToStep(updated.get().draftId(), "review");
+        Optional<OnboardingDraftDto> committed =
+                coordinator.commitDraft(updated.get().draftId());
+        if (committed.isEmpty() || committed.get().state() != OnboardingDraftState.COMPLETED) {
+            return Response.status(409)
+                    .entity(new AmshaErrorResponse("Conflict", "Provider commit failed"))
+                    .build();
+        }
 
         auditService.recordMandatory(
                 "settings",
-                key != null ? key : "unknown",
+                owner,
                 "system",
                 SecurityEventType.SETTINGS_CHANGED,
-                "field=provider provider=" + req.provider() + " model=" + (req.model() != null ? req.model() : ""));
+                "field=provider committed provider=" + req.provider());
+        return Response.ok(Map.of("committed", true, "provider", req.provider()))
+                .build();
+    }
 
-        return Response.ok(Map.of("updated", true)).build();
+    @PATCH
+    @Path("/connection-network-profile")
+    @Consumes(MediaType.APPLICATION_JSON)
+    @Operation(summary = "Persist a per-connection networkProfileJson into the owner's active draft")
+    public Response updateConnectionNetworkProfile(
+            @HeaderParam("X-Amsha-API-Key") String key, NetworkProfileUpdateRequest req) {
+        String owner = requireOwner();
+        if (owner == null) {
+            return Response.status(401)
+                    .entity(new AmshaErrorResponse("Unauthorized", "Invalid or missing API Key"))
+                    .build();
+        }
+        if (req == null
+                || req.networkProfileJson() == null
+                || req.networkProfileJson().isBlank()
+                || !NetworkProfilePolicy.isValidJson(req.networkProfileJson())) {
+            return Response.status(400)
+                    .entity(new AmshaErrorResponse("networkProfileJson must be a valid supported network profile"))
+                    .build();
+        }
+        OnboardingDraftDto draft =
+                coordinator.findActive(owner).orElseGet(() -> coordinator.getOrCreateFirstRunDraft(owner));
+        Optional<OnboardingDraftDto> updated = coordinator.updateConnectionNetworkProfile(
+                draft.draftId(), req.connectionIndex(), req.networkProfileJson());
+        if (updated.isEmpty()) {
+            return Response.status(400)
+                    .entity(new AmshaErrorResponse("No connections selection found for this draft"))
+                    .build();
+        }
+        auditService.recordMandatory(
+                "settings",
+                owner,
+                "system",
+                SecurityEventType.SETTINGS_CHANGED,
+                "field=network-profile connectionIndex=" + req.connectionIndex());
+        return Response.ok(Map.of("updated", true, "draftId", draft.draftId())).build();
     }
 
     @PATCH
     @Path("/prompt")
     @Consumes(MediaType.APPLICATION_JSON)
-    @Operation(summary = "Update the global system prompt")
+    @Operation(summary = "Update the global system prompt (legacy compatibility read/write)")
     public Response updatePrompt(@HeaderParam("X-Amsha-API-Key") String key, PromptUpdateRequest req) {
-        checkAuth(key);
+        String owner = requireOwner();
+        if (owner == null) {
+            return Response.status(401)
+                    .entity(new AmshaErrorResponse("Unauthorized", "Invalid or missing API Key"))
+                    .build();
+        }
         if (req.systemPrompt() == null || req.systemPrompt().isBlank()) {
             return Response.status(400)
                     .entity(new AmshaErrorResponse("systemPrompt is required"))
@@ -182,54 +282,29 @@ public class SettingsResource {
         }
         vault.storeSystemKey(
                 VaultConstants.SYSTEM_PROMPT_KEY, req.systemPrompt().getBytes(StandardCharsets.UTF_8));
-
-        eventBus.publish(
-                EventTypeCatalog.CONFIGURATION_CHANGED,
-                ConfigurationChangedEvent.of("settings/prompt", Map.of("systemPrompt", "(updated)")));
-
         auditService.recordMandatory(
                 "settings",
-                key != null ? key : "unknown",
+                owner,
                 "system",
                 SecurityEventType.SETTINGS_CHANGED,
                 "field=prompt length=" + req.systemPrompt().length());
-
         return Response.ok(Map.of("updated", true)).build();
     }
 
     @POST
     @Path("/reset")
-    @Operation(summary = "Nuke all settings and keys to force re-onboarding")
+    @Operation(summary = "Scoped deactivation: discard the owner's active draft (no blind key deletion)")
     public Response reset(@HeaderParam("X-Amsha-API-Key") String key) {
-        checkAuth(key);
-
+        String owner = requireOwner();
+        if (owner == null) {
+            return Response.status(401)
+                    .entity(new AmshaErrorResponse("Unauthorized", "Invalid or missing API Key"))
+                    .build();
+        }
+        coordinator.findActive(owner).ifPresent(d -> coordinator.discard(d.draftId(), owner));
         auditService.recordMandatory(
-                "settings",
-                key != null ? key : "unknown",
-                "system",
-                SecurityEventType.SETTINGS_RESET,
-                "keys=LLM_PROVIDER_KEY,LLM_MODEL_KEY,LLM_API_KEY,SYSTEM_PROMPT_KEY");
-
-        registry.invalidateAll();
-
-        // Clear all LLM related keys to force re-onboarding (§reset-fix)
-        vault.removeSystemKey(VaultConstants.LLM_PROVIDER_KEY);
-        vault.removeSystemKey(VaultConstants.LLM_MODEL_KEY);
-        vault.removeSystemKey(VaultConstants.LLM_API_KEY);
-        vault.removeSystemKey(VaultConstants.SYSTEM_PROMPT_KEY);
-
-        return Response.ok(Map.of(
-                        "reset",
-                        true,
-                        "message",
-                        "Onboarding sessions cleared. Cache cleared. Refresh to re-run the wizard."))
-                .cookie(new NewCookie.Builder(HttpConstants.COOKIE_AMSHA_API_KEY)
-                        .value("")
-                        .path("/")
-                        .maxAge(0)
-                        .httpOnly(true)
-                        .sameSite(NewCookie.SameSite.STRICT)
-                        .build())
+                "settings", owner, "system", SecurityEventType.SETTINGS_RESET, "action=discard-active-draft");
+        return Response.ok(Map.of("reset", true, "message", "Active onboarding draft discarded."))
                 .build();
     }
 

@@ -2,9 +2,71 @@ package com.amsha.core.tools;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import java.util.Map;
+
+import com.amsha.core.agent.role.ToolCapability;
+import com.amsha.core.security.AutonomyLevel;
+import com.amsha.core.security.ToolOperation;
+
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 class SmartWebFetchToolTest {
+
+    private SmartWebFetchTool tool;
+
+    @BeforeEach
+    void setUp() {
+        tool = new SmartWebFetchTool();
+    }
+
+    @Test
+    void testToolMetadataProperties() {
+        assertEquals(ToolCapability.WEB_FETCH.toolName(), tool.name());
+        assertNotNull(tool.description());
+        assertFalse(tool.requiresSandbox());
+        assertEquals(ToolOperation.NETWORK_OUTBOUND, tool.requiredOperation());
+        assertEquals(IdempotencyMode.IDEMPOTENT, tool.idempotencyMode());
+        assertTrue(tool.isEnabled());
+        assertNotNull(tool.parametersSchema());
+    }
+
+    @Test
+    void testInitAndCleanupDoesNotThrowInTestMode() {
+        assertDoesNotThrow(() -> tool.init());
+        assertDoesNotThrow(() -> tool.cleanup());
+    }
+
+    @Test
+    void testExecuteValidation() {
+        ToolExecutionContext ctx = new ToolExecutionContext(
+                "sess-1",
+                "user-1",
+                "chat-1",
+                "COORDINATOR",
+                AutonomyLevel.FULL,
+                "trace-1",
+                "WEBSOCKET",
+                "plat-1",
+                "goal",
+                null,
+                null,
+                null);
+
+        ToolResponse r1 = tool.execute(ctx, Map.of());
+        assertFalse(r1.success());
+
+        ToolResponse r2 = tool.execute(ctx, Map.of("url", "ftp://example.com"));
+        assertFalse(r2.success());
+
+        ToolResponse r3 = tool.execute(ctx, Map.of("url", "http://127.0.0.1/admin"));
+        assertFalse(r3.success());
+        assertEquals(403, r3.exitCode());
+
+        ToolResponse r4 = tool.execute(ctx, Map.of("url", "http://localhost:8080"));
+        assertFalse(r4.success());
+        assertEquals(403, r4.exitCode());
+    }
 
     @Test
     void htmlToTextStripsTags() {

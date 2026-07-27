@@ -1,7 +1,15 @@
 package com.amsha.core.agent.loop;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.*;
 
+import jakarta.enterprise.inject.Instance;
+
+import java.util.ArrayList;
+import java.util.List;
+
+import com.amsha.core.agent.reasoning.ReasoningEngine;
 import com.amsha.core.agent.result.AgentResult;
 import com.amsha.core.agent.role.ToolCapability;
 import com.amsha.core.tools.ToolResponse;
@@ -9,19 +17,38 @@ import com.amsha.core.tools.ToolResponse;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 
 @ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.LENIENT)
 @SuppressWarnings("java:S1192")
 class PersonaEscalationServiceTest {
 
-    private PersonaEscalationService service;
+    @Mock
+    ReasoningEngine reasoningEngine;
+
+    @Mock
+    Instance<AgentLoop> agentLoopInstance;
+
+    @Mock
+    AgentLoop agentLoop;
+
+    @Mock
+    GroupConsultationService groupConsultationService;
+
+    @InjectMocks
+    PersonaEscalationService service;
 
     @BeforeEach
     void setUp() {
-        service = new PersonaEscalationService();
         service.escalationEnabled = true;
         service.maxEscalationDepth = 2;
+        service.agentLoop = agentLoopInstance;
+        when(agentLoopInstance.get()).thenReturn(agentLoop);
     }
 
     @Test
@@ -68,207 +95,57 @@ class PersonaEscalationServiceTest {
     }
 
     @Test
-    void determineEscalationTarget_brahma_designPattern_toBrihaspati() {
-        String target = service.determineEscalationTarget("coder", "best practice for this", null);
-        assertEquals("architect", target);
-    }
-
-    @Test
-    void determineEscalationTarget_shiva_obscureError_toSaraswati() {
-        String target = service.determineEscalationTarget("debugger", "unknown error, unable to diagnose", null);
-        assertEquals("researcher", target);
-    }
-
-    @Test
-    void determineEscalationTarget_shiva_insufficientInfo_toSaraswati() {
-        String target =
-                service.determineEscalationTarget("debugger", "insufficient information to determine root cause", null);
-        assertEquals("researcher", target);
-    }
-
-    @Test
-    void determineEscalationTarget_shiva_fundamentalFlaw_toBrahma() {
-        String target = service.determineEscalationTarget(
-                "debugger", "fundamental flaw in design, needs to be rewritten", null);
-        assertEquals("coder", target);
-    }
-
-    @Test
-    void determineEscalationTarget_shiva_architectureIssue_toBrahma() {
-        String target =
-                service.determineEscalationTarget("debugger", "architecture issue requires complete rewrite", null);
-        assertEquals("coder", target);
-    }
-
-    @Test
-    void determineEscalationTarget_shiva_complexLogic_toGanesha() {
-        String target = service.determineEscalationTarget("debugger", "dummy", "this recursive algorithm is complex");
-        assertEquals("optimizer", target);
-    }
-
-    @Test
-    void determineEscalationTarget_shiva_securityVulnerability_toKartikeya() {
-        String target =
-                service.determineEscalationTarget("debugger", "dummy", "found a security vulnerability in the code");
-        assertEquals("sentinel", target);
-    }
-
-    @Test
-    void determineEscalationTarget_brihaspati_needsImplementation_toBrahma() {
-        String target = service.determineEscalationTarget("architect", "dummy error", "implement this design");
-        assertEquals("coder", target);
-    }
-
-    @Test
-    void determineEscalationTarget_brihaspati_writeCode_toBrahma() {
-        String target = service.determineEscalationTarget("architect", "dummy", "write code for this architecture");
-        assertEquals("coder", target);
-    }
-
-    @Test
-    void determineEscalationTarget_brihaspati_needsResearch_toSaraswati() {
-        String target = service.determineEscalationTarget("architect", "dummy", "research the latest patterns");
-        assertEquals("researcher", target);
-    }
-
-    @Test
-    void determineEscalationTarget_saraswati_needsImplementation_toBrahma() {
-        String target = service.determineEscalationTarget("researcher", "dummy", "implement this feature");
-        assertEquals("coder", target);
-    }
-
-    @Test
-    void determineEscalationTarget_saraswati_writeCode_toBrahma() {
-        String target = service.determineEscalationTarget("researcher", "dummy", "write code based on research");
-        assertEquals("coder", target);
-    }
-
-    @Test
     void determineEscalationTarget_sandboxCodeError_escalatesToDebugger() {
         String target = service.determineEscalationTarget("coder", "simple syntax error in line 5", null);
         assertEquals("debugger", target);
     }
 
     @Test
-    void determineEscalationTarget_nonSandboxError_returnsNull() {
-        String target = service.determineEscalationTarget("coordinator", "rate limit exceeded", null);
-        assertNull(target);
+    void attemptEscalation_exceedsMaxDepth() {
+        var res = service.attemptEscalation(
+                "sess-1", "usr-1", "chat-1", "coder", "researcher", "err", "goal", null, null, "cli", "cli", 3);
+        assertFalse(res.success());
+        assertEquals("Max escalation depth reached", res.errorIfFailed());
     }
 
     @Test
-    void determineEscalationTarget_nullSource_returnsNull() {
-        String target = service.determineEscalationTarget(null, "error", null);
-        assertNull(target);
-    }
-
-    // Ganesha (Optimizer) escalation tests
-    @Test
-    void determineEscalationTarget_ganesha_needsImplementation_toBrahma() {
-        String target = service.determineEscalationTarget("optimizer", "dummy", "implement this solution");
-        assertEquals("coder", target);
+    void attemptEscalation_pingPongDetected() {
+        List<String> chain = new ArrayList<>(List.of("researcher->coder", "coder->researcher", "researcher->coder"));
+        var res = service.attemptEscalation(
+                "sess-1", "usr-1", "chat-1", "coder", "researcher", "err", "goal", null, null, "cli", "cli", 1, chain);
+        assertFalse(res.success());
+        assertTrue(res.errorIfFailed().contains("ping-pong"));
     }
 
     @Test
-    void determineEscalationTarget_ganesha_needsResearch_toSaraswati() {
-        String target = service.determineEscalationTarget("optimizer", "dummy", "research the algorithm");
-        assertEquals("researcher", target);
+    void attemptEscalation_unknownTargetRole() {
+        var res = service.attemptEscalation(
+                "sess-1", "usr-1", "chat-1", "coder", "nonexistent_role", "err", "goal", null, null, "cli", "cli");
+        assertFalse(res.success());
+        assertTrue(res.errorIfFailed().contains("Unknown target persona"));
     }
 
     @Test
-    void determineEscalationTarget_ganesha_needsDebug_toShiva() {
-        String target = service.determineEscalationTarget("optimizer", "dummy", "fix bug in logic");
-        assertEquals("debugger", target);
+    void attemptEscalation_success() {
+        AgentResult.Finished finished = new AgentResult.Finished("research answer", List.of(), 5, 5);
+        when(agentLoop.run(anyString(), eq("researcher"), anyString(), eq(reasoningEngine), anyInt()))
+                .thenReturn(finished);
+
+        var res = service.attemptEscalation(
+                "sess-1", "usr-1", "chat-1", "coder", "researcher", "err", "goal", null, null, "cli", "cli");
+        assertTrue(res.success());
+        assertEquals("researcher", res.targetPersona());
+        assertEquals("research answer", res.result());
     }
 
     @Test
-    void determineEscalationTarget_ganesha_securityIssue_toKartikeya() {
-        String target =
-                service.determineEscalationTarget("optimizer", "dummy", "this logic has a security vulnerability");
-        assertEquals("sentinel", target);
-    }
+    void testGroupConsultationDelegation() {
+        when(groupConsultationService.isGroupLead("coordinator")).thenReturn(true);
+        assertTrue(service.isGroupLead("coordinator"));
 
-    // Kartikeya (Sentinel) escalation tests
-    @Test
-    void determineEscalationTarget_kartikeya_needsFix_toShiva() {
-        String target = service.determineEscalationTarget("sentinel", "dummy", "patch the vulnerability");
-        assertEquals("debugger", target);
-    }
-
-    @Test
-    void determineEscalationTarget_kartikeya_needsResearch_toSaraswati() {
-        String target = service.determineEscalationTarget("sentinel", "dummy", "research CVE details");
-        assertEquals("researcher", target);
-    }
-
-    @Test
-    void determineEscalationTarget_kartikeya_cveLowercase_toSaraswati() {
-        String target = service.determineEscalationTarget("sentinel", "dummy", "look up cve-2024-1234");
-        assertEquals("researcher", target);
-    }
-
-    @Test
-    void determineEscalationTarget_kartikeya_complexLogic_toGanesha() {
-        String target =
-                service.determineEscalationTarget("sentinel", "dummy", "this requires complex algorithm analysis");
-        assertEquals("optimizer", target);
-    }
-
-    // Lakshmi (Healer) escalation tests
-    @Test
-    void determineEscalationTarget_lakshmi_needsFix_toShiva() {
-        String target = service.determineEscalationTarget("healer", "dummy", "fix the error");
-        assertEquals("debugger", target);
-    }
-
-    @Test
-    void determineEscalationTarget_lakshmi_needsResearch_toSaraswati() {
-        String target = service.determineEscalationTarget("healer", "dummy", "research best practices");
-        assertEquals("researcher", target);
-    }
-
-    @Test
-    void determineEscalationTarget_lakshmi_budgetCoordination_toVishnu() {
-        String target = service.determineEscalationTarget("healer", "dummy", "need budget allocation review");
-        assertEquals("coordinator", target);
-    }
-
-    // Durga (Protector) escalation tests
-    @Test
-    void determineEscalationTarget_durga_needsFix_toShiva() {
-        String target = service.determineEscalationTarget("protector", "dummy", "implement policy fix");
-        assertEquals("debugger", target);
-    }
-
-    @Test
-    void determineEscalationTarget_durga_needsResearch_toSaraswati() {
-        String target = service.determineEscalationTarget("protector", "dummy", "research compliance rules");
-        assertEquals("researcher", target);
-    }
-
-    // Kali (Purifier) escalation tests
-    @Test
-    void determineEscalationTarget_kali_needsFix_toShiva() {
-        String target = service.determineEscalationTarget("purifier", "dummy", "fix cleanup code");
-        assertEquals("debugger", target);
-    }
-
-    @Test
-    void determineEscalationTarget_kali_needsResearch_toSaraswati() {
-        String target = service.determineEscalationTarget("purifier", "dummy", "research best practices");
-        assertEquals("researcher", target);
-    }
-
-    // Parvati (Nurturer) escalation tests
-    @Test
-    void determineEscalationTarget_parvati_needsFix_toShiva() {
-        String target = service.determineEscalationTarget("nurturer", "dummy", "fix the bug");
-        assertEquals("debugger", target);
-    }
-
-    @Test
-    void determineEscalationTarget_parvati_needsResearch_toSaraswati() {
-        String target = service.determineEscalationTarget("nurturer", "dummy", "research documentation");
-        assertEquals("researcher", target);
+        GroupConsultationService.TriageResult expectedTriage = mock(GroupConsultationService.TriageResult.class);
+        when(groupConsultationService.triage("coordinator", "goal")).thenReturn(expectedTriage);
+        assertEquals(expectedTriage, service.triageGroupConsultation("coordinator", "goal"));
     }
 
     @Test
@@ -279,67 +156,83 @@ class PersonaEscalationServiceTest {
     }
 
     @Test
-    void buildEscalationGoal_containsErrorOutput() {
-        String goal = service.buildEscalationGoal("coder", "researcher", "package does not exist", "goal", null, null);
-        assertTrue(goal.contains("package does not exist"));
+    void determineEscalationTarget_debuggerRules() {
+        assertEquals("researcher", service.determineEscalationTarget("debugger", "unable to diagnose error", null));
+        assertEquals("coder", service.determineEscalationTarget("debugger", "fundamental flaw", null));
+        assertEquals(
+                "optimizer",
+                service.determineEscalationTarget("debugger", "error in algorithm", "complex logic obstacle"));
+        assertEquals(
+                "sentinel",
+                service.determineEscalationTarget("debugger", "vulnerability detected", "security injection"));
     }
 
     @Test
-    void buildEscalationGoal_containsCodeWhenProvided() {
-        String goal =
-                service.buildEscalationGoal("coder", "researcher", "error", "goal", "public class Main {}", "java");
-        assertTrue(goal.contains("public class Main {}"));
-        assertTrue(goal.contains("java"));
+    void determineEscalationTarget_architectAndResearcherRules() {
+        assertEquals("coder", service.determineEscalationTarget("architect", "design ready", "implement the feature"));
+        assertEquals(
+                "researcher",
+                service.determineEscalationTarget("architect", "design unclear", "research best practices"));
+        assertEquals(
+                "coder",
+                service.determineEscalationTarget("researcher", "findings attached", "write code for solution"));
     }
 
     @Test
-    void buildEscalationGoal_truncatesLongErrors() {
-        String longError = "x".repeat(5000);
-        String goal = service.buildEscalationGoal("coder", "researcher", longError, "goal", null, null);
-        assertTrue(goal.contains("[truncated]"));
+    void determineEscalationTarget_nullOrUniversalFallback() {
+        assertNull(service.determineEscalationTarget(null, "error", "goal"));
+        assertNull(service.determineEscalationTarget("coder", null, "goal"));
+        assertEquals(
+                "debugger", service.determineEscalationTarget("unknown_role", "compilation error in main.java", null));
     }
 
     @Test
-    void escalationResult_successRecord() {
-        PersonaEscalationService.EscalationResult result =
-                PersonaEscalationService.EscalationResult.success("researcher", "found docs", 1);
-        assertTrue(result.success());
-        assertEquals("researcher", result.targetPersona());
-        assertEquals("found docs", result.result());
-        assertEquals(1, result.depthUsed());
-        assertNull(result.errorIfFailed());
+    void testFormatAgentResultError() {
+        AgentResult.Failed failed = mock(AgentResult.Failed.class);
+        when(failed.reason()).thenReturn("some failure");
+        assertEquals("some failure", service.formatAgentResultError(failed));
+
+        AgentResult.LoopExceeded loopExceeded = mock(AgentResult.LoopExceeded.class);
+        when(loopExceeded.maxIterations()).thenReturn(10);
+        assertEquals("Agent exceeded max iterations (10)", service.formatAgentResultError(loopExceeded));
+
+        AgentResult.AwaitingApproval awaitingApproval = mock(AgentResult.AwaitingApproval.class);
+        when(awaitingApproval.toolName()).thenReturn("sandbox_exec");
+        assertEquals(
+                "Agent requires human approval for tool: sandbox_exec",
+                service.formatAgentResultError(awaitingApproval));
+
+        AgentResult.AwaitingRetry awaitingRetry = mock(AgentResult.AwaitingRetry.class);
+        when(awaitingRetry.retryAfterMs()).thenReturn(5000);
+        assertEquals("Agent hit rate limit, retry after 5s", service.formatAgentResultError(awaitingRetry));
     }
 
     @Test
-    void escalationResult_failureRecord() {
-        PersonaEscalationService.EscalationResult result =
-                PersonaEscalationService.EscalationResult.failure("delegation failed");
-        assertFalse(result.success());
-        assertNull(result.targetPersona());
-        assertNull(result.result());
-        assertEquals("delegation failed", result.errorIfFailed());
-    }
+    void attemptEscalation_secondaryEscalationSuccess() {
+        AgentResult.Finished firstResult =
+                new AgentResult.Finished("I cannot solve this - insufficient information", List.of(), 3, 3);
+        AgentResult.Finished secondResult =
+                new AgentResult.Finished("Final answer after secondary escalation", List.of(), 4, 4);
 
-    @Test
-    void formatAgentResultError_failed() {
-        AgentResult result = AgentResult.failed("test error", AgentResult.FailureCategory.SYSTEM_ERROR, null);
-        String msg = service.formatAgentResultError(result);
-        assertEquals("test error", msg);
-    }
+        when(agentLoop.run(anyString(), eq("debugger"), anyString(), eq(reasoningEngine), anyInt()))
+                .thenReturn(firstResult);
+        when(agentLoop.run(anyString(), eq("researcher"), anyString(), eq(reasoningEngine), anyInt()))
+                .thenReturn(secondResult);
 
-    @Test
-    void formatAgentResultError_loopExceeded() {
-        AgentResult result = AgentResult.loopExceeded(5, null);
-        String msg = service.formatAgentResultError(result);
-        assertTrue(msg.contains("exceeded max iterations"));
-        assertTrue(msg.contains("5"));
-    }
-
-    @Test
-    void formatAgentResultError_awaitingApproval() {
-        AgentResult result =
-                AgentResult.awaitingApproval(ToolCapability.SANDBOX_EXEC.toolName(), "null", "sess1", null);
-        String msg = service.formatAgentResultError(result);
-        assertTrue(msg.contains("requires human approval"));
+        var res = service.attemptEscalation(
+                "sess-1",
+                "usr-1",
+                "chat-1",
+                "coder",
+                "debugger",
+                "syntax error",
+                "fix compilation",
+                null,
+                null,
+                "cli",
+                "cli");
+        assertTrue(res.success());
+        assertEquals("researcher", res.targetPersona());
+        assertEquals("Final answer after secondary escalation", res.result());
     }
 }

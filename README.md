@@ -8,7 +8,8 @@
   ![Native Image Ready](https://img.shields.io/badge/Native_Image-Ready-orange.svg?style=flat&logo=graalvm)
   ![OpenTelemetry](https://img.shields.io/badge/OpenTelemetry-Tracing-blueviolet.svg?style=flat&logo=opentelemetry)
   ![Podman](https://img.shields.io/badge/Isolation-Rootless_Podman-purple.svg?style=flat&logo=podman)
-  ![Tests](https://img.shields.io/badge/Tests-3103_passing-brightgreen.svg?style=flat)
+  ![Tests](https://img.shields.io/badge/Tests-3867_passing-brightgreen.svg?style=flat)
+  ![Coverage](https://img.shields.io/badge/Coverage-70.11%25-brightgreen.svg?style=flat)
   [![Built with Devbox](https://img.shields.io/badge/built_with-devbox-green.svg?style=flat)](https://www.jetify.com/devbox/)
   [![Built with mise](https://img.shields.io/badge/built_with-mise-blue.svg?style=flat)](https://jdx.dev)
 </div>
@@ -188,6 +189,7 @@ Set `AMSHA_UI_SKIP_ONBOARDING=true` if you want the web UI to skip the setup wiz
 | Doc | What it covers |
 |-----|---------------|
 | [AMSHA_EXTENSION.md](./docs/AMSHA_EXTENSION.md) | Adding tools, personas, reflexes, channels, skills, LLM providers, guards |
+| [SKILLSJAR_ADMISSION.md](./docs/SKILLSJAR_ADMISSION.md) | SkillsJar compatibility checks, quarantine, packaging contracts, and validation |
 | [CHANNEL_SPI.md](./docs/CHANNEL_SPI.md) | Adding a new channel (Discord, Slack, etc.) via the 6-interface SPI |
 
 ### 🔒 Security
@@ -203,6 +205,11 @@ Set `AMSHA_UI_SKIP_ONBOARDING=true` if you want the web UI to skip the setup wiz
 | [TESTING_GUIDE.md](./docs/TESTING_GUIDE.md) | REST API testing, regression checklists |
 | [TELEGRAM_TESTING.md](./docs/TELEGRAM_TESTING.md) | Telegram bot end-to-end testing |
 | [rest-http/](./rest-http/) | IntelliJ / VSCode REST Client files |
+
+After `mise run build:test`, run `mise run test:summary` to view the total test count
+and reactor JaCoCo coverage, or `python3 ./scripts/analyze_jacoco_coverage.py --target 0.72` to see
+the coverage buffer, additional covered lines needed, and highest-value classes to test next.
+Use `--module app`, `--top 10`, `--badge`, or `--json` to narrow or automate reports.
 
 ### ❓ Reference
 

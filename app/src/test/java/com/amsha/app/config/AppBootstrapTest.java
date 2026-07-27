@@ -23,15 +23,10 @@ class AppBootstrapTest {
         System.clearProperty("KEY_E");
         System.clearProperty("AMSHA_LLM_PROVIDER");
         System.clearProperty("AMSHA_LLM_CONTEXT_WINDOW");
-        System.clearProperty("amsha.llm.context-window");
         System.clearProperty("AMSHA_LLM_COMPACT_PROMPT_ENABLED");
-        System.clearProperty("amsha.llm.compact-prompt-enabled");
         System.clearProperty("AMSHA_LLM_STRUCTURED_OUTPUT_MODE");
-        System.clearProperty("amsha.llm.structured-output-mode");
         System.clearProperty("AMSHA_INTENT_CLASSIFIER_STRUCTURED_OUTPUT_MODE");
-        System.clearProperty("amsha.routing.intent-classifier.structured-output-mode");
         System.clearProperty("AMSHA_COMPACTION_STRUCTURED_OUTPUT_MODE");
-        System.clearProperty("amsha.memory.compaction.structured-output-mode");
         System.clearProperty("AMSHA_INFINITE_LOOP_LLM_PROVIDERS");
         System.clearProperty("AMSHA_INFINITE_LOOP_COMPACTION_PROVIDERS");
         System.clearProperty("AMSHA_INFINITE_LOOP_CLASSIFIER_PROVIDERS");
@@ -78,37 +73,38 @@ class AppBootstrapTest {
     }
 
     @Test
-    void testValidateAndAutoFixLlmConfig_publishesEffectiveContextWindowToDottedKey(@TempDir Path tempDir)
-            throws Exception {
+    void testValidateLlmConfig_doesNotOverrideSystemProperties(@TempDir Path tempDir) throws Exception {
         System.setProperty("AMSHA_LLM_PROVIDER", "cerebras");
         System.setProperty("AMSHA_LLM_CONTEXT_WINDOW", "8192");
 
         Path envFile = tempDir.resolve(".env");
         Files.write(envFile, List.of("AMSHA_LLM_PROVIDER=cerebras", "AMSHA_LLM_CONTEXT_WINDOW=8192"));
 
-        invokeValidateAndAutoFixLlmConfig(tempDir);
+        invokeValidateLlmConfig(tempDir);
 
+        // Validator should NOT set any System properties - it only warns
         assertEquals("8192", System.getProperty("AMSHA_LLM_CONTEXT_WINDOW"));
-        assertEquals("8192", System.getProperty("amsha.llm.context-window"));
     }
 
     @Test
-    void testValidateAndAutoFixLlmConfig_defaultsCompactPromptFlagToFalse(@TempDir Path tempDir) throws Exception {
+    void testValidateLlmConfig_doesNotSetDefaultsForMissingValues(@TempDir Path tempDir) throws Exception {
         System.setProperty("AMSHA_LLM_PROVIDER", "groq");
-        // Ensure environment variable doesn't override the test by setting property to blank
+        // Ensure these are blank so the validator would warn
         System.setProperty("AMSHA_LLM_COMPACT_PROMPT_ENABLED", "");
+        System.setProperty("AMSHA_LLM_STRUCTURED_OUTPUT_MODE", "");
 
         Path envFile = tempDir.resolve(".env");
         Files.write(envFile, List.of("AMSHA_LLM_PROVIDER=groq"));
 
-        invokeValidateAndAutoFixLlmConfig(tempDir);
+        invokeValidateLlmConfig(tempDir);
 
-        assertEquals("false", System.getProperty("AMSHA_LLM_COMPACT_PROMPT_ENABLED"));
-        assertEquals("false", System.getProperty("amsha.llm.compact-prompt-enabled"));
+        // Validator should NOT set defaults - it only warns
+        assertEquals("", System.getProperty("AMSHA_LLM_COMPACT_PROMPT_ENABLED"));
+        assertEquals("", System.getProperty("AMSHA_LLM_STRUCTURED_OUTPUT_MODE"));
     }
 
-    private static void invokeValidateAndAutoFixLlmConfig(Path binaryDir) throws Exception {
-        Method method = LlmConfigAutoFixer.class.getDeclaredMethod("validateAndAutoFixLlmConfig", Path.class);
+    private static void invokeValidateLlmConfig(Path binaryDir) throws Exception {
+        Method method = LlmConfigValidator.class.getDeclaredMethod("validateLlmConfig", Path.class);
         method.setAccessible(true);
         try {
             method.invoke(null, binaryDir);

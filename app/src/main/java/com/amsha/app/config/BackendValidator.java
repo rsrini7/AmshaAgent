@@ -3,10 +3,13 @@ package com.amsha.app.config;
 import jakarta.annotation.Priority;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
+import jakarta.inject.Inject;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Properties;
+
+import com.amsha.app.security.ApiKeyRegistry;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
@@ -33,7 +36,18 @@ public class BackendValidator {
     @ConfigProperty(name = "amsha.persistence.backend", defaultValue = "sqlite")
     String runtimeBackend;
 
+    @ConfigProperty(name = "amsha.api.keys.internal", defaultValue = "key-internal-changeme")
+    String internalApiKey;
+
+    @Inject
+    ApiKeyRegistry apiKeyRegistry;
+
     void onStart(@Observes @Priority(1) StartupEvent ev) {
+        // Register the internal API key so the cookie issued for skip-onboarding (and other
+        // internal-UI flows) validates against ApiKeyRegistry. Mirrors the legacy main-branch
+        // behavior where the internal key was an always-valid owner credential.
+        apiKeyRegistry.register("internal", internalApiKey);
+
         String buildBackend = readBuildBackend();
 
         if ("default".equals(buildBackend)) {
@@ -80,7 +94,7 @@ public class BackendValidator {
             Properties props = new Properties();
             props.load(is);
             return props.getProperty("quarkus.amsha.build.backend", "default");
-        } catch (IOException e) {
+        } catch (IOException _) {
             log.debugf("BackendValidator: could not read build-info.properties — assuming JVM mode.");
             return "default";
         }

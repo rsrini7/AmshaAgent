@@ -19,7 +19,7 @@ import io.quarkus.runtime.StartupEvent;
 
 /**
  * Creates the FTS5 virtual table for compaction summary search on startup.
- * WORM audit triggers are managed by Flyway (V1__baseline.sql).
+ * WORM audit triggers are managed by Flyway (V3__security_and_audit.sql).
  */
 @ApplicationScoped
 @IfBuildProperty(name = "amsha.persistence.backend", stringValue = "sqlite", enableIfMissing = true)

@@ -1,13 +1,17 @@
 # ADR: Identity, Web Sessions, Multi-Admin Access, and Workspace Sharing
 
-- Status: Implemented
+- Status: Partially Implemented
 - Date: 2026-07-14
 - Decision owners: Amsha Agent maintainers
 - Required by: `ADR-Onboarding-Multi-Agent-Provider-Model.md`
 
+## Implementation checkpoint
+
+Identity users/workspaces/memberships, API credentials, opaque web sessions, external-login providers, invitations, and an initial first-owner bootstrap are present. The bootstrap implementation remains provisional: the onboarding ADR requires replacing its pre-CAS identity writes and combined persist/register credential flow before the first-owner acceptance criteria are complete. Phase 5 also remains open: `SecretVault` has no typed `WORKSPACE` scope, web sessions have no distinct active identity-workspace binding, and connection grants are not complete. This ADR must not be reported as fully implemented until the bootstrap replacement, workspace contracts, and their three-backend/security tests pass.
+
 ## Context
 
-Amsha currently authenticates API requests with configured or runtime-registered API keys. `ApiKeyRegistry` maps an HMAC of a key to a label, `ApiKeyValidator` resolves that label, `ApiKeyAuthFilter` places it in `SecurityContext`, and `ApiKeyOwnerResolver` exposes it through the core owner SPI. There are no durable human users, external identities, browser login sessions, invitations, teams, or workspace memberships.
+At the time of this decision, Amsha authenticated API requests with configured or runtime-registered API keys. `ApiKeyRegistry` mapped an HMAC of a key to a label, `ApiKeyValidator` resolved that label, `ApiKeyAuthFilter` placed it in `SecurityContext`, and `ApiKeyOwnerResolver` exposed it through the core owner SPI. Durable human users, external identities, browser login sessions, invitations, teams, and workspace memberships were then absent; the checkpoint above records the current implementation state.
 
 Profile-based onboarding needs a stable owner before storing credentials in `USER:<userId>`. Community deployments also need more than one administrator and a safe way to share a provider connection without copying its secret. Those requirements cannot be represented by a `shared` flag or by treating the configured `internal` key label as a permanent human account model.
 
@@ -23,7 +27,7 @@ Adopt an **OIDC-first identity model with API-key operator fallback**.
 - Multiple administrators are added through expiring invitations or an owner-issued API-key principal. No second unauthenticated first-owner claim is possible.
 - Shareable resources use explicit scope and grants: `USER:<userId>` for private resources or `WORKSPACE:<workspaceId>` for team resources. A boolean `shared` field is forbidden.
 
-This ADR is an implementation gate for onboarding Phase 1. The narrow API-key bootstrap may be built as part of that phase, but the identity ports, stable-principal mapping, session policy, and workspace authorization contracts must be approved first.
+This ADR is the gate that owns the first-owner bootstrap, identity ports, stable-principal mapping, session policy, and workspace authorization contracts. Status is now `Partially Implemented`: I1–I4 foundations (ports, stable principals, opaque sessions, external-login providers, invitations, and the provisional first-owner bootstrap) are present. The remaining work is the joint O1 bootstrap replacement with the onboarding ADR (reservation state machine, state-bound credential activation) and I5 (active identity-workspace context, `WORKSPACE` vault scope, connection grants). Only completion of those two items moves this ADR to `Implemented`.
 
 ## Goals
 
@@ -80,7 +84,9 @@ The port APIs use optimistic revisions and atomic operations for first-owner cla
 
 ### 2. First owner and legacy API-key compatibility
 
-This identity subsystem defines `BootstrapStateStorePort` and a core-owned `BootstrapCredentialIssuer` SPI implemented by the app module; onboarding consumes them. Together they create a high-entropy API credential, a generated stable `userId`, the default workspace, and its first `OWNER` membership. The API credential maps to that `userId`; it is not stored under literal principal `internal`.
+This identity subsystem defines `BootstrapStateStorePort` and the core-owned `BootstrapCredentialIssuer` SPI (in `core/security`, implemented by the app module); onboarding consumes them. The onboarding ADR refines their initial implementation with a `CLAIMING` reservation, stable owner/workspace recovery, and state-bound credential activation; its §0 is the normative source for the reservation state machine (`UNCLAIMED -> CLAIMING -> CREDENTIAL_ISSUED -> CLAIMED`), the `reserveFirstOwner`/`recordCredentialIssued`/`confirmClaim`/`rollbackClaiming`/`replaceCredential` transition names, and the two-phase `BootstrapCredentialIssuer` prepare/activate split. This ADR does not restate that state machine; implementers must read the onboarding ADR §0. Together they create a high-entropy API credential, a generated stable `userId`, the default workspace, and its first `OWNER` membership. The API credential maps to that `userId`; it is not stored under literal principal `internal`.
+
+The bootstrap replacement also imposes a new coupling on this subsystem: `ApiKeyRegistry` must accept the bootstrap credential only when both the `ApiCredential` record and a matching `CREDENTIAL_ISSUED`/`CLAIMED` bootstrap digest exist in `BootstrapStateStorePort`. A generic durable-credential lookup cannot bypass bootstrap state, so an unactivated `CLAIMING` reservation never yields a usable key. This gate is defined in the onboarding ADR §0 and is part of the O1 acceptance criteria for this ADR.
 
 During compatibility, configured `amsha.api.keys.*` entries remain valid. Their labels resolve through a migration mapping: the configured `internal` key maps to the claimed owner's stable `userId` and `OWNER` role; CI/service keys map to explicit service principals with bounded roles. `ApiKeyRegistry` becomes a cache over configured keys plus `ApiCredentialStorePort`, not an authoritative in-memory identity store.
 
@@ -173,19 +179,21 @@ Responses never contain raw credentials except the one-time API-key creation res
 
 1. Add identity, workspace, API-credential, session, and invitation ports with all three backends, migrations, reflection registration, and contract tests.
 2. Migrate `ApiKeyRegistry`/validator/filter/owner resolver to stable principals while preserving configured internal/CI keys.
-3. Implement first-owner/default-workspace claim and opaque web sessions, including revocation, rotation, CSRF, and takeover/recovery tests.
+3. Implement opaque web sessions and the initial first-owner/default-workspace claim. The session work is present; the provisional claim is replaced jointly with onboarding O1 by the reservation/state-bound activation contract, including takeover/recovery tests.
 4. Freeze the `ExternalIdentityProvider` contract, then add generic OIDC plus GitHub OAuth, account linking, invitations, and multi-admin role enforcement against the same provider contract tests.
-5. Add `WORKSPACE` vault scope and connection grants; integrate profile onboarding and MCP ownership with the same authorization service.
+5. **Open:** add the distinct active identity-workspace context, `WORKSPACE` vault scope, and connection grants; integrate profile onboarding and MCP ownership with the same authorization service. Only completion of this item moves this ADR to `Implemented`.
 
 Each phase runs the project's required Java formatting, focused compile/tests, three-backend contracts, native-sensitive compile, documentation verification, and Sonar checks. Identity/security integration tests cover concurrent claims, fixation, replay, CSRF, issuer confusion, invitation races, last-owner enforcement, session revocation, and cross-workspace denial.
 
 ### Cross-ADR dependency
 
-Onboarding Phase 1 (bootstrap and foundation) depends on Identity Phases 1–3 (ports, stable principals, first-owner claim, opaque sessions). Onboarding Phases 2–3 (LLM profiles, routing cutover) depend on Identity Phase 5 (workspace vault scope). Identity Phase 4 (OIDC + invitations) can run in parallel with Onboarding Phases 1–2 and is not a blocking dependency.
+Onboarding Phase 1 (safe bootstrap and foundation) depends on the Identity Phases 1–3 ports, stable principals, authorization, and opaque sessions, and jointly completes the replacement first-owner claim contract. Onboarding Phases 2–3 (LLM profiles, routing cutover) depend on Identity Phase 5 (workspace vault scope). Identity Phase 4 (OIDC + invitations) can run in parallel with Onboarding Phases 1–2 and is not a blocking dependency.
 
 ## Acceptance criteria
 
-- A fresh deployment can claim exactly one first owner and recover from a lost credential-delivery response.
+- A fresh deployment can claim exactly one first owner and recover from a lost credential-delivery response. Concurrent claims are serialized by the `BootstrapStateStorePort` compare-and-set: a winning reservation creates exactly one stable user, one default workspace, and one `OWNER` membership, while losing claimants create no orphan users, workspaces, or credentials. A stale `CLAIMING` reservation is safely rolled back to `UNCLAIMED` with no durable identity rows left behind.
+- A lost credential-delivery response can be replaced for the same persisted owner and workspace before confirmation, without ever leaving two valid keys: the old digest is revoked and the new one is activated only against the reserved owner/revision. After the issued key authenticates and the first draft confirms `CLAIMED`, all bootstrap claim/recovery endpoints return unavailable.
+- `ApiKeyRegistry` accepts a bootstrap credential only when both the `ApiCredential` record and a matching `CREDENTIAL_ISSUED`/`CLAIMED` bootstrap digest exist; an unactivated `CLAIMING` reservation never yields a usable key.
 - The configured internal key retains access during migration but resolves to a stable user ID and owner role.
 - A user can log in through generic OIDC; GitHub login works through its explicit OAuth adapter.
 - Browser sessions are opaque, expiring, rotating, CSRF-protected, revocable, and restart-safe.

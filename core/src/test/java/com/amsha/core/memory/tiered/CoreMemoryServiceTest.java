@@ -1,11 +1,10 @@
 package com.amsha.core.memory.tiered;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.util.ArrayList;
@@ -56,6 +55,32 @@ class CoreMemoryServiceTest {
         when(tieredConfig.coreMemory()).thenReturn(coreMemoryConfig);
         when(coreMemoryConfig.maxBlocksPerUser()).thenReturn(20);
         when(coreMemoryConfig.maxCharsPerBlock()).thenReturn(2000);
+    }
+
+    @Test
+    void testReadAllAndGetAndDelete() {
+        when(coreStore.read("user1")).thenReturn(List.of());
+        assertTrue(service.readAll("user1").isEmpty());
+
+        when(coreStore.get("user1", "user_profile")).thenReturn(Optional.empty());
+        assertTrue(service.get("user1", "user_profile").isEmpty());
+
+        service.delete("user1", "user_profile");
+        verify(coreStore).delete("user1", "user_profile");
+    }
+
+    @Test
+    void testUpsertSuccess() {
+        when(coreStore.get("user1", "user_profile")).thenReturn(Optional.empty());
+        when(coreStore.read("user1")).thenReturn(List.of());
+
+        assertDoesNotThrow(() -> service.upsert("user1", "user_profile", "content"));
+        verify(coreStore).upsert(eq("user1"), eq("user_profile"), eq("content"), eq(0));
+    }
+
+    @Test
+    void testUpsertInvalidKey() {
+        assertThrows(IllegalArgumentException.class, () -> service.upsert("user1", "invalid_key", "content"));
     }
 
     @Test

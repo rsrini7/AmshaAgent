@@ -2,6 +2,7 @@ package com.amsha.app.config;
 
 import com.amsha.app.api.AdminDirectiveResource;
 import com.amsha.app.api.ArchivalMemoryAdminResource;
+import com.amsha.app.api.AuditResource;
 import com.amsha.app.api.AuthResource;
 import com.amsha.app.api.CoreMemoryAdminResource;
 import com.amsha.app.api.IdentityResource;
@@ -36,6 +37,8 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             McpConnectResource.DisconnectResponse.class,
             McpConnectResource.ServerEntry.class,
             SkillResource.MessageResponse.class,
+            SkillResource.QuarantinedSkillResponse.class,
+            SkillResource.SkillAdmissionResponse.class,
             SkillResource.SkillResponse.class,
             AuthErrorResponse.class,
             RateLimitErrorResponse.class,
@@ -57,7 +60,6 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             // Onboarding bootstrap records
             BootstrapResource.BootstrapStatusResponse.class,
             BootstrapResource.ClaimResponse.class,
-            BootstrapResource.ConfirmRequest.class,
             BootstrapResource.ConfirmResponse.class,
             BootstrapResource.ErrorResponse.class,
             // Identity resource records (response + request DTOs)
@@ -77,6 +79,8 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             AuthResource.LogoutResponse.class,
             // revoke-all-sessions moved to SessionResource
             SessionResource.RevokeAllResponse.class,
+            AuditResource.class,
+            SessionResource.class,
             // Persistence DTOs serialized inside identity responses
             IdentityUserDto.class,
             WorkspaceMembershipDto.class,

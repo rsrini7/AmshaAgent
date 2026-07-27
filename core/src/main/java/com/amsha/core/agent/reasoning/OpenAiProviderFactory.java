@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Optional;
 
 import com.amsha.core.routing.ChatModelFactory;
+import com.amsha.core.routing.ModelDefaults;
 import com.amsha.core.routing.MultiModelChatModel;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
@@ -22,7 +23,7 @@ public class OpenAiProviderFactory implements AgentChatModelProvider {
     @ConfigProperty(name = "AMSHA_OPENAI_API_KEY")
     Optional<String> apiKey;
 
-    @ConfigProperty(name = "AMSHA_OPENAI_BASE_URL", defaultValue = "https://api.openai.com/v1")
+    @ConfigProperty(name = "AMSHA_OPENAI_BASE_URL", defaultValue = ModelDefaults.DEFAULT_OPENAI_BASE_URL)
     String baseUrl;
 
     @ConfigProperty(name = "AMSHA_OPENAI_MODEL")
@@ -30,7 +31,7 @@ public class OpenAiProviderFactory implements AgentChatModelProvider {
 
     @Override
     public String providerName() {
-        return "openai";
+        return ModelDefaults.PROVIDER_OPENAI;
     }
 
     @Override

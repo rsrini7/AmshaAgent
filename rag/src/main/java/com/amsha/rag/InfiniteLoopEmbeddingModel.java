@@ -38,7 +38,11 @@ public class InfiniteLoopEmbeddingModel implements EmbeddingModel {
         this.batchProvider = new InfiniteLoopProvider<>(
                 "embedding-batch",
                 slots,
-                (model, request) -> model.embedAll((List<TextSegment>) request),
+                (model, request) -> {
+                    @SuppressWarnings("unchecked")
+                    List<TextSegment> segments = (List<TextSegment>) request;
+                    return model.embedAll(segments);
+                },
                 cooldownBaseSeconds,
                 cooldownMaxSeconds,
                 cooldownTransientSeconds,

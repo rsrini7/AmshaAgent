@@ -36,7 +36,7 @@ class SynthesizedDirectiveTest {
 
     @Test
     void create_setsCandidiateState() {
-        SynthesizedDirective d = SynthesizedDirective.create("u1", "Always run fix_fqns.py", 0.9, "", "");
+        SynthesizedDirective d = SynthesizedDirective.create("u1", "Always run scripts/fix_fqns.py", 0.9, "", "");
         assertEquals(DirectiveState.CANDIDATE, d.state());
         assertEquals("u1", d.userId());
         assertEquals(0.9, d.confidence());

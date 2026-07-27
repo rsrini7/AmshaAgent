@@ -237,6 +237,18 @@ public class PostgresCheckpointStoreAdapter implements CheckpointStorePort {
     }
 
     @Override
+    public List<CheckpointDto> findByStatusAndSessionIds(
+            String status, List<String> sessionIds, int limit, int offset) {
+        return jdbi.withExtension(
+                CheckpointJdbiDao.class, dao -> dao.findByStatusAndSessionIds(status, sessionIds, limit, offset));
+    }
+
+    @Override
+    public long countByStatusAndSessionIds(String status, List<String> sessionIds) {
+        return jdbi.withExtension(CheckpointJdbiDao.class, dao -> dao.countByStatusAndSessionIds(status, sessionIds));
+    }
+
+    @Override
     public List<CheckpointDto> findByStatus(String status) {
         return jdbi.withExtension(CheckpointJdbiDao.class, dao -> dao.findByStatus(status));
     }

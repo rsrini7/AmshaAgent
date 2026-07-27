@@ -64,21 +64,55 @@ class AgentGroupRegistryTest {
 
     @Test
     void testDynamicGroupRegistration() {
+        // Use roles that do not belong to any built-in group so registration is allowed.
         AgentGroup dynamic = new AgentGroup(
-                "custom", "Custom Group", "healer", List.of("healer", "nurturer"), "Support domain", "No hint");
+                "custom",
+                "Custom Group",
+                "skill:lead",
+                List.of("skill:lead", "skill:member"),
+                "Support domain",
+                "No hint");
 
         registry.registerDynamic(dynamic);
 
         Optional<AgentGroup> found = registry.findById("custom");
         assertTrue(found.isPresent());
-        assertEquals("healer", found.get().leadRoleId());
+        assertEquals("skill:lead", found.get().leadRoleId());
 
-        Optional<AgentGroup> byLead = registry.findByLead("healer");
-        // Vaikunta has healer as member, not lead, so dynamic lead healer should be found
+        Optional<AgentGroup> byLead = registry.findByLead("skill:lead");
         assertTrue(byLead.isPresent());
         assertEquals("custom", byLead.get().groupId());
+    }
 
-        // Note: findByMember will find "nurturer" in kailasa first because built-in is checked first,
-        // but let's test a unique dynamic member.
+    @Test
+    void registerDynamic_rejectsDuplicateGroupId() {
+        AgentGroup dynamic = new AgentGroup(
+                "custom",
+                "Custom Group",
+                "skill:lead",
+                List.of("skill:lead", "skill:member"),
+                "Support domain",
+                "No hint");
+        registry.registerDynamic(dynamic);
+        AgentGroup duplicate = new AgentGroup("custom", "Other", "skill:other", List.of("skill:other"), "x", "y");
+        assertThrows(IllegalArgumentException.class, () -> registry.registerDynamic(duplicate));
+        // State unchanged: the original registration remains.
+        assertEquals("skill:lead", registry.findById("custom").get().leadRoleId());
+    }
+
+    @Test
+    void registerDynamic_rejectsOverlapWithBuiltInGroup() {
+        // "healer" belongs to the built-in Vaikunta group.
+        AgentGroup overlapping = new AgentGroup("dyn-x", "X", "healer", List.of("healer", "skill:free"), "x", "y");
+        assertThrows(IllegalArgumentException.class, () -> registry.registerDynamic(overlapping));
+        assertFalse(registry.findById("dyn-x").isPresent());
+    }
+
+    @Test
+    void registerDynamic_rejectsDuplicateMemberWithinGroup() {
+        AgentGroup dupMember =
+                new AgentGroup("dyn-y", "Y", "skill:a", List.of("skill:a", "skill:b", "skill:a"), "x", "y");
+        assertThrows(IllegalArgumentException.class, () -> registry.registerDynamic(dupMember));
+        assertFalse(registry.findById("dyn-y").isPresent());
     }
 }

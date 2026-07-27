@@ -40,12 +40,6 @@
       <version>2026_02_19-4b3ade6</version>
     </dependency> -->
 
-    <dependency>
-        <groupId>com.skillsjars</groupId>
-        <artifactId>anthropics__skills__algorithmic-art</artifactId>
-        <version>2026_03_06-b0cbd3d</version>
-    </dependency>
-
     <!-- Self-Evolution trace capture + extraction -->
     <dependency>
       <groupId>com.amsha</groupId>
@@ -331,36 +325,32 @@
   </dependencies>
 
   <build>
-    <pluginManagement>
-      <plugins>
-        <!-- Ignore maven-antrun-plugin in m2e (VS Code/Eclipse) to prevent IDE lifecycle errors -->
-        <plugin>
-          <groupId>org.eclipse.m2e</groupId>
-          <artifactId>lifecycle-mapping</artifactId>
-          <version>1.0.0</version>
-          <configuration>
-            <lifecycleMappingMetadata>
-              <pluginExecutions>
-                <pluginExecution>
-                  <pluginExecutionFilter>
-                    <groupId>org.apache.maven.plugins</groupId>
-                    <artifactId>maven-antrun-plugin</artifactId>
-                    <versionRange>[1.0.0,)</versionRange>
-                    <goals>
-                      <goal>run</goal>
-                    </goals>
-                  </pluginExecutionFilter>
-                  <action>
-                    <ignore/>
-                  </action>
-                </pluginExecution>
-              </pluginExecutions>
-            </lifecycleMappingMetadata>
-          </configuration>
-        </plugin>
-      </plugins>
-    </pluginManagement>
     <plugins>
+      <!-- The app is the final reactor module, so all per-module JaCoCo reports
+           are available when this aggregate coverage gate runs. -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-antrun-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>jacoco-coverage-check</id>
+            <phase>verify</phase>
+            <goals>
+              <goal>run</goal>
+            </goals>
+            <configuration>
+              <skip>${skipTests}</skip>
+              <target>
+                <exec executable="python3" failonerror="true">
+                  <arg value="${maven.multiModuleProjectDirectory}/scripts/verify_jacoco_coverage.py"/>
+                  <arg value="--minimum"/>
+                  <arg value="${jacoco.minimum.line.coverage}"/>
+                </exec>
+              </target>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
       <!-- GraalVM cannot read skill resources from dependency JARs at runtime.
            Materialize all SkillsJar resources in the application output first. -->
       <plugin>
@@ -559,7 +549,8 @@ paths: {}</echo>
           templates/**,
           prompts/**,
           skills/**,
-          META-INF/skills/**
+          META-INF/skills/**,
+          provider-catalog.json
         </quarkus.native.resources.includes>
       </properties>
     </profile>

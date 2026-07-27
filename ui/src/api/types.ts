@@ -57,6 +57,121 @@ export interface OnboardingCompleteDto {
   chatUrl: string;
   provider: string;
   model: string;
-  serviceKey: string;
   pluginSteps: Array<{stepId:string; title:string; isConfigured:boolean}>;
+}
+
+export interface ConnectionDraft {
+  provider: string;
+  apiKeyVaultRef?: string;
+  apiKey?: string;
+  baseUrl?: string;
+  targetUrl?: string; // targetUrl is required specifically for generic-openai
+  modelId: string;
+  contextWindow: number;
+  structuredOutputMode: string;
+  capabilities: string[];
+  headroomEnabled?: boolean;
+  timeoutMs?: number;
+  retries?: number;
+}
+
+export interface ConcernRoutes {
+  agentLoop: number[];
+  compaction: number[];
+  classifier: number[];
+  embedding: number[];
+}
+
+export interface RouteAssignment {
+  primary: number;
+  failover: number[];
+}
+
+export interface McpServerDraft {
+  name: string;
+  transport: string;
+  command?: string;
+  args?: string;
+  url?: string;
+  envVars?: Record<string, string>;
+  healthCheckIntervalMs?: number;
+}
+
+export interface IntegrationsConfig {
+  playwrightEnabled: boolean;
+  playwrightHeaded: boolean;
+  braveApiKeyVaultRef?: string;
+  serperApiKeyVaultRef?: string;
+  githubTokenVaultRef?: string;
+  skillsjarsApprovalRequired: boolean;
+  skillsMaxIterations?: number;
+}
+
+export interface AdvancedSettings {
+  temperature?: number;
+  maxOutputTokens?: number;
+  timeoutMs?: number;
+  maxRetries?: number;
+  compactPrompt?: boolean;
+  circuitBreaker?: boolean;
+  delegationDepth?: number;
+  budgetLimit?: number;
+  compactionStructuredOutputMode?: string; // Controls global compaction output format (e.g. from .env)
+}
+
+export interface MemoryConfig {
+  tieredEnabled: boolean;
+  coreMaxBlocks?: number;
+  recallRetention?: number;
+  archivalEnabled?: boolean;
+  selfEvolveEnabled: boolean;
+  embedDimensions?: number;
+  ragVecPath?: string;
+}
+
+export interface SecurityConfig {
+  rateLimitRequestsPerMin?: number;
+  rateLimitMutationsPerMin?: number;
+  sessionIdleMinutes?: number;
+  sandboxStrategy?: string;
+  sandboxMemoryLimit?: number;
+  sandboxCpuLimit?: number;
+  archivePassVaultRef?: string;
+  hostExecSkills?: string[];
+}
+
+export interface ChannelsConfig {
+  telegramEnabled: boolean;
+  telegramBotTokenVaultRef?: string;
+  telegramAllowedIds?: string[];
+  webEnabled: boolean;
+  webRequireAuth: boolean;
+  timezone?: string;
+  cronStartupMs?: number;
+  phoenixEnabled: boolean;
+  phoenixEndpoint?: string;
+}
+
+export interface IdentityConfig {
+  oidcClientId?: string;
+  oidcClientSecretVaultRef?: string;
+  oidcAuthUrl?: string;
+  oidcTokenUrl?: string;
+  oidcUserinfoUrl?: string;
+  oidcjwksUrl?: string;
+  oidcRedirectUri?: string;
+}
+
+export interface O1DraftPayload {
+  connections: ConnectionDraft[];
+  concernRoutes: ConcernRoutes;
+  personaRoutes?: Record<string, RouteAssignment>;
+  groupRoutes?: Record<string, RouteAssignment>;
+  mcpServers?: McpServerDraft[];
+  integrations?: IntegrationsConfig;
+  advanced?: AdvancedSettings;
+  memory?: MemoryConfig;
+  security?: SecurityConfig;
+  channels?: ChannelsConfig;
+  identity?: IdentityConfig;
 }

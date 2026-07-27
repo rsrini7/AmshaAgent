@@ -20,17 +20,20 @@ B="${TEST_BASE:-$B}"
 R="$B/api/v1"
 INVALID_KEY="sk-invalid-amsha-test-key-zzzzzzzzzzzzzzzz"
 FAIL=0; PASS=0
+RESP_FILE=$(mktemp "${TMPDIR:-/tmp}/amsha-identity-response.XXXXXX")
+HEADERS_FILE=$(mktemp "${TMPDIR:-/tmp}/amsha-identity-headers.XXXXXX")
+trap 'rm -f "$RESP_FILE" "$HEADERS_FILE"' EXIT
 
 info()  { printf "%-4s %-62s " "" "$1"; }
 ok()    { printf "✅ HTTP %s\n" "$1"; PASS=$((PASS+1)); }
-fail()  { printf "❌ HTTP %s — %s\n" "$1" "$(head -c 140 /tmp/resp)"; FAIL=$((FAIL+1)); }
+fail()  { printf "❌ HTTP %s — %s\n" "$1" "$(head -c 140 "$RESP_FILE")"; FAIL=$((FAIL+1)); }
 exp() { # exp GOT EXPECTED LABEL
   if [ "$1" = "$2" ]; then ok "$1"; else fail "$1 (expected $2)"; fi
 }
 
-mute()  { curl -s -m 15 -o /tmp/resp -w "%{http_code}" "$@"; }
+mute()  { : > "$RESP_FILE"; curl -s -m 15 -o "$RESP_FILE" -w "%{http_code}" "$@"; }
 # body + headers (for cookie extraction): -D headers only, -o body only
-raw()   { curl -s -m 15 -D /tmp/headers -o /tmp/resp -w "%{http_code}" "$@"; }
+raw()   { : > "$RESP_FILE"; : > "$HEADERS_FILE"; curl -s -m 15 -D "$HEADERS_FILE" -o "$RESP_FILE" -w "%{http_code}" "$@"; }
 
 # Generic request with API key + optional JSON body
 req() {
@@ -52,7 +55,7 @@ req() {
   echo "$c"
 }
 
-json() { python3 -c "import json,sys; print(json.load(open('/tmp/resp')).get('$1',''))" 2>/dev/null; }
+json() { python3 -c "import json,sys; print(json.load(open(sys.argv[1])).get(sys.argv[2],''))" "$RESP_FILE" "$1" 2>/dev/null; }
 
 echo "════════════════════════════════════════════════════════"
 echo " P109 IDENTITY / ACCESS VALIDATOR"
@@ -63,13 +66,26 @@ echo ""
 echo "── FLOW A: First-Owner Bootstrap Claim ──"
 
 info "A1: bootstrap status (fresh)"
-CODE=$(req GET "" "$R/onboarding/bootstrap/status"); exp "$CODE" "200"
+CODE=$(req GET "" "$R/onboarding/bootstrap/status")
+ST=$(json status)
+if [ "$CODE" = "200" ] && [ "$ST" = "UNCLAIMED" ]; then
+  ok "$CODE ($ST)"
+else
+  if [ "${EXPECT_SKIP_IDENTITY:-false}" = "true" ] && [ "$CODE" = "200" ] && [ "$ST" = "CLAIMED" ]; then
+    printf "⚠️  HTTP %s (%s; skipped because bootstrap tests require a fresh database)\n" "$CODE" "$ST"
+    echo "Identity validation skipped without modifying the claimed database."
+    exit 0
+  fi
+  fail "$CODE ($ST; requires a fresh UNCLAIMED database)"
+  echo "Identity validation stopped: bootstrap ownership tests are destructive and require a fresh database."
+  exit 1
+fi
 
 info "A2: claim first owner"
 HTTP=$(raw -X POST "$R/onboarding/bootstrap/claim")
 CODE=$(echo "$HTTP" | tail -n1)
 # extract raw key from: Set-Cookie: AMSHA_API_KEY=sk-...; ...
-OWNER_KEY=$(grep -i 'set-cookie' /tmp/headers | grep -i 'AMSHA_API_KEY=' \
+OWNER_KEY=$(grep -i 'set-cookie' "$HEADERS_FILE" | grep -i 'AMSHA_API_KEY=' \
             | sed -E 's/.*AMSHA_API_KEY=([^; ]+).*/\1/' | head -n1)
 OWNER_ID=$(json ownerId)
 WS_ID=$(json workspaceId)
@@ -77,6 +93,8 @@ if [ "$CODE" = "200" ] && [ -n "$OWNER_KEY" ] && [ -n "$OWNER_ID" ]; then
   ok "$CODE (owner=$OWNER_ID ws=$WS_ID)"
 else
   fail "$CODE (key=${OWNER_KEY:-MISSING})"
+  echo "Identity validation stopped: first-owner claim did not issue a usable credential."
+  exit 1
 fi
 
 info "A3: bootstrap status after claim"
@@ -86,16 +104,23 @@ if [ "$CODE" = "200" ] && { [ "$ST" = "CLAIMED" ] || [ "$ST" = "CREDENTIAL_ISSUE
   ok "$CODE ($ST)"; else fail "$CODE ($ST)"; fi
 
 info "A4: re-claim (CREDENTIAL_ISSUED) → 200 recovery re-issue"
-CODE=$(req POST "" "$R/onboarding/bootstrap/claim"); exp "$CODE" "200"
-# NOTE: the recovery re-issue returns a fresh key, but we keep the A2 owner key
-# for subsequent owner-scoped calls (it carries the OWNER role); the re-issued
-# key is only exercised for bootstrap-state coverage, not role-gated flows.
+HTTP=$(raw -X POST "$R/onboarding/bootstrap/claim")
+CODE=$(echo "$HTTP" | tail -n1)
+RECOVERED_KEY=$(grep -i 'set-cookie' "$HEADERS_FILE" | grep -i 'AMSHA_API_KEY=' \
+                | sed -E 's/.*AMSHA_API_KEY=([^; ]+).*/\1/' | head -n1)
+if [ "$CODE" = "200" ] && [ -n "$RECOVERED_KEY" ]; then
+  OWNER_KEY="$RECOVERED_KEY"
+  ok "$CODE (credential re-issued)"
+else
+  fail "$CODE (re-issued key missing)"
+  exit 1
+fi
 
 info "A5: confirm claim"
-CODE=$(req POST "" "$R/onboarding/bootstrap/confirm" '{"expectedRevision":1}'); exp "$CODE" "200"
+CODE=$(req POST "$OWNER_KEY" "$R/onboarding/bootstrap/confirm" '{}'); exp "$CODE" "200"
 
 info "A6: confirm again → 400 (state no longer CREDENTIAL_ISSUED)"
-CODE=$(req POST "" "$R/onboarding/bootstrap/confirm" '{"expectedRevision":1}'); exp "$CODE" "400"
+CODE=$(req POST "$OWNER_KEY" "$R/onboarding/bootstrap/confirm" '{}'); exp "$CODE" "400"
 
 echo ""
 

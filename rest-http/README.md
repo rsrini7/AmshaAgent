@@ -67,7 +67,7 @@ GITHUB_TOKEN=ghp_...    # required for GithubTool tests in 04, 05, 09, 12
 | 13 | `13_rag.http` | RAG ingest → approve → recall, RRF dual-tier, isolation | AMSHA_LLM_API_KEY | C3: rag_chunk table |
 | 14 | `14_budget_governance.http` | Budget soft/hard limits, SUPERVISED/FULL/READONLY autonomy | AMSHA_LLM_API_KEY | A1, A2 |
 | 15 | `15_phase64_regression.http` | Full regression suite for all Phase 64 fixes A1–A7, B1–B3, C1–C3, D smoke | AMSHA_LLM_API_KEY | All tiers |
-| 16 | `16_ui_settings_onboarding.http` | UI status/SSE streams, settings CRUD, onboarding wizard, HITL task-id approval, WS token | AMSHA_LLM_API_KEY | Post-Phase 64 |
+| 16 | `16_ui_settings_onboarding.http` | UI status/SSE streams, settings CRUD, draft/saga onboarding, HITL task-id approval, WS token | AMSHA_LLM_API_KEY | Post-Phase 64 / P110 |
 | 19 | `19_identity_access.http` | **P109** first-owner bootstrap claim, `/identity/me`, workspace members, invitations, personal API credentials, last-owner guard, ownership transfer, workspace credential rotation | Fresh DB (UNCLAIMED) | New in P109 |
 | 20 | `20_auth_oauth_session.http` | **P109** `/auth/providers` discovery, OAuth login/callback negative paths, web-session rotate, CSRF enforcement, logout, revoke-all | Server up | New in P109 |
 | 21 | `21_self_evolve.http` | **Self-evolve** behavioral directive REST surface: list/get, synthesize, reconcile, disable, delete + internal-key-only auth model | Server up | New (dedicated coverage) |
@@ -218,15 +218,16 @@ sqlite3 ../data/amsha-meta.db
 .tables
 SELECT * FROM audit_event WHERE session_id='<uuid>' ORDER BY sequence;
 SELECT * FROM agent_checkpoint WHERE session_id='<uuid>';
-SELECT * FROM session_registry LIMIT 10;
+-- P110: durable onboarding drafts replaced the removed session_registry
+SELECT * FROM onboarding_draft LIMIT 10;
 SELECT * FROM rag_chunk LIMIT 10;
 
 # Phase 64-C3: confirm no "rag:" prefix rows
 SELECT COUNT(*) FROM compaction_summary WHERE session_id LIKE 'rag:%';
 
-# Phase 64-B3: inspect session registry
-SELECT channel_type, channel_id, user_id, session_id, created_at
-FROM session_registry ORDER BY created_at DESC LIMIT 10;
+# Phase 64-B3: inspect durable onboarding drafts (P110 replaced session_registry)
+SELECT draft_id, owner_id, current_step_id, state, revision, updated_at
+FROM onboarding_draft ORDER BY updated_at DESC LIMIT 10;
 ```
 
 ---
@@ -256,7 +257,7 @@ FROM session_registry ORDER BY created_at DESC LIMIT 10;
 - `ChannelType.fromString` returns `Optional.empty()` for unknown types
 - Audit writes serialized per-session via `SessionAuditSequencer`
 - DevSecretSeeder excluded at compile time via `@IfBuildProfile("dev")`
-- Session IDs are random UUIDs stored in `session_registry` table
+- Session IDs are random UUIDs stored in the session store
 - RAG chunks in dedicated `rag_chunk` table, fully isolated from compaction
 
 ---
@@ -266,12 +267,15 @@ FROM session_registry ORDER BY created_at DESC LIMIT 10;
 Branch P109 introduces a complete identity/access layer **not covered by any
 pre-Phase-64 file** (those reference the old `/api/v1/onboarding/*` UI wizard,
 which is distinct from the new `/onboarding/bootstrap/*` first-owner claim).
+The `/api/v1/onboarding/*` UI surface was further rewritten in P110 into the
+durable draft/saga model (see the P110 section below); the bootstrap claim
+(`/onboarding/bootstrap/*`) remains the first-owner flow.
 
 ### New resources (no `/api/v1` prefix)
 
 | Resource | Path | Auth |
 |---|---|---|
-| Bootstrap (first-owner claim) | `/onboarding/bootstrap/{status,claim,confirm}` | Public, loopback-only |
+| Bootstrap (first-owner claim) | `/onboarding/bootstrap/{status,claim,recovery,confirm}` | Public, loopback-only |
 | Identity | `/identity/me`, `/identity/workspaces/{id}/members` | API key or session |
 | Invitations | `/identity/workspaces/{id}/invitations`, `/identity/invitations/{token}/accept` | API key or session |
 | Members | `DELETE /identity/workspaces/{id}/members/{memberId}` | API key or session |
@@ -280,6 +284,55 @@ which is distinct from the new `/onboarding/bootstrap/*` first-owner claim).
 | API credentials | `/identity/api-credentials` (`POST`/`DELETE`) | API key or session |
 | Auth providers | `/auth/providers`, `/auth/login/{p}`, `/auth/callback/{p}` | Public |
 | Sessions | `/auth/session/rotate`, `/auth/logout`, `/auth/session/revoke-all` | Session cookie (+CSRF) |
+
+### P110 — Durable Draft/Saga Onboarding, Provider Catalog & Workspace Scoping (NEW)
+
+Branch P110 replaces the legacy numbered-step onboarding wizard
+(`/api/v1/onboarding/step/{N}`, `/api/v1/onboarding/complete`) with a durable,
+resumable **draft/saga** model and adds the provider catalog, per-connection
+network-profile persistence, and the `ActiveWorkspaceFilter`.
+
+New/changed resources (under `/api/v1`):
+
+| Resource | Path | Auth |
+|---|---|---|
+| Onboarding status | `GET /onboarding/status` | API key (owner) |
+| Draft create/resume | `POST /onboarding/drafts` | API key (owner) |
+| Draft list | `GET /onboarding/drafts` | API key (owner) |
+| Draft get | `GET /onboarding/drafts/{draftId}` | API key (owner) |
+| Step advance | `PUT /onboarding/drafts/{draftId}/steps/{stepId}` | API key (owner) |
+| Draft commit | `POST /onboarding/drafts/{draftId}/commit` | API key (owner) |
+| Routing health | `GET /onboarding/health/routing` | API key (owner) |
+| Provider catalog | `GET /onboarding/provider-catalog` | API key (owner) |
+| Profile export | `GET /onboarding/export` | API key (owner) |
+| Profile import | `POST /onboarding/import` | API key (owner) |
+| Draft discard | `POST /onboarding/drafts/discard` | API key (owner) |
+| Connection network profile | `PATCH /settings/connection-network-profile` | API key (owner) |
+| Bootstrap recovery | `POST /onboarding/bootstrap/recovery` | API key (reserved owner) |
+| Workspace scoping | `X-Amsha-Workspace-Id` header on every request | filter-enforced |
+
+The `ActiveWorkspaceFilter` (new) binds an explicitly selected workspace when
+the `X-Amsha-Workspace-Id` header is present: unauthenticated + header → `401`,
+authenticated non-member → `403`, member → request scoped to that workspace.
+The legacy session registry and numbered-step wizard were removed.
+
+### Running the P110 suite
+
+```bash
+# Covers pre-auth skip/cookie authentication, negative and successful draft commits,
+# strict typed provider catalog, import/export persistence, network-profile positive
+# and negative behavior, recovery authz/state, and workspace filtering.
+# Uses the skip cookie when enabled; otherwise requires a usable VALID_KEY owner.
+bash rest-http/scripts/validate_onboarding.sh
+# or via the master runner (runs after the identity/bootstrap suite):
+bash rest-http/scripts/run_all_validations.sh --onboarding
+
+# Require the skip-onboarding branch rather than accepting the expected 401 when disabled:
+EXPECT_SKIP_ONBOARDING=true bash rest-http/scripts/run_all_validations.sh --onboarding
+
+# Override credentials without editing common_env.sh:
+VALID_KEY='<active-owner-key>' bash rest-http/scripts/run_all_validations.sh --onboarding
+```
 
 ### Running the P109 suite
 
@@ -377,6 +430,7 @@ needed). Run individually or via the master runner `run_all_validations.sh`.
 |---|---|---|---|
 | `--reflex` | `validate_reflex.sh` | Reflex commands via goal text | zero-token |
 | `--skills` | `validate_skill.sh` | Skill CRUD, routing, errors | low |
+| `--skills-admission` | `validate_skillsjar_admission.sh` | SkillsJar admission, quarantine schema, refresh stability | zero-token |
 | `--mcp` | `validate_mcp.sh` | MCP JSON-RPC protocol + connect | low |
 | `--memory` | `validate_memory.sh` | Archival/core memory + Arabic search (HITL-aware) | LLM |
 | `--web` | `validate_web.sh` | Web search/fetch/SSRF blocks (HITL-aware) | LLM |

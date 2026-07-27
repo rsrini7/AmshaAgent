@@ -16,6 +16,7 @@ import com.amsha.core.audit.AuditService;
 import com.amsha.core.audit.SecurityEventType;
 import com.amsha.core.cron.AgentJobCompleted;
 import com.amsha.core.domain.model.AgentCronRecord;
+import com.amsha.core.event.FlushQueuedNotifications;
 import com.amsha.core.lifecycle.WorkspaceManager;
 import com.amsha.core.state.StatefulAgentStore;
 import com.amsha.persistence.api.CronRunStorePort;
@@ -124,6 +125,20 @@ class CronResultHandlerTest {
                         anyString(),
                         eq(SecurityEventType.LOOP_AWAITING_APPROVAL),
                         ArgumentMatchers.contains("pendingTool=tool"));
+    }
+
+    @Test
+    void testAwaitingRetry_skipsTermination() {
+        AgentResult result = AgentResult.awaitingRetry("rate limited", 5000, List.of());
+
+        handler.handleSuccess(job, sessionId, execId, result);
+
+        verify(workspaceManager, never()).terminateSession(sessionId);
+    }
+
+    @Test
+    void testFlushNotificationsEvent() {
+        handler.onFlushNotifications(new FlushQueuedNotifications("chat-1"));
     }
 
     @Test

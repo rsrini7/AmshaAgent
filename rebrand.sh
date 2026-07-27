@@ -242,7 +242,7 @@ verify_migration
 
 phase "Required validation"
 cat <<'EOF'
-  1. python3 ./fix_fqns.py && ./mvnw spotless:apply -q
+  1. python3 ./scripts/fix_fqns.py && ./mvnw spotless:apply -q
   2. ./mvnw compile -DskipTests -q
   3. (cd ui && npm run build)
   4. ./mvnw verify

@@ -113,7 +113,21 @@ public class DevSecretSeeder {
     private void seedAuditHmacKey() {
         String keyName = VaultConstants.AUDIT_HMAC_KEY_NAME;
         try {
+            boolean needsSeeding = false;
             if (!secretVault.systemKeyExists(keyName)) {
+                needsSeeding = true;
+            } else {
+                try {
+                    needsSeeding = secretVault.retrieveSystemKey(keyName).isEmpty();
+                } catch (Exception e) {
+                    log.warnf(
+                            "DevSecretSeeder: existing %s in vault cannot be decrypted (%s); re-seeding ephemeral key",
+                            keyName, LogUtil.rootMessage(e));
+                    needsSeeding = true;
+                }
+            }
+
+            if (needsSeeding) {
                 byte[] hmacKeyBytes = new byte[32];
                 // Instantiate SecureRandom locally — NOT as a static field.
                 // GraalVM native image marks java.security.SecureRandom for run-time

@@ -3,18 +3,23 @@ package com.amsha.channel.telegram;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import java.util.List;
 
+import com.amsha.channel.api.ApprovalPrompt;
 import com.amsha.channel.api.ChannelType;
 import com.amsha.channel.api.ChannelUser;
 import com.amsha.channel.api.ContentNode;
 
 import org.apache.camel.ProducerTemplate;
+import org.apache.camel.component.telegram.model.InlineKeyboardMarkup;
+import org.apache.camel.component.telegram.model.OutgoingTextMessage;
 import org.jboss.logging.Logger;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -37,7 +42,7 @@ class TelegramChannelSenderTest {
     Logger log;
 
     @InjectMocks
-    TelegramChannelSender sender; // uses constructor injection
+    TelegramChannelSender sender;
 
     private final ChannelUser user = new ChannelUser("123", "123", "alice", ChannelType.TELEGRAM);
 
@@ -49,7 +54,6 @@ class TelegramChannelSenderTest {
     @Test
     void testSendWithNodesCallsSendRaw() {
         when(renderer.render(any())).thenReturn("Hello");
-        // Use a non-empty list to avoid the immediate fallback
         sender.send(user, List.of(new ContentNode.Text("hi")));
 
         verify(producerTemplate)
@@ -76,7 +80,6 @@ class TelegramChannelSenderTest {
                         eq("(No response generated)"),
                         eq(TelegramConstants.TELEGRAM_CHAT_ID),
                         eq("123"));
-        // Must not throw NullPointerException
     }
 
     @Test
@@ -95,5 +98,55 @@ class TelegramChannelSenderTest {
                 "telegram:bots",
                 uriCaptor.getValue(),
                 "Sender URI must be exactly 'telegram:bots' with no query params");
+    }
+
+    @Test
+    void testSendApprovalPromptNode() {
+        ApprovalPrompt prompt = new ApprovalPrompt("sess1", "tool_a,tool_b", "{}");
+        when(renderer.render(any())).thenReturn("Approval Required");
+
+        sender.send(user, List.of(prompt));
+
+        verify(producerTemplate)
+                .sendBodyAndHeader(
+                        eq("telegram:bots"),
+                        any(OutgoingTextMessage.class),
+                        eq(TelegramConstants.TELEGRAM_CHAT_ID),
+                        eq("123"));
+    }
+
+    @Test
+    void testSendWithKeyboardNullMarkup() {
+        sender.sendWithKeyboard(user, "Keyboard text", null);
+        verify(producerTemplate)
+                .sendBodyAndHeader(
+                        eq("telegram:bots"), eq("Keyboard text"), eq(TelegramConstants.TELEGRAM_CHAT_ID), eq("123"));
+    }
+
+    @Test
+    void testSendWithKeyboardNonNullMarkup() {
+        InlineKeyboardMarkup markup = new InlineKeyboardMarkup();
+        sender.sendWithKeyboard(user, "Keyboard text", markup);
+        verify(producerTemplate)
+                .sendBodyAndHeader(
+                        eq("telegram:bots"),
+                        any(OutgoingTextMessage.class),
+                        eq(TelegramConstants.TELEGRAM_CHAT_ID),
+                        eq("123"));
+    }
+
+    @Test
+    void testLongTextChunking() {
+        sender.maxLength = 20;
+        sender.sendRaw(user, "This is a very long message that should be chunked into multiple pieces");
+        verify(producerTemplate, times(4))
+                .sendBodyAndHeader(eq("telegram:bots"), anyString(), eq(TelegramConstants.TELEGRAM_CHAT_ID), eq("123"));
+    }
+
+    @Test
+    void testStripGarbledLines() {
+        String garbled = "???...\nReal Line 1\n.....?????\nReal Line 2";
+        String cleaned = TelegramChannelSender.stripGarbledLines(garbled);
+        assertEquals("Real Line 1\nReal Line 2", cleaned);
     }
 }

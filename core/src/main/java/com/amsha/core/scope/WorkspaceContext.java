@@ -34,6 +34,15 @@ public final class WorkspaceContext {
     public static final ScopedValue<Boolean> IS_COMPACT = ScopedValue.newInstance();
     public static final ScopedValue<String> RAW_USER_GOAL = ScopedValue.newInstance();
     public static final ScopedValue<String> CHANNEL_PLATFORM_ID = ScopedValue.newInstance();
+    /**
+     * The identity workspace explicitly selected for the current execution, propagated through the
+     * context-aware executor / WorkspaceContext.run chain. Unlike {@code ActiveWorkspaceContext}
+     * (which is {@code @RequestScoped} and unavailable in async agent/channel/cron execution), this
+     * ScopedValue is available wherever the workspace context is propagated, so profile routing can
+     * resolve workspace-scoped routes outside an HTTP request.
+     */
+    public static final ScopedValue<String> ACTIVE_WORKSPACE_ID = ScopedValue.newInstance();
+
     public static final ScopedValue<AtomicInteger> GLOBAL_ITERATION_COUNT = ScopedValue.newInstance();
 
     /** Default global iteration budget across all nested state machines. */
@@ -248,6 +257,48 @@ public final class WorkspaceContext {
             return Optional.of(CHANNEL_TYPE.get());
         }
         return Optional.empty();
+    }
+
+    /**
+     * Returns the active identity workspace id propagated through the context-aware executor /
+     * {@code WorkspaceContext.run} chain, if bound. This is the preferred source for profile
+     * routing because it is available in async agent/channel/cron execution, unlike the
+     * {@code @RequestScoped} {@code ActiveWorkspaceContext}. When unbound, callers should fall back
+     * to {@code ActiveWorkspaceContext} only if a request context is active.
+     */
+    public static Optional<String> activeWorkspaceId() {
+        if (ACTIVE_WORKSPACE_ID.isBound()
+                && ACTIVE_WORKSPACE_ID.get() != null
+                && !ACTIVE_WORKSPACE_ID.get().isBlank()) {
+            return Optional.of(ACTIVE_WORKSPACE_ID.get());
+        }
+        return Optional.empty();
+    }
+
+    /**
+     * Runs work with an explicitly selected identity workspace. Entry points capture this value
+     * before dispatching asynchronous agent work; {@link WorkspaceScopeHolder#wrap(Runnable)}
+     * captures and restores it for subsequent executor hops.
+     */
+    public static <T> T callWithActiveWorkspace(String workspaceId, Callable<T> task) throws Exception {
+        if (workspaceId == null || workspaceId.isBlank()) {
+            return task.call();
+        }
+        return ScopedValue.where(ACTIVE_WORKSPACE_ID, workspaceId).call(() -> task.call());
+    }
+
+    /** Runnable counterpart of {@link #callWithActiveWorkspace(String, Callable)}. */
+    public static void runWithActiveWorkspace(String workspaceId, Runnable task) {
+        try {
+            callWithActiveWorkspace(workspaceId, () -> {
+                task.run();
+                return null;
+            });
+        } catch (RuntimeException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
     }
 
     public static String channelPlatformId() {

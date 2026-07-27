@@ -14,12 +14,17 @@ import java.util.Optional;
 
 import com.amsha.core.agent.loop.TaskClassifierService;
 import com.amsha.core.agent.reasoning.AgentChatModelProvider;
+import com.amsha.core.agent.reasoning.AgentLlmConfig;
 import com.amsha.core.agent.role.AgentGroupRegistry;
 import com.amsha.core.agent.role.AgentPersona;
 import com.amsha.core.scope.WorkspaceContext;
+import com.amsha.core.util.MdcKeys;
+import com.amsha.persistence.api.LlmConnectionDto;
+import com.amsha.persistence.api.LlmProfileStorePort;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
+import org.jboss.logging.MDC;
 
 import io.smallrye.config.SmallRyeConfigProviderResolver;
 
@@ -44,9 +49,6 @@ public class ModelRouter {
     private static final Logger log = Logger.getLogger(ModelRouter.class);
 
     @Inject
-    ChatModelPool modelPool;
-
-    @Inject
     @Any
     Instance<AgentChatModelProvider> providers;
 
@@ -56,6 +58,24 @@ public class ModelRouter {
     @Inject
     TaskClassifierService classifierService;
 
+    @Inject
+    ChatModelPool modelPool;
+
+    @Inject
+    ModelProfileResolver profileResolver;
+
+    @Inject
+    ModelProfileCredentialResolver credentialResolver;
+
+    @Inject
+    LlmProfileStorePort profileStore;
+
+    @Inject
+    AgentLlmConfig agentConfig;
+
+    @ConfigProperty(name = "amsha.llm.profile-routing.enabled", defaultValue = "false")
+    boolean profileRoutingEnabled;
+
     @ConfigProperty(name = "amsha.llm.provider", defaultValue = "groq")
     String globalProvider;
 
@@ -64,16 +84,88 @@ public class ModelRouter {
 
     /**
      * Resolves the ChatModel for a given agent role.
-     * Resolution: persona override → group default → global default.
-     * If multiple models are configured, wraps them in a {@link MultiModelChatModel}
-     * for automatic failover and round-robin rotation.
+     * When {@code amsha.llm.profile-routing.enabled} is true, an owned/workspace/system profile
+     * route (resolved via {@link ModelProfileResolver}) takes precedence over deployment config.
+     * Otherwise resolution is the legacy persona → group → global path.
      */
     public ChatModel resolve(String agentRole) {
+        if (profileRoutingEnabled) {
+            ChatModel profiled = resolveProfileRouted(agentRole);
+            if (profiled != null) {
+                return profiled;
+            }
+        }
         var configs = resolveConfigs(agentRole);
         if (configs.isEmpty()) {
             return getOrCreateModel(globalProvider, globalModel.orElse(""));
         }
         return buildModelFromConfigs(configs);
+    }
+
+    /**
+     * Resolves via the profile store precedence chain. Returns null when no eligible owned/workspace
+     * route applies, so the caller falls back to legacy deployment/system routing.
+     */
+    private ChatModel resolveProfileRouted(String agentRole) {
+        RouteResolution resolution = profileResolver.resolve(agentRole);
+        if (!resolution.resolved() || resolution.chain().isEmpty()) {
+            return null;
+        }
+        String actorUserId = currentUserId();
+        List<OrderedFailoverChatModel.Entry> entries = new ArrayList<>();
+        for (ResolvedProfile p : resolution.chain()) {
+            Optional<LlmConnectionDto> conn = profileConnection(p.connectionId());
+            if (conn.isEmpty()) {
+                continue;
+            }
+            Optional<ResolvedCredential> cred = credentialResolver.resolve(conn.get(), actorUserId);
+            if (cred.isEmpty()) {
+                log.warnf(
+                        "[MODEL-ROUTER] No credential for connection %s, skipping profile %s",
+                        p.connectionId(), p.profileId());
+                continue;
+            }
+            try (ResolvedCredential c = cred.get()) {
+                ChatModel model = modelPool.getOrCreateTyped(
+                        p.scopeType(),
+                        p.scopeId(),
+                        p.connectionId(),
+                        p.connectionRevision(),
+                        p.profileId(),
+                        p.profileRevision(),
+                        p.providerAdapterId(),
+                        p.modelId(),
+                        () -> ChatModelFactory.createForAdapter(
+                                p.providerAdapterId(), c.baseUrl(), c.apiKey(), p.modelId(), agentConfig));
+                entries.add(new OrderedFailoverChatModel.Entry(p.profileId(), model));
+            }
+        }
+        if (entries.isEmpty()) {
+            return null;
+        }
+        // Route wrappers retain the resolved chain. Scope identity is therefore part of their
+        // cache key; a precedence tier such as "user-role" alone is shared by every user.
+        ResolvedProfile routeScope = resolution.chain().getFirst();
+        String routeKey = resolution.precedenceTier()
+                + ":"
+                + routeScope.scopeType()
+                + ":"
+                + routeScope.scopeId()
+                + ":"
+                + agentRole;
+        return modelPool.getOrCreateProfileRoute(routeKey, () -> new OrderedFailoverChatModel(routeKey, entries, 30));
+    }
+
+    private Optional<LlmConnectionDto> profileConnection(String connectionId) {
+        return profileStore.findConnection(connectionId);
+    }
+
+    private String currentUserId() {
+        if (WorkspaceContext.USER_ID.isBound() && WorkspaceContext.USER_ID.get() != null) {
+            return WorkspaceContext.USER_ID.get();
+        }
+        String mdcUser = (String) MDC.get(MdcKeys.USER_ID);
+        return mdcUser != null ? mdcUser : "unknown";
     }
 
     /**
@@ -248,7 +340,7 @@ public class ModelRouter {
                 return p;
             }
         }
-        throw new RuntimeException("No AgentChatModelProvider found for provider='" + providerName + "'");
+        throw new ModelRoutingException("No AgentChatModelProvider found for provider='" + providerName + "'");
     }
 
     private boolean isLightweightTask(String goal) {

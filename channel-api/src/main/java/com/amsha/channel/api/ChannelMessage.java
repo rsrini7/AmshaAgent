@@ -171,4 +171,11 @@ public interface ChannelMessage {
             return ChannelType.WEBSOCKET;
         }
     }
+
+    /**
+     * A generic channel message fallback for unregistered/custom channels.
+     */
+    record GenericChannelMessage(
+            ChannelUser sender, String text, String correlationId, Instant receivedAt, ChannelType channelType)
+            implements ChannelMessage {}
 }

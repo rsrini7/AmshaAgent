@@ -7,6 +7,8 @@ import jakarta.inject.Inject;
 
 import java.util.Optional;
 
+import com.amsha.core.routing.ModelDefaults;
+
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 import io.quarkiverse.langchain4j.ai.runtime.gemini.AiGeminiChatLanguageModel;
@@ -20,7 +22,7 @@ public class GeminiProviderFactory implements AgentChatModelProvider {
     @ConfigProperty(name = "AMSHA_GEMINI_API_KEY")
     Optional<String> apiKey;
 
-    @ConfigProperty(name = "AMSHA_GEMINI_MODEL", defaultValue = "gemini-2.5-flash-lite")
+    @ConfigProperty(name = "AMSHA_GEMINI_MODEL", defaultValue = ModelDefaults.DEFAULT_GEMINI_MODEL)
     String modelName;
 
     @ConfigProperty(name = "amsha.llm.gemini.log-requests", defaultValue = "false")
@@ -31,7 +33,7 @@ public class GeminiProviderFactory implements AgentChatModelProvider {
 
     @Override
     public String providerName() {
-        return "gemini";
+        return ModelDefaults.PROVIDER_GEMINI;
     }
 
     @Override

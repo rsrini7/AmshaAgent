@@ -26,7 +26,7 @@
 java = "temurin-25"
 maven = "3.9"
 powershell = "7.5"
-node = "22"
+node = "24"
 gh = "latest"
 go = "1.26"
 sonar-scanner-cli = "latest"
@@ -107,12 +107,12 @@ if (Test-Path '.env.build-backup') {
 """
 
 [tasks."test:summary"]
-description = "Summarize surefire XML test report counts"
+description = "Summarize surefire XML test report counts and reactor JaCoCo line coverage"
 dir = "{{config_root}}"
 quiet = true
 shell = "bash -c"
 run = """
-rg -u -g "**/target/surefire-reports/TEST-*.xml" "<testsuite" | awk -F' ' '{
+TEST_SUMMARY=$(rg -u -g "**/target/surefire-reports/TEST-*.xml" "<testsuite" | awk -F' ' '{
     for(i=1; i<=NF; i++) {
         if($i ~ /tests=/)    { split($i, a, "\\x22"); t += a[2] }
         if($i ~ /errors=/)   { split($i, a, "\\x22"); e += a[2] }
@@ -120,7 +120,9 @@ rg -u -g "**/target/surefire-reports/TEST-*.xml" "<testsuite" | awk -F' ' '{
         if($i ~ /skipped=/)  { split($i, a, "\\x22"); s += a[2] }
     }
 }
-END { printf "Total: %d | Failures: %d | Errors: %d | Skipped: %d\\n", t, f, e, s }'
+END { printf "Total: %d | Failures: %d | Errors: %d | Skipped: %d", t, f, e, s }')
+echo "Tests:    $TEST_SUMMARY"
+python3 ./scripts/analyze_jacoco_coverage.py --summary 2>/dev/null
 """
 
 

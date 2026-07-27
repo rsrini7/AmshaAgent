@@ -238,7 +238,7 @@ class FsIdentityStoreAdapterTest {
     @Test
     void testBootstrapStateOperations() {
         BootstrapStateDto state = new BootstrapStateDto(
-                "bootstrap", "UNCLAIMED", "user-admin", "digest-init", null, null, 0, Instant.now());
+                "bootstrap", "UNCLAIMED", "user-admin", null, "digest-init", null, null, 0, Instant.now());
         bootstrapStateStore.save(state);
 
         Optional<BootstrapStateDto> found = bootstrapStateStore.getState();

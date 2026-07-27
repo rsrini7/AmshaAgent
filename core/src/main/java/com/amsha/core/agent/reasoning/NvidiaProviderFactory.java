@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Optional;
 
 import com.amsha.core.routing.ChatModelFactory;
+import com.amsha.core.routing.ModelDefaults;
 import com.amsha.core.routing.MultiModelChatModel;
 import com.amsha.core.routing.NvidiaMessageSanitizer;
 
@@ -23,15 +24,15 @@ public class NvidiaProviderFactory implements AgentChatModelProvider {
     @ConfigProperty(name = "AMSHA_NVIDIA_API_KEY")
     Optional<String> apiKey;
 
-    @ConfigProperty(name = "AMSHA_NVIDIA_BASE_URL", defaultValue = "https://integrate.api.nvidia.com/v1")
+    @ConfigProperty(name = "AMSHA_NVIDIA_BASE_URL", defaultValue = ModelDefaults.DEFAULT_NVIDIA_BASE_URL)
     String baseUrl;
 
-    @ConfigProperty(name = "AMSHA_NVIDIA_MODEL", defaultValue = "bytedance/seed-oss-36b-instruct")
+    @ConfigProperty(name = "AMSHA_NVIDIA_MODEL", defaultValue = ModelDefaults.DEFAULT_NVIDIA_MODEL)
     String modelName;
 
     @Override
     public String providerName() {
-        return "nvidia";
+        return ModelDefaults.PROVIDER_NVIDIA;
     }
 
     @Override

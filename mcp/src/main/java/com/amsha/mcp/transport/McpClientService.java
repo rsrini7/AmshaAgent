@@ -30,6 +30,13 @@ import java.util.concurrent.locks.ReentrantLock;
 
 import com.amsha.common.util.LogUtil;
 import com.amsha.core.scope.WorkspaceContext;
+import com.amsha.core.security.OutboundHttpPolicyService;
+import com.amsha.core.security.OutboundPurpose;
+import com.amsha.core.security.SecretVault;
+import com.amsha.core.security.http.ApprovalReceiptIssuer;
+import com.amsha.core.security.http.GovernedHttpClient;
+import com.amsha.core.security.http.OutboundApprovalReceipt;
+import com.amsha.core.security.http.OutboundHttpException;
 import com.amsha.core.tools.ToolCategory;
 import com.amsha.mcp.tool.DynamicToolCapability;
 import com.amsha.mcp.tool.DynamicToolCapabilityRegistry;
@@ -78,6 +85,15 @@ public class McpClientService {
     @Inject
     McpConnectionCredentialPort credentialPort;
 
+    @Inject
+    OutboundHttpPolicyService outboundPolicyService;
+
+    @Inject
+    ApprovalReceiptIssuer approvalReceiptIssuer;
+
+    @Inject
+    SecretVault secretVault;
+
     private ManagedExecutor getExecutor() {
         return managedExecutors.select(Identifier.Literal.of("external-tool-executor")).stream()
                 .findFirst()
@@ -94,7 +110,6 @@ public class McpClientService {
     private final ConcurrentHashMap<String, BufferedReader> processReaders = new ConcurrentHashMap<>();
 
     private final AtomicInteger requestIdGen = new AtomicInteger(1);
-    private HttpClient httpClient;
     private ScheduledExecutorService healthCheckExecutor;
 
     @ConfigProperty(name = "amsha.mcp.health-check-interval-ms", defaultValue = "15000")
@@ -104,10 +119,6 @@ public class McpClientService {
 
     @PostConstruct
     void init() {
-        this.httpClient = HttpClient.newBuilder()
-                .executor(getExecutor())
-                .connectTimeout(Duration.ofSeconds(5))
-                .build();
         startHealthCheck();
     }
 
@@ -129,16 +140,26 @@ public class McpClientService {
                 log.warnf("Health check: MCP STDIO server '%s' process is dead, initiating reconnect", serverName);
                 StdioConfig cfg = stdioConfigs.get(serverName);
                 if (cfg != null) {
+                    // Free the scheduler thread: release the dead process synchronously, then
+                    // perform the blocking subprocess re-spawn on the managed external-tool executor.
                     ReentrantLock lock = stdioLocks.computeIfAbsent(serverName, k -> new ReentrantLock());
                     lock.lock();
                     try {
                         cleanupStdio(serverName);
-                        connectStdio(serverName, cfg.command(), cfg.args(), cfg.env(), cfg.category());
-                    } catch (Exception e) {
-                        log.errorf("Health check reconnect failed for %s: %s", serverName, LogUtil.rootMessage(e));
                     } finally {
                         lock.unlock();
                     }
+                    getExecutor().execute(() -> {
+                        ReentrantLock reconnectLock = stdioLocks.computeIfAbsent(serverName, k -> new ReentrantLock());
+                        reconnectLock.lock();
+                        try {
+                            connectStdio(serverName, cfg.command(), cfg.args(), cfg.env(), cfg.category());
+                        } catch (Exception e) {
+                            log.errorf("Health check reconnect failed for %s: %s", serverName, LogUtil.rootMessage(e));
+                        } finally {
+                            reconnectLock.unlock();
+                        }
+                    });
                 } else {
                     cleanupStdio(serverName);
                 }
@@ -159,7 +180,7 @@ public class McpClientService {
 
     public void connect(
             String serverName, String serverUrl, ToolCategory category, Map<String, String> handshakeHeaders) {
-        connectInternal(serverName, serverName, serverUrl, category, handshakeHeaders);
+        connectInternal(serverName, serverName, serverUrl, category, handshakeHeaders, false);
     }
 
     public void connectForUser(
@@ -168,7 +189,46 @@ public class McpClientService {
             String serverUrl,
             ToolCategory category,
             Map<String, String> handshakeHeaders) {
-        connectInternal(serverName, runtimeKey(serverName, userId), serverUrl, category, handshakeHeaders);
+        connectForUser(serverName, userId, serverUrl, category, handshakeHeaders, false);
+    }
+
+    /** Connects after the caller has completed the required MCP-connect approval lifecycle. */
+    public void connectForUser(
+            String serverName,
+            String userId,
+            String serverUrl,
+            ToolCategory category,
+            Map<String, String> handshakeHeaders,
+            boolean preApproved) {
+        connectInternal(serverName, runtimeKey(serverName, userId), serverUrl, category, handshakeHeaders, preApproved);
+    }
+
+    /**
+     * Connects after the caller presents a checkpoint-issued single-use approval token (minted when
+     * the MCP connection was committed through the onboarding saga). The token is consumed exactly
+     * once here to authorize the whole handshake: a valid token sets the connection as pre-approved,
+     * while an invalid/expired/mismatched token fails closed to a non-approved connect. When no token
+     * is supplied the caller falls back to the unapproved path and must clear HITL on each request.
+     */
+    public void connectForUser(
+            String serverName,
+            String userId,
+            String serverUrl,
+            ToolCategory category,
+            Map<String, String> handshakeHeaders,
+            String approvalToken) {
+        boolean preApproved = false;
+        if (approvalToken != null && approvalReceiptIssuer != null) {
+            OutboundApprovalReceipt receipt = approvalReceiptIssuer.verifyAndConsume(
+                    approvalToken,
+                    OutboundPurpose.MCP_CONNECT,
+                    URI.create(serverUrl).getHost());
+            if (receipt == null || !userId.equals(receipt.approvedByUserId())) {
+                throw new McpConnectionException("MCP connection requires an approval for the requesting user");
+            }
+            preApproved = true;
+        }
+        connectInternal(serverName, runtimeKey(serverName, userId), serverUrl, category, handshakeHeaders, preApproved);
     }
 
     private void connectInternal(
@@ -176,12 +236,20 @@ public class McpClientService {
             String runtimeKey,
             String serverUrl,
             ToolCategory category,
-            Map<String, String> handshakeHeaders) {
+            Map<String, String> handshakeHeaders,
+            boolean preApproved) {
         serverUrls.put(runtimeKey, serverUrl);
         try {
             ObjectNode initParams = createInitParams();
-            HttpResponse<String> initResp =
-                    postJsonRpc(runtimeKey, serverUrl, "initialize", initParams, null, handshakeHeaders);
+            HttpResponse<String> initResp = postJsonRpc(
+                    runtimeKey,
+                    serverUrl,
+                    "initialize",
+                    initParams,
+                    null,
+                    handshakeHeaders,
+                    OutboundPurpose.MCP_CONNECT,
+                    preApproved);
             if (initResp.statusCode() != 200) {
                 if (meterRegistry != null) {
                     meterRegistry
@@ -194,10 +262,24 @@ public class McpClientService {
             initResp.headers().firstValue("Mcp-Session-Id").ifPresent(sid -> sessionIds.put(runtimeKey, sid));
 
             String sessionId = sessionIds.get(runtimeKey);
-            postNotification(runtimeKey, serverUrl, "notifications/initialized", sessionId, handshakeHeaders);
+            postNotification(
+                    runtimeKey,
+                    serverUrl,
+                    "notifications/initialized",
+                    sessionId,
+                    handshakeHeaders,
+                    OutboundPurpose.MCP_CONNECT,
+                    preApproved);
 
             HttpResponse<String> toolsResp = postJsonRpc(
-                    runtimeKey, serverUrl, "tools/list", objectMapper.createObjectNode(), sessionId, handshakeHeaders);
+                    runtimeKey,
+                    serverUrl,
+                    "tools/list",
+                    objectMapper.createObjectNode(),
+                    sessionId,
+                    handshakeHeaders,
+                    OutboundPurpose.MCP_CONNECT,
+                    preApproved);
             if (toolsResp.statusCode() != 200) {
                 if (meterRegistry != null) {
                     meterRegistry
@@ -376,8 +458,15 @@ public class McpClientService {
 
             ObjectNode callParams = createCallParams(toolName, paramsJson);
 
-            HttpResponse<String> resp =
-                    postJsonRpc(runtimeKey, url, "tools/call", callParams, sessionIds.get(runtimeKey), Map.of());
+            HttpResponse<String> resp = postJsonRpc(
+                    runtimeKey,
+                    url,
+                    "tools/call",
+                    callParams,
+                    sessionIds.get(runtimeKey),
+                    Map.of(),
+                    OutboundPurpose.MCP_TOOL_CALL,
+                    false);
             if (resp.statusCode() != 200) {
                 throw new RuntimeException("tools/call failed [" + resp.statusCode() + "] for: " + toolName);
             }
@@ -432,7 +521,9 @@ public class McpClientService {
             String method,
             ObjectNode params,
             String sessionId,
-            Map<String, String> directHeaders)
+            Map<String, String> directHeaders,
+            OutboundPurpose purpose,
+            boolean preApproved)
             throws Exception {
         ObjectNode rpc = objectMapper.createObjectNode();
         rpc.put("jsonrpc", "2.0");
@@ -449,12 +540,18 @@ public class McpClientService {
         applyDirectHeaders(req, directHeaders);
         try (ResolvedMcpHeaders resolvedHeaders = resolveConfiguredHeaders(runtimeKey, directHeaders)) {
             resolvedHeaders.applyTo(req);
-            return httpClient.send(req.build(), HttpResponse.BodyHandlers.ofString());
+            return governedSend(req.build(), purpose, preApproved);
         }
     }
 
     private void postNotification(
-            String runtimeKey, String baseUrl, String method, String sessionId, Map<String, String> directHeaders)
+            String runtimeKey,
+            String baseUrl,
+            String method,
+            String sessionId,
+            Map<String, String> directHeaders,
+            OutboundPurpose purpose,
+            boolean preApproved)
             throws Exception {
         ObjectNode notification = objectMapper.createObjectNode();
         notification.put("jsonrpc", "2.0");
@@ -470,7 +567,44 @@ public class McpClientService {
         applyDirectHeaders(req, directHeaders);
         try (ResolvedMcpHeaders resolvedHeaders = resolveConfiguredHeaders(runtimeKey, directHeaders)) {
             resolvedHeaders.applyTo(req);
-            httpClient.send(req.build(), HttpResponse.BodyHandlers.discarding());
+            governedSend(req.build(), purpose, preApproved);
+        }
+    }
+
+    /**
+     * Executes an MCP HTTP request through the governed outbound transport (SSRF/TLS/proxy/DNS-
+     * rebinding/redirect enforcement). The MCP commit saga already clears HITL for committed
+     * connections must carry an explicit approval decision from their caller; this transport never
+     * infers approval merely because a connection is already persisted.
+     */
+    private HttpResponse<String> governedSend(HttpRequest request, OutboundPurpose purpose, boolean preApproved) {
+        // When the governed policy service is not wired (e.g. a manually-constructed test instance
+        // without CDI injection), fall back to a direct send so legacy call paths keep working.
+        // Production CDI instances always have outboundPolicyService injected.
+        if (outboundPolicyService == null) {
+            try {
+                return HttpClient.newBuilder()
+                        .connectTimeout(Duration.ofSeconds(5))
+                        .followRedirects(HttpClient.Redirect.NEVER)
+                        .build()
+                        .send(request, HttpResponse.BodyHandlers.ofString());
+            } catch (IOException | InterruptedException e) {
+                if (e instanceof InterruptedException) Thread.currentThread().interrupt();
+                throw new McpConnectionException(
+                        "HTTP MCP request failed: " + request.uri().getHost(), e);
+            }
+        }
+        GovernedHttpClient client = GovernedHttpClient.builder(outboundPolicyService)
+                .vault(secretVault)
+                .purpose(purpose)
+                .actor(WorkspaceContext.getUserIdOrUnknown())
+                .preApproved(preApproved)
+                .build();
+        try {
+            return client.send(request, HttpResponse.BodyHandlers.ofString());
+        } catch (OutboundHttpException e) {
+            throw new McpConnectionException(
+                    "Governed outbound request to " + request.uri().getHost() + " rejected: " + e.category(), e);
         }
     }
 
@@ -622,7 +756,7 @@ public class McpClientService {
                 if (!healthCheckExecutor.awaitTermination(2, TimeUnit.SECONDS)) {
                     healthCheckExecutor.shutdownNow();
                 }
-            } catch (InterruptedException e) {
+            } catch (InterruptedException _) {
                 Thread.currentThread().interrupt();
                 healthCheckExecutor.shutdownNow();
             }
@@ -633,7 +767,7 @@ public class McpClientService {
                 if (!process.waitFor(3, TimeUnit.SECONDS)) {
                     process.destroyForcibly();
                 }
-            } catch (InterruptedException e) {
+            } catch (InterruptedException _) {
                 Thread.currentThread().interrupt();
                 process.destroyForcibly();
             }

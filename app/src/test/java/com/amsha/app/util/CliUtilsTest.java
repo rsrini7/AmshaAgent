@@ -280,6 +280,23 @@ class CliUtilsTest {
         assertTrue(missing.isEmpty());
     }
 
+    @Test
+    void testWarnTelegramIfPartial() throws Exception {
+        Method warnMethod = CliUtils.class.getDeclaredMethod("warnTelegramIfPartial");
+        warnMethod.setAccessible(true);
+
+        assertDoesNotThrow(() -> warnMethod.invoke(null));
+
+        System.setProperty("AMSHA_TELEGRAM_ENABLED", "true");
+        assertDoesNotThrow(() -> warnMethod.invoke(null));
+
+        System.setProperty("TELEGRAM_BOT_TOKEN", "bot123");
+        assertDoesNotThrow(() -> warnMethod.invoke(null));
+
+        System.clearProperty("AMSHA_TELEGRAM_ENABLED");
+        assertDoesNotThrow(() -> warnMethod.invoke(null));
+    }
+
     // -----------------------------------------------------------------------
     // validateRequiredEnvVars — tests the happy path (no exit)
     // -----------------------------------------------------------------------
@@ -310,6 +327,42 @@ class CliUtilsTest {
         // When all vars are set, empty args (no mode) should not exit
         setAllVars();
         assertDoesNotThrow(() -> CliUtils.validateRequiredEnvVars(new String[] {}));
+    }
+
+    @Test
+    void getMissingVarSpecs_otherLlmProviders() {
+        setAllVars();
+        String[] providers = {"openrouter", "openai", "gemini", "nvidia", "cerebras", "omlx", "ollama"};
+        for (String p : providers) {
+            System.setProperty("AMSHA_LLM_PROVIDER", p);
+            // Should not throw and should handle provider resolution
+            List<VarSpec> missing = CliUtils.getMissingVarSpecs(new String[] {});
+            assertNotNull(missing);
+        }
+    }
+
+    @Test
+    void getMissingVarSpecs_customSlotProviders() {
+        setAllVars();
+        System.setProperty("AMSHA_INFINITE_LOOP_COMPACTION_PROVIDERS", "cerebras,groq");
+        System.setProperty("AMSHA_INFINITE_LOOP_CLASSIFIER_PROVIDERS", "openrouter,ollama");
+        System.setProperty("AMSHA_INFINITE_LOOP_EMBEDDING_PROVIDERS", "openai");
+        List<VarSpec> missing = CliUtils.getMissingVarSpecs(new String[] {});
+        assertNotNull(missing);
+    }
+
+    @Test
+    void getMissingVarSpecs_optionalToolsMissing_returnsMissingSpecs() {
+        setAllVars();
+        System.setProperty("AMSHA_TOOLS_GITHUB_TOKEN", "");
+        System.setProperty("AMSHA_TOOLS_SERPER_API_KEY", "");
+        System.setProperty("AMSHA_TOOLS_BRAVE_API_KEY", "");
+
+        List<VarSpec> missing = CliUtils.getMissingVarSpecs(new String[] {});
+        assertEquals(3, missing.size());
+        assertTrue(missing.stream().anyMatch(s -> s.key().equals("AMSHA_TOOLS_GITHUB_TOKEN")));
+        assertTrue(missing.stream().anyMatch(s -> s.key().equals("AMSHA_TOOLS_SERPER_API_KEY")));
+        assertTrue(missing.stream().anyMatch(s -> s.key().equals("AMSHA_TOOLS_BRAVE_API_KEY")));
     }
 
     // -----------------------------------------------------------------------

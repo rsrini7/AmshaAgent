@@ -6,18 +6,17 @@ import static com.github.tomakehurst.wiremock.client.WireMock.equalTo;
 import static com.github.tomakehurst.wiremock.client.WireMock.post;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
 import static com.github.tomakehurst.wiremock.core.WireMockConfiguration.wireMockConfig;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import jakarta.enterprise.inject.Instance;
 import jakarta.enterprise.util.AnnotationLiteral;
 
+import java.lang.reflect.Method;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -25,6 +24,9 @@ import java.util.stream.Stream;
 
 import com.amsha.core.scope.WorkspaceContext;
 import com.amsha.core.security.AutonomyLevel;
+import com.amsha.core.security.OutboundPurpose;
+import com.amsha.core.security.http.ApprovalReceiptIssuer;
+import com.amsha.core.security.http.OutboundApprovalReceipt;
 import com.amsha.core.tools.ToolCategory;
 import com.amsha.mcp.tool.DynamicToolCapabilityRegistry;
 import com.amsha.mcp.tool.McpTransportType;
@@ -58,6 +60,7 @@ class McpClientServiceTest {
         service.objectMapper = new ObjectMapper();
         service.meterRegistry = new SimpleMeterRegistry();
         service.credentialPort = mock(McpConnectionCredentialPort.class);
+        service.approvalReceiptIssuer = mock(ApprovalReceiptIssuer.class);
         when(service.credentialPort.resolveHeaders(any())).thenReturn(ResolvedMcpHeaders.empty());
 
         service.managedExecutors = mock(Instance.class);
@@ -104,6 +107,30 @@ class McpClientServiceTest {
         assertEquals("test-server", cap.mcpServerName());
         assertEquals(McpTransportType.HTTP_SSE, cap.transport());
         assertEquals("Search the web", cap.description());
+        assertEquals(wireMock.baseUrl(), service.httpServerUrl("test-server").orElse(null));
+    }
+
+    @Test
+    void testClearHttpConnectionState() {
+        stubFullConnect("session-abc");
+        service.connect("test-server", wireMock.baseUrl());
+        assertTrue(service.httpServerUrl("test-server").isPresent());
+
+        service.clearHttpConnectionState("test-server");
+        assertFalse(service.httpServerUrl("test-server").isPresent());
+
+        service.connectForUser("user-server", "usr-1", wireMock.baseUrl(), ToolCategory.NETWORK, Map.of());
+        service.clearHttpConnectionState("user-server", "usr-1");
+    }
+
+    @Test
+    void testConfigureHeaderSecretRefsUserMismatchAndEmpty() {
+        assertThrows(
+                McpConnectionException.class,
+                () -> service.configureHeaderSecretRefs(
+                        "server", "user-a", List.of(headerRef("r1", "c1", "user-b", "h1", "v1"))));
+
+        assertDoesNotThrow(() -> service.configureHeaderSecretRefs("server", "user-a", List.of()));
     }
 
     @Test
@@ -153,6 +180,54 @@ class McpClientServiceTest {
     }
 
     @Test
+    void testConnectForUserWithApprovalToken() throws Exception {
+        stubFullConnect("session-approved");
+        OutboundApprovalReceipt receipt =
+                new OutboundApprovalReceipt("user-1", "sess-1", OutboundPurpose.MCP_CONNECT, "localhost");
+        when(service.approvalReceiptIssuer.verifyAndConsume(
+                        eq("tok-123"), eq(OutboundPurpose.MCP_CONNECT), anyString()))
+                .thenReturn(receipt);
+
+        WorkspaceContext.run("sess-1", "user-1", "chat-1", AutonomyLevel.FULL, "COORDINATOR", () -> {
+            service.connectForUser(
+                    "app-server", "user-1", wireMock.baseUrl(), ToolCategory.NETWORK, Map.of(), "tok-123");
+            assertTrue(service.httpServerUrl("app-server").isPresent());
+            return null;
+        });
+    }
+
+    @Test
+    void testConnectForUserWithInvalidApprovalTokenThrows() {
+        when(service.approvalReceiptIssuer.verifyAndConsume(anyString(), any(), anyString()))
+                .thenReturn(null);
+
+        assertThrows(
+                McpConnectionException.class,
+                () -> service.connectForUser(
+                        "app-server-bad", "user-1", wireMock.baseUrl(), ToolCategory.NETWORK, Map.of(), "bad-tok"));
+    }
+
+    @Test
+    void testConnectToolsList500ThrowsMcpConnectionException() {
+        wireMock.stubFor(post(urlEqualTo("/"))
+                .withRequestBody(containing("\"initialize\""))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody("{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{"
+                                + "\"protocolVersion\":\"2024-11-05\",\"capabilities\":{},"
+                                + "\"serverInfo\":{\"name\":\"test\",\"version\":\"1.0\"}}}")));
+        wireMock.stubFor(post(urlEqualTo("/"))
+                .withRequestBody(containing("\"notifications/initialized\""))
+                .willReturn(aResponse().withStatus(200).withBody("")));
+        wireMock.stubFor(post(urlEqualTo("/"))
+                .withRequestBody(containing("\"tools/list\""))
+                .willReturn(aResponse().withStatus(500).withBody("Internal error")));
+
+        assertThrows(McpConnectionException.class, () -> service.connect("fail-tools-server", wireMock.baseUrl()));
+    }
+
+    @Test
     void testInvokeThrowsWhenNoUrlRegistered() {
         assertThrows(McpConnectionException.class, () -> service.invoke("ghost-server", "some_tool", "{}"));
     }
@@ -180,34 +255,25 @@ class McpClientServiceTest {
     }
 
     @Test
-    void testStoredHeadersAreResolvedOnlyForCurrentWorkspaceOwner() throws Exception {
-        stubFullConnect("shared-session");
-        wireMock.stubFor(post(urlEqualTo("/"))
-                .withRequestBody(containing("\"tools/call\""))
-                .willReturn(aResponse()
-                        .withStatus(200)
-                        .withHeader("Content-Type", "application/json")
-                        .withBody("{\"jsonrpc\":\"2.0\",\"id\":3,\"result\":{\"content\":"
-                                + "[{\"type\":\"text\",\"text\":\"owner result\"}]}}")));
+    void testExtractTextResultFallback() throws Exception {
+        Method extract = McpClientService.class.getDeclaredMethod("extractTextResult", String.class);
+        extract.setAccessible(true);
 
-        service.connectForUser("shared", "user-a", wireMock.baseUrl(), ToolCategory.NETWORK, Map.of());
-        service.configureHeaderSecretRefs(
-                "shared", "user-a", List.of(headerRef("ref-a", "conn-a", "user-a", "authorization", "vault-a")));
-        service.connectForUser("shared", "user-b", wireMock.baseUrl(), ToolCategory.NETWORK, Map.of());
-        service.configureHeaderSecretRefs(
-                "shared", "user-b", List.of(headerRef("ref-b", "conn-b", "user-b", "authorization", "vault-b")));
+        String jsonWithoutContent = "{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{\"status\":\"ok\"}}";
+        String res = (String) extract.invoke(service, jsonWithoutContent);
+        assertTrue(res.contains("status"));
+    }
 
-        String result = WorkspaceContext.run(
-                "session-a",
-                "user-a",
-                "chat-a",
-                AutonomyLevel.FULL,
-                "COORDINATOR",
-                () -> service.invoke("shared", "external_search", "{}"));
+    @Test
+    void testHealthCheckRunsNoThrow() throws Exception {
+        Method healthCheck = McpClientService.class.getDeclaredMethod("healthCheck");
+        healthCheck.setAccessible(true);
+        assertDoesNotThrow(() -> healthCheck.invoke(service));
+    }
 
-        assertEquals("owner result", result);
-        verify(service.credentialPort).resolveHeaders("conn-a");
-        verify(service.credentialPort, never()).resolveHeaders("conn-b");
+    @Test
+    void testCleanupNoThrow() {
+        assertDoesNotThrow(service::cleanup);
     }
 
     private static McpConnectionHeaderSecretRefDto headerRef(

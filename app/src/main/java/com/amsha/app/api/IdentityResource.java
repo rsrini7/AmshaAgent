@@ -272,8 +272,20 @@ public class IdentityResource {
                     .build();
         }
 
-        WorkspaceMembershipDto membership =
-                new WorkspaceMembershipDto(invitation.workspaceId(), userId, invitation.role(), "ACTIVE", 0, now, now);
+        Optional<WorkspaceMembershipDto> existingMembership =
+                identityStore.findMembership(invitation.workspaceId(), userId);
+        int membershipRevision =
+                existingMembership.map(WorkspaceMembershipDto::revision).orElse(0);
+        Instant membershipCreatedAt =
+                existingMembership.map(WorkspaceMembershipDto::createdAt).orElse(now);
+        WorkspaceMembershipDto membership = new WorkspaceMembershipDto(
+                invitation.workspaceId(),
+                userId,
+                invitation.role(),
+                "ACTIVE",
+                membershipRevision,
+                membershipCreatedAt,
+                now);
         if (!identityStore.saveMembership(membership)) {
             return Response.status(Response.Status.CONFLICT)
                     .entity(new ErrorResponse("MEMBERSHIP_CONFLICT", "Workspace membership changed concurrently."))
@@ -493,7 +505,7 @@ public class IdentityResource {
             Object email = parsed.get("email");
             if (!(email instanceof String value) || value.isBlank()) return null;
             return new VerifiedEmail(value, Boolean.TRUE.equals(parsed.get("email_verified")));
-        } catch (Exception e) {
+        } catch (Exception _) {
             return null;
         }
     }

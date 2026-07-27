@@ -86,7 +86,10 @@ public class SkillsJarSkillProvider implements SkillProvider {
         } catch (Exception e) {
             LOG.errorf("Failure reading SkillsJars index %s: %s", INDEX_PATH, LogUtil.rootMessage(e));
         }
-        return !skills.isEmpty();
+        // The index is authoritative when present, including when it intentionally contains
+        // no skills. Falling back on an empty index would resurrect stale extracted skills
+        // after their Maven dependency has been removed.
+        return true;
     }
 
     /** Loads an indexed resource and extracts its companion files for native/indexed mode. */

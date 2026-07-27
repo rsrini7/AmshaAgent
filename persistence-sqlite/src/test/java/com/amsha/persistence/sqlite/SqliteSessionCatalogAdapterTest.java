@@ -10,6 +10,7 @@ import java.time.Instant;
 import java.util.UUID;
 
 import com.amsha.persistence.api.SessionCatalogEntry;
+import com.amsha.persistence.api.SessionCatalogStore;
 import com.amsha.persistence.sqlite.testutil.FlywayEnabledTestProfile;
 
 import org.junit.jupiter.api.Test;
@@ -22,7 +23,7 @@ import io.quarkus.test.junit.TestProfile;
 class SqliteSessionCatalogAdapterTest {
 
     @Inject
-    SqliteSessionCatalogAdapter adapter;
+    SessionCatalogStore adapter;
 
     private final Instant now = Instant.now();
 
@@ -109,9 +110,13 @@ class SqliteSessionCatalogAdapterTest {
         adapter.activateNew(makeEntry(sid, scopeOwner, "telegram", scopeCid));
         adapter.setActive(sid, false);
 
-        var match = adapter.listInactiveBefore(Instant.now().plusSeconds(3600));
+        var match = adapter.listInactiveBefore(Instant.now().plusSeconds(3600)).stream()
+                .filter(e -> sid.equals(e.sessionId()))
+                .toList();
         assertFalse(match.isEmpty());
-        var empty = adapter.listInactiveBefore(Instant.now().minusSeconds(3600));
+        var empty = adapter.listInactiveBefore(Instant.now().minusSeconds(3600)).stream()
+                .filter(e -> sid.equals(e.sessionId()))
+                .toList();
         assertTrue(empty.isEmpty());
     }
 

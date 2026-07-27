@@ -4,9 +4,11 @@ import jakarta.enterprise.context.ApplicationScoped;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
@@ -196,9 +198,36 @@ public class AgentGroupRegistry {
 
     /**
      * Register a dynamic group at runtime (e.g., from skill definitions).
+     *
+     * <p>Registration is validated before mutation: a duplicate group ID, a duplicate member
+     * within the incoming group, or any member that already belongs to a built-in or existing
+     * dynamic group is rejected with {@link IllegalArgumentException}, leaving registry state
+     * unchanged. This prevents silently overwriting a built-in group or creating overlapping
+     * membership that would make routing ambiguous.</p>
      */
     public void registerDynamic(AgentGroup group) {
-        dynamicGroups.put(group.groupId(), group);
+        String groupId = group.groupId();
+        if (findById(groupId).isPresent()) {
+            throw new IllegalArgumentException("Agent group id already registered: " + groupId);
+        }
+        // Reject a role listed twice within the member list (lead is also a member by design, so a
+        // lead appearing in memberRoleIds is allowed; only true duplicates are rejected).
+        Set<String> members = new LinkedHashSet<>(group.memberRoleIds());
+        if (members.size() != group.memberRoleIds().size()) {
+            throw new IllegalArgumentException(
+                    "Duplicate member in dynamic group " + groupId + ": " + group.memberRoleIds());
+        }
+        // Reject overlap with any built-in or existing dynamic group (lead included).
+        Set<String> allRoles = new LinkedHashSet<>(members);
+        allRoles.add(group.leadRoleId());
+        for (String role : allRoles) {
+            Optional<AgentGroup> existing = findByMember(role);
+            if (existing.isPresent()) {
+                throw new IllegalArgumentException("Role " + role + " already belongs to group "
+                        + existing.get().groupId() + "; dynamic group " + groupId + " cannot overlap");
+            }
+        }
+        dynamicGroups.put(groupId, group);
         log.infof(
                 "[GROUP-REGISTRY] Registered dynamic group: %s (lead=%s, members=%s)",
                 group.groupId(), group.leadRoleId(), group.memberRoleIds());
@@ -218,10 +247,10 @@ public class AgentGroupRegistry {
      */
     public String toPromptSummary() {
         StringBuilder sb = new StringBuilder();
-        sb.append("AGENT GROUPS (LOKAS):\n");
+        sb.append(String.format("AGENT GROUPS (LOKAS):%n"));
         for (AgentGroup group : allGroups()) {
             sb.append(String.format(
-                    "- %s [%s]: Lead=%s, Members=%s\n",
+                    "- %s [%s]: Lead=%s, Members=%s%n",
                     group.displayName(), group.groupId(), group.leadRoleId(), group.memberRoleIds()));
         }
         return sb.toString();

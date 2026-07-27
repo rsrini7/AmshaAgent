@@ -16,7 +16,7 @@ public class GeminiLlmProviderFactory implements RoutingChatModelProvider {
 
     @Override
     public String providerId() {
-        return "gemini";
+        return ModelDefaults.PROVIDER_GEMINI;
     }
 
     @Override

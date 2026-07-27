@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Optional;
 
 import com.amsha.core.routing.ChatModelFactory;
+import com.amsha.core.routing.ModelDefaults;
 import com.amsha.core.routing.MultiModelChatModel;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
@@ -22,15 +23,15 @@ public class CerebrasProviderFactory implements AgentChatModelProvider {
     @ConfigProperty(name = "AMSHA_CEREBRAS_API_KEY")
     Optional<String> apiKey;
 
-    @ConfigProperty(name = "AMSHA_CEREBRAS_BASE_URL", defaultValue = "https://api.cerebras.ai/v1")
+    @ConfigProperty(name = "AMSHA_CEREBRAS_BASE_URL", defaultValue = ModelDefaults.DEFAULT_CEREBRAS_BASE_URL)
     String baseUrl;
 
-    @ConfigProperty(name = "AMSHA_CEREBRAS_MODEL", defaultValue = "qwen-3-235b-a22b-instruct-2507")
+    @ConfigProperty(name = "AMSHA_CEREBRAS_MODEL", defaultValue = ModelDefaults.DEFAULT_CEREBRAS_MODEL)
     String modelName;
 
     @Override
     public String providerName() {
-        return "cerebras";
+        return ModelDefaults.PROVIDER_CEREBRAS;
     }
 
     @Override

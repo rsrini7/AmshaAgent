@@ -39,6 +39,9 @@ public class HostExecSkillGrant {
     @Inject
     CapabilityRegistry capabilityRegistry;
 
+    @Inject
+    SkillRegistry skillRegistry;
+
     // Priority must be ABOVE the default CDI observer priority (2500) so this grant
     // runs AFTER SkillLoader (which uses default priority 2500). Otherwise a hot-reload
     // via SkillLoader.reloadAll() would remove the role before we re-grant host_exec.
@@ -55,6 +58,14 @@ public class HostExecSkillGrant {
             }
             String trimmed = skillName.trim();
             if (trimmed.isEmpty()) {
+                continue;
+            }
+            boolean admittedSkillsJar = skillRegistry
+                    .findByName(trimmed)
+                    .filter(entry -> "skillsjars".equals(entry.source()))
+                    .isPresent();
+            if (!admittedSkillsJar) {
+                log.warnf("[HostExec] Ignoring configured skill '%s' because it was not admitted", trimmed);
                 continue;
             }
             String roleId = "skill:" + trimmed;

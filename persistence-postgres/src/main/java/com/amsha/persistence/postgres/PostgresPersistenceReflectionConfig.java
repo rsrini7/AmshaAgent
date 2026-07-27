@@ -13,15 +13,25 @@ import com.amsha.persistence.api.ExternalIdentityDto;
 import com.amsha.persistence.api.IdentityInvitationDto;
 import com.amsha.persistence.api.IdentityUserDto;
 import com.amsha.persistence.api.IdentityWorkspaceDto;
+import com.amsha.persistence.api.LlmConnectionDto;
+import com.amsha.persistence.api.LlmConnectionSecretRefDto;
 import com.amsha.persistence.api.McpConnectionCleanupFailureDto;
 import com.amsha.persistence.api.McpConnectionDto;
 import com.amsha.persistence.api.McpConnectionHeaderSecretRefDto;
 import com.amsha.persistence.api.MemoryChunkDto;
+import com.amsha.persistence.api.ModelProfileDto;
+import com.amsha.persistence.api.ModelRouteAssignmentDto;
+import com.amsha.persistence.api.OnboardingCommitReceiptDto;
+import com.amsha.persistence.api.OnboardingDraftDto;
+import com.amsha.persistence.api.OnboardingDraftPurpose;
+import com.amsha.persistence.api.OnboardingDraftState;
+import com.amsha.persistence.api.OnboardingExtensionStateDto;
 import com.amsha.persistence.api.PromptDto;
 import com.amsha.persistence.api.ReasoningStepDto;
 import com.amsha.persistence.api.SecretDto;
 import com.amsha.persistence.api.SkillDto;
 import com.amsha.persistence.api.WebSessionDto;
+import com.amsha.persistence.api.WorkspaceConnectionGrantDto;
 import com.amsha.persistence.api.WorkspaceMembershipDto;
 import com.amsha.persistence.postgres.jdbi.ApiCredentialJdbiDao;
 import com.amsha.persistence.postgres.jdbi.ArchivalMemoryJdbiDao;
@@ -36,8 +46,12 @@ import com.amsha.persistence.postgres.jdbi.CronRunJdbiDao;
 import com.amsha.persistence.postgres.jdbi.IdentityInvitationJdbiDao;
 import com.amsha.persistence.postgres.jdbi.IdentityJdbiDao;
 import com.amsha.persistence.postgres.jdbi.JdbiProducer;
+import com.amsha.persistence.postgres.jdbi.LlmProfilePostgresDao;
 import com.amsha.persistence.postgres.jdbi.LockJdbiDao;
 import com.amsha.persistence.postgres.jdbi.McpConnectionJdbiDao;
+import com.amsha.persistence.postgres.jdbi.OnboardingCommitReceiptPostgresDao;
+import com.amsha.persistence.postgres.jdbi.OnboardingDraftJdbiDao;
+import com.amsha.persistence.postgres.jdbi.OnboardingExtensionStateJdbiDao;
 import com.amsha.persistence.postgres.jdbi.PromptJdbiDao;
 import com.amsha.persistence.postgres.jdbi.RagChunkJdbiDao;
 import com.amsha.persistence.postgres.jdbi.RecallMemoryJdbiDao;
@@ -73,6 +87,16 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             WebSessionDto.class,
             IdentityInvitationDto.class,
             BootstrapStateDto.class,
+            OnboardingDraftDto.class,
+            OnboardingCommitReceiptDto.class,
+            OnboardingDraftPurpose.class,
+            OnboardingDraftState.class,
+            OnboardingExtensionStateDto.class,
+            LlmConnectionDto.class,
+            LlmConnectionSecretRefDto.class,
+            ModelProfileDto.class,
+            ModelRouteAssignmentDto.class,
+            WorkspaceConnectionGrantDto.class,
             // JDBI DAOs (SQL Object proxies)
             CheckpointJdbiDao.class,
             CronJdbiDao.class,
@@ -94,6 +118,11 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             WebSessionJdbiDao.class,
             IdentityInvitationJdbiDao.class,
             BootstrapStateJdbiDao.class,
+            OnboardingDraftJdbiDao.class,
+            OnboardingDraftJdbiDao.DraftRowMapper.class,
+            OnboardingCommitReceiptPostgresDao.class,
+            OnboardingExtensionStateJdbiDao.class,
+            LlmProfilePostgresDao.class,
             // JDBI infrastructure
             JdbiProducer.class,
             // Store adapters (CDI beans)
@@ -119,6 +148,10 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             PostgresApiCredentialStoreAdapter.class,
             PostgresWebSessionStoreAdapter.class,
             PostgresIdentityInvitationStoreAdapter.class,
-            PostgresBootstrapStateStoreAdapter.class
+            PostgresBootstrapStateStoreAdapter.class,
+            PostgresOnboardingDraftStoreAdapter.class,
+            PostgresOnboardingCommitReceiptStoreAdapter.class,
+            PostgresOnboardingExtensionStateStoreAdapter.class,
+            PostgresLlmProfileStoreAdapter.class
         })
 public class PostgresPersistenceReflectionConfig {}

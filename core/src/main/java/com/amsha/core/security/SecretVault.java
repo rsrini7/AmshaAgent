@@ -41,6 +41,15 @@ public interface SecretVault {
      */
     void remove(String keyName, String userId);
 
+    /** Stores a secret in a workspace vault partition after authorizing the acting member. */
+    void storeWorkspace(String keyName, byte[] secret, String workspaceId, String actorUserId);
+
+    /** Retrieves a workspace secret after authorizing the acting member. */
+    Optional<VaultKey> getWorkspace(String keyName, String workspaceId, String actorUserId);
+
+    /** Removes a workspace secret after authorizing the acting member. */
+    void removeWorkspace(String keyName, String workspaceId, String actorUserId);
+
     // rotateSecrets removed as per key-rotation policy deferral
     /**
      * Retrieves a system-level key (not tied to any specific workspace session).

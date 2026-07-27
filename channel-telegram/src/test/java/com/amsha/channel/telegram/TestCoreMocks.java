@@ -1,5 +1,7 @@
 package com.amsha.channel.telegram;
 
+import static org.mockito.Mockito.*;
+
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.embedding.EmbeddingModel;
 
@@ -10,8 +12,6 @@ import jakarta.enterprise.inject.Produces;
 import jakarta.inject.Named;
 
 import com.amsha.channel.api.IntentDetector;
-
-import org.mockito.Mockito;
 
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -40,7 +40,7 @@ public class TestCoreMocks {
     @Priority(1000)
     @ApplicationScoped
     public IntentDetector IntentDetector() {
-        return Mockito.mock(IntentDetector.class);
+        return mock(IntentDetector.class);
     }
 
     @Produces
@@ -49,7 +49,7 @@ public class TestCoreMocks {
     @ApplicationScoped
     @Identifier("compaction")
     public ChatModel compactionModel() {
-        return Mockito.mock(ChatModel.class);
+        return mock(ChatModel.class);
     }
 
     @Produces
@@ -57,7 +57,7 @@ public class TestCoreMocks {
     @Priority(1000)
     @ApplicationScoped
     public ChatModel defaultChatModel() {
-        return Mockito.mock(ChatModel.class);
+        return mock(ChatModel.class);
     }
 
     @Produces
@@ -66,7 +66,7 @@ public class TestCoreMocks {
     @ApplicationScoped
     @Named("architectTemplate")
     public Template architectTemplate() {
-        return Mockito.mock(Template.class);
+        return mock(Template.class);
     }
 
     @Produces
@@ -75,7 +75,7 @@ public class TestCoreMocks {
     @ApplicationScoped
     @Named("coderTemplate")
     public Template coderTemplate() {
-        return Mockito.mock(Template.class);
+        return mock(Template.class);
     }
 
     @Produces
@@ -84,7 +84,7 @@ public class TestCoreMocks {
     @ApplicationScoped
     @Named("coordinatorTemplate")
     public Template coordinatorTemplate() {
-        return Mockito.mock(Template.class);
+        return mock(Template.class);
     }
 
     @Produces
@@ -93,7 +93,7 @@ public class TestCoreMocks {
     @ApplicationScoped
     @Named("debuggerTemplate")
     public Template debuggerTemplate() {
-        return Mockito.mock(Template.class);
+        return mock(Template.class);
     }
 
     @Produces
@@ -102,7 +102,7 @@ public class TestCoreMocks {
     @ApplicationScoped
     @Named("researcherTemplate")
     public Template researcherTemplate() {
-        return Mockito.mock(Template.class);
+        return mock(Template.class);
     }
 
     @Produces
@@ -111,7 +111,7 @@ public class TestCoreMocks {
     @ApplicationScoped
     @Named("synthesizerTemplate")
     public Template synthesizerTemplate() {
-        return Mockito.mock(Template.class);
+        return mock(Template.class);
     }
 
     @Produces
@@ -119,6 +119,6 @@ public class TestCoreMocks {
     @Priority(1000)
     @ApplicationScoped
     public EmbeddingModel embeddingModel() {
-        return Mockito.mock(EmbeddingModel.class);
+        return mock(EmbeddingModel.class);
     }
 }

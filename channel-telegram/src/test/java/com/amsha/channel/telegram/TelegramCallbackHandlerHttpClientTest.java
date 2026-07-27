@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.*;
 import static org.mockito.Mockito.verify;
 
 import java.lang.reflect.Field;
@@ -21,7 +22,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
-import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
@@ -58,14 +58,14 @@ class TelegramCallbackHandlerHttpClientTest {
     @Test
     void bugA3_answerCallback_appliesFiveSecondTimeout() throws Exception {
         // 1. Setup mock HttpClient
-        HttpClient mockClient = Mockito.mock(HttpClient.class);
+        HttpClient mockClient = mock(HttpClient.class);
 
         // 2. Overwrite the instance httpClient field
         Field field = TelegramCallbackHandler.class.getDeclaredField("httpClient");
         field.setAccessible(true);
 
         // mock the method to return a valid CompletableFuture instead of null
-        Mockito.when(mockClient.sendAsync(any(), any())).thenReturn(CompletableFuture.completedFuture(null));
+        when(mockClient.sendAsync(any(), any())).thenReturn(CompletableFuture.completedFuture(null));
 
         HttpClient originalClient = (HttpClient) field.get(handler);
         try {

@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Optional;
 
 import com.amsha.core.routing.ChatModelFactory;
+import com.amsha.core.routing.ModelDefaults;
 import com.amsha.core.routing.MultiModelChatModel;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
@@ -22,10 +23,10 @@ public class OpenRouterProviderFactory implements AgentChatModelProvider {
     @ConfigProperty(name = "AMSHA_OPENROUTER_API_KEY")
     Optional<String> apiKey;
 
-    @ConfigProperty(name = "AMSHA_OPENROUTER_BASE_URL", defaultValue = "https://openrouter.ai/api/v1")
+    @ConfigProperty(name = "AMSHA_OPENROUTER_BASE_URL", defaultValue = ModelDefaults.DEFAULT_OPENROUTER_BASE_URL)
     String baseUrl;
 
-    @ConfigProperty(name = "AMSHA_OPENROUTER_MODEL", defaultValue = "openai/gpt-oss-20b:free")
+    @ConfigProperty(name = "AMSHA_OPENROUTER_MODEL", defaultValue = ModelDefaults.DEFAULT_OPENROUTER_MODEL)
     String modelName;
 
     @ConfigProperty(name = "amsha.llm.openrouter.site-url", defaultValue = "https://github.com/rsrini7/amsha")
@@ -36,7 +37,7 @@ public class OpenRouterProviderFactory implements AgentChatModelProvider {
 
     @Override
     public String providerName() {
-        return "openrouter";
+        return ModelDefaults.PROVIDER_OPENROUTER;
     }
 
     @Override

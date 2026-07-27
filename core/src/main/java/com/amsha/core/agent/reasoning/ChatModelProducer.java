@@ -14,6 +14,7 @@ import java.util.Map;
 import java.util.Optional;
 
 import com.amsha.core.routing.ChatModelFactory;
+import com.amsha.core.routing.ModelDefaults;
 import com.amsha.core.security.SecretVault;
 import com.amsha.core.security.VaultConstants;
 import com.amsha.core.security.VaultKey;
@@ -30,16 +31,16 @@ public class ChatModelProducer {
 
     private static final Logger log = Logger.getLogger(ChatModelProducer.class);
     private static final Map<String, String> PROVIDER_BASE_URLS = Map.ofEntries(
-            Map.entry("groq", "https://api.groq.com/openai/v1"),
-            Map.entry("openai", "https://api.openai.com/v1"),
-            Map.entry("openrouter", "https://openrouter.ai/api/v1"),
-            Map.entry("cerebras", "https://api.cerebras.ai/v1"),
-            Map.entry("nvidia", "https://integrate.api.nvidia.com/v1"),
-            Map.entry("ollama", "http://localhost:11434"),
-            Map.entry("omlx", "http://127.0.0.1:8000/v1"),
-            Map.entry("llamacpp", "http://127.0.0.1:8080/v1"),
-            Map.entry("gemini", "https://generativelanguage.googleapis.com/v1beta"),
-            Map.entry("generic-openai", ""));
+            Map.entry(ModelDefaults.PROVIDER_GROQ, ModelDefaults.DEFAULT_GROQ_BASE_URL),
+            Map.entry(ModelDefaults.PROVIDER_OPENAI, ModelDefaults.DEFAULT_OPENAI_BASE_URL),
+            Map.entry(ModelDefaults.PROVIDER_OPENROUTER, ModelDefaults.DEFAULT_OPENROUTER_BASE_URL),
+            Map.entry(ModelDefaults.PROVIDER_CEREBRAS, ModelDefaults.DEFAULT_CEREBRAS_BASE_URL),
+            Map.entry(ModelDefaults.PROVIDER_NVIDIA, ModelDefaults.DEFAULT_NVIDIA_BASE_URL),
+            Map.entry(ModelDefaults.PROVIDER_OLLAMA, ModelDefaults.DEFAULT_OLLAMA_BASE_URL),
+            Map.entry(ModelDefaults.PROVIDER_OMLX, ModelDefaults.DEFAULT_OMLX_BASE_URL),
+            Map.entry(ModelDefaults.PROVIDER_LLAMACPP, ModelDefaults.DEFAULT_LLAMACPP_BASE_URL),
+            Map.entry(ModelDefaults.PROVIDER_GEMINI, ModelDefaults.DEFAULT_GEMINI_BASE_URL),
+            Map.entry(ModelDefaults.PROVIDER_GENERIC_OPENAI, ""));
 
     @ConfigProperty(name = "amsha.llm.provider", defaultValue = "groq")
     String provider;
@@ -111,7 +112,7 @@ public class ChatModelProducer {
                 if (!p.isBlank()) return p;
             }
         }
-        return provider != null ? provider : "groq";
+        return provider != null ? provider : ModelDefaults.DEFAULT_PROVIDER;
     }
 
     @Produces
@@ -123,7 +124,7 @@ public class ChatModelProducer {
     }
 
     private AgentChatModelProvider findProvider(String providerName) {
-        String cleanProvider = clean(providerName != null ? providerName : "groq");
+        String cleanProvider = clean(providerName != null ? providerName : ModelDefaults.DEFAULT_PROVIDER);
         for (AgentChatModelProvider p : providers) {
             if (p.providerName().equalsIgnoreCase(cleanProvider)) {
                 return p;

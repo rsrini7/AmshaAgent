@@ -9,7 +9,7 @@ public class OmlxLlmProviderFactory implements RoutingChatModelProvider {
 
     @Override
     public String providerId() {
-        return "omlx";
+        return ModelDefaults.PROVIDER_OMLX;
     }
 
     @Override

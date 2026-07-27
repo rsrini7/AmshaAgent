@@ -214,7 +214,7 @@ public class AuthResource {
                 sessionDigest,
                 csrfDigest,
                 now.plus(Duration.ofMinutes(
-                        Math.max(5, Math.min(idleTimeoutMinutes, 1440)))), // idle (default 12h, bounded 5m-24h)
+                        Math.clamp(idleTimeoutMinutes, 5, 1440))), // idle (default 12h, bounded 5m-24h)
                 now.plus(Duration.ofDays(7)), // 7 days absolute
                 null,
                 null,

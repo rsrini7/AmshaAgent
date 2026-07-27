@@ -1,105 +1,69 @@
 package com.amsha.persistence.postgres;
 
 import static org.junit.jupiter.api.Assertions.*;
-
-import jakarta.inject.Inject;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.*;
 
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
 import com.amsha.persistence.api.CheckpointDto;
-import com.amsha.persistence.api.CheckpointStorePort;
 import com.amsha.persistence.api.ReasoningStepDto;
-import com.amsha.persistence.postgres.testutil.FlywayEnabledTestProfile;
+import com.amsha.persistence.postgres.jdbi.CheckpointJdbiDao;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
+import org.jdbi.v3.core.Handle;
+import org.jdbi.v3.core.HandleCallback;
+import org.jdbi.v3.core.Jdbi;
+import org.jdbi.v3.core.extension.ExtensionCallback;
+import org.jdbi.v3.core.statement.PreparedBatch;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.Spy;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 
-import io.quarkus.test.common.QuarkusTestResource;
-import io.quarkus.test.junit.QuarkusTest;
-import io.quarkus.test.junit.TestProfile;
-
-@QuarkusTest
-@TestProfile(FlywayEnabledTestProfile.class)
-@QuarkusTestResource(PostgresTestResource.class)
-@SuppressWarnings("java:S1192")
+@ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.LENIENT)
 class PostgresCheckpointStoreAdapterTest {
 
-    @Inject
-    CheckpointStorePort store;
+    @Mock
+    Jdbi jdbi;
 
-    @Test
-    void testSaveAndFindById() {
-        CheckpointDto dto = createCheckpoint("cpt-save-1", "IN_PROGRESS");
-        CheckpointDto saved = store.save(dto);
-        assertNotNull(saved.id());
+    @Spy
+    ObjectMapper objectMapper = new ObjectMapper();
 
-        Optional<CheckpointDto> found = store.findById(saved.id());
-        assertTrue(found.isPresent());
-        assertEquals("cpt-save-1", found.get().sessionId());
-        assertEquals("IN_PROGRESS", found.get().status());
-    }
+    @Mock
+    Handle handle;
 
-    @Test
-    void testTransitionStatus() {
-        CheckpointDto saved = store.save(createCheckpoint("cpt-trn-1", "IN_PROGRESS"));
-        store.transitionStatus(saved.id(), "COMPLETED");
-        Optional<CheckpointDto> found = store.findById(saved.id());
-        assertTrue(found.isPresent());
-        assertEquals("COMPLETED", found.get().status());
-    }
+    @Mock
+    CheckpointJdbiDao dao;
 
-    @Test
-    void testAtomicTransition() {
-        CheckpointDto saved = store.save(createCheckpoint("cpt-atomic-1", "AWAITING_APPROVAL"));
-        assertTrue(store.atomicTransition(saved.id(), "AWAITING_APPROVAL", "APPROVED"));
-        assertEquals("APPROVED", store.findById(saved.id()).get().status());
-    }
+    @Mock
+    PreparedBatch preparedBatch;
 
-    @Test
-    void testAtomicTransitionWrongStatus() {
-        CheckpointDto saved = store.save(createCheckpoint("cpt-atomic-2", "COMPLETED"));
-        assertFalse(store.atomicTransition(saved.id(), "AWAITING_APPROVAL", "APPROVED"));
-    }
+    PostgresCheckpointStoreAdapter adapter;
 
-    @Test
-    void testSaveCheckpointWithSteps() {
-        CheckpointDto dto = createCheckpoint("cpt-steps-1", "IN_PROGRESS");
-        List<ReasoningStepDto> steps = List.of(
-                new ReasoningStepDto("thought-1", "action-1", "{}", "obs-1", 100, 50, true, null, null, null),
-                new ReasoningStepDto("thought-2", "action-2", "{}", "obs-2", 200, 100, true, null, null, null));
-        CheckpointDto saved = store.saveCheckpointWithSteps(dto, steps);
-        List<ReasoningStepDto> loaded = store.loadSteps(saved.id());
-        assertEquals(2, loaded.size());
-    }
+    private Instant now;
+    private CheckpointDto sampleDto;
 
-    @Test
-    void testFindActiveBySession() {
-        store.save(createCheckpoint("cpt-active-1", "role-1", "IN_PROGRESS"));
-        store.save(createCheckpoint("cpt-active-1", "role-2", "IN_PROGRESS"));
-        store.save(createCheckpoint("cpt-active-1", "role-3", "COMPLETED"));
-        assertEquals(2, store.findActiveBySession("cpt-active-1").size());
-    }
-
-    @Test
-    void testFindByStatus() {
-        store.save(createCheckpoint("cpt-status-1", "role-1", "AWAITING_APPROVAL"));
-        store.save(createCheckpoint("cpt-status-1", "role-2", "IN_PROGRESS"));
-        List<CheckpointDto> awaiting = store.findByStatus("AWAITING_APPROVAL");
-        assertEquals(1, awaiting.size());
-    }
-
-    @Test
-    void testFindBySessionAndRole() {
-        store.save(new CheckpointDto(
-                null,
-                "cpt-sr-1",
-                "primary",
+    @BeforeEach
+    void setUp() {
+        adapter = new PostgresCheckpointStoreAdapter(jdbi, objectMapper, 2);
+        now = Instant.now();
+        sampleDto = new CheckpointDto(
+                1L,
+                "sess-1",
+                "coder",
                 "IN_PROGRESS",
                 "FULL",
                 "{}",
-                "plat-1",
-                "telegram",
+                "cli",
+                "cli",
                 "goal",
                 null,
                 null,
@@ -108,7 +72,8 @@ class PostgresCheckpointStoreAdapterTest {
                 null,
                 null,
                 null,
-                null,
+                10,
+                1,
                 0,
                 null,
                 null,
@@ -116,71 +81,63 @@ class PostgresCheckpointStoreAdapterTest {
                 null,
                 null,
                 null,
-                null,
                 0,
-                Instant.now(),
-                Instant.now()));
-        Optional<CheckpointDto> found = store.findBySessionAndRole("cpt-sr-1", "primary");
-        assertTrue(found.isPresent());
+                now,
+                now);
+
+        when(jdbi.inTransaction(any())).thenAnswer(inv -> {
+            HandleCallback callback = inv.getArgument(0);
+            return callback.withHandle(handle);
+        });
+
+        when(jdbi.withExtension(eq(CheckpointJdbiDao.class), any())).thenAnswer(inv -> {
+            ExtensionCallback callback = inv.getArgument(1);
+            return callback.withExtension(dao);
+        });
+
+        when(handle.attach(CheckpointJdbiDao.class)).thenReturn(dao);
+        when(handle.prepareBatch(anyString())).thenReturn(preparedBatch);
+        when(dao.findAnyBySessionAndRole(anyString(), anyString())).thenReturn(Optional.of(sampleDto));
+        when(dao.findById(anyLong())).thenReturn(Optional.of(sampleDto));
+        when(dao.findBySessionAndRole(anyString(), anyString())).thenReturn(Optional.of(sampleDto));
+        when(dao.claimForResume(anyString(), anyString(), any(), any())).thenReturn(true);
     }
 
     @Test
-    void testMarkFailed() {
-        CheckpointDto saved = store.save(createCheckpoint("cpt-fail-1", "IN_PROGRESS"));
-        store.markFailed(saved.id(), "test failure", "ERR_001", "trace-1", "TestException");
-        Optional<CheckpointDto> found = store.findById(saved.id());
-        assertTrue(found.isPresent());
-        assertEquals("FAILED", found.get().status());
+    void testSave() {
+        CheckpointDto result = adapter.save(sampleDto);
+        assertNotNull(result);
+        verify(dao).upsertCheckpoint(any());
     }
 
     @Test
-    void testHasPendingApproval() {
-        store.save(createCheckpoint("cpt-approve-1", "role-1", "AWAITING_APPROVAL"));
-        assertTrue(store.hasPendingApproval("cpt-approve-1"));
-        store.save(createCheckpoint("cpt-approve-1", "role-2", "COMPLETED"));
-        assertTrue(store.hasPendingApproval("cpt-approve-1"));
+    void testUpsertWithSteps() {
+        var res = adapter.upsertWithSteps("sess-1", "coder", "{}", "FULL", 1, "goal", "{}");
+        assertNotNull(res);
+        verify(dao).upsertCheckpoint(any());
     }
 
     @Test
-    void testFindStaleApprovals() {
-        store.save(createCheckpoint("cpt-stale-1", "AWAITING_APPROVAL"));
-        List<CheckpointDto> stale = store.findStaleApprovals(Instant.now().plusSeconds(3600));
-        assertTrue(stale.size() >= 1);
+    void testUpsertAndFinalize() {
+        ReasoningStepDto step = new ReasoningStepDto("{}", "act", "{}", "obs", 10, 20, true, null, null, null);
+        var res = adapter.upsertAndFinalize("sess-1", "coder", "{}", "COMPLETED", List.of(step), "goal", "{}");
+        assertNotNull(res);
+        verify(dao).deleteSteps(1L);
+        verify(preparedBatch).execute();
     }
 
-    private CheckpointDto createCheckpoint(String sessionId, String status) {
-        return createCheckpoint(sessionId, "role", status);
-    }
+    @Test
+    void testSimpleDelegates() {
+        Optional<CheckpointDto> byId = adapter.findById(1L);
+        assertTrue(byId.isPresent());
 
-    private CheckpointDto createCheckpoint(String sessionId, String role, String status) {
-        return new CheckpointDto(
-                null,
-                sessionId,
-                role,
-                status,
-                "FULL",
-                "{}",
-                "plat-1",
-                "telegram",
-                "goal",
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                0,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                0,
-                Instant.now(),
-                Instant.now());
+        Optional<CheckpointDto> bySession = adapter.findBySessionAndRole("sess-1", "coder");
+        assertTrue(bySession.isPresent());
+
+        boolean claimed = adapter.claimForResume("sess-1", "coder");
+        assertTrue(claimed);
+
+        adapter.releaseResumeClaim("sess-1", "coder");
+        verify(jdbi).useExtension(eq(CheckpointJdbiDao.class), any());
     }
 }

@@ -2,6 +2,7 @@ package com.amsha.core.api;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.*;
 
 import java.util.List;
 import java.util.Map;
@@ -15,12 +16,11 @@ import com.amsha.core.audit.AuditService;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.Mockito;
 
 class AgentResponseMapperTest {
 
     private final AgentResponseMapper mapper = new AgentResponseMapper();
-    private final AuditService auditService = Mockito.mock(AuditService.class);
+    private final AuditService auditService = mock(AuditService.class);
 
     @BeforeEach
     void setUp() {

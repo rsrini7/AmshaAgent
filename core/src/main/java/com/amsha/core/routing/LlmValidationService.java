@@ -12,6 +12,7 @@ import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -32,27 +33,30 @@ public class LlmValidationService implements LlmValidationGateway {
     @Inject
     LlmModelFactory modelFactory;
 
+    @Inject
+    Executor validationExecutor;
+
     @ConfigProperty(name = "AMSHA_GENERIC_OPENAI_BASE_URL")
     Optional<String> genericOpenAiBaseUrl;
 
     @Override
     public boolean validate(String provider, String model, String apiKey) throws LlmValidationException {
         try {
-            if (!"claude-code".equals(provider)) {
+            if (!ModelDefaults.PROVIDER_CLAUDE_CODE.equals(provider)) {
                 vault.storeSystemKey(VaultConstants.LLM_API_KEY, apiKey.getBytes(StandardCharsets.UTF_8));
             }
             String effectiveBaseUrl =
                     switch (provider.toLowerCase(Locale.ROOT)) {
-                        case "groq" -> "https://api.groq.com/openai/v1";
-                        case "openai" -> "https://api.openai.com/v1";
-                        case "anthropic" -> "https://api.anthropic.com";
-                        case "openrouter" -> "https://openrouter.ai/api/v1";
-                        case "cerebras" -> "https://api.cerebras.ai/v1";
-                        case "ollama" -> "http://localhost:11434";
-                        case "nvidia" -> "https://integrate.api.nvidia.com/v1";
-                        case "omlx" -> "http://127.0.0.1:8000/v1";
-                        case "llamacpp" -> "http://127.0.0.1:9000/v1";
-                        case "generic-openai" -> genericOpenAiBaseUrl.orElse("");
+                        case ModelDefaults.PROVIDER_GROQ -> ModelDefaults.DEFAULT_GROQ_BASE_URL;
+                        case ModelDefaults.PROVIDER_OPENAI -> ModelDefaults.DEFAULT_OPENAI_BASE_URL;
+                        case ModelDefaults.PROVIDER_ANTHROPIC -> ModelDefaults.DEFAULT_ANTHROPIC_BASE_URL;
+                        case ModelDefaults.PROVIDER_OPENROUTER -> ModelDefaults.DEFAULT_OPENROUTER_BASE_URL;
+                        case ModelDefaults.PROVIDER_CEREBRAS -> ModelDefaults.DEFAULT_CEREBRAS_BASE_URL;
+                        case ModelDefaults.PROVIDER_OLLAMA -> ModelDefaults.DEFAULT_OLLAMA_BASE_URL;
+                        case ModelDefaults.PROVIDER_NVIDIA -> ModelDefaults.DEFAULT_NVIDIA_BASE_URL;
+                        case ModelDefaults.PROVIDER_OMLX -> ModelDefaults.DEFAULT_OMLX_BASE_URL;
+                        case ModelDefaults.PROVIDER_LLAMACPP -> ModelDefaults.DEFAULT_LLAMACPP_BASE_URL;
+                        case ModelDefaults.PROVIDER_GENERIC_OPENAI -> genericOpenAiBaseUrl.orElse("");
                         default -> "";
                     };
 
@@ -73,8 +77,8 @@ public class LlmValidationService implements LlmValidationGateway {
                     "ollama".equalsIgnoreCase(provider) ? effectiveBaseUrl : null,
                     "ollama".equalsIgnoreCase(provider) ? model : null);
 
-            var future =
-                    CompletableFuture.supplyAsync(() -> chatModel.chat("hi")).orTimeout(15, TimeUnit.SECONDS);
+            var future = CompletableFuture.supplyAsync(() -> chatModel.chat("hi"), validationExecutor)
+                    .orTimeout(15, TimeUnit.SECONDS);
             String reply = future.join();
             return reply != null;
         } catch (Exception e) {

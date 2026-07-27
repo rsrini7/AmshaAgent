@@ -1,19 +1,15 @@
 package com.amsha.mcp.transport;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.*;
 
 import jakarta.enterprise.inject.Instance;
 
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Stream;
 
 import com.amsha.core.audit.AuditService;
@@ -59,7 +55,7 @@ class McpConnectionLifecycleServiceTest {
         service.secretVault = secretVault;
         service.auditService = auditService;
         service.mcpClientService = mcpClientService;
-        when(stores.stream()).thenAnswer(invocation -> Stream.of(store));
+        lenient().when(stores.stream()).thenAnswer(invocation -> Stream.of(store));
     }
 
     @Test
@@ -76,7 +72,12 @@ class McpConnectionLifecycleServiceTest {
         verify(mcpClientService).configureHeaderSecretRefs(connection.name(), connection.userId(), refs);
         verify(mcpClientService)
                 .connectForUser(
-                        connection.name(), connection.userId(), connection.endpoint(), ToolCategory.NETWORK, Map.of());
+                        connection.name(),
+                        connection.userId(),
+                        connection.endpoint(),
+                        ToolCategory.NETWORK,
+                        Map.of(),
+                        true);
         verify(auditService)
                 .recordMandatory(
                         anyString(),
@@ -94,7 +95,8 @@ class McpConnectionLifecycleServiceTest {
         int reconnected = service.reconnectEnabledConnections();
 
         assertEquals(0, reconnected);
-        verify(mcpClientService, never()).connectForUser(anyString(), anyString(), anyString(), any(), any());
+        verify(mcpClientService, never())
+                .connectForUser(anyString(), anyString(), anyString(), any(), any(), anyBoolean());
         verify(mcpClientService, never()).configureHeaderSecretRefs(anyString(), anyString(), any());
     }
 
@@ -163,6 +165,61 @@ class McpConnectionLifecycleServiceTest {
                         anyString(),
                         eq(SecurityEventType.MCP_CREDENTIAL_REMOVED),
                         eq("connectionId=mcp-1 header=authorization cleanupRetry=true"));
+    }
+
+    @Test
+    void testValidateHttpRegistrationRejectsInvalidUrlOrForbiddenHeader() {
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> service.validateHttpRegistration("https://user:pass@example.com/mcp", Map.of()));
+
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> service.validateHttpRegistration("https://example.com/mcp", Map.of("Host", "invalid.host")));
+    }
+
+    @Test
+    void testDeleteByNameAndUserId() {
+        McpConnectionDto connection = connection("mcp-2", "user-2", "docs-2", McpTransportType.HTTP_SSE.name(), true);
+        when(store.findByNameAndUserId("docs-2", "user-2")).thenReturn(Optional.of(connection));
+        when(store.listHeaderSecretRefs(connection.id(), "user-2")).thenReturn(List.of());
+        when(store.deleteByIdAndUserId(connection.id(), "user-2")).thenReturn(1);
+
+        assertTrue(service.deleteByNameAndUserId("docs-2", "user-2"));
+        verify(mcpClientService).clearHttpConnectionState("docs-2", "user-2");
+    }
+
+    @Test
+    void testDeleteByIdAndUserId() {
+        McpConnectionDto connection = connection("mcp-5", "user-5", "docs-5", McpTransportType.HTTP_SSE.name(), true);
+        when(store.findByIdAndUserId("mcp-5", "user-5")).thenReturn(Optional.of(connection));
+        when(store.listHeaderSecretRefs("mcp-5", "user-5")).thenReturn(List.of());
+        when(store.deleteByIdAndUserId("mcp-5", "user-5")).thenReturn(1);
+
+        assertTrue(service.deleteByIdAndUserId("mcp-5", "user-5"));
+    }
+
+    @Test
+    void testPersistSuccessfulHttp() {
+        when(store.findByNameAndUserId("my-serv", "usr-10")).thenReturn(Optional.empty());
+
+        McpConnectionLifecycleService.PersistedConnection persisted = service.persistSuccessfulHttp(
+                "my-serv", "https://example.com/mcp", ToolCategory.NETWORK, "usr-10", Map.of("x-token", "val123"));
+
+        assertNotNull(persisted);
+        assertNotNull(persisted.connection());
+        assertEquals("my-serv", persisted.connection().name());
+        assertEquals(1, persisted.headerSecretRefs().size());
+    }
+
+    @Test
+    void testListByUserId() {
+        McpConnectionDto connection = connection("mcp-3", "user-3", "docs-3", McpTransportType.HTTP_SSE.name(), true);
+        when(store.listByUserId("user-3")).thenReturn(List.of(connection));
+
+        List<McpConnectionDto> list = service.listByUserId("user-3");
+        assertEquals(1, list.size());
+        assertEquals("docs-3", list.get(0).name());
     }
 
     private static McpConnectionDto connection(

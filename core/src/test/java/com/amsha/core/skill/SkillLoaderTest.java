@@ -7,6 +7,7 @@ import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 
 import java.lang.reflect.Method;
+import java.nio.file.Path;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
@@ -77,6 +78,26 @@ class SkillLoaderTest {
         // Assuming src/main/resources/skills/index.txt is empty
         skillLoader.reloadAll(false);
         assertEquals(0, skillRegistry.size());
+    }
+
+    @Test
+    void testIncompatibleSkillsJarIsQuarantinedBeforeCapabilityGrant() {
+        SkillDefinition incompatible = new SkillDefinition(
+                null,
+                "incompatible-art",
+                "Creates art",
+                List.of(),
+                List.of(),
+                5,
+                "Use the Read tool to load a template, then create an HTML artifact.",
+                Path.of(System.getProperty("java.io.tmpdir")).toString());
+        Mockito.when(skillsJarSkillProvider.load()).thenReturn(List.of(incompatible));
+
+        skillLoader.reloadAll(false);
+
+        assertEquals(0, skillRegistry.size());
+        assertEquals(1, skillLoader.quarantinedSkills().size());
+        Assertions.assertFalse(capabilityRegistry.hasCapability("skill:incompatible-art", "host_exec"));
     }
 
     @Test

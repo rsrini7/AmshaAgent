@@ -83,4 +83,63 @@ class ChatModelPoolTest {
         // Factory should only be called once
         verify(factory, times(1)).get();
     }
+
+    @Test
+    void getOrCreateTyped_returnsSameInstanceForSameTypedKey() {
+        ChatModelPool pool = new ChatModelPool();
+        ChatModel m = mock(ChatModel.class);
+
+        ChatModel r1 = pool.getOrCreateTyped("USER", "u1", "conn1", 1, "prof1", 1, "openai", "gpt-4o", () -> m);
+        ChatModel r2 = pool.getOrCreateTyped("USER", "u1", "conn1", 1, "prof1", 1, "openai", "gpt-4o", () -> m);
+
+        assertSame(r1, r2);
+        // Single typed entry plus nothing else.
+        assertEquals(1, pool.size());
+    }
+
+    @Test
+    void getOrCreateTyped_separatesTwoAccountsForSameModel() {
+        ChatModelPool pool = new ChatModelPool();
+        ChatModel a = mock(ChatModel.class);
+        ChatModel b = mock(ChatModel.class);
+
+        ChatModel r1 = pool.getOrCreateTyped("USER", "u1", "conn1", 1, "prof1", 1, "openai", "gpt-4o", () -> a);
+        ChatModel r2 = pool.getOrCreateTyped("USER", "u2", "conn2", 1, "prof2", 1, "openai", "gpt-4o", () -> b);
+
+        assertNotSame(r1, r2);
+        assertEquals(2, pool.size());
+    }
+
+    @Test
+    void invalidateByConnection_removesAllDerivedEntries() {
+        ChatModelPool pool = new ChatModelPool();
+        ChatModel m = mock(ChatModel.class);
+        pool.getOrCreateTyped("USER", "u1", "conn1", 1, "prof1", 1, "openai", "gpt-4o", () -> m);
+        pool.getOrCreateTyped("USER", "u1", "conn1", 2, "prof2", 1, "openai", "gpt-4o", () -> m);
+
+        pool.invalidateByConnection("conn1");
+
+        assertEquals(0, pool.size());
+        // Re-create after invalidation must build a fresh instance.
+        ChatModel recreated = pool.getOrCreateTyped("USER", "u1", "conn1", 1, "prof1", 1, "openai", "gpt-4o", () -> m);
+        assertSame(m, recreated);
+    }
+
+    @Test
+    void invalidateByProfile_removesOnlyProfileDerivedEntry() {
+        ChatModelPool pool = new ChatModelPool();
+        ChatModel m = mock(ChatModel.class);
+        pool.getOrCreateTyped("USER", "u1", "conn1", 1, "prof1", 1, "openai", "gpt-4o", () -> m);
+        pool.getOrCreateTyped("USER", "u1", "conn1", 1, "prof2", 1, "openai", "gpt-4o", () -> m);
+
+        pool.invalidateByProfile("prof1");
+
+        assertEquals(1, pool.size());
+    }
+
+    @Test
+    void typedKey_formatsAllComponents() {
+        String key = ChatModelPool.typedKey("USER", "u1", "conn1", 3, "prof1", 2, "openai", "gpt-4o");
+        assertEquals("USER#u1#conn1#3#prof1#2#openai#gpt-4o", key);
+    }
 }

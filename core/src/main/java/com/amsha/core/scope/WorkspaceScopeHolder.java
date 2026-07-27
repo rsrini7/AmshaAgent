@@ -171,8 +171,9 @@ public final class WorkspaceScopeHolder {
         String channelType = WorkspaceContext.CHANNEL_TYPE.isBound() ? WorkspaceContext.CHANNEL_TYPE.get() : null;
         String platformId =
                 WorkspaceContext.CHANNEL_PLATFORM_ID.isBound() ? WorkspaceContext.CHANNEL_PLATFORM_ID.get() : null;
+        String activeWorkspaceId = WorkspaceContext.activeWorkspaceId().orElse(null);
 
-        return () -> {
+        return () -> WorkspaceContext.runWithActiveWorkspace(activeWorkspaceId, () -> {
             if (channelType != null) {
                 WorkspaceContext.run(
                         sessionId, finalUserId, finalChatId, autonomy, agentRole, channelType, platformId, runnable);
@@ -181,7 +182,7 @@ public final class WorkspaceScopeHolder {
             } else {
                 run(sessionId, finalUserId, finalChatId, runnable);
             }
-        };
+        });
     }
 
     public static <T> Callable<T> wrap(Callable<T> callable) {
@@ -204,8 +205,9 @@ public final class WorkspaceScopeHolder {
         String channelType = WorkspaceContext.CHANNEL_TYPE.isBound() ? WorkspaceContext.CHANNEL_TYPE.get() : null;
         String platformId =
                 WorkspaceContext.CHANNEL_PLATFORM_ID.isBound() ? WorkspaceContext.CHANNEL_PLATFORM_ID.get() : null;
+        String activeWorkspaceId = WorkspaceContext.activeWorkspaceId().orElse(null);
 
-        return () -> {
+        return () -> WorkspaceContext.callWithActiveWorkspace(activeWorkspaceId, () -> {
             if (channelType != null) {
                 // M1 Fix: Validate channel type before running, but don't throw to avoid crashing ongoing sessions
                 // Instead, default to TELEGRAM and log a warning if unrecognized
@@ -232,7 +234,7 @@ public final class WorkspaceScopeHolder {
             } else {
                 return call(sessionId, finalUserId, finalChatId, callable);
             }
-        };
+        });
     }
 
     private static void validate(String sessionId) {

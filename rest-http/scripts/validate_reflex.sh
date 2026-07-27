@@ -10,26 +10,31 @@ source "$SCRIPT_DIR/common_env.sh"
 FAIL=0; PASS=0
 SP=7            # sleep before each mutating call to respect 10 mutations/min
 RL_WAIT=62     # wait on 429 (retry-after ~60s)
+AGENT_TIMEOUT="${AGENT_TIMEOUT:-60}" # native local models may need >20s before reaching HITL
+RESP_FILE=$(mktemp "${TMPDIR:-/tmp}/amsha-reflex-response.XXXXXX")
+trap 'rm -f "$RESP_FILE"' EXIT
 
 info()  { printf "%-4s %-22s " "" "$1"; }
 ok()    { printf "✅ HTTP %s\n" "$1"; PASS=$((PASS+1)); }
 warn()  { printf "⚠️  HTTP %s (known issue)\n" "$1"; PASS=$((PASS+1)); }
-fail()  { printf "❌ HTTP %s — %s\n" "$1" "$(head -c 80 /tmp/resp)"; FAIL=$((FAIL+1)); }
-mute()  { curl -s -m 15 -o /tmp/resp -w "%{http_code}" "$@"; }
-sid()   { python3 -c "import json; print(json.load(open('/tmp/resp')).get('sessionId',''))" 2>/dev/null; }
+fail()  { printf "❌ HTTP %s — %s\n" "$1" "$(head -c 80 "$RESP_FILE")"; FAIL=$((FAIL+1)); }
+mute()  { : > "$RESP_FILE"; curl -s -m 15 -o "$RESP_FILE" -w "%{http_code}" "$@"; }
+sid()   { python3 -c "import json,sys; print(json.load(open(sys.argv[1])).get('sessionId',''))" "$RESP_FILE" 2>/dev/null; }
 
 # run a reflex/command against the shared session, auto-retry once on 429
 run_agent() {
   local goal="$1" code
   sleep "$SP"
-  code=$(curl -s -m 20 -o /tmp/resp -w "%{http_code}" \
+  : > "$RESP_FILE"
+  code=$(curl -s -m "$AGENT_TIMEOUT" -o "$RESP_FILE" -w "%{http_code}" \
     -H "X-Amsha-API-Key: $KEY" -H "Content-Type: application/json" \
     -X POST "$B/api/v1/sessions/$S/run" \
     -d "{\"goal\":\"$goal\",\"agentRole\":\"coordinator\",\"maxIterations\":1}")
   if [ "$code" = "429" ]; then
     printf "(429, waiting %ss) " "$RL_WAIT" >&2
     sleep "$RL_WAIT"
-    code=$(curl -s -m 20 -o /tmp/resp -w "%{http_code}" \
+    : > "$RESP_FILE"
+    code=$(curl -s -m "$AGENT_TIMEOUT" -o "$RESP_FILE" -w "%{http_code}" \
       -H "X-Amsha-API-Key: $KEY" -H "Content-Type: application/json" \
       -X POST "$B/api/v1/sessions/$S/run" \
       -d "{\"goal\":\"$goal\",\"agentRole\":\"coordinator\",\"maxIterations\":1}")
@@ -51,7 +56,7 @@ if [ "$MK" = "429" ]; then echo "⏳ rate limited creating session, waiting ${RL
   MK=$(mute -H "X-Amsha-API-Key: $KEY" -H "Content-Type: application/json" \
     -X POST "$B/api/v1/sessions" -d '{"autonomyLevel":"SUPERVISED"}'); fi
 S=$(sid)
-if [ -z "$S" ]; then echo "❌ Could not create session (HTTP $MK) — $(head -c 120 /tmp/resp)"; exit 1; fi
+if [ -z "$S" ]; then echo "❌ Could not create session (HTTP $MK) — $(head -c 120 "$RESP_FILE")"; exit 1; fi
 echo "   session: $S"
 echo ""
 

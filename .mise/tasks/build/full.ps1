@@ -54,7 +54,7 @@ try {
     $env:MAVEN_ARGS = "-ntp"
 
     # Phase 0: Format code (Spotless + FQN replacement)
-    python3 ./fix_fqns.py
+    python3 ./scripts/fix_fqns.py
     & $mvnw spotless:apply --no-transfer-progress -q
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     Write-Host '✅  Code formatted (Spotless + FQN replacement).'

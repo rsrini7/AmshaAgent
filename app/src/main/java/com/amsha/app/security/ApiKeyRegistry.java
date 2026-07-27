@@ -140,13 +140,32 @@ public class ApiKeyRegistry {
         }
         if (apiCredentialStore.isResolvable()) {
             Optional<ApiCredentialDto> optCred = apiCredentialStore.get().findByKeyDigest(inputHex);
-            if (optCred.isPresent()) {
+            if (optCred.isPresent() && isBootstrapCredentialEligible(optCred.get())) {
                 ApiCredentialDto cred = optCred.get();
                 Instant now = Instant.now();
                 return (cred.expiresAt() == null || !cred.expiresAt().isBefore(now)) && cred.revokedAt() == null;
             }
         }
         return false;
+    }
+
+    /**
+     * Bootstrap-state gate: a bootstrap-issued credential is only accepted once bootstrap has reached
+     * CREDENTIAL_ISSUED (or later). An unactivated CLAIMING reservation never yields a usable key,
+     * so a generic durable-credential lookup cannot bypass bootstrap state.
+     */
+    private boolean isBootstrapCredentialEligible(ApiCredentialDto cred) {
+        if (!"bootstrap-cred".equals(cred.credentialId())) {
+            return true;
+        }
+        if (!bootstrapStateStore.isResolvable()) {
+            return false;
+        }
+        return bootstrapStateStore
+                .get()
+                .getState()
+                .map(s -> s.isCredentialIssued() || s.isClaimed())
+                .orElse(false);
     }
 
     /**
@@ -177,7 +196,7 @@ public class ApiKeyRegistry {
         }
         if (apiCredentialStore.isResolvable()) {
             Optional<ApiCredentialDto> optCred = apiCredentialStore.get().findByKeyDigest(inputHex);
-            if (optCred.isPresent()) {
+            if (optCred.isPresent() && isBootstrapCredentialEligible(optCred.get())) {
                 ApiCredentialDto cred = optCred.get();
                 return cred.userId();
             }
@@ -199,7 +218,7 @@ public class ApiKeyRegistry {
         }
         if (apiCredentialStore.isResolvable()) {
             Optional<ApiCredentialDto> optCred = apiCredentialStore.get().findByKeyDigest(inputHex);
-            if (optCred.isPresent()) {
+            if (optCred.isPresent() && isBootstrapCredentialEligible(optCred.get())) {
                 ApiCredentialDto cred = optCred.get();
                 Instant now = Instant.now();
                 if ((cred.expiresAt() == null || !cred.expiresAt().isBefore(now)) && cred.revokedAt() == null) {

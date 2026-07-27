@@ -1,5 +1,7 @@
 package com.amsha.channel.web;
 
+import static org.mockito.Mockito.*;
+
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.embedding.EmbeddingModel;
 
@@ -10,8 +12,6 @@ import jakarta.enterprise.inject.Produces;
 
 import com.amsha.core.agent.reasoning.AgentChatModelProvider;
 import com.amsha.core.agent.reasoning.StructuredOutputMode;
-
-import org.mockito.Mockito;
 
 import io.smallrye.common.annotation.Identifier;
 
@@ -30,7 +30,7 @@ public class MockChatModelProducer implements AgentChatModelProvider {
 
     @Override
     public ChatModel create() {
-        return Mockito.mock(ChatModel.class);
+        return mock(ChatModel.class);
     }
 
     @Produces
@@ -39,7 +39,7 @@ public class MockChatModelProducer implements AgentChatModelProvider {
     @Alternative
     @Priority(1)
     public ChatModel compactionModel() {
-        return Mockito.mock(ChatModel.class);
+        return mock(ChatModel.class);
     }
 
     @Produces
@@ -71,6 +71,6 @@ public class MockChatModelProducer implements AgentChatModelProvider {
     @Alternative
     @Priority(1)
     public EmbeddingModel mockEmbeddingModel() {
-        return Mockito.mock(EmbeddingModel.class);
+        return mock(EmbeddingModel.class);
     }
 }

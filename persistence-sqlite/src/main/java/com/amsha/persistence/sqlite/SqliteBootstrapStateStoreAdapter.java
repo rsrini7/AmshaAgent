@@ -37,16 +37,35 @@ public class SqliteBootstrapStateStoreAdapter implements BootstrapStateStorePort
     }
 
     @Override
-    public boolean claimFirstOwner(String ownerId, String credentialDigest, Instant issuedAt) {
+    public Optional<Integer> reserveFirstOwner(String ownerId, String workspaceId, Instant reservedAt) {
+        int affected = jdbi.withExtension(
+                BootstrapStateJdbiDao.class, dao -> dao.reserveFirstOwner(ownerId, workspaceId, reservedAt));
+        if (affected <= 0) {
+            return Optional.empty();
+        }
+        return getState().map(BootstrapStateDto::revision);
+    }
+
+    @Override
+    public boolean recordCredentialIssued(int expectedRevision, String credentialDigest, Instant issuedAt) {
         return jdbi.withExtension(
-                        BootstrapStateJdbiDao.class, dao -> dao.claimFirstOwner(ownerId, credentialDigest, issuedAt))
+                        BootstrapStateJdbiDao.class,
+                        dao -> dao.recordCredentialIssued(expectedRevision, credentialDigest, issuedAt))
                 > 0;
     }
 
     @Override
-    public boolean confirmClaim(int expectedRevision, Instant claimedAt, Instant updatedAt) {
+    public boolean confirmClaim(int expectedRevision, String authenticatedOwnerId, Instant claimedAt) {
         return jdbi.withExtension(
-                        BootstrapStateJdbiDao.class, dao -> dao.confirmClaim(expectedRevision, claimedAt, updatedAt))
+                        BootstrapStateJdbiDao.class,
+                        dao -> dao.confirmClaim(expectedRevision, authenticatedOwnerId, claimedAt))
+                > 0;
+    }
+
+    @Override
+    public boolean rollbackClaiming(int expectedRevision, Instant rolledBackAt) {
+        return jdbi.withExtension(
+                        BootstrapStateJdbiDao.class, dao -> dao.rollbackClaiming(expectedRevision, rolledBackAt))
                 > 0;
     }
 

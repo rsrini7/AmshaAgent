@@ -98,6 +98,16 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
                     return;
                 }
             }
+            // The onboarding status endpoint is callable before credentials exist so it can
+            // advertise skip-onboarding. When a key/cookie is present, still resolve it so the
+            // resource can return owner-scoped state and ActiveWorkspaceFilter can authorize an
+            // explicit workspace.
+            if (finalPath.startsWith("/onboarding/status")) {
+                String apiKey = resolveApiKey(requestContext);
+                if (apiKey != null && !apiKey.isBlank()) {
+                    tryApiKeyAuth(requestContext, finalPath, requestContext.getMethod(), remoteIp(), startTime);
+                }
+            }
             return;
         }
 
@@ -111,7 +121,17 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
     }
 
     private boolean isPublicPath(String path) {
-        return path.startsWith("/info") || path.startsWith("/onboarding") || isAuthPath(path);
+        // The bootstrap pre-draft status/claim endpoints are always public (loopback-gated in the
+        // resource). The unauthenticated setup wizard also needs the read/setup endpoints
+        // (provider catalog + draft resume/create) before any credential exists; these are
+        // reached before the claim cookie is issued and on already-bootstrapped systems where the
+        // claim is skipped. Mutations (steps, commit, complete, recovery, cancel) still require an
+        // authenticated principal.
+        boolean bootstrapPublic = path.startsWith("/onboarding/bootstrap/status")
+                || path.startsWith("/onboarding/bootstrap/claim")
+                || path.startsWith("/onboarding/status")
+                || path.startsWith("/onboarding/provider-catalog");
+        return path.startsWith("/info") || bootstrapPublic || isAuthPath(path);
     }
 
     private boolean isAuthPath(String path) {

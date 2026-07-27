@@ -1,5 +1,6 @@
 package com.amsha.core.agent.loop;
 
+import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
@@ -10,6 +11,7 @@ import static org.mockito.Mockito.when;
 import jakarta.enterprise.inject.Instance;
 
 import java.lang.reflect.Field;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -18,6 +20,7 @@ import java.util.Optional;
 import com.amsha.core.agent.reasoning.ParallelToolCall;
 import com.amsha.core.agent.reasoning.ReasoningStep;
 import com.amsha.core.agent.reasoning.StructuredOutputMode;
+import com.amsha.core.agent.result.AgentResult;
 import com.amsha.core.governance.ApprovalFrame;
 import com.amsha.core.governance.GovernanceStrategy;
 import com.amsha.core.governance.RateLimitTracker;
@@ -82,6 +85,86 @@ class ParallelToolStepExecutorPreExecTest {
     }
 
     @Test
+    void executeWithCorruptBatch_ReturnsTerminalFailed() {
+        AgentExecutionContext context = new AgentExecutionContext(
+                "s-corrupt",
+                "u1",
+                "c1",
+                "COORDINATOR",
+                "goal",
+                AutonomyLevel.FULL,
+                StructuredOutputMode.NATIVE,
+                5,
+                0,
+                null,
+                null,
+                null,
+                null);
+        ReasoningStep batchStep = ReasoningStep.parallelBatch("thought", Map.of("batch", "invalid-json"), 0, 0);
+
+        StepDecision decision = executor.execute(context, new ArrayList<>(), batchStep, 0);
+        assertNotNull(decision);
+        assertEquals(DecisionType.TERMINAL, decision.type());
+        assertTrue(decision.result() instanceof AgentResult.Failed);
+    }
+
+    @Test
+    void executeWithBlockedTool_ReturnsRetryValidation() {
+        AgentExecutionContext context = new AgentExecutionContext(
+                "s-blocked",
+                "u1",
+                "c1",
+                "COORDINATOR",
+                "goal",
+                AutonomyLevel.FULL,
+                StructuredOutputMode.NATIVE,
+                5,
+                0,
+                null,
+                null,
+                null,
+                null);
+
+        var calls = List.of(new ParallelToolCall("c1", "blocked_tool", Map.of(), "{}", null, true));
+        ReasoningStep batchStep = ReasoningStep.parallelBatch("thought", Map.of("batch", calls), 0, 0);
+
+        when(guard.evaluate(any(), any(), any(), eq("blocked_tool"), any(), any(), any(), any()))
+                .thenReturn(new ToolInvocationGuard.GuardDecision.Blocked("Not allowed"));
+
+        StepDecision decision = executor.execute(context, new ArrayList<>(), batchStep, 0);
+        assertNotNull(decision);
+        assertNull(decision.result());
+        assertEquals(1, decision.consecutiveFailures());
+    }
+
+    @Test
+    void executeWithDeduplicatedTools_ReturnsCompletedBatch() {
+        AgentExecutionContext context = new AgentExecutionContext(
+                "s-dedup",
+                "u1",
+                "c1",
+                "COORDINATOR",
+                "goal",
+                AutonomyLevel.FULL,
+                StructuredOutputMode.NATIVE,
+                5,
+                0,
+                null,
+                null,
+                null,
+                null);
+
+        var calls = List.of(new ParallelToolCall("c1", "dup_tool", Map.of(), "{}", null, true));
+        ReasoningStep batchStep = ReasoningStep.parallelBatch("thought", Map.of("batch", calls), 0, 0);
+
+        when(guard.evaluate(any(), any(), any(), eq("dup_tool"), any(), any(), any(), any()))
+                .thenReturn(new ToolInvocationGuard.GuardDecision.Deduplicate("Cached result"));
+
+        StepDecision decision = executor.execute(context, new ArrayList<>(), batchStep, 0);
+        assertNotNull(decision);
+    }
+
+    @Test
     void executeWithMixedTools_PreExecutesSafeTool() {
         String sessionId = "123-456";
         String agentRole = "COORDINATOR";
@@ -108,7 +191,6 @@ class ParallelToolStepExecutorPreExecTest {
         ReasoningStep batchStep = ReasoningStep.parallelBatch("thought", Map.of("batch", calls), 0, 0)
                 .withObservation("");
 
-        // First tool triggers HITL
         when(guard.evaluate(any(), any(), any(), eq("safe_read"), any(), any(), any(), any()))
                 .thenReturn(new ToolInvocationGuard.GuardDecision.Allow());
 
@@ -116,14 +198,51 @@ class ParallelToolStepExecutorPreExecTest {
                 .thenReturn(new ToolInvocationGuard.GuardDecision.PauseForApproval(
                         new ApprovalFrame("unsafe_write", Map.of(), ApprovalFrame.RiskLevel.MEDIUM)));
 
-        // Mock safe tool invocation
         when(toolInvoker.invoke(eq("safe_read"), any(), eq(sessionId)))
                 .thenReturn(ToolResponse.success("pre-exec-data"));
 
         executor.execute(context, Collections.emptyList(), batchStep, 0);
 
-        // Verify pre-execution happened
         verify(toolInvoker, times(1)).invoke(eq("safe_read"), any(), any());
+        verify(checkpointManager).persistBatchWithPreExecuted(eq(context), anyList(), any(), anyList(), any(), any());
+    }
+
+    @Test
+    void executeWithPreExecutionFailure_HandlesGracefully() {
+        String sessionId = "s-fail-pre";
+        AgentExecutionContext context = new AgentExecutionContext(
+                sessionId,
+                "user1",
+                "chat1",
+                "COORDINATOR",
+                "goal",
+                AutonomyLevel.SUPERVISED,
+                StructuredOutputMode.NATIVE,
+                5,
+                0,
+                null,
+                null,
+                null,
+                null);
+
+        var calls = List.of(
+                new ParallelToolCall("c1", "safe_read", Map.of(), "{}", null, true),
+                new ParallelToolCall("c2", "unsafe_write", Map.of(), "{}", null, true));
+
+        ReasoningStep batchStep = ReasoningStep.parallelBatch("thought", Map.of("batch", calls), 0, 0)
+                .withObservation("");
+
+        when(guard.evaluate(any(), any(), any(), eq("safe_read"), any(), any(), any(), any()))
+                .thenReturn(new ToolInvocationGuard.GuardDecision.Allow());
+
+        when(guard.evaluate(any(), any(), any(), eq("unsafe_write"), any(), any(), any(), any()))
+                .thenReturn(new ToolInvocationGuard.GuardDecision.PauseForApproval(
+                        new ApprovalFrame("unsafe_write", Map.of(), ApprovalFrame.RiskLevel.MEDIUM)));
+
+        when(toolInvoker.invoke(eq("safe_read"), any(), eq(sessionId)))
+                .thenThrow(new RuntimeException("IO error during pre-exec"));
+
+        executor.execute(context, Collections.emptyList(), batchStep, 0);
 
         verify(checkpointManager).persistBatchWithPreExecuted(eq(context), anyList(), any(), anyList(), any(), any());
     }

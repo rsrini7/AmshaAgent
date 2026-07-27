@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -15,11 +16,13 @@ import dev.langchain4j.model.chat.ChatModel;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.concurrent.CompletionException;
+import java.util.concurrent.Executor;
 
 import com.amsha.core.llm.LlmValidationException;
 import com.amsha.core.security.SecretVault;
 import com.amsha.core.security.VaultConstants;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -39,8 +42,22 @@ class LlmValidationServiceTest {
     @Mock
     ChatModel chatModel;
 
+    @Mock
+    Executor validationExecutor;
+
     @InjectMocks
     LlmValidationService service;
+
+    @BeforeEach
+    void setUp() {
+        // Execute supplyAsync tasks synchronously on the calling thread
+        doAnswer(invocation -> {
+                    ((Runnable) invocation.getArgument(0)).run();
+                    return null;
+                })
+                .when(validationExecutor)
+                .execute(any(Runnable.class));
+    }
 
     // ── Happy path ────────────────────────────────────────────────────────────
 

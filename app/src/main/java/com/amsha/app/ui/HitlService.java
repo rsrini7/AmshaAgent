@@ -20,26 +20,21 @@ import com.amsha.core.observability.AgentOtelContext;
 import com.amsha.core.state.CheckpointStatus;
 import com.amsha.core.util.BatchDecisionUtil;
 import com.amsha.persistence.api.CheckpointDto;
+import com.amsha.persistence.api.CheckpointStorePort;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
-import org.jdbi.v3.core.Jdbi;
-import org.jdbi.v3.core.mapper.reflect.ConstructorMapper;
-
 import io.opentelemetry.api.trace.Span;
 import io.opentelemetry.api.trace.StatusCode;
-import io.quarkus.arc.properties.IfBuildProperty;
 
 /**
  * Service to manage Human-In-The-Loop approvals for the UI.
- * Inactive when no database backend is available (e.g., filesystem mode).
  */
 @ApplicationScoped
-@IfBuildProperty(name = "quarkus.flyway.enabled", stringValue = "true", enableIfMissing = true)
 public class HitlService {
 
     @Inject
-    Jdbi jdbi;
+    CheckpointStorePort checkpointStorePort;
 
     @Inject
     ObjectMapper objectMapper;
@@ -83,47 +78,8 @@ public class HitlService {
             return Map.of();
         }
 
-        List<CheckpointDto> list =
-                jdbi.withHandle(handle -> handle.createQuery("SELECT " + "  checkpoint_id AS \"id\", "
-                                + "  session_id AS \"sessionId\", "
-                                + "  agent_role AS \"agentRole\", "
-                                + "  status, "
-                                + "  autonomy_level AS \"autonomyLevel\", "
-                                + "  state_json AS \"stateJson\", "
-                                + "  channel_platform_id AS \"channelPlatformId\", "
-                                + "  channel_type AS \"channelType\", "
-                                + "  original_goal AS \"originalGoal\", "
-                                + "  failed_at AS \"failedAt\", "
-                                + "  completed_at AS \"completedAt\", "
-                                + "  fail_reason AS \"failReason\", "
-                                + "  pending_tool_name AS \"pendingToolName\", "
-                                + "  batch_tool_decisions AS \"batchToolDecisions\", "
-                                + "  pending_tool_parameters AS \"pendingToolParametersJson\", "
-                                + "  pre_executed_results AS \"preExecutedResults\", "
-                                + "  max_iterations AS \"maxIterations\", "
-                                + "  iterations_used AS \"iterationsUsed\", "
-                                + "  retry_after_ms AS \"retryAfterMs\", "
-                                + "  system_note AS \"systemNote\", "
-                                + "  context_data AS \"contextDataJson\", "
-                                + "  error_code AS \"errorCode\", "
-                                + "  trace_id AS \"traceId\", "
-                                + "  root_cause_class AS \"rootCauseClass\", "
-                                + "  parent_checkpoint_id AS \"parentCheckpointId\", "
-                                + "  depth, "
-                                + "  created_at AS \"createdAt\", "
-                                + "  updated_at AS \"updatedAt\" "
-                                + "FROM agent_checkpoint "
-                                + "WHERE status = :status "
-                                + "  AND session_id IN (<sessionIds>) "
-                                + "ORDER BY checkpoint_id DESC "
-                                + "LIMIT :limit OFFSET :offset")
-                        .bind("status", CheckpointStatus.AWAITING_APPROVAL.name())
-                        .bindList("sessionIds", visibleSessionIds)
-                        .bind("limit", effectiveLimit)
-                        .bind("offset", effectiveOffset)
-                        .registerRowMapper(ConstructorMapper.factory(CheckpointDto.class))
-                        .mapTo(CheckpointDto.class)
-                        .list());
+        List<CheckpointDto> list = checkpointStorePort.findByStatusAndSessionIds(
+                CheckpointStatus.AWAITING_APPROVAL.name(), visibleSessionIds, effectiveLimit, effectiveOffset);
 
         return list.stream()
                 .map(CheckpointRecord::fromDto)
@@ -149,12 +105,8 @@ public class HitlService {
             return 0L;
         }
 
-        return jdbi.withHandle(handle -> handle.createQuery("SELECT COUNT(*) FROM agent_checkpoint "
-                        + "WHERE status = :status " + "  AND session_id IN (<sessionIds>)")
-                .bind("status", CheckpointStatus.AWAITING_APPROVAL.name())
-                .bindList("sessionIds", visibleSessionIds)
-                .mapTo(Long.class)
-                .one());
+        return checkpointStorePort.countByStatusAndSessionIds(
+                CheckpointStatus.AWAITING_APPROVAL.name(), visibleSessionIds);
     }
 
     private PendingApproval mapToPending(AgentCheckpoint cp) {
@@ -177,41 +129,7 @@ public class HitlService {
     @Transactional(TxType.NOT_SUPPORTED)
     public void resolve(String taskId, String toolName, boolean approved, String reason) {
         Long id = Long.valueOf(taskId);
-        CheckpointDto dto = jdbi.withHandle(handle -> handle.createQuery("SELECT " + "  checkpoint_id AS \"id\", "
-                        + "  session_id AS \"sessionId\", "
-                        + "  agent_role AS \"agentRole\", "
-                        + "  status, "
-                        + "  autonomy_level AS \"autonomyLevel\", "
-                        + "  state_json AS \"stateJson\", "
-                        + "  channel_platform_id AS \"channelPlatformId\", "
-                        + "  channel_type AS \"channelType\", "
-                        + "  original_goal AS \"originalGoal\", "
-                        + "  failed_at AS \"failedAt\", "
-                        + "  completed_at AS \"completedAt\", "
-                        + "  fail_reason AS \"failReason\", "
-                        + "  pending_tool_name AS \"pendingToolName\", "
-                        + "  batch_tool_decisions AS \"batchToolDecisions\", "
-                        + "  pending_tool_parameters AS \"pendingToolParametersJson\", "
-                        + "  pre_executed_results AS \"preExecutedResults\", "
-                        + "  max_iterations AS \"maxIterations\", "
-                        + "  iterations_used AS \"iterationsUsed\", "
-                        + "  retry_after_ms AS \"retryAfterMs\", "
-                        + "  system_note AS \"systemNote\", "
-                        + "  context_data AS \"contextDataJson\", "
-                        + "  error_code AS \"errorCode\", "
-                        + "  trace_id AS \"traceId\", "
-                        + "  root_cause_class AS \"rootCauseClass\", "
-                        + "  parent_checkpoint_id AS \"parentCheckpointId\", "
-                        + "  depth, "
-                        + "  created_at AS \"createdAt\", "
-                        + "  updated_at AS \"updatedAt\" "
-                        + "FROM agent_checkpoint "
-                        + "WHERE checkpoint_id = :id")
-                .bind("id", id)
-                .registerRowMapper(ConstructorMapper.factory(CheckpointDto.class))
-                .mapTo(CheckpointDto.class)
-                .findOne()
-                .orElse(null));
+        CheckpointDto dto = checkpointStorePort.findById(id).orElse(null);
 
         if (dto == null) {
             throw new IllegalArgumentException("No pending approval found for ID: " + taskId);

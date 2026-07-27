@@ -2,8 +2,8 @@
 ### 16 - UI ENDPOINTS, SETTINGS & ONBOARDING
 ###
 ### This file covers the remaining REST endpoints not tested in
-### files 01-15: UI/status streams, settings management, onboarding
-### wizard, and WebSocket token generation.
+### files 01-15: UI/status streams, settings management, draft/saga onboarding,
+### and WebSocket token generation.
 ###
 ### Endpoint map:
 ###   GET    /api/v1/sessions/active           → active agent sessions
@@ -21,13 +21,18 @@
 ###   PATCH  /api/v1/settings/provider         → update LLM provider
 ###   PATCH  /api/v1/settings/prompt           → update system prompt
 ###   POST   /api/v1/settings/reset            → reset settings to defaults
-###   GET    /api/v1/onboarding/status         → onboarding completion status
-###   POST   /api/v1/onboarding/step/1         → start onboarding
-###   POST   /api/v1/onboarding/step/2         → set provider + model
-###   POST   /api/v1/onboarding/step/3         → set API key
-###   POST   /api/v1/onboarding/step/4         → set system prompt
-###   POST   /api/v1/onboarding/step/5         → configure MCP servers
-###   GET    /api/v1/onboarding/complete       → finalize onboarding
+###   GET    /api/v1/onboarding/status                      → draft status + current step
+###   GET    /api/v1/onboarding/drafts                      → active draft id
+###   POST   /api/v1/onboarding/drafts                      → create/resume draft
+###   GET    /api/v1/onboarding/drafts/{draftId}            → get draft
+###   PUT    /api/v1/onboarding/drafts/{draftId}/steps/{stepId} → advance step
+###   POST   /api/v1/onboarding/drafts/{draftId}/commit     → finalize draft
+###   GET    /api/v1/onboarding/health/routing              → routing health
+###   GET    /api/v1/onboarding/provider-catalog            → LLM provider catalog
+###   GET    /api/v1/onboarding/export                      → export profiles
+###   POST   /api/v1/onboarding/import                      → import profiles
+###   POST   /api/v1/onboarding/drafts/discard              → discard draft
+###   PATCH  /api/v1/settings/connection-network-profile    → per-connection network policy
 ###
 ### Note: SSE endpoints use EventSource (browser) or curl --no-buffer.
 ###       For VS Code REST Client, SSE responses stream until timeout.
@@ -161,66 +166,181 @@ GET {{baseUrl}}/api/v1/settings
 GET {{baseUrl}}/api/v1/settings/prompt
 
 ### ═══════════════════════════════════════════════════════════════
-### C. ONBOARDING ENDPOINTS (no API key required)
+### C. ONBOARDING ENDPOINTS (draft/saga flow — requires API key; the legacy
+###    numbered-step wizard /onboarding/step/{N} and /onboarding/complete were
+###    REMOVED in P110)
 ### ═══════════════════════════════════════════════════════════════
 
-### [ONBOARD-1] Check onboarding status
+### [ONBOARD-0] Pre-auth status. With AMSHA_UI_SKIP_ONBOARDING=true this returns
+###   skipOnboarding=true, credentialsOk=true, and an AMSHA_API_KEY cookie.
+###   REST clients that retain cookies use it for the following requests.
 GET {{baseUrl}}/api/v1/onboarding/status
 
 ###
 
-### [ONBOARD-2] Start onboarding - Step 1
-# @name onboardStep1
-POST {{baseUrl}}/api/v1/onboarding/step/1
-Content-Type: application/json
+### [ONBOARD-1] Check onboarding status (creates first-run draft)
+GET {{baseUrl}}/api/v1/onboarding/status
+X-Amsha-API-Key: {{validKey}}
 
 ###
 
-### [ONBOARD-3] Step 2 - Set provider and model
-POST {{baseUrl}}/api/v1/onboarding/step/2
+### [ONBOARD-2] Create / resume the owner's draft
+# @name onboardDraft
+POST {{baseUrl}}/api/v1/onboarding/drafts
 Content-Type: application/json
+X-Amsha-API-Key: {{validKey}}
+
+###
+
+### [ONBOARD-3] List active draft id
+GET {{baseUrl}}/api/v1/onboarding/drafts
+X-Amsha-API-Key: {{validKey}}
+
+###
+
+### [ONBOARD-4] Get the draft by id
+GET {{baseUrl}}/api/v1/onboarding/drafts/{{onboardDraft.response.body.draftId}}
+X-Amsha-API-Key: {{validKey}}
+
+###
+
+### [ONBOARD-5] Premature commit must return 409.
+POST {{baseUrl}}/api/v1/onboarding/drafts/{{onboardDraft.response.body.draftId}}/commit
+X-Amsha-API-Key: {{validKey}}
+
+###
+
+### [ONBOARD-6] Advance through the guarded connections and routes steps.
+PUT {{baseUrl}}/api/v1/onboarding/drafts/{{onboardDraft.response.body.draftId}}/steps/connections
+Content-Type: application/json
+X-Amsha-API-Key: {{validKey}}
 
 {
-  "provider": "groq",
-  "model": "meta-llama/llama-4-scout-17b-16e-instruct"
+  "selectedNonSecretIds": []
 }
 
 ###
 
-### [ONBOARD-4] Step 3 - Set API key
-POST {{baseUrl}}/api/v1/onboarding/step/3
+PUT {{baseUrl}}/api/v1/onboarding/drafts/{{onboardDraft.response.body.draftId}}/steps/routes
 Content-Type: application/json
+X-Amsha-API-Key: {{validKey}}
 
 {
-  "apiKey": "gsk_test_key_for_onboarding"
+  "selectedNonSecretIds": []
 }
 
 ###
 
-### [ONBOARD-5] Step 4 - Set system prompt
-POST {{baseUrl}}/api/v1/onboarding/step/4
+PUT {{baseUrl}}/api/v1/onboarding/drafts/{{onboardDraft.response.body.draftId}}/steps/review
 Content-Type: application/json
+X-Amsha-API-Key: {{validKey}}
 
 {
-  "systemPrompt": "You are a helpful AI assistant."
+  "selectedNonSecretIds": []
 }
 
 ###
 
-### [ONBOARD-6] Step 5 - Configure MCP servers
-POST {{baseUrl}}/api/v1/onboarding/step/5
+### [ONBOARD-7] Commit the draft; response state must be COMPLETED.
+POST {{baseUrl}}/api/v1/onboarding/drafts/{{onboardDraft.response.body.draftId}}/commit
+X-Amsha-API-Key: {{validKey}}
+
+###
+
+### [ONBOARD-8] Routing health (pooled model count + effective plan)
+GET {{baseUrl}}/api/v1/onboarding/health/routing
+X-Amsha-API-Key: {{validKey}}
+
+###
+
+### [ONBOARD-9] Provider catalog. Expect 200 with non-empty typed descriptors,
+### including openai and groq; 404 is a failure.
+GET {{baseUrl}}/api/v1/onboarding/provider-catalog
+X-Amsha-API-Key: {{validKey}}
+
+###
+
+### [ONBOARD-10] Import a non-empty graph (connections are staged).
+POST {{baseUrl}}/api/v1/onboarding/import
 Content-Type: application/json
+X-Amsha-API-Key: {{validKey}}
 
 {
-  "mcpServers": []
+  "connections": [
+    {
+      "id": "conn_rest_manual",
+      "displayName": "REST manual import",
+      "providerAdapterId": "ollama"
+    }
+  ],
+  "profiles": [
+    {
+      "id": "profile_rest_manual",
+      "connectionId": "conn_rest_manual",
+      "modelId": "llama3"
+    }
+  ],
+  "routes": []
 }
 
 ###
 
-### [ONBOARD-7] Complete onboarding
-GET {{baseUrl}}/api/v1/onboarding/complete
+### [ONBOARD-11] Export must contain conn_rest_manual and profile_rest_manual.
+GET {{baseUrl}}/api/v1/onboarding/export
+X-Amsha-API-Key: {{validKey}}
 
-### ═══════════════════════════════════════════════════════════════
+###
+
+### [ONBOARD-12] Open a provider-change draft with a selected connection.
+PATCH {{baseUrl}}/api/v1/settings/provider
+Content-Type: application/json
+X-Amsha-API-Key: {{validKey}}
+
+{
+  "provider": "ollama",
+  "model": "llama3"
+}
+
+###
+
+### [ONBOARD-13] Persist a valid per-connection network profile; expect
+### updated=true and a non-empty draftId.
+PATCH {{baseUrl}}/api/v1/settings/connection-network-profile
+Content-Type: application/json
+X-Amsha-API-Key: {{validKey}}
+
+{
+  "connectionIndex": 0,
+  "networkProfileJson": "{\"egressMode\":\"ALLOW_ALL\",\"tlsTrustMode\":\"SYSTEM\"}"
+}
+
+###
+
+### [ONBOARD-14] Malformed network profile must return 400.
+PATCH {{baseUrl}}/api/v1/settings/connection-network-profile
+Content-Type: application/json
+X-Amsha-API-Key: {{validKey}}
+
+{
+  "connectionIndex": 0,
+  "networkProfileJson": "not-json"
+}
+
+###
+
+### [ONBOARD-15] Discard the active draft
+POST {{baseUrl}}/api/v1/onboarding/drafts/discard
+X-Amsha-API-Key: {{validKey}}
+
+###
+
+### [ONBOARD-16] Workspace scoping via ActiveWorkspaceFilter (P110):
+###   header present + non-member -> 403; header present + no key -> 401
+GET {{baseUrl}}/api/v1/onboarding/status
+X-Amsha-Workspace-Id: ws_validator_bogus
+X-Amsha-API-Key: {{validKey}}
+
+### ═══════════════════════════════════════════════════
 ### D. HITL TASK-ID APPROVAL (new endpoint, different from session-based)
 ### ═══════════════════════════════════════════════════════════════
 

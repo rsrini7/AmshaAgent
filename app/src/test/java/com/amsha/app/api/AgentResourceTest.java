@@ -8,6 +8,7 @@ import static org.hamcrest.Matchers.notNullValue;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.*;
 
 import java.time.Instant;
 import java.util.List;
@@ -32,7 +33,6 @@ import com.amsha.persistence.api.CheckpointDto;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.Mockito;
 
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
@@ -66,31 +66,31 @@ class AgentResourceTest {
     @BeforeEach
     void setupMock() {
         // Ensure sessions exist by default so we don't hit 404 in validateSession
-        Mockito.when(heartbeatTracker.exists(anyString())).thenReturn(true);
+        when(heartbeatTracker.exists(anyString())).thenReturn(true);
 
         // The unified dispatch service (TurnDispatchService) is the single entry
         // point used by AgentSessionService; mock it directly so we control the
         // AgentResult that drives HTTP status + error-body mapping.
         stubDispatch(AgentResult.finished("42", List.of()));
 
-        Mockito.when(apiKeyRegistry.isValidKey(anyString())).thenReturn(true);
-        Mockito.when(apiKeyRegistry.isAllowed(anyString())).thenReturn(true);
-        Mockito.when(apiKeyRegistry.isMutationAllowed(anyString())).thenReturn(true);
+        when(apiKeyRegistry.isValidKey(anyString())).thenReturn(true);
+        when(apiKeyRegistry.isAllowed(anyString())).thenReturn(true);
+        when(apiKeyRegistry.isMutationAllowed(anyString())).thenReturn(true);
 
         // Mock store to return a valid (completed) checkpoint for status checks
-        AgentCheckpoint checkpoint = Mockito.mock(AgentCheckpoint.class);
-        Mockito.when(checkpoint.getSessionId()).thenReturn("any-session");
-        Mockito.when(checkpoint.getAgentRole()).thenReturn("coordinator");
-        Mockito.when(checkpoint.getStatus()).thenReturn(CheckpointStatus.COMPLETED);
-        Mockito.when(checkpoint.getStateJson()).thenReturn("[{\"description\":\"Calculated final answer\"}]");
+        AgentCheckpoint checkpoint = mock(AgentCheckpoint.class);
+        when(checkpoint.getSessionId()).thenReturn("any-session");
+        when(checkpoint.getAgentRole()).thenReturn("coordinator");
+        when(checkpoint.getStatus()).thenReturn(CheckpointStatus.COMPLETED);
+        when(checkpoint.getStateJson()).thenReturn("[{\"description\":\"Calculated final answer\"}]");
 
-        Mockito.when(agentStore.load(anyString(), anyString())).thenReturn(Optional.of(checkpoint));
-        Mockito.when(agentStore.loadSteps(any()))
+        when(agentStore.load(anyString(), anyString())).thenReturn(Optional.of(checkpoint));
+        when(agentStore.loadSteps(any()))
                 .thenReturn(List.of(ReasoningStep.pending(
                         "Calculated final answer", ReasoningStep.FINISH, Map.of("response", "42"), 0, 0)));
 
         // Mock active agents endpoint
-        Mockito.when(checkpointCrud.findAllActive())
+        when(checkpointCrud.findAllActive())
                 .thenReturn(List.of(
                         new CheckpointDto(
                                 1L,
@@ -152,12 +152,12 @@ class AgentResourceTest {
                                 Instant.now())));
 
         // Explicitly mock session-not-found for 404 compliance tests
-        Mockito.when(heartbeatTracker.exists(Mockito.eq("fake-id-123"))).thenReturn(false);
-        Mockito.when(agentStore.load(Mockito.eq("fake-id-123"), anyString())).thenReturn(Optional.empty());
+        when(heartbeatTracker.exists(eq("fake-id-123"))).thenReturn(false);
+        when(agentStore.load(eq("fake-id-123"), anyString())).thenReturn(Optional.empty());
     }
 
     private void stubDispatch(AgentResult result) {
-        Mockito.when(turnDispatchService.dispatch(any()))
+        when(turnDispatchService.dispatch(any()))
                 .thenReturn(new TurnDispatchResult(
                         Optional.of("test-id"), Optional.of("coordinator"), Optional.of(result), Optional.empty()));
     }

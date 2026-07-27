@@ -14,7 +14,7 @@ public class LlamaCppLlmProviderFactory implements RoutingChatModelProvider {
 
     @Override
     public String providerId() {
-        return "llamacpp";
+        return ModelDefaults.PROVIDER_LLAMACPP;
     }
 
     @Override

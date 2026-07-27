@@ -9,7 +9,7 @@ public class OpenAiLlmProviderFactory implements RoutingChatModelProvider {
 
     @Override
     public String providerId() {
-        return "openai";
+        return ModelDefaults.PROVIDER_OPENAI;
     }
 
     @Override

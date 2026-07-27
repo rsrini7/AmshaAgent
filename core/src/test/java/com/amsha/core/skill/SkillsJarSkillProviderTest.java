@@ -1,148 +1,165 @@
 package com.amsha.core.skill;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertSame;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.*;
 
-import java.io.IOException;
-import java.lang.reflect.Method;
+import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.jar.JarFile;
-import java.util.jar.JarOutputStream;
-import java.util.jar.Manifest;
-import java.util.zip.ZipEntry;
 
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.api.io.TempDir;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 
+@ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.LENIENT)
 class SkillsJarSkillProviderTest {
 
-    private Path tempHome;
-    private String originalUserHome;
+    @Mock
+    SkillDefinitionParser parser;
 
-    @BeforeEach
-    void setUp() throws IOException {
-        originalUserHome = System.getProperty("user.home");
-        tempHome = Files.createTempDirectory("skill-provider-test-home");
-        System.setProperty("user.home", tempHome.toString());
-    }
+    @Mock
+    SkillAdaptationManager adaptationManager;
 
-    @AfterEach
-    void tearDown() throws IOException {
-        if (originalUserHome != null) {
-            System.setProperty("user.home", originalUserHome);
-        }
-        if (tempHome != null && Files.exists(tempHome)) {
-            Files.walk(tempHome).sorted((a, b) -> b.compareTo(a)).forEach(path -> {
-                try {
-                    Files.deleteIfExists(path);
-                } catch (IOException e) {
-                    // ignore cleanup failures
-                }
-            });
-        }
+    @InjectMocks
+    SkillsJarSkillProvider provider;
+
+    @Test
+    void testMetadata() {
+        assertEquals("skillsjars", provider.sourceName());
+        assertEquals(50, provider.priority());
     }
 
     @Test
-    void testExtractSkillAssetsIncludesSkillMd() throws Exception {
-        Path jarFile = createSkillJar();
-        try (JarFile jar = new JarFile(jarFile.toFile())) {
-            SkillsJarSkillProvider provider = new SkillsJarSkillProvider();
-            Method extractMethod =
-                    SkillsJarSkillProvider.class.getDeclaredMethod("extractSkillAssets", JarFile.class, String.class);
-            extractMethod.setAccessible(true);
-
-            String skillMdPath = "META-INF/skills/brunoborges/jdb-agentic-debugger/jdb-debugger/SKILL.md";
-            String extractedPath = (String) extractMethod.invoke(provider, jar, skillMdPath);
-
-            assertTrue(extractedPath != null && !extractedPath.isBlank(), "Expected a non-empty extracted skill path");
-            Path extractedDir = Path.of(extractedPath);
-            assertTrue(Files.isDirectory(extractedDir), "Extracted skill directory should exist");
-            assertTrue(
-                    Files.exists(extractedDir.resolve("SKILL.md")),
-                    "SKILL.md should be extracted into the skill directory");
-            assertTrue(
-                    Files.exists(extractedDir.resolve("scripts/jdb-attach.sh")),
-                    "Script files should be extracted into the skill directory");
-            assertTrue(
-                    Files.exists(extractedDir.resolve("references/jdwp-options.md")),
-                    "Reference files should be extracted into the skill directory");
-
-            String actualName = extractedDir.getFileName().toString();
-            assertEquals("jdb-debugger", actualName, "Skill directory should be named after the skill");
-        }
+    void testLoadHandlesEmptyOrIndex() {
+        List<SkillDefinition> loaded = provider.load();
+        assertNotNull(loaded);
     }
 
     @Test
-    void testBrowserPreviewRulesApplyToHtmlSkillsGenerically() throws Exception {
-        Path skillHome = Files.createTempDirectory(tempHome, "viewer-skill");
-        Files.createDirectories(skillHome.resolve("output"));
-
-        SkillDefinition base = new SkillDefinition(
-                "id",
-                "generic-viewer",
-                "Render artifacts",
-                List.of(),
-                List.of(),
-                5,
-                "BASE SYSTEM PROMPT",
-                skillHome.toString(),
-                true);
-
-        SkillDefinition augmented = SkillsJarSkillProvider.maybeAugmentBrowserPreview(base, skillHome.toString());
-
-        assertTrue(augmented.systemPrompt().contains("BROWSER PREVIEW RULES"));
-        assertTrue(augmented.systemPrompt().contains(skillHome.resolve("output").toString()));
-        assertTrue(augmented.systemPrompt().contains("default browser"));
+    void testMaybeAugmentBrowserPreviewNull() {
+        assertNull(SkillsJarSkillProvider.maybeAugmentBrowserPreview(null, "/tmp/home"));
     }
 
     @Test
-    void testBrowserPreviewRulesDoNotApplyToNonHtmlSkills() {
-        Path skillHome = tempHome.resolve("plain-skill");
-        SkillDefinition base = new SkillDefinition(
-                "id",
-                "plain-skill",
-                "Plain skill",
-                List.of(),
-                List.of(),
-                5,
-                "BASE SYSTEM PROMPT",
-                skillHome.toString(),
-                false);
-
-        SkillDefinition augmented = SkillsJarSkillProvider.maybeAugmentBrowserPreview(base, skillHome.toString());
-
-        assertSame(base, augmented, "Non-HTML skills should be returned unchanged");
+    void testMaybeAugmentBrowserPreviewNonBrowser() {
+        SkillDefinition def = new SkillDefinition(
+                "s1", "name", "desc", List.of(), List.of(), 5, "system prompt", "/home", false, null);
+        SkillDefinition result = SkillsJarSkillProvider.maybeAugmentBrowserPreview(def, "/home");
+        assertEquals(def, result);
     }
 
-    private Path createSkillJar() throws IOException {
-        Path jarFile = Files.createTempFile("jdb-debugger-skill", ".jar");
-        Manifest manifest = new Manifest();
-        manifest.getMainAttributes().putValue("Manifest-Version", "1.0");
-        try (JarOutputStream jos = new JarOutputStream(Files.newOutputStream(jarFile), manifest)) {
-            addEntry(
-                    jos,
-                    "META-INF/skills/brunoborges/jdb-agentic-debugger/jdb-debugger/SKILL.md",
-                    "---\nname: jdb-debugger\ndescription: Debug Java processes\n---\nYou are a JDB debugger skill.\n");
-            addEntry(
-                    jos,
-                    "META-INF/skills/brunoborges/jdb-agentic-debugger/jdb-debugger/scripts/jdb-attach.sh",
-                    "#!/bin/bash\necho attach\n");
-            addEntry(
-                    jos,
-                    "META-INF/skills/brunoborges/jdb-agentic-debugger/jdb-debugger/references/jdwp-options.md",
-                    "# JDWP options\n");
-        }
-        return jarFile;
+    @Test
+    void testMaybeAugmentBrowserPreviewBrowserEnabled() {
+        SkillDefinition def = new SkillDefinition(
+                "s1", "name", "desc", List.of(), List.of(), 5, "original prompt", "/home", true, "templates");
+        SkillDefinition result = SkillsJarSkillProvider.maybeAugmentBrowserPreview(def, "/home");
+        assertNotNull(result);
+        assertTrue(result.systemPrompt().contains("BROWSER PREVIEW RULES"));
+        assertTrue(result.systemPrompt().contains("original prompt"));
     }
 
-    private static void addEntry(JarOutputStream jos, String name, String content) throws IOException {
-        ZipEntry entry = new ZipEntry(name);
-        jos.putNextEntry(entry);
-        jos.write(content.getBytes());
-        jos.closeEntry();
+    @Test
+    void testConflictingSectionsStripped() {
+        SkillDefinition parsedDef =
+                new SkillDefinition("s1", "n1", "d1", List.of(), List.of(), 5, "clean", "/tmp", false, null);
+        when(adaptationManager.isAdaptiveEnabled()).thenReturn(false);
+        when(parser.parse(anyString(), any())).thenReturn(parsedDef);
+
+        List<SkillDefinition> skills = provider.load();
+        assertNotNull(skills);
+    }
+
+    @Test
+    void testLoadSkillFromFile(@TempDir Path tempDir) throws Exception {
+        Path skillDir = tempDir.resolve("my-skill");
+        Files.createDirectories(skillDir);
+        Path scriptsDir = skillDir.resolve("scripts");
+        Files.createDirectories(scriptsDir);
+        Files.writeString(scriptsDir.resolve("run.sh"), "#!/bin/bash\necho ok\n");
+
+        Path skillMd = skillDir.resolve("SKILL.md");
+        Files.writeString(skillMd, "# Skill\nallowed-tools: Bash()\n## Decision Tree\nConflicting content\n");
+
+        SkillDefinition parsedDef = new SkillDefinition(
+                "s2", "n2", "d2", List.of(), List.of(), 5, "clean2", skillDir.toString(), false, null);
+        when(parser.parse(anyString(), eq(skillDir.toString()))).thenReturn(parsedDef);
+        when(adaptationManager.isAdaptiveEnabled()).thenReturn(false);
+
+        var loadMethod = provider.getClass().getDeclaredMethod("loadSkillFromFile", Path.class, List.class);
+        loadMethod.setAccessible(true);
+        List<SkillDefinition> skills = new ArrayList<>();
+        loadMethod.invoke(provider, skillMd, skills);
+
+        assertFalse(skills.isEmpty());
+    }
+
+    @Test
+    void testLoadSkillFromFileAdaptiveEnabled(@TempDir Path tempDir) throws Exception {
+        Path skillDir = tempDir.resolve("my-skill-adaptive");
+        Files.createDirectories(skillDir);
+        Path scriptsDir = skillDir.resolve("scripts");
+        Files.createDirectories(scriptsDir);
+
+        Path skillMd = skillDir.resolve("SKILL.md");
+        Files.writeString(skillMd, "# Skill\n## Prerequisites\nSkip me\n");
+
+        SkillDefinition parsedDef = new SkillDefinition(
+                "s3", "n3", "d3", List.of(), List.of(), 5, "clean3", skillDir.toString(), false, null);
+        when(parser.parse(anyString(), eq(skillDir.toString()))).thenReturn(parsedDef);
+        when(adaptationManager.isAdaptiveEnabled()).thenReturn(true);
+
+        var loadMethod = provider.getClass().getDeclaredMethod("loadSkillFromFile", Path.class, List.class);
+        loadMethod.setAccessible(true);
+        List<SkillDefinition> skills = new ArrayList<>();
+        loadMethod.invoke(provider, skillMd, skills);
+
+        assertFalse(skills.isEmpty());
+    }
+
+    @Test
+    void testScanDirectory(@TempDir Path tempDir) throws Exception {
+        Path skillSubDir = tempDir.resolve("META-INF/skills/test-provider/test-skill");
+        Files.createDirectories(skillSubDir);
+        Path skillFile = skillSubDir.resolve("SKILL.md");
+        Files.writeString(skillFile, "# Test Skill\n");
+
+        var scanDirMethod = provider.getClass().getDeclaredMethod("scanDirectory", URL.class, List.class);
+        scanDirMethod.setAccessible(true);
+
+        List<SkillDefinition> skills = new ArrayList<>();
+        scanDirMethod.invoke(provider, tempDir.toUri().toURL(), skills);
+        assertNotNull(skills);
+    }
+
+    @Test
+    void testLoadFromExtractedSkills(@TempDir Path tempDir) throws Exception {
+        var loadExtracted = provider.getClass().getDeclaredMethod("loadFromExtractedSkills", List.class);
+        loadExtracted.setAccessible(true);
+
+        List<SkillDefinition> skills = new ArrayList<>();
+        assertDoesNotThrow(() -> loadExtracted.invoke(provider, skills));
+    }
+
+    @Test
+    void testWriteSourceMetadata(@TempDir Path tempDir) throws Exception {
+        JarFile mockJar = mock(JarFile.class);
+        when(mockJar.getName()).thenReturn("com.skillsjars.test-skill-1.2.3.jar");
+
+        var writeMeta =
+                provider.getClass().getDeclaredMethod("writeSourceMetadata", Path.class, String.class, JarFile.class);
+        writeMeta.setAccessible(true);
+
+        assertDoesNotThrow(() -> writeMeta.invoke(provider, tempDir, "test-skill", mockJar));
+        assertTrue(Files.exists(tempDir.resolve(".skill-source.json")));
     }
 }

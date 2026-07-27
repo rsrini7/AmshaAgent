@@ -15,6 +15,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
 import java.util.stream.Collectors;
@@ -58,6 +59,11 @@ public class SkillLoader {
     CapabilityRegistry capabilityRegistry;
 
     @Inject
+    SkillAdmissionEvaluator admissionEvaluator;
+
+    private final AtomicReference<List<QuarantinedSkill>> quarantinedSkills = new AtomicReference<>(List.of());
+
+    @Inject
     @ConfigProperty(name = "amsha.skills.skillsjars.require-approval-for-sensitive", defaultValue = "true")
     boolean requireApprovalForSensitive;
 
@@ -80,6 +86,7 @@ public class SkillLoader {
 
         Map<String, CompiledSkillEntry> mergedSkills = new LinkedHashMap<>();
         List<String> allWarnings = new ArrayList<>();
+        List<QuarantinedSkill> quarantined = new ArrayList<>();
 
         // Sort by priority (lower = higher priority, processed first)
         // putIfAbsent semantics: first writer wins → highest-priority provider wins on collision
@@ -92,6 +99,18 @@ public class SkillLoader {
             List<SkillDefinition> definitions = provider.load();
             for (SkillDefinition def : definitions) {
                 try {
+                    SkillAdmissionEvaluator.AdmissionDecision decision =
+                            admissionEvaluator.evaluate(def, provider.sourceName());
+                    if (!decision.accepted()) {
+                        QuarantinedSkill rejected =
+                                new QuarantinedSkill(def.name(), provider.sourceName(), decision.reasons());
+                        quarantined.add(rejected);
+                        String warning = "Quarantined skill '" + def.name() + "' from " + provider.sourceName() + ": "
+                                + String.join("; ", decision.reasons());
+                        LOG.warn(warning);
+                        allWarnings.add(warning);
+                        continue;
+                    }
                     allWarnings.addAll(addSafe(mergedSkills, def, provider.sourceName()));
                 } catch (Exception e) {
                     String w = "Failed to compile skill '" + def.name() + "' from " + provider.sourceName() + ": "
@@ -103,13 +122,14 @@ public class SkillLoader {
         }
 
         List<CompiledSkillEntry> finalList = List.copyOf(mergedSkills.values());
+        quarantinedSkills.set(List.copyOf(quarantined));
         skillRegistry.reload(finalList);
 
         for (CompiledSkillEntry entry : finalList) {
             roleRegistry.registerDynamic(entry.definition().name(), entry.roleDefinition());
         }
 
-        LOG.infof("Skill load complete. Total Loaded: %d", finalList.size());
+        LOG.infof("Skill admission complete. Active: %d, Quarantined: %d", finalList.size(), quarantined.size());
 
         SecurityEventType eventType = isRefresh ? SecurityEventType.SKILL_REFRESHED : SecurityEventType.SKILL_LOADED;
         telemetryAuditService.record(
@@ -120,6 +140,10 @@ public class SkillLoader {
                 "Loaded " + finalList.size() + " skills");
 
         return List.copyOf(allWarnings);
+    }
+
+    public List<QuarantinedSkill> quarantinedSkills() {
+        return quarantinedSkills.get();
     }
 
     private List<String> addSafe(Map<String, CompiledSkillEntry> map, SkillDefinition def, String source) {
@@ -142,14 +166,6 @@ public class SkillLoader {
             boolean isThirdParty = "skillsjars".equals(source);
 
             Set<ToolCapability> finalCapabilities = new HashSet<>(toolsResult.valid());
-            if (finalCapabilities.isEmpty() && isThirdParty) {
-                // Skills jars typically ship companion scripts/CLIs that must run on the host.
-                // Default to host_exec unless the skill explicitly declares sandbox_exec.
-                finalCapabilities.add(ToolCapability.HOST_EXEC);
-                finalCapabilities.add(ToolCapability.RECALL_MEMORY_SEARCH);
-                finalCapabilities.add(ToolCapability.CORE_MEMORY_READ);
-                LOG.infof("Skill '%s' declared no capabilities; granting defaults: %s", def.name(), finalCapabilities);
-            }
 
             boolean hasSensitiveOps = finalCapabilities.stream()
                     .anyMatch(cap -> cap.category() == ToolCategory.COMPUTE
@@ -214,6 +230,14 @@ public class SkillLoader {
     }
 
     private record CompileToolsResult(Set<ToolCapability> valid, List<String> warnings) {}
+
+    public record QuarantinedSkill(String name, String source, List<String> reasons) {
+        public QuarantinedSkill {
+            Objects.requireNonNull(name, "name must not be null");
+            Objects.requireNonNull(source, "source must not be null");
+            reasons = reasons == null ? List.of() : List.copyOf(reasons);
+        }
+    }
 
     private static String validCapabilityNames() {
         return Arrays.stream(ToolCapability.values()).map(Enum::name).collect(Collectors.joining(", "));

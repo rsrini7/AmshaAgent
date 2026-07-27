@@ -37,7 +37,7 @@ public class ClaudeCodeProviderFactory implements RoutingChatModelProvider {
 
     @Override
     public String providerId() {
-        return "claude-code";
+        return ModelDefaults.PROVIDER_CLAUDE_CODE;
     }
 
     @Override
@@ -70,7 +70,7 @@ public class ClaudeCodeProviderFactory implements RoutingChatModelProvider {
         // 5. Clean up model name assignment (Fix I1)
         String modelName = config.modelName();
         if (modelName == null || modelName.isBlank() || "mistral-small".equalsIgnoreCase(modelName)) {
-            modelName = "claude-sonnet-4-5";
+            modelName = ModelDefaults.DEFAULT_CLAUDE_CODE_MODEL;
         }
 
         return AnthropicChatModel.builder()

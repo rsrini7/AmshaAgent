@@ -1,3 +1,2 @@
 # SkillsJars resources that must be loaded explicitly in GraalVM native images.
 # Native Image cannot enumerate META-INF/skills directory resources at runtime.
-anthropics/skills/algorithmic-art/SKILL.md
