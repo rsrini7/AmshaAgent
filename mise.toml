@@ -122,7 +122,7 @@ TEST_SUMMARY=$(rg -u -g "**/target/surefire-reports/TEST-*.xml" "<testsuite" | a
 }
 END { printf "Total: %d | Failures: %d | Errors: %d | Skipped: %d", t, f, e, s }')
 echo "Tests:    $TEST_SUMMARY"
-python3 ./analyze_jacoco_coverage.py --summary 2>/dev/null
+python3 ./scripts/analyze_jacoco_coverage.py --summary 2>/dev/null
 """
 
 

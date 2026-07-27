@@ -4,8 +4,8 @@
       "Shell(./mvnw:*)",
       "Shell(grep:*)",
       "Shell(lsof:*)",
-      "Shell(python3 ./fix_fqns.py 2 >& 1)",
-      "Shell(python3 ./verify_docs.py 2 >& 1)",
+      "Shell(python3 ./scripts/fix_fqns.py 2 >& 1)",
+      "Shell(python3 ./scripts/verify_docs.py 2 >& 1)",
       "Shell(mise:*)"
     ],
     "deny": [],

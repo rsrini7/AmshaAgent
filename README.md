@@ -207,7 +207,7 @@ Set `AMSHA_UI_SKIP_ONBOARDING=true` if you want the web UI to skip the setup wiz
 | [rest-http/](./rest-http/) | IntelliJ / VSCode REST Client files |
 
 After `mise run build:test`, run `mise run test:summary` to view the total test count
-and reactor JaCoCo coverage, or `python3 ./analyze_jacoco_coverage.py --target 0.72` to see
+and reactor JaCoCo coverage, or `python3 ./scripts/analyze_jacoco_coverage.py --target 0.72` to see
 the coverage buffer, additional covered lines needed, and highest-value classes to test next.
 Use `--module app`, `--top 10`, `--badge`, or `--json` to narrow or automate reports.
 

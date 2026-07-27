@@ -55,8 +55,8 @@ JVM fallback loading, extracted resources, and unexpected packaging differences.
 Run the verifier after adding or removing a `com.skillsjars` dependency:
 
 ```bash
-python3 ./verify_skillsjar_index.py --fix
-python3 ./verify_skillsjar_index.py
+python3 ./scripts/verify_skillsjar_index.py --fix
+python3 ./scripts/verify_skillsjar_index.py
 ```
 
 The verifier reads SkillsJar dependencies from `app/pom.xml`, opens each JAR
@@ -176,7 +176,7 @@ Before adding a SkillsJar dependency, confirm:
 - The script validates prerequisites and returns a nonzero exit code on failure.
 - The script verifies any claimed output before reporting success.
 - No instruction assumes unsupported agent tools.
-- The dependency passes `verify_skillsjar_index.py`.
+- The dependency passes `scripts/verify_skillsjar_index.py`.
 - Focused JVM tests cover admission and the representative workflow.
 - Native-image resource indexing remains synchronized.
 

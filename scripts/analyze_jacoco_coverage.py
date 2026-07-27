@@ -83,7 +83,7 @@ def main() -> int:
     if args.top < 1:
         parser.error("--top must be at least 1")
 
-    root = Path(__file__).resolve().parent
+    root = Path(__file__).resolve().parent.parent
     gaps, missing_reports = read_gaps(root)
     if missing_reports:
         print(

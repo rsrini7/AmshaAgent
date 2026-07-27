@@ -466,7 +466,7 @@
             <configuration>
               <executable>python3</executable>
               <arguments>
-                <argument>./verify_skillsjar_index.py</argument>
+                <argument>./scripts/verify_skillsjar_index.py</argument>
               </arguments>
               <workingDirectory>${maven.multiModuleProjectDirectory}</workingDirectory>
             </configuration>

@@ -342,7 +342,7 @@
               <skip>${skipTests}</skip>
               <target>
                 <exec executable="python3" failonerror="true">
-                  <arg value="${maven.multiModuleProjectDirectory}/verify_jacoco_coverage.py"/>
+                  <arg value="${maven.multiModuleProjectDirectory}/scripts/verify_jacoco_coverage.py"/>
                   <arg value="--minimum"/>
                   <arg value="${jacoco.minimum.line.coverage}"/>
                 </exec>

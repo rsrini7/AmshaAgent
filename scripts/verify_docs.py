@@ -166,7 +166,7 @@ def check_md_file(md_path, workspace_root, file_anchors):
 
 def main():
     # Use script parent directory as workspace root
-    workspace_root = os.path.dirname(os.path.abspath(__file__))
+    workspace_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     md_files = scan_markdown_files(workspace_root)
     
     print(f"Scanning {len(md_files)} markdown files in '{workspace_root}'...\n")

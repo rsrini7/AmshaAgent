@@ -44,7 +44,7 @@ class DirectiveConfidenceThresholdTest {
 
     @Test
     void activeDirective_withHighConfidence_isInjectable() {
-        SynthesizedDirective d = SynthesizedDirective.create("u1", "Always run fix_fqns.py", 0.9, "", "")
+        SynthesizedDirective d = SynthesizedDirective.create("u1", "Always run scripts/fix_fqns.py", 0.9, "", "")
                 .withState(DirectiveState.ACTIVE);
         assertTrue(d.isInjectable());
     }

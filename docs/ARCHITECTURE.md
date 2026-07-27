@@ -799,7 +799,7 @@ Skills can be packaged as JAR files under `META-INF/skills/`. The `SkillsJarSkil
 - **Index path** (`META-INF/skills/skills-index.txt`): optional pre-indexed list of `SKILL.md` paths. When present, skills are loaded via the index (fast path, avoids classpath scanning).
 - **Fallback**: classpath scanning of `META-INF/skills/` for `SKILL.md` files.
 
-For every SkillsJar dependency change in `app/pom.xml`, regenerate `app/src/main/resources/META-INF/skills/skills-index.txt` with `python3 ./verify_skillsjar_index.py --fix`, then validate it without `--fix`. This is mandatory for native builds: GraalVM Native Image cannot enumerate classpath resource directories, so it cannot use the fallback scan. `META-INF/skills/**` must also remain in `quarkus.native.resources.includes`.
+For every SkillsJar dependency change in `app/pom.xml`, regenerate `app/src/main/resources/META-INF/skills/skills-index.txt` with `python3 ./scripts/verify_skillsjar_index.py --fix`, then validate it without `--fix`. This is mandatory for native builds: GraalVM Native Image cannot enumerate classpath resource directories, so it cannot use the fallback scan. `META-INF/skills/**` must also remain in `quarkus.native.resources.includes`.
 
 Each SkillsJar contains:
 - `META-INF/skills/<skill-name>/SKILL.md` — YAML-fronted markdown defining system prompt, trigger patterns, tool capabilities, and max iterations.

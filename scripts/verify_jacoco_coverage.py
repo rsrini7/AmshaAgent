@@ -59,7 +59,7 @@ def main() -> int:
     if not 0 <= args.minimum <= 1:
         parser.error("--minimum must be between 0 and 1")
 
-    root = Path(__file__).resolve().parent
+    root = Path(__file__).resolve().parent.parent
 
     # Auto-merge Quarkus test coverage execution data if present
     if merge_quarkus_jacoco_data(root):

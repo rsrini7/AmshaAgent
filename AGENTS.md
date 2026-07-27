@@ -5,8 +5,8 @@ incidents live in [Architecture Invariants](docs/Architecture_Invariants.md).
 
 ## Required checks
 
-- After Java edits: `python3 ./fix_fqns.py && ./mvnw spotless:apply -q`.
-- After Markdown edits: `python3 ./verify_docs.py`.
+- After Java edits: `python3 ./scripts/fix_fqns.py && ./mvnw spotless:apply -q`.
+- After Markdown edits: `python3 ./scripts/verify_docs.py`.
 - Before committing: `mise run sonar:issues` (or the BLOCKER-only variant).
 - Verify changes proportionally: compile affected modules, run focused tests, and
   run `./mvnw clean install -DskipTests` after changing a dependency module.
@@ -99,7 +99,7 @@ incidents live in [Architecture Invariants](docs/Architecture_Invariants.md).
 - Dynamic SkillsJars are prompt/tool wrappers, not executable engines. Vet their
   CLI/cloud dependencies; provision required binaries; keep
   `META-INF/skills/skills-index.txt` in sync with `app/pom.xml` using
-  `python3 ./verify_skillsjar_index.py --fix` and the verifier.
+  `python3 ./scripts/verify_skillsjar_index.py --fix` and the verifier.
 
 ## Change recipes
 
@@ -138,10 +138,10 @@ and the memory section in `docs/Architecture_Invariants.md`.
 | Change | Minimum check |
 | --- | --- |
 | Prompt/escalation | `./mvnw test -pl core -Dtest="SystemPromptBuilderTest,PersonaEscalationServiceTest,EscalationPatternsTest"` |
-| Java | `python3 ./fix_fqns.py && ./mvnw spotless:apply -q` |
-| Markdown | `python3 ./verify_docs.py` |
+| Java | `python3 ./scripts/fix_fqns.py && ./mvnw spotless:apply -q` |
+| Markdown | `python3 ./scripts/verify_docs.py` |
 | Native-sensitive code | `./mvnw compile -DskipTests -q`; use `mise build:native-local` when applicable |
-| SkillsJar dependencies | `python3 ./verify_skillsjar_index.py` |
+| SkillsJar dependencies | `python3 ./scripts/verify_skillsjar_index.py` |
 
 ### REST validation
 

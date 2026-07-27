@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """FQN replacement: converts fully-qualified class names to short names + imports.
 
 Import sorting/formatting is handled by Spotless (mvn spotless:apply).

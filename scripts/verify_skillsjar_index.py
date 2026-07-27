@@ -9,7 +9,7 @@ import zipfile
 from pathlib import Path
 
 
-ROOT = Path(__file__).resolve().parent
+ROOT = Path(__file__).resolve().parent.parent
 POM_PATH = ROOT / "app" / "pom.xml"
 INDEX_PATH = ROOT / "app" / "src" / "main" / "resources" / "META-INF" / "skills" / "skills-index.txt"
 M2_REPOSITORY = Path.home() / ".m2" / "repository"
@@ -147,7 +147,7 @@ def main():
             print("Missing index entries:", *sorted(missing), sep="\n  ", file=sys.stderr)
         if stale:
             print("Stale index entries:", *sorted(stale), sep="\n  ", file=sys.stderr)
-        print("Run: python3 ./verify_skillsjar_index.py --fix", file=sys.stderr)
+        print("Run: python3 ./scripts/verify_skillsjar_index.py --fix", file=sys.stderr)
         return 1
 
     print(f"SkillsJar index is current ({len(expected)} path(s)).")

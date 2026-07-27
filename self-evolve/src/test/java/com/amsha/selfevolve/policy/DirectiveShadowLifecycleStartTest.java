@@ -15,7 +15,7 @@ class DirectiveShadowLifecycleStartTest {
 
     @Test
     void create_newDirective_startsAsCandidate() {
-        SynthesizedDirective d = SynthesizedDirective.create("u1", "Always run fix_fqns.py", 0.9, "", "");
+        SynthesizedDirective d = SynthesizedDirective.create("u1", "Always run scripts/fix_fqns.py", 0.9, "", "");
         assertEquals(DirectiveState.CANDIDATE, d.state());
     }
 
