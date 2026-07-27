@@ -140,7 +140,7 @@ class SqliteCheckpointStoreAdapterDirectTest {
                 0,
                 null,
                 null);
-        CheckpointDto saved = adapter.save(dto);
+        adapter.save(dto);
 
         boolean claimed = adapter.claimForResume(sessionId, "coordinator");
         assertTrue(claimed);

@@ -1,8 +1,6 @@
 package com.amsha.persistence.postgres;
 
 import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.*;
-import static org.mockito.Mockito.*;
 
 import dev.langchain4j.model.embedding.EmbeddingModel;
 
