@@ -9,6 +9,36 @@
 - Decision maturity: Phase 0 spike and Phase 1 implementation are authorized subject
   to the Section 15 go/no-go gates; Phases 2–3 remain proposed
 
+## Current implementation status (2026-07-28)
+
+Phase 0–1 foundation work is in progress; it does not yet make ONNX an active
+embedding provider or change the configured default provider list.
+
+- Completed: provider-neutral `EmbeddingSpaceDescriptor` support and compatible-slot
+  enforcement in the existing embedding failover loop; incompatible slots are skipped
+  rather than mixing vector spaces.
+- Completed: optional `local-ml-onnx` module wiring, pinned ONNX Runtime Java
+  `1.27.0`, JVM native-load probe, CDI/Jandex setup, central native reflection
+  registration, feature-disabled startup behavior, and managed runtime-environment
+  cleanup during CDI shutdown.
+- Completed: local bundle manifest parsing and verification for an explicitly selected
+  bundle below `amsha.onnx.model-root`. Model and tokenizer files must be regular
+  root-contained files with matching SHA-256 digests and sizes; path traversal,
+  symlink escapes, oversized files, tampering, and manifest/directory ID mismatches
+  are rejected. Unknown manifest metadata is tolerated for forward compatibility while
+  all fields used by the current verifier remain mandatory and validated. The module
+  never downloads or installs model assets automatically.
+- Verified so far: focused RAG compatibility tests, ONNX runtime/bundle verifier tests,
+  application assembly compilation, documentation validation, and diff hygiene.
+- Still required before any embedding slot can be enabled: tokenizer binding selection
+  and its platform/native evaluation, a real signed model/index installation flow,
+  inference/session lifecycle and bounded scheduling, golden-corpus correctness
+  evidence, `OnnxEmbeddingProviderFactory`, warm-up/observability, and vector-index
+  fingerprint parity across SQLite, PostgreSQL, and filesystem.
+- Explicitly not started: Phase 2.5 core classifier SPIs and every Phase 2–3
+  classifier behavior. No database migration is introduced at this stage because no
+  ONNX-produced vector schema is active.
+
 ## 1. Decision summary
 
 Amsha Agent will evaluate ONNX Runtime Java as an optional, in-process CPU inference
@@ -586,6 +616,7 @@ Configuration properties are explicitly reconciled:
 # Global ONNX Feature Toggle & Limits
 amsha.onnx.enabled=false
 amsha.onnx.model-root=data/models
+amsha.onnx.max-model-file-bytes=1073741824
 amsha.onnx.max-loaded-models=2
 amsha.onnx.max-resident-mb=1024
 amsha.onnx.inference-threads=2
