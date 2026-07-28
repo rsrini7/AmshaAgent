@@ -25,7 +25,6 @@ import com.amsha.rag.EmbeddingSpaceDescriptor;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 import io.vertx.core.Context;
-import io.vertx.core.Vertx;
 
 /** Opt-in RAG embedding provider backed exclusively by verified local ONNX bundles. */
 @ApplicationScoped
@@ -244,7 +243,9 @@ public class OnnxEmbeddingProviderFactory implements EmbeddingProviderFactory {
 
         private List<float[]> embedTexts(List<String> texts) {
             rejectEventLoopThread();
+            metrics.recordExecutionStage("thread_guard_passed");
             validateInputLimits(texts);
+            metrics.recordExecutionStage("input_validated");
             long started = System.nanoTime();
             Instant deadline = Instant.now().plus(configuredTimeout());
             try {
@@ -318,9 +319,8 @@ public class OnnxEmbeddingProviderFactory implements EmbeddingProviderFactory {
         }
     }
 
-    private static void rejectEventLoopThread() {
-        Context context = Vertx.currentContext();
-        if (context != null && context.isEventLoopContext()) {
+    static void rejectEventLoopThread() {
+        if (Context.isOnEventLoopThread()) {
             throw new IllegalStateException("ONNX embedding must not block a Quarkus event-loop thread");
         }
     }

@@ -13,8 +13,8 @@
 
 Phase 0–1 foundation work is in progress. ONNX is available only as an explicit
 provider slot with an installed verified bundle; it does not change the configured
-default provider list and has not yet passed the native request-path, real-model
-golden-corpus, or persistence-parity gates.
+default provider list. The macOS arm64 native request path now passes; the real-model
+golden-corpus and persistence-parity gates remain open.
 
 - Completed: provider-neutral `EmbeddingSpaceDescriptor` support and compatible-slot
   enforcement in the existing embedding failover loop; incompatible slots are skipped
@@ -72,23 +72,25 @@ golden-corpus, or persistence-parity gates.
 - Verified in the macOS arm64 native binary: ORT runtime loading, verified bundle
   loading, tokenizer creation, scheduler dispatch, lease acquisition, graph execution,
   pooling, and normalization all complete during the manifest-declared startup warm-up.
-- Current Phase 0 blocker: the authenticated fixed-text native probe reaches neither
-  the ONNX scheduler nor its lease/inference checkpoints after warm-up. The standard
-  `run_all_validations.sh --onnx` probe times out as `HTTP 000` at curl's 180-second
-  bound, while health and manifest digest checks pass. Payload-free probe checkpoints
-  distinguish authorization, CDI model resolution, `Instance.get()`, and
-  `EmbeddingModel.embed()` on the next native run; do not claim native request support
-  until that run identifies and fixes the boundary.
+- Verified in the rebuilt macOS arm64 native binary: the authenticated fixed-text probe
+  completes in a fraction of a second and `run_all_validations.sh --onnx` reports ONNX-2
+  as `HTTP 200` with an incremented success metric. The root cause of the former
+  `HTTP 000` timeout was the pre-scheduler blocking guard inspecting the retained Vert.x
+  context type instead of the actual executing thread. It falsely rejected a valid
+  `@RunOnVirtualThread` request, after which provider retry/cooldown hid the error. The
+  guard now uses `Context.isOnEventLoopThread()`; the unsuccessful `ScopedValue`
+  experiment was reverted.
 - Implemented filesystem recovery correction: JSON-to-Lucene reconstruction regenerates
   vectors through the configured embedding model. Descriptor-manifest validation and
   all-backend index-fingerprint parity remain Phase 1 work.
 - Verified so far: focused RAG compatibility, ONNX runtime/bundle verifier, scheduler,
   lease, runner, and real-JVM MPNet smoke tests; application assembly compilation,
-  documentation validation, native-image build, and diff hygiene.
-- Still required for Phase 0: fix and pass the real native probe; supported-platform
-  native matrix; versioned Python-reference golden corpus with tolerance/pass-rate and
-  nearest-neighbour evidence; repeated startup/inference/shutdown resource-leak gate;
-  signed trust-root and release SBOM/provenance evidence.
+  documentation validation, native-image build, native REST inference probe, and diff
+  hygiene.
+- Still required for Phase 0: supported-platform native matrix; versioned
+  Python-reference golden corpus with tolerance/pass-rate and nearest-neighbour evidence;
+  repeated startup/inference/shutdown resource-leak gate; signed trust-root and release
+  SBOM/provenance evidence.
 - Still required for Phase 1: full embedding-index descriptor; matching SQLite and
   PostgreSQL `V10` migrations; checksummed filesystem descriptor manifest; every-vector-
   namespace mismatch detection; non-vector fallback and explicit development-reset

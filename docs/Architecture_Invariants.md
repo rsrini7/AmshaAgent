@@ -1234,6 +1234,12 @@ The `embedding vector(768)` column and HNSW index MUST be similarly guarded with
      propagates workspace context but does NOT propagate OTel ThreadLocal spans.
      (P81 Confirmation: Verified in ParallelToolStepExecutor.java lines 173/192)
 
+7.13.1 INVARIANT: Blocking guards must test the actual executing thread, not
+     merely the type of an attached Vert.x context. A REST method annotated with
+     `@RunOnVirtualThread` can retain an event-loop-derived context while running
+     safely on a virtual thread. Use `Context.isOnEventLoopThread()`; do not infer
+     the current thread from `Vertx.currentContext().isEventLoopContext()`.
+
 7.14 INVARIANT: ReasoningStep history is the in-memory source of truth
      during AgentLoop.runWithRole() execution. ChatHistoryAssembler reads
      from in-memory history on each LLM call - SQLite does not need to
