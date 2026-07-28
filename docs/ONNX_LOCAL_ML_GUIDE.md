@@ -124,8 +124,8 @@ mise run models:install-mpnet
    - Propagates `WorkspaceContext` via `WorkspaceExecutors.wrap()`.
    - Checks absolute request deadlines before queueing, during lease acquisition, and before task execution.
 3. **Reactive Non-Blocking Protection**:
-   - `OnnxEmbeddingProviderFactory.rejectEventLoopThread()` inspects Vert.x context (`context.isEventLoopContext()`).
-   - Fails fast if invoked on a Quarkus event loop thread to prevent thread starvation.
+   - `OnnxEmbeddingProviderFactory.rejectEventLoopThread()` inspects executing thread using `Context.isOnEventLoopThread()`.
+   - Fails fast if invoked on a Quarkus event loop thread to prevent thread starvation, while permitting `@RunOnVirtualThread` virtual threads with attached Vert.x context.
 4. **Native Memory Determinism**:
    - All `OnnxTensor` instances (`input_ids`, `attention_mask`, `token_type_ids`) and `OrtSession.Result` native handles are enclosed in try-with-resources blocks. C++ memory is freed immediately upon completion.
 
