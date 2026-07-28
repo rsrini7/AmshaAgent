@@ -160,9 +160,9 @@ From another terminal, run:
 bash rest-http/scripts/run_all_validations.sh --onnx
 ```
 
-This proves the native process starts, reports ONNX readiness, and sees the verified bundle. `ONNX-2` calls the internal-only fixed-text probe, requires an ONNX success-counter increment, and therefore proves native `OrtSession.run()` when it passes. A native inference smoke test on every supported target remains mandatory before Phase 0 is closed. Do not rely on undocumented ORT extraction locations or system-property library overrides; they are not an approved deployment interface.
+This proves the native process starts, reports ONNX readiness, sees the verified bundle, and activates only descriptor-compatible vector indexes. `ONNX-2` calls the internal-only fixed-text probe, requires an ONNX success-counter increment, and therefore proves native `OrtSession.run()` when it passes. `ONNX-4` requires overall health `UP`, the `Vector Index Compatibility` check `UP`, and `vectorStatus=READY`; it intentionally fails for `DEGRADED` or `NOT_ACTIVE` rather than treating text fallback as proof of the Phase 1 happy path. A native inference smoke test on every supported target remains mandatory before Phase 0 is closed. Do not rely on undocumented ORT extraction locations or system-property library overrides; they are not an approved deployment interface.
 
-The macOS arm64 build/start/readiness procedure above passed on 2026-07-28. It is evidence for that target only; Linux x86-64, Linux arm64, and a real native embedding execution remain required gates.
+The macOS arm64 build/start/readiness and real inference procedure above passed on 2026-07-28. It is evidence for that target only; Linux x86-64, Linux arm64, reference-corpus numeric equivalence, leak testing, and signed provenance remain required gates.
 
 ---
 
@@ -174,14 +174,14 @@ The macOS arm64 build/start/readiness procedure above passed on 2026-07-28. It i
 - **`AMSHA_EMBEDDING_ONNX_SPACE_REVISION`**: Read from `"spaceRevision"` in `manifest.json` (`e8c3b32edf5434bc2275fc9bab85f82640a19130`), which is the Hugging Face Git commit SHA.
 
 ### Q: Does a successful native build prove ONNX inference works in the native binary?
-No. A native image can compile while a JNI resource, dynamic-library loader, reflection path, or tokenizer binding still fails at runtime. Follow the native build, launch, and REST readiness procedure in Section 7, then add a real native inference smoke test before considering the Phase 0 native gate closed.
+No. A native image can compile while a JNI resource, dynamic-library loader, reflection path, or tokenizer binding still fails at runtime. Follow the native build, launch, and REST procedure in Section 7; a passing `ONNX-2` is the real inference proof for that built target. Phase 0 remains open until every supported target and the remaining numeric-equivalence, leak, and supply-chain gates pass.
 
 ### Q: How do I validate local ONNX inference over REST?
 Run the REST validation script:
 ```bash
 bash rest-http/scripts/run_all_validations.sh --onnx
 ```
-This executes `ONNX-1` (health check `/q/health`), `ONNX-2` (an internal fixed-text inference probe plus ONNX success-metric increment), and `ONNX-3` (model bundle size/digest verification). The focused JVM inference proof is separate:
+This executes `ONNX-1` (runtime health), `ONNX-2` (an internal fixed-text inference probe plus ONNX success-metric increment), `ONNX-3` (model bundle size/digest verification), and `ONNX-4` (active vector-index descriptor compatibility). `ONNX-4` must report `READY` for this model-installed happy-path validation. If it reports `MISSING_METADATA` or `MISMATCH`, keep text fallback active, stop the application, and perform the explicit pre-production reset of the configured `AMSHA_DATA_DIR` or development database volume; never auto-adopt a non-empty index. The focused JVM inference proof is separate:
 
 ```bash
 ./mvnw -pl local-ml-onnx -Dtest=OnnxEmbeddingModelSmokeTest test

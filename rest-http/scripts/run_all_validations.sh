@@ -108,7 +108,7 @@ for arg in "$@"; do
       echo "  --budget       validate_budget.sh              (budget + autonomy SUPERVISED/FULL/READONLY, needs LLM)"
       echo "  --sse-settings validate_sse_settings.sh        (UI SSE streams + ws-token + settings CRUD, fast)"
       echo "  --onboarding  validate_onboarding.sh         (P110 draft/saga + provider-catalog + workspace filter, fast)"
-      echo "  --onnx         validate_onnx.sh               (ONNX health, metrics, bundle integrity; requires local model)"
+      echo "  --onnx         validate_onnx.sh               (runtime, inference, bundle, vector-index compatibility; requires local model)"
       echo "  --cron         validate_cron.sh               (programmatic cron resource REST APIs, needs LLM)"
       echo "  --fast         reflex + skills + SkillsJar admission + admin + auth-session + identity + pii-audit + self-evolve + sse-settings + onboarding"
       echo "  --llm          memory + web + roles + cron + rag + budget + hitl"

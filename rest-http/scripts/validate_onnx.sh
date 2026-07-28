@@ -19,25 +19,40 @@ successful_embeddings() {
   curl -s -m 15 "$B/q/metrics" \
     | awk '/^amsha_onnx_embedding_requests_total\{[^}]*outcome="success"/ { total += $NF } END { printf "%.0f", total + 0 }'
 }
-vector_index_is_ready() {
+vector_index_readiness() {
   python3 - "$RESP_FILE" <<'PY'
 import json
 import sys
 
-with open(sys.argv[1], encoding="utf-8") as response:
-    health = json.load(response)
+try:
+    with open(sys.argv[1], encoding="utf-8") as response:
+        health = json.load(response)
+except (OSError, json.JSONDecodeError) as error:
+    print(f"invalid health response: {error}")
+    raise SystemExit(1) from error
 
 checks = [
     check
     for check in health.get("checks", [])
     if check.get("name") == "Vector Index Compatibility"
 ]
-if (
-    health.get("status") != "UP"
-    or len(checks) != 1
-    or checks[0].get("status") != "UP"
-    or checks[0].get("data", {}).get("vectorStatus") != "READY"
-):
+check = checks[0] if len(checks) == 1 else {}
+data = check.get("data", {})
+namespaces = ",".join(
+    f"{key.removeprefix('namespace.')}={value}"
+    for key, value in sorted(data.items())
+    if key.startswith("namespace.")
+)
+summary = (
+    f"overall={health.get('status', 'MISSING')} "
+    f"check={check.get('status', 'MISSING')} "
+    f"vectorStatus={data.get('vectorStatus', 'MISSING')}"
+)
+if namespaces:
+    summary += f" namespaces=[{namespaces}]"
+print(summary)
+
+if health.get("status") != "UP" or check.get("status") != "UP" or data.get("vectorStatus") != "READY":
     raise SystemExit(1)
 PY
 }
@@ -102,11 +117,13 @@ fi
 # ── ONNX-4: Vector Index Compatibility Health Check ──
 info "ONNX-4: Vector Index Compatibility check (/q/health)"
 CODE=$(mute -X GET "$B/q/health")
+VECTOR_INDEX_SUMMARY=""
 if [ "$CODE" = "200" ] \
-  && vector_index_is_ready; then
+  && VECTOR_INDEX_SUMMARY=$(vector_index_readiness); then
   ok "$CODE"
 else
-  fail "$CODE"
+  printf "❌ HTTP %s — %s\n" "$CODE" "${VECTOR_INDEX_SUMMARY:-invalid or unavailable health response}"
+  FAIL=$((FAIL+1))
 fi
 
 echo ""
