@@ -79,14 +79,25 @@ public class InfiniteLoopEmbeddingModelProvider {
             String[] providerNames = loopProviders.split(",", -1);
             List<InfiniteLoopProvider.Slot<EmbeddingModel>> slots = new ArrayList<>();
             List<EmbeddingProviderFactory> allFactories = factories.stream().toList();
+            EmbeddingSpaceDescriptor configuredSpace = null;
 
             for (String name : providerNames) {
                 String trimmed = name.trim().toLowerCase(Locale.ROOT);
                 if (trimmed.isEmpty()) continue;
                 try {
-                    EmbeddingModel model = createModelForProvider(trimmed, allFactories);
-                    slots.add(new InfiniteLoopProvider.Slot<>(trimmed, model));
-                    log.infof("Embedding loop: added slot [%s]", trimmed);
+                    ConfiguredEmbeddingModel configured = createModelForProvider(trimmed, allFactories);
+                    if (configuredSpace == null) {
+                        configuredSpace = configured.space();
+                    } else if (!configuredSpace.isCompatibleWith(configured.space())) {
+                        log.warnf(
+                                "Embedding loop: skipping incompatible slot [%s] space=%s; expected fingerprint=%s",
+                                trimmed, configured.space().spaceId(), configuredSpace.fingerprint());
+                        continue;
+                    }
+                    slots.add(new InfiniteLoopProvider.Slot<>(trimmed, configured.model()));
+                    log.infof(
+                            "Embedding loop: added slot [%s] space=%s",
+                            trimmed, configured.space().spaceId());
                 } catch (Exception e) {
                     log.warnf("Embedding loop: skipping slot [%s] — %s", trimmed, e.getMessage());
                 }
@@ -131,7 +142,8 @@ public class InfiniteLoopEmbeddingModelProvider {
         }
     }
 
-    private EmbeddingModel createModelForProvider(String providerName, List<EmbeddingProviderFactory> allFactories) {
+    private ConfiguredEmbeddingModel createModelForProvider(
+            String providerName, List<EmbeddingProviderFactory> allFactories) {
         EmbeddingProviderFactory factory = allFactories.stream()
                 .filter(f -> f.providerId().equals(providerName))
                 .findFirst()
@@ -146,11 +158,13 @@ public class InfiniteLoopEmbeddingModelProvider {
         String baseUrl = resolveOptional(config, providerName, "base-url", factory.defaultBaseUrl());
         String apiKey = resolveOptional(config, providerName, "api-key", "");
         int timeout = resolveOptionalInt(config, providerName, "timeout-seconds", 30);
+        String spaceId = resolveOptional(config, providerName, "space-id", "");
+        String spaceRevision = resolveOptional(config, providerName, "space-revision", "");
         Optional<String> optKey = Optional.ofNullable(apiKey).filter(k -> !k.isBlank());
 
-        EmbeddingModelConfig embedConfig =
-                new EmbeddingModelConfig(providerName, model, baseUrl, optKey, Duration.ofSeconds(timeout));
-        return factory.create(embedConfig);
+        EmbeddingModelConfig embedConfig = new EmbeddingModelConfig(
+                providerName, model, baseUrl, optKey, Duration.ofSeconds(timeout), spaceId, spaceRevision);
+        return new ConfiguredEmbeddingModel(factory.create(embedConfig), factory.embeddingSpace(embedConfig));
     }
 
     private static String resolveRequired(Config config, String provider, String key) {
@@ -170,4 +184,6 @@ public class InfiniteLoopEmbeddingModelProvider {
         return config.getOptionalValue(CONFIG_PREFIX + provider + "." + key, Integer.class)
                 .orElse(defaultValue);
     }
+
+    private record ConfiguredEmbeddingModel(EmbeddingModel model, EmbeddingSpaceDescriptor space) {}
 }

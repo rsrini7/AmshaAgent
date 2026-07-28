@@ -382,6 +382,18 @@ amsha:
     cooldown-max-seconds: ${AMSHA_INFINITE_LOOP_COOLDOWN_MAX_SECONDS:300}
     cooldown-transient-seconds: ${AMSHA_INFINITE_LOOP_COOLDOWN_TRANSIENT_SECONDS:5}
     max-latency-ms: ${AMSHA_INFINITE_LOOP_MAX_LATENCY_MS:60000}
+  # Embedding-space values prevent incompatible provider rotation. A provider
+  # without an explicit shared space remains provider-bound by default.
+  embedding:
+    ollama:
+      space-id: "${AMSHA_EMBEDDING_OLLAMA_SPACE_ID:}"
+      space-revision: "${AMSHA_EMBEDDING_OLLAMA_SPACE_REVISION:}"
+    jina:
+      space-id: "${AMSHA_EMBEDDING_JINA_SPACE_ID:}"
+      space-revision: "${AMSHA_EMBEDDING_JINA_SPACE_REVISION:}"
+    openai:
+      space-id: "${AMSHA_EMBEDDING_OPENAI_SPACE_ID:}"
+      space-revision: "${AMSHA_EMBEDDING_OPENAI_SPACE_REVISION:}"
   agent:
     default-timezone: "${AMSHA_DEFAULT_TIMEZONE:Asia/Kolkata}"
     rate-limit:

@@ -28,6 +28,8 @@ class InfiniteLoopEmbeddingModelProviderTest {
         mockOllamaFactory = mock(EmbeddingProviderFactory.class);
 
         when(mockOllamaFactory.providerId()).thenReturn("ollama");
+        when(mockOllamaFactory.embeddingSpace(any(EmbeddingModelConfig.class)))
+                .thenReturn(EmbeddingSpaceDescriptor.providerBound("ollama", "nomic-embed-text:v1.5"));
         when(mockFactories.stream()).thenAnswer(i -> Stream.of(mockOllamaFactory));
         provider.factories = mockFactories;
 
