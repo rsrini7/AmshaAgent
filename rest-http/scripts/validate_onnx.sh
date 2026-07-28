@@ -15,6 +15,10 @@ RESP_FILE="$(mktemp)"
 trap 'rm -f "$RESP_FILE"' EXIT
 fail()  { printf "❌ HTTP %s — %s\n" "$CODE" "$(head -c 120 "$RESP_FILE")"; FAIL=$((FAIL+1)); }
 mute()  { curl -s -m 180 -o "$RESP_FILE" -w "%{http_code}" "$@"; }
+successful_embeddings() {
+  curl -s -m 15 "$B/q/metrics" \
+    | awk '/^amsha_onnx_embedding_requests_total\{[^}]*outcome="success"/ { total += $NF } END { printf "%.0f", total + 0 }'
+}
 
 echo "═══════════════════════════════════════════"
 echo " ONNX LOCAL ML INFERENCE REST VALIDATOR"
@@ -32,13 +36,14 @@ else
   fail "$CODE"
 fi
 
-# ── ONNX-2: Metrics Registration ──
-# The archival admin search endpoint is deliberately BM25-only; use the focused
-# OnnxEmbeddingModelSmokeTest for an actual embedding assertion until a semantic
-# retrieval REST surface exists.
-info "ONNX-2: ONNX embedding latency metric is registered"
-CODE=$(mute -X GET "$B/q/metrics")
-if [ "$CODE" = "200" ] && grep -q '^amsha_onnx_embedding_latency_seconds_count' "$RESP_FILE"; then
+# ── ONNX-2: Fixed-text Native/JVM Inference Probe ──
+BEFORE_SUCCESS=$(successful_embeddings)
+info "ONNX-2: Internal ONNX probe increments success metric"
+CODE=$(mute -X POST -H "X-Amsha-API-Key: $VALID_KEY" "$B/api/v1/admin/local-ml/onnx/probe")
+AFTER_SUCCESS=$(successful_embeddings)
+if [ "$CODE" = "200" ] \
+  && grep -q '"status":"ready"' "$RESP_FILE" \
+  && [ "$AFTER_SUCCESS" -gt "$BEFORE_SUCCESS" ]; then
   ok "$CODE"
 else
   fail "$CODE"

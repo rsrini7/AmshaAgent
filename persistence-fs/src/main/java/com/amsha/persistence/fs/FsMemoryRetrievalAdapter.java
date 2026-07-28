@@ -80,7 +80,7 @@ public class FsMemoryRetrievalAdapter implements MemoryRetrievalPort {
             String id = f.replace(".json", "");
             store.readOptional(List.of(DOMAIN, f), IndexEntry.class).ifPresent(entry -> {
                 String mdJson = serializeMetadata(entry.metadata);
-                lucene.index(id, entry.text, mdJson, null);
+                lucene.index(id, entry.text, mdJson, embeddingFor(entry.text, id));
             });
         }
         if (!files.isEmpty()) {
@@ -114,19 +114,7 @@ public class FsMemoryRetrievalAdapter implements MemoryRetrievalPort {
         String id = entry.id() != null ? entry.id() : UUID.randomUUID().toString();
         String text = entry.text();
         String metadataJson = serializeMetadata(entry.metadata());
-        float[] embedding = null;
-        if (vectorSearchEnabled && text != null && !text.isBlank()) {
-            try {
-                var embeddingResult = embeddingModel.get().embed(text);
-                validateDimension(embeddingResult.content().vector());
-                if (vectorSearchEnabled) {
-                    embedding = embeddingResult.content().vector();
-                }
-            } catch (Exception e) {
-                LOG.warnf("Embedding failed for document %s (indexing without vector): %s", id, e.getMessage());
-            }
-        }
-        lucene.index(id, text, metadataJson, embedding);
+        lucene.index(id, text, metadataJson, embeddingFor(text, id));
         store.write(List.of(DOMAIN, id + ".json"), new IndexEntry(id, text, entry.metadata()));
         return new IngestResult(id, true);
     }
@@ -140,6 +128,18 @@ public class FsMemoryRetrievalAdapter implements MemoryRetrievalPort {
         return lucene.searchBM25(query, topK).stream()
                 .map(r -> new MemoryChunkDto(r.id(), r.content(), r.score()))
                 .toList();
+    }
+
+    private float[] embeddingFor(String text, String id) {
+        if (!vectorSearchEnabled || text == null || text.isBlank()) return null;
+        try {
+            float[] embedding = embeddingModel.get().embed(text).content().vector();
+            validateDimension(embedding);
+            return vectorSearchEnabled ? embedding : null;
+        } catch (Exception e) {
+            LOG.warnf("Embedding failed for document %s (indexing without vector): %s", id, e.getMessage());
+            return null;
+        }
     }
 
     private void validateDimension(float[] vector) {

@@ -8,7 +8,7 @@
   ![Native Image Ready](https://img.shields.io/badge/Native_Image-Ready-orange.svg?style=flat&logo=graalvm)
   ![OpenTelemetry](https://img.shields.io/badge/OpenTelemetry-Tracing-blueviolet.svg?style=flat&logo=opentelemetry)
   ![Podman](https://img.shields.io/badge/Isolation-Rootless_Podman-purple.svg?style=flat&logo=podman)
-  ![Tests](https://img.shields.io/badge/Tests-3893_passing-brightgreen.svg?style=flat)
+  ![Tests](https://img.shields.io/badge/Tests-3897_passing-brightgreen.svg?style=flat)
   ![Coverage](https://img.shields.io/badge/Coverage-70.11%25-brightgreen.svg?style=flat)
   [![Built with Devbox](https://img.shields.io/badge/built_with-devbox-green.svg?style=flat)](https://www.jetify.com/devbox/)
   [![Built with mise](https://img.shields.io/badge/built_with-mise-blue.svg?style=flat)](https://jdx.dev)
@@ -16,9 +16,27 @@
 
 ---
 
-> **A self-hosted, production-grade agentic AI platform** — ReAct agent loop, 12 specialist personas, HITL governance, Podman sandbox, hexagonal persistence (SQLite / PostgreSQL / FS). Runs as a single ~183 MB binary.
+> **A self-hosted, production-grade agentic AI platform** — ReAct agent loop, 12 specialist personas, HITL governance, Podman sandbox, hexagonal persistence (SQLite / PostgreSQL / FS). Runs as a single ~400 MB binary.
 
 **Stack**: JDK 25 · Quarkus 3.27.2 · LangChain4J 1.x · SQLite (WAL + FTS5 + sqlite-vec) · Podman · Apache Camel · BouncyCastle
+
+### Native binary size
+
+The native binary includes the optional ONNX Runtime and DJL tokenizer libraries so a
+verified local model can run without Python or a sidecar. A current macOS arm64 build
+of `dist/amsha-sqlite` is **381.3 MiB**; size varies by target OS/architecture and
+GraalVM reachability analysis.
+
+| Contribution | Measured size | Notes |
+| --- | ---: | --- |
+| ONNX Runtime 1.27.0 JAR | 41.4 MiB compressed / 147.6 MiB contents | Contains native libraries for Linux arm64/x64, macOS arm64, and Windows x64. |
+| DJL Tokenizers 0.33.0 JAR | 17.8 MiB compressed / 51.9 MiB contents | Contains Rust tokenizer bindings for the same supported families. |
+| Native-image executable | 381.3 MiB on this build | Includes only resources/code retained by GraalVM; it cannot be accurately split into a fixed “base”, JNI metadata, and dependency total from file size alone. |
+| MPNet model bundle | 415.6 MiB external | Installed under gitignored `data/models/`; never embedded in the binary. |
+
+The JAR-content values are supply-chain inventory figures, not additive executable
+size. For the exact binary on a target, build locally and use `ls -lh dist/amsha-sqlite`.
+See [Local ONNX ML](./docs/ONNX_LOCAL_ML_GUIDE.md) for installation and verification.
 
 ---
 

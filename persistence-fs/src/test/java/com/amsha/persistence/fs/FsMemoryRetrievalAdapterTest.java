@@ -187,7 +187,12 @@ class FsMemoryRetrievalAdapterTest {
     }
 
     @Test
-    void rebuildsLuceneIndexFromJsonOnStartup() throws Exception {
+    @SuppressWarnings("unchecked")
+    void rebuildsLuceneIndexFromJsonWithVectorsOnStartup() throws Exception {
+        Instance<EmbeddingModel> mockInstance = mock(Instance.class);
+        when(mockInstance.isUnsatisfied()).thenReturn(false);
+        when(mockInstance.get()).thenReturn(new FakeEmbeddingModel(4));
+        setField(adapter, "embeddingModel", mockInstance);
         adapter.init();
         adapter.index(new MemoryEntryDto("r1", "rebuild me", Map.of("source", "test")));
         assertEquals(1, adapter.search("rebuild", 10, null).size());
@@ -197,8 +202,10 @@ class FsMemoryRetrievalAdapterTest {
         setField(restarted, "store", fileStore);
         setField(restarted, "properties", tempProps());
         setField(restarted, "objectMapper", fileStore.objectMapper());
+        setField(restarted, "embeddingModel", mockInstance);
         restarted.init();
         assertEquals(1, restarted.search("rebuild", 10, null).size());
+        assertEquals(1, restarted.search("unrelated", 10, null).size());
         restarted.destroy();
     }
 

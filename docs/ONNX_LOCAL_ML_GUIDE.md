@@ -17,7 +17,7 @@ The implementation follows [ADR-ONNX-In-Process-Local-ML-Inference.md](../Ideas-
 | **Phase 2 & 2.5: Classifier SPI Gates** | *Pending* | Core `ClassifierResult` SPI, `PostPolicyToolRiskInterceptor`, shadow mode score distribution |
 | **Phase 3: Bounded Behavioral Activation** | *Pending* | Admin kill switches (`/admin/local-ml/**`), per-classifier runtime feature toggles |
 
-Current evidence (2026-07-28): the real MPNet JVM smoke test completed a 768-dimensional, finite, L2-normalized embedding through `OrtSession.run()`. The existing macOS arm64 native binary also started with ONNX Runtime `1.27.0` ready, registered the ONNX MPNet slot, and passed the three `--onnx` REST checks. The native REST surface does not execute an embedding, so the cross-platform native inference gate remains open.
+Current evidence (2026-07-28): the real MPNet JVM smoke test completed a 768-dimensional, finite, L2-normalized embedding through `OrtSession.run()`. The existing macOS arm64 native binary also started with ONNX Runtime `1.27.0` ready and registered the ONNX MPNet slot. The native diagnostic probe must be run after its introducing native build; it executes one fixed-text embedding and verifies the ONNX success metric without exposing text or vector data. The cross-platform native inference gate remains open.
 
 ---
 
@@ -160,7 +160,7 @@ From another terminal, run:
 bash rest-http/scripts/run_all_validations.sh --onnx
 ```
 
-This proves the native process starts, reports ONNX readiness, exposes the ONNX metric, and sees the verified bundle. It does **not** yet prove native `OrtSession.run()` execution: the current archival admin endpoint is deliberately BM25-only. A native inference smoke test on every supported target remains mandatory before Phase 0 is closed. Do not rely on undocumented ORT extraction locations or system-property library overrides; they are not an approved deployment interface.
+This proves the native process starts, reports ONNX readiness, and sees the verified bundle. `ONNX-2` calls the internal-only fixed-text probe, requires an ONNX success-counter increment, and therefore proves native `OrtSession.run()` when it passes. A native inference smoke test on every supported target remains mandatory before Phase 0 is closed. Do not rely on undocumented ORT extraction locations or system-property library overrides; they are not an approved deployment interface.
 
 The macOS arm64 build/start/readiness procedure above passed on 2026-07-28. It is evidence for that target only; Linux x86-64, Linux arm64, and a real native embedding execution remain required gates.
 
@@ -181,7 +181,7 @@ Run the REST validation script:
 ```bash
 bash rest-http/scripts/run_all_validations.sh --onnx
 ```
-This executes `ONNX-1` (health check `/q/health`), `ONNX-2` (metric registration), and `ONNX-3` (model bundle size/digest verification). The focused JVM inference proof is separate:
+This executes `ONNX-1` (health check `/q/health`), `ONNX-2` (an internal fixed-text inference probe plus ONNX success-metric increment), and `ONNX-3` (model bundle size/digest verification). The focused JVM inference proof is separate:
 
 ```bash
 ./mvnw -pl local-ml-onnx -Dtest=OnnxEmbeddingModelSmokeTest test

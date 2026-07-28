@@ -881,7 +881,7 @@ All three values are determined from the verified model bundle manifest at `data
 
 ### Q: Is native ONNX inference verified already?
 
-The macOS arm64 native binary has compiled, started with ONNX Runtime ready, registered the MPNet slot, and passed the ONNX REST readiness/metric/bundle checks. That is not a real native embedding result: a native `OrtSession.run()` smoke test is still required on every supported target before ONNX native deployment is supported. The 435 MB model always remains external in `data/models/`.
+The macOS arm64 native binary has compiled, started with ONNX Runtime ready, and registered the MPNet slot. After rebuilding with the diagnostic probe, `--onnx` executes a fixed-text embedding and requires the ONNX success metric to increase. The same native inference check is still required on every supported target before ONNX native deployment is supported. The 435 MB model always remains external in `data/models/`.
 
 ---
 
