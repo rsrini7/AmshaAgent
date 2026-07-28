@@ -50,6 +50,7 @@
     <quarkus-mcp.version>1.10.3</quarkus-mcp.version>
     <quarkus-jdbc-sqlite.version>3.0.11</quarkus-jdbc-sqlite.version>
     <lucene.version>10.4.0</lucene.version>
+    <djl.version>0.33.0</djl.version>
     <onnxruntime.version>1.27.0</onnxruntime.version>
     <!-- Baked into build-info.properties. "default" = JVM mode (BackendValidator skips).
          Native builds explicitly pass -Damsha.build.backend=sqlite|postgres|fs. -->
@@ -146,6 +147,11 @@
         <groupId>com.amsha</groupId>
         <artifactId>amsha-local-ml-onnx</artifactId>
         <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>ai.djl.huggingface</groupId>
+        <artifactId>tokenizers</artifactId>
+        <version>${djl.version}</version>
       </dependency>
       <dependency>
         <groupId>com.microsoft.onnxruntime</groupId>

@@ -56,7 +56,7 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             CoreMemoryAdminResource.CoreMemoryUpdateRequest.class,
             PromptAdminResource.PromptUpdateRequest.class,
             ActiveAgentResponse.class,
-            // ── P109: Identity / Access / Workspace Sharing / Bootstrap ──
+            // Identity / Access / Workspace Sharing / Bootstrap ──
             // Onboarding bootstrap records
             BootstrapResource.BootstrapStatusResponse.class,
             BootstrapResource.ClaimResponse.class,

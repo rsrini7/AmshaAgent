@@ -28,10 +28,17 @@ embedding provider or change the configured default provider list.
   are rejected. Unknown manifest metadata is tolerated for forward compatibility while
   all fields used by the current verifier remain mandatory and validated. The module
   never downloads or installs model assets automatically.
+- Completed for the JVM spike: selected `ai.djl.huggingface:tokenizers` `0.33.0`
+  (Apache-2.0) for standard Hugging Face WordPiece, BPE, and Unigram tokenizer JSON.
+  Its CPU JNI artifact packages Linux x86-64, Linux arm64, and macOS arm64 libraries.
+  `OnnxTokenizerFactory` forces DJL offline mode and telemetry opt-out, and rejects
+  native-library/flavour overrides before it loads a bundle-local tokenizer. A local
+  macOS arm64 load and WordPiece tokenization probe passes; this is not yet the full
+  supported-platform or native-image gate.
 - Verified so far: focused RAG compatibility tests, ONNX runtime/bundle verifier tests,
   application assembly compilation, documentation validation, and diff hygiene.
-- Still required before any embedding slot can be enabled: tokenizer binding selection
-  and its platform/native evaluation, a real signed model/index installation flow,
+- Still required before any embedding slot can be enabled: tokenizer platform/native
+  evaluation, a real signed model/index installation flow,
   inference/session lifecycle and bounded scheduling, golden-corpus correctness
   evidence, `OnnxEmbeddingProviderFactory`, warm-up/observability, and vector-index
   fingerprint parity across SQLite, PostgreSQL, and filesystem.
@@ -122,6 +129,11 @@ Prove all of the following before adding ONNX to a default distribution:
    `ISC`, or `0BSD`), GraalVM native-image JNI viability, performance, and model
    family coverage (WordPiece, BPE, Unigram for BERT/RoBERTa/MPNet).
    Any other license requires an explicit legal and maintainer review.
+   The current JVM spike selects `ai.djl.huggingface:tokenizers` `0.33.0`
+   (Apache-2.0). It is constrained to the bundled CPU JNI libraries and local
+   `tokenizer.json` files by `OnnxTokenizerFactory`, which enforces DJL offline mode
+   and telemetry opt-out before any tokenizer class is used. This selection remains
+   conditional on the cross-platform and native-image gates below.
 2. **Platform Native Loading**: Verify ONNX Runtime and selected tokenizer native
    libraries load cleanly on JDK 25 across Linux x86-64, Linux arm64, and macOS arm64.
 3. **Memory Leak Gate**: Repeated application startup, inference cycles, and shutdown
