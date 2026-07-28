@@ -44,6 +44,10 @@ embedding provider or change the configured default provider list.
   workspace-context-aware executor. Full queues fail explicitly, and work that reaches
   the executor after its request deadline completes as a timeout; no caller-thread
   blocking adapter or provider is exposed yet.
+- Completed Phase 1 bundle metadata foundation: embedding bundles can carry a typed,
+  validated tokenizer/input/output/pooling/normalization/dimension/vector-space contract;
+  older non-embedding manifests remain verifiable but cannot be selected by the future
+  embedding provider.
 - Verified so far: focused RAG compatibility tests, ONNX runtime/bundle verifier tests,
   application assembly compilation, documentation validation, and diff hygiene.
 - Still required before any embedding slot can be enabled: tokenizer platform/native

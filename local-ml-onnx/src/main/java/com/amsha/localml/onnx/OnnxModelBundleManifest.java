@@ -2,6 +2,7 @@ package com.amsha.localml.onnx;
 
 import java.util.Locale;
 import java.util.Objects;
+import java.util.Optional;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
@@ -15,7 +16,8 @@ public record OnnxModelBundleManifest(
         long modelBytes,
         String tokenizerFile,
         String tokenizerSha256,
-        long tokenizerBytes) {
+        long tokenizerBytes,
+        OnnxEmbeddingBundleSpec embedding) {
 
     public OnnxModelBundleManifest {
         bundleId = requireIdentifier(bundleId, "bundleId");
@@ -29,6 +31,33 @@ public record OnnxModelBundleManifest(
         }
         tokenizerSha256 = requireSha256(tokenizerSha256, "tokenizerSha256");
         if (tokenizerBytes <= 0) throw new IllegalArgumentException("tokenizerBytes must be positive");
+    }
+
+    /** Compatibility constructor for non-embedding bundles verified by the Phase 0 foundation. */
+    public OnnxModelBundleManifest(
+            String bundleId,
+            String revision,
+            String modelFile,
+            String modelSha256,
+            long modelBytes,
+            String tokenizerFile,
+            String tokenizerSha256,
+            long tokenizerBytes) {
+        this(
+                bundleId,
+                revision,
+                modelFile,
+                modelSha256,
+                modelBytes,
+                tokenizerFile,
+                tokenizerSha256,
+                tokenizerBytes,
+                null);
+    }
+
+    /** Returns the embedding contract when this bundle is explicitly declared for embeddings. */
+    public Optional<OnnxEmbeddingBundleSpec> embeddingSpec() {
+        return Optional.ofNullable(embedding);
     }
 
     private static String requireIdentifier(String value, String name) {

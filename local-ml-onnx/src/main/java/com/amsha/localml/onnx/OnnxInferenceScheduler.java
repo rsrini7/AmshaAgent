@@ -19,7 +19,6 @@ import java.util.concurrent.TimeUnit;
 import com.amsha.core.scope.WorkspaceExecutors;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
-import org.jboss.logging.Logger;
 
 /**
  * Bounded CPU inference work queue. It propagates workspace context but never performs model
@@ -27,8 +26,6 @@ import org.jboss.logging.Logger;
  */
 @ApplicationScoped
 public class OnnxInferenceScheduler {
-
-    private static final Logger log = Logger.getLogger(OnnxInferenceScheduler.class);
 
     private final int inferenceThreads;
     private final int queueCapacity;
