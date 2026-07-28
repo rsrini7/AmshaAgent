@@ -30,18 +30,25 @@ public class OnnxInferenceScheduler {
     private final int inferenceThreads;
     private final int queueCapacity;
     private final Duration shutdownGrace;
+    private final OnnxInferenceMetrics metrics;
     private volatile ExecutorService executor;
 
     @Inject
     public OnnxInferenceScheduler(
             @ConfigProperty(name = "amsha.onnx.inference-threads", defaultValue = "2") int inferenceThreads,
             @ConfigProperty(name = "amsha.onnx.queue-capacity", defaultValue = "64") int queueCapacity,
-            @ConfigProperty(name = "amsha.onnx.shutdown-grace", defaultValue = "PT10S") Duration shutdownGrace) {
+            @ConfigProperty(name = "amsha.onnx.shutdown-grace", defaultValue = "PT10S") Duration shutdownGrace,
+            OnnxInferenceMetrics metrics) {
         if (inferenceThreads <= 0) throw new IllegalArgumentException("inferenceThreads must be positive");
         if (queueCapacity <= 0) throw new IllegalArgumentException("queueCapacity must be positive");
         this.inferenceThreads = inferenceThreads;
         this.queueCapacity = queueCapacity;
         this.shutdownGrace = requireNonNegative(shutdownGrace, "shutdownGrace");
+        this.metrics = metrics;
+    }
+
+    OnnxInferenceScheduler(int inferenceThreads, int queueCapacity, Duration shutdownGrace) {
+        this(inferenceThreads, queueCapacity, shutdownGrace, null);
     }
 
     @PostConstruct
@@ -68,6 +75,7 @@ public class OnnxInferenceScheduler {
         CompletableFuture<T> result = new CompletableFuture<>();
         try {
             currentExecutor.execute(() -> execute(deadline, task, result));
+            recordStage("scheduler_accepted");
         } catch (RejectedExecutionException e) {
             throw new OnnxInferenceSchedulingException(
                     OnnxInferenceSchedulingException.Reason.OVERLOAD_REJECTED, "ONNX inference queue is full");
@@ -91,7 +99,8 @@ public class OnnxInferenceScheduler {
         }
     }
 
-    private static <T> void execute(Instant deadline, Callable<T> task, CompletableFuture<T> result) {
+    private <T> void execute(Instant deadline, Callable<T> task, CompletableFuture<T> result) {
+        recordStage("scheduler_started");
         if (!Instant.now().isBefore(deadline)) {
             result.completeExceptionally(new OnnxInferenceSchedulingException(
                     OnnxInferenceSchedulingException.Reason.TIMEOUT,
@@ -113,6 +122,10 @@ public class OnnxInferenceScheduler {
                 TimeUnit.MILLISECONDS,
                 new ArrayBlockingQueue<>(capacity),
                 new ThreadPoolExecutor.AbortPolicy());
+    }
+
+    private void recordStage(String stage) {
+        if (metrics != null) metrics.recordExecutionStage(stage);
     }
 
     private static Duration requireNonNegative(Duration value, String name) {

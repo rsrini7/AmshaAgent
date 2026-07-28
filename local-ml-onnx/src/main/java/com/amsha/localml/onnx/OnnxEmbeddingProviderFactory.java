@@ -63,7 +63,7 @@ public class OnnxEmbeddingProviderFactory implements EmbeddingProviderFactory {
                 runtimeManager,
                 sessionLeaseManager,
                 scheduler,
-                new OnnxEmbeddingRunner(),
+                new OnnxEmbeddingRunner(metrics),
                 metrics,
                 maxInputBytes,
                 maxBatchInputBytes,
@@ -205,7 +205,9 @@ public class OnnxEmbeddingProviderFactory implements EmbeddingProviderFactory {
         var environment = runtimeManager
                 .environment()
                 .orElseThrow(() -> new OnnxEmbeddingInferenceException("ONNX Runtime is unavailable"));
+        metrics.recordExecutionStage("lease_acquire_started");
         try (OnnxSessionLease lease = sessionLeaseManager.acquire(bundle, deadline)) {
+            metrics.recordExecutionStage("lease_acquired");
             return runner.embedAll(environment, lease.session(), lease.tokenizer(), spec, probes);
         }
     }
@@ -270,7 +272,9 @@ public class OnnxEmbeddingProviderFactory implements EmbeddingProviderFactory {
             var environment = runtimeManager
                     .environment()
                     .orElseThrow(() -> new OnnxEmbeddingInferenceException("ONNX Runtime is unavailable"));
+            metrics.recordExecutionStage("lease_acquire_started");
             try (OnnxSessionLease lease = sessionLeaseManager.acquire(bundle, deadline)) {
+                metrics.recordExecutionStage("lease_acquired");
                 return runner.embedAll(environment, lease.session(), lease.tokenizer(), spec, texts);
             }
         }

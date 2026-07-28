@@ -16,8 +16,22 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
+import org.jboss.logging.Logger;
+
 /** Executes one verified embedding batch with manifest-declared inputs, output, and pooling. */
 public final class OnnxEmbeddingRunner {
+
+    private static final Logger log = Logger.getLogger(OnnxEmbeddingRunner.class);
+
+    private final OnnxInferenceMetrics metrics;
+
+    public OnnxEmbeddingRunner() {
+        this(null);
+    }
+
+    OnnxEmbeddingRunner(OnnxInferenceMetrics metrics) {
+        this.metrics = metrics;
+    }
 
     public List<float[]> embedAll(
             OrtEnvironment environment,
@@ -35,7 +49,10 @@ public final class OnnxEmbeddingRunner {
         for (String text : texts) Objects.requireNonNull(text, "texts must not contain null");
         validateGraph(session, spec);
 
+        long started = System.nanoTime();
         BatchInputs inputs = tokenize(tokenizer, spec, texts);
+        recordPhase("tokenization", started);
+        started = System.nanoTime();
         try (OnnxTensor inputIds = OnnxTensor.createTensor(environment, inputs.inputIds());
                 OnnxTensor attentionMask = OnnxTensor.createTensor(environment, inputs.attentionMask())) {
             Map<String, OnnxTensor> tensors = new LinkedHashMap<>();
@@ -44,23 +61,37 @@ public final class OnnxEmbeddingRunner {
             if (spec.tokenTypeIdsName() != null) {
                 try (OnnxTensor tokenTypeIds = OnnxTensor.createTensor(environment, inputs.tokenTypeIds())) {
                     tensors.put(spec.tokenTypeIdsName(), tokenTypeIds);
+                    recordPhase("tensor_preparation", started);
                     return runAndPool(session, spec, inputs.attentionMask(), tensors);
                 }
             }
+            recordPhase("tensor_preparation", started);
             return runAndPool(session, spec, inputs.attentionMask(), tensors);
         } catch (OrtException | RuntimeException e) {
             throw new OnnxEmbeddingInferenceException("ONNX embedding inference failed", e);
         }
     }
 
-    private static List<float[]> runAndPool(
+    private List<float[]> runAndPool(
             OrtSession session, OnnxEmbeddingBundleSpec spec, long[][] attentionMask, Map<String, OnnxTensor> tensors)
             throws OrtException, OnnxEmbeddingInferenceException {
+        log.debug("ONNX embedding phase started: graph_execution");
+        long started = System.nanoTime();
         try (OrtSession.Result result = session.run(tensors)) {
+            recordPhase("graph_execution", started);
             OnnxValue output = result.get(spec.outputName())
                     .orElseThrow(() -> new OnnxEmbeddingInferenceException("Declared ONNX output is missing"));
-            return pool(output.getValue(), attentionMask, spec);
+            started = System.nanoTime();
+            List<float[]> vectors = pool(output.getValue(), attentionMask, spec);
+            recordPhase("pooling", started);
+            return vectors;
         }
+    }
+
+    private void recordPhase(String phase, long startedNanos) {
+        long elapsedNanos = System.nanoTime() - startedNanos;
+        if (metrics != null) metrics.recordPhase(phase, elapsedNanos);
+        log.debugf("ONNX embedding phase completed: phase=%s durationMs=%.3f", phase, elapsedNanos / 1_000_000.0);
     }
 
     private static void validateGraph(OrtSession session, OnnxEmbeddingBundleSpec spec)

@@ -40,6 +40,23 @@ public class OnnxInferenceMetrics {
         embeddingLatency.record(elapsedNanos, TimeUnit.NANOSECONDS);
     }
 
+    void recordPhase(String phase, long elapsedNanos) {
+        Timer.builder("amsha.onnx.embedding.phase.latency")
+                .tag("phase", phase)
+                .description("Local ONNX embedding execution phase latency")
+                .publishPercentiles(0.5, 0.95, 0.99)
+                .register(registry)
+                .record(elapsedNanos, TimeUnit.NANOSECONDS);
+    }
+
+    void recordExecutionStage(String stage) {
+        Counter.builder("amsha.onnx.embedding.execution.stage")
+                .tag("stage", stage)
+                .description("Payload-free checkpoints for local ONNX embedding execution")
+                .register(registry)
+                .increment();
+    }
+
     void recordWarmup(String outcome) {
         Counter.builder("amsha.onnx.warmup")
                 .tag("outcome", outcome)

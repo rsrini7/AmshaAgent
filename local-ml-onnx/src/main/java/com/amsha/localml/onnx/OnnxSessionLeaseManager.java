@@ -232,6 +232,11 @@ public class OnnxSessionLeaseManager {
             var tokenizer = tokenizerFactory.load(bundle.tokenizerPath());
             try {
                 try (OrtSession.SessionOptions options = new OrtSession.SessionOptions()) {
+                    // Keep native-image execution deliberately conservative until the cross-platform
+                    // execution matrix proves a wider ORT threading configuration is safe.
+                    options.setIntraOpNumThreads(1);
+                    options.setInterOpNumThreads(1);
+                    options.setExecutionMode(OrtSession.SessionOptions.ExecutionMode.SEQUENTIAL);
                     return new OrtSessionHandle(
                             environment.createSession(bundle.modelPath().toString(), options), tokenizer);
                 }
