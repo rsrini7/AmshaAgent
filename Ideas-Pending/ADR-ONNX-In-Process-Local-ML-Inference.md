@@ -608,6 +608,23 @@ non-vector fallback before Phase 1 ships. If preserving production data becomes 
 requirement, design online re-embedding and cutover in a separate ADR before the first
 stable release; do not silently expand this development reset policy.
 
+Phase 1 deliberately provides no vector-index rebuild endpoint. A future production
+rebuild workflow is an operational feature requiring its own ADR. It must be
+internal-only, namespace-specific, asynchronous, cancellable, and auditable. It builds
+and validates a new index generation beside the active generation before atomically
+activating it; it never purges or mutates the active generation first. Embedding
+inference and bulk index construction remain outside database transactions. Only the
+short metadata write that activates a validated generation may be transactional, with
+an explicit rollback pointer to the prior generation.
+
+`VectorIndexNamespace` identifies durable or rebuildable persisted vector indexes; it
+is not a general model-purpose registry. Phase 2/2.5 classifiers are governed by
+immutable bundle identity, calibration/version evidence, per-classifier kill switches,
+and model lifecycle state. They must not acquire vector-index namespaces merely
+because they use ONNX. A future classifier may add a namespace only if it genuinely
+owns a persisted vector index, in which case the same descriptor, rebuild, and atomic
+activation contract applies.
+
 ## 8. Runtime lifecycle, concurrency, and failure behavior
 
 - Pin exact Maven versions through root dependency-management properties; version ranges are forbidden.

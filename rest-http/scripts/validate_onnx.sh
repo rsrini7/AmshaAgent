@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # validate_onnx.sh — Validate deployed in-process local ONNX Runtime readiness and bundle integrity
-# Covers: ONNX health → metric wiring → bundle digest verification
+# Covers: ONNX health → metric wiring → bundle digest verification → active index compatibility
 #
 # Needs: serve mode with AMSHA_ONNX_ENABLED=true and verified model bundle in data/models.
 
@@ -18,6 +18,28 @@ mute()  { curl -s -m 180 -o "$RESP_FILE" -w "%{http_code}" "$@"; }
 successful_embeddings() {
   curl -s -m 15 "$B/q/metrics" \
     | awk '/^amsha_onnx_embedding_requests_total\{[^}]*outcome="success"/ { total += $NF } END { printf "%.0f", total + 0 }'
+}
+vector_index_is_ready() {
+  python3 - "$RESP_FILE" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as response:
+    health = json.load(response)
+
+checks = [
+    check
+    for check in health.get("checks", [])
+    if check.get("name") == "Vector Index Compatibility"
+]
+if (
+    health.get("status") != "UP"
+    or len(checks) != 1
+    or checks[0].get("status") != "UP"
+    or checks[0].get("data", {}).get("vectorStatus") != "READY"
+):
+    raise SystemExit(1)
+PY
 }
 
 echo "═══════════════════════════════════════════"
@@ -75,6 +97,16 @@ then
 else
   printf "❌ INVALID OR MISSING %s/manifest.json\n" "$BUNDLE_PATH"
   FAIL=$((FAIL+1))
+fi
+
+# ── ONNX-4: Vector Index Compatibility Health Check ──
+info "ONNX-4: Vector Index Compatibility check (/q/health)"
+CODE=$(mute -X GET "$B/q/health")
+if [ "$CODE" = "200" ] \
+  && vector_index_is_ready; then
+  ok "$CODE"
+else
+  fail "$CODE"
 fi
 
 echo ""
