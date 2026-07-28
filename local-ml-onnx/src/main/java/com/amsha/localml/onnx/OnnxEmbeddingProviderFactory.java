@@ -143,10 +143,20 @@ public class OnnxEmbeddingProviderFactory implements EmbeddingProviderFactory {
 
     @Override
     public EmbeddingSpaceDescriptor embeddingSpace(EmbeddingModelConfig config) {
-        OnnxEmbeddingBundleSpec spec =
-                loadEmbeddingBundle(config).manifest().embeddingSpec().orElseThrow();
+        VerifiedOnnxModelBundle bundle = loadEmbeddingBundle(config);
+        OnnxEmbeddingBundleSpec spec = bundle.manifest().embeddingSpec().orElseThrow();
         validateConfiguredSpace(config, spec);
-        return EmbeddingSpaceDescriptor.configured(providerId(), spec.spaceId(), spec.spaceRevision());
+        return EmbeddingSpaceDescriptor.verified(
+                providerId(),
+                spec.spaceId(),
+                bundle.manifest().revision(),
+                spec.tokenizerRevision(),
+                "onnx-transformer-v1",
+                spec.poolingStrategy().name(),
+                spec.l2Normalize(),
+                spec.vectorDimension(),
+                "FLOAT32",
+                spec.maxSequenceLength());
     }
 
     private VerifiedOnnxModelBundle loadEmbeddingBundle(EmbeddingModelConfig config) {

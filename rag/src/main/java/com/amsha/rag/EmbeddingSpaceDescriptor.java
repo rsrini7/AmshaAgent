@@ -13,36 +13,159 @@ import java.util.Objects;
  * have been independently verified. Provider identity is retained for diagnostics but
  * does not determine compatibility.
  */
-public record EmbeddingSpaceDescriptor(String providerId, String spaceId, String revision, String fingerprint) {
+public record EmbeddingSpaceDescriptor(
+        String providerId,
+        String spaceId,
+        String modelRevision,
+        String tokenizerRevision,
+        String preprocessingRevision,
+        String poolingStrategy,
+        boolean l2Normalize,
+        int vectorDimension,
+        String numericPrecision,
+        int maxSequenceLength,
+        String fingerprint) {
 
     public EmbeddingSpaceDescriptor {
         providerId = requireNonBlank(providerId, "providerId");
         spaceId = requireNonBlank(spaceId, "spaceId");
-        revision = requireNonBlank(revision, "revision");
+        modelRevision = requireNonBlank(modelRevision, "modelRevision");
+        tokenizerRevision = requireNonBlank(tokenizerRevision, "tokenizerRevision");
+        preprocessingRevision = requireNonBlank(preprocessingRevision, "preprocessingRevision");
+        poolingStrategy = requireNonBlank(poolingStrategy, "poolingStrategy");
+        if (vectorDimension < 0) throw new IllegalArgumentException("vectorDimension must not be negative");
+        numericPrecision = requireNonBlank(numericPrecision, "numericPrecision");
+        if (maxSequenceLength < 0) throw new IllegalArgumentException("maxSequenceLength must not be negative");
         fingerprint = requireNonBlank(fingerprint, "fingerprint");
-        if (!fingerprint.equals(fingerprint(spaceId, revision))) {
-            throw new IllegalArgumentException("fingerprint does not match spaceId and revision");
+        if (!fingerprint.equals(fingerprint(
+                spaceId,
+                modelRevision,
+                tokenizerRevision,
+                preprocessingRevision,
+                poolingStrategy,
+                l2Normalize,
+                vectorDimension,
+                numericPrecision,
+                maxSequenceLength))) {
+            throw new IllegalArgumentException("fingerprint does not match embedding-space fields");
         }
     }
 
     public static EmbeddingSpaceDescriptor providerBound(String providerId, String modelName) {
         String id = requireNonBlank(providerId, "providerId") + ":" + requireNonBlank(modelName, "modelName");
-        return new EmbeddingSpaceDescriptor(providerId, id, "unverified", fingerprint(id, "unverified"));
+        return create(
+                providerId,
+                id,
+                "unverified",
+                "provider-managed",
+                "provider-managed",
+                "provider-managed",
+                false,
+                0,
+                "FLOAT32",
+                0);
     }
 
     public static EmbeddingSpaceDescriptor configured(String providerId, String spaceId, String revision) {
-        return new EmbeddingSpaceDescriptor(providerId, spaceId, revision, fingerprint(spaceId, revision));
+        return create(
+                providerId,
+                spaceId,
+                revision,
+                revision,
+                "externally-verified",
+                "externally-verified",
+                false,
+                0,
+                "FLOAT32",
+                0);
+    }
+
+    public static EmbeddingSpaceDescriptor verified(
+            String providerId,
+            String spaceId,
+            String modelRevision,
+            String tokenizerRevision,
+            String preprocessingRevision,
+            String poolingStrategy,
+            boolean l2Normalize,
+            int vectorDimension,
+            String numericPrecision,
+            int maxSequenceLength) {
+        return create(
+                providerId,
+                spaceId,
+                modelRevision,
+                tokenizerRevision,
+                preprocessingRevision,
+                poolingStrategy,
+                l2Normalize,
+                vectorDimension,
+                numericPrecision,
+                maxSequenceLength);
     }
 
     public boolean isCompatibleWith(EmbeddingSpaceDescriptor other) {
         return other != null && fingerprint.equals(other.fingerprint);
     }
 
-    private static String fingerprint(String spaceId, String revision) {
+    private static EmbeddingSpaceDescriptor create(
+            String providerId,
+            String spaceId,
+            String modelRevision,
+            String tokenizerRevision,
+            String preprocessingRevision,
+            String poolingStrategy,
+            boolean l2Normalize,
+            int vectorDimension,
+            String numericPrecision,
+            int maxSequenceLength) {
+        return new EmbeddingSpaceDescriptor(
+                providerId,
+                spaceId,
+                modelRevision,
+                tokenizerRevision,
+                preprocessingRevision,
+                poolingStrategy,
+                l2Normalize,
+                vectorDimension,
+                numericPrecision,
+                maxSequenceLength,
+                fingerprint(
+                        spaceId,
+                        modelRevision,
+                        tokenizerRevision,
+                        preprocessingRevision,
+                        poolingStrategy,
+                        l2Normalize,
+                        vectorDimension,
+                        numericPrecision,
+                        maxSequenceLength));
+    }
+
+    private static String fingerprint(
+            String spaceId,
+            String modelRevision,
+            String tokenizerRevision,
+            String preprocessingRevision,
+            String poolingStrategy,
+            boolean l2Normalize,
+            int vectorDimension,
+            String numericPrecision,
+            int maxSequenceLength) {
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            return HexFormat.of()
-                    .formatHex(digest.digest((spaceId + "\n" + revision).getBytes(StandardCharsets.UTF_8)));
+            String canonical = String.join(
+                    "\n",
+                    spaceId,
+                    modelRevision,
+                    tokenizerRevision,
+                    preprocessingRevision,
+                    poolingStrategy,
+                    Boolean.toString(l2Normalize),
+                    Integer.toString(vectorDimension),
+                    numericPrecision,
+                    Integer.toString(maxSequenceLength));
+            return HexFormat.of().formatHex(digest.digest(canonical.getBytes(StandardCharsets.UTF_8)));
         } catch (NoSuchAlgorithmException e) {
             throw new IllegalStateException("SHA-256 is unavailable", e);
         }

@@ -136,6 +136,8 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             PostgresCronStoreAdapter.class,
             PostgresCronRunStoreAdapter.class,
             PostgresMemoryRetrievalAdapter.class,
+            PostgresVectorIndexMetadataAdapter.class,
+            PostgresVectorIndexCompatibilityInitializer.class,
             PostgresArchivalMemoryStore.class,
             PostgresPromptStoreAdapter.class,
             PostgresSecretStoreAdapter.class,

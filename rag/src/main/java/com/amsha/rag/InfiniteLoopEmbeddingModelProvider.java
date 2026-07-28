@@ -18,7 +18,10 @@ import java.util.Locale;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
+import com.amsha.common.util.LogUtil;
 import com.amsha.core.routing.InfiniteLoopProvider;
+import com.amsha.persistence.api.EmbeddingIndexDescriptor;
+import com.amsha.persistence.api.EmbeddingIndexDescriptorSource;
 
 import org.eclipse.microprofile.config.Config;
 import org.eclipse.microprofile.config.ConfigProvider;
@@ -42,7 +45,7 @@ import io.quarkus.runtime.Startup;
  * </pre>
  */
 @ApplicationScoped
-public class InfiniteLoopEmbeddingModelProvider {
+public class InfiniteLoopEmbeddingModelProvider implements EmbeddingIndexDescriptorSource {
 
     private static final Logger log = Logger.getLogger(InfiniteLoopEmbeddingModelProvider.class);
     private static final String CONFIG_PREFIX = "amsha.embedding.";
@@ -66,7 +69,11 @@ public class InfiniteLoopEmbeddingModelProvider {
     @ConfigProperty(name = "amsha.infinite-loop.max-latency-ms", defaultValue = "60000")
     long maxLatencyMs;
 
+    @ConfigProperty(name = "amsha.rag.embed-dimensions", defaultValue = "768")
+    int configuredVectorDimension;
+
     private volatile InfiniteLoopEmbeddingModel instance;
+    private volatile EmbeddingIndexDescriptor activeIndexDescriptor;
 
     @Produces
     @ApplicationScoped
@@ -99,7 +106,7 @@ public class InfiniteLoopEmbeddingModelProvider {
                             "Embedding loop: added slot [%s] space=%s",
                             trimmed, configured.space().spaceId());
                 } catch (Exception e) {
-                    log.warnf("Embedding loop: skipping slot [%s] — %s", trimmed, e.getMessage());
+                    log.warnf("Embedding loop: skipping slot [%s] — %s", trimmed, LogUtil.rootMessage(e));
                 }
             }
 
@@ -136,10 +143,37 @@ public class InfiniteLoopEmbeddingModelProvider {
                     slots.size(),
                     slots.stream().map(InfiniteLoopProvider.Slot::name).toList());
 
-            instance = new InfiniteLoopEmbeddingModel(
+            InfiniteLoopEmbeddingModel initialized = new InfiniteLoopEmbeddingModel(
                     slots, cooldownBaseSeconds, cooldownMaxSeconds, cooldownTransientSeconds, maxLatencyMs);
-            return instance;
+            activeIndexDescriptor = toIndexDescriptor(configuredSpace);
+            instance = initialized;
+            return initialized;
         }
+    }
+
+    @Override
+    public Optional<EmbeddingIndexDescriptor> activeDescriptor() {
+        if (activeIndexDescriptor == null) embeddingModel();
+        return Optional.ofNullable(activeIndexDescriptor);
+    }
+
+    private EmbeddingIndexDescriptor toIndexDescriptor(EmbeddingSpaceDescriptor space) {
+        int dimension = space.vectorDimension() > 0 ? space.vectorDimension() : configuredVectorDimension;
+        return EmbeddingIndexDescriptor.create(
+                space.providerId(),
+                space.spaceId(),
+                space.modelRevision(),
+                space.tokenizerRevision(),
+                space.preprocessingRevision(),
+                space.poolingStrategy(),
+                space.l2Normalize(),
+                dimension,
+                space.numericPrecision(),
+                "FIRST_MAX_TOKENS",
+                "v1",
+                space.maxSequenceLength(),
+                0,
+                "DIRECT");
     }
 
     private ConfiguredEmbeddingModel createModelForProvider(

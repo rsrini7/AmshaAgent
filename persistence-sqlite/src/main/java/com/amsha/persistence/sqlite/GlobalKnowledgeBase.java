@@ -13,6 +13,8 @@ import java.util.UUID;
 
 import com.amsha.common.util.LogUtil;
 import com.amsha.persistence.api.MemoryChunkDto;
+import com.amsha.persistence.api.VectorIndexMetadataPort;
+import com.amsha.persistence.api.VectorIndexNamespace;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
@@ -35,6 +37,9 @@ public class GlobalKnowledgeBase {
     @Inject
     FtsConnectionInterceptor ftsInterceptor;
 
+    @Inject
+    VectorIndexMetadataPort vectorIndexMetadata;
+
     @ConfigProperty(name = "amsha.rag.embed-dimensions", defaultValue = "768")
     int embedDimensions;
 
@@ -43,8 +48,8 @@ public class GlobalKnowledgeBase {
             log.debug("GlobalKnowledgeBase: skipping blank ingest text.");
             return null;
         }
-        if (!ftsInterceptor.isVectorSearchEnabled()) {
-            log.debugf("GlobalKnowledgeBase: vec0 not available, skipping ingest.");
+        if (!isVectorEnabled()) {
+            log.debugf("GlobalKnowledgeBase: compatible vector index unavailable, skipping ingest.");
             return null;
         }
         try {
@@ -78,7 +83,7 @@ public class GlobalKnowledgeBase {
         if (query == null || query.isBlank()) {
             return List.of();
         }
-        if (!ftsInterceptor.isVectorSearchEnabled()) {
+        if (!isVectorEnabled()) {
             return List.of();
         }
         try {
@@ -127,5 +132,10 @@ public class GlobalKnowledgeBase {
         }
         sb.append(']');
         return sb.toString();
+    }
+
+    private boolean isVectorEnabled() {
+        return ftsInterceptor.isVectorSearchEnabled()
+                && vectorIndexMetadata.isVectorEnabled(VectorIndexNamespace.RAG_GLOBAL);
     }
 }

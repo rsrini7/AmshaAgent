@@ -11,10 +11,12 @@
 
 ## Current implementation status (2026-07-28)
 
-Phase 0–1 foundation work is in progress. ONNX is available only as an explicit
-provider slot with an installed verified bundle; it does not change the configured
-default provider list. The macOS arm64 native request path now passes; the real-model
-golden-corpus and persistence-parity gates remain open.
+Phase 1 implementation is complete, while the remaining Phase 0 release-evidence
+gates stay open. ONNX is available only as an explicit provider slot with an installed
+verified bundle; it does not change the configured default provider list. The macOS
+arm64 native request path and all-backend descriptor parity now pass; the supported-
+platform matrix, reference golden corpus, leak gate, and signed release provenance
+remain required before general availability.
 
 - Completed: provider-neutral `EmbeddingSpaceDescriptor` support and compatible-slot
   enforcement in the existing embedding failover loop; incompatible slots are skipped
@@ -80,24 +82,46 @@ golden-corpus and persistence-parity gates remain open.
   `@RunOnVirtualThread` request, after which provider retry/cooldown hid the error. The
   guard now uses `Context.isOnEventLoopThread()`; the unsuccessful `ScopedValue`
   experiment was reverted.
-- Implemented filesystem recovery correction: JSON-to-Lucene reconstruction regenerates
-  vectors through the configured embedding model. Descriptor-manifest validation and
-  all-backend index-fingerprint parity remain Phase 1 work.
+- Completed Phase 1 index identity: provider-neutral `EmbeddingIndexDescriptor`
+  fingerprints cover the immutable model/tokenizer/preprocessing contract, pooling,
+  normalization, dimension, precision, and chunking/window/aggregation rules. Provider
+  identity remains diagnostic provenance and cannot make incompatible spaces match.
+- Completed Phase 1 persistence parity: matching SQLite/PostgreSQL `V10` Flyway
+  migrations store descriptors, while filesystem Lucene stores a versioned checksummed
+  `index_descriptor.json` written by atomic replacement. Empty indexes initialize or
+  adopt the active descriptor; non-empty missing/mismatched indexes retain their data
+  and disable only vector operations.
+- Completed Phase 1 namespace gates and fallback: SQLite gates global RAG and archival
+  vec0 indexes, PostgreSQL gates its active RAG pgvector index, and filesystem gates the
+  Lucene RAG index. Retrieval and ingestion consume the same gate; mismatches preserve
+  BM25/FTS/text retrieval. The PostgreSQL archival embedding column is dormant and is
+  not reported as an active vector namespace because its adapter currently neither
+  writes nor queries that column.
+- Completed Phase 1 recovery/reset behavior: JSON-to-Lucene reconstruction runs only
+  for an empty Lucene index and regenerates vectors under the active descriptor. SQL
+  data and Lucene documents are never deleted automatically. Tests cover empty
+  initialization, non-empty mismatch preservation, post-reset descriptor adoption,
+  vector-disabled text fallback, checksummed filesystem restart reconstruction, and
+  native-reflection registrations across all three backends.
+- Completed Phase 1 diagnostics: `Vector Index Compatibility` readiness remains `UP`
+  while reporting `READY`, `NOT_ACTIVE`, or `DEGRADED` and bounded per-namespace state.
+  Internal `GET /admin/local-ml/onnx/indexes` exposes the exact active descriptor,
+  revision/fingerprint, and namespace compatibility without returning input or vectors.
 - Verified so far: focused RAG compatibility, ONNX runtime/bundle verifier, scheduler,
-  lease, runner, and real-JVM MPNet smoke tests; application assembly compilation,
-  documentation validation, native-image build, native REST inference probe, and diff
-  hygiene.
+  lease, runner, real-JVM MPNet smoke, descriptor/reset/fallback parity, and health/
+  diagnostic tests; SQLite and PostgreSQL `V10` migration tests; application assembly
+  compilation; documentation validation; native-image build; native REST inference
+  probe; and diff hygiene.
 - Still required for Phase 0: supported-platform native matrix; versioned
   Python-reference golden corpus with tolerance/pass-rate and nearest-neighbour evidence;
   repeated startup/inference/shutdown resource-leak gate; signed trust-root and release
   SBOM/provenance evidence.
-- Still required for Phase 1: full embedding-index descriptor; matching SQLite and
-  PostgreSQL `V10` migrations; checksummed filesystem descriptor manifest; every-vector-
-  namespace mismatch detection; non-vector fallback and explicit development-reset
-  behavior; and parity/rebuild contract tests across SQLite, PostgreSQL, and filesystem.
+- No Phase 1 implementation item remains open. Phase 1 general availability is still
+  conditional on the outstanding Phase 0 cross-platform, numeric-equivalence, leak,
+  signature, SBOM, and provenance evidence in Section 15.
 - Explicitly not started: Phase 2.5 core classifier SPIs and every Phase 2–3
-  classifier behavior. No database migration is introduced at this stage because no
-  ONNX-produced vector schema is active.
+  classifier behavior. The new `V10` migrations add descriptor metadata only; they do
+  not migrate, delete, or re-embed existing development vectors.
 
 ## 1. Decision summary
 
@@ -113,20 +137,24 @@ All three persistence backends already have vector-search paths:
 
 - SQLite uses sqlite-vec/vec0 through `RagSchemaInitializer`,
   `ArchivalVecSchemaInitializer`, and `GlobalKnowledgeBase`.
-- PostgreSQL uses pgvector through `rag_chunk_embedding`, vector columns in archival
-  memory, `RagChunkJdbiDao`, and `PostgresMemoryRetrievalAdapter`.
-- Filesystem persistence uses Lucene `KnnFloatVectorField` and hybrid search through
-  `LuceneIndexManager` and `FsMemoryRetrievalAdapter`.
+- PostgreSQL uses pgvector through `rag_chunk_embedding`, `RagChunkJdbiDao`, and
+  `PostgresMemoryRetrievalAdapter`. Its migration may create an archival embedding
+  column when pgvector is available, but `PostgresArchivalMemoryStore` is currently
+  BM25-only and does not make that dormant column an active vector namespace.
+- Filesystem RAG persistence uses Lucene `KnnFloatVectorField` and hybrid search through
+  `LuceneIndexManager` and `FsMemoryRetrievalAdapter`; filesystem archival memory remains
+  text-only and is not part of the Lucene vector namespace.
 
 Filesystem reconstruction from JSON regenerates vectors through the configured
-embedding model. It still lacks the Phase 1 descriptor-manifest validation required
-to prove that regenerated vectors match the active index contract.
+embedding model only after an empty index adopts the active checksummed descriptor.
+A non-empty missing or mismatched index is preserved and serves text-only retrieval.
 
 The repository requires persistence parity. Phase 1 therefore introduces matching
 fingerprint schema/manifest support and reset/rebuild behavior for SQLite, PostgreSQL,
 and filesystem vector namespaces in the same change. Existing development data is not
 migrated; the explicit reset policy in Section 7 applies. ONNX vector support is not
-declared generally available until parity tests pass on all three backends.
+declared generally available until the remaining Phase 0 evidence gates pass; Phase 1
+backend parity tests now pass on all three backends.
 
 The integration must:
 
@@ -748,7 +776,10 @@ Expose metrics for model load duration, inference latency, queue depth/rejection
 provider failover rotation count, classifier decision distribution, classifier
 circuit transitions/half-open probes, and best-effort resident memory. Expose exact
 model revisions and active index fingerprints through a protected diagnostic/health
-response, not metric labels.
+response, not metric labels. The public `Vector Index Compatibility` readiness check
+therefore exposes only bounded status values and remains `UP` when text fallback is
+safe; internal `GET /admin/local-ml/onnx/indexes` carries the exact descriptor and
+fingerprints.
 
 ## 13. Verification and acceptance criteria
 

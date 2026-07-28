@@ -39,6 +39,7 @@ class InfiniteLoopEmbeddingModelProviderTest {
         provider.cooldownMaxSeconds = 300;
         provider.cooldownTransientSeconds = 5;
         provider.maxLatencyMs = 60000;
+        provider.configuredVectorDimension = 768;
 
         // Set per-provider config via system properties
         System.setProperty("amsha.embedding.ollama.model", "nomic-embed-text:v1.5");
@@ -59,6 +60,7 @@ class InfiniteLoopEmbeddingModelProviderTest {
         EmbeddingModel result = provider.embeddingModel();
 
         assertNotNull(result);
+        assertEquals(768, provider.activeDescriptor().orElseThrow().vectorDimension());
         verify(mockOllamaFactory).create(any(EmbeddingModelConfig.class));
     }
 

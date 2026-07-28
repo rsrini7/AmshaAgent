@@ -134,6 +134,8 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             SqliteArchivalMemoryStore.class,
             ArchivalVecSchemaInitializer.class,
             VectorIngestionService.class,
+            SqliteVectorIndexMetadataAdapter.class,
+            SqliteVectorIndexCompatibilityInitializer.class,
             SqliteCronStoreAdapter.class,
             SqliteCronRunStoreAdapter.class,
             SqlitePromptStoreAdapter.class,

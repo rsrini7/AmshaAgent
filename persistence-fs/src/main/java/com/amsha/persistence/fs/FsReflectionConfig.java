@@ -37,6 +37,7 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             FsCheckpointStoreAdapter.class,
             FsCheckpointHelper.class,
             FsMemoryRetrievalAdapter.class,
+            FsVectorIndexMetadataAdapter.class,
             FsPersistenceAdapter.class,
             FsPromptStoreAdapter.class,
             FsMcpConnectionStoreAdapter.class,
@@ -82,6 +83,7 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             "org.apache.lucene.search.BoostAttribute",
             "org.apache.lucene.search.BoostAttributeImpl",
             "org.apache.lucene.search.MaxNonCompetitiveBoostAttribute",
-            "org.apache.lucene.search.MaxNonCompetitiveBoostAttributeImpl"
+            "org.apache.lucene.search.MaxNonCompetitiveBoostAttributeImpl",
+            "com.amsha.persistence.fs.FsVectorIndexMetadataAdapter$IndexDescriptorManifest"
         })
 public class FsReflectionConfig {}

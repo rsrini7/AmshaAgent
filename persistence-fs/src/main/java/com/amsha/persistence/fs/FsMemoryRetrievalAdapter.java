@@ -13,11 +13,16 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+import com.amsha.common.util.LogUtil;
 import com.amsha.persistence.api.BackendCapabilities;
+import com.amsha.persistence.api.EmbeddingIndexDescriptor;
+import com.amsha.persistence.api.EmbeddingIndexDescriptorSource;
 import com.amsha.persistence.api.IngestResult;
 import com.amsha.persistence.api.MemoryChunkDto;
 import com.amsha.persistence.api.MemoryEntryDto;
 import com.amsha.persistence.api.MemoryRetrievalPort;
+import com.amsha.persistence.api.VectorIndexMetadataPort;
+import com.amsha.persistence.api.VectorIndexNamespace;
 import com.amsha.persistence.fs.lucene.LuceneIndexManager;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -44,6 +49,12 @@ public class FsMemoryRetrievalAdapter implements MemoryRetrievalPort {
     Instance<EmbeddingModel> embeddingModel;
 
     @Inject
+    Instance<EmbeddingIndexDescriptorSource> descriptorSources;
+
+    @Inject
+    VectorIndexMetadataPort vectorIndexMetadata;
+
+    @Inject
     ObjectMapper objectMapper;
 
     private LuceneIndexManager lucene;
@@ -60,7 +71,9 @@ public class FsMemoryRetrievalAdapter implements MemoryRetrievalPort {
                 : Path.of(properties.dataDir(), properties.luceneIndexDir()).normalize();
         vectorSearchEnabled = embeddingModel != null && !embeddingModel.isUnsatisfied() && vectorDimension > 0;
         lucene = new LuceneIndexManager(luceneDir, vectorDimension);
-        rebuildFromJson();
+        boolean indexEmpty = lucene.numDocs() == 0;
+        configureVectorCompatibility(indexEmpty);
+        if (indexEmpty) rebuildFromJson();
     }
 
     @PreDestroy
@@ -69,7 +82,7 @@ public class FsMemoryRetrievalAdapter implements MemoryRetrievalPort {
             try {
                 lucene.close();
             } catch (Exception e) {
-                LOG.warnf("Failed to close Lucene index: %s", e.getMessage());
+                LOG.warnf("Failed to close Lucene index: %s", LogUtil.rootMessage(e));
             }
         }
     }
@@ -88,6 +101,31 @@ public class FsMemoryRetrievalAdapter implements MemoryRetrievalPort {
         }
     }
 
+    private void configureVectorCompatibility(boolean indexEmpty) {
+        if (!vectorSearchEnabled) return;
+        if (descriptorSources == null
+                || vectorIndexMetadata == null
+                || descriptorSources.isUnsatisfied()
+                || descriptorSources.isAmbiguous()) {
+            LOG.warn("Filesystem active embedding descriptor unavailable or ambiguous; vector search disabled");
+            vectorSearchEnabled = false;
+            return;
+        }
+        EmbeddingIndexDescriptor descriptor =
+                descriptorSources.get().activeDescriptor().orElse(null);
+        if (descriptor == null || descriptor.vectorDimension() != vectorDimension) {
+            LOG.warnf(
+                    "Filesystem vector descriptor dimension mismatch or unavailable: configured=%d descriptor=%s; "
+                            + "vector search disabled",
+                    vectorDimension, descriptor == null ? "unavailable" : descriptor.vectorDimension());
+            vectorSearchEnabled = false;
+            return;
+        }
+        vectorSearchEnabled = vectorIndexMetadata
+                .verifyOrInitialize(VectorIndexNamespace.RAG_GLOBAL, descriptor, indexEmpty)
+                .vectorEnabled();
+    }
+
     @Override
     public List<MemoryChunkDto> search(String query, int topK, String userId) {
         // userId is ignored — FS backend is global (no user isolation yet)
@@ -102,7 +140,7 @@ public class FsMemoryRetrievalAdapter implements MemoryRetrievalPort {
                         .map(r -> new MemoryChunkDto(r.id(), r.content(), r.score()))
                         .toList();
             } catch (Exception e) {
-                LOG.warnf("Vector search failed for query (falling back to BM25): %s", e.getMessage());
+                LOG.warnf("Vector search failed for query (falling back to BM25): %s", LogUtil.rootMessage(e));
                 return bm25Search(query, topK);
             }
         }
@@ -137,7 +175,7 @@ public class FsMemoryRetrievalAdapter implements MemoryRetrievalPort {
             validateDimension(embedding);
             return vectorSearchEnabled ? embedding : null;
         } catch (Exception e) {
-            LOG.warnf("Embedding failed for document %s (indexing without vector): %s", id, e.getMessage());
+            LOG.warnf("Embedding failed for document %s (indexing without vector): %s", id, LogUtil.rootMessage(e));
             return null;
         }
     }
@@ -163,7 +201,7 @@ public class FsMemoryRetrievalAdapter implements MemoryRetrievalPort {
         try {
             return objectMapper.writeValueAsString(metadata);
         } catch (JsonProcessingException e) {
-            LOG.warnf("Failed to serialize metadata: %s", e.getMessage());
+            LOG.warnf("Failed to serialize metadata: %s", LogUtil.rootMessage(e));
             return null;
         }
     }

@@ -17,11 +17,17 @@ import java.nio.file.Path;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import com.amsha.persistence.api.BackendCapabilities;
+import com.amsha.persistence.api.EmbeddingIndexDescriptor;
+import com.amsha.persistence.api.EmbeddingIndexDescriptorSource;
 import com.amsha.persistence.api.IngestResult;
 import com.amsha.persistence.api.MemoryChunkDto;
 import com.amsha.persistence.api.MemoryEntryDto;
+import com.amsha.persistence.api.VectorIndexCompatibility;
+import com.amsha.persistence.api.VectorIndexMetadataPort;
+import com.amsha.persistence.api.VectorIndexNamespace;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -111,6 +117,7 @@ class FsMemoryRetrievalAdapterTest {
         when(mockInstance.isUnsatisfied()).thenReturn(false);
         when(mockInstance.get()).thenReturn(fakeModel);
         setField(adapter, "embeddingModel", mockInstance);
+        enableCompatibleVectorIndex(adapter);
 
         adapter.init();
 
@@ -133,6 +140,7 @@ class FsMemoryRetrievalAdapterTest {
         when(mockInstance.isUnsatisfied()).thenReturn(false);
         when(mockInstance.get()).thenReturn(wrongDimModel);
         setField(adapter, "embeddingModel", mockInstance);
+        enableCompatibleVectorIndex(adapter);
 
         adapter.init();
         adapter.index(new MemoryEntryDto("d1", "dimension mismatch test", Map.of()));
@@ -193,6 +201,7 @@ class FsMemoryRetrievalAdapterTest {
         when(mockInstance.isUnsatisfied()).thenReturn(false);
         when(mockInstance.get()).thenReturn(new FakeEmbeddingModel(4));
         setField(adapter, "embeddingModel", mockInstance);
+        enableCompatibleVectorIndex(adapter);
         adapter.init();
         adapter.index(new MemoryEntryDto("r1", "rebuild me", Map.of("source", "test")));
         assertEquals(1, adapter.search("rebuild", 10, null).size());
@@ -203,6 +212,7 @@ class FsMemoryRetrievalAdapterTest {
         setField(restarted, "properties", tempProps());
         setField(restarted, "objectMapper", fileStore.objectMapper());
         setField(restarted, "embeddingModel", mockInstance);
+        enableCompatibleVectorIndex(restarted);
         restarted.init();
         assertEquals(1, restarted.search("rebuild", 10, null).size());
         assertEquals(1, restarted.search("unrelated", 10, null).size());
@@ -257,6 +267,45 @@ class FsMemoryRetrievalAdapterTest {
                 return 4;
             }
         };
+    }
+
+    @SuppressWarnings("unchecked")
+    private void enableCompatibleVectorIndex(FsMemoryRetrievalAdapter target) throws Exception {
+        EmbeddingIndexDescriptor descriptor = descriptor(4);
+        EmbeddingIndexDescriptorSource source = () -> Optional.of(descriptor);
+        Instance<EmbeddingIndexDescriptorSource> sourceInstance = mock(Instance.class);
+        when(sourceInstance.isUnsatisfied()).thenReturn(false);
+        when(sourceInstance.isAmbiguous()).thenReturn(false);
+        when(sourceInstance.get()).thenReturn(source);
+
+        VectorIndexMetadataPort metadata = mock(VectorIndexMetadataPort.class);
+        when(metadata.verifyOrInitialize(eq(VectorIndexNamespace.RAG_GLOBAL), eq(descriptor), anyBoolean()))
+                .thenReturn(new VectorIndexCompatibility(
+                        VectorIndexNamespace.RAG_GLOBAL,
+                        VectorIndexCompatibility.Status.MATCH,
+                        descriptor.fingerprint(),
+                        Optional.of(descriptor.fingerprint())));
+        when(metadata.isVectorEnabled(VectorIndexNamespace.RAG_GLOBAL)).thenReturn(true);
+        setField(target, "descriptorSources", sourceInstance);
+        setField(target, "vectorIndexMetadata", metadata);
+    }
+
+    private static EmbeddingIndexDescriptor descriptor(int dimension) {
+        return EmbeddingIndexDescriptor.create(
+                "test",
+                "test-space",
+                "revision-1",
+                "tokenizer-1",
+                "preprocessing-1",
+                "MASKED_MEAN",
+                true,
+                dimension,
+                "FLOAT32",
+                "FIRST_MAX_TOKENS",
+                "v1",
+                512,
+                0,
+                "DIRECT");
     }
 
     private static class FakeEmbeddingModel implements EmbeddingModel {

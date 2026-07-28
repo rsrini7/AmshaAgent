@@ -1065,6 +1065,39 @@ into the catalog through `activateNew`. This keeps `SessionRegistry` (SQL) and
 
 ---
 
+## 5.28 Embedding Vector-Index Descriptor Safety (§5.28 INVARIANT)
+
+Every durable or rebuildable vector index MUST be bound to an
+`EmbeddingIndexDescriptor` before vector ingestion or retrieval is enabled. Dimension
+equality alone is insufficient. The fingerprint MUST include the canonical embedding
+space, immutable model and tokenizer revisions, preprocessing, pooling, normalization,
+numeric precision, and chunking/window/aggregation contract. Provider or transport
+identity is retained as provenance but MUST NOT determine compatibility.
+
+- An empty index may initialize or replace its descriptor with the active descriptor.
+- A non-empty index with missing, invalid, or mismatched metadata MUST preserve all
+  rows/documents, disable only vector operations, and retain safe BM25/FTS/text search.
+- Startup MUST NOT delete, re-embed, or silently relabel existing vectors. Development
+  reset is an explicit operator action: delete the configured SQLite/filesystem data
+  directory or recreate the PostgreSQL development database/volume.
+- SQLite and PostgreSQL descriptor schema changes MUST use matching Flyway versions and
+  equivalent semantics. Filesystem Lucene MUST use a versioned checksummed manifest
+  written atomically in the index root.
+- Retrieval, ingestion, capability reporting, and readiness diagnostics MUST consume
+  the same `VectorIndexMetadataPort` gate. A descriptor mismatch reports bounded
+  `DEGRADED` vector capability while overall readiness remains `UP` when text fallback
+  is safe. Exact revisions and fingerprints belong only in protected diagnostics, not
+  metric labels or public readiness payloads.
+
+The active namespace inventory is explicit: SQLite global RAG and archival vec0;
+PostgreSQL RAG pgvector; and filesystem Lucene RAG. The current PostgreSQL archival
+embedding column is dormant because `PostgresArchivalMemoryStore` neither writes nor
+queries it, and filesystem archival memory is text-only. A dormant schema column MUST
+NOT be advertised or health-checked as an active vector namespace until its complete
+ingestion, query, fallback, and descriptor-gating path lands.
+
+---
+
 ## 6. Native image and reflection rules
 
 ### 6.1 Reflection safety
