@@ -36,6 +36,7 @@ public class OnnxEmbeddingProviderFactory implements EmbeddingProviderFactory {
     private final OnnxSessionLeaseManager sessionLeaseManager;
     private final OnnxInferenceScheduler scheduler;
     private final OnnxEmbeddingRunner runner;
+    private final OnnxInferenceMetrics metrics;
     private final long maxInputBytes;
     private final long maxBatchInputBytes;
     private final int maxBatchSize;
@@ -49,6 +50,7 @@ public class OnnxEmbeddingProviderFactory implements EmbeddingProviderFactory {
             OnnxRuntimeManager runtimeManager,
             OnnxSessionLeaseManager sessionLeaseManager,
             OnnxInferenceScheduler scheduler,
+            OnnxInferenceMetrics metrics,
             @ConfigProperty(name = "amsha.onnx.max-input-bytes", defaultValue = "262144") long maxInputBytes,
             @ConfigProperty(name = "amsha.onnx.max-batch-input-bytes", defaultValue = "1048576")
                     long maxBatchInputBytes,
@@ -62,6 +64,7 @@ public class OnnxEmbeddingProviderFactory implements EmbeddingProviderFactory {
                 sessionLeaseManager,
                 scheduler,
                 new OnnxEmbeddingRunner(),
+                metrics,
                 maxInputBytes,
                 maxBatchInputBytes,
                 maxBatchSize,
@@ -76,6 +79,7 @@ public class OnnxEmbeddingProviderFactory implements EmbeddingProviderFactory {
             OnnxSessionLeaseManager sessionLeaseManager,
             OnnxInferenceScheduler scheduler,
             OnnxEmbeddingRunner runner,
+            OnnxInferenceMetrics metrics,
             long maxInputBytes,
             long maxBatchInputBytes,
             int maxBatchSize) {
@@ -85,6 +89,7 @@ public class OnnxEmbeddingProviderFactory implements EmbeddingProviderFactory {
                 sessionLeaseManager,
                 scheduler,
                 runner,
+                metrics,
                 maxInputBytes,
                 maxBatchInputBytes,
                 maxBatchSize,
@@ -99,6 +104,7 @@ public class OnnxEmbeddingProviderFactory implements EmbeddingProviderFactory {
             OnnxSessionLeaseManager sessionLeaseManager,
             OnnxInferenceScheduler scheduler,
             OnnxEmbeddingRunner runner,
+            OnnxInferenceMetrics metrics,
             long maxInputBytes,
             long maxBatchInputBytes,
             int maxBatchSize,
@@ -110,6 +116,7 @@ public class OnnxEmbeddingProviderFactory implements EmbeddingProviderFactory {
         this.sessionLeaseManager = Objects.requireNonNull(sessionLeaseManager, "sessionLeaseManager");
         this.scheduler = Objects.requireNonNull(scheduler, "scheduler");
         this.runner = Objects.requireNonNull(runner, "runner");
+        this.metrics = Objects.requireNonNull(metrics, "metrics");
         this.maxInputBytes = requirePositive(maxInputBytes, "maxInputBytes");
         this.maxBatchInputBytes = requirePositive(maxBatchInputBytes, "maxBatchInputBytes");
         this.maxBatchSize = requirePositive(maxBatchSize, "maxBatchSize");
@@ -178,12 +185,16 @@ public class OnnxEmbeddingProviderFactory implements EmbeddingProviderFactory {
             List<float[]> vectors = result.get(warmupTimeout.toMillis(), TimeUnit.MILLISECONDS);
             if (vectors.size() != probes.size())
                 throw new IllegalStateException("ONNX warm-up returned an unexpected result count");
+            metrics.recordWarmup("success");
         } catch (OnnxInferenceSchedulingException | TimeoutException e) {
+            metrics.recordWarmup("failed");
             throw new IllegalStateException("ONNX warm-up did not complete", e);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
+            metrics.recordWarmup("failed");
             throw new IllegalStateException("ONNX warm-up was interrupted", e);
         } catch (ExecutionException e) {
+            metrics.recordWarmup("failed");
             throw new IllegalStateException("ONNX warm-up failed", e.getCause());
         }
     }
@@ -232,18 +243,25 @@ public class OnnxEmbeddingProviderFactory implements EmbeddingProviderFactory {
         private List<float[]> embedTexts(List<String> texts) {
             rejectEventLoopThread();
             validateInputLimits(texts);
+            long started = System.nanoTime();
             Instant deadline = Instant.now().plus(configuredTimeout());
             try {
                 var result = scheduler.submit(deadline, () -> runVerifiedBundle(texts, deadline));
-                return result.get(configuredTimeout().toMillis(), TimeUnit.MILLISECONDS);
+                List<float[]> vectors = result.get(configuredTimeout().toMillis(), TimeUnit.MILLISECONDS);
+                metrics.recordEmbedding("success", System.nanoTime() - started);
+                return vectors;
             } catch (OnnxInferenceSchedulingException e) {
+                metrics.recordEmbedding("overload_rejected", System.nanoTime() - started);
                 throw new IllegalStateException("Local ONNX embedding request was not accepted: " + e.reason(), e);
             } catch (TimeoutException e) {
+                metrics.recordEmbedding("timeout", System.nanoTime() - started);
                 throw new IllegalStateException("Local ONNX embedding request timed out", e);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
+                metrics.recordEmbedding("failed", System.nanoTime() - started);
                 throw new IllegalStateException("Local ONNX embedding request was interrupted", e);
             } catch (ExecutionException e) {
+                metrics.recordEmbedding("failed", System.nanoTime() - started);
                 throw new IllegalStateException("Local ONNX embedding request failed", e.getCause());
             }
         }

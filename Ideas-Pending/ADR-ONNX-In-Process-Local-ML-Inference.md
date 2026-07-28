@@ -65,11 +65,14 @@ default provider list and has not yet passed real-model golden-corpus validation
 - Completed embedding warm-up: a configured bounded subset of manifest-declared,
   non-sensitive probes runs through the same scheduler and lease before an ONNX slot
   is created. Failed warm-up rejects that slot rather than serving a cold/broken bundle.
+- Completed initial observability: payload-free ONNX request latency/outcome and warm-up
+  outcome metrics use only fixed outcome labels; optional-runtime readiness exposes a
+  status without making an otherwise valid fallback deployment unready.
 - Verified so far: focused RAG compatibility tests, ONNX runtime/bundle verifier tests,
   application assembly compilation, documentation validation, and diff hygiene.
 - Still required before ONNX embedding support can be generally available: tokenizer platform/native
   evaluation, a real signed model/index installation flow, golden-corpus correctness
-  evidence, observability, and vector-index fingerprint parity across SQLite,
+  evidence, long-running resource/leak observability, and vector-index fingerprint parity across SQLite,
   PostgreSQL, and filesystem.
 - Explicitly not started: Phase 2.5 core classifier SPIs and every Phase 2–3
   classifier behavior. No database migration is introduced at this stage because no

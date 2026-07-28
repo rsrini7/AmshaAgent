@@ -19,6 +19,8 @@ import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+
 @Tag("model-smoke")
 class OnnxEmbeddingModelSmokeTest {
 
@@ -51,6 +53,8 @@ class OnnxEmbeddingModelSmokeTest {
                 new OnnxSessionLeaseManager(runtimeManager, new OnnxTokenizerFactory(), Duration.ofSeconds(5));
         scheduler = new OnnxInferenceScheduler(1, 1, Duration.ofSeconds(5));
         scheduler.initialize();
+        OnnxInferenceMetrics metrics = new OnnxInferenceMetrics(new SimpleMeterRegistry());
+        metrics.initialize();
 
         EmbeddingModel model = new OnnxEmbeddingProviderFactory(
                         registry,
@@ -58,6 +62,7 @@ class OnnxEmbeddingModelSmokeTest {
                         sessionLeaseManager,
                         scheduler,
                         new OnnxEmbeddingRunner(),
+                        metrics,
                         262_144,
                         1_048_576,
                         32,
