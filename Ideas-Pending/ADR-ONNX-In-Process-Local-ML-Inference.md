@@ -13,7 +13,8 @@
 
 Phase 0–1 foundation work is in progress. ONNX is available only as an explicit
 provider slot with an installed verified bundle; it does not change the configured
-default provider list and has not yet passed real-model golden-corpus validation.
+default provider list and has not yet passed the native request-path, real-model
+golden-corpus, or persistence-parity gates.
 
 - Completed: provider-neutral `EmbeddingSpaceDescriptor` support and compatible-slot
   enforcement in the existing embedding failover loop; incompatible slots are skipped
@@ -68,12 +69,30 @@ default provider list and has not yet passed real-model golden-corpus validation
 - Completed initial observability: payload-free ONNX request latency/outcome and warm-up
   outcome metrics use only fixed outcome labels; optional-runtime readiness exposes a
   status without making an otherwise valid fallback deployment unready.
-- Verified so far: focused RAG compatibility tests, ONNX runtime/bundle verifier tests,
-  application assembly compilation, documentation validation, and diff hygiene.
-- Still required before ONNX embedding support can be generally available: tokenizer platform/native
-  evaluation, a real signed model/index installation flow, golden-corpus correctness
-  evidence, long-running resource/leak observability, and vector-index fingerprint parity across SQLite,
-  PostgreSQL, and filesystem.
+- Verified in the macOS arm64 native binary: ORT runtime loading, verified bundle
+  loading, tokenizer creation, scheduler dispatch, lease acquisition, graph execution,
+  pooling, and normalization all complete during the manifest-declared startup warm-up.
+- Current Phase 0 blocker: the authenticated fixed-text native probe reaches neither
+  the ONNX scheduler nor its lease/inference checkpoints after warm-up. The standard
+  `run_all_validations.sh --onnx` probe times out as `HTTP 000` at curl's 180-second
+  bound, while health and manifest digest checks pass. Payload-free probe checkpoints
+  distinguish authorization, CDI model resolution, `Instance.get()`, and
+  `EmbeddingModel.embed()` on the next native run; do not claim native request support
+  until that run identifies and fixes the boundary.
+- Implemented filesystem recovery correction: JSON-to-Lucene reconstruction regenerates
+  vectors through the configured embedding model. Descriptor-manifest validation and
+  all-backend index-fingerprint parity remain Phase 1 work.
+- Verified so far: focused RAG compatibility, ONNX runtime/bundle verifier, scheduler,
+  lease, runner, and real-JVM MPNet smoke tests; application assembly compilation,
+  documentation validation, native-image build, and diff hygiene.
+- Still required for Phase 0: fix and pass the real native probe; supported-platform
+  native matrix; versioned Python-reference golden corpus with tolerance/pass-rate and
+  nearest-neighbour evidence; repeated startup/inference/shutdown resource-leak gate;
+  signed trust-root and release SBOM/provenance evidence.
+- Still required for Phase 1: full embedding-index descriptor; matching SQLite and
+  PostgreSQL `V10` migrations; checksummed filesystem descriptor manifest; every-vector-
+  namespace mismatch detection; non-vector fallback and explicit development-reset
+  behavior; and parity/rebuild contract tests across SQLite, PostgreSQL, and filesystem.
 - Explicitly not started: Phase 2.5 core classifier SPIs and every Phase 2–3
   classifier behavior. No database migration is introduced at this stage because no
   ONNX-produced vector schema is active.
@@ -97,9 +116,9 @@ All three persistence backends already have vector-search paths:
 - Filesystem persistence uses Lucene `KnnFloatVectorField` and hybrid search through
   `LuceneIndexManager` and `FsMemoryRetrievalAdapter`.
 
-Filesystem reconstruction from JSON currently rebuilds Lucene documents without
-vectors; Phase 1 must correct new-schema reconstruction so it regenerates embeddings.
-It is a recovery gap, not evidence that filesystem vector search is absent.
+Filesystem reconstruction from JSON regenerates vectors through the configured
+embedding model. It still lacks the Phase 1 descriptor-manifest validation required
+to prove that regenerated vectors match the active index contract.
 
 The repository requires persistence parity. Phase 1 therefore introduces matching
 fingerprint schema/manifest support and reset/rebuild behavior for SQLite, PostgreSQL,

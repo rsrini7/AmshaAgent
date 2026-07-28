@@ -22,6 +22,8 @@ import com.amsha.core.api.dto.AmshaErrorResponse;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import io.smallrye.common.annotation.RunOnVirtualThread;
 
 /**
@@ -41,6 +43,9 @@ public class OnnxAdminResource {
     @Inject
     Instance<EmbeddingModel> embeddingModel;
 
+    @Inject
+    MeterRegistry meterRegistry;
+
     @ConfigProperty(name = "amsha.onnx.enabled", defaultValue = "false")
     boolean onnxEnabled;
 
@@ -59,15 +64,24 @@ public class OnnxAdminResource {
                     .entity(new AmshaErrorResponse("Only internal API keys can run the ONNX diagnostic probe"))
                     .build();
         }
+        recordProbeStage("authorized");
         if (!onnxEnabled || !onnxConfigured()) {
             return unavailable("ONNX embedding is not explicitly configured");
         }
+        recordProbeStage("configuration_verified");
+        recordProbeStage("model_resolution_started");
         if (embeddingModel == null || embeddingModel.isUnsatisfied()) {
             return unavailable("No embedding model is available");
         }
+        recordProbeStage("model_resolution_ready");
 
         try {
-            float[] vector = embeddingModel.get().embed(PROBE_TEXT).content().vector();
+            recordProbeStage("model_lookup_started");
+            EmbeddingModel model = embeddingModel.get();
+            recordProbeStage("model_lookup_ready");
+            recordProbeStage("embedding_started");
+            float[] vector = model.embed(PROBE_TEXT).content().vector();
+            recordProbeStage("embedding_completed");
             if (vector == null || vector.length == 0 || !allFinite(vector)) {
                 return unavailable("ONNX embedding probe returned an invalid vector");
             }
@@ -106,5 +120,14 @@ public class OnnxAdminResource {
         return Response.status(Response.Status.SERVICE_UNAVAILABLE)
                 .entity(new AmshaErrorResponse("onnx_probe_unavailable", message))
                 .build();
+    }
+
+    private void recordProbeStage(String stage) {
+        if (meterRegistry == null) return;
+        Counter.builder("amsha.onnx.probe.stage")
+                .tag("stage", stage)
+                .description("Payload-free checkpoints for the internal ONNX diagnostic probe")
+                .register(meterRegistry)
+                .increment();
     }
 }
