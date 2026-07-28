@@ -57,6 +57,11 @@ default provider list and has not yet passed real-model golden-corpus validation
   vector-space descriptor, enforces UTF-8 segment/batch limits, and runs tokenization
   under the same lifecycle lease as its `OrtSession`. It is selected only by adding
   `onnx` to the existing provider slot list and supplying its bundle ID.
+- Completed development bundle onboarding: `mise run models:install-mpnet` installs
+  the pinned Apache-2.0 MPNet ONNX/tokenizer assets below the gitignored model root,
+  verifies fixed sizes and SHA-256 values, and writes the manifest verified by a
+  model-optional real-JVM smoke test through the provider SPI, bounded scheduler,
+  tokenizer/session lease, and `OrtSession.run()`.
 - Verified so far: focused RAG compatibility tests, ONNX runtime/bundle verifier tests,
   application assembly compilation, documentation validation, and diff hygiene.
 - Still required before ONNX embedding support can be generally available: tokenizer platform/native
@@ -743,6 +748,31 @@ Minimum repository checks after implementation include focused module tests, aff
 - Lower latency for local recall and micro-routing.
 - Reusable, governed inference substrate for evaluated classifiers.
 - Explicit model/index provenance improves reproducibility beyond provider-name-only configuration.
+
+### Future model expansion candidates
+
+The pinned MPNet development bundle is the first real embedding bundle, not an
+exclusive model choice. Future adoption remains opt-in and separately evaluated:
+
+- **Fast English embeddings**: `BAAI/bge-small-en-v1.5` and
+  `sentence-transformers/all-MiniLM-L6-v2` for lower CPU/memory budgets.
+- **Multilingual embeddings**: `intfloat/multilingual-e5-small` or
+  `intfloat/multilingual-e5-base` when cross-language retrieval is a product need.
+- **Higher-quality English retrieval**: `BAAI/bge-base-en-v1.5` or
+  `BAAI/bge-large-en-v1.5`, subject to measured latency and memory budgets.
+- **Rerankers**: compact MiniLM or BGE cross-encoders as a separately bounded,
+  post-retrieval stage; they are not interchangeable with embedding providers.
+- **Classifiers**: compact MiniLM-family models for Phase 2 intent shadowing,
+  semantic tool-risk signals, or answer-quality scoring only after each classifier's
+  independent dataset, calibration, and safety gates pass.
+- **Privacy-oriented NLP**: local NER/PII detection only if a concrete privacy flow
+  requires it and it receives its own false-positive/false-negative budget.
+
+Every additional model requires a pinned installer, immutable manifest, license and
+provenance review, golden corpus, supported-platform smoke tests, and bounded resource
+budget. Each embedding model also receives its own `EmbeddingSpaceDescriptor`; different
+space fingerprints may never query or populate the same vector index. A model-space
+change therefore follows the explicit development reset/rebuild policy in Section 7.
 
 ### Costs and risks
 
