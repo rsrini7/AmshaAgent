@@ -35,11 +35,19 @@ embedding provider or change the configured default provider list.
   native-library/flavour overrides before it loads a bundle-local tokenizer. A local
   macOS arm64 load and WordPiece tokenization probe passes; this is not yet the full
   supported-platform or native-image gate.
+- Completed Phase 1 lifecycle foundation: verified bundles acquire cached ORT sessions
+  only through idempotent `AutoCloseable` leases. Per-bundle locking rejects new leases
+  once unload begins and never closes a session while an active lease remains; bounded
+  unload/shutdown reports draining leases for process teardown rather than racing
+  `OrtSession.run()`.
+- Completed Phase 1 scheduling foundation: CPU inference work uses a fixed, bounded,
+  workspace-context-aware executor. Full queues fail explicitly, and work that reaches
+  the executor after its request deadline completes as a timeout; no caller-thread
+  blocking adapter or provider is exposed yet.
 - Verified so far: focused RAG compatibility tests, ONNX runtime/bundle verifier tests,
   application assembly compilation, documentation validation, and diff hygiene.
 - Still required before any embedding slot can be enabled: tokenizer platform/native
-  evaluation, a real signed model/index installation flow,
-  inference/session lifecycle and bounded scheduling, golden-corpus correctness
+  evaluation, a real signed model/index installation flow, golden-corpus correctness
   evidence, `OnnxEmbeddingProviderFactory`, warm-up/observability, and vector-index
   fingerprint parity across SQLite, PostgreSQL, and filesystem.
 - Explicitly not started: Phase 2.5 core classifier SPIs and every Phase 2–3

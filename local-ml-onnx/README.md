@@ -9,6 +9,9 @@ Optional in-process ONNX Runtime integration for Amsha Agent.
 | amsha.onnx.enabled | AMSHA_ONNX_ENABLED | false | Enables the ONNX Runtime JVM compatibility probe. |
 | amsha.onnx.model-root | AMSHA_ONNX_MODEL_ROOT | data/models | Root for verified local model bundles. |
 | amsha.onnx.max-model-file-bytes | AMSHA_ONNX_MAX_MODEL_FILE_BYTES | 1073741824 | Maximum size of each verified bundle file, in bytes. |
+| amsha.onnx.inference-threads | AMSHA_ONNX_INFERENCE_THREADS | 2 | Fixed number of CPU ONNX inference workers. |
+| amsha.onnx.queue-capacity | AMSHA_ONNX_QUEUE_CAPACITY | 64 | Maximum queued ONNX inference requests before rejection. |
+| amsha.onnx.shutdown-grace | AMSHA_ONNX_SHUTDOWN_GRACE | PT10S | Maximum time to drain in-flight ONNX session leases during unload or shutdown. |
 
 `OnnxModelBundleRegistry` loads only an explicitly selected bundle ID below the
 configured root. It never downloads assets; each bundle must contain a regular

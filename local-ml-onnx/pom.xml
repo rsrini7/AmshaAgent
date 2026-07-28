@@ -15,6 +15,10 @@
   <dependencies>
     <dependency>
       <groupId>com.amsha</groupId>
+      <artifactId>amsha-core</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.amsha</groupId>
       <artifactId>amsha-rag</artifactId>
     </dependency>
     <dependency>

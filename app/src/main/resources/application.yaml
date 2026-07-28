@@ -322,6 +322,9 @@ amsha:
     enabled: ${AMSHA_ONNX_ENABLED:false}
     model-root: "${AMSHA_ONNX_MODEL_ROOT:data/models}"
     max-model-file-bytes: ${AMSHA_ONNX_MAX_MODEL_FILE_BYTES:1073741824}
+    inference-threads: ${AMSHA_ONNX_INFERENCE_THREADS:2}
+    queue-capacity: ${AMSHA_ONNX_QUEUE_CAPACITY:64}
+    shutdown-grace: ${AMSHA_ONNX_SHUTDOWN_GRACE:PT10S}
   fs:
     data-dir: "${AMSHA_FS_DATA_DIR:./data/fs}"
     lock-timeout-seconds: 30
