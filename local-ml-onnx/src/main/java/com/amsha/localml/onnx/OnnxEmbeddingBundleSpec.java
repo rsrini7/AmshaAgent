@@ -18,6 +18,7 @@ public record OnnxEmbeddingBundleSpec(
         String outputName,
         int maxSequenceLength,
         int vectorDimension,
+        Long paddingTokenId,
         PoolingStrategy poolingStrategy,
         boolean l2Normalize,
         String spaceId,
@@ -37,6 +38,8 @@ public record OnnxEmbeddingBundleSpec(
         outputName = requireTensorName(outputName, "outputName");
         if (maxSequenceLength <= 0) throw new IllegalArgumentException("maxSequenceLength must be positive");
         if (vectorDimension <= 0) throw new IllegalArgumentException("vectorDimension must be positive");
+        Objects.requireNonNull(paddingTokenId, "paddingTokenId");
+        if (paddingTokenId < 0) throw new IllegalArgumentException("paddingTokenId must not be negative");
         Objects.requireNonNull(poolingStrategy, "poolingStrategy");
         spaceId = requireNonBlank(spaceId, "spaceId");
         spaceRevision = requireNonBlank(spaceRevision, "spaceRevision");

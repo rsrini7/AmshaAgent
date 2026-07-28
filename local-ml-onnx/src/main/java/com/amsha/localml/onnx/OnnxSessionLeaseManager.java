@@ -38,8 +38,9 @@ public class OnnxSessionLeaseManager {
     @Inject
     public OnnxSessionLeaseManager(
             OnnxRuntimeManager runtimeManager,
+            OnnxTokenizerFactory tokenizerFactory,
             @ConfigProperty(name = "amsha.onnx.shutdown-grace", defaultValue = "PT10S") Duration shutdownGrace) {
-        this(runtimeManager::environment, new OrtSessionHandleFactoryImpl(), shutdownGrace);
+        this(runtimeManager::environment, new OrtSessionHandleFactoryImpl(tokenizerFactory), shutdownGrace);
     }
 
     OnnxSessionLeaseManager(
@@ -220,19 +221,36 @@ public class OnnxSessionLeaseManager {
     }
 
     private static final class OrtSessionHandleFactoryImpl implements OnnxSessionHandleFactory {
+        private final OnnxTokenizerFactory tokenizerFactory;
+
+        OrtSessionHandleFactoryImpl(OnnxTokenizerFactory tokenizerFactory) {
+            this.tokenizerFactory = Objects.requireNonNull(tokenizerFactory, "tokenizerFactory");
+        }
+
         @Override
         public OnnxSessionHandle open(OrtEnvironment environment, VerifiedOnnxModelBundle bundle) throws Exception {
-            try (OrtSession.SessionOptions options = new OrtSession.SessionOptions()) {
-                return new OrtSessionHandle(
-                        environment.createSession(bundle.modelPath().toString(), options));
+            var tokenizer = tokenizerFactory.load(bundle.tokenizerPath());
+            try {
+                try (OrtSession.SessionOptions options = new OrtSession.SessionOptions()) {
+                    return new OrtSessionHandle(
+                            environment.createSession(bundle.modelPath().toString(), options), tokenizer);
+                }
+            } catch (Exception | LinkageError e) {
+                tokenizer.close();
+                throw e;
             }
         }
     }
 
-    private record OrtSessionHandle(OrtSession session) implements OnnxSessionHandle {
+    private record OrtSessionHandle(OrtSession session, ai.djl.huggingface.tokenizers.HuggingFaceTokenizer tokenizer)
+            implements OnnxSessionHandle {
         @Override
         public void close() throws Exception {
-            session.close();
+            try {
+                session.close();
+            } finally {
+                tokenizer.close();
+            }
         }
     }
 }

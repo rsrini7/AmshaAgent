@@ -11,8 +11,9 @@
 
 ## Current implementation status (2026-07-28)
 
-Phase 0–1 foundation work is in progress; it does not yet make ONNX an active
-embedding provider or change the configured default provider list.
+Phase 0–1 foundation work is in progress. ONNX is available only as an explicit
+provider slot with an installed verified bundle; it does not change the configured
+default provider list and has not yet passed real-model golden-corpus validation.
 
 - Completed: provider-neutral `EmbeddingSpaceDescriptor` support and compatible-slot
   enforcement in the existing embedding failover loop; incompatible slots are skipped
@@ -42,18 +43,26 @@ embedding provider or change the configured default provider list.
   `OrtSession.run()`.
 - Completed Phase 1 scheduling foundation: CPU inference work uses a fixed, bounded,
   workspace-context-aware executor. Full queues fail explicitly, and work that reaches
-  the executor after its request deadline completes as a timeout; no caller-thread
-  blocking adapter or provider is exposed yet.
+  the executor after its request deadline completes as a timeout.
 - Completed Phase 1 bundle metadata foundation: embedding bundles can carry a typed,
   validated tokenizer/input/output/pooling/normalization/dimension/vector-space contract;
   older non-embedding manifests remain verifiable but cannot be selected by the future
   embedding provider.
+- Completed Phase 1 inference core: a bundle-contract-driven batch runner creates and
+  closes owned input tensors and `OrtSession.Result`, validates exact graph input/output
+  names, performs declared pooling, ignores padded tokens for masked means, and applies
+  checked L2 normalization.
+- Completed Phase 1 opt-in embedding integration: `OnnxEmbeddingProviderFactory` uses
+  only a verified embedding bundle, requires runtime readiness, preserves the manifest
+  vector-space descriptor, enforces UTF-8 segment/batch limits, and runs tokenization
+  under the same lifecycle lease as its `OrtSession`. It is selected only by adding
+  `onnx` to the existing provider slot list and supplying its bundle ID.
 - Verified so far: focused RAG compatibility tests, ONNX runtime/bundle verifier tests,
   application assembly compilation, documentation validation, and diff hygiene.
-- Still required before any embedding slot can be enabled: tokenizer platform/native
+- Still required before ONNX embedding support can be generally available: tokenizer platform/native
   evaluation, a real signed model/index installation flow, golden-corpus correctness
-  evidence, `OnnxEmbeddingProviderFactory`, warm-up/observability, and vector-index
-  fingerprint parity across SQLite, PostgreSQL, and filesystem.
+  evidence, warm-up/observability, and vector-index fingerprint parity across SQLite,
+  PostgreSQL, and filesystem.
 - Explicitly not started: Phase 2.5 core classifier SPIs and every Phase 2–3
   classifier behavior. No database migration is introduced at this stage because no
   ONNX-produced vector schema is active.

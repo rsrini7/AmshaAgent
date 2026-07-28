@@ -325,6 +325,9 @@ amsha:
     inference-threads: ${AMSHA_ONNX_INFERENCE_THREADS:2}
     queue-capacity: ${AMSHA_ONNX_QUEUE_CAPACITY:64}
     shutdown-grace: ${AMSHA_ONNX_SHUTDOWN_GRACE:PT10S}
+    max-input-bytes: ${AMSHA_ONNX_MAX_INPUT_BYTES:262144}
+    max-batch-input-bytes: ${AMSHA_ONNX_MAX_BATCH_INPUT_BYTES:1048576}
+    max-batch-size: ${AMSHA_ONNX_MAX_BATCH_SIZE:32}
   fs:
     data-dir: "${AMSHA_FS_DATA_DIR:./data/fs}"
     lock-timeout-seconds: 30
@@ -401,6 +404,11 @@ amsha:
     openai:
       space-id: "${AMSHA_EMBEDDING_OPENAI_SPACE_ID:}"
       space-revision: "${AMSHA_EMBEDDING_OPENAI_SPACE_REVISION:}"
+    onnx:
+      model: "${AMSHA_EMBEDDING_ONNX_MODEL:}"
+      timeout-seconds: ${AMSHA_EMBEDDING_ONNX_TIMEOUT_SECONDS:5}
+      space-id: "${AMSHA_EMBEDDING_ONNX_SPACE_ID:}"
+      space-revision: "${AMSHA_EMBEDDING_ONNX_SPACE_REVISION:}"
   agent:
     default-timezone: "${AMSHA_DEFAULT_TIMEZONE:Asia/Kolkata}"
     rate-limit:

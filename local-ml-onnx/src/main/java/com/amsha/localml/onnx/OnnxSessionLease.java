@@ -1,5 +1,6 @@
 package com.amsha.localml.onnx;
 
+import ai.djl.huggingface.tokenizers.HuggingFaceTokenizer;
 import ai.onnxruntime.OrtSession;
 
 import java.util.Objects;
@@ -25,6 +26,10 @@ public final class OnnxSessionLease implements AutoCloseable {
     /** Returns the leased session. The lease must remain open for the complete {@code run()} call. */
     public OrtSession session() {
         return handle.session();
+    }
+
+    HuggingFaceTokenizer tokenizer() {
+        return handle.tokenizer();
     }
 
     @Override

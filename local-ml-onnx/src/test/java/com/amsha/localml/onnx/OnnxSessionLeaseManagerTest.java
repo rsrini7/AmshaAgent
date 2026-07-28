@@ -3,6 +3,7 @@ package com.amsha.localml.onnx;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
+import ai.djl.huggingface.tokenizers.HuggingFaceTokenizer;
 import ai.onnxruntime.OrtEnvironment;
 import ai.onnxruntime.OrtSession;
 
@@ -92,6 +93,11 @@ class OnnxSessionLeaseManagerTest {
                 @Override
                 public OrtSession session() {
                     throw new UnsupportedOperationException("This lifecycle test never runs inference");
+                }
+
+                @Override
+                public HuggingFaceTokenizer tokenizer() {
+                    throw new UnsupportedOperationException("This lifecycle test never tokenizes");
                 }
 
                 @Override

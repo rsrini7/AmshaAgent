@@ -76,7 +76,7 @@ class OnnxModelBundleVerifierTest {
                 "tokenizerBytes":1,"embedding":{"tokenizerRevision":"v1","inputIdsName":"input_ids",
                 "attentionMaskName":"attention_mask","outputName":"last_hidden_state",
                 "maxSequenceLength":512,"vectorDimension":768,"poolingStrategy":"MASKED_MEAN",
-                "l2Normalize":true,"spaceId":"sentence-transformer/example","spaceRevision":"v1"}}
+                "paddingTokenId":0,"l2Normalize":true,"spaceId":"sentence-transformer/example","spaceRevision":"v1"}}
                 """, OnnxModelBundleManifest.class);
 
         OnnxEmbeddingBundleSpec embedding = manifest.embeddingSpec().orElseThrow();
@@ -96,6 +96,7 @@ class OnnxModelBundleVerifierTest {
                         "last_hidden_state",
                         512,
                         768,
+                        0L,
                         OnnxEmbeddingBundleSpec.PoolingStrategy.MASKED_MEAN,
                         true,
                         "sentence-transformer/example",
