@@ -1,5 +1,6 @@
 package com.amsha.localml.onnx;
 
+import java.util.List;
 import java.util.Objects;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
@@ -22,7 +23,8 @@ public record OnnxEmbeddingBundleSpec(
         PoolingStrategy poolingStrategy,
         boolean l2Normalize,
         String spaceId,
-        String spaceRevision) {
+        String spaceRevision,
+        List<String> warmupProbes) {
 
     public enum PoolingStrategy {
         CLS_TOKEN,
@@ -43,6 +45,9 @@ public record OnnxEmbeddingBundleSpec(
         Objects.requireNonNull(poolingStrategy, "poolingStrategy");
         spaceId = requireNonBlank(spaceId, "spaceId");
         spaceRevision = requireNonBlank(spaceRevision, "spaceRevision");
+        warmupProbes = List.copyOf(Objects.requireNonNull(warmupProbes, "warmupProbes"));
+        if (warmupProbes.isEmpty()) throw new IllegalArgumentException("warmupProbes must not be empty");
+        for (String probe : warmupProbes) requireNonBlank(probe, "warmupProbes entry");
         rejectDuplicateNames(inputIdsName, attentionMaskName, tokenTypeIdsName, outputName);
     }
 

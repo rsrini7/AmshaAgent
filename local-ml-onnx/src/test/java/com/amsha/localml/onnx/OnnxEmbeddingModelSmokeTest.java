@@ -60,7 +60,10 @@ class OnnxEmbeddingModelSmokeTest {
                         new OnnxEmbeddingRunner(),
                         262_144,
                         1_048_576,
-                        32)
+                        32,
+                        true,
+                        2,
+                        Duration.ofSeconds(5))
                 .create(new EmbeddingModelConfig(
                         "onnx", bundle.manifest().bundleId(), "", Optional.empty(), Duration.ofSeconds(10)));
         List<float[]> vectors = List.of(

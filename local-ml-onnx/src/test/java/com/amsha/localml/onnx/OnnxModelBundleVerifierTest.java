@@ -8,6 +8,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.util.HexFormat;
+import java.util.List;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -76,7 +77,8 @@ class OnnxModelBundleVerifierTest {
                 "tokenizerBytes":1,"embedding":{"tokenizerRevision":"v1","inputIdsName":"input_ids",
                 "attentionMaskName":"attention_mask","outputName":"last_hidden_state",
                 "maxSequenceLength":512,"vectorDimension":768,"poolingStrategy":"MASKED_MEAN",
-                "paddingTokenId":0,"l2Normalize":true,"spaceId":"sentence-transformer/example","spaceRevision":"v1"}}
+                "paddingTokenId":0,"l2Normalize":true,"spaceId":"sentence-transformer/example","spaceRevision":"v1",
+                "warmupProbes":["warm-up"]}}
                 """, OnnxModelBundleManifest.class);
 
         OnnxEmbeddingBundleSpec embedding = manifest.embeddingSpec().orElseThrow();
@@ -100,7 +102,8 @@ class OnnxModelBundleVerifierTest {
                         OnnxEmbeddingBundleSpec.PoolingStrategy.MASKED_MEAN,
                         true,
                         "sentence-transformer/example",
-                        "v1"));
+                        "v1",
+                        List.of("warm-up")));
     }
 
     private Path writeBundle(String modelContents, String tokenizerContents) throws Exception {

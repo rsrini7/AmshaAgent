@@ -328,6 +328,10 @@ amsha:
     max-input-bytes: ${AMSHA_ONNX_MAX_INPUT_BYTES:262144}
     max-batch-input-bytes: ${AMSHA_ONNX_MAX_BATCH_INPUT_BYTES:1048576}
     max-batch-size: ${AMSHA_ONNX_MAX_BATCH_SIZE:32}
+    warmup:
+      enabled: ${AMSHA_ONNX_WARMUP_ENABLED:true}
+      max-probes: ${AMSHA_ONNX_WARMUP_MAX_PROBES:5}
+      timeout: ${AMSHA_ONNX_WARMUP_TIMEOUT:PT3S}
   fs:
     data-dir: "${AMSHA_FS_DATA_DIR:./data/fs}"
     lock-timeout-seconds: 30

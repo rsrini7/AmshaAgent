@@ -67,6 +67,7 @@ $manifest = [ordered]@{
         l2Normalize = $true
         spaceId = 'sentence-transformers/all-mpnet-base-v2'
         spaceRevision = $revision
+        warmupProbes = @('Amsha local ONNX warm-up.', 'Vector embedding readiness probe.')
     }
     source = [ordered]@{
         repository = 'https://huggingface.co/sentence-transformers/all-mpnet-base-v2'

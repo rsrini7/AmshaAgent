@@ -39,6 +39,9 @@ public class OnnxEmbeddingProviderFactory implements EmbeddingProviderFactory {
     private final long maxInputBytes;
     private final long maxBatchInputBytes;
     private final int maxBatchSize;
+    private final boolean warmupEnabled;
+    private final int warmupMaxProbes;
+    private final Duration warmupTimeout;
 
     @Inject
     public OnnxEmbeddingProviderFactory(
@@ -49,7 +52,10 @@ public class OnnxEmbeddingProviderFactory implements EmbeddingProviderFactory {
             @ConfigProperty(name = "amsha.onnx.max-input-bytes", defaultValue = "262144") long maxInputBytes,
             @ConfigProperty(name = "amsha.onnx.max-batch-input-bytes", defaultValue = "1048576")
                     long maxBatchInputBytes,
-            @ConfigProperty(name = "amsha.onnx.max-batch-size", defaultValue = "32") int maxBatchSize) {
+            @ConfigProperty(name = "amsha.onnx.max-batch-size", defaultValue = "32") int maxBatchSize,
+            @ConfigProperty(name = "amsha.onnx.warmup.enabled", defaultValue = "true") boolean warmupEnabled,
+            @ConfigProperty(name = "amsha.onnx.warmup.max-probes", defaultValue = "5") int warmupMaxProbes,
+            @ConfigProperty(name = "amsha.onnx.warmup.timeout", defaultValue = "PT3S") Duration warmupTimeout) {
         this(
                 bundleRegistry,
                 runtimeManager,
@@ -58,7 +64,10 @@ public class OnnxEmbeddingProviderFactory implements EmbeddingProviderFactory {
                 new OnnxEmbeddingRunner(),
                 maxInputBytes,
                 maxBatchInputBytes,
-                maxBatchSize);
+                maxBatchSize,
+                warmupEnabled,
+                warmupMaxProbes,
+                warmupTimeout);
     }
 
     OnnxEmbeddingProviderFactory(
@@ -70,6 +79,32 @@ public class OnnxEmbeddingProviderFactory implements EmbeddingProviderFactory {
             long maxInputBytes,
             long maxBatchInputBytes,
             int maxBatchSize) {
+        this(
+                bundleRegistry,
+                runtimeManager,
+                sessionLeaseManager,
+                scheduler,
+                runner,
+                maxInputBytes,
+                maxBatchInputBytes,
+                maxBatchSize,
+                false,
+                1,
+                Duration.ofSeconds(1));
+    }
+
+    OnnxEmbeddingProviderFactory(
+            OnnxModelBundleRegistry bundleRegistry,
+            OnnxRuntimeManager runtimeManager,
+            OnnxSessionLeaseManager sessionLeaseManager,
+            OnnxInferenceScheduler scheduler,
+            OnnxEmbeddingRunner runner,
+            long maxInputBytes,
+            long maxBatchInputBytes,
+            int maxBatchSize,
+            boolean warmupEnabled,
+            int warmupMaxProbes,
+            Duration warmupTimeout) {
         this.bundleRegistry = Objects.requireNonNull(bundleRegistry, "bundleRegistry");
         this.runtimeManager = Objects.requireNonNull(runtimeManager, "runtimeManager");
         this.sessionLeaseManager = Objects.requireNonNull(sessionLeaseManager, "sessionLeaseManager");
@@ -78,6 +113,9 @@ public class OnnxEmbeddingProviderFactory implements EmbeddingProviderFactory {
         this.maxInputBytes = requirePositive(maxInputBytes, "maxInputBytes");
         this.maxBatchInputBytes = requirePositive(maxBatchInputBytes, "maxBatchInputBytes");
         this.maxBatchSize = requirePositive(maxBatchSize, "maxBatchSize");
+        this.warmupEnabled = warmupEnabled;
+        this.warmupMaxProbes = requirePositive(warmupMaxProbes, "warmupMaxProbes");
+        this.warmupTimeout = requirePositive(warmupTimeout, "warmupTimeout");
     }
 
     @Override
@@ -93,6 +131,7 @@ public class OnnxEmbeddingProviderFactory implements EmbeddingProviderFactory {
         VerifiedOnnxModelBundle bundle = loadEmbeddingBundle(config);
         OnnxEmbeddingBundleSpec spec = bundle.manifest().embeddingSpec().orElseThrow();
         validateConfiguredSpace(config, spec);
+        warmUp(bundle, spec);
         return new LocalOnnxEmbeddingModel(bundle, spec, config.timeout());
     }
 
@@ -126,6 +165,37 @@ public class OnnxEmbeddingProviderFactory implements EmbeddingProviderFactory {
         if (!config.spaceRevision().isBlank() && !config.spaceRevision().equals(spec.spaceRevision())) {
             throw new IllegalStateException(
                     "Configured ONNX embedding space revision does not match the verified bundle");
+        }
+    }
+
+    private void warmUp(VerifiedOnnxModelBundle bundle, OnnxEmbeddingBundleSpec spec) {
+        if (!warmupEnabled) return;
+        List<String> probes =
+                spec.warmupProbes().stream().limit(warmupMaxProbes).toList();
+        Instant deadline = Instant.now().plus(warmupTimeout);
+        try {
+            var result = scheduler.submit(deadline, () -> runWarmup(bundle, spec, probes, deadline));
+            List<float[]> vectors = result.get(warmupTimeout.toMillis(), TimeUnit.MILLISECONDS);
+            if (vectors.size() != probes.size())
+                throw new IllegalStateException("ONNX warm-up returned an unexpected result count");
+        } catch (OnnxInferenceSchedulingException | TimeoutException e) {
+            throw new IllegalStateException("ONNX warm-up did not complete", e);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("ONNX warm-up was interrupted", e);
+        } catch (ExecutionException e) {
+            throw new IllegalStateException("ONNX warm-up failed", e.getCause());
+        }
+    }
+
+    private List<float[]> runWarmup(
+            VerifiedOnnxModelBundle bundle, OnnxEmbeddingBundleSpec spec, List<String> probes, Instant deadline)
+            throws Exception {
+        var environment = runtimeManager
+                .environment()
+                .orElseThrow(() -> new OnnxEmbeddingInferenceException("ONNX Runtime is unavailable"));
+        try (OnnxSessionLease lease = sessionLeaseManager.acquire(bundle, deadline)) {
+            return runner.embedAll(environment, lease.session(), lease.tokenizer(), spec, probes);
         }
     }
 

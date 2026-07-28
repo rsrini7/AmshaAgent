@@ -55,6 +55,7 @@ class OnnxEmbeddingRunnerTest {
                 poolingStrategy,
                 normalize,
                 "example-space",
-                "v1");
+                "v1",
+                List.of("warm-up"));
     }
 }

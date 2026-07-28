@@ -15,6 +15,9 @@ Optional in-process ONNX Runtime integration for Amsha Agent.
 | amsha.onnx.max-input-bytes | AMSHA_ONNX_MAX_INPUT_BYTES | 262144 | UTF-8 byte limit for one original input segment before tokenization. |
 | amsha.onnx.max-batch-input-bytes | AMSHA_ONNX_MAX_BATCH_INPUT_BYTES | 1048576 | UTF-8 byte limit across original input segments in one embedding batch. |
 | amsha.onnx.max-batch-size | AMSHA_ONNX_MAX_BATCH_SIZE | 32 | Maximum original input segments accepted in one embedding batch. |
+| amsha.onnx.warmup.enabled | AMSHA_ONNX_WARMUP_ENABLED | true | Runs deterministic manifest-declared probes before exposing an ONNX slot. |
+| amsha.onnx.warmup.max-probes | AMSHA_ONNX_WARMUP_MAX_PROBES | 5 | Maximum declared warm-up probes run per bundle. |
+| amsha.onnx.warmup.timeout | AMSHA_ONNX_WARMUP_TIMEOUT | PT3S | Total deadline for one bundle warm-up. |
 | amsha.embedding.onnx.model | AMSHA_EMBEDDING_ONNX_MODEL | _(empty)_ | Explicit verified local embedding bundle ID; required only when `onnx` is selected as a provider slot. |
 | amsha.embedding.onnx.timeout-seconds | AMSHA_EMBEDDING_ONNX_TIMEOUT_SECONDS | 5 | Maximum synchronous wait for one ONNX embedding request. |
 | amsha.embedding.onnx.space-id | AMSHA_EMBEDDING_ONNX_SPACE_ID | _(manifest)_ | Optional assertion that must match the verified bundle embedding space. |
