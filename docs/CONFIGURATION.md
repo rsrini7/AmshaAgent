@@ -284,6 +284,27 @@ schema) and must match the model used by every active provider.
 | `AMSHA_WORKSPACE_SESSION_TTL_MINUTES` | `30` | Time-to-live in minutes for active sessions since the last heartbeat |
 | `AMSHA_RAG_VEC_PATH` | `./lib/vec0` | Path to sqlite-vec native extension |
 
+## In-Process Local ML (ONNX Runtime)
+
+| Variable | Default | Description |
+|---|---|---|
+| `AMSHA_ONNX_ENABLED` | `false` | Enable in-process ONNX Runtime Java & DJL Tokenizer ML inference |
+| `AMSHA_ONNX_MODEL_ROOT` | `data/models` | Root directory storing verified local model bundles (`data/models/`) |
+| `AMSHA_ONNX_MAX_MODEL_FILE_BYTES` | `1073741824` | Max file byte limit (1 GB) for verified ONNX model bundle files |
+| `AMSHA_ONNX_INFERENCE_THREADS` | `2` | Number of dedicated CPU worker threads for ONNX inference execution |
+| `AMSHA_ONNX_QUEUE_CAPACITY` | `64` | Maximum capacity of the bounded CPU inference task queue |
+| `AMSHA_ONNX_SHUTDOWN_GRACE` | `PT10S` | Grace period duration for draining in-flight leases before shutdown |
+| `AMSHA_ONNX_MAX_INPUT_BYTES` | `262144` | Max UTF-8 byte limit (256 KB) per input text segment |
+| `AMSHA_ONNX_MAX_BATCH_INPUT_BYTES` | `1048576` | Max UTF-8 byte limit (1 MB) per batch request |
+| `AMSHA_ONNX_MAX_BATCH_SIZE` | `32` | Maximum text segment batch size per embedding request |
+| `AMSHA_ONNX_WARMUP_ENABLED` | `true` | Enable bounded probes when the ONNX embedding slot is created; failed warm-up rejects that slot |
+| `AMSHA_ONNX_WARMUP_MAX_PROBES` | `5` | Maximum number of probe executions during session warmup |
+| `AMSHA_ONNX_WARMUP_TIMEOUT` | `PT3S` | Maximum duration limit for session warmup probing |
+| `AMSHA_EMBEDDING_ONNX_MODEL` | *(unset)* | Verified local bundle ID under `AMSHA_ONNX_MODEL_ROOT` (e.g. `all-mpnet-base-v2-e8c3b32`) |
+| `AMSHA_EMBEDDING_ONNX_TIMEOUT_SECONDS` | `5` | Request timeout in seconds for ONNX embedding model requests |
+| `AMSHA_EMBEDDING_ONNX_SPACE_ID` | *(unset)* | Vector space ID matching bundle manifest (e.g. `sentence-transformers/all-mpnet-base-v2`) |
+| `AMSHA_EMBEDDING_ONNX_SPACE_REVISION` | *(unset)* | Vector space revision matching bundle manifest Git commit SHA |
+
 ## Self-Evolution
 
 | Variable | Default | Description |

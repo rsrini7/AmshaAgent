@@ -20,6 +20,7 @@
 | `amsha-persistence-postgres` | PostgreSQL adapter |
 | `amsha-persistence-fs` | Filesystem-based adapter (Lucene BM25) + tiered memory (Core/Recall/Archival) + self-evolve (Events/Extracted) |
 | `amsha-rag` | Two-tier vector (vec0) + FTS5 RAG memory |
+| `amsha-local-ml-onnx` | In-process local ML inference (ONNX Runtime Java 1.27.0 + DJL HuggingFace Tokenizers 0.33.0) |
 | `amsha-mcp` | MCP server bridge + dynamic client tool loading + durable credentialed connections |
 | `amsha-onboarding` | Durable draft/saga onboarding REST API (legacy numbered-step wizard + `/complete` removed in P110) |
 | `amsha-tool-playwright` | Playwright browser automation tool |
@@ -27,7 +28,7 @@
 | `amsha-common` | Shared utilities (LogUtil, constants) |
 | `ui` | Lit 3.x + TypeScript web frontend |
 
-**Dependency flow:** `amsha-app` → `amsha-core` → `amsha-channel-api` ← `amsha-channel-telegram`, `amsha-channel-web`. `amsha-deployment` is build-time only (not in runtime fat-jar). `amsha-rag`, `amsha-mcp`, `amsha-tool-playwright`, and `amsha-self-evolve` are optional runtime modules discovered via CDI. Persistence follows hexagonal architecture: `amsha-persistence-api` defines ports, `amsha-persistence-common` holds shared entities, three adapters (sqlite, postgres, fs) implement ports.
+**Dependency flow:** `amsha-app` → `amsha-core` → `amsha-channel-api` ← `amsha-channel-telegram`, `amsha-channel-web`. `amsha-deployment` is build-time only (not in runtime fat-jar). `amsha-rag`, `amsha-local-ml-onnx`, `amsha-mcp`, `amsha-tool-playwright`, and `amsha-self-evolve` are optional runtime modules discovered via CDI. Persistence follows hexagonal architecture: `amsha-persistence-api` defines ports, `amsha-persistence-common` holds shared entities, three adapters (sqlite, postgres, fs) implement ports.
 
 ![Module Architecture](./assets/amsha_module_architecture.svg)
 

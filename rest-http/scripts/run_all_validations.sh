@@ -37,6 +37,7 @@ RAG_SCRIPT="$SCRIPT_DIR/validate_rag.sh"
 BUDGET_SCRIPT="$SCRIPT_DIR/validate_budget.sh"
 SSE_SETTINGS_SCRIPT="$SCRIPT_DIR/validate_sse_settings.sh"
 ONBOARDING_SCRIPT="$SCRIPT_DIR/validate_onboarding.sh"
+ONNX_SCRIPT="$SCRIPT_DIR/validate_onnx.sh"
 
 check_app() {
   local check_base="${TEST_BASE:-http://localhost:8080}"
@@ -85,6 +86,7 @@ for arg in "$@"; do
     --budget)       RUN_ALL=false; RUN_BUDGET=true ;;
     --sse-settings) RUN_ALL=false; RUN_SSE_SETTINGS=true ;;
     --onboarding)   RUN_ALL=false; RUN_ONBOARDING=true ;;
+    --onnx)         RUN_ALL=false; RUN_ONNX=true ;;
     --fast)   FAST=true; RUN_ALL=false; RUN_REFLEX=true; RUN_SKILLS=true; RUN_SKILLS_ADMISSION=true; RUN_ADMIN=true; RUN_AUTH_SESSION=true; RUN_IDENTITY=true; RUN_PII_AUDIT=true; RUN_SELF_EVOLVE=true; RUN_SSE_SETTINGS=true; RUN_ONBOARDING=true ;;
     --llm)    LLM=true; RUN_ALL=false; RUN_MEMORY=true; RUN_WEB=true; RUN_ROLES=true; RUN_CRON=true; RUN_RAG=true; RUN_BUDGET=true; RUN_HITL=true ;;
     --list)
@@ -106,15 +108,16 @@ for arg in "$@"; do
       echo "  --budget       validate_budget.sh              (budget + autonomy SUPERVISED/FULL/READONLY, needs LLM)"
       echo "  --sse-settings validate_sse_settings.sh        (UI SSE streams + ws-token + settings CRUD, fast)"
       echo "  --onboarding  validate_onboarding.sh         (P110 draft/saga + provider-catalog + workspace filter, fast)"
+      echo "  --onnx         validate_onnx.sh               (ONNX health, metrics, bundle integrity; requires local model)"
       echo "  --cron         validate_cron.sh               (programmatic cron resource REST APIs, needs LLM)"
-      echo "  --fast         reflex + skills + SkillsJar admission + admin + auth-session + identity + pii-audit + self-evolve + sse-settings"
+      echo "  --fast         reflex + skills + SkillsJar admission + admin + auth-session + identity + pii-audit + self-evolve + sse-settings + onboarding"
       echo "  --llm          memory + web + roles + cron + rag + budget + hitl"
       echo "  (no args)      run ALL validators"
       exit 0
       ;;
     --help)
       echo "Usage: bash run_all_validations.sh [options]"
-      echo "Options: --reflex --skills --skills-admission --mcp --memory --web --roles --admin --auth-session --identity --pii-audit --self-evolve --hitl --rag --budget --sse-settings --onboarding --cron --fast --llm --list --help"
+      echo "Options: --reflex --skills --skills-admission --mcp --memory --web --roles --admin --auth-session --identity --pii-audit --self-evolve --hitl --rag --budget --sse-settings --onboarding --onnx --cron --fast --llm --list --help"
       exit 0
       ;;
   esac
@@ -136,7 +139,7 @@ else
 fi
 
 if [ "$FAST" = true ]; then
-  echo "Mode: --fast (reflex + skills + admin + auth-session + identity + pii-audit + self-evolve + sse-settings + onboarding, no LLM)"
+  echo "Mode: --fast (portable zero-token validators; ONNX runs explicitly with --onnx)"
 elif [ "$LLM" = true ]; then
   echo "Mode: --llm (memory + web + roles, needs LLM)"
 elif [ "$RUN_ALL" = true ]; then
@@ -219,7 +222,11 @@ if [ "$RUN_SSE_SETTINGS" = true ] || [ "$RUN_ALL" = true ]; then
 fi
 
 if [ "$RUN_ONBOARDING" = true ] || [ "$RUN_ALL" = true ]; then
-  run_validator "P110 ONBOARDING / PROVIDER / WORKSPACE" "$ONBOARDING_SCRIPT"
+  run_validator "ONBOARDING / SAGA" "$ONBOARDING_SCRIPT"
+fi
+
+if [ "$RUN_ONNX" = true ]; then
+  run_validator "ONNX LOCAL ML" "$ONNX_SCRIPT"
 fi
 
 # ── Summary ──

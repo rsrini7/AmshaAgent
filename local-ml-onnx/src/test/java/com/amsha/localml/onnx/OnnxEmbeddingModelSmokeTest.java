@@ -37,7 +37,9 @@ class OnnxEmbeddingModelSmokeTest {
 
     @Test
     void runsPinnedMpnetBundleWhenInstalled() throws Exception {
-        Path modelRoot = Path.of("data/models").toAbsolutePath();
+        Path modelRoot = Files.isDirectory(Path.of("data/models"))
+                ? Path.of("data/models").toAbsolutePath()
+                : Path.of("../data/models").toAbsolutePath();
         Path bundlePath = modelRoot.resolve("all-mpnet-base-v2-e8c3b32");
         Assumptions.assumeTrue(
                 Files.isRegularFile(bundlePath.resolve("model.onnx")), "run mise run models:install-mpnet");
