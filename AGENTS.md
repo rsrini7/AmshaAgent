@@ -54,6 +54,11 @@ incidents live in [Architecture Invariants](docs/Architecture_Invariants.md).
 - Create `SecureRandom` locally and zero secret bytes in `finally`; do not retain
   it in static fields. Do not echo generated HTML into chat: use the HTML artifact
   transformer and browser preview path.
+- Non-blocking thread guard checks must test the actual executing thread using
+  `Context.isOnEventLoopThread()`. Never infer the thread from
+  `Vertx.currentContext().isEventLoopContext()`, as `@RunOnVirtualThread` REST
+  handlers retain an event-loop-derived Vert.x context while running safely on
+  virtual threads.
 
 ### Java and API conventions
 
@@ -132,6 +137,14 @@ Keep all backends and migration parity in one change. Preserve the admin-resourc
 authorization pattern, retention jobs, and memory metrics. Consult the detailed
 [persistence rules](docs/Architecture_Invariants.md#5-persistence-and-transaction-rules)
 and the memory section in `docs/Architecture_Invariants.md`.
+- Every durable vector namespace must validate compatibility against `EmbeddingIndexDescriptor`.
+  Descriptor fingerprints compare model, tokenizer, pooling, and dimension contracts,
+  excluding `providerId` to allow provider failover. On descriptor mismatch, non-empty
+  vector namespaces must never be auto-purged; they must fall back non-destructively
+  to BM25/FTS5 keyword search.
+- Local ONNX model bundle manifests must include validated upstream source metadata
+  (`repository`, `revision`, `modelPath`, `tokenizerPath`, `license`). Tokenizers must
+  enforce truncation bounded to the model's declared max sequence length (e.g. 384 for MPNet).
 
 ## Focused verification
 
@@ -142,6 +155,7 @@ and the memory section in `docs/Architecture_Invariants.md`.
 | Markdown | `python3 ./scripts/verify_docs.py` |
 | Native-sensitive code | `./mvnw compile -DskipTests -q`; use `mise build:native-local` when applicable |
 | SkillsJar dependencies | `python3 ./scripts/verify_skillsjar_index.py` |
+| Local ML / ONNX Release | `bash scripts/verify_native_matrix.sh && bash scripts/verify_onnx_release_provenance.sh` |
 
 ### REST validation
 
