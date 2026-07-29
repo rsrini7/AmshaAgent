@@ -380,6 +380,22 @@ Core memory modifications are governed by a token-bucket rate limiter (e.g., max
 
 The `CompactionEventBridge` uses a `CountDownLatch` per session to prevent a race where cache populates before compaction write commits, caching `null` for the rest of the session.
 
+### Vector Index Compatibility & Descriptor Safety
+
+To protect durable vector namespaces (`rag-global`, `archival`) from corrupted cross-space retrieval when model weights, tokenization, or vector dimensions change:
+
+1. **Composite Descriptor Fingerprinting (`EmbeddingIndexDescriptor`)**:
+   - Computes a deterministic 15-field SHA-256 fingerprint (`spaceId`, `modelRevision`, `tokenizerRevision`, `preprocessingRevision`, `poolingStrategy`, `l2Normalize`, `vectorDimension`, `numericPrecision`, `chunkingStrategy`, `chunkingRevision`, `maxWindowTokens`, `windowOverlapTokens`, `multiWindowAggregation`).
+   - Retains `providerId` as audit provenance but excludes it from the compatibility fingerprint to support seamless provider transport failover (e.g. ONNX local vs. cloud REST) when underlying vector spaces are mathematically identical.
+2. **Multi-Backend Migration Parity**:
+   - **SQLite & PostgreSQL**: Dual-dialect Flyway `V10` migration creates the `vector_index_metadata` table.
+   - **Filesystem**: Reads/writes a versioned JSON manifest (`index_descriptor.json`) in the Lucene index root directory.
+3. **Non-Destructive Degradation**:
+   - On descriptor mismatch between active configuration and stored index, **no vectors are automatically deleted**.
+   - Vector search is safely disabled (`VectorIndexMetadataPort.isVectorEnabled() == false`), and retrieval adapters automatically degrade to full-text BM25 / SQLite FTS5 / PostgreSQL `tsvector` keyword search.
+4. **Observability**:
+   - Exposes compatibility state via `VectorIndexCompatibilityHealthCheck` under `/q/health` (`Vector Index Compatibility`), reporting namespace statuses (`INITIALIZED`, `MATCH`, `MISMATCH`, `MISSING_METADATA`, `UNAVAILABLE`).
+
 ---
 
 ### Behavioral Self-Evolution System

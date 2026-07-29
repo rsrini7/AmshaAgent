@@ -82,6 +82,8 @@ See [docs/QUICK_START.md](./docs/QUICK_START.md) for detailed setup options.
 - **AES-256-GCM-SIV vault** with Argon2id key derivation — secrets never stored in plaintext
 - **Tamper-evident HMAC audit chain** — every action logged as append-only, verifiable record
 - **MemGPT-style three-tier memory** — prompt-injected Core context, exact-turn Recall history, and semantic Archival knowledge; retrieval combines FTS5 and sqlite-vec with Reciprocal Rank Fusion
+- **In-process local ML inference** — ONNX Runtime (`1.27.0`) and DJL Tokenizers (`0.33.0`) in `amsha-local-ml-onnx` for zero-network air-gapped vector embeddings without Python containers or external sidecars
+- **Vector index descriptor fingerprinting & non-destructive safety** — 15-field `EmbeddingIndexDescriptor` validates model, tokenizer, pooling, and dimension compatibility across SQLite (`sqlite-vec`), PostgreSQL (`pgvector`), and Lucene Filesystem backends; mismatched indices degrade non-destructively to BM25/FTS5 keyword search without auto-deleting vectors
 - **Document ingestion** — add knowledge to the RAG store for retrieval in future agent turns
 - **Extensible Skills system** — YAML/Markdown custom roles from database, classpath, or SkillsJars with hot reload and optional adaptive execution
 - **Behavioral self-evolution** — opt-in trace capture, pattern extraction, and reviewed directives that improve future interactions
