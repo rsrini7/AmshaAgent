@@ -229,7 +229,11 @@ public class OnnxSessionLeaseManager {
 
         @Override
         public OnnxSessionHandle open(OrtEnvironment environment, VerifiedOnnxModelBundle bundle) throws Exception {
-            var tokenizer = tokenizerFactory.load(bundle.tokenizerPath());
+            var embeddingSpec = bundle.manifest().embeddingSpec();
+            var tokenizer = embeddingSpec.isPresent()
+                    ? tokenizerFactory.load(
+                            bundle.tokenizerPath(), embeddingSpec.orElseThrow().maxSequenceLength())
+                    : tokenizerFactory.load(bundle.tokenizerPath());
             try {
                 try (OrtSession.SessionOptions options = new OrtSession.SessionOptions()) {
                     // Keep native-image execution deliberately conservative until the cross-platform

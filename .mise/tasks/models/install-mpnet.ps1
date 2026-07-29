@@ -60,7 +60,8 @@ $manifest = [ordered]@{
         attentionMaskName = 'attention_mask'
         tokenTypeIdsName = $null
         outputName = 'last_hidden_state'
-        maxSequenceLength = 512
+        # sentence_bert_config.json for the pinned SentenceTransformers revision declares 384.
+        maxSequenceLength = 384
         vectorDimension = 768
         paddingTokenId = 1
         poolingStrategy = 'MASKED_MEAN'

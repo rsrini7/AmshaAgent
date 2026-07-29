@@ -2,21 +2,21 @@
 
 - Status: Accepted for Phases 0–1; Proposed for Phases 2–3
 - Date: 2026-07-27
-- Last reviewed: 2026-07-28
-- Last updated: 2026-07-28
+- Last reviewed: 2026-07-29
+- Last updated: 2026-07-29
 - Decision owners: Amsha Agent maintainers
 - Related invariants: [Architecture Invariants](../docs/Architecture_Invariants.md)
 - Decision maturity: Phase 0 spike and Phase 1 implementation are authorized subject
   to the Section 15 go/no-go gates; Phases 2–3 remain proposed
 
-## Current implementation status (2026-07-28)
+## Current implementation status (2026-07-29)
 
 Phase 1 implementation is complete, while the remaining Phase 0 release-evidence
 gates stay open. ONNX is available only as an explicit provider slot with an installed
-verified bundle; it does not change the configured default provider list. The macOS
-arm64 native request path and all-backend descriptor parity now pass; the supported-
-platform matrix, reference golden corpus, leak gate, and signed release provenance
-remain required before general availability.
+verified bundle; it does not change the configured default provider list. The independent
+Python-reference corpus, macOS arm64 native target, and macOS lifecycle/RSS gate now pass.
+Linux x86-64, Linux arm64, and signed trust-root/SBOM/provenance evidence remain required
+before general availability.
 
 - Completed: provider-neutral `EmbeddingSpaceDescriptor` support and compatible-slot
   enforcement in the existing embedding failover loop; incompatible slots are skipped
@@ -112,13 +112,18 @@ remain required before general availability.
   diagnostic tests; SQLite and PostgreSQL `V10` migration tests; application assembly
   compilation; documentation validation; native-image build; native REST inference
   probe; and diff hygiene.
-- Still required for Phase 0: supported-platform native matrix; versioned
-  Python-reference golden corpus with tolerance/pass-rate and nearest-neighbour evidence;
-  repeated startup/inference/shutdown resource-leak gate; signed trust-root and release
-  SBOM/provenance evidence.
+- Phase 0 evidence completed on macOS arm64: the pinned Python SentenceTransformers
+  corpus passed with minimum cosine `0.999999998` against the FP32 `0.9999` threshold,
+  100% for every declared partition and canonical fixture, and stable nearest-neighbour
+  rankings. The native record passed three fresh application lifecycles with 100 inference
+  probes each, graceful shutdown, and maximum within-cycle RSS growth of `22,816 KiB`
+  against the `64 MiB` limit.
+- Still required for Phase 0: equivalent native records from Linux x86-64 and Linux
+  arm64, followed by matrix aggregation; signed trust-root and release SBOM/provenance
+  evidence.
 - No Phase 1 implementation item remains open. Phase 1 general availability is still
-  conditional on the outstanding Phase 0 cross-platform, numeric-equivalence, leak,
-  signature, SBOM, and provenance evidence in Section 15.
+  conditional on the outstanding Phase 0 Linux platform/lifecycle, signature, SBOM,
+  and provenance evidence in Section 15.
 - Explicitly not started: Phase 2.5 core classifier SPIs and every Phase 2–3
   classifier behavior. The new `V10` migrations add descriptor metadata only; they do
   not migrate, delete, or re-embed existing development vectors.
@@ -878,6 +883,15 @@ Phase 1 may become generally available only when:
 - JVM packaging works on all supported JVM platforms;
 - native support either passes its full matrix or is cleanly excluded;
 - default-provider and default-enabled changes receive a separate measured decision.
+
+Current Phase 0 release-evidence status (2026-07-29):
+
+- [x] Independent Python-reference corpus and macOS arm64 numeric equivalence, including
+  per-partition pass rates, canonical fixtures, and nearest-neighbour stability.
+- [x] macOS arm64 native load/infer/shutdown and repeated lifecycle/RSS evidence.
+- [ ] Linux x86-64 native load/infer/shutdown, numeric, and lifecycle/RSS evidence.
+- [ ] Linux arm64 native load/infer/shutdown, numeric, and lifecycle/RSS evidence.
+- [ ] Signed trust root, SBOM, and SLSA provenance retained with the release.
 
 Phase 3 classifier activation may proceed only when:
 

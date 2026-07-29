@@ -3,6 +3,7 @@ package com.amsha.localml.onnx;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
@@ -17,7 +18,11 @@ public record OnnxModelBundleManifest(
         String tokenizerFile,
         String tokenizerSha256,
         long tokenizerBytes,
-        OnnxEmbeddingBundleSpec embedding) {
+        OnnxEmbeddingBundleSpec embedding,
+        OnnxModelBundleSource source) {
+
+    private static final Set<String> ALLOWED_SOURCE_LICENSES =
+            Set.of("Apache-2.0", "MIT", "BSD-2-Clause", "BSD-3-Clause", "ISC", "0BSD");
 
     public OnnxModelBundleManifest {
         bundleId = requireIdentifier(bundleId, "bundleId");
@@ -31,6 +36,29 @@ public record OnnxModelBundleManifest(
         }
         tokenizerSha256 = requireSha256(tokenizerSha256, "tokenizerSha256");
         if (tokenizerBytes <= 0) throw new IllegalArgumentException("tokenizerBytes must be positive");
+    }
+
+    /**
+     * Descriptive upstream source declaration. This is not a signature, trust root, SBOM,
+     * or release-provenance attestation; those remain external release evidence.
+     */
+    public record OnnxModelBundleSource(
+            String repository, String revision, String modelPath, String tokenizerPath, String license) {
+        public OnnxModelBundleSource {
+            repository = requireHttpsRepository(repository);
+            revision = requireNonBlank(revision, "revision");
+            modelPath = requireRelativeFile(modelPath, "modelPath");
+            tokenizerPath = requireRelativeFile(tokenizerPath, "tokenizerPath");
+            license = requireNonBlank(license, "license");
+            if (!ALLOWED_SOURCE_LICENSES.contains(license)) {
+                throw new IllegalArgumentException("license is not in the Phase 0 SPDX allowlist");
+            }
+        }
+    }
+
+    /** Returns unsigned descriptive source metadata when the local manifest declares it. */
+    public Optional<OnnxModelBundleSource> sourceSpec() {
+        return Optional.ofNullable(source);
     }
 
     /** Compatibility constructor for non-embedding bundles verified by the Phase 0 foundation. */
@@ -52,6 +80,7 @@ public record OnnxModelBundleManifest(
                 tokenizerFile,
                 tokenizerSha256,
                 tokenizerBytes,
+                null,
                 null);
     }
 
@@ -79,6 +108,14 @@ public record OnnxModelBundleManifest(
     private static String requireSha256(String value, String name) {
         String result = requireNonBlank(value, name).toLowerCase(Locale.ROOT);
         if (!result.matches("[0-9a-f]{64}")) throw new IllegalArgumentException(name + " must be a SHA-256 hex digest");
+        return result;
+    }
+
+    private static String requireHttpsRepository(String value) {
+        String result = requireNonBlank(value, "repository");
+        if (!result.startsWith("https://") || result.contains(" ")) {
+            throw new IllegalArgumentException("repository must be an HTTPS URL");
+        }
         return result;
     }
 

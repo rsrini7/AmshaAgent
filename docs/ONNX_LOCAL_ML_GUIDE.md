@@ -12,12 +12,12 @@ The implementation follows [ADR-ONNX-In-Process-Local-ML-Inference.md](../Ideas-
 
 | Rollout Phase | Status | Key Deliverables & Components |
 |---|---|---|
-| **Phase 0: Foundation & Tokenizer** | **Partially verified** | JVM runtime, tokenizer, manifest verification, health, metrics, and reflection registration exist. Golden-corpus, all-supported-platform, leak, and native-runtime gates remain open. |
-| **Phase 1: Local Embeddings & RAG** | **In progress** | `OnnxEmbeddingProviderFactory`, `OnnxEmbeddingRunner`, `OnnxEmbeddingBundleSpec`, `OnnxSessionLeaseManager`, and `OnnxInferenceScheduler` execute the verified JVM path. Cross-backend vector-index fingerprint/reset parity is still required before general availability. |
+| **Phase 0: Foundation & Tokenizer** | **Release evidence open** | Python-reference equivalence and macOS arm64 native/lifecycle evidence pass. Linux x86-64, Linux arm64, and signed SBOM/provenance artifacts remain release gates. |
+| **Phase 1: Local Embeddings & RAG** | **Implementation complete** | `OnnxEmbeddingProviderFactory`, `OnnxEmbeddingRunner`, `OnnxEmbeddingBundleSpec`, `OnnxSessionLeaseManager`, `OnnxInferenceScheduler`, 15-field `EmbeddingIndexDescriptor`, dual-dialect `V10` Flyway migrations (SQLite & PostgreSQL), filesystem descriptor manifest, non-destructive BM25/FTS fallback, and MicroProfile health integration (`VectorIndexCompatibilityHealthCheck`). |
 | **Phase 2 & 2.5: Classifier SPI Gates** | *Pending* | Core `ClassifierResult` SPI, `PostPolicyToolRiskInterceptor`, shadow mode score distribution |
 | **Phase 3: Bounded Behavioral Activation** | *Pending* | Admin kill switches (`/admin/local-ml/**`), per-classifier runtime feature toggles |
 
-Current evidence (2026-07-28): the real MPNet JVM smoke test completed a 768-dimensional, finite, L2-normalized embedding through `OrtSession.run()`. The existing macOS arm64 native binary also started with ONNX Runtime `1.27.0` ready and registered the ONNX MPNet slot. The native diagnostic probe must be run after its introducing native build; it executes one fixed-text embedding and verifies the ONNX success metric without exposing text or vector data. The cross-platform native inference gate remains open.
+Current evidence (2026-07-29): the pinned Python-reference corpus passes with minimum cosine `0.999999998` against the FP32 `0.9999` threshold, 100% for every declared partition, and stable nearest-neighbour rankings. The macOS arm64 record passes three fresh native lifecycles, 100 inference probes per lifecycle, graceful shutdown, and maximum RSS growth of `22,816 KiB` against the `64 MiB` limit. Multi-backend vector parity also passes. The release harness still fails closed when either Linux target or signed artifacts are missing.
 
 ---
 
@@ -66,7 +66,7 @@ data/models/all-mpnet-base-v2-e8c3b32/
     "attentionMaskName": "attention_mask",
     "tokenTypeIdsName": null,
     "outputName": "last_hidden_state",
-    "maxSequenceLength": 512,
+    "maxSequenceLength": 384,
     "vectorDimension": 768,
     "paddingTokenId": 1,
     "poolingStrategy": "MASKED_MEAN",
@@ -76,6 +76,11 @@ data/models/all-mpnet-base-v2-e8c3b32/
   }
 }
 ```
+
+The optional `source` object written by the development installer is an unsigned,
+descriptive declaration. Its URL, relative paths, and SPDX license are validated, but
+it is not a trust root, signature, SBOM, or SLSA provenance statement. Release evidence
+is verified separately as described in Section 8.
 
 ---
 
@@ -99,8 +104,8 @@ AMSHA_EMBEDDING_ONNX_SPACE_ID=sentence-transformers/all-mpnet-base-v2
 AMSHA_EMBEDDING_ONNX_SPACE_REVISION=e8c3b32edf5434bc2275fc9bab85f82640a19130
 
 # 5. Existing vector indexes must use the same dimension and fingerprint.
-#    Phase 1 persistence parity is still in progress; reset development data before
-#    changing an active embedding space rather than mixing vectors.
+#    Reset development data before changing an active embedding space rather than
+#    mixing vectors.
 AMSHA_EMBED_DIMENSIONS=768
 ```
 
@@ -162,11 +167,64 @@ bash rest-http/scripts/run_all_validations.sh --onnx
 
 This proves the native process starts, reports ONNX readiness, sees the verified bundle, and activates only descriptor-compatible vector indexes. `ONNX-2` calls the internal-only fixed-text probe, requires an ONNX success-counter increment, and therefore proves native `OrtSession.run()` when it passes. `ONNX-4` requires overall health `UP`, the `Vector Index Compatibility` check `UP`, and `vectorStatus=READY`; it intentionally fails for `DEGRADED` or `NOT_ACTIVE` rather than treating text fallback as proof of the Phase 1 happy path. A native inference smoke test on every supported target remains mandatory before Phase 0 is closed. Do not rely on undocumented ORT extraction locations or system-property library overrides; they are not an approved deployment interface.
 
-The macOS arm64 build/start/readiness and real inference procedure above passed on 2026-07-28. It is evidence for that target only; Linux x86-64, Linux arm64, reference-corpus numeric equivalence, leak testing, and signed provenance remain required gates.
+The macOS arm64 build/start/readiness, numeric corpus, and lifecycle/RSS procedure passed on 2026-07-29. It is evidence for that target only; Linux x86-64, Linux arm64, and signed SBOM/provenance remain required gates.
 
 ---
 
-## 8. Frequently Asked Questions (FAQ)
+## 8. Phase 0 Release-Evidence Gates
+
+Generate the numeric corpus with an independently installed, pinned
+SentenceTransformers/PyTorch model. Offline generation is the default; a download
+requires the explicit `--allow-download` option and must occur in the governed release
+workflow:
+
+```bash
+python3 scripts/export_golden_corpus.py \
+  --model-path /release-inputs/all-mpnet-base-v2-pytorch \
+  --output data/models/golden-corpus-v1.json
+```
+
+`OnnxGoldenCorpusEquivalenceTest` compares every ONNX vector with its Python reference,
+enforces the ADR's FP32/INT8 cosine floor and per-partition pass rate, requires all
+canonical fixtures, exercises actual batch inference, and checks nearest-neighbour
+ranking and labelled retrieval stability. In normal development it remains
+model-optional. A release job sets `amsha.onnx.release-evidence=true`, which turns every
+missing model/corpus prerequisite into a hard failure.
+
+For each supported platform, build the native binary on that platform and collect a
+record. `record` verifies the actual OS/architecture, launches the supplied Mach-O/ELF
+binary, runs strict JVM numeric and RSS tests, performs repeated native inference while
+sampling process RSS, and requires three graceful native process lifecycles:
+
+```bash
+scripts/verify_native_matrix.sh record \
+  macos-arm64 ./dist/amsha-sqlite evidence/onnx/macos-arm64.json
+
+scripts/verify_native_matrix.sh verify evidence/onnx
+```
+
+Repeat `record` on Linux x86-64 and Linux arm64 using output names
+`linux-x86_64.json` and `linux-arm64.json`. `verify` fails until all three valid records
+are present. These records are raw evidence inputs; they are not signatures.
+
+Verify the release SBOM and SLSA provenance as signed blobs using the release trust
+root:
+
+```bash
+scripts/verify_onnx_release_provenance.sh \
+  release-trust-root.pub release.cdx.json release.cdx.sig \
+  release.intoto.jsonl release.intoto.sig
+```
+
+The verifier requires CycloneDX/SPDX entries for ONNX Runtime and DJL tokenizers,
+in-toto/SLSA provenance with SHA-256 subjects covering the model and tokenizer, and
+valid `cosign verify-blob` signatures. The macOS numeric report, native record, and leak
+samples now pass. Phase 0 remains open until the two Linux records, complete matrix,
+trust root, signed SBOM, and signed provenance are retained with the release.
+
+---
+
+## 9. Frequently Asked Questions (FAQ)
 
 ### Q: How did you determine `AMSHA_EMBEDDING_ONNX_MODEL`, `SPACE_ID`, and `SPACE_REVISION`?
 - **`AMSHA_EMBEDDING_ONNX_MODEL`**: The exact folder name under `data/models/` (`all-mpnet-base-v2-e8c3b32`), matching `"bundleId"` in `manifest.json`.
@@ -174,7 +232,7 @@ The macOS arm64 build/start/readiness and real inference procedure above passed 
 - **`AMSHA_EMBEDDING_ONNX_SPACE_REVISION`**: Read from `"spaceRevision"` in `manifest.json` (`e8c3b32edf5434bc2275fc9bab85f82640a19130`), which is the Hugging Face Git commit SHA.
 
 ### Q: Does a successful native build prove ONNX inference works in the native binary?
-No. A native image can compile while a JNI resource, dynamic-library loader, reflection path, or tokenizer binding still fails at runtime. Follow the native build, launch, and REST procedure in Section 7; a passing `ONNX-2` is the real inference proof for that built target. Phase 0 remains open until every supported target and the remaining numeric-equivalence, leak, and supply-chain gates pass.
+No. A native image can compile while a JNI resource, dynamic-library loader, reflection path, or tokenizer binding still fails at runtime. Follow the native build, launch, and REST procedure in Section 7; a passing `ONNX-2` is the real inference proof for that built target. Phase 0 remains open until both Linux targets and the remaining signed supply-chain gates pass.
 
 ### Q: How do I validate local ONNX inference over REST?
 Run the REST validation script:

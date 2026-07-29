@@ -41,6 +41,18 @@ class OnnxTokenizerFactoryTest {
         assertThrows(OnnxTokenizerLoadException.class, () -> new OnnxTokenizerFactory().load(tokenizerFile));
     }
 
+    @Test
+    void configuresNativeTruncationAtTheEmbeddingSpaceBoundary() throws Exception {
+        Path tokenizerFile = tempDir.resolve("tokenizer.json");
+        Files.writeString(tokenizerFile, wordPieceTokenizer());
+
+        try (HuggingFaceTokenizer tokenizer = new OnnxTokenizerFactory().load(tokenizerFile, 1)) {
+            assertArrayEquals(
+                    new long[] {1},
+                    tokenizer.encode("Hello world", false, false).getIds());
+        }
+    }
+
     private static String wordPieceTokenizer() {
         return """
                 {

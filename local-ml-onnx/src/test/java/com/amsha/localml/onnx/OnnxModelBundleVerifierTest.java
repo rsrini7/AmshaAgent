@@ -87,6 +87,35 @@ class OnnxModelBundleVerifierTest {
     }
 
     @Test
+    void readsAllowlistedUnsignedSourceDeclaration() throws Exception {
+        OnnxModelBundleManifest manifest = objectMapper.readValue("""
+                {"bundleId":"test-bundle","revision":"revision-1","modelFile":"model.onnx",
+                "modelSha256":"0000000000000000000000000000000000000000000000000000000000000000",
+                "modelBytes":1,"tokenizerFile":"tokenizer.json",
+                "tokenizerSha256":"0000000000000000000000000000000000000000000000000000000000000000",
+                "tokenizerBytes":1,"source":{"repository":"https://example.test/model",
+                "revision":"revision-1","modelPath":"onnx/model.onnx",
+                "tokenizerPath":"tokenizer.json","license":"Apache-2.0"}}
+                """, OnnxModelBundleManifest.class);
+
+        assertEquals(
+                "https://example.test/model",
+                manifest.sourceSpec().orElseThrow().repository());
+    }
+
+    @Test
+    void rejectsSourceLicenseOutsidePhaseZeroAllowlist() {
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new OnnxModelBundleManifest.OnnxModelBundleSource(
+                        "https://example.test/model",
+                        "revision-1",
+                        "onnx/model.onnx",
+                        "tokenizer.json",
+                        "Proprietary"));
+    }
+
+    @Test
     void rejectsDuplicateEmbeddingTensorNames() {
         assertThrows(
                 IllegalArgumentException.class,
