@@ -24,7 +24,8 @@ public record OnnxEmbeddingBundleSpec(
         boolean l2Normalize,
         String spaceId,
         String spaceRevision,
-        List<String> warmupProbes) {
+        List<String> warmupProbes)
+        implements OnnxTextInputSpec {
 
     public enum PoolingStrategy {
         CLS_TOKEN,

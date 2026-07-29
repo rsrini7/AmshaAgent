@@ -61,6 +61,9 @@ public class FinishActionHandler {
     private final RoleRegistry roleRegistry;
 
     @Inject
+    AnswerQualityShadowEvaluationService answerQualityShadowEvaluation;
+
+    @Inject
     public FinishActionHandler(
             AnswerGuardStrategy qualityGuard,
             CodeGenerationPolicy codePolicy,
@@ -251,8 +254,30 @@ public class FinishActionHandler {
         final ReasoningStep completedStep = step.withObservation("Task completed.");
         observers.forEach(o -> o.onStepComplete(sessionId, agentRole, completedStep));
 
+        observeAcceptedAnswer(context, history, finalAnswer);
         AgentResult result = AgentResult.finished(finalAnswer, List.copyOf(history));
         return new FinishOutcome.Completed(result, finalAnswer);
+    }
+
+    private void observeAcceptedAnswer(AgentExecutionContext context, List<ReasoningStep> history, String answer) {
+        try {
+            if (answerQualityShadowEvaluation != null) {
+                answerQualityShadowEvaluation.observeAccepted(new AnswerQualityShadowContext(
+                        context.agentRole(),
+                        context.goal(),
+                        answer,
+                        history.stream().anyMatch(FinishActionHandler::isToolInvocation)));
+            }
+        } catch (RuntimeException | LinkageError ignored) {
+            // A shadow-only observer must never alter an accepted FINISH answer.
+        }
+    }
+
+    private static boolean isToolInvocation(ReasoningStep step) {
+        return step != null
+                && !ReasoningStep.FINISH.equals(step.action())
+                && !ReasoningStep.OBSERVE.equals(step.action())
+                && step.observation() != null;
     }
 
     /**

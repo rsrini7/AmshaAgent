@@ -230,9 +230,13 @@ public class OnnxSessionLeaseManager {
         @Override
         public OnnxSessionHandle open(OrtEnvironment environment, VerifiedOnnxModelBundle bundle) throws Exception {
             var embeddingSpec = bundle.manifest().embeddingSpec();
-            var tokenizer = embeddingSpec.isPresent()
-                    ? tokenizerFactory.load(
-                            bundle.tokenizerPath(), embeddingSpec.orElseThrow().maxSequenceLength())
+            var classifierSpec = bundle.manifest().classifierSpec();
+            int maximumLength = embeddingSpec
+                    .map(OnnxEmbeddingBundleSpec::maxSequenceLength)
+                    .or(() -> classifierSpec.map(OnnxClassifierBundleSpec::maxSequenceLength))
+                    .orElse(0);
+            var tokenizer = maximumLength > 0
+                    ? tokenizerFactory.load(bundle.tokenizerPath(), maximumLength)
                     : tokenizerFactory.load(bundle.tokenizerPath());
             try {
                 try (OrtSession.SessionOptions options = new OrtSession.SessionOptions()) {

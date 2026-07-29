@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import jakarta.enterprise.inject.Instance;
@@ -25,6 +26,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
 @SuppressWarnings("java:S1192")
 class FinishActionHandlerTest {
@@ -37,6 +39,7 @@ class FinishActionHandlerTest {
     private CorrectionStrategy correctionStrategy;
     private TextPatternUtils textPatternUtils;
     private RoleRegistry roleRegistry;
+    private AnswerQualityShadowEvaluationService answerQualityShadowEvaluation;
 
     @BeforeEach
     @SuppressWarnings("unchecked")
@@ -48,6 +51,7 @@ class FinishActionHandlerTest {
         correctionStrategy = mock(CorrectionStrategy.class);
         textPatternUtils = mock(TextPatternUtils.class);
         roleRegistry = mock(RoleRegistry.class);
+        answerQualityShadowEvaluation = mock(AnswerQualityShadowEvaluationService.class);
 
         ToolRegistry toolRegistry = mock(ToolRegistry.class);
         when(toolRegistry.listTools())
@@ -75,6 +79,7 @@ class FinishActionHandlerTest {
                 textPatternUtils,
                 toolRegistry,
                 roleRegistry);
+        handler.answerQualityShadowEvaluation = answerQualityShadowEvaluation;
 
         // Default mock behaviors
         when(qualityGuard.isRawToolCallLeak(anyString())).thenReturn(false);
@@ -92,6 +97,26 @@ class FinishActionHandlerTest {
         FinishActionHandler.FinishOutcome outcome = handler.handle(ctx, List.of(), step, 0);
 
         assertEquals("Hello world", ((FinishActionHandler.FinishOutcome.Completed) outcome).answer());
+    }
+
+    @Test
+    void acceptedAnswerIsObservedWithoutChangingFinishOrRetryingAcrossToolBoundary() {
+        AgentExecutionContext ctx = mock(AgentExecutionContext.class);
+        when(ctx.sessionId()).thenReturn("s1");
+        when(ctx.agentRole()).thenReturn("researcher");
+        when(ctx.goal()).thenReturn("summarize the result");
+        ReasoningStep tool =
+                ReasoningStep.pending("tool", "search", Map.of(), 0, 0).withObservation("private tool result", true);
+        ReasoningStep finish =
+                ReasoningStep.pending("FINISH: Here is the accepted summary.", ReasoningStep.FINISH, Map.of(), 0, 0);
+
+        FinishActionHandler.FinishOutcome outcome = handler.handle(ctx, List.of(tool), finish, 0);
+
+        assertEquals("Here is the accepted summary.", ((FinishActionHandler.FinishOutcome.Completed) outcome).answer());
+        ArgumentCaptor<AnswerQualityShadowContext> captor = ArgumentCaptor.forClass(AnswerQualityShadowContext.class);
+        verify(answerQualityShadowEvaluation).observeAccepted(captor.capture());
+        assertTrue(captor.getValue().toolInvokedInTurn());
+        assertEquals("Here is the accepted summary.", captor.getValue().answer());
     }
 
     @Test

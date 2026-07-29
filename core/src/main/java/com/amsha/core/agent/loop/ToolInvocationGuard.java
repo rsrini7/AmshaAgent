@@ -55,6 +55,9 @@ public class ToolInvocationGuard {
     @Inject
     public Instance<ToolGuardInterceptor> interceptors;
 
+    @Inject
+    ToolRiskShadowEvaluationService toolRiskShadowEvaluation;
+
     private static final int MAX_DEDUP_SESSIONS = 1000;
     private final Map<String, Map<String, String>> sessionDedupeCache = new ConcurrentHashMap<>();
     private final ConcurrentLinkedDeque<String> sessionOrder = new ConcurrentLinkedDeque<>();
@@ -173,7 +176,20 @@ public class ToolInvocationGuard {
             ApprovalFrame frame = new ApprovalFrame(toolName, params, op.riskLevel());
             return new GuardDecision.PauseForApproval(frame);
         }
+        observeProvisionalAllow(agentRole, level, toolName, params, goal);
         return new GuardDecision.Allow();
+    }
+
+    private void observeProvisionalAllow(
+            String agentRole, AutonomyLevel level, String toolName, Map<String, Object> params, String goal) {
+        try {
+            if (toolRiskShadowEvaluation != null) {
+                toolRiskShadowEvaluation.observeProvisionalAllow(new ToolRiskShadowContext(
+                        agentRole, level, toolName, params == null ? Map.of() : params, goal));
+            }
+        } catch (RuntimeException | LinkageError ignored) {
+            // A shadow-only observer must never alter a deterministic guard decision.
+        }
     }
 
     private GuardDecision checkDeduplication(

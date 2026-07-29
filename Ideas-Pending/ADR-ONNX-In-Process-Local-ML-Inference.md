@@ -124,9 +124,22 @@ before general availability.
 - No Phase 1 implementation item remains open. Phase 1 general availability is still
   conditional on the outstanding Phase 0 Linux platform/lifecycle, signature, SBOM,
   and provenance evidence in Section 15.
-- Explicitly not started: Phase 2.5 core classifier SPIs and every Phase 2–3
-  classifier behavior. The new `V10` migrations add descriptor metadata only; they do
-  not migrate, delete, or re-embed existing development vectors.
+- Phase 2 classifier-shadow code is implemented but disabled by default. Core owns the
+  sealed `ClassifierResult` contract and asynchronously compares optional intent,
+  provisional-allow tool-risk, and guard-accepted answer-quality opinions using bounded,
+  payload-free metrics. Tool-risk cannot block or request approval. Answer-quality
+  cannot modify an answer or retry across a tool boundary. `local-ml-onnx` supports all
+  three adapters through one verified execution/lifecycle path with mutually exclusive
+  classifier manifests, strict graph/output validation, softmax or sigmoid scores,
+  calibrated low-confidence `NoOpinion`, deterministic warm-up, input limits, deadlines,
+  and per-bundle closed/open/half-open circuit breakers. Queue rejection does not count
+  as a model failure.
+- Phase 2 is not yet an evaluated classifier release: no classifier model, pinned
+  installer, versioned labelled dataset, calibration, model card, error budgets, or
+  retained shadow-evidence record has been approved for any of the three use cases.
+  Phase 2.5 and all Phase 3 behavioral activation remain explicitly unstarted. The
+  `V10` migrations add descriptor metadata only; they do not migrate, delete, or
+  re-embed existing development vectors.
 
 ## 1. Decision summary
 
@@ -729,6 +742,9 @@ Configuration properties are explicitly reconciled:
 
 ```properties
 # Global ONNX Feature Toggle & Limits
+amsha.classifier.shadow.threads=2
+amsha.classifier.shadow.queue-capacity=64
+amsha.classifier.shadow.shutdown-grace=PT5S
 amsha.onnx.enabled=false
 amsha.onnx.model-root=data/models
 amsha.onnx.max-model-file-bytes=1073741824
@@ -746,7 +762,7 @@ amsha.onnx.warmup.enabled=true
 amsha.onnx.warmup.max-probes=5
 amsha.onnx.warmup.timeout=PT3S
 amsha.onnx.classifier.circuit.failure-threshold=3
-amsha.onnx.classifier.circuit.cooldown=PT30S
+amsha.onnx.classifier.circuit.cooldown-seconds=30
 
 # Provider-neutral embedding-index safety
 amsha.rag.embedding-index.max-child-windows-per-segment=64
@@ -756,8 +772,14 @@ amsha.embedding.onnx.model=sentence-transformers-all-mpnet-base-v2-fp32
 
 # Per-Classifier Kill Switches (default: false)
 amsha.onnx.classifier.intent.enabled=false
+amsha.onnx.classifier.intent.model=
+amsha.onnx.classifier.intent.timeout-seconds=2
 amsha.onnx.classifier.tool-risk.enabled=false
+amsha.onnx.classifier.tool-risk.model=
+amsha.onnx.classifier.tool-risk.timeout-seconds=2
 amsha.onnx.classifier.answer-quality.enabled=false
+amsha.onnx.classifier.answer-quality.model=
+amsha.onnx.classifier.answer-quality.timeout-seconds=2
 ```
 
 `max-input-bytes` and `max-batch-input-bytes` count UTF-8 encoded bytes, not Java
@@ -892,6 +914,27 @@ Current Phase 0 release-evidence status (2026-07-29):
 - [ ] Linux x86-64 native load/infer/shutdown, numeric, and lifecycle/RSS evidence.
 - [ ] Linux arm64 native load/infer/shutdown, numeric, and lifecycle/RSS evidence.
 - [ ] Signed trust root, SBOM, and SLSA provenance retained with the release.
+
+Current Phase 2 classifier-shadow status (2026-07-29):
+
+- [x] Core sealed opinion/no-opinion contract and failure isolation.
+- [x] Intent-shadow observation leaves every authoritative routing result unchanged.
+- [x] Tool-risk shadow observation runs only after deterministic provisional allow and
+  cannot block, request approval, or alter deduplication/HITL decisions.
+- [x] Answer-quality shadow observation runs only after authoritative answer acceptance,
+  records the tool boundary, and cannot change the answer or consume a retry.
+- [x] Payload-free aggregate comparison, confidence-histogram, fixed score-band, and
+  no-opinion-reason metrics.
+- [x] Verified classifier bundle contract, strict ONNX graph/output handling,
+  deterministic warm-up, bounded scheduling, timeouts, and per-bundle circuit breaker.
+- [ ] Approved intent model bundle and pinned installer with license/provenance review.
+- [ ] Versioned labelled intent corpus, calibration, model card, false-positive and
+  false-negative budgets, rollback criteria, and retained shadow-evaluation evidence.
+- [x] Disabled-by-default ONNX adapters and independent kill switches for intent,
+  tool-risk, and answer-quality classification.
+- [ ] Approved models, pinned installers, datasets, calibration, model cards, error
+  budgets, rollback criteria, and retained shadow evidence for tool-risk and
+  answer-quality classification.
 
 Phase 3 classifier activation may proceed only when:
 

@@ -63,6 +63,9 @@ public class IntentDetectorService implements IntentDetector {
     @Inject
     IntentClassificationService intentDetector;
 
+    @Inject
+    IntentShadowEvaluationService intentShadowEvaluation;
+
     @ConfigProperty(name = "amsha.routing.intent-classifier.sla-warn-ms", defaultValue = "2000")
     long slaWarnMs;
 
@@ -160,7 +163,7 @@ public class IntentDetectorService implements IntentDetector {
                 if (p.matcher(userMessage).find() || provider.matchesFuzzy(userMessage)) {
                     String role = provider.fastPathRole().orElse(AgentRoleEnum.COORDINATOR.toScopedName());
                     log.debugf("CLASSIFIER fast-path: match in %s -> %s", ClassUtils.getCleanName(provider), role);
-                    return role;
+                    return completeClassification(userMessage, role);
                 }
             }
         }
@@ -188,11 +191,15 @@ public class IntentDetectorService implements IntentDetector {
         } catch (TimeoutException te) {
             log.warnf("IntentDetector SLA breach (TIMEOUT > %dms) - using fast fallback model", slaTimeoutMs);
             String rawFallback = tryFallbackOrHeuristic(finalSafePrompt, userMessage);
-            return destructiveFilter.filter(sanitize(rawFallback.trim().toLowerCase(Locale.ROOT)), userMessage);
+            return completeClassification(
+                    userMessage,
+                    destructiveFilter.filter(sanitize(rawFallback.trim().toLowerCase(Locale.ROOT)), userMessage));
         } catch (Exception e) {
             log.warnf("Intent classifier failed: %s. Using fast fallback model.", LogUtil.rootMessage(e));
             String rawFallback = tryFallbackOrHeuristic(finalSafePrompt, userMessage);
-            return destructiveFilter.filter(sanitize(rawFallback.trim().toLowerCase(Locale.ROOT)), userMessage);
+            return completeClassification(
+                    userMessage,
+                    destructiveFilter.filter(sanitize(rawFallback.trim().toLowerCase(Locale.ROOT)), userMessage));
         }
         long elapsedMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startNs);
         if (elapsedMs > slaWarnMs) {
@@ -201,12 +208,21 @@ public class IntentDetectorService implements IntentDetector {
 
         if (raw == null || raw.isBlank()) {
             log.warnf("IntentDetector SLA exceeded or null response - raw was null");
-            return AgentRoleEnum.COORDINATOR.toScopedName();
+            return completeClassification(userMessage, AgentRoleEnum.COORDINATOR.toScopedName());
         }
 
         String result = sanitize(raw.trim().toLowerCase(Locale.ROOT));
         log.debugf("CLASSIFIER invoked, SLA=%dms, role=%s", elapsedMs, result);
-        return destructiveFilter.filter(result, userMessage);
+        return completeClassification(userMessage, destructiveFilter.filter(result, userMessage));
+    }
+
+    private String completeClassification(String userMessage, String authoritativeRole) {
+        try {
+            if (intentShadowEvaluation != null) intentShadowEvaluation.observe(userMessage, authoritativeRole);
+        } catch (RuntimeException | LinkageError ignored) {
+            // A shadow-only observer must never change or fail the authoritative route.
+        }
+        return authoritativeRole;
     }
 
     private String tryFallbackOrHeuristic(String prompt, String userMessage) {

@@ -1,0 +1,7 @@
+package com.amsha.core.agent.loop;
+
+/** Bounded Phase 2 answer-quality prediction; it never requests an active retry. */
+public enum AnswerQualityPrediction {
+    ACCEPTABLE,
+    RETRY_RECOMMENDED
+}

@@ -1,6 +1,5 @@
 package com.amsha.localml.onnx;
 
-import ai.djl.huggingface.tokenizers.Encoding;
 import ai.djl.huggingface.tokenizers.HuggingFaceTokenizer;
 import ai.onnxruntime.OnnxTensor;
 import ai.onnxruntime.OnnxValue;
@@ -9,12 +8,9 @@ import ai.onnxruntime.OrtException;
 import ai.onnxruntime.OrtSession;
 
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Set;
 
 import org.jboss.logging.Logger;
 
@@ -47,26 +43,20 @@ public final class OnnxEmbeddingRunner {
         Objects.requireNonNull(texts, "texts");
         if (texts.isEmpty()) return List.of();
         for (String text : texts) Objects.requireNonNull(text, "texts must not contain null");
-        validateGraph(session, spec);
 
         long started = System.nanoTime();
-        BatchInputs inputs = tokenize(tokenizer, spec, texts);
+        OnnxTextInputSupport.Batch inputs;
+        try {
+            OnnxTextInputSupport.validateGraph(session, spec);
+            inputs = OnnxTextInputSupport.prepare(tokenizer, spec, texts);
+        } catch (OnnxTextInputSupport.OnnxTextInputException | RuntimeException e) {
+            throw new OnnxEmbeddingInferenceException("ONNX embedding input preparation failed", e);
+        }
         recordPhase("tokenization", started);
         started = System.nanoTime();
-        try (OnnxTensor inputIds = OnnxTensor.createTensor(environment, inputs.inputIds());
-                OnnxTensor attentionMask = OnnxTensor.createTensor(environment, inputs.attentionMask())) {
-            Map<String, OnnxTensor> tensors = new LinkedHashMap<>();
-            tensors.put(spec.inputIdsName(), inputIds);
-            tensors.put(spec.attentionMaskName(), attentionMask);
-            if (spec.tokenTypeIdsName() != null) {
-                try (OnnxTensor tokenTypeIds = OnnxTensor.createTensor(environment, inputs.tokenTypeIds())) {
-                    tensors.put(spec.tokenTypeIdsName(), tokenTypeIds);
-                    recordPhase("tensor_preparation", started);
-                    return runAndPool(session, spec, inputs.attentionMask(), tensors);
-                }
-            }
+        try (OnnxTextInputSupport.TensorBatch tensors = OnnxTextInputSupport.createTensors(environment, spec, inputs)) {
             recordPhase("tensor_preparation", started);
-            return runAndPool(session, spec, inputs.attentionMask(), tensors);
+            return runAndPool(session, spec, inputs.attentionMask(), tensors.values());
         } catch (OrtException | RuntimeException e) {
             throw new OnnxEmbeddingInferenceException("ONNX embedding inference failed", e);
         }
@@ -92,46 +82,6 @@ public final class OnnxEmbeddingRunner {
         long elapsedNanos = System.nanoTime() - startedNanos;
         if (metrics != null) metrics.recordPhase(phase, elapsedNanos);
         log.debugf("ONNX embedding phase completed: phase=%s durationMs=%.3f", phase, elapsedNanos / 1_000_000.0);
-    }
-
-    private static void validateGraph(OrtSession session, OnnxEmbeddingBundleSpec spec)
-            throws OnnxEmbeddingInferenceException {
-        List<String> declaredInputs = new ArrayList<>();
-        declaredInputs.add(spec.inputIdsName());
-        declaredInputs.add(spec.attentionMaskName());
-        if (spec.tokenTypeIdsName() != null) declaredInputs.add(spec.tokenTypeIdsName());
-        if (!session.getInputNames().equals(Set.copyOf(declaredInputs))) {
-            throw new OnnxEmbeddingInferenceException("ONNX graph inputs do not match the verified manifest");
-        }
-        if (!session.getOutputNames().contains(spec.outputName())) {
-            throw new OnnxEmbeddingInferenceException("Declared ONNX output is absent from the graph");
-        }
-    }
-
-    private static BatchInputs tokenize(
-            HuggingFaceTokenizer tokenizer, OnnxEmbeddingBundleSpec spec, List<String> texts)
-            throws OnnxEmbeddingInferenceException {
-        Encoding[] encodings = tokenizer.batchEncode(texts, true, true);
-        int sequenceLength = 0;
-        for (Encoding encoding : encodings)
-            sequenceLength = Math.max(sequenceLength, Math.min(encoding.getIds().length, spec.maxSequenceLength()));
-        if (sequenceLength == 0) throw new OnnxEmbeddingInferenceException("Tokenizer produced an empty sequence");
-        long[][] inputIds = new long[texts.size()][sequenceLength];
-        long[][] attentionMask = new long[texts.size()][sequenceLength];
-        long[][] tokenTypeIds = new long[texts.size()][sequenceLength];
-        for (int row = 0; row < encodings.length; row++) {
-            Arrays.fill(inputIds[row], spec.paddingTokenId());
-            long[] ids = encodings[row].getIds();
-            long[] mask = encodings[row].getAttentionMask();
-            long[] types = encodings[row].getTypeIds();
-            int copied = Math.min(ids.length, sequenceLength);
-            System.arraycopy(ids, 0, inputIds[row], 0, copied);
-            System.arraycopy(mask, 0, attentionMask[row], 0, Math.min(mask.length, copied));
-            System.arraycopy(types, 0, tokenTypeIds[row], 0, Math.min(types.length, copied));
-            if (countActive(attentionMask[row]) == 0)
-                throw new OnnxEmbeddingInferenceException("Tokenizer produced an all-zero attention mask");
-        }
-        return new BatchInputs(inputIds, attentionMask, tokenTypeIds);
     }
 
     static List<float[]> pool(Object rawOutput, long[][] attentionMask, OnnxEmbeddingBundleSpec spec)
@@ -211,12 +161,4 @@ public final class OnnxEmbeddingRunner {
         for (int index = 0; index < vector.length; index++) vector[index] /= (float) norm;
         return vector;
     }
-
-    private static int countActive(long[] mask) {
-        int count = 0;
-        for (long value : mask) if (value != 0) count++;
-        return count;
-    }
-
-    private record BatchInputs(long[][] inputIds, long[][] attentionMask, long[][] tokenTypeIds) {}
 }

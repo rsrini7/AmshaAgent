@@ -87,6 +87,71 @@ class OnnxModelBundleVerifierTest {
     }
 
     @Test
+    void readsValidatedClassifierContractFromManifest() throws Exception {
+        OnnxModelBundleManifest manifest = objectMapper.readValue("""
+                {"bundleId":"test-bundle","revision":"revision-1","modelFile":"model.onnx",
+                "modelSha256":"0000000000000000000000000000000000000000000000000000000000000000",
+                "modelBytes":1,"tokenizerFile":"tokenizer.json",
+                "tokenizerSha256":"0000000000000000000000000000000000000000000000000000000000000000",
+                "tokenizerBytes":1,"classifier":{"tokenizerRevision":"v1","inputIdsName":"input_ids",
+                "attentionMaskName":"attention_mask","outputName":"logits","maxSequenceLength":128,
+                "paddingTokenId":0,"labels":["coordinator","coder"],"scoreTransform":"SOFTMAX",
+                "minimumConfidence":0.75,"ruleId":"intent-v1","warmupProbes":["warm-up"]}}
+                """, OnnxModelBundleManifest.class);
+
+        OnnxClassifierBundleSpec classifier = manifest.classifierSpec().orElseThrow();
+        assertEquals(List.of("coordinator", "coder"), classifier.labels());
+        assertEquals(OnnxClassifierBundleSpec.ScoreTransform.SOFTMAX, classifier.scoreTransform());
+    }
+
+    @Test
+    void rejectsBundleWithEmbeddingAndClassifierContracts() {
+        String digest = "0".repeat(64);
+        OnnxEmbeddingBundleSpec embedding = new OnnxEmbeddingBundleSpec(
+                "v1",
+                "input_ids",
+                "attention_mask",
+                null,
+                "embedding",
+                8,
+                2,
+                0L,
+                OnnxEmbeddingBundleSpec.PoolingStrategy.DIRECT_VECTOR,
+                true,
+                "space",
+                "v1",
+                List.of("warm-up"));
+        OnnxClassifierBundleSpec classifier = new OnnxClassifierBundleSpec(
+                "v1",
+                "input_ids",
+                "attention_mask",
+                null,
+                "logits",
+                8,
+                0L,
+                List.of("coordinator", "coder"),
+                OnnxClassifierBundleSpec.ScoreTransform.SOFTMAX,
+                0.5f,
+                "intent-v1",
+                List.of("warm-up"));
+
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new OnnxModelBundleManifest(
+                        "test-bundle",
+                        "revision-1",
+                        "model.onnx",
+                        digest,
+                        1,
+                        "tokenizer.json",
+                        digest,
+                        1,
+                        embedding,
+                        classifier,
+                        null));
+    }
+
+    @Test
     void readsAllowlistedUnsignedSourceDeclaration() throws Exception {
         OnnxModelBundleManifest manifest = objectMapper.readValue("""
                 {"bundleId":"test-bundle","revision":"revision-1","modelFile":"model.onnx",

@@ -7,6 +7,8 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             OnnxModelBundleManifest.class,
             OnnxModelBundleManifest.OnnxModelBundleSource.class,
             OnnxEmbeddingBundleSpec.class,
-            OnnxEmbeddingBundleSpec.PoolingStrategy.class
+            OnnxEmbeddingBundleSpec.PoolingStrategy.class,
+            OnnxClassifierBundleSpec.class,
+            OnnxClassifierBundleSpec.ScoreTransform.class
         })
 public class OnnxReflectionConfig {}

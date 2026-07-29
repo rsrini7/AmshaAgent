@@ -6,6 +6,8 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import jakarta.enterprise.inject.Instance;
@@ -37,6 +39,7 @@ class ToolInvocationGuardTest {
     private ObjectMapper objectMapper;
     private ToolRegistry mockToolRegistry;
     private Instance<ToolGuardInterceptor> mockInterceptors;
+    private ToolRiskShadowEvaluationService toolRiskShadowEvaluation;
 
     @BeforeEach
     @SuppressWarnings("unchecked")
@@ -46,6 +49,7 @@ class ToolInvocationGuardTest {
         objectMapper = new ObjectMapper();
         mockToolRegistry = mock(ToolRegistry.class);
         mockInterceptors = mock(Instance.class);
+        toolRiskShadowEvaluation = mock(ToolRiskShadowEvaluationService.class);
         when(mockInterceptors.iterator()).thenReturn(Collections.emptyIterator());
         when(mockInterceptors.stream()).thenReturn(Stream.empty());
 
@@ -53,6 +57,7 @@ class ToolInvocationGuardTest {
         guard.objectMapper = objectMapper;
         guard.toolRegistry = mockToolRegistry;
         guard.interceptors = mockInterceptors;
+        guard.toolRiskShadowEvaluation = toolRiskShadowEvaluation;
 
         guard.dynamicToolLookup = mock(Instance.class);
         when(guard.dynamicToolLookup.isUnsatisfied()).thenReturn(true);
@@ -121,6 +126,7 @@ class ToolInvocationGuardTest {
                     "s1", "coordinator", AutonomyLevel.FULL, "delete-all", Map.of(), List.of(), "goal", List.of());
 
             assertInstanceOf(ToolInvocationGuard.GuardDecision.Allow.class, result);
+            verify(toolRiskShadowEvaluation).observeProvisionalAllow(any(ToolRiskShadowContext.class));
         });
     }
 
@@ -150,6 +156,7 @@ class ToolInvocationGuardTest {
         assertTrue(((ToolInvocationGuard.GuardDecision.Blocked) result)
                 .observation()
                 .contains("interceptor-blocked"));
+        verify(toolRiskShadowEvaluation, never()).observeProvisionalAllow(any());
     }
 
     @Test

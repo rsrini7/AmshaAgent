@@ -318,6 +318,11 @@ smallrye:
 # =============================================================================
 amsha:
   data-dir: "${AMSHA_DATA_DIR:./data}"
+  classifier:
+    shadow:
+      threads: ${AMSHA_CLASSIFIER_SHADOW_THREADS:2}
+      queue-capacity: ${AMSHA_CLASSIFIER_SHADOW_QUEUE_CAPACITY:64}
+      shutdown-grace: ${AMSHA_CLASSIFIER_SHADOW_SHUTDOWN_GRACE:PT5S}
   onnx:
     enabled: ${AMSHA_ONNX_ENABLED:false}
     model-root: "${AMSHA_ONNX_MODEL_ROOT:data/models}"
@@ -332,6 +337,22 @@ amsha:
       enabled: ${AMSHA_ONNX_WARMUP_ENABLED:true}
       max-probes: ${AMSHA_ONNX_WARMUP_MAX_PROBES:5}
       timeout: ${AMSHA_ONNX_WARMUP_TIMEOUT:PT3S}
+    classifier:
+      circuit:
+        failure-threshold: ${AMSHA_ONNX_CLASSIFIER_CIRCUIT_FAILURE_THRESHOLD:3}
+        cooldown-seconds: ${AMSHA_ONNX_CLASSIFIER_CIRCUIT_COOLDOWN_SECONDS:30}
+      intent:
+        enabled: ${AMSHA_ONNX_CLASSIFIER_INTENT_ENABLED:false}
+        model: "${AMSHA_ONNX_CLASSIFIER_INTENT_MODEL:}"
+        timeout-seconds: ${AMSHA_ONNX_CLASSIFIER_INTENT_TIMEOUT_SECONDS:2}
+      tool-risk:
+        enabled: ${AMSHA_ONNX_CLASSIFIER_TOOL_RISK_ENABLED:false}
+        model: "${AMSHA_ONNX_CLASSIFIER_TOOL_RISK_MODEL:}"
+        timeout-seconds: ${AMSHA_ONNX_CLASSIFIER_TOOL_RISK_TIMEOUT_SECONDS:2}
+      answer-quality:
+        enabled: ${AMSHA_ONNX_CLASSIFIER_ANSWER_QUALITY_ENABLED:false}
+        model: "${AMSHA_ONNX_CLASSIFIER_ANSWER_QUALITY_MODEL:}"
+        timeout-seconds: ${AMSHA_ONNX_CLASSIFIER_ANSWER_QUALITY_TIMEOUT_SECONDS:2}
   fs:
     data-dir: "${AMSHA_FS_DATA_DIR:./data/fs}"
     lock-timeout-seconds: 30

@@ -19,6 +19,7 @@ public record OnnxModelBundleManifest(
         String tokenizerSha256,
         long tokenizerBytes,
         OnnxEmbeddingBundleSpec embedding,
+        OnnxClassifierBundleSpec classifier,
         OnnxModelBundleSource source) {
 
     private static final Set<String> ALLOWED_SOURCE_LICENSES =
@@ -36,6 +37,9 @@ public record OnnxModelBundleManifest(
         }
         tokenizerSha256 = requireSha256(tokenizerSha256, "tokenizerSha256");
         if (tokenizerBytes <= 0) throw new IllegalArgumentException("tokenizerBytes must be positive");
+        if (embedding != null && classifier != null) {
+            throw new IllegalArgumentException("A model bundle cannot declare both embedding and classifier contracts");
+        }
     }
 
     /**
@@ -81,12 +85,44 @@ public record OnnxModelBundleManifest(
                 tokenizerSha256,
                 tokenizerBytes,
                 null,
+                null,
                 null);
+    }
+
+    /** Compatibility constructor for manifests created before classifier contracts were added. */
+    public OnnxModelBundleManifest(
+            String bundleId,
+            String revision,
+            String modelFile,
+            String modelSha256,
+            long modelBytes,
+            String tokenizerFile,
+            String tokenizerSha256,
+            long tokenizerBytes,
+            OnnxEmbeddingBundleSpec embedding,
+            OnnxModelBundleSource source) {
+        this(
+                bundleId,
+                revision,
+                modelFile,
+                modelSha256,
+                modelBytes,
+                tokenizerFile,
+                tokenizerSha256,
+                tokenizerBytes,
+                embedding,
+                null,
+                source);
     }
 
     /** Returns the embedding contract when this bundle is explicitly declared for embeddings. */
     public Optional<OnnxEmbeddingBundleSpec> embeddingSpec() {
         return Optional.ofNullable(embedding);
+    }
+
+    /** Returns the classifier contract when this bundle is explicitly declared for classification. */
+    public Optional<OnnxClassifierBundleSpec> classifierSpec() {
+        return Optional.ofNullable(classifier);
     }
 
     private static String requireIdentifier(String value, String name) {
