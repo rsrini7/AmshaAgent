@@ -1,8 +1,14 @@
 package com.amsha.app.api;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
@@ -16,6 +22,10 @@ import jakarta.ws.rs.core.SecurityContext;
 import java.util.Map;
 import java.util.Optional;
 
+import com.amsha.core.audit.AuditService;
+import com.amsha.core.audit.SecurityEventType;
+import com.amsha.localml.onnx.OnnxClassifierRuntimeControl;
+import com.amsha.localml.onnx.OnnxClassifierRuntimeControl.Classifier;
 import com.amsha.persistence.api.EmbeddingIndexDescriptor;
 import com.amsha.persistence.api.EmbeddingIndexDescriptorSource;
 import com.amsha.persistence.api.VectorIndexCompatibility;
@@ -32,6 +42,8 @@ class OnnxAdminResourceTest {
     private Instance<EmbeddingModel> embeddingModels;
     private Instance<EmbeddingIndexDescriptorSource> descriptorSources;
     private VectorIndexMetadataPort vectorIndexMetadata;
+    private OnnxClassifierRuntimeControl classifierRuntimeControl;
+    private AuditService auditService;
 
     @BeforeEach
     @SuppressWarnings({"unchecked", "UnnecessaryAssignment"})
@@ -41,10 +53,14 @@ class OnnxAdminResourceTest {
         embeddingModels = mock(Instance.class);
         descriptorSources = mock(Instance.class);
         vectorIndexMetadata = mock(VectorIndexMetadataPort.class);
+        classifierRuntimeControl = new OnnxClassifierRuntimeControl(false, false, false);
+        auditService = mock(AuditService.class);
         resource.securityContext = securityContext;
         resource.embeddingModel = embeddingModels;
         resource.descriptorSources = descriptorSources;
         resource.vectorIndexMetadata = vectorIndexMetadata;
+        resource.classifierRuntimeControl = classifierRuntimeControl;
+        resource.auditService = auditService;
         resource.onnxEnabled = true;
         resource.embeddingProviders = "onnx";
     }
@@ -130,6 +146,112 @@ class OnnxAdminResourceTest {
         assertEquals(descriptor.fingerprint(), activeDescriptor.get("fingerprint"));
         assertEquals("model-r1", activeDescriptor.get("modelRevision"));
         verifyNoInteractions(embeddingModels);
+    }
+
+    @Test
+    void classifierStatusRequiresInternalCaller() {
+        when(securityContext.isUserInRole("internal")).thenReturn(false);
+
+        assertEquals(403, resource.classifierRuntimeStatus().getStatus());
+        verifyNoInteractions(auditService);
+    }
+
+    @Test
+    void classifierStatusReportsAllUnavailableWithoutActivatingBehavior() {
+        when(securityContext.isUserInRole("internal")).thenReturn(true);
+
+        var response = resource.classifierRuntimeStatus();
+
+        assertEquals(200, response.getStatus());
+        var payload = (OnnxAdminResource.ClassifierRuntimeResponse) response.getEntity();
+        assertEquals(3, payload.classifiers().size());
+        assertTrue(payload.classifiers().stream().noneMatch(snapshot -> snapshot.effectiveEnabled()));
+        verifyNoInteractions(auditService);
+    }
+
+    @Test
+    void enableRejectsMissingActiveImplementationWithoutAudit() {
+        when(securityContext.isUserInRole("internal")).thenReturn(true);
+
+        var response = resource.enableClassifier("tool-risk");
+
+        assertEquals(409, response.getStatus());
+        assertFalse(classifierRuntimeControl.snapshot(Classifier.TOOL_RISK).requestedEnabled());
+        verifyNoInteractions(auditService);
+    }
+
+    @Test
+    void classifierMutationRequiresInternalCaller() {
+        when(securityContext.isUserInRole("internal")).thenReturn(false);
+
+        assertEquals(403, resource.disableClassifier("intent").getStatus());
+        verifyNoInteractions(auditService);
+    }
+
+    @Test
+    void enableReadyImplementationUsesMandatoryAuditBeforeMutation() {
+        when(securityContext.isUserInRole("internal")).thenReturn(true);
+        when(securityContext.getUserPrincipal()).thenReturn(() -> "internal-admin");
+
+        try (var registration = classifierRuntimeControl.registerReadyImplementation(Classifier.TOOL_RISK)) {
+            var response = resource.enableClassifier("tool-risk");
+
+            assertEquals(200, response.getStatus());
+            assertTrue(classifierRuntimeControl.snapshot(Classifier.TOOL_RISK).effectiveEnabled());
+            verify(auditService)
+                    .recordMandatory(
+                            eq("local-ml-classifier:tool-risk"),
+                            eq("internal-admin"),
+                            eq("system"),
+                            eq(SecurityEventType.CLASSIFIER_RUNTIME_CHANGE_REQUESTED),
+                            eq("classifier=tool-risk requestedEnabled=true"));
+        }
+    }
+
+    @Test
+    void mandatoryAuditFailureLeavesRuntimeStateUnchanged() {
+        when(securityContext.isUserInRole("internal")).thenReturn(true);
+        doThrow(new IllegalStateException("audit unavailable"))
+                .when(auditService)
+                .recordMandatory(
+                        anyString(),
+                        anyString(),
+                        anyString(),
+                        eq(SecurityEventType.CLASSIFIER_RUNTIME_CHANGE_REQUESTED),
+                        anyString());
+
+        try (var registration = classifierRuntimeControl.registerReadyImplementation(Classifier.ANSWER_QUALITY)) {
+            assertThrows(IllegalStateException.class, () -> resource.enableClassifier("answer-quality"));
+            assertFalse(
+                    classifierRuntimeControl.snapshot(Classifier.ANSWER_QUALITY).requestedEnabled());
+        }
+    }
+
+    @Test
+    void disableAuditsAndLeavesAcceptedLeaseDraining() {
+        when(securityContext.isUserInRole("internal")).thenReturn(true);
+        when(securityContext.getUserPrincipal()).thenReturn(() -> "internal-admin");
+
+        try (var registration = classifierRuntimeControl.registerReadyImplementation(Classifier.INTENT)) {
+            classifierRuntimeControl.setEnabled(Classifier.INTENT, true);
+            try (var lease =
+                    classifierRuntimeControl.tryAcquire(Classifier.INTENT).orElseThrow()) {
+                var response = resource.disableClassifier("intent");
+
+                assertEquals(200, response.getStatus());
+                assertTrue(classifierRuntimeControl.snapshot(Classifier.INTENT).draining());
+                assertTrue(
+                        classifierRuntimeControl.tryAcquire(Classifier.INTENT).isEmpty());
+                verify(auditService)
+                        .recordMandatory(
+                                eq("local-ml-classifier:intent"),
+                                eq("internal-admin"),
+                                eq("system"),
+                                eq(SecurityEventType.CLASSIFIER_RUNTIME_CHANGE_REQUESTED),
+                                eq("classifier=intent requestedEnabled=false"));
+            }
+            assertFalse(classifierRuntimeControl.snapshot(Classifier.INTENT).draining());
+        }
     }
 
     private static EmbeddingIndexDescriptor descriptor() {

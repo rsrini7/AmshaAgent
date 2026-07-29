@@ -24,6 +24,7 @@ class SecurityEventTypeTest {
         assertTrue(SecurityEventType.MCP_CREDENTIAL_ROTATED.isMandatory());
         assertTrue(SecurityEventType.MCP_CREDENTIAL_REMOVED.isMandatory());
         assertTrue(SecurityEventType.MCP_CREDENTIAL_CLEANUP_FAILED.isMandatory());
+        assertTrue(SecurityEventType.CLASSIFIER_RUNTIME_CHANGE_REQUESTED.isMandatory());
 
         // Non-mandatory - fire-and-forget
         assertFalse(SecurityEventType.REFLEX_COMMAND.isMandatory());

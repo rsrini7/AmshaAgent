@@ -160,6 +160,15 @@ before general availability.
   authoritative path and emit only bounded, payload-free metrics. Focused tests cover
   stable ordering, monotonic composition, HITL preservation, retry boundaries, and the
   no-implementation case.
+- Phase 3A non-activating control-plane scaffolding is complete. An application-scoped
+  atomic state holder separates startup/requested state from effective state for intent,
+  tool-risk, and answer-quality classifiers. Effective enablement additionally requires
+  a ready active implementation registration; none exists in this phase. Internal-only
+  status/enable/disable endpoints use mandatory audit-before-mutation, and disabling
+  rejects new leases while accepted in-flight work drains without cancellation. Focused
+  tests and the deployed ONNX validator cover switch isolation, missing-implementation
+  rejection, audit failure, authorization, and drain behavior. Phase 3 behavioral
+  activation remains pending the Phase 2 evidence gates.
 
 ## 1. Decision summary
 
@@ -329,6 +338,21 @@ may therefore remain paused without reopening this completed core gate.
   `@ConfigProperty` values alone are not dynamically refreshed. Disabling takes effect
   for new requests and drains in-flight inference without changing its result into an
   authorization decision.
+
+Phase 3A implements only that non-activating control plane. `OnnxClassifierRuntimeControl`
+tracks `startupEnabled`, `requestedEnabled`, implementation availability, effective
+enablement, request admission, drain state, in-flight count, and a bounded revision for
+each classifier. A restart-free enable is rejected unless a ready active implementation
+has registered. Phase 2 shadow classifiers never register and do not consume active
+leases. The internal endpoints are:
+
+- `GET /admin/local-ml/onnx/classifiers`;
+- `POST /admin/local-ml/onnx/classifiers/{classifier}/enable`;
+- `POST /admin/local-ml/onnx/classifiers/{classifier}/disable`.
+
+Every state-changing request is recorded as a mandatory, payload-free audit event before
+the atomic mutation. Audit failure leaves state unchanged. No model ID, input, output,
+score, goal, answer, or tool parameters appear in the control response or audit detail.
 
 ## 4. Module and component architecture
 
@@ -993,6 +1017,20 @@ Current Phase 2.5 core classifier SPI status (2026-07-29):
   existing behavior while failure metrics remain bounded and payload-free.
 - [x] Focused dispatcher/guard/FINISH tests pass with deterministic test doubles, and
   `local-ml-onnx` provides no active implementation of either Phase 2.5 SPI.
+
+Current Phase 3A non-activating control-plane status (2026-07-29):
+
+- [x] Independent atomic intent, tool-risk, and answer-quality state separates startup,
+  requested, implementation-available, effective, accepting, draining, and in-flight
+  values.
+- [x] Restart-free enable fails closed when no ready active implementation is registered;
+  Phase 2 shadow classifiers do not register and no active ONNX SPI exists.
+- [x] Disable rejects every new lease immediately while accepted leases finish and drain.
+- [x] Internal-only status/enable/disable endpoints expose no inference or model payload.
+- [x] Every actual mutation requires a successful mandatory audit record first; audit
+  failure preserves the prior state.
+- [x] Unit and deployed REST validation cover classifier isolation, authorization,
+  missing implementation, audit failure, and drain behavior.
 
 Phase 3 classifier activation may proceed only when:
 

@@ -78,6 +78,26 @@ class SmokeHandler(BaseHTTPRequestHandler):
                         "namespaces": {"rag": {"vectorEnabled": True}},
                     }
                 )
+        elif self.path == "/api/v1/admin/local-ml/onnx/classifiers":
+            if self.authorized("X-Amsha-API-Key", self.server.internal_key):
+                self.send_json(
+                    {
+                        "classifiers": [
+                            {
+                                "classifier": classifier,
+                                "startupEnabled": False,
+                                "requestedEnabled": False,
+                                "implementationAvailable": False,
+                                "effectiveEnabled": False,
+                                "acceptingRequests": False,
+                                "draining": False,
+                                "inFlight": 0,
+                                "revision": 0,
+                            }
+                            for classifier in ("intent", "tool-risk", "answer-quality")
+                        ]
+                    }
+                )
         else:
             self.send_json({"error": "not found"}, 404)
 
@@ -95,6 +115,21 @@ class SmokeHandler(BaseHTTPRequestHandler):
             if self.authorized("X-Amsha-API-Key", self.server.internal_key):
                 self.server.probe_count += 1
                 self.send_json({"status": "ready", "dimensions": 768, "l2Norm": 1.0})
+        elif self.path == "/api/v1/admin/local-ml/onnx/classifiers/tool-risk/enable":
+            if self.authorized("X-Amsha-API-Key", self.server.internal_key):
+                self.send_json(
+                    {
+                        "accepted": False,
+                        "changed": False,
+                        "reason": "MISSING_READY_IMPLEMENTATION",
+                        "classifier": {
+                            "classifier": "tool-risk",
+                            "implementationAvailable": False,
+                            "effectiveEnabled": False,
+                        },
+                    },
+                    409,
+                )
         else:
             self.send_json({"error": "not found"}, 404)
 
@@ -151,7 +186,7 @@ class LocalRuntimeSmokeTest(unittest.TestCase):
             768,
             messages.append,
         )
-        self.assertEqual(5, len(messages))
+        self.assertEqual(7, len(messages))
         self.assertTrue(all(message.startswith(smoke.PASS_PREFIX) for message in messages))
         self.assertEqual(1, self.server.probe_count)
 

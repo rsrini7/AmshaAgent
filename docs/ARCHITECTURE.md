@@ -250,6 +250,16 @@ ToolFailure (any role, any tool)
 6. **Post-policy tool risk** — ordered optional opinions may only raise provisional
    allow to approval or block; absence and failure preserve allow
 
+### Phase 3A Classifier Runtime Control
+
+`OnnxClassifierRuntimeControl` owns independent atomic state for intent, tool-risk, and
+answer-quality activation. Startup configuration seeds requested state, but effective
+state requires a registered ready active implementation. The current assembly registers
+none, so enable requests fail closed. Disable blocks new leases immediately while
+accepted leases retain their result path and drain. Internal admin mutations write a
+mandatory payload-free audit record before changing state; audit failure leaves the
+switch unchanged.
+
 ### Parallel Tool Execution
 
 The LLM can request multiple tools in one step. Parallel batches:

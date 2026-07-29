@@ -26,6 +26,12 @@ checks provisionally allow a tool. It may require approval or block, but cannot 
 an existing block, deduplication result, or HITL decision. Missing implementations and
 isolated classifier failures preserve the deterministic result and emit no payload data.
 
+Phase 3A runtime controls are internal-only and cannot make requested state effective
+without a registered ready active implementation. A disable rejects new active leases
+while accepted work drains. Every state-changing request must successfully record the
+mandatory `CLASSIFIER_RUNTIME_CHANGE_REQUESTED` event before mutation. Its detail is
+limited to the fixed classifier identifier and requested boolean state.
+
 ---
 
 ## Cryptographic Vault

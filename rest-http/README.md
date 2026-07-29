@@ -439,7 +439,7 @@ needed). Run individually or via the master runner `run_all_validations.sh`.
 | `--auth-session` | `validate_auth_session.sh` | API-key auth + session lifecycle | fast |
 | `--identity` | `validate_identity_access.sh` | P109 bootstrap/identity/OAuth | fast |
 | `--pii-audit` | `validate_pii_injection_audit.sh` | PII redaction + injection + audit HMAC | fast |
-| `--onnx` | `validate_onnx.sh` | ONNX health, fixed-text inference metric, bundle digests, vector compatibility | local CPU |
+| `--onnx` | `validate_onnx.sh` | ONNX health, fixed-text inference metric, bundle digests, vector compatibility, non-activating classifier controls | local CPU |
 | `--self-evolve` | `validate_self_evolve.sh` | Directives lifecycle (seeds when `--data-dir` given) | LLM |
 | `--hitl` | `validate_hitl.sh` | Approve/deny (REST + goal-string + taskId), 401/409 | LLM |
 | `--rag` | `validate_rag.sh` | Ingest → approve → recall + rag_chunk isolation | LLM |

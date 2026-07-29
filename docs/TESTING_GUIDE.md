@@ -2366,6 +2366,30 @@ preservation of validation/deduplication/HITL decisions, reuse of the existing a
 frame, a single pre-tool answer retry, no retry after a tool boundary, and unchanged
 behavior when no optional implementation exists.
 
+### 23.6 Phase 3A non-activating runtime controls
+
+Run the state, admin authorization/audit, and mandatory-event tests:
+
+```bash
+./mvnw -pl local-ml-onnx,app -am \
+  -Dtest="OnnxClassifierRuntimeControlTest,OnnxAdminResourceTest,SecurityEventTypeTest" \
+  -Dsurefire.failIfNoSpecifiedTests=false test
+```
+
+The suite verifies independent switches, requested/effective separation, rejection when
+no ready active implementation exists, mandatory audit-before-mutation, internal-only
+access, and disable/drain semantics. No model or external service is required.
+
+Against a model-installed running application, the deployed validation adds the
+non-activating control checks as `ONNX-5` through `ONNX-7`:
+
+```bash
+bash rest-http/scripts/run_all_validations.sh --onnx
+```
+
+The current Phase 3A assembly must report all three active implementations unavailable,
+return `409 MISSING_READY_IMPLEMENTATION` for enable, and reject non-internal mutation.
+
 ## 24. Testing Identity, OIDC, Web Sessions, and Multi-Admin
 
 To verify the complete identity subsystem, browser authentication, and multi-admin scopes in real-time, follow these manual test scenarios.

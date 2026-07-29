@@ -8,6 +8,7 @@ import jakarta.inject.Inject;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.POST;
 import jakarta.ws.rs.Path;
+import jakarta.ws.rs.PathParam;
 import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.MediaType;
@@ -17,11 +18,19 @@ import jakarta.ws.rs.core.SecurityContext;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
 import com.amsha.common.util.LogUtil;
 import com.amsha.core.api.dto.AmshaErrorResponse;
+import com.amsha.core.audit.AuditService;
+import com.amsha.core.audit.SecurityEventType;
+import com.amsha.core.scope.WorkspaceContext;
+import com.amsha.localml.onnx.OnnxClassifierRuntimeControl;
+import com.amsha.localml.onnx.OnnxClassifierRuntimeControl.Classifier;
+import com.amsha.localml.onnx.OnnxClassifierRuntimeControl.Snapshot;
+import com.amsha.localml.onnx.OnnxClassifierRuntimeControl.ToggleResult;
 import com.amsha.persistence.api.EmbeddingIndexDescriptor;
 import com.amsha.persistence.api.EmbeddingIndexDescriptorSource;
 import com.amsha.persistence.api.VectorIndexCompatibility;
@@ -59,6 +68,12 @@ public class OnnxAdminResource {
 
     @Inject
     MeterRegistry meterRegistry;
+
+    @Inject
+    OnnxClassifierRuntimeControl classifierRuntimeControl;
+
+    @Inject
+    AuditService auditService;
 
     @ConfigProperty(name = "amsha.onnx.enabled", defaultValue = "false")
     boolean onnxEnabled;
@@ -147,8 +162,78 @@ public class OnnxAdminResource {
         return Response.ok(payload).build();
     }
 
+    /** Returns the protected, payload-free state of all Phase 3 classifier switches. */
+    @GET
+    @Path("/classifiers")
+    public Response classifierRuntimeStatus() {
+        if (!isInternal()) {
+            return classifierControlForbidden();
+        }
+        return Response.ok(new ClassifierRuntimeResponse(classifierRuntimeControl.snapshots()))
+                .build();
+    }
+
+    /** Enables one classifier only when a ready active implementation has registered. */
+    @POST
+    @Path("/classifiers/{classifier}/enable")
+    public Response enableClassifier(@PathParam("classifier") String classifierId) {
+        return updateClassifier(classifierId, true);
+    }
+
+    /** Disables one classifier immediately for new requests while existing leases drain. */
+    @POST
+    @Path("/classifiers/{classifier}/disable")
+    public Response disableClassifier(@PathParam("classifier") String classifierId) {
+        return updateClassifier(classifierId, false);
+    }
+
+    private Response updateClassifier(String classifierId, boolean enabled) {
+        if (!isInternal()) {
+            return classifierControlForbidden();
+        }
+        Classifier classifier = Classifier.fromId(classifierId).orElse(null);
+        if (classifier == null) {
+            return Response.status(Response.Status.BAD_REQUEST)
+                    .entity(new AmshaErrorResponse(
+                            "unknown_classifier", "Unknown classifier; expected intent, tool-risk, or answer-quality"))
+                    .build();
+        }
+
+        Snapshot before = classifierRuntimeControl.snapshot(classifier);
+        if (enabled && !before.implementationAvailable()) {
+            return Response.status(Response.Status.CONFLICT)
+                    .entity(new ClassifierToggleResponse(false, false, "MISSING_READY_IMPLEMENTATION", before))
+                    .build();
+        }
+        if (before.requestedEnabled() == enabled) {
+            return Response.ok(new ClassifierToggleResponse(true, false, "UNCHANGED", before))
+                    .build();
+        }
+
+        auditService.recordMandatory(
+                "local-ml-classifier:" + classifier.id(),
+                resolveUserId(),
+                "system",
+                SecurityEventType.CLASSIFIER_RUNTIME_CHANGE_REQUESTED,
+                "classifier=" + classifier.id() + " requestedEnabled=" + enabled);
+
+        ToggleResult result = classifierRuntimeControl.setEnabled(classifier, enabled);
+        ClassifierToggleResponse response =
+                new ClassifierToggleResponse(result.accepted(), result.changed(), result.reason(), result.snapshot());
+        return result.accepted()
+                ? Response.ok(response).build()
+                : Response.status(Response.Status.CONFLICT).entity(response).build();
+    }
+
     private boolean isInternal() {
         return securityContext != null && securityContext.isUserInRole("internal");
+    }
+
+    private String resolveUserId() {
+        if (securityContext != null && securityContext.getUserPrincipal() != null) {
+            return securityContext.getUserPrincipal().getName();
+        }
+        return WorkspaceContext.getUserIdOrUnknown();
     }
 
     private boolean onnxConfigured() {
@@ -214,4 +299,18 @@ public class OnnxAdminResource {
                 .register(meterRegistry)
                 .increment();
     }
+
+    private static Response classifierControlForbidden() {
+        return Response.status(Response.Status.FORBIDDEN)
+                .entity(new AmshaErrorResponse("Only internal API keys can control ONNX classifiers"))
+                .build();
+    }
+
+    public record ClassifierRuntimeResponse(List<Snapshot> classifiers) {
+        public ClassifierRuntimeResponse {
+            classifiers = List.copyOf(classifiers);
+        }
+    }
+
+    public record ClassifierToggleResponse(boolean accepted, boolean changed, String reason, Snapshot classifier) {}
 }

@@ -180,10 +180,11 @@ def read_limited(response) -> bytes:  # noqa: ANN001
     return payload
 
 
-def request_bytes(
+def request_bytes_with_status(
     url: str,
     label: str,
     timeout: float,
+    expected_status: int | None,
     *,
     method: str = "GET",
     headers: Mapping[str, str] | None = None,
@@ -202,12 +203,51 @@ def request_bytes(
             status = response.status
             payload = read_limited(response)
     except HTTPError as error:
-        raise SmokeFailure(f"{label} returned HTTP {error.code}") from None
+        status = error.code
+        if expected_status != status:
+            error.close()
+            raise SmokeFailure(f"{label} returned HTTP {status}") from None
+        try:
+            payload = read_limited(error)
+        finally:
+            error.close()
     except (URLError, TimeoutError, OSError):
         raise SmokeFailure(f"{label} is unreachable") from None
-    if not 200 <= status < 300:
+    if expected_status is not None and status != expected_status:
+        raise SmokeFailure(f"{label} returned HTTP {status}")
+    if expected_status is None and not 200 <= status < 300:
         raise SmokeFailure(f"{label} returned HTTP {status}")
     return payload
+
+
+def request_bytes(
+    url: str,
+    label: str,
+    timeout: float,
+    *,
+    method: str = "GET",
+    headers: Mapping[str, str] | None = None,
+    json_body: Mapping[str, object] | None = None,
+) -> bytes:
+    return request_bytes_with_status(
+        url,
+        label,
+        timeout,
+        None,
+        method=method,
+        headers=headers,
+        json_body=json_body,
+    )
+
+
+def decode_json_object(payload: bytes, label: str) -> dict[str, object]:
+    try:
+        decoded = json.loads(payload)
+    except (UnicodeError, json.JSONDecodeError):
+        raise SmokeFailure(f"{label} returned invalid JSON") from None
+    if not isinstance(decoded, dict):
+        raise SmokeFailure(f"{label} returned an unexpected JSON shape")
+    return decoded
 
 
 def request_json(
@@ -227,13 +267,29 @@ def request_json(
         headers=headers,
         json_body=json_body,
     )
-    try:
-        decoded = json.loads(payload)
-    except (UnicodeError, json.JSONDecodeError):
-        raise SmokeFailure(f"{label} returned invalid JSON") from None
-    if not isinstance(decoded, dict):
-        raise SmokeFailure(f"{label} returned an unexpected JSON shape")
-    return decoded
+    return decode_json_object(payload, label)
+
+
+def request_json_with_status(
+    url: str,
+    label: str,
+    timeout: float,
+    expected_status: int,
+    *,
+    method: str = "GET",
+    headers: Mapping[str, str] | None = None,
+    json_body: Mapping[str, object] | None = None,
+) -> dict[str, object]:
+    payload = request_bytes_with_status(
+        url,
+        label,
+        timeout,
+        expected_status,
+        method=method,
+        headers=headers,
+        json_body=json_body,
+    )
+    return decode_json_object(payload, label)
 
 
 def authorization_header(api_key: str) -> dict[str, str]:
@@ -385,6 +441,22 @@ def require_index_diagnostics(payload: Mapping[str, object], dimensions: int) ->
         raise SmokeFailure("At least one ONNX index namespace is not vector-enabled")
 
 
+def require_classifier_scaffold(payload: Mapping[str, object]) -> None:
+    classifiers = payload.get("classifiers")
+    expected = {"intent", "tool-risk", "answer-quality"}
+    if not isinstance(classifiers, list) or len(classifiers) != len(expected):
+        raise SmokeFailure("ONNX classifier status did not contain exactly three classifiers")
+    if any(not isinstance(classifier, dict) for classifier in classifiers):
+        raise SmokeFailure("ONNX classifier status contained an invalid snapshot")
+    identifiers = {classifier.get("classifier") for classifier in classifiers}
+    if identifiers != expected:
+        raise SmokeFailure("ONNX classifier status contained unexpected classifier identifiers")
+    if any(classifier.get("implementationAvailable") is not False for classifier in classifiers):
+        raise SmokeFailure("An ONNX classifier unexpectedly reported an available implementation")
+    if any(classifier.get("effectiveEnabled") is not False for classifier in classifiers):
+        raise SmokeFailure("An ONNX classifier unexpectedly reported effective enablement")
+
+
 def run_amsha_checks(
     base_url: str,
     internal_api_key: str,
@@ -405,6 +477,27 @@ def run_amsha_checks(
     )
     require_index_diagnostics(indexes, dimensions)
     emit_pass("Amsha protected ONNX index descriptor diagnostics", emit)
+
+    classifiers = request_json(
+        endpoint(base_url, "api/v1/admin/local-ml/onnx/classifiers"),
+        "Amsha ONNX classifier status",
+        timeout,
+        headers=internal_headers,
+    )
+    require_classifier_scaffold(classifiers)
+    emit_pass("Amsha inactive Phase 3A classifier scaffold", emit)
+
+    enable = request_json_with_status(
+        endpoint(base_url, "api/v1/admin/local-ml/onnx/classifiers/tool-risk/enable"),
+        "Amsha ONNX classifier fail-closed enable",
+        timeout,
+        409,
+        method="POST",
+        headers=internal_headers,
+    )
+    if enable.get("accepted") is not False or enable.get("reason") != "MISSING_READY_IMPLEMENTATION":
+        raise SmokeFailure("ONNX classifier enable did not fail closed without an implementation")
+    emit_pass("Amsha classifier enable fails closed without an approved implementation", emit)
 
     before = request_metrics(base_url, timeout)
     probe = request_json(

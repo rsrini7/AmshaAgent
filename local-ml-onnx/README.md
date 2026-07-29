@@ -23,13 +23,13 @@ Optional in-process ONNX Runtime integration for Amsha Agent.
 | amsha.classifier.shadow.shutdown-grace | AMSHA_CLASSIFIER_SHADOW_SHUTDOWN_GRACE | PT5S | Maximum time to drain accepted shadow observations during shutdown. |
 | amsha.onnx.classifier.circuit.failure-threshold | AMSHA_ONNX_CLASSIFIER_CIRCUIT_FAILURE_THRESHOLD | 3 | Consecutive model load, timeout, or inference failures before a standalone classifier circuit opens. Queue rejection does not count. |
 | amsha.onnx.classifier.circuit.cooldown-seconds | AMSHA_ONNX_CLASSIFIER_CIRCUIT_COOLDOWN_SECONDS | 30 | Delay before one half-open standalone-classifier probe is admitted. |
-| amsha.onnx.classifier.intent.enabled | AMSHA_ONNX_CLASSIFIER_INTENT_ENABLED | false | Enables Phase 2 intent inference in shadow mode only; it cannot select the active route. |
+| amsha.onnx.classifier.intent.enabled | AMSHA_ONNX_CLASSIFIER_INTENT_ENABLED | false | Enables Phase 2 intent shadow inference and initializes its Phase 3 requested state. Effective behavior still requires a registered ready active implementation. |
 | amsha.onnx.classifier.intent.model | AMSHA_ONNX_CLASSIFIER_INTENT_MODEL | _(empty)_ | Explicit verified local classifier bundle ID. An empty value produces `NoOpinion(MISSING_MODEL)`. |
 | amsha.onnx.classifier.intent.timeout-seconds | AMSHA_ONNX_CLASSIFIER_INTENT_TIMEOUT_SECONDS | 2 | Total wait deadline for one shadow intent-classifier request. |
-| amsha.onnx.classifier.tool-risk.enabled | AMSHA_ONNX_CLASSIFIER_TOOL_RISK_ENABLED | false | Enables Phase 2 tool-risk inference only after the deterministic guard provisionally allows a call; it cannot block or request approval. |
+| amsha.onnx.classifier.tool-risk.enabled | AMSHA_ONNX_CLASSIFIER_TOOL_RISK_ENABLED | false | Enables Phase 2 tool-risk shadow inference and initializes its Phase 3 requested state. Shadow inference cannot block or request approval. |
 | amsha.onnx.classifier.tool-risk.model | AMSHA_ONNX_CLASSIFIER_TOOL_RISK_MODEL | _(empty)_ | Explicit verified local tool-risk bundle ID. |
 | amsha.onnx.classifier.tool-risk.timeout-seconds | AMSHA_ONNX_CLASSIFIER_TOOL_RISK_TIMEOUT_SECONDS | 2 | Total wait deadline for one tool-risk shadow request. |
-| amsha.onnx.classifier.answer-quality.enabled | AMSHA_ONNX_CLASSIFIER_ANSWER_QUALITY_ENABLED | false | Enables Phase 2 scoring only after the authoritative answer guard accepts; it cannot retry or alter the answer. |
+| amsha.onnx.classifier.answer-quality.enabled | AMSHA_ONNX_CLASSIFIER_ANSWER_QUALITY_ENABLED | false | Enables Phase 2 answer-quality shadow inference and initializes its Phase 3 requested state. Shadow inference cannot retry or alter the answer. |
 | amsha.onnx.classifier.answer-quality.model | AMSHA_ONNX_CLASSIFIER_ANSWER_QUALITY_MODEL | _(empty)_ | Explicit verified local answer-quality bundle ID. |
 | amsha.onnx.classifier.answer-quality.timeout-seconds | AMSHA_ONNX_CLASSIFIER_ANSWER_QUALITY_TIMEOUT_SECONDS | 2 | Total wait deadline for one answer-quality shadow request. |
 | amsha.embedding.onnx.model | AMSHA_EMBEDDING_ONNX_MODEL | _(empty)_ | Explicit verified local embedding bundle ID; required only when `onnx` is selected as a provider slot. |
@@ -61,6 +61,25 @@ answer-quality path shares one retry budget and rejects retry after a tool bound
 This module intentionally provides no active `PostPolicyToolRiskInterceptor` or
 `AnswerQualityInterceptor`; its existing classifier adapters remain shadow-only until
 the corresponding Phase 2 evidence and Phase 3 activation gates are approved.
+
+## Phase 3A runtime controls
+
+`OnnxClassifierRuntimeControl` provides independent restart-free switches for `intent`,
+`tool-risk`, and `answer-quality`. Startup configuration initializes requested state,
+but effective state also requires a ready active implementation registration. Phase 2
+shadow classifiers never register, so the current module cannot become behaviorally
+active through these endpoints:
+
+- `GET /api/v1/admin/local-ml/onnx/classifiers` returns payload-free state;
+- `POST /api/v1/admin/local-ml/onnx/classifiers/{classifier}/enable` returns `409` with
+  `MISSING_READY_IMPLEMENTATION` in the current Phase 3A assembly;
+- `POST /api/v1/admin/local-ml/onnx/classifiers/{classifier}/disable` stops new active
+  leases immediately and reports `draining` until accepted leases finish.
+
+All three endpoints require an internal API key. State-changing requests use mandatory
+audit-before-mutation; an audit failure leaves the switch unchanged. The responses and
+audit detail exclude model IDs, inputs, outputs, labels, scores, goals, answers, and tool
+parameters.
 
 The [Phase 2 classifier preparation and resumption runbook](classifier-training/README.md)
 documents the current pause point, human-review requirements, Git retention boundary,

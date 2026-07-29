@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # validate_onnx.sh — Validate deployed in-process local ONNX Runtime readiness and bundle integrity
 # Covers: ONNX health → metric wiring → bundle digest verification → active index compatibility
+#         → non-activating Phase 3A classifier control plane
 #
 # Needs: serve mode with AMSHA_ONNX_ENABLED=true and verified model bundle in data/models.
 
@@ -53,6 +54,24 @@ if namespaces:
 print(summary)
 
 if health.get("status") != "UP" or check.get("status") != "UP" or data.get("vectorStatus") != "READY":
+    raise SystemExit(1)
+PY
+}
+
+classifier_scaffold_status() {
+  python3 - "$RESP_FILE" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as response:
+    payload = json.load(response)
+
+classifiers = payload.get("classifiers", [])
+expected = {"intent", "tool-risk", "answer-quality"}
+actual = {item.get("classifier") for item in classifiers}
+if actual != expected:
+    raise SystemExit(1)
+if any(item.get("implementationAvailable") or item.get("effectiveEnabled") for item in classifiers):
     raise SystemExit(1)
 PY
 }
@@ -124,6 +143,35 @@ if [ "$CODE" = "200" ] \
 else
   printf "❌ HTTP %s — %s\n" "$CODE" "${VECTOR_INDEX_SUMMARY:-invalid or unavailable health response}"
   FAIL=$((FAIL+1))
+fi
+
+# ── ONNX-5: Phase 3A Non-Activating Classifier Status ──
+info "ONNX-5: Classifier controls expose disabled scaffold"
+CODE=$(mute -X GET -H "X-Amsha-API-Key: $VALID_KEY" "$B/api/v1/admin/local-ml/onnx/classifiers")
+if [ "$CODE" = "200" ] && classifier_scaffold_status; then
+  ok "$CODE"
+else
+  fail "$CODE"
+fi
+
+# ── ONNX-6: Missing Active Implementation Cannot Be Enabled ──
+info "ONNX-6: Classifier enable fails closed without implementation"
+CODE=$(mute -X POST -H "X-Amsha-API-Key: $VALID_KEY" \
+  "$B/api/v1/admin/local-ml/onnx/classifiers/tool-risk/enable")
+if [ "$CODE" = "409" ] && grep -q '"reason":"MISSING_READY_IMPLEMENTATION"' "$RESP_FILE"; then
+  ok "$CODE"
+else
+  fail "$CODE"
+fi
+
+# ── ONNX-7: Runtime Mutation Requires Internal Key ──
+info "ONNX-7: Classifier mutation rejects non-internal key"
+CODE=$(mute -X POST -H "X-Amsha-API-Key: $CI_KEY" \
+  "$B/api/v1/admin/local-ml/onnx/classifiers/tool-risk/disable")
+if [ "$CODE" = "403" ]; then
+  ok "$CODE"
+else
+  fail "$CODE"
 fi
 
 echo ""

@@ -1295,6 +1295,17 @@ The `embedding vector(768)` column and HNSW index MUST be similarly guarded with
      effects or duplicate tool execution. Missing implementations and isolated failures MUST
      preserve the accepted answer without logging answer or goal payloads.
 
+7.13.4 INVARIANT: Phase 3 classifier runtime control MUST distinguish startup/requested
+     state from effective enablement. Effective enablement additionally requires a ready,
+     promotion-approved active implementation registration. Shadow classifiers MUST NOT
+     register as active implementations or acquire active leases. Enabling without a ready
+     implementation MUST fail closed. Disabling MUST atomically reject new leases while
+     accepted leases complete unchanged and drain. Intent, tool-risk, and answer-quality
+     state MUST remain independent. Mutating admin endpoints MUST require `isInternal()`
+     and record a mandatory, payload-free audit event before mutation; audit failure MUST
+     leave state unchanged. Control responses and audit details MUST NOT contain model IDs,
+     inputs, outputs, scores, labels, goals, answers, or tool parameters.
+
 7.14 INVARIANT: ReasoningStep history is the in-memory source of truth
      during AgentLoop.runWithRole() execution. ChatHistoryAssembler reads
      from in-memory history on each LLM call - SQLite does not need to
