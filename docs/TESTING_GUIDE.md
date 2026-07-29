@@ -2351,6 +2351,21 @@ curl -s -X POST "http://localhost:8080/api/v1/sessions/$SESSION/run" \
 
 **Expect:** Answer does NOT contain raw compaction summary text like "Summary of previous conversation:".
 
+### 23.5 Phase 2.5 classifier SPI safety
+
+Run the deterministic core tests; they require no ONNX model or external service:
+
+```bash
+./mvnw -pl core \
+  -Dtest="PostPolicyToolRiskDispatcherTest,AnswerQualityDispatcherTest,ToolInvocationGuardTest,FinishActionHandlerTest" \
+  test
+```
+
+These tests must prove stable interceptor ordering, monotonic tool-risk composition,
+preservation of validation/deduplication/HITL decisions, reuse of the existing approval
+frame, a single pre-tool answer retry, no retry after a tool boundary, and unchanged
+behavior when no optional implementation exists.
+
 ## 24. Testing Identity, OIDC, Web Sessions, and Multi-Admin
 
 To verify the complete identity subsystem, browser authentication, and multi-admin scopes in real-time, follow these manual test scenarios.

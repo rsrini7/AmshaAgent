@@ -54,6 +54,14 @@ bounded match/mismatch/no-opinion metrics and never return a behavioral decision
 input, parameters, answers, labels, rule IDs, model revisions, and exception details are
 not metric tags or logs. No classifier model is bundled or selected by default.
 
+The Phase 2.5 core classifier SPI gate is complete. Core orders optional implementations
+by priority and binary class name, preserves every deterministic block, deduplication,
+validation, and HITL decision, and permits only monotonic tool-risk upgrades. Its
+answer-quality path shares one retry budget and rejects retry after a tool boundary.
+This module intentionally provides no active `PostPolicyToolRiskInterceptor` or
+`AnswerQualityInterceptor`; its existing classifier adapters remain shadow-only until
+the corresponding Phase 2 evidence and Phase 3 activation gates are approved.
+
 The [Phase 2 classifier preparation and resumption runbook](classifier-training/README.md)
 documents the current pause point, human-review requirements, Git retention boundary,
 and exact `mise` command sequence. All operations enter through

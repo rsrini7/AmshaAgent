@@ -14,6 +14,7 @@ import com.amsha.core.agent.reasoning.ReasoningStep;
 import com.amsha.core.agent.result.AgentResult;
 import com.amsha.core.agent.role.RoleRegistry;
 import com.amsha.core.agent.role.ToolCapability;
+import com.amsha.core.classifier.ClassifierResult;
 import com.amsha.core.governance.RateLimitTracker;
 import com.amsha.core.observability.AgentObserver;
 import com.amsha.core.tools.ToolRegistry;
@@ -62,6 +63,9 @@ public class FinishActionHandler {
 
     @Inject
     AnswerQualityShadowEvaluationService answerQualityShadowEvaluation;
+
+    @Inject
+    AnswerQualityDispatcher answerQualityDispatcher;
 
     @Inject
     public FinishActionHandler(
@@ -249,24 +253,49 @@ public class FinishActionHandler {
             return injected;
         }
 
+        boolean toolInvokedInTurn = history.stream().anyMatch(FinishActionHandler::isToolInvocation);
+        FinishOutcome qualityDecision = applyAnswerQualityInterceptors(context, step, answer, toolInvokedInTurn);
+        if (qualityDecision != null) return qualityDecision;
+
         // --- Observers ---
         final String finalAnswer = answer;
         final ReasoningStep completedStep = step.withObservation("Task completed.");
         observers.forEach(o -> o.onStepComplete(sessionId, agentRole, completedStep));
 
-        observeAcceptedAnswer(context, history, finalAnswer);
+        observeAcceptedAnswer(context, finalAnswer, toolInvokedInTurn);
         AgentResult result = AgentResult.finished(finalAnswer, List.copyOf(history));
         return new FinishOutcome.Completed(result, finalAnswer);
     }
 
-    private void observeAcceptedAnswer(AgentExecutionContext context, List<ReasoningStep> history, String answer) {
+    private FinishOutcome applyAnswerQualityInterceptors(
+            AgentExecutionContext context, ReasoningStep.FinishStep step, String answer, boolean toolInvokedInTurn) {
+        if (answerQualityDispatcher == null) return null;
+        try {
+            ClassifierResult<AnswerQualityAction> result = answerQualityDispatcher.evaluate(
+                    new AnswerQualityContext(context.agentRole(), context.goal(), answer, toolInvokedInTurn));
+            if (result instanceof ClassifierResult.Opinion<AnswerQualityAction> opinion
+                    && opinion.value() == AnswerQualityAction.REQUEST_RETRY
+                    && !toolInvokedInTurn
+                    && context.tryConsumeAnswerQualityRetry()) {
+                context.setForceFinishRetry(true);
+                ReasoningStep correctedStep =
+                        step.withObservation("Answer-quality interceptor requested the single pre-tool retry.");
+                return new FinishOutcome.Correction(
+                        correctedStep,
+                        "Your previous response did not meet the configured answer-quality threshold. "
+                                + "Provide one improved final answer without invoking a tool.");
+            }
+        } catch (RuntimeException | LinkageError ignored) {
+            // Optional answer-quality decisions fail open to the authoritative accepted answer.
+        }
+        return null;
+    }
+
+    private void observeAcceptedAnswer(AgentExecutionContext context, String answer, boolean toolInvokedInTurn) {
         try {
             if (answerQualityShadowEvaluation != null) {
-                answerQualityShadowEvaluation.observeAccepted(new AnswerQualityShadowContext(
-                        context.agentRole(),
-                        context.goal(),
-                        answer,
-                        history.stream().anyMatch(FinishActionHandler::isToolInvocation)));
+                answerQualityShadowEvaluation.observeAccepted(
+                        new AnswerQualityShadowContext(context.agentRole(), context.goal(), answer, toolInvokedInTurn));
             }
         } catch (RuntimeException | LinkageError ignored) {
             // A shadow-only observer must never alter an accepted FINISH answer.

@@ -17,6 +17,7 @@ import java.util.concurrent.ConcurrentLinkedDeque;
 import com.amsha.core.agent.reasoning.ReasoningStep;
 import com.amsha.core.agent.role.RoleRegistry;
 import com.amsha.core.agent.role.ToolCapability;
+import com.amsha.core.classifier.ClassifierResult;
 import com.amsha.core.governance.ApprovalFrame;
 import com.amsha.core.security.AutonomyLevel;
 import com.amsha.core.security.ToolOperation;
@@ -57,6 +58,9 @@ public class ToolInvocationGuard {
 
     @Inject
     ToolRiskShadowEvaluationService toolRiskShadowEvaluation;
+
+    @Inject
+    PostPolicyToolRiskDispatcher postPolicyToolRiskDispatcher;
 
     private static final int MAX_DEDUP_SESSIONS = 1000;
     private final Map<String, Map<String, String>> sessionDedupeCache = new ConcurrentHashMap<>();
@@ -119,7 +123,9 @@ public class ToolInvocationGuard {
                 Optional<GuardDecision> decision = interceptor.evaluate(
                         sessionId, agentRole, level, toolName, params, history, goal, skillSnapshot);
                 if (decision.isPresent()) {
-                    return decision.get();
+                    GuardDecision interceptorDecision = decision.get();
+                    if (interceptorDecision instanceof GuardDecision.Allow) continue;
+                    return interceptorDecision;
                 }
             }
         }
@@ -168,16 +174,54 @@ public class ToolInvocationGuard {
 
         boolean isExempt = isSchedulingTool || (isMemoryReadTool && level != AutonomyLevel.READONLY);
 
+        ToolOperation op = toolOpt.map(AgentTool::requiredOperation).orElse(ToolOperation.EXECUTE_SHELL);
         if ((roleRegistry.requiresApprovalForTools(agentRole) || toolRequiresApproval)
                 && !isExempt
                 && !AutonomyLevel.FULL.equals(level)) {
-
-            ToolOperation op = toolOpt.map(AgentTool::requiredOperation).orElse(ToolOperation.EXECUTE_SHELL);
             ApprovalFrame frame = new ApprovalFrame(toolName, params, op.riskLevel());
             return new GuardDecision.PauseForApproval(frame);
         }
         observeProvisionalAllow(agentRole, level, toolName, params, goal);
-        return new GuardDecision.Allow();
+        return applyPostPolicyToolRisk(agentRole, level, toolName, params, history, goal, op);
+    }
+
+    private GuardDecision applyPostPolicyToolRisk(
+            String agentRole,
+            AutonomyLevel level,
+            String toolName,
+            Map<String, Object> params,
+            List<ReasoningStep> history,
+            String goal,
+            ToolOperation operation) {
+        if (postPolicyToolRiskDispatcher == null) return new GuardDecision.Allow();
+        try {
+            ClassifierResult<ToolRiskAction> result = postPolicyToolRiskDispatcher.evaluate(new PostPolicyToolContext(
+                    agentRole,
+                    level,
+                    toolName,
+                    params == null ? Map.of() : params,
+                    goal,
+                    history != null && history.stream().anyMatch(ToolInvocationGuard::isToolInvocation)));
+            return switch (result) {
+                case ClassifierResult.Opinion<ToolRiskAction> opinion ->
+                    switch (opinion.value()) {
+                        case BLOCK -> new GuardDecision.Blocked("Tool call blocked by the post-policy risk gate.");
+                        case REQUIRE_APPROVAL ->
+                            new GuardDecision.PauseForApproval(new ApprovalFrame(
+                                    toolName, params == null ? Map.of() : params, operation.riskLevel()));
+                    };
+                case ClassifierResult.NoOpinion<ToolRiskAction> ignored -> new GuardDecision.Allow();
+            };
+        } catch (RuntimeException | LinkageError ignored) {
+            return new GuardDecision.Allow();
+        }
+    }
+
+    private static boolean isToolInvocation(ReasoningStep step) {
+        return step != null
+                && !ReasoningStep.FINISH.equals(step.action())
+                && !ReasoningStep.OBSERVE.equals(step.action())
+                && step.observation() != null;
     }
 
     private void observeProvisionalAllow(

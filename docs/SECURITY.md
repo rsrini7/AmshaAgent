@@ -15,11 +15,16 @@ Amsha Agent is built with a defense-in-depth security posture. This document cov
 | 5 | **Goal sanitize** | `AgentDispatchHandler` PII re-sanitizer | Applies `piiSanitizer.sanitize()` to goal before agent dispatch |
 | 6 | **HITL boundary** | `CheckpointResumeCoordinator` / `ToolInvocationGuard` | Approval frames, autonomy policy, delegated approval |
 | 7 | **LLM boundary** | `GuardrailCoordinator` + `PreLlmGuard`/`PostLlmGuard` | Injection check (`InjectionInputGuard`), PII sanitize (`PiiInputGuard`), response validation (`ParseabilityOutputGuard`) |
-| 8 | **Tool boundary** | `ToolInvocationGuard` | Dedup, unknown-tool block, HITL approval, GitHub-specific intent guard |
-| 9 | **Tool interceptor** | `GithubToolGuardInterceptor` | Cross-loop dedup for GitHub, intent validation |
+| 8 | **Pre-policy tool interceptor** | `ToolGuardInterceptor` implementations | Tool-specific deterministic block, dedup, or approval decisions; `Allow` continues |
+| 9 | **Tool boundary** | `ToolInvocationGuard` | Validation, dedup, unknown-tool block, HITL approval, monotonic post-policy risk |
 | 10 | **Session isolation** | `AgentSessionService` per-key access | Async approve/deny, session-scoped API keys |
 
 Layers 1–6 are **reflex/deterministic** (zero LLM tokens). Layer 7 is the LLM boundary — runs before/after every model call. Each layer assumes the layer below has already passed.
+
+The optional Phase 2.5 post-policy risk hook runs only after layer 9's deterministic
+checks provisionally allow a tool. It may require approval or block, but cannot replace
+an existing block, deduplication result, or HITL decision. Missing implementations and
+isolated classifier failures preserve the deterministic result and emit no payload data.
 
 ---
 

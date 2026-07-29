@@ -172,24 +172,34 @@ Exception classification:
 
 Budget tracking: `GovernanceStrategy.recordLlmCall()` checks per-session token budgets. `BudgetWarningException` appends constraint directive; `BudgetExceededException` terminates immediately.
 
-**Step B: FINISH Action Handler:** Extracts answer from `actionInput["answer"]` or `thought`. Unescapes HTML/Unicode. Role guard: non-coder roles cannot generate bare code blocks. Raw tool-call leak guard. `guardFinalAnswer()` prevents LLM echoing injected RAG headers.
+**Step B: FINISH Action Handler:** Extracts answer from `actionInput["answer"]` or
+`thought`. Unescapes HTML/Unicode. Role guard: non-coder roles cannot generate bare code
+blocks. Raw tool-call leak guard. The authoritative answer guard prevents LLM echoing
+injected RAG headers. After deterministic acceptance, the ordered optional Phase 2.5
+answer-quality dispatcher may consume one corrective retry only if no tool has been
+invoked in the turn. Absence or failure preserves the accepted answer.
 
 **Step C: ToolStepHandler — Validation**
 
 `ToolInvocationGuard.evaluate()` decision tree:
 
 ```
-1. Guard interceptors (SPI) → Optional<GuardDecision>
-2. Deduplication check → GuardDecision.Deduplicate(cachedObservation)
-3. Role tool schema check → GuardDecision.Blocked("not permitted")
-4. Role trust pre-flight:
-   - requiresApprovalForTools(role) == false → trusted; skip non-sensitive ops (→ step 6)
-   - Sensitive ops (NETWORK_OUTBOUND, EXECUTE_SHELL) always reach step 5
-5. HITL pre-approval:
+1. Pre-policy guard interceptors (SPI): empty/Allow → continue; stronger decision → stop
+2. Registered-tool parameter validation → GuardDecision.Blocked(validationError)
+3. Idempotent-tool deduplication → GuardDecision.Deduplicate(cachedObservation)
+4. Internal/dynamic tool recognition → unknown tool is blocked
+5. Deterministic HITL pre-approval:
    - tool NOT scheduling tool (exempt per §4.10) && autonomy NOT FULL
      → GuardDecision.PauseForApproval(toolName, paramsJson)
-6. Default → GuardDecision.Allow
+6. Shadow observation of the deterministic provisional allow
+7. Ordered post-policy tool-risk SPI:
+   - BLOCK → GuardDecision.Blocked
+   - REQUIRE_APPROVAL → existing ApprovalFrame/PauseForApproval path
+   - NoOpinion, absence, or isolated failure → preserve provisional Allow
 ```
+
+Role-tool schema validation occurs earlier in `ToolStepValidator`; neither pre-policy
+nor post-policy classifier hooks may bypass it.
 
 **Step C.1: Auto-Heal Hook:** After `sandbox_exec` failure for coder role:
 ```
@@ -232,13 +242,13 @@ ToolFailure (any role, any tool)
 
 `ToolInvocationGuard.evaluate()` runs:
 
-1. **Guard interceptors** — SPI for custom tool guards
-2. **Deduplication** — return cached observation if duplicate call
-3. **Role schema check** — tool not permitted for role? → blocked
-4. **Role trust pre-flight** — trusted role (`requiresApproval=false`)? → skip non-sensitive ops
-   - **Sensitive ops** (`NETWORK_OUTBOUND`, `EXECUTE_SHELL`) always reach HITL check
-5. **HITL pre-approval** — scheduling tools exempt; `SUPERVISED` level pauses for approval
-6. **Default** → allow
+1. **Pre-policy guard interceptors** — empty/allow continues; stronger decisions stop
+2. **Parameter validation** — invalid registered-tool input is blocked
+3. **Deduplication** — return cached observation for an eligible duplicate call
+4. **Tool recognition** — unknown internal/dynamic tools are blocked
+5. **HITL pre-approval** — deterministic role/tool/autonomy policy remains authoritative
+6. **Post-policy tool risk** — ordered optional opinions may only raise provisional
+   allow to approval or block; absence and failure preserve allow
 
 ### Parallel Tool Execution
 
@@ -528,8 +538,8 @@ sequenceDiagram
 | 5 | **Goal sanitize** | `AgentDispatchHandler` | PII re-sanitizer on goal before dispatch |
 | 6 | **HITL boundary** | `CheckpointResumeCoordinator` / `ToolInvocationGuard` | Approval frames, autonomy policy |
 | 7 | **LLM boundary** | `GuardrailCoordinator` | Injection check, PII, response validation |
-| 8 | **Tool boundary** | `ToolInvocationGuard` | Dedup, HITL, role schema |
-| 9 | **Tool interceptor** | `GithubToolGuardInterceptor` | Cross-loop dedup, intent validation |
+| 8 | **Pre-policy tool interceptor** | `ToolGuardInterceptor` implementations | Deterministic block, dedup, or approval decisions; `Allow` continues |
+| 9 | **Tool boundary** | `ToolInvocationGuard` | Validation, dedup, recognition, HITL, monotonic post-policy risk |
 | 10 | **Session isolation** | `AgentSessionService` per-key access | Async approve/deny, key scoping |
 
 See [SECURITY.md](./SECURITY.md) for vault, sandbox, audit chain, and key management details.
@@ -545,8 +555,8 @@ graph TD
     L4 --> L5["5. Goal Sanitize\nPII Re-sanitizer"]
     L5 --> L6["6. HITL Boundary\nToolInvocationGuard"]
     L6 --> L7["7. LLM Boundary\nGuardrailCoordinator"]
-    L7 --> L8["8. Tool Boundary\nToolInvocationGuard"]
-    L8 --> L9["9. Tool Interceptor\nGithubToolGuardInterceptor"]
+    L7 --> L8["8. Pre-policy Tool Interceptor\nAllow continues"]
+    L8 --> L9["9. Tool Boundary\nMandatory checks + post-policy risk"]
     L9 --> L10["10. Session Isolation\nAgentSessionService"]
 ```
 
@@ -1149,13 +1159,15 @@ External Input
   │    → LangChainReasoningEngine → LLM (Groq/OpenAI/Ollama/...)    │
   │    → ReasoningStepParser → ReasoningStep                        │
   │    → GovernanceLayer (token budget check)                       │
-  │  FINISH? → guardFinalAnswer() → ChatMemoryWriter → return       │
+  │  FINISH? → deterministic answer guard                          │
+  │          → optional answer-quality retry gate → return         │
   │  ToolStepHandler                                                │
   │    → ToolInvocationGuard                                        │
-  │         ├─ Dedup → cached observation                           │
-  │         ├─ Role schema blocked → error observation              │
-  │         └─ HITL required → ApprovalCheckpointManager            │
-  │              → persist(AWAITING_APPROVAL) → SSE HitlEvent       │
+  │         ├─ Pre-policy stronger decision → stop                  │
+  │         ├─ Validation / dedup / recognition                     │
+  │         ├─ HITL required → ApprovalCheckpointManager            │
+  │         │    → persist(AWAITING_APPROVAL) → SSE HitlEvent       │
+  │         └─ Post-policy risk → block / approval / allow          │
   │    → ToolInvoker → AgentTool.execute(params)                    │
   │         └─ ToolObservationSanitizer (PII / injection / truncate)│
   │    → Auto-Heal (sandbox_exec failure, coder role)               │

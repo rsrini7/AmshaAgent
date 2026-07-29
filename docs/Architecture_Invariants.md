@@ -1273,6 +1273,28 @@ The `embedding vector(768)` column and HNSW index MUST be similarly guarded with
      safely on a virtual thread. Use `Context.isOnEventLoopThread()`; do not infer
      the current thread from `Vertx.currentContext().isEventLoopContext()`.
 
+7.13.2 INVARIANT: Phase 2.5 post-policy tool-risk decision SPIs
+     (`PostPolicyToolRiskInterceptor`) MUST execute only after `ToolInvocationGuard`
+     validation, deduplication, tool recognition, and deterministic HITL checks produce a
+     provisional `Allow`. A pre-policy `ToolGuardInterceptor` returning `Allow` MUST continue
+     through the remaining interceptors and every built-in check. Post-policy interceptors MUST
+     be ordered by ascending priority with binary class name as the stable tie-breaker and MUST
+     compose monotonically: `BLOCK` outranks `REQUIRE_APPROVAL`, which outranks `NoOpinion`.
+     They MUST NEVER bypass or weaken an existing block, deduplication result, HITL boundary,
+     role schema, or autonomy rule. `REQUIRE_APPROVAL` MUST reuse the existing
+     `PauseForApproval`/`ApprovalFrame` path. On classifier error, circuit-breaker trip, model
+     absence, or no optional implementation, `PostPolicyToolRiskDispatcher` MUST preserve the
+     provisional allow through `NoOpinion`; metrics MUST remain bounded and payload-free.
+
+7.13.3 INVARIANT: Phase 2.5 `AnswerQualityInterceptor` SPIs MUST be evaluated in
+     `FinishActionHandler` only after the authoritative `AnswerGuardStrategy` accepts the answer
+     candidate. Interceptors MUST use stable priority/class-name ordering. A `REQUEST_RETRY`
+     opinion may be honored only when no tool has been invoked in the current turn and
+     `context.tryConsumeAnswerQualityRetry()` succeeds. All interceptors share that single retry
+     budget. A retry MUST NEVER be requested after a tool boundary, preventing re-entrant side
+     effects or duplicate tool execution. Missing implementations and isolated failures MUST
+     preserve the accepted answer without logging answer or goal payloads.
+
 7.14 INVARIANT: ReasoningStep history is the in-memory source of truth
      during AgentLoop.runWithRole() execution. ChatHistoryAssembler reads
      from in-memory history on each LLM call - SQLite does not need to

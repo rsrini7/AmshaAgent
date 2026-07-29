@@ -1,5 +1,6 @@
 package com.amsha.core.agent.loop;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -21,6 +22,9 @@ import java.util.stream.Stream;
 
 import com.amsha.core.agent.reasoning.ReasoningStep;
 import com.amsha.core.agent.role.RoleRegistry;
+import com.amsha.core.classifier.ClassifierResult;
+import com.amsha.core.classifier.ClassifierResult.NoOpinionReason;
+import com.amsha.core.governance.ApprovalFrame;
 import com.amsha.core.scope.WorkspaceContext;
 import com.amsha.core.security.AutonomyLevel;
 import com.amsha.core.tool.ToolGuardInterceptor;
@@ -40,6 +44,7 @@ class ToolInvocationGuardTest {
     private ToolRegistry mockToolRegistry;
     private Instance<ToolGuardInterceptor> mockInterceptors;
     private ToolRiskShadowEvaluationService toolRiskShadowEvaluation;
+    private PostPolicyToolRiskDispatcher postPolicyToolRiskDispatcher;
 
     @BeforeEach
     @SuppressWarnings("unchecked")
@@ -50,6 +55,7 @@ class ToolInvocationGuardTest {
         mockToolRegistry = mock(ToolRegistry.class);
         mockInterceptors = mock(Instance.class);
         toolRiskShadowEvaluation = mock(ToolRiskShadowEvaluationService.class);
+        postPolicyToolRiskDispatcher = mock(PostPolicyToolRiskDispatcher.class);
         when(mockInterceptors.iterator()).thenReturn(Collections.emptyIterator());
         when(mockInterceptors.stream()).thenReturn(Stream.empty());
 
@@ -58,6 +64,9 @@ class ToolInvocationGuardTest {
         guard.toolRegistry = mockToolRegistry;
         guard.interceptors = mockInterceptors;
         guard.toolRiskShadowEvaluation = toolRiskShadowEvaluation;
+        guard.postPolicyToolRiskDispatcher = postPolicyToolRiskDispatcher;
+        when(postPolicyToolRiskDispatcher.evaluate(any()))
+                .thenReturn(new ClassifierResult.NoOpinion<>(NoOpinionReason.MISSING_MODEL));
 
         guard.dynamicToolLookup = mock(Instance.class);
         when(guard.dynamicToolLookup.isUnsatisfied()).thenReturn(true);
@@ -84,6 +93,7 @@ class ToolInvocationGuardTest {
         assertTrue(((ToolInvocationGuard.GuardDecision.Deduplicate) result)
                 .cachedObservation()
                 .contains("result 1"));
+        verify(postPolicyToolRiskDispatcher, never()).evaluate(any());
     }
 
     @Test
@@ -114,7 +124,37 @@ class ToolInvocationGuardTest {
                     List.of());
 
             assertInstanceOf(ToolInvocationGuard.GuardDecision.PauseForApproval.class, result);
+            verify(postPolicyToolRiskDispatcher, never()).evaluate(any());
         });
+    }
+
+    @Test
+    void postPolicyRiskCanOnlyUpgradeProvisionalAllowToApproval() {
+        when(postPolicyToolRiskDispatcher.evaluate(any()))
+                .thenReturn(new ClassifierResult.Opinion<>(ToolRiskAction.REQUIRE_APPROVAL, 0.93f, "test-risk"));
+        Map<String, Object> parameters = Map.of("path", "report.txt");
+
+        ToolInvocationGuard.GuardDecision result = guard.evaluate(
+                "s1", "coordinator", AutonomyLevel.FULL, "tool", parameters, List.of(), "goal", List.of());
+
+        ToolInvocationGuard.GuardDecision.PauseForApproval approval =
+                assertInstanceOf(ToolInvocationGuard.GuardDecision.PauseForApproval.class, result);
+        assertEquals("tool", approval.frame().tool());
+        assertEquals(parameters, approval.frame().params());
+        assertEquals(ApprovalFrame.RiskLevel.CRITICAL, approval.frame().riskLevel());
+        verify(toolRiskShadowEvaluation).observeProvisionalAllow(any(ToolRiskShadowContext.class));
+    }
+
+    @Test
+    void postPolicyRiskCanUpgradeProvisionalAllowToBlock() {
+        when(postPolicyToolRiskDispatcher.evaluate(any()))
+                .thenReturn(new ClassifierResult.Opinion<>(ToolRiskAction.BLOCK, 0.99f, "test-block"));
+
+        ToolInvocationGuard.GuardDecision result =
+                guard.evaluate("s1", "coordinator", AutonomyLevel.FULL, "tool", Map.of(), List.of(), "goal", List.of());
+
+        assertInstanceOf(ToolInvocationGuard.GuardDecision.Blocked.class, result);
+        verify(toolRiskShadowEvaluation).observeProvisionalAllow(any(ToolRiskShadowContext.class));
     }
 
     @Test
@@ -157,6 +197,31 @@ class ToolInvocationGuardTest {
                 .observation()
                 .contains("interceptor-blocked"));
         verify(toolRiskShadowEvaluation, never()).observeProvisionalAllow(any());
+    }
+
+    @Test
+    void prePolicyAllowCannotBypassMandatoryHitl() {
+        ToolGuardInterceptor interceptor = mock(ToolGuardInterceptor.class);
+        when(interceptor.handledToolNames()).thenReturn(Set.of("tool"));
+        when(interceptor.evaluate(
+                        anyString(),
+                        anyString(),
+                        any(AutonomyLevel.class),
+                        anyString(),
+                        any(),
+                        anyList(),
+                        anyString(),
+                        anyList()))
+                .thenReturn(Optional.of(new ToolInvocationGuard.GuardDecision.Allow()));
+        when(mockInterceptors.stream()).thenReturn(Stream.of(interceptor));
+        when(roleRegistry.requiresApprovalForTools(anyString())).thenReturn(true);
+        guard.init();
+
+        ToolInvocationGuard.GuardDecision result = guard.evaluate(
+                "s1", "coordinator", AutonomyLevel.SUPERVISED, "tool", Map.of(), List.of(), "goal", List.of());
+
+        assertInstanceOf(ToolInvocationGuard.GuardDecision.PauseForApproval.class, result);
+        verify(postPolicyToolRiskDispatcher, never()).evaluate(any());
     }
 
     @Test

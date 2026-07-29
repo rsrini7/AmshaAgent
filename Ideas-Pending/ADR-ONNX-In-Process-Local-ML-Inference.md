@@ -151,6 +151,15 @@ before general availability.
   non-activating Phase 3 scaffolding, but it remains a hard gate for model promotion
   and every Phase 3 behavioral activation. The `V10` migrations add descriptor metadata
   only; they do not migrate, delete, or re-embed existing development vectors.
+- Phase 2.5 is complete in `core`. Ordered optional dispatchers expose additive
+  post-policy tool-risk and answer-quality SPIs without an active ONNX implementation.
+  Tool-risk can only strengthen a provisional allow to approval or block, existing
+  block/deduplication/HITL decisions remain authoritative, and approval reuses the
+  existing `ApprovalFrame` path. Answer-quality can consume only one shared retry before
+  any tool boundary. Optional absence, timeouts, and inference failures preserve the
+  authoritative path and emit only bounded, payload-free metrics. Focused tests cover
+  stable ordering, monotonic composition, HITL preservation, retry boundaries, and the
+  no-implementation case.
 
 ## 1. Decision summary
 
@@ -291,14 +300,14 @@ as an authoritative signal or claiming the classifier is evaluated or release-re
 
 ### Phase 2.5: core classifier SPI gate
 
-Before any classifier affects behavior, land and review the additive post-policy
-tool-risk SPI and ordered answer-quality interceptor SPI in `core`, with no active ONNX
-implementation. Focused tests must prove ordering, monotonic decision composition,
-HITL preservation, no retry across a tool boundary, and behavior when no optional
-implementation exists. This gate does not block Phase 0–1 embeddings.
+The additive post-policy tool-risk SPI and ordered answer-quality interceptor SPI are
+implemented in `core`, with no active ONNX implementation. Focused tests prove ordering,
+monotonic decision composition, HITL preservation, no retry across a tool boundary,
+and behavior when no optional implementation exists. This gate does not block Phase
+0–1 embeddings.
 It also does not depend on having a release-sized classifier corpus or trained model;
 its safety and ordering tests use deterministic test doubles. Phase 2 model evidence
-may therefore remain paused while this gate is implemented.
+may therefore remain paused without reopening this completed core gate.
 
 ### Phase 3: bounded behavioral use with kill switches
 
@@ -970,6 +979,20 @@ The unchecked model-evidence items above are deliberately deferred until suffici
 human-reviewable data exists. They do not block Phase 2.5 core SPI implementation or
 non-activating Phase 3 scaffolding. They remain mandatory before the corresponding
 classifier can influence routing, tool-risk, answer-quality, retry, or approval behavior.
+
+Current Phase 2.5 core classifier SPI status (2026-07-29):
+
+- [x] Post-policy tool-risk evaluation runs only after deterministic provisional allow;
+  pre-existing block, deduplication, validation, and HITL decisions remain authoritative.
+- [x] Interceptors use stable priority/class-name ordering and monotonic composition:
+  `BLOCK` outranks `REQUIRE_APPROVAL`, which outranks `NoOpinion`.
+- [x] A classifier-requested approval reuses `PauseForApproval` and `ApprovalFrame`.
+- [x] Answer-quality evaluation runs only after deterministic answer acceptance, shares
+  one retry budget, and cannot retry after any tool boundary.
+- [x] Missing optional implementations and isolated interceptor failures preserve the
+  existing behavior while failure metrics remain bounded and payload-free.
+- [x] Focused dispatcher/guard/FINISH tests pass with deterministic test doubles, and
+  `local-ml-onnx` provides no active implementation of either Phase 2.5 SPI.
 
 Phase 3 classifier activation may proceed only when:
 

@@ -592,9 +592,9 @@ public class MyToolGuardInterceptor implements ToolGuardInterceptor {
     }
 
     /**
-     * Evaluate the tool call. Return Optional.empty() to pass through to
-     * the next interceptor or built-in guard logic.
-     * Return a present Optional to short-circuit with that decision.
+     * Evaluate the tool call. Optional.empty() and GuardDecision.Allow
+     * continue through the next interceptor and every built-in guard.
+     * A stronger present decision short-circuits the pre-policy chain.
      */
     @Override
     public Optional<GuardDecision> evaluate(
@@ -624,15 +624,32 @@ public class MyToolGuardInterceptor implements ToolGuardInterceptor {
 
 | Decision | Effect |
 |---|---|
-| `GuardDecision.Allow` | Tool proceeds to execution immediately |
+| `GuardDecision.Allow` | Continues through later interceptors and all mandatory built-in checks; it never authorizes immediate execution |
 | `GuardDecision.Blocked(String observation)` | Tool is blocked; `observation` is returned to the LLM as the tool result |
-| `GuardDecision.Deduplicate(String cachedObservation)` | Returns a cached result without re-executing; adds a `[NOTE: retrieved from session cache]` suffix |
-| `GuardDecision.PauseForApproval(String toolName, String paramsJson)` | Saves an `AWAITING_APPROVAL` checkpoint and returns `202` to the user |
+| `GuardDecision.Deduplicate(String cachedObservation)` | Returns a cached result without re-executing and marks it as deduplicated |
+| `GuardDecision.PauseForApproval(ApprovalFrame frame)` | Uses the existing checkpoint/approval path with the tool parameters and risk level |
 
-Interceptors registered via CDI are evaluated in the **first pass** of `ToolInvocationGuard.evaluate()`, before the built-in deduplication check, dynamic tool fallback, and HITL check. If any interceptor returns a present `Optional`, the guard short-circuits immediately without evaluating further interceptors or built-in logic.
+Interceptors registered via CDI are evaluated in the **first pass** of
+`ToolInvocationGuard.evaluate()`, before parameter validation, built-in deduplication,
+dynamic-tool recognition, and HITL checks. `Optional.empty()` and
+`GuardDecision.Allow` continue through the chain. Only `Blocked`, `Deduplicate`, or
+`PauseForApproval` short-circuit. Consequently, an interceptor cannot use `Allow` to
+bypass mandatory validation or authorization.
 
 > [!NOTE]
-> The built-in deduplication check (which prevents the LLM from calling the same tool with identical parameters twice in the same session) runs **after** registered interceptors. If you want to override or extend deduplication logic, use a `ToolGuardInterceptor` that inspects `history` and returns `GuardDecision.Deduplicate` with your chosen cached observation.
+> The built-in deduplication check (which prevents the LLM from calling the same tool
+> with identical parameters twice in the same session) runs **after** registered
+> interceptors. To add a stricter pre-policy deduplication rule, use a
+> `ToolGuardInterceptor` that inspects `history` and returns
+> `GuardDecision.Deduplicate` with the chosen cached observation.
+
+Probabilistic risk scoring must not be added to this pre-policy SPI. The Phase 2.5
+`PostPolicyToolRiskInterceptor` runs only after the deterministic path provisionally
+allows a tool and can return only `REQUIRE_APPROVAL`, `BLOCK`, or `NoOpinion`. The
+ordered `AnswerQualityInterceptor` runs only after deterministic answer acceptance;
+its retry opinion is honored once at most and never after a tool boundary. Implementing
+either active SPI for ONNX requires the corresponding Phase 2 model evidence and Phase
+3 activation gates from the ONNX ADR; `local-ml-onnx` currently implements neither.
 
 ---
 

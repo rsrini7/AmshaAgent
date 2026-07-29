@@ -39,6 +39,7 @@ public final class AgentExecutionContext {
     private volatile boolean statusDirty = true;
     private volatile boolean forceFinishRetry = false;
     private int truncationRetryCount = 0;
+    private int answerQualityRetryCount = 0;
     private int checkpointRestoreOffset = 0;
 
     public AgentExecutionContext(
@@ -154,6 +155,17 @@ public final class AgentExecutionContext {
 
     public void incrementTruncationRetry() {
         this.truncationRetryCount++;
+    }
+
+    /** Atomically consumes the single answer-quality retry allowed before any tool boundary. */
+    public synchronized boolean tryConsumeAnswerQualityRetry() {
+        if (answerQualityRetryCount >= 1) return false;
+        answerQualityRetryCount++;
+        return true;
+    }
+
+    public int getAnswerQualityRetryCount() {
+        return answerQualityRetryCount;
     }
 
     public int getCheckpointRestoreOffset() {

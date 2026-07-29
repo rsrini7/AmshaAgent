@@ -1,11 +1,13 @@
 package com.amsha.core.agent.loop;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -16,10 +18,14 @@ import java.util.Map;
 import java.util.Set;
 
 import com.amsha.core.agent.reasoning.ReasoningStep;
+import com.amsha.core.agent.reasoning.StructuredOutputMode;
 import com.amsha.core.agent.role.RoleRegistry;
 import com.amsha.core.agent.role.ToolCapability;
+import com.amsha.core.classifier.ClassifierResult;
+import com.amsha.core.classifier.ClassifierResult.NoOpinionReason;
 import com.amsha.core.governance.RateLimitTracker;
 import com.amsha.core.observability.AgentObserver;
+import com.amsha.core.security.AutonomyLevel;
 import com.amsha.core.tools.ToolRegistry;
 import com.amsha.core.util.TextPatternUtils;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -40,6 +46,7 @@ class FinishActionHandlerTest {
     private TextPatternUtils textPatternUtils;
     private RoleRegistry roleRegistry;
     private AnswerQualityShadowEvaluationService answerQualityShadowEvaluation;
+    private AnswerQualityDispatcher answerQualityDispatcher;
 
     @BeforeEach
     @SuppressWarnings("unchecked")
@@ -52,6 +59,7 @@ class FinishActionHandlerTest {
         textPatternUtils = mock(TextPatternUtils.class);
         roleRegistry = mock(RoleRegistry.class);
         answerQualityShadowEvaluation = mock(AnswerQualityShadowEvaluationService.class);
+        answerQualityDispatcher = mock(AnswerQualityDispatcher.class);
 
         ToolRegistry toolRegistry = mock(ToolRegistry.class);
         when(toolRegistry.listTools())
@@ -80,6 +88,9 @@ class FinishActionHandlerTest {
                 toolRegistry,
                 roleRegistry);
         handler.answerQualityShadowEvaluation = answerQualityShadowEvaluation;
+        handler.answerQualityDispatcher = answerQualityDispatcher;
+        when(answerQualityDispatcher.evaluate(any()))
+                .thenReturn(new ClassifierResult.NoOpinion<>(NoOpinionReason.MISSING_MODEL));
 
         // Default mock behaviors
         when(qualityGuard.isRawToolCallLeak(anyString())).thenReturn(false);
@@ -117,6 +128,52 @@ class FinishActionHandlerTest {
         verify(answerQualityShadowEvaluation).observeAccepted(captor.capture());
         assertTrue(captor.getValue().toolInvokedInTurn());
         assertEquals("Here is the accepted summary.", captor.getValue().answer());
+    }
+
+    @Test
+    void activeAnswerQualityConsumesOnlyOnePreToolRetry() {
+        AgentExecutionContext context = context("researcher", "summarize this");
+        when(answerQualityDispatcher.evaluate(any()))
+                .thenReturn(new ClassifierResult.Opinion<>(AnswerQualityAction.REQUEST_RETRY, 0.91f, "test-quality"));
+        ReasoningStep finish = ReasoningStep.pending(
+                "FINISH: This is a complete candidate answer.", ReasoningStep.FINISH, Map.of(), 0, 0);
+
+        FinishActionHandler.FinishOutcome first = handler.handle(context, List.of(), finish, 0);
+        FinishActionHandler.FinishOutcome second = handler.handle(context, List.of(), finish, 0);
+
+        assertInstanceOf(FinishActionHandler.FinishOutcome.Correction.class, first);
+        assertInstanceOf(FinishActionHandler.FinishOutcome.Completed.class, second);
+        assertEquals(1, context.getAnswerQualityRetryCount());
+    }
+
+    @Test
+    void activeAnswerQualityCannotRetryAfterAnyToolBoundary() {
+        AgentExecutionContext context = context("researcher", "summarize this");
+        when(answerQualityDispatcher.evaluate(any()))
+                .thenReturn(new ClassifierResult.Opinion<>(AnswerQualityAction.REQUEST_RETRY, 0.91f, "test-quality"));
+        ReasoningStep tool =
+                ReasoningStep.pending("tool", "search", Map.of(), 0, 0).withObservation("result", true);
+        ReasoningStep finish = ReasoningStep.pending(
+                "FINISH: This is the final answer after a tool.", ReasoningStep.FINISH, Map.of(), 0, 0);
+
+        FinishActionHandler.FinishOutcome outcome = handler.handle(context, List.of(tool), finish, 0);
+
+        assertInstanceOf(FinishActionHandler.FinishOutcome.Completed.class, outcome);
+        assertEquals(0, context.getAnswerQualityRetryCount());
+    }
+
+    @Test
+    void deterministicAnswerGuardFailureBypassesActiveInterceptors() {
+        AgentExecutionContext context = context("researcher", "summarize this");
+        when(qualityGuard.guard(anyString(), any()))
+                .thenReturn(new AnswerGuardStrategy.AnswerGuardResult("", false, "deterministic failure"));
+        ReasoningStep finish = ReasoningStep.pending(
+                "FINISH: This answer is rejected deterministically.", ReasoningStep.FINISH, Map.of(), 0, 0);
+
+        FinishActionHandler.FinishOutcome outcome = handler.handle(context, List.of(), finish, 0);
+
+        assertInstanceOf(FinishActionHandler.FinishOutcome.Correction.class, outcome);
+        verify(answerQualityDispatcher, never()).evaluate(any());
     }
 
     @Test
@@ -356,5 +413,22 @@ class FinishActionHandlerTest {
         String hint = ((FinishActionHandler.FinishOutcome.Correction) outcome).correctionHint();
         assertTrue(hint.contains(
                 "STOP. The user requested a future/scheduled action, but you did NOT call the schedule_task tool"));
+    }
+
+    private static AgentExecutionContext context(String role, String goal) {
+        return new AgentExecutionContext(
+                "s1",
+                "u1",
+                "c1",
+                role,
+                goal,
+                AutonomyLevel.FULL,
+                StructuredOutputMode.NATIVE,
+                5,
+                0,
+                null,
+                null,
+                null,
+                Map.of());
     }
 }
