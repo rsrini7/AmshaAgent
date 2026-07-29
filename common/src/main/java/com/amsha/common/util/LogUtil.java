@@ -8,12 +8,12 @@ public final class LogUtil {
 
     public static String rootMessage(Exception e) {
         String msg = ExceptionUtils.getRootCauseMessage(e);
-        return msg != null ? msg : e.getClass().getSimpleName();
+        return SecretRedactor.redact(msg != null ? msg : e.getClass().getSimpleName());
     }
 
     public static String rootMessage(Throwable e) {
         String msg = ExceptionUtils.getRootCauseMessage(e);
-        return msg != null ? msg : e.getClass().getSimpleName();
+        return SecretRedactor.redact(msg != null ? msg : e.getClass().getSimpleName());
     }
 
     public static String trimmedStack(Exception e, int maxLines) {
@@ -21,7 +21,7 @@ public final class LogUtil {
     }
 
     public static String trimmedStack(Throwable e, int maxLines) {
-        return ExceptionUtils.getStackTrace(e)
+        return SecretRedactor.redact(ExceptionUtils.getStackTrace(e))
                 .lines()
                 .limit(maxLines)
                 .reduce("", (a, b) -> a.isEmpty() ? b : a + "\n" + b);

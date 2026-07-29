@@ -179,7 +179,12 @@ Ollama is still provisioned in `docker-compose.yaml` (disabled by default) for f
 
 ### Q: What is OMLX and when should I use it?
 
-OMLX is a provider for local MLX-based OpenAI-compatible inference servers (e.g., `mlx-lm` serving quantized models on Apple Silicon). It defaults to `http://127.0.0.1:8000/v1` and requires no API key (`api-key=not-needed`). Use OMLX when you want fully local, air-gapped inference with models like `mlx-community/Qwen3.6-35B-A3B-4bit`. It implements both `AgentChatModelProvider` (reasoning) and `RoutingChatModelProvider` (intent classification + compaction), so it can serve as a complete end-to-end provider. Set `AMSHA_LLM_PROVIDER=omlx` to activate.
+OMLX is a provider for local MLX-based OpenAI-compatible inference servers (e.g., `mlx-lm` serving quantized models on Apple Silicon). It defaults to `http://127.0.0.1:8000/v1`; unauthenticated servers can use the `not-needed` default, while protected servers accept a real `AMSHA_OMLX_API_KEY`. Use OMLX when you want fully local, air-gapped inference with models like `mlx-community/Qwen3.6-35B-A3B-4bit`. It implements both `AgentChatModelProvider` (reasoning) and `RoutingChatModelProvider` (intent classification + compaction), so it can serve as a complete end-to-end provider. Set `AMSHA_LLM_PROVIDER=omlx` for the dedicated provider, or map the same endpoint into `AMSHA_GENERIC_OPENAI_*` when exercising it through `generic-openai`.
+
+For a credential-safe connectivity check, keep the `AMSHA_OMLX_*` values in the
+ignored root `.env` and run `mise run smoke:local-runtime -- omlx`. The runner validates
+the authenticated catalog and a minimal completion without printing headers, prompts,
+responses, or credentials.
 
 ---
 
@@ -893,4 +898,16 @@ Execute the ONNX REST validation suite against a running daemon:
 bash rest-http/scripts/run_all_validations.sh --onnx
 ```
 
-This verifies health check `/q/health`, ONNX metric registration, and model bundle file integrity. It does not invoke vector search: the archival admin endpoint intentionally performs BM25-only search. Use the focused smoke test for JVM inference and follow the native verification procedure in the [Local ML guide](./ONNX_LOCAL_ML_GUIDE.md).
+This verifies health check `/q/health`, executes the protected fixed-text ONNX probe,
+requires the successful-inference metric to increment, verifies model bundle file
+integrity, and requires `READY` vector-index compatibility. For one command that also
+checks an authenticated OMLX completion and manages an isolated native lifecycle, run:
+
+```bash
+mise run smoke:local-runtime -- native --binary dist/amsha-sqlite
+```
+
+That runner forces `generic-openai` plus ONNX and never selects Ollama. It is a local
+smoke check, not a replacement for the supported-platform records, numeric corpus,
+repeated leak test, or signed SBOM/provenance gates described in the
+[Local ML guide](./ONNX_LOCAL_ML_GUIDE.md).

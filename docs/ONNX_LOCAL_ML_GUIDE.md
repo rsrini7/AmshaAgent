@@ -169,6 +169,43 @@ This proves the native process starts, reports ONNX readiness, sees the verified
 
 The macOS arm64 build/start/readiness, numeric corpus, and lifecycle/RSS procedure passed on 2026-07-29. It is evidence for that target only; Linux x86-64, Linux arm64, and signed SBOM/provenance remain required gates.
 
+### Reusable local runtime smoke runner
+
+Use the dedicated smoke runner for repeatable local checks. It reads only the required
+`AMSHA_OMLX_*` and internal-key values from the ignored root `.env`; exported process
+variables take precedence. Do not pass credentials on the command line. The OMLX
+connection is exercised through its authenticated OpenAI-compatible API, while native
+Amsha is explicitly configured with `AMSHA_LLM_PROVIDER=generic-openai`. The runner
+also forces the embedding route to `onnx`, disables Telegram and the web channel, and
+cannot select Ollama.
+
+```bash
+# OMLX authentication, model catalog, and a minimal completion
+mise run smoke:local-runtime -- omlx
+
+# OMLX plus an Amsha process that is already serving the verified ONNX bundle
+mise run smoke:local-runtime -- running \
+  --amsha-base-url http://127.0.0.1:8080
+
+# Full isolated lifecycle using the freshly built native binary
+mise run smoke:local-runtime -- native --binary dist/amsha-sqlite
+```
+
+The `running` and `native` commands verify bundle sizes and SHA-256 digests, overall
+health, local ONNX readiness, `READY` vector-index compatibility, protected descriptor
+diagnostics, fixed-text inference, and an increment of the successful-inference metric.
+The native command defaults to port `18080`, uses an isolated data directory, generates
+an ephemeral internal API key, and gracefully stops its child process. Logs and data are
+created under the gitignored `data/smoke/` tree; they are removed after success and
+retained without automatic log dumping after failure. Pass `--keep-artifacts` when a
+successful native run also needs retained diagnostics, or use `--help` to see path,
+port, timeout, bundle, and interpreter overrides. Set `AMSHA_SMOKE_PYTHON` to select a
+different Python 3 interpreter.
+
+This is a development smoke workflow, not a substitute for the signed, platform-bound
+release evidence in Section 8. Use `scripts/verify_native_matrix.sh record` for numeric
+corpus, repeated lifecycle, and RSS evidence on each supported operating system.
+
 ---
 
 ## 8. Phase 0 Release-Evidence Gates

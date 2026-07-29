@@ -54,12 +54,31 @@ bounded match/mismatch/no-opinion metrics and never return a behavioral decision
 input, parameters, answers, labels, rule IDs, model revisions, and exception details are
 not metric tags or logs. No classifier model is bundled or selected by default.
 
+The [Phase 2 classifier preparation and resumption runbook](classifier-training/README.md)
+documents the current pause point, human-review requirements, Git retention boundary,
+and exact `mise` command sequence. All operations enter through
+`scripts/classifier_training.sh` and the `classifier:*` `mise` tasks. Run
+`mise run classifier:validate-seeds` to validate the pending repository-contract review
+packets and `mise run classifier:install-base` to install the immutable, SHA-256-pinned
+Apache-2.0 `all-MiniLM-L6-v2` training source. Train, evaluate, and package tasks fail
+before loading ML dependencies unless the selected dataset is human-approved and meets
+the minimum split sizes. Packaging also requires approved error budgets and passing
+held-out evidence. Insufficient classifier data does not block later non-activating
+implementation phases, but it remains a hard gate for model promotion and Phase 3
+behavioral activation.
+
 For a reproducible development bundle, run `mise run models:install-mpnet`. It
 downloads the Apache-2.0 `sentence-transformers/all-mpnet-base-v2` revision pinned by
 the task, verifies its fixed SHA-256 and sizes, and writes the matching local manifest.
 The resulting files remain under gitignored `data/models/`.
 Run `./mvnw -pl local-ml-onnx -Dtest=OnnxEmbeddingModelSmokeTest test` after
 installation to execute the JVM smoke test against the real bundle.
+
+For repeatable authenticated OMLX, running-server, and isolated native checks, use the
+[local runtime smoke runner](../docs/ONNX_LOCAL_ML_GUIDE.md#reusable-local-runtime-smoke-runner).
+All entry points go through `scripts/local_runtime_smoke.sh` and
+`mise run smoke:local-runtime`; credentials remain in the ignored root `.env`, and the
+native workflow forces `generic-openai` plus ONNX without selecting Ollama.
 
 ## Tokenizer spike
 

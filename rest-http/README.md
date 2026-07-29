@@ -439,6 +439,7 @@ needed). Run individually or via the master runner `run_all_validations.sh`.
 | `--auth-session` | `validate_auth_session.sh` | API-key auth + session lifecycle | fast |
 | `--identity` | `validate_identity_access.sh` | P109 bootstrap/identity/OAuth | fast |
 | `--pii-audit` | `validate_pii_injection_audit.sh` | PII redaction + injection + audit HMAC | fast |
+| `--onnx` | `validate_onnx.sh` | ONNX health, fixed-text inference metric, bundle digests, vector compatibility | local CPU |
 | `--self-evolve` | `validate_self_evolve.sh` | Directives lifecycle (seeds when `--data-dir` given) | LLM |
 | `--hitl` | `validate_hitl.sh` | Approve/deny (REST + goal-string + taskId), 401/409 | LLM |
 | `--rag` | `validate_rag.sh` | Ingest → approve → recall + rag_chunk isolation | LLM |
@@ -447,6 +448,14 @@ needed). Run individually or via the master runner `run_all_validations.sh`.
 | `--cron` | `validate_cron.sh` | Programmatic cron REST lifecycle | LLM |
 | `--fast` | `(master)` | all fast/zero-token validators | mixed |
 | `--llm` | `(master)` | memory + web + roles + cron + rag + budget + hitl | LLM |
+
+`--onnx` targets an already-running process. To also authenticate against the local
+OMLX OpenAI-compatible API and manage an isolated native lifecycle, keep the required
+`AMSHA_OMLX_*` credentials in the ignored root `.env` and run
+`mise run smoke:local-runtime -- native --binary dist/amsha-sqlite`. That workflow
+forces `generic-openai` plus ONNX, never selects Ollama, and does not print raw HTTP
+payloads or credentials. See the
+[local ONNX guide](../docs/ONNX_LOCAL_ML_GUIDE.md#reusable-local-runtime-smoke-runner).
 
 ### New P109 config flags (also in `.env.example`)
 

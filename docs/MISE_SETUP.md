@@ -306,6 +306,7 @@ mise run help    # or: mise tasks
 | `mise run native:chat` | Native binary - interactive REPL |
 | `mise run native:attach` | Native binary - Telegram daemon |
 | `mise run native:ask` | Native binary - one-shot task (`$env:GOAL="..."`) |
+| **`mise run smoke:local-runtime`** | Secret-safe OMLX and running/isolated native ONNX smoke checks |
 | **`mise run dist:dist`** | Assemble `dist/` folder: binary + vec0 + launchers |
 | `mise run dist:pack` | Create OS-specific release archives |
 | `mise run compose:up` | Full observability stack up |
@@ -419,6 +420,27 @@ mise run native:attach   # Telegram daemon
 
 $env:GOAL = "summarize today's logs"; mise run native:ask
 ```
+
+### Reusable local runtime smoke
+
+The smoke task delegates to the root `scripts/local_runtime_smoke.sh` wrapper and its
+standard-library Python runner. Configure `AMSHA_OMLX_API_KEY`,
+`AMSHA_OMLX_BASE_URL`, and `AMSHA_OMLX_MODEL` in the ignored root `.env`; do not put
+credentials on the command line. The native command maps those values to the
+`generic-openai` provider, forces ONNX embeddings, disables Telegram, uses an isolated
+data directory and port `18080`, and stops the process it starts.
+
+```bash
+mise run smoke:local-runtime -- omlx
+mise run smoke:local-runtime -- running --amsha-base-url http://127.0.0.1:8080
+mise run smoke:local-runtime -- native --binary dist/amsha-sqlite
+```
+
+Set `AMSHA_SMOKE_PYTHON` to override the Python 3 interpreter. Run
+`mise run smoke:local-runtime -- native --help` for model-root, bundle, port, timeout,
+dimension, and diagnostic-retention options. The complete verification contract and
+release-evidence boundary are in the
+[local ONNX guide](./ONNX_LOCAL_ML_GUIDE.md#reusable-local-runtime-smoke-runner).
 
 ### Assemble a dist/ folder (ship-ready)
 

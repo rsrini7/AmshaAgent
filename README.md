@@ -8,7 +8,7 @@
   ![Native Image Ready](https://img.shields.io/badge/Native_Image-Ready-orange.svg?style=flat&logo=graalvm)
   ![OpenTelemetry](https://img.shields.io/badge/OpenTelemetry-Tracing-blueviolet.svg?style=flat&logo=opentelemetry)
   ![Podman](https://img.shields.io/badge/Isolation-Rootless_Podman-purple.svg?style=flat&logo=podman)
-  ![Tests](https://img.shields.io/badge/Tests-3927_passing-brightgreen.svg?style=flat)
+  ![Tests](https://img.shields.io/badge/Tests-3932_passing-brightgreen.svg?style=flat)
   ![Coverage](https://img.shields.io/badge/Coverage-70.11%25-brightgreen.svg?style=flat)
   [![Built with Devbox](https://img.shields.io/badge/built_with-devbox-green.svg?style=flat)](https://www.jetify.com/devbox/)
   [![Built with mise](https://img.shields.io/badge/built_with-mise-blue.svg?style=flat)](https://jdx.dev)
@@ -37,6 +37,11 @@ GraalVM reachability analysis.
 The JAR-content values are supply-chain inventory figures, not additive executable
 size. For the exact binary on a target, build locally and use `ls -lh dist/amsha-sqlite`.
 See [Local ONNX ML](./docs/ONNX_LOCAL_ML_GUIDE.md) for installation and verification.
+After configuring the required `AMSHA_OMLX_*` values in the ignored `.env`, run
+`mise run smoke:local-runtime -- native --binary dist/amsha-sqlite` for the reusable
+authenticated OMLX plus isolated native ONNX smoke lifecycle. The workflow forces
+Amsha to use `generic-openai`, never Ollama, and does not print credentials or model
+responses.
 
 ---
 
@@ -72,7 +77,7 @@ See [docs/QUICK_START.md](./docs/QUICK_START.md) for detailed setup options.
 - **Group consultation** — `mode='group_consult'` triggers parallel family huddle with virtual threads; dynamic group formation for cross-realm tasks
 - **Persona escalation** — auto-routes tasks when a persona hits its capability boundary; group-aware fallback prefers intra-realm routing
 - **Parallel tool execution** — N tool calls in one LLM turn, concurrent with Virtual Threads
-- **18 deterministic reflexes** — zero-token fast-path for commands, PII redaction, injection blocking, vault ops
+- **20 deterministic reflexes** — zero-token fast-path for commands, PII redaction, injection blocking, vault ops
 - **Human-in-the-loop and budget governance** — approval checkpoints, autonomy controls, durable resume/recovery, and per-session spend limits
 - **Durable scheduling** — cron-backed agent tasks with execution history and bounded concurrent dispatch
 - **Identity and workspace access** — first-owner bootstrap, API credentials, OIDC/GitHub providers, web sessions with CSRF, invitations, role-based membership, ownership transfer, and last-owner protection
@@ -80,10 +85,13 @@ See [docs/QUICK_START.md](./docs/QUICK_START.md) for detailed setup options.
 - **Podman rootless sandbox** for code execution (Python, Java, Go, Node, Bash)
 - **Browser and web tools** — optional Playwright automation, lightweight web fetch, and Brave/Serper real-time search
 - **AES-256-GCM-SIV vault** with Argon2id key derivation — secrets never stored in plaintext
+- **Secret-safe application logging** — console and file filters redact credential-shaped URLs, bearer values, assignments, formatted parameters, and throwable cause/suppressed chains before rendering
 - **Tamper-evident HMAC audit chain** — every action logged as append-only, verifiable record
 - **MemGPT-style three-tier memory** — prompt-injected Core context, exact-turn Recall history, and semantic Archival knowledge; retrieval combines FTS5 and sqlite-vec with Reciprocal Rank Fusion
-- **In-process local ML inference** — ONNX Runtime (`1.27.0`) and DJL Tokenizers (`0.33.0`) in `amsha-local-ml-onnx` for zero-network air-gapped vector embeddings without Python containers or external sidecars
+- **Opt-in in-process local ML inference** — Phase 1 ONNX Runtime (`1.27.0`) and DJL Tokenizers (`0.33.0`) embedding implementation runs verified local bundles without Python containers, downloads, or external inference sidecars; Linux native records and signed release provenance remain open gates
 - **Vector index descriptor fingerprinting & non-destructive safety** — 15-field `EmbeddingIndexDescriptor` validates model, tokenizer, pooling, and dimension compatibility across SQLite (`sqlite-vec`), PostgreSQL (`pgvector`), and Lucene Filesystem backends; mismatched indices degrade non-destructively to BM25/FTS5 keyword search without auto-deleting vectors
+- **Non-authoritative classifier shadow path** — disabled-by-default intent, tool-risk, and answer-quality adapters emit bounded payload-free comparisons without changing routing, authorization, retry, or answer behavior; reproducible review/training/export tooling is present, while human-approved datasets and promoted models remain pending
+- **Reusable local ML verification** — one secret-safe mise workflow checks authenticated OMLX through `generic-openai`, bundle digests, ONNX health/index descriptors, real inference metric movement, and isolated native startup/shutdown without selecting Ollama
 - **Document ingestion** — add knowledge to the RAG store for retrieval in future agent turns
 - **Extensible Skills system** — YAML/Markdown custom roles from database, classpath, or SkillsJars with hot reload and optional adaptive execution
 - **Behavioral self-evolution** — opt-in trace capture, pattern extraction, and reviewed directives that improve future interactions
@@ -105,7 +113,7 @@ See [docs/QUICK_START.md](./docs/QUICK_START.md) for detailed setup options.
 | `persistence-*/` | Hexagonal persistence: API ports + SQLite / PostgreSQL / FS adapters |
 | `channel-*/` | Channel adapters: Telegram, WebSocket |
 | `ui/` | Lit 3.x + TypeScript web frontend |
-| `mcp/`, `rag/`, `tool-playwright/`, `self-evolve/` | Optional runtime modules for MCP, retrieval, browser automation, and self-evolution |
+| `mcp/`, `rag/`, `local-ml-onnx/`, `tool-playwright/`, `self-evolve/` | Optional runtime modules for MCP, retrieval, verified local ML, browser automation, and self-evolution |
 | `onboarding/` | Guided provider, credential, prompt, and MCP setup wizard |
 
 ---
@@ -151,6 +159,7 @@ persistence-postgres/ ← PostgreSQL adapter
 persistence-fs/       ← Filesystem adapter (Lucene BM25)
 │
 rag/                  ← Two-tier vector (vec0) + FTS5 RAG memory
+local-ml-onnx/        ← Verified local ONNX embeddings + shadow classifiers
 mcp/                  ← MCP server bridge + dynamic client tool loading
 onboarding/           ← 6-step setup wizard REST API
 tool-playwright/      ← Playwright browser automation tool
@@ -210,7 +219,7 @@ Set `AMSHA_UI_SKIP_ONBOARDING=true` if you want the web UI to skip the setup wiz
 |-----|---------------|
 | [AMSHA_EXTENSION.md](./docs/AMSHA_EXTENSION.md) | Adding tools, personas, reflexes, channels, skills, LLM providers, guards |
 | [SKILLSJAR_ADMISSION.md](./docs/SKILLSJAR_ADMISSION.md) | SkillsJar compatibility checks, quarantine, packaging contracts, and validation |
-| [ONNX_LOCAL_ML_GUIDE.md](./docs/ONNX_LOCAL_ML_GUIDE.md) | Local ONNX model integration guide |
+| [ONNX_LOCAL_ML_GUIDE.md](./docs/ONNX_LOCAL_ML_GUIDE.md) | Local ONNX integration, release evidence, and reusable OMLX/native smoke runner |
 | [CHANNEL_SPI.md](./docs/CHANNEL_SPI.md) | Adding a new channel (Discord, Slack, etc.) via the 6-interface SPI |
 
 ### 🔒 Security
@@ -241,4 +250,4 @@ Use `--module app`, `--top 10`, `--badge`, or `--json` to narrow or automate rep
 
 ---
 
-> **Last updated**: Amsha Agent V0.1.0 · Quarkus 3.27.2 · JDK 25 · 18 modules · 21 tools · 18 reflexes · 11 LLM providers
+> **Last updated**: Amsha Agent V0.1.0 · Quarkus 3.27.2 · JDK 25 · 19 modules · 21 tools · 20 reflexes · 11 LLM providers

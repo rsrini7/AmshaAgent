@@ -93,6 +93,28 @@ Compaction and classifier slots also support `generic-openai`:
 `AMSHA_COMPACTION_GENERIC_OPENAI_BASE_URL` and `AMSHA_CLASSIFIER_GENERIC_OPENAI_*`
 vars. See Compaction and Intent Classification sections below.
 
+### Local OMLX smoke workflow
+
+The repository smoke runner intentionally sources its endpoint credentials from
+`AMSHA_OMLX_API_KEY`, `AMSHA_OMLX_BASE_URL`, and `AMSHA_OMLX_MODEL` in the ignored
+root `.env`, with exported process variables taking precedence. Its isolated native
+mode maps those values to `AMSHA_GENERIC_OPENAI_*`, sets
+`AMSHA_LLM_PROVIDER=generic-openai`, forces the embedding provider to `onnx`, and
+disables Telegram; it never selects Ollama. `running` additionally requires
+`AMSHA_API_KEYS_INTERNAL` so it can call protected ONNX diagnostics. These are
+smoke-runner inputs rather than new Quarkus configuration properties.
+
+```bash
+mise run smoke:local-runtime -- omlx
+mise run smoke:local-runtime -- running --amsha-base-url http://127.0.0.1:8080
+mise run smoke:local-runtime -- native --binary dist/amsha-sqlite
+```
+
+Keep all keys in `.env` or the process environment, never in command arguments. The
+runner prints only bounded pass/fail labels and never prints headers, prompts,
+completions, or raw HTTP responses. See the
+[local ONNX guide](./ONNX_LOCAL_ML_GUIDE.md#reusable-local-runtime-smoke-runner).
+
 ## Compaction
 
 Compaction uses a multi-slot infinite-loop failover (per-slot provider list). Each

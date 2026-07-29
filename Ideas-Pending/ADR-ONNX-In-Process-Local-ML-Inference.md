@@ -1,13 +1,14 @@
 # ADR: In-Process Local Machine-Learning Inference with ONNX Runtime
 
-- Status: Accepted for Phases 0–1; Proposed for Phases 2–3
+- Status: Accepted for Phases 0–2 shadow implementation; Proposed for Phase 3 activation
 - Date: 2026-07-27
 - Last reviewed: 2026-07-29
 - Last updated: 2026-07-29
 - Decision owners: Amsha Agent maintainers
 - Related invariants: [Architecture Invariants](../docs/Architecture_Invariants.md)
-- Decision maturity: Phase 0 spike and Phase 1 implementation are authorized subject
-  to the Section 15 go/no-go gates; Phases 2–3 remain proposed
+- Decision maturity: Phase 0–2 implementation is authorized subject to the Section 15
+  go/no-go gates. Deferred classifier data/evaluation is a promotion gate, not a blocker
+  for later non-activating implementation; Phase 3 behavioral activation remains proposed
 
 ## Current implementation status (2026-07-29)
 
@@ -111,7 +112,8 @@ before general availability.
   lease, runner, real-JVM MPNet smoke, descriptor/reset/fallback parity, and health/
   diagnostic tests; SQLite and PostgreSQL `V10` migration tests; application assembly
   compilation; documentation validation; native-image build; native REST inference
-  probe; and diff hygiene.
+  probe; reusable secret-safe OMLX/`generic-openai` and isolated native smoke tooling;
+  and diff hygiene.
 - Phase 0 evidence completed on macOS arm64: the pinned Python SentenceTransformers
   corpus passed with minimum cosine `0.999999998` against the FP32 `0.9999` threshold,
   100% for every declared partition and canonical fixture, and stable nearest-neighbour
@@ -134,12 +136,21 @@ before general availability.
   calibrated low-confidence `NoOpinion`, deterministic warm-up, input limits, deadlines,
   and per-bundle closed/open/half-open circuit breakers. Queue rejection does not count
   as a model failure.
-- Phase 2 is not yet an evaluated classifier release: no classifier model, pinned
-  installer, versioned labelled dataset, calibration, model card, error budgets, or
-  retained shadow-evidence record has been approved for any of the three use cases.
-  Phase 2.5 and all Phase 3 behavioral activation remain explicitly unstarted. The
-  `V10` migrations add descriptor metadata only; they do not migrate, delete, or
-  re-embed existing development vectors.
+- Phase 2 now has a reproducible three-model preparation path: the Apache-2.0
+  `all-MiniLM-L6-v2` source revision and every required file are size/SHA-256 pinned;
+  root-script and `mise` entry points cover de-identification, dataset gates, independent
+  training, calibration/evaluation, and verified ONNX bundle export. The initial intent,
+  tool-risk, and answer-quality packets contain only repository test-contract seeds and
+  remain explicitly pending human review. Training refuses pending or undersized data,
+  and packaging refuses unapproved error budgets or failing held-out evidence.
+- Phase 2 is therefore not yet an evaluated classifier release: no task-specific
+  classifier model, versioned human-approved dataset, calibration, model card, error
+  budget, rollback decision, or retained shadow-evidence record has been approved for
+  any use case. The preparation runbook records the exact pause point and resumption
+  sequence. This deferred evidence lane does not block Phase 2.5 core safety work or
+  non-activating Phase 3 scaffolding, but it remains a hard gate for model promotion
+  and every Phase 3 behavioral activation. The `V10` migrations add descriptor metadata
+  only; they do not migrate, delete, or re-embed existing development vectors.
 
 ## 1. Decision summary
 
@@ -270,6 +281,14 @@ Record only privacy-safe scores and compare them with labelled outcomes. Promote
 classifier only after its model card, dataset, calibration, false-positive and
 false-negative budgets, and rollback criteria are approved.
 
+Phase 2 has two independently scheduled lanes. The shadow runtime, safety isolation,
+verified bundle contract, and reproducible preparation workflow may be implemented and
+reviewed without a release-sized corpus. Human data review, training, calibration,
+held-out evaluation, packaging, and retained shadow evidence resume later through
+`local-ml-onnx/classifier-training/README.md`. Pausing that evidence lane does not block
+Phase 2.5 or non-activating Phase 3 implementation. It does block enabling any classifier
+as an authoritative signal or claiming the classifier is evaluated or release-ready.
+
 ### Phase 2.5: core classifier SPI gate
 
 Before any classifier affects behavior, land and review the additive post-policy
@@ -277,6 +296,9 @@ tool-risk SPI and ordered answer-quality interceptor SPI in `core`, with no acti
 implementation. Focused tests must prove ordering, monotonic decision composition,
 HITL preservation, no retry across a tool boundary, and behavior when no optional
 implementation exists. This gate does not block Phase 0–1 embeddings.
+It also does not depend on having a release-sized classifier corpus or trained model;
+its safety and ordering tests use deterministic test doubles. Phase 2 model evidence
+may therefore remain paused while this gate is implemented.
 
 ### Phase 3: bounded behavioral use with kill switches
 
@@ -927,6 +949,14 @@ Current Phase 2 classifier-shadow status (2026-07-29):
   no-opinion-reason metrics.
 - [x] Verified classifier bundle contract, strict ONNX graph/output handling,
   deterministic warm-up, bounded scheduling, timeouts, and per-bundle circuit breaker.
+- [x] SHA-256-pinned Apache-2.0 MiniLM base installer plus root-script/`mise` workflow
+  for de-identification, human-review gating, independent training, calibration,
+  aggregate evaluation, and verified ONNX export.
+- [x] Pending seed review packets derived from repository routing and guard contracts;
+  release gates reject their current review status and insufficient held-out counts.
+- [x] Versioned resumption runbook documents the `mise`/root-script entry path,
+  human-review fields, artifact retention boundary, strict dataset gate, independent
+  training/evaluation/package sequence, and current pause point.
 - [ ] Approved intent model bundle and pinned installer with license/provenance review.
 - [ ] Versioned labelled intent corpus, calibration, model card, false-positive and
   false-negative budgets, rollback criteria, and retained shadow-evaluation evidence.
@@ -935,6 +965,11 @@ Current Phase 2 classifier-shadow status (2026-07-29):
 - [ ] Approved models, pinned installers, datasets, calibration, model cards, error
   budgets, rollback criteria, and retained shadow evidence for tool-risk and
   answer-quality classification.
+
+The unchecked model-evidence items above are deliberately deferred until sufficient
+human-reviewable data exists. They do not block Phase 2.5 core SPI implementation or
+non-activating Phase 3 scaffolding. They remain mandatory before the corresponding
+classifier can influence routing, tool-risk, answer-quality, retry, or approval behavior.
 
 Phase 3 classifier activation may proceed only when:
 

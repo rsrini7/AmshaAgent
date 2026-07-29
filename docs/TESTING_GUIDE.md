@@ -143,6 +143,33 @@ AMSHA_TELEGRAM_BOT_TOKEN=...  # required for attach telegram mode only
   "-Damsha.rag.vec-extension-path=../lib/vec0"
 ```
 
+### Local OMLX and ONNX runtime smoke
+
+The reusable smoke runner reads the required `AMSHA_OMLX_*` values and, for the
+`running` command, `AMSHA_API_KEYS_INTERNAL` from the ignored root `.env`. Exported
+process variables override that file. Keep credentials out of command-line arguments.
+It uses the authenticated OpenAI-compatible OMLX API, configures native Amsha as
+`generic-openai`, forces ONNX embeddings, and never selects Ollama.
+
+```bash
+# Provider-only connectivity and minimal completion
+mise run smoke:local-runtime -- omlx
+
+# Provider, bundle integrity, health, descriptor, inference, and metric checks
+mise run smoke:local-runtime -- running \
+  --amsha-base-url http://127.0.0.1:8080
+
+# The same checks with isolated native startup and graceful shutdown
+mise run smoke:local-runtime -- native --binary dist/amsha-sqlite
+```
+
+Native logs and temporary data stay below the gitignored `data/smoke/` directory.
+Successful runs remove them; failed runs retain the path but do not automatically dump
+logs. This lightweight workflow complements, but does not replace, platform-matrix,
+golden-corpus, repeated leak, or signed provenance release evidence. See the
+[local ONNX guide](./ONNX_LOCAL_ML_GUIDE.md#reusable-local-runtime-smoke-runner) for
+the full contract and overrides.
+
 ### REST Client Files Index
 
 All HTTP test files live in `rest-http/`. See [rest-http/README.md](../rest-http/README.md) for full details.

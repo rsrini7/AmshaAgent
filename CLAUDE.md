@@ -10,6 +10,14 @@ Read [AGENTS.md](AGENTS.md) before making changes; it is the canonical guide.
 - PMD limits: 500 lines per file, 80 per method, cognitive complexity 15.
 - SQLite diagnostics: `sqlite3 data/amsha-meta.db ".tables"` and
   `sqlite3 data/amsha-fts.db ".tables"`.
+- Local OMLX/ONNX validation uses `mise run smoke:local-runtime -- <command>`. The
+  mise task must continue to delegate through `scripts/local_runtime_smoke.sh` to
+  `scripts/local_runtime_smoke.py`; see the reusable-smoke section in `AGENTS.md`.
+- Use `omlx` for provider-only checks, `running` for an existing Amsha process, and
+  `native --binary dist/amsha-sqlite` for the managed native lifecycle. Credentials
+  belong only in the ignored `.env` or process environment; never print or pass them
+  on the command line. This smoke path must use OMLX through `generic-openai`, never
+  Ollama, and must not be represented as formal cross-platform release evidence.
 
 ## Babysitter
 
