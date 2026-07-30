@@ -1,4 +1,5 @@
 # workflow
+- Uses multiple AI tools (Codex, DeepSeek, Claude) in parallel for code review, sharing feedback across tools to cross-validate findings and consolidate results. Confidence: 0.70
 - When diagnosing test failures, first collect all failure reports and identify common root causes across modules before fixing individual tests. Confidence: 0.75
 - For Quarkus multi-module projects, set `quarkus.http.test-port=0` in the parent POM's surefire `systemPropertyVariables` so all modules inherit random test ports and avoid port conflicts. Confidence: 0.80
 - Keep build output clean — fix spurious IDE/lifecycle-mapping warnings (e.g., m2e antrun plugin goals) when they appear, in addition to the primary issue. Confidence: 0.65
