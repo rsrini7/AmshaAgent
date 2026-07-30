@@ -11,6 +11,7 @@
 
 # documentation
 - Maintain architecture invariants and cross-referencing docs (agents.md, invariants) to capture all backend implementations when adding new store ports, preventing single-backend gaps. Confidence: 0.72
+- Reference scripts and documentation paths in Claude/LLM agent instruction files (e.g., claude.md, gemini.md) so LLMs can discover and invoke project scripts autonomously. Confidence: 0.80
 - After implementing features, proactively check and update all project documentation — README Key Capabilities, agents.md, LLM instruction files (gemini.md, claude.md), architecture diagrams (SVG), and docs/ folder — without waiting to be asked; then condense where possible. Confidence: 0.75
 - Before implementing from an ADR, ensure the ADR has been reviewed for blocking gaps (categorized as blocking/should-fix/nice-to-have) and updated to resolve all blocking issues. Confidence: 0.70
 
