@@ -156,7 +156,12 @@ public class OnnxEmbeddingProviderFactory implements EmbeddingProviderFactory {
                 spec.l2Normalize(),
                 spec.vectorDimension(),
                 "FLOAT32",
-                spec.maxSequenceLength());
+                spec.maxSequenceLength(),
+                spec.chunkingStrategy(),
+                spec.chunkingRevision(),
+                spec.maxWindowTokens(),
+                spec.windowOverlapTokens(),
+                spec.multiWindowAggregation());
     }
 
     private VerifiedOnnxModelBundle loadEmbeddingBundle(EmbeddingModelConfig config) {

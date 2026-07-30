@@ -34,6 +34,12 @@ class SecretRedactorTest {
     @Test
     void preservesOrdinaryTextAndNull() {
         assertEquals("ordinary diagnostic", SecretRedactor.redact("ordinary diagnostic"));
+        assertEquals("apikey", SecretRedactor.redact("apikey"));
         assertNull(SecretRedactor.redact(null));
+    }
+
+    @Test
+    void redactsSensitiveAssignmentAtMinimumLengthBoundary() {
+        assertEquals("apikey=" + SecretRedactor.REDACTED, SecretRedactor.redact("apikey=x"));
     }
 }

@@ -15,10 +15,18 @@ public final class SecretRedactor {
     private static final Pattern SENSITIVE_ASSIGNMENT = Pattern.compile(
             "(?i)(\\b(?:authorization|proxy-authorization|api[-_]?key|access[-_]?token|auth[-_]?token|bot[-_]?token|client[-_]?secret|password)\\b\\s*[=:]\\s*[\\\"']?)(?:bearer\\s+)?[^\\s,\\\"';&]+");
 
+    /**
+     * Minimum message length that could contain any sensitive keyword.
+     *
+     * <p>The shortest complete sensitive assignment is eight characters ({@code apikey=x}). A
+     * shorter message cannot match any pattern, so it can skip the regex pipeline.
+     */
+    private static final int MIN_MEANINGFUL_LENGTH = 8;
+
     private SecretRedactor() {}
 
     public static String redact(String value) {
-        if (value == null || value.isEmpty()) return value;
+        if (value == null || value.length() < MIN_MEANINGFUL_LENGTH) return value;
 
         String redacted = TELEGRAM_API_TOKEN.matcher(value).replaceAll("$1" + REDACTED);
         redacted = TELEGRAM_TOKEN.matcher(redacted).replaceAll(REDACTED);

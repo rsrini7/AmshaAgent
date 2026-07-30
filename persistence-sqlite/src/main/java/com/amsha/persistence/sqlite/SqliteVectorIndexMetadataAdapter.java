@@ -13,14 +13,17 @@ import com.amsha.persistence.api.EmbeddingIndexDescriptor;
 import com.amsha.persistence.api.VectorIndexCompatibility;
 import com.amsha.persistence.api.VectorIndexMetadataPort;
 import com.amsha.persistence.api.VectorIndexNamespace;
+import com.amsha.persistence.sqlite.jdbi.VectorIndexMetadataJdbiDao;
 
 import org.jboss.logging.Logger;
 import org.jdbi.v3.core.Jdbi;
 
+import io.quarkus.arc.Unremovable;
 import io.quarkus.arc.properties.IfBuildProperty;
 
 /** SQLite persistence and compatibility gate for durable vector namespaces. */
 @ApplicationScoped
+@Unremovable
 @IfBuildProperty(name = "amsha.persistence.backend", stringValue = "sqlite", enableIfMissing = true)
 public class SqliteVectorIndexMetadataAdapter implements VectorIndexMetadataPort {
 
@@ -64,31 +67,7 @@ public class SqliteVectorIndexMetadataAdapter implements VectorIndexMetadataPort
 
     @Override
     public Optional<EmbeddingIndexDescriptor> find(VectorIndexNamespace namespace) {
-        return jdbi.withHandle(handle -> handle.createQuery(
-                        "SELECT schema_version, provider_id, space_id, model_revision, tokenizer_revision, "
-                                + "preprocessing_revision, pooling_strategy, l2_normalize, vector_dimension, "
-                                + "numeric_precision, chunking_strategy, chunking_revision, max_window_tokens, "
-                                + "window_overlap_tokens, multi_window_aggregation, descriptor_fingerprint "
-                                + "FROM vector_index_metadata WHERE namespace = :namespace")
-                .bind("namespace", namespace.persistentId())
-                .map((rs, ctx) -> new EmbeddingIndexDescriptor(
-                        rs.getInt("schema_version"),
-                        rs.getString("provider_id"),
-                        rs.getString("space_id"),
-                        rs.getString("model_revision"),
-                        rs.getString("tokenizer_revision"),
-                        rs.getString("preprocessing_revision"),
-                        rs.getString("pooling_strategy"),
-                        rs.getInt("l2_normalize") != 0,
-                        rs.getInt("vector_dimension"),
-                        rs.getString("numeric_precision"),
-                        rs.getString("chunking_strategy"),
-                        rs.getString("chunking_revision"),
-                        rs.getInt("max_window_tokens"),
-                        rs.getInt("window_overlap_tokens"),
-                        rs.getString("multi_window_aggregation"),
-                        rs.getString("descriptor_fingerprint")))
-                .findOne());
+        return jdbi.withExtension(VectorIndexMetadataJdbiDao.class, dao -> dao.find(namespace.persistentId()));
     }
 
     @Override
@@ -104,48 +83,8 @@ public class SqliteVectorIndexMetadataAdapter implements VectorIndexMetadataPort
 
     private void upsert(VectorIndexNamespace namespace, EmbeddingIndexDescriptor descriptor) {
         String now = Instant.now().toString();
-        jdbi.useHandle(handle -> handle.createUpdate(
-                        "INSERT INTO vector_index_metadata (namespace, schema_version, provider_id, space_id, "
-                                + "model_revision, tokenizer_revision, preprocessing_revision, pooling_strategy, "
-                                + "l2_normalize, vector_dimension, numeric_precision, chunking_strategy, "
-                                + "chunking_revision, max_window_tokens, window_overlap_tokens, "
-                                + "multi_window_aggregation, descriptor_fingerprint, created_at, updated_at) "
-                                + "VALUES (:namespace, :schemaVersion, :providerId, :spaceId, :modelRevision, "
-                                + ":tokenizerRevision, :preprocessingRevision, :poolingStrategy, :l2Normalize, "
-                                + ":vectorDimension, :numericPrecision, :chunkingStrategy, :chunkingRevision, "
-                                + ":maxWindowTokens, :windowOverlapTokens, :multiWindowAggregation, :fingerprint, "
-                                + ":createdAt, :updatedAt) ON CONFLICT(namespace) DO UPDATE SET "
-                                + "schema_version = excluded.schema_version, provider_id = excluded.provider_id, "
-                                + "space_id = excluded.space_id, model_revision = excluded.model_revision, "
-                                + "tokenizer_revision = excluded.tokenizer_revision, "
-                                + "preprocessing_revision = excluded.preprocessing_revision, "
-                                + "pooling_strategy = excluded.pooling_strategy, l2_normalize = excluded.l2_normalize, "
-                                + "vector_dimension = excluded.vector_dimension, numeric_precision = excluded.numeric_precision, "
-                                + "chunking_strategy = excluded.chunking_strategy, chunking_revision = excluded.chunking_revision, "
-                                + "max_window_tokens = excluded.max_window_tokens, "
-                                + "window_overlap_tokens = excluded.window_overlap_tokens, "
-                                + "multi_window_aggregation = excluded.multi_window_aggregation, "
-                                + "descriptor_fingerprint = excluded.descriptor_fingerprint, updated_at = excluded.updated_at")
-                .bind("namespace", namespace.persistentId())
-                .bind("schemaVersion", descriptor.schemaVersion())
-                .bind("providerId", descriptor.providerId())
-                .bind("spaceId", descriptor.spaceId())
-                .bind("modelRevision", descriptor.modelRevision())
-                .bind("tokenizerRevision", descriptor.tokenizerRevision())
-                .bind("preprocessingRevision", descriptor.preprocessingRevision())
-                .bind("poolingStrategy", descriptor.poolingStrategy())
-                .bind("l2Normalize", descriptor.l2Normalize() ? 1 : 0)
-                .bind("vectorDimension", descriptor.vectorDimension())
-                .bind("numericPrecision", descriptor.numericPrecision())
-                .bind("chunkingStrategy", descriptor.chunkingStrategy())
-                .bind("chunkingRevision", descriptor.chunkingRevision())
-                .bind("maxWindowTokens", descriptor.maxWindowTokens())
-                .bind("windowOverlapTokens", descriptor.windowOverlapTokens())
-                .bind("multiWindowAggregation", descriptor.multiWindowAggregation())
-                .bind("fingerprint", descriptor.fingerprint())
-                .bind("createdAt", now)
-                .bind("updatedAt", now)
-                .execute());
+        jdbi.useExtension(
+                VectorIndexMetadataJdbiDao.class, dao -> dao.upsert(namespace.persistentId(), descriptor, now, now));
     }
 
     private static void logResult(VectorIndexCompatibility result) {

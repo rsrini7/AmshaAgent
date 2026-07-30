@@ -68,6 +68,11 @@ data/models/all-mpnet-base-v2-e8c3b32/
     "tokenTypeIdsName": null,
     "outputName": "last_hidden_state",
     "maxSequenceLength": 384,
+    "chunkingStrategy": "FIRST_MAX_TOKENS",
+    "chunkingRevision": "v1",
+    "maxWindowTokens": 384,
+    "windowOverlapTokens": 0,
+    "multiWindowAggregation": "DIRECT",
     "vectorDimension": 768,
     "paddingTokenId": 1,
     "poolingStrategy": "MASKED_MEAN",
@@ -77,6 +82,12 @@ data/models/all-mpnet-base-v2-e8c3b32/
   }
 }
 ```
+
+Phase 1 accepts only the manifest-declared `FIRST_MAX_TOKENS` `v1` contract with
+`maxWindowTokens` equal to `maxSequenceLength`, zero overlap, and `DIRECT`
+aggregation. These values flow through `EmbeddingSpaceDescriptor` into the durable
+index fingerprint; unsupported strategies fail bundle validation instead of silently
+reusing a compatible index.
 
 The optional `source` object written by the development installer is an unsigned,
 descriptive declaration. Its URL, relative paths, and SPDX license are validated, but

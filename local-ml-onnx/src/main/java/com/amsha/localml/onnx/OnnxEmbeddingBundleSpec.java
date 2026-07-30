@@ -18,6 +18,11 @@ public record OnnxEmbeddingBundleSpec(
         String tokenTypeIdsName,
         String outputName,
         int maxSequenceLength,
+        String chunkingStrategy,
+        String chunkingRevision,
+        int maxWindowTokens,
+        int windowOverlapTokens,
+        String multiWindowAggregation,
         int vectorDimension,
         Long paddingTokenId,
         PoolingStrategy poolingStrategy,
@@ -26,6 +31,10 @@ public record OnnxEmbeddingBundleSpec(
         String spaceRevision,
         List<String> warmupProbes)
         implements OnnxTextInputSpec {
+
+    static final String SUPPORTED_CHUNKING_STRATEGY = "FIRST_MAX_TOKENS";
+    static final String SUPPORTED_CHUNKING_REVISION = "v1";
+    static final String SUPPORTED_MULTI_WINDOW_AGGREGATION = "DIRECT";
 
     public enum PoolingStrategy {
         CLS_TOKEN,
@@ -40,6 +49,28 @@ public record OnnxEmbeddingBundleSpec(
         if (tokenTypeIdsName != null) tokenTypeIdsName = requireTensorName(tokenTypeIdsName, "tokenTypeIdsName");
         outputName = requireTensorName(outputName, "outputName");
         if (maxSequenceLength <= 0) throw new IllegalArgumentException("maxSequenceLength must be positive");
+        chunkingStrategy = chunkingStrategy == null
+                ? SUPPORTED_CHUNKING_STRATEGY
+                : requireNonBlank(chunkingStrategy, "chunkingStrategy");
+        chunkingRevision = chunkingRevision == null
+                ? SUPPORTED_CHUNKING_REVISION
+                : requireNonBlank(chunkingRevision, "chunkingRevision");
+        if (maxWindowTokens == 0) maxWindowTokens = maxSequenceLength;
+        if (maxWindowTokens != maxSequenceLength) {
+            throw new IllegalArgumentException("maxWindowTokens must equal maxSequenceLength for FIRST_MAX_TOKENS");
+        }
+        if (windowOverlapTokens != 0) {
+            throw new IllegalArgumentException("windowOverlapTokens must be zero for FIRST_MAX_TOKENS");
+        }
+        multiWindowAggregation = multiWindowAggregation == null
+                ? SUPPORTED_MULTI_WINDOW_AGGREGATION
+                : requireNonBlank(multiWindowAggregation, "multiWindowAggregation");
+        if (!SUPPORTED_CHUNKING_STRATEGY.equals(chunkingStrategy)
+                || !SUPPORTED_CHUNKING_REVISION.equals(chunkingRevision)
+                || !SUPPORTED_MULTI_WINDOW_AGGREGATION.equals(multiWindowAggregation)) {
+            throw new IllegalArgumentException(
+                    "ONNX embeddings currently support only FIRST_MAX_TOKENS v1 with DIRECT aggregation");
+        }
         if (vectorDimension <= 0) throw new IllegalArgumentException("vectorDimension must be positive");
         Objects.requireNonNull(paddingTokenId, "paddingTokenId");
         if (paddingTokenId < 0) throw new IllegalArgumentException("paddingTokenId must not be negative");

@@ -7,6 +7,8 @@ import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 import jakarta.interceptor.Interceptor;
 
+import java.util.Map;
+
 import com.amsha.common.util.LogUtil;
 import com.amsha.persistence.api.EmbeddingIndexDescriptor;
 import com.amsha.persistence.api.EmbeddingIndexDescriptorSource;
@@ -24,6 +26,16 @@ import io.quarkus.runtime.StartupEvent;
 @ApplicationScoped
 @IfBuildProperty(name = "amsha.persistence.backend", stringValue = "sqlite", enableIfMissing = true)
 public class SqliteVectorIndexCompatibilityInitializer {
+
+    /**
+     * Explicit whitelist of allowed table names per namespace.
+     *
+     * <p>Using a whitelist instead of passing a raw table-name string prevents accidental
+     * SQL injection if call sites are ever refactored to derive names from external input.
+     */
+    private static final Map<VectorIndexNamespace, String> NAMESPACE_TABLES = Map.of(
+            VectorIndexNamespace.RAG_GLOBAL, "fts.vec_global",
+            VectorIndexNamespace.ARCHIVAL, "vec_archival");
 
     private static final Logger log = Logger.getLogger(SqliteVectorIndexCompatibilityInitializer.class);
 
@@ -62,11 +74,15 @@ public class SqliteVectorIndexCompatibilityInitializer {
             metadata.markUnavailable(VectorIndexNamespace.ARCHIVAL, descriptor);
             return;
         }
-        verify(VectorIndexNamespace.RAG_GLOBAL, "fts.vec_global", descriptor);
-        verify(VectorIndexNamespace.ARCHIVAL, "vec_archival", descriptor);
+        verify(VectorIndexNamespace.RAG_GLOBAL, descriptor);
+        verify(VectorIndexNamespace.ARCHIVAL, descriptor);
     }
 
-    private void verify(VectorIndexNamespace namespace, String tableName, EmbeddingIndexDescriptor descriptor) {
+    private void verify(VectorIndexNamespace namespace, EmbeddingIndexDescriptor descriptor) {
+        String tableName = NAMESPACE_TABLES.get(namespace);
+        if (tableName == null) {
+            throw new IllegalArgumentException("No whitelisted table name for namespace: " + namespace);
+        }
         try {
             long count = jdbi.withHandle(handle -> handle.createQuery("SELECT count(*) FROM " + tableName)
                     .mapTo(Long.class)

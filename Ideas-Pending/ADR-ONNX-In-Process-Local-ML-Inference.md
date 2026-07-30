@@ -374,7 +374,7 @@ Component layout:
   a new additive post-policy tool-risk SPI;
 - an ordered answer-quality interceptor SPI added to `core` before enabling that use
   case; adding a second `AnswerGuardStrategy` CDI bean directly would be ambiguous;
-- One central module reflection configuration (`AmshaLocalMlReflectionConfig`).
+- One central module reflection configuration (`OnnxReflectionConfig`).
 
 The existing `ToolGuardInterceptor` chain currently executes inside
 `ToolInvocationGuard` before its built-in validation and authorization checks, so it

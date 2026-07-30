@@ -84,6 +84,8 @@ class OnnxModelBundleVerifierTest {
         OnnxEmbeddingBundleSpec embedding = manifest.embeddingSpec().orElseThrow();
         assertEquals("last_hidden_state", embedding.outputName());
         assertEquals(OnnxEmbeddingBundleSpec.PoolingStrategy.MASKED_MEAN, embedding.poolingStrategy());
+        assertEquals(OnnxEmbeddingBundleSpec.SUPPORTED_CHUNKING_STRATEGY, embedding.chunkingStrategy());
+        assertEquals(512, embedding.maxWindowTokens());
     }
 
     @Test
@@ -114,6 +116,11 @@ class OnnxModelBundleVerifierTest {
                 null,
                 "embedding",
                 8,
+                OnnxEmbeddingBundleSpec.SUPPORTED_CHUNKING_STRATEGY,
+                OnnxEmbeddingBundleSpec.SUPPORTED_CHUNKING_REVISION,
+                8,
+                0,
+                OnnxEmbeddingBundleSpec.SUPPORTED_MULTI_WINDOW_AGGREGATION,
                 2,
                 0L,
                 OnnxEmbeddingBundleSpec.PoolingStrategy.DIRECT_VECTOR,
@@ -191,6 +198,36 @@ class OnnxModelBundleVerifierTest {
                         null,
                         "last_hidden_state",
                         512,
+                        OnnxEmbeddingBundleSpec.SUPPORTED_CHUNKING_STRATEGY,
+                        OnnxEmbeddingBundleSpec.SUPPORTED_CHUNKING_REVISION,
+                        512,
+                        0,
+                        OnnxEmbeddingBundleSpec.SUPPORTED_MULTI_WINDOW_AGGREGATION,
+                        768,
+                        0L,
+                        OnnxEmbeddingBundleSpec.PoolingStrategy.MASKED_MEAN,
+                        true,
+                        "sentence-transformer/example",
+                        "v1",
+                        List.of("warm-up")));
+    }
+
+    @Test
+    void rejectsUnsupportedEmbeddingChunkingContract() {
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new OnnxEmbeddingBundleSpec(
+                        "v1",
+                        "input_ids",
+                        "attention_mask",
+                        null,
+                        "last_hidden_state",
+                        512,
+                        "MEAN_OVERLAPPING_WINDOWS",
+                        "v1",
+                        512,
+                        32,
+                        "WEIGHTED_MEAN",
                         768,
                         0L,
                         OnnxEmbeddingBundleSpec.PoolingStrategy.MASKED_MEAN,

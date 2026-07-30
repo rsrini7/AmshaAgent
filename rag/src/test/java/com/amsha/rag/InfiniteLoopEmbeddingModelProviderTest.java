@@ -65,6 +65,38 @@ class InfiniteLoopEmbeddingModelProviderTest {
     }
 
     @Test
+    void propagatesProviderChunkingContractToIndexDescriptor() {
+        EmbeddingModel mockModel = mock(EmbeddingModel.class);
+        when(mockOllamaFactory.create(any(EmbeddingModelConfig.class))).thenReturn(mockModel);
+        when(mockOllamaFactory.embeddingSpace(any(EmbeddingModelConfig.class)))
+                .thenReturn(EmbeddingSpaceDescriptor.verified(
+                        "ollama",
+                        "verified-space",
+                        "model-v1",
+                        "tokenizer-v1",
+                        "preprocessing-v1",
+                        "MASKED_MEAN",
+                        true,
+                        768,
+                        "FLOAT32",
+                        512,
+                        "MEAN_OVERLAPPING_WINDOWS",
+                        "v2",
+                        384,
+                        32,
+                        "WEIGHTED_MEAN"));
+
+        provider.embeddingModel();
+
+        var descriptor = provider.activeDescriptor().orElseThrow();
+        assertEquals("MEAN_OVERLAPPING_WINDOWS", descriptor.chunkingStrategy());
+        assertEquals("v2", descriptor.chunkingRevision());
+        assertEquals(384, descriptor.maxWindowTokens());
+        assertEquals(32, descriptor.windowOverlapTokens());
+        assertEquals("WEIGHTED_MEAN", descriptor.multiWindowAggregation());
+    }
+
+    @Test
     void testThrowsWhenNoValidSlots() {
         provider.loopProviders = "unsupported";
         System.setProperty("amsha.test.force-error", "true");

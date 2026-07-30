@@ -19,3 +19,5 @@
 - When a script needs a data directory path, ask the user to provide it rather than auto-detecting from the running process. Confidence: 0.75
 - Maintain minimum test coverage of 70%, keeping a buffer above the threshold so small changes do not trigger coverage-reduction reports. When adding new files, write test coverage for them as part of the implementation — don't let new files reduce the overall coverage percentage. Confidence: 0.92
 - Proactively fix deprecation warnings as they appear across the codebase. Confidence: 0.85
+- When reviewing code changes across branches, use structured parallel file analysis — run git diff alongside read tools to examine architecture, security, tests, persistence parity, and documentation in parallel rather than sequentially. Confidence: 0.80
+- After providing code review findings, when the user says fixes are done, verify by examining staged changes (git diff --cached) and confirm each issue was addressed, flagging any remaining concerns. Confidence: 0.85

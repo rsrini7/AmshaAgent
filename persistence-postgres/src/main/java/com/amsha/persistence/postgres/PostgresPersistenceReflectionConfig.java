@@ -9,6 +9,7 @@ import com.amsha.persistence.api.CheckpointDto;
 import com.amsha.persistence.api.CompactionSummaryDto;
 import com.amsha.persistence.api.CoreMemoryBlockDto;
 import com.amsha.persistence.api.CronRunDto;
+import com.amsha.persistence.api.EmbeddingIndexDescriptor;
 import com.amsha.persistence.api.ExternalIdentityDto;
 import com.amsha.persistence.api.IdentityInvitationDto;
 import com.amsha.persistence.api.IdentityUserDto;
@@ -57,6 +58,7 @@ import com.amsha.persistence.postgres.jdbi.RagChunkJdbiDao;
 import com.amsha.persistence.postgres.jdbi.RecallMemoryJdbiDao;
 import com.amsha.persistence.postgres.jdbi.SecretJdbiDao;
 import com.amsha.persistence.postgres.jdbi.SkillJdbiDao;
+import com.amsha.persistence.postgres.jdbi.VectorIndexMetadataJdbiDao;
 import com.amsha.persistence.postgres.jdbi.WebSessionJdbiDao;
 
 import io.quarkus.runtime.annotations.RegisterForReflection;
@@ -97,6 +99,7 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             ModelProfileDto.class,
             ModelRouteAssignmentDto.class,
             WorkspaceConnectionGrantDto.class,
+            EmbeddingIndexDescriptor.class,
             // JDBI DAOs (SQL Object proxies)
             CheckpointJdbiDao.class,
             CronJdbiDao.class,
@@ -123,6 +126,7 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             OnboardingCommitReceiptPostgresDao.class,
             OnboardingExtensionStateJdbiDao.class,
             LlmProfilePostgresDao.class,
+            VectorIndexMetadataJdbiDao.class,
             // JDBI infrastructure
             JdbiProducer.class,
             // Store adapters (CDI beans)

@@ -169,11 +169,11 @@ public class InfiniteLoopEmbeddingModelProvider implements EmbeddingIndexDescrip
                 space.l2Normalize(),
                 dimension,
                 space.numericPrecision(),
-                "FIRST_MAX_TOKENS",
-                "v1",
-                space.maxSequenceLength(),
-                0,
-                "DIRECT");
+                space.chunkingStrategy(),
+                space.chunkingRevision(),
+                space.maxWindowTokens(),
+                space.windowOverlapTokens(),
+                space.multiWindowAggregation());
     }
 
     private ConfiguredEmbeddingModel createModelForProvider(
