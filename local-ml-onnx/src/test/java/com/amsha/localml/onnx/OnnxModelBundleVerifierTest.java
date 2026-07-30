@@ -27,6 +27,9 @@ class OnnxModelBundleVerifierTest {
         VerifiedOnnxModelBundle verified = new OnnxModelBundleVerifier(objectMapper, 1024).loadAndVerify(bundle);
         assertEquals("test-bundle", verified.manifest().bundleId());
         assertEquals(bundle.resolve("model.onnx").toRealPath(), verified.modelPath());
+        assertEquals(
+                2L * (Files.size(bundle.resolve("model.onnx")) + Files.size(bundle.resolve("tokenizer.json"))),
+                verified.manifest().estimatedResidentBytes());
     }
 
     @Test
@@ -52,6 +55,26 @@ class OnnxModelBundleVerifierTest {
                 IllegalArgumentException.class,
                 () -> new OnnxModelBundleManifest(
                         "test-bundle", "revision-1", "model.onnx", digest, 1, "model.onnx", digest, 1));
+    }
+
+    @Test
+    void rejectsResidentEstimateBelowVerifiedBundleBytes() {
+        String digest = "0".repeat(64);
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new OnnxModelBundleManifest(
+                        "test-bundle",
+                        "revision-1",
+                        "model.onnx",
+                        digest,
+                        10,
+                        "tokenizer.json",
+                        digest,
+                        5,
+                        14,
+                        null,
+                        null,
+                        null));
     }
 
     @Test
@@ -153,6 +176,7 @@ class OnnxModelBundleVerifierTest {
                         "tokenizer.json",
                         digest,
                         1,
+                        0,
                         embedding,
                         classifier,
                         null));

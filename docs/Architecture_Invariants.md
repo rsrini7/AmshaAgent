@@ -1294,6 +1294,10 @@ The `embedding vector(768)` column and HNSW index MUST be similarly guarded with
      budget. A retry MUST NEVER be requested after a tool boundary, preventing re-entrant side
      effects or duplicate tool execution. Missing implementations and isolated failures MUST
      preserve the accepted answer without logging answer or goal payloads.
+     Tool-risk and answer-quality contexts, including shadow contexts, contain sensitive,
+     ephemeral payloads. Their diagnostic string representation MUST be payload-free, and
+     implementations MUST NOT perform network I/O or log, persist, export, metric-label, or
+     retain the payload beyond one synchronous in-process evaluation.
 
 7.13.4 INVARIANT: Phase 3 classifier runtime control MUST distinguish startup/requested
      state from effective enablement. Effective enablement additionally requires a ready,

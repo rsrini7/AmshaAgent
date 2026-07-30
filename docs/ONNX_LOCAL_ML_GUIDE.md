@@ -61,6 +61,7 @@ data/models/all-mpnet-base-v2-e8c3b32/
   "tokenizerFile": "tokenizer.json",
   "tokenizerSha256": "b8be2c30ba5dd723a6d5ee26d013da103d5408d92ddcb23747622f9e48f1d842",
   "tokenizerBytes": 466021,
+  "estimatedResidentBytes": 872585138,
   "embedding": {
     "tokenizerRevision": "e8c3b32edf5434bc2275fc9bab85f82640a19130",
     "inputIdsName": "input_ids",
@@ -89,6 +90,11 @@ aggregation. These values flow through `EmbeddingSpaceDescriptor` into the durab
 index fingerprint; unsupported strategies fail bundle validation instead of silently
 reusing a compatible index.
 
+`estimatedResidentBytes` is a conservative per-bundle admission estimate, not a
+measurement of process RSS. Legacy manifests that omit it default to twice the verified
+model-plus-tokenizer bytes. The session manager reserves the estimate before loading and
+evicts only idle sessions when either configured admission budget is full.
+
 The optional `source` object written by the development installer is an unsigned,
 descriptive declaration. Its URL, relative paths, and SPDX license are validated, but
 it is not a trust root, signature, SBOM, or SLSA provenance statement. Release evidence
@@ -103,6 +109,8 @@ To activate local ONNX embedding inference in `dist/.env` or `.env`:
 ```env
 # 1. Enable local ONNX runtime
 AMSHA_ONNX_ENABLED=true
+AMSHA_ONNX_MAX_LOADED_MODELS=2
+AMSHA_ONNX_MAX_RESIDENT_MB=1024
 
 # 2. Select ONNX as active provider in RAG rotation loop
 AMSHA_INFINITE_LOOP_EMBEDDING_PROVIDERS=onnx
@@ -127,7 +135,10 @@ Install the pinned development bundle before enabling the slot:
 mise run models:install-mpnet
 ```
 
-`onnx` is never added to the default provider list. An ONNX-only configuration has no remote embedding fallback; a configured fallback is eligible only when it advertises the same embedding-space descriptor.
+`onnx` is never added to the default provider list. An ONNX-only configuration has no
+remote embedding fallback; a configured fallback is eligible only when it advertises
+the same embedding-space descriptor. Existing incompatible vector namespaces still
+retain the non-vector BM25/FTS keyword-search fallback.
 
 ---
 
@@ -136,6 +147,8 @@ mise run models:install-mpnet
 1. **Session Lease Management (`OnnxSessionLeaseManager`)**:
    - Uses per-bundle monitor synchronization to serialize model loads while allowing multi-model parallel inference.
    - Reference counts active leases (`leaseCount`). Closing a session during active inference is physically impossible because `OrtSession.close()` executes only when `leaseCount == 0`.
+   - Reserves each manifest's conservative resident-memory estimate before loading, enforces loaded-model and memory budgets, and evicts only the least-recently-used idle session.
+   - Supports audited operator unload through `POST /api/v1/admin/local-ml/models/{bundleId}/unload`; active graph calls receive a cooperative `RunOptions.setTerminate(true)` signal, and `409` means accepted leases are still draining without the session being closed underneath them.
 2. **Bounded CPU Inference Scheduler (`OnnxInferenceScheduler`)**:
    - Executes CPU inference on a bounded worker pool (`AMSHA_ONNX_INFERENCE_THREADS=2`, capacity `64`).
    - Propagates `WorkspaceContext` via `WorkspaceExecutors.wrap()`.
@@ -179,7 +192,10 @@ bash rest-http/scripts/run_all_validations.sh --onnx
 
 This proves the native process starts, reports ONNX readiness, sees the verified bundle, and activates only descriptor-compatible vector indexes. `ONNX-2` calls the internal-only fixed-text probe, requires an ONNX success-counter increment, and therefore proves native `OrtSession.run()` when it passes. `ONNX-4` requires overall health `UP`, the `Vector Index Compatibility` check `UP`, and `vectorStatus=READY`; it intentionally fails for `DEGRADED` or `NOT_ACTIVE` rather than treating text fallback as proof of the Phase 1 happy path. `ONNX-5` through `ONNX-7` verify the non-activating classifier status, fail-closed enable, and internal-only mutation contracts. A native inference smoke test on every supported target remains mandatory before Phase 0 is closed. Do not rely on undocumented ORT extraction locations or system-property library overrides; they are not an approved deployment interface.
 
-The macOS arm64 build/start/readiness, numeric corpus, and lifecycle/RSS procedure passed on 2026-07-29. It is evidence for that target only; Linux x86-64, Linux arm64, and signed SBOM/provenance remain required gates.
+The macOS arm64 build/start/readiness, numeric corpus, and lifecycle/RSS procedure passed
+on 2026-07-29, but that record predates session-admission and per-run cooperative
+cancellation changes. Regenerate it for the final candidate. Linux x86-64, Linux arm64,
+and signed SBOM/provenance remain required gates.
 
 ### Reusable local runtime smoke runner
 

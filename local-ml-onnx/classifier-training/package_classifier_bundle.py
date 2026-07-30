@@ -130,6 +130,7 @@ def main() -> int:
         tokenizer_source = args.model_dir / "best-model" / "tokenizer.json"
         tokenizer_path = destination / "tokenizer.json"
         shutil.copyfile(tokenizer_source, tokenizer_path)
+        verified_bundle_bytes = model_path.stat().st_size + tokenizer_path.stat().st_size
 
         source_lock = json.loads((SCRIPT_DIR / "base-model-lock.json").read_text(encoding="utf-8"))
         manifest = {
@@ -141,6 +142,7 @@ def main() -> int:
             "tokenizerFile": tokenizer_path.name,
             "tokenizerSha256": sha256(tokenizer_path),
             "tokenizerBytes": tokenizer_path.stat().st_size,
+            "estimatedResidentBytes": verified_bundle_bytes * 2,
             "classifier": {
                 "tokenizerRevision": source_lock["revision"],
                 "inputIdsName": "input_ids",

@@ -18,6 +18,7 @@ public record OnnxModelBundleManifest(
         String tokenizerFile,
         String tokenizerSha256,
         long tokenizerBytes,
+        long estimatedResidentBytes,
         OnnxEmbeddingBundleSpec embedding,
         OnnxClassifierBundleSpec classifier,
         OnnxModelBundleSource source) {
@@ -37,6 +38,13 @@ public record OnnxModelBundleManifest(
         }
         tokenizerSha256 = requireSha256(tokenizerSha256, "tokenizerSha256");
         if (tokenizerBytes <= 0) throw new IllegalArgumentException("tokenizerBytes must be positive");
+        long verifiedBundleBytes = addExact(modelBytes, tokenizerBytes, "verified bundle bytes overflow");
+        if (estimatedResidentBytes == 0) {
+            estimatedResidentBytes = multiplyExact(verifiedBundleBytes, 2, "default resident estimate overflow");
+        }
+        if (estimatedResidentBytes < verifiedBundleBytes) {
+            throw new IllegalArgumentException("estimatedResidentBytes must cover all verified bundle files");
+        }
         if (embedding != null && classifier != null) {
             throw new IllegalArgumentException("A model bundle cannot declare both embedding and classifier contracts");
         }
@@ -84,6 +92,7 @@ public record OnnxModelBundleManifest(
                 tokenizerFile,
                 tokenizerSha256,
                 tokenizerBytes,
+                0,
                 null,
                 null,
                 null);
@@ -110,6 +119,7 @@ public record OnnxModelBundleManifest(
                 tokenizerFile,
                 tokenizerSha256,
                 tokenizerBytes,
+                0,
                 embedding,
                 null,
                 source);
@@ -145,6 +155,22 @@ public record OnnxModelBundleManifest(
         String result = requireNonBlank(value, name).toLowerCase(Locale.ROOT);
         if (!result.matches("[0-9a-f]{64}")) throw new IllegalArgumentException(name + " must be a SHA-256 hex digest");
         return result;
+    }
+
+    private static long addExact(long left, long right, String message) {
+        try {
+            return Math.addExact(left, right);
+        } catch (ArithmeticException e) {
+            throw new IllegalArgumentException(message, e);
+        }
+    }
+
+    private static long multiplyExact(long value, long multiplier, String message) {
+        try {
+            return Math.multiplyExact(value, multiplier);
+        } catch (ArithmeticException e) {
+            throw new IllegalArgumentException(message, e);
+        }
     }
 
     private static String requireHttpsRepository(String value) {

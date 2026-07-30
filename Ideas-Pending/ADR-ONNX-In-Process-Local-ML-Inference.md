@@ -15,9 +15,10 @@
 Phase 1 implementation is complete, while the remaining Phase 0 release-evidence
 gates stay open. ONNX is available only as an explicit provider slot with an installed
 verified bundle; it does not change the configured default provider list. The independent
-Python-reference corpus, macOS arm64 native target, and macOS lifecycle/RSS gate now pass.
-Linux x86-64, Linux arm64, and signed trust-root/SBOM/provenance evidence remain required
-before general availability.
+Python-reference corpus passes. The previously retained macOS arm64 native and
+lifecycle/RSS records predate the admission and cooperative-cancellation lifecycle changes
+and must be regenerated for the final candidate. Linux x86-64, Linux arm64, and signed
+trust-root/SBOM/provenance evidence also remain required before general availability.
 
 - Completed: provider-neutral `EmbeddingSpaceDescriptor` support and compatible-slot
   enforcement in the existing embedding failover loop; incompatible slots are skipped
@@ -44,7 +45,10 @@ before general availability.
   only through idempotent `AutoCloseable` leases. Per-bundle locking rejects new leases
   once unload begins and never closes a session while an active lease remains; bounded
   unload/shutdown reports draining leases for process teardown rather than racing
-  `OrtSession.run()`.
+  `OrtSession.run()`. Loaded-model and manifest-estimated resident-memory budgets evict
+  only the least-recently-used idle sessions. The internal model-unload endpoint uses
+  mandatory audit-before-mutation, signals active per-run cancellation options, and
+  returns a conflict while accepted leases drain.
 - Completed Phase 1 scheduling foundation: CPU inference work uses a fixed, bounded,
   workspace-context-aware executor. Full queues fail explicitly, and work that reaches
   the executor after its request deadline completes as a timeout.
@@ -120,9 +124,9 @@ before general availability.
   rankings. The native record passed three fresh application lifecycles with 100 inference
   probes each, graceful shutdown, and maximum within-cycle RSS growth of `22,816 KiB`
   against the `64 MiB` limit.
-- Still required for Phase 0: equivalent native records from Linux x86-64 and Linux
-  arm64, followed by matrix aggregation; signed trust-root and release SBOM/provenance
-  evidence.
+- Still required for Phase 0: refreshed macOS arm64 native numeric/lifecycle evidence,
+  equivalent native records from Linux x86-64 and Linux arm64, followed by matrix
+  aggregation; signed trust-root and release SBOM/provenance evidence.
 - No Phase 1 implementation item remains open. Phase 1 general availability is still
   conditional on the outstanding Phase 0 Linux platform/lifecycle, signature, SBOM,
   and provenance evidence in Section 15.
@@ -793,7 +797,7 @@ If those gates fail, JVM distributions may offer the feature while native builds
 
 ## 11. Configuration contract
 
-Configuration properties are explicitly reconciled:
+Implemented configuration properties are explicitly reconciled:
 
 ```properties
 # Global ONNX Feature Toggle & Limits
@@ -807,20 +811,15 @@ amsha.onnx.max-loaded-models=2
 amsha.onnx.max-resident-mb=1024
 amsha.onnx.inference-threads=2
 amsha.onnx.queue-capacity=64
-amsha.onnx.timeout=PT5S
 amsha.onnx.shutdown-grace=PT10S
 amsha.onnx.max-input-bytes=262144
 amsha.onnx.max-batch-input-bytes=1048576
 amsha.onnx.max-batch-size=32
-amsha.onnx.max-internal-windows-per-segment=64
 amsha.onnx.warmup.enabled=true
 amsha.onnx.warmup.max-probes=5
 amsha.onnx.warmup.timeout=PT3S
 amsha.onnx.classifier.circuit.failure-threshold=3
 amsha.onnx.classifier.circuit.cooldown-seconds=30
-
-# Provider-neutral embedding-index safety
-amsha.rag.embedding-index.max-child-windows-per-segment=64
 
 # RAG embedding integration; additional vector-failover slots must advertise the same space
 amsha.embedding.onnx.model=sentence-transformers-all-mpnet-base-v2-fp32
@@ -837,6 +836,19 @@ amsha.onnx.classifier.answer-quality.model=
 amsha.onnx.classifier.answer-quality.timeout-seconds=2
 ```
 
+The following names are reserved design placeholders, not active configuration properties:
+
+- `amsha.onnx.timeout`: request deadlines currently come from the embedding-provider or
+  per-classifier timeout. A global property requires an explicit precedence rule first.
+- `amsha.onnx.max-internal-windows-per-segment`: becomes applicable only after a
+  provider-internal multi-window strategy is implemented; Phase 1 accepts only
+  `FIRST_MAX_TOKENS`.
+- `amsha.rag.embedding-index.max-child-windows-per-segment`: becomes applicable only
+  when one-to-many ingestion windowing is implemented.
+
+They must not be added to runtime configuration until their corresponding behavior and
+tests exist.
+
 `max-input-bytes` and `max-batch-input-bytes` count UTF-8 encoded bytes, not Java
 characters or tokens. The manifest token limit remains independently authoritative.
 
@@ -848,8 +860,8 @@ Every `@ConfigProperty` MUST appear in `application.yaml`, `.env.example`, and t
 
 Neither the standard/extended operating-system MXBeans nor ONNX Runtime Java expose
 portable, authoritative per-session resident memory accounting. Do not depend on a
-non-existent `OrtEnvironment.getNativeMemoryAllocated()` API. Enforce admission using
-verified bundle sizes, configured per-bundle working-memory estimates, loaded-model
+non-existent `OrtEnvironment.getNativeMemoryAllocated()` API. Admission uses verified
+bundle sizes, a manifest-declared per-bundle `estimatedResidentBytes`, loaded-model
 count, tensor/queue budgets, and a process-wide safety margin. Export process RSS from
 the platform telemetry available in each distribution as a best-effort diagnostic;
 validate leak behavior with OS tooling, Native Memory Tracking where applicable, and
@@ -963,9 +975,10 @@ Phase 1 may become generally available only when:
 
 Current Phase 0 release-evidence status (2026-07-29):
 
-- [x] Independent Python-reference corpus and macOS arm64 numeric equivalence, including
-  per-partition pass rates, canonical fixtures, and nearest-neighbour stability.
-- [x] macOS arm64 native load/infer/shutdown and repeated lifecycle/RSS evidence.
+- [x] Independent Python-reference corpus, including per-partition pass rates, canonical
+  fixtures, and nearest-neighbour stability.
+- [ ] Refreshed macOS arm64 native numeric equivalence, load/infer/shutdown, and repeated
+  lifecycle/RSS evidence for the final admission/cancellation implementation.
 - [ ] Linux x86-64 native load/infer/shutdown, numeric, and lifecycle/RSS evidence.
 - [ ] Linux arm64 native load/infer/shutdown, numeric, and lifecycle/RSS evidence.
 - [ ] Signed trust root, SBOM, and SLSA provenance retained with the release.

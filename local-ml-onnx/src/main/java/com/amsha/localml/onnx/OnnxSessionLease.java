@@ -1,8 +1,11 @@
 package com.amsha.localml.onnx;
 
 import ai.djl.huggingface.tokenizers.HuggingFaceTokenizer;
+import ai.onnxruntime.OnnxTensorLike;
+import ai.onnxruntime.OrtException;
 import ai.onnxruntime.OrtSession;
 
+import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -30,6 +33,17 @@ public final class OnnxSessionLease implements AutoCloseable {
 
     HuggingFaceTokenizer tokenizer() {
         return handle.tokenizer();
+    }
+
+    /** Runs one cancellable graph invocation while this lease owns the session. */
+    public OrtSession.Result run(Map<String, ? extends OnnxTensorLike> inputs) throws OrtException {
+        if (closed.get()) throw new IllegalStateException("ONNX session lease is closed");
+        OrtSession.RunOptions runOptions = owner.beginRun(bundleSession);
+        try {
+            return handle.session().run(inputs, runOptions);
+        } finally {
+            owner.endRun(bundleSession, runOptions);
+        }
     }
 
     @Override

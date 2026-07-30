@@ -9,6 +9,9 @@
 - Use `%n` instead of `\n` for platform-specific line separators when constructing format strings. Confidence: 0.65
 - Remove unused imports instead of leaving them in the codebase. Confidence: 0.80
 
+# review
+- Code review findings should be actionable and specific — include file paths, property names, and concrete gaps, organized by concern category (hard blockers, architecture quality, config completeness), not just a list of changes. Confidence: 0.80
+
 # documentation
 - Maintain architecture invariants and cross-referencing docs (agents.md, invariants) to capture all backend implementations when adding new store ports, preventing single-backend gaps. Confidence: 0.72
 - Reference scripts and documentation paths in Claude/LLM agent instruction files (e.g., claude.md, gemini.md) so LLMs can discover and invoke project scripts autonomously. Confidence: 0.80

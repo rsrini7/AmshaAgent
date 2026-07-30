@@ -7,7 +7,13 @@ import java.util.Objects;
 
 import com.amsha.core.security.AutonomyLevel;
 
-/** Minimum immutable context exposed only after deterministic policy provisionally allows a tool. */
+/**
+ * Minimum immutable context exposed only after deterministic policy provisionally allows a tool.
+ *
+ * <p>The goal and parameter values are sensitive, ephemeral classifier input. Implementations
+ * must not log, persist, export, metric-label, or retain them beyond one synchronous evaluation.
+ * Nested parameter values must be treated as read-only.
+ */
 public record PostPolicyToolContext(
         String agentRole,
         AutonomyLevel autonomyLevel,
@@ -22,6 +28,14 @@ public record PostPolicyToolContext(
         toolName = requireNonBlank(toolName, "toolName");
         parameters = Collections.unmodifiableMap(new LinkedHashMap<>(Objects.requireNonNull(parameters, "parameters")));
         goal = Objects.requireNonNullElse(goal, "");
+    }
+
+    /** Returns a payload-free diagnostic summary. */
+    @Override
+    public String toString() {
+        return "PostPolicyToolContext[agentRole=" + agentRole + ", autonomyLevel=" + autonomyLevel + ", toolName="
+                + toolName + ", parameterCount=" + parameters.size() + ", toolInvokedInTurn=" + toolInvokedInTurn
+                + "]";
     }
 
     private static String requireNonBlank(String value, String name) {

@@ -113,7 +113,11 @@ final class OnnxShadowClassifierEngine<T> {
             return noOpinion(NoOpinionReason.INFERENCE_ERROR);
         } catch (ExecutionException e) {
             NoOpinionReason reason = failureReason(e.getCause());
-            circuitBreaker.recordFailure(granted);
+            if (reason == NoOpinionReason.OVERLOAD_REJECTED) {
+                circuitBreaker.recordNeutral(granted);
+            } else {
+                circuitBreaker.recordFailure(granted);
+            }
             return noOpinion(reason);
         }
     }
@@ -126,7 +130,7 @@ final class OnnxShadowClassifierEngine<T> {
                 .orElseThrow(() -> new OnnxClassifierInferenceException("ONNX Runtime is unavailable"));
         try (OnnxSessionLease lease = sessionLeaseManager.acquire(bundle, deadline)) {
             warmUp(environment, lease, spec);
-            return mapResult(runner.classify(environment, lease.session(), lease.tokenizer(), spec, input));
+            return mapResult(runner.classify(environment, lease, lease.tokenizer(), spec, input));
         }
     }
 
@@ -137,7 +141,7 @@ final class OnnxShadowClassifierEngine<T> {
             if (warmedUp) return;
             for (String probe :
                     spec.warmupProbes().stream().limit(warmupMaxProbes).toList()) {
-                runner.classify(environment, lease.session(), lease.tokenizer(), spec, probe);
+                runner.classify(environment, lease, lease.tokenizer(), spec, probe);
             }
             warmedUp = true;
         }
@@ -188,6 +192,10 @@ final class OnnxShadowClassifierEngine<T> {
         if (failure instanceof OnnxSessionAcquireException acquire
                 && acquire.reason() == OnnxSessionAcquireException.Reason.DEADLINE_EXCEEDED) {
             return NoOpinionReason.TIMEOUT;
+        }
+        if (failure instanceof OnnxSessionAcquireException acquire
+                && acquire.reason() == OnnxSessionAcquireException.Reason.ADMISSION_REJECTED) {
+            return NoOpinionReason.OVERLOAD_REJECTED;
         }
         if (failure instanceof OnnxInferenceSchedulingException scheduling
                 && scheduling.reason() == OnnxInferenceSchedulingException.Reason.TIMEOUT) {

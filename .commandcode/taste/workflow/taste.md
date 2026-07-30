@@ -21,3 +21,4 @@
 - Proactively fix deprecation warnings as they appear across the codebase. Confidence: 0.85
 - When reviewing code changes across branches, use structured parallel file analysis — run git diff alongside read tools to examine architecture, security, tests, persistence parity, and documentation in parallel rather than sequentially. Confidence: 0.80
 - After providing code review findings, when the user says fixes are done, verify by examining staged changes (git diff --cached) and confirm each issue was addressed, flagging any remaining concerns. Confidence: 0.85
+- For branch-level deep reviews, verify ADR completeness — explicitly track which ADR phases/checklists are done vs pending, and call out discrepancies between ADR declarations and actual code. Confidence: 0.80

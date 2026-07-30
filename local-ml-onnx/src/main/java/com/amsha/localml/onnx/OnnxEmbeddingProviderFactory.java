@@ -222,7 +222,7 @@ public class OnnxEmbeddingProviderFactory implements EmbeddingProviderFactory {
         metrics.recordExecutionStage("lease_acquire_started");
         try (OnnxSessionLease lease = sessionLeaseManager.acquire(bundle, deadline)) {
             metrics.recordExecutionStage("lease_acquired");
-            return runner.embedAll(environment, lease.session(), lease.tokenizer(), spec, probes);
+            return runner.embedAll(environment, lease, lease.tokenizer(), spec, probes);
         }
     }
 
@@ -279,6 +279,10 @@ public class OnnxEmbeddingProviderFactory implements EmbeddingProviderFactory {
                 metrics.recordEmbedding("failed", System.nanoTime() - started);
                 throw new IllegalStateException("Local ONNX embedding request was interrupted", e);
             } catch (ExecutionException e) {
+                if (isAdmissionRejected(e.getCause())) {
+                    metrics.recordEmbedding("overload_rejected", System.nanoTime() - started);
+                    throw new IllegalStateException("Local ONNX embedding request was not admitted", e.getCause());
+                }
                 metrics.recordEmbedding("failed", System.nanoTime() - started);
                 throw new IllegalStateException("Local ONNX embedding request failed", e.getCause());
             }
@@ -291,7 +295,7 @@ public class OnnxEmbeddingProviderFactory implements EmbeddingProviderFactory {
             metrics.recordExecutionStage("lease_acquire_started");
             try (OnnxSessionLease lease = sessionLeaseManager.acquire(bundle, deadline)) {
                 metrics.recordExecutionStage("lease_acquired");
-                return runner.embedAll(environment, lease.session(), lease.tokenizer(), spec, texts);
+                return runner.embedAll(environment, lease, lease.tokenizer(), spec, texts);
             }
         }
 
@@ -338,5 +342,10 @@ public class OnnxEmbeddingProviderFactory implements EmbeddingProviderFactory {
         if (Context.isOnEventLoopThread()) {
             throw new IllegalStateException("ONNX embedding must not block a Quarkus event-loop thread");
         }
+    }
+
+    private static boolean isAdmissionRejected(Throwable failure) {
+        return failure instanceof OnnxSessionAcquireException acquire
+                && acquire.reason() == OnnxSessionAcquireException.Reason.ADMISSION_REJECTED;
     }
 }

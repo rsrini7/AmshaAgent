@@ -71,6 +71,7 @@ public enum SecurityEventType {
     SETTINGS_CHANGED, // LLM provider/model/prompt updated
     SETTINGS_RESET, // all settings nuked via /settings/reset
     CLASSIFIER_RUNTIME_CHANGE_REQUESTED, // internal Phase 3 classifier kill-switch mutation
+    ONNX_MODEL_UNLOAD_REQUESTED, // internal ONNX model lifecycle mutation
     ONBOARDING_COMPLETED, // onboarding wizard finished
 
     // Cron admin operations (REST)
@@ -136,6 +137,7 @@ public enum SecurityEventType {
                     SETTINGS_CHANGED,
                     SETTINGS_RESET,
                     CLASSIFIER_RUNTIME_CHANGE_REQUESTED,
+                    ONNX_MODEL_UNLOAD_REQUESTED,
                     CRON_PAUSED,
                     CRON_RESUMED,
                     CRON_FORCE_TRIGGERED,

@@ -117,13 +117,18 @@ import sys
 
 bundle = pathlib.Path(sys.argv[1])
 manifest = json.loads((bundle / "manifest.json").read_text())
+verified_bytes = 0
 for file_key, digest_key, bytes_key in (("modelFile", "modelSha256", "modelBytes"), ("tokenizerFile", "tokenizerSha256", "tokenizerBytes")):
     path = bundle / manifest[file_key]
     if not path.is_file() or path.stat().st_size != manifest[bytes_key]:
         raise SystemExit(1)
+    verified_bytes += manifest[bytes_key]
     digest = hashlib.file_digest(path.open("rb"), "sha256").hexdigest()
     if digest != manifest[digest_key]:
         raise SystemExit(1)
+resident_estimate = manifest.get("estimatedResidentBytes", verified_bytes * 2)
+if not isinstance(resident_estimate, int) or resident_estimate < verified_bytes:
+    raise SystemExit(1)
 PY
 then
   printf "✅ VERIFIED %s\n" "$BUNDLE_PATH/manifest.json"

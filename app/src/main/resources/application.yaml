@@ -329,6 +329,8 @@ amsha:
     enabled: ${AMSHA_ONNX_ENABLED:false}
     model-root: "${AMSHA_ONNX_MODEL_ROOT:data/models}"
     max-model-file-bytes: ${AMSHA_ONNX_MAX_MODEL_FILE_BYTES:1073741824}
+    max-loaded-models: ${AMSHA_ONNX_MAX_LOADED_MODELS:2}
+    max-resident-mb: ${AMSHA_ONNX_MAX_RESIDENT_MB:1024}
     inference-threads: ${AMSHA_ONNX_INFERENCE_THREADS:2}
     queue-capacity: ${AMSHA_ONNX_QUEUE_CAPACITY:64}
     shutdown-grace: ${AMSHA_ONNX_SHUTDOWN_GRACE:PT10S}

@@ -7,7 +7,13 @@ import java.util.Objects;
 
 import com.amsha.core.security.AutonomyLevel;
 
-/** Minimum in-process context observed after deterministic policy provisionally allows a tool. */
+/**
+ * Minimum in-process context observed after deterministic policy provisionally allows a tool.
+ *
+ * <p>The goal and parameter values are sensitive, ephemeral classifier input. Implementations
+ * must not log, persist, export, metric-label, or retain them beyond one synchronous evaluation.
+ * Nested parameter values must be treated as read-only.
+ */
 public record ToolRiskShadowContext(
         String agentRole, AutonomyLevel autonomyLevel, String toolName, Map<String, Object> parameters, String goal) {
 
@@ -17,6 +23,13 @@ public record ToolRiskShadowContext(
         toolName = requireNonBlank(toolName, "toolName");
         parameters = Collections.unmodifiableMap(new LinkedHashMap<>(Objects.requireNonNull(parameters, "parameters")));
         goal = Objects.requireNonNullElse(goal, "");
+    }
+
+    /** Returns a payload-free diagnostic summary. */
+    @Override
+    public String toString() {
+        return "ToolRiskShadowContext[agentRole=" + agentRole + ", autonomyLevel=" + autonomyLevel + ", toolName="
+                + toolName + ", parameterCount=" + parameters.size() + "]";
     }
 
     private static String requireNonBlank(String value, String name) {

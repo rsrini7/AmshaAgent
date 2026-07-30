@@ -9,6 +9,8 @@ Optional in-process ONNX Runtime integration for Amsha Agent.
 | amsha.onnx.enabled | AMSHA_ONNX_ENABLED | false | Enables the ONNX Runtime JVM compatibility probe. |
 | amsha.onnx.model-root | AMSHA_ONNX_MODEL_ROOT | data/models | Root for verified local model bundles. |
 | amsha.onnx.max-model-file-bytes | AMSHA_ONNX_MAX_MODEL_FILE_BYTES | 1073741824 | Maximum size of each verified bundle file, in bytes. |
+| amsha.onnx.max-loaded-models | AMSHA_ONNX_MAX_LOADED_MODELS | 2 | Maximum admitted bundle sessions; an idle least-recently-used session is evicted before rejecting a new bundle. |
+| amsha.onnx.max-resident-mb | AMSHA_ONNX_MAX_RESIDENT_MB | 1024 | Admission budget for manifest-declared conservative resident-memory estimates; this is not a precise process RSS limit. |
 | amsha.onnx.inference-threads | AMSHA_ONNX_INFERENCE_THREADS | 2 | Fixed number of CPU ONNX inference workers. |
 | amsha.onnx.queue-capacity | AMSHA_ONNX_QUEUE_CAPACITY | 64 | Maximum queued ONNX inference requests before rejection. |
 | amsha.onnx.shutdown-grace | AMSHA_ONNX_SHUTDOWN_GRACE | PT10S | Maximum time to drain in-flight ONNX session leases during unload or shutdown. |
@@ -40,7 +42,10 @@ Optional in-process ONNX Runtime integration for Amsha Agent.
 `OnnxModelBundleRegistry` loads only an explicitly selected bundle ID below the
 configured root. It never downloads assets; each bundle must contain a regular
 `manifest.json`, `model.onnx`, and tokenizer file with matching size and SHA-256
-values. A tokenizer binding is still gated on Phase 0 validation.
+values. The manifest also declares `estimatedResidentBytes`; omitted legacy values
+default to twice the verified model-plus-tokenizer bytes. Admission reserves this
+estimate before opening a session and evicts only idle sessions. A tokenizer binding
+is still gated on Phase 0 validation.
 
 Classifier bundles use the same verified local-file and tokenizer controls but declare
 a mutually exclusive `classifier` contract instead of `embedding`. The contract pins
@@ -61,6 +66,14 @@ answer-quality path shares one retry budget and rejects retry after a tool bound
 This module intentionally provides no active `PostPolicyToolRiskInterceptor` or
 `AnswerQualityInterceptor`; its existing classifier adapters remain shadow-only until
 the corresponding Phase 2 evidence and Phase 3 activation gates are approved.
+
+## Model session controls
+
+`POST /api/v1/admin/local-ml/models/{bundleId}/unload` requires an internal API key and
+a successful mandatory audit record before it rejects new leases and signals active
+per-run ONNX cancellation options. It returns `200` when the session is unloaded, `404`
+when the bundle was not loaded, and `409` when accepted leases remain after
+`amsha.onnx.shutdown-grace`; those leases retain the session until they finish.
 
 ## Phase 3A runtime controls
 

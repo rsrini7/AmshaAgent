@@ -6,6 +6,7 @@ public class OnnxSessionAcquireException extends Exception {
     public enum Reason {
         RUNTIME_UNAVAILABLE,
         DEADLINE_EXCEEDED,
+        ADMISSION_REJECTED,
         BUNDLE_CLOSING,
         SESSION_LOAD_FAILED
     }

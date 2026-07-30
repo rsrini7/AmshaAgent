@@ -7,6 +7,7 @@ import com.amsha.app.api.AuthResource;
 import com.amsha.app.api.CoreMemoryAdminResource;
 import com.amsha.app.api.IdentityResource;
 import com.amsha.app.api.OnnxAdminResource;
+import com.amsha.app.api.OnnxModelAdminResource;
 import com.amsha.app.api.PromptAdminResource;
 import com.amsha.app.api.RecallMemoryAdminResource;
 import com.amsha.app.api.SessionResource;
@@ -54,6 +55,7 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             AdminDirectiveResource.ReconcileResponse.class,
             OnnxAdminResource.ClassifierRuntimeResponse.class,
             OnnxAdminResource.ClassifierToggleResponse.class,
+            OnnxModelAdminResource.ModelUnloadResponse.class,
             ArchivalMemoryAdminResource.EvictResponse.class,
             RecallMemoryAdminResource.PurgeResponse.class,
             CoreMemoryAdminResource.CoreMemoryUpdateRequest.class,
