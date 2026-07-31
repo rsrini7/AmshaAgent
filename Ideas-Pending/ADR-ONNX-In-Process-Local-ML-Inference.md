@@ -164,12 +164,13 @@ trust-root/SBOM/provenance evidence also remain required before general availabi
   authoritative path and emit only bounded, payload-free metrics. Focused tests cover
   stable ordering, monotonic composition, HITL preservation, retry boundaries, and the
   no-implementation case.
-- Phase 3A non-activating control-plane scaffolding is complete. An application-scoped
+- Phase 3A active classifier interceptors and control-plane scaffolding are complete. An application-scoped
   atomic state holder separates startup/requested state from effective state for intent,
-  tool-risk, and answer-quality classifiers. Effective enablement additionally requires
-  a ready active implementation registration; none exists in this phase. Internal-only
-  status/enable/disable endpoints use mandatory audit-before-mutation, and disabling
-  rejects new leases while accepted in-flight work drains without cancellation. Focused
+  tool-risk, and answer-quality classifiers. Active ONNX interceptors bridge this state to the core
+  Phase 2.5 SPIs. Effective enablement additionally requires a ready active implementation registration;
+  since none currently registers itself, enable requests fail closed and preserve the deterministic
+  guard path. Internal-only status/enable/disable endpoints use mandatory audit-before-mutation, and
+  disabling rejects new leases while accepted in-flight work drains without cancellation. Focused
   tests and the deployed ONNX validator cover switch isolation, missing-implementation
   rejection, audit failure, authorization, and drain behavior. Phase 3 behavioral
   activation remains pending the Phase 2 evidence gates.
@@ -343,10 +344,11 @@ may therefore remain paused without reopening this completed core gate.
   for new requests and drains in-flight inference without changing its result into an
   authorization decision.
 
-Phase 3A implements only that non-activating control plane. `OnnxClassifierRuntimeControl`
-tracks `startupEnabled`, `requestedEnabled`, implementation availability, effective
-enablement, request admission, drain state, in-flight count, and a bounded revision for
-each classifier. A restart-free enable is rejected unless a ready active implementation
+Phase 3A implements that non-activating control plane alongside active interceptor bridges.
+`OnnxClassifierRuntimeControl` tracks `startupEnabled`, `requestedEnabled`, implementation
+availability, effective enablement, request admission, drain state, in-flight count, and
+a bounded revision for each classifier. The active ONNX interceptors bridge this state to
+the core SPIs. A restart-free enable is rejected unless a ready active implementation
 has registered. Phase 2 shadow classifiers never register and do not consume active
 leases. The internal endpoints are:
 

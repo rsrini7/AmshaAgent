@@ -102,8 +102,14 @@ incidents live in [Architecture Invariants](docs/Architecture_Invariants.md).
 
 - Add every `@ConfigProperty` to `application.yaml`, `.env.example`, and the
   relevant module README; verify the property appears in both config files.
+- In Quarkus, `@ApplicationScoped` beans are lazily initialized. If a bean needs to eagerly
+  register itself with a registry or control plane on startup (e.g., using `@PostConstruct`),
+  it must also be annotated with `@io.quarkus.runtime.Startup`. Otherwise, its initialization
+  will be deferred until its first method invocation, resulting in missing-implementation bugs.
 - Optional-dependency beans are discovered through `BeanManager.getBeans(Object.class)`,
-  then class-name checked and resolved via `getReference()`.
+  then class-name checked and resolved via `getReference()`. These dynamically discovered beans
+  must be annotated with `@io.quarkus.arc.Unremovable` to prevent Quarkus from pruning them
+  during GraalVM native builds.
 - Keep duplicate behavior in one layer: do not repeat work already performed by a
   called method. Log exception messages safely with `LogUtil.rootMessage(e)`.
 - New CDI library modules require Jandex, `META-INF/beans.xml`, application indexing,

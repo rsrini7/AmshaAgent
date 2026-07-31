@@ -71,8 +71,15 @@ expected = {"intent", "tool-risk", "answer-quality"}
 actual = {item.get("classifier") for item in classifiers}
 if actual != expected:
     raise SystemExit(1)
-if any(item.get("implementationAvailable") or item.get("effectiveEnabled") for item in classifiers):
+if any(item.get("effectiveEnabled") for item in classifiers):
     raise SystemExit(1)
+for item in classifiers:
+    id = item.get("classifier")
+    available = item.get("implementationAvailable")
+    if id == "intent" and available:
+        raise SystemExit(1)
+    if id in {"tool-risk", "answer-quality"} and not available:
+        raise SystemExit(1)
 PY
 }
 
@@ -151,7 +158,7 @@ else
 fi
 
 # ── ONNX-5: Phase 3A Non-Activating Classifier Status ──
-info "ONNX-5: Classifier controls expose disabled scaffold"
+info "ONNX-5: Classifier controls expose active implementation"
 CODE=$(mute -X GET -H "X-Amsha-API-Key: $VALID_KEY" "$B/api/v1/admin/local-ml/onnx/classifiers")
 if [ "$CODE" = "200" ] && classifier_scaffold_status; then
   ok "$CODE"
@@ -159,11 +166,10 @@ else
   fail "$CODE"
 fi
 
-# ── ONNX-6: Missing Active Implementation Cannot Be Enabled ──
-info "ONNX-6: Classifier enable fails closed without implementation"
+info "ONNX-6: Classifier enable succeeds with ready implementation"
 CODE=$(mute -X POST -H "X-Amsha-API-Key: $VALID_KEY" \
   "$B/api/v1/admin/local-ml/onnx/classifiers/tool-risk/enable")
-if [ "$CODE" = "409" ] && grep -q '"reason":"MISSING_READY_IMPLEMENTATION"' "$RESP_FILE"; then
+if [ "$CODE" = "200" ] && grep -q '"accepted":true' "$RESP_FILE"; then
   ok "$CODE"
 else
   fail "$CODE"

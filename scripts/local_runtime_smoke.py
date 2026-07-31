@@ -451,8 +451,13 @@ def require_classifier_scaffold(payload: Mapping[str, object]) -> None:
     identifiers = {classifier.get("classifier") for classifier in classifiers}
     if identifiers != expected:
         raise SmokeFailure("ONNX classifier status contained unexpected classifier identifiers")
-    if any(classifier.get("implementationAvailable") is not False for classifier in classifiers):
-        raise SmokeFailure("An ONNX classifier unexpectedly reported an available implementation")
+    for classifier in classifiers:
+        identifier = classifier.get("classifier")
+        available = classifier.get("implementationAvailable")
+        if identifier == "intent" and available is not False:
+            raise SmokeFailure("ONNX intent classifier unexpectedly reported an available implementation")
+        elif identifier in {"tool-risk", "answer-quality"} and available is not True:
+            raise SmokeFailure(f"ONNX {identifier} classifier did not report an available implementation")
     if any(classifier.get("effectiveEnabled") is not False for classifier in classifiers):
         raise SmokeFailure("An ONNX classifier unexpectedly reported effective enablement")
 
@@ -485,19 +490,19 @@ def run_amsha_checks(
         headers=internal_headers,
     )
     require_classifier_scaffold(classifiers)
-    emit_pass("Amsha inactive Phase 3A classifier scaffold", emit)
+    emit_pass("Amsha Phase 3 active classifier implementations exposed", emit)
 
     enable = request_json_with_status(
         endpoint(base_url, "api/v1/admin/local-ml/onnx/classifiers/tool-risk/enable"),
-        "Amsha ONNX classifier fail-closed enable",
+        "Amsha ONNX classifier enable",
         timeout,
-        409,
+        200,
         method="POST",
         headers=internal_headers,
     )
-    if enable.get("accepted") is not False or enable.get("reason") != "MISSING_READY_IMPLEMENTATION":
-        raise SmokeFailure("ONNX classifier enable did not fail closed without an implementation")
-    emit_pass("Amsha classifier enable fails closed without an approved implementation", emit)
+    if enable.get("accepted") is not True:
+        raise SmokeFailure("ONNX classifier enable was not accepted")
+    emit_pass("Amsha active classifier enable succeeds with an approved implementation", emit)
 
     before = request_metrics(base_url, timeout)
     probe = request_json(

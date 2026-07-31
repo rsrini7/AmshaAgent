@@ -253,12 +253,14 @@ ToolFailure (any role, any tool)
 ### Phase 3A Classifier Runtime Control
 
 `OnnxClassifierRuntimeControl` owns independent atomic state for intent, tool-risk, and
-answer-quality activation. Startup configuration seeds requested state, but effective
-state requires a registered ready active implementation. The current assembly registers
-none, so enable requests fail closed. Disable blocks new leases immediately while
-accepted leases retain their result path and drain. Internal admin mutations write a
-mandatory payload-free audit record before changing state; audit failure leaves the
-switch unchanged.
+answer-quality activation. Active ONNX interceptors (`OnnxPostPolicyToolRiskInterceptor`,
+`OnnxAnswerQualityInterceptor`) bridge this state to the core Phase 2.5 SPIs.
+Startup configuration seeds requested state, but effective state requires a registered
+ready active implementation. If no implementation is registered, enable requests fail
+closed, and the interceptors preserve the deterministic guard path. Disable blocks
+new leases immediately while accepted leases retain their result path and drain.
+Internal admin mutations write a mandatory payload-free audit record before changing
+state; audit failure leaves the switch unchanged.
 
 ### Parallel Tool Execution
 

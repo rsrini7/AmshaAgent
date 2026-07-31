@@ -12,7 +12,9 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             OnnxClassifierBundleSpec.ScoreTransform.class,
             OnnxClassifierRuntimeControl.Classifier.class,
             OnnxClassifierRuntimeControl.Snapshot.class,
-            VerifiedOnnxModelBundle.class
+            VerifiedOnnxModelBundle.class,
+            OnnxPostPolicyToolRiskInterceptor.class,
+            OnnxAnswerQualityInterceptor.class
         },
         classNames = {
             "com.amsha.localml.onnx.OnnxTextInputSpec",
