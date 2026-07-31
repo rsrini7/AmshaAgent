@@ -981,7 +981,7 @@ Current Phase 0 release-evidence status (2026-07-29):
 - [ ] Refreshed macOS arm64 native numeric equivalence, load/infer/shutdown, and repeated
   lifecycle/RSS evidence for the final admission/cancellation implementation.
 - [ ] Linux x86-64 native load/infer/shutdown, numeric, and lifecycle/RSS evidence.
-- [ ] Linux arm64 native load/infer/shutdown, numeric, and lifecycle/RSS evidence.
+- [x] Linux arm64 native load/infer/shutdown, numeric, and lifecycle/RSS evidence.
 - [ ] Signed trust root, SBOM, and SLSA provenance retained with the release.
 
 Current Phase 2 classifier-shadow status (2026-07-29):
