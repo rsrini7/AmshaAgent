@@ -17,7 +17,7 @@ gates stay open. ONNX is available only as an explicit provider slot with an ins
 verified bundle; it does not change the configured default provider list. The independent
 Python-reference corpus passes. The previously retained macOS arm64 native and
 lifecycle/RSS records predate the admission and cooperative-cancellation lifecycle changes
-and must be regenerated for the final candidate. Linux arm64 (`aarch64`) has been successfully verified inside an isolated container, confirming graceful shutdown and bounded memory. Linux x86-64, refreshed macOS arm64, and signed
+and must be regenerated for the final candidate. Linux arm64 (`aarch64`) and macOS arm64 have been successfully verified, confirming graceful shutdown and bounded memory. Linux x86-64 and signed
 trust-root/SBOM/provenance evidence remain required before general availability.
 
 - Completed: provider-neutral `EmbeddingSpaceDescriptor` support and compatible-slot
@@ -123,8 +123,7 @@ trust-root/SBOM/provenance evidence remain required before general availability.
   corpus passed with minimum cosine `0.999999998` against the FP32 `0.9999` threshold,
   100% for every declared partition and canonical fixture, and stable nearest-neighbour
   rankings. 
-- Still required for Phase 0: refreshed macOS arm64 native numeric/lifecycle evidence,
-  equivalent native records from Linux x86-64, followed by matrix
+- Still required for Phase 0: equivalent native records from Linux x86-64, followed by matrix
   aggregation; signed trust-root and release SBOM/provenance evidence.
 - No Phase 1 implementation item remains open. Phase 1 general availability is still
   conditional on the outstanding Phase 0 platform/lifecycle, signature, SBOM,
@@ -978,7 +977,7 @@ Current Phase 0 release-evidence status (2026-07-29):
 
 - [x] Independent Python-reference corpus, including per-partition pass rates, canonical
   fixtures, and nearest-neighbour stability.
-- [ ] Refreshed macOS arm64 native numeric equivalence, load/infer/shutdown, and repeated
+- [x] Refreshed macOS arm64 native numeric equivalence, load/infer/shutdown, and repeated
   lifecycle/RSS evidence for the final admission/cancellation implementation.
 - [ ] Linux x86-64 native load/infer/shutdown, numeric, and lifecycle/RSS evidence.
 - [x] Linux arm64 native load/infer/shutdown, numeric, and lifecycle/RSS evidence.
