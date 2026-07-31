@@ -296,6 +296,12 @@
   <!-- Inherited test dependencies for all modules -->
   <dependencies>
     <dependency>
+      <groupId>net.bytebuddy</groupId>
+      <artifactId>byte-buddy-agent</artifactId>
+      <version>${bytebuddy.version}</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
       <groupId>org.jboss.logmanager</groupId>
       <artifactId>jboss-logmanager</artifactId>
       <scope>test</scope>

@@ -215,6 +215,7 @@ record_target() {
     -Damsha.onnx.model-root="$model_root" \
     -Damsha.onnx.golden-corpus="$corpus" \
     -Damsha.onnx.evidence-dir="$golden_report_directory" \
+    -Damsha.onnx.leak.max-rss-growth-mb="$max_growth_mb" \
     test
   if [ ! -f "$golden_report" ]; then
     echo "Strict golden-corpus test did not produce its numeric report: $golden_report" >&2
@@ -243,6 +244,7 @@ record_target() {
     AMSHA_API_RATE_LIMIT_REQUESTS_PER_MINUTE=1000 \
     AMSHA_API_RATE_LIMIT_MUTATION_PER_MINUTE=1000 \
     AMSHA_INFINITE_LOOP_EMBEDDING_PROVIDERS=onnx \
+    AMSHA_EMBEDDING_PROVIDER=onnx \
     AMSHA_EMBEDDING_ONNX_MODEL=all-mpnet-base-v2-e8c3b32 \
     AMSHA_EMBEDDING_ONNX_SPACE_ID=sentence-transformers/all-mpnet-base-v2 \
     AMSHA_EMBEDDING_ONNX_SPACE_REVISION=e8c3b32edf5434bc2275fc9bab85f82640a19130 \

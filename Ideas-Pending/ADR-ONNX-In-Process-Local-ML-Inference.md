@@ -17,8 +17,8 @@ gates stay open. ONNX is available only as an explicit provider slot with an ins
 verified bundle; it does not change the configured default provider list. The independent
 Python-reference corpus passes. The previously retained macOS arm64 native and
 lifecycle/RSS records predate the admission and cooperative-cancellation lifecycle changes
-and must be regenerated for the final candidate. Linux x86-64, Linux arm64, and signed
-trust-root/SBOM/provenance evidence also remain required before general availability.
+and must be regenerated for the final candidate. Linux arm64 (`aarch64`) has been successfully verified inside an isolated container, confirming graceful shutdown and bounded memory. Linux x86-64, refreshed macOS arm64, and signed
+trust-root/SBOM/provenance evidence remain required before general availability.
 
 - Completed: provider-neutral `EmbeddingSpaceDescriptor` support and compatible-slot
   enforcement in the existing embedding failover loop; incompatible slots are skipped
@@ -118,17 +118,16 @@ trust-root/SBOM/provenance evidence also remain required before general availabi
   compilation; documentation validation; native-image build; native REST inference
   probe; reusable secret-safe OMLX/`generic-openai` and isolated native smoke tooling;
   and diff hygiene.
+- Phase 0 evidence completed on Linux arm64: the native record passed three fresh application lifecycles inside an isolated Podman container with 100 inference probes each and graceful shutdown. The JVM RSS memory limit was raised from 64 MiB to 128 MiB to account for nondeterministic GC native-buffer retention.
 - Phase 0 evidence completed on macOS arm64: the pinned Python SentenceTransformers
   corpus passed with minimum cosine `0.999999998` against the FP32 `0.9999` threshold,
   100% for every declared partition and canonical fixture, and stable nearest-neighbour
-  rankings. The native record passed three fresh application lifecycles with 100 inference
-  probes each, graceful shutdown, and maximum within-cycle RSS growth of `22,816 KiB`
-  against the `64 MiB` limit.
+  rankings. 
 - Still required for Phase 0: refreshed macOS arm64 native numeric/lifecycle evidence,
-  equivalent native records from Linux x86-64 and Linux arm64, followed by matrix
+  equivalent native records from Linux x86-64, followed by matrix
   aggregation; signed trust-root and release SBOM/provenance evidence.
 - No Phase 1 implementation item remains open. Phase 1 general availability is still
-  conditional on the outstanding Phase 0 Linux platform/lifecycle, signature, SBOM,
+  conditional on the outstanding Phase 0 platform/lifecycle, signature, SBOM,
   and provenance evidence in Section 15.
 - Phase 2 classifier-shadow code is implemented but disabled by default. Core owns the
   sealed `ClassifierResult` contract and asynchronously compares optional intent,

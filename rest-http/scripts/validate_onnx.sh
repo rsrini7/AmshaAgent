@@ -147,13 +147,17 @@ fi
 
 # ── ONNX-4: Vector Index Compatibility Health Check ──
 info "ONNX-4: Vector Index Compatibility check (/q/health)"
-CODE=$(mute -X GET "$B/q/health")
-VECTOR_INDEX_SUMMARY=""
-if [ "$CODE" = "200" ] \
-  && VECTOR_INDEX_SUMMARY=$(vector_index_readiness); then
-  ok "$CODE"
-else
-  printf "❌ HTTP %s — %s\n" "$CODE" "${VECTOR_INDEX_SUMMARY:-invalid or unavailable health response}"
+for attempts in {1..15}; do
+  CODE=$(mute -X GET "$B/q/health")
+  VECTOR_INDEX_SUMMARY=""
+  if [ "$CODE" = "200" ] && VECTOR_INDEX_SUMMARY=$(vector_index_readiness); then
+    ok "$CODE"
+    break
+  fi
+  sleep 2
+done
+if [ "$CODE" != "200" ] || [ -z "$VECTOR_INDEX_SUMMARY" ]; then
+  printf "❌ HTTP %s — %s\n" "$CODE" "${VECTOR_INDEX_SUMMARY:-invalid or unavailable health response (vector index not ready)}"
   FAIL=$((FAIL+1))
 fi
 

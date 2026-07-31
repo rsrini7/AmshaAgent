@@ -67,8 +67,32 @@ public class AmshaCli implements Runnable, QuarkusApplication {
             return;
         }
 
+        System.err.println("[TRACE] AmshaCli: Calling ai.onnxruntime.OrtEnvironment.getEnvironment()...");
+        // 3.5. Preload ONNX Runtime JNI library to avoid class initialization deadlocks
+        // during Quarkus boot, especially when the JNI library invokes logging hooks
+        // inside the OrtEnvironment static initializer.
+        if (Boolean.parseBoolean(System.getProperty("AMSHA_ONNX_ENABLED", System.getenv("AMSHA_ONNX_ENABLED")))) {
+            try {
+                // Trigger ai.onnxruntime.OnnxRuntime.<clinit> which calls System.load()
+                ai.onnxruntime.OrtEnvironment.getEnvironment();
+                System.err.println("[TRACE] AmshaCli: ONNX Runtime preloaded successfully.");
+            } catch (Throwable t) {
+                System.err.println("[TRACE] Failed to preload ONNX Runtime: " + t.getMessage());
+            }
+
+            try {
+                System.err.println("[TRACE] AmshaCli: Calling ai.djl.huggingface.tokenizers.jni.LibUtils.checkStatus()...");
+                ai.djl.huggingface.tokenizers.jni.LibUtils.checkStatus();
+                System.err.println("[TRACE] AmshaCli: Tokenizers preloaded successfully.");
+            } catch (Throwable t) {
+                System.err.println("[TRACE] Failed to preload Tokenizers: " + t.getMessage());
+            }
+        }
+
+        System.err.println("[TRACE] AmshaCli: Calling Quarkus.run...");
         // 4. Boot Quarkus - config system, CDI, and all extensions start here.
         Quarkus.run(AmshaCli.class, args);
+        System.err.println("[TRACE] AmshaCli: Quarkus.run finished.");
         System.exit(exitStatus);
     }
 
