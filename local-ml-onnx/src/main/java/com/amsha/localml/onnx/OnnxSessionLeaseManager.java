@@ -1,5 +1,6 @@
 package com.amsha.localml.onnx;
 
+import ai.djl.huggingface.tokenizers.HuggingFaceTokenizer;
 import ai.onnxruntime.OrtEnvironment;
 import ai.onnxruntime.OrtException;
 import ai.onnxruntime.OrtSession;
@@ -466,8 +467,7 @@ public class OnnxSessionLeaseManager {
         }
     }
 
-    private record OrtSessionHandle(OrtSession session, ai.djl.huggingface.tokenizers.HuggingFaceTokenizer tokenizer)
-            implements OnnxSessionHandle {
+    private record OrtSessionHandle(OrtSession session, HuggingFaceTokenizer tokenizer) implements OnnxSessionHandle {
         @Override
         public void close() throws Exception {
             try {

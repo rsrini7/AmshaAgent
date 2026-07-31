@@ -1,5 +1,7 @@
 package com.amsha.app;
 
+import ai.djl.huggingface.tokenizers.jni.LibUtils;
+import ai.onnxruntime.OrtEnvironment;
 import picocli.CommandLine;
 import picocli.CommandLine.Command;
 
@@ -74,15 +76,16 @@ public class AmshaCli implements Runnable, QuarkusApplication {
         if (Boolean.parseBoolean(System.getProperty("AMSHA_ONNX_ENABLED", System.getenv("AMSHA_ONNX_ENABLED")))) {
             try {
                 // Trigger ai.onnxruntime.OnnxRuntime.<clinit> which calls System.load()
-                ai.onnxruntime.OrtEnvironment.getEnvironment();
+                OrtEnvironment.getEnvironment();
                 System.err.println("[TRACE] AmshaCli: ONNX Runtime preloaded successfully.");
             } catch (Throwable t) {
                 System.err.println("[TRACE] Failed to preload ONNX Runtime: " + t.getMessage());
             }
 
             try {
-                System.err.println("[TRACE] AmshaCli: Calling ai.djl.huggingface.tokenizers.jni.LibUtils.checkStatus()...");
-                ai.djl.huggingface.tokenizers.jni.LibUtils.checkStatus();
+                System.err.println(
+                        "[TRACE] AmshaCli: Calling ai.djl.huggingface.tokenizers.jni.LibUtils.checkStatus()...");
+                LibUtils.checkStatus();
                 System.err.println("[TRACE] AmshaCli: Tokenizers preloaded successfully.");
             } catch (Throwable t) {
                 System.err.println("[TRACE] Failed to preload Tokenizers: " + t.getMessage());
