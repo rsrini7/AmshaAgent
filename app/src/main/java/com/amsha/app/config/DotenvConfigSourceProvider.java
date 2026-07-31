@@ -4,10 +4,12 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.attribute.FileTime;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.eclipse.microprofile.config.spi.ConfigSource;
 import org.eclipse.microprofile.config.spi.ConfigSourceProvider;
@@ -27,21 +29,49 @@ public class DotenvConfigSourceProvider implements ConfigSourceProvider {
 
     private static final Logger log = LoggerFactory.getLogger(DotenvConfigSourceProvider.class);
 
+    private static final AtomicReference<CachedDotenv> CACHE = new AtomicReference<>();
+
+    private record CachedDotenv(Path path, FileTime lastModified, Map<String, String> properties) {}
+
     @Override
     public Iterable<ConfigSource> getConfigSources(ClassLoader forClassLoader) {
+        if (isDisabled()) {
+            log.debug("DotenvConfigSourceProvider is disabled via amsha.dotenv.enabled=false");
+            return Collections.singletonList(new DotenvConfigSource(Collections.emptyMap()));
+        }
         Map<String, String> dotenvProperties = loadDotenv();
         return Collections.singletonList(new DotenvConfigSource(dotenvProperties));
     }
 
+    private boolean isDisabled() {
+        String sysProp = System.getProperty("amsha.dotenv.enabled");
+        if (sysProp != null) {
+            return "false".equalsIgnoreCase(sysProp);
+        }
+        String envVar = System.getenv("AMSHA_DOTENV_ENABLED");
+        if (envVar != null) {
+            return "false".equalsIgnoreCase(envVar);
+        }
+        return false;
+    }
+
     private Map<String, String> loadDotenv() {
-        Map<String, String> properties = new HashMap<>();
         Path envPath = resolveEnvPath();
 
         if (!Files.exists(envPath)) {
-            return properties; // No .env file found, rely on system/environment variables
+            return Collections.emptyMap(); // No .env file found, rely on system/environment variables
         }
 
         try {
+            FileTime currentModified = Files.getLastModifiedTime(envPath);
+            CachedDotenv cached = CACHE.get();
+            if (cached != null
+                    && cached.path().equals(envPath)
+                    && cached.lastModified().equals(currentModified)) {
+                return cached.properties();
+            }
+
+            Map<String, String> properties = new HashMap<>();
             for (String line : Files.readAllLines(envPath)) {
                 line = line.trim();
 
@@ -70,12 +100,14 @@ public class DotenvConfigSourceProvider implements ConfigSourceProvider {
                     properties.put(key, value);
                 }
             }
-            log.info("Loaded {} properties from .env file.", properties.size());
+            Map<String, String> immutableProperties = Map.copyOf(properties);
+            CACHE.set(new CachedDotenv(envPath, currentModified, immutableProperties));
+            log.debug("Loaded {} properties from .env file.", immutableProperties.size());
+            return immutableProperties;
         } catch (IOException e) {
             log.warn("Failed to read .env file. Falling back to default environment variables.", e);
+            return Collections.emptyMap();
         }
-
-        return properties;
     }
 
     private Path resolveEnvPath() {

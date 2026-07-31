@@ -378,6 +378,7 @@
               <java.util.logging.manager>org.jboss.logmanager.LogManager</java.util.logging.manager>
               <maven.home>${maven.home}</maven.home>
               <quarkus.http.test-port>0</quarkus.http.test-port>
+              <amsha.dotenv.enabled>false</amsha.dotenv.enabled>
             </systemPropertyVariables>
           </configuration>
         </plugin>
