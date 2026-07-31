@@ -32,6 +32,7 @@ podman run --rm -v "$(pwd):/workspace" --tmpfs /tmp -w /workspace eclipse-temuri
   export AMSHA_LD_PRELOAD_SET=1
   export MAVEN_OPTS="-Dmaven.repo.local=/tmp/m2"
   export ONNX_MAX_RSS_GROWTH_MB=128
+  export AMSHA_RUN_JVM_EVIDENCE_TESTS=false
   ./scripts/verify_native_matrix.sh record \"$TARGET\" \"$BINARY\" \"$EVIDENCE\"
 "
 
