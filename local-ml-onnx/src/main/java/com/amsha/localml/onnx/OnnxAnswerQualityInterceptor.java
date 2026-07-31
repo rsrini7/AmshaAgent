@@ -1,6 +1,5 @@
 package com.amsha.localml.onnx;
 
-import io.quarkus.runtime.Startup;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -19,6 +18,7 @@ import com.amsha.localml.onnx.OnnxClassifierRuntimeControl.Lease;
 import com.amsha.localml.onnx.OnnxClassifierRuntimeControl.Registration;
 
 import io.quarkus.arc.Unremovable;
+import io.quarkus.runtime.Startup;
 
 /**
  * Phase 3 active ONNX interceptor for post-policy answer quality classification.
@@ -70,23 +70,22 @@ public class OnnxAnswerQualityInterceptor implements AnswerQualityInterceptor {
             return new ClassifierResult.NoOpinion<>(ClassifierResult.NoOpinionReason.DISABLED);
         }
 
-        try (Lease lease = leaseOpt.get()) {
+        try (var _ = leaseOpt.get()) {
             AnswerQualityShadowContext shadowContext = new AnswerQualityShadowContext(
                     context.agentRole(), context.goal(), context.answer(), context.toolInvokedInTurn());
 
             ClassifierResult<AnswerQualityPrediction> shadowResult = shadowClassifier.classify(shadowContext);
-            if (shadowResult instanceof ClassifierResult.NoOpinion<AnswerQualityPrediction> noOpinion) {
-                return new ClassifierResult.NoOpinion<>(noOpinion.reason());
-            } else if (shadowResult instanceof ClassifierResult.Opinion<AnswerQualityPrediction> opinion) {
-                if (opinion.value() == AnswerQualityPrediction.RETRY_RECOMMENDED) {
-                    return new ClassifierResult.Opinion<>(
-                            AnswerQualityAction.REQUEST_RETRY, opinion.confidence(), opinion.ruleId());
-                } else {
-                    return new ClassifierResult.NoOpinion<>(ClassifierResult.NoOpinionReason.LOW_CONFIDENCE);
-                }
-            }
-            return new ClassifierResult.NoOpinion<>(ClassifierResult.NoOpinionReason.INFERENCE_ERROR);
-        } catch (RuntimeException e) {
+            return switch (shadowResult) {
+                case ClassifierResult.NoOpinion<AnswerQualityPrediction>(var reason) ->
+                    new ClassifierResult.NoOpinion<>(reason);
+                case ClassifierResult.Opinion<AnswerQualityPrediction>(var value, var confidence, var ruleId) ->
+                    switch (value) {
+                        case RETRY_RECOMMENDED ->
+                            new ClassifierResult.Opinion<>(AnswerQualityAction.REQUEST_RETRY, confidence, ruleId);
+                        default -> new ClassifierResult.NoOpinion<>(ClassifierResult.NoOpinionReason.LOW_CONFIDENCE);
+                    };
+            };
+        } catch (RuntimeException _) {
             return new ClassifierResult.NoOpinion<>(ClassifierResult.NoOpinionReason.INFERENCE_ERROR);
         }
     }

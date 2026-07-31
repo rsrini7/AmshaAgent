@@ -72,7 +72,8 @@ incidents live in [Architecture Invariants](docs/Architecture_Invariants.md).
 
 - JDK 25 finalized features are allowed; preview features are forbidden. In
   particular, do not use structured concurrency, stream gatherers, module imports,
-  compact source files, or value classes.
+  compact source files, or value classes. Use the unnamed variable `_` for unused
+  variables or exceptions rather than naming them `ignored`.
 - Nullable sealed-interface wrappers require `@nullable` documentation and
   null-safe consumers (`Boolean.TRUE.equals(value)`).
 - Admin resources use `resolveUserId()`; mutating `/admin/**` endpoints require

@@ -1,6 +1,5 @@
 package com.amsha.localml.onnx;
 
-import io.quarkus.runtime.Startup;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -19,6 +18,7 @@ import com.amsha.localml.onnx.OnnxClassifierRuntimeControl.Lease;
 import com.amsha.localml.onnx.OnnxClassifierRuntimeControl.Registration;
 
 import io.quarkus.arc.Unremovable;
+import io.quarkus.runtime.Startup;
 
 /**
  * Phase 3 active ONNX interceptor for post-policy tool risk classification.
@@ -70,7 +70,7 @@ public class OnnxPostPolicyToolRiskInterceptor implements PostPolicyToolRiskInte
             return new ClassifierResult.NoOpinion<>(ClassifierResult.NoOpinionReason.DISABLED);
         }
 
-        try (Lease lease = leaseOpt.get()) {
+        try (var _ = leaseOpt.get()) {
             ToolRiskShadowContext shadowContext = new ToolRiskShadowContext(
                     context.agentRole(),
                     context.autonomyLevel(),
@@ -79,19 +79,17 @@ public class OnnxPostPolicyToolRiskInterceptor implements PostPolicyToolRiskInte
                     context.goal());
 
             ClassifierResult<ToolRiskPrediction> shadowResult = shadowClassifier.classify(shadowContext);
-            if (shadowResult instanceof ClassifierResult.NoOpinion<ToolRiskPrediction> noOpinion) {
-                return new ClassifierResult.NoOpinion<>(noOpinion.reason());
-            } else if (shadowResult instanceof ClassifierResult.Opinion<ToolRiskPrediction> opinion) {
-                if (opinion.value() == ToolRiskPrediction.REQUIRE_APPROVAL) {
-                    return new ClassifierResult.Opinion<>(
-                            ToolRiskAction.REQUIRE_APPROVAL, opinion.confidence(), opinion.ruleId());
-                } else if (opinion.value() == ToolRiskPrediction.BLOCK) {
-                    return new ClassifierResult.Opinion<>(ToolRiskAction.BLOCK, opinion.confidence(), opinion.ruleId());
-                } else {
-                    return new ClassifierResult.NoOpinion<>(ClassifierResult.NoOpinionReason.LOW_CONFIDENCE);
-                }
-            }
-            return new ClassifierResult.NoOpinion<>(ClassifierResult.NoOpinionReason.INFERENCE_ERROR);
+            return switch (shadowResult) {
+                case ClassifierResult.NoOpinion<ToolRiskPrediction>(var reason) ->
+                    new ClassifierResult.NoOpinion<>(reason);
+                case ClassifierResult.Opinion<ToolRiskPrediction>(var value, var confidence, var ruleId) ->
+                    switch (value) {
+                        case REQUIRE_APPROVAL ->
+                            new ClassifierResult.Opinion<>(ToolRiskAction.REQUIRE_APPROVAL, confidence, ruleId);
+                        case BLOCK -> new ClassifierResult.Opinion<>(ToolRiskAction.BLOCK, confidence, ruleId);
+                        default -> new ClassifierResult.NoOpinion<>(ClassifierResult.NoOpinionReason.LOW_CONFIDENCE);
+                    };
+            };
         } catch (RuntimeException _) {
             return new ClassifierResult.NoOpinion<>(ClassifierResult.NoOpinionReason.INFERENCE_ERROR);
         }
