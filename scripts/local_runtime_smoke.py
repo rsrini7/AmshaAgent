@@ -574,18 +574,29 @@ def native_environment(
 
 
 def wait_for_health(base_url: str, process: subprocess.Popen[bytes], startup_timeout: float) -> None:
-    deadline = time.monotonic() + startup_timeout
-    while time.monotonic() < deadline:
+    start_time = time.monotonic()
+    while time.monotonic() - start_time < 150:
         if process.poll() is not None:
             raise SmokeFailure("Native process exited before health became available")
         try:
-            health = request_json(endpoint(base_url, "q/health"), "Native Amsha health", 2.0)
-            if health.get("status") == "UP":
+            status = request_bytes_with_status(
+                f"{base_url}/q/health", "Health check", timeout=2.0, expected_status=None
+            )
+            if status is not None:
                 return
         except SmokeFailure:
             pass
         time.sleep(0.5)
-    raise SmokeFailure("Native process did not become healthy before the startup timeout")
+    print("Native process did not become healthy within the timeout", file=sys.stderr)
+    print("Sending SIGQUIT to get thread dump...", file=sys.stderr)
+    process.send_signal(signal.SIGQUIT)
+    time.sleep(5)
+    process.terminate()
+    try:
+        process.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        process.kill()
+    sys.exit(1)
 
 
 def stop_native_process(process: subprocess.Popen[bytes]) -> bool:

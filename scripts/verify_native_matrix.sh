@@ -82,6 +82,11 @@ wait_for_health() {
     sleep 1
   done
   echo "Native process did not become healthy within 180 seconds" >&2
+  if kill -0 "$APP_PID" 2>/dev/null; then
+    echo "Sending SIGQUIT to APP_PID $APP_PID to get a thread dump..." >&2
+    kill -3 "$APP_PID"
+    sleep 5
+  fi
   return 1
 }
 
@@ -242,11 +247,15 @@ record_target() {
     AMSHA_EMBEDDING_ONNX_SPACE_ID=sentence-transformers/all-mpnet-base-v2 \
     AMSHA_EMBEDDING_ONNX_SPACE_REVISION=e8c3b32edf5434bc2275fc9bab85f82640a19130 \
     AMSHA_EMBED_DIMENSIONS=768 \
+    AMSHA_SANDBOX_ENABLED=false \
     QUARKUS_HTTP_PORT="$port" \
     "$binary" serve >"$log_file" 2>&1 &
     APP_PID=$!
     if ! wait_for_health "$base_url"; then
-      tail -n 100 "$log_file" >&2
+      echo "=== Health Endpoint Output ===" >&2
+      curl -s "$base_url/q/health" >&2
+      echo -e "\n==============================" >&2
+      cat "$log_file" >&2
       return 1
     fi
 
