@@ -76,6 +76,8 @@ public class AgentResource {
             ToolRiskPrediction.BLOCK.name());
     private static final Set<String> ANSWER_QUALITY_LABELS =
             Set.of(AnswerQualityPrediction.ACCEPTABLE.name(), AnswerQualityPrediction.RETRY_RECOMMENDED.name());
+    private static final Set<String> INTENT_LABELS =
+            Set.copyOf(AgentRoleEnum.values().stream().map(AgentRoleEnum::id).toList());
 
     @POST
     @RunOnVirtualThread
@@ -100,6 +102,11 @@ public class AgentResource {
                         "answer_quality",
                         httpHeaders.getHeaderString("X-Amsha-Test-Expected-Answer-Quality"),
                         ANSWER_QUALITY_LABELS);
+                putValidatedLabel(
+                        expectedLabels,
+                        "intent",
+                        httpHeaders.getHeaderString("X-Amsha-Test-Expected-Intent"),
+                        INTENT_LABELS);
             } catch (IllegalArgumentException e) {
                 return Response.status(Response.Status.BAD_REQUEST)
                         .entity(new AmshaErrorResponse(e.getMessage()))

@@ -12,6 +12,12 @@
 
 ## Current implementation status (2026-07-29)
 
+The Phase 2 evidence automation lane is implemented: sanitized candidate collection,
+dataset merging and deterministic splitting, release-candidate training/evaluation,
+hashed evidence retention, and human-approval-gated promotion are available through
+the classifier `mise` tasks. This automation does not close the human dataset,
+calibration, model-card, error-budget, rollback, or retained shadow-evidence gates.
+
 Phase 1 implementation is complete, while the remaining Phase 0 release-evidence
 gates stay open. ONNX is available only as an explicit provider slot with an installed
 verified bundle; it does not change the configured default provider list. The independent

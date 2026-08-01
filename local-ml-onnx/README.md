@@ -107,6 +107,11 @@ held-out evidence. Insufficient classifier data does not block later non-activat
 implementation phases, but it remains a hard gate for model promotion and Phase 3
 behavioral activation.
 
+The automated promotion path is `classifier:collect`/`classifier:build-dataset`
+-> review import -> `classifier:release-candidate` -> retained evidence ->
+`classifier:promote`; promotion remains blocked until a named human approval
+record matches the evidence digest.
+
 For a reproducible development bundle, run `mise run models:install-mpnet`. It
 downloads the Apache-2.0 `sentence-transformers/all-mpnet-base-v2` revision pinned by
 the task, verifies its fixed SHA-256 and sizes, and writes the matching local manifest.

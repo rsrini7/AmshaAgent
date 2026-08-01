@@ -41,6 +41,21 @@ class TestDataCollectionServiceTest {
                 "echo safe", record.get("input").get("parameters").get("code").asText());
     }
 
+    @Test
+    void recordIntentCandidateWritesMessageDataset() throws Exception {
+        TestDataCollectionService service = newService();
+
+        service.recordIntentCandidate("coder", "Write a parser for the input format");
+
+        Path file = tempDir.resolve("classifier-training/review-working/intent.autotest.jsonl");
+        JsonNode record = new ObjectMapper().readTree(Files.readString(file).strip());
+        assertEquals("intent", record.get("task").asText());
+        assertEquals("coder", record.get("label").asText());
+        assertEquals(
+                "Write a parser for the input format",
+                record.get("input").get("message").asText());
+    }
+
     private TestDataCollectionService newService() {
         TestDataCollectionService service = new TestDataCollectionService();
         service.dataDir = tempDir.toString();

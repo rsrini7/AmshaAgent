@@ -42,6 +42,13 @@ public class TestDataCollectionService {
 
     private final ReentrantLock toolRiskLock = new ReentrantLock();
     private final ReentrantLock answerQualityLock = new ReentrantLock();
+    private final ReentrantLock intentLock = new ReentrantLock();
+
+    public void recordIntentCandidate(String expectedLabel, String userMessage) {
+        ObjectNode input = mapper.createObjectNode();
+        input.put("message", piiSanitizer.sanitize(userMessage));
+        writeCandidate("intent", expectedLabel, input, intentLock);
+    }
 
     public void recordToolRiskCandidate(String expectedLabel, ToolRiskShadowContext context) {
         ObjectNode input = mapper.createObjectNode();

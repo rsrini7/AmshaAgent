@@ -7,6 +7,10 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 TRAINING_DIR="$PROJECT_ROOT/local-ml-onnx/classifier-training"
 PYTHON_BIN="${AMSHA_CLASSIFIER_PYTHON:-python3}"
 UV_CACHE_PATH="${AMSHA_CLASSIFIER_UV_CACHE_DIR:-$PROJECT_ROOT/data/classifier-cache/uv}"
+RUN_ROOT="${AMSHA_CLASSIFIER_RUN_ROOT:-$PROJECT_ROOT/data/classifier-training/runs}"
+MODEL_ROOT="${AMSHA_CLASSIFIER_MODEL_ROOT:-$PROJECT_ROOT/data/models}"
+EVIDENCE_ROOT="${AMSHA_CLASSIFIER_EVIDENCE_ROOT:-$PROJECT_ROOT/data/classifier-training/evidence}"
+BASE_MODEL="$PROJECT_ROOT/data/classifier-training/base/all-MiniLM-L6-v2-1110a243"
 
 usage() {
     cat <<'USAGE'
@@ -22,7 +26,11 @@ Commands:
   toolchain-check
   train <intent|tool_risk|answer_quality> <reviewed.jsonl>
   evaluate <intent|tool_risk|answer_quality> <reviewed.jsonl> <model-dir>
-  package <intent|tool_risk|answer_quality> <reviewed.jsonl> <model-dir>
+package <intent|tool_risk|answer_quality> <reviewed.jsonl> <model-dir>
+build-dataset <task> <target.jsonl> <candidate.jsonl> [...]
+collect <task> <target.jsonl>
+release-candidate <task> <reviewed.jsonl> <approved-budgets.json>
+promote <evidence-dir> <human-approval.json> [model-root]
 USAGE
 }
 
@@ -159,7 +167,53 @@ case "$command_name" in
             --task "$1" --require-approved --release-size
         run_training_python "$TRAINING_DIR/package_classifier_bundle.py" "$@"
         ;;
-    *)
+    build-dataset)
+        [[ $# -ge 3 ]] || { usage; exit 2; }
+        task="$1"
+        target="$2"
+        shift 2
+        run_python "$TRAINING_DIR/build_classifier_dataset.py" "$task" "$target" "$@" --assign-splits
+        ;;
+    collect)
+        [[ $# -eq 2 ]] || { usage; exit 2; }
+        task="$1"
+        target="$2"
+        source_name="${task//_/-}.autotest.jsonl"
+        source="$PROJECT_ROOT/data/classifier-training/review-working/$source_name"
+        require_file "$source"
+        run_python "$TRAINING_DIR/build_classifier_dataset.py" "$task" "$target" "$source" --assign-splits
+        ;;
+    release-candidate)
+        [[ $# -eq 3 ]] || { usage; exit 2; }
+        task="$1"
+        dataset="$2"
+        budgets="$3"
+        require_file "$dataset"
+        require_file "$budgets"
+        run_python "$TRAINING_DIR/classifier_data.py" validate "$dataset" \
+            --task "$task" --require-approved --release-size
+        if [[ ! -f "$BASE_MODEL/source-lock.verified.json" ]]; then
+            run_training_python "$TRAINING_DIR/install_base_model.py"
+        fi
+        run_training_python "$TRAINING_DIR/verify_training_toolchain.py"
+        digest="$(run_python "$TRAINING_DIR/classifier_data.py" digest "$dataset" | "$PYTHON_BIN" -c 'import json,sys; print(json.load(sys.stdin)["sha256"])')"
+        run_training_python "$TRAINING_DIR/train_classifier.py" train "$task" "$dataset" --output-root "$RUN_ROOT"
+        run_dir="$RUN_ROOT/$task-${digest:0:12}"
+        run_training_python "$TRAINING_DIR/train_classifier.py" evaluate "$task" "$dataset" "$run_dir" --budgets "$budgets"
+        run_training_python "$TRAINING_DIR/package_classifier_bundle.py" "$task" "$dataset" "$run_dir" --model-root "$MODEL_ROOT"
+        bundle_dir="$MODEL_ROOT/${task//_/-}-minilm-l6-${digest:0:8}"
+        evidence_dir="$EVIDENCE_ROOT/$task-$digest"
+        run_python "$TRAINING_DIR/classifier_evidence.py" create \
+            "$task" "$dataset" "$run_dir" "$bundle_dir" "$evidence_dir"
+        ;;
+    promote)
+        [[ $# -eq 2 || $# -eq 3 ]] || { usage; exit 2; }
+        evidence_dir="$1"
+        approval="$2"
+        target_root="${3:-$MODEL_ROOT}"
+        run_python "$TRAINING_DIR/classifier_evidence.py" promote "$evidence_dir" "$approval" "$target_root"
+        ;;
+*)
         usage
         exit 2
         ;;

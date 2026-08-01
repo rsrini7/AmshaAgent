@@ -19,8 +19,9 @@ create_session() {
   c=$(mute -X POST -H "X-Amsha-API-Key: $VALID_KEY" -H "Content-Type: application/json" \
     -H "X-Amsha-Test-Expected-Tool-Risk: LOW_RISK" \
     -H "X-Amsha-Test-Expected-Answer-Quality: ACCEPTABLE" \
+    -H "X-Amsha-Test-Expected-Intent: coder" \
     "$B/api/v1/sessions" -d '{"autonomyLevel":"FULL"}')
-  if [ "$c" = "429" ]; then sleep $RL_WAIT; c=$(mute -X POST -H "X-Amsha-API-Key: $VALID_KEY" -H "Content-Type: application/json" -H "X-Amsha-Test-Expected-Tool-Risk: LOW_RISK" -H "X-Amsha-Test-Expected-Answer-Quality: ACCEPTABLE" "$B/api/v1/sessions" -d '{"autonomyLevel":"FULL"}'); fi
+    if [ "$c" = "429" ]; then sleep $RL_WAIT; c=$(mute -X POST -H "X-Amsha-API-Key: $VALID_KEY" -H "Content-Type: application/json" -H "X-Amsha-Test-Expected-Tool-Risk: LOW_RISK" -H "X-Amsha-Test-Expected-Answer-Quality: ACCEPTABLE" -H "X-Amsha-Test-Expected-Intent: coder" "$B/api/v1/sessions" -d '{"autonomyLevel":"FULL"}'); fi
   echo "$c"
 }
 
@@ -56,8 +57,9 @@ fi
 
 info "DATA-1: create session"
 DATA_DIR="${AMSHA_DATA_DIR:-$SCRIPT_DIR/../../data}"
-rm -f "$DATA_DIR/classifier-training/review-working/tool-risk.autotest.jsonl"
-rm -f "$DATA_DIR/classifier-training/review-working/answer-quality.autotest.jsonl"
+  rm -f "$DATA_DIR/classifier-training/review-working/tool-risk.autotest.jsonl"
+  rm -f "$DATA_DIR/classifier-training/review-working/answer-quality.autotest.jsonl"
+  rm -f "$DATA_DIR/classifier-training/review-working/intent.autotest.jsonl"
 CODE=$(create_session); SID=$(sid)
 [ "$CODE" = "201" ] || [ "$CODE" = "200" ] && ok "$CODE" || { fail "$CODE"; SID=""; }
 if [ -n "$SID" ]; then
@@ -89,18 +91,19 @@ if [ -n "$SID" ]; then
 
   run_req DELETE "$VALID_KEY" "$B/api/v1/sessions/$SID" >/dev/null 2>&1
 
-  info "DATA-4: execute python validation gate on generated file"
+  info "DATA-4: execute de-identification gates on generated files"
   DATA_DIR="${AMSHA_DATA_DIR:-$SCRIPT_DIR/../../data}"
-  rm -f "$DATA_DIR/classifier-training/review-working/tool-risk.packet.jsonl"
-  
-  # Run prepare-review to ensure it passes Python de-identification regexes
-  if bash "$SCRIPT_DIR/../../scripts/classifier_training.sh" prepare-review \
-    "$DATA_DIR/classifier-training/review-working/tool-risk.autotest.jsonl" \
-    "$DATA_DIR/classifier-training/review-working/tool-risk.packet.jsonl" >/dev/null 2>&1; then
-    ok "GATE PASSED"
-  else
-    fail "GATE FAILED"
-  fi
+  for task in intent tool-risk answer-quality; do
+    source_file="$DATA_DIR/classifier-training/review-working/$task.autotest.jsonl"
+    packet_file="$DATA_DIR/classifier-training/review-working/$task.packet.jsonl"
+    rm -f "$packet_file"
+    if [ -f "$source_file" ] && bash "$SCRIPT_DIR/../../scripts/classifier_training.sh" prepare-review \
+      "$source_file" "$packet_file" >/dev/null 2>&1; then
+      ok "$task GATE PASSED"
+    else
+      fail "$task GATE FAILED"
+    fi
+  done
 fi
 
 echo "───────────────────────────────────────────"

@@ -21,7 +21,9 @@ import com.amsha.channel.api.ChannelType;
 import com.amsha.channel.api.ChannelUser;
 import com.amsha.core.agent.IntentClassificationService;
 import com.amsha.core.agent.loop.AgentRoleCache;
+import com.amsha.core.agent.loop.TestDataCollectionService;
 import com.amsha.core.agent.role.AgentRoleEnum;
+import com.amsha.core.api.AgentSessionService;
 import com.amsha.core.channel.ChannelPluginRegistry;
 import com.amsha.core.pipeline.HandleResult;
 import com.amsha.core.pipeline.MessageContext;
@@ -40,6 +42,8 @@ class IntentClassificationHandlerTest {
     private ChannelPluginRegistry registry;
     private AgentRoleCache roleCache;
     private IntentClassificationService intentDetector;
+    private AgentSessionService sessionService;
+    private TestDataCollectionService testDataCollectionService;
 
     @BeforeEach
     void setUp() {
@@ -49,6 +53,8 @@ class IntentClassificationHandlerTest {
         registry = mock(ChannelPluginRegistry.class);
         roleCache = mock(AgentRoleCache.class);
         intentDetector = mock(IntentClassificationService.class);
+        sessionService = mock(AgentSessionService.class);
+        testDataCollectionService = mock(TestDataCollectionService.class);
 
         ChannelPlugin plugin = mock(ChannelPlugin.class);
         when(plugin.sender()).thenReturn(sender);
@@ -58,6 +64,9 @@ class IntentClassificationHandlerTest {
         handler.channelPluginRegistry = registry;
         handler.roleCache = roleCache;
         handler.intentDetector = intentDetector;
+        handler.sessionService = sessionService;
+        handler.testDataCollectionService = testDataCollectionService;
+        handler.testDataCollectionEnabled = true;
 
         when(intentDetector.isFollowUpHeuristic(anyString())).thenReturn(false);
 
@@ -97,6 +106,19 @@ class IntentClassificationHandlerTest {
 
         assertEquals(
                 AgentRoleEnum.COORDINATOR.toScopedName(), context.getAgentRole().get());
+    }
+
+    @Test
+    void testHandle_collectsIntentForExplicitRole() {
+        ChannelUser user = new ChannelUser("u1", "u1", "user", ChannelType.TELEGRAM);
+        ChannelMessage msg = new ChannelMessage.TelegramMessage(user, "hello", "c1", Instant.now());
+        MessageContext context = new MessageContext("c1", user, msg);
+        context.setAgentRole(AgentRoleEnum.CODER.toScopedName());
+        when(sessionService.getExpectedTestLabel(any(), eq("intent"))).thenReturn("coder");
+
+        handler.handle(context);
+
+        verify(testDataCollectionService).recordIntentCandidate("coder", "hello");
     }
 
     @Test

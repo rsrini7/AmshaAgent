@@ -60,8 +60,48 @@ Available tasks:
 | `classifier:train` | `<task> <reviewed.jsonl> [options]` | Train one independently gated classifier. |
 | `classifier:evaluate` | `<task> <reviewed.jsonl> <run-dir> [options]` | Calibrate on validation data and evaluate held-out data against an approved budget. |
 | `classifier:package` | `<task> <reviewed.jsonl> <run-dir> [options]` | Export a passing development bundle under the verified ONNX model root. |
+| `classifier:build-dataset` | `<task> <target.jsonl> <candidate.jsonl> [...]` | Merge, de-identify, deduplicate, and deterministically split candidates. |
+| `classifier:collect` | `<task> <target.jsonl>` | Build a pending packet from ignored runtime test candidates. |
+| `classifier:release-candidate` | `<task> <reviewed.jsonl> <approved-budgets.json>` | Run validation through evidence-bundle creation. |
+| `classifier:promote` | `<evidence-dir> <human-approval.json> [model-root]` | Promote only an explicitly approved evidence bundle. |
 
 The task identifier is exactly `intent`, `tool_risk`, or `answer_quality`.
+
+## Automated release-candidate pipeline
+
+The supported end-to-end path is:
+
+```text
+REST test fixtures / approved source data
+  -> classifier:collect or classifier:build-dataset
+  -> export-review / import-review
+  -> classifier:release-candidate
+  -> READY_FOR_HUMAN_REVIEW evidence bundle
+  -> classifier:promote after explicit human approval
+```
+
+`classifier:collect` only creates sanitized, pending candidates. It never creates
+approved ground truth. `classifier:release-candidate` validates an approved
+dataset, installs/checks the pinned toolchain, trains, calibrates, evaluates the
+held-out split against an approved error budget, packages the ONNX bundle, and
+retains an evidence directory with hashes, metrics, metadata, and an approval
+template. `classifier:promote` refuses to copy a bundle unless the approval file
+matches the evidence digest and contains named human approval for the dataset,
+model card, rollback criteria, and shadow evidence.
+
+After review, copy `approval-template.json` to `approval.json`, fill the named
+reviewer, approval timestamp, and all four approval booleans, then run:
+
+```bash
+mise run classifier:promote -- \
+  data/classifier-training/evidence/<task>-<dataset-sha256> \
+  data/classifier-training/evidence/<task>-<dataset-sha256>/approval.json
+```
+
+The REST collection switch is `amsha.test-data-collection.enabled` (environment
+variable `AMSHA_TEST_DATA_COLLECTION_ENABLED`). Collection headers are restricted
+to internal callers and are test-label provenance, not a substitute for human
+review or independent evaluation.
 
 ## Evidence boundary
 

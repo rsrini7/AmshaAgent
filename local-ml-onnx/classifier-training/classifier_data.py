@@ -363,6 +363,8 @@ def main() -> int:
     validate.add_argument("--task", choices=sorted(TASK_LABELS))
     validate.add_argument("--require-approved", action="store_true")
     validate.add_argument("--release-size", action="store_true")
+    digest_command = subcommands.add_parser("digest", help="print the canonical dataset SHA-256")
+    digest_command.add_argument("dataset", type=Path)
 
     args = parser.parse_args()
     try:
@@ -372,6 +374,9 @@ def main() -> int:
             summary = export_review_csv(args.source, args.target)
         elif args.command == "import-review-csv":
             summary = import_review_csv(args.source, args.target)
+        elif args.command == "digest":
+            records = load_jsonl(args.dataset)
+            summary = {"sha256": dataset_digest(records), "records": len(records)}
         else:
             summary = validate_records(
                 load_jsonl(args.dataset),
