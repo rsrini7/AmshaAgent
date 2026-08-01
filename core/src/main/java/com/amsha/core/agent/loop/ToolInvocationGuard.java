@@ -175,7 +175,10 @@ public class ToolInvocationGuard {
         boolean isExempt = isSchedulingTool || (isMemoryReadTool && level != AutonomyLevel.READONLY);
 
         ToolOperation op = toolOpt.map(AgentTool::requiredOperation).orElse(ToolOperation.EXECUTE_SHELL);
-        boolean alwaysRequiresHitl = (op == ToolOperation.EXECUTE_SHELL || op == ToolOperation.NETWORK_OUTBOUND);
+        // Dynamic tools do not expose an AgentTool operation contract here. They are governed by
+        // their dynamic admission policy, so do not classify the absent operation as shell execution.
+        boolean alwaysRequiresHitl =
+                toolOpt.isPresent() && (op == ToolOperation.EXECUTE_SHELL || op == ToolOperation.NETWORK_OUTBOUND);
 
         if (!isExempt
                 && (alwaysRequiresHitl
