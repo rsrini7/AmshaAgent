@@ -48,7 +48,7 @@ public class OnnxPostPolicyToolRiskInterceptor implements PostPolicyToolRiskInte
 
     @PostConstruct
     void init() {
-        registration = runtimeControl.registerReadyImplementation(Classifier.TOOL_RISK);
+        registration = shadowClassifier.prepareAndRegister(runtimeControl).orElse(null);
     }
 
     @PreDestroy
@@ -78,7 +78,7 @@ public class OnnxPostPolicyToolRiskInterceptor implements PostPolicyToolRiskInte
                     context.parameters(),
                     context.goal());
 
-            ClassifierResult<ToolRiskPrediction> shadowResult = shadowClassifier.classify(shadowContext);
+            ClassifierResult<ToolRiskPrediction> shadowResult = shadowClassifier.classifyUnderLease(shadowContext);
             return switch (shadowResult) {
                 case ClassifierResult.NoOpinion<ToolRiskPrediction>(var reason) ->
                     new ClassifierResult.NoOpinion<>(reason);

@@ -40,6 +40,7 @@ import com.amsha.core.security.http.OutboundHttpException;
 import com.amsha.core.tools.ToolCategory;
 import com.amsha.mcp.tool.DynamicToolCapability;
 import com.amsha.mcp.tool.DynamicToolCapabilityRegistry;
+import com.amsha.mcp.tool.DynamicToolOperationDefaults;
 import com.amsha.mcp.tool.McpTransportType;
 import com.amsha.persistence.api.McpConnectionHeaderSecretRefDto;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -238,6 +239,7 @@ public class McpClientService {
             ToolCategory category,
             Map<String, String> handshakeHeaders,
             boolean preApproved) {
+        DynamicToolOperationDefaults.requireFor(category);
         serverUrls.put(runtimeKey, serverUrl);
         try {
             ObjectNode initParams = createInitParams();
@@ -362,6 +364,7 @@ public class McpClientService {
 
     public void connectStdio(
             String serverName, String command, List<String> args, Map<String, String> env, ToolCategory category) {
+        DynamicToolOperationDefaults.requireFor(category);
         stdioConfigs.put(serverName, new StdioConfig(command, args, env, category));
         try {
             ProcessBuilder pb = new ProcessBuilder();
@@ -664,6 +667,8 @@ public class McpClientService {
             String name = tool.path("name").asText();
             String desc = tool.path("description").asText("");
             String schema = tool.has("inputSchema") ? tool.path("inputSchema").toString() : "{}";
+            // requiredOperation is set explicitly via category registration defaults
+            // (NETWORK→NETWORK_OUTBOUND; COMPUTE→EXECUTE_SHELL for host/sandbox-equivalent compute).
             registry.register(new DynamicToolCapability(name, desc, serverName, transport, false, schema, category));
         }
     }

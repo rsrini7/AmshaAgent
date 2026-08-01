@@ -145,6 +145,11 @@ public class McpSelfRegisterTool implements AgentTool {
         } catch (IllegalArgumentException | ClassCastException _) {
             return ToolResponse.failure(400, "Invalid category. Must be NETWORK, COMPUTE, DATABASE, or INTERNAL.");
         }
+        try {
+            DynamicToolOperationDefaults.requireFor(category);
+        } catch (IllegalArgumentException e) {
+            return ToolResponse.failure(400, e.getMessage());
+        }
 
         try {
             if ("http".equalsIgnoreCase(transportStr)) {

@@ -15,6 +15,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedDeque;
 
 import com.amsha.core.agent.reasoning.ReasoningStep;
+import com.amsha.core.agent.reasoning.ReasoningStepSupport;
 import com.amsha.core.agent.role.RoleRegistry;
 import com.amsha.core.agent.role.ToolCapability;
 import com.amsha.core.classifier.ClassifierResult;
@@ -22,7 +23,8 @@ import com.amsha.core.governance.ApprovalFrame;
 import com.amsha.core.security.AutonomyLevel;
 import com.amsha.core.security.ToolOperation;
 import com.amsha.core.skill.CompiledSkillEntry;
-import com.amsha.core.tool.DynamicToolLookup;
+import com.amsha.core.tool.DynamicToolAdmission;
+import com.amsha.core.tool.DynamicToolAdmissionLookup;
 import com.amsha.core.tool.InterceptorPriority;
 import com.amsha.core.tool.ToolGuardInterceptor;
 import com.amsha.core.tools.AgentTool;
@@ -51,7 +53,7 @@ public class ToolInvocationGuard {
     public ToolRegistry toolRegistry;
 
     @Inject
-    public Instance<DynamicToolLookup> dynamicToolLookup;
+    public Instance<DynamicToolAdmissionLookup> dynamicToolAdmissionLookup;
 
     @Inject
     public Instance<ToolGuardInterceptor> interceptors;
@@ -145,24 +147,24 @@ public class ToolInvocationGuard {
         }
 
         boolean isInternalTool = toolOpt.isPresent();
-        boolean isDynamicAllowed = !isInternalTool
-                && dynamicToolLookup != null
-                && !dynamicToolLookup.isUnsatisfied()
-                && dynamicToolLookup.get().isDynamicToolAllowed(toolName);
-
-        if (!isInternalTool && !isDynamicAllowed) {
-            log.warnf(
-                    "GUARD Unknown tool call attempt '%s' in session '%s' - "
-                            + "not in ToolRegistry and not allowed by DynamicToolLookup.",
-                    toolName, sessionId);
-            return new GuardDecision.Blocked("Tool '" + toolName + "' is not recognized or permitted.");
+        final DynamicToolAdmission dynamicAdmission;
+        if (!isInternalTool) {
+            Optional<DynamicToolAdmission> admissionOpt = resolveDynamicAdmission(toolName);
+            if (admissionOpt.isEmpty()) {
+                log.warnf("GUARD Unknown or unadmitted dynamic tool '%s' in session '%s'.", toolName, sessionId);
+                return new GuardDecision.Blocked("Tool '" + toolName + "' is not recognized or permitted.");
+            }
+            dynamicAdmission = admissionOpt.get();
+        } else {
+            dynamicAdmission = null;
         }
 
         boolean isSchedulingTool = ToolCapability.SCHEDULE_TASK.toolName().equals(toolName)
                 || ToolCapability.MANAGE_SCHEDULE.toolName().equals(toolName);
 
-        boolean toolRequiresApproval =
+        boolean staticRequiresApproval =
                 toolOpt.map(tool -> tool.requiresManualApproval(params)).orElse(false);
+        boolean dynamicRequiresApproval = dynamicAdmission != null && dynamicAdmission.requiresApproval();
 
         // Memory search tools are read-only and should be exempt from HITL approval
         // at both BACKGROUND and SUPERVISED levels. ingest_document is WRITE_MEMORY
@@ -174,15 +176,14 @@ public class ToolInvocationGuard {
 
         boolean isExempt = isSchedulingTool || (isMemoryReadTool && level != AutonomyLevel.READONLY);
 
-        ToolOperation op = toolOpt.map(AgentTool::requiredOperation).orElse(ToolOperation.EXECUTE_SHELL);
-        // Dynamic tools do not expose an AgentTool operation contract here. They are governed by
-        // their dynamic admission policy, so do not classify the absent operation as shell execution.
-        boolean alwaysRequiresHitl =
-                toolOpt.isPresent() && (op == ToolOperation.EXECUTE_SHELL || op == ToolOperation.NETWORK_OUTBOUND);
+        ToolOperation op = toolOpt.map(AgentTool::requiredOperation)
+                .orElseGet(() -> Objects.requireNonNull(dynamicAdmission).requiredOperation());
+        boolean alwaysRequiresHitl = op == ToolOperation.EXECUTE_SHELL || op == ToolOperation.NETWORK_OUTBOUND;
 
         if (!isExempt
                 && (alwaysRequiresHitl
-                        || ((roleRegistry.requiresApprovalForTools(agentRole) || toolRequiresApproval)
+                        || dynamicRequiresApproval
+                        || ((roleRegistry.requiresApprovalForTools(agentRole) || staticRequiresApproval)
                                 && !AutonomyLevel.FULL.equals(level)))) {
             observeToolRiskForCollection(sessionId, agentRole, level, toolName, params, goal);
             ApprovalFrame frame = new ApprovalFrame(toolName, params, op.riskLevel());
@@ -190,6 +191,36 @@ public class ToolInvocationGuard {
         }
         observeProvisionalAllow(sessionId, agentRole, level, toolName, params, goal);
         return applyPostPolicyToolRisk(agentRole, level, toolName, params, history, goal, op);
+    }
+
+    /**
+     * Resolves dynamic admission fail-closed: CDI absence, ambiguity, lookup errors, and
+     * empty/invalid metadata all yield empty Optional (caller Blocks).
+     */
+    private Optional<DynamicToolAdmission> resolveDynamicAdmission(String toolName) {
+        if (dynamicToolAdmissionLookup == null
+                || dynamicToolAdmissionLookup.isUnsatisfied()
+                || dynamicToolAdmissionLookup.isAmbiguous()) {
+            return Optional.empty();
+        }
+        try {
+            Optional<DynamicToolAdmission> admission =
+                    dynamicToolAdmissionLookup.get().findAdmission(toolName);
+            if (admission == null || admission.isEmpty()) {
+                return Optional.empty();
+            }
+            DynamicToolAdmission metadata = admission.get();
+            if (!toolName.equals(metadata.toolName())) {
+                log.warnf("GUARD Dynamic admission name mismatch for '%s'.", toolName);
+                return Optional.empty();
+            }
+            return Optional.of(metadata);
+        } catch (RuntimeException | LinkageError e) {
+            log.warnf(
+                    "GUARD Dynamic admission lookup failed for '%s': %s",
+                    toolName, e.getClass().getSimpleName());
+            return Optional.empty();
+        }
     }
 
     private GuardDecision applyPostPolicyToolRisk(
@@ -208,7 +239,7 @@ public class ToolInvocationGuard {
                     toolName,
                     params == null ? Map.of() : params,
                     goal,
-                    history != null && history.stream().anyMatch(ToolInvocationGuard::isToolInvocation)));
+                    history != null && history.stream().anyMatch(ReasoningStepSupport::isToolCallStep)));
             return switch (result) {
                 case ClassifierResult.Opinion<ToolRiskAction> opinion ->
                     switch (opinion.value()) {
@@ -222,13 +253,6 @@ public class ToolInvocationGuard {
         } catch (RuntimeException | LinkageError ignored) {
             return new GuardDecision.Allow();
         }
-    }
-
-    private static boolean isToolInvocation(ReasoningStep step) {
-        return step != null
-                && !ReasoningStep.FINISH.equals(step.action())
-                && !ReasoningStep.OBSERVE.equals(step.action())
-                && step.observation() != null;
     }
 
     private void observeProvisionalAllow(

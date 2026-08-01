@@ -122,6 +122,29 @@ final class OnnxShadowClassifierEngine<T> {
         }
     }
 
+    /**
+     * Validates the bundle and runs warmup probes. Returns false when the model is missing
+     * or validation/warmup fails — callers must not register ready in that case.
+     */
+    boolean ensureReady() {
+        if (model.isBlank()) return false;
+        if (warmedUp) return true;
+        try {
+            VerifiedOnnxModelBundle bundle = loadBundle();
+            OnnxClassifierBundleSpec spec = bundle.manifest().classifierSpec().orElseThrow();
+            OrtEnvironment environment = runtimeManager
+                    .environment()
+                    .orElseThrow(() -> new OnnxClassifierInferenceException("ONNX Runtime is unavailable"));
+            Instant deadline = Instant.now().plus(timeout);
+            try (OnnxSessionLease lease = sessionLeaseManager.acquire(bundle, deadline)) {
+                warmUp(environment, lease, spec);
+            }
+            return warmedUp;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
     private ClassifierResult<T> run(
             VerifiedOnnxModelBundle bundle, OnnxClassifierBundleSpec spec, String input, Instant deadline)
             throws Exception {

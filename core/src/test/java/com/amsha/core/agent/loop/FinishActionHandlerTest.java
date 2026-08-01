@@ -163,6 +163,22 @@ class FinishActionHandlerTest {
     }
 
     @Test
+    void pendingToolCallStepWithoutObservationIsToolBoundary() {
+        AgentExecutionContext context = context("researcher", "summarize this");
+        when(answerQualityDispatcher.evaluate(any()))
+                .thenReturn(new ClassifierResult.Opinion<>(AnswerQualityAction.REQUEST_RETRY, 0.91f, "test-quality"));
+        ReasoningStep pendingTool = ReasoningStep.pending("tool", "search", Map.of(), 0, 0);
+        ReasoningStep finish = ReasoningStep.pending(
+                "FINISH: Candidate after a pending tool call.", ReasoningStep.FINISH, Map.of(), 0, 0);
+
+        FinishActionHandler.FinishOutcome outcome = handler.handle(context, List.of(pendingTool), finish, 0);
+
+        assertInstanceOf(FinishActionHandler.FinishOutcome.Completed.class, outcome);
+        assertEquals(0, context.getAnswerQualityRetryCount());
+        verify(answerQualityDispatcher).evaluate(any());
+    }
+
+    @Test
     void deterministicAnswerGuardFailureBypassesActiveInterceptors() {
         AgentExecutionContext context = context("researcher", "summarize this");
         when(qualityGuard.guard(anyString(), any()))

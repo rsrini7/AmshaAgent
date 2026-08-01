@@ -11,6 +11,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
+import java.util.function.BooleanSupplier;
 import java.util.function.Function;
 
 import com.amsha.core.agent.loop.ToolRiskPrediction;
@@ -33,6 +34,7 @@ public class OnnxToolRiskShadowClassifier implements ToolRiskShadowClassifier {
     private final boolean enabled;
     private final ObjectMapper objectMapper;
     private final Function<String, ClassifierResult<ToolRiskPrediction>> classifier;
+    private final BooleanSupplier readinessCheck;
 
     @Inject
     public OnnxToolRiskShadowClassifier(
@@ -51,39 +53,57 @@ public class OnnxToolRiskShadowClassifier implements ToolRiskShadowClassifier {
                     long cooldownSeconds,
             @ConfigProperty(name = "amsha.onnx.max-input-bytes", defaultValue = "262144") long maxInputBytes,
             @ConfigProperty(name = "amsha.onnx.warmup.max-probes", defaultValue = "5") int warmupMaxProbes) {
-        this(
-                enabled,
-                objectMapper,
-                new OnnxShadowClassifierEngine<>(
-                        bundleRegistry,
-                        runtimeManager,
-                        sessionLeaseManager,
-                        scheduler,
-                        new OnnxTextClassifierRunner(),
-                        new OnnxClassifierCircuitBreaker(
-                                failureThreshold,
-                                Duration.ofSeconds(requirePositive(cooldownSeconds, "cooldownSeconds"))),
-                        Objects.requireNonNull(model, "model").orElse(""),
-                        Duration.ofSeconds(requirePositive(timeoutSeconds, "timeoutSeconds")),
-                        maxInputBytes,
-                        warmupMaxProbes,
-                        OnnxToolRiskShadowClassifier::parseLabel,
-                        Set.of(ToolRiskPrediction.values()))::classify);
+        OnnxShadowClassifierEngine<ToolRiskPrediction> engine = new OnnxShadowClassifierEngine<>(
+                bundleRegistry,
+                runtimeManager,
+                sessionLeaseManager,
+                scheduler,
+                new OnnxTextClassifierRunner(),
+                new OnnxClassifierCircuitBreaker(
+                        failureThreshold, Duration.ofSeconds(requirePositive(cooldownSeconds, "cooldownSeconds"))),
+                Objects.requireNonNull(model, "model").orElse(""),
+                Duration.ofSeconds(requirePositive(timeoutSeconds, "timeoutSeconds")),
+                maxInputBytes,
+                warmupMaxProbes,
+                OnnxToolRiskShadowClassifier::parseLabel,
+                Set.of(ToolRiskPrediction.values()));
+        this.enabled = enabled;
+        this.objectMapper = Objects.requireNonNull(objectMapper, "objectMapper");
+        this.classifier = engine::classify;
+        this.readinessCheck = engine::ensureReady;
     }
 
     OnnxToolRiskShadowClassifier(
             boolean enabled,
             ObjectMapper objectMapper,
             Function<String, ClassifierResult<ToolRiskPrediction>> classifier) {
+        this(enabled, objectMapper, classifier, () -> true);
+    }
+
+    OnnxToolRiskShadowClassifier(
+            boolean enabled,
+            ObjectMapper objectMapper,
+            Function<String, ClassifierResult<ToolRiskPrediction>> classifier,
+            BooleanSupplier readinessCheck) {
         this.enabled = enabled;
         this.objectMapper = Objects.requireNonNull(objectMapper, "objectMapper");
         this.classifier = Objects.requireNonNull(classifier, "classifier");
+        this.readinessCheck = Objects.requireNonNull(readinessCheck, "readinessCheck");
     }
 
     @Override
     public ClassifierResult<ToolRiskPrediction> classify(ToolRiskShadowContext context) {
         Objects.requireNonNull(context, "context");
         if (!enabled) return new ClassifierResult.NoOpinion<>(NoOpinionReason.DISABLED);
+        return classifyUnderLease(context);
+    }
+
+    /**
+     * Active Phase-3 path: classify without re-checking the Phase-2 boot {@code enabled} flag.
+     * Callers must hold a runtime lease from {@link OnnxClassifierRuntimeControl}.
+     */
+    public ClassifierResult<ToolRiskPrediction> classifyUnderLease(ToolRiskShadowContext context) {
+        Objects.requireNonNull(context, "context");
         try {
             Map<String, Object> input = new LinkedHashMap<>();
             input.put("classifier", "tool_risk");
@@ -96,6 +116,20 @@ public class OnnxToolRiskShadowClassifier implements ToolRiskShadowClassifier {
         } catch (JsonProcessingException | RuntimeException e) {
             return new ClassifierResult.NoOpinion<>(NoOpinionReason.INFERENCE_ERROR);
         }
+    }
+
+    /**
+     * Validates and warms the model; registers ready only after success.
+     * Fixture classifiers treat readiness as always true.
+     */
+    public Optional<OnnxClassifierRuntimeControl.Registration> prepareAndRegister(
+            OnnxClassifierRuntimeControl runtimeControl) {
+        Objects.requireNonNull(runtimeControl, "runtimeControl");
+        if (!readinessCheck.getAsBoolean()) {
+            return Optional.empty();
+        }
+        return Optional.of(
+                runtimeControl.registerReadyImplementation(OnnxClassifierRuntimeControl.Classifier.TOOL_RISK));
     }
 
     static ToolRiskPrediction parseLabel(String label) {

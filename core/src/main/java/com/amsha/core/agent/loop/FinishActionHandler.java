@@ -11,6 +11,7 @@ import java.util.Map;
 
 import com.amsha.core.agent.AgentSentinels;
 import com.amsha.core.agent.reasoning.ReasoningStep;
+import com.amsha.core.agent.reasoning.ReasoningStepSupport;
 import com.amsha.core.agent.result.AgentResult;
 import com.amsha.core.agent.role.RoleRegistry;
 import com.amsha.core.agent.role.ToolCapability;
@@ -253,7 +254,7 @@ public class FinishActionHandler {
             return injected;
         }
 
-        boolean toolInvokedInTurn = history.stream().anyMatch(FinishActionHandler::isToolInvocation);
+        boolean toolInvokedInTurn = history.stream().anyMatch(ReasoningStepSupport::isToolCallStep);
         FinishOutcome qualityDecision = applyAnswerQualityInterceptors(context, step, answer, toolInvokedInTurn);
         if (qualityDecision != null) return qualityDecision;
 
@@ -301,13 +302,6 @@ public class FinishActionHandler {
         } catch (RuntimeException | LinkageError ignored) {
             // A shadow-only observer must never alter an accepted FINISH answer.
         }
-    }
-
-    private static boolean isToolInvocation(ReasoningStep step) {
-        return step != null
-                && !ReasoningStep.FINISH.equals(step.action())
-                && !ReasoningStep.OBSERVE.equals(step.action())
-                && step.observation() != null;
     }
 
     /**

@@ -48,7 +48,7 @@ public class OnnxAnswerQualityInterceptor implements AnswerQualityInterceptor {
 
     @PostConstruct
     void init() {
-        registration = runtimeControl.registerReadyImplementation(Classifier.ANSWER_QUALITY);
+        registration = shadowClassifier.prepareAndRegister(runtimeControl).orElse(null);
     }
 
     @PreDestroy
@@ -74,7 +74,7 @@ public class OnnxAnswerQualityInterceptor implements AnswerQualityInterceptor {
             AnswerQualityShadowContext shadowContext = new AnswerQualityShadowContext(
                     context.agentRole(), context.goal(), context.answer(), context.toolInvokedInTurn());
 
-            ClassifierResult<AnswerQualityPrediction> shadowResult = shadowClassifier.classify(shadowContext);
+            ClassifierResult<AnswerQualityPrediction> shadowResult = shadowClassifier.classifyUnderLease(shadowContext);
             return switch (shadowResult) {
                 case ClassifierResult.NoOpinion<AnswerQualityPrediction>(var reason) ->
                     new ClassifierResult.NoOpinion<>(reason);

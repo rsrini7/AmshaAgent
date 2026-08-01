@@ -218,6 +218,14 @@ public class OnnxAdminResource {
                 "classifier=" + classifier.id() + " requestedEnabled=" + enabled);
 
         ToggleResult result = classifierRuntimeControl.setEnabled(classifier, enabled);
+        auditService.recordMandatory(
+                "local-ml-classifier:" + classifier.id(),
+                resolveUserId(),
+                "system",
+                result.accepted()
+                        ? SecurityEventType.CLASSIFIER_RUNTIME_CHANGE_ACCEPTED
+                        : SecurityEventType.CLASSIFIER_RUNTIME_CHANGE_REJECTED,
+                "classifier=" + classifier.id() + " requestedEnabled=" + enabled + " reason=" + result.reason());
         ClassifierToggleResponse response =
                 new ClassifierToggleResponse(result.accepted(), result.changed(), result.reason(), result.snapshot());
         return result.accepted()

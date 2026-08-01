@@ -210,7 +210,7 @@ public final class AgentExecutionContext {
 
     /** Returns a copy of this context with a different goal. */
     public AgentExecutionContext withGoal(String newGoal) {
-        return new AgentExecutionContext(
+        AgentExecutionContext copy = new AgentExecutionContext(
                 sessionId,
                 userId,
                 chatId,
@@ -224,5 +224,13 @@ public final class AgentExecutionContext {
                 channelPlatformId,
                 systemNote,
                 data);
+        // Preserve same-turn budgets/cursors; clear stale finish-retry and checkpoint cache.
+        copy.answerQualityRetryCount = this.answerQualityRetryCount;
+        copy.truncationRetryCount = this.truncationRetryCount;
+        copy.checkpointRestoreOffset = this.checkpointRestoreOffset;
+        copy.forceFinishRetry = false;
+        copy.lastCheckpointStatus = null;
+        copy.statusDirty = true;
+        return copy;
     }
 }

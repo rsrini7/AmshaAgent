@@ -69,8 +69,8 @@ class ToolInvocationGuardTest {
         when(postPolicyToolRiskDispatcher.evaluate(any()))
                 .thenReturn(new ClassifierResult.NoOpinion<>(NoOpinionReason.MISSING_MODEL));
 
-        guard.dynamicToolLookup = mock(Instance.class);
-        when(guard.dynamicToolLookup.isUnsatisfied()).thenReturn(true);
+        guard.dynamicToolAdmissionLookup = mock(Instance.class);
+        when(guard.dynamicToolAdmissionLookup.isUnsatisfied()).thenReturn(true);
 
         // Root Cause 1: Assume tool exists by default to allow hitl/autonomy tests to proceed
         var mockTool = mock(AgentTool.class);
@@ -80,6 +80,22 @@ class ToolInvocationGuardTest {
         when(mockToolRegistry.findTool("tool")).thenReturn(Optional.of(mockTool));
 
         guard.init(); // Initialize sortedInterceptors
+    }
+
+    @Test
+    void postPolicyContextMarksPendingToolCallStepAsToolInvoked() {
+        ReasoningStep pending = ReasoningStep.pending("t", "search", Map.of(), 0, 0);
+        when(postPolicyToolRiskDispatcher.evaluate(any())).thenAnswer(invocation -> {
+            PostPolicyToolContext ctx = invocation.getArgument(0);
+            assertTrue(ctx.toolInvokedInTurn());
+            return new ClassifierResult.NoOpinion<>(NoOpinionReason.MISSING_MODEL);
+        });
+
+        ToolInvocationGuard.GuardDecision decision = guard.evaluate(
+                "s1", "coder", AutonomyLevel.FULL, "tool", Map.of(), List.of(pending), "goal", List.of());
+
+        assertInstanceOf(ToolInvocationGuard.GuardDecision.Allow.class, decision);
+        verify(postPolicyToolRiskDispatcher).evaluate(any());
     }
 
     @Test

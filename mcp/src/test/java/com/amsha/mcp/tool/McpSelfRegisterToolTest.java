@@ -145,12 +145,12 @@ class McpSelfRegisterToolTest {
     @Test
     void testExplicitCategory() throws Exception {
         Map<String, Object> params = Map.of(
-                "name", "database-server",
+                "name", "compute-server",
                 "transport", "http",
                 "url", "http://localhost:3000/mcp",
-                "category", "DATABASE");
+                "category", "COMPUTE");
         when(lifecycleService.persistSuccessfulHttp(
-                        "database-server", "http://localhost:3000/mcp", ToolCategory.DATABASE, "user-123", Map.of()))
+                        "compute-server", "http://localhost:3000/mcp", ToolCategory.COMPUTE, "user-123", Map.of()))
                 .thenReturn(new PersistedConnection(null, List.of()));
 
         WorkspaceContext.run(
@@ -163,10 +163,10 @@ class McpSelfRegisterToolTest {
 
         verify(mcpClientService)
                 .connectForUser(
-                        "database-server",
+                        "compute-server",
                         "user-123",
                         "http://localhost:3000/mcp",
-                        ToolCategory.DATABASE,
+                        ToolCategory.COMPUTE,
                         Map.of(),
                         "approved-token");
     }

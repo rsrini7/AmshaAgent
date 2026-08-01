@@ -17,11 +17,13 @@ import java.util.Set;
 import com.amsha.core.agent.reasoning.ReasoningStep;
 import com.amsha.core.agent.role.RoleRegistry;
 import com.amsha.core.security.AutonomyLevel;
+import com.amsha.core.security.ToolOperation;
 import com.amsha.core.skill.CompiledSkillEntry;
-import com.amsha.core.tool.DynamicToolLookup;
+import com.amsha.core.tool.DynamicToolAdmissionLookup;
 import com.amsha.core.tool.InterceptorPriority;
 import com.amsha.core.tool.ToolGuardInterceptor;
 import com.amsha.core.tools.AgentTool;
+import com.amsha.core.tools.IdempotencyMode;
 import com.amsha.core.tools.ToolRegistry;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -74,12 +76,16 @@ class ToolGuardOrderingTest {
         manualGuard.roleRegistry = mock(RoleRegistry.class);
         manualGuard.objectMapper = new ObjectMapper();
         manualGuard.toolRegistry = mock(ToolRegistry.class);
-        when(manualGuard.toolRegistry.findTool(any())).thenReturn(Optional.of(mock(AgentTool.class)));
+        AgentTool tool = mock(AgentTool.class);
+        when(tool.idempotencyMode()).thenReturn(IdempotencyMode.NON_IDEMPOTENT);
+        when(tool.requiredOperation()).thenReturn(ToolOperation.WRITE_MEMORY);
+        when(manualGuard.toolRegistry.findTool(any())).thenReturn(Optional.of(tool));
 
         @SuppressWarnings("unchecked")
-        Instance<DynamicToolLookup> mockLookup = mock(Instance.class);
+        Instance<DynamicToolAdmissionLookup> mockLookup = mock(Instance.class);
         when(mockLookup.isUnsatisfied()).thenReturn(true);
-        manualGuard.dynamicToolLookup = mockLookup;
+        when(mockLookup.isAmbiguous()).thenReturn(false);
+        manualGuard.dynamicToolAdmissionLookup = mockLookup;
 
         manualGuard.init(); // Triggers sorting
 

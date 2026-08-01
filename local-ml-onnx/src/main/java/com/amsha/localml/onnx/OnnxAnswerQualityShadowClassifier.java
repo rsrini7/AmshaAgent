@@ -10,6 +10,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.BooleanSupplier;
 import java.util.function.Function;
 
 import com.amsha.core.agent.loop.AnswerQualityPrediction;
@@ -32,6 +33,7 @@ public class OnnxAnswerQualityShadowClassifier implements AnswerQualityShadowCla
     private final boolean enabled;
     private final ObjectMapper objectMapper;
     private final Function<String, ClassifierResult<AnswerQualityPrediction>> classifier;
+    private final BooleanSupplier readinessCheck;
 
     @Inject
     public OnnxAnswerQualityShadowClassifier(
@@ -51,39 +53,54 @@ public class OnnxAnswerQualityShadowClassifier implements AnswerQualityShadowCla
                     long cooldownSeconds,
             @ConfigProperty(name = "amsha.onnx.max-input-bytes", defaultValue = "262144") long maxInputBytes,
             @ConfigProperty(name = "amsha.onnx.warmup.max-probes", defaultValue = "5") int warmupMaxProbes) {
-        this(
-                enabled,
-                objectMapper,
-                new OnnxShadowClassifierEngine<>(
-                        bundleRegistry,
-                        runtimeManager,
-                        sessionLeaseManager,
-                        scheduler,
-                        new OnnxTextClassifierRunner(),
-                        new OnnxClassifierCircuitBreaker(
-                                failureThreshold,
-                                Duration.ofSeconds(requirePositive(cooldownSeconds, "cooldownSeconds"))),
-                        Objects.requireNonNull(model, "model").orElse(""),
-                        Duration.ofSeconds(requirePositive(timeoutSeconds, "timeoutSeconds")),
-                        maxInputBytes,
-                        warmupMaxProbes,
-                        OnnxAnswerQualityShadowClassifier::parseLabel,
-                        Set.of(AnswerQualityPrediction.values()))::classify);
+        OnnxShadowClassifierEngine<AnswerQualityPrediction> engine = new OnnxShadowClassifierEngine<>(
+                bundleRegistry,
+                runtimeManager,
+                sessionLeaseManager,
+                scheduler,
+                new OnnxTextClassifierRunner(),
+                new OnnxClassifierCircuitBreaker(
+                        failureThreshold, Duration.ofSeconds(requirePositive(cooldownSeconds, "cooldownSeconds"))),
+                Objects.requireNonNull(model, "model").orElse(""),
+                Duration.ofSeconds(requirePositive(timeoutSeconds, "timeoutSeconds")),
+                maxInputBytes,
+                warmupMaxProbes,
+                OnnxAnswerQualityShadowClassifier::parseLabel,
+                Set.of(AnswerQualityPrediction.values()));
+        this.enabled = enabled;
+        this.objectMapper = Objects.requireNonNull(objectMapper, "objectMapper");
+        this.classifier = engine::classify;
+        this.readinessCheck = engine::ensureReady;
     }
 
     OnnxAnswerQualityShadowClassifier(
             boolean enabled,
             ObjectMapper objectMapper,
             Function<String, ClassifierResult<AnswerQualityPrediction>> classifier) {
+        this(enabled, objectMapper, classifier, () -> true);
+    }
+
+    OnnxAnswerQualityShadowClassifier(
+            boolean enabled,
+            ObjectMapper objectMapper,
+            Function<String, ClassifierResult<AnswerQualityPrediction>> classifier,
+            BooleanSupplier readinessCheck) {
         this.enabled = enabled;
         this.objectMapper = Objects.requireNonNull(objectMapper, "objectMapper");
         this.classifier = Objects.requireNonNull(classifier, "classifier");
+        this.readinessCheck = Objects.requireNonNull(readinessCheck, "readinessCheck");
     }
 
     @Override
     public ClassifierResult<AnswerQualityPrediction> classify(AnswerQualityShadowContext context) {
         Objects.requireNonNull(context, "context");
         if (!enabled) return new ClassifierResult.NoOpinion<>(NoOpinionReason.DISABLED);
+        return classifyUnderLease(context);
+    }
+
+    /** Active Phase-3 path under a held runtime lease; does not re-check boot enabled. */
+    public ClassifierResult<AnswerQualityPrediction> classifyUnderLease(AnswerQualityShadowContext context) {
+        Objects.requireNonNull(context, "context");
         try {
             Map<String, Object> input = new LinkedHashMap<>();
             input.put("classifier", "answer_quality");
@@ -95,6 +112,16 @@ public class OnnxAnswerQualityShadowClassifier implements AnswerQualityShadowCla
         } catch (JsonProcessingException | RuntimeException e) {
             return new ClassifierResult.NoOpinion<>(NoOpinionReason.INFERENCE_ERROR);
         }
+    }
+
+    public Optional<OnnxClassifierRuntimeControl.Registration> prepareAndRegister(
+            OnnxClassifierRuntimeControl runtimeControl) {
+        Objects.requireNonNull(runtimeControl, "runtimeControl");
+        if (!readinessCheck.getAsBoolean()) {
+            return Optional.empty();
+        }
+        return Optional.of(
+                runtimeControl.registerReadyImplementation(OnnxClassifierRuntimeControl.Classifier.ANSWER_QUALITY));
     }
 
     static AnswerQualityPrediction parseLabel(String label) {

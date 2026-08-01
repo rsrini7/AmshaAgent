@@ -111,6 +111,9 @@ public class WorkspaceManager {
     @Inject
     ToolInvocationGuard toolInvocationGuard;
 
+    @Inject
+    SessionTestLabelStore sessionTestLabelStore;
+
     @ConfigProperty(name = "amsha.workspace.root-dir", defaultValue = "./data/workspaces")
     String workspaceRootDir;
 
@@ -143,6 +146,7 @@ public class WorkspaceManager {
         // 1a. Clear budget and dedup memory
         governanceLayer.clearSession(sessionId);
         toolInvocationGuard.clearSession(sessionId);
+        sessionTestLabelStore.clearSession(sessionId);
 
         // 1b. Cleanup audit observer
         if (sessionId != null) {

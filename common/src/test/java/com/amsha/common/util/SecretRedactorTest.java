@@ -42,4 +42,27 @@ class SecretRedactorTest {
     void redactsSensitiveAssignmentAtMinimumLengthBoundary() {
         assertEquals("apikey=" + SecretRedactor.REDACTED, SecretRedactor.redact("apikey=x"));
     }
+
+    @Test
+    void redactsBareSkApiKeysInExceptionText() {
+        String redacted = SecretRedactor.redact("provider failed with key sk-abcdefghijklmnopqrstuvwxyz1234");
+        assertFalse(redacted.contains("sk-abcdefghijklmnopqrstuvwxyz1234"));
+        assertTrue(redacted.contains(SecretRedactor.REDACTED));
+    }
+
+    @Test
+    void redactsJwtTokens() {
+        String jwt = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJhbXNoYSJ9.dGVzdHNpZ25hdHVyZQ";
+        String redacted = SecretRedactor.redact("auth failed token=" + jwt);
+        assertFalse(redacted.contains(jwt));
+        assertTrue(redacted.contains(SecretRedactor.REDACTED));
+    }
+
+    @Test
+    void redactsJwtWithNonJsonPayloadAndHeader() {
+        String jwt = "aGVhZGVy.cGF5bG9hZA.c2lnbmF0dXJl";
+        String redacted = SecretRedactor.redact("auth failed token=" + jwt);
+        assertFalse(redacted.contains(jwt));
+        assertTrue(redacted.contains(SecretRedactor.REDACTED));
+    }
 }

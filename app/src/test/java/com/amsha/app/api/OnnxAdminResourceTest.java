@@ -34,6 +34,7 @@ import com.amsha.persistence.api.VectorIndexNamespace;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 
 class OnnxAdminResourceTest {
 
@@ -198,13 +199,21 @@ class OnnxAdminResourceTest {
 
             assertEquals(200, response.getStatus());
             assertTrue(classifierRuntimeControl.snapshot(Classifier.TOOL_RISK).effectiveEnabled());
-            verify(auditService)
+            var inOrder = Mockito.inOrder(auditService);
+            inOrder.verify(auditService)
                     .recordMandatory(
                             eq("local-ml-classifier:tool-risk"),
                             eq("internal-admin"),
                             eq("system"),
                             eq(SecurityEventType.CLASSIFIER_RUNTIME_CHANGE_REQUESTED),
                             eq("classifier=tool-risk requestedEnabled=true"));
+            inOrder.verify(auditService)
+                    .recordMandatory(
+                            eq("local-ml-classifier:tool-risk"),
+                            eq("internal-admin"),
+                            eq("system"),
+                            eq(SecurityEventType.CLASSIFIER_RUNTIME_CHANGE_ACCEPTED),
+                            eq("classifier=tool-risk requestedEnabled=true reason=UPDATED"));
         }
     }
 
@@ -249,6 +258,13 @@ class OnnxAdminResourceTest {
                                 eq("system"),
                                 eq(SecurityEventType.CLASSIFIER_RUNTIME_CHANGE_REQUESTED),
                                 eq("classifier=intent requestedEnabled=false"));
+                verify(auditService)
+                        .recordMandatory(
+                                eq("local-ml-classifier:intent"),
+                                eq("internal-admin"),
+                                eq("system"),
+                                eq(SecurityEventType.CLASSIFIER_RUNTIME_CHANGE_ACCEPTED),
+                                eq("classifier=intent requestedEnabled=false reason=UPDATED"));
             }
             assertFalse(classifierRuntimeControl.snapshot(Classifier.INTENT).draining());
         }

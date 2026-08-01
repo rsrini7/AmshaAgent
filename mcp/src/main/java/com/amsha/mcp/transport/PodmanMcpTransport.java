@@ -23,6 +23,7 @@ import com.amsha.common.util.LogUtil;
 import com.amsha.core.sandbox.SandboxCircuitBreaker;
 import com.amsha.mcp.tool.DynamicToolCapability;
 import com.amsha.mcp.tool.DynamicToolCapabilityRegistry;
+import com.amsha.mcp.tool.DynamicToolOperationDefaults;
 import com.amsha.mcp.tool.McpTransportType;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -96,6 +97,7 @@ public class PodmanMcpTransport {
     public Uni<Void> connect(McpServerConfig config) {
         return Uni.createFrom()
                 .item(() -> {
+                    DynamicToolOperationDefaults.requireFor(config.category());
                     if (sandboxCircuitBreaker.getState() == SandboxCircuitBreaker.CircuitBreakerState.OPEN) {
                         if (!sandboxCircuitBreaker.shouldAttemptPodman()) {
                             throw new RuntimeException(
@@ -179,6 +181,7 @@ public class PodmanMcpTransport {
                 String schema =
                         tool.has("inputSchema") ? tool.get("inputSchema").toString() : "{}";
 
+                // requiredOperation from category registration defaults (see DynamicToolOperationDefaults).
                 DynamicToolCapability cap = new DynamicToolCapability(
                         name, desc, config.serverName(), McpTransportType.STDIO, false, schema, config.category());
                 registry.register(cap);

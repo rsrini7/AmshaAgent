@@ -9,7 +9,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.Callable;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.function.Consumer;
 
@@ -33,6 +32,7 @@ import com.amsha.core.audit.SecurityEventType;
 import com.amsha.core.domain.model.AgentCheckpoint;
 import com.amsha.core.governance.BudgetExceededException;
 import com.amsha.core.lifecycle.SessionHeartbeatTracker;
+import com.amsha.core.lifecycle.SessionTestLabelStore;
 import com.amsha.core.lifecycle.WorkspaceManager;
 import com.amsha.core.pipeline.MessageContext;
 import com.amsha.core.pipeline.TurnDispatchResult;
@@ -72,9 +72,8 @@ public class AgentSessionService {
     private final SessionCatalogService sessionCatalogService;
     private final ExecutorService vThreads;
     private final ActiveWorkspaceContext activeWorkspaceContext;
+    private final SessionTestLabelStore sessionTestLabelStore;
     private final int maxResumeIterations;
-
-    private final Map<String, Map<String, String>> expectedTestLabels = new ConcurrentHashMap<>();
 
     private static final String REST_USER_NAME = ApiConstants.REST_USER_NAME;
     private static final String REST_API_SESSION_PREFIX = "rest-api-";
@@ -95,6 +94,7 @@ public class AgentSessionService {
         this.sessionCatalogService = null;
         this.vThreads = null;
         this.activeWorkspaceContext = null;
+        this.sessionTestLabelStore = new SessionTestLabelStore();
         this.maxResumeIterations = 0;
     }
 
@@ -113,6 +113,7 @@ public class AgentSessionService {
             AuditService auditService,
             SessionCatalogService sessionCatalogService,
             ActiveWorkspaceContext activeWorkspaceContext,
+            SessionTestLabelStore sessionTestLabelStore,
             @VirtualThreads ExecutorService vThreads,
             @ConfigProperty(name = "amsha.approval.max-resume-iterations", defaultValue = "5")
                     int maxResumeIterations) {
@@ -129,6 +130,8 @@ public class AgentSessionService {
         this.auditService = auditService;
         this.sessionCatalogService = sessionCatalogService;
         this.activeWorkspaceContext = activeWorkspaceContext;
+        this.sessionTestLabelStore =
+                sessionTestLabelStore != null ? sessionTestLabelStore : new SessionTestLabelStore();
         this.vThreads = vThreads;
         this.maxResumeIterations = maxResumeIterations;
     }
@@ -162,6 +165,7 @@ public class AgentSessionService {
                 auditService,
                 null,
                 null,
+                new SessionTestLabelStore(),
                 vThreads,
                 maxResumeIterations);
     }
@@ -209,15 +213,14 @@ public class AgentSessionService {
                 "autonomy=" + level.name());
 
         if (expectedLabels != null && !expectedLabels.isEmpty()) {
-            expectedTestLabels.put(sessionId, Map.copyOf(expectedLabels));
+            sessionTestLabelStore.put(sessionId, expectedLabels);
         }
 
         return sessionId;
     }
 
     public String getExpectedTestLabel(String sessionId, String task) {
-        Map<String, String> labels = expectedTestLabels.get(sessionId);
-        return labels != null ? labels.get(task) : null;
+        return sessionTestLabelStore.get(sessionId, task);
     }
 
     public Map<String, Instant> listSessions(String userId) {
@@ -249,10 +252,16 @@ public class AgentSessionService {
         try {
             TurnDispatchResult dispatched = withSelectedWorkspace(() -> WorkspaceScopeHolder.call(
                     sessionId, () -> dispatchRestTurn(sessionId, userId, request, canonicalRole, maxIterations)));
-            return toServiceResult(dispatched, false);
+            ServiceResult<Object> result = toServiceResult(dispatched, false);
+            if (!isAwaitingApproval(result)) {
+                sessionTestLabelStore.clearSession(sessionId);
+            }
+            return result;
         } catch (BudgetExceededException e) {
+            sessionTestLabelStore.clearSession(sessionId);
             return ServiceResult.error("BUDGET", e.getMessage());
         } catch (Exception e) {
+            sessionTestLabelStore.clearSession(sessionId);
             log.errorf("Sync agent run failed: %s", LogUtil.rootMessage(e));
             return ServiceResult.error("SYSTEM", e.getMessage() != null ? e.getMessage() : "Internal error");
         }
@@ -292,9 +301,14 @@ public class AgentSessionService {
                 String canonicalRole =
                         AgentRoleEnum.fromString(request.agentRole()).toScopedName();
                 int maxIterations = request.maxIterations() != null ? request.maxIterations() : 5;
-                callback.accept(toServiceResult(
-                        dispatchRestTurn(sessionId, userId, request, canonicalRole, maxIterations), true));
+                ServiceResult<Object> result = toServiceResult(
+                        dispatchRestTurn(sessionId, userId, request, canonicalRole, maxIterations), true);
+                if (!isAwaitingApproval(result)) {
+                    sessionTestLabelStore.clearSession(sessionId);
+                }
+                callback.accept(result);
             } catch (Exception e) {
+                sessionTestLabelStore.clearSession(sessionId);
                 log.errorf("Async agent run failed: %s", LogUtil.rootMessage(e));
                 callback.accept(
                         ServiceResult.error("SYSTEM", e.getMessage() != null ? e.getMessage() : "Internal error"));
@@ -403,7 +417,7 @@ public class AgentSessionService {
         if (sessionError.isPresent()) return sessionError.get();
 
         auditService.recordMandatory(sessionId, userId, "system", SecurityEventType.SESSION_TERMINATED, "via=REST");
-        expectedTestLabels.remove(sessionId);
+        sessionTestLabelStore.clearSession(sessionId);
         workspaceManager.terminateSession(sessionId);
         return ServiceResult.success(null);
     }
@@ -447,6 +461,17 @@ public class AgentSessionService {
                 .<ServiceResult<Object>>map(
                         result -> new ServiceResult<>(responseMapper.mapResult(result, asynchronous), null, null))
                 .orElseGet(() -> ServiceResult.success(Map.of("status", "OK", "message", "Turn processed")));
+    }
+
+    private static boolean isAwaitingApproval(ServiceResult<Object> result) {
+        if (result == null) return false;
+        if ("AWAITING_APPROVAL".equals(result.errorCode())) return true;
+        Object data = result.value();
+        if (data instanceof Map<?, ?> map) {
+            Object status = map.get("status");
+            return status != null && "AWAITING_APPROVAL".equals(status.toString());
+        }
+        return data != null && data.toString().contains("AWAITING_APPROVAL");
     }
 
     private Optional<ServiceResult<Object>> validateRole(String role) {
