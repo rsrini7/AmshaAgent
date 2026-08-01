@@ -295,6 +295,7 @@ public class FinishActionHandler {
         try {
             if (answerQualityShadowEvaluation != null) {
                 answerQualityShadowEvaluation.observeAccepted(
+                        context.sessionId(),
                         new AnswerQualityShadowContext(context.agentRole(), context.goal(), answer, toolInvokedInTurn));
             }
         } catch (RuntimeException | LinkageError ignored) {

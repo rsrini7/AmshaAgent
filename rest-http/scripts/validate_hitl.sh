@@ -25,8 +25,9 @@ is_sandbox_offline() { grep -q "SANDBOX_OFFLINE" /tmp/resp; }
 create_session() {
   local c
   c=$(mute -X POST -H "X-Amsha-API-Key: $VALID_KEY" -H "Content-Type: application/json" \
+    -H "X-Amsha-Test-Expected-Tool-Risk: REQUIRE_APPROVAL" \
     "$B/api/v1/sessions" -d '{"autonomyLevel":"SUPERVISED"}')
-  if [ "$c" = "429" ]; then sleep $RL_WAIT; c=$(mute -X POST -H "X-Amsha-API-Key: $VALID_KEY" -H "Content-Type: application/json" "$B/api/v1/sessions" -d '{"autonomyLevel":"SUPERVISED"}'); fi
+  if [ "$c" = "429" ]; then sleep $RL_WAIT; c=$(mute -X POST -H "X-Amsha-API-Key: $VALID_KEY" -H "Content-Type: application/json" -H "X-Amsha-Test-Expected-Tool-Risk: REQUIRE_APPROVAL" "$B/api/v1/sessions" -d '{"autonomyLevel":"SUPERVISED"}'); fi
   echo "$c"
 }
 trigger_approval() {

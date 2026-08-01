@@ -38,6 +38,7 @@ BUDGET_SCRIPT="$SCRIPT_DIR/validate_budget.sh"
 SSE_SETTINGS_SCRIPT="$SCRIPT_DIR/validate_sse_settings.sh"
 ONBOARDING_SCRIPT="$SCRIPT_DIR/validate_onboarding.sh"
 ONNX_SCRIPT="$SCRIPT_DIR/validate_onnx.sh"
+DATA_COLLECTION_SCRIPT="$SCRIPT_DIR/validate_data_collection.sh"
 
 check_app() {
   local check_base="${TEST_BASE:-http://localhost:8080}"
@@ -87,8 +88,9 @@ for arg in "$@"; do
     --sse-settings) RUN_ALL=false; RUN_SSE_SETTINGS=true ;;
     --onboarding)   RUN_ALL=false; RUN_ONBOARDING=true ;;
     --onnx)         RUN_ALL=false; RUN_ONNX=true ;;
+    --data-collection) RUN_ALL=false; RUN_DATA_COLLECTION=true ;;
     --fast)   FAST=true; RUN_ALL=false; RUN_REFLEX=true; RUN_SKILLS=true; RUN_SKILLS_ADMISSION=true; RUN_ADMIN=true; RUN_AUTH_SESSION=true; RUN_IDENTITY=true; RUN_PII_AUDIT=true; RUN_SELF_EVOLVE=true; RUN_SSE_SETTINGS=true; RUN_ONBOARDING=true ;;
-    --llm)    LLM=true; RUN_ALL=false; RUN_MEMORY=true; RUN_WEB=true; RUN_ROLES=true; RUN_CRON=true; RUN_RAG=true; RUN_BUDGET=true; RUN_HITL=true ;;
+    --llm)    LLM=true; RUN_ALL=false; RUN_MEMORY=true; RUN_WEB=true; RUN_ROLES=true; RUN_CRON=true; RUN_RAG=true; RUN_BUDGET=true; RUN_HITL=true; RUN_DATA_COLLECTION=true ;;
     --list)
       echo "Available validators:"
       echo "  --reflex       validate_reflex.sh             (zero-token, ~30s)"
@@ -110,8 +112,9 @@ for arg in "$@"; do
       echo "  --onboarding  validate_onboarding.sh         (P110 draft/saga + provider-catalog + workspace filter, fast)"
       echo "  --onnx         validate_onnx.sh               (runtime, inference, bundle, vector index, classifier controls; requires local model)"
       echo "  --cron         validate_cron.sh               (programmatic cron resource REST APIs, needs LLM)"
+      echo "  --data-collection validate_data_collection.sh  (needs LLM)"
       echo "  --fast         reflex + skills + SkillsJar admission + admin + auth-session + identity + pii-audit + self-evolve + sse-settings + onboarding"
-      echo "  --llm          memory + web + roles + cron + rag + budget + hitl"
+      echo "  --llm          memory + web + roles + cron + rag + budget + hitl + data-collection"
       echo "  (no args)      run ALL validators"
       exit 0
       ;;
@@ -227,6 +230,10 @@ fi
 
 if [ "$RUN_ONNX" = true ]; then
   run_validator "ONNX LOCAL ML" "$ONNX_SCRIPT"
+fi
+
+if [ "$RUN_DATA_COLLECTION" = true ] || [ "$RUN_ALL" = true ]; then
+  run_validator "DATA COLLECTION" "$DATA_COLLECTION_SCRIPT"
 fi
 
 # ── Summary ──

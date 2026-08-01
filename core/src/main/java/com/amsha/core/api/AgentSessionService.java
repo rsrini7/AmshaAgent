@@ -9,6 +9,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.Callable;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.function.Consumer;
 
@@ -72,6 +73,8 @@ public class AgentSessionService {
     private final ExecutorService vThreads;
     private final ActiveWorkspaceContext activeWorkspaceContext;
     private final int maxResumeIterations;
+
+    private final Map<String, Map<String, String>> expectedTestLabels = new ConcurrentHashMap<>();
 
     private static final String REST_USER_NAME = ApiConstants.REST_USER_NAME;
     private static final String REST_API_SESSION_PREFIX = "rest-api-";
@@ -164,10 +167,29 @@ public class AgentSessionService {
     }
 
     public String createSession(String userId, AutonomyLevel autonomyLevel) {
-        return createSession(userId, autonomyLevel, ChannelType.REST_API.id(), "rest-chat");
+        return createSession(userId, autonomyLevel, Map.of(), ChannelType.REST_API.id(), "rest-chat");
+    }
+
+    public String createSession(String userId, AutonomyLevel autonomyLevel, Map<String, String> expectedLabels) {
+        return createSession(userId, autonomyLevel, expectedLabels, ChannelType.REST_API.id(), "rest-chat");
     }
 
     public String createSession(String userId, AutonomyLevel autonomyLevel, String channelType, String channelId) {
+        return createSession(userId, autonomyLevel, Map.of(), channelType, channelId);
+    }
+
+    public String createSession(
+            String userId,
+            AutonomyLevel autonomyLevel,
+            Map<String, String> expectedLabels,
+            String channelType,
+            String channelId) {
+        if (autonomyLevel == AutonomyLevel.FULL
+                && expectedLabels != null
+                && "REQUIRE_APPROVAL".equals(expectedLabels.get("tool_risk"))) {
+            throw new IllegalArgumentException("FULL autonomy cannot produce REQUIRE_APPROVAL observations");
+        }
+
         String sessionId = sessionCatalogService != null
                 ? sessionCatalogService.createSession(userId, channelType, channelId)
                 : UUID.randomUUID().toString();
@@ -186,7 +208,16 @@ public class AgentSessionService {
                 SecurityEventType.SESSION_CREATED,
                 "autonomy=" + level.name());
 
+        if (expectedLabels != null && !expectedLabels.isEmpty()) {
+            expectedTestLabels.put(sessionId, Map.copyOf(expectedLabels));
+        }
+
         return sessionId;
+    }
+
+    public String getExpectedTestLabel(String sessionId, String task) {
+        Map<String, String> labels = expectedTestLabels.get(sessionId);
+        return labels != null ? labels.get(task) : null;
     }
 
     public Map<String, Instant> listSessions(String userId) {
@@ -372,6 +403,7 @@ public class AgentSessionService {
         if (sessionError.isPresent()) return sessionError.get();
 
         auditService.recordMandatory(sessionId, userId, "system", SecurityEventType.SESSION_TERMINATED, "via=REST");
+        expectedTestLabels.remove(sessionId);
         workspaceManager.terminateSession(sessionId);
         return ServiceResult.success(null);
     }

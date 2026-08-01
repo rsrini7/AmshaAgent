@@ -15,10 +15,12 @@ import jakarta.ws.rs.QueryParam;
 import jakarta.ws.rs.container.AsyncResponse;
 import jakarta.ws.rs.container.Suspended;
 import jakarta.ws.rs.core.Context;
+import jakarta.ws.rs.core.HttpHeaders;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.core.SecurityContext;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -35,6 +37,7 @@ import com.amsha.core.scope.WorkspaceContext;
 import com.amsha.persistence.api.CheckpointCrudPort;
 import com.amsha.persistence.api.CheckpointDto;
 
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.eclipse.microprofile.openapi.annotations.Operation;
 
 import io.smallrye.common.annotation.RunOnVirtualThread;
@@ -58,15 +61,39 @@ public class AgentResource {
     @Context
     SecurityContext securityContext;
 
+    @Context
+    HttpHeaders httpHeaders;
+
+    @ConfigProperty(name = "amsha.test-data-collection.enabled", defaultValue = "false")
+    boolean collectionEnabled;
+
     @POST
     @RunOnVirtualThread
     @Operation(summary = "Create a new agent session with specified autonomy level")
     public Response createSession(@Valid CreateSessionRequest request) {
         var level = request != null ? request.autonomyLevel() : null;
         String userId = resolveUserId();
-        return Response.status(Response.Status.CREATED)
-                .entity(new CreateSessionResponse(sessionService.createSession(userId, level)))
-                .build();
+
+        Map<String, String> expectedLabels = new HashMap<>();
+        if (collectionEnabled
+                && securityContext != null
+                && securityContext.isUserInRole("internal")
+                && httpHeaders != null) {
+            String toolRisk = httpHeaders.getHeaderString("X-Amsha-Test-Expected-Tool-Risk");
+            if (toolRisk != null) expectedLabels.put("tool_risk", toolRisk);
+            String answerQuality = httpHeaders.getHeaderString("X-Amsha-Test-Expected-Answer-Quality");
+            if (answerQuality != null) expectedLabels.put("answer_quality", answerQuality);
+        }
+
+        try {
+            return Response.status(Response.Status.CREATED)
+                    .entity(new CreateSessionResponse(sessionService.createSession(userId, level, expectedLabels)))
+                    .build();
+        } catch (IllegalArgumentException e) {
+            return Response.status(Response.Status.BAD_REQUEST)
+                    .entity(new AmshaErrorResponse(e.getMessage()))
+                    .build();
+        }
     }
 
     @GET

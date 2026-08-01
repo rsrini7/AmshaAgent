@@ -175,13 +175,17 @@ public class ToolInvocationGuard {
         boolean isExempt = isSchedulingTool || (isMemoryReadTool && level != AutonomyLevel.READONLY);
 
         ToolOperation op = toolOpt.map(AgentTool::requiredOperation).orElse(ToolOperation.EXECUTE_SHELL);
-        if ((roleRegistry.requiresApprovalForTools(agentRole) || toolRequiresApproval)
-                && !isExempt
-                && !AutonomyLevel.FULL.equals(level)) {
+        boolean alwaysRequiresHitl = (op == ToolOperation.EXECUTE_SHELL || op == ToolOperation.NETWORK_OUTBOUND);
+
+        if (!isExempt
+                && (alwaysRequiresHitl
+                        || ((roleRegistry.requiresApprovalForTools(agentRole) || toolRequiresApproval)
+                                && !AutonomyLevel.FULL.equals(level)))) {
+            observeToolRiskForCollection(sessionId, agentRole, level, toolName, params, goal);
             ApprovalFrame frame = new ApprovalFrame(toolName, params, op.riskLevel());
             return new GuardDecision.PauseForApproval(frame);
         }
-        observeProvisionalAllow(agentRole, level, toolName, params, goal);
+        observeProvisionalAllow(sessionId, agentRole, level, toolName, params, goal);
         return applyPostPolicyToolRisk(agentRole, level, toolName, params, history, goal, op);
     }
 
@@ -225,11 +229,43 @@ public class ToolInvocationGuard {
     }
 
     private void observeProvisionalAllow(
-            String agentRole, AutonomyLevel level, String toolName, Map<String, Object> params, String goal) {
+            String sessionId,
+            String agentRole,
+            AutonomyLevel level,
+            String toolName,
+            Map<String, Object> params,
+            String goal) {
+        observeToolRisk(sessionId, agentRole, level, toolName, params, goal, true);
+    }
+
+    private void observeToolRiskForCollection(
+            String sessionId,
+            String agentRole,
+            AutonomyLevel level,
+            String toolName,
+            Map<String, Object> params,
+            String goal) {
+        observeToolRisk(sessionId, agentRole, level, toolName, params, goal, false);
+    }
+
+    private void observeToolRisk(
+            String sessionId,
+            String agentRole,
+            AutonomyLevel level,
+            String toolName,
+            Map<String, Object> params,
+            String goal,
+            boolean includeShadow) {
         try {
-            if (toolRiskShadowEvaluation != null) {
-                toolRiskShadowEvaluation.observeProvisionalAllow(new ToolRiskShadowContext(
-                        agentRole, level, toolName, params == null ? Map.of() : params, goal));
+            if (toolRiskShadowEvaluation == null) {
+                return;
+            }
+            ToolRiskShadowContext context =
+                    new ToolRiskShadowContext(agentRole, level, toolName, params == null ? Map.of() : params, goal);
+            if (includeShadow) {
+                toolRiskShadowEvaluation.observeProvisionalAllow(sessionId, context);
+            } else {
+                toolRiskShadowEvaluation.observeForDataCollection(sessionId, context);
             }
         } catch (RuntimeException | LinkageError ignored) {
             // A shadow-only observer must never alter a deterministic guard decision.

@@ -125,7 +125,7 @@ class FinishActionHandlerTest {
 
         assertEquals("Here is the accepted summary.", ((FinishActionHandler.FinishOutcome.Completed) outcome).answer());
         ArgumentCaptor<AnswerQualityShadowContext> captor = ArgumentCaptor.forClass(AnswerQualityShadowContext.class);
-        verify(answerQualityShadowEvaluation).observeAccepted(captor.capture());
+        verify(answerQualityShadowEvaluation).observeAccepted(anyString(), captor.capture());
         assertTrue(captor.getValue().toolInvokedInTurn());
         assertEquals("Here is the accepted summary.", captor.getValue().answer());
     }

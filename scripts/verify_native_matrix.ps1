@@ -181,8 +181,45 @@ function Invoke-RecordTarget {
 
     $baseUrl = "http://127.0.0.1:$port"
 
+    # Extract OMLX keys from root .env to enable true LLM validations
+    $omlxKey = "dummy-key-to-bypass-startup-check"
+    $omlxUrl = "http://127.0.0.1:8000/v1"
+    $omlxModel = "wang-yang/Ornith-1.0-35B-MTPLX"
+    if (Test-Path "$RootDir/.env") {
+        Get-Content "$RootDir/.env" | ForEach-Object {
+            if ($_ -match "^AMSHA_OMLX_API_KEY=(.*)") { $omlxKey = $matches[1].Trim() }
+            if ($_ -match "^AMSHA_OMLX_BASE_URL=(.*)") { $omlxUrl = $matches[1].Trim() }
+            if ($_ -match "^AMSHA_OMLX_MODEL=(.*)") { $omlxModel = $matches[1].Trim() }
+        }
+    }
+    
+    if ($omlxKey -ne "dummy-key-to-bypass-startup-check") {
+        Write-Host "Checking if local OMLX provider is running..."
+        try {
+            $null = Invoke-WebRequest -Uri "$omlxUrl/models" -TimeoutSec 2 -UseBasicParsing -ErrorAction Stop
+        } catch {
+            Write-Host "⚠️  OMLX endpoint unreachable at $omlxUrl!"
+            Write-Host "⚠️  Please start OMLX in a separate terminal using: omlx serve"
+            Write-Host "⚠️  Skipping data collection validation."
+            $omlxKey = "dummy-key-to-bypass-startup-check"
+        }
+    }
+
+    $env:AMSHA_LLM_PROVIDER = "generic-openai"
+    $env:AMSHA_GENERIC_OPENAI_API_KEY = $omlxKey
+    $env:AMSHA_GENERIC_OPENAI_BASE_URL = $omlxUrl
+    $env:AMSHA_GENERIC_OPENAI_MODEL = $omlxModel
+
     # NOTE: Run all validations uses bash on windows. We assume Git Bash is available in PATH.
     $validKey = (python -c "import os; print(os.environ.get('VALID_KEY', 'default'))") # Fallback to common env equivalent
+    $env:AMSHA_API_KEYS_INTERNAL = $validKey
+
+    $collectionEnabled = $false
+    $sandboxEnabled = "false"
+    if ($omlxKey -ne "dummy-key-to-bypass-startup-check") {
+        $collectionEnabled = $true
+        $sandboxEnabled = "true"
+    }
 
     for ($cycle = 1; $cycle -le $cycles; $cycle++) {
         $dataDir = Join-Path $Global:RunDir "cycle-$cycle\data"
@@ -191,6 +228,8 @@ function Invoke-RecordTarget {
 
         Write-Host "Starting native lifecycle $cycle/$cycles for $actualTarget..."
         $env:AMSHA_DATA_DIR = $dataDir
+        $env:AMSHA_SANDBOX_ENABLED = $sandboxEnabled
+        $env:AMSHA_TEST_DATA_COLLECTION_ENABLED = if ($collectionEnabled) { "true" } else { "false" }
         
         $proc = Start-Process -FilePath $binary -ArgumentList "serve" -RedirectStandardOutput $logFile -RedirectStandardError $logFile -PassThru -NoNewWindow
         $Global:AppPID = $proc.Id
@@ -202,8 +241,15 @@ function Invoke-RecordTarget {
 
         # Run bash validations
         $env:TEST_BASE = $baseUrl
-        bash "$RootDir/rest-http/scripts/run_all_validations.sh" --onnx
+        bash "$RootDir/rest-http/scripts/run_all_validations.sh" --onnx --fast
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        
+        if ($collectionEnabled) {
+            Write-Host "OMLX keys detected, running data collection validation..."
+            $env:AMSHA_TEST_DATA_COLLECTION_ENABLED = "true"
+            bash "$RootDir/rest-http/scripts/validate_data_collection.sh"
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        }
 
         $beforeRss = Get-RssKib $Global:AppPID
         for ($probe = 1; $probe -le $probes; $probe++) {

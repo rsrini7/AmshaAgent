@@ -27,11 +27,14 @@ class ToolRiskShadowEvaluationServiceTest {
                     return new ClassifierResult.Opinion<>(ToolRiskPrediction.REQUIRE_APPROVAL, 0.91f, "tool-risk-v1");
                 }),
                 Runnable::run,
-                registry);
+                registry,
+                null,
+                null,
+                false);
         ToolRiskShadowContext context = new ToolRiskShadowContext(
                 "coder", AutonomyLevel.FULL, "private_tool_name", Map.of("token", "private-secret"), "private goal");
 
-        service.observeProvisionalAllow(context);
+        service.observeProvisionalAllow("test-session-id", context);
 
         assertEquals(context, observed.get());
         assertEquals(
@@ -65,15 +68,21 @@ class ToolRiskShadowEvaluationServiceTest {
                             throw new IllegalStateException("sensitive");
                         }),
                         Runnable::run,
-                        registry)
-                .observeProvisionalAllow(context);
+                        registry,
+                        null,
+                        null,
+                        false)
+                .observeProvisionalAllow("test-session-id", context);
         new ToolRiskShadowEvaluationService(
                         List.of(ignored -> new ClassifierResult.Opinion<>(ToolRiskPrediction.LOW_RISK, 1.0f, "never")),
                         command -> {
                             throw new RejectedExecutionException();
                         },
-                        registry)
-                .observeProvisionalAllow(context);
+                        registry,
+                        null,
+                        null,
+                        false)
+                .observeProvisionalAllow("test-session-id", context);
 
         assertEquals(
                 1.0,

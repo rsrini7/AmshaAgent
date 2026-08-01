@@ -240,6 +240,35 @@ record_target() {
 
   local cycle base_url data_dir log_file before_rss after_rss growth_kib probe code
   base_url="http://127.0.0.1:$port"
+  # Extract OMLX keys from root .env to enable true LLM validations without external APIs
+  local omlx_key omlx_url omlx_model
+  if [ -f "$ROOT_DIR/.env" ]; then
+    omlx_key="$(grep "^AMSHA_OMLX_API_KEY=" "$ROOT_DIR/.env" | cut -d= -f2- | tr -d '\r')"
+    omlx_url="$(grep "^AMSHA_OMLX_BASE_URL=" "$ROOT_DIR/.env" | cut -d= -f2- | tr -d '\r')"
+    omlx_model="$(grep "^AMSHA_OMLX_MODEL=" "$ROOT_DIR/.env" | cut -d= -f2- | tr -d '\r')"
+  fi
+  # Fallback to dummy keys if missing so startup checks pass
+  omlx_key="${omlx_key:-dummy-key-to-bypass-startup-check}"
+  omlx_url="${omlx_url:-http://127.0.0.1:8000/v1}"
+  omlx_model="${omlx_model:-wang-yang/Ornith-1.0-35B-MTPLX}"
+
+  if [ "$omlx_key" != "dummy-key-to-bypass-startup-check" ]; then
+    echo "Checking if local OMLX provider is running..."
+    if ! curl -s -m 2 "$omlx_url/models" >/dev/null; then
+      echo "⚠️  OMLX endpoint unreachable at $omlx_url!"
+      echo "⚠️  Please start OMLX in a separate terminal using: omlx serve"
+      echo "⚠️  Skipping data collection validation."
+      omlx_key="dummy-key-to-bypass-startup-check"
+    fi
+  fi
+
+  local collection_enabled=false
+  local sandbox_enabled=false
+  if [ "$omlx_key" != "dummy-key-to-bypass-startup-check" ]; then
+    collection_enabled=true
+    sandbox_enabled=true
+  fi
+
   for ((cycle = 1; cycle <= cycles; cycle++)); do
     data_dir="$RUN_DIR/cycle-$cycle/data"
     log_file="$RUN_DIR/cycle-$cycle/native.log"
@@ -256,7 +285,13 @@ record_target() {
     AMSHA_EMBEDDING_ONNX_SPACE_ID=sentence-transformers/all-mpnet-base-v2 \
     AMSHA_EMBEDDING_ONNX_SPACE_REVISION=e8c3b32edf5434bc2275fc9bab85f82640a19130 \
     AMSHA_EMBED_DIMENSIONS=768 \
-    AMSHA_SANDBOX_ENABLED=false \
+    AMSHA_SANDBOX_ENABLED="$sandbox_enabled" \
+    AMSHA_API_KEYS_INTERNAL="$VALID_KEY" \
+    AMSHA_LLM_PROVIDER="generic-openai" \
+    AMSHA_GENERIC_OPENAI_API_KEY="$omlx_key" \
+    AMSHA_GENERIC_OPENAI_BASE_URL="$omlx_url" \
+    AMSHA_GENERIC_OPENAI_MODEL="$omlx_model" \
+    AMSHA_TEST_DATA_COLLECTION_ENABLED="$collection_enabled" \
     QUARKUS_HTTP_PORT="$port" \
     "$binary" serve >"$log_file" 2>&1 &
     APP_PID=$!
@@ -269,7 +304,17 @@ record_target() {
     fi
 
     TEST_BASE="$base_url" AMSHA_ONNX_MODEL_ROOT="$model_root" \
-      bash "$ROOT_DIR/rest-http/scripts/run_all_validations.sh" --onnx
+      bash "$ROOT_DIR/rest-http/scripts/run_all_validations.sh" --onnx --fast
+    
+    if [ "$collection_enabled" = true ]; then
+      echo "OMLX keys detected, running data collection validation..."
+      AMSHA_TEST_DATA_COLLECTION_ENABLED=true TEST_BASE="$base_url" AMSHA_DATA_DIR="$data_dir" \
+        bash "$ROOT_DIR/rest-http/scripts/validate_data_collection.sh"
+      if [ $? -ne 0 ]; then
+        return 1
+      fi
+    fi
+    
     before_rss="$(rss_kibibytes "$APP_PID")"
     for ((probe = 1; probe <= probes; probe++)); do
       code="$(curl -s -m 30 -o /dev/null -w '%{http_code}' \

@@ -10,9 +10,12 @@ import java.util.Locale;
 import java.util.Objects;
 import java.util.concurrent.Executor;
 
+import com.amsha.core.api.AgentSessionService;
 import com.amsha.core.classifier.ClassifierResult;
 import com.amsha.core.classifier.ClassifierShadowDispatcher;
 import com.amsha.core.classifier.ClassifierShadowExecutor;
+
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.DistributionSummary;
@@ -27,30 +30,66 @@ public class ToolRiskShadowEvaluationService {
     private final Executor executor;
     private final MeterRegistry meterRegistry;
     private final DistributionSummary confidence;
+    private final AgentSessionService sessionService;
+    private final TestDataCollectionService testDataCollectionService;
+    private final boolean testDataCollectionEnabled;
 
     @Inject
     public ToolRiskShadowEvaluationService(
             Instance<ToolRiskShadowClassifier> classifiers,
             @Identifier("classifier-shadow") ClassifierShadowExecutor executor,
-            MeterRegistry meterRegistry) {
-        this(classifiers.stream().toList(), executor, meterRegistry);
+            MeterRegistry meterRegistry,
+            AgentSessionService sessionService,
+            TestDataCollectionService testDataCollectionService,
+            @ConfigProperty(name = "amsha.test-data-collection.enabled", defaultValue = "false")
+                    boolean testDataCollectionEnabled) {
+        this(
+                classifiers.stream().toList(),
+                executor,
+                meterRegistry,
+                sessionService,
+                testDataCollectionService,
+                testDataCollectionEnabled);
     }
 
     ToolRiskShadowEvaluationService(
-            List<ToolRiskShadowClassifier> classifiers, Executor executor, MeterRegistry meterRegistry) {
+            List<ToolRiskShadowClassifier> classifiers,
+            Executor executor,
+            MeterRegistry meterRegistry,
+            AgentSessionService sessionService,
+            TestDataCollectionService testDataCollectionService,
+            boolean testDataCollectionEnabled) {
         this.classifiers = classifiers.stream()
                 .sorted(Comparator.comparing(classifier -> classifier.getClass().getName()))
                 .toList();
         this.executor = Objects.requireNonNull(executor, "executor");
         this.meterRegistry = Objects.requireNonNull(meterRegistry, "meterRegistry");
+        this.sessionService = sessionService;
+        this.testDataCollectionService = testDataCollectionService;
+        this.testDataCollectionEnabled = testDataCollectionEnabled;
         this.confidence = DistributionSummary.builder("amsha.classifier.tool_risk.shadow.confidence")
                 .description("Confidence distribution for Phase 2 tool-risk shadow opinions")
                 .serviceLevelObjectives(0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0)
                 .register(meterRegistry);
     }
 
-    public void observeProvisionalAllow(ToolRiskShadowContext context) {
+    public void observeForDataCollection(String sessionId, ToolRiskShadowContext context) {
+        maybeCollect(sessionId, context);
+    }
+
+    public void observeProvisionalAllow(String sessionId, ToolRiskShadowContext context) {
+        maybeCollect(sessionId, context);
         ClassifierShadowDispatcher.observe(classifiers, executor, context, this::recordResult);
+    }
+
+    private void maybeCollect(String sessionId, ToolRiskShadowContext context) {
+        if (!testDataCollectionEnabled || sessionService == null || testDataCollectionService == null) {
+            return;
+        }
+        String expectedLabel = sessionService.getExpectedTestLabel(sessionId, "tool_risk");
+        if (expectedLabel != null) {
+            testDataCollectionService.recordToolRiskCandidate(expectedLabel, context);
+        }
     }
 
     private void recordResult(ClassifierResult<ToolRiskPrediction> result) {

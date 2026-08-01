@@ -1310,6 +1310,24 @@ The `embedding vector(768)` column and HNSW index MUST be similarly guarded with
      leave state unchanged. Control responses and audit details MUST NOT contain model IDs,
      inputs, outputs, scores, labels, goals, answers, or tool parameters.
 
+7.13.5 INVARIANT: Phase 4 Classifier Automated Data Collection MUST NOT compromise
+     the isolation or safety of the core loop. The collection hook MUST operate on
+     sanitized copies of context data (`@InputSanitizer.PII` qualified) and MUST NOT
+     block execution or leak data. Collection MUST be strictly opt-in via
+     `amsha.test-data-collection.enabled`. Data is collected into `data/` using
+     file locks and JSON-Lines formats compatible with the labeling schema. The
+     end-to-end test automation (`validate_data_collection.sh`) MUST NOT rely on
+     modified security policies; specifically, `EXECUTE_SHELL` and `NETWORK_OUTBOUND`
+     MUST continue to enforce HITL even under `FULL` autonomy, requiring test
+     harnesses to actively poll and approve `AWAITING_APPROVAL` checkpoints instead
+     of bypassing security invariants. Terminal checkpoints (`COMPLETED`) MUST NOT
+     be prematurely archived by the transaction finalizing them; they MUST remain
+     queryable by API clients until explicitly archived or a new turn begins.
+     Furthermore, to prevent duplicate IDs during repetitive testing, test scripts
+     MUST clear stale `.autotest.jsonl` files before starting a test run. The test
+     harness MUST also tolerate intermittent failures (e.g., `Connection refused`)
+     from local LLM providers under load without failing the test suite.
+
 7.14 INVARIANT: ReasoningStep history is the in-memory source of truth
      during AgentLoop.runWithRole() execution. ChatHistoryAssembler reads
      from in-memory history on each LLM call - SQLite does not need to

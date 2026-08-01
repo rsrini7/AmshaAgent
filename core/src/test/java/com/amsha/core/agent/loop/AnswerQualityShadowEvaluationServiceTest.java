@@ -26,11 +26,14 @@ class AnswerQualityShadowEvaluationServiceTest {
                             AnswerQualityPrediction.ACCEPTABLE, 0.88f, "answer-quality-v1");
                 }),
                 Runnable::run,
-                registry);
+                registry,
+                null,
+                null,
+                false);
         AnswerQualityShadowContext context =
                 new AnswerQualityShadowContext("researcher", "private goal", "private accepted answer", true);
 
-        service.observeAccepted(context);
+        service.observeAccepted("test-session-id", context);
 
         assertEquals(context, observed.get());
         assertEquals(
@@ -60,9 +63,12 @@ class AnswerQualityShadowEvaluationServiceTest {
         AnswerQualityShadowEvaluationService service = new AnswerQualityShadowEvaluationService(
                 List.of(context -> new ClassifierResult.NoOpinion<>(NoOpinionReason.DISABLED)),
                 Runnable::run,
-                registry);
+                registry,
+                null,
+                null,
+                false);
 
-        service.observeAccepted(new AnswerQualityShadowContext("coder", "goal", "answer", false));
+        service.observeAccepted("test-session-id", new AnswerQualityShadowContext("coder", "goal", "answer", false));
 
         assertEquals(
                 1.0,
