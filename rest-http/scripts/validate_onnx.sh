@@ -14,7 +14,25 @@ info()  { printf "%-4s %-58s " "" "$1"; }
 ok()    { printf "✅ HTTP %s\n" "$1"; PASS=$((PASS+1)); }
 RESP_FILE="$(mktemp)"
 trap 'rm -f "$RESP_FILE"' EXIT
-fail()  { printf "❌ HTTP %s — %s\n" "$CODE" "$(head -c 120 "$RESP_FILE")"; FAIL=$((FAIL+1)); }
+response_shape() {
+  python3 - "$RESP_FILE" <<'PY'
+import json
+import sys
+
+try:
+    with open(sys.argv[1], encoding="utf-8") as response:
+        payload = json.load(response)
+except (OSError, UnicodeError, json.JSONDecodeError):
+    print("non-json-response")
+else:
+    if isinstance(payload, dict):
+        keys = sorted(str(key) for key in payload)[:12]
+        print("json-keys=" + ",".join(keys))
+    else:
+        print("json-type=" + type(payload).__name__)
+PY
+}
+fail()  { printf "❌ HTTP %s — %s\n" "$CODE" "$(response_shape)"; FAIL=$((FAIL+1)); }
 mute()  { curl -s -m 180 -o "$RESP_FILE" -w "%{http_code}" "$@"; }
 successful_embeddings() {
   curl -s -m 15 "$B/q/metrics" \
@@ -87,6 +105,25 @@ echo "════════════════════════�
 echo " ONNX LOCAL ML INFERENCE REST VALIDATOR"
 echo "═══════════════════════════════════════════"
 echo ""
+
+# ── ONNX-0: Protected endpoint access matrix ──
+info "ONNX-0a: Probe rejects unauthenticated callers"
+CODE=$(mute -X POST "$B/api/v1/admin/local-ml/onnx/probe")
+if [ "$CODE" = "401" ]; then ok "$CODE"; else fail "$CODE"; fi
+
+info "ONNX-0b: Probe rejects non-internal callers"
+CODE=$(mute -X POST -H "X-Amsha-API-Key: $CI_KEY" \
+  "$B/api/v1/admin/local-ml/onnx/probe")
+if [ "$CODE" = "403" ]; then ok "$CODE"; else fail "$CODE"; fi
+
+info "ONNX-0c: Index diagnostics reject unauthenticated callers"
+CODE=$(mute -X GET "$B/api/v1/admin/local-ml/onnx/indexes")
+if [ "$CODE" = "401" ]; then ok "$CODE"; else fail "$CODE"; fi
+
+info "ONNX-0d: Classifier status rejects non-internal callers"
+CODE=$(mute -X GET -H "X-Amsha-API-Key: $CI_KEY" \
+  "$B/api/v1/admin/local-ml/onnx/classifiers")
+if [ "$CODE" = "403" ]; then ok "$CODE"; else fail "$CODE"; fi
 
 # ── ONNX-1: Health Check Readiness ──
 info "ONNX-1: Local ONNX Runtime health check (/q/health)"
@@ -180,11 +217,24 @@ else
   fail "$CODE"
 fi
 
-info "ONNX-6: Classifier enable fails closed without a ready implementation"
+for classifier in intent tool-risk answer-quality; do
+  info "ONNX-6: $classifier enable fails closed without a ready implementation"
+  CODE=$(mute -X POST -H "X-Amsha-API-Key: $VALID_KEY" \
+    "$B/api/v1/admin/local-ml/onnx/classifiers/$classifier/enable")
+  if [ "$CODE" = "409" ] \
+    && grep -q '"accepted":false' "$RESP_FILE" \
+    && grep -q '"reason":"MISSING_READY_IMPLEMENTATION"' "$RESP_FILE" \
+    && grep -q '"classifier":"'"$classifier"'"' "$RESP_FILE"; then
+    ok "$CODE"
+  else
+    fail "$CODE"
+  fi
+done
+
+info "ONNX-6b: Unknown classifier is rejected"
 CODE=$(mute -X POST -H "X-Amsha-API-Key: $VALID_KEY" \
-  "$B/api/v1/admin/local-ml/onnx/classifiers/tool-risk/enable")
-if [ "$CODE" = "409" ] && grep -q '"accepted":false' "$RESP_FILE" \
-    && grep -q '"reason":"MISSING_READY_IMPLEMENTATION"' "$RESP_FILE"; then
+  "$B/api/v1/admin/local-ml/onnx/classifiers/unknown/enable")
+if [ "$CODE" = "400" ] && grep -q '"unknown_classifier"' "$RESP_FILE"; then
   ok "$CODE"
 else
   fail "$CODE"
@@ -198,6 +248,33 @@ if [ "$CODE" = "403" ]; then
   ok "$CODE"
 else
   fail "$CODE"
+fi
+
+info "ONNX-8: Model unload rejects non-internal callers before mutation"
+CODE=$(mute -X POST -H "X-Amsha-API-Key: $CI_KEY" \
+  "$B/api/v1/admin/local-ml/models/not-loaded/unload")
+if [ "$CODE" = "403" ]; then
+  ok "$CODE"
+else
+  fail "$CODE"
+fi
+
+# Destructive lifecycle check is opt-in and must run against an isolated process.
+if [ "${AMSHA_ONNX_VALIDATE_UNLOAD:-false}" = "true" ]; then
+  BUNDLE_ID="${AMSHA_ONNX_UNLOAD_BUNDLE_ID:-all-mpnet-base-v2-e8c3b32}"
+  info "ONNX-9: Loaded model bundle unloads with mandatory internal authorization"
+  if [[ ! "$BUNDLE_ID" =~ ^[a-zA-Z0-9][a-zA-Z0-9._-]*$ ]]; then
+    CODE="invalid-bundle-id"
+    fail "$CODE"
+  else
+    CODE=$(mute -X POST -H "X-Amsha-API-Key: $VALID_KEY" \
+      "$B/api/v1/admin/local-ml/models/$BUNDLE_ID/unload")
+    if [ "$CODE" = "200" ] && grep -q '"status":"UNLOADED"' "$RESP_FILE"; then
+      ok "$CODE"
+    else
+      fail "$CODE"
+    fi
+  fi
 fi
 
 echo ""

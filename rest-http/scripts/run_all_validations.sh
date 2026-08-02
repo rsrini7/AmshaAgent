@@ -18,6 +18,7 @@
 #   bash run_all_validations.sh --list           → list available validators
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+# Set AMSHA_VALIDATION_SUMMARY_FILE to write JSONL suite results.
 
 REFLEX_SCRIPT="$SCRIPT_DIR/validate_reflex.sh"
 SKILL_SCRIPT="$SCRIPT_DIR/validate_skill.sh"
@@ -62,6 +63,15 @@ run_validator() {
     PASSED=$((PASSED + 1))
   else
     FAILED=$((FAILED + 1))
+  fi
+  if [ -n "$SUMMARY_FILE" ]; then
+    python3 - "$SUMMARY_FILE" "$name" "$rc" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], "a", encoding="utf-8") as summary:
+    summary.write(json.dumps({"suite": sys.argv[2], "exitCode": int(sys.argv[3])}) + "\n")
+PY
   fi
 }
 
@@ -150,6 +160,13 @@ elif [ "$RUN_ALL" = true ]; then
 fi
 
 TOTAL=0; PASSED=0; FAILED=0
+SUMMARY_FILE="${AMSHA_VALIDATION_SUMMARY_FILE:-}"
+if [ -n "$SUMMARY_FILE" ]; then
+  : > "$SUMMARY_FILE" || {
+    echo "❌ Cannot write validation summary: $SUMMARY_FILE"
+    exit 1
+  }
+fi
 
 # ── Run selected validators ──
 if [ "$RUN_REFLEX" = true ] || [ "$RUN_ALL" = true ]; then

@@ -107,6 +107,37 @@ if [ -n "$SID" ]; then
 fi
 
 echo "───────────────────────────────────────────"
+info "DATA-5: generated JSONL files are non-empty and parseable"
+for task in intent tool-risk answer-quality; do
+  file="$DATA_DIR/classifier-training/review-working/$task.autotest.jsonl"
+  if [ -s "$file" ] && python3 - "$file" <<'PY'
+import json
+import re
+import sys
+
+required = {"id", "task", "label", "split", "input", "source", "review"}
+identifiers = set()
+pii = re.compile(
+    r"(?:[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}|"
+    r"/Users/|/home/|\b\d{3}[-. ]\d{3}[-. ]\d{4}\b|"
+    r"\b[0-9a-f]{8}-[0-9a-f-]{27,}\b|\b\d{9,10}:[A-Za-z0-9_-]{20,}\b)"
+)
+
+for line in open(sys.argv[1], encoding="utf-8"):
+    record = json.loads(line)
+    if not required.issubset(record) or record["id"] in identifiers:
+        raise SystemExit(1)
+    identifiers.add(record["id"])
+    if pii.search(json.dumps(record, ensure_ascii=False, sort_keys=True)):
+        raise SystemExit(1)
+PY
+  then
+    ok "$task schema"
+  else
+    fail "$task schema"
+  fi
+done
+
 echo " DATA COLLECTION Results: $PASS passed, $FAIL failed"
 echo "───────────────────────────────────────────"
 [ $FAIL -eq 0 ] && exit 0 || exit 1
