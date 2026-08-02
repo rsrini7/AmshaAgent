@@ -396,4 +396,47 @@ class SystemPromptBuilderTest {
                 result.contains("Do NOT claim the data was stored or saved."),
                 "Prompt should instruct not to claim storage");
     }
+
+    @Test
+    void testBuildSystemPrompt_compactSimpleChitchatUsesMinimalBase() throws Exception {
+        when(intentService.isSimpleConversational(any())).thenReturn(true);
+        when(agentPersonaRegistry.getPersonaPrompt(any(), any())).thenReturn("LONG_PERSONA_MARKER");
+        setField(builder, "compactPromptEnabled", true);
+
+        String result = builder.build(createCtx("s1"), "coordinator", "s1", "Hi", false);
+
+        assertTrue(result.contains("STRICT MODE - SIMPLE CONVERSATION"));
+        assertTrue(result.contains("Active persona role: coordinator"));
+        assertTrue(result.contains("You are Amsha Agent, the application-level assistant"));
+        assertTrue(result.contains("Brihaspati (architect)"));
+        assertTrue(result.contains("Never claim that Amsha Agent has no subagents"));
+        assertFalse(result.contains("LONG_PERSONA_MARKER"));
+        assertFalse(result.contains("TOOL PRIORITY RULES:"));
+    }
+
+    @Test
+    void testBuildSystemPrompt_nonCompactSimpleChitchatRetainsExistingPersona() throws Exception {
+        when(intentService.isSimpleConversational(any())).thenReturn(true);
+        when(agentPersonaRegistry.getPersonaPrompt(any(), any())).thenReturn("LONG_PERSONA_MARKER");
+        setField(builder, "compactPromptEnabled", false);
+
+        String result = builder.build(createCtx("s1"), "coordinator", "s1", "Hi", false);
+
+        assertTrue(result.contains("LONG_PERSONA_MARKER"));
+    }
+
+    @Test
+    void testBuildSystemPrompt_compactOverflowDropsWholeOptionalSections() throws Exception {
+        when(agentPersonaRegistry.getPersonaPrompt(any(), any())).thenReturn("PERSONA_SECTION_MARKER".repeat(2000));
+        setField(builder, "compactPromptEnabled", true);
+        setField(builder, "compactPromptMaxChars", 8000);
+
+        String result = builder.build(createCtx("s1"), "coordinator", "s1", "some goal", false);
+
+        assertFalse(result.contains("PERSONA_SECTION_MARKER"));
+        assertTrue(result.contains("STRICT TOOL BINDING CONTRACT"));
+        assertTrue(result.contains("CRITICAL OPERATIONAL RULES:"));
+        assertTrue(result.contains("EXECUTION BOUNDARY:"));
+        assertFalse(result.contains("middle context omitted"));
+    }
 }

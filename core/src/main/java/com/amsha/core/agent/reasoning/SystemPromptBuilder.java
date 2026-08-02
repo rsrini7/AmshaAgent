@@ -223,6 +223,13 @@ public class SystemPromptBuilder {
 
         baseSystemPrompt += roleSpecificSection;
 
+        // Compact chitchat does not need the full persona or role-specific execution
+        // instructions. Keep the active role marker and shared security rules, but
+        // avoid prose that cannot affect a direct, tool-free answer.
+        if (isCompact && isSimpleChitchat) {
+            baseSystemPrompt = buildCompactChitchatBase(mode, agentRole);
+        }
+
         String strictBinding = buildStrictBinding(context, roleEnum, agentRole, isCompact, goal, isSimpleChitchat);
 
         String securityPrompt = instructionLibrary.getSecurityRules(isCompact || isSimpleChitchat);
@@ -276,8 +283,9 @@ public class SystemPromptBuilder {
             }
         }
 
-        String finalPrompt = baseSystemPrompt + strictBinding + "\n" + securityPrompt
+        String assembledPrompt = baseSystemPrompt + strictBinding + "\n" + securityPrompt
                 + (dynamicRules.isEmpty() ? "" : "\n" + dynamicRules);
+        String finalPrompt = assembledPrompt;
 
         if (contextEnrichers != null) {
             String userId = context != null ? context.userId() : null;
@@ -288,19 +296,84 @@ public class SystemPromptBuilder {
 
         if (isCompact && finalPrompt.length() > compactPromptMaxChars) {
             int originalLength = finalPrompt.length();
-            int head = (int) (compactPromptMaxChars * 0.75);
-            int tail = compactPromptMaxChars - head;
-            finalPrompt = finalPrompt.substring(0, head)
-                    + "\n\n[COMPACT PROMPT: middle context omitted to stay within the recovery budget]\n\n"
-                    + finalPrompt.substring(finalPrompt.length() - tail);
+            finalPrompt = compactPromptBySection(
+                    assembledPrompt,
+                    finalPrompt,
+                    baseSystemPrompt,
+                    strictBinding,
+                    securityPrompt,
+                    dynamicRules,
+                    compactPromptMaxChars);
             log.warnf(
-                    "[SystemPrompt] Compact prompt truncated from %d to %d chars for session %s",
-                    originalLength, compactPromptMaxChars, sessionId);
+                    "[SystemPrompt] Compact prompt section-compacted from %d to %d chars for session %s",
+                    originalLength, finalPrompt.length(), sessionId);
         }
 
         log.debugf("[SystemPrompt] Completed build for session %s. Length: %d chars", sessionId, finalPrompt.length());
 
         return finalPrompt;
+    }
+
+    private String buildCompactChitchatBase(StructuredOutputMode mode, String agentRole) {
+        StringBuilder sb = new StringBuilder();
+        if (mode == StructuredOutputMode.PROMPT_DIRECTIVE) {
+            sb.append("CRITICAL: You MUST respond ONLY in required JSON schema. Never respond in prose.\n\n");
+        }
+        sb.append("You Amsha Agent. CURRENT SYSTEM TIME (UTC): ")
+                .append(formatTime(Instant.now()))
+                .append("\n")
+                .append("You are Amsha Agent, the application-level assistant, not the underlying model or provider.\n")
+                .append(
+                        "If asked who you are, identify yourself as Amsha Agent; mention Gemma only if explicitly asked about the underlying model.\n")
+                .append(
+                        "Amsha Agent orchestrates specialized subagents. Built-in roles include Brihaspati (architect), Saraswati (researcher), Brahma (coder), Shiva (debugger), Dattatreya (synthesizer), Ganesha (optimizer), Kartikeya (sentinel), Lakshmi (healer), Durga (protector), Kali (purifier), and Parvati (nurturer).\n")
+                .append(
+                        "Never claim that Amsha Agent has no subagents; also acknowledge configured skill roles when relevant.\n")
+                .append("Active persona role: ")
+                .append(agentRole)
+                .append(".\n")
+                .append("Use the role's normal tone, but answer this simple conversational request directly.\n\n");
+        return sb.toString();
+    }
+
+    private String compactPromptBySection(
+            String assembledPrompt,
+            String finalPrompt,
+            String baseSystemPrompt,
+            String strictBinding,
+            String securityPrompt,
+            String dynamicRules,
+            int maxChars) {
+        String enrichedSuffix =
+                finalPrompt.startsWith(assembledPrompt) ? finalPrompt.substring(assembledPrompt.length()) : "";
+        String mandatoryPrompt =
+                strictBinding + "\n" + securityPrompt + (dynamicRules.isEmpty() ? "" : "\n" + dynamicRules);
+
+        String compactBase = compactBaseHeader(baseSystemPrompt);
+        String withContext = compactBase + mandatoryPrompt + enrichedSuffix;
+        if (withContext.length() <= maxChars) {
+            return withContext;
+        }
+
+        String withoutOptionalContext = compactBase + mandatoryPrompt;
+        if (withoutOptionalContext.length() <= maxChars) {
+            return withoutOptionalContext;
+        }
+
+        // The mandatory contract wins over the configured character budget. This is
+        // safer than cutting through a security or tool instruction.
+        return mandatoryPrompt;
+    }
+
+    private String compactBaseHeader(String baseSystemPrompt) {
+        String personaMarker = "Your active persona described below.";
+        int personaStart = baseSystemPrompt.indexOf(personaMarker);
+        if (personaStart < 0) {
+            return baseSystemPrompt;
+        }
+        return baseSystemPrompt.substring(0, personaStart)
+                + "Active persona guidance is omitted from this compact recovery prompt; "
+                + "follow the active role and mandatory rules below.\n\n";
     }
 
     private String buildStrictBinding(
