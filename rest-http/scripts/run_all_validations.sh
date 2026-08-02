@@ -18,12 +18,14 @@
 #   bash run_all_validations.sh --list           → list available validators
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+# --fast includes deterministic MCP handshake checks via validate_mcp_fast.sh.
 # Set AMSHA_VALIDATION_SUMMARY_FILE to write JSONL suite results.
 
 REFLEX_SCRIPT="$SCRIPT_DIR/validate_reflex.sh"
 SKILL_SCRIPT="$SCRIPT_DIR/validate_skill.sh"
 SKILLS_ADMISSION_SCRIPT="$SCRIPT_DIR/validate_skillsjar_admission.sh"
 MCP_SCRIPT="$SCRIPT_DIR/validate_mcp.sh"
+MCP_FAST_SCRIPT="$SCRIPT_DIR/validate_mcp_fast.sh"
 MEMORY_SCRIPT="$SCRIPT_DIR/validate_memory.sh"
 WEB_SCRIPT="$SCRIPT_DIR/validate_web.sh"
 ROLES_SCRIPT="$SCRIPT_DIR/validate_roles.sh"
@@ -126,8 +128,9 @@ for arg in "$@"; do
       echo "  --fast         reflex + skills + SkillsJar admission + admin + auth-session + identity + pii-audit + self-evolve + sse-settings + onboarding"
       echo "  --llm          memory + web + roles + cron + rag + budget + hitl + data-collection"
       echo "  (no args)      run ALL validators"
-      exit 0
-      ;;
+ echo " --fast includes deterministic validate_mcp_fast.sh MCP handshake checks"
+ exit 0
+ ;; 
     --help)
       echo "Usage: bash run_all_validations.sh [options]"
       echo "Options: --reflex --skills --skills-admission --mcp --memory --web --roles --admin --auth-session --identity --pii-audit --self-evolve --hitl --rag --budget --sse-settings --onboarding --onnx --cron --fast --llm --list --help"
@@ -135,6 +138,12 @@ for arg in "$@"; do
       ;;
   esac
 done
+
+# The fast profile includes deterministic MCP handshake checks. Keep the full
+# MCP flow behind --mcp so it can continue exercising tool calls and self-connect.
+if [ "$FAST" = true ]; then
+    RUN_MCP=true
+fi
 
 # ── Pre-flight check ──
 echo "═══════════════════════════════════════════"
@@ -182,7 +191,11 @@ if [ "$RUN_SKILLS_ADMISSION" = true ] || [ "$RUN_ALL" = true ]; then
 fi
 
 if [ "$RUN_MCP" = true ] || [ "$RUN_ALL" = true ]; then
-  run_validator "MCP PROTOCOL" "$MCP_SCRIPT"
+    if [ "$FAST" = true ]; then
+        run_validator "MCP PROTOCOL (FAST)" "$MCP_FAST_SCRIPT"
+    else
+        run_validator "MCP PROTOCOL" "$MCP_SCRIPT"
+    fi
 fi
 
 if [ "$RUN_MEMORY" = true ] || [ "$RUN_ALL" = true ]; then

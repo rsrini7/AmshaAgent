@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set +e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [ "${1:-}" = "--fast" ]; then
+    exec "$SCRIPT_DIR/validate_mcp_fast.sh"
+fi
 source "$SCRIPT_DIR/common_env.sh"
 SECRET="$KEY"
 AB=$B/api/v1

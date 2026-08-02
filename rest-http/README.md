@@ -447,6 +447,7 @@ needed). Run individually or via the master runner `run_all_validations.sh`.
 | `--sse-settings` | `validate_sse_settings.sh` | UI SSE streams, ws-token, settings CRUD | fast |
 | `--cron` | `validate_cron.sh` | Programmatic cron REST lifecycle | LLM |
 | `--fast` | `(master)` | all fast/zero-token validators | mixed |
+The `--fast` profile includes `validate_mcp_fast.sh`: MCP admin status/tools, REST API-key rejection, JSON-RPC initialize, session handshake, tools/list, and unknown-tool rejection. It does not invoke LLM-backed MCP tools or connect to an external MCP server.
 | `--llm` | `(master)` | memory + web + roles + cron + rag + budget + hitl | LLM |
 
 `--onnx` targets an already-running process. To also authenticate against the local
