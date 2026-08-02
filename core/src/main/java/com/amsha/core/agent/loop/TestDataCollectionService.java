@@ -5,7 +5,6 @@ import jakarta.inject.Inject;
 
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
-import java.nio.channels.FileLock;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -15,6 +14,7 @@ import java.security.MessageDigest;
 import java.util.TreeMap;
 import java.util.concurrent.locks.ReentrantLock;
 
+import com.amsha.common.util.SecretRedactor;
 import com.amsha.core.security.InputSanitizer;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -46,16 +46,16 @@ public class TestDataCollectionService {
 
     public void recordIntentCandidate(String expectedLabel, String userMessage) {
         ObjectNode input = mapper.createObjectNode();
-        input.put("message", piiSanitizer.sanitize(userMessage));
+        input.put("message", sanitizeText(userMessage));
         writeCandidate("intent", expectedLabel, input, intentLock);
     }
 
     public void recordToolRiskCandidate(String expectedLabel, ToolRiskShadowContext context) {
         ObjectNode input = mapper.createObjectNode();
-        input.put("agent_role", piiSanitizer.sanitize(context.agentRole()));
-        input.put("autonomy", piiSanitizer.sanitize(context.autonomyLevel().name()));
-        input.put("tool_name", piiSanitizer.sanitize(context.toolName()));
-        input.put("goal", piiSanitizer.sanitize(context.goal()));
+        input.put("agent_role", sanitizeText(context.agentRole()));
+        input.put("autonomy", sanitizeText(context.autonomyLevel().name()));
+        input.put("tool_name", sanitizeText(context.toolName()));
+        input.put("goal", sanitizeText(context.goal()));
 
         input.set("parameters", sanitizeNode(mapper.valueToTree(new TreeMap<>(context.parameters()))));
 
@@ -64,9 +64,9 @@ public class TestDataCollectionService {
 
     public void recordAnswerQualityCandidate(String expectedLabel, AnswerQualityShadowContext context) {
         ObjectNode input = mapper.createObjectNode();
-        input.put("agent_role", piiSanitizer.sanitize(context.agentRole()));
-        input.put("goal", piiSanitizer.sanitize(context.goal()));
-        input.put("answer", piiSanitizer.sanitize(context.answer()));
+        input.put("agent_role", sanitizeText(context.agentRole()));
+        input.put("goal", sanitizeText(context.goal()));
+        input.put("answer", sanitizeText(context.answer()));
         input.put("tool_invoked_in_turn", context.toolInvokedInTurn());
         writeCandidate("answer_quality", expectedLabel, input, answerQualityLock);
     }
@@ -103,7 +103,7 @@ public class TestDataCollectionService {
             byte[] payload = (mapper.writeValueAsString(record) + "\n").getBytes(StandardCharsets.UTF_8);
             try (FileChannel channel = FileChannel.open(
                             file, StandardOpenOption.CREATE, StandardOpenOption.WRITE, StandardOpenOption.APPEND);
-                    FileLock _ = channel.lock()) {
+                    var _ = channel.lock()) {
                 channel.write(ByteBuffer.wrap(payload));
             }
         } catch (Exception e) {
@@ -118,11 +118,11 @@ public class TestDataCollectionService {
             return node;
         }
         if (node.isTextual()) {
-            return TextNode.valueOf(piiSanitizer.sanitize(node.textValue()));
+            return TextNode.valueOf(sanitizeText(node.textValue()));
         }
         if (node.isObject()) {
             ObjectNode sanitized = mapper.createObjectNode();
-            node.fields().forEachRemaining(entry -> sanitized.set(entry.getKey(), sanitizeNode(entry.getValue())));
+            node.properties().forEach(entry -> sanitized.set(entry.getKey(), sanitizeNode(entry.getValue())));
             return sanitized;
         }
         if (node.isArray()) {
@@ -132,6 +132,10 @@ public class TestDataCollectionService {
             }
         }
         return node;
+    }
+
+    private String sanitizeText(String value) {
+        return SecretRedactor.redact(piiSanitizer.sanitize(value));
     }
 
     private String computeSHA256(String data) {

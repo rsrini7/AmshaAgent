@@ -69,6 +69,42 @@ class DynamicToolCapabilityTest {
     }
 
     @Test
+    void oversizedDescriptionIsRejected() {
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new DynamicToolCapability(
+                        "tool",
+                        "x".repeat(DynamicToolCapability.MAX_DESCRIPTION_LENGTH + 1),
+                        "server",
+                        McpTransportType.STDIO,
+                        false,
+                        "{}"));
+    }
+
+    @Test
+    void oversizedSchemaIsRejected() {
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new DynamicToolCapability(
+                        "tool",
+                        "desc",
+                        "server",
+                        McpTransportType.STDIO,
+                        false,
+                        "{\"description\":\"" + "x".repeat(DynamicToolCapability.MAX_INPUT_SCHEMA_LENGTH) + "\"}"));
+    }
+
+    @Test
+    void schemaMustBeValidObjectJson() {
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new DynamicToolCapability("tool", "desc", "server", McpTransportType.STDIO, false, "[]"));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new DynamicToolCapability("tool", "desc", "server", McpTransportType.STDIO, false, "not-json"));
+    }
+
+    @Test
     void testNullServerName() {
         assertThrows(
                 NullPointerException.class,

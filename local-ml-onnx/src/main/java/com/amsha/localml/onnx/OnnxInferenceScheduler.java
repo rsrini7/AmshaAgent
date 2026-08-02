@@ -111,7 +111,7 @@ public class OnnxInferenceScheduler {
         }
         try {
             result.complete(task.call());
-        } catch (Exception | LinkageError e) {
+        } catch (Exception | Error e) {
             result.completeExceptionally(e);
         }
     }

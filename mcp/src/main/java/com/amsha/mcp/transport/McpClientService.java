@@ -116,7 +116,8 @@ public class McpClientService {
     @ConfigProperty(name = "amsha.mcp.health-check-interval-ms", defaultValue = "15000")
     long healthCheckIntervalMs;
 
-    private record StdioConfig(String command, List<String> args, Map<String, String> env, ToolCategory category) {}
+    private record StdioConfig(
+            String command, List<String> args, Map<String, String> env, ToolCategory category, String ownerUserId) {}
 
     @PostConstruct
     void init() {
@@ -154,7 +155,13 @@ public class McpClientService {
                         ReentrantLock reconnectLock = stdioLocks.computeIfAbsent(serverName, k -> new ReentrantLock());
                         reconnectLock.lock();
                         try {
-                            connectStdio(serverName, cfg.command(), cfg.args(), cfg.env(), cfg.category());
+                            connectStdio(
+                                    serverName,
+                                    cfg.command(),
+                                    cfg.args(),
+                                    cfg.env(),
+                                    cfg.category(),
+                                    cfg.ownerUserId());
                         } catch (Exception e) {
                             log.errorf("Health check reconnect failed for %s: %s", serverName, LogUtil.rootMessage(e));
                         } finally {
@@ -181,7 +188,7 @@ public class McpClientService {
 
     public void connect(
             String serverName, String serverUrl, ToolCategory category, Map<String, String> handshakeHeaders) {
-        connectInternal(serverName, serverName, serverUrl, category, handshakeHeaders, false);
+        connectInternal(serverName, serverName, serverUrl, category, handshakeHeaders, false, currentOwner());
     }
 
     public void connectForUser(
@@ -201,7 +208,8 @@ public class McpClientService {
             ToolCategory category,
             Map<String, String> handshakeHeaders,
             boolean preApproved) {
-        connectInternal(serverName, runtimeKey(serverName, userId), serverUrl, category, handshakeHeaders, preApproved);
+        connectInternal(
+                serverName, runtimeKey(serverName, userId), serverUrl, category, handshakeHeaders, preApproved, userId);
     }
 
     /**
@@ -229,7 +237,8 @@ public class McpClientService {
             }
             preApproved = true;
         }
-        connectInternal(serverName, runtimeKey(serverName, userId), serverUrl, category, handshakeHeaders, preApproved);
+        connectInternal(
+                serverName, runtimeKey(serverName, userId), serverUrl, category, handshakeHeaders, preApproved, userId);
     }
 
     private void connectInternal(
@@ -238,7 +247,8 @@ public class McpClientService {
             String serverUrl,
             ToolCategory category,
             Map<String, String> handshakeHeaders,
-            boolean preApproved) {
+            boolean preApproved,
+            String ownerUserId) {
         DynamicToolOperationDefaults.requireFor(category);
         serverUrls.put(runtimeKey, serverUrl);
         try {
@@ -292,7 +302,13 @@ public class McpClientService {
                         "MCP tools/list failed [" + toolsResp.statusCode() + "] for: " + serverName);
             }
             JsonNode payload = objectMapper.readTree(toolsResp.body());
-            registerTools(serverName, payload.path("result"), McpTransportType.HTTP_SSE, category);
+            registerTools(
+                    serverName,
+                    payload.path("result"),
+                    McpTransportType.HTTP_SSE,
+                    category,
+                    ownerUserId,
+                    isSelfConnectUrl(serverUrl));
 
             log.infof(
                     "Connected to HTTP/SSE MCP server '%s', registered tools: %d",
@@ -354,6 +370,10 @@ public class McpClientService {
         return Optional.ofNullable(serverUrls.get(resolveHttpRuntimeKey(serverName)));
     }
 
+    public boolean hasStdioServer(String serverName) {
+        return processes.containsKey(serverName);
+    }
+
     /**
      * Connect to a local MCP server via STDIO.
      * Starts a sub-process and performs the MCP handshake over its stdin/stdout.
@@ -364,8 +384,19 @@ public class McpClientService {
 
     public void connectStdio(
             String serverName, String command, List<String> args, Map<String, String> env, ToolCategory category) {
+        connectStdio(serverName, command, args, env, category, requireCurrentOwner());
+    }
+
+    public void connectStdio(
+            String serverName,
+            String command,
+            List<String> args,
+            Map<String, String> env,
+            ToolCategory category,
+            String ownerUserId) {
+        ownerUserId = requireOwner(ownerUserId);
         DynamicToolOperationDefaults.requireFor(category);
-        stdioConfigs.put(serverName, new StdioConfig(command, args, env, category));
+        stdioConfigs.put(serverName, new StdioConfig(command, args, env, category, ownerUserId));
         try {
             ProcessBuilder pb = new ProcessBuilder();
             List<String> fullCmd = new ArrayList<>();
@@ -391,7 +422,7 @@ public class McpClientService {
 
             // 3. List tools
             JsonNode toolsResult = sendRequestStdio(serverName, "tools/list", objectMapper.createObjectNode());
-            registerTools(serverName, toolsResult, McpTransportType.STDIO, category);
+            registerTools(serverName, toolsResult, McpTransportType.STDIO, category, ownerUserId, false);
 
             log.infof(
                     "Connected to STDIO MCP server '%s', registered tools: %d",
@@ -429,6 +460,10 @@ public class McpClientService {
             retryOn = {IOException.class})
     @CircuitBreaker(requestVolumeThreshold = 10, failureRatio = 0.5, delay = 5000)
     public String invoke(String serverName, String toolName, String paramsJson) {
+        return invoke(serverName, toolName, paramsJson, currentOwner());
+    }
+
+    public String invoke(String serverName, String toolName, String paramsJson, String ownerUserId) {
         var timer = Timer.builder("amsha.mcp.tool.invocation")
                 .tag(TAG_SERVER, serverName)
                 .tag("tool", toolName);
@@ -444,7 +479,7 @@ public class McpClientService {
                 if (!processes.containsKey(serverName) && stdioConfigs.containsKey(serverName)) {
                     log.infof("reconnecting dead MCP server: %s", serverName);
                     StdioConfig cfg = stdioConfigs.get(serverName);
-                    connectStdio(serverName, cfg.command(), cfg.args(), cfg.env(), cfg.category());
+                    connectStdio(serverName, cfg.command(), cfg.args(), cfg.env(), cfg.category(), cfg.ownerUserId());
                 }
             } finally {
                 lock.unlock();
@@ -453,7 +488,7 @@ public class McpClientService {
             if (processes.containsKey(serverName)) {
                 return invokeStdio(serverName, toolName, paramsJson);
             }
-            String runtimeKey = resolveHttpRuntimeKey(serverName);
+            String runtimeKey = resolveHttpRuntimeKey(serverName, ownerUserId);
             String url = serverUrls.get(runtimeKey);
             if (url == null) {
                 throw new McpConnectionException("No URL registered for HTTP MCP server: " + serverName);
@@ -635,7 +670,10 @@ public class McpClientService {
     }
 
     private String resolveHttpRuntimeKey(String serverName) {
-        String userId = WorkspaceContext.getUserIdOrUnknown();
+        return resolveHttpRuntimeKey(serverName, WorkspaceContext.getUserIdOrUnknown());
+    }
+
+    private String resolveHttpRuntimeKey(String serverName, String userId) {
         if (isKnownUser(userId)) {
             String ownerKey = runtimeKey(serverName, userId);
             if (serverUrls.containsKey(ownerKey) || serverCredentialIds.containsKey(ownerKey)) return ownerKey;
@@ -660,17 +698,66 @@ public class McpClientService {
         return userId != null && !userId.isBlank() && !"unknown".equals(userId);
     }
 
-    private void registerTools(String serverName, JsonNode result, McpTransportType transport, ToolCategory category) {
+    private static boolean isSelfConnectUrl(String serverUrl) {
+        try {
+            URI uri = URI.create(serverUrl);
+            String host = uri.getHost();
+            String path = uri.getPath();
+            return host != null
+                    && ("localhost".equalsIgnoreCase(host)
+                            || "127.0.0.1".equals(host)
+                            || "[::1]".equals(host)
+                            || "::1".equals(host))
+                    && ("/mcp".equals(path) || "/mcp/".equals(path));
+        } catch (IllegalArgumentException _) {
+            return false;
+        }
+    }
+
+    private void registerTools(
+            String serverName,
+            JsonNode result,
+            McpTransportType transport,
+            ToolCategory category,
+            String ownerUserId,
+            boolean skipInternalNames) {
         JsonNode tools = result.path("tools");
         if (!tools.isArray()) return;
         for (JsonNode tool : tools) {
             String name = tool.path("name").asText();
+            if (skipInternalNames && registry.isInternalToolName(name)) {
+                // The inbound /mcp endpoint exposes built-in tools. A self-connect must not
+                // re-register those names as dynamic tools, and external collisions are
+                // deliberately omitted rather than allowed to shadow internal capabilities.
+                log.warnf("Skipping MCP tool '%s' from server '%s': internal tool name", name, serverName);
+                continue;
+            }
             String desc = tool.path("description").asText("");
             String schema = tool.has("inputSchema") ? tool.path("inputSchema").toString() : "{}";
             // requiredOperation is set explicitly via category registration defaults
             // (NETWORK→NETWORK_OUTBOUND; COMPUTE→EXECUTE_SHELL for host/sandbox-equivalent compute).
-            registry.register(new DynamicToolCapability(name, desc, serverName, transport, false, schema, category));
+            registry.registerForUser(
+                    ownerUserId, new DynamicToolCapability(name, desc, serverName, transport, false, schema, category));
         }
+    }
+
+    private static String currentOwner() {
+        try {
+            return WorkspaceContext.getUserIdOrUnknown();
+        } catch (RuntimeException _) {
+            return "unknown";
+        }
+    }
+
+    private static String requireCurrentOwner() {
+        return requireOwner(currentOwner());
+    }
+
+    private static String requireOwner(String ownerUserId) {
+        if (!isKnownUser(ownerUserId)) {
+            throw new IllegalArgumentException("MCP STDIO registration requires a bound user owner");
+        }
+        return ownerUserId;
     }
 
     private JsonNode sendRequestStdio(String serverName, String method, ObjectNode params) throws Exception {

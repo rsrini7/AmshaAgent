@@ -44,6 +44,8 @@ class OnnxClassifierCircuitBreakerTest {
         breaker.recordNeutral(breaker.tryAcquire().orElseThrow());
 
         assertEquals(OnnxClassifierCircuitBreaker.State.OPEN, breaker.state());
+        assertTrue(breaker.tryAcquire().isEmpty());
+        clock.advance(Duration.ofSeconds(30));
         assertTrue(breaker.tryAcquire().isPresent());
     }
 

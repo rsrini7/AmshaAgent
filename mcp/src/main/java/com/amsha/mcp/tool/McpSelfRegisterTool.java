@@ -178,6 +178,9 @@ public class McpSelfRegisterTool implements AgentTool {
                     throw e;
                 }
             } else if ("stdio".equalsIgnoreCase(transportStr)) {
+                // STDIO registration intentionally remains NETWORK_OUTBOUND/manual-approval
+                // gated: command, arguments, and environment are an arbitrary process launch.
+                // Do not change this operation to a lower-risk category without a sandbox policy.
                 String command = (String) params.get("command");
                 if (command == null || command.isBlank()) {
                     return ToolResponse.failure(400, "command is required for stdio transport.");
@@ -204,7 +207,7 @@ public class McpSelfRegisterTool implements AgentTool {
                     }
                 }
 
-                mcpClientService.connectStdio(name, command, argsList, envMap, category);
+                mcpClientService.connectStdio(name, command, argsList, envMap, category, userId);
             } else {
                 return ToolResponse.failure(400, "Unsupported transport: " + transportStr);
             }

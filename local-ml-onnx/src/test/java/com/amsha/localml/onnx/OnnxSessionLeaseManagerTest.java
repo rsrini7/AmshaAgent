@@ -2,6 +2,7 @@ package com.amsha.localml.onnx;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import ai.djl.huggingface.tokenizers.HuggingFaceTokenizer;
 import ai.onnxruntime.OrtEnvironment;
@@ -12,6 +13,11 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.jupiter.api.Test;
@@ -40,6 +46,38 @@ class OnnxSessionLeaseManagerTest {
         second.close();
         assertEquals(1, closed.get());
         assertEquals(OnnxSessionLeaseManager.UnloadResult.NOT_LOADED, manager.unload("test-model", Duration.ZERO));
+    }
+
+    @Test
+    void completedOpenAfterTimedOutUnloadRemovesClosingSession() throws Exception {
+        CountDownLatch openStarted = new CountDownLatch(1);
+        CountDownLatch releaseOpen = new CountDownLatch(1);
+        AtomicInteger closed = new AtomicInteger();
+        OnnxSessionLeaseManager manager = new OnnxSessionLeaseManager(
+                () -> Optional.of(OrtEnvironment.getEnvironment()),
+                (environment, bundle) -> {
+                    openStarted.countDown();
+                    releaseOpen.await(5, TimeUnit.SECONDS);
+                    return fakeHandle(closed);
+                },
+                Duration.ofSeconds(1));
+        ExecutorService executor = Executors.newSingleThreadExecutor();
+        try {
+            var acquire = executor.submit(() -> manager.acquire(bundle(), futureDeadline()));
+            assertTrue(openStarted.await(5, TimeUnit.SECONDS));
+            assertEquals(OnnxSessionLeaseManager.UnloadResult.DRAINING, manager.unload("test-model", Duration.ZERO));
+
+            releaseOpen.countDown();
+            ExecutionException error = assertThrows(ExecutionException.class, () -> acquire.get(5, TimeUnit.SECONDS));
+            assertEquals(
+                    OnnxSessionAcquireException.Reason.BUNDLE_CLOSING,
+                    ((OnnxSessionAcquireException) error.getCause()).reason());
+            assertEquals(OnnxSessionLeaseManager.UnloadResult.NOT_LOADED, manager.unload("test-model", Duration.ZERO));
+            assertEquals(1, closed.get());
+        } finally {
+            releaseOpen.countDown();
+            executor.shutdownNow();
+        }
     }
 
     @Test

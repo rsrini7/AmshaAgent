@@ -62,6 +62,59 @@ class DynamicToolCapabilityRegistryTest {
     }
 
     @Test
+    void toolsAreScopedToTheRegisteringUser() {
+        registry.registerForUser("alice", createTool("shared_name"));
+
+        assertTrue(registry.find("alice", "shared_name").isPresent());
+        assertTrue(registry.find("bob", "shared_name").isEmpty());
+    }
+
+    @Test
+    void conflictingServerCannotSilentlyReplaceTool() {
+        registry.registerForUser("alice", createTool("collision"));
+        DynamicToolCapability otherServer =
+                new DynamicToolCapability("collision", "desc", "other", McpTransportType.STDIO, false, "{}");
+
+        assertThrows(IllegalArgumentException.class, () -> registry.registerForUser("alice", otherServer));
+    }
+
+    @Test
+    void sameServerCanRefreshChangedMetadata() {
+        registry.registerForUser("alice", createTool("refreshable"));
+        DynamicToolCapability refreshed = new DynamicToolCapability(
+                "refreshable",
+                "updated description",
+                "server",
+                McpTransportType.STDIO,
+                false,
+                "{\"type\":\"object\",\"properties\":{\"query\":{\"type\":\"string\"}}}");
+
+        registry.registerForUser("alice", refreshed);
+
+        assertEquals(Optional.of(refreshed), registry.find("alice", "refreshable"));
+    }
+
+    @Test
+    void serverToolCountIsBounded() {
+        for (int i = 0; i < DynamicToolCapabilityRegistry.MAX_TOOLS_PER_SERVER; i++) {
+            registry.registerForUser("alice", createTool("bounded-" + i));
+        }
+
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> registry.registerForUser("alice", createTool("bounded-over-limit")));
+    }
+
+    @Test
+    void differentServerCannotSilentlyReplaceTool() {
+        registry.registerForUser("alice", createTool("collision"));
+        DynamicToolCapability conflictingServer =
+                new DynamicToolCapability("collision", "changed", "other-server", McpTransportType.STDIO, false, "{}");
+
+        assertThrows(IllegalArgumentException.class, () -> registry.registerForUser("alice", conflictingServer));
+    }
+
+    @Test
     void testGetAllReflectsCurrentState() {
         assertTrue(registry.getAll().isEmpty());
 
@@ -89,11 +142,11 @@ class DynamicToolCapabilityRegistryTest {
             executor.execute(() -> {
                 try {
                     if (idx % 2 == 0) {
-                        for (int j = 0; j < 100; j++) {
+                        for (int j = 0; j < 4; j++) {
                             registry.register(createTool("tool-" + idx + "-" + j));
                         }
                     } else {
-                        for (int j = 0; j < 100; j++) {
+                        for (int j = 0; j < 4; j++) {
                             var _ = registry.getAll().stream().count();
                         }
                     }

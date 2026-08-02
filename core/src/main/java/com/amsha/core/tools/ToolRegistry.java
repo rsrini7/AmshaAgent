@@ -3,12 +3,15 @@ package com.amsha.core.tools;
 import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
+import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -29,6 +32,7 @@ import com.amsha.core.security.AutonomyLevel;
 import com.amsha.core.security.AutonomyPolicy;
 import com.amsha.core.security.RequiresSecret;
 import com.amsha.core.skill.SkillRegistry;
+import com.amsha.core.tool.DynamicToolInvoker;
 import com.amsha.core.util.ClassUtils;
 import com.amsha.core.util.PathSanitizer;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -85,6 +89,9 @@ public class ToolRegistry {
     @Inject
     SkillRegistry skillRegistry;
 
+    @Inject
+    Instance<DynamicToolInvoker> dynamicToolInvokers;
+
     @ConfigProperty(name = "amsha.workspace.root-dir", defaultValue = "./data/workspaces")
     String workspaceRootDir;
 
@@ -106,7 +113,12 @@ public class ToolRegistry {
     }
 
     public List<String> listTools() {
-        return List.copyOf(discoveryService.getToolIndex().keySet());
+        LinkedHashSet<String> names =
+                new LinkedHashSet<>(discoveryService.getToolIndex().keySet());
+        if (dynamicToolInvokers != null && !dynamicToolInvokers.isUnsatisfied()) {
+            dynamicToolInvokers.forEach(invoker -> invoker.listTools().forEach(tool -> names.add(tool.name())));
+        }
+        return List.copyOf(names);
     }
 
     public String registeredToolNames() {
@@ -115,6 +127,28 @@ public class ToolRegistry {
 
     public Optional<AgentTool> findTool(String toolName) {
         return Optional.ofNullable(discoveryService.getToolIndex().get(toolName));
+    }
+
+    private ToolExecutionContext createExecutionContext() {
+        return new ToolExecutionContext(
+                WorkspaceContext.SESSION_ID.isBound() ? WorkspaceContext.SESSION_ID.get() : "system",
+                WorkspaceContext.getUserIdOrUnknown(),
+                WorkspaceContext.CHAT_ID.isBound() ? WorkspaceContext.CHAT_ID.get() : "system",
+                WorkspaceContext.AGENT_ROLE.isBound()
+                        ? WorkspaceContext.AGENT_ROLE.get()
+                        : AgentRoleEnum.COORDINATOR.id(),
+                WorkspaceContext.AUTONOMY.isBound() ? WorkspaceContext.AUTONOMY.get() : AutonomyLevel.SUPERVISED,
+                Span.current().getSpanContext().getTraceId(),
+                WorkspaceContext.CHANNEL_TYPE.isBound() ? WorkspaceContext.CHANNEL_TYPE.get() : null,
+                WorkspaceContext.CHANNEL_PLATFORM_ID.isBound() ? WorkspaceContext.CHANNEL_PLATFORM_ID.get() : null,
+                WorkspaceContext.RAW_USER_GOAL.isBound() ? WorkspaceContext.RAW_USER_GOAL.get() : null,
+                WorkspaceContext.SUGGESTED_CRON.isBound() ? WorkspaceContext.SUGGESTED_CRON.get() : null,
+                WorkspaceContext.SUGGESTED_NEXT_FIRE_TIME.isBound()
+                        ? WorkspaceContext.SUGGESTED_NEXT_FIRE_TIME.get()
+                        : null,
+                WorkspaceContext.SUGGESTED_CRON_SOURCE.isBound() ? WorkspaceContext.SUGGESTED_CRON_SOURCE.get() : null,
+                resolveSkillHome(),
+                resolveBrowserPreview());
     }
 
     /**
@@ -126,7 +160,31 @@ public class ToolRegistry {
                     "Intercepted headroom tool call '%s' - returning empty response to prevent model loop.", toolName);
             return ToolResponse.success("No relevant information found or action completed successfully.");
         }
-        var tool = findTool(toolName).orElseThrow(() -> new IllegalArgumentException("Unknown tool: " + toolName));
+        AgentTool tool = findTool(toolName).orElse(null);
+        if (tool == null) {
+            if (dynamicToolInvokers != null && !dynamicToolInvokers.isUnsatisfied()) {
+                for (DynamicToolInvoker invoker : dynamicToolInvokers) {
+                    var descriptor = invoker.findTool(toolName);
+                    if (descriptor.isPresent()) {
+                        ToolExecutionContext context = createExecutionContext();
+                        try {
+                            governanceGuard.verifyAutonomy(
+                                    context, toolName, descriptor.get().requiredOperation(), params);
+                        } catch (SecurityException | IllegalArgumentException e) {
+                            return ToolResponse.failure(403, e.getMessage());
+                        }
+                        auditService.record(
+                                context.sessionId(),
+                                context.userId(),
+                                context.agentRole(),
+                                SecurityEventType.TOOL_INVOKED,
+                                descriptor.get().requiredOperation().name());
+                        return invoker.invoke(toolName, params, context);
+                    }
+                }
+            }
+            throw new IllegalArgumentException("Unknown tool: " + toolName);
+        }
 
         ToolExecutionContext ctx = new ToolExecutionContext(
                 WorkspaceContext.SESSION_ID.isBound() ? WorkspaceContext.SESSION_ID.get() : "system",
@@ -318,7 +376,14 @@ public class ToolRegistry {
     public record ToolDescriptor(String name, String description, String inputSchema) {}
 
     public List<ToolDescriptor> listToolDescriptors() {
-        return List.copyOf(discoveryService.getDescriptorCache().values());
+        List<ToolDescriptor> descriptors =
+                new ArrayList<>(discoveryService.getDescriptorCache().values());
+        if (dynamicToolInvokers != null && !dynamicToolInvokers.isUnsatisfied()) {
+            dynamicToolInvokers.forEach(invoker -> invoker.listTools()
+                    .forEach(tool ->
+                            descriptors.add(new ToolDescriptor(tool.name(), tool.description(), tool.inputSchema()))));
+        }
+        return List.copyOf(descriptors);
     }
 
     public Map<String, String> extractRequiredSecrets(AgentTool tool) {

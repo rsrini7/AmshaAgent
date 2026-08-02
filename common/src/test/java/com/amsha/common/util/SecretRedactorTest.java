@@ -70,6 +70,22 @@ class SecretRedactorTest {
     }
 
     @Test
+    void redactsUrlEmbeddedCredentials() {
+        String redacted = SecretRedactor.redact("request failed for https://alice:super-secret@example.com/path");
+
+        assertTrue(redacted.contains("https://" + SecretRedactor.REDACTED + "@example.com"));
+        assertFalse(redacted.contains("super-secret"));
+    }
+
+    @Test
+    void redactsCredentialsForNonHttpUrls() {
+        String redacted = SecretRedactor.redact("connection postgresql://alice:super-secret@db.example/app");
+
+        assertTrue(redacted.contains("postgresql://" + SecretRedactor.REDACTED + "@db.example"));
+        assertFalse(redacted.contains("super-secret"));
+    }
+
+    @Test
     void redactsJwtWithNonJsonPayloadAndHeader() {
         String jwt = "aGVhZGVy.cGF5bG9hZA.c2lnbmF0dXJl";
         String redacted = SecretRedactor.redact("auth failed token=" + jwt);

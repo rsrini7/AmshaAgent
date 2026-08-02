@@ -160,7 +160,8 @@ class ToolInvocationGuardTest {
         assertEquals("tool", approval.frame().tool());
         assertEquals(parameters, approval.frame().params());
         assertEquals(ApprovalFrame.RiskLevel.LOW, approval.frame().riskLevel());
-        verify(toolRiskShadowEvaluation).observeProvisionalAllow(anyString(), any(ToolRiskShadowContext.class));
+        verify(toolRiskShadowEvaluation, never())
+                .observeProvisionalAllow(anyString(), any(ToolRiskShadowContext.class));
     }
 
     @Test
@@ -172,7 +173,8 @@ class ToolInvocationGuardTest {
                 guard.evaluate("s1", "coordinator", AutonomyLevel.FULL, "tool", Map.of(), List.of(), "goal", List.of());
 
         assertInstanceOf(ToolInvocationGuard.GuardDecision.Blocked.class, result);
-        verify(toolRiskShadowEvaluation).observeProvisionalAllow(anyString(), any(ToolRiskShadowContext.class));
+        verify(toolRiskShadowEvaluation, never())
+                .observeProvisionalAllow(anyString(), any(ToolRiskShadowContext.class));
     }
 
     @Test

@@ -70,7 +70,7 @@ final class OnnxClassifierCircuitBreaker {
         Objects.requireNonNull(permit, "permit");
         if (permit.epoch() != epoch || !permit.halfOpen() || state != State.HALF_OPEN) return;
         state = State.OPEN;
-        retryAt = clock.instant();
+        retryAt = clock.instant().plus(cooldown);
         epoch++;
     }
 

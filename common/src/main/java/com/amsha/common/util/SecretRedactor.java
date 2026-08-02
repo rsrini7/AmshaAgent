@@ -6,6 +6,7 @@ import java.util.regex.Pattern;
 public final class SecretRedactor {
 
     public static final String REDACTED = "[REDACTED]";
+    private static final Pattern URL_CREDENTIALS = Pattern.compile("(?i)([a-z][a-z0-9+.-]*://)[^\\s/@:]+:[^\\s/@]+@");
 
     private static final Pattern TELEGRAM_API_TOKEN =
             Pattern.compile("(?i)(https?://api\\.telegram\\.org/bot)[^/?#\\s]+");
@@ -33,6 +34,7 @@ public final class SecretRedactor {
         if (value == null || value.length() < MIN_MEANINGFUL_LENGTH) return value;
 
         String redacted = TELEGRAM_API_TOKEN.matcher(value).replaceAll("$1" + REDACTED);
+        redacted = URL_CREDENTIALS.matcher(redacted).replaceAll("$1" + REDACTED + "@");
         redacted = TELEGRAM_TOKEN.matcher(redacted).replaceAll(REDACTED);
         redacted = BEARER_TOKEN.matcher(redacted).replaceAll("$1" + REDACTED);
         redacted = SENSITIVE_ASSIGNMENT.matcher(redacted).replaceAll("$1" + REDACTED);

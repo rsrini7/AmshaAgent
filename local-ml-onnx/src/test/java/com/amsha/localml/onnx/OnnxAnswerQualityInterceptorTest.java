@@ -49,7 +49,7 @@ class OnnxAnswerQualityInterceptorTest {
         });
         var interceptor = new OnnxAnswerQualityInterceptor(runtimeControl, shadowClassifier);
 
-        try (var registration = runtimeControl.registerReadyImplementation(Classifier.ANSWER_QUALITY)) {
+        try (var _ = runtimeControl.registerReadyImplementation(Classifier.ANSWER_QUALITY)) {
             ClassifierResult<AnswerQualityAction> result = interceptor.evaluate(CONTEXT);
 
             assertInstanceOf(ClassifierResult.NoOpinion.class, result);
@@ -68,7 +68,7 @@ class OnnxAnswerQualityInterceptorTest {
         });
         var interceptor = new OnnxAnswerQualityInterceptor(runtimeControl, shadowClassifier);
 
-        try (var registration = runtimeControl.registerReadyImplementation(Classifier.ANSWER_QUALITY)) {
+        try (var _ = runtimeControl.registerReadyImplementation(Classifier.ANSWER_QUALITY)) {
             runtimeControl.setEnabled(Classifier.ANSWER_QUALITY, true);
             ClassifierResult<AnswerQualityAction> result = interceptor.evaluate(CONTEXT);
 
@@ -88,7 +88,7 @@ class OnnxAnswerQualityInterceptorTest {
         });
         var interceptor = new OnnxAnswerQualityInterceptor(runtimeControl, shadowClassifier);
 
-        try (var registration = runtimeControl.registerReadyImplementation(Classifier.ANSWER_QUALITY)) {
+        try (var _ = runtimeControl.registerReadyImplementation(Classifier.ANSWER_QUALITY)) {
             runtimeControl.setEnabled(Classifier.ANSWER_QUALITY, true);
             ClassifierResult<AnswerQualityAction> result = interceptor.evaluate(CONTEXT);
 
@@ -106,7 +106,7 @@ class OnnxAnswerQualityInterceptorTest {
         });
         var interceptor = new OnnxAnswerQualityInterceptor(runtimeControl, shadowClassifier);
 
-        try (var registration = runtimeControl.registerReadyImplementation(Classifier.ANSWER_QUALITY)) {
+        try (var _ = runtimeControl.registerReadyImplementation(Classifier.ANSWER_QUALITY)) {
             runtimeControl.setEnabled(Classifier.ANSWER_QUALITY, true);
             ClassifierResult<AnswerQualityAction> result = interceptor.evaluate(CONTEXT);
 

@@ -931,7 +931,7 @@ curl -s -X POST http://localhost:8080/api/v1/mcp/connect \
   -d '{"name":"self","url":"http://localhost:8080/mcp"}' | jq .
 ```
 
-**Expect:** `{"name":"self","toolsRegistered":N,"status":"connected"}` - N ≥ 1.
+**Expect:** `{"name":"self","toolsRegistered":0,"status":"connected"}` - built-in `/mcp` names are skipped.
 
 ---
 
@@ -976,7 +976,7 @@ curl -s http://localhost:8080/api/v1/mcp/connect \
   -H "X-Amsha-API-Key: key-internal-changeme" | jq .
 ```
 
-**Expect:** `{"connectedServers":[{"name":"self","toolCount":N}],"totalDynamicTools":N}`
+**Expect:** `{"connectedServers":[{"name":"self","toolCount":0}],"totalDynamicTools":0}`
 
 ---
 
@@ -1083,11 +1083,11 @@ No external MCP server required. Amsha Agent connects to itself.
 
 | # | What to run | What to verify |
 |---|---|---|
-| 1 | `MCP-CLIENT-1` (self-connect) | `{"status":"connected","toolsRegistered":2}` - proves full outbound stack: `McpConnectResource → McpClientService → MCP initialize handshake → tools/list → DynamicToolCapabilityRegistry.register()` |
-| 2 | `MCP-ADMIN-2` | `registeredDynamicTools` now has 2 entries; both `mcpServerName:"self"`, `transport:"HTTP_SSE"` |
-| 3 | `MCP-CLIENT-3` (list servers) | `{"connectedServers":[{"name":"self","toolCount":2}],"totalDynamicTools":2}` |
-| 4 | **Telegram**: `/mcp` | Now shows: `Dynamic MCP tools (2): github [self, HTTP_SSE], recall_memory_search [self, HTTP_SSE]` |
-| 5 | `MCP-CLIENT-5` (disconnect) | `{"name":"self","deregistered":true,"toolsRemoved":2}` |
+| 1 | `MCP-CLIENT-1` (self-connect) | `{"status":"connected","toolsRegistered":0}` - proves full outbound stack; built-in `/mcp` names are skipped by dynamic registration |
+| 2 | `MCP-ADMIN-2` | `registeredDynamicTools` now has 0 entries; built-in names are skipped |
+| 3 | `MCP-CLIENT-3` (list servers) | `{"connectedServers":[{"name":"self","toolCount":0}],"totalDynamicTools":0}` |
+| 4 | **Telegram**: `/mcp` | Now shows: `Dynamic MCP tools: none connected` |
+| 5 | `MCP-CLIENT-5` (disconnect) | `{"name":"self","deregistered":true,"toolsRemoved":0}` |
 | 6 | `MCP-CLIENT-6` | `registeredDynamicTools:[]` - confirmed empty |
 | 7 | **Telegram**: `/mcp` | Back to `Dynamic MCP tools: none connected` |
 | 8 | `MCP-CLIENT-ERR-1–5` | `400` (missing url), `502` (unreachable), `404` (disconnect unknown), `409` or overwrite (duplicate connect), `401` (no key) |
@@ -2272,8 +2272,8 @@ Run after any significant code change. Combine automated + manual.
 | 13 | HMAC verify (tampered) | `{"valid":false,"brokenAtId":"..."}` |
 | 14 | Skill create + routing | `201`, message routes to skill, no Groq call |
 | 15 | Skill delete + fallback | `200`, routing reverts to intent classifier |
-| 16 | MCP self-connect | `toolsRegistered:N` (N ≥ 1) |
-| 17 | MCP disconnect | `toolsRemoved:N`, `registeredDynamicTools:[]` |
+| 16 | MCP self-connect | `toolsRegistered:0` |
+| 17 | MCP disconnect | `toolsRemoved:0`, `registeredDynamicTools:[]` |
 | 18 | MCP protocol: initialize → tools/list | `200`/`202`, tools array returned |
 | 19 | RAG ingest + retrieval | Ingested chunk retrieved via recall_memory_search |
 | 20 | `rag_chunk` table has rows, no `rag:` prefix | SQLite check returns 0 |

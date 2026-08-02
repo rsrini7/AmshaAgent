@@ -11,9 +11,19 @@ public record McpServerConfig(
         String podmanImage,
         List<String> envVars,
         Map<String, String> labels,
-        ToolCategory category) {
+        ToolCategory category,
+        String ownerUserId) {
     public McpServerConfig(String serverName, String podmanImage, List<String> envVars, Map<String, String> labels) {
-        this(serverName, podmanImage, envVars, labels, ToolCategory.NETWORK);
+        this(serverName, podmanImage, envVars, labels, ToolCategory.NETWORK, null);
+    }
+
+    public McpServerConfig(
+            String serverName,
+            String podmanImage,
+            List<String> envVars,
+            Map<String, String> labels,
+            ToolCategory category) {
+        this(serverName, podmanImage, envVars, labels, category, null);
     }
 
     public McpServerConfig {

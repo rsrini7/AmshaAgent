@@ -3,6 +3,7 @@ package com.amsha.mcp.tool;
 import static org.junit.jupiter.api.Assertions.*;
 
 import com.amsha.core.agent.role.ToolCapability;
+import com.amsha.core.tool.DynamicToolAdmission;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -16,7 +17,9 @@ class DynamicToolLookupImplTest {
     void setUp() {
         lookup = new DynamicToolLookupImpl();
         registry = new DynamicToolCapabilityRegistry();
-        lookup.registry = registry;
+        lookup.admissionLookup = toolName -> registry.find(toolName)
+                .map(tool -> new DynamicToolAdmission(
+                        tool.toolName(), tool.category(), tool.requiresApproval(), tool.requiredOperation()));
     }
 
     @Test

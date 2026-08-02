@@ -100,11 +100,7 @@ public class ToolInvocationGuard {
 
         record Deduplicate(String cachedObservation) implements GuardDecision {}
 
-        record PauseForApproval(ApprovalFrame frame) implements GuardDecision {
-            public PauseForApproval(String reason, String toolName) {
-                this(new ApprovalFrame(toolName, Map.of(), ApprovalFrame.RiskLevel.MEDIUM));
-            }
-        }
+        record PauseForApproval(ApprovalFrame frame) implements GuardDecision {}
 
         record Blocked(String observation) implements GuardDecision {}
     }
@@ -185,12 +181,18 @@ public class ToolInvocationGuard {
                         || dynamicRequiresApproval
                         || ((roleRegistry.requiresApprovalForTools(agentRole) || staticRequiresApproval)
                                 && !AutonomyLevel.FULL.equals(level)))) {
+            // HITL is the deliberate stronger control for approved operations. The automated
+            // post-policy classifier is not re-run after this pause/resume boundary.
             observeToolRiskForCollection(sessionId, agentRole, level, toolName, params, goal);
             ApprovalFrame frame = new ApprovalFrame(toolName, params, op.riskLevel());
             return new GuardDecision.PauseForApproval(frame);
         }
-        observeProvisionalAllow(sessionId, agentRole, level, toolName, params, goal);
-        return applyPostPolicyToolRisk(agentRole, level, toolName, params, history, goal, op);
+        GuardDecision postPolicyDecision =
+                applyPostPolicyToolRisk(agentRole, level, toolName, params, history, goal, op);
+        if (postPolicyDecision instanceof GuardDecision.Allow) {
+            observeProvisionalAllow(sessionId, agentRole, level, toolName, params, goal);
+        }
+        return postPolicyDecision;
     }
 
     /**
@@ -248,9 +250,9 @@ public class ToolInvocationGuard {
                             new GuardDecision.PauseForApproval(new ApprovalFrame(
                                     toolName, params == null ? Map.of() : params, operation.riskLevel()));
                     };
-                case ClassifierResult.NoOpinion<ToolRiskAction> ignored -> new GuardDecision.Allow();
+                case ClassifierResult.NoOpinion<ToolRiskAction> _ -> new GuardDecision.Allow();
             };
-        } catch (RuntimeException | LinkageError ignored) {
+        } catch (RuntimeException | LinkageError _) {
             return new GuardDecision.Allow();
         }
     }

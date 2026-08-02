@@ -19,6 +19,7 @@ import com.amsha.core.agent.reasoning.ReasoningStep;
 import com.amsha.core.agent.reasoning.StructuredOutputMode;
 import com.amsha.core.agent.result.AgentResult;
 import com.amsha.core.agent.role.ToolCapability;
+import com.amsha.core.governance.ApprovalFrame;
 import com.amsha.core.observability.AgentObserver;
 import com.amsha.core.security.AutonomyLevel;
 import com.amsha.core.tool.DynamicToolLookup;
@@ -168,8 +169,8 @@ class ToolStepHandlerGuardTest {
                 ReasoningStep.pending("thought", ToolCapability.GITHUB.toolName(), Map.of("target", "rsrini7"));
 
         lenient()
-                .doReturn(new ToolInvocationGuard.GuardDecision.PauseForApproval(
-                        ToolCapability.GITHUB.toolName(), "{\"target\":\"rsrini7\"}"))
+                .doReturn(new ToolInvocationGuard.GuardDecision.PauseForApproval(new ApprovalFrame(
+                        ToolCapability.GITHUB.toolName(), Map.of("target", "rsrini7"), ApprovalFrame.RiskLevel.MEDIUM)))
                 .when(guard)
                 .evaluate(
                         anyString(),

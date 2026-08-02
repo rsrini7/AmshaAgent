@@ -2,25 +2,26 @@ package com.amsha.core.lifecycle;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.time.Instant;
 import java.util.Map;
 
 import org.junit.jupiter.api.Test;
 
 class SessionTestLabelStoreTest {
-
     @Test
-    void putGetAndClearAreIdempotent() {
+    void labelsSurviveNormalReadsAndAreReapedAfterInactivity() {
         SessionTestLabelStore store = new SessionTestLabelStore();
-        store.put("s1", Map.of("tool_risk", "LOW_RISK"));
-        assertEquals("LOW_RISK", store.get("s1", "tool_risk"));
-        assertTrue(store.hasSession("s1"));
+        store.put("session-1", Map.of("task", "expected"));
 
-        store.clearSession("s1");
-        store.clearSession("s1");
-        assertNull(store.get("s1", "tool_risk"));
-        assertFalse(store.hasSession("s1"));
+        assertEquals("expected", store.get("session-1", "task"));
+        assertTrue(store.hasSession("session-1"));
+
+        store.reapExpired(Instant.now().minusSeconds(1));
+        assertTrue(store.hasSession("session-1"));
+
+        store.reapExpired(Instant.now().plusSeconds(1));
+        assertFalse(store.hasSession("session-1"));
     }
 }

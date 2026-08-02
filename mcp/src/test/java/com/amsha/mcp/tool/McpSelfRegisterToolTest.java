@@ -121,7 +121,8 @@ class McpSelfRegisterToolTest {
                         eq("npx"),
                         eq(List.of("-y", "@mcp/server")),
                         eq(Map.of("FOO", "BAR", "BAZ", "QUX")),
-                        eq(ToolCategory.NETWORK));
+                        eq(ToolCategory.NETWORK),
+                        eq("user-123"));
     }
 
     @Test

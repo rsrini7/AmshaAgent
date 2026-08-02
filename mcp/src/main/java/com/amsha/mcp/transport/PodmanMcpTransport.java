@@ -53,6 +53,10 @@ public class PodmanMcpTransport {
     private final AtomicInteger requestIdGenerator = new AtomicInteger(1);
     private ScheduledExecutorService healthCheckExecutor;
 
+    public boolean hasServer(String serverName) {
+        return activeProcesses.containsKey(serverName);
+    }
+
     @ConfigProperty(name = "amsha.mcp.podman.health-check-interval-ms", defaultValue = "15000")
     long healthCheckIntervalMs;
 
@@ -97,6 +101,7 @@ public class PodmanMcpTransport {
     public Uni<Void> connect(McpServerConfig config) {
         return Uni.createFrom()
                 .item(() -> {
+                    String ownerUserId = requireOwner(config.ownerUserId());
                     DynamicToolOperationDefaults.requireFor(config.category());
                     if (sandboxCircuitBreaker.getState() == SandboxCircuitBreaker.CircuitBreakerState.OPEN) {
                         if (!sandboxCircuitBreaker.shouldAttemptPodman()) {
@@ -159,7 +164,7 @@ public class PodmanMcpTransport {
                         // Step 3: List tools
                         JsonNode toolsResponse =
                                 sendRequest(config.serverName(), "tools/list", objectMapper.createObjectNode());
-                        registerTools(config, toolsResponse);
+                        registerTools(config, toolsResponse, ownerUserId);
 
                         sandboxCircuitBreaker.recordSuccess();
                         log.infof("Connected to MCP server: %s", config.serverName());
@@ -172,7 +177,7 @@ public class PodmanMcpTransport {
                 .replaceWithVoid();
     }
 
-    private void registerTools(McpServerConfig config, JsonNode toolsResponse) {
+    private void registerTools(McpServerConfig config, JsonNode toolsResponse, String ownerUserId) {
         JsonNode tools = toolsResponse.get("tools");
         if (tools != null && tools.isArray()) {
             for (JsonNode tool : tools) {
@@ -184,9 +189,16 @@ public class PodmanMcpTransport {
                 // requiredOperation from category registration defaults (see DynamicToolOperationDefaults).
                 DynamicToolCapability cap = new DynamicToolCapability(
                         name, desc, config.serverName(), McpTransportType.STDIO, false, schema, config.category());
-                registry.register(cap);
+                registry.registerForUser(ownerUserId, cap);
             }
         }
+    }
+
+    private static String requireOwner(String ownerUserId) {
+        if (ownerUserId == null || ownerUserId.isBlank() || "unknown".equals(ownerUserId)) {
+            throw new IllegalArgumentException("Podman MCP registration requires an explicit user owner");
+        }
+        return ownerUserId;
     }
 
     public Uni<String> invoke(String serverName, String toolName, String paramsJson) {

@@ -25,7 +25,7 @@ class OnnxClassifierRuntimeControlTest {
     @Test
     void disableRejectsNewLeasesAndDrainsExistingLease() {
         var control = new OnnxClassifierRuntimeControl(false, false, false);
-        try (var registration = control.registerReadyImplementation(Classifier.TOOL_RISK)) {
+        try (var _ = control.registerReadyImplementation(Classifier.TOOL_RISK)) {
             assertTrue(control.setEnabled(Classifier.TOOL_RISK, true).accepted());
             var lease = control.tryAcquire(Classifier.TOOL_RISK).orElseThrow();
 
@@ -48,7 +48,7 @@ class OnnxClassifierRuntimeControlTest {
     @Test
     void runtimeSwitchesRemainIndependent() {
         var control = new OnnxClassifierRuntimeControl(false, false, false);
-        try (var registration = control.registerReadyImplementation(Classifier.ANSWER_QUALITY)) {
+        try (var _ = control.registerReadyImplementation(Classifier.ANSWER_QUALITY)) {
             control.setEnabled(Classifier.ANSWER_QUALITY, true);
 
             assertTrue(control.snapshot(Classifier.ANSWER_QUALITY).effectiveEnabled());
@@ -63,7 +63,7 @@ class OnnxClassifierRuntimeControlTest {
         assertTrue(control.snapshot(Classifier.INTENT).requestedEnabled());
         assertFalse(control.snapshot(Classifier.INTENT).effectiveEnabled());
 
-        try (var registration = control.registerReadyImplementation(Classifier.INTENT)) {
+        try (var _ = control.registerReadyImplementation(Classifier.INTENT)) {
             assertTrue(control.snapshot(Classifier.INTENT).effectiveEnabled());
         }
 

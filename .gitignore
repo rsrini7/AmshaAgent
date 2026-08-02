@@ -106,3 +106,6 @@ __pycache__/
 .venv/
 .pytest_cache/
 .serena/
+
+*.diff
+*files.txt

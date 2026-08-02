@@ -194,7 +194,7 @@ class OnnxAdminResourceTest {
         when(securityContext.isUserInRole("internal")).thenReturn(true);
         when(securityContext.getUserPrincipal()).thenReturn(() -> "internal-admin");
 
-        try (var registration = classifierRuntimeControl.registerReadyImplementation(Classifier.TOOL_RISK)) {
+        try (var _ = classifierRuntimeControl.registerReadyImplementation(Classifier.TOOL_RISK)) {
             var response = resource.enableClassifier("tool-risk");
 
             assertEquals(200, response.getStatus());
@@ -229,7 +229,7 @@ class OnnxAdminResourceTest {
                         eq(SecurityEventType.CLASSIFIER_RUNTIME_CHANGE_REQUESTED),
                         anyString());
 
-        try (var registration = classifierRuntimeControl.registerReadyImplementation(Classifier.ANSWER_QUALITY)) {
+        try (var _ = classifierRuntimeControl.registerReadyImplementation(Classifier.ANSWER_QUALITY)) {
             assertThrows(IllegalStateException.class, () -> resource.enableClassifier("answer-quality"));
             assertFalse(
                     classifierRuntimeControl.snapshot(Classifier.ANSWER_QUALITY).requestedEnabled());
@@ -241,10 +241,9 @@ class OnnxAdminResourceTest {
         when(securityContext.isUserInRole("internal")).thenReturn(true);
         when(securityContext.getUserPrincipal()).thenReturn(() -> "internal-admin");
 
-        try (var registration = classifierRuntimeControl.registerReadyImplementation(Classifier.INTENT)) {
+        try (var _ = classifierRuntimeControl.registerReadyImplementation(Classifier.INTENT)) {
             classifierRuntimeControl.setEnabled(Classifier.INTENT, true);
-            try (var lease =
-                    classifierRuntimeControl.tryAcquire(Classifier.INTENT).orElseThrow()) {
+            try (var _ = classifierRuntimeControl.tryAcquire(Classifier.INTENT).orElseThrow()) {
                 var response = resource.disableClassifier("intent");
 
                 assertEquals(200, response.getStatus());

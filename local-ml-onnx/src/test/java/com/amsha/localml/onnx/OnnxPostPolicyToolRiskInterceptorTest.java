@@ -51,7 +51,7 @@ class OnnxPostPolicyToolRiskInterceptorTest {
         });
         var interceptor = new OnnxPostPolicyToolRiskInterceptor(runtimeControl, shadowClassifier);
 
-        try (var registration = runtimeControl.registerReadyImplementation(Classifier.TOOL_RISK)) {
+        try (var _ = runtimeControl.registerReadyImplementation(Classifier.TOOL_RISK)) {
             ClassifierResult<ToolRiskAction> result = interceptor.evaluate(CONTEXT);
 
             assertInstanceOf(ClassifierResult.NoOpinion.class, result);
@@ -70,7 +70,7 @@ class OnnxPostPolicyToolRiskInterceptorTest {
         });
         var interceptor = new OnnxPostPolicyToolRiskInterceptor(runtimeControl, shadowClassifier);
 
-        try (var registration = runtimeControl.registerReadyImplementation(Classifier.TOOL_RISK)) {
+        try (var _ = runtimeControl.registerReadyImplementation(Classifier.TOOL_RISK)) {
             runtimeControl.setEnabled(Classifier.TOOL_RISK, true);
             ClassifierResult<ToolRiskAction> result = interceptor.evaluate(CONTEXT);
 
@@ -90,7 +90,7 @@ class OnnxPostPolicyToolRiskInterceptorTest {
         });
         var interceptor = new OnnxPostPolicyToolRiskInterceptor(runtimeControl, shadowClassifier);
 
-        try (var registration = runtimeControl.registerReadyImplementation(Classifier.TOOL_RISK)) {
+        try (var _ = runtimeControl.registerReadyImplementation(Classifier.TOOL_RISK)) {
             runtimeControl.setEnabled(Classifier.TOOL_RISK, true);
             ClassifierResult<ToolRiskAction> result = interceptor.evaluate(CONTEXT);
 
@@ -110,7 +110,7 @@ class OnnxPostPolicyToolRiskInterceptorTest {
         });
         var interceptor = new OnnxPostPolicyToolRiskInterceptor(runtimeControl, shadowClassifier);
 
-        try (var registration = runtimeControl.registerReadyImplementation(Classifier.TOOL_RISK)) {
+        try (var _ = runtimeControl.registerReadyImplementation(Classifier.TOOL_RISK)) {
             runtimeControl.setEnabled(Classifier.TOOL_RISK, true);
             ClassifierResult<ToolRiskAction> result = interceptor.evaluate(CONTEXT);
 
@@ -128,7 +128,7 @@ class OnnxPostPolicyToolRiskInterceptorTest {
         });
         var interceptor = new OnnxPostPolicyToolRiskInterceptor(runtimeControl, shadowClassifier);
 
-        try (var registration = runtimeControl.registerReadyImplementation(Classifier.TOOL_RISK)) {
+        try (var _ = runtimeControl.registerReadyImplementation(Classifier.TOOL_RISK)) {
             runtimeControl.setEnabled(Classifier.TOOL_RISK, true);
             ClassifierResult<ToolRiskAction> result = interceptor.evaluate(CONTEXT);
 

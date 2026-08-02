@@ -45,10 +45,10 @@ class DynamicToolAdmissionLookupImplTest {
     }
 
     @Test
-    void registerReplacesAdmissionMetadataAtomically() {
+    void sameServerRegistrationRefreshesAdmissionMetadata() {
         registry.register(
                 new DynamicToolCapability("tool", "d", "s", McpTransportType.STDIO, false, "{}", ToolCategory.NETWORK));
-        registry.register(new DynamicToolCapability(
+        DynamicToolCapability changed = new DynamicToolCapability(
                 "tool",
                 "d2",
                 "s",
@@ -56,8 +56,9 @@ class DynamicToolAdmissionLookupImplTest {
                 true,
                 "{}",
                 ToolCategory.COMPUTE,
-                ToolOperation.EXECUTE_SHELL));
+                ToolOperation.EXECUTE_SHELL);
 
+        registry.register(changed);
         DynamicToolAdmission admission = lookup.findAdmission("tool").orElseThrow();
         assertEquals(ToolCategory.COMPUTE, admission.category());
         assertTrue(admission.requiresApproval());

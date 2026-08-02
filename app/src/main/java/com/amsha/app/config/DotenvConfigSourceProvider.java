@@ -1,10 +1,13 @@
 package com.amsha.app.config;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.attribute.FileTime;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
@@ -31,7 +34,7 @@ public class DotenvConfigSourceProvider implements ConfigSourceProvider {
 
     private static final AtomicReference<CachedDotenv> CACHE = new AtomicReference<>();
 
-    private record CachedDotenv(Path path, FileTime lastModified, Map<String, String> properties) {}
+    private record CachedDotenv(Path path, FileTime lastModified, String contentHash, Map<String, String> properties) {}
 
     @Override
     public Iterable<ConfigSource> getConfigSources(ClassLoader forClassLoader) {
@@ -64,15 +67,18 @@ public class DotenvConfigSourceProvider implements ConfigSourceProvider {
 
         try {
             FileTime currentModified = Files.getLastModifiedTime(envPath);
+            String content = Files.readString(envPath, StandardCharsets.UTF_8);
+            String contentHash = sha256(content);
             CachedDotenv cached = CACHE.get();
             if (cached != null
                     && cached.path().equals(envPath)
-                    && cached.lastModified().equals(currentModified)) {
+                    && cached.lastModified().equals(currentModified)
+                    && cached.contentHash().equals(contentHash)) {
                 return cached.properties();
             }
 
             Map<String, String> properties = new HashMap<>();
-            for (String line : Files.readAllLines(envPath)) {
+            for (String line : content.lines().toList()) {
                 line = line.trim();
 
                 // 1. Ignore full-line comments and empty lines
@@ -101,12 +107,25 @@ public class DotenvConfigSourceProvider implements ConfigSourceProvider {
                 }
             }
             Map<String, String> immutableProperties = Map.copyOf(properties);
-            CACHE.set(new CachedDotenv(envPath, currentModified, immutableProperties));
+            CACHE.set(new CachedDotenv(envPath, currentModified, contentHash, immutableProperties));
             log.debug("Loaded {} properties from .env file.", immutableProperties.size());
             return immutableProperties;
         } catch (IOException e) {
             log.warn("Failed to read .env file. Falling back to default environment variables.", e);
             return Collections.emptyMap();
+        }
+    }
+
+    private static String sha256(String content) {
+        try {
+            byte[] digest = MessageDigest.getInstance("SHA-256").digest(content.getBytes(StandardCharsets.UTF_8));
+            StringBuilder result = new StringBuilder(digest.length * 2);
+            for (byte value : digest) {
+                result.append(String.format("%02x", value));
+            }
+            return result.toString();
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-256 unavailable", e);
         }
     }
 

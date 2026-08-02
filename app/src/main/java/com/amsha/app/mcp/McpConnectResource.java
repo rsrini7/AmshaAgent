@@ -45,8 +45,8 @@ import io.smallrye.common.annotation.RunOnVirtualThread;
  *
  * Self-connect smoke test (no external server needed):
  *   POST with {"name":"self","url":"http://localhost:8080/mcp"}
- *   Amsha Agent connects to itself - github and recall_memory_search appear as dynamic tools.
- *   Then send /mcp in Telegram to confirm the live count.
+ *   Amsha Agent connects to itself; built-in tools are skipped and no dynamic tools are registered.
+ *   Then send /mcp in Telegram to confirm the live count remains zero.
  */
 @ApplicationScoped
 @Path("/mcp/connect")
@@ -96,12 +96,12 @@ public class McpConnectResource {
     /**
      * Connect to a remote HTTP/SSE MCP server.
      * Performs the full MCP handshake: initialize → notifications/initialized → tools/list.
-     * All discovered tools are registered into DynamicToolCapabilityRegistry and become
-     * immediately available to the agent loop via ExternalMcpToolAdapter.
+     * Eligible discovered tools are registered into DynamicToolCapabilityRegistry and become
+     * immediately available to the agent loop via ExternalMcpToolAdapter; built-in name collisions are skipped.
      *
      * Body: {"name":"my-server","url":"http://remote-mcp-host:3000/mcp"}
      *
-     * Self-connect test: {"name":"self","url":"http://localhost:8080/mcp"}
+     * Self-connect test: {"name":"self","url":"http://localhost:8080/mcp"}; built-in names are skipped.
      */
     @POST
     @Consumes(MediaType.APPLICATION_JSON)

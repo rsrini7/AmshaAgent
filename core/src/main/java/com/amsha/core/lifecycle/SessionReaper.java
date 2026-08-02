@@ -75,6 +75,9 @@ public class SessionReaper {
     SessionHeartbeatTracker heartbeatTracker;
 
     @Inject
+    SessionTestLabelStore sessionTestLabelStore;
+
+    @Inject
     Event<ApprovalDecisionEvent> decisionEvents;
 
     @Inject
@@ -210,10 +213,13 @@ public class SessionReaper {
     @Scheduled(every = "${amsha.workspace.gc-interval:5m}", delayed = "PT90S")
     public void gcSweep() {
         if (shuttingDown) return;
+        Instant cutoff = Instant.now().minus(Duration.ofMinutes(sessionTtlMinutes));
+        if (sessionTestLabelStore != null) {
+            sessionTestLabelStore.reapExpired(cutoff);
+        }
         if (heartbeatTracker.activeSessionCount() == 0) return;
 
         try {
-            Instant cutoff = Instant.now().minus(Duration.ofMinutes(sessionTtlMinutes));
             log.debugf("GC sweep: checking sessions against TTL=%dm (cutoff=%s)", sessionTtlMinutes, cutoff);
 
             Set<String> awaitingApprovalIds = findAwaitingApprovalIds();

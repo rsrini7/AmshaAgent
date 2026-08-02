@@ -462,7 +462,7 @@ curl -X POST http://localhost:8080/api/v1/mcp/connect \
   -d '{"url":"http://localhost:8080/mcp","name":"self"}'
 ```
 
-After this, `GET /api/v1/mcp/tools` should show `registeredDynamicTools` with 2 entries, both with `mcpServerName:"self"` and `transport:"HTTP_SSE"`. This verifies the full outbound MCP stack without needing an external server.
+After this, `GET /api/v1/mcp/tools` should show `registeredDynamicTools` with 0 entries. Built-in `/mcp` tools are intentionally not re-registered as dynamic tools, so this remains a full outbound MCP handshake smoke test without creating internal-name collisions.
 
 ---
 

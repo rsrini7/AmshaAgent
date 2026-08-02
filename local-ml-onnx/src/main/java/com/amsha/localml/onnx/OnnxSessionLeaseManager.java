@@ -1,6 +1,5 @@
 package com.amsha.localml.onnx;
 
-import ai.djl.huggingface.tokenizers.HuggingFaceTokenizer;
 import ai.onnxruntime.OrtEnvironment;
 import ai.onnxruntime.OrtException;
 import ai.onnxruntime.OrtSession;
@@ -69,7 +68,7 @@ public class OnnxSessionLeaseManager {
             @ConfigProperty(name = "amsha.onnx.max-resident-mb", defaultValue = "1024") long maxResidentMb) {
         this(
                 runtimeManager::environment,
-                new OrtSessionHandleFactoryImpl(tokenizerFactory),
+                new DefaultOnnxSessionHandleFactory(tokenizerFactory),
                 shutdownGrace,
                 maxLoadedModels,
                 maxResidentMb);
@@ -79,7 +78,7 @@ public class OnnxSessionLeaseManager {
             OnnxRuntimeManager runtimeManager, OnnxTokenizerFactory tokenizerFactory, Duration shutdownGrace) {
         this(
                 runtimeManager::environment,
-                new OrtSessionHandleFactoryImpl(tokenizerFactory),
+                new DefaultOnnxSessionHandleFactory(tokenizerFactory),
                 shutdownGrace,
                 DEFAULT_MAX_LOADED_MODELS,
                 DEFAULT_MAX_RESIDENT_MB);
@@ -115,14 +114,58 @@ public class OnnxSessionLeaseManager {
         Objects.requireNonNull(deadline, "deadline");
         ensureBeforeDeadline(deadline);
         BundleSession bundleSession = sessionFor(bundle, deadline);
+        OnnxSessionHandle handle;
         synchronized (bundleSession) {
-            if (bundleSession.closing) {
+            while (true) {
+                if (bundleSession.closing) {
+                    throw new OnnxSessionAcquireException(
+                            OnnxSessionAcquireException.Reason.BUNDLE_CLOSING, "ONNX bundle is closing");
+                }
+                handle = bundleSession.handle;
+                if (handle != null) {
+                    ensureBeforeDeadline(deadline);
+                    bundleSession.leaseCount++;
+                    bundleSession.lastAccessSequence = accessSequence.incrementAndGet();
+                    return new OnnxSessionLease(this, bundleSession, handle);
+                }
+                if (!bundleSession.opening) {
+                    bundleSession.opening = true;
+                    break;
+                }
+                if (!waitForLease(bundleSession, deadline)) {
+                    throw new OnnxSessionAcquireException(
+                            OnnxSessionAcquireException.Reason.DEADLINE_EXCEEDED,
+                            "ONNX session open deadline exceeded");
+                }
+            }
+        }
+
+        OnnxSessionHandle opened = null;
+        boolean openedWithinDeadline = false;
+        try {
+            opened = open(bundle, deadline, bundleSession);
+            ensureBeforeDeadline(deadline);
+            openedWithinDeadline = true;
+        } finally {
+            synchronized (bundleSession) {
+                bundleSession.opening = false;
+                if (opened != null && openedWithinDeadline && !bundleSession.closing) {
+                    bundleSession.handle = opened;
+                    handle = opened;
+                } else if (opened != null) {
+                    closeQuietly(opened);
+                }
+                if (bundleSession.closing && !hasInFlightWork(bundleSession)) {
+                    closeAndRemove(bundleSession.bundleId, bundleSession);
+                }
+                bundleSession.notifyAll();
+            }
+        }
+        synchronized (bundleSession) {
+            if (bundleSession.closing || opened == null) {
                 throw new OnnxSessionAcquireException(
                         OnnxSessionAcquireException.Reason.BUNDLE_CLOSING, "ONNX bundle is closing");
             }
-            OnnxSessionHandle handle = bundleSession.handle;
-            if (handle == null) handle = open(bundle, deadline, bundleSession);
-            ensureBeforeDeadline(deadline);
             bundleSession.leaseCount++;
             bundleSession.lastAccessSequence = accessSequence.incrementAndGet();
             return new OnnxSessionLease(this, bundleSession, handle);
@@ -332,20 +375,16 @@ public class OnnxSessionLeaseManager {
                 throw new OnnxSessionAcquireException(
                         OnnxSessionAcquireException.Reason.RUNTIME_UNAVAILABLE, "ONNX Runtime is unavailable");
             }
-            OnnxSessionHandle handle = sessionFactory.open(environment.get(), bundle);
-            bundleSession.handle = Objects.requireNonNull(handle, "sessionFactory result");
+            OnnxSessionHandle handle =
+                    Objects.requireNonNull(sessionFactory.open(environment.get(), bundle), "sessionFactory result");
             ensureBeforeDeadline(deadline);
             return handle;
         } catch (OnnxSessionAcquireException e) {
             bundleSession.closing = true;
-            closeQuietly(bundleSession.handle);
-            bundleSession.handle = null;
             closeAndRemove(bundle.manifest().bundleId(), bundleSession);
             throw e;
         } catch (Exception | LinkageError e) {
             bundleSession.closing = true;
-            closeQuietly(bundleSession.handle);
-            bundleSession.handle = null;
             closeAndRemove(bundle.manifest().bundleId(), bundleSession);
             throw new OnnxSessionAcquireException(
                     OnnxSessionAcquireException.Reason.SESSION_LOAD_FAILED,
@@ -418,7 +457,7 @@ public class OnnxSessionLeaseManager {
     }
 
     private static boolean hasInFlightWork(BundleSession bundleSession) {
-        return bundleSession.leaseCount > 0 || !bundleSession.activeRuns.isEmpty();
+        return bundleSession.opening || bundleSession.leaseCount > 0 || !bundleSession.activeRuns.isEmpty();
     }
 
     private static void requestCancellation(BundleSession bundleSession) {
@@ -472,6 +511,7 @@ public class OnnxSessionLeaseManager {
         private OnnxSessionHandle handle;
         private int leaseCount;
         private boolean closing;
+        private boolean opening;
         private volatile long lastAccessSequence;
 
         BundleSession(String bundleId, long estimatedResidentBytes, long lastAccessSequence) {
@@ -482,50 +522,4 @@ public class OnnxSessionLeaseManager {
     }
 
     private record CapacitySnapshot(int loadedModels, long reservedBytes) {}
-
-    private static final class OrtSessionHandleFactoryImpl implements OnnxSessionHandleFactory {
-        private final OnnxTokenizerFactory tokenizerFactory;
-
-        OrtSessionHandleFactoryImpl(OnnxTokenizerFactory tokenizerFactory) {
-            this.tokenizerFactory = Objects.requireNonNull(tokenizerFactory, "tokenizerFactory");
-        }
-
-        @Override
-        public OnnxSessionHandle open(OrtEnvironment environment, VerifiedOnnxModelBundle bundle) throws Exception {
-            var embeddingSpec = bundle.manifest().embeddingSpec();
-            var classifierSpec = bundle.manifest().classifierSpec();
-            int maximumLength = embeddingSpec
-                    .map(OnnxEmbeddingBundleSpec::maxSequenceLength)
-                    .or(() -> classifierSpec.map(OnnxClassifierBundleSpec::maxSequenceLength))
-                    .orElse(0);
-            var tokenizer = maximumLength > 0
-                    ? tokenizerFactory.load(bundle.tokenizerPath(), maximumLength)
-                    : tokenizerFactory.load(bundle.tokenizerPath());
-            try {
-                try (OrtSession.SessionOptions options = new OrtSession.SessionOptions()) {
-                    // Keep native-image execution deliberately conservative until the cross-platform
-                    // execution matrix proves a wider ORT threading configuration is safe.
-                    options.setIntraOpNumThreads(1);
-                    options.setInterOpNumThreads(1);
-                    options.setExecutionMode(OrtSession.SessionOptions.ExecutionMode.SEQUENTIAL);
-                    return new OrtSessionHandle(
-                            environment.createSession(bundle.modelPath().toString(), options), tokenizer);
-                }
-            } catch (Exception | LinkageError e) {
-                tokenizer.close();
-                throw e;
-            }
-        }
-    }
-
-    private record OrtSessionHandle(OrtSession session, HuggingFaceTokenizer tokenizer) implements OnnxSessionHandle {
-        @Override
-        public void close() throws Exception {
-            try {
-                session.close();
-            } finally {
-                tokenizer.close();
-            }
-        }
-    }
 }

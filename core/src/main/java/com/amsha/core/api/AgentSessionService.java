@@ -253,9 +253,6 @@ public class AgentSessionService {
             TurnDispatchResult dispatched = withSelectedWorkspace(() -> WorkspaceScopeHolder.call(
                     sessionId, () -> dispatchRestTurn(sessionId, userId, request, canonicalRole, maxIterations)));
             ServiceResult<Object> result = toServiceResult(dispatched, false);
-            if (!isAwaitingApproval(result)) {
-                sessionTestLabelStore.clearSession(sessionId);
-            }
             return result;
         } catch (BudgetExceededException e) {
             sessionTestLabelStore.clearSession(sessionId);
@@ -303,9 +300,6 @@ public class AgentSessionService {
                 int maxIterations = request.maxIterations() != null ? request.maxIterations() : 5;
                 ServiceResult<Object> result = toServiceResult(
                         dispatchRestTurn(sessionId, userId, request, canonicalRole, maxIterations), true);
-                if (!isAwaitingApproval(result)) {
-                    sessionTestLabelStore.clearSession(sessionId);
-                }
                 callback.accept(result);
             } catch (Exception e) {
                 sessionTestLabelStore.clearSession(sessionId);
@@ -461,17 +455,6 @@ public class AgentSessionService {
                 .<ServiceResult<Object>>map(
                         result -> new ServiceResult<>(responseMapper.mapResult(result, asynchronous), null, null))
                 .orElseGet(() -> ServiceResult.success(Map.of("status", "OK", "message", "Turn processed")));
-    }
-
-    private static boolean isAwaitingApproval(ServiceResult<Object> result) {
-        if (result == null) return false;
-        if ("AWAITING_APPROVAL".equals(result.errorCode())) return true;
-        Object data = result.value();
-        if (data instanceof Map<?, ?> map) {
-            Object status = map.get("status");
-            return status != null && "AWAITING_APPROVAL".equals(status.toString());
-        }
-        return data != null && data.toString().contains("AWAITING_APPROVAL");
     }
 
     private Optional<ServiceResult<Object>> validateRole(String role) {
