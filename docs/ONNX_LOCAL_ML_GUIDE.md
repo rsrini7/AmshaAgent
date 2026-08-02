@@ -80,6 +80,13 @@ data/models/all-mpnet-base-v2-e8c3b32/
     "l2Normalize": true,
     "spaceId": "sentence-transformers/all-mpnet-base-v2",
     "spaceRevision": "e8c3b32edf5434bc2275fc9bab85f82640a19130"
+  },
+  "source": {
+    "repository": "https://huggingface.co/sentence-transformers/all-mpnet-base-v2",
+    "revision": "e8c3b32edf5434bc2275fc9bab85f82640a19130",
+    "modelPath": "onnx/model.onnx",
+    "tokenizerPath": "tokenizer.json",
+    "license": "Apache-2.0"
   }
 }
 ```
@@ -95,7 +102,7 @@ measurement of process RSS. Legacy manifests that omit it default to twice the v
 model-plus-tokenizer bytes. The session manager reserves the estimate before loading and
 evicts only idle sessions when either configured admission budget is full.
 
-The optional `source` object written by the development installer is an unsigned,
+The required `source` object written by the development installer is an unsigned,
 descriptive declaration. Its URL, relative paths, and SPDX license are validated, but
 it is not a trust root, signature, SBOM, or SLSA provenance statement. Release evidence
 is verified separately as described in Section 8.

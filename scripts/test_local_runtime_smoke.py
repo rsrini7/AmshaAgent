@@ -215,6 +215,13 @@ class LocalRuntimeSmokeTest(unittest.TestCase):
                 "tokenizerFile": "tokenizer.json",
                 "tokenizerBytes": len(tokenizer),
                 "tokenizerSha256": hashlib.sha256(tokenizer).hexdigest(),
+                "source": {
+                    "repository": "https://example.test/model",
+                    "revision": "revision-1",
+                    "modelPath": "model.onnx",
+                    "tokenizerPath": "tokenizer.json",
+                    "license": "Apache-2.0",
+                },
             }
             (bundle / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
             messages: list[str] = []

@@ -6,6 +6,7 @@ import ai.onnxruntime.OrtEnvironment;
 import ai.onnxruntime.OrtException;
 import ai.onnxruntime.OrtSession;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
 
@@ -21,6 +22,17 @@ public final class OnnxTextClassifierRunner {
             HuggingFaceTokenizer tokenizer,
             OnnxClassifierBundleSpec spec,
             String text)
+            throws OnnxClassifierInferenceException {
+        return classify(environment, lease, tokenizer, spec, text, null);
+    }
+
+    public ClassifierResult<String> classify(
+            OrtEnvironment environment,
+            OnnxSessionLease lease,
+            HuggingFaceTokenizer tokenizer,
+            OnnxClassifierBundleSpec spec,
+            String text,
+            Instant deadline)
             throws OnnxClassifierInferenceException {
         Objects.requireNonNull(environment, "environment");
         Objects.requireNonNull(lease, "lease");
@@ -38,7 +50,7 @@ public final class OnnxTextClassifierRunner {
         }
 
         try (OnnxTextInputSupport.TensorBatch tensors = OnnxTextInputSupport.createTensors(environment, spec, inputs);
-                OrtSession.Result result = lease.run(tensors.values())) {
+                OrtSession.Result result = lease.run(tensors.values(), deadline)) {
             OnnxValue output = result.get(spec.outputName())
                     .orElseThrow(() -> new OnnxClassifierInferenceException("Declared ONNX output is missing"));
             return select(output.getValue(), spec);

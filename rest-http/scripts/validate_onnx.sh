@@ -78,7 +78,7 @@ for item in classifiers:
     available = item.get("implementationAvailable")
     if id == "intent" and available:
         raise SystemExit(1)
-    if id in {"tool-risk", "answer-quality"} and not available:
+    if id in {"tool-risk", "answer-quality"} and available:
         raise SystemExit(1)
 PY
 }
@@ -124,6 +124,16 @@ import sys
 
 bundle = pathlib.Path(sys.argv[1])
 manifest = json.loads((bundle / "manifest.json").read_text())
+source = manifest.get("source")
+required_source = {"repository", "revision", "modelPath", "tokenizerPath", "license"}
+if (
+    not isinstance(source, dict)
+    or not required_source.issubset(source)
+    or not isinstance(source.get("repository"), str)
+    or not source["repository"].startswith("https://")
+    or source.get("license") not in {"Apache-2.0", "MIT", "BSD-2-Clause", "BSD-3-Clause", "ISC", "0BSD"}
+):
+    raise SystemExit(1)
 verified_bytes = 0
 for file_key, digest_key, bytes_key in (("modelFile", "modelSha256", "modelBytes"), ("tokenizerFile", "tokenizerSha256", "tokenizerBytes")):
     path = bundle / manifest[file_key]
@@ -170,10 +180,11 @@ else
   fail "$CODE"
 fi
 
-info "ONNX-6: Classifier enable succeeds with ready implementation"
+info "ONNX-6: Classifier enable fails closed without a ready implementation"
 CODE=$(mute -X POST -H "X-Amsha-API-Key: $VALID_KEY" \
   "$B/api/v1/admin/local-ml/onnx/classifiers/tool-risk/enable")
-if [ "$CODE" = "200" ] && grep -q '"accepted":true' "$RESP_FILE"; then
+if [ "$CODE" = "409" ] && grep -q '"accepted":false' "$RESP_FILE" \
+    && grep -q '"reason":"MISSING_READY_IMPLEMENTATION"' "$RESP_FILE"; then
   ok "$CODE"
 else
   fail "$CODE"

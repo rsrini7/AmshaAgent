@@ -61,7 +61,11 @@ class OnnxModelBundleRegistryTest {
                         original.modelBytes(),
                         original.tokenizerFile(),
                         original.tokenizerSha256(),
-                        original.tokenizerBytes()));
+                        original.tokenizerBytes(),
+                        original.estimatedResidentBytes(),
+                        original.embedding(),
+                        original.classifier(),
+                        original.source()));
         OnnxModelBundleRegistry registry = new OnnxModelBundleRegistry(objectMapper, true, tempDir, 1024);
 
         assertThrows(IOException.class, () -> registry.loadVerified("bundle-one"));
@@ -83,7 +87,16 @@ class OnnxModelBundleRegistryTest {
                         Files.size(model),
                         "tokenizer.json",
                         sha256(tokenizer),
-                        Files.size(tokenizer)));
+                        Files.size(tokenizer),
+                        0,
+                        null,
+                        null,
+                        new OnnxModelBundleManifest.OnnxModelBundleSource(
+                                "https://example.test/model",
+                                "revision-1",
+                                "model.onnx",
+                                "tokenizer.json",
+                                "Apache-2.0")));
         return bundle;
     }
 

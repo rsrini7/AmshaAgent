@@ -20,6 +20,11 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.Executors;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Supplier;
 
@@ -44,6 +49,12 @@ public class OnnxSessionLeaseManager {
     private final Duration shutdownGrace;
     private final int maxLoadedModels;
     private final long maxResidentBytes;
+    private final ScheduledExecutorService cancellationExecutor =
+            Executors.newSingleThreadScheduledExecutor(runnable -> {
+                Thread thread = new Thread(runnable, "amsha-onnx-cancellation");
+                thread.setDaemon(true);
+                return thread;
+            });
     private final Object admissionLock = new Object();
     private final AtomicLong accessSequence = new AtomicLong();
     private final Map<String, BundleSession> sessions = new HashMap<>();
@@ -161,6 +172,7 @@ public class OnnxSessionLeaseManager {
                 log.warnf("ONNX bundle still has in-flight leases at shutdown: %s", entry.getKey());
             }
         }
+        cancellationExecutor.shutdownNow();
     }
 
     void release(BundleSession bundleSession) {
@@ -177,19 +189,39 @@ public class OnnxSessionLeaseManager {
     }
 
     OrtSession.RunOptions beginRun(BundleSession bundleSession) throws OrtException {
+        return beginRun(bundleSession, null);
+    }
+
+    OrtSession.RunOptions beginRun(BundleSession bundleSession, Instant deadline) throws OrtException {
         synchronized (bundleSession) {
             if (bundleSession.closing) {
                 throw new IllegalStateException("ONNX bundle is closing");
             }
+            if (deadline != null && !Instant.now().isBefore(deadline)) {
+                throw new IllegalStateException("ONNX inference request deadline exceeded");
+            }
             OrtSession.RunOptions runOptions = new OrtSession.RunOptions();
-            bundleSession.activeRuns.add(runOptions);
+            bundleSession.activeRuns.put(runOptions, null);
+            if (deadline != null) {
+                try {
+                    long delayNanos = nanosUntil(deadline);
+                    ScheduledFuture<?> cancellation = cancellationExecutor.schedule(
+                            () -> terminateRun(bundleSession, runOptions), delayNanos, TimeUnit.NANOSECONDS);
+                    bundleSession.activeRuns.put(runOptions, cancellation);
+                } catch (RejectedExecutionException e) {
+                    bundleSession.activeRuns.remove(runOptions);
+                    runOptions.close();
+                    throw new IllegalStateException("ONNX cancellation scheduler is stopped", e);
+                }
+            }
             return runOptions;
         }
     }
 
     void endRun(BundleSession bundleSession, OrtSession.RunOptions runOptions) {
         synchronized (bundleSession) {
-            bundleSession.activeRuns.remove(runOptions);
+            ScheduledFuture<?> cancellation = bundleSession.activeRuns.remove(runOptions);
+            if (cancellation != null) cancellation.cancel(false);
             runOptions.close();
             if (bundleSession.closing && !hasInFlightWork(bundleSession)) {
                 closeAndRemove(bundleSession.bundleId, bundleSession);
@@ -390,12 +422,31 @@ public class OnnxSessionLeaseManager {
     }
 
     private static void requestCancellation(BundleSession bundleSession) {
-        for (OrtSession.RunOptions runOptions : bundleSession.activeRuns) {
+        for (OrtSession.RunOptions runOptions : bundleSession.activeRuns.keySet()) {
             try {
                 runOptions.setTerminate(true);
             } catch (OrtException e) {
                 log.warn("ONNX run cancellation signal failed");
             }
+        }
+    }
+
+    private static void terminateRun(BundleSession bundleSession, OrtSession.RunOptions runOptions) {
+        synchronized (bundleSession) {
+            if (!bundleSession.activeRuns.containsKey(runOptions)) return;
+            try {
+                runOptions.setTerminate(true);
+            } catch (OrtException e) {
+                log.warn("ONNX deadline cancellation signal failed");
+            }
+        }
+    }
+
+    private static long nanosUntil(Instant deadline) {
+        try {
+            return Math.max(0, Duration.between(Instant.now(), deadline).toNanos());
+        } catch (ArithmeticException e) {
+            return Long.MAX_VALUE;
         }
     }
 
@@ -417,7 +468,7 @@ public class OnnxSessionLeaseManager {
     static final class BundleSession {
         private final String bundleId;
         private final long estimatedResidentBytes;
-        private final Set<OrtSession.RunOptions> activeRuns = new HashSet<>();
+        private final Map<OrtSession.RunOptions, ScheduledFuture<?>> activeRuns = new HashMap<>();
         private OnnxSessionHandle handle;
         private int leaseCount;
         private boolean closing;

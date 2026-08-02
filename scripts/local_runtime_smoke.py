@@ -367,6 +367,16 @@ def verify_bundle(model_root: Path, bundle_id: str, emit: Emitter = print) -> No
         raise SmokeFailure("Pinned ONNX bundle manifest is unreadable or invalid") from None
     if not isinstance(manifest, dict):
         raise SmokeFailure("Pinned ONNX bundle manifest has an invalid shape")
+    source = manifest.get("source")
+    required_source_fields = {"repository", "revision", "modelPath", "tokenizerPath", "license"}
+    if (
+        not isinstance(source, dict)
+        or required_source_fields - source.keys()
+        or not isinstance(source.get("repository"), str)
+        or not source["repository"].startswith("https://")
+        or source.get("license") not in {"Apache-2.0", "MIT", "BSD-2-Clause", "BSD-3-Clause", "ISC", "0BSD"}
+    ):
+        raise SmokeFailure("Pinned ONNX bundle provenance metadata is missing or invalid")
 
     for prefix, label in (("model", "model file"), ("tokenizer", "tokenizer file")):
         path = safe_bundle_file(bundle_directory, manifest.get(f"{prefix}File"), label)
@@ -454,10 +464,12 @@ def require_classifier_scaffold(payload: Mapping[str, object]) -> None:
     for classifier in classifiers:
         identifier = classifier.get("classifier")
         available = classifier.get("implementationAvailable")
+        if identifier in {"tool-risk", "answer-quality"}:
+            if available is not False:
+                raise SmokeFailure(f"ONNX {identifier} classifier unexpectedly reported an available implementation")
+            continue
         if identifier == "intent" and available is not False:
             raise SmokeFailure("ONNX intent classifier unexpectedly reported an available implementation")
-        elif identifier in {"tool-risk", "answer-quality"} and available is not True:
-            raise SmokeFailure(f"ONNX {identifier} classifier did not report an available implementation")
     if any(classifier.get("effectiveEnabled") is not False for classifier in classifiers):
         raise SmokeFailure("An ONNX classifier unexpectedly reported effective enablement")
 
@@ -490,19 +502,19 @@ def run_amsha_checks(
         headers=internal_headers,
     )
     require_classifier_scaffold(classifiers)
-    emit_pass("Amsha Phase 3 active classifier implementations exposed", emit)
+    emit_pass("Amsha Phase 3 classifier controls expose no active implementations", emit)
 
     enable = request_json_with_status(
         endpoint(base_url, "api/v1/admin/local-ml/onnx/classifiers/tool-risk/enable"),
         "Amsha ONNX classifier enable",
         timeout,
-        200,
+        409,
         method="POST",
         headers=internal_headers,
     )
-    if enable.get("accepted") is not True:
-        raise SmokeFailure("ONNX classifier enable was not accepted")
-    emit_pass("Amsha active classifier enable succeeds with an approved implementation", emit)
+    if enable.get("accepted") is not False or enable.get("reason") != "MISSING_READY_IMPLEMENTATION":
+        raise SmokeFailure("ONNX classifier enable did not fail closed without a ready implementation")
+    emit_pass("Amsha classifier enable fails closed without a ready implementation", emit)
 
     before = request_metrics(base_url, timeout)
     probe = request_json(

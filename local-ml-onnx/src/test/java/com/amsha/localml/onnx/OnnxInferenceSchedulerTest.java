@@ -63,6 +63,29 @@ class OnnxInferenceSchedulerTest {
     }
 
     @Test
+    void cancellationInterruptsRunningInferenceWork() throws Exception {
+        OnnxInferenceScheduler scheduler = scheduler(1, 1);
+        CountDownLatch started = new CountDownLatch(1);
+        CountDownLatch interrupted = new CountDownLatch(1);
+
+        var future = scheduler.submit(deadline(), () -> {
+            started.countDown();
+            try {
+                new CountDownLatch(1).await();
+            } catch (InterruptedException e) {
+                interrupted.countDown();
+                throw e;
+            }
+            return "unreachable";
+        });
+
+        assertTrue(started.await(1, TimeUnit.SECONDS));
+        assertTrue(future.cancel(true));
+        assertTrue(interrupted.await(1, TimeUnit.SECONDS));
+        scheduler.shutdown();
+    }
+
+    @Test
     void rejectsAlreadyExpiredDeadlineWithoutQueueingWork() {
         OnnxInferenceScheduler scheduler = scheduler(1, 1);
 

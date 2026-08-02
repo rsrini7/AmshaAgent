@@ -11,6 +11,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -89,8 +90,9 @@ final class OnnxShadowClassifierEngine<T> {
         }
 
         Instant deadline = Instant.now().plus(timeout);
+        CompletableFuture<ClassifierResult<T>> future = null;
         try {
-            var future = scheduler.submit(deadline, () -> run(bundle, spec, input, deadline));
+            future = scheduler.submit(deadline, () -> run(bundle, spec, input, deadline));
             ClassifierResult<T> result = future.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
             circuitBreaker.recordSuccess(granted);
             return result;
@@ -105,9 +107,11 @@ final class OnnxShadowClassifierEngine<T> {
                             ? NoOpinionReason.TIMEOUT
                             : NoOpinionReason.INFERENCE_ERROR);
         } catch (TimeoutException e) {
+            if (future != null) future.cancel(true);
             circuitBreaker.recordFailure(granted);
             return noOpinion(NoOpinionReason.TIMEOUT);
         } catch (InterruptedException e) {
+            if (future != null) future.cancel(true);
             Thread.currentThread().interrupt();
             circuitBreaker.recordNeutral(granted);
             return noOpinion(NoOpinionReason.INFERENCE_ERROR);
@@ -132,17 +136,29 @@ final class OnnxShadowClassifierEngine<T> {
         try {
             VerifiedOnnxModelBundle bundle = loadBundle();
             OnnxClassifierBundleSpec spec = bundle.manifest().classifierSpec().orElseThrow();
-            OrtEnvironment environment = runtimeManager
-                    .environment()
-                    .orElseThrow(() -> new OnnxClassifierInferenceException("ONNX Runtime is unavailable"));
             Instant deadline = Instant.now().plus(timeout);
-            try (OnnxSessionLease lease = sessionLeaseManager.acquire(bundle, deadline)) {
-                warmUp(environment, lease, spec);
+            CompletableFuture<Boolean> future = scheduler.submit(deadline, () -> runWarmup(bundle, spec, deadline));
+            try {
+                return future.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
+            } catch (TimeoutException | InterruptedException e) {
+                future.cancel(true);
+                if (e instanceof InterruptedException) Thread.currentThread().interrupt();
+                return false;
             }
-            return warmedUp;
         } catch (Exception e) {
             return false;
         }
+    }
+
+    private boolean runWarmup(VerifiedOnnxModelBundle bundle, OnnxClassifierBundleSpec spec, Instant deadline)
+            throws Exception {
+        OrtEnvironment environment = runtimeManager
+                .environment()
+                .orElseThrow(() -> new OnnxClassifierInferenceException("ONNX Runtime is unavailable"));
+        try (OnnxSessionLease lease = sessionLeaseManager.acquire(bundle, deadline)) {
+            warmUp(environment, lease, spec, deadline);
+        }
+        return warmedUp;
     }
 
     private ClassifierResult<T> run(
@@ -152,19 +168,20 @@ final class OnnxShadowClassifierEngine<T> {
                 .environment()
                 .orElseThrow(() -> new OnnxClassifierInferenceException("ONNX Runtime is unavailable"));
         try (OnnxSessionLease lease = sessionLeaseManager.acquire(bundle, deadline)) {
-            warmUp(environment, lease, spec);
-            return mapResult(runner.classify(environment, lease, lease.tokenizer(), spec, input));
+            warmUp(environment, lease, spec, deadline);
+            return mapResult(runner.classify(environment, lease, lease.tokenizer(), spec, input, deadline));
         }
     }
 
-    private void warmUp(OrtEnvironment environment, OnnxSessionLease lease, OnnxClassifierBundleSpec spec)
+    private void warmUp(
+            OrtEnvironment environment, OnnxSessionLease lease, OnnxClassifierBundleSpec spec, Instant deadline)
             throws OnnxClassifierInferenceException {
         if (warmedUp) return;
         synchronized (warmupMonitor) {
             if (warmedUp) return;
             for (String probe :
                     spec.warmupProbes().stream().limit(warmupMaxProbes).toList()) {
-                runner.classify(environment, lease, lease.tokenizer(), spec, probe);
+                runner.classify(environment, lease, lease.tokenizer(), spec, probe, deadline);
             }
             warmedUp = true;
         }

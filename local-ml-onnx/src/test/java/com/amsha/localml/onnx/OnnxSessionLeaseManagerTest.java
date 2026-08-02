@@ -261,7 +261,19 @@ class OnnxSessionLeaseManagerTest {
         String digest = "0".repeat(64);
         return new VerifiedOnnxModelBundle(
                 new OnnxModelBundleManifest(
-                        bundleId, "v1", "model.onnx", digest, modelBytes, "tokenizer.json", digest, tokenizerBytes),
+                        bundleId,
+                        "v1",
+                        "model.onnx",
+                        digest,
+                        modelBytes,
+                        "tokenizer.json",
+                        digest,
+                        tokenizerBytes,
+                        0,
+                        null,
+                        null,
+                        new OnnxModelBundleManifest.OnnxModelBundleSource(
+                                "https://example.test/model", "v1", "model.onnx", "tokenizer.json", "Apache-2.0")),
                 Path.of(bundleId, "model.onnx"),
                 Path.of(bundleId, "tokenizer.json"));
     }

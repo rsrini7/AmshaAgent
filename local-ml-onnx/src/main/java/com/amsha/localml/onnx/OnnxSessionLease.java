@@ -5,6 +5,7 @@ import ai.onnxruntime.OnnxTensorLike;
 import ai.onnxruntime.OrtException;
 import ai.onnxruntime.OrtSession;
 
+import java.time.Instant;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -37,8 +38,13 @@ public final class OnnxSessionLease implements AutoCloseable {
 
     /** Runs one cancellable graph invocation while this lease owns the session. */
     public OrtSession.Result run(Map<String, ? extends OnnxTensorLike> inputs) throws OrtException {
+        return run(inputs, null);
+    }
+
+    /** Runs one graph invocation and asks ORT to terminate it when the request deadline arrives. */
+    public OrtSession.Result run(Map<String, ? extends OnnxTensorLike> inputs, Instant deadline) throws OrtException {
         if (closed.get()) throw new IllegalStateException("ONNX session lease is closed");
-        OrtSession.RunOptions runOptions = owner.beginRun(bundleSession);
+        OrtSession.RunOptions runOptions = owner.beginRun(bundleSession, deadline);
         try {
             return handle.session().run(inputs, runOptions);
         } finally {

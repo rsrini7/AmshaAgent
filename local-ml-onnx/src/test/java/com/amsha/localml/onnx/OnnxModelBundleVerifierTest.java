@@ -45,7 +45,18 @@ class OnnxModelBundleVerifierTest {
         assertThrows(
                 IllegalArgumentException.class,
                 () -> new OnnxModelBundleManifest(
-                        "test-bundle", "revision-1", "../model.onnx", digest, 1, "tokenizer.json", digest, 1));
+                        "test-bundle",
+                        "revision-1",
+                        "../model.onnx",
+                        digest,
+                        1,
+                        "tokenizer.json",
+                        digest,
+                        1,
+                        0,
+                        null,
+                        null,
+                        source()));
     }
 
     @Test
@@ -54,7 +65,18 @@ class OnnxModelBundleVerifierTest {
         assertThrows(
                 IllegalArgumentException.class,
                 () -> new OnnxModelBundleManifest(
-                        "test-bundle", "revision-1", "model.onnx", digest, 1, "model.onnx", digest, 1));
+                        "test-bundle",
+                        "revision-1",
+                        "model.onnx",
+                        digest,
+                        1,
+                        "model.onnx",
+                        digest,
+                        1,
+                        0,
+                        null,
+                        null,
+                        source()));
     }
 
     @Test
@@ -74,7 +96,7 @@ class OnnxModelBundleVerifierTest {
                         14,
                         null,
                         null,
-                        null));
+                        source()));
     }
 
     @Test
@@ -84,10 +106,21 @@ class OnnxModelBundleVerifierTest {
                 "modelSha256":"0000000000000000000000000000000000000000000000000000000000000000",
                 "modelBytes":1,"tokenizerFile":"tokenizer.json",
                 "tokenizerSha256":"0000000000000000000000000000000000000000000000000000000000000000",
-                "tokenizerBytes":1,"chunkingStrategy":"FIRST_MAX_TOKENS"}
+                "tokenizerBytes":1,"chunkingStrategy":"FIRST_MAX_TOKENS","source":{"repository":"https://example.test/model","revision":"revision-1","modelPath":"model.onnx","tokenizerPath":"tokenizer.json","license":"Apache-2.0"}}
                 """, OnnxModelBundleManifest.class);
 
         assertEquals("test-bundle", manifest.bundleId());
+    }
+
+    @Test
+    void rejectsManifestWithoutRequiredSourceProvenance() {
+        assertThrows(IOException.class, () -> objectMapper.readValue("""
+                        {"bundleId":"test-bundle","revision":"revision-1","modelFile":"model.onnx",
+                        "modelSha256":"0000000000000000000000000000000000000000000000000000000000000000",
+                        "modelBytes":1,"tokenizerFile":"tokenizer.json",
+                        "tokenizerSha256":"0000000000000000000000000000000000000000000000000000000000000000",
+                        "tokenizerBytes":1}
+                        """, OnnxModelBundleManifest.class));
     }
 
     @Test
@@ -101,7 +134,7 @@ class OnnxModelBundleVerifierTest {
                 "attentionMaskName":"attention_mask","outputName":"last_hidden_state",
                 "maxSequenceLength":512,"vectorDimension":768,"poolingStrategy":"MASKED_MEAN",
                 "paddingTokenId":0,"l2Normalize":true,"spaceId":"sentence-transformer/example","spaceRevision":"v1",
-                "warmupProbes":["warm-up"]}}
+                "warmupProbes":["warm-up"]},"source":{"repository":"https://example.test/model","revision":"revision-1","modelPath":"model.onnx","tokenizerPath":"tokenizer.json","license":"Apache-2.0"}}
                 """, OnnxModelBundleManifest.class);
 
         OnnxEmbeddingBundleSpec embedding = manifest.embeddingSpec().orElseThrow();
@@ -121,7 +154,7 @@ class OnnxModelBundleVerifierTest {
                 "tokenizerBytes":1,"classifier":{"tokenizerRevision":"v1","inputIdsName":"input_ids",
                 "attentionMaskName":"attention_mask","outputName":"logits","maxSequenceLength":128,
                 "paddingTokenId":0,"labels":["coordinator","coder"],"scoreTransform":"SOFTMAX",
-                "minimumConfidence":0.75,"ruleId":"intent-v1","warmupProbes":["warm-up"]}}
+                "minimumConfidence":0.75,"ruleId":"intent-v1","warmupProbes":["warm-up"]},"source":{"repository":"https://example.test/model","revision":"revision-1","modelPath":"model.onnx","tokenizerPath":"tokenizer.json","license":"Apache-2.0"}}
                 """, OnnxModelBundleManifest.class);
 
         OnnxClassifierBundleSpec classifier = manifest.classifierSpec().orElseThrow();
@@ -179,7 +212,7 @@ class OnnxModelBundleVerifierTest {
                         0,
                         embedding,
                         classifier,
-                        null));
+                        source()));
     }
 
     @Test
@@ -275,12 +308,21 @@ class OnnxModelBundleVerifierTest {
                 Files.size(model),
                 "tokenizer.json",
                 sha256(tokenizer),
-                Files.size(tokenizer));
+                Files.size(tokenizer),
+                0,
+                null,
+                null,
+                source());
         objectMapper.writeValue(bundle.resolve("manifest.json").toFile(), manifest);
         return bundle;
     }
 
     private static String sha256(Path file) throws Exception {
         return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(file)));
+    }
+
+    private static OnnxModelBundleManifest.OnnxModelBundleSource source() {
+        return new OnnxModelBundleManifest.OnnxModelBundleSource(
+                "https://example.test/model", "revision-1", "model.onnx", "tokenizer.json", "Apache-2.0");
     }
 }

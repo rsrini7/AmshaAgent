@@ -29,6 +29,9 @@ public record OnnxModelBundleManifest(
     public OnnxModelBundleManifest {
         bundleId = requireIdentifier(bundleId, "bundleId");
         revision = requireNonBlank(revision, "revision");
+        if (source == null) {
+            throw new IllegalArgumentException("source metadata is required");
+        }
         modelFile = requireRelativeFile(modelFile, "modelFile");
         modelSha256 = requireSha256(modelSha256, "modelSha256");
         if (modelBytes <= 0) throw new IllegalArgumentException("modelBytes must be positive");
@@ -70,32 +73,7 @@ public record OnnxModelBundleManifest(
 
     /** Returns unsigned descriptive source metadata when the local manifest declares it. */
     public Optional<OnnxModelBundleSource> sourceSpec() {
-        return Optional.ofNullable(source);
-    }
-
-    /** Compatibility constructor for non-embedding bundles verified by the Phase 0 foundation. */
-    public OnnxModelBundleManifest(
-            String bundleId,
-            String revision,
-            String modelFile,
-            String modelSha256,
-            long modelBytes,
-            String tokenizerFile,
-            String tokenizerSha256,
-            long tokenizerBytes) {
-        this(
-                bundleId,
-                revision,
-                modelFile,
-                modelSha256,
-                modelBytes,
-                tokenizerFile,
-                tokenizerSha256,
-                tokenizerBytes,
-                0,
-                null,
-                null,
-                null);
+        return Optional.of(source);
     }
 
     /** Compatibility constructor for manifests created before classifier contracts were added. */

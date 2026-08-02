@@ -13,7 +13,7 @@ public final class SecretRedactor {
             Pattern.compile("(?<![A-Za-z0-9_-])\\d{6,}:[A-Za-z0-9_-]{20,}(?![A-Za-z0-9_-])");
     private static final Pattern BEARER_TOKEN = Pattern.compile("(?i)(\\bbearer\\s+)[A-Za-z0-9._~+/=-]{8,}");
     private static final Pattern SENSITIVE_ASSIGNMENT = Pattern.compile(
-            "(?i)(\\b(?:authorization|proxy-authorization|api[-_]?key|access[-_]?token|auth[-_]?token|bot[-_]?token|client[-_]?secret|password)\\b\\s*[=:]\\s*[\\\"']?)(?:bearer\\s+)?[^\\s,\\\"';&]+");
+            "(?i)((?<![A-Za-z0-9_-])(?:[A-Za-z0-9]+[_-])*?(?:authorization|proxy-authorization|api[-_]?keys?|access[-_]?tokens?|auth[-_]?tokens?|bot[-_]?tokens?|client[-_]?secrets?|password)(?:[_-][A-Za-z0-9]+)*\\b\\s*[=:]\\s*[\\\"']?)(?:bearer\\s+)?[^\\s,\\\"';&]+");
     private static final Pattern SK_API_KEY =
             Pattern.compile("(?<![A-Za-z0-9_-])sk-[A-Za-z0-9_-]{16,}(?![A-Za-z0-9_-])");
     private static final Pattern JWT_TOKEN = Pattern.compile(

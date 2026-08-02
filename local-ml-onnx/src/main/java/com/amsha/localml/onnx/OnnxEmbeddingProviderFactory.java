@@ -14,6 +14,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -194,16 +195,19 @@ public class OnnxEmbeddingProviderFactory implements EmbeddingProviderFactory {
         List<String> probes =
                 spec.warmupProbes().stream().limit(warmupMaxProbes).toList();
         Instant deadline = Instant.now().plus(warmupTimeout);
+        CompletableFuture<List<float[]>> result = null;
         try {
-            var result = scheduler.submit(deadline, () -> runWarmup(bundle, spec, probes, deadline));
+            result = scheduler.submit(deadline, () -> runWarmup(bundle, spec, probes, deadline));
             List<float[]> vectors = result.get(warmupTimeout.toMillis(), TimeUnit.MILLISECONDS);
             if (vectors.size() != probes.size())
                 throw new IllegalStateException("ONNX warm-up returned an unexpected result count");
             metrics.recordWarmup("success");
         } catch (OnnxInferenceSchedulingException | TimeoutException e) {
+            if (result != null) result.cancel(true);
             metrics.recordWarmup("failed");
             throw new IllegalStateException("ONNX warm-up did not complete", e);
         } catch (InterruptedException e) {
+            if (result != null) result.cancel(true);
             Thread.currentThread().interrupt();
             metrics.recordWarmup("failed");
             throw new IllegalStateException("ONNX warm-up was interrupted", e);
@@ -222,7 +226,7 @@ public class OnnxEmbeddingProviderFactory implements EmbeddingProviderFactory {
         metrics.recordExecutionStage("lease_acquire_started");
         try (OnnxSessionLease lease = sessionLeaseManager.acquire(bundle, deadline)) {
             metrics.recordExecutionStage("lease_acquired");
-            return runner.embedAll(environment, lease, lease.tokenizer(), spec, probes);
+            return runner.embedAll(environment, lease, lease.tokenizer(), spec, probes, deadline);
         }
     }
 
@@ -263,8 +267,9 @@ public class OnnxEmbeddingProviderFactory implements EmbeddingProviderFactory {
             metrics.recordExecutionStage("input_validated");
             long started = System.nanoTime();
             Instant deadline = Instant.now().plus(configuredTimeout());
+            CompletableFuture<List<float[]>> result = null;
             try {
-                var result = scheduler.submit(deadline, () -> runVerifiedBundle(texts, deadline));
+                result = scheduler.submit(deadline, () -> runVerifiedBundle(texts, deadline));
                 List<float[]> vectors = result.get(configuredTimeout().toMillis(), TimeUnit.MILLISECONDS);
                 metrics.recordEmbedding("success", System.nanoTime() - started);
                 return vectors;
@@ -272,9 +277,11 @@ public class OnnxEmbeddingProviderFactory implements EmbeddingProviderFactory {
                 metrics.recordEmbedding("overload_rejected", System.nanoTime() - started);
                 throw new IllegalStateException("Local ONNX embedding request was not accepted: " + e.reason(), e);
             } catch (TimeoutException e) {
+                if (result != null) result.cancel(true);
                 metrics.recordEmbedding("timeout", System.nanoTime() - started);
                 throw new IllegalStateException("Local ONNX embedding request timed out", e);
             } catch (InterruptedException e) {
+                if (result != null) result.cancel(true);
                 Thread.currentThread().interrupt();
                 metrics.recordEmbedding("failed", System.nanoTime() - started);
                 throw new IllegalStateException("Local ONNX embedding request was interrupted", e);
@@ -295,7 +302,7 @@ public class OnnxEmbeddingProviderFactory implements EmbeddingProviderFactory {
             metrics.recordExecutionStage("lease_acquire_started");
             try (OnnxSessionLease lease = sessionLeaseManager.acquire(bundle, deadline)) {
                 metrics.recordExecutionStage("lease_acquired");
-                return runner.embedAll(environment, lease, lease.tokenizer(), spec, texts);
+                return runner.embedAll(environment, lease, lease.tokenizer(), spec, texts, deadline);
             }
         }
 

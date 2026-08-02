@@ -7,6 +7,7 @@ import ai.onnxruntime.OrtEnvironment;
 import ai.onnxruntime.OrtException;
 import ai.onnxruntime.OrtSession;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -36,6 +37,17 @@ public final class OnnxEmbeddingRunner {
             OnnxEmbeddingBundleSpec spec,
             List<String> texts)
             throws OnnxEmbeddingInferenceException {
+        return embedAll(environment, lease, tokenizer, spec, texts, null);
+    }
+
+    public List<float[]> embedAll(
+            OrtEnvironment environment,
+            OnnxSessionLease lease,
+            HuggingFaceTokenizer tokenizer,
+            OnnxEmbeddingBundleSpec spec,
+            List<String> texts,
+            Instant deadline)
+            throws OnnxEmbeddingInferenceException {
         Objects.requireNonNull(environment, "environment");
         Objects.requireNonNull(lease, "lease");
         Objects.requireNonNull(tokenizer, "tokenizer");
@@ -57,7 +69,7 @@ public final class OnnxEmbeddingRunner {
         started = System.nanoTime();
         try (OnnxTextInputSupport.TensorBatch tensors = OnnxTextInputSupport.createTensors(environment, spec, inputs)) {
             recordPhase("tensor_preparation", started);
-            return runAndPool(lease, spec, inputs.attentionMask(), tensors.values());
+            return runAndPool(lease, spec, inputs.attentionMask(), tensors.values(), deadline);
         } catch (OrtException | RuntimeException e) {
             throw new OnnxEmbeddingInferenceException("ONNX embedding inference failed", e);
         }
@@ -67,11 +79,12 @@ public final class OnnxEmbeddingRunner {
             OnnxSessionLease lease,
             OnnxEmbeddingBundleSpec spec,
             long[][] attentionMask,
-            Map<String, OnnxTensor> tensors)
+            Map<String, OnnxTensor> tensors,
+            Instant deadline)
             throws OrtException, OnnxEmbeddingInferenceException {
         log.debug("ONNX embedding phase started: graph_execution");
         long started = System.nanoTime();
-        try (OrtSession.Result result = lease.run(tensors)) {
+        try (OrtSession.Result result = lease.run(tensors, deadline)) {
             recordPhase("graph_execution", started);
             OnnxValue output = result.get(spec.outputName())
                     .orElseThrow(() -> new OnnxEmbeddingInferenceException("Declared ONNX output is missing"));

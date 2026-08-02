@@ -12,6 +12,7 @@ import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Future;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
@@ -72,9 +73,10 @@ public class OnnxInferenceScheduler {
             throw new OnnxInferenceSchedulingException(
                     OnnxInferenceSchedulingException.Reason.SCHEDULER_STOPPED, "ONNX inference scheduler is stopped");
         }
-        CompletableFuture<T> result = new CompletableFuture<>();
+        CancellableInferenceFuture<T> result = new CancellableInferenceFuture<>();
         try {
-            currentExecutor.execute(() -> execute(deadline, task, result));
+            Future<?> worker = currentExecutor.submit(() -> execute(deadline, task, result));
+            result.attach(worker);
             recordStage("scheduler_accepted");
         } catch (RejectedExecutionException e) {
             throw new OnnxInferenceSchedulingException(
@@ -122,6 +124,24 @@ public class OnnxInferenceScheduler {
                 TimeUnit.MILLISECONDS,
                 new ArrayBlockingQueue<>(capacity),
                 new ThreadPoolExecutor.AbortPolicy());
+    }
+
+    /** A caller timeout must remove queued work and interrupt work already running. */
+    private static final class CancellableInferenceFuture<T> extends CompletableFuture<T> {
+        private volatile Future<?> worker;
+
+        void attach(Future<?> worker) {
+            this.worker = Objects.requireNonNull(worker, "worker");
+            if (isCancelled()) worker.cancel(true);
+        }
+
+        @Override
+        public boolean cancel(boolean mayInterruptIfRunning) {
+            boolean cancelled = super.cancel(mayInterruptIfRunning);
+            Future<?> currentWorker = worker;
+            if (cancelled && currentWorker != null) currentWorker.cancel(mayInterruptIfRunning);
+            return cancelled;
+        }
     }
 
     private void recordStage(String stage) {

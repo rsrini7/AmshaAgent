@@ -32,6 +32,17 @@ class SecretRedactorTest {
     }
 
     @Test
+    void redactsEnvironmentPrefixedApiKeyAssignments() {
+        String redacted = SecretRedactor.redact(
+                "AMSHA_GENERIC_OPENAI_API_KEY=secret-value AMSHA_API_KEYS_INTERNAL='another-secret'");
+
+        assertFalse(redacted.contains("secret-value"));
+        assertFalse(redacted.contains("another-secret"));
+        assertTrue(redacted.contains("AMSHA_GENERIC_OPENAI_API_KEY=" + SecretRedactor.REDACTED));
+        assertTrue(redacted.contains("AMSHA_API_KEYS_INTERNAL='" + SecretRedactor.REDACTED));
+    }
+
+    @Test
     void preservesOrdinaryTextAndNull() {
         assertEquals("ordinary diagnostic", SecretRedactor.redact("ordinary diagnostic"));
         assertEquals("apikey", SecretRedactor.redact("apikey"));
