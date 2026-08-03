@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # validate_budget.sh — Validate Budget Governance & Autonomy Level REST workflow
 # Covers: invalid autonomy → 400, READONLY blocks tools (no TOOL_INVOKED),
-# FULL autonomy executes NETWORK_OUTBOUND without approval (200, not 202),
+# FULL autonomy bypasses approval for non-sensitive tools (200, not 202),
+# while NETWORK_OUTBOUND and EXECUTE_SHELL remain mandatory HITL,
 # SUPERVISED pauses for approval (202), and budget-exhausted audit event.
 #
 # Needs: serve mode + LLM + GITHUB_TOKEN. LLM cost for the actual runs;
@@ -20,8 +21,6 @@ ok() { printf "✅ HTTP %s\n" "$1"; PASS=$((PASS+1)); }
 fail() { printf "❌ HTTP %s — %s\n" "$1" "$(head -c 120 /tmp/resp)"; FAIL=$((FAIL+1)); }
 mute() { curl -s -m 180 -o /tmp/resp -w "%{http_code}" "$@"; }
 sid() { python3 -c "import json; print(json.load(open('/tmp/resp')).get('sessionId',''))" 2>/dev/null; }
-is_sandbox_offline() { grep -q "SANDBOX_OFFLINE" /tmp/resp; }
-
 create_session() {
   local body="$1"
   local c
@@ -91,22 +90,16 @@ fi
 
 echo ""
 
-# ── FLOW C: FULL autonomy executes without approval ──
+# ── FLOW C: FULL autonomy bypasses approval for safe operations ──
 echo "── FLOW C: FULL autonomy ──"
 info "AUTO-5: create FULL session"
 CODE=$(create_session '{"autonomyLevel":"FULL"}')
 FID=$(sid)
 [ "$CODE" = "201" ] || [ "$CODE" = "200" ] && ok "$CODE" || { fail "$CODE"; FID=""; }
 if [ -n "$FID" ]; then
-  info "AUTO-6: run github task (FULL → 200, NOT 202)"
-  CODE=$(run_req POST "$VALID_KEY" "$B/api/v1/sessions/$FID/run" '{"goal":"List the public repositories of GitHub user rsrini7.","agentRole":"coordinator","maxIterations":3}')
-  if [ "$CODE" = "200" ]; then
-    ok "$CODE"
-  elif [ "$CODE" = "500" ] && is_sandbox_offline; then
-    ok "$CODE (FULL bypassed approval; optional github CLI unavailable)"
-  else
-    fail "$CODE"
-  fi
+  info "AUTO-6: run safe memory task (FULL → 200, NOT 202)"
+  CODE=$(run_req POST "$VALID_KEY" "$B/api/v1/sessions/$FID/run" '{"goal":"Use recall_memory_search to search memory for any facts about user rsrini7, then summarize the result.","agentRole":"coordinator","maxIterations":3}')
+  [ "$CODE" = "200" ] && ok "$CODE" || fail "$CODE"
   info "AUTO-7: status no longer AWAITING_APPROVAL after FULL run"
   ST=""
   for i in $(seq 1 10); do

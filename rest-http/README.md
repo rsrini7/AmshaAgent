@@ -443,7 +443,7 @@ needed). Run individually or via the master runner `run_all_validations.sh`.
 | `--self-evolve` | `validate_self_evolve.sh` | Directives lifecycle (seeds when `--data-dir` given) | LLM |
 | `--hitl` | `validate_hitl.sh` | Approve/deny (REST + goal-string + taskId), 401/409 | LLM |
 | `--rag` | `validate_rag.sh` | Ingest → approve → recall + rag_chunk isolation | LLM |
-| `--budget` | `validate_budget.sh` | Budget limits + autonomy SUPERVISED/FULL/READONLY | LLM |
+| `--budget` | `validate_budget.sh` | Budget limits + autonomy; FULL safe-operation bypass and mandatory network/shell HITL | LLM |
 | `--sse-settings` | `validate_sse_settings.sh` | UI SSE streams, ws-token, settings CRUD | fast |
 | `--cron` | `validate_cron.sh` | Programmatic cron REST lifecycle | LLM |
 | `--fast` | `(master)` | all fast/zero-token validators | mixed |
