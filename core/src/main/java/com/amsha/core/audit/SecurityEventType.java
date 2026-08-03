@@ -87,6 +87,7 @@ public enum SecurityEventType {
 
     // MCP admin operations (REST)
     MCP_CONNECTION_REQUESTED, // outbound MCP connection requested
+    MCP_TOOL_POLICY_ENABLED, // MCP tool policy granted executable capability
     MCP_SERVER_CONNECTED, // remote MCP server connected
     MCP_SERVER_DISCONNECTED, // remote MCP server disconnected
     MCP_CONNECTION_VALIDATION_FAILED, // outbound MCP handshake failed
@@ -150,6 +151,7 @@ public enum SecurityEventType {
                     MCP_SERVER_CONNECTED,
                     MCP_SERVER_DISCONNECTED,
                     MCP_CONNECTION_REQUESTED,
+                    MCP_TOOL_POLICY_ENABLED,
                     MCP_CONNECTION_VALIDATION_FAILED,
                     MCP_CREDENTIAL_CONFIGURED,
                     MCP_CREDENTIAL_ROTATED,

@@ -610,6 +610,7 @@ amsha:
       - recall_memory_search
       - archival_memory_search
     server-enabled: true
+    setup-token-secret: ${AMSHA_MCP_SETUP_TOKEN_SECRET:}
     health-check-interval-ms: ${AMSHA_MCP_HEALTH_CHECK_INTERVAL_MS:15000}
     podman:
       health-check-interval-ms: ${AMSHA_MCP_PODMAN_HEALTH_CHECK_INTERVAL_MS:15000}

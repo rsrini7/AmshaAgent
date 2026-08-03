@@ -2,6 +2,7 @@ package com.amsha.mcp.tool;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import java.time.Duration;
 import java.util.Collection;
 import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
@@ -166,5 +167,34 @@ class DynamicToolCapabilityRegistryTest {
                 0,
                 failures.get(),
                 "ConcurrentModificationException or other error occurred during concurrent operation");
+    }
+
+    @Test
+    void drainRejectsNewInvocationsAndRemovesAfterAcceptedWorkCompletes() throws InterruptedException {
+        registry.registerForUser("alice", createTool("draining"));
+        assertTrue(registry.acquireInvocation("alice", "draining"));
+
+        ExecutorService executor = Executors.newSingleThreadExecutor();
+        executor.submit(() -> registry.drainAndDeregister("alice", "draining", Duration.ofSeconds(1)));
+        int extraInvocations = 0;
+        try {
+            boolean rejected = false;
+            for (int attempt = 0; attempt < 100 && !rejected; attempt++) {
+                rejected = !registry.acquireInvocation("alice", "draining");
+                if (!rejected) {
+                    extraInvocations++;
+                    Thread.sleep(5);
+                }
+            }
+            assertTrue(rejected);
+            registry.releaseInvocation("alice", "draining");
+            for (int invocation = 0; invocation < extraInvocations; invocation++) {
+                registry.releaseInvocation("alice", "draining");
+            }
+        } finally {
+            executor.shutdown();
+            assertTrue(executor.awaitTermination(2, TimeUnit.SECONDS));
+        }
+        assertTrue(registry.find("alice", "draining").isEmpty());
     }
 }

@@ -1,6 +1,7 @@
 package com.amsha.mcp.config;
 
 import java.util.List;
+import java.util.Optional;
 
 import io.smallrye.config.ConfigMapping;
 import io.smallrye.config.WithDefault;
@@ -31,6 +32,13 @@ public interface McpToolAllowlist {
      */
     @WithDefault("15000")
     long healthCheckIntervalMs();
+
+    /**
+     * HMAC-SHA-256 secret for ten-minute, single-use, user-bound channel-to-UI MCP
+     * setup links. Absent (default) creates a process-local secret that invalidates
+     * outstanding links on restart; production deployments should set a stable value.
+     */
+    Optional<String> setupTokenSecret();
 
     /**
      * Podman/Stdio MCP transport settings.

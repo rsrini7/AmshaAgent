@@ -11,7 +11,6 @@ import com.amsha.app.api.OnnxModelAdminResource;
 import com.amsha.app.api.PromptAdminResource;
 import com.amsha.app.api.RecallMemoryAdminResource;
 import com.amsha.app.api.SessionResource;
-import com.amsha.app.mcp.McpConnectResource;
 import com.amsha.app.security.AuthErrorResponse;
 import com.amsha.app.security.RateLimitErrorResponse;
 import com.amsha.app.skill.SkillResource;
@@ -33,11 +32,16 @@ import com.amsha.persistence.api.WorkspaceMembershipDto;
 import io.quarkus.runtime.annotations.RegisterForReflection;
 
 @RegisterForReflection(
+        classNames = {
+            "com.amsha.app.mcp.McpConnectResource$ConnectRequest",
+            "com.amsha.app.mcp.McpConnectResource$DisconnectResponse",
+            "com.amsha.app.mcp.McpConnectResource$DiscoverRequest",
+            "com.amsha.app.mcp.McpConnectResource$RotateHeadersRequest",
+            "com.amsha.app.mcp.McpSetupResource$IssueRequest",
+            "com.amsha.app.mcp.McpSetupResource$RedeemRequest",
+            "com.amsha.app.mcp.McpSetupResource$RedeemResponse"
+        },
         targets = {
-            McpConnectResource.ConnectRequest.class,
-            McpConnectResource.ConnectResponse.class,
-            McpConnectResource.DisconnectResponse.class,
-            McpConnectResource.ServerEntry.class,
             SkillResource.MessageResponse.class,
             SkillResource.QuarantinedSkillResponse.class,
             SkillResource.SkillAdmissionResponse.class,

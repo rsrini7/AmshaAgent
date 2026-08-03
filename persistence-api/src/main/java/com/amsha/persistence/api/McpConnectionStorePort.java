@@ -20,6 +20,16 @@ public interface McpConnectionStorePort {
 
     List<McpConnectionDto> listEnabled();
 
+    List<McpConnectionDto> listPendingApprovals();
+
+    boolean updateStateIfRevision(McpConnectionDto connection, long expectedRevision);
+
+    List<McpConnectionToolPolicyDto> listToolPolicies(String connectionId, String userId);
+
+    void replaceToolPolicies(String connectionId, String userId, List<McpConnectionToolPolicyDto> policies);
+
+    int setToolEnabled(String connectionId, String userId, String toolName, boolean enabled);
+
     int deleteByIdAndUserId(String id, String userId);
 
     void replaceHeaderSecretRefs(String connectionId, String userId, List<McpConnectionHeaderSecretRefDto> references);

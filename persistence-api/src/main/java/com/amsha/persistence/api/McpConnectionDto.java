@@ -1,5 +1,6 @@
 package com.amsha.persistence.api;
 
+import java.beans.ConstructorProperties;
 import java.time.Instant;
 
 /**
@@ -16,9 +17,54 @@ public record McpConnectionDto(
         String endpoint,
         String category,
         boolean enabled,
+        String state,
+        String approvalTaskId,
+        long revision,
+        String lastErrorCode,
         Instant createdAt,
         Instant updatedAt) {
 
+    public McpConnectionDto(
+            String id,
+            String userId,
+            String name,
+            String transport,
+            String endpoint,
+            String category,
+            boolean enabled,
+            Instant createdAt,
+            Instant updatedAt) {
+        this(
+                id,
+                userId,
+                name,
+                transport,
+                endpoint,
+                category,
+                enabled,
+                enabled ? "DISCONNECTED" : "PAUSED",
+                null,
+                0,
+                null,
+                createdAt,
+                updatedAt);
+    }
+
+    @ConstructorProperties({
+        "id",
+        "userId",
+        "name",
+        "transport",
+        "endpoint",
+        "category",
+        "enabled",
+        "state",
+        "approvalTaskId",
+        "revision",
+        "lastErrorCode",
+        "createdAt",
+        "updatedAt"
+    })
     public McpConnectionDto {
         requireText(id, "id");
         requireText(userId, "userId");
@@ -26,6 +72,10 @@ public record McpConnectionDto(
         requireText(transport, "transport");
         requireText(endpoint, "endpoint");
         requireText(category, "category");
+        requireText(state, "state");
+        if (revision < 0) {
+            throw new IllegalArgumentException("revision must not be negative");
+        }
         if (createdAt == null) throw new IllegalArgumentException("createdAt is required");
         if (updatedAt == null) throw new IllegalArgumentException("updatedAt is required");
     }

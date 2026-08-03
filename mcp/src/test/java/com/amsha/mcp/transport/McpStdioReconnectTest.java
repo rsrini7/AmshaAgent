@@ -13,6 +13,7 @@ import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.Collections;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Stream;
 
@@ -104,7 +105,8 @@ public class McpStdioReconnectTest {
                 McpTransportType.class,
                 ToolCategory.class,
                 String.class,
-                boolean.class);
+                boolean.class,
+                Set.class);
         registerTools.setAccessible(true);
 
         JsonNode initial = mapper.readTree("{\"tools\":[{\"name\":\"search\",\"description\":\"old\","
@@ -114,9 +116,23 @@ public class McpStdioReconnectTest {
                 + "\"query\":{\"type\":\"string\"}}}}]}");
 
         registerTools.invoke(
-                service, "stdio-server", initial, McpTransportType.STDIO, ToolCategory.NETWORK, "owner", false);
+                service,
+                "stdio-server",
+                initial,
+                McpTransportType.STDIO,
+                ToolCategory.NETWORK,
+                "owner",
+                false,
+                Set.of("search"));
         registerTools.invoke(
-                service, "stdio-server", refreshed, McpTransportType.STDIO, ToolCategory.NETWORK, "owner", false);
+                service,
+                "stdio-server",
+                refreshed,
+                McpTransportType.STDIO,
+                ToolCategory.NETWORK,
+                "owner",
+                false,
+                Set.of("search"));
 
         assertEquals(
                 "new", service.registry.find("owner", "search").orElseThrow().description());

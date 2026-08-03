@@ -12,6 +12,7 @@ import { ROUTES } from '../routes';
 import './arc-onboarding';
 import './arc-nav';
 import './arc-chat-interface';
+import './arc-mcp-panel';
 import './arc-agent-status';
 import './arc-hitl-panel';
 import './arc-skills-panel';
@@ -38,7 +39,7 @@ export class ArcShell extends LitElement {
   @state() private _agents: AgentStatusDto[] = [];
   @state() private _pendingApprovals: PendingApprovalDto[] = [];
   @state() private _sseStatus: 'connected' | 'disconnected' | 'error' = 'disconnected';
-  @state() private _route = window.location.hash || '#/onboarding';
+  @state() private _route = (window.location.hash || '#/onboarding').split('?')[0];
   @state() private _isNavOpen = false;
   @state() private _chatWsStatus: string = 'closed';
 
@@ -149,7 +150,7 @@ export class ArcShell extends LitElement {
   }
 
   private _boundHashChange = () => {
-    this._route = window.location.hash || '#/onboarding';
+    this._route = (window.location.hash || '#/onboarding').split('?')[0];
     this._isNavOpen = false; // Close nav on route change
     if (!this._apiKey && this._route !== '#/onboarding') {
       window.location.hash = '#/onboarding';
@@ -433,6 +434,9 @@ export class ArcShell extends LitElement {
 
     return html`
       <arc-chat-interface class="content-area" style="display: ${this._route === '#/chat' ? 'flex' : 'none'}"></arc-chat-interface>
+      ${this._route === '#/mcp' ? html`
+        <arc-mcp-panel class="content-area"></arc-mcp-panel>
+      ` : nothing}
       ${this._route === '#/agents' ? html`
         <arc-agent-status class="content-area" .agents="${this._agents}"></arc-agent-status>
       ` : nothing}

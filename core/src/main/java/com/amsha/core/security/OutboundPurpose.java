@@ -14,6 +14,8 @@ public enum OutboundPurpose {
     OAUTH_CALLBACK,
     /** MCP server connection (initial handshake). */
     MCP_CONNECT,
+    /** Explicit activation of a discovered MCP tool. */
+    MCP_TOOL_ENABLE,
     /** MCP tool invocation. */
     MCP_TOOL_CALL
 }

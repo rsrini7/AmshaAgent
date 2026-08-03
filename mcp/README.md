@@ -36,6 +36,7 @@ POST /api/v1/mcp/connect
 ## Configuration
 
 - `amsha.mcp.server-enabled` (Env: `AMSHA_MCP_SERVER_ENABLED`, default `true`): Enable the outbound MCP connection REST API.
+- `amsha.mcp.setup-token-secret` (Env: `AMSHA_MCP_SETUP_TOKEN_SECRET`, default empty): HMAC-SHA-256 secret for ten-minute, single-use, user-bound channel-to-UI setup links. Set a stable random value in production; an empty value creates a process-local secret and invalidates links on restart.
 - `amsha.mcp.health-check-interval-ms` (Env: `AMSHA_MCP_HEALTH_CHECK_INTERVAL_MS`, default `15000`): Interval to check health of active SSE/HTTP outbound MCP connections.
 - `amsha.mcp.podman.health-check-interval-ms` (Env: `AMSHA_MCP_PODMAN_HEALTH_CHECK_INTERVAL_MS`, default `15000`): Interval to check health of active Podman/Stdio outbound MCP connections.
 

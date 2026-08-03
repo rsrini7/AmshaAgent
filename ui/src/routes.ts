@@ -7,6 +7,7 @@ export interface RouteConfig {
 
 export const ROUTES: RouteConfig[] = [
   { hash: '#/chat', label: 'Chat', icon: '💬', component: 'arc-chat-interface' },
+  { hash: '#/mcp', label: 'MCP', icon: '🔌', component: 'arc-mcp-panel' },
   { hash: '#/agents', label: 'Agents', icon: '🤖', component: 'arc-agent-status' },
   { hash: '#/hitl', label: 'Approvals', icon: '✋', component: 'arc-hitl-panel' },
   { hash: '#/skills', label: 'Skills', icon: '🔧', component: 'arc-skills-panel' },

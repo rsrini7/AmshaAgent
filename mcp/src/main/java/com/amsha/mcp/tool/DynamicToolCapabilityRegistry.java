@@ -4,12 +4,16 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
+import java.time.Duration;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.locks.LockSupport;
 
 import com.amsha.core.scope.WorkspaceContext;
 import com.amsha.core.tool.DynamicToolCatalog;
@@ -28,6 +32,9 @@ public class DynamicToolCapabilityRegistry implements DynamicToolCatalog {
 
     private final ConcurrentHashMap<String, ConcurrentHashMap<String, DynamicToolCapability>> registry =
             new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, AtomicInteger> activeInvocations = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, Object> invocationLocks = new ConcurrentHashMap<>();
+    private final Set<String> draining = ConcurrentHashMap.newKeySet();
 
     @Inject
     Instance<AgentTool> internalTools;
@@ -77,6 +84,43 @@ public class DynamicToolCapabilityRegistry implements DynamicToolCatalog {
                 registry.remove(normalizeScope(scope), scoped);
             }
         }
+        draining.remove(invocationKey(scope, toolName));
+        activeInvocations.remove(invocationKey(scope, toolName));
+    }
+
+    /** Claims an invocation before the capability is executed. Disabled/draining tools fail closed. */
+    public boolean acquireInvocation(String scope, String toolName) {
+        String key = invocationKey(scope, toolName);
+        Object lock = invocationLocks.computeIfAbsent(key, ignored -> new Object());
+        synchronized (lock) {
+            if (draining.contains(key) || find(scope, toolName).isEmpty()) return false;
+            activeInvocations
+                    .computeIfAbsent(key, ignored -> new AtomicInteger())
+                    .incrementAndGet();
+            return true;
+        }
+    }
+
+    /** Releases a previously claimed invocation. */
+    public void releaseInvocation(String scope, String toolName) {
+        String key = invocationKey(scope, toolName);
+        AtomicInteger count = activeInvocations.get(key);
+        if (count != null && count.decrementAndGet() <= 0) activeInvocations.remove(key, count);
+    }
+
+    /** Stops new invocations, waits briefly for accepted work, then removes the capability. */
+    public void drainAndDeregister(String scope, String toolName, Duration timeout) {
+        String key = invocationKey(scope, toolName);
+        Object lock = invocationLocks.computeIfAbsent(key, ignored -> new Object());
+        synchronized (lock) {
+            draining.add(key);
+        }
+        long deadline = System.nanoTime() + timeout.toNanos();
+        while (activeInvocations.getOrDefault(key, new AtomicInteger()).get() > 0 && System.nanoTime() < deadline) {
+            LockSupport.parkNanos(Duration.ofMillis(10).toNanos());
+        }
+        deregister(scope, toolName);
+        invocationLocks.remove(key, lock);
     }
 
     public Optional<DynamicToolCapability> find(String toolName) {
@@ -138,6 +182,10 @@ public class DynamicToolCapabilityRegistry implements DynamicToolCatalog {
         } catch (RuntimeException _) {
             return UNKNOWN_SCOPE;
         }
+    }
+
+    private static String invocationKey(String scope, String toolName) {
+        return normalizeScope(scope) + "\u0000" + toolName;
     }
 
     private static String normalizeScope(String scope) {

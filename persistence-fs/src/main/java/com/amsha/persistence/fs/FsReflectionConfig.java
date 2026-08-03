@@ -11,6 +11,7 @@ import com.amsha.persistence.api.LlmConnectionSecretRefDto;
 import com.amsha.persistence.api.McpConnectionCleanupFailureDto;
 import com.amsha.persistence.api.McpConnectionDto;
 import com.amsha.persistence.api.McpConnectionHeaderSecretRefDto;
+import com.amsha.persistence.api.McpConnectionToolPolicyDto;
 import com.amsha.persistence.api.ModelProfileDto;
 import com.amsha.persistence.api.ModelRouteAssignmentDto;
 import com.amsha.persistence.api.OnboardingCommitReceiptDto;
@@ -59,6 +60,7 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             FsLlmProfileStoreAdapter.class,
             McpConnectionDto.class,
             McpConnectionHeaderSecretRefDto.class,
+            McpConnectionToolPolicyDto.class,
             McpConnectionCleanupFailureDto.class,
             IdentityUserDto.class,
             ExternalIdentityDto.class,

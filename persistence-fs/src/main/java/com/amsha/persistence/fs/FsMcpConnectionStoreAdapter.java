@@ -3,6 +3,9 @@ package com.amsha.persistence.fs;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
+import java.nio.charset.StandardCharsets;
+import java.time.Instant;
+import java.util.Base64;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
@@ -13,6 +16,7 @@ import com.amsha.persistence.api.McpConnectionCleanupFailureDto;
 import com.amsha.persistence.api.McpConnectionDto;
 import com.amsha.persistence.api.McpConnectionHeaderSecretRefDto;
 import com.amsha.persistence.api.McpConnectionStorePort;
+import com.amsha.persistence.api.McpConnectionToolPolicyDto;
 
 import io.quarkus.arc.Unremovable;
 import io.quarkus.arc.properties.IfBuildProperty;
@@ -32,7 +36,7 @@ public class FsMcpConnectionStoreAdapter implements McpConnectionStorePort {
     FilesystemFileStore store;
 
     @Override
-    public void save(McpConnectionDto connection) {
+    public synchronized void save(McpConnectionDto connection) {
         store.write(List.of(DOMAIN, CONNECTIONS, connection.id() + ".json"), connection);
     }
 
@@ -65,6 +69,82 @@ public class FsMcpConnectionStoreAdapter implements McpConnectionStorePort {
                 .flatMap(Optional::stream)
                 .filter(McpConnectionDto::enabled)
                 .toList();
+    }
+
+    @Override
+    public List<McpConnectionDto> listPendingApprovals() {
+        return store.list(List.of(DOMAIN, CONNECTIONS), ".json").stream()
+                .map(file -> store.readOptional(List.of(DOMAIN, CONNECTIONS, file), McpConnectionDto.class))
+                .flatMap(Optional::stream)
+                .filter(connection -> "PENDING_APPROVAL".equals(connection.state()))
+                .toList();
+    }
+
+    @Override
+    public synchronized boolean updateStateIfRevision(McpConnectionDto connection, long expectedRevision) {
+        Optional<McpConnectionDto> current = findByIdAndUserId(connection.id(), connection.userId());
+        if (current.isEmpty() || current.get().revision() != expectedRevision) return false;
+        save(connection);
+        return true;
+    }
+
+    @Override
+    public List<McpConnectionToolPolicyDto> listToolPolicies(String connectionId, String userId) {
+        if (connectionId == null || connectionId.isBlank() || userId == null || userId.isBlank()) {
+            return List.of();
+        }
+        return store.list(List.of(DOMAIN, "tool-policies", connectionId), ".json").stream()
+                .map(file -> store.readOptional(
+                        List.of(DOMAIN, "tool-policies", connectionId, file), McpConnectionToolPolicyDto.class))
+                .flatMap(Optional::stream)
+                .filter(policy -> userId.equals(policy.userId()))
+                .toList();
+    }
+
+    @Override
+    public void replaceToolPolicies(String connectionId, String userId, List<McpConnectionToolPolicyDto> policies) {
+        if (connectionId == null || connectionId.isBlank() || userId == null || userId.isBlank()) {
+            throw new IllegalArgumentException("connectionId/userId required");
+        }
+        if (findByIdAndUserId(connectionId, userId).isEmpty()) {
+            throw new IllegalArgumentException("MCP connection not found");
+        }
+        List<McpConnectionToolPolicyDto> normalized = normalizeAndValidatePolicies(connectionId, userId, policies);
+        store.deleteDirectory(List.of(DOMAIN, "tool-policies", connectionId));
+        normalized.forEach(policy ->
+                store.write(List.of(DOMAIN, "tool-policies", connectionId, policyFileName(policy.toolName())), policy));
+    }
+
+    @Override
+    public int setToolEnabled(String connectionId, String userId, String toolName, boolean enabled) {
+        if (connectionId == null
+                || connectionId.isBlank()
+                || userId == null
+                || userId.isBlank()
+                || toolName == null
+                || toolName.isBlank()) {
+            return 0;
+        }
+        Optional<McpConnectionToolPolicyDto> existing = listToolPolicies(connectionId, userId).stream()
+                .filter(policy -> toolName.equals(policy.toolName()))
+                .findFirst();
+        if (existing.isEmpty()) return 0;
+        McpConnectionToolPolicyDto policy = existing.get();
+        store.write(
+                List.of(DOMAIN, "tool-policies", connectionId, policyFileName(toolName)),
+                new McpConnectionToolPolicyDto(
+                        policy.id(),
+                        policy.connectionId(),
+                        policy.userId(),
+                        policy.toolName(),
+                        enabled,
+                        policy.description(),
+                        policy.inputSchema(),
+                        policy.schemaHash(),
+                        policy.discoveredAt(),
+                        policy.revision() + 1,
+                        Instant.now()));
+        return 1;
     }
 
     @Override
@@ -133,6 +213,28 @@ public class FsMcpConnectionStoreAdapter implements McpConnectionStorePort {
                     }
                 })
                 .toList();
+    }
+
+    private static List<McpConnectionToolPolicyDto> normalizeAndValidatePolicies(
+            String connectionId, String userId, List<McpConnectionToolPolicyDto> policies) {
+        if (policies == null || policies.isEmpty()) return List.of();
+        Set<String> names = new HashSet<>();
+        return policies.stream()
+                .map(policy -> {
+                    if (!connectionId.equals(policy.connectionId()) || !userId.equals(policy.userId())) {
+                        throw new IllegalArgumentException("MCP tool policy ownership mismatch");
+                    }
+                    if (!names.add(policy.toolName())) {
+                        throw new IllegalArgumentException("Duplicate MCP tool policy: " + policy.toolName());
+                    }
+                    return policy;
+                })
+                .toList();
+    }
+
+    private static String policyFileName(String toolName) {
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(toolName.getBytes(StandardCharsets.UTF_8))
+                + ".json";
     }
 
     private static McpConnectionHeaderSecretRefDto normalizeReference(

@@ -19,6 +19,7 @@ import com.amsha.persistence.api.LlmConnectionSecretRefDto;
 import com.amsha.persistence.api.McpConnectionCleanupFailureDto;
 import com.amsha.persistence.api.McpConnectionDto;
 import com.amsha.persistence.api.McpConnectionHeaderSecretRefDto;
+import com.amsha.persistence.api.McpConnectionToolPolicyDto;
 import com.amsha.persistence.api.MemoryChunkDto;
 import com.amsha.persistence.api.ModelProfileDto;
 import com.amsha.persistence.api.ModelRouteAssignmentDto;
@@ -81,6 +82,7 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             McpConnectionCleanupFailureDto.class,
             McpConnectionDto.class,
             McpConnectionHeaderSecretRefDto.class,
+            McpConnectionToolPolicyDto.class,
             IdentityUserDto.class,
             ExternalIdentityDto.class,
             IdentityWorkspaceDto.class,

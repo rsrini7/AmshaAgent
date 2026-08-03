@@ -150,7 +150,7 @@ public class OutboundHttpPolicyService {
 
     private static boolean requiresHitl(OutboundPurpose purpose) {
         return switch (purpose) {
-            case CATALOG_PROBE, OAUTH_CALLBACK, MCP_CONNECT -> true;
+            case CATALOG_PROBE, OAUTH_CALLBACK, MCP_CONNECT, MCP_TOOL_ENABLE -> true;
             case PROVIDER_API_CALL, PROVIDER_MODEL_DISCOVERY, MCP_TOOL_CALL -> false;
         };
     }

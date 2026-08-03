@@ -9,7 +9,6 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 
 import java.util.List;
 import java.util.Map;
@@ -24,8 +23,7 @@ import com.amsha.core.tools.ToolCategory;
 import com.amsha.core.tools.ToolExecutionContext;
 import com.amsha.core.tools.ToolResponse;
 import com.amsha.mcp.transport.McpClientService;
-import com.amsha.mcp.transport.McpConnectionLifecycleService;
-import com.amsha.mcp.transport.McpConnectionLifecycleService.PersistedConnection;
+import com.amsha.mcp.transport.McpManagementService;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -45,7 +43,7 @@ class McpSelfRegisterToolTest {
     AuditService auditService;
 
     @Mock
-    McpConnectionLifecycleService lifecycleService;
+    McpManagementService managementService;
 
     @Mock
     ApprovalReceiptIssuer approvalReceiptIssuer;
@@ -67,10 +65,6 @@ class McpSelfRegisterToolTest {
                 "name", "my-server",
                 "transport", "http",
                 "url", "http://localhost:3000/mcp");
-        when(lifecycleService.persistSuccessfulHttp(
-                        "my-server", "http://localhost:3000/mcp", ToolCategory.NETWORK, "user-123", Map.of()))
-                .thenReturn(new PersistedConnection(null, List.of()));
-
         ToolResponse resp = WorkspaceContext.run(
                 "session-456",
                 "user-123",
@@ -80,14 +74,14 @@ class McpSelfRegisterToolTest {
                 () -> tool.execute(ctx("session-456", "user-123"), params));
 
         assertEquals(0, resp.exitCode());
-        verify(mcpClientService, times(1))
-                .connectForUser(
-                        "my-server",
+        verify(managementService, times(1))
+                .registerFromApprovedCheckpoint(
                         "user-123",
+                        "my-server",
                         "http://localhost:3000/mcp",
-                        ToolCategory.NETWORK,
                         Map.of(),
-                        "approved-token");
+                        "approved-token",
+                        ToolCategory.NETWORK);
         verify(auditService, times(1))
                 .record(
                         eq("session-456"),
@@ -150,10 +144,6 @@ class McpSelfRegisterToolTest {
                 "transport", "http",
                 "url", "http://localhost:3000/mcp",
                 "category", "COMPUTE");
-        when(lifecycleService.persistSuccessfulHttp(
-                        "compute-server", "http://localhost:3000/mcp", ToolCategory.COMPUTE, "user-123", Map.of()))
-                .thenReturn(new PersistedConnection(null, List.of()));
-
         WorkspaceContext.run(
                 "session-456",
                 "user-123",
@@ -162,14 +152,14 @@ class McpSelfRegisterToolTest {
                 "COORDINATOR",
                 () -> tool.execute(ctx("session-456", "user-123"), params));
 
-        verify(mcpClientService)
-                .connectForUser(
-                        "compute-server",
+        verify(managementService)
+                .registerFromApprovedCheckpoint(
                         "user-123",
+                        "compute-server",
                         "http://localhost:3000/mcp",
-                        ToolCategory.COMPUTE,
                         Map.of(),
-                        "approved-token");
+                        "approved-token",
+                        ToolCategory.COMPUTE);
     }
 
     @Test
@@ -212,14 +202,14 @@ class McpSelfRegisterToolTest {
     @Test
     void testMcpConnectionExceptionPropagation() throws Exception {
         doThrow(new RuntimeException("Connection refused"))
-                .when(mcpClientService)
-                .connectForUser(
-                        eq("fail-server"),
+                .when(managementService)
+                .registerFromApprovedCheckpoint(
                         eq("user-123"),
+                        eq("fail-server"),
                         anyString(),
-                        eq(ToolCategory.NETWORK),
                         eq(Map.of()),
-                        eq("approved-token"));
+                        eq("approved-token"),
+                        eq(ToolCategory.NETWORK));
 
         Map<String, Object> params = Map.of(
                 "name", "fail-server",

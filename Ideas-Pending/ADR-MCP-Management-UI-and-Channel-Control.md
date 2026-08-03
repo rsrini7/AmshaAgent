@@ -264,8 +264,9 @@ GET    /api/v1/mcp/connect
 POST   /api/v1/mcp/connect/discover
 POST   /api/v1/mcp/connect
 GET    /api/v1/mcp/connect/{name}/tools
-POST   /api/v1/mcp/connect/{name}/tools/enable
-POST   /api/v1/mcp/connect/{name}/tools/disable
+POST   /api/v1/mcp/connect/{name}/activate
+POST   /api/v1/mcp/connect/{name}/tools/{toolName}/enable
+DELETE /api/v1/mcp/connect/{name}/tools/{toolName}
 POST   /api/v1/mcp/connect/{name}/pause
 POST   /api/v1/mcp/connect/{name}/resume
 POST   /api/v1/mcp/connect/{name}/reconnect
@@ -435,14 +436,19 @@ Supported commands:
 /mcp resume <server>
 /mcp reconnect <server>
 /mcp disconnect <server>
+/mcp approve <taskId>
+/mcp deny <taskId>
 ```
 
 `/mcp connect` may start a no-auth flow, subject to approval. For authenticated servers
 it creates the secure setup link described above. It never accepts bearer tokens or
 custom header values in message text.
 
-The existing `/approve <taskId>` and `/deny <taskId>` flow remains the approval
-mechanism. Telegram approval callbacks retain stale-approval denial, user/channel
+MCP lifecycle approvals use `/mcp approve <taskId>` and the REST endpoint
+`POST /api/v1/mcp/connect/approvals/{taskId}/approve`; these surfaces accept only
+MCP lifecycle task IDs. The global `/approve <taskId>` and `/deny <taskId>` flow
+handles agent checkpoint approvals and is not a control path for MCP tasks.
+Telegram approval callbacks retain stale-approval denial, user/channel
 binding, and `flushPendingNotifications()` behavior. Responses contain only names,
 hosts, states, tool counts, task IDs, and next actions. Telegram output continues through
 `stripGarbledLines()`.
@@ -475,11 +481,17 @@ Approval requirements are explicit:
 | Disconnect | Authenticated user mutation plus audit | Drains and removes the connection |
 | Startup reconnect | Persisted authorization continuation | No new destination or capability is authorized |
 
-`MCP_TOOL_ENABLE` is a typed approval purpose and requires a corresponding mandatory
-tool-policy audit event. If the existing approval SPI needs a new purpose, add it rather
-than reusing a misleading provider-connect label. Chat and Telegram responses include
-the returned task ID for discover, connect, reconnect, rotate, and enable; `/approve`
-and `/deny` remain the channel controls. Pause, disable, resume, and disconnect show
+`MCP_TOOL_ENABLE` is a typed approval purpose and requires the mandatory
+`MCP_TOOL_POLICY_ENABLED` audit event when a tool policy is granted executable
+capability. If the existing approval SPI needs a new purpose, add it rather than reusing
+a misleading provider-connect label. Chat and Telegram responses include
+the returned task ID for discover, connect, reconnect, rotate, and enable; `/mcp approve`
+and `/mcp deny` are the MCP lifecycle channel controls. The global `/approve` and
+`/deny` commands remain reserved for agent checkpoint approvals. `McpApprovalService`
+retains validated pending header maps in process memory for at most 10 minutes while
+approval is outstanding. Restart-safe and multi-instance durable pending approvals are
+deferred; this limitation must be explicit in operations documentation and is not a
+production-ready HA guarantee. Pause, disable, resume, and disconnect show
 confirmation and audit status but do not create a network approval task.
 
 ## Security invariants
@@ -609,7 +621,49 @@ Rejected for the initial release. Generic authenticated MCP headers and a transp
 abstraction cover public servers, Tapetide, Sarvam, and future providers without
 multiplying code paths.
 
+## Review observations addressed
+
+This section records how implementation review feedback was incorporated. It is not a
+second specification; the sections above remain authoritative.
+
+### Phase 1 implementation review
+
+| Observation | Resolution |
+| --- | --- |
+| Discover persisted durable connections | `McpManagementService.discover` is throwaway: no persistence, no tool policy, `clearHttpConnectionState` in `finally`. |
+| REST bypassed HITL | `McpApprovalService` plus `202 ACCEPTED` pending responses; `issueForExplicitApproval` mints single-use receipts consumed at the network boundary. |
+| `register_mcp_server` auto-enabled all tools | Delegates to `connectNewInternal` only; all discovered tools persist disabled. |
+| Legacy dual paths in `McpConnectResource` | Resource is a thin adapter over `McpManagementService`; legacy orchestration removed. |
+| Missing tests | Added `McpManagementServiceTest`, `McpApprovalServiceTest`, updated `McpConnectResourceTest` and `McpReflexTest`, registry drain coverage. |
+| No optimistic revision | `If-MCP-Revision` header and `McpRevisionConflictException` on mutating operations. |
+| Missing `rotate-headers` | `POST /api/v1/mcp/connect/{name}/rotate-headers` with approval flow. |
+| No `MCP_TOOL_ENABLE` purpose | `OutboundPurpose.MCP_TOOL_ENABLE`; enable receipts use a distinct purpose from connect. |
+| Setup token gaps | HMAC digest, vault-backed grant persistence, `channelId` binding, `POST /api/v1/mcp/setup/redeem`. |
+| Disable without drain | `DynamicToolCapabilityRegistry.drainAndDeregister` used from `McpManagementSupport`. |
+| Boot reconnect failure state | Startup reconnect failure transitions durable rows to `DEGRADED` with bounded `lastErrorCode`. |
+| Non-ADR `DISCOVERED` state | Removed; ADR state machine only. |
+
+### Follow-up review nits
+
+| Observation | Resolution |
+| --- | --- |
+| `CONNECTING` documented but unused | `connectInternal` sets `CONNECTING` before governed handshake and clears `approvalTaskId` on `CONNECTED` or `DEGRADED`. |
+| Tool-enable audit event unspecified | Added mandatory `SecurityEventType.MCP_TOOL_POLICY_ENABLED`; emitted on successful enable. |
+| Two approval command surfaces unclear | Documented above: `/mcp approve` and `/mcp deny` for MCP lifecycle tasks; global `/approve` and `/deny` remain agent-checkpoint only. |
+| Pending credentials only in memory | Documented limitation: `McpApprovalService` retains validated header maps in-process for at most 10 minutes; restart-safe durable pending approvals deferred. On startup, orphaned durable `PENDING_APPROVAL` rows are fail-closed to `DISCONNECTED` or `PAUSED`, clear `approvalTaskId`, and emit `APPROVAL_DENIED` with `APPROVAL_LOST_ON_RESTART`. |
+| Reject left `PENDING_APPROVAL` stale | `rejectApproval` clears task-bound durable state to `DISCONNECTED` or `PAUSED` with `lastErrorCode=APPROVAL_DENIED`. |
+| Legacy `connectForUser` registered all tools | Deprecated overloads delegate to `connectForUserWithEnabledTools` with an empty enabled set. |
+
+### Still deferred (not blockers for Phase 1–3 merge)
+
+- Phase 0 transport verification and `STREAMABLE_HTTP` adapter before UI exposes that transport.
+- Phase 4 Telegram integration tests (stale approval, `flushPendingNotifications`, channel binding).
+- Phase 5 external provider exercises (public no-auth, Tapetide, Sarvam).
+- Restart-safe, multi-instance durable MCP approval queue (explicit release gate below).
+
 ## Release gates
+
+The current approval bridge is process-local. Restart-safe persistence for pending MCP approval operations is an additional gate before this ADR can move to Accepted; the in-process implementation must not be treated as production-ready across restart or multi-instance deployment.
 
 This ADR remains Proposed until the Phase 0 transport check, user-private persistence
 contract, discover/connect API split, and secure-link contract are accepted by the

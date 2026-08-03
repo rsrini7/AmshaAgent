@@ -2,6 +2,50 @@ import { AgentStatusDto } from './generated/models/AgentStatusDto';
 import { SkillDto } from './generated/models/SkillDto';
 import { PendingApprovalDto, ApprovalResultDto, ToolDto } from './types';
 
+export interface McpToolPolicy {
+  id: string;
+  toolName: string;
+  enabled: boolean;
+  description: string;
+  inputSchema: string;
+  revision: number;
+}
+
+export interface McpConnection {
+  name: string;
+  endpoint: string;
+  state: string;
+  transport: string;
+  enabledToolCount: number;
+  discoveredToolCount: number;
+  revision: number;
+  tools: McpToolPolicy[];
+  headers?: Record<string, string>;
+}
+
+export interface McpDiscoveryPreview {
+  name: string;
+  endpoint: string;
+  transport: string;
+  tools: Array<{ name: string; description: string; inputSchema: string; schemaHash: string }>;
+}
+
+export interface McpPendingApproval {
+  taskId: string;
+  operation: string;
+  name: string;
+  endpoint: string;
+  toolName?: string;
+  expiresAt: string;
+  expectedRevision?: number;
+}
+
+export interface McpApprovalExecution<T = McpConnection | McpDiscoveryPreview> {
+  taskId: string;
+  operation: string;
+  result: T;
+}
+
 export class ArcClient {
   constructor(
     public readonly baseUrl: string,
@@ -16,6 +60,10 @@ export class ArcClient {
       h['X-AMSHA-API-KEY'] = this.apiKey;
     }
     return h;
+  }
+
+  private revisionHeaders(revision?: number): HeadersInit {
+    return revision === undefined ? {} : { 'If-MCP-Revision': String(revision) };
   }
 
   private async request<T>(endpoint: string, options?: RequestInit): Promise<T> {
@@ -58,6 +106,68 @@ export class ArcClient {
 
   async getTools(): Promise<ToolDto[]> {
     return this.request<ToolDto[]>('/tools');
+  }
+
+  async getMcpConnections(): Promise<McpConnection[]> {
+    const result = await this.request<{ connections?: McpConnection[]; connectedServers?: McpConnection[] }>('/mcp/connect');
+    return result.connections || result.connectedServers || [];
+  }
+
+  async discoverMcp(name: string, url: string, headers: Record<string, string> = {}): Promise<McpDiscoveryPreview | McpPendingApproval> {
+    return this.request<McpDiscoveryPreview | McpPendingApproval>('/mcp/connect/discover', {
+      method: 'POST',
+      body: JSON.stringify({ name, url, headers }),
+    });
+  }
+
+  async connectMcp(name: string, url: string, headers: Record<string, string> = {}): Promise<McpConnection | McpPendingApproval> {
+    return this.request<McpConnection | McpPendingApproval>('/mcp/connect', {
+      method: 'POST',
+      body: JSON.stringify({ name, url, headers }),
+    });
+  }
+
+  async activateMcp(name: string, revision?: number): Promise<McpConnection | McpPendingApproval> {
+    return this.request<McpConnection | McpPendingApproval>(`/mcp/connect/${encodeURIComponent(name)}/activate`, { method: 'POST', headers: this.revisionHeaders(revision) });
+  }
+
+  async pauseMcp(name: string, revision?: number): Promise<McpConnection> {
+    return this.request<McpConnection>(`/mcp/connect/${encodeURIComponent(name)}/pause`, { method: 'POST', headers: this.revisionHeaders(revision) });
+  }
+
+  async resumeMcp(name: string, revision?: number): Promise<McpConnection | McpPendingApproval> {
+    return this.request<McpConnection | McpPendingApproval>(`/mcp/connect/${encodeURIComponent(name)}/resume`, { method: 'POST', headers: this.revisionHeaders(revision) });
+  }
+
+  async reconnectMcp(name: string, revision?: number): Promise<McpConnection | McpPendingApproval> {
+    return this.request<McpConnection | McpPendingApproval>(`/mcp/connect/${encodeURIComponent(name)}/reconnect`, { method: 'POST', headers: this.revisionHeaders(revision) });
+  }
+
+  async enableMcpTool(name: string, toolName: string, revision?: number): Promise<McpConnection | McpPendingApproval> {
+    return this.request<McpConnection | McpPendingApproval>(`/mcp/connect/${encodeURIComponent(name)}/tools/${encodeURIComponent(toolName)}/enable`, { method: 'POST', headers: this.revisionHeaders(revision) });
+  }
+
+  async disableMcpTool(name: string, toolName: string, revision?: number): Promise<McpConnection> {
+    return this.request<McpConnection>(`/mcp/connect/${encodeURIComponent(name)}/tools/${encodeURIComponent(toolName)}`, { method: 'DELETE', headers: this.revisionHeaders(revision) });
+  }
+
+  async approveMcp(taskId: string): Promise<McpApprovalExecution> {
+    return this.request<McpApprovalExecution>(`/mcp/connect/approvals/${encodeURIComponent(taskId)}/approve`, { method: 'POST' });
+  }
+
+  async rejectMcp(taskId: string): Promise<void> {
+    await this.request<void>(`/mcp/connect/approvals/${encodeURIComponent(taskId)}/reject`, { method: 'POST' });
+  }
+
+  async disconnectMcp(name: string, revision?: number): Promise<void> {
+    await this.request<void>(`/mcp/connect/${encodeURIComponent(name)}`, { method: 'DELETE', headers: this.revisionHeaders(revision) });
+  }
+
+  async redeemMcpSetup(token: string): Promise<{ serverName: string; channelType: string; expiresAt: string }> {
+    return this.request<{ serverName: string; channelType: string; expiresAt: string }>('/mcp/setup/redeem', {
+      method: 'POST',
+      body: JSON.stringify({ token }),
+    });
   }
 
   async getSkills(): Promise<SkillDto[]> {

@@ -10,6 +10,7 @@ import java.util.Map;
 
 import com.amsha.core.audit.AuditService;
 import com.amsha.core.audit.SecurityEventType;
+import com.amsha.core.scope.WorkspaceContext;
 import com.amsha.core.tool.DynamicToolDescriptor;
 import com.amsha.core.tool.DynamicToolInvoker;
 import com.amsha.core.tools.ToolExecutionContext;
@@ -42,8 +43,12 @@ public class ExternalMcpToolAdapter implements DynamicToolInvoker {
     AuditService auditService;
 
     public String invoke(String toolName, String paramsJson) {
-        DynamicToolCapability cap = registry.find(toolName)
+        String scope = WorkspaceContext.getUserIdOrUnknown();
+        DynamicToolCapability cap = registry.find(scope, toolName)
                 .orElseThrow(() -> new McpToolNotFoundException("Dynamic MCP tool not registered: " + toolName));
+        if (!registry.acquireInvocation(scope, toolName)) {
+            throw new McpToolNotFoundException("Dynamic MCP tool is disabled: " + toolName);
+        }
 
         log.debugf("Invoking dynamic tool %s via %s", toolName, cap.transport());
 
@@ -54,10 +59,14 @@ public class ExternalMcpToolAdapter implements DynamicToolInvoker {
                 SecurityEventType.MCP_TOOL_INVOKED,
                 "tool=" + toolName + " server=" + cap.mcpServerName() + " transport=" + cap.transport());
 
-        return switch (cap.transport()) {
-            case STDIO -> invokeStdio(cap.mcpServerName(), toolName, paramsJson, null);
-            case HTTP_SSE -> mcpClientService.invoke(cap.mcpServerName(), toolName, paramsJson);
-        };
+        try {
+            return switch (cap.transport()) {
+                case STDIO -> invokeStdio(cap.mcpServerName(), toolName, paramsJson, null);
+                case HTTP_SSE -> mcpClientService.invoke(cap.mcpServerName(), toolName, paramsJson);
+            };
+        } finally {
+            registry.releaseInvocation(scope, toolName);
+        }
     }
 
     @Override
@@ -86,6 +95,9 @@ public class ExternalMcpToolAdapter implements DynamicToolInvoker {
     private String invokeForUser(String userId, String toolName, String paramsJson) {
         DynamicToolCapability cap = registry.find(userId, toolName)
                 .orElseThrow(() -> new McpToolNotFoundException("Dynamic MCP tool not registered: " + toolName));
+        if (!registry.acquireInvocation(userId, toolName)) {
+            throw new McpToolNotFoundException("Dynamic MCP tool is disabled: " + toolName);
+        }
         log.debugf("Invoking dynamic tool %s via %s", toolName, cap.transport());
         auditService.record(
                 "mcp-external",
@@ -93,10 +105,14 @@ public class ExternalMcpToolAdapter implements DynamicToolInvoker {
                 "system",
                 SecurityEventType.MCP_TOOL_INVOKED,
                 "tool=" + toolName + " server=" + cap.mcpServerName() + " transport=" + cap.transport());
-        return switch (cap.transport()) {
-            case STDIO -> invokeStdio(cap.mcpServerName(), toolName, paramsJson, userId);
-            case HTTP_SSE -> mcpClientService.invoke(cap.mcpServerName(), toolName, paramsJson, userId);
-        };
+        try {
+            return switch (cap.transport()) {
+                case STDIO -> invokeStdio(cap.mcpServerName(), toolName, paramsJson, userId);
+                case HTTP_SSE -> mcpClientService.invoke(cap.mcpServerName(), toolName, paramsJson, userId);
+            };
+        } finally {
+            registry.releaseInvocation(userId, toolName);
+        }
     }
 
     private String invokeStdio(String serverName, String toolName, String paramsJson, String userId) {
