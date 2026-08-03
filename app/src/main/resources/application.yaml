@@ -271,6 +271,10 @@ smallrye:
         level: INFO
       "org.apache.camel.component.telegram.TelegramConsumer":
         level: ERROR
+      # Telegram polling retries are handled by Camel's backoff policy. Keep
+      # expected transient outages quiet while preserving ERROR diagnostics.
+      "com.amsha.channel.telegram.TelegramChannelRoute":
+        level: ERROR
       "org.apache.camel":
         level: INFO
       "io.netty":
