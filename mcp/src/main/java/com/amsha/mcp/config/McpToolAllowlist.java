@@ -41,6 +41,12 @@ public interface McpToolAllowlist {
     Optional<String> setupTokenSecret();
 
     /**
+     * Optional absolute base URL for setup links issued through remote channels.
+     * Empty values keep links relative to the current Arc UI origin.
+     */
+    Optional<String> setupUiBaseUrl();
+
+    /**
      * Podman/Stdio MCP transport settings.
      */
     Podman podman();

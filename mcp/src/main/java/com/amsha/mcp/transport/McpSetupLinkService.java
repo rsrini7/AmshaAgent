@@ -1,16 +1,21 @@
 package com.amsha.mcp.transport;
 
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
 
-import org.eclipse.microprofile.config.inject.ConfigProperty;
+import com.amsha.mcp.config.McpToolAllowlist;
 
 /** Builds channel-neutral links to the authenticated MCP setup panel. */
 @ApplicationScoped
 public class McpSetupLinkService {
     private final String uiBaseUrl;
 
-    public McpSetupLinkService(
-            @ConfigProperty(name = "amsha.mcp.setup-ui-base-url", defaultValue = "") String uiBaseUrl) {
+    @Inject
+    public McpSetupLinkService(McpToolAllowlist config) {
+        this(config.setupUiBaseUrl().orElse(""));
+    }
+
+    public McpSetupLinkService(String uiBaseUrl) {
         this.uiBaseUrl = trimTrailingSlashes(uiBaseUrl);
     }
 
