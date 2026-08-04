@@ -136,6 +136,7 @@ public class McpApprovalService {
         DISCOVER(OutboundPurpose.MCP_CONNECT),
         CONNECT(OutboundPurpose.MCP_CONNECT),
         RECONNECT(OutboundPurpose.MCP_CONNECT),
+        RECONFIGURE(OutboundPurpose.MCP_CONNECT),
         ROTATE_HEADERS(OutboundPurpose.MCP_CONNECT),
         ENABLE_TOOL(OutboundPurpose.MCP_TOOL_ENABLE);
 

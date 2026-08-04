@@ -4,6 +4,8 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -42,28 +44,75 @@ final class McpManagementSupport {
 
     void replacePolicies(String connectionId, String userId, List<McpClientService.DiscoveredTool> tools) {
         Instant now = Instant.now();
-        lifecycleService.replaceToolPolicies(
+        Map<String, McpClientService.DiscoveredTool> current = new HashMap<>();
+        tools.forEach(tool -> current.putIfAbsent(tool.name(), tool));
+        List<McpConnectionToolPolicyDto> policies = lifecycleService.listToolPolicies(connectionId, userId).stream()
+                .map(existing -> mergePolicy(existing, current.remove(existing.toolName()), connectionId, userId, now))
+                .collect(Collectors.toCollection(ArrayList::new));
+        current.values().stream()
+                .map(tool -> newPolicy(connectionId, userId, tool, now))
+                .forEach(policies::add);
+        lifecycleService.replaceToolPolicies(connectionId, userId, policies);
+    }
+
+    private static McpConnectionToolPolicyDto mergePolicy(
+            McpConnectionToolPolicyDto existing,
+            McpClientService.DiscoveredTool current,
+            String connectionId,
+            String userId,
+            Instant now) {
+        if (current == null) {
+            return new McpConnectionToolPolicyDto(
+                    existing.id(),
+                    connectionId,
+                    userId,
+                    existing.toolName(),
+                    false,
+                    false,
+                    existing.description(),
+                    existing.inputSchema(),
+                    existing.schemaHash(),
+                    existing.discoveredAt(),
+                    existing.revision(),
+                    now);
+        }
+        String schemaHash = sha256(current.inputSchema());
+        boolean enabled = existing.enabled() && existing.available() && schemaHash.equals(existing.schemaHash());
+        return new McpConnectionToolPolicyDto(
+                existing.id(),
                 connectionId,
                 userId,
-                tools.stream()
-                        .map(tool -> new McpConnectionToolPolicyDto(
-                                UUID.randomUUID().toString(),
-                                connectionId,
-                                userId,
-                                tool.name(),
-                                false,
-                                tool.description(),
-                                tool.inputSchema(),
-                                sha256(tool.inputSchema()),
-                                now,
-                                0,
-                                now))
-                        .toList());
+                current.name(),
+                true,
+                enabled,
+                current.description(),
+                current.inputSchema(),
+                schemaHash,
+                now,
+                existing.revision(),
+                now);
+    }
+
+    private static McpConnectionToolPolicyDto newPolicy(
+            String connectionId, String userId, McpClientService.DiscoveredTool tool, Instant now) {
+        return new McpConnectionToolPolicyDto(
+                UUID.randomUUID().toString(),
+                connectionId,
+                userId,
+                tool.name(),
+                true,
+                false,
+                tool.description(),
+                tool.inputSchema(),
+                sha256(tool.inputSchema()),
+                now,
+                0,
+                now);
     }
 
     Set<String> enabledToolNames(McpConnectionDto connection, String userId) {
         return lifecycleService.listToolPolicies(connection.id(), userId).stream()
-                .filter(McpConnectionToolPolicyDto::enabled)
+                .filter(policy -> policy.available() && policy.enabled())
                 .map(McpConnectionToolPolicyDto::toolName)
                 .collect(Collectors.toSet());
     }
@@ -76,15 +125,18 @@ final class McpManagementSupport {
     McpManagementService.ConnectionSnapshot snapshot(McpConnectionDto connection) {
         List<McpConnectionToolPolicyDto> policies =
                 lifecycleService.listToolPolicies(connection.id(), connection.userId());
-        long enabled =
-                policies.stream().filter(McpConnectionToolPolicyDto::enabled).count();
+        long enabled = policies.stream()
+                .filter(policy -> policy.available() && policy.enabled())
+                .count();
+        long discovered =
+                policies.stream().filter(McpConnectionToolPolicyDto::available).count();
         return new McpManagementService.ConnectionSnapshot(
                 connection.name(),
                 connection.endpoint(),
                 connection.state(),
                 connection.transport(),
                 enabled,
-                policies.size(),
+                discovered,
                 connection.revision(),
                 policies);
     }

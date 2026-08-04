@@ -5,7 +5,6 @@ import jakarta.inject.Inject;
 
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 import com.amsha.core.audit.AuditService;
 import com.amsha.core.audit.SecurityEventType;
@@ -31,6 +30,7 @@ public class McpManagementService {
     private final McpManagementSupport support;
     private final McpApprovalService approvalService;
     private final McpManagementConnectionSetup connectionSetup;
+    private final McpManagementConnectionOperations connectionOperations;
 
     @Inject
     public McpManagementService(
@@ -44,6 +44,7 @@ public class McpManagementService {
         this.support = new McpManagementSupport(clientService, lifecycleService, registry, auditService);
         this.approvalService = approvalService;
         this.connectionSetup = new McpManagementConnectionSetup(clientService, lifecycleService, support);
+        this.connectionOperations = new McpManagementConnectionOperations(clientService, lifecycleService, support);
     }
 
     public McpApprovalService.PendingApproval requestDiscovery(
@@ -102,6 +103,25 @@ public class McpManagementService {
         return approval;
     }
 
+    public McpApprovalService.PendingApproval requestReconfigure(
+            String userId, String name, String endpoint, Map<String, String> headers, Long expectedRevision) {
+        McpConnectionDto connection = support.findConnection(userId, name);
+        McpManagementSupport.checkRevision(connection, expectedRevision);
+        String proposedEndpoint = McpManagementSupport.isBlank(endpoint) ? connection.endpoint() : endpoint;
+        Map<String, String> proposedHeaders = headers == null ? Map.of() : Map.copyOf(headers);
+        support.validateRequest(name, proposedEndpoint, proposedHeaders);
+        McpApprovalService.PendingApproval approval = approvalService.request(
+                userId,
+                McpApprovalService.Operation.RECONFIGURE,
+                name,
+                proposedEndpoint,
+                proposedHeaders,
+                null,
+                expectedRevision);
+        support.markPending(connection, approval.taskId());
+        return approval;
+    }
+
     public McpApprovalService.PendingApproval requestEnableTool(String userId, String name, String toolName) {
         return requestEnableTool(userId, name, toolName, null);
     }
@@ -145,6 +165,15 @@ public class McpManagementService {
                         connectWithApproval(
                                 userId,
                                 operation.name(),
+                                operation.receiptToken(),
+                                operation.expectedRevision(),
+                                operation.taskId());
+                    case RECONFIGURE ->
+                        connectionSetup.reconfigureWithApproval(
+                                userId,
+                                operation.name(),
+                                operation.endpoint(),
+                                operation.headers(),
                                 operation.receiptToken(),
                                 operation.expectedRevision(),
                                 operation.taskId());
@@ -228,6 +257,17 @@ public class McpManagementService {
         return connectWithApproval(userId, name, approvalToken, expectedRevision, null);
     }
 
+    public ConnectionSnapshot reconfigureWithApproval(
+            String userId,
+            String name,
+            String endpoint,
+            Map<String, String> headers,
+            String approvalToken,
+            Long expectedRevision) {
+        return connectionSetup.reconfigureWithApproval(
+                userId, name, endpoint, headers, approvalToken, expectedRevision, null);
+    }
+
     private ConnectionSnapshot connectWithApproval(
             String userId, String name, String approvalToken, Long expectedRevision, String approvalTaskId) {
         return connectInternal(
@@ -252,49 +292,8 @@ public class McpManagementService {
             OutboundPurpose approvalPurpose,
             Long expectedRevision,
             String approvalTaskId) {
-        McpManagementSupport.requireUser(userId);
-        McpConnectionDto connection = support.findConnection(userId, name);
-        support.checkApprovalRevision(connection, expectedRevision, approvalTaskId);
-        Set<String> enabledTools = support.enabledToolNames(connection, userId);
-        lifecycleService.updateState(
-                connection.id(), userId, STATE_CONNECTING, true, connection.approvalTaskId(), null);
-        support.clearRegisteredTools(userId, name);
-        try {
-            support.runInUserVaultScope(userId, () -> {
-                support.configureStoredHeaders(connection, userId);
-                if (approvalToken == null) {
-                    clientService.connectForUserWithEnabledTools(
-                            name,
-                            userId,
-                            connection.endpoint(),
-                            ToolCategory.valueOf(connection.category()),
-                            Map.of(),
-                            preApproved,
-                            enabledTools);
-                } else {
-                    clientService.connectForUserWithEnabledTools(
-                            name,
-                            userId,
-                            connection.endpoint(),
-                            ToolCategory.valueOf(connection.category()),
-                            Map.of(),
-                            approvalToken,
-                            approvalPurpose,
-                            enabledTools);
-                }
-            });
-            lifecycleService.updateState(connection.id(), userId, STATE_CONNECTED, true, null, null);
-            support.audit(
-                    userId, SecurityEventType.MCP_SERVER_CONNECTED, "server=" + name + " tools=" + enabledTools.size());
-            return lifecycleService
-                    .findByNameAndUserId(name, userId)
-                    .map(support::snapshot)
-                    .orElseThrow();
-        } catch (RuntimeException e) {
-            lifecycleService.updateState(
-                    connection.id(), userId, STATE_DEGRADED, true, null, McpManagementSupport.classify(e));
-            throw e;
-        }
+        return connectionOperations.connect(
+                userId, name, preApproved, approvalToken, approvalPurpose, expectedRevision, approvalTaskId);
     }
 
     /** Agent registration uses the same disabled policy model as every other surface. */
@@ -473,6 +472,7 @@ public class McpManagementService {
     public List<ToolPreview> listTools(String userId, String name) {
         McpConnectionDto connection = support.findConnection(userId, name);
         return lifecycleService.listToolPolicies(connection.id(), userId).stream()
+                .filter(McpConnectionToolPolicyDto::available)
                 .map(policy -> new ToolPreview(
                         policy.toolName(), policy.description(), policy.inputSchema(), policy.schemaHash()))
                 .toList();

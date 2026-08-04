@@ -128,6 +128,6 @@ class McpManagementServiceTest {
 
     private McpConnectionToolPolicyDto policy(String name, boolean enabled) {
         return new McpConnectionToolPolicyDto(
-                "policy-1", "id-1", "user-1", name, enabled, "Search", "{}", "hash", now, 0, now);
+                "policy-1", "id-1", "user-1", name, true, enabled, "Search", "{}", "hash", now, 0, now);
     }
 }

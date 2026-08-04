@@ -967,6 +967,7 @@ class PersistencePortContractTest {
                                             policy.connectionId(),
                                             policy.userId(),
                                             policy.toolName(),
+                                            policy.available(),
                                             enabled,
                                             policy.description(),
                                             policy.inputSchema(),

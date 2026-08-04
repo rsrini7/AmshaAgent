@@ -37,6 +37,8 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             "com.amsha.app.mcp.McpConnectResource$DisconnectResponse",
             "com.amsha.app.mcp.McpConnectResource$DiscoverRequest",
             "com.amsha.app.mcp.McpConnectResource$RotateHeadersRequest",
+            "com.amsha.app.mcp.McpConnectResource$ReconfigureRequest",
+            "com.amsha.app.mcp.McpImportResource$ApplyRequest",
             "com.amsha.app.mcp.McpSetupResource$IssueRequest",
             "com.amsha.app.mcp.McpSetupResource$RedeemRequest",
             "com.amsha.app.mcp.McpSetupResource$RedeemResponse"

@@ -2,7 +2,7 @@ import { LitElement, css, html } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
 import { consume } from '@lit/context';
 import { arcContext, ArcAppContext } from '../context/arc-context';
-import { ArcClient, McpApprovalExecution, McpConnection, McpDiscoveryPreview, McpPendingApproval } from '../api/client';
+import { ArcClient, McpApprovalExecution, McpConnection, McpDiscoveryPreview, McpImportPreview, McpPendingApproval } from '../api/client';
 
 @customElement('arc-mcp-panel')
 export class ArcMcpPanel extends LitElement {
@@ -18,6 +18,10 @@ export class ArcMcpPanel extends LitElement {
   @state() private _message = '';
   @state() private _error = '';
   @state() private _pendingApproval?: McpPendingApproval;
+  @state() private _editing?: string;
+  @state() private _editUrl = '';
+  @state() private _editHeaders = '';
+  @state() private _importPreview?: McpImportPreview;
 
   static styles = css`
     :host { display: block; padding: 2rem; overflow-y: auto; }
@@ -185,13 +189,69 @@ export class ArcMcpPanel extends LitElement {
     finally { this._busy = false; }
   }
 
-    private async _toggleTool(connection: McpConnection, toolName: string, enabled: boolean) {
+  private async _toggleTool(connection: McpConnection, toolName: string, enabled: boolean) {
         if (this._busy || connection.state !== 'CONNECTED' || this._pendingApproval?.name === connection.name) {
             return;
         }
         await this._action(
       () => enabled ? this._client.enableMcpTool(connection.name, toolName, connection.revision) : this._client.disableMcpTool(connection.name, toolName, connection.revision),
       enabled ? `Enabled ${toolName}.` : `Disabled ${toolName}.`);
+  }
+
+  private _startEdit(connection: McpConnection) {
+    this._editing = connection.name;
+    this._editUrl = connection.endpoint;
+    this._editHeaders = '';
+    this._error = '';
+    this._message = 'Stored credentials remain unchanged unless you enter replacement headers.';
+  }
+
+  private async _saveEdit(connection: McpConnection) {
+    let headers: Record<string, string> = {};
+    if (this._editHeaders.trim()) {
+      try {
+        headers = JSON.parse(this._editHeaders);
+      } catch (_) {
+        this._error = 'Replacement headers must be valid JSON.';
+        return;
+      }
+    }
+    await this._action(
+      () => this._client.reconfigureMcp(connection.name, this._editUrl.trim(), headers, connection.revision),
+      'Reconfiguration requested.'
+    );
+    this._editing = undefined;
+  }
+
+  private async _previewImport(event: Event) {
+    const file = (event.target as HTMLInputElement).files?.[0];
+    if (!file) return;
+    this._busy = true;
+    this._error = '';
+    try {
+      this._importPreview = await this._client.previewMcpConfig(file);
+      this._message = 'Preview parsed locally. Apply a supported entry to request normal MCP approval.';
+    } catch (error) {
+      this._error = this._messageFor(error);
+    } finally {
+      this._busy = false;
+    }
+  }
+
+  private async _applyImport(entry: McpImportPreview['entries'][number]) {
+    if (!this._importPreview || !entry.supported) return;
+    this._busy = true;
+    this._error = '';
+    try {
+      const result = await this._client.applyMcpImport(this._importPreview.operationId, entry.name);
+      this._pendingApproval = result;
+      this._importPreview = undefined;
+      this._message = `Approval required for imported MCP server ${entry.name}.`;
+    } catch (error) {
+      this._error = this._messageFor(error);
+    } finally {
+      this._busy = false;
+    }
   }
 
   private _messageFor(error: unknown) { return error instanceof Error ? error.message : 'MCP request failed.'; }
@@ -204,8 +264,22 @@ export class ArcMcpPanel extends LitElement {
     return 'state' in value;
   }
 
+  private _renderEditForm() {
+    if (!this._editing) {
+      return html`<section class="card"><h2>Import MCP config</h2><p>Choose a local .mcp.json file. Preview is bounded and does not contact a server.</p><input type="file" accept=".json,application/json" @change=${this._previewImport} ?disabled=${this._busy} />${this._importPreview ? html`<div class="tools"><p>${this._importPreview.fileName} · expires ${this._importPreview.expiresAt}</p>${this._importPreview.entries.map(entry => html`<div class="tool"><span class="tool-name">${entry.name} · ${entry.endpoint || entry.reason}</span><button @click=${() => this._applyImport(entry)} ?disabled=${!entry.supported || this._busy}>${entry.supported ? 'Apply' : 'Unsupported'}</button></div>`)}</div>` : ''}</section><div class="actions">${this._connections.filter(connection => connection.state !== 'PREVIEW').map(connection => html`<button @click=${() => this._startEdit(connection)}>Edit ${connection.name}</button>`)}</div>`;
+    }
+    const connection = this._connections.find(item => item.name === this._editing);
+    if (!connection) return '';
+    return html`<section class="card"><h2>Edit ${connection.name}</h2><div class="form">
+      <label for="mcp-edit-url">MCP endpoint</label>
+      <input id="mcp-edit-url" .value=${this._editUrl} @input=${(event: InputEvent) => this._editUrl = (event.target as HTMLInputElement).value} />
+      <label for="mcp-edit-headers">Replacement headers JSON</label>
+      <textarea id="mcp-edit-headers" .value=${this._editHeaders} @input=${(event: InputEvent) => this._editHeaders = (event.target as HTMLTextAreaElement).value} placeholder="Leave blank to keep stored credentials"></textarea>
+    </div><div class="actions"><button class="primary" @click=${() => this._saveEdit(connection)} ?disabled=${this._busy}>Save and request approval</button><button @click=${() => this._editing = undefined}>Cancel</button></div></section>`;
+  }
+
   render() {
-    return html`
+    return html`${this._renderEditForm()}
       <div class="header"><div><h1>MCP connections</h1><p>Connect remote MCP servers, review discovered tools, and activate only what you need.</p></div><button @click=${this._load} ?disabled=${this._busy}>Refresh</button></div>
       <section class="card"><h2>Add a server</h2><p>Credentials are sent over the authenticated API and stored server-side in the vault. They are never included in chat or Telegram commands.</p>
         <div class="form"><label for="mcp-name">Name</label><input id="mcp-name" .value=${this._name} @input=${(e: InputEvent) => this._name = (e.target as HTMLInputElement).value} placeholder="tapetide" />

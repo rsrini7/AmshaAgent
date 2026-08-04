@@ -8,6 +8,7 @@ public record McpConnectionToolPolicyDto(
         String connectionId,
         String userId,
         String toolName,
+        boolean available,
         boolean enabled,
         String description,
         String inputSchema,

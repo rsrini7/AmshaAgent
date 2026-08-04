@@ -2,6 +2,7 @@ package com.amsha.app.mcp;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import jakarta.ws.rs.core.SecurityContext;
@@ -82,6 +83,29 @@ class McpConnectResourceTest {
                 new McpConnectResource.DiscoverRequest("test-server", "http://localhost:3000/mcp", Map.of()));
 
         assertEquals(202, response.getStatus());
+    }
+
+    @Test
+    void reconfigureUsesRevisionHeaderAndSharedApprovalFlow() {
+        var pending = new McpApprovalService.PendingApproval(
+                "task-edit",
+                "RECONFIGURE",
+                "test-server",
+                "https://example.test/mcp",
+                null,
+                Instant.now().plusSeconds(60),
+                4L);
+        when(managementService.requestReconfigure("user-1", "test-server", "https://example.test/mcp", Map.of(), 4L))
+                .thenReturn(pending);
+
+        var response = resource.reconfigure(
+                "test-server",
+                new McpConnectResource.ReconfigureRequest("https://example.test/mcp", Map.of()),
+                null,
+                4L);
+
+        assertEquals(202, response.getStatus());
+        verify(managementService).requestReconfigure("user-1", "test-server", "https://example.test/mcp", Map.of(), 4L);
     }
 
     @Test

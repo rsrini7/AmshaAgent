@@ -6,6 +6,7 @@ import java.util.Map;
 import com.amsha.core.audit.SecurityEventType;
 import com.amsha.core.tools.ToolCategory;
 import com.amsha.mcp.tool.McpTransportType;
+import com.amsha.persistence.api.McpConnectionDto;
 
 /** Owns throwaway discovery and first durable connection setup. */
 final class McpManagementConnectionSetup {
@@ -122,5 +123,53 @@ final class McpManagementConnectionSetup {
                 .findByNameAndUserId(name, userId)
                 .map(support::snapshot)
                 .orElseThrow();
+    }
+
+    McpManagementService.ConnectionSnapshot reconfigureWithApproval(
+            String userId,
+            String name,
+            String endpoint,
+            Map<String, String> headers,
+            String approvalToken,
+            Long expectedRevision,
+            String approvalTaskId) {
+        McpConnectionDto current = support.findConnection(userId, name);
+        support.checkApprovalRevision(current, expectedRevision, approvalTaskId);
+        Map<String, String> proposedHeaders = headers == null ? Map.of() : Map.copyOf(headers);
+        lifecycleService.updateState(
+                current.id(), userId, McpManagementService.STATE_CONNECTING, true, approvalTaskId, null);
+        try {
+            support.runInUserVaultScope(userId, () -> support.configureStoredHeaders(current, userId));
+            List<McpClientService.DiscoveredTool> tools = support.runInUserVaultScope(
+                    userId,
+                    () -> clientService.discoverForUser(
+                            name, userId, endpoint, ToolCategory.NETWORK, proposedHeaders, approvalToken));
+            McpConnectionLifecycleService.PersistedConnection persisted = proposedHeaders.isEmpty()
+                    ? lifecycleService.persistSuccessfulHttpKeepingHeaders(name, endpoint, ToolCategory.NETWORK, userId)
+                    : lifecycleService.persistSuccessfulHttp(
+                            name, endpoint, ToolCategory.NETWORK, userId, proposedHeaders);
+            if (persisted.connection() == null) {
+                throw new McpConnectionException("MCP persistence backend is unavailable");
+            }
+            support.runInUserVaultScope(
+                    userId, () -> clientService.configureHeaderSecretRefs(name, userId, persisted.headerSecretRefs()));
+            support.replacePolicies(persisted.connection().id(), userId, tools);
+            lifecycleService.updateState(
+                    persisted.connection().id(), userId, McpManagementService.STATE_CONNECTED, true, null, null);
+            support.audit(userId, SecurityEventType.MCP_SERVER_CONNECTED, "server=" + name + " reconfigured");
+            return lifecycleService
+                    .findByNameAndUserId(name, userId)
+                    .map(support::snapshot)
+                    .orElseThrow();
+        } catch (RuntimeException exception) {
+            lifecycleService.updateState(
+                    current.id(),
+                    userId,
+                    McpManagementService.STATE_DEGRADED,
+                    true,
+                    null,
+                    McpManagementSupport.classify(exception));
+            throw exception;
+        }
     }
 }

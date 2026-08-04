@@ -19,6 +19,8 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             "com.amsha.mcp.transport.McpManagementService$ApprovalExecution",
             "com.amsha.mcp.transport.McpManagementService$DiscoveryPreview",
             "com.amsha.mcp.transport.McpManagementService$ToolPreview",
+            "com.amsha.mcp.transport.McpConfigImportService$ImportPreview",
+            "com.amsha.mcp.transport.McpConfigImportService$ImportEntry",
             "com.amsha.mcp.transport.McpApprovalService$PendingApproval",
             "com.amsha.mcp.transport.McpSetupTokenService$SetupGrant"
         },

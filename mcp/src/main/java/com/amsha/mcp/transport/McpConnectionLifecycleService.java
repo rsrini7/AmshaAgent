@@ -241,6 +241,16 @@ public class McpConnectionLifecycleService {
         return persistSuccessfulHttp(name, url, category, userId, Map.of());
     }
 
+    public PersistedConnection persistSuccessfulHttpKeepingHeaders(
+            String name, String url, ToolCategory category, String userId) {
+        requestValidator.validateEndpoint(url);
+        return store().map(port -> {
+                    McpConnectionDto connection = upsertConnection(port, name, url, category, userId);
+                    return new PersistedConnection(connection, port.listHeaderSecretRefs(connection.id(), userId));
+                })
+                .orElseGet(() -> new PersistedConnection(null, List.of()));
+    }
+
     public void validateHttpRegistration(String url, Map<String, String> headers) {
         if (outboundHttpPolicyService != null) {
             OutboundPolicyDecision decision =

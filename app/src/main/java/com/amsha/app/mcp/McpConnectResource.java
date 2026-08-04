@@ -7,6 +7,7 @@ import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.DELETE;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.HeaderParam;
+import jakarta.ws.rs.PATCH;
 import jakarta.ws.rs.POST;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.PathParam;
@@ -74,6 +75,12 @@ public class McpConnectResource {
     }
 
     public record RotateHeadersRequest(Map<String, String> headers) {
+        public Map<String, String> headersOrEmpty() {
+            return headers == null ? Map.of() : Map.copyOf(headers);
+        }
+    }
+
+    public record ReconfigureRequest(String url, Map<String, String> headers) {
         public Map<String, String> headersOrEmpty() {
             return headers == null ? Map.of() : Map.copyOf(headers);
         }
@@ -268,6 +275,26 @@ public class McpConnectResource {
             @PathParam("toolName") String toolName,
             @HeaderParam("If-MCP-Revision") Long expectedRevision) {
         return operation(() -> managementService.disableTool(resolveUserId(), name, toolName, expectedRevision));
+    }
+
+    @PATCH
+    @Path("/{name}")
+    @Consumes(MediaType.APPLICATION_JSON)
+    @Operation(summary = "Reconfigure an MCP endpoint or credentials")
+    public Response reconfigure(
+            @PathParam("name") String name,
+            ReconfigureRequest request,
+            @HeaderParam("X-MCP-APPROVAL-TOKEN") String approvalToken,
+            @HeaderParam("If-MCP-Revision") Long expectedRevision) {
+        if (request == null) return badRequest("reconfiguration request required");
+        String endpoint = request.url();
+        Map<String, String> headers = request.headersOrEmpty();
+        if (!isBlank(approvalToken)) {
+            return operation(() -> managementService.reconfigureWithApproval(
+                    resolveUserId(), name, endpoint, headers, approvalToken, expectedRevision));
+        }
+        return pendingOperation(
+                () -> managementService.requestReconfigure(resolveUserId(), name, endpoint, headers, expectedRevision));
     }
 
     @POST

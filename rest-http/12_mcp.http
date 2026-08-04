@@ -17,6 +17,9 @@
 ### POST /api/v1/mcp/connect → request/complete durable connect (tools disabled)
 ### DELETE /api/v1/mcp/connect/{name} → disconnect + deregister tools
 ###      GET    /api/v1/mcp/connect        → list connected servers
+###      PATCH  /api/v1/mcp/connect/{name} → reconfigure endpoint/credentials (`If-MCP-Revision`)
+###      POST   /api/v1/mcp/import/preview → bounded browser multipart preview (no network I/O)
+###      POST   /api/v1/mcp/import/apply   → apply one preview entry through normal HITL flow
 ### Dynamic tools appear only after explicit per-tool enable approval.
 ###      (The agent tool "register_mcp_server" is the LLM-driven equivalent - see FLOW G;
 ###       it adds STDIO/Podman transports and an explicit execution category.)

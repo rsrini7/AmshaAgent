@@ -10,6 +10,7 @@ CREATE TABLE mcp_connection_tool_policy (
     connection_id TEXT NOT NULL,
     user_id TEXT NOT NULL,
     tool_name TEXT NOT NULL,
+    available BOOLEAN NOT NULL DEFAULT TRUE,
     enabled BOOLEAN NOT NULL DEFAULT FALSE,
     description TEXT NOT NULL DEFAULT '',
     input_schema TEXT NOT NULL DEFAULT '{}',

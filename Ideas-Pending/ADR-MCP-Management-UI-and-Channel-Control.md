@@ -2,6 +2,7 @@
 
 - Status: Proposed
 - Date: 2026-08-03
+- Last reviewed: 2026-08-04
 - Decision owners: Amsha Agent maintainers
 - Scope: user-private outbound MCP server connections and their management surfaces
 
@@ -106,6 +107,7 @@ pause(name, userId)
 resume(name, userId)
 reconnect(name, approvalContext)
 rotateHeaders(name, secretHeaders, userId)
+reconfigure(name, endpoint?, secretHeaders?, expectedRevision, approvalContext)
 disconnect(name, userId)
 listTools(name, userId)
 ```
@@ -140,6 +142,75 @@ implementation that silently bypasses HITL is not acceptable.
 `approvalTaskId` is retained only while the connection is `PENDING_APPROVAL` or
 `CONNECTING`. It is nulled on `CONNECTED`, `PAUSED`, `FAILED`, `DEGRADED`, and
 `DISCONNECTED`; the approval and outcome remain in the mandatory audit trail.
+
+### Reconfiguration / edit
+
+Reconfiguration is a first-class lifecycle operation. Users must be able to change an
+existing connection's endpoint or credentials without first deleting the connection.
+Endpoint and credential changes are applied atomically as one operation; a failed,
+rejected, expired, or conflicting edit leaves the previous working connection and
+vault references unchanged.
+
+The standard edit flow is:
+
+1. The UI opens an Edit connection panel populated with safe metadata only. Existing
+   secret values are never returned; blank credential fields mean keep the current
+   vault references, while an explicit clear action removes a selected credential.
+2. Test and save validates the proposed endpoint and headers, stages replacement
+   secrets, and requests `MCP_CONNECT` approval before any governed handshake. After
+   approval, the service performs the handshake and `tools/list` before committing.
+3. After approval, the service persists the new endpoint and vault references,
+   refreshes discovered tool metadata, reconnects the server, and returns the new
+   revision. On any failure it compensates staged secrets and retains the old state.
+4. New tools and schema-changed tools remain disabled. An enabled policy is retained
+   only when the tool name and schema hash are unchanged. Removed tools remain as
+   durable policy rows with `available=false` and `enabled=false`; they are not
+   registered or counted. If a removed tool reappears, it is marked available again
+   but remains disabled until explicit activation. No edit may implicitly enable a
+   newly discovered capability.
+
+Every edit carries `If-MCP-Revision` and returns a safe `409 Conflict` when the row
+changed since the UI loaded it. Endpoint changes and credential rotation use the same
+shared service operation and approval/audit path. The existing `rotate-headers` route
+may remain as a narrow compatibility alias, but it must delegate to reconfiguration.
+
+### Local MCP configuration import
+
+`.mcp.json` is a common convention, but it is not a single universal schema. Amsha
+does not currently detect or import it. Version 1 provides an explicit **Import MCP
+config** action with these rules:
+
+- The v1 input is an authenticated browser file-picker upload through
+  `POST /api/v1/mcp/import/preview`. It is a bounded multipart request (maximum
+  256 KiB, or the lower configured limit) containing file content and a display
+  filename. It never accepts an arbitrary filesystem path.
+- Amsha does not scan the home directory, repository parents, working directories,
+  or any server-side root in v1. A future server-side import mode would require a
+  separately allowlisted root and path-traversal protection; it is not part of this
+  contract.
+- Import first produces a bounded preview. It recognizes only supported remote HTTP
+  MCP entries and reports unsupported or malformed entries without executing them.
+- Preview is local parsing only and performs no network I/O. Endpoint validation and
+  remote discovery happen only when Apply enters the normal connect/reconfigure flow.
+- Imported name, endpoint, transport, and non-secret metadata populate the normal
+  discover/reconfigure flow. All discovered tools remain disabled until explicit
+  activation.
+- Raw tokens, header values, environment substitutions, and command environment values
+  are never copied into connection metadata, logs, chat, or audit payloads. Credentials
+  require explicit user confirmation and vault staging; unresolved environment values
+  require user re-entry or an explicit vault-key mapping.
+- STDIO `command`, `args`, and `env` entries are not launched by the browser import
+  path. They remain unsupported or disabled until a separately approved host-execution
+  flow exists.
+- Importing an entry with an existing user/name pair becomes a normal reconfiguration
+  operation with HITL, revision checks, rollback, and tool-policy reconciliation. A
+  failed import cannot replace the working connection.
+- Preview returns only safe metadata and a short-lived preview operation ID. Apply
+  consumes that ID and enters the normal connect/reconfigure approval flow; preview
+  is throwaway and does not create a durable connection or retain raw secrets.
+- The persisted MCP connection and vault are the source of truth after import.
+  `.mcp.json` is not watched or synchronized automatically; external file changes
+  require an explicit re-import.
 
 ### Startup reconnect
 
@@ -229,15 +300,21 @@ Add a user-scoped `McpConnectionToolPolicyDto` and corresponding port operations
 
 ```text
 McpConnectionToolPolicyDto
-  id, connectionId, userId, toolName, enabled, description
+  id, connectionId, userId, toolName, available, enabled, description
   inputSchema, schemaHash, discoveredAt, revision, updatedAt
 ```
 
+`available` means the tool was present in the latest successful `tools/list`; `enabled`
+is the user's explicit activation decision. Current tools are upserted with
+`available=true`. Tools absent from a successful refresh remain as policy rows with
+`available=false` and are forced to `enabled=false`. Reappearing tools become
+available again but remain disabled. The registry registers only policies where both
+flags are true, and enabled/discovered counts include only available tools.
 `description` and `inputSchema` are bounded, sanitized, non-secret fields with explicit
 size limits; `schemaHash` identifies the exact discovered schema. This gives the tool
 policy a durable home for UI display and restart recovery. On reconnect, the current
 `tools/list` response refreshes these fields for known tools, but new tools remain
-disabled. An enable request registers only a currently discovered tool using its current
+disabled. An enable request registers only a currently available tool using its current
 schema; if the server cannot be reached, enable fails closed rather than using stale
 execution metadata.
 
@@ -251,11 +328,28 @@ Implement the same contract in:
 - PostgreSQL tables and semantically matching migrations;
 - filesystem revisioned manifests and cleanup state.
 
+The SQLite and PostgreSQL migrations add the `available` column with the legacy-safe
+default `true`; migration/reconciliation then marks tools absent from the next
+successful discovery unavailable and disabled. Filesystem manifests persist the same
+field and semantics.
+
 The persistence contract covers user filtering, optimistic revisions, state transitions,
 tool policy replacement, pending-operation cleanup, and retryable credential cleanup.
 No adapter returns raw header values through a DTO.
 
 ## API contract
+
+The mutating API includes `PATCH /api/v1/mcp/connect/{name}` for endpoint and
+credential reconfiguration. `POST /api/v1/mcp/connect/{name}/rotate-headers` remains
+the header-only compatibility alias.
+
+Config import is a separate preview/apply workflow: preview uses
+`POST /api/v1/mcp/import/preview` and apply uses `POST /api/v1/mcp/import/apply`.
+Version 1 accepts only an authenticated browser file-picker upload through the
+preview endpoint
+as a bounded multipart request (maximum 256 KiB, or the lower configured limit),
+carrying file content and a display filename. It never accepts arbitrary filesystem
+paths, scans a server-side root, or creates a second persistence model.
 
 Preserve the existing compatibility surface while making the lifecycle explicit:
 
@@ -297,6 +391,22 @@ will no longer infer the complete response from active registry tools, and
 scripts must be updated to assert durable state, discovered count, and zero enabled
 tools until explicit activation. The separate `/mcp/status` and `/mcp/tools` endpoints
 retain their current administrative roles.
+
+### Reconfigure
+
+`PATCH /api/v1/mcp/connect/{name}` is the canonical edit contract. The expected
+revision is supplied only through the `If-MCP-Revision` header; it is not accepted in
+the JSON body. The body may contain an endpoint, replacement headers, and explicit
+credential-clear directives, and never returns header values. A request without an
+approval receipt returns a pending MCP operation; the approved request repeats
+validation and handshake before committing the replacement. `rotate-headers` uses the
+same operation, vault staging, revision, audit, and rollback behavior.
+
+The UI must show the original row while an edit is pending, indicate the pending
+operation, and replace it only after the service reports success. A failed test must
+not disconnect the current server. A successful endpoint edit may briefly drain and
+pause new invocations while the connection is swapped, then returns `CONNECTED`,
+`DEGRADED`, or `FAILED` with a bounded error code.
 
 ### Discover
 
@@ -407,6 +517,8 @@ The panel contains:
 - a Test and discover action that invokes no tool;
 - discovered-tool metadata with explicit enable/disable controls;
 - reconnect, pause/resume, rotate credentials, and remove actions;
+- Edit/reconfigure action for endpoint and credentials without deleting the connection;
+- Explicit Import MCP config action with preview and safe-file rules;
 - approval progress and safe failure remediation.
 
 Presets may prefill a verified endpoint and header name, but never a credential. Until
@@ -416,6 +528,13 @@ only. Presets are static UI metadata and do not create provider-specific code pa
 The UI uses the authenticated `ArcClient`, handles optimistic revision conflicts, and
 refreshes after approval or reconnect. It never puts secret values in URL parameters,
 browser history, local storage, draft JSON, or error messages.
+
+Edit uses a modal or inline panel with safe metadata prefilled and secret fields blank;
+it displays `Stored securely` rather than existing header values. Empty secret fields
+preserve current vault references, while an explicit clear action removes them. Test
+and save leaves the existing row active until the reconfiguration operation is
+approved and committed. It never puts secret values in URL parameters, browser
+history, local storage, draft JSON, or error messages.
 
 ## Chat and Telegram control
 
@@ -475,6 +594,7 @@ Approval requirements are explicit:
 | Connect | `MCP_CONNECT` / `NETWORK_OUTBOUND` HITL | New durable remote destination |
 | Manual reconnect | `MCP_CONNECT` / `NETWORK_OUTBOUND` HITL | New outbound handshake initiated by a user |
 | Rotate headers | `MCP_CONNECT` / `NETWORK_OUTBOUND` HITL | Credential-bearing handshake after mutation |
+| Reconfigure endpoint or credentials | `MCP_CONNECT` / `NETWORK_OUTBOUND` HITL | Changes the authorized remote destination or credential-bearing handshake |
 | Enable tools | `MCP_TOOL_ENABLE` HITL plus audit-before-mutation | Grants executable dynamic capability |
 | Disable tools | Authenticated user mutation plus audit | Removes capability; no outbound call |
 | Pause/resume | Authenticated user mutation plus audit | Changes desired lifecycle state |
@@ -511,6 +631,11 @@ confirmation and audit status but do not create a network approval task.
   secret or provider payloads.
 - New JSON/JDBI/persistence types are registered in the owning reflection config; no
   type-level reflection shortcut is introduced.
+
+Config import adds no exception to the security model: local files are untrusted input,
+import parsers are bounded and schema-validated, secrets are vault-only, and imported
+configuration still passes endpoint policy, approval, audit-before-mutation, and
+explicit tool activation.
 
 ## Delivery plan
 
@@ -555,6 +680,18 @@ confirmation and audit status but do not create a network approval task.
 - Add setup-token redemption and authenticated browser binding.
 - Add verified provider metadata only after Phase 0 documentation checks.
 
+### Phase 3A: edit and explicit config import
+
+- Add Edit connection UI for endpoint and credential changes, with masked secret
+  fields, explicit credential clearing, approval progress, rollback messaging, and
+  `If-MCP-Revision` conflict reload/retry handling.
+- Add browser `.mcp.json` upload, bounded safe preview, unsupported-entry reporting,
+  explicit apply/reject, and normal connect/reconfigure approval flow. Never expose
+  raw imported secrets or execute imported STDIO entries.
+- Reconcile `available`, `enabled`, schema hashes, counts, and registry state after
+  a successful edit or import; newly discovered or schema-changed tools remain
+  disabled.
+
 ### Phase 4: chat and Telegram parity
 
 - Extend `McpReflex` with tokenized subcommand parsing while preserving bare `/mcp`.
@@ -575,9 +712,10 @@ confirmation and audit status but do not create a network approval task.
 | Area | Minimum verification |
 | --- | --- |
 | Reflex | bare `/mcp`, subcommand parsing, unknown-command consumption, no secret echo |
-| REST | owner isolation, approval states, discover-only behavior, safe errors, lifecycle; update `McpConnectResourceTest` |
+| REST | owner isolation, approval states, discover-only behavior, safe errors, lifecycle, reconfiguration rollback, secret non-disclosure, revision conflicts; update `McpConnectResourceTest` |
 | Core MCP | `McpReflexTest`, management-service state tests, registry-limit tests, startup reconnect policy |
-| UI | add/discover/connect/enable/pause/resume/rotate/remove and revision conflicts |
+| UI | add/discover/connect/edit endpoint/edit credentials/import config/enable/pause/resume/rotate/remove, secret masking, rollback, approval progress, and revision conflicts |
+| Provenance | UI and assistant claim data was “returned by MCP” only when the current operation has correlated `MCP_TOOL_INVOKED` and `TOOL_EXECUTED` evidence |
 | Telegram | `/mcp`, approval, setup link, stale approval, channel binding, compact output |
 | Transport | initialize, initialized notification, tools/list, required SSE/Streamable HTTP |
 | Tool policy | all-discovered-disabled default, explicit enable, disable drain, reconnect policy |
@@ -661,9 +799,65 @@ second specification; the sections above remain authoritative.
 - Phase 5 external provider exercises (public no-auth, Tapetide, Sarvam).
 - Restart-safe, multi-instance durable MCP approval queue (explicit release gate below).
 
+## Implementation lessons and resolved integration risks
+
+The implementation and external MCP exercise exposed several risks that are part of
+this design, not incidental debugging details:
+
+- **Durable owner versus channel target:** after WebSocket authentication,
+  `ChannelUser.platformId` is the durable owner (`usr_...`), while `channelId` is the
+  browser platform/session identifier. Approval checkpoints intentionally retain the
+  owner for authorization. WebSocket delivery therefore maintains an explicit
+  owner-to-active-connection mapping and uses the channel target first, with owner
+  fallback for resumed replies. A sender must never assume that the authenticated
+  owner ID is a socket ID.
+- **Approval creation versus notification delivery:** a checkpoint can be correctly
+  persisted while its approval card or resumed final answer is lost at the channel
+  boundary. Durable approval state is the source of truth; the UI must refresh pending
+  operations on socket reconnect, and delivery code must test both the initial approval
+  notification and the post-approval result.
+- **Resume identity differs from initial-turn identity:** resume reconstructs channel
+  recipients from persisted checkpoint data. Tests must cover the full sequence
+  `request -> approval -> resume -> tool result -> final delivery`, not only the initial
+  approval. Owner/session lookup is required for refreshes and resumed responses.
+- **Restart and refresh are not approval replay:** process-local pending approvals may
+  be denied during startup recovery, and a missed one-time notification must not be
+  treated as a new approval. The UI must show stale/denied state and require a fresh
+  operation rather than repeatedly submitting an old task ID.
+- **Tool provenance must be explicit:** a model can produce a plausible answer from
+  conversation history after an MCP server reconnects, without invoking the tool in the
+  current turn. The UI and assistant must claim “returned by MCP” only when the current
+  operation has correlated `MCP_TOOL_INVOKED` and `TOOL_EXECUTED` evidence. A fresh
+  session is a useful diagnostic, but provenance must come from the operation trace.
+- **Local config is not a universal contract:** `.mcp.json` schemas and secret formats
+  vary across MCP clients. Treating a file in the working directory as authoritative
+  would create silent configuration drift and could execute untrusted STDIO commands.
+  Import must therefore be explicit, bounded, previewed, and normalized into the
+  normal user-scoped store/vault flow.
+- **Native runtime parity:** channel fixes are ineffective until the native binary is
+  rebuilt and restarted. Operational verification records source revision, binary
+  rebuild time, WebSocket owner mapping, approval, MCP invocation, execution, and final
+  delivery evidence in one trace.
+- **External provider behavior:** startup reconnect proves only that the server and
+  tool metadata were registered. It does not prove that a user prompt invoked the tool.
+  External validation must distinguish `MCP_SERVER_CONNECTED` from
+  `MCP_TOOL_INVOKED` and `TOOL_EXECUTED`.
+
+These risks require focused tests and log-safe correlation IDs; secret values, tool
+parameters, provider responses, and authorization headers remain excluded from logs.
+
 ## Release gates
 
 The current approval bridge is process-local. Restart-safe persistence for pending MCP approval operations is an additional gate before this ADR can move to Accepted; the in-process implementation must not be treated as production-ready across restart or multi-instance deployment.
+
+The edit/reconfiguration gate also requires endpoint and credential changes to be
+atomic, vault-safe, revision-checked, approval-aware, and covered by rollback and
+tool-policy reconciliation tests. The UI must not expose existing secret values.
+
+For the v1 browser-upload import, the additional gate is: upload size and boundary
+tests, malformed-entry tests, secret redaction tests, unsupported-STDIO tests,
+explicit apply/reject behavior, and proof that external files do not silently mutate
+durable connections.
 
 This ADR remains Proposed until the Phase 0 transport check, user-private persistence
 contract, discover/connect API split, and secure-link contract are accepted by the

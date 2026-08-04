@@ -28,7 +28,7 @@ public interface McpConnectionJdbiDao {
             + "normalized_header_name AS \"headerName\", vault_key_ref AS \"vaultKeyRef\", "
             + "created_at AS \"createdAt\", updated_at AS \"updatedAt\"";
     String POLICY_COLUMNS = "id, connection_id AS \"connectionId\", user_id AS \"userId\", tool_name AS \"toolName\", "
-            + "enabled, description, input_schema AS \"inputSchema\", "
+            + "available, enabled, description, input_schema AS \"inputSchema\", "
             + "schema_hash AS \"schemaHash\", discovered_at AS \"discoveredAt\", revision, "
             + "updated_at AS \"updatedAt\"";
 
@@ -92,11 +92,12 @@ public interface McpConnectionJdbiDao {
             @Bind("connectionId") String connectionId, @Bind("userId") String userId);
 
     @SqlUpdate("INSERT INTO mcp_connection_tool_policy "
-            + "(id, connection_id, user_id, tool_name, enabled, description, input_schema, schema_hash, "
+            + "(id, connection_id, user_id, tool_name, available, enabled, description, input_schema, schema_hash, "
             + "discovered_at, revision, updated_at) "
-            + "VALUES (:id, :connectionId, :userId, :toolName, :enabled, :description, :inputSchema, "
+            + "VALUES (:id, :connectionId, :userId, :toolName, :available, :enabled, :description, :inputSchema, "
             + ":schemaHash, :discoveredAt, :revision, :updatedAt) "
-            + "ON CONFLICT(connection_id, user_id, tool_name) DO UPDATE SET enabled = excluded.enabled, "
+            + "ON CONFLICT(connection_id, user_id, tool_name) DO UPDATE SET available = excluded.available, "
+            + "enabled = excluded.enabled, "
             + "description = excluded.description, input_schema = excluded.input_schema, "
             + "schema_hash = excluded.schema_hash, discovered_at = excluded.discovered_at, "
             + "revision = excluded.revision, updated_at = excluded.updated_at")
@@ -111,7 +112,7 @@ public interface McpConnectionJdbiDao {
 
     @SqlUpdate("UPDATE mcp_connection_tool_policy SET enabled = :enabled, revision = revision + 1, "
             + "updated_at = :updatedAt WHERE connection_id = :connectionId AND user_id = :userId "
-            + "AND tool_name = :toolName")
+            + "AND tool_name = :toolName AND available = TRUE")
     int setToolEnabled(
             @Bind("connectionId") String connectionId,
             @Bind("userId") String userId,

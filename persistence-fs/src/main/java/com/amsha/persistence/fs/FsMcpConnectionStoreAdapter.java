@@ -128,7 +128,7 @@ public class FsMcpConnectionStoreAdapter implements McpConnectionStorePort {
         Optional<McpConnectionToolPolicyDto> existing = listToolPolicies(connectionId, userId).stream()
                 .filter(policy -> toolName.equals(policy.toolName()))
                 .findFirst();
-        if (existing.isEmpty()) return 0;
+        if (existing.isEmpty() || !existing.get().available()) return 0;
         McpConnectionToolPolicyDto policy = existing.get();
         store.write(
                 List.of(DOMAIN, "tool-policies", connectionId, policyFileName(toolName)),
@@ -137,6 +137,7 @@ public class FsMcpConnectionStoreAdapter implements McpConnectionStorePort {
                         policy.connectionId(),
                         policy.userId(),
                         policy.toolName(),
+                        policy.available(),
                         enabled,
                         policy.description(),
                         policy.inputSchema(),

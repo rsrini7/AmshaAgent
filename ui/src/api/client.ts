@@ -5,6 +5,7 @@ import { PendingApprovalDto, ApprovalResultDto, ToolDto } from './types';
 export interface McpToolPolicy {
   id: string;
   toolName: string;
+  available?: boolean;
   enabled: boolean;
   description: string;
   inputSchema: string;
@@ -28,6 +29,21 @@ export interface McpDiscoveryPreview {
   endpoint: string;
   transport: string;
   tools: Array<{ name: string; description: string; inputSchema: string; schemaHash: string }>;
+}
+
+export interface McpImportEntry {
+  name: string;
+  endpoint: string;
+  transport: string;
+  supported: boolean;
+  reason: string;
+}
+
+export interface McpImportPreview {
+  operationId: string;
+  fileName: string;
+  entries: McpImportEntry[];
+  expiresAt: string;
 }
 
 export interface McpPendingApproval {
@@ -67,10 +83,13 @@ export class ArcClient {
   }
 
   private async request<T>(endpoint: string, options?: RequestInit): Promise<T> {
+    const headers = new Headers(this.headers());
+    new Headers(options?.headers).forEach((value, key) => headers.set(key, value));
+    if (options?.body instanceof FormData) headers.delete('Content-Type');
     const res = await fetch(`${this.baseUrl}${endpoint}`, {
       ...options,
       credentials: 'include',
-      headers: { ...this.headers(), ...options?.headers }
+      headers,
     });
     if (!res.ok) {
       const errorData = await res.json().catch(() => ({}));
@@ -124,6 +143,41 @@ export class ArcClient {
     return this.request<McpConnection | McpPendingApproval>('/mcp/connect', {
       method: 'POST',
       body: JSON.stringify({ name, url, headers }),
+    });
+  }
+
+  async reconfigureMcp(
+    name: string,
+    url: string,
+    headers: Record<string, string> = {},
+    revision?: number
+  ): Promise<McpConnection | McpPendingApproval> {
+    return this.request<McpConnection | McpPendingApproval>(`/mcp/connect/${encodeURIComponent(name)}`, {
+      method: 'PATCH',
+      headers: { ...this.headers(), ...this.revisionHeaders(revision) },
+      body: JSON.stringify({ url, headers }),
+    });
+  }
+
+  async previewMcpConfig(file: File): Promise<McpImportPreview> {
+    const form = new FormData();
+    form.append('file', file, file.name);
+    return this.request<McpImportPreview>('/mcp/import/preview', {
+      method: 'POST',
+      body: form,
+    });
+  }
+
+  async applyMcpImport(
+    operationId: string,
+    name: string,
+    headers: Record<string, string> = {},
+    revision?: number
+  ): Promise<McpPendingApproval> {
+    return this.request<McpPendingApproval>('/mcp/import/apply', {
+      method: 'POST',
+      headers: this.revisionHeaders(revision),
+      body: JSON.stringify({ operationId, name, headers }),
     });
   }
 
