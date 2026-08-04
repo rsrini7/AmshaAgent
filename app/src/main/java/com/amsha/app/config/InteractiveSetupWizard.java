@@ -9,11 +9,13 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.security.SecureRandom;
+import java.util.Arrays;
 import java.util.Base64;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import com.amsha.app.util.CliUtils;
 import com.amsha.app.util.VarSpec;
@@ -84,7 +86,7 @@ public class InteractiveSetupWizard {
 
             System.err.println();
             System.err.println("╔══════════════════════════════════════════════════════════╗");
-            System.err.println("║         Amsha Agent - First-Run Interactive Setup            ║");
+            System.err.println("║         Amsha Agent - First-Run Interactive Setup        ║");
             System.err.println("╚══════════════════════════════════════════════════════════╝");
             System.err.println();
             System.err.println("  " + missing.size() + " required value(s) need configuration.");
@@ -158,12 +160,42 @@ public class InteractiveSetupWizard {
                 .orElse("groq");
         EnvConfigInitializer.patchEnvFile(
                 envFile, "AMSHA_LLM_PROVIDER", provider, EnvConfigInitializer.PatchMode.UPDATE);
-        EnvConfigInitializer.patchEnvFile(
-                envFile, "AMSHA_INFINITE_LOOP_LLM_PROVIDERS", provider, EnvConfigInitializer.PatchMode.UPDATE);
-        EnvConfigInitializer.patchEnvFile(
-                envFile, "AMSHA_INFINITE_LOOP_COMPACTION_PROVIDERS", provider, EnvConfigInitializer.PatchMode.UPDATE);
-        EnvConfigInitializer.patchEnvFile(
-                envFile, "AMSHA_INFINITE_LOOP_CLASSIFIER_PROVIDERS", provider, EnvConfigInitializer.PatchMode.UPDATE);
+        boolean infiniteLoop = provider.equalsIgnoreCase("infinite-loop");
+        patchProviderList(
+                envFile,
+                "AMSHA_INFINITE_LOOP_LLM_PROVIDERS",
+                infiniteLoop
+                        ? configuredProviderList("AMSHA_INFINITE_LOOP_LLM_PROVIDERS", "omlx,groq,openrouter")
+                        : provider);
+        patchProviderList(
+                envFile,
+                "AMSHA_INFINITE_LOOP_COMPACTION_PROVIDERS",
+                infiniteLoop
+                        ? configuredProviderList("AMSHA_INFINITE_LOOP_COMPACTION_PROVIDERS", "groq,ollama")
+                        : provider);
+        patchProviderList(
+                envFile,
+                "AMSHA_INFINITE_LOOP_CLASSIFIER_PROVIDERS",
+                infiniteLoop
+                        ? configuredProviderList("AMSHA_INFINITE_LOOP_CLASSIFIER_PROVIDERS", "groq,ollama")
+                        : provider);
+    }
+
+    private static void patchProviderList(Path envFile, String key, String value) {
+        EnvConfigInitializer.patchEnvFile(envFile, key, value, EnvConfigInitializer.PatchMode.UPDATE);
+        System.setProperty(key, value);
+    }
+
+    private static String configuredProviderList(String key, String fallback) {
+        String configured = Optional.ofNullable(System.getProperty(key))
+                .or(() -> Optional.ofNullable(System.getenv(key)))
+                .orElse("");
+        String providers = Arrays.stream(configured.split(","))
+                .map(String::trim)
+                .filter(value -> !value.isBlank())
+                .filter(value -> !value.equalsIgnoreCase("infinite-loop"))
+                .collect(Collectors.joining(","));
+        return providers.isBlank() ? fallback : providers;
     }
 
     private static boolean shouldPromptUnifiedKey(List<VarSpec> missing) {

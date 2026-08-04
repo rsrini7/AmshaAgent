@@ -145,8 +145,11 @@ public class CliUtils {
             if (!isSet(spec.key())) missing.add(spec);
         }
 
-        for (VarSpec spec : TELEGRAM_VARS) {
-            if (!isSet(spec.key())) missing.add(spec);
+        boolean attachMode = args != null && args.length > 0 && "attach".equalsIgnoreCase(args[0]);
+        if (attachMode || !isExplicitOptOut("AMSHA_TELEGRAM_ENABLED")) {
+            for (VarSpec spec : TELEGRAM_VARS) {
+                if (!isSet(spec.key())) missing.add(spec);
+            }
         }
 
         if (!isSet("AMSHA_TOOLS_GITHUB_TOKEN") && !isExplicitOptOut("AMSHA_TOOLS_GITHUB_TOKEN")) {

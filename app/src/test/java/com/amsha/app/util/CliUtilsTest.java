@@ -281,6 +281,33 @@ class CliUtilsTest {
     }
 
     @Test
+    void getMissingVarSpecs_telegramDisabled_doesNotRequireTelegramFields() {
+        setAllVars();
+        System.clearProperty("TELEGRAM_BOT_TOKEN");
+        System.clearProperty("AMSHA_TELEGRAM_ALLOWED_USER_IDS");
+        System.clearProperty("AMSHA_TELEGRAM_ALLOWED_USERS");
+        System.setProperty("AMSHA_TELEGRAM_ENABLED", "false");
+
+        List<VarSpec> missing = CliUtils.getMissingVarSpecs(new String[] {});
+
+        assertTrue(missing.stream().noneMatch(spec -> spec.key().startsWith("TELEGRAM_")));
+        assertTrue(missing.stream().noneMatch(spec -> spec.key().startsWith("AMSHA_TELEGRAM_")));
+    }
+
+    @Test
+    void getMissingVarSpecs_attachModeStillRequiresTelegramFields() {
+        setAllVars();
+        System.clearProperty("TELEGRAM_BOT_TOKEN");
+        System.clearProperty("AMSHA_TELEGRAM_ALLOWED_USER_IDS");
+        System.clearProperty("AMSHA_TELEGRAM_ALLOWED_USERS");
+        System.setProperty("AMSHA_TELEGRAM_ENABLED", "false");
+
+        List<VarSpec> missing = CliUtils.getMissingVarSpecs(new String[] {"attach"});
+
+        assertTrue(missing.stream().anyMatch(spec -> spec.key().equals("TELEGRAM_BOT_TOKEN")));
+    }
+
+    @Test
     void testWarnTelegramIfPartial() throws Exception {
         Method warnMethod = CliUtils.class.getDeclaredMethod("warnTelegramIfPartial");
         warnMethod.setAccessible(true);
