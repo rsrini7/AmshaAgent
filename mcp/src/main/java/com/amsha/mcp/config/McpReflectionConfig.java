@@ -15,10 +15,10 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
 @RegisterForReflection(
         classNames = {
             "com.amsha.mcp.transport.McpClientService$DiscoveredTool",
-            "com.amsha.mcp.transport.McpManagementService$ConnectionSnapshot",
-            "com.amsha.mcp.transport.McpManagementService$ApprovalExecution",
-            "com.amsha.mcp.transport.McpManagementService$DiscoveryPreview",
-            "com.amsha.mcp.transport.McpManagementService$ToolPreview",
+            "com.amsha.mcp.transport.McpManagementServiceModels$ConnectionSnapshot",
+            "com.amsha.mcp.transport.McpManagementServiceModels$ApprovalExecution",
+            "com.amsha.mcp.transport.McpManagementServiceModels$DiscoveryPreview",
+            "com.amsha.mcp.transport.McpManagementServiceModels$ToolPreview",
             "com.amsha.mcp.transport.McpConfigImportService$ImportPreview",
             "com.amsha.mcp.transport.McpConfigImportService$ImportEntry",
             "com.amsha.mcp.transport.McpApprovalService$PendingApproval",

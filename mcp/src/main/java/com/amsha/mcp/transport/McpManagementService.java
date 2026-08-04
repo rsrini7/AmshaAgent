@@ -12,11 +12,10 @@ import com.amsha.core.security.OutboundPurpose;
 import com.amsha.core.tools.ToolCategory;
 import com.amsha.mcp.tool.DynamicToolCapabilityRegistry;
 import com.amsha.persistence.api.McpConnectionDto;
-import com.amsha.persistence.api.McpConnectionToolPolicyDto;
 
 /** Shared, user-scoped orchestration for MCP lifecycle surfaces. */
 @ApplicationScoped
-public class McpManagementService {
+public class McpManagementService extends McpManagementServiceModels {
     public static final String STATE_DISCONNECTED = "DISCONNECTED";
     public static final String STATE_PENDING_APPROVAL = "PENDING_APPROVAL";
     public static final String STATE_CONNECTING = "CONNECTING";
@@ -31,6 +30,7 @@ public class McpManagementService {
     private final McpApprovalService approvalService;
     private final McpManagementConnectionSetup connectionSetup;
     private final McpManagementConnectionOperations connectionOperations;
+    private final McpManagementServiceQueries queries;
 
     @Inject
     public McpManagementService(
@@ -45,6 +45,7 @@ public class McpManagementService {
         this.approvalService = approvalService;
         this.connectionSetup = new McpManagementConnectionSetup(clientService, lifecycleService, support);
         this.connectionOperations = new McpManagementConnectionOperations(clientService, lifecycleService, support);
+        this.queries = new McpManagementServiceQueries(lifecycleService, support);
     }
 
     public McpApprovalService.PendingApproval requestDiscovery(
@@ -230,10 +231,7 @@ public class McpManagementService {
     }
 
     public List<ConnectionSnapshot> list(String userId) {
-        if (McpManagementSupport.isBlank(userId)) return List.of();
-        return lifecycleService.listByUserId(userId).stream()
-                .map(support::snapshot)
-                .toList();
+        return queries.list(userId);
     }
 
     /** Throwaway preview: no durable connection, policy row, vault ref, or runtime session remains. */
@@ -496,29 +494,6 @@ public class McpManagementService {
     }
 
     public List<ToolPreview> listTools(String userId, String name) {
-        McpConnectionDto connection = support.findConnection(userId, name);
-        return lifecycleService.listToolPolicies(connection.id(), userId).stream()
-                .filter(McpConnectionToolPolicyDto::available)
-                .map(policy -> new ToolPreview(
-                        policy.toolName(), policy.description(), policy.inputSchema(), policy.schemaHash()))
-                .toList();
+        return queries.listTools(userId, name);
     }
-
-    public record ConnectionSnapshot(
-            String name,
-            String endpoint,
-            String state,
-            String transport,
-            long enabledToolCount,
-            long discoveredToolCount,
-            long revision,
-            List<McpConnectionToolPolicyDto> tools) {}
-
-    public record DiscoveryPreview(String name, String endpoint, String transport, List<ToolPreview> tools) {}
-
-    public record ToolPreview(String name, String description, String inputSchema, String schemaHash) {}
-
-    public record DisconnectResult(boolean deregistered, int toolsRemoved) {}
-
-    public record ApprovalExecution(String taskId, String operation, Object result) {}
 }
