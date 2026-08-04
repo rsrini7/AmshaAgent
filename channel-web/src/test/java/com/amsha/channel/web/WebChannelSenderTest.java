@@ -21,6 +21,9 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
+import io.quarkus.websockets.next.WebSocketConnection;
+import io.smallrye.mutiny.Uni;
+
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
 class WebChannelSenderTest {
@@ -51,10 +54,25 @@ class WebChannelSenderTest {
     @Test
     void testSendRawNoSession() {
         ChannelUser user = new ChannelUser("usr1", "ws-plat-1", "user", ChannelType.WEBSOCKET);
-        when(sessionStore.get("usr1")).thenReturn(Optional.empty());
-        when(sessionStore.getAmshaSessionId("usr1")).thenReturn(Optional.empty());
+        when(sessionStore.get("ws-plat-1")).thenReturn(Optional.empty());
+        when(sessionStore.getAmshaSessionId("ws-plat-1")).thenReturn(Optional.empty());
 
         assertDoesNotThrow(() -> sender.sendRaw(user, "Hello text"));
+    }
+
+    @Test
+    void testSendRawUsesChannelIdForWebSocketSession() {
+        WebSocketConnection connection = mock(WebSocketConnection.class);
+        when(connection.sendText(anyString())).thenReturn(Uni.createFrom().nullItem());
+        when(sessionStore.get("ws-plat-1")).thenReturn(Optional.of(connection));
+
+        ChannelUser user = new ChannelUser("usr1", "ws-plat-1", "user", ChannelType.WEBSOCKET);
+
+        sender.sendRaw(user, "Approval required");
+
+        verify(sessionStore).get("ws-plat-1");
+        verify(connection).sendText(anyString());
+        verify(sessionStore, never()).get("usr1");
     }
 
     @Test

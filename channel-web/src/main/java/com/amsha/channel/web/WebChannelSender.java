@@ -58,7 +58,9 @@ public class WebChannelSender implements ChannelSender {
 
     private void sendRawWithSession(ChannelUser recipient, String text, ApprovalPrompt prompt) {
         String payload = buildMessageJson(text, prompt);
-        String platformId = recipient.platformId();
+        // WebSocket ChannelUser.platformId is the durable owner after authentication.
+        // The active socket is addressed by the channel-specific browser platform ID.
+        String platformId = recipient.channelId();
 
         sessionStore
                 .get(platformId)
