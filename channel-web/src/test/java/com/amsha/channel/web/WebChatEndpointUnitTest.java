@@ -57,7 +57,7 @@ class WebChatEndpointUnitTest {
         when(conn.sendText(anyString())).thenReturn(Uni.createFrom().voidItem());
 
         assertDoesNotThrow(() -> endpoint.onOpen(conn));
-        verify(sessionStore).register("plat-1", "amsha-sess-1", conn);
+        verify(sessionStore).register("plat-1", "amsha-sess-1", "plat-1", conn);
     }
 
     @Test

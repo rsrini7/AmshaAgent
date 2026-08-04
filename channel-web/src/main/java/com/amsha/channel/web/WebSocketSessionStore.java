@@ -31,6 +31,9 @@ public class WebSocketSessionStore {
     // connId → amshaSessionId
     private final Map<String, String> connToAmshaSession = new ConcurrentHashMap<>();
 
+    // connId → durable owner key used by authenticated channel messages
+    private final Map<String, String> connToOwner = new ConcurrentHashMap<>();
+
     // connId → WebSocketConnection (direct lookup to avoid O(n) scans)
     private final Map<String, WebSocketConnection> connIdToConnection = new ConcurrentHashMap<>();
 
@@ -38,9 +41,14 @@ public class WebSocketSessionStore {
     private final Map<String, String> platformToAmsha = new ConcurrentHashMap<>();
 
     public void register(String platformId, String amshaSessionId, WebSocketConnection conn) {
+        register(platformId, amshaSessionId, platformId, conn);
+    }
+
+    public void register(String platformId, String amshaSessionId, String ownerKeyName, WebSocketConnection conn) {
         platformToSession.put(platformId, conn);
         platformToAmsha.put(platformId, amshaSessionId);
         connToAmshaSession.put(conn.id(), amshaSessionId);
+        connToOwner.put(conn.id(), ownerKeyName);
         connIdToConnection.put(conn.id(), conn);
     }
 
@@ -48,6 +56,7 @@ public class WebSocketSessionStore {
         WebSocketConnection conn = platformToSession.remove(platformId);
         if (conn != null) {
             connToAmshaSession.remove(conn.id());
+            connToOwner.remove(conn.id());
             connIdToConnection.remove(conn.id());
         }
         platformToAmsha.remove(platformId);
@@ -71,6 +80,16 @@ public class WebSocketSessionStore {
                 .toList();
     }
 
+    public List<WebSocketConnection> getConnectionsByOwner(String ownerKeyName) {
+        if (ownerKeyName == null) return Collections.emptyList();
+
+        return connToOwner.entrySet().stream()
+                .filter(entry -> ownerKeyName.equals(entry.getValue()))
+                .map(entry -> findConnectionById(entry.getKey()))
+                .filter(Objects::nonNull)
+                .toList();
+    }
+
     private WebSocketConnection findConnectionById(String connId) {
         return connIdToConnection.get(connId);
     }
@@ -89,6 +108,7 @@ public class WebSocketSessionStore {
         });
         platformToSession.clear();
         connToAmshaSession.clear();
+        connToOwner.clear();
         platformToAmsha.clear();
         connIdToConnection.clear();
     }

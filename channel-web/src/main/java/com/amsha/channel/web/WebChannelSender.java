@@ -76,6 +76,13 @@ public class WebChannelSender implements ChannelSender {
                         () -> {
                             // If the direct platformId is stale (e.g. refresh), try a broadcast based on the sessionId
                             // that is known to exist for the user's platform reference (§85-C)
+                            List<WebSocketConnection> ownerConnections =
+                                    sessionStore.getConnectionsByOwner(recipient.platformId());
+                            if (!ownerConnections.isEmpty()) {
+                                sendToConnections(ownerConnections, payload, recipient.platformId());
+                                return;
+                            }
+
                             sessionStore
                                     .getAmshaSessionId(platformId)
                                     .ifPresentOrElse(
@@ -112,6 +119,15 @@ public class WebChannelSender implements ChannelSender {
         } else {
             log.warnf("WebChannelSender: no active connections found for session %s (async result dropped)", sessionId);
         }
+    }
+
+    private void sendToConnections(List<WebSocketConnection> connections, String payload, String targetId) {
+        connections.forEach(conn -> conn.sendText(payload)
+                .subscribe()
+                .with(
+                        _ -> {},
+                        err -> log.warnf(
+                                "Failed push result target %s conn %s: %s", targetId, conn.id(), err.getMessage())));
     }
 
     private String buildMessageJson(String text, ApprovalPrompt prompt) {

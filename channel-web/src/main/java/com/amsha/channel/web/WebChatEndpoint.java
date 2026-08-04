@@ -136,7 +136,7 @@ public class WebChatEndpoint {
         connections.put(conn.id(), new ConnectionState(platformId, effectiveSessionId, true, ownerKeyName));
 
         // Track connection and mapping in the globally accessible store (§85-C)
-        sessionStore.register(platformId, effectiveSessionId, conn);
+        sessionStore.register(platformId, effectiveSessionId, ownerKeyName, conn);
 
         // §85-B: Proactively initialize session presence in the heartbeat tracker.
         channelServices.recordHeartbeat(effectiveSessionId);

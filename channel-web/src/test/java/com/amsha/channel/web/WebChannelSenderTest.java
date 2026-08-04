@@ -55,6 +55,7 @@ class WebChannelSenderTest {
     void testSendRawNoSession() {
         ChannelUser user = new ChannelUser("usr1", "ws-plat-1", "user", ChannelType.WEBSOCKET);
         when(sessionStore.get("ws-plat-1")).thenReturn(Optional.empty());
+        when(sessionStore.getConnectionsByOwner("usr1")).thenReturn(List.of());
         when(sessionStore.getAmshaSessionId("ws-plat-1")).thenReturn(Optional.empty());
 
         assertDoesNotThrow(() -> sender.sendRaw(user, "Hello text"));
@@ -73,6 +74,21 @@ class WebChannelSenderTest {
         verify(sessionStore).get("ws-plat-1");
         verify(connection).sendText(anyString());
         verify(sessionStore, never()).get("usr1");
+    }
+
+    @Test
+    void testSendRawUsesOwnerLookupWhenResumedChannelIdIsOwner() {
+        WebSocketConnection connection = mock(WebSocketConnection.class);
+        when(connection.sendText(anyString())).thenReturn(Uni.createFrom().nullItem());
+        when(sessionStore.get("usr1")).thenReturn(Optional.empty());
+        when(sessionStore.getConnectionsByOwner("usr1")).thenReturn(List.of(connection));
+
+        ChannelUser user = new ChannelUser("usr1", "usr1", "user", ChannelType.WEBSOCKET);
+
+        sender.sendRaw(user, "Final answer");
+
+        verify(sessionStore).getConnectionsByOwner("usr1");
+        verify(connection).sendText(anyString());
     }
 
     @Test
