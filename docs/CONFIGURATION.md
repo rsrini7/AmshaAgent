@@ -505,6 +505,10 @@ schema) and must match the model used by every active provider.
 | `AMSHA_OPENROUTER_APP_NAME` | (repo URL) | OpenRouter app name |
 | `AMSHA_OPENROUTER_SITE_URL` | (repo URL) | OpenRouter site URL |
 
+## Interactive `.env` changes
+
+The first-run setup only changes `.env` through the interactive wizard. Each actual update is reported on stderr with the absolute path, key name, and redacted state transition (`<unset>`, `<set>`, or `disabled`); secret values are never printed. The same records are appended to `.env.changes.log` beside `.env`. Choosing `No` for an optional integration stores an explicit `none` opt-out so it is not prompted again. Commenting out a variable makes it unset, so it remains eligible for setup.
+
 ## Testing
 
 | Property / Variable | Default | Description |

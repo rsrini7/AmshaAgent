@@ -75,7 +75,10 @@ public class InteractiveSetupWizard {
 
         if (!Files.exists(envFile)) {
             try (InputStream in = InteractiveSetupWizard.class.getResourceAsStream("/env-example")) {
-                if (in != null) Files.copy(in, envFile, StandardCopyOption.REPLACE_EXISTING);
+                if (in != null) {
+                    Files.copy(in, envFile, StandardCopyOption.REPLACE_EXISTING);
+                    EnvConfigInitializer.reportEnvFileCreated(envFile, "bundled .env.example template");
+                }
             } catch (IOException e) {
                 log.debugf("Failed to seed .env from example: %s", LogUtil.rootMessage(e));
             }
@@ -111,11 +114,11 @@ public class InteractiveSetupWizard {
                 }
 
                 if (spec.key().equals("AMSHA_TOOLS_GITHUB_TOKEN")
-                        && !promptOptionalModule(spec.key(), "GitHub repository access")) continue;
+                        && !promptOptionalModule(envFile, spec.key(), "GitHub repository access")) continue;
                 if (spec.key().equals("AMSHA_TOOLS_SERPER_API_KEY")
-                        && !promptOptionalModule(spec.key(), "Serper Search Integration")) continue;
+                        && !promptOptionalModule(envFile, spec.key(), "Serper Search Integration")) continue;
                 if (spec.key().equals("AMSHA_TOOLS_BRAVE_API_KEY")
-                        && !promptOptionalModule(spec.key(), "Brave Search Integration")) continue;
+                        && !promptOptionalModule(envFile, spec.key(), "Brave Search Integration")) continue;
 
                 promptVariable(envFile, spec);
             }
@@ -308,10 +311,17 @@ public class InteractiveSetupWizard {
         return enabled;
     }
 
-    private static boolean promptOptionalModule(String key, String label) {
+    private static boolean promptOptionalModule(Path envFile, String key, String label) {
         System.err.println("  ┌─ " + label);
         String response = readLineWithFallback(System.console(), "  └─ Configure " + key + "? [y/N]: ");
-        return response != null && response.trim().toLowerCase(Locale.ROOT).startsWith("y");
+        boolean enabled =
+                response != null && response.trim().toLowerCase(Locale.ROOT).startsWith("y");
+        if (!enabled) {
+            EnvConfigInitializer.patchEnvFile(envFile, key, "none", EnvConfigInitializer.PatchMode.UPDATE);
+            System.setProperty(key, "none");
+            System.err.println(" ✓ Disabled; saved explicit opt-out.");
+        }
+        return enabled;
     }
 
     private static void promptVariable(Path envFile, VarSpec spec) {

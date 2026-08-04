@@ -47,6 +47,7 @@ lib/
 
 # Environment Variables
 .env
+.env.changes.log
 .env.local
 .env.build*
 .env.backup*
