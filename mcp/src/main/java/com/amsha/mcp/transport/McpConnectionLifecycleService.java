@@ -149,17 +149,17 @@ public class McpConnectionLifecycleService {
                         dynamicToolRegistry, connection.userId(), connection.name());
                 List<McpConnectionHeaderSecretRefDto> refs =
                         store.get().listHeaderSecretRefs(connection.id(), connection.userId());
-                runInUserVaultScope(
-                        connection.userId(),
-                        () -> mcpClientService.configureHeaderSecretRefs(connection.name(), connection.userId(), refs));
-                mcpClientService.connectForUserWithEnabledTools(
-                        connection.name(),
-                        connection.userId(),
-                        connection.endpoint(),
-                        ToolCategory.valueOf(connection.category()),
-                        Map.of(),
-                        true,
-                        enabledToolNames);
+                runInUserVaultScope(connection.userId(), () -> {
+                    mcpClientService.configureHeaderSecretRefs(connection.name(), connection.userId(), refs);
+                    mcpClientService.connectForUserWithEnabledTools(
+                            connection.name(),
+                            connection.userId(),
+                            connection.endpoint(),
+                            ToolCategory.valueOf(connection.category()),
+                            Map.of(),
+                            true,
+                            enabledToolNames);
+                });
                 McpConnectionStartupSupport.reconcileToolPolicies(
                         dynamicToolRegistry, store.get(), connection, enabledToolNames);
                 store.get()
@@ -258,17 +258,30 @@ public class McpConnectionLifecycleService {
             McpConnectionStorePort port, String name, String url, ToolCategory category, String userId) {
         Instant now = Instant.now();
         Optional<McpConnectionDto> existing = port.findByNameAndUserId(name, userId);
-        McpConnectionDto connection = new McpConnectionDto(
-                existing.map(McpConnectionDto::id)
-                        .orElseGet(() -> UUID.randomUUID().toString()),
-                userId,
-                name,
-                McpTransportType.HTTP_SSE.name(),
-                url,
-                category.name(),
-                true,
-                existing.map(McpConnectionDto::createdAt).orElse(now),
-                now);
+        McpConnectionDto connection = existing.map(previous -> new McpConnectionDto(
+                        previous.id(),
+                        userId,
+                        name,
+                        McpTransportType.HTTP_SSE.name(),
+                        url,
+                        category.name(),
+                        previous.enabled(),
+                        previous.state(),
+                        previous.approvalTaskId(),
+                        previous.revision(),
+                        previous.lastErrorCode(),
+                        previous.createdAt(),
+                        now))
+                .orElseGet(() -> new McpConnectionDto(
+                        UUID.randomUUID().toString(),
+                        userId,
+                        name,
+                        McpTransportType.HTTP_SSE.name(),
+                        url,
+                        category.name(),
+                        true,
+                        now,
+                        now));
         port.save(connection);
         return connection;
     }
@@ -493,7 +506,7 @@ public class McpConnectionLifecycleService {
      * explicitly. The vault key is derived from the stable per-user scope id, keeping secrets
      * decryptable across restarts and requests.
      */
-    private void runInUserVaultScope(String userId, Runnable action) {
+    void runInUserVaultScope(String userId, Runnable action) {
         WorkspaceScopeHolder.run(VaultConstants.USER_VAULT_SCOPE_PREFIX + userId, userId, null, action);
     }
 

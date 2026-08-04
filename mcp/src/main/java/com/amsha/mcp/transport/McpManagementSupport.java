@@ -8,10 +8,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import com.amsha.core.audit.AuditService;
 import com.amsha.core.audit.SecurityEventType;
+import com.amsha.core.scope.WorkspaceScopeHolder;
+import com.amsha.core.security.VaultConstants;
 import com.amsha.mcp.tool.DynamicToolCapabilityRegistry;
 import com.amsha.persistence.api.McpConnectionDto;
 import com.amsha.persistence.api.McpConnectionHeaderSecretRefDto;
@@ -111,6 +114,25 @@ final class McpManagementSupport {
         }
     }
 
+    long checkApprovalRevision(McpConnectionDto connection, Long expectedRevision, String approvalTaskId) {
+        if (approvalTaskId == null) {
+            checkRevision(connection, expectedRevision);
+            return connection.revision();
+        }
+        if (!McpManagementService.STATE_PENDING_APPROVAL.equals(connection.state())
+                || !approvalTaskId.equals(connection.approvalTaskId())) {
+            throw new McpRevisionConflictException(
+                    expectedRevision == null ? connection.revision() + 1 : expectedRevision + 1, connection.revision());
+        }
+        if (expectedRevision != null) {
+            long pendingRevision = expectedRevision + 1;
+            if (pendingRevision != connection.revision()) {
+                throw new McpRevisionConflictException(pendingRevision, connection.revision());
+            }
+        }
+        return connection.revision();
+    }
+
     void audit(String userId, SecurityEventType type, String details) {
         auditService.recordMandatory("mcp-management", userId, "system", type, details);
     }
@@ -135,6 +157,21 @@ final class McpManagementSupport {
     void validateRequest(String name, String endpoint, Map<String, String> headers) {
         requireName(name);
         lifecycleService.validateHttpRegistration(endpoint, headers == null ? Map.of() : headers);
+    }
+
+    <T> T runInUserVaultScope(String userId, Supplier<T> action) {
+        try {
+            return WorkspaceScopeHolder.call(
+                    VaultConstants.USER_VAULT_SCOPE_PREFIX + userId, userId, null, action::get);
+        } catch (RuntimeException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new McpConnectionException("MCP vault scope operation failed", e);
+        }
+    }
+
+    void runInUserVaultScope(String userId, Runnable action) {
+        WorkspaceScopeHolder.run(VaultConstants.USER_VAULT_SCOPE_PREFIX + userId, userId, null, action);
     }
 
     void markPendingIfPresent(String userId, String name, String taskId) {

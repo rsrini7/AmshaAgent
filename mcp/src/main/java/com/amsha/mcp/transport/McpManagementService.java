@@ -12,7 +12,6 @@ import com.amsha.core.audit.SecurityEventType;
 import com.amsha.core.security.OutboundPurpose;
 import com.amsha.core.tools.ToolCategory;
 import com.amsha.mcp.tool.DynamicToolCapabilityRegistry;
-import com.amsha.mcp.tool.McpTransportType;
 import com.amsha.persistence.api.McpConnectionDto;
 import com.amsha.persistence.api.McpConnectionToolPolicyDto;
 
@@ -31,6 +30,7 @@ public class McpManagementService {
     private final McpConnectionLifecycleService lifecycleService;
     private final McpManagementSupport support;
     private final McpApprovalService approvalService;
+    private final McpManagementConnectionSetup connectionSetup;
 
     @Inject
     public McpManagementService(
@@ -43,6 +43,7 @@ public class McpManagementService {
         this.lifecycleService = lifecycleService;
         this.support = new McpManagementSupport(clientService, lifecycleService, registry, auditService);
         this.approvalService = approvalService;
+        this.connectionSetup = new McpManagementConnectionSetup(clientService, lifecycleService, support);
     }
 
     public McpApprovalService.PendingApproval requestDiscovery(
@@ -127,14 +128,14 @@ public class McpManagementService {
         Object result =
                 switch (operation.operation()) {
                     case DISCOVER ->
-                        discoverWithApproval(
+                        connectionSetup.discoverWithApproval(
                                 userId,
                                 operation.name(),
                                 operation.endpoint(),
                                 operation.headers(),
                                 operation.receiptToken());
                     case CONNECT ->
-                        connectNewWithApproval(
+                        connectionSetup.connectNewWithApproval(
                                 userId,
                                 operation.name(),
                                 operation.endpoint(),
@@ -142,21 +143,27 @@ public class McpManagementService {
                                 operation.receiptToken());
                     case RECONNECT ->
                         connectWithApproval(
-                                userId, operation.name(), operation.receiptToken(), operation.expectedRevision());
+                                userId,
+                                operation.name(),
+                                operation.receiptToken(),
+                                operation.expectedRevision(),
+                                operation.taskId());
                     case ROTATE_HEADERS ->
                         rotateHeadersWithApproval(
                                 userId,
                                 operation.name(),
                                 operation.headers(),
                                 operation.receiptToken(),
-                                operation.expectedRevision());
+                                operation.expectedRevision(),
+                                operation.taskId());
                     case ENABLE_TOOL ->
                         enableToolWithApproval(
                                 userId,
                                 operation.name(),
                                 operation.toolName(),
                                 operation.receiptToken(),
-                                operation.expectedRevision());
+                                operation.expectedRevision(),
+                                operation.taskId());
                 };
         return new ApprovalExecution(operation.taskId(), operation.operation().name(), result);
     }
@@ -188,88 +195,23 @@ public class McpManagementService {
     /** Throwaway preview: no durable connection, policy row, vault ref, or runtime session remains. */
     public DiscoveryPreview discover(
             String userId, String name, String endpoint, Map<String, String> headers, boolean preApproved) {
-        return discoverInternal(userId, name, endpoint, headers, preApproved, null);
+        return connectionSetup.discover(userId, name, endpoint, headers, preApproved);
     }
 
     public DiscoveryPreview discoverWithApproval(
             String userId, String name, String endpoint, Map<String, String> headers, String approvalToken) {
-        return discoverInternal(userId, name, endpoint, headers, false, approvalToken);
-    }
-
-    private DiscoveryPreview discoverInternal(
-            String userId,
-            String name,
-            String endpoint,
-            Map<String, String> headers,
-            boolean preApproved,
-            String approvalToken) {
-        McpManagementSupport.requireUser(userId);
-        McpManagementSupport.requireName(name);
-        Map<String, String> safeHeaders = headers == null ? Map.of() : Map.copyOf(headers);
-        if (approvalToken == null) lifecycleService.validateHttpRegistration(endpoint, safeHeaders);
-        try {
-            List<McpClientService.DiscoveredTool> tools = approvalToken == null
-                    ? clientService.discoverForUser(
-                            name, userId, endpoint, ToolCategory.NETWORK, safeHeaders, preApproved)
-                    : clientService.discoverForUser(
-                            name, userId, endpoint, ToolCategory.NETWORK, safeHeaders, approvalToken);
-            support.audit(userId, SecurityEventType.MCP_CONNECTION_REQUESTED, "server=" + name + " operation=discover");
-            return new DiscoveryPreview(
-                    name,
-                    endpoint,
-                    McpTransportType.HTTP_SSE.name(),
-                    tools.stream()
-                            .map(tool -> new ToolPreview(
-                                    tool.name(),
-                                    tool.description(),
-                                    tool.inputSchema(),
-                                    McpManagementSupport.sha256(tool.inputSchema())))
-                            .toList());
-        } finally {
-            clientService.clearHttpConnectionState(name, userId);
-        }
+        return connectionSetup.discoverWithApproval(userId, name, endpoint, headers, approvalToken);
     }
 
     /** Creates a durable connection and stores every discovered tool disabled. */
     public ConnectionSnapshot connectNew(
             String userId, String name, String endpoint, Map<String, String> headers, boolean preApproved) {
-        return connectNewInternal(userId, name, endpoint, headers, ToolCategory.NETWORK, preApproved, null);
+        return connectionSetup.connectNew(userId, name, endpoint, headers, preApproved);
     }
 
     public ConnectionSnapshot connectNewWithApproval(
             String userId, String name, String endpoint, Map<String, String> headers, String approvalToken) {
-        return connectNewInternal(userId, name, endpoint, headers, ToolCategory.NETWORK, false, approvalToken);
-    }
-
-    private ConnectionSnapshot connectNewInternal(
-            String userId,
-            String name,
-            String endpoint,
-            Map<String, String> headers,
-            ToolCategory category,
-            boolean preApproved,
-            String approvalToken) {
-        McpManagementSupport.requireUser(userId);
-        McpManagementSupport.requireName(name);
-        Map<String, String> safeHeaders = headers == null ? Map.of() : Map.copyOf(headers);
-        if (approvalToken == null) lifecycleService.validateHttpRegistration(endpoint, safeHeaders);
-        List<McpClientService.DiscoveredTool> tools = approvalToken == null
-                ? clientService.discoverForUser(name, userId, endpoint, category, safeHeaders, preApproved)
-                : clientService.discoverForUser(name, userId, endpoint, category, safeHeaders, approvalToken);
-        McpConnectionLifecycleService.PersistedConnection persisted =
-                lifecycleService.persistSuccessfulHttp(name, endpoint, category, userId, safeHeaders);
-        if (persisted.connection() == null) {
-            clientService.clearHttpConnectionState(name, userId);
-            throw new McpConnectionException("MCP persistence backend is unavailable");
-        }
-        clientService.configureHeaderSecretRefs(name, userId, persisted.headerSecretRefs());
-        support.replacePolicies(persisted.connection().id(), userId, tools);
-        lifecycleService.updateState(persisted.connection().id(), userId, STATE_CONNECTED, true, null, null);
-        support.audit(userId, SecurityEventType.MCP_SERVER_CONNECTED, "server=" + name + " tools=0");
-        return lifecycleService
-                .findByNameAndUserId(name, userId)
-                .map(support::snapshot)
-                .orElseThrow();
+        return connectionSetup.connectNewWithApproval(userId, name, endpoint, headers, approvalToken);
     }
 
     /** Activation/reconnect of an existing durable connection. */
@@ -283,7 +225,13 @@ public class McpManagementService {
 
     public ConnectionSnapshot connectWithApproval(
             String userId, String name, String approvalToken, Long expectedRevision) {
-        return connectInternal(userId, name, false, approvalToken, OutboundPurpose.MCP_CONNECT, expectedRevision);
+        return connectWithApproval(userId, name, approvalToken, expectedRevision, null);
+    }
+
+    private ConnectionSnapshot connectWithApproval(
+            String userId, String name, String approvalToken, Long expectedRevision, String approvalTaskId) {
+        return connectInternal(
+                userId, name, false, approvalToken, OutboundPurpose.MCP_CONNECT, expectedRevision, approvalTaskId);
     }
 
     private ConnectionSnapshot connectInternal(
@@ -293,35 +241,48 @@ public class McpManagementService {
             String approvalToken,
             OutboundPurpose approvalPurpose,
             Long expectedRevision) {
+        return connectInternal(userId, name, preApproved, approvalToken, approvalPurpose, expectedRevision, null);
+    }
+
+    private ConnectionSnapshot connectInternal(
+            String userId,
+            String name,
+            boolean preApproved,
+            String approvalToken,
+            OutboundPurpose approvalPurpose,
+            Long expectedRevision,
+            String approvalTaskId) {
         McpManagementSupport.requireUser(userId);
         McpConnectionDto connection = support.findConnection(userId, name);
-        McpManagementSupport.checkRevision(connection, expectedRevision);
+        support.checkApprovalRevision(connection, expectedRevision, approvalTaskId);
         Set<String> enabledTools = support.enabledToolNames(connection, userId);
         lifecycleService.updateState(
                 connection.id(), userId, STATE_CONNECTING, true, connection.approvalTaskId(), null);
         support.clearRegisteredTools(userId, name);
-        support.configureStoredHeaders(connection, userId);
         try {
-            if (approvalToken == null) {
-                clientService.connectForUserWithEnabledTools(
-                        name,
-                        userId,
-                        connection.endpoint(),
-                        ToolCategory.valueOf(connection.category()),
-                        Map.of(),
-                        preApproved,
-                        enabledTools);
-            } else {
-                clientService.connectForUserWithEnabledTools(
-                        name,
-                        userId,
-                        connection.endpoint(),
-                        ToolCategory.valueOf(connection.category()),
-                        Map.of(),
-                        approvalToken,
-                        approvalPurpose,
-                        enabledTools);
-            }
+            support.runInUserVaultScope(userId, () -> {
+                support.configureStoredHeaders(connection, userId);
+                if (approvalToken == null) {
+                    clientService.connectForUserWithEnabledTools(
+                            name,
+                            userId,
+                            connection.endpoint(),
+                            ToolCategory.valueOf(connection.category()),
+                            Map.of(),
+                            preApproved,
+                            enabledTools);
+                } else {
+                    clientService.connectForUserWithEnabledTools(
+                            name,
+                            userId,
+                            connection.endpoint(),
+                            ToolCategory.valueOf(connection.category()),
+                            Map.of(),
+                            approvalToken,
+                            approvalPurpose,
+                            enabledTools);
+                }
+            });
             lifecycleService.updateState(connection.id(), userId, STATE_CONNECTED, true, null, null);
             support.audit(
                     userId, SecurityEventType.MCP_SERVER_CONNECTED, "server=" + name + " tools=" + enabledTools.size());
@@ -344,7 +305,7 @@ public class McpManagementService {
             Map<String, String> headers,
             String approvalToken,
             ToolCategory category) {
-        return connectNewInternal(userId, name, endpoint, headers, category, false, approvalToken);
+        return connectionSetup.registerFromApprovedCheckpoint(userId, name, endpoint, headers, approvalToken, category);
     }
 
     public ConnectionSnapshot enableTool(String userId, String name, String toolName, boolean preApproved) {
@@ -375,16 +336,26 @@ public class McpManagementService {
 
     public ConnectionSnapshot enableToolWithApproval(
             String userId, String name, String toolName, String approvalToken, Long expectedRevision) {
+        return enableToolWithApproval(userId, name, toolName, approvalToken, expectedRevision, null);
+    }
+
+    private ConnectionSnapshot enableToolWithApproval(
+            String userId,
+            String name,
+            String toolName,
+            String approvalToken,
+            Long expectedRevision,
+            String approvalTaskId) {
         McpManagementSupport.requireUser(userId);
         McpConnectionDto connection = support.findConnection(userId, name);
-        McpManagementSupport.checkRevision(connection, expectedRevision);
+        long currentRevision = support.checkApprovalRevision(connection, expectedRevision, approvalTaskId);
         support.audit(userId, SecurityEventType.MCP_TOOL_POLICY_ENABLED, "server=" + name + " tool=" + toolName);
         if (lifecycleService.setToolEnabled(connection.id(), userId, toolName, true) == 0) {
             throw new McpConnectionException("MCP tool was not discovered: " + toolName);
         }
         try {
             return connectInternal(
-                    userId, name, false, approvalToken, OutboundPurpose.MCP_TOOL_ENABLE, expectedRevision);
+                    userId, name, false, approvalToken, OutboundPurpose.MCP_TOOL_ENABLE, currentRevision);
         } catch (RuntimeException e) {
             lifecycleService.setToolEnabled(connection.id(), userId, toolName, false);
             throw e;
@@ -431,12 +402,22 @@ public class McpManagementService {
 
     public ConnectionSnapshot rotateHeadersWithApproval(
             String userId, String name, Map<String, String> headers, String approvalToken, Long expectedRevision) {
+        return rotateHeadersWithApproval(userId, name, headers, approvalToken, expectedRevision, null);
+    }
+
+    private ConnectionSnapshot rotateHeadersWithApproval(
+            String userId,
+            String name,
+            Map<String, String> headers,
+            String approvalToken,
+            Long expectedRevision,
+            String approvalTaskId) {
         McpConnectionDto connection = support.findConnection(userId, name);
-        McpManagementSupport.checkRevision(connection, expectedRevision);
+        long currentRevision = support.checkApprovalRevision(connection, expectedRevision, approvalTaskId);
         McpConnectionLifecycleService.PersistedConnection persisted = lifecycleService.persistSuccessfulHttp(
                 name, connection.endpoint(), ToolCategory.valueOf(connection.category()), userId, headers);
         clientService.configureHeaderSecretRefs(name, userId, persisted.headerSecretRefs());
-        return connectWithApproval(userId, name, approvalToken);
+        return connectWithApproval(userId, name, approvalToken, currentRevision);
     }
 
     public ConnectionSnapshot pause(String userId, String name) {

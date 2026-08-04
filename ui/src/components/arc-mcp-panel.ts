@@ -185,8 +185,11 @@ export class ArcMcpPanel extends LitElement {
     finally { this._busy = false; }
   }
 
-  private async _toggleTool(connection: McpConnection, toolName: string, enabled: boolean) {
-    await this._action(
+    private async _toggleTool(connection: McpConnection, toolName: string, enabled: boolean) {
+        if (this._busy || connection.state !== 'CONNECTED' || this._pendingApproval?.name === connection.name) {
+            return;
+        }
+        await this._action(
       () => enabled ? this._client.enableMcpTool(connection.name, toolName, connection.revision) : this._client.disableMcpTool(connection.name, toolName, connection.revision),
       enabled ? `Enabled ${toolName}.` : `Disabled ${toolName}.`);
   }
