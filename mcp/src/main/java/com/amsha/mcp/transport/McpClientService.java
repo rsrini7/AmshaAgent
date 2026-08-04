@@ -195,16 +195,6 @@ public class McpClientService {
         connectInternal(serverName, serverName, serverUrl, category, handshakeHeaders, false, currentOwner());
     }
 
-    @Deprecated(since = "1.0", forRemoval = false)
-    public void connectForUser(
-            String serverName,
-            String userId,
-            String serverUrl,
-            ToolCategory category,
-            Map<String, String> handshakeHeaders) {
-        connectForUserWithEnabledTools(serverName, userId, serverUrl, category, handshakeHeaders, false, Set.of());
-    }
-
     /**
      * @deprecated use the selective-registration overload and pass the explicitly enabled tool
      *     names
