@@ -1,5 +1,6 @@
 package com.amsha.channel.api;
 
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -42,4 +43,9 @@ public interface ChannelServices {
      * Checks whether a raw identity credential (e.g. API key) is valid.
      */
     boolean isValidIdentity(String credential);
+
+    /** Resolves a validated channel credential to its durable owner identity. */
+    default Optional<String> resolveIdentity(String credential) {
+        return Optional.empty();
+    }
 }

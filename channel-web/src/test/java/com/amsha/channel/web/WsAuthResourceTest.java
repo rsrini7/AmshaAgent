@@ -9,6 +9,7 @@ import jakarta.ws.rs.core.HttpHeaders;
 
 import java.util.Collections;
 import java.util.Map;
+import java.util.Optional;
 
 import com.amsha.channel.api.ChannelServices;
 
@@ -44,7 +45,8 @@ class WsAuthResourceTest {
     void issueTokenReturnsTokenWithValidApiKey() {
         String apiKey = "valid-api-key-123";
         when(channelServices.isValidIdentity(apiKey)).thenReturn(true);
-        when(tokenStore.generateToken()).thenReturn("ws-token-abc");
+        when(channelServices.resolveIdentity(apiKey)).thenReturn(Optional.of("owner-1"));
+        when(tokenStore.generateToken("owner-1")).thenReturn("ws-token-abc");
 
         WsAuthResource.WsTokenResponse response = resource.issueToken(apiKey);
 
@@ -83,7 +85,8 @@ class WsAuthResourceTest {
         Cookie cookie = new Cookie.Builder("AMSHA_API_KEY").value(cookieValue).build();
         when(httpHeaders.getCookies()).thenReturn(Map.of("AMSHA_API_KEY", cookie));
         when(channelServices.isValidIdentity(cookieValue)).thenReturn(true);
-        when(tokenStore.generateToken()).thenReturn("ws-token-from-cookie");
+        when(channelServices.resolveIdentity(cookieValue)).thenReturn(Optional.of("owner-1"));
+        when(tokenStore.generateToken("owner-1")).thenReturn("ws-token-from-cookie");
 
         WsAuthResource.WsTokenResponse response = resource.issueToken(null);
 

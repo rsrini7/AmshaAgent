@@ -13,6 +13,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -49,7 +50,8 @@ public class WebChatEndpoint {
     @Inject
     WsTokenStore wsTokenStore;
 
-    private record ConnectionState(String platformId, String amshaSessionId, boolean authenticated) {}
+    private record ConnectionState(
+            String platformId, String amshaSessionId, boolean authenticated, String ownerKeyName) {}
 
     // conn.id() → consolidated connection state
     private final Map<String, ConnectionState> connections = new ConcurrentHashMap<>();
@@ -99,14 +101,14 @@ public class WebChatEndpoint {
                 oldConn.close().subscribe().with(v -> {}, err -> {});
             });
 
-            connections.put(conn.id(), new ConnectionState(platformId, amshaSessionId, !requireAuth));
+            connections.put(conn.id(), new ConnectionState(platformId, amshaSessionId, false, null));
 
             log.debugf(
                     "WebSocket mapping established: connId=%s -> platformId=%s, amshaSession=%s",
                     conn.id(), platformId, amshaSessionId);
 
             if (!requireAuth) {
-                setupAuthenticatedSession(conn, platformId, amshaSessionId);
+                setupAuthenticatedSession(conn, platformId, amshaSessionId, platformId);
             } else {
                 log.infof("WebSocket pending auth: connId=%s platformId=%s", conn.id(), platformId);
             }
@@ -120,22 +122,34 @@ public class WebChatEndpoint {
         }
     }
 
-    private void setupAuthenticatedSession(WebSocketConnection conn, String platformId, String amshaSessionId) {
-        connections.put(conn.id(), new ConnectionState(platformId, amshaSessionId, true));
+    private void setupAuthenticatedSession(
+            WebSocketConnection conn, String platformId, String amshaSessionId, String ownerKeyName) {
+        String effectiveSessionId = amshaSessionId;
+        if (!ownerKeyName.equals(platformId)) {
+            effectiveSessionId = channelServices.resolveOrCreateSession(
+                    ChannelType.WEBSOCKET.id().toUpperCase(Locale.ROOT), platformId, ownerKeyName);
+            if (amshaSessionId != null && !amshaSessionId.equals(effectiveSessionId)) {
+                channelServices.terminateSession(amshaSessionId);
+            }
+        }
+        channelServices.bindSessionOwner(effectiveSessionId, ownerKeyName);
+        connections.put(conn.id(), new ConnectionState(platformId, effectiveSessionId, true, ownerKeyName));
 
         // Track connection and mapping in the globally accessible store (§85-C)
-        sessionStore.register(platformId, amshaSessionId, conn);
+        sessionStore.register(platformId, effectiveSessionId, conn);
 
         // §85-B: Proactively initialize session presence in the heartbeat tracker.
-        channelServices.recordHeartbeat(amshaSessionId);
+        channelServices.recordHeartbeat(effectiveSessionId);
 
-        conn.sendText(buildConnectedJson(platformId, amshaSessionId))
+        conn.sendText(buildConnectedJson(platformId, effectiveSessionId))
                 .subscribe()
                 .with(
                         id -> {},
                         err -> log.warnf("Failed to send connected event to %s: %s", conn.id(), err.getMessage()));
 
-        log.infof("WebSocket ready: connId=%s platformId=%s amshaSession=%s", conn.id(), platformId, amshaSessionId);
+        log.infof(
+                "WebSocket ready: connId=%s platformId=%s amshaSession=%s owner=%s",
+                conn.id(), platformId, effectiveSessionId, ownerKeyName);
     }
 
     @OnTextMessage
@@ -145,21 +159,22 @@ public class WebChatEndpoint {
             String type = json.getString("type", "");
 
             ConnectionState cs = connections.get(conn.id());
-            if (requireAuth && (cs == null || !cs.authenticated())) {
-                if ("AUTH".equals(type)) {
-                    String token = json.getString("token", "");
-                    if (wsTokenStore.validateAndConsumeToken(token)) {
-                        String platformId = cs != null ? cs.platformId() : null;
-                        String amshaSessionId = cs != null ? cs.amshaSessionId() : null;
-                        setupAuthenticatedSession(conn, platformId, amshaSessionId);
-                    } else {
-                        conn.sendTextAndAwait("{\"type\":\"error\",\"text\":\"Invalid or expired token\"}");
-                        var _ = conn.close();
-                    }
-                } else {
-                    conn.sendTextAndAwait("{\"type\":\"error\",\"text\":\"Authentication required\"}");
+            if ("AUTH".equals(type)) {
+                String token = json.getString("token", "");
+                Optional<String> owner = wsTokenStore.validateAndConsumeToken(token);
+                if (owner.isPresent() && (cs == null || !owner.get().equals(cs.ownerKeyName()))) {
+                    String platformId = cs != null ? cs.platformId() : null;
+                    String amshaSessionId = cs != null ? cs.amshaSessionId() : null;
+                    setupAuthenticatedSession(conn, platformId, amshaSessionId, owner.get());
+                } else if (owner.isEmpty() && requireAuth) {
+                    conn.sendTextAndAwait("{\"type\":\"error\",\"text\":\"Invalid or expired token\"}");
                     var _ = conn.close();
                 }
+                return;
+            }
+            if (requireAuth && (cs == null || !cs.authenticated())) {
+                conn.sendTextAndAwait("{\"type\":\"error\",\"text\":\"Authentication required\"}");
+                var _ = conn.close();
                 return;
             }
 
@@ -180,7 +195,8 @@ public class WebChatEndpoint {
             }
             String platformId = messageCs.platformId();
 
-            ChannelUser user = new ChannelUser(platformId, platformId, "Web User", ChannelType.WEBSOCKET);
+            String userId = messageCs.ownerKeyName() != null ? messageCs.ownerKeyName() : platformId;
+            ChannelUser user = new ChannelUser(userId, platformId, "Web User", ChannelType.WEBSOCKET);
 
             ChannelMessage.WebSocketMessage msg =
                     new ChannelMessage.WebSocketMessage(user, text, platformId, Instant.now());
@@ -246,8 +262,8 @@ public class WebChatEndpoint {
     void onSessionRotated(@Observes SessionRotatedEvent event) {
         connections.forEach((connId, state) -> {
             if (state.amshaSessionId().equals(event.oldSessionId())) {
-                ConnectionState updated =
-                        new ConnectionState(state.platformId(), event.newSessionId(), state.authenticated());
+                ConnectionState updated = new ConnectionState(
+                        state.platformId(), event.newSessionId(), state.authenticated(), state.ownerKeyName());
                 connections.put(connId, updated);
                 sessionStore.updateAmshaSession(state.platformId(), event.newSessionId());
                 log.infof(

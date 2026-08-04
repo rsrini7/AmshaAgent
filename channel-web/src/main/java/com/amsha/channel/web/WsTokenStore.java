@@ -2,6 +2,7 @@ package com.amsha.channel.web;
 
 import jakarta.enterprise.context.ApplicationScoped;
 
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
@@ -10,20 +11,19 @@ import com.github.benmanes.caffeine.cache.Caffeine;
 
 @ApplicationScoped
 public class WsTokenStore {
-    private final Cache<String, Boolean> tokenCache =
+    private final Cache<String, String> tokenCache =
             Caffeine.newBuilder().expireAfterWrite(5, TimeUnit.MINUTES).build();
 
-    public String generateToken() {
+    public String generateToken(String ownerKeyName) {
         String token = UUID.randomUUID().toString();
-        tokenCache.put(token, Boolean.TRUE);
+        tokenCache.put(token, ownerKeyName);
         return token;
     }
 
-    public boolean validateAndConsumeToken(String token) {
+    public Optional<String> validateAndConsumeToken(String token) {
         if (token == null || token.isBlank()) {
-            return false;
+            return Optional.empty();
         }
-        Boolean exists = tokenCache.asMap().remove(token);
-        return exists != null && exists;
+        return Optional.ofNullable(tokenCache.asMap().remove(token));
     }
 }
