@@ -7,6 +7,7 @@ import com.amsha.core.audit.SecurityEventType;
 import com.amsha.core.tools.ToolCategory;
 import com.amsha.mcp.tool.McpTransportType;
 import com.amsha.persistence.api.McpConnectionDto;
+import com.amsha.persistence.api.McpConnectionHeaderSecretRefDto;
 
 /** Owns throwaway discovery and first durable connection setup. */
 final class McpManagementConnectionSetup {
@@ -130,21 +131,28 @@ final class McpManagementConnectionSetup {
             String name,
             String endpoint,
             Map<String, String> headers,
+            boolean clearCredentials,
             String approvalToken,
             Long expectedRevision,
             String approvalTaskId) {
         McpConnectionDto current = support.findConnection(userId, name);
         support.checkApprovalRevision(current, expectedRevision, approvalTaskId);
         Map<String, String> proposedHeaders = headers == null ? Map.of() : Map.copyOf(headers);
+        List<McpConnectionHeaderSecretRefDto> previousRefs = lifecycleService.headerSecretRefs(current.id(), userId);
+        boolean committed = false;
         lifecycleService.updateState(
                 current.id(), userId, McpManagementService.STATE_CONNECTING, true, approvalTaskId, null);
         try {
-            support.runInUserVaultScope(userId, () -> support.configureStoredHeaders(current, userId));
+            if (clearCredentials) {
+                clientService.configureHeaderSecretRefs(name, userId, List.of());
+            } else {
+                support.runInUserVaultScope(userId, () -> support.configureStoredHeaders(current, userId));
+            }
             List<McpClientService.DiscoveredTool> tools = support.runInUserVaultScope(
                     userId,
                     () -> clientService.discoverForUser(
                             name, userId, endpoint, ToolCategory.NETWORK, proposedHeaders, approvalToken));
-            McpConnectionLifecycleService.PersistedConnection persisted = proposedHeaders.isEmpty()
+            McpConnectionLifecycleService.PersistedConnection persisted = proposedHeaders.isEmpty() && !clearCredentials
                     ? lifecycleService.persistSuccessfulHttpKeepingHeaders(name, endpoint, ToolCategory.NETWORK, userId)
                     : lifecycleService.persistSuccessfulHttp(
                             name, endpoint, ToolCategory.NETWORK, userId, proposedHeaders);
@@ -157,11 +165,15 @@ final class McpManagementConnectionSetup {
             lifecycleService.updateState(
                     persisted.connection().id(), userId, McpManagementService.STATE_CONNECTED, true, null, null);
             support.audit(userId, SecurityEventType.MCP_SERVER_CONNECTED, "server=" + name + " reconfigured");
+            committed = true;
             return lifecycleService
                     .findByNameAndUserId(name, userId)
                     .map(support::snapshot)
                     .orElseThrow();
         } catch (RuntimeException exception) {
+            if (clearCredentials && !committed) {
+                clientService.configureHeaderSecretRefs(name, userId, previousRefs);
+            }
             lifecycleService.updateState(
                     current.id(),
                     userId,

@@ -611,6 +611,7 @@ amsha:
       - archival_memory_search
     server-enabled: true
     setup-token-secret: ${AMSHA_MCP_SETUP_TOKEN_SECRET:}
+    setup-ui-base-url: ${AMSHA_MCP_SETUP_UI_BASE_URL:}
     health-check-interval-ms: ${AMSHA_MCP_HEALTH_CHECK_INTERVAL_MS:15000}
     podman:
       health-check-interval-ms: ${AMSHA_MCP_PODMAN_HEALTH_CHECK_INTERVAL_MS:15000}

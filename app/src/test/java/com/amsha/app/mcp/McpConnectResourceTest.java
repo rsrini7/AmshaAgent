@@ -95,7 +95,8 @@ class McpConnectResourceTest {
                 null,
                 Instant.now().plusSeconds(60),
                 4L);
-        when(managementService.requestReconfigure("user-1", "test-server", "https://example.test/mcp", Map.of(), 4L))
+        when(managementService.requestReconfigure(
+                        "user-1", "test-server", "https://example.test/mcp", Map.of(), false, 4L))
                 .thenReturn(pending);
 
         var response = resource.reconfigure(
@@ -105,7 +106,33 @@ class McpConnectResourceTest {
                 4L);
 
         assertEquals(202, response.getStatus());
-        verify(managementService).requestReconfigure("user-1", "test-server", "https://example.test/mcp", Map.of(), 4L);
+        verify(managementService)
+                .requestReconfigure("user-1", "test-server", "https://example.test/mcp", Map.of(), false, 4L);
+    }
+
+    @Test
+    void reconfigurePropagatesExplicitCredentialClear() {
+        var pending = new McpApprovalService.PendingApproval(
+                "task-clear",
+                "RECONFIGURE",
+                "test-server",
+                "https://example.test/mcp",
+                null,
+                Instant.now().plusSeconds(60),
+                4L);
+        when(managementService.requestReconfigure(
+                        "user-1", "test-server", "https://example.test/mcp", Map.of(), true, 4L))
+                .thenReturn(pending);
+
+        var response = resource.reconfigure(
+                "test-server",
+                new McpConnectResource.ReconfigureRequest("https://example.test/mcp", Map.of(), true),
+                null,
+                4L);
+
+        assertEquals(202, response.getStatus());
+        verify(managementService)
+                .requestReconfigure("user-1", "test-server", "https://example.test/mcp", Map.of(), true, 4L);
     }
 
     @Test

@@ -20,6 +20,7 @@ import com.amsha.mcp.tool.DynamicToolCapabilityRegistry;
 import com.amsha.mcp.tool.McpTransportType;
 import com.amsha.mcp.transport.McpApprovalService;
 import com.amsha.mcp.transport.McpManagementService;
+import com.amsha.mcp.transport.McpSetupLinkService;
 import com.amsha.mcp.transport.McpSetupTokenService;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -43,6 +44,9 @@ class McpReflexTest {
 
     @Mock
     McpSetupTokenService setupTokenService;
+
+    @Mock
+    McpSetupLinkService setupLinkService;
 
     @InjectMocks
     McpReflex reflex;
@@ -101,6 +105,52 @@ class McpReflexTest {
 
         assertEquals("✅ MCP approval denied.", result.commandResponse().orElseThrow());
         verify(managementService).rejectApproval("user1", "task-1");
+    }
+
+    @Test
+    void editIssuesShortLivedSetupLinkWithoutAcceptingCredentials() {
+        when(setupTokenService.issueForEdit("user1", "cli", "chat1", "tapetide"))
+                .thenReturn("edit-token");
+        when(setupLinkService.link("edit-token")).thenReturn("https://agent.example/#/mcp/setup?token=edit-token");
+
+        ReflexResult result = reflex.execute("sess-1", "user1", "chat1", "/mcp edit tapetide", context());
+
+        assertTrue(
+                result.commandResponse().orElseThrow().contains("https://agent.example/#/mcp/setup?token=edit-token"));
+        verify(setupTokenService).issueForEdit("user1", "cli", "chat1", "tapetide");
+        verify(setupLinkService).link("edit-token");
+        verifyNoInteractions(managementService);
+    }
+
+    @Test
+    void editUsesOriginatingChannelAndConversationId() {
+        MessageContext telegramContext = mock(MessageContext.class);
+        when(telegramContext.getChannelType()).thenReturn(ChannelType.TELEGRAM);
+        when(telegramContext.getChatId()).thenReturn("telegram-chat");
+        when(setupTokenService.issueForEdit("user1", "telegram", "telegram-chat", "tapetide"))
+                .thenReturn("telegram-edit-token");
+
+        reflex.execute("sess-1", "user1", "ignored", "/mcp edit tapetide", telegramContext);
+
+        verify(setupTokenService).issueForEdit("user1", "telegram", "telegram-chat", "tapetide");
+    }
+
+    @Test
+    void setupUsesOriginatingChannelAndConversationId() {
+        MessageContext telegramContext = mock(MessageContext.class);
+        when(telegramContext.getChannelType()).thenReturn(ChannelType.TELEGRAM);
+        when(telegramContext.getChatId()).thenReturn("telegram-chat");
+        when(setupTokenService.issue("user1", "telegram", "telegram-chat", "tapetide"))
+                .thenReturn("telegram-setup-token");
+        when(setupLinkService.link("telegram-setup-token"))
+                .thenReturn("https://agent.example/#/mcp/setup?token=telegram-setup-token");
+
+        ReflexResult result = reflex.execute("sess-1", "user1", "ignored", "/mcp setup tapetide", telegramContext);
+
+        assertTrue(result.commandResponse()
+                .orElseThrow()
+                .contains("https://agent.example/#/mcp/setup?token=telegram-setup-token"));
+        verify(setupTokenService).issue("user1", "telegram", "telegram-chat", "tapetide");
     }
 
     @Test

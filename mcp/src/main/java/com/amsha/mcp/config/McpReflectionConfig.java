@@ -22,7 +22,8 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             "com.amsha.mcp.transport.McpConfigImportService$ImportPreview",
             "com.amsha.mcp.transport.McpConfigImportService$ImportEntry",
             "com.amsha.mcp.transport.McpApprovalService$PendingApproval",
-            "com.amsha.mcp.transport.McpSetupTokenService$SetupGrant"
+            "com.amsha.mcp.transport.McpSetupTokenService$SetupGrant",
+            "com.amsha.mcp.transport.McpSetupTokenService$SetupMode"
         },
         targets = {
             McpToolDescriptor.class,

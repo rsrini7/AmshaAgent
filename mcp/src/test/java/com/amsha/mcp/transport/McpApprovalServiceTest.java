@@ -3,6 +3,7 @@ package com.amsha.mcp.transport;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -53,5 +54,31 @@ class McpApprovalServiceTest {
         verify(issuer)
                 .issueForExplicitApproval("user-1", pending.taskId(), OutboundPurpose.MCP_TOOL_ENABLE, "example.test");
         assertThrows(IllegalArgumentException.class, () -> service.approve("user-1", pending.taskId()));
+    }
+
+    @Test
+    void approvalCarriesExplicitCredentialClear() {
+        ApprovalReceiptIssuer issuer = Mockito.mock(ApprovalReceiptIssuer.class);
+        when(issuer.issueForExplicitApproval(
+                        Mockito.eq("user-1"),
+                        Mockito.anyString(),
+                        Mockito.eq(OutboundPurpose.MCP_CONNECT),
+                        Mockito.eq("example.test")))
+                .thenReturn("receipt-clear");
+        McpApprovalService service = new McpApprovalService(issuer);
+
+        var pending = service.request(
+                "user-1",
+                McpApprovalService.Operation.RECONFIGURE,
+                "server",
+                "https://example.test/mcp",
+                Map.of(),
+                null,
+                4L,
+                true);
+        var approved = service.approve("user-1", pending.taskId());
+
+        assertEquals("receipt-clear", approved.receiptToken());
+        assertTrue(approved.clearCredentials());
     }
 }

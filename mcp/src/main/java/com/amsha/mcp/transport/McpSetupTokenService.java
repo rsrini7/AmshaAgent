@@ -69,6 +69,14 @@ public class McpSetupTokenService {
     }
 
     public String issue(String userId, String channelType, String channelId, String serverName) {
+        return issue(userId, channelType, channelId, serverName, SetupMode.ONBOARD);
+    }
+
+    public String issueForEdit(String userId, String channelType, String channelId, String serverName) {
+        return issue(userId, channelType, channelId, serverName, SetupMode.EDIT);
+    }
+
+    private String issue(String userId, String channelType, String channelId, String serverName, SetupMode mode) {
         sweepExpiredGrants();
         requireText(userId, "userId");
         requireText(channelType, "channelType");
@@ -79,7 +87,12 @@ public class McpSetupTokenService {
             new SecureRandom().nextBytes(raw);
             String token = Base64.getUrlEncoder().withoutPadding().encodeToString(raw);
             Grant grant = new Grant(
-                    userId, channelType, channelId, serverName, Instant.now().plus(TTL));
+                    userId,
+                    channelType,
+                    channelId,
+                    serverName,
+                    mode,
+                    Instant.now().plus(TTL));
             grants.put(digest(token), grant);
             persistGrant(digest(token), grant);
             return token;
@@ -108,7 +121,12 @@ public class McpSetupTokenService {
         }
         removeGrant(tokenDigest, grant.userId());
         return Optional.of(new SetupGrant(
-                grant.userId(), grant.channelType(), grant.channelId(), grant.serverName(), grant.expiresAt()));
+                grant.userId(),
+                grant.channelType(),
+                grant.channelId(),
+                grant.serverName(),
+                grant.mode(),
+                grant.expiresAt()));
     }
 
     private void sweepExpiredGrants() {
@@ -158,18 +176,22 @@ public class McpSetupTokenService {
                 encode(grant.channelType()),
                 encode(grant.channelId()),
                 encode(grant.serverName()),
+                encode(grant.mode().name()),
                 Long.toString(grant.expiresAt().toEpochMilli()));
     }
 
     private static Grant deserialize(String value) {
         String[] parts = value.split("\\.", -1);
-        if (parts.length != 5) throw new IllegalArgumentException("Invalid MCP setup grant");
+        if (parts.length != 5 && parts.length != 6) {
+            throw new IllegalArgumentException("Invalid MCP setup grant");
+        }
         return new Grant(
                 decode(parts[0]),
                 decode(parts[1]),
                 decode(parts[2]),
                 decode(parts[3]),
-                Instant.ofEpochMilli(Long.parseLong(parts[4])));
+                parts.length == 6 ? SetupMode.valueOf(decode(parts[4])) : SetupMode.ONBOARD,
+                Instant.ofEpochMilli(Long.parseLong(parts.length == 6 ? parts[5] : parts[4])));
     }
 
     private static String encode(String value) {
@@ -196,8 +218,24 @@ public class McpSetupTokenService {
         if (value == null || value.isBlank()) throw new IllegalArgumentException(field + " is required");
     }
 
-    private record Grant(String userId, String channelType, String channelId, String serverName, Instant expiresAt) {}
+    private record Grant(
+            String userId,
+            String channelType,
+            String channelId,
+            String serverName,
+            SetupMode mode,
+            Instant expiresAt) {}
+
+    public enum SetupMode {
+        ONBOARD,
+        EDIT
+    }
 
     public record SetupGrant(
-            String userId, String channelType, String channelId, String serverName, Instant expiresAt) {}
+            String userId,
+            String channelType,
+            String channelId,
+            String serverName,
+            SetupMode mode,
+            Instant expiresAt) {}
 }

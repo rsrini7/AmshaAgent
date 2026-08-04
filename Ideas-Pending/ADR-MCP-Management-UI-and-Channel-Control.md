@@ -396,8 +396,10 @@ retain their current administrative roles.
 
 `PATCH /api/v1/mcp/connect/{name}` is the canonical edit contract. The expected
 revision is supplied only through the `If-MCP-Revision` header; it is not accepted in
-the JSON body. The body may contain an endpoint, replacement headers, and explicit
-credential-clear directives, and never returns header values. A request without an
+the JSON body. The body may contain `url`, replacement `headers`, and boolean
+`clearCredentials`; `clearCredentials: true` must be sent with an empty header map
+and removes stored vault references, while `false` preserves them when headers are
+empty. The response never returns header values. A request without an
 approval receipt returns a pending MCP operation; the approved request repeats
 validation and handshake before committing the replacement. `rotate-headers` uses the
 same operation, vault staging, revision, audit, and rollback behavior.
@@ -548,6 +550,8 @@ Supported commands:
 /mcp
 /mcp list
 /mcp tools <server>
+/mcp setup <name>
+/mcp edit <server>
 /mcp connect <name> <url>
 /mcp enable <server> [tool ...]
 /mcp disable <server> [tool ...]
@@ -562,6 +566,8 @@ Supported commands:
 `/mcp connect` may start a no-auth flow, subject to approval. For authenticated servers
 it creates the secure setup link described above. It never accepts bearer tokens or
 custom header values in message text.
+
+`/mcp setup <name>` issues an onboarding setup link. `/mcp edit <server>` issues the same short-lived, user/channel-bound link with edit intent; redeeming it opens the existing server's reconfiguration panel with secret fields blank. The reflex derives channel type and conversation ID from `MessageContext`, so Telegram, Discord, Slack, and future channel plugins use the same path without channel-specific MCP logic. The command never accepts credentials, and the link never contains credential values. Editing still uses the normal `RECONFIGURE` approval before network I/O and preserves the existing durable connection until the approved change commits.
 
 MCP lifecycle approvals use `/mcp approve <taskId>` and the REST endpoint
 `POST /api/v1/mcp/connect/approvals/{taskId}/approve`; these surfaces accept only

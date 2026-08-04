@@ -35,7 +35,18 @@ class McpSetupTokenServiceTest {
 
         assertEquals("user-1", grant.userId());
         assertEquals("server-1", grant.serverName());
+        assertEquals(McpSetupTokenService.SetupMode.ONBOARD, grant.mode());
         assertTrue(service.redeem(token, "user-1").isEmpty());
+    }
+
+    @Test
+    void editTokenCarriesEditMode() {
+        String token = service.issueForEdit("user-1", "chat", "chat-1", "server-1");
+
+        McpSetupTokenService.SetupGrant grant =
+                service.redeem(token, "user-1", "chat", "chat-1").orElseThrow();
+
+        assertEquals(McpSetupTokenService.SetupMode.EDIT, grant.mode());
     }
 
     @Test

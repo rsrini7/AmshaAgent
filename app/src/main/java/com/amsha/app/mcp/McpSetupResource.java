@@ -16,6 +16,7 @@ import java.util.Map;
 
 import com.amsha.core.api.dto.AmshaErrorResponse;
 import com.amsha.core.scope.WorkspaceContext;
+import com.amsha.mcp.transport.McpSetupLinkService;
 import com.amsha.mcp.transport.McpSetupTokenService;
 
 import org.eclipse.microprofile.openapi.annotations.Operation;
@@ -31,6 +32,9 @@ public class McpSetupResource {
 
     @Inject
     McpSetupTokenService setupTokenService;
+
+    @Inject
+    McpSetupLinkService setupLinkService;
 
     @Context
     SecurityContext securityContext;
@@ -50,7 +54,7 @@ public class McpSetupResource {
         String userId = resolveUserId();
         String token = setupTokenService.issue(
                 userId, request.channelTypeOrDefault(), request.channelIdOrDefault(), request.serverName());
-        return Response.ok(Map.of("token", token, "path", "/#/mcp/setup?token=" + token))
+        return Response.ok(Map.of("token", token, "path", setupLinkService.link(token)))
                 .build();
     }
 
@@ -68,7 +72,11 @@ public class McpSetupResource {
         return setupTokenService
                 .redeem(request.token(), userId, request.channelType(), request.channelId())
                 .<Response>map(grant -> Response.ok(new RedeemResponse(
-                                grant.serverName(), grant.channelType(), grant.channelId(), grant.expiresAt()))
+                                grant.serverName(),
+                                grant.channelType(),
+                                grant.channelId(),
+                                grant.mode().name(),
+                                grant.expiresAt()))
                         .build())
                 .orElseGet(() -> Response.status(Response.Status.FORBIDDEN)
                         .entity(new AmshaErrorResponse("Invalid, expired, or user-mismatched setup token"))
@@ -102,5 +110,6 @@ public class McpSetupResource {
         }
     }
 
-    public record RedeemResponse(String serverName, String channelType, String channelId, Instant expiresAt) {}
+    public record RedeemResponse(
+            String serverName, String channelType, String channelId, String mode, Instant expiresAt) {}
 }

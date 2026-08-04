@@ -105,10 +105,23 @@ public class McpManagementService {
 
     public McpApprovalService.PendingApproval requestReconfigure(
             String userId, String name, String endpoint, Map<String, String> headers, Long expectedRevision) {
+        return requestReconfigure(userId, name, endpoint, headers, false, expectedRevision);
+    }
+
+    public McpApprovalService.PendingApproval requestReconfigure(
+            String userId,
+            String name,
+            String endpoint,
+            Map<String, String> headers,
+            boolean clearCredentials,
+            Long expectedRevision) {
         McpConnectionDto connection = support.findConnection(userId, name);
         McpManagementSupport.checkRevision(connection, expectedRevision);
         String proposedEndpoint = McpManagementSupport.isBlank(endpoint) ? connection.endpoint() : endpoint;
         Map<String, String> proposedHeaders = headers == null ? Map.of() : Map.copyOf(headers);
+        if (clearCredentials && !proposedHeaders.isEmpty()) {
+            throw new IllegalArgumentException("MCP clearCredentials cannot include replacement headers");
+        }
         support.validateRequest(name, proposedEndpoint, proposedHeaders);
         McpApprovalService.PendingApproval approval = approvalService.request(
                 userId,
@@ -117,7 +130,8 @@ public class McpManagementService {
                 proposedEndpoint,
                 proposedHeaders,
                 null,
-                expectedRevision);
+                expectedRevision,
+                clearCredentials);
         support.markPending(connection, approval.taskId());
         return approval;
     }
@@ -174,6 +188,7 @@ public class McpManagementService {
                                 operation.name(),
                                 operation.endpoint(),
                                 operation.headers(),
+                                operation.clearCredentials(),
                                 operation.receiptToken(),
                                 operation.expectedRevision(),
                                 operation.taskId());
@@ -264,8 +279,19 @@ public class McpManagementService {
             Map<String, String> headers,
             String approvalToken,
             Long expectedRevision) {
+        return reconfigureWithApproval(userId, name, endpoint, headers, false, approvalToken, expectedRevision);
+    }
+
+    public ConnectionSnapshot reconfigureWithApproval(
+            String userId,
+            String name,
+            String endpoint,
+            Map<String, String> headers,
+            boolean clearCredentials,
+            String approvalToken,
+            Long expectedRevision) {
         return connectionSetup.reconfigureWithApproval(
-                userId, name, endpoint, headers, approvalToken, expectedRevision, null);
+                userId, name, endpoint, headers, clearCredentials, approvalToken, expectedRevision, null);
     }
 
     private ConnectionSnapshot connectWithApproval(

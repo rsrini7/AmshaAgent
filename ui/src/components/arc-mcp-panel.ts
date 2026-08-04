@@ -18,9 +18,10 @@ export class ArcMcpPanel extends LitElement {
   @state() private _message = '';
   @state() private _error = '';
   @state() private _pendingApproval?: McpPendingApproval;
-  @state() private _editing?: string;
+ @state() private _editing?: string;
  @state() private _editUrl = '';
  @state() private _editHeaders = '';
+ @state() private _clearCredentials = false;
  @state() private _importPreview?: McpImportPreview;
  @state() private _expanded = new Set<string>();
 
@@ -53,24 +54,43 @@ export class ArcMcpPanel extends LitElement {
 
   connectedCallback() {
     super.connectedCallback();
-    void this._load();
-    void this._redeemSetupToken();
+    void this._init();
+  }
+
+  private async _init() {
+    const redeemedEdit = await this._redeemSetupToken();
+    if (!redeemedEdit) await this._load();
   }
 
   private get _client() { return new ArcClient('/api/v1', this._appContext?.apiKey || ''); }
 
-  private async _redeemSetupToken() {
+  private async _redeemSetupToken(): Promise<boolean> {
     const query = window.location.hash.split('?')[1];
     const token = query ? new URLSearchParams(query).get('token') : null;
-    if (!token) return;
+    if (!token) return false;
     try {
       const grant = await this._client.redeemMcpSetup(token);
       this._name = grant.serverName;
-      this._message = 'Setup link accepted. Enter the endpoint and credentials, then test and discover.';
+      if (grant.mode === 'EDIT') {
+        await this._load();
+        const connection = this._connections.find(item => item.name === grant.serverName);
+        if (!connection) {
+          this._error = `MCP connection '${grant.serverName}' was not found.`;
+        } else {
+          this._startEdit(
+            connection,
+            `Secure edit link accepted for ${grant.serverName}. Stored credentials remain hidden.`,
+          );
+        }
+      } else {
+        this._message = 'Setup link accepted. Enter the endpoint and credentials, then test and discover.';
+      }
       window.history.replaceState(null, '', `${window.location.href.split('#')[0]}#/mcp`);
+      return grant.mode === 'EDIT';
     } catch (error) {
       this._error = this._messageFor(error);
       window.history.replaceState(null, '', `${window.location.href.split('#')[0]}#/mcp`);
+      return false;
     }
   }
 
@@ -185,7 +205,7 @@ export class ArcMcpPanel extends LitElement {
     } catch (error) { this._error = this._messageFor(error); }
   }
 
-  private async _action(action: () => Promise<McpConnection | McpPendingApproval>, message?: string) {
+  private async _action(action: () => Promise<McpConnection | McpPendingApproval>, message?: string): Promise<boolean> {
     this._busy = true; this._error = ''; this._message = '';
     try {
       const updated = await action();
@@ -196,12 +216,14 @@ export class ArcMcpPanel extends LitElement {
         this._connections = this._connections.map(c => c.name === updated.name ? updated : c);
         this._message = message || 'MCP connection updated.';
       }
+      return true;
     } catch (error) {
       this._error = this._messageFor(error);
       if (this._error.toLowerCase().includes('revision')) {
         await this._load();
         this._message = 'The connection changed elsewhere. Refreshed current state.';
       }
+      return false;
     }
     finally { this._busy = false; }
   }
@@ -215,12 +237,13 @@ export class ArcMcpPanel extends LitElement {
       enabled ? `Enabled ${toolName}.` : `Disabled ${toolName}.`);
   }
 
-  private _startEdit(connection: McpConnection) {
+  private _startEdit(connection: McpConnection, message = 'Stored credentials remain unchanged unless you enter replacement headers.') {
     this._editing = connection.name;
     this._editUrl = connection.endpoint;
     this._editHeaders = '';
+    this._clearCredentials = false;
     this._error = '';
-    this._message = 'Stored credentials remain unchanged unless you enter replacement headers.';
+    this._message = message;
   }
 
   private async _saveEdit(connection: McpConnection) {
@@ -233,11 +256,21 @@ export class ArcMcpPanel extends LitElement {
         return;
       }
     }
-    await this._action(
-      () => this._client.reconfigureMcp(connection.name, this._editUrl.trim(), headers, connection.revision),
+    if (this._clearCredentials && Object.keys(headers).length > 0) {
+      this._error = 'Clear existing credentials or provide replacement headers, not both.';
+      return;
+    }
+    const completed = await this._action(
+      () => this._client.reconfigureMcp(
+        connection.name,
+        this._editUrl.trim(),
+        headers,
+        this._clearCredentials,
+        connection.revision,
+      ),
       'Reconfiguration requested.'
     );
-    this._editing = undefined;
+    if (completed) this._editing = undefined;
   }
 
   private async _previewImport(event: Event) {
@@ -301,6 +334,8 @@ export class ArcMcpPanel extends LitElement {
     <input id="mcp-edit-url" .value=${this._editUrl} @input=${(event: InputEvent) => this._editUrl = (event.target as HTMLInputElement).value} />
     <label for="mcp-edit-headers">Replacement headers JSON</label>
     <textarea id="mcp-edit-headers" .value=${this._editHeaders} @input=${(event: InputEvent) => this._editHeaders = (event.target as HTMLTextAreaElement).value} placeholder="Leave blank to keep stored credentials"></textarea>
+    <label for="mcp-clear-credentials">Credentials</label>
+    <label><input id="mcp-clear-credentials" type="checkbox" .checked=${this._clearCredentials} @change=${(event: Event) => this._clearCredentials = (event.target as HTMLInputElement).checked} /> Clear existing credentials</label>
    </div><div class="actions">
     <button class="primary" @click=${() => this._saveEdit(connection)} ?disabled=${this._busy}>Save and request approval</button>
     <button @click=${() => this._editing = undefined}>Cancel</button>

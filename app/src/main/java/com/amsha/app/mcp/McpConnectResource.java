@@ -80,7 +80,11 @@ public class McpConnectResource {
         }
     }
 
-    public record ReconfigureRequest(String url, Map<String, String> headers) {
+    public record ReconfigureRequest(String url, Map<String, String> headers, boolean clearCredentials) {
+        public ReconfigureRequest(String url, Map<String, String> headers) {
+            this(url, headers, false);
+        }
+
         public Map<String, String> headersOrEmpty() {
             return headers == null ? Map.of() : Map.copyOf(headers);
         }
@@ -291,10 +295,16 @@ public class McpConnectResource {
         Map<String, String> headers = request.headersOrEmpty();
         if (!isBlank(approvalToken)) {
             return operation(() -> managementService.reconfigureWithApproval(
-                    resolveUserId(), name, endpoint, headers, approvalToken, expectedRevision));
+                    resolveUserId(),
+                    name,
+                    endpoint,
+                    headers,
+                    request.clearCredentials(),
+                    approvalToken,
+                    expectedRevision));
         }
-        return pendingOperation(
-                () -> managementService.requestReconfigure(resolveUserId(), name, endpoint, headers, expectedRevision));
+        return pendingOperation(() -> managementService.requestReconfigure(
+                resolveUserId(), name, endpoint, headers, request.clearCredentials(), expectedRevision));
     }
 
     @POST

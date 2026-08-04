@@ -92,7 +92,7 @@ public class McpConfigImportService {
             return List.of();
         }
         List<ImportEntry> entries = new ArrayList<>();
-        servers.fields().forEachRemaining(field -> entries.add(parseEntry(field.getKey(), field.getValue())));
+        servers.properties().forEach(field -> entries.add(parseEntry(field.getKey(), field.getValue())));
         return List.copyOf(entries);
     }
 

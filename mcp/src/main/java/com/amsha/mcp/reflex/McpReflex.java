@@ -15,6 +15,7 @@ import com.amsha.mcp.tool.DynamicToolCapabilityRegistry;
 import com.amsha.mcp.transport.McpApprovalService;
 import com.amsha.mcp.transport.McpConnectionException;
 import com.amsha.mcp.transport.McpManagementService;
+import com.amsha.mcp.transport.McpSetupLinkService;
 import com.amsha.mcp.transport.McpSetupTokenService;
 
 /** Handles MCP status and safe lifecycle commands from chat and Telegram. */
@@ -34,6 +35,9 @@ public class McpReflex implements AgentReflex {
     @Inject
     McpSetupTokenService setupTokenService;
 
+    @Inject
+    McpSetupLinkService setupLinkService;
+
     @Override
     public boolean matches(String input) {
         if (input == null) return false;
@@ -48,13 +52,13 @@ public class McpReflex implements AgentReflex {
             return ReflexResult.respond(status(userId), context);
         }
         try {
-            return ReflexResult.respond(executeCommand(userId, chatId, args), context);
+            return ReflexResult.respond(executeCommand(userId, chatId, context, args), context);
         } catch (IllegalArgumentException | McpConnectionException e) {
             return ReflexResult.respond("❌ MCP operation failed: " + safeMessage(e), context);
         }
     }
 
-    private String executeCommand(String userId, String chatId, String[] args) {
+    private String executeCommand(String userId, String chatId, MessageContext context, String[] args) {
         String command = args[1].toLowerCase(Locale.ROOT);
         return switch (command) {
             case "discover" -> {
@@ -63,10 +67,19 @@ public class McpReflex implements AgentReflex {
             }
             case "setup" -> {
                 requireArgs(args, 3, "setup <name>");
-                String token = setupTokenService.issue(userId, "chat", chatId == null ? "unknown" : chatId, args[2]);
-                yield "🔐 Open this short-lived MCP setup link in the web UI: `/#/mcp/setup?token="
-                        + token
-                        + "` (expires in 10 minutes).";
+                String token =
+                        setupTokenService.issue(userId, channelType(context), channelId(context, chatId), args[2]);
+                yield "🔐 Open this short-lived MCP setup link in the web UI: "
+                        + setupLink(token)
+                        + " (expires in 10 minutes).";
+            }
+            case "edit" -> {
+                requireArgs(args, 3, "edit <name>");
+                String token = setupTokenService.issueForEdit(
+                        userId, channelType(context), channelId(context, chatId), args[2]);
+                yield "🔐 Open this short-lived MCP edit link in web UI: "
+                        + setupLink(token)
+                        + " (expires in 10 minutes).";
             }
             case "connect" -> {
                 requireArgs(args, 3, "connect <name> [https-url]");
@@ -127,7 +140,7 @@ public class McpReflex implements AgentReflex {
                 yield format(managementService.disableTool(userId, args[2], args[3]), "Disabled");
             }
             default ->
-                "Usage: /mcp [list|setup <name>|discover <name> <url>|connect <name> [url]|approve <task-id>|deny <task-id>|tools <server>|enable <server> <tool>|disable <server> <tool>|pause|resume|reconnect|disconnect]";
+                "Usage: /mcp [list|setup <name>|edit <name>|discover <name> <url>|connect <name> [url]|approve <task-id>|deny <task-id>|tools <server>|enable <server> <tool>|disable <server> <tool>|pause|resume|reconnect|disconnect]";
         };
     }
 
@@ -204,6 +217,22 @@ public class McpReflex implements AgentReflex {
             return format(snapshot, execution.operation().toLowerCase(Locale.ROOT));
         }
         return "✅ MCP operation completed.";
+    }
+
+    private static String channelType(MessageContext context) {
+        if (context != null && context.getChannelType() != null) {
+            return context.getChannelType().id();
+        }
+        return "chat";
+    }
+
+    private static String channelId(MessageContext context, String chatId) {
+        String candidate = context == null ? chatId : context.getChatId();
+        return candidate == null || candidate.isBlank() ? "unknown" : candidate;
+    }
+
+    private String setupLink(String token) {
+        return setupLinkService == null ? "/#/mcp/setup?token=" + token : setupLinkService.link(token);
     }
 
     private static void requireArgs(String[] args, int count, String usage) {

@@ -37,6 +37,7 @@ POST /api/v1/mcp/connect
 
 - `amsha.mcp.server-enabled` (Env: `AMSHA_MCP_SERVER_ENABLED`, default `true`): Enable the outbound MCP connection REST API.
 - `amsha.mcp.setup-token-secret` (Env: `AMSHA_MCP_SETUP_TOKEN_SECRET`, default empty): HMAC-SHA-256 secret for ten-minute, single-use, user-bound channel-to-UI setup links. Set a stable random value in production; an empty value creates a process-local secret and invalidates links on restart.
+- `amsha.mcp.setup-ui-base-url` (Env: `AMSHA_MCP_SETUP_UI_BASE_URL`, default empty): Public Amsha UI base URL used to make setup/edit links clickable from Telegram, Discord, Slack, and other remote channels. Empty keeps the local relative `/#/mcp/setup` path.
 - `amsha.mcp.health-check-interval-ms` (Env: `AMSHA_MCP_HEALTH_CHECK_INTERVAL_MS`, default `15000`): Interval to check health of active SSE/HTTP outbound MCP connections.
 - `amsha.mcp.podman.health-check-interval-ms` (Env: `AMSHA_MCP_PODMAN_HEALTH_CHECK_INTERVAL_MS`, default `15000`): Interval to check health of active Podman/Stdio outbound MCP connections.
 

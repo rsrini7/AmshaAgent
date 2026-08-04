@@ -150,12 +150,13 @@ export class ArcClient {
     name: string,
     url: string,
     headers: Record<string, string> = {},
+    clearCredentials = false,
     revision?: number
   ): Promise<McpConnection | McpPendingApproval> {
     return this.request<McpConnection | McpPendingApproval>(`/mcp/connect/${encodeURIComponent(name)}`, {
       method: 'PATCH',
       headers: { ...this.headers(), ...this.revisionHeaders(revision) },
-      body: JSON.stringify({ url, headers }),
+      body: JSON.stringify({ url, headers, clearCredentials }),
     });
   }
 
@@ -217,8 +218,8 @@ export class ArcClient {
     await this.request<void>(`/mcp/connect/${encodeURIComponent(name)}`, { method: 'DELETE', headers: this.revisionHeaders(revision) });
   }
 
-  async redeemMcpSetup(token: string): Promise<{ serverName: string; channelType: string; expiresAt: string }> {
-    return this.request<{ serverName: string; channelType: string; expiresAt: string }>('/mcp/setup/redeem', {
+  async redeemMcpSetup(token: string): Promise<{ serverName: string; channelType: string; mode?: string; expiresAt: string }> {
+    return this.request<{ serverName: string; channelType: string; mode?: string; expiresAt: string }>('/mcp/setup/redeem', {
       method: 'POST',
       body: JSON.stringify({ token }),
     });

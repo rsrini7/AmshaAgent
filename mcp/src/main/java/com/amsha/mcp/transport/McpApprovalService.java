@@ -41,7 +41,7 @@ public class McpApprovalService {
             String endpoint,
             Map<String, String> headers,
             String toolName) {
-        return request(userId, operation, name, endpoint, headers, toolName, null);
+        return request(userId, operation, name, endpoint, headers, toolName, null, false);
     }
 
     public PendingApproval request(
@@ -52,6 +52,18 @@ public class McpApprovalService {
             Map<String, String> headers,
             String toolName,
             Long expectedRevision) {
+        return request(userId, operation, name, endpoint, headers, toolName, expectedRevision, false);
+    }
+
+    public PendingApproval request(
+            String userId,
+            Operation operation,
+            String name,
+            String endpoint,
+            Map<String, String> headers,
+            String toolName,
+            Long expectedRevision,
+            boolean clearCredentials) {
         requireUser(userId);
         if (operation == null || isBlank(name) || isBlank(endpoint)) {
             throw new IllegalArgumentException("MCP approval request is incomplete");
@@ -69,7 +81,8 @@ public class McpApprovalService {
                         headers == null ? Map.of() : Map.copyOf(headers),
                         toolName,
                         expiresAt,
-                        expectedRevision));
+                        expectedRevision,
+                        clearCredentials));
         return new PendingApproval(taskId, operation.name(), name, endpoint, toolName, expiresAt, expectedRevision);
     }
 
@@ -99,7 +112,8 @@ public class McpApprovalService {
                 operation.headers(),
                 operation.toolName(),
                 receipt,
-                operation.expectedRevision());
+                operation.expectedRevision(),
+                operation.clearCredentials());
     }
 
     public boolean reject(String userId, String taskId) {
@@ -160,7 +174,8 @@ public class McpApprovalService {
             Map<String, String> headers,
             String toolName,
             Instant expiresAt,
-            Long expectedRevision) {
+            Long expectedRevision,
+            boolean clearCredentials) {
         PendingApproval publicView() {
             return new PendingApproval(taskId, operation.name(), name, endpoint, toolName, expiresAt, expectedRevision);
         }
@@ -188,5 +203,6 @@ public class McpApprovalService {
             Map<String, String> headers,
             String toolName,
             String receiptToken,
-            Long expectedRevision) {}
+            Long expectedRevision,
+            boolean clearCredentials) {}
 }
