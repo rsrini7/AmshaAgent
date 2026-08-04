@@ -19,15 +19,31 @@ export class ArcMcpPanel extends LitElement {
   @state() private _error = '';
   @state() private _pendingApproval?: McpPendingApproval;
   @state() private _editing?: string;
-  @state() private _editUrl = '';
-  @state() private _editHeaders = '';
-  @state() private _importPreview?: McpImportPreview;
+ @state() private _editUrl = '';
+ @state() private _editHeaders = '';
+ @state() private _importPreview?: McpImportPreview;
+ @state() private _expanded = new Set<string>();
 
   static styles = css`
     :host { display: block; padding: 2rem; overflow-y: auto; }
     .header { display:flex; justify-content:space-between; align-items:flex-start; gap:1rem; margin-bottom:1.5rem; }
     h1 { margin:0; font-size:1.5rem; } p { color:var(--text-muted); margin:.4rem 0 0; }
-    .card { background:var(--bg-surface); border:1px solid var(--border); border-radius:12px; padding:1.25rem; margin-bottom:1rem; }
+ .card { background:var(--bg-surface); border:1px solid var(--border); border-radius:12px; padding:1.25rem; margin-bottom:1rem; }
+ .server-card details { width:100%; }
+ .server-card summary { list-style:none; cursor:pointer; }
+ .server-card summary::-webkit-details-marker { display:none; }
+ .server-summary { padding:.1rem; }
+ .server-head { display:flex; justify-content:space-between; gap:1rem; align-items:center; }
+ .server-title { display:flex; align-items:center; gap:.65rem; }
+ .server-title h2 { margin:0; }
+ .server-endpoint { font-family:monospace; overflow-wrap:anywhere; }
+ .server-meta { font-size:.8rem; }
+ .summary-chevron { color:var(--accent-secondary); font-size:1.25rem; transition:transform .15s ease; }
+ .server-card details[open] .summary-chevron { transform:rotate(180deg); }
+ .server-content { border-top:1px solid var(--border); margin-top:1rem; padding-top:.25rem; }
+ .connections-toolbar { display:flex; justify-content:space-between; align-items:end; gap:1rem; margin:1.5rem 0 .75rem; }
+ .connections-toolbar h2 { margin:0; font-size:1.1rem; }
+ .empty-state { text-align:center; }
     .form { display:grid; grid-template-columns:1fr 2fr; gap:.75rem; align-items:center; }
     label { color:var(--text-muted); font-size:.85rem; } input, textarea { width:100%; box-sizing:border-box; padding:.65rem; background:var(--bg-base); border:1px solid var(--border); border-radius:7px; color:var(--text-primary); }
     textarea { min-height:4rem; font-family:monospace; } button { border:1px solid var(--border); background:var(--bg-elevated); color:var(--text-primary); border-radius:7px; padding:.55rem .8rem; cursor:pointer; } button.primary { background:var(--accent); color:white; border-color:var(--accent); } button.danger { color:#f87171; } button:disabled { opacity:.5; cursor:wait; }
@@ -96,7 +112,8 @@ export class ArcMcpPanel extends LitElement {
           revision: 0,
         })),
       };
-      this._connections = [...this._connections.filter(c => c.name !== connection.name), connection];
+ this._connections = [...this._connections.filter(c => c.name !== connection.name), connection];
+ this._expanded = new Set([...this._expanded, connection.name]);
       this._message = `Discovered ${connection.discoveredToolCount} tools. Nothing is enabled yet. Click Connect to persist it.`;
     } catch (error) { this._error = this._messageFor(error); }
     finally { this._busy = false; }
@@ -260,41 +277,112 @@ export class ArcMcpPanel extends LitElement {
     return 'taskId' in value;
   }
 
-  private _isConnection(value: McpConnection | McpDiscoveryPreview): value is McpConnection {
-    return 'state' in value;
-  }
+ private _isConnection(value: McpConnection | McpDiscoveryPreview): value is McpConnection {
+  return 'state' in value;
+ }
 
-  private _renderEditForm() {
-    if (!this._editing) {
-      return html`<section class="card"><h2>Import MCP config</h2><p>Choose a local .mcp.json file. Preview is bounded and does not contact a server.</p><input type="file" accept=".json,application/json" @change=${this._previewImport} ?disabled=${this._busy} />${this._importPreview ? html`<div class="tools"><p>${this._importPreview.fileName} · expires ${this._importPreview.expiresAt}</p>${this._importPreview.entries.map(entry => html`<div class="tool"><span class="tool-name">${entry.name} · ${entry.endpoint || entry.reason}</span><button @click=${() => this._applyImport(entry)} ?disabled=${!entry.supported || this._busy}>${entry.supported ? 'Apply' : 'Unsupported'}</button></div>`)}</div>` : ''}</section><div class="actions">${this._connections.filter(connection => connection.state !== 'PREVIEW').map(connection => html`<button @click=${() => this._startEdit(connection)}>Edit ${connection.name}</button>`)}</div>`;
-    }
-    const connection = this._connections.find(item => item.name === this._editing);
-    if (!connection) return '';
-    return html`<section class="card"><h2>Edit ${connection.name}</h2><div class="form">
-      <label for="mcp-edit-url">MCP endpoint</label>
-      <input id="mcp-edit-url" .value=${this._editUrl} @input=${(event: InputEvent) => this._editUrl = (event.target as HTMLInputElement).value} />
-      <label for="mcp-edit-headers">Replacement headers JSON</label>
-      <textarea id="mcp-edit-headers" .value=${this._editHeaders} @input=${(event: InputEvent) => this._editHeaders = (event.target as HTMLTextAreaElement).value} placeholder="Leave blank to keep stored credentials"></textarea>
-    </div><div class="actions"><button class="primary" @click=${() => this._saveEdit(connection)} ?disabled=${this._busy}>Save and request approval</button><button @click=${() => this._editing = undefined}>Cancel</button></div></section>`;
-  }
+ private _toggleExpanded(name: string, expanded: boolean) {
+  const next = new Set(this._expanded);
+  if (expanded) next.add(name);
+  else next.delete(name);
+  this._expanded = next;
+ }
 
-  render() {
-    return html`${this._renderEditForm()}
-      <div class="header"><div><h1>MCP connections</h1><p>Connect remote MCP servers, review discovered tools, and activate only what you need.</p></div><button @click=${this._load} ?disabled=${this._busy}>Refresh</button></div>
-      <section class="card"><h2>Add a server</h2><p>Credentials are sent over the authenticated API and stored server-side in the vault. They are never included in chat or Telegram commands.</p>
-        <div class="form"><label for="mcp-name">Name</label><input id="mcp-name" .value=${this._name} @input=${(e: InputEvent) => this._name = (e.target as HTMLInputElement).value} placeholder="tapetide" />
-        <label for="mcp-url">MCP endpoint</label><input id="mcp-url" .value=${this._url} @input=${(e: InputEvent) => this._url = (e.target as HTMLInputElement).value} placeholder="https://example.com/mcp" />
-        <label for="mcp-headers">Headers JSON (optional)</label><textarea id="mcp-headers" .value=${this._headers} @input=${(e: InputEvent) => this._headers = (e.target as HTMLTextAreaElement).value} placeholder='{"authorization":"Bearer …"}'></textarea></div>
-        <div class="actions"><button class="primary" @click=${this._discover} ?disabled=${this._busy}>Test and discover</button></div>
-      </section>
-      ${this._pendingApproval ? html`<div class="notice">Approval required: ${this._pendingApproval.operation} for ${this._pendingApproval.name} <button class="primary" @click=${this._approvePending} ?disabled=${this._busy}>Approve</button><button @click=${this._rejectPending} ?disabled=${this._busy}>Reject</button></div>` : ''}
-      ${this._message ? html`<div class="notice">${this._message}</div>` : ''}${this._error ? html`<div class="error">${this._error}</div>` : ''}
-      ${this._connections.map(connection => html`<section class="card"><div class="server-head"><div><h2>${connection.name}</h2><p>${connection.endpoint}</p></div><span class="state">${connection.state} · ${connection.enabledToolCount}/${connection.discoveredToolCount} enabled</span></div>
-              <div class="actions">${connection.state === 'PREVIEW'
-                ? html`<button class="primary" @click=${() => this._connectPreview(connection)} ?disabled=${this._busy}>Connect</button>`
-                : html`<button @click=${() => this._action(() => this._client.activateMcp(connection.name, connection.revision), 'Activated enabled tools.')}>Activate</button><button @click=${() => this._action(() => this._client.reconnectMcp(connection.name, connection.revision), 'Reconnected.')}>Reconnect</button><button @click=${() => this._action(() => connection.state === 'PAUSED' ? this._client.resumeMcp(connection.name, connection.revision) : this._client.pauseMcp(connection.name, connection.revision))}>${connection.state === 'PAUSED' ? 'Resume' : 'Pause'}</button><button class="danger" @click=${() => this._action(async () => { await this._client.disconnectMcp(connection.name, connection.revision); return { ...connection, state: 'DISCONNECTED' }; }, 'Disconnected.')}>Disconnect</button>`}</div>
-              <div class="tools"><strong>Discovered tools</strong>${connection.tools.length ? connection.tools.map(tool => html`<div class="tool"><div><div class="tool-name">${tool.toolName}</div><div class="tool-desc">${tool.description || 'No description provided.'}</div></div>${connection.state === 'PREVIEW' ? html`<span class="state">Preview only</span>` : html`<button @click=${() => this._toggleTool(connection, tool.toolName, !tool.enabled)}>${tool.enabled ? 'Disable' : 'Enable'}</button>`}</div>`) : html`<p>No tools discovered.</p>`}</div>
-      </section>`)}
-    `;
+ private _setAllExpanded(expanded: boolean) {
+  this._expanded = expanded ? new Set(this._connections.map(connection => connection.name)) : new Set();
+ }
+
+ private _renderEditForm() {
+  if (this._editing) {
+   const connection = this._connections.find(item => item.name === this._editing);
+   if (!connection) return '';
+   return html`<section class="card"><h2>Edit ${connection.name}</h2><div class="form">
+    <label for="mcp-edit-url">MCP endpoint</label>
+    <input id="mcp-edit-url" .value=${this._editUrl} @input=${(event: InputEvent) => this._editUrl = (event.target as HTMLInputElement).value} />
+    <label for="mcp-edit-headers">Replacement headers JSON</label>
+    <textarea id="mcp-edit-headers" .value=${this._editHeaders} @input=${(event: InputEvent) => this._editHeaders = (event.target as HTMLTextAreaElement).value} placeholder="Leave blank to keep stored credentials"></textarea>
+   </div><div class="actions">
+    <button class="primary" @click=${() => this._saveEdit(connection)} ?disabled=${this._busy}>Save and request approval</button>
+    <button @click=${() => this._editing = undefined}>Cancel</button>
+   </div></section>`;
   }
+  return html`<section class="card"><h2>Import MCP config</h2><p>Choose a local .mcp.json file. Preview is bounded and does not contact a server.</p>
+   <input type="file" accept=".json,application/json" @change=${this._previewImport} ?disabled=${this._busy} />
+   ${this._importPreview ? html`<div class="tools"><p>${this._importPreview.fileName} - expires ${this._importPreview.expiresAt}</p>
+    ${this._importPreview.entries.map(entry => html`<div class="tool">
+     <span class="tool-name">${entry.name} - ${entry.endpoint || entry.reason}</span>
+     <button @click=${() => this._applyImport(entry)} ?disabled=${!entry.supported || this._busy}>${entry.supported ? 'Apply' : 'Unsupported'}</button>
+    </div>`)}
+   </div>` : ''}
+  </section>`;
+ }
+
+ private _renderConnectionCard(connection: McpConnection) {
+  const isPreview = connection.state === 'PREVIEW';
+  const expanded = this._expanded.has(connection.name);
+  return html`<section class="card server-card">
+   <details .open=${expanded} @toggle=${(event: Event) => this._toggleExpanded(connection.name, (event.target as HTMLDetailsElement).open)}>
+    <summary class="server-summary">
+     <div class="server-head">
+      <div>
+       <div class="server-title"><h2>${connection.name}</h2><span class="state">${connection.state}</span></div>
+       <p class="server-endpoint">${connection.endpoint}</p>
+       <p class="server-meta">${connection.transport} - ${connection.enabledToolCount}/${connection.discoveredToolCount} tools enabled</p>
+      </div>
+      <span class="summary-chevron" aria-hidden="true">v</span>
+     </div>
+    </summary>
+    <div class="server-content">
+     <div class="actions">
+      ${isPreview ? html`<button class="primary" @click=${() => this._connectPreview(connection)} ?disabled=${this._busy}>Connect</button>` : html`
+       <button @click=${() => this._startEdit(connection)}>Edit</button>
+       <button @click=${() => this._action(() => this._client.activateMcp(connection.name, connection.revision), 'Activated enabled tools.')}>Activate</button>
+       <button @click=${() => this._action(() => this._client.reconnectMcp(connection.name, connection.revision), 'Reconnected.')}>Reconnect</button>
+       <button @click=${() => this._action(() => connection.state === 'PAUSED'
+        ? this._client.resumeMcp(connection.name, connection.revision)
+        : this._client.pauseMcp(connection.name, connection.revision))}>
+        ${connection.state === 'PAUSED' ? 'Resume' : 'Pause'}
+       </button>
+       <button class="danger" @click=${() => this._action(async () => {
+        await this._client.disconnectMcp(connection.name, connection.revision);
+        return { ...connection, state: 'DISCONNECTED' };
+       }, 'Disconnected.')}>Disconnect</button>
+      `}
+     </div>
+     <div class="tools"><strong>Discovered tools</strong>
+      ${connection.tools.length ? connection.tools.map(tool => html`<div class="tool">
+       <div><div class="tool-name">${tool.toolName}</div><div class="tool-desc">${tool.description || 'No description provided.'}</div></div>
+       ${isPreview ? html`<span class="state">Preview only</span>` : html`<button @click=${() => this._toggleTool(connection, tool.toolName, !tool.enabled)}>${tool.enabled ? 'Disable' : 'Enable'}</button>`}
+      </div>`) : html`<p>No tools discovered.</p>`}
+     </div>
+    </div>
+   </details>
+  </section>`;
+ }
+
+ render() {
+  return html`
+   ${this._renderEditForm()}
+   <div class="header"><div><h1>MCP connections</h1><p>Connect remote MCP servers, review discovered tools, and activate only what you need.</p></div><button @click=${this._load} ?disabled=${this._busy}>Refresh</button></div>
+   <section class="card"><h2>Add server</h2><p>Credentials are sent over the authenticated API and stored server-side in the vault; they are never included in chat or Telegram commands.</p>
+    <div class="form">
+     <label for="mcp-name">Name</label><input id="mcp-name" .value=${this._name} @input=${(event: InputEvent) => this._name = (event.target as HTMLInputElement).value} placeholder="tapetide" />
+     <label for="mcp-url">MCP endpoint</label><input id="mcp-url" .value=${this._url} @input=${(event: InputEvent) => this._url = (event.target as HTMLInputElement).value} placeholder="https://example.com/mcp" />
+     <label for="mcp-headers">Headers JSON (optional)</label><textarea id="mcp-headers" .value=${this._headers} @input=${(event: InputEvent) => this._headers = (event.target as HTMLTextAreaElement).value} placeholder='{"authorization":"Bearer ..."}'></textarea>
+    </div>
+    <div class="actions"><button class="primary" @click=${this._discover} ?disabled=${this._busy}>Test and discover</button></div>
+   </section>
+   ${this._pendingApproval ? html`<div class="notice">Approval required: ${this._pendingApproval.operation} ${this._pendingApproval.name}
+    <button class="primary" @click=${this._approvePending} ?disabled=${this._busy}>Approve</button><button @click=${this._rejectPending} ?disabled=${this._busy}>Reject</button>
+   </div>` : ''}
+   ${this._message ? html`<div class="notice">${this._message}</div>` : ''}
+   ${this._error ? html`<div class="error">${this._error}</div>` : ''}
+   ${this._connections.length ? html`
+    <div class="connections-toolbar"><div><h2>Configured MCP servers</h2><p>${this._connections.length} connection${this._connections.length === 1 ? '' : 's'}</p></div>
+     ${this._connections.length > 1 ? html`<div class="actions"><button @click=${() => this._setAllExpanded(true)}>Expand all</button><button @click=${() => this._setAllExpanded(false)}>Collapse all</button></div>` : ''}
+    </div>
+    ${this._connections.map(connection => this._renderConnectionCard(connection))}
+   ` : html`<section class="card empty-state"><h2>No configured MCP servers</h2><p>Use Add server above or import a compatible .mcp.json file.</p></section>`}
+  `;
+ }
 }
