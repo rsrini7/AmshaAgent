@@ -548,6 +548,7 @@ Supported commands:
 
 ```text
 /mcp
+/mcp help
 /mcp list
 /mcp tools <server>
 /mcp setup <name>

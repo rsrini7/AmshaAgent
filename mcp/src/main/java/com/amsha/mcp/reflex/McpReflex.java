@@ -48,7 +48,10 @@ public class McpReflex implements AgentReflex {
     @Override
     public ReflexResult execute(String sessionId, String userId, String chatId, String input, MessageContext context) {
         String[] args = input.trim().split("\\s+");
-        if (args.length == 1 || "list".equalsIgnoreCase(args[1]) || "status".equalsIgnoreCase(args[1])) {
+        if (args.length == 1) {
+            return ReflexResult.respond(status(userId) + "\n\n" + help(), context);
+        }
+        if ("list".equalsIgnoreCase(args[1]) || "status".equalsIgnoreCase(args[1])) {
             return ReflexResult.respond(status(userId), context);
         }
         try {
@@ -61,6 +64,7 @@ public class McpReflex implements AgentReflex {
     private String executeCommand(String userId, String chatId, MessageContext context, String[] args) {
         String command = args[1].toLowerCase(Locale.ROOT);
         return switch (command) {
+            case "help" -> help();
             case "discover" -> {
                 requireArgs(args, 4, "discover <name> <https-url>");
                 yield pending(managementService.requestDiscovery(userId, args[2], args[3], Map.of()));
@@ -139,9 +143,25 @@ public class McpReflex implements AgentReflex {
                 requireArgs(args, 4, "disable <server> <tool>");
                 yield format(managementService.disableTool(userId, args[2], args[3]), "Disabled");
             }
-            default ->
-                "Usage: /mcp [list|setup <name>|edit <name>|discover <name> <url>|connect <name> [url]|approve <task-id>|deny <task-id>|tools <server>|enable <server> <tool>|disable <server> <tool>|pause|resume|reconnect|disconnect]";
+            default -> "Usage: /mcp help";
         };
+    }
+
+    private static String help() {
+        return "🧰 MCP commands:\n"
+                + "• /mcp — show status\n"
+                + "• /mcp help — show this guide\n"
+                + "• /mcp list — list managed servers\n"
+                + "• /mcp setup <name> — open the UI to add a server\n"
+                + "• /mcp edit <name> — open the UI to edit a server\n"
+                + "• /mcp discover <name> <https-url> — preview tools\n"
+                + "• /mcp connect <name> [https-url] — connect or reconnect\n"
+                + "• /mcp tools <server> — list discovered tools\n"
+                + "• /mcp enable <server> <tool> — request tool activation\n"
+                + "• /mcp disable <server> <tool> — deactivate a tool\n"
+                + "• /mcp pause|resume|reconnect|disconnect <server>\n"
+                + "• /mcp approve <task-id> or /mcp deny <task-id>\n"
+                + "\nCredentials and custom headers must be entered in the MCP tab, never in chat.";
     }
 
     private String status(String userId) {

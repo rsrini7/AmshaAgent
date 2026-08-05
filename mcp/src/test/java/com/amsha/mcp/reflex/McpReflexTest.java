@@ -77,6 +77,31 @@ class McpReflexTest {
     }
 
     @Test
+    void helpExplainsMcpCommandsWithoutCallingManagementService() {
+        ReflexResult result = reflex.execute("sess-1", "user1", "chat1", "/mcp help", context());
+
+        String output = result.commandResponse().orElseThrow();
+        assertTrue(output.contains("/mcp setup <name>"));
+        assertTrue(output.contains("/mcp edit <name>"));
+        assertTrue(output.contains("/mcp approve <task-id>"));
+        verifyNoInteractions(managementService);
+    }
+
+    @Test
+    void bareMcpPrintsStatusAndHelp() {
+        reflex.managementService = null;
+        when(mcpToolBridge.getExposedTools()).thenReturn(Collections.emptyList());
+        when(registry.getAll()).thenReturn(Collections.emptyList());
+
+        ReflexResult result = reflex.execute("sess-1", "user1", "chat1", "/mcp", context());
+
+        String output = result.commandResponse().orElseThrow();
+        assertTrue(output.contains("MCP Status"));
+        assertTrue(output.contains("/mcp help"));
+        assertTrue(output.contains("/mcp setup <name>"));
+    }
+
+    @Test
     void discoverCreatesApprovalTaskInsteadOfCallingRemoteDirectly() {
         reflex.managementService = managementService;
         var pending = new McpApprovalService.PendingApproval(
