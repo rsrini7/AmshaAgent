@@ -81,6 +81,10 @@ try {
     Copy-Item -Path "ui/dist/*" -Destination $target -Recurse -Force
     Write-Host '✅  UI copied to Quarkus resources.'
 
+    # Repackage after the UI copy so the application artifacts contain the fresh bundle.
+    & $mvnw verify -DskipTests --no-transfer-progress -T $threads
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
     Write-Host '✅  Full build complete.'
 } finally {
     if ($envBackup -and (Test-Path '.env.build-backup')) {

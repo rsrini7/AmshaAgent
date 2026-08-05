@@ -6,10 +6,17 @@ incidents live in [Architecture Invariants](docs/Architecture_Invariants.md).
 ## Required checks
 
 - After Java edits: `python3 ./scripts/fix_fqns.py && ./mvnw spotless:apply -q`.
+- Before building or handing off Java changes, run the module-scoped PMD gate:
+  `./mvnw -pl <affected-module> -am pmd:check -DskipTests`.
+- PMD uses `app/src/main/resources/amsha-rules.xml`: methods are limited to 80
+  NCSS statements, cognitive complexity is limited to 50, and classes are limited
+  to 500 lines. A PMD pass is required even when the build uses `-DskipTests`;
+  `package` alone does not reach the PMD `verify` execution.
 - After Markdown edits: `python3 ./scripts/verify_docs.py`.
 - Before committing: `mise run sonar:issues` (or the BLOCKER-only variant).
-- Verify changes proportionally: compile affected modules, run focused tests, and
-  run `./mvnw clean install -DskipTests` after changing a dependency module.
+- Verify changes proportionally: compile affected modules, run focused tests, run
+  the PMD gate, and run `./mvnw clean install -DskipTests` after changing a
+  dependency module.
 
 ## Non-negotiable invariants
 
@@ -167,8 +174,9 @@ and the memory section in `docs/Architecture_Invariants.md`.
 | --- | --- |
 | Prompt/escalation | `./mvnw test -pl core -Dtest="SystemPromptBuilderTest,PersonaEscalationServiceTest,EscalationPatternsTest"` |
 | Java | `python3 ./scripts/fix_fqns.py && ./mvnw spotless:apply -q` |
+| PMD complexity/size | `./mvnw -pl <affected-module> -am pmd:check -DskipTests` |
 | Markdown | `python3 ./scripts/verify_docs.py` |
-| Native-sensitive code | `./mvnw compile -DskipTests -q`; use `mise build:native-local` when applicable |
+| Native-sensitive code | `./mvnw compile -DskipTests -q`; use `mise run build:native-local` when applicable (it rebuilds the UI, runs PMD via `verify`, and packages the native image) |
 | SkillsJar dependencies | `python3 ./scripts/verify_skillsjar_index.py` |
 | Classifier SPIs | `./mvnw -pl core -Dtest="PostPolicyToolRiskDispatcherTest,AnswerQualityDispatcherTest,ToolInvocationGuardTest,FinishActionHandlerTest" test` |
 | Classifier controls | `./mvnw -pl local-ml-onnx,app -am -Dtest="OnnxClassifierRuntimeControlTest,OnnxAdminResourceTest,SecurityEventTypeTest" -Dsurefire.failIfNoSpecifiedTests=false test` |

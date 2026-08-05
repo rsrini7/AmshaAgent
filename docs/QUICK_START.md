@@ -53,6 +53,16 @@ mise run build:native-local
 ./mvnw package -Dnative -Pnative
 ```
 
+`build:native-local` builds and copies the UI before native packaging, then
+runs Maven `verify`, including the project PMD gate. For a focused Java check:
+
+```bash
+python3 ./scripts/fix_fqns.py
+./mvnw spotless:apply -q
+./mvnw -pl <affected-module> -am pmd:check -DskipTests
+mise run sonar:issues
+```
+
 ## Docker Compose
 
 ```bash

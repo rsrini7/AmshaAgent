@@ -58,8 +58,11 @@ try {
         }
     }
 
-    $env:MAVEN_OPTS = '--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow'
-    & $mvnw clean package -Pnative -pl app -am -DskipTests "-Damsha.build.backend=fs" "-Damsha.persistence.backend=fs" "-Dquarkus.profile=prod,filesystem" '-Dquarkus.native.container-build=false' "-Dquarkus.native.native-image-xmx=${targetGB}g" @nativeAdditionalBuildArgs
+mise run build:ui:copy
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+$env:MAVEN_OPTS = '--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow'
+& $mvnw clean verify -Pnative -pl app -am -DskipTests "-Damsha.build.backend=fs" "-Damsha.persistence.backend=fs" "-Dquarkus.profile=prod,filesystem" '-Dquarkus.native.container-build=false' "-Dquarkus.native.native-image-xmx=${targetGB}g" @nativeAdditionalBuildArgs
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     Write-Host "✅  Filesystem native build complete: app/target/amsha-app-0.1.0-SNAPSHOT$suffix"
     Write-Host '▶   Copying to dist/amsha-fs...'

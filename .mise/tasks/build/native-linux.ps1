@@ -44,6 +44,9 @@ if ($IsWindows) {
         Write-Host '    To silence: set AMSHA_NATIVE_BUILD=local in .env'
     }
 }
+mise run build:ui:copy
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
 $containerFlag = if ($strategy -eq 'container') { '-Dquarkus.native.container-build=true' } else { '-Dquarkus.native.container-build=false' }
 
 # ── .env shield ───────────────────────────────────────────────────────────────
@@ -112,7 +115,7 @@ if ($strategy -eq 'container') {
         Write-Host "🧠 Allocating ${targetGB}G for native-image (VM ${vmMemMB}MB - ${overheadGB}GB overhead)..."
 
         $env:MAVEN_OPTS = $mOpts
-        & $mvnw clean package -Pnative -pl app -am -DskipTests "-Damsha.persistence.backend=sqlite" "-Dquarkus.profile=prod" "-Dquarkus.native.native-image-xmx=${targetGB}g" $containerFlag
+        & $mvnw clean verify -Pnative -pl app -am -DskipTests "-Damsha.persistence.backend=sqlite" "-Dquarkus.profile=prod" "-Dquarkus.native.native-image-xmx=${targetGB}g" $containerFlag
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
         if ($args -contains '--clean' -or $args -contains '-c') {
             mise run dist:dist -- --clean
@@ -140,7 +143,7 @@ if ($strategy -eq 'container') {
 
         mise use --path mise.toml java@graalvm-community-25.0.2
         $env:MAVEN_OPTS = $mOpts
-        & $mvnw clean package -Pnative -pl app -am -DskipTests "-Damsha.persistence.backend=sqlite" "-Dquarkus.profile=prod" "-Dquarkus.native.native-image-xmx=${targetGB}g" $containerFlag
+        & $mvnw clean verify -Pnative -pl app -am -DskipTests "-Damsha.persistence.backend=sqlite" "-Dquarkus.profile=prod" "-Dquarkus.native.native-image-xmx=${targetGB}g" $containerFlag
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
         if ($args -contains '--clean' -or $args -contains '-c') {
             mise run dist:dist -- --clean
