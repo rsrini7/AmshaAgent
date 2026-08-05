@@ -200,18 +200,20 @@ Apache Camel's `camel-telegram` component handles the long-polling lifecycle, gr
 
 | Role | Deity | Key Constraint | Use For |
 |---|---|---|---|
-| `coordinator` | Vishnu | Can use all tools | General tasks, delegation, scheduling |
-| `researcher` | Saraswati | Read-only tools only; never fabricates | External data retrieval, GitHub lookups |
-| `coder` | Brahma | sandbox_exec + manage_checklist + register_mcp_server | Code execution, engineering tasks |
-| `debugger` | Shiva | GitHub only; contrarian by design | Bug analysis, stack traces, security audits |
-| `architect` | Brihaspati | GitHub + memory search; never writes code | ADRs, design reviews, trade-off analysis |
-| `synthesizer` | Dattatreya | All tools; only for cross-domain tasks | Multi-agent output integration |
-| `optimizer` | Ganesha | GitHub + sandbox; sub-agent of Shiva | Complex logic, obstacle removal, recursion |
-| `sentinel` | Kartikeya | GitHub + sandbox; sub-agent of Shiva | Security scanning, input validation |
-| `healer` | Lakshmi | GitHub + memory; dual role | Error recovery, token optimization |
-| `protector` | Durga | GitHub + memory | Policy enforcement, guardrails |
-| `purifier` | Kali | GitHub + memory | Cleanup, lifecycle management |
-| `nurturer` | Parvati | GitHub + memory + ingest_document | Empathy, tone analysis, sentiment |
+| `coordinator` | Vishnu | Orchestration tools, memory, ingest_document, web_fetch, scheduling, garuda | General tasks, scheduling, delegation |
+| `researcher` | Saraswati | GitHub, web/search/fetch, memory, agent_task, garuda | External data retrieval and source-backed analysis |
+| `coder` | Brahma | sandbox_exec, manage_checklist, register_mcp_server, memory, garuda | Code execution and engineering tasks |
+| `debugger` | Shiva | GitHub, sandbox_exec, manage_checklist, register_mcp_server, recall_memory_search, garuda | Bug analysis, stack traces, security audits |
+| `architect` | Brihaspati | GitHub, memory, garuda; never executes code | ADRs, design reviews, trade-off analysis |
+| `synthesizer` | Dattatreya | GitHub, web/search/fetch, scheduling, memory, ingest_document, agent_task, garuda | Cross-domain output integration |
+| `optimizer` | Ganesha | garuda; unsupported tools redelegate to their owner | Complex logic and obstacle removal |
+| `sentinel` | Kartikeya | garuda; unsupported tools redelegate to their owner | Security scanning and input validation |
+| `healer` | Lakshmi | garuda; unsupported tools redelegate to their owner | Error recovery and token optimization |
+| `protector` | Durga | garuda; unsupported tools redelegate to their owner | Policy enforcement and guardrails |
+| `purifier` | Kali | garuda; unsupported tools redelegate to their owner | Cleanup and lifecycle management |
+| `nurturer` | Parvati | ingest_document, garuda | Empathy, tone analysis, sentiment |
+
+Direct access is intentionally narrow. If any persona requests a known tool it does not own, the loop delegates through `garuda` to the tool's owner; approval-resume and parallel-batch paths use the same rule. This preserves least privilege without granting every persona every tool.
 
 The `SkillAwareIntentDetector` checks `SkillRegistry` first (zero classification tokens), then falls through to `llama-3.1-8b-instant` to auto-route incoming messages to the best role. You can also specify a role explicitly via `--role` on the CLI or `agentRole` in the REST payload.
 

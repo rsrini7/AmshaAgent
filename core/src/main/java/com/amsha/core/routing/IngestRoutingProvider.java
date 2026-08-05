@@ -16,7 +16,7 @@ public class IngestRoutingProvider implements IntentRoutingProvider {
     // and does NOT match negations like "do not schedule" or
     // "cancel my reminder". If the pattern is ever broadened,
     // add a shouldSkip() guard via IntentRoutingProvider.shouldSkip()
-    // default method to handle negations. 
+    // default method to handle negations.
     private static final Pattern COORDINATOR_FORCE_PATTERN = Pattern.compile(
             "(?i)^\\s*(ingest|store this|add to (knowledge|rag|memory|kb)|"
                     + "remember this|save this|learn this|index this|"

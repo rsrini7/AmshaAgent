@@ -22,6 +22,7 @@ import com.amsha.common.util.LogUtil;
 import com.amsha.core.agent.reasoning.ParallelToolCall;
 import com.amsha.core.agent.reasoning.ReasoningStep;
 import com.amsha.core.agent.result.AgentResult;
+import com.amsha.core.agent.role.ToolCapability;
 import com.amsha.core.governance.BudgetExceededException;
 import com.amsha.core.governance.GovernanceStrategy;
 import com.amsha.core.governance.RateLimitTracker;
@@ -70,6 +71,7 @@ public class ParallelToolStepExecutor {
     private final long toolTimeoutSeconds;
     private final BatchResultAggregator batchResultAggregator;
     private final ToolCategoryMapper categoryMapper;
+    private final ToolDelegationResolver delegationResolver;
 
     @Inject
     public ParallelToolStepExecutor(
@@ -83,6 +85,7 @@ public class ParallelToolStepExecutor {
             SequentialToolExecutor sequentialToolExecutor,
             Instance<ManagedExecutor> managedExecutors,
             ToolCategoryMapper categoryMapper,
+            ToolDelegationResolver delegationResolver,
             @ConfigProperty(name = "amsha.hitl.pre-executable-tools", defaultValue = "")
                     Optional<List<String>> preExecutableTools,
             @ConfigProperty(name = "amsha.parallel.tool-timeout-seconds", defaultValue = "60")
@@ -99,11 +102,25 @@ public class ParallelToolStepExecutor {
         this.categoryMapper = categoryMapper;
         this.preExecutableTools = preExecutableTools;
         this.toolTimeoutSeconds = toolTimeoutSeconds;
+        this.delegationResolver = delegationResolver;
         this.batchResultAggregator = new BatchResultAggregator(objectMapper, this.observers);
     }
 
     protected ParallelToolStepExecutor() {
-        this(null, null, null, null, null, null, null, null, null, null, Optional.empty(), 60);
+        this(
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                new ToolDelegationResolver(),
+                Optional.empty(),
+                60);
     }
 
     private ManagedExecutor executorFor(ToolCategory category) {
@@ -218,7 +235,8 @@ public class ParallelToolStepExecutor {
             int consecutiveFailures) {
 
         GuardEvaluationResult r = new GuardEvaluationResult();
-        for (ParallelToolCall call : calls) {
+        for (ParallelToolCall requestedCall : calls) {
+            ParallelToolCall call = redirectUnauthorizedCall(context, requestedCall);
             ToolInvocationGuard.GuardDecision decision = guard.evaluate(
                     context.sessionId(),
                     context.agentRole(),
@@ -262,6 +280,33 @@ public class ParallelToolStepExecutor {
             r.allowedCalls.add(call);
         }
         return r;
+    }
+
+    private ParallelToolCall redirectUnauthorizedCall(AgentExecutionContext context, ParallelToolCall call) {
+        if (delegationResolver == null) {
+            return call;
+        }
+        var owner = delegationResolver.resolveOwner(context.agentRole(), call.toolName());
+        if (owner.isEmpty()) {
+            return call;
+        }
+        try {
+            Map<String, Object> delegationParams = Map.of(
+                    "agent",
+                    owner.get(),
+                    "goal",
+                    ToolStepResolutionUtils.buildDelegateGoal(call.toolName(), call.params()));
+            String paramsJson = objectMapper.writeValueAsString(delegationParams);
+            log.warnf(
+                    "[PARALLEL-GUARD] Redirecting unauthorized tool %s from role %s to %s in session %s",
+                    call.toolName(), context.agentRole(), owner.get(), context.sessionId());
+            return ParallelToolCall.pending(
+                    call.callId(), ToolCapability.DELEGATE_TO_AGENT.toolName(), delegationParams, paramsJson);
+        } catch (Exception e) {
+            log.warnf(
+                    "[PARALLEL-GUARD] Could not build delegation for %s: %s", call.toolName(), LogUtil.rootMessage(e));
+            return call;
+        }
     }
 
     private List<ParallelToolCall> runAllowedCallsAsync(

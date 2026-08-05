@@ -6,7 +6,6 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
 import java.util.Locale;
-import java.util.stream.Collectors;
 
 import com.amsha.common.util.LogUtil;
 import com.amsha.core.agent.AgentSentinels;
@@ -114,11 +113,7 @@ public class DelegationProcessor {
     }
 
     public String getDelegatableAgentList() {
-        return AgentRoleEnum.values().stream()
-                .filter(role -> !role.equals(AgentRoleEnum.COORDINATOR))
-                .flatMap(role -> role.definition().aliases().stream())
-                .sorted()
-                .collect(Collectors.joining(", "));
+        return AgentRoleEnum.getDelegatableRoleNames();
     }
 
     public static String stripSurroundingQuotes(String s) {

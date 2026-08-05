@@ -317,22 +317,22 @@ When a `host_exec` goal matches `HostExecTool.BROWSER_PREVIEW_GOAL_PATTERN` and 
 
 | Role | Persona | Tools | Max Iter |
 |---|---|---|---|
-| `coordinator` | Vishnu | github, web_fetch, schedule, memory (5), garuda, agent_task | 7 |
-| `coder` | Brahma | sandbox_exec, manage_checklist, memory (5), garuda | 15 |
-| `debugger` | Shiva | github, sandbox_exec, manage_checklist, recall_memory_search, garuda | 15 |
-| `researcher` | Saraswati | github, web_fetch, brave/serper search, memory (5), garuda, agent_task | 10 |
-| `architect` | Brihaspati | github, memory (5), garuda | 7 |
-| `synthesizer` | Dattatreya | github, web_fetch, schedule, brave/serper search, memory (5), ingest_document, garuda, agent_task | 10 |
-| `optimizer` | Ganesha | sandbox_exec, garuda | 10 |
-| `sentinel` | Kartikeya | sandbox_exec, garuda | 10 |
-| `healer` | Lakshmi | garuda | 10 |
-| `protector` | Durga | garuda | 10 |
-| `purifier` | Kali | garuda | 10 |
+| `coordinator` | Vishnu | github, web_fetch, schedule/manage, memory (6), ingest_document, self_evolve_reflect, garuda, agent_task | 7 |
+| `coder` | Brahma | sandbox_exec, manage_checklist, register_mcp_server, memory (6), garuda | 15 |
+| `debugger` | Shiva | github, sandbox_exec, manage_checklist, register_mcp_server, recall_memory_search, garuda | 15 |
+| `researcher` | Saraswati | github, web_fetch, brave/serper search, memory (6), garuda, agent_task | 10 |
+| `architect` | Brihaspati | github, memory (6), garuda | 7 |
+| `synthesizer` | Dattatreya | github, web_fetch, schedule/manage, brave/serper search, memory (6), ingest_document, garuda, agent_task | 10 |
+| `optimizer` | Ganesha | garuda; unsupported tools redelegate to their owner | 10 |
+| `sentinel` | Kartikeya | garuda; unsupported tools redelegate to their owner | 10 |
+| `healer` | Lakshmi | garuda; unsupported tools redelegate to their owner | 10 |
+| `protector` | Durga | garuda; unsupported tools redelegate to their owner | 10 |
+| `purifier` | Kali | garuda; unsupported tools redelegate to their owner | 10 |
 | `nurturer` | Parvati | garuda, ingest_document | 10 |
 
-**memory (5)** = `recall_memory_search`, `archival_memory_search`, `core_memory_read`, `core_memory_append`, `core_memory_replace`, `archival_memory_insert` (6 tools; debugger only gets `recall_memory_search`).
+**memory (6)** = `recall_memory_search`, `archival_memory_search`, `core_memory_read`, `core_memory_append`, `core_memory_replace`, `archival_memory_insert` (debugger only gets `recall_memory_search`).
 
-All 12 roles have `garuda` for delegation. Tool schemas dynamically assembled via `@ToolMetadata(defaultRoles=...)`.
+All 12 roles have `garuda` for delegation. An unauthorized known tool is rewritten to a `garuda` call targeting the centralized owner persona; this applies in the normal loop, approval resume, and parallel-batch resume. Tool schemas are dynamically assembled via `@ToolMetadata(defaultRoles=...)`.
 
 ---
 
@@ -583,7 +583,7 @@ graph TD
 | Serper Web Search | `serper_web_search` | `NETWORK_OUTBOUND` | researcher, synthesizer |
 | Smart Web Fetch | `web_fetch` | `NETWORK_OUTBOUND` | researcher, synthesizer, coordinator |
 | Sandbox Exec | `sandbox_exec` | `EXECUTE_SHELL` | coder, debugger |
-| Playwright CLI | `browser_navigate` | `NETWORK_OUTBOUND` | coder |
+| Playwright CLI | `browser_navigate` | `NETWORK_OUTBOUND` | researcher (delegation owner) |
 | Recall Memory Search | `recall_memory_search` | `READ_FS` | architect, coordinator, researcher, synthesizer, coder, debugger |
 | Archival Memory Search | `archival_memory_search` | `READ_FS` | architect, coordinator, researcher, synthesizer, coder |
 | Core Memory Read | `core_memory_read` | `READ_FS` | architect, coordinator, researcher, synthesizer, coder |
@@ -596,7 +596,7 @@ graph TD
 | Manage Checklist | `manage_checklist` | `READ_FS` | coder, debugger |
 | Agent Task | `agent_task` | `WRITE_FS` | coordinator, synthesizer, researcher |
 | Delegate (Garuda) | `garuda` | `DELEGATE_AUTONOMOUS` | all 12 roles |
-| Register MCP Server | `register_mcp_server` | `NETWORK_OUTBOUND` | (dynamic) |
+| Register MCP Server | `register_mcp_server` | `NETWORK_OUTBOUND` | coder, debugger |
 | MCP dynamic tools | (varies) | (varies) | all roles with MCP |
 
 ### Governance by Autonomy Level

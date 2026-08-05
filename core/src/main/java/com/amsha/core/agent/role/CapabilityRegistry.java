@@ -6,6 +6,7 @@ import java.util.Collections;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
 
 import org.jboss.logging.Logger;
 
@@ -62,6 +63,20 @@ public class CapabilityRegistry {
     public boolean hasCapability(String roleId, String toolName) {
         Set<String> tools = roleSupplementalTools.get(roleId);
         return tools != null && tools.contains(toolName);
+    }
+
+    /**
+     * Returns the registered roles that have a capability. Used by routing
+     * code to find an owner for dynamically discovered tools.
+     */
+    public Set<String> rolesWithCapability(String toolName) {
+        if (toolName == null || toolName.isBlank()) {
+            return Set.of();
+        }
+        return roleSupplementalTools.entrySet().stream()
+                .filter(entry -> entry.getValue().contains(toolName))
+                .map(Map.Entry::getKey)
+                .collect(Collectors.toUnmodifiableSet());
     }
 
     /**
