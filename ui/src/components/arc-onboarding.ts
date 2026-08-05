@@ -164,6 +164,18 @@ export class ArcOnboarding extends LitElement {
     this._loading = true;
     this._error = '';
     try {
+      const status = await this._client.onboardingStatus();
+      if (status.credentialsValidated || status.skipOnboarding) {
+        this.dispatchEvent(
+          new CustomEvent('api-key-set', {
+            bubbles: true,
+            composed: true,
+            detail: { key: 'authenticated' }
+          })
+        );
+        return;
+      }
+
       const boot = await this._client.getBootstrapStatus();
       if (boot.status === 'UNCLAIMED' || boot.status === 'CLAIMING') {
         await this._client.claimFirstOwner();
