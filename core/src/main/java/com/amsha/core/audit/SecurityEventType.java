@@ -70,6 +70,10 @@ public enum SecurityEventType {
     // Configuration changes
     SETTINGS_CHANGED, // LLM provider/model/prompt updated
     SETTINGS_RESET, // all settings nuked via /settings/reset
+    CLASSIFIER_RUNTIME_CHANGE_REQUESTED, // internal Phase 3 classifier kill-switch mutation requested
+    CLASSIFIER_RUNTIME_CHANGE_ACCEPTED, // classifier kill-switch mutation accepted
+    CLASSIFIER_RUNTIME_CHANGE_REJECTED, // classifier kill-switch mutation rejected after REQUESTED
+    ONNX_MODEL_UNLOAD_REQUESTED, // internal ONNX model lifecycle mutation
     ONBOARDING_COMPLETED, // onboarding wizard finished
 
     // Cron admin operations (REST)
@@ -83,6 +87,7 @@ public enum SecurityEventType {
 
     // MCP admin operations (REST)
     MCP_CONNECTION_REQUESTED, // outbound MCP connection requested
+    MCP_TOOL_POLICY_ENABLED, // MCP tool policy granted executable capability
     MCP_SERVER_CONNECTED, // remote MCP server connected
     MCP_SERVER_DISCONNECTED, // remote MCP server disconnected
     MCP_CONNECTION_VALIDATION_FAILED, // outbound MCP handshake failed
@@ -134,6 +139,10 @@ public enum SecurityEventType {
                     SESSION_TERMINATED,
                     SETTINGS_CHANGED,
                     SETTINGS_RESET,
+                    CLASSIFIER_RUNTIME_CHANGE_REQUESTED,
+                    CLASSIFIER_RUNTIME_CHANGE_ACCEPTED,
+                    CLASSIFIER_RUNTIME_CHANGE_REJECTED,
+                    ONNX_MODEL_UNLOAD_REQUESTED,
                     CRON_PAUSED,
                     CRON_RESUMED,
                     CRON_FORCE_TRIGGERED,
@@ -142,6 +151,7 @@ public enum SecurityEventType {
                     MCP_SERVER_CONNECTED,
                     MCP_SERVER_DISCONNECTED,
                     MCP_CONNECTION_REQUESTED,
+                    MCP_TOOL_POLICY_ENABLED,
                     MCP_CONNECTION_VALIDATION_FAILED,
                     MCP_CREDENTIAL_CONFIGURED,
                     MCP_CREDENTIAL_ROTATED,

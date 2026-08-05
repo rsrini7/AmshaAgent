@@ -93,6 +93,28 @@ Compaction and classifier slots also support `generic-openai`:
 `AMSHA_COMPACTION_GENERIC_OPENAI_BASE_URL` and `AMSHA_CLASSIFIER_GENERIC_OPENAI_*`
 vars. See Compaction and Intent Classification sections below.
 
+### Local OMLX smoke workflow
+
+The repository smoke runner intentionally sources its endpoint credentials from
+`AMSHA_OMLX_API_KEY`, `AMSHA_OMLX_BASE_URL`, and `AMSHA_OMLX_MODEL` in the ignored
+root `.env`, with exported process variables taking precedence. Its isolated native
+mode maps those values to `AMSHA_GENERIC_OPENAI_*`, sets
+`AMSHA_LLM_PROVIDER=generic-openai`, forces the embedding provider to `onnx`, and
+disables Telegram; it never selects Ollama. `running` additionally requires
+`AMSHA_API_KEYS_INTERNAL` so it can call protected ONNX diagnostics. These are
+smoke-runner inputs rather than new Quarkus configuration properties.
+
+```bash
+mise run smoke:local-runtime -- omlx
+mise run smoke:local-runtime -- running --amsha-base-url http://127.0.0.1:8080
+mise run smoke:local-runtime -- native --binary dist/amsha-sqlite
+```
+
+Keep all keys in `.env` or the process environment, never in command arguments. The
+runner prints only bounded pass/fail labels and never prints headers, prompts,
+completions, or raw HTTP responses. See the
+[local ONNX guide](./ONNX_LOCAL_ML_GUIDE.md#reusable-local-runtime-smoke-runner).
+
 ## Compaction
 
 Compaction uses a multi-slot infinite-loop failover (per-slot provider list). Each
@@ -284,6 +306,27 @@ schema) and must match the model used by every active provider.
 | `AMSHA_WORKSPACE_SESSION_TTL_MINUTES` | `30` | Time-to-live in minutes for active sessions since the last heartbeat |
 | `AMSHA_RAG_VEC_PATH` | `./lib/vec0` | Path to sqlite-vec native extension |
 
+## In-Process Local ML (ONNX Runtime)
+
+| Variable | Default | Description |
+|---|---|---|
+| `AMSHA_ONNX_ENABLED` | `false` | Enable in-process ONNX Runtime Java & DJL Tokenizer ML inference |
+| `AMSHA_ONNX_MODEL_ROOT` | `data/models` | Root directory storing verified local model bundles (`data/models/`) |
+| `AMSHA_ONNX_MAX_MODEL_FILE_BYTES` | `1073741824` | Max file byte limit (1 GB) for verified ONNX model bundle files |
+| `AMSHA_ONNX_INFERENCE_THREADS` | `2` | Number of dedicated CPU worker threads for ONNX inference execution |
+| `AMSHA_ONNX_QUEUE_CAPACITY` | `64` | Maximum capacity of the bounded CPU inference task queue |
+| `AMSHA_ONNX_SHUTDOWN_GRACE` | `PT10S` | Grace period duration for draining in-flight leases before shutdown |
+| `AMSHA_ONNX_MAX_INPUT_BYTES` | `262144` | Max UTF-8 byte limit (256 KB) per input text segment |
+| `AMSHA_ONNX_MAX_BATCH_INPUT_BYTES` | `1048576` | Max UTF-8 byte limit (1 MB) per batch request |
+| `AMSHA_ONNX_MAX_BATCH_SIZE` | `32` | Maximum text segment batch size per embedding request |
+| `AMSHA_ONNX_WARMUP_ENABLED` | `true` | Enable bounded probes when the ONNX embedding slot is created; failed warm-up rejects that slot |
+| `AMSHA_ONNX_WARMUP_MAX_PROBES` | `5` | Maximum number of probe executions during session warmup |
+| `AMSHA_ONNX_WARMUP_TIMEOUT` | `PT3S` | Maximum duration limit for session warmup probing |
+| `AMSHA_EMBEDDING_ONNX_MODEL` | *(unset)* | Verified local bundle ID under `AMSHA_ONNX_MODEL_ROOT` (e.g. `all-mpnet-base-v2-e8c3b32`) |
+| `AMSHA_EMBEDDING_ONNX_TIMEOUT_SECONDS` | `5` | Request timeout in seconds for ONNX embedding model requests |
+| `AMSHA_EMBEDDING_ONNX_SPACE_ID` | *(unset)* | Vector space ID matching bundle manifest (e.g. `sentence-transformers/all-mpnet-base-v2`) |
+| `AMSHA_EMBEDDING_ONNX_SPACE_REVISION` | *(unset)* | Vector space revision matching bundle manifest Git commit SHA |
+
 ## Self-Evolution
 
 | Variable | Default | Description |
@@ -335,6 +378,19 @@ schema) and must match the model used by every active provider.
 | `AMSHA_TELEGRAM_ALLOWED_USERS` | `mock-telegram-user` | Comma-separated @usernames |
 | `AMSHA_CHANNEL_TELEGRAM_MAX_LENGTH` | `4096` | Max Telegram message length |
 
+## MCP
+
+| Variable | Default | Description |
+|---|---|---|
+| `AMSHA_MCP_SERVER_ENABLED` | `true` | Enable outbound MCP client management REST endpoints. |
+| `AMSHA_MCP_SETUP_TOKEN_SECRET` | empty | Stable HMAC-SHA-256 secret for ten-minute, single-use, user-bound setup/edit links. |
+| `AMSHA_MCP_SETUP_UI_BASE_URL` | empty | Public UI base URL for absolute setup/edit links issued by remote channels. |
+| `AMSHA_MCP_HEALTH_CHECK_INTERVAL_MS` | `15000` | Health-check interval for active HTTP/SSE MCP connections. |
+| `AMSHA_MCP_PODMAN_HEALTH_CHECK_INTERVAL_MS` | `15000` | Health-check interval for Podman MCP connections. |
+| `AMSHA_WEB_REQUIRE_AUTH` | `false` | Require WebSocket authentication; the browser platform-ID continuity fallback is accepted only when false. |
+
+MCP management behavior is documented in [MCP Management](./MCP_MANAGEMENT.md).
+
 ## Tools
 
 | Variable | Default | Description |
@@ -349,9 +405,6 @@ schema) and must match the model used by every active provider.
 | `AMSHA_TOOLS_PLAYWRIGHT_MCP_HEADLESS` | `true` | MCP browser headless mode |
 | `AMSHA_TOOLS_PLAYWRIGHT_MCP_COMMAND` | `npx` | MCP server launch command |
 | `AMSHA_TOOLS_PLAYWRIGHT_MCP_ARGS` | `@playwright/mcp` | MCP server args |
-| `AMSHA_MCP_SERVER_ENABLED` | `true` | Enable the outbound MCP client REST API for connecting to remote servers |
-| `AMSHA_MCP_HEALTH_CHECK_INTERVAL_MS` | `15000` | How often to check health of active SSE/HTTP outbound MCP connections (ms) |
-| `AMSHA_MCP_PODMAN_HEALTH_CHECK_INTERVAL_MS` | `15000` | How often to check health of active Podman/Stdio outbound MCP connections (ms) |
 | `AMSHA_TOOLS_PLAYWRIGHT_RESUMPTION_STALE_MARK_SECONDS` | `300` | Playwright resume staleness (s) |
 | `AMSHA_TOOLS_HOST_EXEC_SKILLS` | `jdb-debugger` | Skills allowed to use host_exec tool (comma-separated) |
 | `AMSHA_HOST_EXEC_MAX_OUTPUT_CHARS` | `8192` | Max output chars for host_exec tool (falls back to sandbox max) |
@@ -461,6 +514,10 @@ schema) and must match the model used by every active provider.
 | `OLLAMA_MODEL` | `mistral-small:latest` | Ollama default model |
 | `AMSHA_OPENROUTER_APP_NAME` | (repo URL) | OpenRouter app name |
 | `AMSHA_OPENROUTER_SITE_URL` | (repo URL) | OpenRouter site URL |
+
+## Interactive `.env` changes
+
+The first-run setup only changes `.env` through the interactive wizard. Each actual update is reported on stderr with the absolute path, key name, and redacted state transition (`<unset>`, `<set>`, or `disabled`); secret values are never printed. The same records are appended to `.env.changes.log` beside `.env`. Choosing `No` for an optional integration stores an explicit `none` opt-out so it is not prompted again. Commenting out a variable makes it unset, so it remains eligible for setup.
 
 ## Testing
 

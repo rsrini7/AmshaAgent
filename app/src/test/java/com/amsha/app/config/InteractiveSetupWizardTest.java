@@ -22,12 +22,20 @@ class InteractiveSetupWizardTest {
     void setUp() {
         originalIn = System.in;
         System.clearProperty("AMSHA_LLM_PROVIDER");
+        System.clearProperty("AMSHA_INFINITE_LOOP_LLM_PROVIDERS");
+        System.clearProperty("AMSHA_INFINITE_LOOP_COMPACTION_PROVIDERS");
+        System.clearProperty("AMSHA_INFINITE_LOOP_CLASSIFIER_PROVIDERS");
+        System.clearProperty("AMSHA_TELEGRAM_ENABLED");
     }
 
     @AfterEach
     void tearDown() {
         System.setIn(originalIn);
         System.clearProperty("AMSHA_LLM_PROVIDER");
+        System.clearProperty("AMSHA_INFINITE_LOOP_LLM_PROVIDERS");
+        System.clearProperty("AMSHA_INFINITE_LOOP_COMPACTION_PROVIDERS");
+        System.clearProperty("AMSHA_INFINITE_LOOP_CLASSIFIER_PROVIDERS");
+        System.clearProperty("AMSHA_TELEGRAM_ENABLED");
     }
 
     @Test
@@ -57,6 +65,31 @@ class InteractiveSetupWizardTest {
             System.setIn(new ByteArrayInputStream(input.getBytes(StandardCharsets.UTF_8)));
             assertDoesNotThrow(() -> InteractiveSetupWizard.run(tempDir, new String[0]));
         }
+    }
+
+    @Test
+    void ensureBaseConfigs_doesNotPersistInfiniteLoopSelfReference(@TempDir Path tempDir) throws Exception {
+        Path envFile = tempDir.resolve(".env");
+        Files.writeString(
+                envFile,
+                "AMSHA_LLM_PROVIDER=infinite-loop\n"
+                        + "AMSHA_INFINITE_LOOP_LLM_PROVIDERS=infinite-loop\n"
+                        + "AMSHA_INFINITE_LOOP_COMPACTION_PROVIDERS=infinite-loop\n"
+                        + "AMSHA_INFINITE_LOOP_CLASSIFIER_PROVIDERS=infinite-loop\n");
+        System.setProperty("AMSHA_LLM_PROVIDER", "infinite-loop");
+        System.setProperty("AMSHA_INFINITE_LOOP_LLM_PROVIDERS", "infinite-loop");
+        System.setProperty("AMSHA_INFINITE_LOOP_COMPACTION_PROVIDERS", "infinite-loop");
+        System.setProperty("AMSHA_INFINITE_LOOP_CLASSIFIER_PROVIDERS", "infinite-loop");
+
+        Method ensure = InteractiveSetupWizard.class.getDeclaredMethod("ensureBaseConfigsInEnv", Path.class);
+        ensure.setAccessible(true);
+        ensure.invoke(null, envFile);
+
+        String content = Files.readString(envFile);
+        assertTrue(content.contains("AMSHA_INFINITE_LOOP_LLM_PROVIDERS=omlx,groq,openrouter"));
+        assertTrue(content.contains("AMSHA_INFINITE_LOOP_COMPACTION_PROVIDERS=groq,ollama"));
+        assertTrue(content.contains("AMSHA_INFINITE_LOOP_CLASSIFIER_PROVIDERS=groq,ollama"));
+        assertFalse(content.contains("AMSHA_INFINITE_LOOP_LLM_PROVIDERS=infinite-loop"));
     }
 
     @Test

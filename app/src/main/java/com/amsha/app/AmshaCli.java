@@ -1,5 +1,7 @@
 package com.amsha.app;
 
+import ai.djl.huggingface.tokenizers.jni.LibUtils;
+import ai.onnxruntime.OrtEnvironment;
 import picocli.CommandLine;
 import picocli.CommandLine.Command;
 
@@ -65,6 +67,24 @@ public class AmshaCli implements Runnable, QuarkusApplication {
         if (args.length == 0) {
             printUsageGuide();
             return;
+        }
+
+        // 3.5. Preload ONNX Runtime JNI library to avoid class initialization deadlocks
+        // during Quarkus boot, especially when the JNI library invokes logging hooks
+        // inside the OrtEnvironment static initializer.
+        if (Boolean.parseBoolean(System.getProperty("amsha.onnx.enabled", System.getenv("AMSHA_ONNX_ENABLED")))) {
+            try {
+                // Trigger ai.onnxruntime.OnnxRuntime.<clinit> which calls System.load()
+                OrtEnvironment.getEnvironment();
+            } catch (Throwable _) {
+                // Quarkus reports the definitive ONNX startup failure.
+            }
+
+            try {
+                LibUtils.checkStatus();
+            } catch (Throwable _) {
+                // Quarkus reports the definitive tokenizer startup failure.
+            }
         }
 
         // 4. Boot Quarkus - config system, CDI, and all extensions start here.

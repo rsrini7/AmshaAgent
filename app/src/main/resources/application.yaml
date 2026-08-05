@@ -64,7 +64,7 @@ quarkus:
     cors:
       enabled: true
       origins: "${AMSHA_CORS_ORIGINS:http://localhost:3000,http://localhost:8080}"
-      headers: "X-Amsha-API-Key,X-AMSHA-API-KEY,Content-Type,Accept"
+      headers: "X-Amsha-API-Key,X-AMSHA-API-KEY,X-AMSHA-PLATFORM-ID,Content-Type,Accept"
       methods: "GET,POST,PATCH,DELETE,OPTIONS"
     limits:
       max-body-size: 10M
@@ -271,6 +271,10 @@ smallrye:
         level: INFO
       "org.apache.camel.component.telegram.TelegramConsumer":
         level: ERROR
+      # Telegram polling retries are handled by Camel's backoff policy. Keep
+      # expected transient outages quiet while preserving ERROR diagnostics.
+      "com.amsha.channel.telegram.TelegramChannelRoute":
+        level: ERROR
       "org.apache.camel":
         level: INFO
       "io.netty":
@@ -301,11 +305,13 @@ smallrye:
       # sessionId from MDC rendered in every log line (Fix C4)
       format: "%d{HH:mm:ss} %-5p [%c{2.}] [sid=%X{sessionId}] (%t) %s%e%n"
       darken: 0
+      filter: secret-redaction
     file:
       enabled: true
       path: "./amsha.log"
       level: DEBUG
       format: "%d{yyyy-MM-dd HH:mm:ss,SSS} %-5p [%c{3.}] [sid=%X{sessionId}] [trace=%X{traceId}] [span=%X{spanId}] (%t) %s%e%n"
+      filter: secret-redaction
       rotation:
         max-file-size: 20M
         max-backup-index: 3
@@ -318,6 +324,47 @@ smallrye:
 # =============================================================================
 amsha:
   data-dir: "${AMSHA_DATA_DIR:./data}"
+  test-data-collection:
+    enabled: ${AMSHA_TEST_DATA_COLLECTION_ENABLED:false}
+  classifier:
+    shadow:
+      threads: ${AMSHA_CLASSIFIER_SHADOW_THREADS:2}
+      queue-capacity: ${AMSHA_CLASSIFIER_SHADOW_QUEUE_CAPACITY:64}
+      shutdown-grace: ${AMSHA_CLASSIFIER_SHADOW_SHUTDOWN_GRACE:PT5S}
+  onnx:
+    enabled: ${AMSHA_ONNX_ENABLED:false}
+    model-root: "${AMSHA_ONNX_MODEL_ROOT:data/models}"
+    max-model-file-bytes: ${AMSHA_ONNX_MAX_MODEL_FILE_BYTES:1073741824}
+    max-loaded-models: ${AMSHA_ONNX_MAX_LOADED_MODELS:2}
+    max-resident-mb: ${AMSHA_ONNX_MAX_RESIDENT_MB:1024}
+    inference-threads: ${AMSHA_ONNX_INFERENCE_THREADS:2}
+    queue-capacity: ${AMSHA_ONNX_QUEUE_CAPACITY:64}
+    shutdown-grace: ${AMSHA_ONNX_SHUTDOWN_GRACE:PT10S}
+    max-input-bytes: ${AMSHA_ONNX_MAX_INPUT_BYTES:262144}
+    max-batch-input-bytes: ${AMSHA_ONNX_MAX_BATCH_INPUT_BYTES:1048576}
+    max-batch-size: ${AMSHA_ONNX_MAX_BATCH_SIZE:32}
+    warmup:
+      enabled: ${AMSHA_ONNX_WARMUP_ENABLED:true}
+      max-probes: ${AMSHA_ONNX_WARMUP_MAX_PROBES:5}
+      timeout: ${AMSHA_ONNX_WARMUP_TIMEOUT:PT3S}
+    classifier:
+      circuit:
+        failure-threshold: ${AMSHA_ONNX_CLASSIFIER_CIRCUIT_FAILURE_THRESHOLD:3}
+        cooldown-seconds: ${AMSHA_ONNX_CLASSIFIER_CIRCUIT_COOLDOWN_SECONDS:30}
+      # Enables shadow inference and seeds Phase 3 requested state. A ready active
+      # implementation registration is still required for effective behavior.
+      intent:
+        enabled: ${AMSHA_ONNX_CLASSIFIER_INTENT_ENABLED:false}
+        model: "${AMSHA_ONNX_CLASSIFIER_INTENT_MODEL:}"
+        timeout-seconds: ${AMSHA_ONNX_CLASSIFIER_INTENT_TIMEOUT_SECONDS:2}
+      tool-risk:
+        enabled: ${AMSHA_ONNX_CLASSIFIER_TOOL_RISK_ENABLED:false}
+        model: "${AMSHA_ONNX_CLASSIFIER_TOOL_RISK_MODEL:}"
+        timeout-seconds: ${AMSHA_ONNX_CLASSIFIER_TOOL_RISK_TIMEOUT_SECONDS:2}
+      answer-quality:
+        enabled: ${AMSHA_ONNX_CLASSIFIER_ANSWER_QUALITY_ENABLED:false}
+        model: "${AMSHA_ONNX_CLASSIFIER_ANSWER_QUALITY_MODEL:}"
+        timeout-seconds: ${AMSHA_ONNX_CLASSIFIER_ANSWER_QUALITY_TIMEOUT_SECONDS:2}
   fs:
     data-dir: "${AMSHA_FS_DATA_DIR:./data/fs}"
     lock-timeout-seconds: 30
@@ -382,6 +429,23 @@ amsha:
     cooldown-max-seconds: ${AMSHA_INFINITE_LOOP_COOLDOWN_MAX_SECONDS:300}
     cooldown-transient-seconds: ${AMSHA_INFINITE_LOOP_COOLDOWN_TRANSIENT_SECONDS:5}
     max-latency-ms: ${AMSHA_INFINITE_LOOP_MAX_LATENCY_MS:60000}
+  # Embedding-space values prevent incompatible provider rotation. A provider
+  # without an explicit shared space remains provider-bound by default.
+  embedding:
+    ollama:
+      space-id: "${AMSHA_EMBEDDING_OLLAMA_SPACE_ID:}"
+      space-revision: "${AMSHA_EMBEDDING_OLLAMA_SPACE_REVISION:}"
+    jina:
+      space-id: "${AMSHA_EMBEDDING_JINA_SPACE_ID:}"
+      space-revision: "${AMSHA_EMBEDDING_JINA_SPACE_REVISION:}"
+    openai:
+      space-id: "${AMSHA_EMBEDDING_OPENAI_SPACE_ID:}"
+      space-revision: "${AMSHA_EMBEDDING_OPENAI_SPACE_REVISION:}"
+    onnx:
+      model: "${AMSHA_EMBEDDING_ONNX_MODEL:}"
+      timeout-seconds: ${AMSHA_EMBEDDING_ONNX_TIMEOUT_SECONDS:5}
+      space-id: "${AMSHA_EMBEDDING_ONNX_SPACE_ID:}"
+      space-revision: "${AMSHA_EMBEDDING_ONNX_SPACE_REVISION:}"
   agent:
     default-timezone: "${AMSHA_DEFAULT_TIMEZONE:Asia/Kolkata}"
     rate-limit:
@@ -546,6 +610,8 @@ amsha:
       - recall_memory_search
       - archival_memory_search
     server-enabled: true
+    setup-token-secret: ${AMSHA_MCP_SETUP_TOKEN_SECRET:}
+    setup-ui-base-url: ${AMSHA_MCP_SETUP_UI_BASE_URL:}
     health-check-interval-ms: ${AMSHA_MCP_HEALTH_CHECK_INTERVAL_MS:15000}
     podman:
       health-check-interval-ms: ${AMSHA_MCP_PODMAN_HEALTH_CHECK_INTERVAL_MS:15000}

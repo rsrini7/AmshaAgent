@@ -32,6 +32,7 @@ import com.amsha.core.audit.SecurityEventType;
 import com.amsha.core.domain.model.AgentCheckpoint;
 import com.amsha.core.governance.BudgetExceededException;
 import com.amsha.core.lifecycle.SessionHeartbeatTracker;
+import com.amsha.core.lifecycle.SessionTestLabelStore;
 import com.amsha.core.lifecycle.WorkspaceManager;
 import com.amsha.core.pipeline.MessageContext;
 import com.amsha.core.pipeline.TurnDispatchResult;
@@ -71,6 +72,7 @@ public class AgentSessionService {
     private final SessionCatalogService sessionCatalogService;
     private final ExecutorService vThreads;
     private final ActiveWorkspaceContext activeWorkspaceContext;
+    private final SessionTestLabelStore sessionTestLabelStore;
     private final int maxResumeIterations;
 
     private static final String REST_USER_NAME = ApiConstants.REST_USER_NAME;
@@ -92,6 +94,7 @@ public class AgentSessionService {
         this.sessionCatalogService = null;
         this.vThreads = null;
         this.activeWorkspaceContext = null;
+        this.sessionTestLabelStore = new SessionTestLabelStore();
         this.maxResumeIterations = 0;
     }
 
@@ -110,6 +113,7 @@ public class AgentSessionService {
             AuditService auditService,
             SessionCatalogService sessionCatalogService,
             ActiveWorkspaceContext activeWorkspaceContext,
+            SessionTestLabelStore sessionTestLabelStore,
             @VirtualThreads ExecutorService vThreads,
             @ConfigProperty(name = "amsha.approval.max-resume-iterations", defaultValue = "5")
                     int maxResumeIterations) {
@@ -126,6 +130,8 @@ public class AgentSessionService {
         this.auditService = auditService;
         this.sessionCatalogService = sessionCatalogService;
         this.activeWorkspaceContext = activeWorkspaceContext;
+        this.sessionTestLabelStore =
+                sessionTestLabelStore != null ? sessionTestLabelStore : new SessionTestLabelStore();
         this.vThreads = vThreads;
         this.maxResumeIterations = maxResumeIterations;
     }
@@ -159,15 +165,35 @@ public class AgentSessionService {
                 auditService,
                 null,
                 null,
+                new SessionTestLabelStore(),
                 vThreads,
                 maxResumeIterations);
     }
 
     public String createSession(String userId, AutonomyLevel autonomyLevel) {
-        return createSession(userId, autonomyLevel, ChannelType.REST_API.id(), "rest-chat");
+        return createSession(userId, autonomyLevel, Map.of(), ChannelType.REST_API.id(), "rest-chat");
+    }
+
+    public String createSession(String userId, AutonomyLevel autonomyLevel, Map<String, String> expectedLabels) {
+        return createSession(userId, autonomyLevel, expectedLabels, ChannelType.REST_API.id(), "rest-chat");
     }
 
     public String createSession(String userId, AutonomyLevel autonomyLevel, String channelType, String channelId) {
+        return createSession(userId, autonomyLevel, Map.of(), channelType, channelId);
+    }
+
+    public String createSession(
+            String userId,
+            AutonomyLevel autonomyLevel,
+            Map<String, String> expectedLabels,
+            String channelType,
+            String channelId) {
+        if (autonomyLevel == AutonomyLevel.FULL
+                && expectedLabels != null
+                && "REQUIRE_APPROVAL".equals(expectedLabels.get("tool_risk"))) {
+            throw new IllegalArgumentException("FULL autonomy cannot produce REQUIRE_APPROVAL observations");
+        }
+
         String sessionId = sessionCatalogService != null
                 ? sessionCatalogService.createSession(userId, channelType, channelId)
                 : UUID.randomUUID().toString();
@@ -186,7 +212,15 @@ public class AgentSessionService {
                 SecurityEventType.SESSION_CREATED,
                 "autonomy=" + level.name());
 
+        if (expectedLabels != null && !expectedLabels.isEmpty()) {
+            sessionTestLabelStore.put(sessionId, expectedLabels);
+        }
+
         return sessionId;
+    }
+
+    public String getExpectedTestLabel(String sessionId, String task) {
+        return sessionTestLabelStore.get(sessionId, task);
     }
 
     public Map<String, Instant> listSessions(String userId) {
@@ -218,10 +252,13 @@ public class AgentSessionService {
         try {
             TurnDispatchResult dispatched = withSelectedWorkspace(() -> WorkspaceScopeHolder.call(
                     sessionId, () -> dispatchRestTurn(sessionId, userId, request, canonicalRole, maxIterations)));
-            return toServiceResult(dispatched, false);
+            ServiceResult<Object> result = toServiceResult(dispatched, false);
+            return result;
         } catch (BudgetExceededException e) {
+            sessionTestLabelStore.clearSession(sessionId);
             return ServiceResult.error("BUDGET", e.getMessage());
         } catch (Exception e) {
+            sessionTestLabelStore.clearSession(sessionId);
             log.errorf("Sync agent run failed: %s", LogUtil.rootMessage(e));
             return ServiceResult.error("SYSTEM", e.getMessage() != null ? e.getMessage() : "Internal error");
         }
@@ -261,9 +298,11 @@ public class AgentSessionService {
                 String canonicalRole =
                         AgentRoleEnum.fromString(request.agentRole()).toScopedName();
                 int maxIterations = request.maxIterations() != null ? request.maxIterations() : 5;
-                callback.accept(toServiceResult(
-                        dispatchRestTurn(sessionId, userId, request, canonicalRole, maxIterations), true));
+                ServiceResult<Object> result = toServiceResult(
+                        dispatchRestTurn(sessionId, userId, request, canonicalRole, maxIterations), true);
+                callback.accept(result);
             } catch (Exception e) {
+                sessionTestLabelStore.clearSession(sessionId);
                 log.errorf("Async agent run failed: %s", LogUtil.rootMessage(e));
                 callback.accept(
                         ServiceResult.error("SYSTEM", e.getMessage() != null ? e.getMessage() : "Internal error"));
@@ -372,6 +411,7 @@ public class AgentSessionService {
         if (sessionError.isPresent()) return sessionError.get();
 
         auditService.recordMandatory(sessionId, userId, "system", SecurityEventType.SESSION_TERMINATED, "via=REST");
+        sessionTestLabelStore.clearSession(sessionId);
         workspaceManager.terminateSession(sessionId);
         return ServiceResult.success(null);
     }

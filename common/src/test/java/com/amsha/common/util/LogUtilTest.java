@@ -58,4 +58,14 @@ class LogUtilTest {
         String result = LogUtil.ctx("sess-1", "user", "search");
         assertEquals("[session=sess-1 role=user tool=search]", result);
     }
+
+    @Test
+    void exceptionHelpersRedactTelegramTokens() {
+        String token = "123456789:AAExampleTelegramCredential_123456789";
+        Exception error = new RuntimeException("GET https://api.telegram.org/bot" + token + "/getUpdates");
+
+        assertFalse(LogUtil.rootMessage(error).contains(token));
+        assertFalse(LogUtil.trimmedStack(error).contains(token));
+        assertTrue(LogUtil.rootMessage(error).contains(SecretRedactor.REDACTED));
+    }
 }

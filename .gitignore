@@ -47,6 +47,7 @@ lib/
 
 # Environment Variables
 .env
+.env.changes.log
 .env.local
 .env.build*
 .env.backup*
@@ -100,4 +101,12 @@ headroom_memory.db
 .tokensave/
 .m2/
 
+# Python
 __pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.serena/
+
+*.diff
+*files.txt

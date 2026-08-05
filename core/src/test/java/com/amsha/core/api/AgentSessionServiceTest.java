@@ -2,6 +2,7 @@ package com.amsha.core.api;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -12,6 +13,7 @@ import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
@@ -179,6 +181,21 @@ class AgentSessionServiceTest {
         String sessionId = service.createSession("unknown", AutonomyLevel.SUPERVISED);
         assertNotNull(sessionId);
         verify(heartbeatTracker, never()).tryBindOwner(anyString(), anyString());
+    }
+
+    @Test
+    void testCreateSession_storesExpectedTestLabels() {
+        String sessionId = service.createSession(
+                TEST_USER, AutonomyLevel.FULL, Map.of("tool_risk", "LOW_RISK", "answer_quality", "ACCEPTABLE"));
+        assertEquals("LOW_RISK", service.getExpectedTestLabel(sessionId, "tool_risk"));
+        assertEquals("ACCEPTABLE", service.getExpectedTestLabel(sessionId, "answer_quality"));
+    }
+
+    @Test
+    void testCreateSession_rejectsFullAutonomyWithRequireApprovalLabel() {
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> service.createSession(TEST_USER, AutonomyLevel.FULL, Map.of("tool_risk", "REQUIRE_APPROVAL")));
     }
 
     @Test

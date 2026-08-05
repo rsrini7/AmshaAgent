@@ -5,6 +5,7 @@ import picocli.CommandLine;
 import jakarta.annotation.Priority;
 import jakarta.enterprise.context.control.ActivateRequestContext;
 import jakarta.enterprise.event.Observes;
+import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
 import java.io.BufferedReader;
@@ -36,6 +37,8 @@ import com.amsha.core.pipeline.TurnRequest;
 import com.amsha.core.scope.WorkspaceContext;
 import com.amsha.core.security.AutonomyLevel;
 import com.amsha.core.session.SessionCatalogService;
+import com.amsha.persistence.api.BootstrapStateDto;
+import com.amsha.persistence.api.BootstrapStateStorePort;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.fusesource.jansi.AnsiConsole;
@@ -95,7 +98,11 @@ public class ChatCommand implements Runnable {
     @Inject
     SessionCatalogService sessionCatalogService;
 
+    @Inject
+    Instance<BootstrapStateStorePort> bootstrapStateStores;
+
     private volatile String currentCliSessionId;
+    private volatile String currentCliUserId = CLI_USER_ID;
 
     /**
      * Guard flag: set to true when an AwaitingApproval result is received.
@@ -116,23 +123,25 @@ public class ChatCommand implements Runnable {
     @Override
     @ActivateRequestContext
     public void run() {
+        String cliUserId = resolveCliUserId();
+        currentCliUserId = cliUserId;
+
         // 1. Resolve initial session — priority: --session-id > --new-session > --last-session > default new
         String sessionId;
         if (requestedSessionId != null && !requestedSessionId.isBlank()) {
             sessionId = sessionCatalogService.registerOrResumeSession(
-                    requestedSessionId.trim(), CLI_USER_ID, ChannelType.CLI.id(), CLI_CHAT_ID);
+                    requestedSessionId.trim(), cliUserId, ChannelType.CLI.id(), CLI_CHAT_ID);
         } else if (newSession) {
-            sessionId = sessionCatalogService.createSession(CLI_USER_ID, ChannelType.CLI.id(), CLI_CHAT_ID);
+            sessionId = sessionCatalogService.createSession(cliUserId, ChannelType.CLI.id(), CLI_CHAT_ID);
         } else if (lastSession) {
             sessionId = sessionCatalogService
-                    .latestResumableScoped(CLI_USER_ID, ChannelType.CLI.id(), CLI_CHAT_ID)
+                    .latestResumableScoped(cliUserId, ChannelType.CLI.id(), CLI_CHAT_ID)
                     .map(entry -> sessionCatalogService.resume(
-                            entry.sessionId(), CLI_USER_ID, ChannelType.CLI.id(), CLI_CHAT_ID))
-                    .orElseGet(
-                            () -> sessionCatalogService.createSession(CLI_USER_ID, ChannelType.CLI.id(), CLI_CHAT_ID));
+                            entry.sessionId(), cliUserId, ChannelType.CLI.id(), CLI_CHAT_ID))
+                    .orElseGet(() -> sessionCatalogService.createSession(cliUserId, ChannelType.CLI.id(), CLI_CHAT_ID));
         } else {
             sessionId = sessionCatalogService.registerOrResumeSession(
-                    "cli-" + UUID.randomUUID(), CLI_USER_ID, ChannelType.CLI.id(), CLI_CHAT_ID);
+                    "cli-" + UUID.randomUUID(), cliUserId, ChannelType.CLI.id(), CLI_CHAT_ID);
         }
         this.currentCliSessionId = sessionId;
 
@@ -165,6 +174,24 @@ public class ChatCommand implements Runnable {
 
         log.infof("CLI chat session %s terminated", sessionId);
         System.out.println("\n[Terminated]");
+    }
+
+    private String resolveCliUserId() {
+        if (bootstrapStateStores == null || bootstrapStateStores.isUnsatisfied()) {
+            return CLI_USER_ID;
+        }
+        try {
+            return bootstrapStateStores
+                    .get()
+                    .getState()
+                    .filter(state -> BootstrapStateDto.STATUS_CLAIMED.equals(state.status()))
+                    .map(BootstrapStateDto::ownerId)
+                    .filter(ownerId -> ownerId != null && !ownerId.isBlank())
+                    .orElse(CLI_USER_ID);
+        } catch (RuntimeException exception) {
+            log.debugf("Could not resolve claimed local CLI owner: %s", LogUtil.rootMessage(exception));
+            return CLI_USER_ID;
+        }
     }
 
     /**
@@ -320,17 +347,18 @@ public class ChatCommand implements Runnable {
 
     private void dispatchToWorkflow(String input) {
         var sessionId = currentCliSessionId;
+        String cliUserId = currentCliUserId;
         try {
             log.infof("CLI chat session %s dispatching input: %s", sessionId, input);
             System.out.println("⚡ Thinking...");
             ChannelMessage message = new ChannelMessage.CliMessage(
-                    new ChannelUser(CLI_USER_ID, CLI_CHAT_ID, "CLI User", ChannelType.CLI),
+                    new ChannelUser(cliUserId, CLI_CHAT_ID, "CLI User", ChannelType.CLI),
                     input,
                     sessionId,
                     Instant.now());
             TurnDispatchResult result = WorkspaceContext.run(
                     sessionId,
-                    CLI_USER_ID,
+                    cliUserId,
                     CLI_CHAT_ID,
                     AutonomyLevel.SUPERVISED,
                     canonicalRole(role),

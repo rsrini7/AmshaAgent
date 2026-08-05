@@ -28,6 +28,8 @@ class InfiniteLoopEmbeddingModelProviderTest {
         mockOllamaFactory = mock(EmbeddingProviderFactory.class);
 
         when(mockOllamaFactory.providerId()).thenReturn("ollama");
+        when(mockOllamaFactory.embeddingSpace(any(EmbeddingModelConfig.class)))
+                .thenReturn(EmbeddingSpaceDescriptor.providerBound("ollama", "nomic-embed-text:v1.5"));
         when(mockFactories.stream()).thenAnswer(i -> Stream.of(mockOllamaFactory));
         provider.factories = mockFactories;
 
@@ -37,6 +39,7 @@ class InfiniteLoopEmbeddingModelProviderTest {
         provider.cooldownMaxSeconds = 300;
         provider.cooldownTransientSeconds = 5;
         provider.maxLatencyMs = 60000;
+        provider.configuredVectorDimension = 768;
 
         // Set per-provider config via system properties
         System.setProperty("amsha.embedding.ollama.model", "nomic-embed-text:v1.5");
@@ -57,7 +60,40 @@ class InfiniteLoopEmbeddingModelProviderTest {
         EmbeddingModel result = provider.embeddingModel();
 
         assertNotNull(result);
+        assertEquals(768, provider.activeDescriptor().orElseThrow().vectorDimension());
         verify(mockOllamaFactory).create(any(EmbeddingModelConfig.class));
+    }
+
+    @Test
+    void propagatesProviderChunkingContractToIndexDescriptor() {
+        EmbeddingModel mockModel = mock(EmbeddingModel.class);
+        when(mockOllamaFactory.create(any(EmbeddingModelConfig.class))).thenReturn(mockModel);
+        when(mockOllamaFactory.embeddingSpace(any(EmbeddingModelConfig.class)))
+                .thenReturn(EmbeddingSpaceDescriptor.verified(
+                        "ollama",
+                        "verified-space",
+                        "model-v1",
+                        "tokenizer-v1",
+                        "preprocessing-v1",
+                        "MASKED_MEAN",
+                        true,
+                        768,
+                        "FLOAT32",
+                        512,
+                        "MEAN_OVERLAPPING_WINDOWS",
+                        "v2",
+                        384,
+                        32,
+                        "WEIGHTED_MEAN"));
+
+        provider.embeddingModel();
+
+        var descriptor = provider.activeDescriptor().orElseThrow();
+        assertEquals("MEAN_OVERLAPPING_WINDOWS", descriptor.chunkingStrategy());
+        assertEquals("v2", descriptor.chunkingRevision());
+        assertEquals(384, descriptor.maxWindowTokens());
+        assertEquals(32, descriptor.windowOverlapTokens());
+        assertEquals("WEIGHTED_MEAN", descriptor.multiWindowAggregation());
     }
 
     @Test

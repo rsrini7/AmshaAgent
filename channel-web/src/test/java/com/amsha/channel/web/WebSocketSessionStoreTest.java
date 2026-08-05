@@ -56,6 +56,14 @@ class WebSocketSessionStoreTest {
     }
 
     @Test
+    void testGetConnectionsByOwner() {
+        store.register("plat-1", "amsha-sess-1", "owner-1", connection);
+
+        assertEquals(List.of(connection), store.getConnectionsByOwner("owner-1"));
+        assertTrue(store.getConnectionsByOwner("owner-2").isEmpty());
+    }
+
+    @Test
     void testCloseAll() {
         store.register("plat-1", "amsha-sess-1", connection);
         assertEquals(1, store.all().size());

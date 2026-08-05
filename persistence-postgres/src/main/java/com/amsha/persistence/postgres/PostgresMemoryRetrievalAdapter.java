@@ -13,6 +13,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+import com.amsha.common.util.LogUtil;
 import com.amsha.persistence.api.BackendCapabilities;
 import com.amsha.persistence.api.CompactionStorePort;
 import com.amsha.persistence.api.CompactionSummaryDto;
@@ -20,6 +21,8 @@ import com.amsha.persistence.api.IngestResult;
 import com.amsha.persistence.api.MemoryChunkDto;
 import com.amsha.persistence.api.MemoryEntryDto;
 import com.amsha.persistence.api.MemoryRetrievalPort;
+import com.amsha.persistence.api.VectorIndexMetadataPort;
+import com.amsha.persistence.api.VectorIndexNamespace;
 import com.amsha.persistence.postgres.jdbi.RagChunkJdbiDao;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
@@ -41,6 +44,9 @@ public class PostgresMemoryRetrievalAdapter implements MemoryRetrievalPort {
     private final CompactionStorePort compactionRepo;
     private final EmbeddingModel embeddingModel;
     private final int maxSourceChars;
+
+    @Inject
+    VectorIndexMetadataPort vectorIndexMetadata;
 
     @Inject
     public PostgresMemoryRetrievalAdapter(
@@ -91,6 +97,7 @@ public class PostgresMemoryRetrievalAdapter implements MemoryRetrievalPort {
     }
 
     private List<MemoryChunkDto> searchVector(String query, int topN) {
+        if (!isVectorEnabled()) return List.of();
         try {
             Embedding queryEmbedding = embeddingModel.embed(query).content();
             String json = floatArrayToJson(queryEmbedding.vector());
@@ -109,12 +116,15 @@ public class PostgresMemoryRetrievalAdapter implements MemoryRetrievalPort {
         });
         // Embedding runs outside the transaction — embed calls are slow I/O
         // that corrupt Agroal connection state if they fail inside a tx
-        try {
-            Embedding embedding = embeddingModel.embed(entry.text()).content();
-            jdbi.useExtension(
-                    RagChunkJdbiDao.class, dao -> dao.upsertEmbedding(chunkId, floatArrayToJson(embedding.vector())));
-        } catch (Exception e) {
-            log.warnf("Embedding unavailable for chunk %s: %s", chunkId, e.getMessage());
+        if (isVectorEnabled()) {
+            try {
+                Embedding embedding = embeddingModel.embed(entry.text()).content();
+                jdbi.useExtension(
+                        RagChunkJdbiDao.class,
+                        dao -> dao.upsertEmbedding(chunkId, floatArrayToJson(embedding.vector())));
+            } catch (Exception e) {
+                log.warnf("Embedding unavailable for chunk %s: %s", chunkId, LogUtil.rootMessage(e));
+            }
         }
         return new IngestResult(chunkId, false);
     }
@@ -123,10 +133,14 @@ public class PostgresMemoryRetrievalAdapter implements MemoryRetrievalPort {
     public BackendCapabilities capabilities() {
         return new BackendCapabilities(
                 true, // supportsFullTextSearch
-                true, // supportsVectorSearch
+                isVectorEnabled(), // supportsVectorSearch
                 true, // supportsAdvisoryLocks
                 false // supportsNestedTransactions
                 );
+    }
+
+    private boolean isVectorEnabled() {
+        return vectorIndexMetadata == null || vectorIndexMetadata.isVectorEnabled(VectorIndexNamespace.RAG_GLOBAL);
     }
 
     @SafeVarargs

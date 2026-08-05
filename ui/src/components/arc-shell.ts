@@ -12,6 +12,7 @@ import { ROUTES } from '../routes';
 import './arc-onboarding';
 import './arc-nav';
 import './arc-chat-interface';
+import './arc-mcp-panel';
 import './arc-agent-status';
 import './arc-hitl-panel';
 import './arc-skills-panel';
@@ -38,13 +39,14 @@ export class ArcShell extends LitElement {
   @state() private _agents: AgentStatusDto[] = [];
   @state() private _pendingApprovals: PendingApprovalDto[] = [];
   @state() private _sseStatus: 'connected' | 'disconnected' | 'error' = 'disconnected';
-  @state() private _route = window.location.hash || '#/onboarding';
+  @state() private _route = this._routeFromHash(window.location.hash || '#/onboarding');
   @state() private _isNavOpen = false;
   @state() private _chatWsStatus: string = 'closed';
 
   private _client: ArcClient | null = null;
   private _sseManager: SseManager | null = null;
   private _boundSessionReady = ((e: Event) => this._onSessionReady(e as CustomEvent)) as EventListener;
+  private _pendingMcpSetupHash: string | null = null;
 
   static styles = css`
     :host { 
@@ -149,7 +151,11 @@ export class ArcShell extends LitElement {
   }
 
   private _boundHashChange = () => {
-    this._route = window.location.hash || '#/onboarding';
+    const currentHash = window.location.hash || '#/onboarding';
+    if (!this._apiKey && this._isMcpSetupHash(currentHash)) {
+      this._pendingMcpSetupHash = currentHash;
+    }
+    this._route = this._routeFromHash(currentHash);
     this._isNavOpen = false; // Close nav on route change
     if (!this._apiKey && this._route !== '#/onboarding') {
       window.location.hash = '#/onboarding';
@@ -184,9 +190,21 @@ export class ArcShell extends LitElement {
     return id;
   }
 
+  private _routeFromHash(hash: string): string {
+    const route = hash.split('?')[0] || '#/onboarding';
+    return route === '#/mcp/setup' ? '#/mcp' : route;
+  }
+
+  private _isMcpSetupHash(hash: string): boolean {
+    return hash.split('?')[0] === '#/mcp/setup';
+  }
+
   async connectedCallback() {
     super.connectedCallback();
     window.addEventListener('hashchange', this._boundHashChange);
+    if (this._isMcpSetupHash(window.location.hash)) {
+      this._pendingMcpSetupHash = window.location.hash;
+    }
 
     try {
       const status = await this._client!.onboardingStatus();
@@ -195,9 +213,13 @@ export class ArcShell extends LitElement {
         this._client = new ArcClient('/api/v1', this._apiKey);
         this._updateContext();
 
-        const targetRoute = window.location.hash || '#/chat';
+        const targetHash = this._pendingMcpSetupHash || window.location.hash || '#/chat';
+        this._pendingMcpSetupHash = null;
+        const targetRoute = this._routeFromHash(targetHash);
         this._route = targetRoute === '#/onboarding' ? '#/chat' : targetRoute;
-        if (window.location.hash !== this._route) {
+        if (targetRoute === '#/mcp' && targetHash !== window.location.hash) {
+          window.location.hash = targetHash;
+        } else if (this._route === '#/chat' && targetRoute === '#/onboarding') {
           window.location.hash = this._route;
         }
 
@@ -239,7 +261,13 @@ export class ArcShell extends LitElement {
     this._sseManager?.disconnect();
 
     if (this._apiKey) {
-      window.location.hash = '#/chat';
+      const setupHash = this._pendingMcpSetupHash;
+      this._pendingMcpSetupHash = null;
+      if (setupHash) {
+        window.location.hash = setupHash;
+      } else {
+        window.location.hash = '#/chat';
+      }
       this._fetchAgents();
       this._fetchApprovals();
       this._startSse();
@@ -433,6 +461,9 @@ export class ArcShell extends LitElement {
 
     return html`
       <arc-chat-interface class="content-area" style="display: ${this._route === '#/chat' ? 'flex' : 'none'}"></arc-chat-interface>
+      ${this._route === '#/mcp' ? html`
+        <arc-mcp-panel class="content-area"></arc-mcp-panel>
+      ` : nothing}
       ${this._route === '#/agents' ? html`
         <arc-agent-status class="content-area" .agents="${this._agents}"></arc-agent-status>
       ` : nothing}

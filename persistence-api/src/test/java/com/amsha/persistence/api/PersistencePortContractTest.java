@@ -889,6 +889,7 @@ class PersistencePortContractTest {
     static class InMemoryMcpConnectionStore implements McpConnectionStorePort {
         final Map<String, McpConnectionDto> connections = new ConcurrentHashMap<>();
         final Map<String, List<McpConnectionHeaderSecretRefDto>> headerRefs = new ConcurrentHashMap<>();
+        final Map<String, List<McpConnectionToolPolicyDto>> toolPolicies = new ConcurrentHashMap<>();
         final Map<String, McpConnectionCleanupFailureDto> cleanupFailures = new ConcurrentHashMap<>();
 
         @Override
@@ -924,11 +925,68 @@ class PersistencePortContractTest {
         }
 
         @Override
+        public List<McpConnectionDto> listPendingApprovals() {
+            return connections.values().stream()
+                    .filter(connection -> "PENDING_APPROVAL".equals(connection.state()))
+                    .toList();
+        }
+
+        @Override
+        public boolean updateStateIfRevision(McpConnectionDto connection, long expectedRevision) {
+            return connections.computeIfPresent(
+                            connection.id(),
+                            (id, current) -> current.revision() == expectedRevision ? connection : current)
+                    == connection;
+        }
+
+        @Override
+        public List<McpConnectionToolPolicyDto> listToolPolicies(String connectionId, String userId) {
+            return toolPolicies.getOrDefault(connectionId, List.of()).stream()
+                    .filter(policy -> userId.equals(policy.userId()))
+                    .toList();
+        }
+
+        @Override
+        public void replaceToolPolicies(String connectionId, String userId, List<McpConnectionToolPolicyDto> policies) {
+            if (findByIdAndUserId(connectionId, userId).isEmpty()) {
+                throw new IllegalArgumentException("MCP connection not found: " + connectionId);
+            }
+            toolPolicies.put(connectionId, List.copyOf(policies == null ? List.of() : policies));
+        }
+
+        @Override
+        public int setToolEnabled(String connectionId, String userId, String toolName, boolean enabled) {
+            List<McpConnectionToolPolicyDto> existing = listToolPolicies(connectionId, userId);
+            if (existing.stream().noneMatch(policy -> toolName.equals(policy.toolName()))) return 0;
+            toolPolicies.put(
+                    connectionId,
+                    existing.stream()
+                            .map(policy -> toolName.equals(policy.toolName())
+                                    ? new McpConnectionToolPolicyDto(
+                                            policy.id(),
+                                            policy.connectionId(),
+                                            policy.userId(),
+                                            policy.toolName(),
+                                            policy.available(),
+                                            enabled,
+                                            policy.description(),
+                                            policy.inputSchema(),
+                                            policy.schemaHash(),
+                                            policy.discoveredAt(),
+                                            policy.revision() + 1,
+                                            policy.updatedAt())
+                                    : policy)
+                            .toList());
+            return 1;
+        }
+
+        @Override
         public int deleteByIdAndUserId(String id, String userId) {
             Optional<McpConnectionDto> existing = findByIdAndUserId(id, userId);
             if (existing.isEmpty()) return 0;
             connections.remove(id);
             headerRefs.remove(id);
+            toolPolicies.remove(id);
             return 1;
         }
 

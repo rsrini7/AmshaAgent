@@ -71,6 +71,10 @@
       <groupId>com.amsha</groupId>
       <artifactId>amsha-rag</artifactId>
     </dependency>
+    <dependency>
+      <groupId>com.amsha</groupId>
+      <artifactId>amsha-local-ml-onnx</artifactId>
+    </dependency>
 
     <!-- Test -->
     <dependency>

@@ -143,6 +143,33 @@ AMSHA_TELEGRAM_BOT_TOKEN=...  # required for attach telegram mode only
   "-Damsha.rag.vec-extension-path=../lib/vec0"
 ```
 
+### Local OMLX and ONNX runtime smoke
+
+The reusable smoke runner reads the required `AMSHA_OMLX_*` values and, for the
+`running` command, `AMSHA_API_KEYS_INTERNAL` from the ignored root `.env`. Exported
+process variables override that file. Keep credentials out of command-line arguments.
+It uses the authenticated OpenAI-compatible OMLX API, configures native Amsha as
+`generic-openai`, forces ONNX embeddings, and never selects Ollama.
+
+```bash
+# Provider-only connectivity and minimal completion
+mise run smoke:local-runtime -- omlx
+
+# Provider, bundle integrity, health, descriptor, inference, and metric checks
+mise run smoke:local-runtime -- running \
+  --amsha-base-url http://127.0.0.1:8080
+
+# The same checks with isolated native startup and graceful shutdown
+mise run smoke:local-runtime -- native --binary dist/amsha-sqlite
+```
+
+Native logs and temporary data stay below the gitignored `data/smoke/` directory.
+Successful runs remove them; failed runs retain the path but do not automatically dump
+logs. This lightweight workflow complements, but does not replace, platform-matrix,
+golden-corpus, repeated leak, or signed provenance release evidence. See the
+[local ONNX guide](./ONNX_LOCAL_ML_GUIDE.md#reusable-local-runtime-smoke-runner) for
+the full contract and overrides.
+
 ### REST Client Files Index
 
 All HTTP test files live in `rest-http/`. See [rest-http/README.md](../rest-http/README.md) for full details.
@@ -790,10 +817,38 @@ GET    /api/v1/mcp/tools             → exposed internal + registered dynamic t
 POST   /api/v1/mcp/connect           → connect to a remote MCP server
 GET    /api/v1/mcp/connect           → list connected servers
 DELETE /api/v1/mcp/connect/{name}    → disconnect + deregister tools
+POST   /api/v1/mcp/connect/discover  → approval-gated throwaway discovery
+GET    /api/v1/mcp/connect/approvals → restore pending MCP approvals
+POST   /api/v1/mcp/connect/{name}/tools/{tool}/enable → explicit tool enable approval
+PATCH  /api/v1/mcp/connect/{name}    → endpoint/credential reconfiguration
+POST   /api/v1/mcp/import/preview    → bounded upload-only local preview
+POST   /api/v1/mcp/import/apply      → apply one preview entry through approval
 POST   /mcp                          → MCP JSON-RPC protocol endpoint (inbound)
 ```
 
-### 9.1 MCP server status
+### 9.1 Management lifecycle smoke test
+
+Use an authenticated API key for REST requests. The expected sequence is:
+
+1. `POST /api/v1/mcp/connect/discover` returns `202` and a task ID; approve it with
+   `POST /api/v1/mcp/connect/approvals/{taskId}/approve`.
+2. Discovery returns a preview and does not create a durable connection.
+3. `POST /api/v1/mcp/connect` returns a new approval task; approve it and confirm `GET
+   /api/v1/mcp/connect` contains a durable `CONNECTED` row with `0/N` enabled tools.
+4. `POST /api/v1/mcp/connect/{name}/tools/{tool}/enable` returns an `MCP_TOOL_ENABLE` task;
+   approve it and confirm the row changes to `1/N`.
+5. Send a chat request that explicitly names the enabled tool. Confirm the result is backed by
+   correlated `MCP_TOOL_INVOKED` and `TOOL_EXECUTED` audit events.
+6. Send `PATCH /api/v1/mcp/connect/{name}` with `If-MCP-Revision`, approve the reconfiguration,
+   and confirm the revision and policy retention behavior.
+7. Refresh the UI, verify pending approvals are restored, then test pause, resume/reconnect,
+   disable, and disconnect.
+
+For the no-login local channel check, the browser uses its per-tab platform identity and native CLI
+chat uses the claimed bootstrap owner. Restart the rebuilt native binary before testing CLI scope.
+Different user IDs or data directories must remain isolated.
+
+### 9.2 MCP server status
 
 ```bash
 curl -s http://localhost:8080/api/v1/mcp/status \
@@ -804,7 +859,7 @@ curl -s http://localhost:8080/api/v1/mcp/status \
 
 ---
 
-### 9.2 List exposed and dynamic tools
+### 9.3 List exposed and dynamic tools
 
 ```bash
 curl -s http://localhost:8080/api/v1/mcp/tools \
@@ -821,7 +876,7 @@ curl -s http://localhost:8080/api/v1/mcp/tools \
 
 ---
 
-### 9.3 MCP protocol - full session handshake
+### 9.4 MCP protocol - full session handshake
 
 **Step 1 - Initialize (capture session ID from response header):**
 
@@ -881,7 +936,7 @@ curl -s -X POST http://localhost:8080/mcp \
 
 ---
 
-### 9.4 Blocked tool (not in allowlist)
+### 9.5 Blocked tool (not in allowlist)
 
 ```bash
 curl -s -X POST http://localhost:8080/mcp \
@@ -895,7 +950,7 @@ curl -s -X POST http://localhost:8080/mcp \
 
 ---
 
-### 9.5 MCP client - self-connect smoke test
+### 9.6 MCP client - self-connect smoke test
 
 ```bash
 curl -s -X POST http://localhost:8080/api/v1/mcp/connect \
@@ -904,21 +959,35 @@ curl -s -X POST http://localhost:8080/api/v1/mcp/connect \
   -d '{"name":"self","url":"http://localhost:8080/mcp"}' | jq .
 ```
 
-**Expect:** `{"name":"self","toolsRegistered":N,"status":"connected"}` - N ≥ 1.
+**Expect:** HTTP `202` with a pending approval containing `taskId` and
+`operation:"CONNECT"` (the internal operation name is `CONNECT`, while the
+audit purpose is `MCP_CONNECT`). Approve it:
+
+```bash
+curl -s -X POST http://localhost:8080/api/v1/mcp/connect/approvals/$TASK_ID/approve \
+  -H "X-Amsha-API-Key: key-internal-changeme" | jq .
+```
+
+The approval response contains the durable connection snapshot. It should be
+`state:"CONNECTED"` with `enabledToolCount:0`; built-in `/mcp` names are
+skipped by dynamic registration.
 
 ---
 
-### 9.6 Verify dynamic tools after connect
+### 9.7 Verify dynamic tools after connect
 
 ```bash
 curl -s http://localhost:8080/api/v1/mcp/tools \
   -H "X-Amsha-API-Key: key-internal-changeme" | jq .registeredDynamicTools
 ```
 
-**Expect:** Array with `mcpServerName:"self"`, `transport:"HTTP_SSE"`, and
-`category:"NETWORK"`. `NETWORK` is the default for discovered MCP tools.
+**Expect:** `[]` for self-connect because the built-in `/mcp` names are
+intentionally not re-registered. For an external server, the array remains
+empty until a selected tool receives `MCP_TOOL_ENABLE` approval; after that,
+the entry has `mcpServerName`, `transport:"HTTP_SSE"`, and
+`category:"NETWORK"`.
 
-### 9.6.1 Register a categorized MCP server through chat
+### 9.8 Register a categorized MCP server through chat
 
 Ask the agent to register a reachable MCP server, for example:
 
@@ -942,18 +1011,21 @@ An invalid category, such as `FAST`, is rejected with a validation error.
 
 ---
 
-### 9.7 List connected servers
+### 9.9 List connected servers
 
 ```bash
 curl -s http://localhost:8080/api/v1/mcp/connect \
   -H "X-Amsha-API-Key: key-internal-changeme" | jq .
 ```
 
-**Expect:** `{"connectedServers":[{"name":"self","toolCount":N}],"totalDynamicTools":N}`
+**Expect:** a `connections` array containing a row with at least
+`name`, `endpoint`, `state`, `transport`, `enabledToolCount`,
+`discoveredToolCount`, and `revision`. For this self-connect example the row
+is `CONNECTED`, has `enabledToolCount:0`, and has no registered dynamic tools.
 
 ---
 
-### 9.8 Disconnect
+### 9.10 Disconnect
 
 ```bash
 curl -s -X DELETE http://localhost:8080/api/v1/mcp/connect/self \
@@ -966,7 +1038,7 @@ curl -s -X DELETE http://localhost:8080/api/v1/mcp/connect/self \
 
 ---
 
-### 9.9 Disconnect non-existent server → 404
+### 9.11 Disconnect non-existent server → 404
 
 ```bash
 curl -s -X DELETE http://localhost:8080/api/v1/mcp/connect/does-not-exist \
@@ -977,7 +1049,7 @@ curl -s -X DELETE http://localhost:8080/api/v1/mcp/connect/does-not-exist \
 
 ---
 
-### 9.10 `11_skill.http` - file structure & prerequisite note
+### 9.12 `11_skill.http` - file structure & prerequisite note
 
 > `11_skill.http` uses `@baseUrl = http://localhost:8080/api/v1` (includes the `/api/v1` path in the base variable). This is **inconsistent** with all other files which use `@baseUrl = http://localhost:8080`. Do not copy the `@baseUrl` line from this file into other files.
 
@@ -993,7 +1065,7 @@ The file is structured as five flows:
 
 ---
 
-### 9.11 `12_mcp.http` - file structure & critical prerequisite
+### 9.13 `12_mcp.http` - file structure & critical prerequisite
 
 > **Always run `MCP-ADMIN-1` before any protocol flow.** If `serverEnabled:false` (or 404), `MCP-1` (initialize) returns 404 and you have no `Mcp-Session-Id` for any subsequent request. The entire protocol flow collapses silently.
 >
@@ -1013,7 +1085,7 @@ The file is structured as five flows:
 
 ---
 
-### 9.12 Skills - ordered test execution with Telegram cross-checks
+### 9.14 Skills - ordered test execution with Telegram cross-checks
 
 Run `11_skill.http` requests in this order. Telegram steps verify that the registry change is live without a restart.
 
@@ -1031,7 +1103,7 @@ Run `11_skill.http` requests in this order. Telegram steps verify that the regis
 
 ---
 
-### 9.13 MCP server (inbound) - ordered test execution with Telegram cross-checks
+### 9.15 MCP server (inbound) - ordered test execution with Telegram cross-checks
 
 Run `12_mcp.http` Flow A, then Flow B in strict order.
 
@@ -1050,17 +1122,17 @@ Run `12_mcp.http` Flow A, then Flow B in strict order.
 
 ---
 
-### 9.14 MCP client (outbound) - ordered self-connect smoke test
+### 9.16 MCP client (outbound) - ordered self-connect smoke test
 
 No external MCP server required. Amsha Agent connects to itself.
 
 | # | What to run | What to verify |
 |---|---|---|
-| 1 | `MCP-CLIENT-1` (self-connect) | `{"status":"connected","toolsRegistered":2}` - proves full outbound stack: `McpConnectResource → McpClientService → MCP initialize handshake → tools/list → DynamicToolCapabilityRegistry.register()` |
-| 2 | `MCP-ADMIN-2` | `registeredDynamicTools` now has 2 entries; both `mcpServerName:"self"`, `transport:"HTTP_SSE"` |
-| 3 | `MCP-CLIENT-3` (list servers) | `{"connectedServers":[{"name":"self","toolCount":2}],"totalDynamicTools":2}` |
-| 4 | **Telegram**: `/mcp` | Now shows: `Dynamic MCP tools (2): github [self, HTTP_SSE], recall_memory_search [self, HTTP_SSE]` |
-| 5 | `MCP-CLIENT-5` (disconnect) | `{"name":"self","deregistered":true,"toolsRemoved":2}` |
+| 1 | `MCP-CLIENT-1` (self-connect) | First response is `202` with an approval task; after approval the durable row is `CONNECTED` with `enabledToolCount:0`; built-in `/mcp` names are not dynamically registered |
+| 2 | `MCP-ADMIN-2` | `registeredDynamicTools` now has 0 entries; built-in names are skipped |
+| 3 | `MCP-CLIENT-3` (list servers) | `connections[]` contains state, transport, endpoint, `enabledToolCount`, `discoveredToolCount`, and `revision` |
+| 4 | **Telegram**: `/mcp` | Now shows: `Dynamic MCP tools: none connected` |
+| 5 | `MCP-CLIENT-5` (disconnect) | `{"name":"self","deregistered":true,"toolsRemoved":0}` |
 | 6 | `MCP-CLIENT-6` | `registeredDynamicTools:[]` - confirmed empty |
 | 7 | **Telegram**: `/mcp` | Back to `Dynamic MCP tools: none connected` |
 | 8 | `MCP-CLIENT-ERR-1–5` | `400` (missing url), `502` (unreachable), `404` (disconnect unknown), `409` or overwrite (duplicate connect), `401` (no key) |
@@ -2245,8 +2317,8 @@ Run after any significant code change. Combine automated + manual.
 | 13 | HMAC verify (tampered) | `{"valid":false,"brokenAtId":"..."}` |
 | 14 | Skill create + routing | `201`, message routes to skill, no Groq call |
 | 15 | Skill delete + fallback | `200`, routing reverts to intent classifier |
-| 16 | MCP self-connect | `toolsRegistered:N` (N ≥ 1) |
-| 17 | MCP disconnect | `toolsRemoved:N`, `registeredDynamicTools:[]` |
+| 16 | MCP self-connect | Approval-gated durable `CONNECTED` row with zero enabled tools; no implicit dynamic registration |
+| 17 | MCP disconnect | `toolsRemoved:0`, `registeredDynamicTools:[]` |
 | 18 | MCP protocol: initialize → tools/list | `200`/`202`, tools array returned |
 | 19 | RAG ingest + retrieval | Ingested chunk retrieved via recall_memory_search |
 | 20 | `rag_chunk` table has rows, no `rag:` prefix | SQLite check returns 0 |
@@ -2323,6 +2395,45 @@ curl -s -X POST "http://localhost:8080/api/v1/sessions/$SESSION/run" \
 ```
 
 **Expect:** Answer does NOT contain raw compaction summary text like "Summary of previous conversation:".
+
+### 23.5 Phase 2.5 classifier SPI safety
+
+Run the deterministic core tests; they require no ONNX model or external service:
+
+```bash
+./mvnw -pl core \
+  -Dtest="PostPolicyToolRiskDispatcherTest,AnswerQualityDispatcherTest,ToolInvocationGuardTest,FinishActionHandlerTest" \
+  test
+```
+
+These tests must prove stable interceptor ordering, monotonic tool-risk composition,
+preservation of validation/deduplication/HITL decisions, reuse of the existing approval
+frame, a single pre-tool answer retry, no retry after a tool boundary, and unchanged
+behavior when no optional implementation exists.
+
+### 23.6 Phase 3A non-activating runtime controls
+
+Run the state, admin authorization/audit, and mandatory-event tests:
+
+```bash
+./mvnw -pl local-ml-onnx,app -am \
+  -Dtest="OnnxClassifierRuntimeControlTest,OnnxAdminResourceTest,SecurityEventTypeTest" \
+  -Dsurefire.failIfNoSpecifiedTests=false test
+```
+
+The suite verifies independent switches, requested/effective separation, rejection when
+no ready active implementation exists, mandatory audit-before-mutation, internal-only
+access, and disable/drain semantics. No model or external service is required.
+
+Against a model-installed running application, the deployed validation adds the
+non-activating control checks as `ONNX-5` through `ONNX-7`:
+
+```bash
+bash rest-http/scripts/run_all_validations.sh --onnx
+```
+
+The current Phase 3A assembly must report all three active implementations unavailable,
+return `409 MISSING_READY_IMPLEMENTATION` for enable, and reject non-internal mutation.
 
 ## 24. Testing Identity, OIDC, Web Sessions, and Multi-Admin
 

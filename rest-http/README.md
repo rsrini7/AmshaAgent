@@ -431,7 +431,13 @@ needed). Run individually or via the master runner `run_all_validations.sh`.
 | `--reflex` | `validate_reflex.sh` | Reflex commands via goal text | zero-token |
 | `--skills` | `validate_skill.sh` | Skill CRUD, routing, errors | low |
 | `--skills-admission` | `validate_skillsjar_admission.sh` | SkillsJar admission, quarantine schema, refresh stability | zero-token |
-| `--mcp` | `validate_mcp.sh` | MCP JSON-RPC protocol + connect | low |
+| `--mcp` | `validate_mcp.sh` | MCP JSON-RPC protocol plus approval-gated discover/connect, policies, reconfigure, pause/resume, import, setup-token, and cleanup | low |
+
+`validate_mcp.sh` starts a local deterministic MCP fixture for outbound lifecycle
+checks. It may exceed the default application mutation budget in one run; the
+validator reports `429` without waiting by default. Set
+`AMSHA_MCP_VALIDATION_RATE_LIMIT_WAIT_SECONDS=62` when deliberately running a
+complete flow across the rate-limit window.
 | `--memory` | `validate_memory.sh` | Archival/core memory + Arabic search (HITL-aware) | LLM |
 | `--web` | `validate_web.sh` | Web search/fetch/SSRF blocks (HITL-aware) | LLM |
 | `--roles` | `validate_roles.sh` | Agent roles + aliases (HITL-aware) | LLM |
@@ -439,14 +445,24 @@ needed). Run individually or via the master runner `run_all_validations.sh`.
 | `--auth-session` | `validate_auth_session.sh` | API-key auth + session lifecycle | fast |
 | `--identity` | `validate_identity_access.sh` | P109 bootstrap/identity/OAuth | fast |
 | `--pii-audit` | `validate_pii_injection_audit.sh` | PII redaction + injection + audit HMAC | fast |
+| `--onnx` | `validate_onnx.sh` | ONNX health, fixed-text inference metric, bundle digests, vector compatibility, non-activating classifier controls | local CPU |
 | `--self-evolve` | `validate_self_evolve.sh` | Directives lifecycle (seeds when `--data-dir` given) | LLM |
 | `--hitl` | `validate_hitl.sh` | Approve/deny (REST + goal-string + taskId), 401/409 | LLM |
 | `--rag` | `validate_rag.sh` | Ingest → approve → recall + rag_chunk isolation | LLM |
-| `--budget` | `validate_budget.sh` | Budget limits + autonomy SUPERVISED/FULL/READONLY | LLM |
+| `--budget` | `validate_budget.sh` | Budget limits + autonomy; FULL safe-operation bypass and mandatory network/shell HITL | LLM |
 | `--sse-settings` | `validate_sse_settings.sh` | UI SSE streams, ws-token, settings CRUD | fast |
 | `--cron` | `validate_cron.sh` | Programmatic cron REST lifecycle | LLM |
 | `--fast` | `(master)` | all fast/zero-token validators | mixed |
+The `--fast` profile includes `validate_mcp_fast.sh`: MCP admin status/tools, REST API-key rejection, the current durable connection-list shape, JSON-RPC initialize, session handshake, tools/list, and unknown-tool rejection. It does not invoke LLM-backed tools or mutate managed connections.
 | `--llm` | `(master)` | memory + web + roles + cron + rag + budget + hitl | LLM |
+
+`--onnx` targets an already-running process. To also authenticate against the local
+OMLX OpenAI-compatible API and manage an isolated native lifecycle, keep the required
+`AMSHA_OMLX_*` credentials in the ignored root `.env` and run
+`mise run smoke:local-runtime -- native --binary dist/amsha-sqlite`. That workflow
+forces `generic-openai` plus ONNX, never selects Ollama, and does not print raw HTTP
+payloads or credentials. See the
+[local ONNX guide](../docs/ONNX_LOCAL_ML_GUIDE.md#reusable-local-runtime-smoke-runner).
 
 ### New P109 config flags (also in `.env.example`)
 

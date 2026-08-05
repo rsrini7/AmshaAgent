@@ -8,6 +8,7 @@ import dev.langchain4j.data.message.SystemMessage;
 import dev.langchain4j.data.message.UserMessage;
 
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
 import java.nio.file.Files;
@@ -27,9 +28,12 @@ import com.amsha.core.agent.role.ToolCapability;
 import com.amsha.core.security.AutonomyLevel;
 import com.amsha.core.skill.SkillAdaptationManager;
 import com.amsha.core.skill.SkillRegistry;
+import com.amsha.core.tool.DynamicToolInvoker;
 import com.amsha.core.tools.AgentTool;
+import com.amsha.core.tools.DynamicToolSchemaParser;
 import com.amsha.core.tools.ToolRegistry;
 import com.amsha.core.tools.search.ToolSearchIndex;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.jboss.logging.Logger;
 
@@ -55,6 +59,12 @@ public class ReasoningMessageAssembler {
 
     @Inject
     SkillAdaptationManager adaptationManager;
+
+    @Inject
+    Instance<DynamicToolInvoker> dynamicToolInvokers;
+
+    @Inject
+    ObjectMapper objectMapper;
 
     @Inject
     public ReasoningMessageAssembler(
@@ -232,11 +242,11 @@ public class ReasoningMessageAssembler {
                 ranked.add(name);
             }
         }
-
-        return ranked.stream()
+        List<ToolSpecification> specifications = ranked.stream()
                 .filter(name -> !isBackgroundSession
                         || (!name.equals(ToolCapability.SCHEDULE_TASK.toolName())
                                 && !name.equals(ToolCapability.MANAGE_SCHEDULE.toolName())))
+                .filter(name -> toolRegistry.findTool(name).isPresent())
                 .map(name -> toolRegistry.findTool(name).orElseThrow())
                 .filter(AgentTool::isEnabled)
                 .map(tool -> {
@@ -269,5 +279,18 @@ public class ReasoningMessageAssembler {
                             .build();
                 })
                 .collect(Collectors.toList());
+        if (dynamicToolInvokers != null && !dynamicToolInvokers.isUnsatisfied() && objectMapper != null) {
+            dynamicToolInvokers.stream()
+                    .flatMap(catalog -> catalog.listTools().stream())
+                    .filter(tool -> specifications.stream()
+                            .noneMatch(spec -> spec.name().equals(tool.name())))
+                    .map(tool -> ToolSpecification.builder()
+                            .name(tool.name())
+                            .description(tool.description())
+                            .parameters(DynamicToolSchemaParser.parse(objectMapper, tool.inputSchema()))
+                            .build())
+                    .forEach(specifications::add);
+        }
+        return specifications;
     }
 }

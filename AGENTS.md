@@ -42,6 +42,14 @@ incidents live in [Architecture Invariants](docs/Architecture_Invariants.md).
   `ContextAwareExecutorService` or `WorkspaceScopeHolder.wrap()`.
 - `PreflightState`, `LoopStuckDetector`, and `ToolInvocationGuard` are mandatory.
   The guard executes before every tool; never bypass it.
+- Pre-policy tool-guard `Allow` decisions still pass through every mandatory check.
+  Post-policy classifier hooks may only increase risk, and answer-quality classifiers
+  may consume one retry only before a tool boundary. Optional absence or failure must
+  preserve the deterministic decision without logging payloads.
+- Phase 3 classifier controls distinguish requested from effective state. Shadow beans
+  never register as active implementations. Enable without a ready implementation fails
+  closed; disable rejects new leases and drains accepted work. Mutations require internal
+  authorization and mandatory audit-before-mutation.
 - After a successful tool result, the coordinator must emit `FINISH`; no subsequent
   tool call may follow in that turn. Keep full and compact prompts aligned.
 - `NETWORK_OUTBOUND` and `EXECUTE_SHELL` always require HITL. Trusted roles only
@@ -54,12 +62,18 @@ incidents live in [Architecture Invariants](docs/Architecture_Invariants.md).
 - Create `SecureRandom` locally and zero secret bytes in `finally`; do not retain
   it in static fields. Do not echo generated HTML into chat: use the HTML artifact
   transformer and browser preview path.
+- Non-blocking thread guard checks must test the actual executing thread using
+  `Context.isOnEventLoopThread()`. Never infer the thread from
+  `Vertx.currentContext().isEventLoopContext()`, as `@RunOnVirtualThread` REST
+  handlers retain an event-loop-derived Vert.x context while running safely on
+  virtual threads.
 
 ### Java and API conventions
 
 - JDK 25 finalized features are allowed; preview features are forbidden. In
   particular, do not use structured concurrency, stream gatherers, module imports,
-  compact source files, or value classes.
+  compact source files, or value classes. Use the unnamed variable `_` for unused
+  variables or exceptions rather than naming them `ignored`.
 - Nullable sealed-interface wrappers require `@nullable` documentation and
   null-safe consumers (`Boolean.TRUE.equals(value)`).
 - Admin resources use `resolveUserId()`; mutating `/admin/**` endpoints require
@@ -89,8 +103,14 @@ incidents live in [Architecture Invariants](docs/Architecture_Invariants.md).
 
 - Add every `@ConfigProperty` to `application.yaml`, `.env.example`, and the
   relevant module README; verify the property appears in both config files.
+- In Quarkus, `@ApplicationScoped` beans are lazily initialized. If a bean needs to eagerly
+  register itself with a registry or control plane on startup (e.g., using `@PostConstruct`),
+  it must also be annotated with `@io.quarkus.runtime.Startup`. Otherwise, its initialization
+  will be deferred until its first method invocation, resulting in missing-implementation bugs.
 - Optional-dependency beans are discovered through `BeanManager.getBeans(Object.class)`,
-  then class-name checked and resolved via `getReference()`.
+  then class-name checked and resolved via `getReference()`. These dynamically discovered beans
+  must be annotated with `@io.quarkus.arc.Unremovable` to prevent Quarkus from pruning them
+  during GraalVM native builds.
 - Keep duplicate behavior in one layer: do not repeat work already performed by a
   called method. Log exception messages safely with `LogUtil.rootMessage(e)`.
 - New CDI library modules require Jandex, `META-INF/beans.xml`, application indexing,
@@ -132,6 +152,14 @@ Keep all backends and migration parity in one change. Preserve the admin-resourc
 authorization pattern, retention jobs, and memory metrics. Consult the detailed
 [persistence rules](docs/Architecture_Invariants.md#5-persistence-and-transaction-rules)
 and the memory section in `docs/Architecture_Invariants.md`.
+- Every durable vector namespace must validate compatibility against `EmbeddingIndexDescriptor`.
+  Descriptor fingerprints compare model, tokenizer, pooling, and dimension contracts,
+  excluding `providerId` to allow provider failover. On descriptor mismatch, non-empty
+  vector namespaces must never be auto-purged; they must fall back non-destructively
+  to BM25/FTS5 keyword search.
+- Local ONNX model bundle manifests must include validated upstream source metadata
+  (`repository`, `revision`, `modelPath`, `tokenizerPath`, `license`). Tokenizers must
+  enforce truncation bounded to the model's declared max sequence length (e.g. 384 for MPNet).
 
 ## Focused verification
 
@@ -142,6 +170,35 @@ and the memory section in `docs/Architecture_Invariants.md`.
 | Markdown | `python3 ./scripts/verify_docs.py` |
 | Native-sensitive code | `./mvnw compile -DskipTests -q`; use `mise build:native-local` when applicable |
 | SkillsJar dependencies | `python3 ./scripts/verify_skillsjar_index.py` |
+| Phase 2.5 classifier SPIs | `./mvnw -pl core -Dtest="PostPolicyToolRiskDispatcherTest,AnswerQualityDispatcherTest,ToolInvocationGuardTest,FinishActionHandlerTest" test` |
+| Phase 3A classifier controls | `./mvnw -pl local-ml-onnx,app -am -Dtest="OnnxClassifierRuntimeControlTest,OnnxAdminResourceTest,SecurityEventTypeTest" -Dsurefire.failIfNoSpecifiedTests=false test` |
+| Local OMLX / ONNX smoke | `mise run smoke:local-runtime -- native --binary dist/amsha-sqlite` |
+| Local ML / ONNX Release | `bash scripts/verify_native_matrix.sh && bash scripts/verify_onnx_release_provenance.sh` |
+
+### Reusable local runtime smoke
+
+- Enter through `mise run smoke:local-runtime -- <command>`. The mise task delegates
+  to the root `scripts/local_runtime_smoke.sh` wrapper, which invokes
+  `scripts/local_runtime_smoke.py`. Keep this chain intact so developers and coding
+  agents use one reproducible entry point. Override Python only with
+  `AMSHA_SMOKE_PYTHON`.
+- Use `omlx` for authenticated provider catalog plus minimal completion checks. Use
+  `running --amsha-base-url http://127.0.0.1:8080` for OMLX plus an existing Amsha
+  process. Use `native --binary dist/amsha-sqlite` for isolated native startup,
+  bundle/health/index/inference/metric validation, and graceful shutdown.
+- The runner reads only required values from the ignored root `.env`, with process
+  environment overrides: `AMSHA_OMLX_API_KEY`, `AMSHA_OMLX_BASE_URL`, and
+  `AMSHA_OMLX_MODEL`; `running` also needs `AMSHA_API_KEYS_INTERNAL`. Never hardcode,
+  stage, echo, log, or pass credentials as command-line arguments. Never print raw
+  provider/application responses, prompts, completions, or authorization headers.
+- For this smoke workflow, never use Ollama. The native command maps the OMLX values
+  to `AMSHA_GENERIC_OPENAI_*`, forces `AMSHA_LLM_PROVIDER=generic-openai` and the
+  embedding provider to `onnx`, and disables Telegram. Do not weaken those overrides.
+- Native smoke artifacts live below gitignored `data/smoke/`. Successful runs clean
+  them; failed runs retain a diagnostic path without automatically dumping logs.
+- Run `python3 scripts/test_local_runtime_smoke.py` after changing the runner. A local
+  smoke pass does not close the Phase 0 platform-matrix, golden-corpus/leak, or signed
+  SBOM/provenance gates; use the release-evidence scripts for those claims.
 
 ### REST validation
 

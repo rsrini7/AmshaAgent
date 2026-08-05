@@ -13,10 +13,14 @@
 ###      Allowlist: amsha.mcp.tool-allowlist controls which tools can be called
 ###
 ###   B) MCP CLIENT (outbound - Amsha Agent connects to remote MCP servers)
-###      POST   /api/v1/mcp/connect        → connect to remote server
-###      DELETE /api/v1/mcp/connect/{name} → disconnect + deregister tools
+### POST /api/v1/mcp/connect/discover → preview remote tools (throwaway, no persistence)
+### POST /api/v1/mcp/connect → request/complete durable connect (tools disabled)
+### DELETE /api/v1/mcp/connect/{name} → disconnect + deregister tools
 ###      GET    /api/v1/mcp/connect        → list connected servers
-###      After connecting: dynamic tools appear in agent's tool schema automatically.
+###      PATCH  /api/v1/mcp/connect/{name} → reconfigure endpoint/credentials (`If-MCP-Revision`)
+###      POST   /api/v1/mcp/import/preview → bounded browser multipart preview (no network I/O)
+###      POST   /api/v1/mcp/import/apply   → apply one preview entry through normal HITL flow
+### Dynamic tools appear only after explicit per-tool enable approval.
 ###      (The agent tool "register_mcp_server" is the LLM-driven equivalent - see FLOW G;
 ###       it adds STDIO/Podman transports and an explicit execution category.)
 ###
@@ -32,8 +36,9 @@
 ###
 ### Self-connect smoke test (FLOW D):
 ###   MCP-CLIENT-1 connects Amsha Agent to itself at http://localhost:8080/mcp.
-###   After success: Amsha Agent now has its own tools registered as dynamic tools.
-###   MCP-ADMIN-2 shows registeredDynamicTools with ≥1 entry.
+###   After approval, self-connect is durable and discovers the built-in tools,
+###   but keeps them disabled; MCP-ADMIN-2 remains empty because built-in names
+###   are not re-registered as dynamic tools.
 ###
 ### Telegram: /mcp reflex shows live MCP status (zero LLM tokens).
 ###
@@ -301,10 +306,9 @@ Mcp-Session-Id: {{mcpSessionId}}
 ### ════════════════════════════════════════════════════════════════
 
 ### [MCP-CLIENT-1] Self-connect - Amsha Agent as client to itself
-# Expect 200: {"name":"self","url":"...","toolsRegistered":N,"status":"connected"}
-# N is the number of tools exposed (≥1, depends on amsha.mcp.exposed-tools config).
-# Proves: McpConnectResource → McpClientService.connect() →
-#         MCP initialize handshake → tools/list → DynamicToolCapabilityRegistry.register()
+# First response is 202 with taskId; approve it before the handshake.
+# The completed response is durable CONNECTED metadata with enabledToolCount=0
+# and discoveredToolCount=N.
 POST {{adminBase}}/mcp/connect
 Content-Type: application/json
 X-Amsha-API-Key: {{validKey}}
@@ -316,8 +320,8 @@ X-Amsha-API-Key: {{validKey}}
 
 ###
 
-### [MCP-CLIENT-2] Verify dynamic tools registered after self-connect
-# Expect 200: registeredDynamicTools contains github + recall_memory_search
+### [MCP-CLIENT-2] Verify self-connect dynamic registry
+# Expect 200: registeredDynamicTools is empty until a discovered tool is enabled
 # Both with mcpServerName="self" and transport="HTTP_SSE"
 GET {{adminBase}}/mcp/tools
 Accept: application/json
@@ -326,7 +330,8 @@ X-Amsha-API-Key: {{validKey}}
 ###
 
 ### [MCP-CLIENT-3] List connected servers
-# Expect 200: {"connectedServers":[{"name":"self","toolCount":N}],"totalDynamicTools":N}
+# Expect 200: durable connection row includes state, revision,
+# enabledToolCount=0, and discoveredToolCount=N.
 GET {{adminBase}}/mcp/connect
 Accept: application/json
 X-Amsha-API-Key: {{validKey}}
@@ -418,7 +423,8 @@ X-Amsha-API-Key: {{validKey}}
 ### re-resolves secrets (audit: MCP_CREDENTIAL_CONFIGURED / _REMOVED).
 
 ### [MCP-CLIENT-SEC-1] Secure connect with an Authorization header secret
-# Expect 200: {"name":"secure","url":"...","toolsRegistered":N,"status":"connected"}
+# Expect 202 approval, then durable CONNECTED metadata with enabledToolCount=0
+# and discoveredToolCount=N. Header values remain vault-backed.
 # Proves: McpConnectResource -> lifecycleService.persistSuccessfulHttp()
 #   -> validateHeaders() -> storeHeaderSecrets() -> secretVault.store()
 #   (wrapped in WorkspaceScopeHolder). Audit: MCP_CREDENTIAL_CONFIGURED.
@@ -436,8 +442,9 @@ X-Amsha-API-Key: {{validKey}}
 
 ###
 
-### [MCP-CLIENT-SEC-2] Verify dynamic tools registered for the secure server
-# Expect 200: registeredDynamicTools contains tools with mcpServerName="secure"
+### [MCP-CLIENT-SEC-2] Verify secure server policies after connect
+# Expect 200: registeredDynamicTools is empty until an explicit tool-enable
+# approval; the connection list reports discoveredToolCount and enabledToolCount.
 GET {{adminBase}}/mcp/tools
 Accept: application/json
 X-Amsha-API-Key: {{validKey}}
@@ -617,3 +624,11 @@ DELETE {{adminBase}}/sessions/{{mcpRegSession.response.body.sessionId}}
 X-Amsha-API-Key: {{validKey}}
 
 ###
+
+### MCP lifecycle approval notes
+# POST /mcp/connect and POST /mcp/connect/discover return 202 with taskId.
+# Approve with POST /mcp/connect/approvals/{taskId}/approve.
+# Discovery is throwaway; connect persists all discovered tools disabled.
+# POST /mcp/connect/{name}/tools/{toolName}/enable also returns an approval task.
+# GET /mcp/connect/{name}/tools lists persisted descriptions and schemas.
+# Lifecycle mutations may send If-MCP-Revision; stale values return HTTP 409.

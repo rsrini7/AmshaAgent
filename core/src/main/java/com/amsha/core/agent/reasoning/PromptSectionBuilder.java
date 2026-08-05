@@ -1,8 +1,10 @@
 package com.amsha.core.agent.reasoning;
 
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -12,6 +14,7 @@ import com.amsha.core.agent.role.AgentRoleEnum;
 import com.amsha.core.agent.role.CapabilityRegistry;
 import com.amsha.core.agent.role.ToolCapability;
 import com.amsha.core.security.AutonomyLevel;
+import com.amsha.core.tool.DynamicToolInvoker;
 import com.amsha.core.tools.AgentTool;
 import com.amsha.core.tools.ToolRegistry;
 
@@ -23,6 +26,9 @@ public class PromptSectionBuilder {
 
     private final ToolRegistry toolRegistry;
     private final CapabilityRegistry capabilityRegistry;
+
+    @Inject
+    Instance<DynamicToolInvoker> dynamicToolInvokers;
 
     @Inject
     public PromptSectionBuilder(ToolRegistry toolRegistry, CapabilityRegistry capabilityRegistry) {
@@ -118,12 +124,31 @@ public class PromptSectionBuilder {
 
     public List<String> getAvailableToolNames(AgentExecutionContext context, AgentRoleEnum roleEnum) {
         boolean isBackground = context != null && context.autonomyLevel() == AutonomyLevel.BACKGROUND;
-        return capabilityRegistry.getSupplementalTools(roleEnum.id()).stream()
-                .filter(name ->
-                        toolRegistry.findTool(name).map(AgentTool::isEnabled).orElse(false))
+        List<String> names = new ArrayList<>(capabilityRegistry.getSupplementalTools(roleEnum.id()));
+        if (dynamicToolInvokers != null && !dynamicToolInvokers.isUnsatisfied()) {
+            dynamicToolInvokers.stream()
+                    .flatMap(catalog -> catalog.listTools().stream())
+                    .map(tool -> tool.name())
+                    .forEach(names::add);
+        }
+        return names.stream()
+                .distinct()
                 .filter(name -> !isBackground
                         || (!ToolCapability.SCHEDULE_TASK.toolName().equals(name)
                                 && !ToolCapability.MANAGE_SCHEDULE.toolName().equals(name)))
+                .filter(this::isVisibleDynamicOrStaticTool)
                 .toList();
+    }
+
+    private boolean isVisibleDynamicOrStaticTool(String name) {
+        return isDynamicTool(name)
+                || toolRegistry.findTool(name).map(AgentTool::isEnabled).orElse(false);
+    }
+
+    private boolean isDynamicTool(String name) {
+        return dynamicToolInvokers != null
+                && !dynamicToolInvokers.isUnsatisfied()
+                && dynamicToolInvokers.stream()
+                        .anyMatch(catalog -> catalog.findTool(name).isPresent());
     }
 }

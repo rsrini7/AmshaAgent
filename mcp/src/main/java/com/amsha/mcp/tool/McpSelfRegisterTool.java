@@ -26,7 +26,7 @@ import com.amsha.core.tools.ToolCategory;
 import com.amsha.core.tools.ToolExecutionContext;
 import com.amsha.core.tools.ToolResponse;
 import com.amsha.mcp.transport.McpClientService;
-import com.amsha.mcp.transport.McpConnectionLifecycleService;
+import com.amsha.mcp.transport.McpManagementService;
 
 /**
  * Component A4 - McpSelfRegisterTool.
@@ -56,7 +56,7 @@ public class McpSelfRegisterTool implements AgentTool {
     AuditService auditService;
 
     @Inject
-    McpConnectionLifecycleService lifecycleService;
+    McpManagementService managementService;
 
     @Inject
     ApprovalReceiptIssuer approvalReceiptIssuer;
@@ -145,6 +145,11 @@ public class McpSelfRegisterTool implements AgentTool {
         } catch (IllegalArgumentException | ClassCastException _) {
             return ToolResponse.failure(400, "Invalid category. Must be NETWORK, COMPUTE, DATABASE, or INTERNAL.");
         }
+        try {
+            DynamicToolOperationDefaults.requireFor(category);
+        } catch (IllegalArgumentException e) {
+            return ToolResponse.failure(400, e.getMessage());
+        }
 
         try {
             if ("http".equalsIgnoreCase(transportStr)) {
@@ -153,7 +158,6 @@ public class McpSelfRegisterTool implements AgentTool {
                     return ToolResponse.failure(400, "url is required for http transport.");
                 }
                 Map<String, String> headers = parseHeaders(params.get(PARAM_HEADERS));
-                lifecycleService.validateHttpRegistration(url, headers);
                 String approvalToken = approvalReceiptIssuer
                         .issueForApprovedCheckpoint(
                                 userId,
@@ -164,15 +168,11 @@ public class McpSelfRegisterTool implements AgentTool {
                                 URI.create(url).getHost())
                         .orElseThrow(
                                 () -> new SecurityException("Approved checkpoint is required for MCP registration"));
-                mcpClientService.connectForUser(name, userId, url, category, headers, approvalToken);
-                try {
-                    var persisted = lifecycleService.persistSuccessfulHttp(name, url, category, userId, headers);
-                    mcpClientService.configureHeaderSecretRefs(name, userId, persisted.headerSecretRefs());
-                } catch (RuntimeException e) {
-                    mcpClientService.clearHttpConnectionState(name, userId);
-                    throw e;
-                }
+                managementService.registerFromApprovedCheckpoint(userId, name, url, headers, approvalToken, category);
             } else if ("stdio".equalsIgnoreCase(transportStr)) {
+                // STDIO registration intentionally remains NETWORK_OUTBOUND/manual-approval
+                // gated: command, arguments, and environment are an arbitrary process launch.
+                // Do not change this operation to a lower-risk category without a sandbox policy.
                 String command = (String) params.get("command");
                 if (command == null || command.isBlank()) {
                     return ToolResponse.failure(400, "command is required for stdio transport.");
@@ -199,7 +199,7 @@ public class McpSelfRegisterTool implements AgentTool {
                     }
                 }
 
-                mcpClientService.connectStdio(name, command, argsList, envMap, category);
+                mcpClientService.connectStdio(name, command, argsList, envMap, category, userId);
             } else {
                 return ToolResponse.failure(400, "Unsupported transport: " + transportStr);
             }

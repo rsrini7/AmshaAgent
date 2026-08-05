@@ -13,6 +13,18 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
  * Matches §6.7 invariant rule.
  */
 @RegisterForReflection(
+        classNames = {
+            "com.amsha.mcp.transport.McpClientService$DiscoveredTool",
+            "com.amsha.mcp.transport.McpManagementServiceModels$ConnectionSnapshot",
+            "com.amsha.mcp.transport.McpManagementServiceModels$ApprovalExecution",
+            "com.amsha.mcp.transport.McpManagementServiceModels$DiscoveryPreview",
+            "com.amsha.mcp.transport.McpManagementServiceModels$ToolPreview",
+            "com.amsha.mcp.transport.McpConfigImportService$ImportPreview",
+            "com.amsha.mcp.transport.McpConfigImportService$ImportEntry",
+            "com.amsha.mcp.transport.McpApprovalService$PendingApproval",
+            "com.amsha.mcp.transport.McpSetupTokenService$SetupGrant",
+            "com.amsha.mcp.transport.McpSetupTokenService$SetupMode"
+        },
         targets = {
             McpToolDescriptor.class,
             McpToolRequest.class,

@@ -15,13 +15,18 @@ import jakarta.ws.rs.QueryParam;
 import jakarta.ws.rs.container.AsyncResponse;
 import jakarta.ws.rs.container.Suspended;
 import jakarta.ws.rs.core.Context;
+import jakarta.ws.rs.core.HttpHeaders;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.core.SecurityContext;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
+import com.amsha.core.agent.loop.AnswerQualityPrediction;
+import com.amsha.core.agent.loop.ToolRiskPrediction;
 import com.amsha.core.agent.role.AgentRoleEnum;
 import com.amsha.core.api.AgentResponseMapper;
 import com.amsha.core.api.AgentSessionService;
@@ -35,6 +40,7 @@ import com.amsha.core.scope.WorkspaceContext;
 import com.amsha.persistence.api.CheckpointCrudPort;
 import com.amsha.persistence.api.CheckpointDto;
 
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.eclipse.microprofile.openapi.annotations.Operation;
 
 import io.smallrye.common.annotation.RunOnVirtualThread;
@@ -58,15 +64,77 @@ public class AgentResource {
     @Context
     SecurityContext securityContext;
 
+    @Context
+    HttpHeaders httpHeaders;
+
+    @ConfigProperty(name = "amsha.test-data-collection.enabled", defaultValue = "false")
+    boolean collectionEnabled;
+
+    private static final Set<String> TOOL_RISK_LABELS = Set.of(
+            ToolRiskPrediction.LOW_RISK.name(),
+            ToolRiskPrediction.REQUIRE_APPROVAL.name(),
+            ToolRiskPrediction.BLOCK.name());
+    private static final Set<String> ANSWER_QUALITY_LABELS =
+            Set.of(AnswerQualityPrediction.ACCEPTABLE.name(), AnswerQualityPrediction.RETRY_RECOMMENDED.name());
+    private static final Set<String> INTENT_LABELS =
+            Set.copyOf(AgentRoleEnum.values().stream().map(AgentRoleEnum::id).toList());
+
     @POST
     @RunOnVirtualThread
     @Operation(summary = "Create a new agent session with specified autonomy level")
     public Response createSession(@Valid CreateSessionRequest request) {
         var level = request != null ? request.autonomyLevel() : null;
         String userId = resolveUserId();
-        return Response.status(Response.Status.CREATED)
-                .entity(new CreateSessionResponse(sessionService.createSession(userId, level)))
-                .build();
+
+        Map<String, String> expectedLabels = new HashMap<>();
+        if (collectionEnabled
+                && securityContext != null
+                && securityContext.isUserInRole("internal")
+                && httpHeaders != null) {
+            try {
+                putValidatedLabel(
+                        expectedLabels,
+                        "tool_risk",
+                        httpHeaders.getHeaderString("X-Amsha-Test-Expected-Tool-Risk"),
+                        TOOL_RISK_LABELS);
+                putValidatedLabel(
+                        expectedLabels,
+                        "answer_quality",
+                        httpHeaders.getHeaderString("X-Amsha-Test-Expected-Answer-Quality"),
+                        ANSWER_QUALITY_LABELS);
+                putValidatedLabel(
+                        expectedLabels,
+                        "intent",
+                        httpHeaders.getHeaderString("X-Amsha-Test-Expected-Intent"),
+                        INTENT_LABELS);
+            } catch (IllegalArgumentException e) {
+                return Response.status(Response.Status.BAD_REQUEST)
+                        .entity(new AmshaErrorResponse(e.getMessage()))
+                        .build();
+            }
+        }
+
+        try {
+            return Response.status(Response.Status.CREATED)
+                    .entity(new CreateSessionResponse(sessionService.createSession(userId, level, expectedLabels)))
+                    .build();
+        } catch (IllegalArgumentException e) {
+            return Response.status(Response.Status.BAD_REQUEST)
+                    .entity(new AmshaErrorResponse(e.getMessage()))
+                    .build();
+        }
+    }
+
+    private static void putValidatedLabel(
+            Map<String, String> expectedLabels, String task, String label, Set<String> allowed) {
+        if (label == null) {
+            return;
+        }
+        if (!allowed.contains(label)) {
+            throw new IllegalArgumentException(
+                    "Invalid " + task + " label '" + label + "'; expected one of " + allowed);
+        }
+        expectedLabels.put(task, label);
     }
 
     @GET

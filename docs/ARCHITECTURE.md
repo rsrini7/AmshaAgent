@@ -20,6 +20,7 @@
 | `amsha-persistence-postgres` | PostgreSQL adapter |
 | `amsha-persistence-fs` | Filesystem-based adapter (Lucene BM25) + tiered memory (Core/Recall/Archival) + self-evolve (Events/Extracted) |
 | `amsha-rag` | Two-tier vector (vec0) + FTS5 RAG memory |
+| `amsha-local-ml-onnx` | In-process local ML inference (ONNX Runtime Java 1.27.0 + DJL HuggingFace Tokenizers 0.33.0) |
 | `amsha-mcp` | MCP server bridge + dynamic client tool loading + durable credentialed connections |
 | `amsha-onboarding` | Durable draft/saga onboarding REST API (legacy numbered-step wizard + `/complete` removed in P110) |
 | `amsha-tool-playwright` | Playwright browser automation tool |
@@ -27,7 +28,7 @@
 | `amsha-common` | Shared utilities (LogUtil, constants) |
 | `ui` | Lit 3.x + TypeScript web frontend |
 
-**Dependency flow:** `amsha-app` → `amsha-core` → `amsha-channel-api` ← `amsha-channel-telegram`, `amsha-channel-web`. `amsha-deployment` is build-time only (not in runtime fat-jar). `amsha-rag`, `amsha-mcp`, `amsha-tool-playwright`, and `amsha-self-evolve` are optional runtime modules discovered via CDI. Persistence follows hexagonal architecture: `amsha-persistence-api` defines ports, `amsha-persistence-common` holds shared entities, three adapters (sqlite, postgres, fs) implement ports.
+**Dependency flow:** `amsha-app` → `amsha-core` → `amsha-channel-api` ← `amsha-channel-telegram`, `amsha-channel-web`. `amsha-deployment` is build-time only (not in runtime fat-jar). `amsha-rag`, `amsha-local-ml-onnx`, `amsha-mcp`, `amsha-tool-playwright`, and `amsha-self-evolve` are optional runtime modules discovered via CDI. Persistence follows hexagonal architecture: `amsha-persistence-api` defines ports, `amsha-persistence-common` holds shared entities, three adapters (sqlite, postgres, fs) implement ports.
 
 ![Module Architecture](./assets/amsha_module_architecture.svg)
 
@@ -171,24 +172,34 @@ Exception classification:
 
 Budget tracking: `GovernanceStrategy.recordLlmCall()` checks per-session token budgets. `BudgetWarningException` appends constraint directive; `BudgetExceededException` terminates immediately.
 
-**Step B: FINISH Action Handler:** Extracts answer from `actionInput["answer"]` or `thought`. Unescapes HTML/Unicode. Role guard: non-coder roles cannot generate bare code blocks. Raw tool-call leak guard. `guardFinalAnswer()` prevents LLM echoing injected RAG headers.
+**Step B: FINISH Action Handler:** Extracts answer from `actionInput["answer"]` or
+`thought`. Unescapes HTML/Unicode. Role guard: non-coder roles cannot generate bare code
+blocks. Raw tool-call leak guard. The authoritative answer guard prevents LLM echoing
+injected RAG headers. After deterministic acceptance, the ordered optional Phase 2.5
+answer-quality dispatcher may consume one corrective retry only if no tool has been
+invoked in the turn. Absence or failure preserves the accepted answer.
 
 **Step C: ToolStepHandler — Validation**
 
 `ToolInvocationGuard.evaluate()` decision tree:
 
 ```
-1. Guard interceptors (SPI) → Optional<GuardDecision>
-2. Deduplication check → GuardDecision.Deduplicate(cachedObservation)
-3. Role tool schema check → GuardDecision.Blocked("not permitted")
-4. Role trust pre-flight:
-   - requiresApprovalForTools(role) == false → trusted; skip non-sensitive ops (→ step 6)
-   - Sensitive ops (NETWORK_OUTBOUND, EXECUTE_SHELL) always reach step 5
-5. HITL pre-approval:
+1. Pre-policy guard interceptors (SPI): empty/Allow → continue; stronger decision → stop
+2. Registered-tool parameter validation → GuardDecision.Blocked(validationError)
+3. Idempotent-tool deduplication → GuardDecision.Deduplicate(cachedObservation)
+4. Internal/dynamic tool recognition → unknown tool is blocked
+5. Deterministic HITL pre-approval:
    - tool NOT scheduling tool (exempt per §4.10) && autonomy NOT FULL
      → GuardDecision.PauseForApproval(toolName, paramsJson)
-6. Default → GuardDecision.Allow
+6. Shadow observation of the deterministic provisional allow
+7. Ordered post-policy tool-risk SPI:
+   - BLOCK → GuardDecision.Blocked
+   - REQUIRE_APPROVAL → existing ApprovalFrame/PauseForApproval path
+   - NoOpinion, absence, or isolated failure → preserve provisional Allow
 ```
+
+Role-tool schema validation occurs earlier in `ToolStepValidator`; neither pre-policy
+nor post-policy classifier hooks may bypass it.
 
 **Step C.1: Auto-Heal Hook:** After `sandbox_exec` failure for coder role:
 ```
@@ -231,13 +242,25 @@ ToolFailure (any role, any tool)
 
 `ToolInvocationGuard.evaluate()` runs:
 
-1. **Guard interceptors** — SPI for custom tool guards
-2. **Deduplication** — return cached observation if duplicate call
-3. **Role schema check** — tool not permitted for role? → blocked
-4. **Role trust pre-flight** — trusted role (`requiresApproval=false`)? → skip non-sensitive ops
-   - **Sensitive ops** (`NETWORK_OUTBOUND`, `EXECUTE_SHELL`) always reach HITL check
-5. **HITL pre-approval** — scheduling tools exempt; `SUPERVISED` level pauses for approval
-6. **Default** → allow
+1. **Pre-policy guard interceptors** — empty/allow continues; stronger decisions stop
+2. **Parameter validation** — invalid registered-tool input is blocked
+3. **Deduplication** — return cached observation for an eligible duplicate call
+4. **Tool recognition** — unknown internal/dynamic tools are blocked
+5. **HITL pre-approval** — deterministic role/tool/autonomy policy remains authoritative
+6. **Post-policy tool risk** — ordered optional opinions may only raise provisional
+   allow to approval or block; absence and failure preserve allow
+
+### Phase 3A Classifier Runtime Control
+
+`OnnxClassifierRuntimeControl` owns independent atomic state for intent, tool-risk, and
+answer-quality activation. Active ONNX interceptors (`OnnxPostPolicyToolRiskInterceptor`,
+`OnnxAnswerQualityInterceptor`) bridge this state to the core Phase 2.5 SPIs.
+Startup configuration seeds requested state, but effective state requires a registered
+ready active implementation. If no implementation is registered, enable requests fail
+closed, and the interceptors preserve the deterministic guard path. Disable blocks
+new leases immediately while accepted leases retain their result path and drain.
+Internal admin mutations write a mandatory payload-free audit record before changing
+state; audit failure leaves the switch unchanged.
 
 ### Parallel Tool Execution
 
@@ -379,6 +402,22 @@ Core memory modifications are governed by a token-bucket rate limiter (e.g., max
 
 The `CompactionEventBridge` uses a `CountDownLatch` per session to prevent a race where cache populates before compaction write commits, caching `null` for the rest of the session.
 
+### Vector Index Compatibility & Descriptor Safety
+
+To protect durable vector namespaces (`rag-global`, `archival`) from corrupted cross-space retrieval when model weights, tokenization, or vector dimensions change:
+
+1. **Composite Descriptor Fingerprinting (`EmbeddingIndexDescriptor`)**:
+   - Computes a deterministic 15-field SHA-256 fingerprint (`spaceId`, `modelRevision`, `tokenizerRevision`, `preprocessingRevision`, `poolingStrategy`, `l2Normalize`, `vectorDimension`, `numericPrecision`, `chunkingStrategy`, `chunkingRevision`, `maxWindowTokens`, `windowOverlapTokens`, `multiWindowAggregation`).
+   - Retains `providerId` as audit provenance but excludes it from the compatibility fingerprint to support seamless provider transport failover (e.g. ONNX local vs. cloud REST) when underlying vector spaces are mathematically identical.
+2. **Multi-Backend Migration Parity**:
+   - **SQLite & PostgreSQL**: Dual-dialect Flyway `V10` migration creates the `vector_index_metadata` table.
+   - **Filesystem**: Reads/writes a versioned JSON manifest (`index_descriptor.json`) in the Lucene index root directory.
+3. **Non-Destructive Degradation**:
+   - On descriptor mismatch between active configuration and stored index, **no vectors are automatically deleted**.
+   - Vector search is safely disabled (`VectorIndexMetadataPort.isVectorEnabled() == false`), and retrieval adapters automatically degrade to full-text BM25 / SQLite FTS5 / PostgreSQL `tsvector` keyword search.
+4. **Observability**:
+   - Exposes compatibility state via `VectorIndexCompatibilityHealthCheck` under `/q/health` (`Vector Index Compatibility`), reporting namespace statuses (`INITIALIZED`, `MATCH`, `MISMATCH`, `MISSING_METADATA`, `UNAVAILABLE`).
+
 ---
 
 ### Behavioral Self-Evolution System
@@ -511,8 +550,8 @@ sequenceDiagram
 | 5 | **Goal sanitize** | `AgentDispatchHandler` | PII re-sanitizer on goal before dispatch |
 | 6 | **HITL boundary** | `CheckpointResumeCoordinator` / `ToolInvocationGuard` | Approval frames, autonomy policy |
 | 7 | **LLM boundary** | `GuardrailCoordinator` | Injection check, PII, response validation |
-| 8 | **Tool boundary** | `ToolInvocationGuard` | Dedup, HITL, role schema |
-| 9 | **Tool interceptor** | `GithubToolGuardInterceptor` | Cross-loop dedup, intent validation |
+| 8 | **Pre-policy tool interceptor** | `ToolGuardInterceptor` implementations | Deterministic block, dedup, or approval decisions; `Allow` continues |
+| 9 | **Tool boundary** | `ToolInvocationGuard` | Validation, dedup, recognition, HITL, monotonic post-policy risk |
 | 10 | **Session isolation** | `AgentSessionService` per-key access | Async approve/deny, key scoping |
 
 See [SECURITY.md](./SECURITY.md) for vault, sandbox, audit chain, and key management details.
@@ -528,8 +567,8 @@ graph TD
     L4 --> L5["5. Goal Sanitize\nPII Re-sanitizer"]
     L5 --> L6["6. HITL Boundary\nToolInvocationGuard"]
     L6 --> L7["7. LLM Boundary\nGuardrailCoordinator"]
-    L7 --> L8["8. Tool Boundary\nToolInvocationGuard"]
-    L8 --> L9["9. Tool Interceptor\nGithubToolGuardInterceptor"]
+    L7 --> L8["8. Pre-policy Tool Interceptor\nAllow continues"]
+    L8 --> L9["9. Tool Boundary\nMandatory checks + post-policy risk"]
     L9 --> L10["10. Session Isolation\nAgentSessionService"]
 ```
 
@@ -822,22 +861,38 @@ The `SkillAdaptationManager` enables adaptive skill execution — dynamically ad
 
 ![MCP dynamic tool execution](./assets/amsha_mcp_execution.svg)
 
+### MCP management lifecycle
+
+All remote management surfaces delegate to `McpManagementService`. Discovery is a throwaway,
+approval-gated preview: it validates the endpoint, performs `initialize`/`tools:list` after
+`MCP_CONNECT` approval, and leaves no durable row or registered tool. Connect repeats the governed
+handshake, persists user-private connection metadata, and stores all discovered tools disabled.
+
+`MCP_TOOL_ENABLE` approval is required before reachability validation and registration of an individual
+tool. The dynamic registry is user-scoped, so `CONNECTED (1/56 tools)` means one explicitly enabled tool
+out of 56 discovered tools. Pause/disconnect drain and deregister; startup reconnect restores only
+explicitly enabled policies. Reconfiguration uses `If-MCP-Revision`, preserves enabled policy only for
+unchanged tool name/schema hash pairs, and compensates staged vault changes on failure.
+
+The operator-facing lifecycle, chat commands, REST paths, setup/edit links, import contract, and local
+identity rules are documented in [MCP Management](./MCP_MANAGEMENT.md).
+
 ### Amsha Agent as MCP Server
 
 `McpAdminResource` (`GET /mcp/tools`) exposes Amsha Agent's internal tools as MCP-compatible descriptors. `AgentFunctionProcessor` (build-time) generates JSON schemas from `@AgentFunction`-annotated SAM interfaces.
 
 ### Amsha Agent as MCP Client (Dynamic Tool Loading)
 
-Outbound MCP connections register a remote server's tools into the agent loop.
+Outbound MCP connections discover a remote server's tools and register only explicitly enabled tools into the user-scoped agent loop.
 
 ```
 POST /api/v1/mcp/connect  {name, url, headers?}
-  → McpConnectionLifecycleService.validateHttpRegistration(url, headers)
-  → McpClientService.connectForUser(name, userId, url, category, headers)
-  → SSE handshake with remote MCP server (initialize → initialized → tools/list)
-  → ExternalMcpToolAdapter wraps each as AgentTool
-  → DynamicToolCapabilityRegistry.register(toolDef)
-  → Persist connection + vault-backed header refs (McpConnectionStorePort)
+ → request MCP_CONNECT approval before network I/O
+ → McpConnectionLifecycleService validates, stages, and persists connection metadata
+ → McpClientService performs initialize → initialized → tools/list
+ → persist discovered policies disabled; no implicit registration
+ → MCP_TOOL_ENABLE approval and reachability check for each selected tool
+ → ExternalMcpToolAdapter + DynamicToolCapabilityRegistry register that user-scoped tool
   → Available as tools in agent roles at next invocation
 ```
 
@@ -866,7 +921,7 @@ connections from durable metadata; failed reconnects are logged and retried. Fai
 cancelled credential cleanup is persisted as an owner-scoped, idempotent retry record
 (`MCP_CREDENTIAL_CLEANUP_FAILED`) and retried on startup before reconnect.
 
-Self-connect smoke test: connecting to `http://localhost:8080/mcp` makes Amsha Agent's own tools discoverable as dynamic tools.
+Self-connect smoke test: connecting to `http://localhost:8080/mcp` discovers Amsha Agent's own tools, but they remain disabled and are not registered dynamically until an explicit tool-enable approval.
 
 ---
 
@@ -1132,13 +1187,15 @@ External Input
   │    → LangChainReasoningEngine → LLM (Groq/OpenAI/Ollama/...)    │
   │    → ReasoningStepParser → ReasoningStep                        │
   │    → GovernanceLayer (token budget check)                       │
-  │  FINISH? → guardFinalAnswer() → ChatMemoryWriter → return       │
+  │  FINISH? → deterministic answer guard                          │
+  │          → optional answer-quality retry gate → return         │
   │  ToolStepHandler                                                │
   │    → ToolInvocationGuard                                        │
-  │         ├─ Dedup → cached observation                           │
-  │         ├─ Role schema blocked → error observation              │
-  │         └─ HITL required → ApprovalCheckpointManager            │
-  │              → persist(AWAITING_APPROVAL) → SSE HitlEvent       │
+  │         ├─ Pre-policy stronger decision → stop                  │
+  │         ├─ Validation / dedup / recognition                     │
+  │         ├─ HITL required → ApprovalCheckpointManager            │
+  │         │    → persist(AWAITING_APPROVAL) → SSE HitlEvent       │
+  │         └─ Post-policy risk → block / approval / allow          │
   │    → ToolInvoker → AgentTool.execute(params)                    │
   │         └─ ToolObservationSanitizer (PII / injection / truncate)│
   │    → Auto-Heal (sandbox_exec failure, coder role)               │

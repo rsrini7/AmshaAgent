@@ -7,6 +7,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
+import java.time.Instant;
 import java.util.Base64;
 import java.util.Set;
 import java.util.regex.Matcher;
@@ -31,6 +32,7 @@ public class EnvConfigInitializer {
             "AMSHA_API_KEYS_INTERNAL",
             "AMSHA_API_KEYS_CI",
             "AMSHA_API_KEYS_ADMIN");
+    private static final String CHANGE_LOG_SUFFIX = ".changes.log";
 
     public static void loadDotEnv(Path dir) {
         Path envFile = dir.resolve(".env");
@@ -128,6 +130,7 @@ public class EnvConfigInitializer {
         try {
             if (!Files.exists(envFile)) {
                 Files.writeString(envFile, key + "=" + value + System.lineSeparator());
+                reportChange(envFile, key, "<unset>", valueState(value));
                 return;
             }
             String content = Files.readString(envFile);
@@ -136,34 +139,80 @@ public class EnvConfigInitializer {
 
             if (matcher.find()) {
                 String currentLine = matcher.group();
+                String currentValue = currentLine.substring(key.length() + 1).trim();
                 String newLine = key + "=" + value;
 
                 boolean needsPatch =
                         switch (mode) {
                             case FORCE -> true;
                             case UPDATE -> !currentLine.equals(newLine);
-                            case INIT -> {
-                                String currentValue =
-                                        currentLine.substring(key.length() + 1).trim();
-                                yield currentValue.isEmpty()
+                            case INIT ->
+                                currentValue.isEmpty()
                                         || currentValue.contains("xxxx")
                                         || currentValue.contains("<")
                                         || currentValue.contains("changeme")
                                         || currentValue.contains("ABCdef");
-                            }
                         };
 
                 if (needsPatch) {
                     content = pattern.matcher(content).replaceAll(Matcher.quoteReplacement(newLine));
                     Files.writeString(envFile, content);
+                    reportChange(envFile, key, valueState(currentValue), valueState(value));
                 }
             } else {
                 String separator = content.endsWith(System.lineSeparator()) ? "" : System.lineSeparator();
                 Files.writeString(
                         envFile, separator + key + "=" + value + System.lineSeparator(), StandardOpenOption.APPEND);
+                reportChange(envFile, key, "<unset>", valueState(value));
             }
         } catch (IOException e) {
             log.warnf("[Amsha Agent] Could not update .env: %s", LogUtil.rootMessage(e));
+        }
+    }
+
+    /**
+     * Reports creation of the runtime .env file without exposing template or secret values.
+     *
+     * @param envFile created .env file
+     * @param source non-secret description of the source used to create it
+     */
+    public static void reportEnvFileCreated(Path envFile, String source) {
+        String message = "env=" + absolutePath(envFile) + " event=created source=" + source;
+        System.err.println("[Amsha Agent] .env created: " + message);
+        appendChangeLog(envFile, message);
+    }
+
+    private static String valueState(String value) {
+        if (value == null || value.isBlank()) {
+            return "<unset>";
+        }
+        return isDisabledValue(value) ? "disabled" : "<set>";
+    }
+
+    private static boolean isDisabledValue(String value) {
+        String normalized = value.trim();
+        return normalized.equalsIgnoreCase("none")
+                || normalized.equalsIgnoreCase("false")
+                || normalized.equalsIgnoreCase("skip");
+    }
+
+    private static void reportChange(Path envFile, String key, String oldState, String newState) {
+        String message = "env=" + absolutePath(envFile) + " key=" + key + " old=" + oldState + " new=" + newState;
+        System.err.println("[Amsha Agent] .env changed: " + message);
+        appendChangeLog(envFile, message);
+    }
+
+    private static String absolutePath(Path path) {
+        return path.toAbsolutePath().normalize().toString();
+    }
+
+    private static void appendChangeLog(Path envFile, String message) {
+        Path changeLog = envFile.resolveSibling(envFile.getFileName() + CHANGE_LOG_SUFFIX);
+        String entry = Instant.now() + " " + message + System.lineSeparator();
+        try {
+            Files.writeString(changeLog, entry, StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+        } catch (IOException e) {
+            log.warnf("[Amsha Agent] Could not write .env change log: %s", LogUtil.rootMessage(e));
         }
     }
 

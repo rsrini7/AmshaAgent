@@ -18,7 +18,10 @@ import java.util.Locale;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
+import com.amsha.common.util.LogUtil;
 import com.amsha.core.routing.InfiniteLoopProvider;
+import com.amsha.persistence.api.EmbeddingIndexDescriptor;
+import com.amsha.persistence.api.EmbeddingIndexDescriptorSource;
 
 import org.eclipse.microprofile.config.Config;
 import org.eclipse.microprofile.config.ConfigProvider;
@@ -42,7 +45,7 @@ import io.quarkus.runtime.Startup;
  * </pre>
  */
 @ApplicationScoped
-public class InfiniteLoopEmbeddingModelProvider {
+public class InfiniteLoopEmbeddingModelProvider implements EmbeddingIndexDescriptorSource {
 
     private static final Logger log = Logger.getLogger(InfiniteLoopEmbeddingModelProvider.class);
     private static final String CONFIG_PREFIX = "amsha.embedding.";
@@ -66,7 +69,11 @@ public class InfiniteLoopEmbeddingModelProvider {
     @ConfigProperty(name = "amsha.infinite-loop.max-latency-ms", defaultValue = "60000")
     long maxLatencyMs;
 
+    @ConfigProperty(name = "amsha.rag.embed-dimensions", defaultValue = "768")
+    int configuredVectorDimension;
+
     private volatile InfiniteLoopEmbeddingModel instance;
+    private volatile EmbeddingIndexDescriptor activeIndexDescriptor;
 
     @Produces
     @ApplicationScoped
@@ -79,16 +86,27 @@ public class InfiniteLoopEmbeddingModelProvider {
             String[] providerNames = loopProviders.split(",", -1);
             List<InfiniteLoopProvider.Slot<EmbeddingModel>> slots = new ArrayList<>();
             List<EmbeddingProviderFactory> allFactories = factories.stream().toList();
+            EmbeddingSpaceDescriptor configuredSpace = null;
 
             for (String name : providerNames) {
                 String trimmed = name.trim().toLowerCase(Locale.ROOT);
                 if (trimmed.isEmpty()) continue;
                 try {
-                    EmbeddingModel model = createModelForProvider(trimmed, allFactories);
-                    slots.add(new InfiniteLoopProvider.Slot<>(trimmed, model));
-                    log.infof("Embedding loop: added slot [%s]", trimmed);
+                    ConfiguredEmbeddingModel configured = createModelForProvider(trimmed, allFactories);
+                    if (configuredSpace == null) {
+                        configuredSpace = configured.space();
+                    } else if (!configuredSpace.isCompatibleWith(configured.space())) {
+                        log.warnf(
+                                "Embedding loop: skipping incompatible slot [%s] space=%s; expected fingerprint=%s",
+                                trimmed, configured.space().spaceId(), configuredSpace.fingerprint());
+                        continue;
+                    }
+                    slots.add(new InfiniteLoopProvider.Slot<>(trimmed, configured.model()));
+                    log.infof(
+                            "Embedding loop: added slot [%s] space=%s",
+                            trimmed, configured.space().spaceId());
                 } catch (Exception e) {
-                    log.warnf("Embedding loop: skipping slot [%s] — %s", trimmed, e.getMessage());
+                    log.warnf("Embedding loop: skipping slot [%s] — %s", trimmed, LogUtil.rootMessage(e));
                 }
             }
 
@@ -125,13 +143,41 @@ public class InfiniteLoopEmbeddingModelProvider {
                     slots.size(),
                     slots.stream().map(InfiniteLoopProvider.Slot::name).toList());
 
-            instance = new InfiniteLoopEmbeddingModel(
+            InfiniteLoopEmbeddingModel initialized = new InfiniteLoopEmbeddingModel(
                     slots, cooldownBaseSeconds, cooldownMaxSeconds, cooldownTransientSeconds, maxLatencyMs);
-            return instance;
+            activeIndexDescriptor = toIndexDescriptor(configuredSpace);
+            instance = initialized;
+            return initialized;
         }
     }
 
-    private EmbeddingModel createModelForProvider(String providerName, List<EmbeddingProviderFactory> allFactories) {
+    @Override
+    public Optional<EmbeddingIndexDescriptor> activeDescriptor() {
+        if (activeIndexDescriptor == null) embeddingModel();
+        return Optional.ofNullable(activeIndexDescriptor);
+    }
+
+    private EmbeddingIndexDescriptor toIndexDescriptor(EmbeddingSpaceDescriptor space) {
+        int dimension = space.vectorDimension() > 0 ? space.vectorDimension() : configuredVectorDimension;
+        return EmbeddingIndexDescriptor.create(
+                space.providerId(),
+                space.spaceId(),
+                space.modelRevision(),
+                space.tokenizerRevision(),
+                space.preprocessingRevision(),
+                space.poolingStrategy(),
+                space.l2Normalize(),
+                dimension,
+                space.numericPrecision(),
+                space.chunkingStrategy(),
+                space.chunkingRevision(),
+                space.maxWindowTokens(),
+                space.windowOverlapTokens(),
+                space.multiWindowAggregation());
+    }
+
+    private ConfiguredEmbeddingModel createModelForProvider(
+            String providerName, List<EmbeddingProviderFactory> allFactories) {
         EmbeddingProviderFactory factory = allFactories.stream()
                 .filter(f -> f.providerId().equals(providerName))
                 .findFirst()
@@ -146,11 +192,13 @@ public class InfiniteLoopEmbeddingModelProvider {
         String baseUrl = resolveOptional(config, providerName, "base-url", factory.defaultBaseUrl());
         String apiKey = resolveOptional(config, providerName, "api-key", "");
         int timeout = resolveOptionalInt(config, providerName, "timeout-seconds", 30);
+        String spaceId = resolveOptional(config, providerName, "space-id", "");
+        String spaceRevision = resolveOptional(config, providerName, "space-revision", "");
         Optional<String> optKey = Optional.ofNullable(apiKey).filter(k -> !k.isBlank());
 
-        EmbeddingModelConfig embedConfig =
-                new EmbeddingModelConfig(providerName, model, baseUrl, optKey, Duration.ofSeconds(timeout));
-        return factory.create(embedConfig);
+        EmbeddingModelConfig embedConfig = new EmbeddingModelConfig(
+                providerName, model, baseUrl, optKey, Duration.ofSeconds(timeout), spaceId, spaceRevision);
+        return new ConfiguredEmbeddingModel(factory.create(embedConfig), factory.embeddingSpace(embedConfig));
     }
 
     private static String resolveRequired(Config config, String provider, String key) {
@@ -170,4 +218,6 @@ public class InfiniteLoopEmbeddingModelProvider {
         return config.getOptionalValue(CONFIG_PREFIX + provider + "." + key, Integer.class)
                 .orElse(defaultValue);
     }
+
+    private record ConfiguredEmbeddingModel(EmbeddingModel model, EmbeddingSpaceDescriptor space) {}
 }

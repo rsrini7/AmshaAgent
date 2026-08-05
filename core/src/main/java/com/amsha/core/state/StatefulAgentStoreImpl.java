@@ -184,9 +184,6 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
             transitionService.emitCreated(sessionId, agentRole, userId, autonomy, saved.id(), saved.createdAt());
         }
         transitionService.emitFinalStatus(sessionId, agentRole, userId, finalStatus, saved.id(), saved.createdAt());
-        if (finalStatus == CheckpointStatus.COMPLETED) {
-            storeAdapter.archive(saved.id());
-        }
         return CheckpointRecord.fromDto(saved);
     }
 

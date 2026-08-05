@@ -6,6 +6,7 @@ import static org.mockito.Mockito.*;
 import java.time.Instant;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 
 import com.amsha.channel.api.ChannelMessage;
 import com.amsha.channel.api.ChannelType;
@@ -17,7 +18,12 @@ import com.amsha.mcp.bridge.McpToolDescriptor;
 import com.amsha.mcp.tool.DynamicToolCapability;
 import com.amsha.mcp.tool.DynamicToolCapabilityRegistry;
 import com.amsha.mcp.tool.McpTransportType;
+import com.amsha.mcp.transport.McpApprovalService;
+import com.amsha.mcp.transport.McpManagementService;
+import com.amsha.mcp.transport.McpSetupLinkService;
+import com.amsha.mcp.transport.McpSetupTokenService;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -33,8 +39,22 @@ class McpReflexTest {
     @Mock
     McpToolBridge mcpToolBridge;
 
+    @Mock
+    McpManagementService managementService;
+
+    @Mock
+    McpSetupTokenService setupTokenService;
+
+    @Mock
+    McpSetupLinkService setupLinkService;
+
     @InjectMocks
     McpReflex reflex;
+
+    @BeforeEach
+    void keepStatusTestsOnRegistrySurface() {
+        reflex.managementService = null;
+    }
 
     private MessageContext context() {
         ChannelUser user = new ChannelUser("user1", "chat1", "User 1", ChannelType.CLI);
@@ -54,6 +74,108 @@ class McpReflexTest {
         assertFalse(reflex.matches("/status"));
         assertFalse(reflex.matches("mcp"));
         assertFalse(reflex.matches(null));
+    }
+
+    @Test
+    void helpExplainsMcpCommandsWithoutCallingManagementService() {
+        ReflexResult result = reflex.execute("sess-1", "user1", "chat1", "/mcp help", context());
+
+        String output = result.commandResponse().orElseThrow();
+        assertTrue(output.contains("/mcp setup <name>"));
+        assertTrue(output.contains("/mcp edit <name>"));
+        assertTrue(output.contains("/mcp approve <task-id>"));
+        verifyNoInteractions(managementService);
+    }
+
+    @Test
+    void bareMcpPrintsStatusAndHelp() {
+        reflex.managementService = null;
+        when(mcpToolBridge.getExposedTools()).thenReturn(Collections.emptyList());
+        when(registry.getAll()).thenReturn(Collections.emptyList());
+
+        ReflexResult result = reflex.execute("sess-1", "user1", "chat1", "/mcp", context());
+
+        String output = result.commandResponse().orElseThrow();
+        assertTrue(output.contains("MCP Status"));
+        assertTrue(output.contains("/mcp help"));
+        assertTrue(output.contains("/mcp setup <name>"));
+    }
+
+    @Test
+    void discoverCreatesApprovalTaskInsteadOfCallingRemoteDirectly() {
+        reflex.managementService = managementService;
+        var pending = new McpApprovalService.PendingApproval(
+                "task-1",
+                "DISCOVER",
+                "server",
+                "https://example.test/mcp",
+                null,
+                Instant.now().plusSeconds(60));
+        when(managementService.requestDiscovery("user1", "server", "https://example.test/mcp", Map.of()))
+                .thenReturn(pending);
+
+        ReflexResult result =
+                reflex.execute("sess-1", "user1", "chat1", "/mcp discover server https://example.test/mcp", context());
+
+        assertTrue(result.commandResponse().orElseThrow().contains("task-1"));
+        verify(managementService).requestDiscovery("user1", "server", "https://example.test/mcp", Map.of());
+    }
+
+    @Test
+    void denyRejectsMcpApprovalTask() {
+        reflex.managementService = managementService;
+        when(managementService.rejectApproval("user1", "task-1")).thenReturn(true);
+
+        ReflexResult result = reflex.execute("sess-1", "user1", "chat1", "/mcp deny task-1", context());
+
+        assertEquals("✅ MCP approval denied.", result.commandResponse().orElseThrow());
+        verify(managementService).rejectApproval("user1", "task-1");
+    }
+
+    @Test
+    void editIssuesShortLivedSetupLinkWithoutAcceptingCredentials() {
+        when(setupTokenService.issueForEdit("user1", "cli", "chat1", "tapetide"))
+                .thenReturn("edit-token");
+        when(setupLinkService.link("edit-token")).thenReturn("https://agent.example/#/mcp/setup?token=edit-token");
+
+        ReflexResult result = reflex.execute("sess-1", "user1", "chat1", "/mcp edit tapetide", context());
+
+        assertTrue(
+                result.commandResponse().orElseThrow().contains("https://agent.example/#/mcp/setup?token=edit-token"));
+        verify(setupTokenService).issueForEdit("user1", "cli", "chat1", "tapetide");
+        verify(setupLinkService).link("edit-token");
+        verifyNoInteractions(managementService);
+    }
+
+    @Test
+    void editUsesOriginatingChannelAndConversationId() {
+        MessageContext telegramContext = mock(MessageContext.class);
+        when(telegramContext.getChannelType()).thenReturn(ChannelType.TELEGRAM);
+        when(telegramContext.getChatId()).thenReturn("telegram-chat");
+        when(setupTokenService.issueForEdit("user1", "telegram", "telegram-chat", "tapetide"))
+                .thenReturn("telegram-edit-token");
+
+        reflex.execute("sess-1", "user1", "ignored", "/mcp edit tapetide", telegramContext);
+
+        verify(setupTokenService).issueForEdit("user1", "telegram", "telegram-chat", "tapetide");
+    }
+
+    @Test
+    void setupUsesOriginatingChannelAndConversationId() {
+        MessageContext telegramContext = mock(MessageContext.class);
+        when(telegramContext.getChannelType()).thenReturn(ChannelType.TELEGRAM);
+        when(telegramContext.getChatId()).thenReturn("telegram-chat");
+        when(setupTokenService.issue("user1", "telegram", "telegram-chat", "tapetide"))
+                .thenReturn("telegram-setup-token");
+        when(setupLinkService.link("telegram-setup-token"))
+                .thenReturn("https://agent.example/#/mcp/setup?token=telegram-setup-token");
+
+        ReflexResult result = reflex.execute("sess-1", "user1", "ignored", "/mcp setup tapetide", telegramContext);
+
+        assertTrue(result.commandResponse()
+                .orElseThrow()
+                .contains("https://agent.example/#/mcp/setup?token=telegram-setup-token"));
+        verify(setupTokenService).issue("user1", "telegram", "telegram-chat", "tapetide");
     }
 
     @Test

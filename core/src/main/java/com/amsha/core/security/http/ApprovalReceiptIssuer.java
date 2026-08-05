@@ -123,7 +123,27 @@ public class ApprovalReceiptIssuer {
                 .load(sessionId, agentRole)
                 .filter(checkpoint -> actorUserId.equals(checkpoint.getChannelPlatformId()))
                 .filter(checkpoint -> hasApprovedDecision(checkpoint.getBatchToolDecisions(), toolName))
-                .map(ignored -> issue(actorUserId, sessionId, purpose, targetHost));
+                .map(_ -> issue(actorUserId, sessionId, purpose, targetHost));
+    }
+
+    /**
+     * Mints a receipt after an explicit, user-scoped application approval has
+     * been recorded.  MCP lifecycle operations use this narrow bridge because
+     * they do not originate in an agent checkpoint, but still must reach the
+     * same governed transport boundary with a single-use receipt.
+     */
+    public String issueForExplicitApproval(
+            String actorUserId, String operationId, OutboundPurpose purpose, String targetHost) {
+        if (actorUserId == null
+                || actorUserId.isBlank()
+                || operationId == null
+                || operationId.isBlank()
+                || purpose == null
+                || targetHost == null
+                || targetHost.isBlank()) {
+            throw new IllegalArgumentException("MCP approval context is incomplete");
+        }
+        return issue(actorUserId, "mcp-approval:" + operationId, purpose, targetHost);
     }
 
     private boolean hasApprovedDecision(String decisionsJson, String toolName) {

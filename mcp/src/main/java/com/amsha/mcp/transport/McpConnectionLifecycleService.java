@@ -5,19 +5,15 @@ import jakarta.enterprise.event.Observes;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
-import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.Timer;
 import java.util.TimerTask;
 import java.util.UUID;
-import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import com.amsha.common.util.LogUtil;
@@ -31,11 +27,13 @@ import com.amsha.core.security.OutboundPurpose;
 import com.amsha.core.security.SecretVault;
 import com.amsha.core.security.VaultConstants;
 import com.amsha.core.tools.ToolCategory;
+import com.amsha.mcp.tool.DynamicToolCapabilityRegistry;
 import com.amsha.mcp.tool.McpTransportType;
 import com.amsha.persistence.api.McpConnectionCleanupFailureDto;
 import com.amsha.persistence.api.McpConnectionDto;
 import com.amsha.persistence.api.McpConnectionHeaderSecretRefDto;
 import com.amsha.persistence.api.McpConnectionStorePort;
+import com.amsha.persistence.api.McpConnectionToolPolicyDto;
 
 import org.jboss.logging.Logger;
 
@@ -47,22 +45,7 @@ import io.quarkus.runtime.StartupEvent;
 public class McpConnectionLifecycleService {
 
     private static final Logger LOG = Logger.getLogger(McpConnectionLifecycleService.class);
-    // Conservative RFC 7230 token subset; intentionally excludes ^, `, |, and ~ for broad client/proxy compatibility.
-    private static final Pattern HEADER_NAME_PATTERN = Pattern.compile("^[!#$%&'*+\\-.0-9A-Za-z]+$");
-    private static final Set<String> FORBIDDEN_HEADERS = Set.of(
-            "accept",
-            "connection",
-            "content-length",
-            "content-type",
-            "host",
-            "keep-alive",
-            "mcp-session-id",
-            "proxy-authenticate",
-            "proxy-authorization",
-            "te",
-            "trailer",
-            "transfer-encoding",
-            "upgrade");
+    private final McpConnectionRequestValidator requestValidator = new McpConnectionRequestValidator();
 
     @Inject
     Instance<McpConnectionStorePort> stores;
@@ -75,6 +58,9 @@ public class McpConnectionLifecycleService {
 
     @Inject
     McpClientService mcpClientService;
+
+    @Inject
+    DynamicToolCapabilityRegistry dynamicToolRegistry;
 
     @Inject
     OutboundHttpPolicyService outboundHttpPolicyService;
@@ -95,6 +81,7 @@ public class McpConnectionLifecycleService {
                             @Override
                             public void run() {
                                 retryCleanupFailures();
+                                reconcilePendingApprovals();
                                 reconnectEnabledConnections();
                             }
                         },
@@ -135,6 +122,12 @@ public class McpConnectionLifecycleService {
         return cleaned;
     }
 
+    /** Clears approval tasks that cannot survive a process restart before reconnect begins. */
+    public int reconcilePendingApprovals() {
+        return store().map(store -> McpConnectionStartupSupport.reconcilePendingApprovals(store, auditService))
+                .orElse(0);
+    }
+
     public int reconnectEnabledConnections() {
         Optional<McpConnectionStorePort> store = store();
         if (store.isEmpty()) return 0;
@@ -147,18 +140,43 @@ public class McpConnectionLifecycleService {
                 continue;
             }
             try {
+                Set<String> enabledToolNames =
+                        store.get().listToolPolicies(connection.id(), connection.userId()).stream()
+                                .filter(McpConnectionToolPolicyDto::enabled)
+                                .map(McpConnectionToolPolicyDto::toolName)
+                                .collect(Collectors.toSet());
+                McpConnectionStartupSupport.clearRegisteredTools(
+                        dynamicToolRegistry, connection.userId(), connection.name());
                 List<McpConnectionHeaderSecretRefDto> refs =
                         store.get().listHeaderSecretRefs(connection.id(), connection.userId());
-                runInUserVaultScope(
-                        connection.userId(),
-                        () -> mcpClientService.configureHeaderSecretRefs(connection.name(), connection.userId(), refs));
-                mcpClientService.connectForUser(
-                        connection.name(),
-                        connection.userId(),
-                        connection.endpoint(),
-                        ToolCategory.valueOf(connection.category()),
-                        Map.of(),
-                        true);
+                runInUserVaultScope(connection.userId(), () -> {
+                    mcpClientService.configureHeaderSecretRefs(connection.name(), connection.userId(), refs);
+                    mcpClientService.connectForUserWithEnabledTools(
+                            connection.name(),
+                            connection.userId(),
+                            connection.endpoint(),
+                            ToolCategory.valueOf(connection.category()),
+                            Map.of(),
+                            true,
+                            enabledToolNames);
+                });
+                McpConnectionStartupSupport.reconcileToolPolicies(
+                        dynamicToolRegistry, store.get(), connection, enabledToolNames);
+                store.get()
+                        .save(new McpConnectionDto(
+                                connection.id(),
+                                connection.userId(),
+                                connection.name(),
+                                connection.transport(),
+                                connection.endpoint(),
+                                connection.category(),
+                                connection.enabled(),
+                                "CONNECTED",
+                                null,
+                                connection.revision() + 1,
+                                null,
+                                connection.createdAt(),
+                                Instant.now()));
                 auditService.recordMandatory(
                         AgentSentinels.SYSTEM_SESSION,
                         connection.userId(),
@@ -168,6 +186,21 @@ public class McpConnectionLifecycleService {
                 reconnected++;
             } catch (RuntimeException e) {
                 mcpClientService.clearHttpConnectionState(connection.name(), connection.userId());
+                store.get()
+                        .save(new McpConnectionDto(
+                                connection.id(),
+                                connection.userId(),
+                                connection.name(),
+                                connection.transport(),
+                                connection.endpoint(),
+                                connection.category(),
+                                connection.enabled(),
+                                "DEGRADED",
+                                connection.approvalTaskId(),
+                                connection.revision() + 1,
+                                classifyReconnectFailure(e),
+                                connection.createdAt(),
+                                Instant.now()));
                 auditService.recordMandatory(
                         AgentSentinels.SYSTEM_SESSION,
                         connection.userId(),
@@ -183,11 +216,16 @@ public class McpConnectionLifecycleService {
         return reconnected;
     }
 
+    private static String classifyReconnectFailure(RuntimeException e) {
+        return e instanceof McpConnectionException ? "HANDSHAKE_FAILED" : "MCP_RECONNECT_FAILED";
+    }
+
     public PersistedConnection persistSuccessfulHttp(
             String name, String url, ToolCategory category, String userId, Map<String, String> headers) {
-        validateEndpoint(url);
+        requestValidator.validateEndpoint(url);
         return store().map(port -> {
-                    List<ValidatedHeader> validatedHeaders = validateHeaders(headers);
+                    List<McpConnectionRequestValidator.ValidatedHeader> validatedHeaders =
+                            requestValidator.validateHeaders(headers);
                     McpConnectionDto connection = upsertConnection(port, name, url, category, userId);
                     List<McpConnectionHeaderSecretRefDto> oldRefs = port.listHeaderSecretRefs(connection.id(), userId);
                     List<McpConnectionHeaderSecretRefDto> refs =
@@ -203,6 +241,16 @@ public class McpConnectionLifecycleService {
         return persistSuccessfulHttp(name, url, category, userId, Map.of());
     }
 
+    public PersistedConnection persistSuccessfulHttpKeepingHeaders(
+            String name, String url, ToolCategory category, String userId) {
+        requestValidator.validateEndpoint(url);
+        return store().map(port -> {
+                    McpConnectionDto connection = upsertConnection(port, name, url, category, userId);
+                    return new PersistedConnection(connection, port.listHeaderSecretRefs(connection.id(), userId));
+                })
+                .orElseGet(() -> new PersistedConnection(null, List.of()));
+    }
+
     public void validateHttpRegistration(String url, Map<String, String> headers) {
         if (outboundHttpPolicyService != null) {
             OutboundPolicyDecision decision =
@@ -212,25 +260,38 @@ public class McpConnectionLifecycleService {
                         + decision.reason().orElse("POLICY_DENIED"));
             }
         }
-        validateEndpoint(url);
-        validateHeaders(headers);
+        requestValidator.validateEndpoint(url);
+        requestValidator.validateHeaders(headers);
     }
 
     private McpConnectionDto upsertConnection(
             McpConnectionStorePort port, String name, String url, ToolCategory category, String userId) {
         Instant now = Instant.now();
         Optional<McpConnectionDto> existing = port.findByNameAndUserId(name, userId);
-        McpConnectionDto connection = new McpConnectionDto(
-                existing.map(McpConnectionDto::id)
-                        .orElseGet(() -> UUID.randomUUID().toString()),
-                userId,
-                name,
-                McpTransportType.HTTP_SSE.name(),
-                url,
-                category.name(),
-                true,
-                existing.map(McpConnectionDto::createdAt).orElse(now),
-                now);
+        McpConnectionDto connection = existing.map(previous -> new McpConnectionDto(
+                        previous.id(),
+                        userId,
+                        name,
+                        McpTransportType.HTTP_SSE.name(),
+                        url,
+                        category.name(),
+                        previous.enabled(),
+                        previous.state(),
+                        previous.approvalTaskId(),
+                        previous.revision(),
+                        previous.lastErrorCode(),
+                        previous.createdAt(),
+                        now))
+                .orElseGet(() -> new McpConnectionDto(
+                        UUID.randomUUID().toString(),
+                        userId,
+                        name,
+                        McpTransportType.HTTP_SSE.name(),
+                        url,
+                        category.name(),
+                        true,
+                        now,
+                        now));
         port.save(connection);
         return connection;
     }
@@ -238,7 +299,7 @@ public class McpConnectionLifecycleService {
     private List<McpConnectionHeaderSecretRefDto> storeHeaderSecrets(
             String connectionId,
             String userId,
-            List<ValidatedHeader> headers,
+            List<McpConnectionRequestValidator.ValidatedHeader> headers,
             List<McpConnectionHeaderSecretRefDto> oldRefs) {
         if (headers.isEmpty()) return List.of();
         Instant now = Instant.now();
@@ -297,6 +358,57 @@ public class McpConnectionLifecycleService {
         return store().map(port -> port.listByUserId(userId)).orElseGet(List::of);
     }
 
+    public Optional<McpConnectionDto> findByNameAndUserId(String name, String userId) {
+        return store().flatMap(port -> port.findByNameAndUserId(name, userId));
+    }
+
+    public List<McpConnectionToolPolicyDto> listToolPolicies(String connectionId, String userId) {
+        return store().map(port -> port.listToolPolicies(connectionId, userId)).orElseGet(List::of);
+    }
+
+    public List<McpConnectionHeaderSecretRefDto> headerSecretRefs(String connectionId, String userId) {
+        return store().map(port -> port.listHeaderSecretRefs(connectionId, userId))
+                .orElseGet(List::of);
+    }
+
+    public void replaceToolPolicies(String connectionId, String userId, List<McpConnectionToolPolicyDto> policies) {
+        store().ifPresent(port -> port.replaceToolPolicies(connectionId, userId, policies));
+    }
+
+    public int setToolEnabled(String connectionId, String userId, String toolName, boolean enabled) {
+        return store().map(port -> port.setToolEnabled(connectionId, userId, toolName, enabled))
+                .orElse(0);
+    }
+
+    public Optional<McpConnectionDto> updateState(
+            String connectionId,
+            String userId,
+            String state,
+            boolean enabled,
+            String approvalTaskId,
+            String lastErrorCode) {
+        return store().flatMap(port -> port.findByIdAndUserId(connectionId, userId)
+                .flatMap(current -> {
+                    McpConnectionDto updated = new McpConnectionDto(
+                            current.id(),
+                            current.userId(),
+                            current.name(),
+                            current.transport(),
+                            current.endpoint(),
+                            current.category(),
+                            enabled,
+                            state,
+                            approvalTaskId,
+                            current.revision() + 1,
+                            lastErrorCode,
+                            current.createdAt(),
+                            Instant.now());
+                    return port.updateStateIfRevision(updated, current.revision())
+                            ? Optional.of(updated)
+                            : Optional.empty();
+                }));
+    }
+
     private Optional<McpConnectionStorePort> store() {
         return stores.stream().findFirst();
     }
@@ -310,49 +422,6 @@ public class McpConnectionLifecycleService {
             removeVaultSecretOrRecordFailure(port, userId, ref);
         }
         return true;
-    }
-
-    private static void validateEndpoint(String url) {
-        URI uri = URI.create(url);
-        if (uri.getUserInfo() != null && !uri.getUserInfo().isBlank()) {
-            throw new IllegalArgumentException("MCP endpoint URL must not contain user-info credentials");
-        }
-    }
-
-    private static List<ValidatedHeader> validateHeaders(Map<String, String> headers) {
-        if (headers == null || headers.isEmpty()) return List.of();
-        Set<String> names = new HashSet<>();
-        return headers.entrySet().stream()
-                .map(entry -> validateHeader(entry.getKey(), entry.getValue()))
-                .peek(header -> {
-                    if (!names.add(header.normalizedName())) {
-                        throw new IllegalArgumentException("Duplicate MCP header name: " + header.normalizedName());
-                    }
-                })
-                .toList();
-    }
-
-    private static ValidatedHeader validateHeader(String name, String value) {
-        if (name == null || name.isBlank() || !HEADER_NAME_PATTERN.matcher(name).matches()) {
-            throw new IllegalArgumentException("Invalid MCP header name: " + name);
-        }
-        String normalizedName = name.toLowerCase(Locale.ROOT);
-        if (FORBIDDEN_HEADERS.contains(normalizedName)) {
-            throw new IllegalArgumentException("MCP header is transport-owned or forbidden: " + normalizedName);
-        }
-        if (value == null || value.isBlank() || containsUnsafeHeaderValue(value)) {
-            throw new IllegalArgumentException("Invalid MCP header value for: " + normalizedName);
-        }
-        return new ValidatedHeader(normalizedName, value);
-    }
-
-    private static boolean containsUnsafeHeaderValue(String value) {
-        if (value.contains("${") || value.contains("$(") || value.contains("`")) return true;
-        for (int i = 0; i < value.length(); i++) {
-            char c = value.charAt(i);
-            if (c < 0x20 || c > 0x7E || c == 0x7F) return true;
-        }
-        return false;
     }
 
     private static String vaultKeyRef(String connectionId, String normalizedHeaderName) {
@@ -447,12 +516,10 @@ public class McpConnectionLifecycleService {
      * explicitly. The vault key is derived from the stable per-user scope id, keeping secrets
      * decryptable across restarts and requests.
      */
-    private void runInUserVaultScope(String userId, Runnable action) {
+    void runInUserVaultScope(String userId, Runnable action) {
         WorkspaceScopeHolder.run(VaultConstants.USER_VAULT_SCOPE_PREFIX + userId, userId, null, action);
     }
 
     public record PersistedConnection(
             McpConnectionDto connection, List<McpConnectionHeaderSecretRefDto> headerSecretRefs) {}
-
-    private record ValidatedHeader(String normalizedName, String value) {}
 }

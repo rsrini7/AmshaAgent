@@ -1065,6 +1065,39 @@ into the catalog through `activateNew`. This keeps `SessionRegistry` (SQL) and
 
 ---
 
+## 5.28 Embedding Vector-Index Descriptor Safety (§5.28 INVARIANT)
+
+Every durable or rebuildable vector index MUST be bound to an
+`EmbeddingIndexDescriptor` before vector ingestion or retrieval is enabled. Dimension
+equality alone is insufficient. The fingerprint MUST include the canonical embedding
+space, immutable model and tokenizer revisions, preprocessing, pooling, normalization,
+numeric precision, and chunking/window/aggregation contract. Provider or transport
+identity is retained as provenance but MUST NOT determine compatibility.
+
+- An empty index may initialize or replace its descriptor with the active descriptor.
+- A non-empty index with missing, invalid, or mismatched metadata MUST preserve all
+  rows/documents, disable only vector operations, and retain safe BM25/FTS/text search.
+- Startup MUST NOT delete, re-embed, or silently relabel existing vectors. Development
+  reset is an explicit operator action: delete the configured SQLite/filesystem data
+  directory or recreate the PostgreSQL development database/volume.
+- SQLite and PostgreSQL descriptor schema changes MUST use matching Flyway versions and
+  equivalent semantics. Filesystem Lucene MUST use a versioned checksummed manifest
+  written atomically in the index root.
+- Retrieval, ingestion, capability reporting, and readiness diagnostics MUST consume
+  the same `VectorIndexMetadataPort` gate. A descriptor mismatch reports bounded
+  `DEGRADED` vector capability while overall readiness remains `UP` when text fallback
+  is safe. Exact revisions and fingerprints belong only in protected diagnostics, not
+  metric labels or public readiness payloads.
+
+The active namespace inventory is explicit: SQLite global RAG and archival vec0;
+PostgreSQL RAG pgvector; and filesystem Lucene RAG. The current PostgreSQL archival
+embedding column is dormant because `PostgresArchivalMemoryStore` neither writes nor
+queries it, and filesystem archival memory is text-only. A dormant schema column MUST
+NOT be advertised or health-checked as an active vector namespace until its complete
+ingestion, query, fallback, and descriptor-gating path lands.
+
+---
+
 ## 6. Native image and reflection rules
 
 ### 6.1 Reflection safety
@@ -1233,6 +1266,67 @@ The `embedding vector(768)` column and HNSW index MUST be similarly guarded with
      inside each virtual thread via context.makeCurrent(). ContextAwareExecutorService
      propagates workspace context but does NOT propagate OTel ThreadLocal spans.
      (P81 Confirmation: Verified in ParallelToolStepExecutor.java lines 173/192)
+
+7.13.1 INVARIANT: Blocking guards must test the actual executing thread, not
+     merely the type of an attached Vert.x context. A REST method annotated with
+     `@RunOnVirtualThread` can retain an event-loop-derived context while running
+     safely on a virtual thread. Use `Context.isOnEventLoopThread()`; do not infer
+     the current thread from `Vertx.currentContext().isEventLoopContext()`.
+
+7.13.2 INVARIANT: Phase 2.5 post-policy tool-risk decision SPIs
+     (`PostPolicyToolRiskInterceptor`) MUST execute only after `ToolInvocationGuard`
+     validation, deduplication, tool recognition, and deterministic HITL checks produce a
+     provisional `Allow`. A pre-policy `ToolGuardInterceptor` returning `Allow` MUST continue
+     through the remaining interceptors and every built-in check. Post-policy interceptors MUST
+     be ordered by ascending priority with binary class name as the stable tie-breaker and MUST
+     compose monotonically: `BLOCK` outranks `REQUIRE_APPROVAL`, which outranks `NoOpinion`.
+     They MUST NEVER bypass or weaken an existing block, deduplication result, HITL boundary,
+     role schema, or autonomy rule. `REQUIRE_APPROVAL` MUST reuse the existing
+     `PauseForApproval`/`ApprovalFrame` path. On classifier error, circuit-breaker trip, model
+     absence, or no optional implementation, `PostPolicyToolRiskDispatcher` MUST preserve the
+     provisional allow through `NoOpinion`; metrics MUST remain bounded and payload-free.
+
+7.13.3 INVARIANT: Phase 2.5 `AnswerQualityInterceptor` SPIs MUST be evaluated in
+     `FinishActionHandler` only after the authoritative `AnswerGuardStrategy` accepts the answer
+     candidate. Interceptors MUST use stable priority/class-name ordering. A `REQUEST_RETRY`
+     opinion may be honored only when no tool has been invoked in the current turn and
+     `context.tryConsumeAnswerQualityRetry()` succeeds. All interceptors share that single retry
+     budget. A retry MUST NEVER be requested after a tool boundary, preventing re-entrant side
+     effects or duplicate tool execution. Missing implementations and isolated failures MUST
+     preserve the accepted answer without logging answer or goal payloads.
+     Tool-risk and answer-quality contexts, including shadow contexts, contain sensitive,
+     ephemeral payloads. Their diagnostic string representation MUST be payload-free, and
+     implementations MUST NOT perform network I/O or log, persist, export, metric-label, or
+     retain the payload beyond one synchronous in-process evaluation.
+
+7.13.4 INVARIANT: Phase 3 classifier runtime control MUST distinguish startup/requested
+     state from effective enablement. Effective enablement additionally requires a ready,
+     promotion-approved active implementation registration. Shadow classifiers MUST NOT
+     register as active implementations or acquire active leases. Enabling without a ready
+     implementation MUST fail closed. Disabling MUST atomically reject new leases while
+     accepted leases complete unchanged and drain. Intent, tool-risk, and answer-quality
+     state MUST remain independent. Mutating admin endpoints MUST require `isInternal()`
+     and record a mandatory, payload-free audit event before mutation; audit failure MUST
+     leave state unchanged. Control responses and audit details MUST NOT contain model IDs,
+     inputs, outputs, scores, labels, goals, answers, or tool parameters.
+
+7.13.5 INVARIANT: Phase 4 Classifier Automated Data Collection MUST NOT compromise
+     the isolation or safety of the core loop. The collection hook MUST operate on
+     sanitized copies of context data (`@InputSanitizer.PII` qualified) and MUST NOT
+     block execution or leak data. Collection MUST be strictly opt-in via
+     `amsha.test-data-collection.enabled`. Data is collected into `data/` using
+     file locks and JSON-Lines formats compatible with the labeling schema. The
+     end-to-end test automation (`validate_data_collection.sh`) MUST NOT rely on
+     modified security policies; specifically, `EXECUTE_SHELL` and `NETWORK_OUTBOUND`
+     MUST continue to enforce HITL even under `FULL` autonomy, requiring test
+     harnesses to actively poll and approve `AWAITING_APPROVAL` checkpoints instead
+     of bypassing security invariants. Terminal checkpoints (`COMPLETED`) MUST NOT
+     be prematurely archived by the transaction finalizing them; they MUST remain
+     queryable by API clients until explicitly archived or a new turn begins.
+     Furthermore, to prevent duplicate IDs during repetitive testing, test scripts
+     MUST clear stale `.autotest.jsonl` files before starting a test run. The test
+     harness MUST also tolerate intermittent failures (e.g., `Connection refused`)
+     from local LLM providers under load without failing the test suite.
 
 7.14 INVARIANT: ReasoningStep history is the in-memory source of truth
      during AgentLoop.runWithRole() execution. ChatHistoryAssembler reads

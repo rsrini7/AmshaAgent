@@ -15,7 +15,9 @@ import com.amsha.common.util.LogUtil;
 import com.amsha.core.agent.AgentSentinels;
 import com.amsha.core.agent.IntentClassificationService;
 import com.amsha.core.agent.loop.AgentRoleCache;
+import com.amsha.core.agent.loop.TestDataCollectionService;
 import com.amsha.core.agent.role.AgentRoleEnum;
+import com.amsha.core.api.AgentSessionService;
 import com.amsha.core.channel.ChannelPluginRegistry;
 import com.amsha.core.pipeline.HandleResult;
 import com.amsha.core.pipeline.MessageContext;
@@ -24,6 +26,7 @@ import com.amsha.core.routing.SkillAwareIntentDetector;
 import com.amsha.core.security.DestructiveVocabularyFilter;
 import com.amsha.core.util.AgentErrorMessageUtil;
 
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
 /**
@@ -50,6 +53,15 @@ public class IntentClassificationHandler implements MessageHandler {
 
     @Inject
     IntentClassificationService intentDetector;
+
+    @Inject
+    AgentSessionService sessionService;
+
+    @Inject
+    TestDataCollectionService testDataCollectionService;
+
+    @ConfigProperty(name = "amsha.test-data-collection.enabled", defaultValue = "false")
+    boolean testDataCollectionEnabled;
 
     @Override
     public int priority() {
@@ -88,12 +100,14 @@ public class IntentClassificationHandler implements MessageHandler {
 
         // If role already set (and no skill override), skip LLM classification
         if (context.getAgentRole().isPresent()) {
+            recordIntentCandidate(context, message.text());
             return HandleResult.CONTINUE;
         }
 
         try {
             String role = classifyRole(context, message);
             context.setAgentRole(role);
+            recordIntentCandidate(context, message.text());
             log.infof("Classified message as role '%s' for chat %s", role, context.getChatId());
         } catch (HttpException e) {
             handleHttpException(context, e);
@@ -165,6 +179,21 @@ public class IntentClassificationHandler implements MessageHandler {
         }
 
         return destructiveVocabularyFilter.filter(role, message.text());
+    }
+
+    private void recordIntentCandidate(MessageContext context, String message) {
+        if (!testDataCollectionEnabled || sessionService == null || testDataCollectionService == null) {
+            return;
+        }
+        try {
+            String sessionId = context.getSessionId().orElse(null);
+            String expectedLabel = sessionService.getExpectedTestLabel(sessionId, "intent");
+            if (expectedLabel != null) {
+                testDataCollectionService.recordIntentCandidate(expectedLabel, message);
+            }
+        } catch (RuntimeException | LinkageError ignored) {
+            // Test-data collection must never alter authoritative routing.
+        }
     }
 
     private void handleHttpException(MessageContext context, HttpException e) {

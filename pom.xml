@@ -22,6 +22,7 @@
     <module>persistence-fs</module>
     <module>persistence-postgres</module>
     <module>rag</module>
+    <module>local-ml-onnx</module>
     <module>mcp</module>
     <module>onboarding</module>
     <module>channel-web</module>
@@ -49,6 +50,8 @@
     <quarkus-mcp.version>1.10.3</quarkus-mcp.version>
     <quarkus-jdbc-sqlite.version>3.0.11</quarkus-jdbc-sqlite.version>
     <lucene.version>10.4.0</lucene.version>
+    <djl.version>0.33.0</djl.version>
+    <onnxruntime.version>1.27.0</onnxruntime.version>
     <!-- Baked into build-info.properties. "default" = JVM mode (BackendValidator skips).
          Native builds explicitly pass -Damsha.build.backend=sqlite|postgres|fs. -->
     <amsha.build.backend>default</amsha.build.backend>
@@ -139,6 +142,21 @@
         <groupId>com.amsha</groupId>
         <artifactId>amsha-rag</artifactId>
         <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.amsha</groupId>
+        <artifactId>amsha-local-ml-onnx</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>ai.djl.huggingface</groupId>
+        <artifactId>tokenizers</artifactId>
+        <version>${djl.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.microsoft.onnxruntime</groupId>
+        <artifactId>onnxruntime</artifactId>
+        <version>${onnxruntime.version}</version>
       </dependency>
       <dependency>
         <groupId>com.amsha</groupId>
@@ -278,6 +296,12 @@
   <!-- Inherited test dependencies for all modules -->
   <dependencies>
     <dependency>
+      <groupId>net.bytebuddy</groupId>
+      <artifactId>byte-buddy-agent</artifactId>
+      <version>${bytebuddy.version}</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
       <groupId>org.jboss.logmanager</groupId>
       <artifactId>jboss-logmanager</artifactId>
       <scope>test</scope>
@@ -360,6 +384,7 @@
               <java.util.logging.manager>org.jboss.logmanager.LogManager</java.util.logging.manager>
               <maven.home>${maven.home}</maven.home>
               <quarkus.http.test-port>0</quarkus.http.test-port>
+              <amsha.dotenv.enabled>false</amsha.dotenv.enabled>
             </systemPropertyVariables>
           </configuration>
         </plugin>

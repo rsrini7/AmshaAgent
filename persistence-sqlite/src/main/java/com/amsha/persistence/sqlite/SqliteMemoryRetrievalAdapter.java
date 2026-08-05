@@ -19,6 +19,8 @@ import com.amsha.persistence.api.IngestResult;
 import com.amsha.persistence.api.MemoryChunkDto;
 import com.amsha.persistence.api.MemoryEntryDto;
 import com.amsha.persistence.api.MemoryRetrievalPort;
+import com.amsha.persistence.api.VectorIndexMetadataPort;
+import com.amsha.persistence.api.VectorIndexNamespace;
 import com.amsha.persistence.common.SessionKnowledgeBase;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
@@ -47,6 +49,9 @@ public class SqliteMemoryRetrievalAdapter implements MemoryRetrievalPort {
     @Inject
     FtsConnectionInterceptor ftsInterceptor;
 
+    @Inject
+    VectorIndexMetadataPort vectorIndexMetadata;
+
     @ConfigProperty(name = "amsha.rag.max-source-chars", defaultValue = "400")
     int maxSourceChars;
 
@@ -61,7 +66,8 @@ public class SqliteMemoryRetrievalAdapter implements MemoryRetrievalPort {
         }
 
         // 2. Fast path: skip RRF if vector search is disabled
-        if (!ftsInterceptor.isVectorSearchEnabled()) {
+        if (!ftsInterceptor.isVectorSearchEnabled()
+                || !vectorIndexMetadata.isVectorEnabled(VectorIndexNamespace.RAG_GLOBAL)) {
             return ftsResults.stream().limit(topK).toList();
         }
 
@@ -110,7 +116,8 @@ public class SqliteMemoryRetrievalAdapter implements MemoryRetrievalPort {
     public BackendCapabilities capabilities() {
         return new BackendCapabilities(
                 true, // supportsFullTextSearch
-                ftsInterceptor.isVectorSearchEnabled(),
+                ftsInterceptor.isVectorSearchEnabled()
+                        && vectorIndexMetadata.isVectorEnabled(VectorIndexNamespace.RAG_GLOBAL),
                 false, // supportsAdvisoryLocks
                 false // supportsNestedTransactions
                 );

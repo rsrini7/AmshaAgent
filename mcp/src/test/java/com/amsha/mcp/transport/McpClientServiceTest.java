@@ -20,6 +20,7 @@ import java.lang.reflect.Method;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Stream;
 
 import com.amsha.core.scope.WorkspaceContext;
@@ -119,7 +120,8 @@ class McpClientServiceTest {
         service.clearHttpConnectionState("test-server");
         assertFalse(service.httpServerUrl("test-server").isPresent());
 
-        service.connectForUser("user-server", "usr-1", wireMock.baseUrl(), ToolCategory.NETWORK, Map.of());
+        service.connectForUserWithEnabledTools(
+                "user-server", "usr-1", wireMock.baseUrl(), ToolCategory.NETWORK, Map.of(), false, Set.of());
         service.clearHttpConnectionState("user-server", "usr-1");
     }
 

@@ -15,13 +15,16 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedDeque;
 
 import com.amsha.core.agent.reasoning.ReasoningStep;
+import com.amsha.core.agent.reasoning.ReasoningStepSupport;
 import com.amsha.core.agent.role.RoleRegistry;
 import com.amsha.core.agent.role.ToolCapability;
+import com.amsha.core.classifier.ClassifierResult;
 import com.amsha.core.governance.ApprovalFrame;
 import com.amsha.core.security.AutonomyLevel;
 import com.amsha.core.security.ToolOperation;
 import com.amsha.core.skill.CompiledSkillEntry;
-import com.amsha.core.tool.DynamicToolLookup;
+import com.amsha.core.tool.DynamicToolAdmission;
+import com.amsha.core.tool.DynamicToolAdmissionLookup;
 import com.amsha.core.tool.InterceptorPriority;
 import com.amsha.core.tool.ToolGuardInterceptor;
 import com.amsha.core.tools.AgentTool;
@@ -50,10 +53,16 @@ public class ToolInvocationGuard {
     public ToolRegistry toolRegistry;
 
     @Inject
-    public Instance<DynamicToolLookup> dynamicToolLookup;
+    public Instance<DynamicToolAdmissionLookup> dynamicToolAdmissionLookup;
 
     @Inject
     public Instance<ToolGuardInterceptor> interceptors;
+
+    @Inject
+    ToolRiskShadowEvaluationService toolRiskShadowEvaluation;
+
+    @Inject
+    PostPolicyToolRiskDispatcher postPolicyToolRiskDispatcher;
 
     private static final int MAX_DEDUP_SESSIONS = 1000;
     private final Map<String, Map<String, String>> sessionDedupeCache = new ConcurrentHashMap<>();
@@ -91,11 +100,7 @@ public class ToolInvocationGuard {
 
         record Deduplicate(String cachedObservation) implements GuardDecision {}
 
-        record PauseForApproval(ApprovalFrame frame) implements GuardDecision {
-            public PauseForApproval(String reason, String toolName) {
-                this(new ApprovalFrame(toolName, Map.of(), ApprovalFrame.RiskLevel.MEDIUM));
-            }
-        }
+        record PauseForApproval(ApprovalFrame frame) implements GuardDecision {}
 
         record Blocked(String observation) implements GuardDecision {}
     }
@@ -116,7 +121,9 @@ public class ToolInvocationGuard {
                 Optional<GuardDecision> decision = interceptor.evaluate(
                         sessionId, agentRole, level, toolName, params, history, goal, skillSnapshot);
                 if (decision.isPresent()) {
-                    return decision.get();
+                    GuardDecision interceptorDecision = decision.get();
+                    if (interceptorDecision instanceof GuardDecision.Allow) continue;
+                    return interceptorDecision;
                 }
             }
         }
@@ -136,24 +143,24 @@ public class ToolInvocationGuard {
         }
 
         boolean isInternalTool = toolOpt.isPresent();
-        boolean isDynamicAllowed = !isInternalTool
-                && dynamicToolLookup != null
-                && !dynamicToolLookup.isUnsatisfied()
-                && dynamicToolLookup.get().isDynamicToolAllowed(toolName);
-
-        if (!isInternalTool && !isDynamicAllowed) {
-            log.warnf(
-                    "GUARD Unknown tool call attempt '%s' in session '%s' - "
-                            + "not in ToolRegistry and not allowed by DynamicToolLookup.",
-                    toolName, sessionId);
-            return new GuardDecision.Blocked("Tool '" + toolName + "' is not recognized or permitted.");
+        final DynamicToolAdmission dynamicAdmission;
+        if (!isInternalTool) {
+            Optional<DynamicToolAdmission> admissionOpt = resolveDynamicAdmission(toolName);
+            if (admissionOpt.isEmpty()) {
+                log.warnf("GUARD Unknown or unadmitted dynamic tool '%s' in session '%s'.", toolName, sessionId);
+                return new GuardDecision.Blocked("Tool '" + toolName + "' is not recognized or permitted.");
+            }
+            dynamicAdmission = admissionOpt.get();
+        } else {
+            dynamicAdmission = null;
         }
 
         boolean isSchedulingTool = ToolCapability.SCHEDULE_TASK.toolName().equals(toolName)
                 || ToolCapability.MANAGE_SCHEDULE.toolName().equals(toolName);
 
-        boolean toolRequiresApproval =
+        boolean staticRequiresApproval =
                 toolOpt.map(tool -> tool.requiresManualApproval(params)).orElse(false);
+        boolean dynamicRequiresApproval = dynamicAdmission != null && dynamicAdmission.requiresApproval();
 
         // Memory search tools are read-only and should be exempt from HITL approval
         // at both BACKGROUND and SUPERVISED levels. ingest_document is WRITE_MEMORY
@@ -165,15 +172,133 @@ public class ToolInvocationGuard {
 
         boolean isExempt = isSchedulingTool || (isMemoryReadTool && level != AutonomyLevel.READONLY);
 
-        if ((roleRegistry.requiresApprovalForTools(agentRole) || toolRequiresApproval)
-                && !isExempt
-                && !AutonomyLevel.FULL.equals(level)) {
+        ToolOperation op = toolOpt.map(AgentTool::requiredOperation)
+                .orElseGet(() -> Objects.requireNonNull(dynamicAdmission).requiredOperation());
+        boolean alwaysRequiresHitl = op == ToolOperation.EXECUTE_SHELL || op == ToolOperation.NETWORK_OUTBOUND;
 
-            ToolOperation op = toolOpt.map(AgentTool::requiredOperation).orElse(ToolOperation.EXECUTE_SHELL);
+        if (!isExempt
+                && (alwaysRequiresHitl
+                        || dynamicRequiresApproval
+                        || ((roleRegistry.requiresApprovalForTools(agentRole) || staticRequiresApproval)
+                                && !AutonomyLevel.FULL.equals(level)))) {
+            // HITL is the deliberate stronger control for approved operations. The automated
+            // post-policy classifier is not re-run after this pause/resume boundary.
+            observeToolRiskForCollection(sessionId, agentRole, level, toolName, params, goal);
             ApprovalFrame frame = new ApprovalFrame(toolName, params, op.riskLevel());
             return new GuardDecision.PauseForApproval(frame);
         }
-        return new GuardDecision.Allow();
+        GuardDecision postPolicyDecision =
+                applyPostPolicyToolRisk(agentRole, level, toolName, params, history, goal, op);
+        if (postPolicyDecision instanceof GuardDecision.Allow) {
+            observeProvisionalAllow(sessionId, agentRole, level, toolName, params, goal);
+        }
+        return postPolicyDecision;
+    }
+
+    /**
+     * Resolves dynamic admission fail-closed: CDI absence, ambiguity, lookup errors, and
+     * empty/invalid metadata all yield empty Optional (caller Blocks).
+     */
+    private Optional<DynamicToolAdmission> resolveDynamicAdmission(String toolName) {
+        if (dynamicToolAdmissionLookup == null
+                || dynamicToolAdmissionLookup.isUnsatisfied()
+                || dynamicToolAdmissionLookup.isAmbiguous()) {
+            return Optional.empty();
+        }
+        try {
+            Optional<DynamicToolAdmission> admission =
+                    dynamicToolAdmissionLookup.get().findAdmission(toolName);
+            if (admission == null || admission.isEmpty()) {
+                return Optional.empty();
+            }
+            DynamicToolAdmission metadata = admission.get();
+            if (!toolName.equals(metadata.toolName())) {
+                log.warnf("GUARD Dynamic admission name mismatch for '%s'.", toolName);
+                return Optional.empty();
+            }
+            return Optional.of(metadata);
+        } catch (RuntimeException | LinkageError e) {
+            log.warnf(
+                    "GUARD Dynamic admission lookup failed for '%s': %s",
+                    toolName, e.getClass().getSimpleName());
+            return Optional.empty();
+        }
+    }
+
+    private GuardDecision applyPostPolicyToolRisk(
+            String agentRole,
+            AutonomyLevel level,
+            String toolName,
+            Map<String, Object> params,
+            List<ReasoningStep> history,
+            String goal,
+            ToolOperation operation) {
+        if (postPolicyToolRiskDispatcher == null) return new GuardDecision.Allow();
+        try {
+            ClassifierResult<ToolRiskAction> result = postPolicyToolRiskDispatcher.evaluate(new PostPolicyToolContext(
+                    agentRole,
+                    level,
+                    toolName,
+                    params == null ? Map.of() : params,
+                    goal,
+                    history != null && history.stream().anyMatch(ReasoningStepSupport::isToolCallStep)));
+            return switch (result) {
+                case ClassifierResult.Opinion<ToolRiskAction> opinion ->
+                    switch (opinion.value()) {
+                        case BLOCK -> new GuardDecision.Blocked("Tool call blocked by the post-policy risk gate.");
+                        case REQUIRE_APPROVAL ->
+                            new GuardDecision.PauseForApproval(new ApprovalFrame(
+                                    toolName, params == null ? Map.of() : params, operation.riskLevel()));
+                    };
+                case ClassifierResult.NoOpinion<ToolRiskAction> _ -> new GuardDecision.Allow();
+            };
+        } catch (RuntimeException | LinkageError _) {
+            return new GuardDecision.Allow();
+        }
+    }
+
+    private void observeProvisionalAllow(
+            String sessionId,
+            String agentRole,
+            AutonomyLevel level,
+            String toolName,
+            Map<String, Object> params,
+            String goal) {
+        observeToolRisk(sessionId, agentRole, level, toolName, params, goal, true);
+    }
+
+    private void observeToolRiskForCollection(
+            String sessionId,
+            String agentRole,
+            AutonomyLevel level,
+            String toolName,
+            Map<String, Object> params,
+            String goal) {
+        observeToolRisk(sessionId, agentRole, level, toolName, params, goal, false);
+    }
+
+    private void observeToolRisk(
+            String sessionId,
+            String agentRole,
+            AutonomyLevel level,
+            String toolName,
+            Map<String, Object> params,
+            String goal,
+            boolean includeShadow) {
+        try {
+            if (toolRiskShadowEvaluation == null) {
+                return;
+            }
+            ToolRiskShadowContext context =
+                    new ToolRiskShadowContext(agentRole, level, toolName, params == null ? Map.of() : params, goal);
+            if (includeShadow) {
+                toolRiskShadowEvaluation.observeProvisionalAllow(sessionId, context);
+            } else {
+                toolRiskShadowEvaluation.observeForDataCollection(sessionId, context);
+            }
+        } catch (RuntimeException | LinkageError ignored) {
+            // A shadow-only observer must never alter a deterministic guard decision.
+        }
     }
 
     private GuardDecision checkDeduplication(

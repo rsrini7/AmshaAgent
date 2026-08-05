@@ -3,14 +3,19 @@ package com.amsha.mcp.bridge;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
+import java.util.Map;
 import java.util.Optional;
 
 import com.amsha.core.audit.AuditService;
+import com.amsha.core.security.AutonomyLevel;
+import com.amsha.core.tools.ToolExecutionContext;
+import com.amsha.core.tools.ToolResponse;
 import com.amsha.mcp.tool.DynamicToolCapability;
 import com.amsha.mcp.tool.DynamicToolCapabilityRegistry;
 import com.amsha.mcp.tool.McpTransportType;
 import com.amsha.mcp.transport.McpClientService;
 import com.amsha.mcp.transport.PodmanMcpTransport;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -36,13 +41,15 @@ class ExternalMcpToolAdapterTest {
         adapter.mcpClientService = mockClient;
         adapter.registry = mockRegistry;
         adapter.auditService = mockAuditService;
+        adapter.objectMapper = new ObjectMapper();
     }
 
     @Test
     void testInvokeStdioTool() {
         DynamicToolCapability cap =
                 new DynamicToolCapability("tool", "desc", "server", McpTransportType.STDIO, false, "{}");
-        when(mockRegistry.find("tool")).thenReturn(Optional.of(cap));
+        when(mockRegistry.find("unknown", "tool")).thenReturn(Optional.of(cap));
+        when(mockRegistry.acquireInvocation("unknown", "tool")).thenReturn(true);
         when(mockPodman.invoke("server", "tool", "{}"))
                 .thenReturn(Uni.createFrom().item("ok"));
 
@@ -54,7 +61,8 @@ class ExternalMcpToolAdapterTest {
     void testInvokeHttpTool() {
         DynamicToolCapability cap =
                 new DynamicToolCapability("tool", "desc", "server", McpTransportType.HTTP_SSE, false, "{}");
-        when(mockRegistry.find("tool")).thenReturn(Optional.of(cap));
+        when(mockRegistry.find("unknown", "tool")).thenReturn(Optional.of(cap));
+        when(mockRegistry.acquireInvocation("unknown", "tool")).thenReturn(true);
         when(mockClient.invoke("server", "tool", "{}")).thenReturn("http-ok");
 
         String result = adapter.invoke("tool", "{}");
@@ -63,7 +71,35 @@ class ExternalMcpToolAdapterTest {
 
     @Test
     void testUnregisteredTool() {
-        when(mockRegistry.find("unknown")).thenReturn(Optional.empty());
+        when(mockRegistry.find("unknown", "unknown")).thenReturn(Optional.empty());
         assertThrows(McpToolNotFoundException.class, () -> adapter.invoke("unknown", "{}"));
+    }
+
+    @Test
+    void dynamicInvokerExecutesUsingOwningUserScope() {
+        DynamicToolCapability cap =
+                new DynamicToolCapability("tool", "desc", "server", McpTransportType.HTTP_SSE, false, "{}");
+        when(mockRegistry.find("alice", "tool")).thenReturn(Optional.of(cap));
+        when(mockRegistry.acquireInvocation("alice", "tool")).thenReturn(true);
+        when(mockClient.invoke("server", "tool", "{}", "alice")).thenReturn("scoped-ok");
+
+        ToolExecutionContext context = new ToolExecutionContext(
+                "session",
+                "alice",
+                "chat",
+                "coordinator",
+                AutonomyLevel.FULL,
+                "trace",
+                "rest",
+                "chat",
+                "goal",
+                null,
+                null,
+                null);
+
+        ToolResponse response = adapter.invoke("tool", Map.of(), context);
+
+        assertEquals("scoped-ok", ((ToolResponse.ToolSuccess) response).output());
+        verify(mockClient).invoke("server", "tool", "{}", "alice");
     }
 }

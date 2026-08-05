@@ -12,6 +12,9 @@ import jakarta.ws.rs.core.Cookie;
 import jakarta.ws.rs.core.HttpHeaders;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
+import jakarta.ws.rs.core.SecurityContext;
+
+import java.util.Optional;
 
 import com.amsha.channel.api.ChannelServices;
 
@@ -34,6 +37,9 @@ public class WsAuthResource {
     @Context
     HttpHeaders httpHeaders;
 
+    @Context
+    SecurityContext securityContext;
+
     @POST
     public WsTokenResponse issueToken(@HeaderParam("X-Amsha-API-Key") String apiKey) {
         String resolvedKey = apiKey;
@@ -43,11 +49,25 @@ public class WsAuthResource {
                 resolvedKey = apiCookie.getValue();
             }
         }
-        if (resolvedKey == null || resolvedKey.isBlank() || !channelServices.isValidIdentity(resolvedKey)) {
+        Optional<String> owner = resolveOwner(resolvedKey);
+        if (owner.isEmpty()) {
             throw new WebApplicationException("Invalid or missing API key", Response.Status.UNAUTHORIZED);
         }
-        String token = tokenStore.generateToken();
+        String token = tokenStore.generateToken(owner.get());
         return new WsTokenResponse(token);
+    }
+
+    private Optional<String> resolveOwner(String credential) {
+        if (securityContext != null && securityContext.getUserPrincipal() != null) {
+            String principal = securityContext.getUserPrincipal().getName();
+            if (principal != null && !principal.isBlank() && !"anonymous".equalsIgnoreCase(principal)) {
+                return Optional.of(principal);
+            }
+        }
+        if (credential == null || credential.isBlank() || !channelServices.isValidIdentity(credential)) {
+            return Optional.empty();
+        }
+        return channelServices.resolveIdentity(credential);
     }
 
     public static class WsTokenResponse {

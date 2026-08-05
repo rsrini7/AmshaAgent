@@ -9,11 +9,13 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.security.SecureRandom;
+import java.util.Arrays;
 import java.util.Base64;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import com.amsha.app.util.CliUtils;
 import com.amsha.app.util.VarSpec;
@@ -73,7 +75,10 @@ public class InteractiveSetupWizard {
 
         if (!Files.exists(envFile)) {
             try (InputStream in = InteractiveSetupWizard.class.getResourceAsStream("/env-example")) {
-                if (in != null) Files.copy(in, envFile, StandardCopyOption.REPLACE_EXISTING);
+                if (in != null) {
+                    Files.copy(in, envFile, StandardCopyOption.REPLACE_EXISTING);
+                    EnvConfigInitializer.reportEnvFileCreated(envFile, "bundled .env.example template");
+                }
             } catch (IOException e) {
                 log.debugf("Failed to seed .env from example: %s", LogUtil.rootMessage(e));
             }
@@ -84,7 +89,7 @@ public class InteractiveSetupWizard {
 
             System.err.println();
             System.err.println("╔══════════════════════════════════════════════════════════╗");
-            System.err.println("║         Amsha Agent - First-Run Interactive Setup            ║");
+            System.err.println("║         Amsha Agent - First-Run Interactive Setup        ║");
             System.err.println("╚══════════════════════════════════════════════════════════╝");
             System.err.println();
             System.err.println("  " + missing.size() + " required value(s) need configuration.");
@@ -109,11 +114,11 @@ public class InteractiveSetupWizard {
                 }
 
                 if (spec.key().equals("AMSHA_TOOLS_GITHUB_TOKEN")
-                        && !promptOptionalModule(spec.key(), "GitHub repository access")) continue;
+                        && !promptOptionalModule(envFile, spec.key(), "GitHub repository access")) continue;
                 if (spec.key().equals("AMSHA_TOOLS_SERPER_API_KEY")
-                        && !promptOptionalModule(spec.key(), "Serper Search Integration")) continue;
+                        && !promptOptionalModule(envFile, spec.key(), "Serper Search Integration")) continue;
                 if (spec.key().equals("AMSHA_TOOLS_BRAVE_API_KEY")
-                        && !promptOptionalModule(spec.key(), "Brave Search Integration")) continue;
+                        && !promptOptionalModule(envFile, spec.key(), "Brave Search Integration")) continue;
 
                 promptVariable(envFile, spec);
             }
@@ -158,12 +163,42 @@ public class InteractiveSetupWizard {
                 .orElse("groq");
         EnvConfigInitializer.patchEnvFile(
                 envFile, "AMSHA_LLM_PROVIDER", provider, EnvConfigInitializer.PatchMode.UPDATE);
-        EnvConfigInitializer.patchEnvFile(
-                envFile, "AMSHA_INFINITE_LOOP_LLM_PROVIDERS", provider, EnvConfigInitializer.PatchMode.UPDATE);
-        EnvConfigInitializer.patchEnvFile(
-                envFile, "AMSHA_INFINITE_LOOP_COMPACTION_PROVIDERS", provider, EnvConfigInitializer.PatchMode.UPDATE);
-        EnvConfigInitializer.patchEnvFile(
-                envFile, "AMSHA_INFINITE_LOOP_CLASSIFIER_PROVIDERS", provider, EnvConfigInitializer.PatchMode.UPDATE);
+        boolean infiniteLoop = provider.equalsIgnoreCase("infinite-loop");
+        patchProviderList(
+                envFile,
+                "AMSHA_INFINITE_LOOP_LLM_PROVIDERS",
+                infiniteLoop
+                        ? configuredProviderList("AMSHA_INFINITE_LOOP_LLM_PROVIDERS", "omlx,groq,openrouter")
+                        : provider);
+        patchProviderList(
+                envFile,
+                "AMSHA_INFINITE_LOOP_COMPACTION_PROVIDERS",
+                infiniteLoop
+                        ? configuredProviderList("AMSHA_INFINITE_LOOP_COMPACTION_PROVIDERS", "groq,ollama")
+                        : provider);
+        patchProviderList(
+                envFile,
+                "AMSHA_INFINITE_LOOP_CLASSIFIER_PROVIDERS",
+                infiniteLoop
+                        ? configuredProviderList("AMSHA_INFINITE_LOOP_CLASSIFIER_PROVIDERS", "groq,ollama")
+                        : provider);
+    }
+
+    private static void patchProviderList(Path envFile, String key, String value) {
+        EnvConfigInitializer.patchEnvFile(envFile, key, value, EnvConfigInitializer.PatchMode.UPDATE);
+        System.setProperty(key, value);
+    }
+
+    private static String configuredProviderList(String key, String fallback) {
+        String configured = Optional.ofNullable(System.getProperty(key))
+                .or(() -> Optional.ofNullable(System.getenv(key)))
+                .orElse("");
+        String providers = Arrays.stream(configured.split(","))
+                .map(String::trim)
+                .filter(value -> !value.isBlank())
+                .filter(value -> !value.equalsIgnoreCase("infinite-loop"))
+                .collect(Collectors.joining(","));
+        return providers.isBlank() ? fallback : providers;
     }
 
     private static boolean shouldPromptUnifiedKey(List<VarSpec> missing) {
@@ -276,10 +311,17 @@ public class InteractiveSetupWizard {
         return enabled;
     }
 
-    private static boolean promptOptionalModule(String key, String label) {
+    private static boolean promptOptionalModule(Path envFile, String key, String label) {
         System.err.println("  ┌─ " + label);
         String response = readLineWithFallback(System.console(), "  └─ Configure " + key + "? [y/N]: ");
-        return response != null && response.trim().toLowerCase(Locale.ROOT).startsWith("y");
+        boolean enabled =
+                response != null && response.trim().toLowerCase(Locale.ROOT).startsWith("y");
+        if (!enabled) {
+            EnvConfigInitializer.patchEnvFile(envFile, key, "none", EnvConfigInitializer.PatchMode.UPDATE);
+            System.setProperty(key, "none");
+            System.err.println(" ✓ Disabled; saved explicit opt-out.");
+        }
+        return enabled;
     }
 
     private static void promptVariable(Path envFile, VarSpec spec) {

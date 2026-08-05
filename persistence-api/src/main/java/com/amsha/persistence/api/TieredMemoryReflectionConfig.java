@@ -11,6 +11,10 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
  */
 @RegisterForReflection(
         targets = {
+            EmbeddingIndexDescriptor.class,
+            VectorIndexCompatibility.class,
+            VectorIndexCompatibility.Status.class,
+            VectorIndexNamespace.class,
             CoreMemoryBlockDto.class,
             RecallMessageDto.class,
             ArchivalChunkDto.class,

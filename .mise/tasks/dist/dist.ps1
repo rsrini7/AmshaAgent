@@ -51,4 +51,4 @@ Write-Host '-- Binaries in dist/ -----------------------------------------------
 if (Test-Path 'dist/amsha-sqlite')     { Write-Host '  OK  amsha-sqlite   (Linux/macOS)' } else { Write-Host '  -   amsha-sqlite   (Linux/macOS) -- not built yet' }
 if (Test-Path 'dist/amsha-sqlite.exe') { Write-Host '  OK  amsha-sqlite.exe (Windows)'     } else { Write-Host '  -   amsha-sqlite.exe (Windows)     -- not built yet' }
 Write-Host '-------------------------------------------------------------------------'
-Write-Host '    Build the missing platform binary and re-run: mise run dist'
+Write-Host '    Build the missing platform binary and re-run: mise run dist:dist'

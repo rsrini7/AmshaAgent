@@ -4,6 +4,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
 import com.amsha.channel.api.ChannelMessage;
@@ -66,5 +67,13 @@ public class ChannelServicesImpl implements ChannelServices {
     @Override
     public boolean isValidIdentity(String credential) {
         return ownerResolver.isResolvable() && ownerResolver.get().isValid(credential);
+    }
+
+    @Override
+    public Optional<String> resolveIdentity(String credential) {
+        if (!ownerResolver.isResolvable()) {
+            return Optional.empty();
+        }
+        return ownerResolver.get().resolveOwner(credential);
     }
 }

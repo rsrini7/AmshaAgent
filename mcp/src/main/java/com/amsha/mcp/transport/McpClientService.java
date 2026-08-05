@@ -21,6 +21,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -40,6 +41,7 @@ import com.amsha.core.security.http.OutboundHttpException;
 import com.amsha.core.tools.ToolCategory;
 import com.amsha.mcp.tool.DynamicToolCapability;
 import com.amsha.mcp.tool.DynamicToolCapabilityRegistry;
+import com.amsha.mcp.tool.DynamicToolOperationDefaults;
 import com.amsha.mcp.tool.McpTransportType;
 import com.amsha.persistence.api.McpConnectionHeaderSecretRefDto;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -62,6 +64,9 @@ import io.smallrye.common.annotation.Identifier;
 @Unremovable
 @SuppressWarnings("PMD.ExcessiveClassLength") // Transport coordinator keeps HTTP and STDIO handshake state together.
 public class McpClientService {
+
+    /** Non-secret tool metadata returned by an MCP tools/list handshake. */
+    public record DiscoveredTool(String name, String description, String inputSchema) {}
 
     private static final Logger log = Logger.getLogger(McpClientService.class);
     private static final String METRIC_MCP_LOAD_FAILURE = "amsha.mcp.tool.load.failure";
@@ -115,7 +120,8 @@ public class McpClientService {
     @ConfigProperty(name = "amsha.mcp.health-check-interval-ms", defaultValue = "15000")
     long healthCheckIntervalMs;
 
-    private record StdioConfig(String command, List<String> args, Map<String, String> env, ToolCategory category) {}
+    private record StdioConfig(
+            String command, List<String> args, Map<String, String> env, ToolCategory category, String ownerUserId) {}
 
     @PostConstruct
     void init() {
@@ -153,7 +159,13 @@ public class McpClientService {
                         ReentrantLock reconnectLock = stdioLocks.computeIfAbsent(serverName, k -> new ReentrantLock());
                         reconnectLock.lock();
                         try {
-                            connectStdio(serverName, cfg.command(), cfg.args(), cfg.env(), cfg.category());
+                            connectStdio(
+                                    serverName,
+                                    cfg.command(),
+                                    cfg.args(),
+                                    cfg.env(),
+                                    cfg.category(),
+                                    cfg.ownerUserId());
                         } catch (Exception e) {
                             log.errorf("Health check reconnect failed for %s: %s", serverName, LogUtil.rootMessage(e));
                         } finally {
@@ -180,19 +192,14 @@ public class McpClientService {
 
     public void connect(
             String serverName, String serverUrl, ToolCategory category, Map<String, String> handshakeHeaders) {
-        connectInternal(serverName, serverName, serverUrl, category, handshakeHeaders, false);
+        connectInternal(serverName, serverName, serverUrl, category, handshakeHeaders, false, currentOwner());
     }
 
-    public void connectForUser(
-            String serverName,
-            String userId,
-            String serverUrl,
-            ToolCategory category,
-            Map<String, String> handshakeHeaders) {
-        connectForUser(serverName, userId, serverUrl, category, handshakeHeaders, false);
-    }
-
-    /** Connects after the caller has completed the required MCP-connect approval lifecycle. */
+    /**
+     * @deprecated use the selective-registration overload and pass the explicitly enabled tool
+     *     names
+     */
+    @Deprecated(since = "1.0", forRemoval = false)
     public void connectForUser(
             String serverName,
             String userId,
@@ -200,7 +207,122 @@ public class McpClientService {
             ToolCategory category,
             Map<String, String> handshakeHeaders,
             boolean preApproved) {
-        connectInternal(serverName, runtimeKey(serverName, userId), serverUrl, category, handshakeHeaders, preApproved);
+        connectForUserWithEnabledTools(
+                serverName, userId, serverUrl, category, handshakeHeaders, preApproved, Set.of());
+    }
+
+    /** Performs the handshake and returns tool metadata without registering executable tools. */
+    public List<DiscoveredTool> discoverForUser(
+            String serverName,
+            String userId,
+            String serverUrl,
+            ToolCategory category,
+            Map<String, String> handshakeHeaders,
+            boolean preApproved) {
+        return connectInternal(
+                serverName,
+                runtimeKey(serverName, userId),
+                serverUrl,
+                category,
+                handshakeHeaders,
+                preApproved,
+                userId,
+                Set.of());
+    }
+
+    /** Performs discovery with a single-use checkpoint approval receipt. */
+    public List<DiscoveredTool> discoverForUser(
+            String serverName,
+            String userId,
+            String serverUrl,
+            ToolCategory category,
+            Map<String, String> handshakeHeaders,
+            String approvalToken) {
+        return connectInternal(
+                serverName,
+                runtimeKey(serverName, userId),
+                serverUrl,
+                category,
+                handshakeHeaders,
+                verifyApproval(userId, serverUrl, approvalToken),
+                userId,
+                Set.of());
+    }
+
+    /** Performs the handshake and registers only the explicitly enabled tool names. */
+    public List<DiscoveredTool> connectForUserWithEnabledTools(
+            String serverName,
+            String userId,
+            String serverUrl,
+            ToolCategory category,
+            Map<String, String> handshakeHeaders,
+            boolean preApproved,
+            Set<String> enabledToolNames) {
+        return connectInternal(
+                serverName,
+                runtimeKey(serverName, userId),
+                serverUrl,
+                category,
+                handshakeHeaders,
+                preApproved,
+                userId,
+                enabledToolNames == null ? Set.of() : Set.copyOf(enabledToolNames));
+    }
+
+    /** Performs activation with a single-use checkpoint approval receipt. */
+    public List<DiscoveredTool> connectForUserWithEnabledTools(
+            String serverName,
+            String userId,
+            String serverUrl,
+            ToolCategory category,
+            Map<String, String> handshakeHeaders,
+            String approvalToken,
+            Set<String> enabledToolNames) {
+        return connectInternal(
+                serverName,
+                runtimeKey(serverName, userId),
+                serverUrl,
+                category,
+                handshakeHeaders,
+                verifyApproval(userId, serverUrl, approvalToken),
+                userId,
+                enabledToolNames == null ? Set.of() : Set.copyOf(enabledToolNames));
+    }
+
+    /** Performs activation after a receipt scoped to MCP_TOOL_ENABLE. */
+    public List<DiscoveredTool> connectForUserWithEnabledTools(
+            String serverName,
+            String userId,
+            String serverUrl,
+            ToolCategory category,
+            Map<String, String> handshakeHeaders,
+            String approvalToken,
+            OutboundPurpose approvalPurpose,
+            Set<String> enabledToolNames) {
+        return connectInternal(
+                serverName,
+                runtimeKey(serverName, userId),
+                serverUrl,
+                category,
+                handshakeHeaders,
+                verifyApproval(userId, serverUrl, approvalToken, approvalPurpose),
+                userId,
+                enabledToolNames == null ? Set.of() : Set.copyOf(enabledToolNames));
+    }
+
+    private boolean verifyApproval(String userId, String serverUrl, String approvalToken) {
+        return verifyApproval(userId, serverUrl, approvalToken, OutboundPurpose.MCP_CONNECT);
+    }
+
+    private boolean verifyApproval(
+            String userId, String serverUrl, String approvalToken, OutboundPurpose approvalPurpose) {
+        if (approvalToken == null || approvalToken.isBlank() || approvalReceiptIssuer == null) return false;
+        OutboundApprovalReceipt receipt = approvalReceiptIssuer.verifyAndConsume(
+                approvalToken, approvalPurpose, URI.create(serverUrl).getHost());
+        if (receipt == null || !userId.equals(receipt.approvedByUserId())) {
+            throw new McpConnectionException("MCP connection requires approval for requesting user");
+        }
+        return true;
     }
 
     /**
@@ -210,6 +332,11 @@ public class McpClientService {
      * while an invalid/expired/mismatched token fails closed to a non-approved connect. When no token
      * is supplied the caller falls back to the unapproved path and must clear HITL on each request.
      */
+    /**
+     * @deprecated use the selective-registration overload and pass the explicitly enabled tool
+     *     names
+     */
+    @Deprecated(since = "1.0", forRemoval = false)
     public void connectForUser(
             String serverName,
             String userId,
@@ -217,27 +344,32 @@ public class McpClientService {
             ToolCategory category,
             Map<String, String> handshakeHeaders,
             String approvalToken) {
-        boolean preApproved = false;
-        if (approvalToken != null && approvalReceiptIssuer != null) {
-            OutboundApprovalReceipt receipt = approvalReceiptIssuer.verifyAndConsume(
-                    approvalToken,
-                    OutboundPurpose.MCP_CONNECT,
-                    URI.create(serverUrl).getHost());
-            if (receipt == null || !userId.equals(receipt.approvedByUserId())) {
-                throw new McpConnectionException("MCP connection requires an approval for the requesting user");
-            }
-            preApproved = true;
-        }
-        connectInternal(serverName, runtimeKey(serverName, userId), serverUrl, category, handshakeHeaders, preApproved);
+        connectForUserWithEnabledTools(
+                serverName, userId, serverUrl, category, handshakeHeaders, approvalToken, Set.of());
     }
 
-    private void connectInternal(
+    private List<DiscoveredTool> connectInternal(
             String serverName,
             String runtimeKey,
             String serverUrl,
             ToolCategory category,
             Map<String, String> handshakeHeaders,
-            boolean preApproved) {
+            boolean preApproved,
+            String ownerUserId) {
+        return connectInternal(
+                serverName, runtimeKey, serverUrl, category, handshakeHeaders, preApproved, ownerUserId, null);
+    }
+
+    private List<DiscoveredTool> connectInternal(
+            String serverName,
+            String runtimeKey,
+            String serverUrl,
+            ToolCategory category,
+            Map<String, String> handshakeHeaders,
+            boolean preApproved,
+            String ownerUserId,
+            Set<String> toolNamesToRegister) {
+        DynamicToolOperationDefaults.requireFor(category);
         serverUrls.put(runtimeKey, serverUrl);
         try {
             ObjectNode initParams = createInitParams();
@@ -290,7 +422,14 @@ public class McpClientService {
                         "MCP tools/list failed [" + toolsResp.statusCode() + "] for: " + serverName);
             }
             JsonNode payload = objectMapper.readTree(toolsResp.body());
-            registerTools(serverName, payload.path("result"), McpTransportType.HTTP_SSE, category);
+            List<DiscoveredTool> discoveredTools = registerTools(
+                    serverName,
+                    payload.path("result"),
+                    McpTransportType.HTTP_SSE,
+                    category,
+                    ownerUserId,
+                    isSelfConnectUrl(serverUrl),
+                    toolNamesToRegister);
 
             log.infof(
                     "Connected to HTTP/SSE MCP server '%s', registered tools: %d",
@@ -298,6 +437,7 @@ public class McpClientService {
                     registry.getAll().stream()
                             .filter(t -> t.mcpServerName().equals(serverName))
                             .count());
+            return discoveredTools;
 
         } catch (McpConnectionException e) {
             throw e;
@@ -352,6 +492,10 @@ public class McpClientService {
         return Optional.ofNullable(serverUrls.get(resolveHttpRuntimeKey(serverName)));
     }
 
+    public boolean hasStdioServer(String serverName) {
+        return processes.containsKey(serverName);
+    }
+
     /**
      * Connect to a local MCP server via STDIO.
      * Starts a sub-process and performs the MCP handshake over its stdin/stdout.
@@ -362,7 +506,19 @@ public class McpClientService {
 
     public void connectStdio(
             String serverName, String command, List<String> args, Map<String, String> env, ToolCategory category) {
-        stdioConfigs.put(serverName, new StdioConfig(command, args, env, category));
+        connectStdio(serverName, command, args, env, category, requireCurrentOwner());
+    }
+
+    public void connectStdio(
+            String serverName,
+            String command,
+            List<String> args,
+            Map<String, String> env,
+            ToolCategory category,
+            String ownerUserId) {
+        ownerUserId = requireOwner(ownerUserId);
+        DynamicToolOperationDefaults.requireFor(category);
+        stdioConfigs.put(serverName, new StdioConfig(command, args, env, category, ownerUserId));
         try {
             ProcessBuilder pb = new ProcessBuilder();
             List<String> fullCmd = new ArrayList<>();
@@ -388,7 +544,7 @@ public class McpClientService {
 
             // 3. List tools
             JsonNode toolsResult = sendRequestStdio(serverName, "tools/list", objectMapper.createObjectNode());
-            registerTools(serverName, toolsResult, McpTransportType.STDIO, category);
+            registerTools(serverName, toolsResult, McpTransportType.STDIO, category, ownerUserId, false, null);
 
             log.infof(
                     "Connected to STDIO MCP server '%s', registered tools: %d",
@@ -426,6 +582,10 @@ public class McpClientService {
             retryOn = {IOException.class})
     @CircuitBreaker(requestVolumeThreshold = 10, failureRatio = 0.5, delay = 5000)
     public String invoke(String serverName, String toolName, String paramsJson) {
+        return invoke(serverName, toolName, paramsJson, currentOwner());
+    }
+
+    public String invoke(String serverName, String toolName, String paramsJson, String ownerUserId) {
         var timer = Timer.builder("amsha.mcp.tool.invocation")
                 .tag(TAG_SERVER, serverName)
                 .tag("tool", toolName);
@@ -441,7 +601,7 @@ public class McpClientService {
                 if (!processes.containsKey(serverName) && stdioConfigs.containsKey(serverName)) {
                     log.infof("reconnecting dead MCP server: %s", serverName);
                     StdioConfig cfg = stdioConfigs.get(serverName);
-                    connectStdio(serverName, cfg.command(), cfg.args(), cfg.env(), cfg.category());
+                    connectStdio(serverName, cfg.command(), cfg.args(), cfg.env(), cfg.category(), cfg.ownerUserId());
                 }
             } finally {
                 lock.unlock();
@@ -450,7 +610,7 @@ public class McpClientService {
             if (processes.containsKey(serverName)) {
                 return invokeStdio(serverName, toolName, paramsJson);
             }
-            String runtimeKey = resolveHttpRuntimeKey(serverName);
+            String runtimeKey = resolveHttpRuntimeKey(serverName, ownerUserId);
             String url = serverUrls.get(runtimeKey);
             if (url == null) {
                 throw new McpConnectionException("No URL registered for HTTP MCP server: " + serverName);
@@ -632,7 +792,10 @@ public class McpClientService {
     }
 
     private String resolveHttpRuntimeKey(String serverName) {
-        String userId = WorkspaceContext.getUserIdOrUnknown();
+        return resolveHttpRuntimeKey(serverName, WorkspaceContext.getUserIdOrUnknown());
+    }
+
+    private String resolveHttpRuntimeKey(String serverName, String userId) {
         if (isKnownUser(userId)) {
             String ownerKey = runtimeKey(serverName, userId);
             if (serverUrls.containsKey(ownerKey) || serverCredentialIds.containsKey(ownerKey)) return ownerKey;
@@ -657,15 +820,72 @@ public class McpClientService {
         return userId != null && !userId.isBlank() && !"unknown".equals(userId);
     }
 
-    private void registerTools(String serverName, JsonNode result, McpTransportType transport, ToolCategory category) {
+    private static boolean isSelfConnectUrl(String serverUrl) {
+        try {
+            URI uri = URI.create(serverUrl);
+            String host = uri.getHost();
+            String path = uri.getPath();
+            return host != null
+                    && ("localhost".equalsIgnoreCase(host)
+                            || "127.0.0.1".equals(host)
+                            || "[::1]".equals(host)
+                            || "::1".equals(host))
+                    && ("/mcp".equals(path) || "/mcp/".equals(path));
+        } catch (IllegalArgumentException _) {
+            return false;
+        }
+    }
+
+    private List<DiscoveredTool> registerTools(
+            String serverName,
+            JsonNode result,
+            McpTransportType transport,
+            ToolCategory category,
+            String ownerUserId,
+            boolean skipInternalNames,
+            Set<String> toolNamesToRegister) {
         JsonNode tools = result.path("tools");
-        if (!tools.isArray()) return;
+        if (!tools.isArray()) return List.of();
+        List<DiscoveredTool> discovered = new ArrayList<>();
         for (JsonNode tool : tools) {
             String name = tool.path("name").asText();
+            if (name.isBlank()) continue;
+            if (skipInternalNames && registry.isInternalToolName(name)) {
+                // The inbound /mcp endpoint exposes built-in tools. A self-connect must not
+                // re-register those names as dynamic tools, and external collisions are
+                // deliberately omitted rather than allowed to shadow internal capabilities.
+                log.warnf("Skipping MCP tool '%s' from server '%s': internal tool name", name, serverName);
+                continue;
+            }
             String desc = tool.path("description").asText("");
             String schema = tool.has("inputSchema") ? tool.path("inputSchema").toString() : "{}";
-            registry.register(new DynamicToolCapability(name, desc, serverName, transport, false, schema, category));
+            discovered.add(new DiscoveredTool(name, desc, schema));
+            if (toolNamesToRegister != null && !toolNamesToRegister.contains(name)) continue;
+            // requiredOperation is set explicitly via category registration defaults
+            // (NETWORK→NETWORK_OUTBOUND; COMPUTE→EXECUTE_SHELL for host/sandbox-equivalent compute).
+            registry.registerForUser(
+                    ownerUserId, new DynamicToolCapability(name, desc, serverName, transport, false, schema, category));
         }
+        return List.copyOf(discovered);
+    }
+
+    private static String currentOwner() {
+        try {
+            return WorkspaceContext.getUserIdOrUnknown();
+        } catch (RuntimeException _) {
+            return "unknown";
+        }
+    }
+
+    private static String requireCurrentOwner() {
+        return requireOwner(currentOwner());
+    }
+
+    private static String requireOwner(String ownerUserId) {
+        if (!isKnownUser(ownerUserId)) {
+            throw new IllegalArgumentException("MCP STDIO registration requires a bound user owner");
+        }
+        return ownerUserId;
     }
 
     private JsonNode sendRequestStdio(String serverName, String method, ObjectNode params) throws Exception {

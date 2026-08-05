@@ -18,7 +18,7 @@ import com.amsha.core.agent.role.RoleRegistry;
 import com.amsha.core.agent.role.ToolCapability;
 import com.amsha.core.security.AutonomyLevel;
 import com.amsha.core.security.ToolOperation;
-import com.amsha.core.tool.DynamicToolLookup;
+import com.amsha.core.tool.DynamicToolAdmissionLookup;
 import com.amsha.core.tool.ToolGuardInterceptor;
 import com.amsha.core.tools.AgentTool;
 import com.amsha.core.tools.IdempotencyMode;
@@ -41,17 +41,17 @@ class ToolInvocationGuardMemoryReadTest {
         roleRegistry = mock(RoleRegistry.class);
         toolRegistry = mock(ToolRegistry.class);
         Instance<ToolGuardInterceptor> interceptors = mock(Instance.class);
-        Instance<DynamicToolLookup> dynamicToolLookup = mock(Instance.class);
+        Instance<DynamicToolAdmissionLookup> dynamicToolAdmissionLookup = mock(Instance.class);
 
         when(interceptors.iterator()).thenReturn(Collections.emptyIterator());
         when(interceptors.stream()).thenReturn(Stream.empty());
-        when(dynamicToolLookup.isUnsatisfied()).thenReturn(true);
+        when(dynamicToolAdmissionLookup.isUnsatisfied()).thenReturn(true);
 
         guard.roleRegistry = roleRegistry;
         guard.objectMapper = new ObjectMapper();
         guard.toolRegistry = toolRegistry;
         guard.interceptors = interceptors;
-        guard.dynamicToolLookup = dynamicToolLookup;
+        guard.dynamicToolAdmissionLookup = dynamicToolAdmissionLookup;
         guard.init();
     }
 

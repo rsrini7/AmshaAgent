@@ -23,6 +23,18 @@ public interface EmbeddingProviderFactory {
     /** Builds the model for this provider using the validated config. */
     EmbeddingModel create(EmbeddingModelConfig config);
 
+    /**
+     * Describes the vector space emitted by a model created from {@code config}.
+     * Defaults intentionally bind a mutable/unknown provider to its own space so it
+     * cannot silently participate in cross-provider failover.
+     */
+    default EmbeddingSpaceDescriptor embeddingSpace(EmbeddingModelConfig config) {
+        if (!config.spaceId().isBlank() && !config.spaceRevision().isBlank()) {
+            return EmbeddingSpaceDescriptor.configured(providerId(), config.spaceId(), config.spaceRevision());
+        }
+        return EmbeddingSpaceDescriptor.providerBound(providerId(), config.modelName());
+    }
+
     /** Helper for factories to enforce API key presence. */
     default String requireApiKey(EmbeddingModelConfig config) {
         return config.apiKey()

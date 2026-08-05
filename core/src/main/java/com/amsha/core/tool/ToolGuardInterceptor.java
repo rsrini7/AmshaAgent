@@ -23,8 +23,9 @@ public interface ToolGuardInterceptor {
 
     /**
      * Evaluate guard for this specific tool.
-     * Return Optional.empty() to pass through to the next interceptor.
-     * Return Optional.of(decision) to halt and use this decision.
+     * Return Optional.empty() or {@link ToolInvocationGuard.GuardDecision.Allow} to
+     * continue through the next interceptor and every mandatory built-in guard.
+     * Any stronger decision halts the pre-policy chain.
      */
     Optional<ToolInvocationGuard.GuardDecision> evaluate(
             String sessionId,

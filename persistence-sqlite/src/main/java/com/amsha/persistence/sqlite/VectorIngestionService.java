@@ -11,6 +11,8 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
 import com.amsha.common.util.LogUtil;
+import com.amsha.persistence.api.VectorIndexMetadataPort;
+import com.amsha.persistence.api.VectorIndexNamespace;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
@@ -39,6 +41,9 @@ public class VectorIngestionService {
 
     @Inject
     FtsConnectionInterceptor ftsInterceptor;
+
+    @Inject
+    VectorIndexMetadataPort vectorIndexMetadata;
 
     @ConfigProperty(name = "amsha.rag.embed-dimensions", defaultValue = "768")
     int embedDimensions;
@@ -119,7 +124,8 @@ public class VectorIngestionService {
      * Check if vec0 loaded and vec_archival table is available.
      */
     public boolean isVectorAvailable() {
-        return ftsInterceptor.isVectorSearchEnabled();
+        return ftsInterceptor.isVectorSearchEnabled()
+                && vectorIndexMetadata.isVectorEnabled(VectorIndexNamespace.ARCHIVAL);
     }
 
     @PreDestroy

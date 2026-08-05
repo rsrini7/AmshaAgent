@@ -19,11 +19,16 @@ class SecurityEventTypeTest {
         assertTrue(SecurityEventType.MCP_SERVER_CONNECTED.isMandatory());
         assertTrue(SecurityEventType.MCP_SERVER_DISCONNECTED.isMandatory());
         assertTrue(SecurityEventType.MCP_CONNECTION_REQUESTED.isMandatory());
+        assertTrue(SecurityEventType.MCP_TOOL_POLICY_ENABLED.isMandatory());
         assertTrue(SecurityEventType.MCP_CONNECTION_VALIDATION_FAILED.isMandatory());
         assertTrue(SecurityEventType.MCP_CREDENTIAL_CONFIGURED.isMandatory());
         assertTrue(SecurityEventType.MCP_CREDENTIAL_ROTATED.isMandatory());
         assertTrue(SecurityEventType.MCP_CREDENTIAL_REMOVED.isMandatory());
         assertTrue(SecurityEventType.MCP_CREDENTIAL_CLEANUP_FAILED.isMandatory());
+        assertTrue(SecurityEventType.CLASSIFIER_RUNTIME_CHANGE_REQUESTED.isMandatory());
+        assertTrue(SecurityEventType.CLASSIFIER_RUNTIME_CHANGE_ACCEPTED.isMandatory());
+        assertTrue(SecurityEventType.CLASSIFIER_RUNTIME_CHANGE_REJECTED.isMandatory());
+        assertTrue(SecurityEventType.ONNX_MODEL_UNLOAD_REQUESTED.isMandatory());
 
         // Non-mandatory - fire-and-forget
         assertFalse(SecurityEventType.REFLEX_COMMAND.isMandatory());

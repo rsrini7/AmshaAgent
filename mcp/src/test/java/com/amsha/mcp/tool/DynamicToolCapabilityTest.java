@@ -2,6 +2,7 @@ package com.amsha.mcp.tool;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import com.amsha.core.security.ToolOperation;
 import com.amsha.core.tools.ToolCategory;
 
 import org.junit.jupiter.api.Test;
@@ -19,14 +20,38 @@ class DynamicToolCapabilityTest {
         assertFalse(capability.requiresApproval());
         assertEquals("{}", capability.inputSchema());
         assertEquals(ToolCategory.NETWORK, capability.category());
+        assertEquals(ToolOperation.NETWORK_OUTBOUND, capability.requiredOperation());
     }
 
     @Test
-    void testExplicitCategory() {
+    void testExplicitCategoryAndOperation() {
         DynamicToolCapability capability = new DynamicToolCapability(
-                "query", "desc", "server", McpTransportType.HTTP_SSE, false, "{}", ToolCategory.DATABASE);
+                "query",
+                "desc",
+                "server",
+                McpTransportType.HTTP_SSE,
+                false,
+                "{}",
+                ToolCategory.DATABASE,
+                ToolOperation.WRITE_MEMORY);
 
         assertEquals(ToolCategory.DATABASE, capability.category());
+        assertEquals(ToolOperation.WRITE_MEMORY, capability.requiredOperation());
+    }
+
+    @Test
+    void databaseCategoryWithoutExplicitOperationRejected() {
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new DynamicToolCapability(
+                        "query", "desc", "server", McpTransportType.HTTP_SSE, false, "{}", ToolCategory.DATABASE));
+    }
+
+    @Test
+    void computeCategoryDefaultsToExecuteShell() {
+        DynamicToolCapability capability = new DynamicToolCapability(
+                "run", "desc", "server", McpTransportType.STDIO, false, "{}", ToolCategory.COMPUTE);
+        assertEquals(ToolOperation.EXECUTE_SHELL, capability.requiredOperation());
     }
 
     @Test
@@ -41,6 +66,42 @@ class DynamicToolCapabilityTest {
         assertThrows(
                 IllegalArgumentException.class,
                 () -> new DynamicToolCapability("   ", "desc", "server", McpTransportType.STDIO, false, "{}"));
+    }
+
+    @Test
+    void oversizedDescriptionIsRejected() {
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new DynamicToolCapability(
+                        "tool",
+                        "x".repeat(DynamicToolCapability.MAX_DESCRIPTION_LENGTH + 1),
+                        "server",
+                        McpTransportType.STDIO,
+                        false,
+                        "{}"));
+    }
+
+    @Test
+    void oversizedSchemaIsRejected() {
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new DynamicToolCapability(
+                        "tool",
+                        "desc",
+                        "server",
+                        McpTransportType.STDIO,
+                        false,
+                        "{\"description\":\"" + "x".repeat(DynamicToolCapability.MAX_INPUT_SCHEMA_LENGTH) + "\"}"));
+    }
+
+    @Test
+    void schemaMustBeValidObjectJson() {
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new DynamicToolCapability("tool", "desc", "server", McpTransportType.STDIO, false, "[]"));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new DynamicToolCapability("tool", "desc", "server", McpTransportType.STDIO, false, "not-json"));
     }
 
     @Test
@@ -61,6 +122,22 @@ class DynamicToolCapabilityTest {
     void testNullCategory() {
         assertThrows(
                 NullPointerException.class,
-                () -> new DynamicToolCapability("tool", "desc", "server", McpTransportType.STDIO, false, "{}", null));
+                () -> new DynamicToolCapability(
+                        "tool",
+                        "desc",
+                        "server",
+                        McpTransportType.STDIO,
+                        false,
+                        "{}",
+                        null,
+                        ToolOperation.NETWORK_OUTBOUND));
+    }
+
+    @Test
+    void testNullRequiredOperation() {
+        assertThrows(
+                NullPointerException.class,
+                () -> new DynamicToolCapability(
+                        "tool", "desc", "server", McpTransportType.STDIO, false, "{}", ToolCategory.NETWORK, null));
     }
 }

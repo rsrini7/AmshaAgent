@@ -39,6 +39,7 @@ public final class AgentExecutionContext {
     private volatile boolean statusDirty = true;
     private volatile boolean forceFinishRetry = false;
     private int truncationRetryCount = 0;
+    private int answerQualityRetryCount = 0;
     private int checkpointRestoreOffset = 0;
 
     public AgentExecutionContext(
@@ -156,6 +157,17 @@ public final class AgentExecutionContext {
         this.truncationRetryCount++;
     }
 
+    /** Atomically consumes the single answer-quality retry allowed before any tool boundary. */
+    public synchronized boolean tryConsumeAnswerQualityRetry() {
+        if (answerQualityRetryCount >= 1) return false;
+        answerQualityRetryCount++;
+        return true;
+    }
+
+    public int getAnswerQualityRetryCount() {
+        return answerQualityRetryCount;
+    }
+
     public int getCheckpointRestoreOffset() {
         return checkpointRestoreOffset;
     }
@@ -198,7 +210,7 @@ public final class AgentExecutionContext {
 
     /** Returns a copy of this context with a different goal. */
     public AgentExecutionContext withGoal(String newGoal) {
-        return new AgentExecutionContext(
+        AgentExecutionContext copy = new AgentExecutionContext(
                 sessionId,
                 userId,
                 chatId,
@@ -212,5 +224,13 @@ public final class AgentExecutionContext {
                 channelPlatformId,
                 systemNote,
                 data);
+        // Preserve same-turn budgets/cursors; clear stale finish-retry and checkpoint cache.
+        copy.answerQualityRetryCount = this.answerQualityRetryCount;
+        copy.truncationRetryCount = this.truncationRetryCount;
+        copy.checkpointRestoreOffset = this.checkpointRestoreOffset;
+        copy.forceFinishRetry = false;
+        copy.lastCheckpointStatus = null;
+        copy.statusDirty = true;
+        return copy;
     }
 }

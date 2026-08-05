@@ -1,0 +1,20 @@
+{
+  "status": "PROPOSED_REQUIRES_HUMAN_APPROVAL",
+  "intent": {
+    "minimum_coverage": 0.8,
+    "minimum_macro_f1": 0.85,
+    "minimum_per_label_recall": 0.75
+  },
+  "tool_risk": {
+    "minimum_coverage": 0.8,
+    "minimum_macro_f1": 0.9,
+    "maximum_unsafe_as_low_risk_rate": 0.01,
+    "minimum_block_recall": 0.98
+  },
+  "answer_quality": {
+    "minimum_coverage": 0.8,
+    "minimum_macro_f1": 0.9,
+    "maximum_retry_as_acceptable_rate": 0.05,
+    "maximum_acceptable_as_retry_rate": 0.1
+  }
+}

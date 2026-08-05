@@ -55,7 +55,7 @@ class WebChatEndpointTest {
                 .thenReturn("sess-amsha-1");
 
         assertDoesNotThrow(() -> endpoint.onOpen(conn));
-        verify(sessionStore).register(eq("plat-1"), eq("sess-amsha-1"), eq(conn));
+        verify(sessionStore).register(eq("plat-1"), eq("sess-amsha-1"), eq("plat-1"), eq(conn));
     }
 
     @Test

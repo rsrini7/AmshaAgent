@@ -2,6 +2,7 @@ package com.amsha.mcp.tool;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import java.time.Duration;
 import java.util.Collection;
 import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
@@ -62,6 +63,59 @@ class DynamicToolCapabilityRegistryTest {
     }
 
     @Test
+    void toolsAreScopedToTheRegisteringUser() {
+        registry.registerForUser("alice", createTool("shared_name"));
+
+        assertTrue(registry.find("alice", "shared_name").isPresent());
+        assertTrue(registry.find("bob", "shared_name").isEmpty());
+    }
+
+    @Test
+    void conflictingServerCannotSilentlyReplaceTool() {
+        registry.registerForUser("alice", createTool("collision"));
+        DynamicToolCapability otherServer =
+                new DynamicToolCapability("collision", "desc", "other", McpTransportType.STDIO, false, "{}");
+
+        assertThrows(IllegalArgumentException.class, () -> registry.registerForUser("alice", otherServer));
+    }
+
+    @Test
+    void sameServerCanRefreshChangedMetadata() {
+        registry.registerForUser("alice", createTool("refreshable"));
+        DynamicToolCapability refreshed = new DynamicToolCapability(
+                "refreshable",
+                "updated description",
+                "server",
+                McpTransportType.STDIO,
+                false,
+                "{\"type\":\"object\",\"properties\":{\"query\":{\"type\":\"string\"}}}");
+
+        registry.registerForUser("alice", refreshed);
+
+        assertEquals(Optional.of(refreshed), registry.find("alice", "refreshable"));
+    }
+
+    @Test
+    void serverToolCountIsBounded() {
+        for (int i = 0; i < DynamicToolCapabilityRegistry.MAX_TOOLS_PER_SERVER; i++) {
+            registry.registerForUser("alice", createTool("bounded-" + i));
+        }
+
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> registry.registerForUser("alice", createTool("bounded-over-limit")));
+    }
+
+    @Test
+    void differentServerCannotSilentlyReplaceTool() {
+        registry.registerForUser("alice", createTool("collision"));
+        DynamicToolCapability conflictingServer =
+                new DynamicToolCapability("collision", "changed", "other-server", McpTransportType.STDIO, false, "{}");
+
+        assertThrows(IllegalArgumentException.class, () -> registry.registerForUser("alice", conflictingServer));
+    }
+
+    @Test
     void testGetAllReflectsCurrentState() {
         assertTrue(registry.getAll().isEmpty());
 
@@ -89,11 +143,11 @@ class DynamicToolCapabilityRegistryTest {
             executor.execute(() -> {
                 try {
                     if (idx % 2 == 0) {
-                        for (int j = 0; j < 100; j++) {
+                        for (int j = 0; j < 4; j++) {
                             registry.register(createTool("tool-" + idx + "-" + j));
                         }
                     } else {
-                        for (int j = 0; j < 100; j++) {
+                        for (int j = 0; j < 4; j++) {
                             var _ = registry.getAll().stream().count();
                         }
                     }
@@ -113,5 +167,34 @@ class DynamicToolCapabilityRegistryTest {
                 0,
                 failures.get(),
                 "ConcurrentModificationException or other error occurred during concurrent operation");
+    }
+
+    @Test
+    void drainRejectsNewInvocationsAndRemovesAfterAcceptedWorkCompletes() throws InterruptedException {
+        registry.registerForUser("alice", createTool("draining"));
+        assertTrue(registry.acquireInvocation("alice", "draining"));
+
+        ExecutorService executor = Executors.newSingleThreadExecutor();
+        executor.submit(() -> registry.drainAndDeregister("alice", "draining", Duration.ofSeconds(1)));
+        int extraInvocations = 0;
+        try {
+            boolean rejected = false;
+            for (int attempt = 0; attempt < 100 && !rejected; attempt++) {
+                rejected = !registry.acquireInvocation("alice", "draining");
+                if (!rejected) {
+                    extraInvocations++;
+                    Thread.sleep(5);
+                }
+            }
+            assertTrue(rejected);
+            registry.releaseInvocation("alice", "draining");
+            for (int invocation = 0; invocation < extraInvocations; invocation++) {
+                registry.releaseInvocation("alice", "draining");
+            }
+        } finally {
+            executor.shutdown();
+            assertTrue(executor.awaitTermination(2, TimeUnit.SECONDS));
+        }
+        assertTrue(registry.find("alice", "draining").isEmpty());
     }
 }

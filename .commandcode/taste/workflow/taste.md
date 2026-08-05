@@ -1,11 +1,25 @@
 # workflow
+- Uses multiple AI tools (Codex, DeepSeek, Claude) in parallel for code review, sharing feedback across tools to cross-validate findings and consolidate results. Confidence: 0.70
 - When diagnosing test failures, first collect all failure reports and identify common root causes across modules before fixing individual tests. Confidence: 0.75
 - For Quarkus multi-module projects, set `quarkus.http.test-port=0` in the parent POM's surefire `systemPropertyVariables` so all modules inherit random test ports and avoid port conflicts. Confidence: 0.80
 - Keep build output clean — fix spurious IDE/lifecycle-mapping warnings (e.g., m2e antrun plugin goals) when they appear, in addition to the primary issue. Confidence: 0.65
 - Skip DB data migration documentation for the project — during active development, delete the data folder instead of running DB migrations. Confidence: 0.80
+- After implementing ADR phases, update the ADR status and remaining-items section to reflect what's done and what's still pending. Confidence: 0.90
+- Create dedicated, reusable smoke test files (e.g., Python scripts) rather than embedding smoke test logic inline — so they can be reused across builds and environments. Confidence: 0.85
 - Keep DB migration version history clean by moving alter-table changes into the original table migration and combining closely related consecutive migrations (e.g., V7 and V9) rather than accumulating many sequential small patches. Confidence: 0.60
 - Store reusable seed/test SQL files under script/data/ for shell script reuse. Confidence: 0.70
+- Use `/fast review staged files against <doc>` for targeted, document-anchored code reviews rather than open-ended review requests. Confidence: 0.80
+- Commit frequently between phases — ask "safe to commit?" before advancing to the next phase, and commit before starting new work. Confidence: 0.90
+- Use mise tasks (not manual scripts) for developer setup automation — integrate download, install, and environment setup steps into mise tasks so fresh machines can be provisioned repeatably. Confidence: 0.85
+- When adding feature-specific validation scripts, register them in the project's central validator (e.g., run_all_validations.sh) with a dedicated flag, not as standalone scripts. Confidence: 0.80
+- Use custom exception types (not generic IOException or RuntimeException) for domain-specific failure modes in new modules. Confidence: 0.85
+- When testing or running the application locally, use the `.env` file from the `dist/` folder for environment configuration. Confidence: 0.80
+- Proceed iteratively through ADR phases — get explicit user confirmation (e.g., "proceed next phase", "ok proceed") before advancing to the next implementation stage. Confidence: 0.90
+- Before advancing to the next implementation phase, ask "is this testable end-to-end?" and ensure a live verification path exists (e.g., jar/native mode test, smoke test, or validation script). Confidence: 0.75
 - Shell scripts and tests (validators, runners) must be generic and work with both jar and native binary deployments — do not hardcode assumptions about dist paths or binary type. Confidence: 0.65
 - When a script needs a data directory path, ask the user to provide it rather than auto-detecting from the running process. Confidence: 0.75
 - Maintain minimum test coverage of 70%, keeping a buffer above the threshold so small changes do not trigger coverage-reduction reports. When adding new files, write test coverage for them as part of the implementation — don't let new files reduce the overall coverage percentage. Confidence: 0.92
 - Proactively fix deprecation warnings as they appear across the codebase. Confidence: 0.85
+- When reviewing code changes across branches, use structured parallel file analysis — run git diff alongside read tools to examine architecture, security, tests, persistence parity, and documentation in parallel rather than sequentially. Confidence: 0.80
+- After providing code review findings, when the user says fixes are done, verify by examining staged changes (git diff --cached) and confirm each issue was addressed, flagging any remaining concerns. Confidence: 0.85
+- For branch-level deep reviews, verify ADR completeness — explicitly track which ADR phases/checklists are done vs pending, and call out discrepancies between ADR declarations and actual code. Confidence: 0.80

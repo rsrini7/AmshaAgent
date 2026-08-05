@@ -138,4 +138,32 @@ class EmbeddingProviderFactoryTest {
                 Duration.ofSeconds(30));
         assertThrows(IllegalStateException.class, () -> factory.requireApiKey(noKey));
     }
+
+    @Test
+    void defaultSpaceIsProviderBoundWithoutExplicitIdentity() {
+        OpenAiEmbeddingProviderFactory factory = new OpenAiEmbeddingProviderFactory();
+
+        EmbeddingSpaceDescriptor space = factory.embeddingSpace(config);
+
+        assertEquals("openai", space.providerId());
+        assertEquals("openai:text-embedding-3-small", space.spaceId());
+        assertFalse(space.isCompatibleWith(EmbeddingSpaceDescriptor.providerBound("jina", "text-embedding-3-small")));
+    }
+
+    @Test
+    void explicitlyConfiguredSpacesCanBeCompatibleAcrossProviders() {
+        EmbeddingModelConfig shared = new EmbeddingModelConfig(
+                "openai",
+                "text-embedding-3-small",
+                "https://api.openai.com/v1",
+                Optional.of("test-key"),
+                Duration.ofSeconds(30),
+                "verified-space",
+                "revision-1");
+
+        EmbeddingSpaceDescriptor openAi = new OpenAiEmbeddingProviderFactory().embeddingSpace(shared);
+        EmbeddingSpaceDescriptor jina = EmbeddingSpaceDescriptor.configured("jina", "verified-space", "revision-1");
+
+        assertTrue(openAi.isCompatibleWith(jina));
+    }
 }

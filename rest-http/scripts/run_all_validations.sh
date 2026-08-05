@@ -18,11 +18,14 @@
 #   bash run_all_validations.sh --list           → list available validators
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+# --fast includes deterministic MCP handshake checks via validate_mcp_fast.sh.
+# Set AMSHA_VALIDATION_SUMMARY_FILE to write JSONL suite results.
 
 REFLEX_SCRIPT="$SCRIPT_DIR/validate_reflex.sh"
 SKILL_SCRIPT="$SCRIPT_DIR/validate_skill.sh"
 SKILLS_ADMISSION_SCRIPT="$SCRIPT_DIR/validate_skillsjar_admission.sh"
 MCP_SCRIPT="$SCRIPT_DIR/validate_mcp.sh"
+MCP_FAST_SCRIPT="$SCRIPT_DIR/validate_mcp_fast.sh"
 MEMORY_SCRIPT="$SCRIPT_DIR/validate_memory.sh"
 WEB_SCRIPT="$SCRIPT_DIR/validate_web.sh"
 ROLES_SCRIPT="$SCRIPT_DIR/validate_roles.sh"
@@ -37,6 +40,8 @@ RAG_SCRIPT="$SCRIPT_DIR/validate_rag.sh"
 BUDGET_SCRIPT="$SCRIPT_DIR/validate_budget.sh"
 SSE_SETTINGS_SCRIPT="$SCRIPT_DIR/validate_sse_settings.sh"
 ONBOARDING_SCRIPT="$SCRIPT_DIR/validate_onboarding.sh"
+ONNX_SCRIPT="$SCRIPT_DIR/validate_onnx.sh"
+DATA_COLLECTION_SCRIPT="$SCRIPT_DIR/validate_data_collection.sh"
 
 check_app() {
   local check_base="${TEST_BASE:-http://localhost:8080}"
@@ -60,6 +65,15 @@ run_validator() {
     PASSED=$((PASSED + 1))
   else
     FAILED=$((FAILED + 1))
+  fi
+  if [ -n "$SUMMARY_FILE" ]; then
+    python3 - "$SUMMARY_FILE" "$name" "$rc" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], "a", encoding="utf-8") as summary:
+    summary.write(json.dumps({"suite": sys.argv[2], "exitCode": int(sys.argv[3])}) + "\n")
+PY
   fi
 }
 
@@ -85,8 +99,10 @@ for arg in "$@"; do
     --budget)       RUN_ALL=false; RUN_BUDGET=true ;;
     --sse-settings) RUN_ALL=false; RUN_SSE_SETTINGS=true ;;
     --onboarding)   RUN_ALL=false; RUN_ONBOARDING=true ;;
+    --onnx)         RUN_ALL=false; RUN_ONNX=true ;;
+    --data-collection) RUN_ALL=false; RUN_DATA_COLLECTION=true ;;
     --fast)   FAST=true; RUN_ALL=false; RUN_REFLEX=true; RUN_SKILLS=true; RUN_SKILLS_ADMISSION=true; RUN_ADMIN=true; RUN_AUTH_SESSION=true; RUN_IDENTITY=true; RUN_PII_AUDIT=true; RUN_SELF_EVOLVE=true; RUN_SSE_SETTINGS=true; RUN_ONBOARDING=true ;;
-    --llm)    LLM=true; RUN_ALL=false; RUN_MEMORY=true; RUN_WEB=true; RUN_ROLES=true; RUN_CRON=true; RUN_RAG=true; RUN_BUDGET=true; RUN_HITL=true ;;
+    --llm)    LLM=true; RUN_ALL=false; RUN_MEMORY=true; RUN_WEB=true; RUN_ROLES=true; RUN_CRON=true; RUN_RAG=true; RUN_BUDGET=true; RUN_HITL=true; RUN_DATA_COLLECTION=true ;;
     --list)
       echo "Available validators:"
       echo "  --reflex       validate_reflex.sh             (zero-token, ~30s)"
@@ -106,19 +122,28 @@ for arg in "$@"; do
       echo "  --budget       validate_budget.sh              (budget + autonomy SUPERVISED/FULL/READONLY, needs LLM)"
       echo "  --sse-settings validate_sse_settings.sh        (UI SSE streams + ws-token + settings CRUD, fast)"
       echo "  --onboarding  validate_onboarding.sh         (P110 draft/saga + provider-catalog + workspace filter, fast)"
+      echo "  --onnx         validate_onnx.sh               (runtime, inference, bundle, vector index, classifier controls; requires local model)"
       echo "  --cron         validate_cron.sh               (programmatic cron resource REST APIs, needs LLM)"
-      echo "  --fast         reflex + skills + SkillsJar admission + admin + auth-session + identity + pii-audit + self-evolve + sse-settings"
-      echo "  --llm          memory + web + roles + cron + rag + budget + hitl"
+      echo "  --data-collection validate_data_collection.sh  (needs LLM)"
+      echo "  --fast         reflex + skills + SkillsJar admission + admin + auth-session + identity + pii-audit + self-evolve + sse-settings + onboarding"
+      echo "  --llm          memory + web + roles + cron + rag + budget + hitl + data-collection"
       echo "  (no args)      run ALL validators"
-      exit 0
-      ;;
+ echo " --fast includes deterministic validate_mcp_fast.sh MCP handshake checks"
+ exit 0
+ ;; 
     --help)
       echo "Usage: bash run_all_validations.sh [options]"
-      echo "Options: --reflex --skills --skills-admission --mcp --memory --web --roles --admin --auth-session --identity --pii-audit --self-evolve --hitl --rag --budget --sse-settings --onboarding --cron --fast --llm --list --help"
+      echo "Options: --reflex --skills --skills-admission --mcp --memory --web --roles --admin --auth-session --identity --pii-audit --self-evolve --hitl --rag --budget --sse-settings --onboarding --onnx --cron --fast --llm --list --help"
       exit 0
       ;;
   esac
 done
+
+# The fast profile includes deterministic MCP handshake checks. Keep the full
+# MCP flow behind --mcp so it can continue exercising tool calls and self-connect.
+if [ "$FAST" = true ]; then
+    RUN_MCP=true
+fi
 
 # ── Pre-flight check ──
 echo "═══════════════════════════════════════════"
@@ -136,7 +161,7 @@ else
 fi
 
 if [ "$FAST" = true ]; then
-  echo "Mode: --fast (reflex + skills + admin + auth-session + identity + pii-audit + self-evolve + sse-settings + onboarding, no LLM)"
+  echo "Mode: --fast (portable zero-token validators; ONNX runs explicitly with --onnx)"
 elif [ "$LLM" = true ]; then
   echo "Mode: --llm (memory + web + roles, needs LLM)"
 elif [ "$RUN_ALL" = true ]; then
@@ -144,6 +169,13 @@ elif [ "$RUN_ALL" = true ]; then
 fi
 
 TOTAL=0; PASSED=0; FAILED=0
+SUMMARY_FILE="${AMSHA_VALIDATION_SUMMARY_FILE:-}"
+if [ -n "$SUMMARY_FILE" ]; then
+  : > "$SUMMARY_FILE" || {
+    echo "❌ Cannot write validation summary: $SUMMARY_FILE"
+    exit 1
+  }
+fi
 
 # ── Run selected validators ──
 if [ "$RUN_REFLEX" = true ] || [ "$RUN_ALL" = true ]; then
@@ -159,7 +191,11 @@ if [ "$RUN_SKILLS_ADMISSION" = true ] || [ "$RUN_ALL" = true ]; then
 fi
 
 if [ "$RUN_MCP" = true ] || [ "$RUN_ALL" = true ]; then
-  run_validator "MCP PROTOCOL" "$MCP_SCRIPT"
+    if [ "$FAST" = true ]; then
+        run_validator "MCP PROTOCOL (FAST)" "$MCP_FAST_SCRIPT"
+    else
+        run_validator "MCP PROTOCOL" "$MCP_SCRIPT"
+    fi
 fi
 
 if [ "$RUN_MEMORY" = true ] || [ "$RUN_ALL" = true ]; then
@@ -219,7 +255,15 @@ if [ "$RUN_SSE_SETTINGS" = true ] || [ "$RUN_ALL" = true ]; then
 fi
 
 if [ "$RUN_ONBOARDING" = true ] || [ "$RUN_ALL" = true ]; then
-  run_validator "P110 ONBOARDING / PROVIDER / WORKSPACE" "$ONBOARDING_SCRIPT"
+  run_validator "ONBOARDING / SAGA" "$ONBOARDING_SCRIPT"
+fi
+
+if [ "$RUN_ONNX" = true ]; then
+  run_validator "ONNX LOCAL ML" "$ONNX_SCRIPT"
+fi
+
+if [ "$RUN_DATA_COLLECTION" = true ] || [ "$RUN_ALL" = true ]; then
+  run_validator "DATA COLLECTION" "$DATA_COLLECTION_SCRIPT"
 fi
 
 # ── Summary ──

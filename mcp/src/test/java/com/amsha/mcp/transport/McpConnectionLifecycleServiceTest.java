@@ -10,8 +10,10 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Stream;
 
+import com.amsha.core.agent.AgentSentinels;
 import com.amsha.core.audit.AuditService;
 import com.amsha.core.audit.SecurityEventType;
 import com.amsha.core.security.SecretVault;
@@ -64,6 +66,7 @@ class McpConnectionLifecycleServiceTest {
         List<McpConnectionHeaderSecretRefDto> refs =
                 List.of(headerRef("ref-1", connection.id(), connection.userId(), "authorization", "vault-auth"));
         when(store.listEnabled()).thenReturn(List.of(connection));
+        when(store.listToolPolicies(connection.id(), connection.userId())).thenReturn(List.of());
         when(store.listHeaderSecretRefs(connection.id(), connection.userId())).thenReturn(refs);
 
         int reconnected = service.reconnectEnabledConnections();
@@ -71,13 +74,14 @@ class McpConnectionLifecycleServiceTest {
         assertEquals(1, reconnected);
         verify(mcpClientService).configureHeaderSecretRefs(connection.name(), connection.userId(), refs);
         verify(mcpClientService)
-                .connectForUser(
+                .connectForUserWithEnabledTools(
                         connection.name(),
                         connection.userId(),
                         connection.endpoint(),
                         ToolCategory.NETWORK,
                         Map.of(),
-                        true);
+                        true,
+                        Set.of());
         verify(auditService)
                 .recordMandatory(
                         anyString(),
@@ -85,6 +89,24 @@ class McpConnectionLifecycleServiceTest {
                         anyString(),
                         eq(SecurityEventType.MCP_SERVER_CONNECTED),
                         eq("server=docs reconnect=true"));
+    }
+
+    @Test
+    void reconcilePendingApprovalsClearsRestartOrphans() {
+        McpConnectionDto connection = connection("mcp-1", "user-1", "docs", McpTransportType.HTTP_SSE.name(), true);
+        when(store.listPendingApprovals()).thenReturn(List.of(connection));
+        when(store.updateStateIfRevision(any(McpConnectionDto.class), eq(connection.revision())))
+                .thenReturn(true);
+
+        assertEquals(1, service.reconcilePendingApprovals());
+        verify(store).updateStateIfRevision(any(McpConnectionDto.class), eq(connection.revision()));
+        verify(auditService)
+                .recordMandatory(
+                        eq(AgentSentinels.SYSTEM_SESSION),
+                        eq("user-1"),
+                        eq(AgentSentinels.SYSTEM_ROLE),
+                        eq(SecurityEventType.APPROVAL_DENIED),
+                        contains("APPROVAL_LOST_ON_RESTART"));
     }
 
     @Test

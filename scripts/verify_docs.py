@@ -4,6 +4,25 @@ import re
 import sys
 import urllib.parse
 
+SKIPPED_DIRECTORY_NAMES = {
+    '.a5c',
+    '.cache',
+    '.devbox',
+    '.gemini',
+    '.git',
+    '.openclaude',
+    '.kimchi',
+    '.omm',
+    '.headroom',
+    '.commandcode',
+    '.venv',
+    '__pycache__',
+    'classifier-cache',
+    'node_modules',
+    'target',
+    'venv',
+}
+
 # List of root dirs in the project
 REAL_ROOT_DIRS = {
     'app', 'core', 'channel-api', 'channel-telegram', 'channel-web', 'common',
@@ -53,8 +72,7 @@ def gfm_anchor(heading):
 def scan_markdown_files(workspace_root):
     md_files = []
     for root, dirs, files in os.walk(workspace_root):
-        if any(p in root for p in ['node_modules', 'target', '.git', '.devbox', '.openclaude', '.gemini', '.a5c']):
-            continue
+        dirs[:] = [directory for directory in dirs if directory not in SKIPPED_DIRECTORY_NAMES]
         for file in files:
             if file.endswith('.md'):
                 md_files.append(os.path.join(root, file))

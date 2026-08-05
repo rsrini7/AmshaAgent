@@ -115,9 +115,9 @@ if ($strategy -eq 'container') {
         & $mvnw clean package -Pnative -pl app -am -DskipTests "-Damsha.persistence.backend=sqlite" "-Dquarkus.profile=prod" "-Dquarkus.native.native-image-xmx=${targetGB}g" $containerFlag
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
         if ($args -contains '--clean' -or $args -contains '-c') {
-            mise run dist -- --clean
+            mise run dist:dist -- --clean
         } else {
-            mise run dist
+            mise run dist:dist
         }
     } finally {
         if ($envBackup -eq $true -and (Test-Path '.env.build-backup')) { Rename-Item '.env.build-backup' '.env'; Write-Host 'ℹ️   .env restored.' }
@@ -143,9 +143,9 @@ if ($strategy -eq 'container') {
         & $mvnw clean package -Pnative -pl app -am -DskipTests "-Damsha.persistence.backend=sqlite" "-Dquarkus.profile=prod" "-Dquarkus.native.native-image-xmx=${targetGB}g" $containerFlag
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
         if ($args -contains '--clean' -or $args -contains '-c') {
-            mise run dist -- --clean
+            mise run dist:dist -- --clean
         } else {
-            mise run dist
+            mise run dist:dist
         }
     } finally {
         if ($envBackup -eq $true -and (Test-Path '.env.build-backup')) { Rename-Item '.env.build-backup' '.env'; Write-Host 'ℹ️   .env restored.' }
