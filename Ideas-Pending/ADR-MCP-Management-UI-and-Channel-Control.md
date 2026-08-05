@@ -271,6 +271,12 @@ Disable semantics are precise:
 
 ### User-private scope
 
+When web authentication is disabled for local development, the browser sends its stable per-tab
+`sessionStorage` platform ID in `X-AMSHA-PLATFORM-ID` to MCP REST endpoints. This value is a continuity
+scope, not an authenticated identity, and is accepted only when `amsha.channel.web.require-auth=false`.
+An authenticated principal always takes precedence, so chat/WebSocket and MCP REST use the same local
+scope without weakening authenticated deployments.
+
 Every version 1 connection, credential reference, tool policy, dynamic registry entry,
 setup operation, and command result is scoped to the authenticated `userId`.
 `McpConnectionStorePort` continues to expose user-private operations such as

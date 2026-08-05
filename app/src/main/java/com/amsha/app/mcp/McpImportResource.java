@@ -8,6 +8,7 @@ import jakarta.ws.rs.POST;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.Context;
+import jakarta.ws.rs.core.HttpHeaders;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.core.SecurityContext;
@@ -23,6 +24,7 @@ import com.amsha.mcp.transport.McpConnectionException;
 import com.amsha.mcp.transport.McpManagementService;
 import com.amsha.mcp.transport.McpRevisionConflictException;
 
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.resteasy.reactive.MultipartForm;
 import org.jboss.resteasy.reactive.RestForm;
 import org.jboss.resteasy.reactive.multipart.FileUpload;
@@ -43,6 +45,12 @@ public class McpImportResource {
 
     @Context
     SecurityContext securityContext;
+
+    @Context
+    HttpHeaders httpHeaders;
+
+    @ConfigProperty(name = "amsha.channel.web.require-auth", defaultValue = "false")
+    boolean webAuthRequired;
 
     public static class ImportForm {
         @RestForm("file")
@@ -108,10 +116,11 @@ public class McpImportResource {
     }
 
     private String resolveUserId() {
-        if (securityContext != null && securityContext.getUserPrincipal() != null) {
-            return securityContext.getUserPrincipal().getName();
+        String userId = McpRestUserIdentity.resolve(securityContext, httpHeaders, webAuthRequired);
+        if (userId == null || userId.isBlank() || "unknown".equalsIgnoreCase(userId)) {
+            throw new IllegalArgumentException("authenticated user is required");
         }
-        throw new IllegalArgumentException("authenticated user is required");
+        return userId;
     }
 
     private static Response badRequest(String detail) {

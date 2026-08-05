@@ -5,6 +5,7 @@ import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import jakarta.ws.rs.core.HttpHeaders;
 import jakarta.ws.rs.core.SecurityContext;
 
 import java.security.Principal;
@@ -12,6 +13,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 
+import com.amsha.core.scope.WorkspaceContext;
 import com.amsha.mcp.config.McpToolAllowlist;
 import com.amsha.mcp.transport.McpApprovalService;
 import com.amsha.mcp.transport.McpManagementService;
@@ -34,6 +36,9 @@ class McpConnectResourceTest {
     SecurityContext securityContext;
 
     @Mock
+    HttpHeaders httpHeaders;
+
+    @Mock
     Principal principal;
 
     McpConnectResource resource;
@@ -44,9 +49,54 @@ class McpConnectResourceTest {
         setField(resource, "config", config);
         setField(resource, "managementService", managementService);
         setField(resource, "securityContext", securityContext);
+        setField(resource, "httpHeaders", httpHeaders);
+        setField(resource, "webAuthRequired", false);
         lenient().when(securityContext.getUserPrincipal()).thenReturn(principal);
         lenient().when(principal.getName()).thenReturn("user-1");
         lenient().when(config.serverEnabled()).thenReturn(true);
+    }
+
+    @Test
+    void unauthenticatedBrowserUsesPlatformIdScope() {
+        when(securityContext.getUserPrincipal()).thenReturn(null);
+        when(httpHeaders.getHeaderString("X-AMSHA-PLATFORM-ID")).thenReturn("browser-tab-1");
+        when(managementService.list("browser-tab-1")).thenReturn(List.of());
+
+        resource.listConnected();
+
+        verify(managementService).list("browser-tab-1");
+    }
+
+    @Test
+    void authenticatedPrincipalTakesPrecedenceOverPlatformId() {
+        when(managementService.list("user-1")).thenReturn(List.of());
+
+        resource.listConnected();
+
+        verify(managementService).list("user-1");
+    }
+
+    @Test
+    void anonymousPrincipalUsesPlatformIdWhenWebAuthIsDisabled() {
+        when(principal.getName()).thenReturn("anonymous");
+        when(httpHeaders.getHeaderString("X-AMSHA-PLATFORM-ID")).thenReturn("browser-tab-2");
+        when(managementService.list("browser-tab-2")).thenReturn(List.of());
+
+        resource.listConnected();
+
+        verify(managementService).list("browser-tab-2");
+    }
+
+    @Test
+    void platformIdIsIgnoredWhenWebAuthIsRequired() {
+        setField(resource, "webAuthRequired", true);
+        when(securityContext.getUserPrincipal()).thenReturn(null);
+        String fallbackUserId = WorkspaceContext.getUserIdOrUnknown();
+        when(managementService.list(fallbackUserId)).thenReturn(List.of());
+
+        resource.listConnected();
+
+        verify(managementService).list(fallbackUserId);
     }
 
     @Test

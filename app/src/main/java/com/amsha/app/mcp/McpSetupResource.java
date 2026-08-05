@@ -7,6 +7,7 @@ import jakarta.ws.rs.POST;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.Context;
+import jakarta.ws.rs.core.HttpHeaders;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.core.SecurityContext;
@@ -15,10 +16,10 @@ import java.time.Instant;
 import java.util.Map;
 
 import com.amsha.core.api.dto.AmshaErrorResponse;
-import com.amsha.core.scope.WorkspaceContext;
 import com.amsha.mcp.transport.McpSetupLinkService;
 import com.amsha.mcp.transport.McpSetupTokenService;
 
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.eclipse.microprofile.openapi.annotations.Operation;
 
 import io.smallrye.common.annotation.RunOnVirtualThread;
@@ -38,6 +39,12 @@ public class McpSetupResource {
 
     @Context
     SecurityContext securityContext;
+
+    @Context
+    HttpHeaders httpHeaders;
+
+    @ConfigProperty(name = "amsha.channel.web.require-auth", defaultValue = "false")
+    boolean webAuthRequired;
 
     @POST
     @Path("/issue")
@@ -84,10 +91,7 @@ public class McpSetupResource {
     }
 
     private String resolveUserId() {
-        if (securityContext != null && securityContext.getUserPrincipal() != null) {
-            return securityContext.getUserPrincipal().getName();
-        }
-        return WorkspaceContext.getUserIdOrUnknown();
+        return McpRestUserIdentity.resolve(securityContext, httpHeaders, webAuthRequired);
     }
 
     public record IssueRequest(String serverName, String channelType, String channelId) {

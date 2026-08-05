@@ -72,6 +72,10 @@ export class ArcClient {
     const h: Record<string, string> = {
       'Content-Type': 'application/json',
     };
+    const platformId = sessionStorage.getItem('amsha-platform-id');
+    if (platformId) {
+      h['X-AMSHA-PLATFORM-ID'] = platformId;
+    }
     if (this.apiKey && this.apiKey !== 'authenticated') {
       h['X-AMSHA-API-KEY'] = this.apiKey;
     }
