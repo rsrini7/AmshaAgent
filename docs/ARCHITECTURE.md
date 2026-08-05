@@ -861,22 +861,38 @@ The `SkillAdaptationManager` enables adaptive skill execution — dynamically ad
 
 ![MCP dynamic tool execution](./assets/amsha_mcp_execution.svg)
 
+### MCP management lifecycle
+
+All remote management surfaces delegate to `McpManagementService`. Discovery is a throwaway,
+approval-gated preview: it validates the endpoint, performs `initialize`/`tools:list` after
+`MCP_CONNECT` approval, and leaves no durable row or registered tool. Connect repeats the governed
+handshake, persists user-private connection metadata, and stores all discovered tools disabled.
+
+`MCP_TOOL_ENABLE` approval is required before reachability validation and registration of an individual
+tool. The dynamic registry is user-scoped, so `CONNECTED (1/56 tools)` means one explicitly enabled tool
+out of 56 discovered tools. Pause/disconnect drain and deregister; startup reconnect restores only
+explicitly enabled policies. Reconfiguration uses `If-MCP-Revision`, preserves enabled policy only for
+unchanged tool name/schema hash pairs, and compensates staged vault changes on failure.
+
+The operator-facing lifecycle, chat commands, REST paths, setup/edit links, import contract, and local
+identity rules are documented in [MCP Management](./MCP_MANAGEMENT.md).
+
 ### Amsha Agent as MCP Server
 
 `McpAdminResource` (`GET /mcp/tools`) exposes Amsha Agent's internal tools as MCP-compatible descriptors. `AgentFunctionProcessor` (build-time) generates JSON schemas from `@AgentFunction`-annotated SAM interfaces.
 
 ### Amsha Agent as MCP Client (Dynamic Tool Loading)
 
-Outbound MCP connections register a remote server's tools into the agent loop.
+Outbound MCP connections discover a remote server's tools and register only explicitly enabled tools into the user-scoped agent loop.
 
 ```
 POST /api/v1/mcp/connect  {name, url, headers?}
-  → McpConnectionLifecycleService.validateHttpRegistration(url, headers)
-  → McpClientService.connectForUser(name, userId, url, category, headers)
-  → SSE handshake with remote MCP server (initialize → initialized → tools/list)
-  → ExternalMcpToolAdapter wraps each as AgentTool
-  → DynamicToolCapabilityRegistry.register(toolDef)
-  → Persist connection + vault-backed header refs (McpConnectionStorePort)
+ → request MCP_CONNECT approval before network I/O
+ → McpConnectionLifecycleService validates, stages, and persists connection metadata
+ → McpClientService performs initialize → initialized → tools/list
+ → persist discovered policies disabled; no implicit registration
+ → MCP_TOOL_ENABLE approval and reachability check for each selected tool
+ → ExternalMcpToolAdapter + DynamicToolCapabilityRegistry register that user-scoped tool
   → Available as tools in agent roles at next invocation
 ```
 
@@ -905,7 +921,7 @@ connections from durable metadata; failed reconnects are logged and retried. Fai
 cancelled credential cleanup is persisted as an owner-scoped, idempotent retry record
 (`MCP_CREDENTIAL_CLEANUP_FAILED`) and retried on startup before reconnect.
 
-Self-connect smoke test: connecting to `http://localhost:8080/mcp` makes Amsha Agent's own tools discoverable as dynamic tools.
+Self-connect smoke test: connecting to `http://localhost:8080/mcp` discovers Amsha Agent's own tools, but they remain disabled and are not registered dynamically until an explicit tool-enable approval.
 
 ---
 

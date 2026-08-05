@@ -1,1 +1,48 @@
-<svg width="100%" viewBox="0 0 960 300" xmlns="http://www.w3.org/2000/svg"><rect width="960" height="300" fill="#171715"/><g font-family="'Segoe UI',system-ui,sans-serif" text-anchor="middle"><text x="480" y="35" font-size="22" font-weight="600" fill="#f2f0e9">MCP Dynamic Tool Execution</text><text x="480" y="58" font-size="12" fill="#b8b5aa">Discover, secure, register, and invoke remote tools</text><g stroke="#9c9a92" stroke-width="1.5"><path d="M170 145H250M390 145H470M610 145H690"/></g><rect x="30" y="105" width="140" height="80" rx="9" fill="#24507a" stroke="#71b7ee"/><text x="100" y="137" font-size="15" fill="#acd9f7">Connect</text><text x="100" y="160" font-size="11" fill="#c0e2f8">URL + headers</text><rect x="250" y="105" width="140" height="80" rx="9" fill="#995700" stroke="#ef9f27"/><text x="320" y="137" font-size="15" fill="#fac775">Validate + HITL</text><text x="320" y="160" font-size="11" fill="#f6d39a">NETWORK_OUTBOUND</text><rect x="470" y="105" width="140" height="80" rx="9" fill="#3c3489" stroke="#afa9ec"/><text x="540" y="137" font-size="15" fill="#cecbf6">Handshake</text><text x="540" y="160" font-size="11" fill="#afa9ec">initialize/tools</text><rect x="690" y="105" width="140" height="80" rx="9" fill="#184d42" stroke="#63c7b7"/><text x="760" y="137" font-size="15" fill="#9fe1d5">Register</text><text x="760" y="160" font-size="11" fill="#b5e8df">dynamic tools</text><path d="M760 185V235H540" stroke="#9c9a92" stroke-width="1.5" fill="none"/><rect x="400" y="220" width="140" height="50" rx="9" fill="#24507a" stroke="#71b7ee"/><text x="470" y="250" font-size="13" fill="#acd9f7">Invoke + audit</text></g></svg>
+<svg width="100%" viewBox="0 0 1200 430" role="img" aria-labelledby="title desc" xmlns="http://www.w3.org/2000/svg">
+  <title id="title">MCP management and selective tool execution</title>
+  <desc id="desc">Discover an MCP server with approval, persist discovered tools disabled, explicitly enable a tool with approval, then invoke and audit it.</desc>
+  <rect width="1200" height="430" fill="#171715"/>
+  <g font-family="'Segoe UI',system-ui,sans-serif" text-anchor="middle">
+    <text x="600" y="35" font-size="22" font-weight="600" fill="#f2f0e9">MCP Management and Selective Tool Execution</text>
+    <text x="600" y="58" font-size="12" fill="#b8b5aa">One service across UI, REST, chat, and channel surfaces</text>
+
+    <g stroke="#9c9a92" stroke-width="1.5" fill="none">
+      <path d="M180 145H250"/>
+      <path d="M400 145H470"/>
+      <path d="M620 145H690"/>
+      <path d="M760 185V285H690"/>
+      <path d="M540 325H470"/>
+      <path d="M400 325H330"/>
+    </g>
+
+    <rect x="30" y="105" width="150" height="80" rx="9" fill="#24507a" stroke="#71b7ee"/>
+    <text x="105" y="137" font-size="15" fill="#acd9f7">Discover</text>
+    <text x="105" y="160" font-size="11" fill="#c0e2f8">preview / tools:list</text>
+
+    <rect x="250" y="105" width="150" height="80" rx="9" fill="#995700" stroke="#ef9f27"/>
+    <text x="325" y="137" font-size="15" fill="#fac775">MCP_CONNECT</text>
+    <text x="325" y="160" font-size="11" fill="#f6d39a">approval before network</text>
+
+    <rect x="470" y="105" width="150" height="80" rx="9" fill="#3c3489" stroke="#afa9ec"/>
+    <text x="545" y="137" font-size="15" fill="#cecbf6">Handshake</text>
+    <text x="545" y="160" font-size="11" fill="#afa9ec">initialize + tools/list</text>
+
+    <rect x="690" y="105" width="150" height="80" rx="9" fill="#184d42" stroke="#63c7b7"/>
+    <text x="765" y="137" font-size="15" fill="#9fe1d5">Persist disabled</text>
+    <text x="765" y="160" font-size="11" fill="#b5e8df">0/N tools enabled</text>
+
+    <rect x="540" y="285" width="150" height="80" rx="9" fill="#995700" stroke="#ef9f27"/>
+    <text x="615" y="317" font-size="15" fill="#fac775">MCP_TOOL_ENABLE</text>
+    <text x="615" y="340" font-size="11" fill="#f6d39a">approval + reachability</text>
+
+    <rect x="320" y="285" width="150" height="80" rx="9" fill="#184d42" stroke="#63c7b7"/>
+    <text x="395" y="317" font-size="15" fill="#9fe1d5">Register selected</text>
+    <text x="395" y="340" font-size="11" fill="#b5e8df">user-scoped tool</text>
+
+    <rect x="100" y="285" width="150" height="80" rx="9" fill="#24507a" stroke="#71b7ee"/>
+    <text x="175" y="317" font-size="15" fill="#acd9f7">Invoke + audit</text>
+    <text x="175" y="340" font-size="11" fill="#c0e2f8">MCP_TOOL_INVOKED</text>
+
+    <text x="600" y="405" font-size="12" fill="#b8b5aa">Reconfigure repeats governed approval and handshake; restart restores only explicit enablement</text>
+  </g>
+</svg>

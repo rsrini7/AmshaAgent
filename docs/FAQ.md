@@ -346,7 +346,7 @@ Exposed internal tools (3): github, recall_memory_search, archival_memory_search
 Dynamic MCP tools: none connected
 ```
 
-After connecting an external MCP server via `POST /api/v1/mcp/connect`, the response changes to show the registered dynamic tools with their server name and transport type.
+Discovery through `POST /api/v1/mcp/connect/discover` is a throwaway preview. A durable connect through `POST /api/v1/mcp/connect` persists the server and its discovered tools disabled; only an approved per-tool enable operation registers a dynamic tool for that user. The response and `/mcp` status show the server name, state, transport, and enabled/discovered counts.
 
 ---
 
@@ -417,6 +417,25 @@ This reloads both classpath built-in skills and database-tier skills without res
 
 ## 🌐 MCP Integration
 
+### Q: How do I manage remote MCP servers now?
+
+Open `#/mcp` for the dedicated management panel. It supports multiple collapsible server cards, throwaway
+discovery, approval-gated connect, per-tool enable/disable, pause/resume/reconnect, disconnect, endpoint or
+credential editing, and upload-only `.mcp.json` import. Discovery never persists a connection; connecting
+persists the server with every discovered tool disabled. A status such as `1/56 tools` means one tool is
+explicitly enabled out of 56 discovered tools.
+
+The same operations are available through `/mcp help` in chat. MCP approvals use `/mcp approve <task-id>`
+and `/mcp deny <task-id>` or the MCP approval REST endpoints; this is separate from global agent `/approve`.
+
+### Q: Why does MCP status differ between local UI and native CLI?
+
+Connections are user-scoped. Authenticated requests use the authenticated principal. In local web mode,
+the browser platform ID is only a continuity fallback when `AMSHA_WEB_REQUIRE_AUTH=false`. Native CLI chat
+uses the claimed local bootstrap owner when available and falls back to `cli-user` before onboarding. Restart
+the rebuilt native binary after changing it. Different users, browser tabs in unauthenticated mode, or data
+directories intentionally do not share connections.
+
 ### Q: What is the Model Context Protocol (MCP) and how does Amsha Agent implement it?
 
 MCP is an open protocol for LLM tool interoperability over JSON-RPC. Amsha Agent implements it in both directions:
@@ -447,7 +466,7 @@ Always run `GET /api/v1/mcp/status` before starting the protocol sequence to con
 
 ### Q: How do dynamic MCP tools appear to agents?
 
-After connecting an external MCP server, `DynamicToolCapabilityRegistry` registers each of its tools as a `DynamicToolCapability`. `DynamicToolLookupImpl` (in `amsha-mcp`) provides the `DynamicToolLookup` implementation used by `ToolRegistry`. The tool then appears in the LLM's tool schema for roles that permit dynamic tools - the LLM invokes them exactly like built-in tools, and `ExternalMcpToolAdapter` dispatches the call to the remote server via `McpClientService`.
+After connecting an external MCP server, its tool descriptions are persisted as disabled policies. An approved enable operation registers the selected tool as a `DynamicToolCapability` in the user-scoped `DynamicToolCapabilityRegistry`. `DynamicToolLookupImpl` (in `amsha-mcp`) provides the `DynamicToolLookup` implementation used by `ToolRegistry`. The enabled tool then appears in the LLM's tool schema for roles that permit dynamic tools, and `ExternalMcpToolAdapter` dispatches calls to the remote server via `McpClientService`.
 
 ---
 
@@ -462,7 +481,7 @@ curl -X POST http://localhost:8080/api/v1/mcp/connect \
   -d '{"url":"http://localhost:8080/mcp","name":"self"}'
 ```
 
-After this, `GET /api/v1/mcp/tools` should show `registeredDynamicTools` with 0 entries. Built-in `/mcp` tools are intentionally not re-registered as dynamic tools, so this remains a full outbound MCP handshake smoke test without creating internal-name collisions.
+The first response is an approval task. Approve it through the MCP approval endpoint, then `GET /api/v1/mcp/connect` should show a durable `CONNECTED` row with `enabledToolCount:0` and a non-zero `discoveredToolCount`. `GET /api/v1/mcp/tools` should still show `registeredDynamicTools` with 0 entries because built-in `/mcp` tools are intentionally not re-registered as dynamic tools. This remains a full outbound MCP handshake smoke test without creating internal-name collisions.
 
 ---
 

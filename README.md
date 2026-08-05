@@ -104,6 +104,10 @@ See [docs/QUICK_START.md](./docs/QUICK_START.md) for detailed setup options.
 
 ---
 
+MCP management is available from the `#/mcp` panel, channel-neutral `/mcp ...` commands, and REST.
+See the [MCP management guide](./docs/MCP_MANAGEMENT.md) for lifecycle, approvals, user scope, setup
+links, reconfiguration, import, and testing. Module/API details are in [`mcp/README.md`](./mcp/README.md).
+
 ## Project Map
 
 | Directory | Purpose |
@@ -207,6 +211,7 @@ Set `AMSHA_UI_SKIP_ONBOARDING=true` if you want the web UI to skip the setup wiz
 | [MANUAL_SETUP.md](./docs/MANUAL_SETUP.md) | Detailed configuration and optional dependency setup |
 | [MISE_SETUP.md](./docs/MISE_SETUP.md) | Mise-based development environment and task automation |
 | [CONFIGURATION.md](./docs/CONFIGURATION.md) | All environment variables reference |
+| [MCP_MANAGEMENT.md](./docs/MCP_MANAGEMENT.md) | MCP management UI, chat commands, REST lifecycle, approvals, scope, setup links, reconfiguration, import, and testing |
 
 ### 🏗️ Architecture
 

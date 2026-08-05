@@ -378,6 +378,19 @@ schema) and must match the model used by every active provider.
 | `AMSHA_TELEGRAM_ALLOWED_USERS` | `mock-telegram-user` | Comma-separated @usernames |
 | `AMSHA_CHANNEL_TELEGRAM_MAX_LENGTH` | `4096` | Max Telegram message length |
 
+## MCP
+
+| Variable | Default | Description |
+|---|---|---|
+| `AMSHA_MCP_SERVER_ENABLED` | `true` | Enable outbound MCP client management REST endpoints. |
+| `AMSHA_MCP_SETUP_TOKEN_SECRET` | empty | Stable HMAC-SHA-256 secret for ten-minute, single-use, user-bound setup/edit links. |
+| `AMSHA_MCP_SETUP_UI_BASE_URL` | empty | Public UI base URL for absolute setup/edit links issued by remote channels. |
+| `AMSHA_MCP_HEALTH_CHECK_INTERVAL_MS` | `15000` | Health-check interval for active HTTP/SSE MCP connections. |
+| `AMSHA_MCP_PODMAN_HEALTH_CHECK_INTERVAL_MS` | `15000` | Health-check interval for Podman MCP connections. |
+| `AMSHA_WEB_REQUIRE_AUTH` | `false` | Require WebSocket authentication; the browser platform-ID continuity fallback is accepted only when false. |
+
+MCP management behavior is documented in [MCP Management](./MCP_MANAGEMENT.md).
+
 ## Tools
 
 | Variable | Default | Description |
@@ -392,9 +405,6 @@ schema) and must match the model used by every active provider.
 | `AMSHA_TOOLS_PLAYWRIGHT_MCP_HEADLESS` | `true` | MCP browser headless mode |
 | `AMSHA_TOOLS_PLAYWRIGHT_MCP_COMMAND` | `npx` | MCP server launch command |
 | `AMSHA_TOOLS_PLAYWRIGHT_MCP_ARGS` | `@playwright/mcp` | MCP server args |
-| `AMSHA_MCP_SERVER_ENABLED` | `true` | Enable the outbound MCP client REST API for connecting to remote servers |
-| `AMSHA_MCP_HEALTH_CHECK_INTERVAL_MS` | `15000` | How often to check health of active SSE/HTTP outbound MCP connections (ms) |
-| `AMSHA_MCP_PODMAN_HEALTH_CHECK_INTERVAL_MS` | `15000` | How often to check health of active Podman/Stdio outbound MCP connections (ms) |
 | `AMSHA_TOOLS_PLAYWRIGHT_RESUMPTION_STALE_MARK_SECONDS` | `300` | Playwright resume staleness (s) |
 | `AMSHA_TOOLS_HOST_EXEC_SKILLS` | `jdb-debugger` | Skills allowed to use host_exec tool (comma-separated) |
 | `AMSHA_HOST_EXEC_MAX_OUTPUT_CHARS` | `8192` | Max output chars for host_exec tool (falls back to sandbox max) |

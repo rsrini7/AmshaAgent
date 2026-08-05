@@ -36,8 +36,9 @@
 ###
 ### Self-connect smoke test (FLOW D):
 ###   MCP-CLIENT-1 connects Amsha Agent to itself at http://localhost:8080/mcp.
-###   After success: Amsha Agent now has its own tools registered as dynamic tools.
-###   MCP-ADMIN-2 shows registeredDynamicTools with ≥1 entry.
+###   After approval, self-connect is durable and discovers the built-in tools,
+###   but keeps them disabled; MCP-ADMIN-2 remains empty because built-in names
+###   are not re-registered as dynamic tools.
 ###
 ### Telegram: /mcp reflex shows live MCP status (zero LLM tokens).
 ###

@@ -817,10 +817,38 @@ GET    /api/v1/mcp/tools             → exposed internal + registered dynamic t
 POST   /api/v1/mcp/connect           → connect to a remote MCP server
 GET    /api/v1/mcp/connect           → list connected servers
 DELETE /api/v1/mcp/connect/{name}    → disconnect + deregister tools
+POST   /api/v1/mcp/connect/discover  → approval-gated throwaway discovery
+GET    /api/v1/mcp/connect/approvals → restore pending MCP approvals
+POST   /api/v1/mcp/connect/{name}/tools/{tool}/enable → explicit tool enable approval
+PATCH  /api/v1/mcp/connect/{name}    → endpoint/credential reconfiguration
+POST   /api/v1/mcp/import/preview    → bounded upload-only local preview
+POST   /api/v1/mcp/import/apply      → apply one preview entry through approval
 POST   /mcp                          → MCP JSON-RPC protocol endpoint (inbound)
 ```
 
-### 9.1 MCP server status
+### 9.1 Management lifecycle smoke test
+
+Use an authenticated API key for REST requests. The expected sequence is:
+
+1. `POST /api/v1/mcp/connect/discover` returns `202` and a task ID; approve it with
+   `POST /api/v1/mcp/connect/approvals/{taskId}/approve`.
+2. Discovery returns a preview and does not create a durable connection.
+3. `POST /api/v1/mcp/connect` returns a new approval task; approve it and confirm `GET
+   /api/v1/mcp/connect` contains a durable `CONNECTED` row with `0/N` enabled tools.
+4. `POST /api/v1/mcp/connect/{name}/tools/{tool}/enable` returns an `MCP_TOOL_ENABLE` task;
+   approve it and confirm the row changes to `1/N`.
+5. Send a chat request that explicitly names the enabled tool. Confirm the result is backed by
+   correlated `MCP_TOOL_INVOKED` and `TOOL_EXECUTED` audit events.
+6. Send `PATCH /api/v1/mcp/connect/{name}` with `If-MCP-Revision`, approve the reconfiguration,
+   and confirm the revision and policy retention behavior.
+7. Refresh the UI, verify pending approvals are restored, then test pause, resume/reconnect,
+   disable, and disconnect.
+
+For the no-login local channel check, the browser uses its per-tab platform identity and native CLI
+chat uses the claimed bootstrap owner. Restart the rebuilt native binary before testing CLI scope.
+Different user IDs or data directories must remain isolated.
+
+### 9.2 MCP server status
 
 ```bash
 curl -s http://localhost:8080/api/v1/mcp/status \
@@ -831,7 +859,7 @@ curl -s http://localhost:8080/api/v1/mcp/status \
 
 ---
 
-### 9.2 List exposed and dynamic tools
+### 9.3 List exposed and dynamic tools
 
 ```bash
 curl -s http://localhost:8080/api/v1/mcp/tools \
@@ -848,7 +876,7 @@ curl -s http://localhost:8080/api/v1/mcp/tools \
 
 ---
 
-### 9.3 MCP protocol - full session handshake
+### 9.4 MCP protocol - full session handshake
 
 **Step 1 - Initialize (capture session ID from response header):**
 
@@ -908,7 +936,7 @@ curl -s -X POST http://localhost:8080/mcp \
 
 ---
 
-### 9.4 Blocked tool (not in allowlist)
+### 9.5 Blocked tool (not in allowlist)
 
 ```bash
 curl -s -X POST http://localhost:8080/mcp \
@@ -922,7 +950,7 @@ curl -s -X POST http://localhost:8080/mcp \
 
 ---
 
-### 9.5 MCP client - self-connect smoke test
+### 9.6 MCP client - self-connect smoke test
 
 ```bash
 curl -s -X POST http://localhost:8080/api/v1/mcp/connect \
@@ -931,21 +959,35 @@ curl -s -X POST http://localhost:8080/api/v1/mcp/connect \
   -d '{"name":"self","url":"http://localhost:8080/mcp"}' | jq .
 ```
 
-**Expect:** `{"name":"self","toolsRegistered":0,"status":"connected"}` - built-in `/mcp` names are skipped.
+**Expect:** HTTP `202` with a pending approval containing `taskId` and
+`operation:"CONNECT"` (the internal operation name is `CONNECT`, while the
+audit purpose is `MCP_CONNECT`). Approve it:
+
+```bash
+curl -s -X POST http://localhost:8080/api/v1/mcp/connect/approvals/$TASK_ID/approve \
+  -H "X-Amsha-API-Key: key-internal-changeme" | jq .
+```
+
+The approval response contains the durable connection snapshot. It should be
+`state:"CONNECTED"` with `enabledToolCount:0`; built-in `/mcp` names are
+skipped by dynamic registration.
 
 ---
 
-### 9.6 Verify dynamic tools after connect
+### 9.7 Verify dynamic tools after connect
 
 ```bash
 curl -s http://localhost:8080/api/v1/mcp/tools \
   -H "X-Amsha-API-Key: key-internal-changeme" | jq .registeredDynamicTools
 ```
 
-**Expect:** Array with `mcpServerName:"self"`, `transport:"HTTP_SSE"`, and
-`category:"NETWORK"`. `NETWORK` is the default for discovered MCP tools.
+**Expect:** `[]` for self-connect because the built-in `/mcp` names are
+intentionally not re-registered. For an external server, the array remains
+empty until a selected tool receives `MCP_TOOL_ENABLE` approval; after that,
+the entry has `mcpServerName`, `transport:"HTTP_SSE"`, and
+`category:"NETWORK"`.
 
-### 9.6.1 Register a categorized MCP server through chat
+### 9.8 Register a categorized MCP server through chat
 
 Ask the agent to register a reachable MCP server, for example:
 
@@ -969,18 +1011,21 @@ An invalid category, such as `FAST`, is rejected with a validation error.
 
 ---
 
-### 9.7 List connected servers
+### 9.9 List connected servers
 
 ```bash
 curl -s http://localhost:8080/api/v1/mcp/connect \
   -H "X-Amsha-API-Key: key-internal-changeme" | jq .
 ```
 
-**Expect:** `{"connectedServers":[{"name":"self","toolCount":0}],"totalDynamicTools":0}`
+**Expect:** a `connections` array containing a row with at least
+`name`, `endpoint`, `state`, `transport`, `enabledToolCount`,
+`discoveredToolCount`, and `revision`. For this self-connect example the row
+is `CONNECTED`, has `enabledToolCount:0`, and has no registered dynamic tools.
 
 ---
 
-### 9.8 Disconnect
+### 9.10 Disconnect
 
 ```bash
 curl -s -X DELETE http://localhost:8080/api/v1/mcp/connect/self \
@@ -993,7 +1038,7 @@ curl -s -X DELETE http://localhost:8080/api/v1/mcp/connect/self \
 
 ---
 
-### 9.9 Disconnect non-existent server → 404
+### 9.11 Disconnect non-existent server → 404
 
 ```bash
 curl -s -X DELETE http://localhost:8080/api/v1/mcp/connect/does-not-exist \
@@ -1004,7 +1049,7 @@ curl -s -X DELETE http://localhost:8080/api/v1/mcp/connect/does-not-exist \
 
 ---
 
-### 9.10 `11_skill.http` - file structure & prerequisite note
+### 9.12 `11_skill.http` - file structure & prerequisite note
 
 > `11_skill.http` uses `@baseUrl = http://localhost:8080/api/v1` (includes the `/api/v1` path in the base variable). This is **inconsistent** with all other files which use `@baseUrl = http://localhost:8080`. Do not copy the `@baseUrl` line from this file into other files.
 
@@ -1020,7 +1065,7 @@ The file is structured as five flows:
 
 ---
 
-### 9.11 `12_mcp.http` - file structure & critical prerequisite
+### 9.13 `12_mcp.http` - file structure & critical prerequisite
 
 > **Always run `MCP-ADMIN-1` before any protocol flow.** If `serverEnabled:false` (or 404), `MCP-1` (initialize) returns 404 and you have no `Mcp-Session-Id` for any subsequent request. The entire protocol flow collapses silently.
 >
@@ -1040,7 +1085,7 @@ The file is structured as five flows:
 
 ---
 
-### 9.12 Skills - ordered test execution with Telegram cross-checks
+### 9.14 Skills - ordered test execution with Telegram cross-checks
 
 Run `11_skill.http` requests in this order. Telegram steps verify that the registry change is live without a restart.
 
@@ -1058,7 +1103,7 @@ Run `11_skill.http` requests in this order. Telegram steps verify that the regis
 
 ---
 
-### 9.13 MCP server (inbound) - ordered test execution with Telegram cross-checks
+### 9.15 MCP server (inbound) - ordered test execution with Telegram cross-checks
 
 Run `12_mcp.http` Flow A, then Flow B in strict order.
 
@@ -1077,7 +1122,7 @@ Run `12_mcp.http` Flow A, then Flow B in strict order.
 
 ---
 
-### 9.14 MCP client (outbound) - ordered self-connect smoke test
+### 9.16 MCP client (outbound) - ordered self-connect smoke test
 
 No external MCP server required. Amsha Agent connects to itself.
 
