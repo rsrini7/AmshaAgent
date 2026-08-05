@@ -28,7 +28,7 @@ import com.amsha.persistence.api.MemoryRetrievalPort;
 @ToolMetadata(
         capabilityId = "ingest_document",
         description = "Ingest a document into the RAG knowledge base",
-        defaultRoles = {"coordinator", "synthesizer"})
+        defaultRoles = {"coordinator", "synthesizer", "nurturer"})
 public class IngestDocumentTool implements AgentTool {
 
     @Inject

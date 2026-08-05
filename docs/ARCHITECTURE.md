@@ -328,7 +328,7 @@ When a `host_exec` goal matches `HostExecTool.BROWSER_PREVIEW_GOAL_PATTERN` and 
 | `healer` | Lakshmi | garuda | 10 |
 | `protector` | Durga | garuda | 10 |
 | `purifier` | Kali | garuda | 10 |
-| `nurturer` | Parvati | garuda | 10 |
+| `nurturer` | Parvati | garuda, ingest_document | 10 |
 
 **memory (5)** = `recall_memory_search`, `archival_memory_search`, `core_memory_read`, `core_memory_append`, `core_memory_replace`, `archival_memory_insert` (6 tools; debugger only gets `recall_memory_search`).
 
@@ -590,7 +590,7 @@ graph TD
 | Core Memory Append | `core_memory_append` | `WRITE_MEMORY` | architect, coordinator, researcher, synthesizer, coder |
 | Core Memory Replace | `core_memory_replace` | `WRITE_MEMORY` | architect, coordinator, researcher, synthesizer, coder |
 | Archival Memory Insert | `archival_memory_insert` | `WRITE_FS` | architect, coordinator, researcher, synthesizer, coder |
-| Ingest Document | `ingest_document` | `WRITE_MEMORY` | coordinator, synthesizer |
+| Ingest Document | `ingest_document` | `WRITE_MEMORY` | coordinator, synthesizer, nurturer |
 | Schedule Task | `schedule_task` | `SCHEDULE_AUTONOMOUS` | coordinator, synthesizer |
 | Manage Schedule | `manage_schedule` | `READ_FS` | coordinator, synthesizer |
 | Manage Checklist | `manage_checklist` | `READ_FS` | coder, debugger |

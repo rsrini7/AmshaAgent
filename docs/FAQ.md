@@ -211,7 +211,7 @@ Apache Camel's `camel-telegram` component handles the long-polling lifecycle, gr
 | `healer` | Lakshmi | GitHub + memory; dual role | Error recovery, token optimization |
 | `protector` | Durga | GitHub + memory | Policy enforcement, guardrails |
 | `purifier` | Kali | GitHub + memory | Cleanup, lifecycle management |
-| `nurturer` | Parvati | GitHub + memory | Empathy, tone analysis, sentiment |
+| `nurturer` | Parvati | GitHub + memory + ingest_document | Empathy, tone analysis, sentiment |
 
 The `SkillAwareIntentDetector` checks `SkillRegistry` first (zero classification tokens), then falls through to `llama-3.1-8b-instant` to auto-route incoming messages to the best role. You can also specify a role explicitly via `--role` on the CLI or `agentRole` in the REST payload.
 
