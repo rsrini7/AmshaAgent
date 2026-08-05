@@ -30,7 +30,7 @@
 18. [HITL Governance Tests](#18-hitl-governance-tests)
 19. [Budget Governance Tests](#19-budget-governance-tests)
 20. [System Info & Observability](#20-system-info--observability)
-21. [Phase 64 Regression Checklist](#21-phase-64-regression-checklist)
+21. [Budget Governance Regression Checklist](#21-budget-governance-regression-checklist)
 22. [Full Regression Suite Checklist](#22-full-regression-suite-checklist)
 23. [Answer Quality Guard](#23-answer-quality-guard)
 24. [Testing Identity, OIDC, Web Sessions, and Multi-Admin](#24-testing-identity-oidc-web-sessions-and-multi-admin)
@@ -2212,9 +2212,9 @@ grep "NullPointerException" logs/*.log
 
 ---
 
-## 21. Phase 64 Regression Checklist
+## 21. Budget Governance Regression Checklist
 
-Run after deploying all Phase 64 fixes.
+Run after deploying all Budget Governance fixes.
 
 ### Tier A - Correctness
 

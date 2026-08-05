@@ -20,7 +20,7 @@ import io.micrometer.core.instrument.MeterRegistry;
  * Manages MDC field setup/teardown and agent role resolution for the
  * Amsha Agent reasoning loop.
  *
- * <p>Extracted from {@code AgentLoop.runWithRole} as part of Phase 2
+ * <p>Extracted from {@code AgentLoop.runWithRole} as part of 
  * God-class decomposition. Owns three of the seven original responsibilities:
  * <ul>
  *   <li><strong>MDC setup/teardown</strong> - puts and removes the

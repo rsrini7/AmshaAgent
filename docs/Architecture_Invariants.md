@@ -1003,7 +1003,7 @@ Flyway V<n> migrations must exist in both `persistence-sqlite` and `persistence-
 each port should have matches for all 3 backends.
 
 **Known failures**:
-- P104: Phase 8/9 self-evolve stores were built for SQLite + PostgreSQL but the FS backend was missed entirely.
+- P104: self-evolve stores were built for SQLite + PostgreSQL but the FS backend was missed entirely.
 - P104b: Tiered memory stores (`CoreMemoryStorePort`, `RecallMemoryStorePort`, `ArchivalMemoryStorePort`) had no `@TieredBackend("fs")` implementations — runtime error `No @TieredBackend("fs") RecallMemoryStorePort implementation found`.
 - P104c: `%filesystem` profile in `application.yaml` was missing `amsha.memory.tiered.backend: fs` — caused tiered memory to default to SQLite while FS backend was active.
 
@@ -1273,7 +1273,7 @@ The `embedding vector(768)` column and HNSW index MUST be similarly guarded with
      safely on a virtual thread. Use `Context.isOnEventLoopThread()`; do not infer
      the current thread from `Vertx.currentContext().isEventLoopContext()`.
 
-7.13.2 INVARIANT: Phase 2.5 post-policy tool-risk decision SPIs
+7.13.2 INVARIANT: post-policy tool-risk decision SPIs
      (`PostPolicyToolRiskInterceptor`) MUST execute only after `ToolInvocationGuard`
      validation, deduplication, tool recognition, and deterministic HITL checks produce a
      provisional `Allow`. A pre-policy `ToolGuardInterceptor` returning `Allow` MUST continue
@@ -1286,7 +1286,7 @@ The `embedding vector(768)` column and HNSW index MUST be similarly guarded with
      absence, or no optional implementation, `PostPolicyToolRiskDispatcher` MUST preserve the
      provisional allow through `NoOpinion`; metrics MUST remain bounded and payload-free.
 
-7.13.3 INVARIANT: Phase 2.5 `AnswerQualityInterceptor` SPIs MUST be evaluated in
+7.13.3 INVARIANT: `AnswerQualityInterceptor` SPIs MUST be evaluated in
      `FinishActionHandler` only after the authoritative `AnswerGuardStrategy` accepts the answer
      candidate. Interceptors MUST use stable priority/class-name ordering. A `REQUEST_RETRY`
      opinion may be honored only when no tool has been invoked in the current turn and
@@ -1299,7 +1299,7 @@ The `embedding vector(768)` column and HNSW index MUST be similarly guarded with
      implementations MUST NOT perform network I/O or log, persist, export, metric-label, or
      retain the payload beyond one synchronous in-process evaluation.
 
-7.13.4 INVARIANT: Phase 3 classifier runtime control MUST distinguish startup/requested
+7.13.4 INVARIANT: classifier runtime control MUST distinguish startup/requested
      state from effective enablement. Effective enablement additionally requires a ready,
      promotion-approved active implementation registration. Shadow classifiers MUST NOT
      register as active implementations or acquire active leases. Enabling without a ready
@@ -1310,7 +1310,7 @@ The `embedding vector(768)` column and HNSW index MUST be similarly guarded with
      leave state unchanged. Control responses and audit details MUST NOT contain model IDs,
      inputs, outputs, scores, labels, goals, answers, or tool parameters.
 
-7.13.5 INVARIANT: Phase 4 Classifier Automated Data Collection MUST NOT compromise
+7.13.5 INVARIANT: Classifier Automated Data Collection MUST NOT compromise
      the isolation or safety of the core loop. The collection hook MUST operate on
      sanitized copies of context data (`@InputSanitizer.PII` qualified) and MUST NOT
      block execution or leak data. Collection MUST be strictly opt-in via

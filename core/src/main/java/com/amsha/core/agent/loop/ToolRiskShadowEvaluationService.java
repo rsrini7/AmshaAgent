@@ -68,7 +68,7 @@ public class ToolRiskShadowEvaluationService {
         this.testDataCollectionService = testDataCollectionService;
         this.testDataCollectionEnabled = testDataCollectionEnabled;
         this.confidence = DistributionSummary.builder("amsha.classifier.tool_risk.shadow.confidence")
-                .description("Confidence distribution for Phase 2 tool-risk shadow opinions")
+                .description("Confidence distribution for tool-risk shadow opinions")
                 .serviceLevelObjectives(0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0)
                 .register(meterRegistry);
     }
@@ -110,7 +110,7 @@ public class ToolRiskShadowEvaluationService {
 
     private void recordOutcome(String outcome, String prediction, String reason, String scoreBand) {
         Counter.builder("amsha.classifier.tool_risk.shadow.results")
-                .description("Payload-free Phase 2 tool-risk shadow results for provisional allows")
+                .description("Payload-free tool-risk shadow results for provisional allows")
                 .tag("outcome", outcome)
                 .tag("prediction", prediction)
                 .tag("reason", reason)

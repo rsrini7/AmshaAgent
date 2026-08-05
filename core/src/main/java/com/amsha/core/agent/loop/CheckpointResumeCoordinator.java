@@ -25,7 +25,7 @@ import org.jboss.logging.Logger;
  * Manages checkpoint loading and resume decision branching for the
  * Amsha Agent reasoning loop.
  *
- * <p>Extracted from {@code AgentLoop.runWithRole} as part of Phase 2
+ * <p>Extracted from {@code AgentLoop.runWithRole} as part of 
  * God-class decomposition. Owns three of the seven original responsibilities:
  * <ul>
  *   <li><strong>Checkpoint load logic</strong> - retrieves the latest

@@ -15,7 +15,7 @@ import io.micrometer.core.instrument.Timer;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 
 /**
- * Phase 12 test: Verifies p95 latency targets for memory operations.
+ * Test: Verifies p95 latency targets for memory operations.
  * <p>
  * Tests actual latency recording through the MemoryMetricsObserver
  * and verifies that percentile distributions are correctly tracked.

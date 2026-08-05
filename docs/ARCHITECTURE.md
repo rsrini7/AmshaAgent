@@ -175,7 +175,7 @@ Budget tracking: `GovernanceStrategy.recordLlmCall()` checks per-session token b
 **Step B: FINISH Action Handler:** Extracts answer from `actionInput["answer"]` or
 `thought`. Unescapes HTML/Unicode. Role guard: non-coder roles cannot generate bare code
 blocks. Raw tool-call leak guard. The authoritative answer guard prevents LLM echoing
-injected RAG headers. After deterministic acceptance, the ordered optional Phase 2.5
+injected RAG headers. After deterministic acceptance, the ordered optional
 answer-quality dispatcher may consume one corrective retry only if no tool has been
 invoked in the turn. Absence or failure preserves the accepted answer.
 
@@ -250,11 +250,11 @@ ToolFailure (any role, any tool)
 6. **Post-policy tool risk** — ordered optional opinions may only raise provisional
    allow to approval or block; absence and failure preserve allow
 
-### Phase 3A Classifier Runtime Control
+### Classifier Runtime Control
 
 `OnnxClassifierRuntimeControl` owns independent atomic state for intent, tool-risk, and
 answer-quality activation. Active ONNX interceptors (`OnnxPostPolicyToolRiskInterceptor`,
-`OnnxAnswerQualityInterceptor`) bridge this state to the core Phase 2.5 SPIs.
+`OnnxAnswerQualityInterceptor`) bridge this state to the core SPIs.
 Startup configuration seeds requested state, but effective state requires a registered
 ready active implementation. If no implementation is registered, enable requests fail
 closed, and the interceptors preserve the deterministic guard path. Disable blocks
@@ -445,12 +445,12 @@ graph TD
     *   `PostgresEvolutionEventStore` is selected for PostgreSQL persistence.
     *   `FsEvolutionEventStore` / `NoOpEvolutionEventStore` is resolved for FS persistence.
 
-#### 2. Pattern Extraction (Phase 9)
+#### 2. Pattern Extraction
 The `MemoryExtractorLite` evaluates captured session traces offline. It parses tool execution inputs, results, and exceptions, identifying patterns of successful operations versus operations that resulted in failure or errors.
 *   Extracted patterns are stored in the `extracted_memories` table (or filesystem JSON files).
 *   Provides structured semantic records mapping the target goal, tool, input parameters, and failure/success outcomes.
 
-#### 3. Directive Synthesis & Lifecycle (Phase 10)
+#### 3. Directive Synthesis & Lifecycle
 The `InteractionPolicySynthesizer` aggregates extracted memories over multiple turns. When a specific failure/success pattern recurs, it synthesizes a new **behavioral directive** to optimize the agent's behavior. An out-of-band daily cron pass (`SelfEvolveSynthesisScheduler`, trigger-gated by `amsha.self-evolve.synthesis-trigger=cron`) synthesizes directives for all known users in a batch, isolating per-user errors so one failure does not abort the whole run.
 
 Directives follow a strict lifecycle state machine:

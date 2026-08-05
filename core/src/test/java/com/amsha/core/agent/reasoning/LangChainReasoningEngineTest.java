@@ -473,7 +473,7 @@ class LangChainReasoningEngineTest {
         List<String> toolNames =
                 sent.toolSpecifications().stream().map(ToolSpecification::name).toList();
 
-        // Phase 46 Fix: Researcher ONLY has github and recall_memory_search.
+        // Researcher ONLY has github and recall_memory_search.
         // Coordinator handles all scheduling to prevent tool hallucinations.
         assertTrue(toolNames.contains(ToolCapability.GITHUB.toolName()), "researcher must have github");
         assertTrue(

@@ -272,9 +272,7 @@ class ChatHistoryAssemblerTest {
         assertEquals("{}", req.arguments());
     }
 
-    // ──────────────────────────────────────────────────────────────
-    // Phase 4: Prompt Budget Integration Tests
-    // ──────────────────────────────────────────────────────────────
+    // Prompt Budget Integration Tests
 
     @Test
     void testAssemble_budgetEnforced_coreMemoryTrimmedMarkerAppended() {

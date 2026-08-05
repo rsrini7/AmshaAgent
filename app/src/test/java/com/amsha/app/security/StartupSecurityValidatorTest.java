@@ -106,7 +106,7 @@ class StartupSecurityValidatorTest {
     @Test
     void testProdProfile_validSecrets_doesNotThrow() throws Exception {
         injectFields("prod", "prod-secure-pepper-000000000000000000000000000000", true);
-        // Phase 46: inject allowlist fields so the new allowlist check passes
+        // Test: inject allowlist fields so the new allowlist check passes
         setField("allowedUserIds", Optional.of(List.of(123L)));
         setField("allowedUsers", Optional.empty());
 

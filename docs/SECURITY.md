@@ -21,12 +21,12 @@ Amsha Agent is built with a defense-in-depth security posture. This document cov
 
 Layers 1–6 are **reflex/deterministic** (zero LLM tokens). Layer 7 is the LLM boundary — runs before/after every model call. Each layer assumes the layer below has already passed.
 
-The optional Phase 2.5 post-policy risk hook runs only after layer 9's deterministic
+The optional post-policy risk hook runs only after layer 9's deterministic
 checks provisionally allow a tool. It may require approval or block, but cannot replace
 an existing block, deduplication result, or HITL decision. Missing implementations and
 isolated classifier failures preserve the deterministic result and emit no payload data.
 
-Phase 3A runtime controls are internal-only and cannot make requested state effective
+Classifier runtime controls are internal-only and cannot make requested state effective
 without a registered ready active implementation. A disable rejects new active leases
 while accepted work drains. Every state-changing request must successfully record the
 mandatory `CLASSIFIER_RUNTIME_CHANGE_REQUESTED` event before mutation. Its detail is

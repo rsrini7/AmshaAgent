@@ -15,7 +15,7 @@ import com.amsha.persistence.api.RecallSearchQuery;
 import org.junit.jupiter.api.Test;
 
 /**
- * Phase 12 test: End-to-end tiered memory tests.
+ * Test: End-to-end tiered memory tests.
  * <p>
  * Tests the complete flow of tiered memory operations including:
  * - Recall message creation and search

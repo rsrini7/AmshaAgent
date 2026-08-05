@@ -8,7 +8,7 @@ import java.util.function.Consumer;
 
 import com.amsha.core.classifier.ClassifierResult.NoOpinionReason;
 
-/** Shared failure-isolating asynchronous dispatcher for all Phase 2 shadow classifiers. */
+/** Shared failure-isolating asynchronous dispatcher for all shadow classifiers. */
 public final class ClassifierShadowDispatcher {
 
     private ClassifierShadowDispatcher() {}

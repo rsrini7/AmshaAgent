@@ -7,7 +7,7 @@ import com.amsha.persistence.api.TieredMemoryHealthDto;
 import org.junit.jupiter.api.Test;
 
 /**
- * Phase 12 test: Verifies TieredMemoryHealthDto schema covers all three tiers.
+ * Test: Verifies TieredMemoryHealthDto schema covers all three tiers.
  * <p>
  * The health DTO should provide comprehensive information about:
  * - Overall health status

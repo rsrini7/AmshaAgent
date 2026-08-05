@@ -351,7 +351,7 @@ amsha:
       circuit:
         failure-threshold: ${AMSHA_ONNX_CLASSIFIER_CIRCUIT_FAILURE_THRESHOLD:3}
         cooldown-seconds: ${AMSHA_ONNX_CLASSIFIER_CIRCUIT_COOLDOWN_SECONDS:30}
-      # Enables shadow inference and seeds Phase 3 requested state. A ready active
+      # Enables shadow inference and seeds shadow requested state. A ready active
       # implementation registration is still required for effective behavior.
       intent:
         enabled: ${AMSHA_ONNX_CLASSIFIER_INTENT_ENABLED:false}

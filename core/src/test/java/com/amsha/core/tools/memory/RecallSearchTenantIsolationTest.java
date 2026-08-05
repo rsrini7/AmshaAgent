@@ -19,7 +19,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 /**
- * Phase 3 Test 3: Verify tenant isolation - User B cannot search User A's data.
+ * Verify tenant isolation - User B cannot search User A's data.
  * Setup: User A ingests "Secret Password". User B searches for "Secret Password".
  * Action: User B calls recall_memory_search.
  * Assert: Result is empty (tenant isolation enforced).

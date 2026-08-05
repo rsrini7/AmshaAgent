@@ -32,7 +32,7 @@
 21. [Autonomy Level Behaviour](#21-autonomy-level-behaviour)
 22. [RAG - Ingest, Recall & Vector Search](#22-rag---ingest-recall--vector-search)
 23. [Non-ASCII Memory Search](#23-non-ascii-memory-search)
-24. [Phase 64 Regression Checklist](#24-phase-64-regression-checklist)
+24. [Regression Checklist](#24-regression-checklist)
 25. [Full Regression Sweep](#25-full-regression-sweep)
 26. [Log Pattern Reference](#26-log-pattern-reference)
 
@@ -154,7 +154,7 @@ WHERE channel_type='telegram' AND channel_id='<your chatId>' AND owner_key='<you
 ORDER BY seq DESC;
 ```
 
-**Legacy formula (before Phase 64-B only - UUID v3 / MD5-based):**
+**Legacy formula (before Budget Governance only - UUID v3 / MD5-based):**
 
 ```python
 import uuid, hashlib
@@ -213,7 +213,7 @@ INFO  [SkillReflex] matched skill:code-reviewer for session <uuid>
 
 No intent classification log appears - the skill bypassed it entirely.
 
-### 4.5 AutonomyLevel is resolved per session (post Phase 64-A)
+### 4.5 AutonomyLevel is resolved per session (post Budget Governance)
 
 Logs will now include:
 
@@ -314,7 +314,7 @@ A Java service has high memory under load. Diagnose whether this is a code defec
 
 **Expect:** Same session UUID in logs.
 
-> **After Phase 64-B**: The session UUID is looked up from the `session_registry` SQLite table
+> **After FTS5 feature**: The session UUID is looked up from the `session_registry` SQLite table
 > on every message. As long as the database file persists across restarts, the same UUID is
 > returned for the same `(TELEGRAM, chatId, userId)` triplet. The UUID is no longer derived
 > computationally - it is a stored random value.
@@ -823,9 +823,9 @@ session's history. Available to: coordinator, researcher, architect, synthesizer
 
 ---
 
-### 13.4 Compaction summary truncation (post Phase 64-D)
+### 13.4 Compaction summary truncation (FTS5 feature)
 
-After Phase 64-D is deployed, compaction summaries containing emoji or CJK characters are
+After FTS5 feature is deployed, compaction summaries containing emoji or CJK characters are
 truncated safely at codepoint boundaries, not UTF-16 char boundaries. To test:
 
 ```
@@ -959,7 +959,7 @@ X-Amsha-API-Key: key-internal-changeme
 
 **Expect:** `{"valid": true, "brokenAtId": null, "totalRows": N}`
 
-If `valid: false`, see `brokenAtId` - that is the first tampered row. Note: after Phase 64-B,
+If `valid: false`, see `brokenAtId` - that is the first tampered row. Note: after Budget Governance,
 concurrent audit writes for the same session are serialized via `SessionAuditSequencer` (a per-session
 `ReentrantLock`), preventing the TOCTOU race that could previously fork the HMAC chain.
 
@@ -1109,7 +1109,7 @@ List all GitHub repositories for user rsrini7.
 
 ## 20. Budget Governance via Telegram
 
-> **⚠️ Phase 64-A change (A1):** The hard USD limit is now checked **before** the soft warning
+> **⚠️ Budget Governance change (A1):** The hard USD limit is now checked **before** the soft warning
 > threshold. A single massive call that exceeds both fires `BudgetExceededException`, not
 > `BudgetWarningException`. Previously, only `BudgetWarningException` fired in this case.
 
@@ -1141,7 +1141,7 @@ Continue past 100%. The next LLM call throws `BudgetExceededException`.
 
 **What to confirm:**
 - Hard limit fires **on the call that exceeds it**, not on the following call (this was the
-  bug before Phase 64-A - the first over-budget call only raised a warning, and `BudgetExceededException`
+  bug before Budget Governance - the first over-budget call only raised a warning, and `BudgetExceededException`
   only fired on the second call).
 - Audit event: `LOOP_BUDGET_EXCEEDED` (mandatory)
 - Sending any further messages returns the budget error immediately (no LLM call made)
@@ -1160,7 +1160,7 @@ new session via REST or halt+restart.
 
 ## 21. Autonomy Level Behaviour
 
-> **⚠️ Phase 64-A change (A2):** Sessions created via REST with `FULL` autonomy are no longer
+> **⚠️ Budget Governance change (A2):** Sessions created via REST with `FULL` autonomy are no longer
 > silently downgraded to `SUPERVISED` when Telegram messages arrive. The stored autonomy level
 > is now correctly read from the checkpoint and passed to `WorkspaceContext.run(...)`.
 
@@ -1190,7 +1190,7 @@ Any message sent via Telegram uses `SUPERVISED` mode by default. When the agent 
    The approval prompt must NOT appear.
 5. **Confirm in logs:** `AutonomyLevel for session <uuid> = FULL` (NOT `SUPERVISED`)
 
-> If you see the approval prompt on a `FULL` session, Phase 64-A fix A2 was not applied.
+> If you see the approval prompt on a `FULL` session, Budget Governance fix A2 was not applied.
 
 ---
 
@@ -1204,7 +1204,7 @@ operation is not permitted.
 
 ## 22. RAG - Ingest, Recall & Vector Search
 
-> **⚠️ Phase 64-C change (C3):** RAG chunks are now stored in a dedicated `rag_chunk` table,
+> **⚠️ Budget Governance change (C3):** RAG chunks are now stored in a dedicated `rag_chunk` table,
 > not via the `"rag:"` prefix hack in `compaction_summary`. Cross-contamination between RAG
 > and compaction search results is eliminated.
 
@@ -1269,7 +1269,7 @@ is scoped by `userId` - tenant isolation is enforced at the FTS5 query layer.
 
 ## 23. Non-ASCII Memory Search
 
-> **⚠️ Phase 64-A change (A3):** Non-ASCII queries to `CompactionSummaryRepository.searchMemory`
+> **⚠️ Budget Governance change (A3):** Non-ASCII queries to `CompactionSummaryRepository.searchMemory`
 > previously stripped all non-ASCII characters, returning empty results for any non-English query.
 > This is fixed - only FTS5 syntax characters are escaped; all Unicode is passed through.
 
@@ -1315,9 +1315,9 @@ Results are returned normally.
 
 ---
 
-## 24. Phase 64 Regression Checklist
+## 24. Budget Governance Regression Checklist
 
-Run this checklist after deploying all Phase 64 fixes to confirm nothing is broken.
+Run this checklist after deploying all Budget Governance fixes to confirm nothing is broken.
 
 ### 24.1 Tier A - Correctness (must all pass)
 
@@ -1405,8 +1405,8 @@ Run this after any significant change. Work top-to-bottom.
 
 | Log Pattern | Meaning |
 |---|---|
-| `Resolved session <uuid> for chat <chatId>` | Session ID lookup from registry (Phase 64-B+) |
-| `AutonomyLevel for session <uuid> = <level>` | Post Phase 64-A: correct level propagated |
+| `Resolved session <uuid> for chat <chatId>` | Session ID lookup from registry (Budget Governance) |
+| `AutonomyLevel for session <uuid> = <level>` | Post Budget Governance: correct level propagated |
 | `Classified message as role 'coordinator'` | Intent classifier result |
 | `matched skill:<name> for session <uuid>` | Skill took over from intent classifier |
 | `VAULT_STORE key=<key> session=<uuid>` | Secret stored successfully |
@@ -1416,7 +1416,7 @@ Run this after any significant change. Work top-to-bottom.
 | `[HITL] decision=DENIED session=<uuid>` | Approval denied |
 | `Compaction triggered for session <uuid>` | Compaction running |
 | `Compaction complete for session <uuid>` | Summary stored |
-| `compactionInFlight=false after observer failure` | Phase 64-A A6 fix working |
+| `compactionInFlight=false after observer failure` | Budget Governance A6 fix working |
 | `Cron job fired: id=<id>` | Scheduled task executing |
 | `sqlite-vec extension loaded successfully` | Vector search active |
 | `Vector search disabled - FTS5 only` | vec0 binary missing, degraded mode |
@@ -1424,4 +1424,4 @@ Run this after any significant change. Work top-to-bottom.
 | `Recovering zombie session <uuid>` | SessionReaper cleaned up a crash |
 | `Budget warning: 80% of session limit reached` | Soft budget threshold |
 | `Session budget exceeded` | Hard budget limit - no more calls |
-| `No ChannelJobNotifier found for type <type>` | Phase 64-C C2: new channel type with no notifier |
+| `No ChannelJobNotifier found for type <type>` | Budget Governance C2: new channel type with no notifier |

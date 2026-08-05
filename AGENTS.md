@@ -46,7 +46,7 @@ incidents live in [Architecture Invariants](docs/Architecture_Invariants.md).
   Post-policy classifier hooks may only increase risk, and answer-quality classifiers
   may consume one retry only before a tool boundary. Optional absence or failure must
   preserve the deterministic decision without logging payloads.
-- Phase 3 classifier controls distinguish requested from effective state. Shadow beans
+- Classifier controls distinguish requested from effective state. Shadow beans
   never register as active implementations. Enable without a ready implementation fails
   closed; disable rejects new leases and drains accepted work. Mutations require internal
   authorization and mandatory audit-before-mutation.
@@ -170,8 +170,8 @@ and the memory section in `docs/Architecture_Invariants.md`.
 | Markdown | `python3 ./scripts/verify_docs.py` |
 | Native-sensitive code | `./mvnw compile -DskipTests -q`; use `mise build:native-local` when applicable |
 | SkillsJar dependencies | `python3 ./scripts/verify_skillsjar_index.py` |
-| Phase 2.5 classifier SPIs | `./mvnw -pl core -Dtest="PostPolicyToolRiskDispatcherTest,AnswerQualityDispatcherTest,ToolInvocationGuardTest,FinishActionHandlerTest" test` |
-| Phase 3A classifier controls | `./mvnw -pl local-ml-onnx,app -am -Dtest="OnnxClassifierRuntimeControlTest,OnnxAdminResourceTest,SecurityEventTypeTest" -Dsurefire.failIfNoSpecifiedTests=false test` |
+| Classifier SPIs | `./mvnw -pl core -Dtest="PostPolicyToolRiskDispatcherTest,AnswerQualityDispatcherTest,ToolInvocationGuardTest,FinishActionHandlerTest" test` |
+| Classifier controls | `./mvnw -pl local-ml-onnx,app -am -Dtest="OnnxClassifierRuntimeControlTest,OnnxAdminResourceTest,SecurityEventTypeTest" -Dsurefire.failIfNoSpecifiedTests=false test` |
 | Local OMLX / ONNX smoke | `mise run smoke:local-runtime -- native --binary dist/amsha-sqlite` |
 | Local ML / ONNX Release | `bash scripts/verify_native_matrix.sh && bash scripts/verify_onnx_release_provenance.sh` |
 
@@ -197,7 +197,7 @@ and the memory section in `docs/Architecture_Invariants.md`.
 - Native smoke artifacts live below gitignored `data/smoke/`. Successful runs clean
   them; failed runs retain a diagnostic path without automatically dumping logs.
 - Run `python3 scripts/test_local_runtime_smoke.py` after changing the runner. A local
-  smoke pass does not close the Phase 0 platform-matrix, golden-corpus/leak, or signed
+  smoke pass does not close the platform-matrix, golden-corpus/leak, or signed
   SBOM/provenance gates; use the release-evidence scripts for those claims.
 
 ### REST validation

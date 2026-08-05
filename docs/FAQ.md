@@ -507,7 +507,7 @@ Agents with `recall_memory_search` in their tool list (coordinator, researcher, 
 
 ### Q: What is the `backfill_fts5.sql` script for?
 
-It is a **one-time migration script** to be run after deploying the Phase 45 FTS5 feature on a database that already has `compaction_summary` rows. It backfills the `user_id` column (using `audit_event` as the source of truth) and populates the `compaction_summary_fts` FTS index for all existing rows. New rows written after the deployment are indexed automatically.
+It is a **one-time migration script** to be run after deploying the FTS5 feature on a database that already has `compaction_summary` rows. It backfills the `user_id` column (using `audit_event` as the source of truth) and populates the `compaction_summary_fts` FTS index for all existing rows. New rows written after the deployment are indexed automatically.
 
 ---
 
@@ -872,7 +872,7 @@ A daily cron scheduler (`MemoryRetentionScheduler` executing at 2 AM and 3 AM) m
 
 ### Q: How does Amsha run local ML models in-process without Python or containers?
 
-Amsha uses **ONNX Runtime Java** (`1.27.0`) and **DJL Hugging Face Tokenizers** (`0.33.0`) in `amsha-local-ml-onnx`. The JVM path executes a verified local `model.onnx` and `tokenizer.json` without Python sidecars, containers, or inference-time model downloads. Native-image runtime execution is still a Phase 0 release gate, not a completed support claim.
+Amsha uses **ONNX Runtime Java** (`1.27.0`) and **DJL Hugging Face Tokenizers** (`0.33.0`) in `amsha-local-ml-onnx`. The JVM path executes a verified local `model.onnx` and `tokenizer.json` without Python sidecars, containers, or inference-time model downloads. Native-image runtime execution is still a release gate, not a completed support claim.
 
 ---
 

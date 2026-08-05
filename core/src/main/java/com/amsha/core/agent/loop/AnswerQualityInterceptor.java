@@ -3,7 +3,7 @@ package com.amsha.core.agent.loop;
 import com.amsha.core.classifier.ClassifierResult;
 
 /**
- * Optional ordered Phase 2.5 SPI evaluated only after authoritative answer acceptance.
+ * Optional ordered SPI evaluated only after authoritative answer acceptance.
  *
  * <p>Implementations run synchronously and in-process. They must not perform network I/O or log,
  * persist, export, metric-label, or retain sensitive context payloads.

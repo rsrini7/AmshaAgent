@@ -21,7 +21,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 /**
- * Phase 12 test: Verifies end-to-end sessions with tiered memory disabled.
+ * Test: Verifies end-to-end sessions with tiered memory disabled.
  * <p>
  * Exercises the NoOp store contract: search returns empty, inserts are no-ops,
  * get methods return empty. This validates the actual disabled path through

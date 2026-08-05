@@ -12,7 +12,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 /**
- * Tests for PromptBudgetManager — Phase 4 prompt budget hardening.
+ * Tests for PromptBudgetManager — prompt budget hardening.
  */
 class PromptBudgetManagerTest {
 
