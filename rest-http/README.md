@@ -431,7 +431,13 @@ needed). Run individually or via the master runner `run_all_validations.sh`.
 | `--reflex` | `validate_reflex.sh` | Reflex commands via goal text | zero-token |
 | `--skills` | `validate_skill.sh` | Skill CRUD, routing, errors | low |
 | `--skills-admission` | `validate_skillsjar_admission.sh` | SkillsJar admission, quarantine schema, refresh stability | zero-token |
-| `--mcp` | `validate_mcp.sh` | MCP JSON-RPC protocol + connect | low |
+| `--mcp` | `validate_mcp.sh` | MCP JSON-RPC protocol plus approval-gated discover/connect, policies, reconfigure, pause/resume, import, setup-token, and cleanup | low |
+
+`validate_mcp.sh` starts a local deterministic MCP fixture for outbound lifecycle
+checks. It may exceed the default application mutation budget in one run; the
+validator reports `429` without waiting by default. Set
+`AMSHA_MCP_VALIDATION_RATE_LIMIT_WAIT_SECONDS=62` when deliberately running a
+complete flow across the rate-limit window.
 | `--memory` | `validate_memory.sh` | Archival/core memory + Arabic search (HITL-aware) | LLM |
 | `--web` | `validate_web.sh` | Web search/fetch/SSRF blocks (HITL-aware) | LLM |
 | `--roles` | `validate_roles.sh` | Agent roles + aliases (HITL-aware) | LLM |
@@ -447,7 +453,7 @@ needed). Run individually or via the master runner `run_all_validations.sh`.
 | `--sse-settings` | `validate_sse_settings.sh` | UI SSE streams, ws-token, settings CRUD | fast |
 | `--cron` | `validate_cron.sh` | Programmatic cron REST lifecycle | LLM |
 | `--fast` | `(master)` | all fast/zero-token validators | mixed |
-The `--fast` profile includes `validate_mcp_fast.sh`: MCP admin status/tools, REST API-key rejection, JSON-RPC initialize, session handshake, tools/list, and unknown-tool rejection. It does not invoke LLM-backed MCP tools or connect to an external MCP server.
+The `--fast` profile includes `validate_mcp_fast.sh`: MCP admin status/tools, REST API-key rejection, the current durable connection-list shape, JSON-RPC initialize, session handshake, tools/list, and unknown-tool rejection. It does not invoke LLM-backed tools or mutate managed connections.
 | `--llm` | `(master)` | memory + web + roles + cron + rag + budget + hitl | LLM |
 
 `--onnx` targets an already-running process. To also authenticate against the local

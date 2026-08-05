@@ -93,8 +93,10 @@ elif kind == "jsonrpc-error":
     assert isinstance(body.get("error"), dict)
 elif kind == "connect-list":
     assert isinstance(body, dict)
-    assert isinstance(body.get("connectedServers"), list)
-    assert isinstance(body.get("totalDynamicTools"), int)
+    connections = body.get("connections")
+    assert isinstance(connections, list)
+    for connection in connections:
+        assert {"name", "endpoint", "state", "transport", "enabledToolCount", "discoveredToolCount", "revision"} <= set(connection)
 else:
     raise AssertionError(f"unknown check kind: {kind}")
 PY

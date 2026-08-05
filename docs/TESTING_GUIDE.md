@@ -1128,9 +1128,9 @@ No external MCP server required. Amsha Agent connects to itself.
 
 | # | What to run | What to verify |
 |---|---|---|
-| 1 | `MCP-CLIENT-1` (self-connect) | `{"status":"connected","toolsRegistered":0}` - proves full outbound stack; built-in `/mcp` names are skipped by dynamic registration |
+| 1 | `MCP-CLIENT-1` (self-connect) | First response is `202` with an approval task; after approval the durable row is `CONNECTED` with `enabledToolCount:0`; built-in `/mcp` names are not dynamically registered |
 | 2 | `MCP-ADMIN-2` | `registeredDynamicTools` now has 0 entries; built-in names are skipped |
-| 3 | `MCP-CLIENT-3` (list servers) | `{"connectedServers":[{"name":"self","toolCount":0}],"totalDynamicTools":0}` |
+| 3 | `MCP-CLIENT-3` (list servers) | `connections[]` contains state, transport, endpoint, `enabledToolCount`, `discoveredToolCount`, and `revision` |
 | 4 | **Telegram**: `/mcp` | Now shows: `Dynamic MCP tools: none connected` |
 | 5 | `MCP-CLIENT-5` (disconnect) | `{"name":"self","deregistered":true,"toolsRemoved":0}` |
 | 6 | `MCP-CLIENT-6` | `registeredDynamicTools:[]` - confirmed empty |
@@ -2317,7 +2317,7 @@ Run after any significant code change. Combine automated + manual.
 | 13 | HMAC verify (tampered) | `{"valid":false,"brokenAtId":"..."}` |
 | 14 | Skill create + routing | `201`, message routes to skill, no Groq call |
 | 15 | Skill delete + fallback | `200`, routing reverts to intent classifier |
-| 16 | MCP self-connect | `toolsRegistered:0` |
+| 16 | MCP self-connect | Approval-gated durable `CONNECTED` row with zero enabled tools; no implicit dynamic registration |
 | 17 | MCP disconnect | `toolsRemoved:0`, `registeredDynamicTools:[]` |
 | 18 | MCP protocol: initialize → tools/list | `200`/`202`, tools array returned |
 | 19 | RAG ingest + retrieval | Ingested chunk retrieved via recall_memory_search |
