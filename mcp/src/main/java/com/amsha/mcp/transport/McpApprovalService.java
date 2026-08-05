@@ -6,6 +6,7 @@ import jakarta.inject.Inject;
 import java.net.URI;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -134,6 +135,16 @@ public class McpApprovalService {
             return Optional.empty();
         }
         return Optional.of(operation.publicView());
+    }
+
+    public List<PendingApproval> list(String userId) {
+        requireUser(userId);
+        Instant now = Instant.now();
+        return pending.values().stream()
+                .filter(operation -> userId.equals(operation.userId())
+                        && operation.expiresAt().isAfter(now))
+                .map(PendingOperation::publicView)
+                .toList();
     }
 
     private static void requireUser(String userId) {

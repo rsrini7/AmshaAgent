@@ -132,6 +132,10 @@ export class ArcClient {
     return result.connections || result.connectedServers || [];
   }
 
+  async getMcpApprovals(): Promise<McpPendingApproval[]> {
+    return this.request<McpPendingApproval[]>('/mcp/connect/approvals');
+  }
+
   async discoverMcp(name: string, url: string, headers: Record<string, string> = {}): Promise<McpDiscoveryPreview | McpPendingApproval> {
     return this.request<McpDiscoveryPreview | McpPendingApproval>('/mcp/connect/discover', {
       method: 'POST',

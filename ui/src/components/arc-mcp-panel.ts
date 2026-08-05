@@ -15,6 +15,7 @@ export class ArcMcpPanel extends LitElement {
   @state() private _url = '';
   @state() private _headers = '';
   @state() private _busy = false;
+  @state() private _loading = false;
   @state() private _message = '';
   @state() private _error = '';
   @state() private _pendingApproval?: McpPendingApproval;
@@ -45,6 +46,7 @@ export class ArcMcpPanel extends LitElement {
  .connections-toolbar { display:flex; justify-content:space-between; align-items:end; gap:1rem; margin:1.5rem 0 .75rem; }
  .connections-toolbar h2 { margin:0; font-size:1.1rem; }
  .empty-state { text-align:center; }
+ .approval-card { border-color:var(--accent); box-shadow:0 0 0 1px color-mix(in srgb, var(--accent) 25%, transparent); }
     .form { display:grid; grid-template-columns:1fr 2fr; gap:.75rem; align-items:center; }
     label { color:var(--text-muted); font-size:.85rem; } input, textarea { width:100%; box-sizing:border-box; padding:.65rem; background:var(--bg-base); border:1px solid var(--border); border-radius:7px; color:var(--text-primary); }
     textarea { min-height:4rem; font-family:monospace; } button { border:1px solid var(--border); background:var(--bg-elevated); color:var(--text-primary); border-radius:7px; padding:.55rem .8rem; cursor:pointer; } button.primary { background:var(--accent); color:white; border-color:var(--accent); } button.danger { color:#f87171; } button:disabled { opacity:.5; cursor:wait; }
@@ -60,6 +62,7 @@ export class ArcMcpPanel extends LitElement {
   private async _init() {
     const redeemedEdit = await this._redeemSetupToken();
     if (!redeemedEdit) await this._load();
+    await this._restorePendingApproval();
   }
 
   private get _client() { return new ArcClient('/api/v1', this._appContext?.apiKey || ''); }
@@ -85,18 +88,54 @@ export class ArcMcpPanel extends LitElement {
       } else {
         this._message = 'Setup link accepted. Enter the endpoint and credentials, then test and discover.';
       }
-      window.history.replaceState(null, '', `${window.location.href.split('#')[0]}#/mcp`);
+      this._clearSetupTokenFromUrl();
       return grant.mode === 'EDIT';
-    } catch (error) {
-      this._error = this._messageFor(error);
-      window.history.replaceState(null, '', `${window.location.href.split('#')[0]}#/mcp`);
+    } catch {
+      this._error = 'This MCP setup link is single-use and is no longer valid. It may already have been used, expired, or issued for a different user. Run /mcp setup again.';
+      this._clearSetupTokenFromUrl();
       return false;
     }
   }
 
+  private _clearSetupTokenFromUrl() {
+    window.history.replaceState(null, '', `${window.location.href.split('#')[0]}#/mcp`);
+  }
+
+  private _setPendingApproval(approval: McpPendingApproval) {
+    this._pendingApproval = approval;
+    void this.updateComplete.then(() => {
+      this.shadowRoot?.querySelector<HTMLElement>('.approval-card')?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'start',
+      });
+    });
+  }
+
   private async _load() {
-    try { this._connections = await this._client.getMcpConnections(); this._error = ''; }
-    catch (error) { this._error = this._messageFor(error); }
+    if (this._loading) return;
+    this._loading = true;
+    try {
+      this._connections = await this._client.getMcpConnections();
+      this._error = '';
+    } catch (error) {
+      this._error = this._messageFor(error);
+    } finally {
+      this._loading = false;
+    }
+  }
+
+  private async _restorePendingApproval() {
+    try {
+      const approvals = await this._client.getMcpApprovals();
+      const pending = approvals.find(approval =>
+        this._connections.some(connection =>
+          connection.name === approval.name && connection.state === 'PENDING_APPROVAL',
+        ),
+      ) || approvals[0];
+    if (pending) this._setPendingApproval(pending);
+    } catch {
+      // Approval restoration is best effort; the connection list remains usable.
+    }
   }
 
   private async _discover() {
@@ -132,8 +171,9 @@ export class ArcMcpPanel extends LitElement {
           revision: 0,
         })),
       };
- this._connections = [...this._connections.filter(c => c.name !== connection.name), connection];
- this._expanded = new Set([...this._expanded, connection.name]);
+      this._connections = [...this._connections.filter(c => c.name !== connection.name), connection];
+      this._expanded = new Set([...this._expanded, connection.name]);
+      this._clearAddServerForm();
       this._message = `Discovered ${connection.discoveredToolCount} tools. Nothing is enabled yet. Click Connect to persist it.`;
     } catch (error) { this._error = this._messageFor(error); }
     finally { this._busy = false; }
@@ -158,6 +198,7 @@ export class ArcMcpPanel extends LitElement {
       this._connections = this._connections.map(candidate =>
         candidate.name === result.name ? result : candidate,
       );
+      this._clearAddServerForm();
       this._message = `Connected ${result.name}. Select tools explicitly to activate them.`;
     } catch (error) {
       this._error = this._messageFor(error);
@@ -168,6 +209,7 @@ export class ArcMcpPanel extends LitElement {
 
   private async _approvePending() {
     if (!this._pendingApproval) return;
+    const pending = this._pendingApproval;
     this._busy = true;
     this._error = '';
     try {
@@ -190,6 +232,9 @@ export class ArcMcpPanel extends LitElement {
         };
         this._connections = [...this._connections.filter(c => c.name !== connection.name), connection];
       }
+      if (pending.operation === 'DISCOVER' || pending.operation === 'CONNECT') {
+        this._clearAddServerForm();
+      }
       this._pendingApproval = undefined;
       this._message = 'MCP approval completed.';
     } catch (error) { this._error = this._messageFor(error); }
@@ -206,11 +251,12 @@ export class ArcMcpPanel extends LitElement {
   }
 
   private async _action(action: () => Promise<McpConnection | McpPendingApproval>, message?: string): Promise<boolean> {
+    if (this._busy) return false;
     this._busy = true; this._error = ''; this._message = '';
     try {
       const updated = await action();
       if (this._isPending(updated)) {
-        this._pendingApproval = updated;
+        this._setPendingApproval(updated);
         this._message = `Approval required for ${updated.operation.toLowerCase()}.`;
       } else {
         this._connections = this._connections.map(c => c.name === updated.name ? updated : c);
@@ -244,6 +290,12 @@ export class ArcMcpPanel extends LitElement {
     this._clearCredentials = false;
     this._error = '';
     this._message = message;
+  }
+
+  private _clearAddServerForm() {
+    this._name = '';
+    this._url = '';
+    this._headers = '';
   }
 
   private async _saveEdit(connection: McpConnection) {
@@ -354,6 +406,10 @@ export class ArcMcpPanel extends LitElement {
 
  private _renderConnectionCard(connection: McpConnection) {
   const isPreview = connection.state === 'PREVIEW';
+  const isConnected = connection.state === 'CONNECTED';
+  const isPaused = connection.state === 'PAUSED';
+  const canReconnect = !isPreview && !isConnected && connection.state !== 'CONNECTING' && connection.state !== 'PENDING_APPROVAL';
+  const canDisconnect = !isPreview && connection.state !== 'DISCONNECTED';
   const expanded = this._expanded.has(connection.name);
   return html`<section class="card server-card">
    <details .open=${expanded} @toggle=${(event: Event) => this._toggleExpanded(connection.name, (event.target as HTMLDetailsElement).open)}>
@@ -370,24 +426,24 @@ export class ArcMcpPanel extends LitElement {
     <div class="server-content">
      <div class="actions">
       ${isPreview ? html`<button class="primary" @click=${() => this._connectPreview(connection)} ?disabled=${this._busy}>Connect</button>` : html`
-       <button @click=${() => this._startEdit(connection)}>Edit</button>
-       <button @click=${() => this._action(() => this._client.activateMcp(connection.name, connection.revision), 'Activated enabled tools.')}>Activate</button>
-       <button @click=${() => this._action(() => this._client.reconnectMcp(connection.name, connection.revision), 'Reconnected.')}>Reconnect</button>
-       <button @click=${() => this._action(() => connection.state === 'PAUSED'
+       <button @click=${() => this._startEdit(connection)} ?disabled=${this._busy}>Edit</button>
+       ${isConnected ? html`<button @click=${() => this._action(() => this._client.activateMcp(connection.name, connection.revision), 'Activated enabled tools.')} ?disabled=${this._busy}>Activate</button>` : ''}
+       ${canReconnect ? html`<button @click=${() => this._action(() => this._client.reconnectMcp(connection.name, connection.revision), 'Reconnected.')} ?disabled=${this._busy}>Reconnect</button>` : ''}
+       ${isConnected || isPaused ? html`<button @click=${() => this._action(() => isPaused
         ? this._client.resumeMcp(connection.name, connection.revision)
-        : this._client.pauseMcp(connection.name, connection.revision))}>
-        ${connection.state === 'PAUSED' ? 'Resume' : 'Pause'}
-       </button>
-       <button class="danger" @click=${() => this._action(async () => {
+        : this._client.pauseMcp(connection.name, connection.revision))} ?disabled=${this._busy}>
+        ${isPaused ? 'Resume' : 'Pause'}
+       </button>` : ''}
+       ${canDisconnect ? html`<button class="danger" @click=${() => this._action(async () => {
         await this._client.disconnectMcp(connection.name, connection.revision);
         return { ...connection, state: 'DISCONNECTED' };
-       }, 'Disconnected.')}>Disconnect</button>
+       }, 'Disconnected.')} ?disabled=${this._busy}>Disconnect</button>` : html`<span class="state">Disconnected — reconnect to restore</span>`}
       `}
      </div>
      <div class="tools"><strong>Discovered tools</strong>
       ${connection.tools.length ? connection.tools.map(tool => html`<div class="tool">
        <div><div class="tool-name">${tool.toolName}</div><div class="tool-desc">${tool.description || 'No description provided.'}</div></div>
-       ${isPreview ? html`<span class="state">Preview only</span>` : html`<button @click=${() => this._toggleTool(connection, tool.toolName, !tool.enabled)}>${tool.enabled ? 'Disable' : 'Enable'}</button>`}
+       ${isPreview ? html`<span class="state">Preview only</span>` : html`<button @click=${() => this._toggleTool(connection, tool.toolName, !tool.enabled)} ?disabled=${this._busy || !isConnected || tool.available === false}>${tool.enabled ? 'Disable' : 'Enable'}</button>`}
       </div>`) : html`<p>No tools discovered.</p>`}
      </div>
     </div>
@@ -398,7 +454,10 @@ export class ArcMcpPanel extends LitElement {
  render() {
   return html`
    ${this._renderEditForm()}
-   <div class="header"><div><h1>MCP connections</h1><p>Connect remote MCP servers, review discovered tools, and activate only what you need.</p></div><button @click=${this._load} ?disabled=${this._busy}>Refresh</button></div>
+   <div class="header"><div><h1>MCP connections</h1><p>Connect remote MCP servers, review discovered tools, and activate only what you need.</p></div><button @click=${this._load} ?disabled=${this._busy || this._loading}>${this._loading ? 'Loading…' : 'Refresh'}</button></div>
+   ${this._pendingApproval ? html`<section class="card approval-card" role="alert"><strong>Approval required</strong><p>${this._pendingApproval.operation} for ${this._pendingApproval.name}${this._pendingApproval.toolName ? ` — tool ${this._pendingApproval.toolName}` : ''}</p>
+    <button class="primary" @click=${this._approvePending} ?disabled=${this._busy}>Approve</button><button @click=${this._rejectPending} ?disabled=${this._busy}>Reject</button>
+   </section>` : ''}
    <section class="card"><h2>Add server</h2><p>Credentials are sent over the authenticated API and stored server-side in the vault; they are never included in chat or Telegram commands.</p>
     <div class="form">
      <label for="mcp-name">Name</label><input id="mcp-name" .value=${this._name} @input=${(event: InputEvent) => this._name = (event.target as HTMLInputElement).value} placeholder="tapetide" />
@@ -407,11 +466,8 @@ export class ArcMcpPanel extends LitElement {
     </div>
     <div class="actions"><button class="primary" @click=${this._discover} ?disabled=${this._busy}>Test and discover</button></div>
    </section>
-   ${this._pendingApproval ? html`<div class="notice">Approval required: ${this._pendingApproval.operation} ${this._pendingApproval.name}
-    <button class="primary" @click=${this._approvePending} ?disabled=${this._busy}>Approve</button><button @click=${this._rejectPending} ?disabled=${this._busy}>Reject</button>
-   </div>` : ''}
    ${this._message ? html`<div class="notice">${this._message}</div>` : ''}
-   ${this._error ? html`<div class="error">${this._error}</div>` : ''}
+   ${this._error ? html`<div class="error" role="alert">${this._error}<button @click=${this._load} ?disabled=${this._busy || this._loading}>Retry</button></div>` : ''}
    ${this._connections.length ? html`
     <div class="connections-toolbar"><div><h2>Configured MCP servers</h2><p>${this._connections.length} connection${this._connections.length === 1 ? '' : 's'}</p></div>
      ${this._connections.length > 1 ? html`<div class="actions"><button @click=${() => this._setAllExpanded(true)}>Expand all</button><button @click=${() => this._setAllExpanded(false)}>Collapse all</button></div>` : ''}

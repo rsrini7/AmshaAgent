@@ -74,16 +74,16 @@ public class McpReflex implements AgentReflex {
                 String token =
                         setupTokenService.issue(userId, channelType(context), channelId(context, chatId), args[2]);
                 yield "🔐 Open this short-lived MCP setup link in the web UI: "
-                        + setupLink(token)
-                        + " (expires in 10 minutes).";
+                        + "[Open link](" + setupLink(token) + ")"
+                        + " (single-use; expires in 10 minutes).";
             }
             case "edit" -> {
                 requireArgs(args, 3, "edit <name>");
                 String token = setupTokenService.issueForEdit(
                         userId, channelType(context), channelId(context, chatId), args[2]);
                 yield "🔐 Open this short-lived MCP edit link in web UI: "
-                        + setupLink(token)
-                        + " (expires in 10 minutes).";
+                        + "[Open link](" + setupLink(token) + ")"
+                        + " (single-use; expires in 10 minutes).";
             }
             case "connect" -> {
                 requireArgs(args, 3, "connect <name> [https-url]");

@@ -151,6 +151,13 @@ public class McpConnectResource {
                 .build();
     }
 
+    @GET
+    @Path("/approvals")
+    @Operation(summary = "List pending MCP lifecycle approvals for current user")
+    public Response listApprovals() {
+        return Response.ok(managementService.pendingApprovals(resolveUserId())).build();
+    }
+
     @POST
     @Path("/discover")
     @Consumes(MediaType.APPLICATION_JSON)

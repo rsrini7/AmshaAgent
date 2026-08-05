@@ -169,6 +169,12 @@ class McpConnectResourceTest {
         assertEquals(200, resource.listConnected().getStatus());
     }
 
+    @Test
+    void listReturnsPendingMcpApprovals() {
+        when(managementService.pendingApprovals("user-1")).thenReturn(List.of());
+        assertEquals(200, resource.listApprovals().getStatus());
+    }
+
     private static void setField(Object target, String fieldName, Object value) {
         try {
             var field = target.getClass().getDeclaredField(fieldName);

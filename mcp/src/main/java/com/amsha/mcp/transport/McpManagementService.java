@@ -234,6 +234,10 @@ public class McpManagementService extends McpManagementServiceModels {
         return queries.list(userId);
     }
 
+    public List<McpApprovalService.PendingApproval> pendingApprovals(String userId) {
+        return approvalService.list(userId);
+    }
+
     /** Throwaway preview: no durable connection, policy row, vault ref, or runtime session remains. */
     public DiscoveryPreview discover(
             String userId, String name, String endpoint, Map<String, String> headers, boolean preApproved) {

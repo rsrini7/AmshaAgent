@@ -368,7 +368,9 @@ POST   /api/v1/mcp/connect/{name}/rotate-headers
 DELETE /api/v1/mcp/connect/{name}
 ```
 
-`GET /api/v1/mcp/connect` returns durable user-private rows even when no dynamic tools
+`GET /api/v1/mcp/connect/approvals` returns live, user-private approval tasks so the
+MCP panel can restore an enable/connect approval after a browser refresh. It never
+returns headers or approval receipts. `GET /api/v1/mcp/connect` returns durable user-private rows even when no dynamic tools
 are active. Each row contains at least:
 
 ```text

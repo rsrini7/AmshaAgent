@@ -28,6 +28,23 @@ class McpApprovalServiceTest {
     }
 
     @Test
+    void listsOnlyLiveApprovalsOwnedByUser() {
+        ApprovalReceiptIssuer issuer = Mockito.mock(ApprovalReceiptIssuer.class);
+        McpApprovalService service = new McpApprovalService(issuer);
+        var pending = service.request(
+                "user-1",
+                McpApprovalService.Operation.ENABLE_TOOL,
+                "server",
+                "https://example.test/mcp",
+                Map.of(),
+                "search");
+
+        assertEquals(1, service.list("user-1").size());
+        assertTrue(service.list("user-2").isEmpty());
+        assertEquals(pending.taskId(), service.list("user-1").getFirst().taskId());
+    }
+
+    @Test
     void approvalIsUserBoundAndMintsTypedSingleUseReceipt() {
         ApprovalReceiptIssuer issuer = Mockito.mock(ApprovalReceiptIssuer.class);
         when(issuer.issueForExplicitApproval(
