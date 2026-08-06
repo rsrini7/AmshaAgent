@@ -63,6 +63,21 @@ python3 ./scripts/fix_fqns.py
 mise run sonar:issues
 ```
 
+### Native first-run onboarding smoke test
+
+For a real first-owner onboarding test, set these runtime values in `dist/.env`:
+
+```env
+AMSHA_DATA_DIR=./data-onboarding-fresh
+AMSHA_LLM_PROVIDER=infinite-loop
+AMSHA_LLM_VAULT_PRIORITY=true
+AMSHA_UI_SKIP_ONBOARDING=false
+```
+
+Use a new data directory when the previous attempt already reached `CLAIMED`; do not delete an existing data directory implicitly. After rebuilding and packaging, start the native runner from `dist` with `./amsha-sqlite serve`, then open `http://localhost:8080`. The claim response must establish the `AMSHA_API_KEY` cookie. On local HTTP it is intentionally not `Secure`, including when the request arrives through IPv6 loopback (`http://[::1]`), so the browser can reuse it. An authenticated `/api/v1/onboarding/status` response should report `vaultPriority: true`.
+
+If the browser loses the owner cookie, `bootstrap/status` remains `CLAIMED` and onboarding status returns `401`; this is expected and prevents a second anonymous owner claim. Restore the owner credential or restart the test with a new data directory.
+
 ## Docker Compose
 
 ```bash

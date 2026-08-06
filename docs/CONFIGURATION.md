@@ -21,8 +21,15 @@ Generate secrets: `openssl rand -base64 32` (Linux/macOS) or `[Convert]::ToBase6
 | `AMSHA_LLM_COMPACT_PROMPT_ENABLED` | `false` | Use compact prompt format |
 | `AMSHA_LLM_COMPACT_PROMPT_MAX_CHARS` | `32000` | Max chars for compact prompt format |
 | `AMSHA_LLM_STRUCTURED_OUTPUT_MODE` | `NATIVE` | Structured output mode: `NATIVE`, `STRICT`, `LENIENT`, `PROMPT_DIRECTIVE`. `PROMPT_DIRECTIVE` forces JSON-only instructions (use when provider rejects native JSON mode with tools) |
-| `AMSHA_LLM_VAULT_PRIORITY` | `false` | Vault operations get priority LLM access |
+| `AMSHA_LLM_VAULT_PRIORITY` | `false` | When true, committed onboarding LLM settings in the vault take precedence over environment provider settings |
+
 | `AMSHA_LLM_CIRCUIT_BREAKER_ENABLED` | `true` | Enable per-model circuit breaker isolation |
+
+### Onboarding and native first-run testing
+
+`AMSHA_UI_SKIP_ONBOARDING=false` keeps the first-run wizard enabled. `AMSHA_LLM_VAULT_PRIORITY=true` allows committed wizard connections to replace environment-backed LLM routing; it is reported by the authenticated `/api/v1/onboarding/status` response as `vaultPriority`.
+
+For native `dist` testing, `AMSHA_DATA_DIR` selects the runtime database directory. A directory whose bootstrap state is already `CLAIMED` cannot be used for a new anonymous first-owner claim. Choose a new data directory for a fresh test rather than deleting existing data implicitly. After Java or UI changes, rebuild and repackage the native binary; `dist/.env` supplies runtime values when the packaged runner is launched from `dist`.
 
 ## Per-Persona / Per-Group Model Routing
 

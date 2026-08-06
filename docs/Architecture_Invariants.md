@@ -1696,6 +1696,15 @@ Always verify with a runtime startup log check when adding CDI beans from a new 
   messages (e.g., `[SelfEvolve] Enabled`). See §15.1-15.2 for the full protocol.
 
 ### 16.4 Session Management (§16.4 INVARIANT)
+#### 16.4.1 Session and first-owner bootstrap cookie invariants
+
+- The first-owner flow is an authentication boundary, not a normal onboarding draft flow. `GET /onboarding/bootstrap/status` is safe before ownership exists; `POST /onboarding/bootstrap/claim` issues the one-time `HttpOnly` `AMSHA_API_KEY` cookie; `/onboarding/status`, draft, and commit endpoints require the resulting owner credential.
+- The bootstrap cookie MUST use `SameSite=Strict`, `Path=/`, and `HttpOnly`. `Secure` MUST be set for HTTPS and non-loopback deployments, but MUST be clear for explicit loopback HTTP development so browsers accept `http://localhost` and `http://[::1]` cookies.
+- Loopback detection MUST be centralized and recognize `localhost`, IPv4 `127.0.0.0/8`, IPv6 `::1` (including expanded form), and IPv4-mapped loopback. Individual resources MUST NOT maintain narrower host lists.
+- A lost claim response or discarded browser cookie does not make the deployment claimable again. The correct result is `/onboarding/status` → `401` together with bootstrap state `CLAIMED`; code MUST NOT silently create a second owner or reissue credentials through the public claim endpoint. Development recovery uses the authenticated owner credential or a new explicitly selected data directory; existing data MUST NOT be deleted implicitly.
+- `vaultPriority` in `OnboardingStatusDto` is authoritative only after the status request is authenticated (or the deployment is intentionally pre-authenticated by skip/configured state). For a native distribution, rebuild and repackage after Java/UI changes, keep runtime settings in `dist/.env`, and verify the authenticated response reports the configured `AMSHA_LLM_VAULT_PRIORITY` value.
+- The minimum local smoke contract is: fresh data directory → bootstrap `UNCLAIMED` → claim `200` with a non-secure local HTTP cookie → authenticated onboarding status `200` with the expected `vaultPriority` → no-cookie status `401` while bootstrap remains `CLAIMED`.
+
 - Amsha Agent primarily uses RESTEasy Reactive (`quarkus-rest`).
 - Since RESTEasy Reactive does NOT support CDI `@SessionScoped` by default (due to bypassing the Servlet layer), wizard state (like onboarding) MUST use `@ApplicationScoped` if session-isolated state is not strictly required by the multi-user runtime model.
 - If true session isolation is required in a Reactive module, implement a manual session registry keyed by a `UUID` stored in a secure Cookie.

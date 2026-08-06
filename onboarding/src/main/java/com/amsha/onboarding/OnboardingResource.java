@@ -176,7 +176,7 @@ public class OnboardingResource {
             return false;
         }
         String host = request.remoteAddress().host();
-        boolean loopback = "127.0.0.1".equals(host) || "0:0:0:0:0:0:0:1".equals(host) || "localhost".equals(host);
+        boolean loopback = HttpConstants.isLoopbackHost(host);
         String scheme = request.scheme();
         return !(loopback && "http".equalsIgnoreCase(scheme));
     }

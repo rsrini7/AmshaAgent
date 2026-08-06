@@ -115,6 +115,12 @@ Only after the first credential authenticates as the generated stable principal 
 
 The configured `AMSHA_API_KEYS_INTERNAL` remains an operator bootstrap credential and maps to the claimed owner's stable ID/role during compatibility; the new flow must never reveal that configured value as today's completion response does. Additional administrators and external login are provisioned by the companion identity subsystem, not by onboarding steps.
 
+#### Bootstrap browser-loss and local-runtime evidence
+
+The claim response is delivered through an `HttpOnly` `AMSHA_API_KEY` cookie. For local HTTP development, the cookie MUST remain usable on both `localhost` and IPv6 loopback (`[::1]`); the implementation therefore clears `Secure` only for explicit loopback HTTP and retains it for HTTPS/non-loopback deployments. Loopback matching includes IPv4 `127.0.0.0/8`, expanded IPv6 loopback, and IPv4-mapped loopback.
+
+If the browser drops that cookie after a successful claim, the persisted state correctly remains `CLAIMED`; subsequent status calls return `401` until the owner credential is restored. This is not a second-claim or silent-recovery path. Local development must use the owner credential or a new data directory rather than deleting existing data implicitly. The verified native contract is: fresh data → `UNCLAIMED` → claim `200` with a non-secure local HTTP cookie → authenticated status `200` with the configured `vaultPriority` → no-cookie status `401` while bootstrap remains `CLAIMED`.
+
 ### 1. LLM API connections and model profiles
 
 Introduce a persistence-api port, named for example `LlmProfileStorePort`, with three explicitly scoped non-secret aggregates:

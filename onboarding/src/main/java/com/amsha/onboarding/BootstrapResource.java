@@ -269,7 +269,7 @@ public class BootstrapResource {
         // Required on HTTPS/non-loopback deployments; not forced for explicit loopback HTTP dev.
         if (request == null || request.remoteAddress() == null) return true;
         String host = request.remoteAddress().host();
-        boolean loopback = "127.0.0.1".equals(host) || "0:0:0:0:0:0:0:1".equals(host) || "localhost".equals(host);
+        boolean loopback = HttpConstants.isLoopbackHost(host);
         String scheme = request.scheme();
         return !(loopback && "http".equalsIgnoreCase(scheme));
     }
@@ -279,7 +279,7 @@ public class BootstrapResource {
             return false;
         }
         String host = request.remoteAddress().host();
-        return "127.0.0.1".equals(host) || "0:0:0:0:0:0:0:1".equals(host) || "localhost".equals(host);
+        return HttpConstants.isLoopbackHost(host);
     }
 
     public record BootstrapStatusResponse(String status, int revision) {}
