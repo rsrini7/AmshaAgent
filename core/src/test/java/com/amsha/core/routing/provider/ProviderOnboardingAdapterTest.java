@@ -22,6 +22,10 @@ class ProviderOnboardingAdapterTest {
         assertFalse(descriptors.isEmpty(), "catalog must load at least one provider");
         assertTrue(descriptors.stream().anyMatch(d -> d.id().equals("openai")));
         assertTrue(descriptors.stream().anyMatch(d -> d.id().equals("groq")));
+        assertTrue(descriptors.stream().noneMatch(d -> d.id().equals("anthropic")));
+        LlmProviderDescriptor groq = adapter.descriptor("groq").orElseThrow();
+        assertEquals("https://api.groq.com/openai/v1", groq.defaultBaseUrl());
+        assertTrue(adapter.descriptor("claude-code").orElseThrow().authScheme().equals("NONE"));
     }
 
     @Test
@@ -106,6 +110,11 @@ class ProviderOnboardingAdapterTest {
         ProviderValidationResult allowed = adapter.validate(new ConnectionValidationRequest(
                 "openai", model, "https://api.openai.com/v1", true, List.of("api.openai.com")));
         assertTrue(allowed.eligible());
+
+        ProviderValidationResult malformed = adapter.validate(
+                new ConnectionValidationRequest("openai", model, "api.openai.com/v1", true, List.of()));
+        assertFalse(malformed.eligible());
+        assertTrue(malformed.errors().stream().anyMatch(e -> e.contains("absolute HTTP(S) URL")));
     }
 
     @Test

@@ -1,6 +1,6 @@
 import { LitElement, css, html } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
-import { ConnectionDraft } from '../../api/types';
+import { ConnectionDraft, ProviderDescriptor } from '../../api/types';
 import { formStyles } from '../arc-onboarding-styles';
 
 @customElement('arc-onboarding-step-persona-routing')
@@ -15,7 +15,7 @@ export class ArcOnboardingStepPersonaRouting extends LitElement {
   ];
 
   @property({ type: Array }) connections: ConnectionDraft[] = [];
-  @property({ type: Array }) catalog: any[] = [];
+  @property({ type: Array }) catalog: ProviderDescriptor[] = [];
   @property({ type: Object }) personaRoutes: Record<string, { primary: number; failover: number[] }> = {};
 
   private _onChange(roleId: string, primaryIdx: number) {
@@ -61,9 +61,9 @@ export class ArcOnboardingStepPersonaRouting extends LitElement {
               <select class="field-select" .value="${route.primary}"
                       @change="${(e: any) => this._onChange(r.id, Number(e.target.value))}">
                 ${this.connections.map((c, idx) => {
-                  const prov = this.catalog.find(p => p.id === c.provider) || {};
+                  const prov: Partial<ProviderDescriptor> = this.catalog.find(p => p.id === c.provider) || {};
                   return html`
-                    <option value="${idx}">${prov.name} — ${c.modelId}</option>
+                    <option value="${idx}">${prov.displayName} — ${c.modelId}</option>
                   `;
                 })}
               </select>

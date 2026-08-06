@@ -60,6 +60,9 @@ public final class VaultConstants {
      */
     public static final String LLM_MODEL_KEY = "llm.model";
 
+    /** Optional custom base URL selected by the onboarding wizard. */
+    public static final String LLM_BASE_URL_KEY = "llm.base.url";
+
     /**
      * A set of all system-level keys that can be set via the vault tool / reflex.
      */

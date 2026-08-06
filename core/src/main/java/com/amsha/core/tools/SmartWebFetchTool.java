@@ -69,6 +69,7 @@ public class SmartWebFetchTool implements AgentTool {
 
     private HttpClient httpClient;
     private LocalSocksProxy socksProxy;
+    private boolean initializationFailed;
 
     @PostConstruct
     void init() {
@@ -94,7 +95,8 @@ public class SmartWebFetchTool implements AgentTool {
                     .proxy(socksSelector)
                     .build();
         } catch (IOException e) {
-            throw new RuntimeException("Failed to initialize SOCKS proxy for SmartWebFetchTool", e);
+            initializationFailed = true;
+            LOG.warnf("SmartWebFetchTool disabled because SOCKS proxy initialization failed: %s", e.getMessage());
         }
     }
 
@@ -139,7 +141,7 @@ public class SmartWebFetchTool implements AgentTool {
 
     @Override
     public boolean isEnabled() {
-        return true;
+        return !initializationFailed;
     }
 
     @Override

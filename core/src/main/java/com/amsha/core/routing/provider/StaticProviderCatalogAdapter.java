@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+import com.amsha.core.routing.ModelDefaults;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -71,7 +72,7 @@ public class StaticProviderCatalogAdapter implements LlmProviderOnboardingAdapte
                 r.name,
                 r.id,
                 r.requiresApiKey ? "API_KEY" : "NONE",
-                null,
+                ModelDefaults.defaultBaseUrlForProvider(r.id),
                 Boolean.TRUE.equals(r.requiresApiKey),
                 Boolean.TRUE.equals(r.embeddingCapable),
                 catalog,
@@ -98,9 +99,12 @@ public class StaticProviderCatalogAdapter implements LlmProviderOnboardingAdapte
             errors.add("Provider " + p.id() + " does not advertise model: " + request.modelId());
         }
         // Tiered egress check: a custom base URL must target an allowed host when an allow-list is set.
-        if (!request.customBaseUrl().isBlank() && !request.allowedEgressHosts().isEmpty()) {
+        if (!request.customBaseUrl().isBlank()) {
             String host = hostOf(request.customBaseUrl());
-            if (host != null && request.allowedEgressHosts().stream().noneMatch(h -> h.equalsIgnoreCase(host))) {
+            if (host == null) {
+                errors.add("Custom base URL must be an absolute HTTP(S) URL with a valid host");
+            } else if (!request.allowedEgressHosts().isEmpty()
+                    && request.allowedEgressHosts().stream().noneMatch(h -> h.equalsIgnoreCase(host))) {
                 errors.add("Custom base URL host is not permitted by the connection egress policy: " + host);
             }
         }
@@ -109,7 +113,11 @@ public class StaticProviderCatalogAdapter implements LlmProviderOnboardingAdapte
 
     private static String hostOf(String url) {
         try {
-            return new URI(url).getHost();
+            URI uri = new URI(url);
+            if (!("http".equalsIgnoreCase(uri.getScheme()) || "https".equalsIgnoreCase(uri.getScheme()))) {
+                return null;
+            }
+            return uri.getHost();
         } catch (Exception _) {
             return null;
         }

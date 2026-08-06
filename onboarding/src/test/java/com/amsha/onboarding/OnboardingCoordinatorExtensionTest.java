@@ -6,6 +6,7 @@ import static org.mockito.Mockito.*;
 
 import jakarta.enterprise.inject.Instance;
 
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.LinkedHashMap;
@@ -14,6 +15,7 @@ import java.util.Map;
 import java.util.Optional;
 
 import com.amsha.core.security.SecretVault;
+import com.amsha.core.security.VaultConstants;
 import com.amsha.core.tools.ToolCategory;
 import com.amsha.mcp.transport.McpConnectionLifecycleService;
 import com.amsha.onboarding.extension.McpOnboardingExtension;
@@ -112,6 +114,7 @@ class OnboardingCoordinatorExtensionTest {
         commitSaga.objectMapper = objectMapper;
         commitSaga.extensions = exts;
         commitSaga.scrubber = scrubber;
+        commitSaga.vaultPriority = true;
 
         coordinator = new OnboardingCoordinator();
         coordinator.draftStore = draftStore;
@@ -219,6 +222,95 @@ class OnboardingCoordinatorExtensionTest {
         commitSaga.activateLlmSettings(selected);
 
         verify(vault, times(2)).storeSystemKey(anyString(), any());
+    }
+
+    @Test
+    void activateLlmSettingsSkipsVaultWritesWhenVaultPriorityIsDisabled() {
+        commitSaga.vaultPriority = false;
+
+        OnboardingDraftDto base = draft("vault-priority-disabled", OnboardingDraftState.DRAFT, List.of());
+        OnboardingDraftDto selected = new OnboardingDraftDto(
+                base.draftId(),
+                base.ownerId(),
+                base.purpose(),
+                base.planFingerprint(),
+                base.currentStepId(),
+                base.completedStepIds(),
+                List.of("{\"connections\":[]}"),
+                base.safeFieldErrors(),
+                base.pendingApprovalIds(),
+                base.state(),
+                base.revision(),
+                base.expiresAt(),
+                base.createdAt(),
+                base.updatedAt());
+
+        commitSaga.activateLlmSettings(selected);
+
+        verify(vault, never()).storeSystemKey(anyString(), any());
+    }
+
+    @Test
+    void activateLlmSettingsPersistsGenericOpenAiTargetUrl() {
+        OnboardingDraftDto base = draft("generic-target-url", OnboardingDraftState.DRAFT, List.of());
+        String payload = """
+                {"connections":[{"provider":"generic-openai","modelId":"custom-model",
+                 "targetUrl":"https://provider.example/v1"}],
+                 "concernRoutes":{"agentLoop":[0]}}
+                """;
+        OnboardingDraftDto selected = new OnboardingDraftDto(
+                base.draftId(),
+                base.ownerId(),
+                base.purpose(),
+                base.planFingerprint(),
+                base.currentStepId(),
+                base.completedStepIds(),
+                List.of(payload),
+                base.safeFieldErrors(),
+                base.pendingApprovalIds(),
+                base.state(),
+                base.revision(),
+                base.expiresAt(),
+                base.createdAt(),
+                base.updatedAt());
+
+        commitSaga.activateLlmSettings(selected);
+
+        verify(vault)
+                .storeSystemKey(
+                        eq(VaultConstants.LLM_BASE_URL_KEY),
+                        eq("https://provider.example/v1".getBytes(StandardCharsets.UTF_8)));
+    }
+
+    @Test
+    void commitDraftSkipsEmptyMcpServerList() {
+        OnboardingDraftDto base =
+                draft("empty-mcp", OnboardingDraftState.DRAFT, List.of("connections", "routes", "mcp"));
+        OnboardingDraftDto selected = new OnboardingDraftDto(
+                base.draftId(),
+                base.ownerId(),
+                base.purpose(),
+                base.planFingerprint(),
+                base.currentStepId(),
+                base.completedStepIds(),
+                List.of("""
+                        {"mcp":{"servers":[]}}
+                        """),
+                base.safeFieldErrors(),
+                base.pendingApprovalIds(),
+                base.state(),
+                base.revision(),
+                base.expiresAt(),
+                base.createdAt(),
+                base.updatedAt());
+        when(draftStore.findById(base.draftId())).thenReturn(Optional.of(selected));
+        when(draftStore.update(any(), anyInt())).thenReturn(true);
+
+        Optional<OnboardingDraftDto> committed = coordinator.commitDraft(base.draftId());
+
+        assertTrue(committed.isPresent());
+        verify(lifecycleService, never()).persistSuccessfulHttp(any(), any(), any(), any(), any());
+        assertTrue(receiptStore.receipts.isEmpty());
     }
 
     @Test

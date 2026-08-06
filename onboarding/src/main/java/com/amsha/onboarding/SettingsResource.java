@@ -102,7 +102,7 @@ public class SettingsResource {
         if (skipOnboarding) {
             return true;
         }
-        if (vault.systemKeyExists(VaultConstants.LLM_API_KEY)) {
+        if (vaultPriority && vault.systemKeyExists(VaultConstants.LLM_API_KEY)) {
             return true;
         }
         String provider = configuredProvider != null ? configuredProvider.trim() : "";
@@ -146,8 +146,8 @@ public class SettingsResource {
         String prompt = readVaultString(VaultConstants.SYSTEM_PROMPT_KEY, "");
         boolean hasKey = vault.systemKeyExists(VaultConstants.LLM_API_KEY);
         String displayPrompt = prompt.length() > 200 ? prompt.substring(0, 199) + "…" : prompt;
-        return new SettingsDto(
-                provider, model, displayPrompt, hasKey, appVersion, skipOnboarding || backendLlmConfigured());
+        boolean effectiveSkipOnboarding = skipOnboarding || backendLlmConfigured();
+        return new SettingsDto(provider, model, displayPrompt, hasKey, appVersion, effectiveSkipOnboarding);
     }
 
     @GET

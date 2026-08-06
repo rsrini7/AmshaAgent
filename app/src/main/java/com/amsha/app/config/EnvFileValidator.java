@@ -245,6 +245,7 @@ public class EnvFileValidator {
 
     private static boolean isPlaceholder(String value) {
         if (value == null || value.isEmpty()) return false;
+        if (isExplicitOptOut(value)) return false;
         if (value.contains("changeme")) return true;
         if (value.contains("<")) return true;
         if (value.contains("your_") && value.contains("_here")) return true;
@@ -254,5 +255,9 @@ public class EnvFileValidator {
         if (value.equals("mock-telegram-token")) return true;
         if (value.equals("key-internal-changeme")) return true;
         return false;
+    }
+
+    private static boolean isExplicitOptOut(String value) {
+        return value.equalsIgnoreCase("none") || value.equalsIgnoreCase("false") || value.equalsIgnoreCase("skip");
     }
 }

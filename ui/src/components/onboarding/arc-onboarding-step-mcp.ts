@@ -19,7 +19,8 @@ export class ArcOnboardingStepMcp extends LitElement {
   @state() private _newMcp: Partial<McpServerDraft> = { transport: 'sse' };
 
   private _addMcp() {
-    if (this._newMcp.name && this._newMcp.transport) {
+    if (this._newMcp.name?.trim() && !this._newMcp.name.includes(',')
+      && this._newMcp.transport && this._newMcp.url?.trim()) {
       const updated = [...this.mcpServers, this._newMcp as McpServerDraft];
       this.dispatchEvent(
         new CustomEvent('update-mcp', {
@@ -83,18 +84,21 @@ export class ArcOnboardingStepMcp extends LitElement {
               style="background:var(--bg-elevated);border:1px solid var(--border-card);border-radius:var(--radius-md);padding:var(--space-4);margin-bottom:var(--space-3);"
             >
               <label class="field-label">Server Name</label>
-              <input
+        <input
                 class="field-input"
                 type="text"
                 placeholder="e.g. brave-search"
                 .value="${this._newMcp?.name ?? ''}"
                 @input="${(e: any) => (this._newMcp = { ...this._newMcp, name: e.target.value })}"
-                style="margin-bottom:var(--space-3)"
-              />
+          style="margin-bottom:var(--space-3)"
+        />
+        ${this._newMcp?.name?.includes(',')
+          ? html`<div style="color:var(--text-danger);font-size:12px;margin-bottom:var(--space-3)">Server names cannot contain commas.</div>`
+          : ''}
 
               <label class="field-label">Transport</label>
               <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--space-2);margin-bottom:var(--space-3)">
-                ${['sse', 'stdio'].map(
+            ${['sse'].map(
                   t => html`
                     <div
                       class="provider-card ${this._newMcp?.transport === t ? 'selected' : ''}"
@@ -110,35 +114,21 @@ export class ArcOnboardingStepMcp extends LitElement {
                 )}
               </div>
 
-              ${this._newMcp?.transport === 'sse'
-                ? html`
-                    <label class="field-label">URL</label>
-                    <input
-                      class="field-input"
-                      type="url"
-                      placeholder="http://localhost:3100/mcp"
-                      .value="${this._newMcp?.url ?? ''}"
-                      @input="${(e: any) => (this._newMcp = { ...this._newMcp, url: e.target.value })}"
-                      style="margin-bottom:var(--space-3)"
-                    />
-                  `
-                : html`
-                    <label class="field-label">Command</label>
-                    <input
-                      class="field-input"
-                      type="text"
-                      placeholder="npx -y @brave/search-mcp"
-                      .value="${this._newMcp?.command ?? ''}"
-                      @input="${(e: any) => (this._newMcp = { ...this._newMcp, command: e.target.value })}"
-                      style="margin-bottom:var(--space-3)"
-                    />
-                  `}
+        <label class="field-label">URL</label>
+        <input
+          class="field-input"
+          type="url"
+          placeholder="http://localhost:3100/mcp"
+          .value="${this._newMcp?.url ?? ''}"
+          @input="${(e: any) => (this._newMcp = { ...this._newMcp, url: e.target.value })}"
+          style="margin-bottom:var(--space-3)"
+        />
 
               <div class="btn-row" style="margin-top:var(--space-2)">
                 <button class="btn-ghost" @click="${() => (this._showAddMcp = false)}">Cancel</button>
                 <button
                   class="btn-primary"
-                  ?disabled="${!this._newMcp?.name?.trim() || !this._newMcp?.transport}"
+            ?disabled="${!this._newMcp?.name?.trim() || this._newMcp?.name?.includes(',') || !this._newMcp?.transport || !this._newMcp?.url?.trim()}"
                   @click="${this._addMcp}"
                 >
                   Add Server

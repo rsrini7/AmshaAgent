@@ -1,6 +1,6 @@
 import { LitElement, css, html } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
-import { ConcernRoutes, ConnectionDraft } from '../../api/types';
+import { ConcernRoutes, ConnectionDraft, ProviderDescriptor } from '../../api/types';
 import { formStyles } from '../arc-onboarding-styles';
 
 @customElement('arc-onboarding-step-concern-routing')
@@ -49,7 +49,7 @@ export class ArcOnboardingStepConcernRouting extends LitElement {
   ];
 
   @property({ type: Array }) connections: ConnectionDraft[] = [];
-  @property({ type: Array }) catalog: any[] = [];
+  @property({ type: Array }) catalog: ProviderDescriptor[] = [];
   @property({ type: Object }) concernRoutes: ConcernRoutes = {
     agentLoop: [],
     compaction: [],
@@ -76,13 +76,13 @@ export class ArcOnboardingStepConcernRouting extends LitElement {
   render() {
     // Determine embedding capable connections
     const embeddingConnections = this.connections.map((c, idx) => {
-      const prov = this.catalog.find(p => p.id === c.provider) || {};
+      const prov: Partial<ProviderDescriptor> = this.catalog.find(p => p.id === c.provider) || {};
       return { conn: c, index: idx, capable: !!prov.embeddingCapable, prov };
     }).filter(item => item.capable);
 
     // General connections (all LLMs)
     const llmConnections = this.connections.map((c, idx) => {
-      const prov = this.catalog.find(p => p.id === c.provider) || {};
+      const prov: Partial<ProviderDescriptor> = this.catalog.find(p => p.id === c.provider) || {};
       return { conn: c, index: idx, prov };
     });
 
@@ -103,7 +103,7 @@ export class ArcOnboardingStepConcernRouting extends LitElement {
           <select class="field-select" .value="${activeAgentLoop}"
                   @change="${(e: any) => this._onChange('agentLoop', Number(e.target.value))}">
             ${llmConnections.map(item => html`
-              <option value="${item.index}">${item.prov.name} — ${item.conn.modelId}</option>
+              <option value="${item.index}">${item.prov.displayName} — ${item.conn.modelId}</option>
             `)}
           </select>
         </div>
@@ -115,7 +115,7 @@ export class ArcOnboardingStepConcernRouting extends LitElement {
           <select class="field-select" .value="${activeCompaction}"
                   @change="${(e: any) => this._onChange('compaction', Number(e.target.value))}">
             ${llmConnections.map(item => html`
-              <option value="${item.index}">${item.prov.name} — ${item.conn.modelId}</option>
+              <option value="${item.index}">${item.prov.displayName} — ${item.conn.modelId}</option>
             `)}
           </select>
         </div>
@@ -127,7 +127,7 @@ export class ArcOnboardingStepConcernRouting extends LitElement {
           <select class="field-select" .value="${activeClassifier}"
                   @change="${(e: any) => this._onChange('classifier', Number(e.target.value))}">
             ${llmConnections.map(item => html`
-              <option value="${item.index}">${item.prov.name} — ${item.conn.modelId}</option>
+              <option value="${item.index}">${item.prov.displayName} — ${item.conn.modelId}</option>
             `)}
           </select>
         </div>
@@ -141,7 +141,7 @@ export class ArcOnboardingStepConcernRouting extends LitElement {
             ${embeddingConnections.length === 0
               ? html`<option value="0" disabled>No embedding-capable connection configured. Using default.</option>`
               : embeddingConnections.map(item => html`
-                  <option value="${item.index}">${item.prov.name} — ${item.conn.modelId}</option>
+                  <option value="${item.index}">${item.prov.displayName} — ${item.conn.modelId}</option>
                 `)}
           </select>
         </div>

@@ -94,6 +94,7 @@ public class OnboardingResource {
         boolean authed = ownerId != null;
         // When the deployment is pre-configured (skip-onboarding or backend LLM already configured),
         // the status is reachable without an authenticated owner so the UI can skip the wizard.
+        // Explicit skip remains supported, and environment-backed providers may skip the wizard.
         boolean skip = skipOnboarding || backendLlmConfigured();
         if (!authed && !skip) {
             log.warnf("Onboarding /status denied: missing or invalid principal");
@@ -115,10 +116,11 @@ public class OnboardingResource {
                             ? draft.selectedNonSecretIds().get(1)
                             : null,
                     draft.state() != OnboardingDraftState.DRAFT,
-                    skip);
+                    skip,
+                    vaultPriority);
         } else {
             // Pre-auth skip: report the deployment as already configured so the UI can go straight to chat.
-            dto = new OnboardingStatusDto(0, "COMPLETE", configuredProvider, null, true, true);
+            dto = new OnboardingStatusDto(0, "COMPLETE", configuredProvider, null, true, true, vaultPriority);
         }
 
         Response.ResponseBuilder rb = Response.ok(dto);
@@ -133,7 +135,7 @@ public class OnboardingResource {
         if (skipOnboarding) {
             return true;
         }
-        if (vault.systemKeyExists(VaultConstants.LLM_API_KEY)) {
+        if (vaultPriority && vault.systemKeyExists(VaultConstants.LLM_API_KEY)) {
             return true;
         }
         String provider = configuredProvider != null ? configuredProvider.trim() : "";

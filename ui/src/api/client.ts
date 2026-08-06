@@ -2,6 +2,14 @@ import { AgentStatusDto } from './generated/models/AgentStatusDto';
 import { SkillDto } from './generated/models/SkillDto';
 import { PendingApprovalDto, ApprovalResultDto, ToolDto } from './types';
 
+export class ArcApiError extends Error {
+  constructor(public readonly status: number, message: string) {
+    super(message);
+    Object.setPrototypeOf(this, new.target.prototype);
+    this.name = 'ArcApiError';
+  }
+}
+
 export interface McpToolPolicy {
   id: string;
   toolName: string;
@@ -97,7 +105,10 @@ export class ArcClient {
     });
     if (!res.ok) {
       const errorData = await res.json().catch(() => ({}));
-      throw new Error(errorData.error || `Request to ${endpoint} failed with status ${res.status}`);
+        throw new ArcApiError(
+          res.status,
+          errorData.error || `Request to ${endpoint} failed with status ${res.status}`,
+        );
     }
     if (res.status === 204) {
       return {} as T;

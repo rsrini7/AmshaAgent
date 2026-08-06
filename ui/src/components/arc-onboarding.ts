@@ -1,7 +1,7 @@
 import { LitElement, css, html } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
-import { ArcClient } from '../api/client';
-import { O1DraftPayload, ConnectionDraft } from '../api/types';
+import { ArcApiError, ArcClient } from '../api/client';
+import { O1DraftPayload, ConnectionDraft, ProviderDescriptor } from '../api/types';
 import { formStyles } from './arc-onboarding-styles';
 import './onboarding/arc-onboarding-plan-stepper';
 import './onboarding/arc-onboarding-step-welcome';
@@ -28,10 +28,11 @@ export class ArcOnboarding extends LitElement {
     connections: [],
     concernRoutes: { agentLoop: [], compaction: [], classifier: [], embedding: [] }
   };
-  @state() private _catalog: any[] = [];
+  @state() private _catalog: ProviderDescriptor[] = [];
   @state() private _modelDefaults: Record<string, { defaultModel: string; defaultBaseUrl?: string }> = {};
   @state() private _loading = false;
   @state() private _error = '';
+  @state() private _vaultPriority = true;
   @state() private _isAdvanced = false;
 
   static styles = [
@@ -164,8 +165,16 @@ export class ArcOnboarding extends LitElement {
     this._loading = true;
     this._error = '';
     try {
-      const status = await this._client.onboardingStatus();
-      if (status.credentialsValidated || status.skipOnboarding) {
+      let status: any | undefined;
+      try {
+        status = await this._client.onboardingStatus();
+      } catch (error) {
+        // A clean deployment deliberately protects onboarding/status until the
+        // first owner exists. Bootstrap is the unauthenticated entry point.
+        if (!(error instanceof ArcApiError) || error.status !== 401) throw error;
+      }
+      if (typeof status?.vaultPriority === 'boolean') this._vaultPriority = status.vaultPriority;
+      if (status?.credentialsOk || status?.skipOnboarding) {
         this.dispatchEvent(
           new CustomEvent('api-key-set', {
             bubbles: true,
@@ -177,8 +186,25 @@ export class ArcOnboarding extends LitElement {
       }
 
       const boot = await this._client.getBootstrapStatus();
-      if (boot.status === 'UNCLAIMED' || boot.status === 'CLAIMING') {
+      if (boot.status === 'UNCLAIMED' || boot.status === 'CREDENTIAL_ISSUED') {
         await this._client.claimFirstOwner();
+      } else if (boot.status === 'CLAIMING') {
+        throw new Error('Bootstrap ownership is currently being claimed; retry in a moment.');
+      } else if (boot.status === 'CLAIMED') {
+        throw new Error('Bootstrap is already claimed. Sign in with the owner API key to continue.');
+      }
+
+      status = await this._client.onboardingStatus();
+    if (typeof status.vaultPriority === 'boolean') this._vaultPriority = status.vaultPriority;
+    if (status.credentialsOk || status.skipOnboarding) {
+        this.dispatchEvent(
+          new CustomEvent('api-key-set', {
+            bubbles: true,
+            composed: true,
+            detail: { key: 'authenticated' },
+          }),
+        );
+        return;
       }
 
       this._catalog = await this._client.getProviderCatalog();
@@ -194,7 +220,15 @@ export class ArcOnboarding extends LitElement {
       this._planStages = res.planFingerprint.split('->');
       if (res.selectedNonSecretIds && res.selectedNonSecretIds.length > 0) {
         try {
-          this._draftPayload = JSON.parse(res.selectedNonSecretIds[0]);
+          const parsed = JSON.parse(res.selectedNonSecretIds[0]);
+          if (!parsed.mcpServers && parsed.mcp?.servers) {
+            parsed.mcpServers = parsed.mcp.servers.map((server: any) => ({
+              name: server.name,
+              transport: 'sse',
+              url: server.endpoint,
+            }));
+          }
+          this._draftPayload = parsed;
         } catch (_) {
           // Payload is clean/empty
         }
@@ -210,7 +244,7 @@ export class ArcOnboarding extends LitElement {
     this._loading = true;
     this._error = '';
     try {
-      const newPayload = { ...this._draftPayload, ...payloadUpdates };
+      const newPayload = this._withMcpExtensionPayload({ ...this._draftPayload, ...payloadUpdates });
       const serialized = JSON.stringify(newPayload);
       
       const res = await this._client.updateDraftStep(this._draftId, targetStepId, {
@@ -287,33 +321,36 @@ export class ArcOnboarding extends LitElement {
   }
 
   private _handleQuickStart() {
-    const groq = this._catalog.find(p => p.id === 'groq') || {};
-    const groqDefault = this._modelDefaults['groq'] || {};
+    // Quick Start must never stage a key-required provider without a key. Prefer
+    // Ollama, then any catalog provider that explicitly needs no API key.
+    const quickProvider = this._catalog.find(p => p.id === 'ollama' && !p.requiresApiKey && p.embeddingCapable)
+      || this._catalog.find(p => !p.requiresApiKey && p.embeddingCapable)
+      || this._catalog.find(p => p.id === 'ollama' && !p.requiresApiKey)
+      || this._catalog.find(p => !p.requiresApiKey);
+    if (!quickProvider) {
+      this._error = 'No keyless provider is available. Use Advanced setup to configure a provider.';
+      this._isAdvanced = true;
+      this._saveAndNavigate('connections');
+      return;
+    }
+    const defaultModel = quickProvider.modelCatalog?.[0]?.id
+      || this._modelDefaults[quickProvider.id]?.defaultModel
+      || '';
     const defaultConn: ConnectionDraft = {
-      provider: 'groq',
-      modelId: groq.defaultModel || groqDefault.defaultModel || 'meta-llama/llama-4-scout-17b-16e-instruct',
+      provider: quickProvider.id,
+      modelId: defaultModel,
       contextWindow: 8192,
       structuredOutputMode: 'NATIVE',
       capabilities: ['tool-calling']
     };
 
-    const ollama = this._catalog.find(p => p.id === 'ollama') || {};
-    const ollamaDefault = this._modelDefaults['ollama'] || {};
-    const defaultEmbed: ConnectionDraft = {
-      provider: 'ollama',
-      modelId: ollama.defaultModel || ollamaDefault.defaultModel || 'mistral-small:latest',
-      contextWindow: 8192,
-      structuredOutputMode: 'NATIVE',
-      capabilities: []
-    };
-    
     const preseededPayload: O1DraftPayload = {
-      connections: [defaultConn, defaultEmbed],
+      connections: [defaultConn],
       concernRoutes: {
         agentLoop: [0],
         compaction: [0],
         classifier: [0],
-        embedding: [1]
+      embedding: quickProvider.embeddingCapable ? [0] : []
       }
     };
 
@@ -339,6 +376,17 @@ export class ArcOnboarding extends LitElement {
 
   private _handleUpdateMcp(e: CustomEvent) {
     this._draftPayload = { ...this._draftPayload, mcpServers: e.detail.mcpServers };
+  }
+
+  private _withMcpExtensionPayload(payload: O1DraftPayload): O1DraftPayload {
+    const payloadWithoutUiOnlyMcp = { ...payload };
+    delete payloadWithoutUiOnlyMcp.mcpServers;
+    const servers = (payload.mcpServers || []).map(server => ({
+      name: server.name.trim(),
+      endpoint: (server.url || '').trim(),
+      category: 'INTERNAL',
+    }));
+    return { ...payloadWithoutUiOnlyMcp, mcp: { servers } };
   }
 
   private _handleUpdateIntegrations(e: CustomEvent) {
@@ -389,8 +437,12 @@ export class ArcOnboarding extends LitElement {
             `
           : ''}
 
-        <div class="wizard-body">
-          ${this._error ? html`<div class="status-msg error">${this._error}</div>` : ''}
+      <div class="wizard-body">
+        <div ?hidden="${this._vaultPriority}" class="status-msg" style="color:var(--text-warning);margin-bottom:var(--space-3)">
+          Vault priority is disabled. Connections selected here will not replace environment configuration
+          unless AMSHA_LLM_VAULT_PRIORITY=true.
+        </div>
+        ${this._error ? html`<div class="status-msg error">${this._error}</div>` : ''}
           ${this._loading ? html`<div class="status-msg loading"><div class="spinner"></div> Loading...</div>` : ''}
           
           <div style="margin-top: var(--space-4);">
@@ -428,6 +480,7 @@ export class ArcOnboarding extends LitElement {
           <arc-onboarding-step-connections
             .connections="${this._draftPayload.connections || []}"
             .catalog="${this._catalog}"
+            .modelDefaults="${this._modelDefaults}"
             @update-connections="${this._handleUpdateConnections}"
             @next="${this._navigateNext}"
           ></arc-onboarding-step-connections>
