@@ -29,6 +29,7 @@ MCP_FAST_SCRIPT="$SCRIPT_DIR/validate_mcp_fast.sh"
 MEMORY_SCRIPT="$SCRIPT_DIR/validate_memory.sh"
 WEB_SCRIPT="$SCRIPT_DIR/validate_web.sh"
 ROLES_SCRIPT="$SCRIPT_DIR/validate_roles.sh"
+DELEGATION_SCRIPT="$SCRIPT_DIR/validate_delegation.sh"
 ADMIN_SCRIPT="$SCRIPT_DIR/validate_admin.sh"
 AUTH_SESSION_SCRIPT="$SCRIPT_DIR/validate_auth_session.sh"
 PII_INJECTION_AUDIT_SCRIPT="$SCRIPT_DIR/validate_pii_injection_audit.sh"
@@ -78,7 +79,7 @@ PY
 }
 
 # ── Parse args ──
-RUN_ALL=true; FAST=false; LLM=false
+RUN_ALL=true; FAST=false; LLM=false; RUN_DELEGATION=false
 for arg in "$@"; do
   case $arg in
     --reflex) RUN_ALL=false; RUN_REFLEX=true ;;
@@ -88,6 +89,7 @@ for arg in "$@"; do
     --memory) RUN_ALL=false; RUN_MEMORY=true ;;
     --web)    RUN_ALL=false; RUN_WEB=true ;;
     --roles)  RUN_ALL=false; RUN_ROLES=true ;;
+    --delegation) RUN_ALL=false; RUN_DELEGATION=true ;;
     --admin)  RUN_ALL=false; RUN_ADMIN=true ;;
     --auth-session) RUN_ALL=false; RUN_AUTH_SESSION=true ;;
     --pii-audit)    RUN_ALL=false; RUN_PII_AUDIT=true ;;
@@ -102,7 +104,7 @@ for arg in "$@"; do
     --onnx)         RUN_ALL=false; RUN_ONNX=true ;;
     --data-collection) RUN_ALL=false; RUN_DATA_COLLECTION=true ;;
     --fast)   FAST=true; RUN_ALL=false; RUN_REFLEX=true; RUN_SKILLS=true; RUN_SKILLS_ADMISSION=true; RUN_ADMIN=true; RUN_AUTH_SESSION=true; RUN_IDENTITY=true; RUN_PII_AUDIT=true; RUN_SELF_EVOLVE=true; RUN_SSE_SETTINGS=true; RUN_ONBOARDING=true ;;
-    --llm)    LLM=true; RUN_ALL=false; RUN_MEMORY=true; RUN_WEB=true; RUN_ROLES=true; RUN_CRON=true; RUN_RAG=true; RUN_BUDGET=true; RUN_HITL=true; RUN_DATA_COLLECTION=true ;;
+    --llm)    LLM=true; RUN_ALL=false; RUN_MEMORY=true; RUN_WEB=true; RUN_ROLES=true; RUN_DELEGATION=true; RUN_CRON=true; RUN_RAG=true; RUN_BUDGET=true; RUN_HITL=true; RUN_DATA_COLLECTION=true ;;
     --list)
       echo "Available validators:"
       echo "  --reflex       validate_reflex.sh             (zero-token, ~30s)"
@@ -134,6 +136,7 @@ for arg in "$@"; do
     --help)
       echo "Usage: bash run_all_validations.sh [options]"
       echo "Options: --reflex --skills --skills-admission --mcp --memory --web --roles --admin --auth-session --identity --pii-audit --self-evolve --hitl --rag --budget --sse-settings --onboarding --onnx --cron --fast --llm --list --help"
+      echo "  --delegation validate_delegation.sh (all 12 personas, needs LLM)"
       exit 0
       ;;
   esac
@@ -208,6 +211,9 @@ fi
 
 if [ "$RUN_ROLES" = true ] || [ "$RUN_ALL" = true ]; then
   run_validator "AGENT ROLES" "$ROLES_SCRIPT"
+fi
+if [ "$RUN_DELEGATION" = true ] || [ "$RUN_ALL" = true ]; then
+  run_validator "ALL-PERSONA DELEGATION" "$DELEGATION_SCRIPT"
 fi
 
 if [ "$RUN_ADMIN" = true ] || [ "$RUN_ALL" = true ]; then
