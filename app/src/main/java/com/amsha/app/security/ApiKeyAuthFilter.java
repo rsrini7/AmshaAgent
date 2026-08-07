@@ -129,6 +129,7 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
         // authenticated principal.
         boolean bootstrapPublic = path.startsWith("/onboarding/bootstrap/status")
                 || path.startsWith("/onboarding/bootstrap/claim")
+                || path.startsWith("/onboarding/bootstrap/local-recovery")
                 || path.startsWith("/onboarding/status")
                 || path.startsWith("/onboarding/provider-catalog");
         return path.startsWith("/info") || bootstrapPublic || isAuthPath(path);
@@ -285,9 +286,11 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
         boolean isReadOnlyPolling =
                 "GET".equals(method) && POLL_LIKE_PATHS.stream().anyMatch(finalPath::startsWith);
         boolean isWebSocketTokenRequest = "POST".equals(method) && "/chat/ws-token".equals(finalPath);
+        boolean isOnboardingDraftRequest =
+                "/onboarding/drafts".equals(finalPath) || finalPath.startsWith("/onboarding/drafts/");
 
         if (!(isReadOnlyPolling && isInternalUiKey)) {
-            boolean allowed = "GET".equals(method) || isWebSocketTokenRequest
+            boolean allowed = "GET".equals(method) || isWebSocketTokenRequest || isOnboardingDraftRequest
                     ? apiKeyRegistry.isAllowed(apiKey)
                     : apiKeyRegistry.isMutationAllowed(apiKey);
             if (!allowed) {
