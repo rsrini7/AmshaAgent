@@ -2,10 +2,23 @@ package com.amsha.onboarding;
 
 import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
+import jakarta.ws.rs.core.HttpHeaders;
+import jakarta.ws.rs.core.Response;
+import jakarta.ws.rs.core.SecurityContext;
+
+import java.time.Instant;
 import java.util.Map;
+import java.util.Optional;
 
+import com.amsha.onboarding.dto.OnboardingStatusDto;
 import com.amsha.onboarding.testutil.FlywayEnabledTestProfile;
+import com.amsha.persistence.api.BootstrapStateDto;
+import com.amsha.persistence.api.BootstrapStateStorePort;
 
 import org.junit.jupiter.api.Test;
 
@@ -21,7 +34,6 @@ class OnboardingResourceTest {
 
     @Test
     void testUnauthenticatedDenials() {
-        given().when().get("/onboarding/status").then().statusCode(401);
         given().when().get("/onboarding/drafts").then().statusCode(401);
         given().when().post("/onboarding/drafts").then().statusCode(401);
         given().when().get("/onboarding/drafts/invalid-draft").then().statusCode(401);
@@ -34,6 +46,37 @@ class OnboardingResourceTest {
                 .then()
                 .statusCode(401);
         given().when().post("/onboarding/drafts/discard").then().statusCode(401);
+    }
+
+    @Test
+    void testUnauthenticatedStatusBeforeAndAfterBootstrapClaim() {
+        OnboardingResource resource = new OnboardingResource();
+        resource.securityContext = mock(SecurityContext.class);
+        resource.bootstrapStateStore = mock(BootstrapStateStorePort.class);
+        resource.skipOnboarding = false;
+        resource.configuredProvider = "";
+        resource.vaultPriority = false;
+
+        when(resource.bootstrapStateStore.getState())
+                .thenReturn(Optional.of(bootstrapState(BootstrapStateDto.STATUS_UNCLAIMED)));
+        try (Response response = resource.status()) {
+            assertEquals(Response.Status.OK.getStatusCode(), response.getStatus());
+            assertEquals("no-store", response.getHeaderString(HttpHeaders.CACHE_CONTROL));
+            OnboardingStatusDto status = (OnboardingStatusDto) response.getEntity();
+            assertEquals("welcome", status.stepName());
+            assertFalse(status.credentialsOk());
+        }
+
+        when(resource.bootstrapStateStore.getState())
+                .thenReturn(Optional.of(bootstrapState(BootstrapStateDto.STATUS_CLAIMED)));
+        try (Response response = resource.status()) {
+            assertEquals(Response.Status.UNAUTHORIZED.getStatusCode(), response.getStatus());
+            assertEquals("no-store", response.getHeaderString(HttpHeaders.CACHE_CONTROL));
+        }
+    }
+
+    private static BootstrapStateDto bootstrapState(String status) {
+        return new BootstrapStateDto("bootstrap", status, null, null, null, null, null, 0, Instant.now());
     }
 
     @Test

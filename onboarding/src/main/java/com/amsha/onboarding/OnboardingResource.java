@@ -9,6 +9,7 @@ import jakarta.ws.rs.Path;
 import jakarta.ws.rs.PathParam;
 import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.Context;
+import jakarta.ws.rs.core.HttpHeaders;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.NewCookie;
 import jakarta.ws.rs.core.Response;
@@ -27,6 +28,7 @@ import com.amsha.core.security.VaultConstants;
 import com.amsha.core.util.HttpConstants;
 import com.amsha.onboarding.dto.OnboardingStatusDto;
 import com.amsha.onboarding.spi.OnboardingValidationResult;
+import com.amsha.persistence.api.BootstrapStateStorePort;
 import com.amsha.persistence.api.LlmProfileStorePort;
 import com.amsha.persistence.api.OnboardingDraftDto;
 import com.amsha.persistence.api.OnboardingDraftState;
@@ -68,6 +70,9 @@ public class OnboardingResource {
     @Inject
     SecretVault vault;
 
+    @Inject
+    BootstrapStateStorePort bootstrapStateStore;
+
     @Context
     SecurityContext securityContext;
 
@@ -96,9 +101,12 @@ public class OnboardingResource {
         // the status is reachable without an authenticated owner so the UI can skip the wizard.
         // Explicit skip remains supported, and environment-backed providers may skip the wizard.
         boolean skip = skipOnboarding || backendLlmConfigured();
-        if (!authed && !skip) {
+        boolean unclaimed =
+                bootstrapStateStore.getState().map(state -> state.isUnclaimed()).orElse(true);
+        if (!authed && !skip && !unclaimed) {
             log.warnf("Onboarding /status denied: missing or invalid principal");
             return Response.status(401)
+                    .header(HttpHeaders.CACHE_CONTROL, "no-store")
                     .entity(new AmshaErrorResponse("Unauthorized", "Authentication required"))
                     .build();
         }
@@ -118,12 +126,17 @@ public class OnboardingResource {
                     draft.state() != OnboardingDraftState.DRAFT,
                     skip,
                     vaultPriority);
-        } else {
+        } else if (skip) {
             // Pre-auth skip: report the deployment as already configured so the UI can go straight to chat.
             dto = new OnboardingStatusDto(0, "COMPLETE", configuredProvider, null, true, true, vaultPriority);
+        } else {
+            // Before first-owner claim, expose only the non-secret wizard/configuration state.
+            // This avoids using an expected 401 as browser bootstrap control flow.
+            dto = new OnboardingStatusDto(1, "welcome", null, null, false, false, vaultPriority);
         }
 
         Response.ResponseBuilder rb = Response.ok(dto);
+        rb.header(HttpHeaders.CACHE_CONTROL, "no-store");
         if (skip) {
             // Mirror main: authenticate the UI for chat via the internal API-key cookie.
             rb.cookie(buildSkipCookie(internalApiKey));

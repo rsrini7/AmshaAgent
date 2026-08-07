@@ -436,6 +436,11 @@ MCP management behavior is documented in [MCP Management](./MCP_MANAGEMENT.md).
 | `AMSHA_WEB_REQUIRE_AUTH` | `false` | Require auth for WebSocket |
 | `AMSHA_CORS_ORIGINS` | `http://localhost:3000,http://localhost:8080` | Allowed CORS origins |
 
+The application CORS policy permits `GET`, `POST`, `PUT`, `PATCH`, `DELETE`,
+and `OPTIONS`. Keep `PUT` enabled because onboarding draft step transitions and
+several administrative resources use it; browser preflight otherwise rejects
+the request before authentication or resource handling.
+
 ## Chat Memory
 
 | Variable | Default | Description |

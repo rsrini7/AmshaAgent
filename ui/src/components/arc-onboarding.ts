@@ -1,6 +1,12 @@
 import { LitElement, css, html } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
-import { ArcApiError, ArcClient } from '../api/client';
+import {
+  ArcApiError,
+  ArcClient,
+  clearPersistedOwnerApiKey,
+  persistOwnerApiKey,
+  readPersistedOwnerApiKey,
+} from '../api/client';
 import { O1DraftPayload, ConnectionDraft, ProviderDescriptor } from '../api/types';
 import { formStyles } from './arc-onboarding-styles';
 import './onboarding/arc-onboarding-plan-stepper';
@@ -32,7 +38,7 @@ export class ArcOnboarding extends LitElement {
   @state() private _modelDefaults: Record<string, { defaultModel: string; defaultBaseUrl?: string }> = {};
   @state() private _loading = false;
   @state() private _error = '';
-  @state() private _vaultPriority = true;
+  @state() private _vaultPriority: boolean | null = null;
   @state() private _isAdvanced = false;
 
   static styles = [
@@ -40,9 +46,10 @@ export class ArcOnboarding extends LitElement {
     css`
       :host {
         display: flex;
-        align-items: center;
+        align-items: flex-start;
         justify-content: center;
         min-height: 100%;
+        box-sizing: border-box;
         background: var(--bg-base);
         font-family: var(--font-family);
         padding: var(--space-6) var(--space-4);
@@ -57,6 +64,7 @@ export class ArcOnboarding extends LitElement {
         box-shadow: var(--shadow-lg), var(--shadow-glow);
         overflow: hidden;
         position: relative;
+        margin-block: auto;
         animation: card-in 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
         transition: max-width var(--transition);
       }
@@ -164,14 +172,31 @@ export class ArcOnboarding extends LitElement {
   private async _initDraft() {
     this._loading = true;
     this._error = '';
+    this._draftId = '';
+    this._planStages = [];
+    this._vaultPriority = null;
     try {
       let status: any | undefined;
+      const attemptedOwnerApiKey = readPersistedOwnerApiKey();
       try {
         status = await this._client.onboardingStatus();
       } catch (error) {
         // A clean deployment deliberately protects onboarding/status until the
         // first owner exists. Bootstrap is the unauthenticated entry point.
         if (!(error instanceof ArcApiError) || error.status !== 401) throw error;
+        if (attemptedOwnerApiKey) {
+          try {
+            // Test the HttpOnly cookie without deleting the persisted key first.
+            // Only a successful cookie-authenticated response proves the stored
+            // header is stale and safe to remove.
+            status = await new ArcClient('/api/v1', undefined, false).onboardingStatus();
+            clearPersistedOwnerApiKey(attemptedOwnerApiKey);
+          } catch (retryError) {
+            if (!(retryError instanceof ArcApiError) || retryError.status !== 401) {
+              throw retryError;
+            }
+          }
+        }
       }
       if (typeof status?.vaultPriority === 'boolean') this._vaultPriority = status.vaultPriority;
       if (status?.credentialsOk || status?.skipOnboarding) {
@@ -187,7 +212,13 @@ export class ArcOnboarding extends LitElement {
 
       const boot = await this._client.getBootstrapStatus();
       if (boot.status === 'UNCLAIMED' || boot.status === 'CREDENTIAL_ISSUED') {
-        await this._client.claimFirstOwner();
+        const claim = await this._client.claimFirstOwner();
+        if (typeof claim?.apiKey === 'string' && claim.apiKey.trim()) {
+          persistOwnerApiKey(claim.apiKey);
+          // Keep the issued credential in memory for this claim flow even if
+          // browser storage is restricted; the HttpOnly cookie remains primary.
+          this._client = new ArcClient('/api/v1', claim.apiKey.trim());
+        }
       } else if (boot.status === 'CLAIMING') {
         throw new Error('Bootstrap ownership is currently being claimed; retry in a moment.');
       } else if (boot.status === 'CLAIMED') {
@@ -241,6 +272,10 @@ export class ArcOnboarding extends LitElement {
   }
 
   private async _saveAndNavigate(targetStepId: string, payloadUpdates?: Partial<O1DraftPayload>) {
+    if (!this._draftId) {
+      this._error = 'Onboarding is not ready. Retry after authentication completes.';
+      return;
+    }
     this._loading = true;
     this._error = '';
     try {
@@ -415,6 +450,7 @@ export class ArcOnboarding extends LitElement {
 
   render() {
     const isWide = ['connections', 'routes', 'persona-routing', 'review'].includes(this._currentStepId);
+    const draftReady = Boolean(this._draftId);
 
     return html`
       <div class="wizard-card ${isWide ? 'wide' : ''}">
@@ -438,30 +474,38 @@ export class ArcOnboarding extends LitElement {
           : ''}
 
       <div class="wizard-body">
-        <div ?hidden="${this._vaultPriority}" class="status-msg" style="color:var(--text-warning);margin-bottom:var(--space-3)">
-          Vault priority is disabled. Connections selected here will not replace environment configuration
-          unless AMSHA_LLM_VAULT_PRIORITY=true.
-        </div>
+        ${this._vaultPriority === false
+          ? html`
+              <div class="status-msg" style="color:var(--text-warning);margin-bottom:var(--space-3)">
+                Vault priority is disabled. Connections selected here will not replace environment configuration
+                unless AMSHA_LLM_VAULT_PRIORITY=true.
+              </div>
+            `
+          : ''}
         ${this._error ? html`<div class="status-msg error">${this._error}</div>` : ''}
           ${this._loading ? html`<div class="status-msg loading"><div class="spinner"></div> Loading...</div>` : ''}
           
           <div style="margin-top: var(--space-4);">
-            ${this._renderStepContent()}
+            ${draftReady && !this._loading && !this._error ? this._renderStepContent() : ''}
           </div>
         </div>
 
-        <div class="wizard-footer">
-          <button class="mode-toggle" @click="${() => (this._isAdvanced = !this._isAdvanced)}">
-            ${this._isAdvanced ? 'Switch to Quick Start' : 'Enable Advanced Setup'}
-          </button>
-          ${this._currentStepId !== 'welcome' && this._currentStepId !== 'complete'
-            ? html`
-                <button class="mode-toggle" style="color: var(--error);" @click="${this._discard}">
-                  Discard & Restart
+        ${draftReady && !this._loading && !this._error
+          ? html`
+              <div class="wizard-footer">
+                <button class="mode-toggle" @click="${() => (this._isAdvanced = !this._isAdvanced)}">
+                  ${this._isAdvanced ? 'Switch to Quick Start' : 'Enable Advanced Setup'}
                 </button>
-              `
-            : ''}
-        </div>
+                ${this._currentStepId !== 'welcome' && this._currentStepId !== 'complete'
+                  ? html`
+                      <button class="mode-toggle" style="color: var(--error);" @click="${this._discard}">
+                        Discard & Restart
+                      </button>
+                    `
+                  : ''}
+              </div>
+            `
+          : ''}
       </div>
     `;
   }

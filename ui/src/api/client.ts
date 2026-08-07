@@ -10,6 +10,39 @@ export class ArcApiError extends Error {
   }
 }
 
+export const OWNER_API_KEY_STORAGE_KEY = 'amsha-owner-api-key';
+
+export function readPersistedOwnerApiKey(): string {
+  if (typeof localStorage === 'undefined') return '';
+  try {
+    return localStorage.getItem(OWNER_API_KEY_STORAGE_KEY)?.trim() || '';
+  } catch {
+    return '';
+  }
+}
+
+export function persistOwnerApiKey(apiKey: string): void {
+  if (typeof localStorage === 'undefined' || !apiKey.trim()) return;
+  try {
+    localStorage.setItem(OWNER_API_KEY_STORAGE_KEY, apiKey.trim());
+  } catch {
+    // The HttpOnly cookie remains the primary credential when storage is blocked.
+  }
+}
+
+export function clearPersistedOwnerApiKey(expectedApiKey?: string): void {
+  if (typeof localStorage === 'undefined') return;
+  try {
+    if (expectedApiKey !== undefined) {
+      const currentApiKey = localStorage.getItem(OWNER_API_KEY_STORAGE_KEY)?.trim() || '';
+      if (currentApiKey !== expectedApiKey.trim()) return;
+    }
+    localStorage.removeItem(OWNER_API_KEY_STORAGE_KEY);
+  } catch {
+    // Ignore storage cleanup failures; cookie authentication is independent.
+  }
+}
+
 export interface McpToolPolicy {
   id: string;
   toolName: string;
@@ -73,7 +106,8 @@ export interface McpApprovalExecution<T = McpConnection | McpDiscoveryPreview> {
 export class ArcClient {
   constructor(
     public readonly baseUrl: string,
-    private readonly apiKey?: string
+    private readonly apiKey?: string,
+    private readonly includePersistedOwnerApiKey = true,
   ) {}
 
   private headers(): HeadersInit {
@@ -84,8 +118,11 @@ export class ArcClient {
     if (platformId) {
       h['X-AMSHA-PLATFORM-ID'] = platformId;
     }
-    if (this.apiKey && this.apiKey !== 'authenticated') {
-      h['X-AMSHA-API-KEY'] = this.apiKey;
+    const persistedOwnerApiKey = this.includePersistedOwnerApiKey ? readPersistedOwnerApiKey() : '';
+    const effectiveApiKey =
+      this.apiKey && this.apiKey !== 'authenticated' ? this.apiKey : persistedOwnerApiKey;
+    if (effectiveApiKey && effectiveApiKey !== 'authenticated') {
+      h['X-AMSHA-API-KEY'] = effectiveApiKey;
     }
     return h;
   }
@@ -250,7 +287,7 @@ export class ArcClient {
 
   // Onboarding
   async getBootstrapStatus(): Promise<any> {
-    return this.request<any>('/onboarding/bootstrap/status');
+    return this.request<any>('/onboarding/bootstrap/status', { cache: 'no-store' });
   }
 
   async claimFirstOwner(): Promise<any> {
@@ -296,7 +333,7 @@ export class ArcClient {
 
   // Deprecated legacy facade methods (retained for backward compatibility during migration)
   async onboardingStatus(): Promise<any> {
-    return this.request<any>('/onboarding/status');
+    return this.request<any>('/onboarding/status', { cache: 'no-store' });
   }
 
   async onboardingStep(step: number, body?: object): Promise<any> {

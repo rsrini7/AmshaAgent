@@ -9,6 +9,7 @@ import jakarta.ws.rs.POST;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.Context;
+import jakarta.ws.rs.core.HttpHeaders;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.NewCookie;
 import jakarta.ws.rs.core.Response;
@@ -74,6 +75,7 @@ public class BootstrapResource {
                 BOOTSTRAP_ID, BootstrapStateDto.STATUS_UNCLAIMED, null, null, null, null, null, 0, Instant.now()));
         // Status discloses only state and safe revision; never owner/workspace ID, digest, or proof.
         return Response.ok(new BootstrapStatusResponse(state.status(), state.revision()))
+                .header(HttpHeaders.CACHE_CONTROL, "no-store")
                 .build();
     }
 
@@ -149,7 +151,7 @@ public class BootstrapResource {
                 "action=claim_first_owner ownerId=" + ownerId + " workspaceId=" + workspaceId);
 
         NewCookie apiCookie = buildCookie(issued.rawKey());
-        return Response.ok(new ClaimResponse(ownerId, workspaceId))
+        return Response.ok(new ClaimResponse(ownerId, workspaceId, issued.rawKey()))
                 .cookie(apiCookie)
                 .build();
     }
@@ -237,7 +239,7 @@ public class BootstrapResource {
                     .build();
         }
         NewCookie apiCookie = buildCookie(newIssued.rawKey());
-        return Response.ok(new ClaimResponse(state.ownerId(), state.workspaceId()))
+        return Response.ok(new ClaimResponse(state.ownerId(), state.workspaceId(), newIssued.rawKey()))
                 .cookie(apiCookie)
                 .build();
     }
@@ -284,7 +286,8 @@ public class BootstrapResource {
 
     public record BootstrapStatusResponse(String status, int revision) {}
 
-    public record ClaimResponse(String ownerId, String workspaceId) {}
+    /** One-time bootstrap response; the same key is also delivered as an HttpOnly cookie. */
+    public record ClaimResponse(String ownerId, String workspaceId, String apiKey) {}
 
     public record ConfirmResponse(boolean success) {}
 

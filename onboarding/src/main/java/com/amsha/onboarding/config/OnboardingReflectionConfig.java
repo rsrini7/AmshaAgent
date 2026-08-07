@@ -1,6 +1,7 @@
 package com.amsha.onboarding.config;
 
 import com.amsha.core.security.PreparedBootstrapCredential;
+import com.amsha.onboarding.BootstrapResource;
 import com.amsha.onboarding.OnboardingCommitSaga;
 import com.amsha.onboarding.OnboardingCoordinator;
 import com.amsha.onboarding.OnboardingProfileExporter;
@@ -34,6 +35,11 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
  */
 @RegisterForReflection(
         targets = {
+            BootstrapResource.class,
+            BootstrapResource.BootstrapStatusResponse.class,
+            BootstrapResource.ClaimResponse.class,
+            BootstrapResource.ConfirmResponse.class,
+            BootstrapResource.ErrorResponse.class,
             OnboardingStatusDto.class,
             ProviderUpdateRequest.class,
             PromptUpdateRequest.class,

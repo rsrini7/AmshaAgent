@@ -121,6 +121,14 @@ fi
 info "ONB-3: GET /onboarding/drafts (active id)"
 CODE=$(req GET "$VALID_KEY" "$R/onboarding/drafts"); exp "$CODE" "200"
 if [ -n "$DID" ]; then
+  info "ONB-CORS-1: browser preflight permits PUT step transition"
+  CODE=$(mute -X OPTIONS \
+    -H "Origin: ${CORS_TEST_ORIGIN:-http://localhost:8080}" \
+    -H "Access-Control-Request-Method: PUT" \
+    -H "Access-Control-Request-Headers: content-type,x-amsha-api-key" \
+    "$R/onboarding/drafts/$DID/steps/connections")
+  exp "$CODE" "200"
+
   info "ONB-4: GET /onboarding/drafts/{id}"
   CODE=$(req GET "$VALID_KEY" "$R/onboarding/drafts/$DID"); exp "$CODE" "200"
   info "ONB-5: POST /onboarding/drafts/{id}/commit before review"

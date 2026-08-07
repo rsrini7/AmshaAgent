@@ -65,7 +65,7 @@ quarkus:
       enabled: true
       origins: "${AMSHA_CORS_ORIGINS:http://localhost:3000,http://localhost:8080}"
       headers: "X-Amsha-API-Key,X-AMSHA-API-KEY,X-AMSHA-PLATFORM-ID,Content-Type,Accept"
-      methods: "GET,POST,PATCH,DELETE,OPTIONS"
+      methods: "GET,POST,PUT,PATCH,DELETE,OPTIONS"
     limits:
       max-body-size: 10M
 

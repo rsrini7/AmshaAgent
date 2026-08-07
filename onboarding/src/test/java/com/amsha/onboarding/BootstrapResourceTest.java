@@ -60,6 +60,7 @@ class BootstrapResourceTest {
                 .statusCode(200)
                 .body("ownerId", startsWith("usr_"))
                 .body("workspaceId", startsWith("ws_"))
+                .body("apiKey", startsWith("sk-"))
                 .cookie("AMSHA_API_KEY", startsWith("sk-"))
                 .extract()
                 .path("ownerId");
@@ -117,6 +118,8 @@ class BootstrapResourceTest {
                 .then()
                 .statusCode(200)
                 .body("status", is("CLAIMED"));
+
+        given().when().get("/onboarding/status").then().statusCode(401);
 
         // Claim after CLAIMED conflicts
         given().contentType(ContentType.JSON)

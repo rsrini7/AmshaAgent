@@ -2,7 +2,10 @@ import { LitElement, css, html, nothing } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
 import { AgentStatusDto, AgentEvent } from '../api/generated/models';
 import { PendingApprovalDto } from '../api/types';
-import { ArcClient } from '../api/client';
+import {
+  ArcClient,
+  clearPersistedOwnerApiKey,
+} from '../api/client';
 import { SseManager } from '../api/sse';
 import { provide } from '@lit/context';
 import { arcContext, ArcAppContext } from '../context/arc-context';
@@ -199,43 +202,14 @@ export class ArcShell extends LitElement {
     return hash.split('?')[0] === '#/mcp/setup';
   }
 
-  async connectedCallback() {
+  connectedCallback() {
     super.connectedCallback();
     window.addEventListener('hashchange', this._boundHashChange);
     if (this._isMcpSetupHash(window.location.hash)) {
       this._pendingMcpSetupHash = window.location.hash;
     }
-
-    try {
-      const status = await this._client!.onboardingStatus();
-      if (status.credentialsOk || status.skipOnboarding) {
-        this._apiKey = 'authenticated';
-        this._client = new ArcClient('/api/v1', this._apiKey);
-        this._updateContext();
-
-        const targetHash = this._pendingMcpSetupHash || window.location.hash || '#/chat';
-        this._pendingMcpSetupHash = null;
-        const targetRoute = this._routeFromHash(targetHash);
-        this._route = targetRoute === '#/onboarding' ? '#/chat' : targetRoute;
-        if (targetRoute === '#/mcp' && targetHash !== window.location.hash) {
-          window.location.hash = targetHash;
-        } else if (this._route === '#/chat' && targetRoute === '#/onboarding') {
-          window.location.hash = this._route;
-        }
-
-        this._fetchAgents();
-        this._fetchApprovals();
-        this._startSse();
-      } else {
-        this._apiKey = '';
-        this._updateContext();
-        window.location.hash = '#/onboarding';
-      }
-    } catch (err) {
-      this._apiKey = '';
-      this._updateContext();
-      window.location.hash = '#/onboarding';
-    }
+    // The onboarding component owns status/bootstrap initialization. A second
+    // shell-level probe races first-owner claim and duplicates expected failures.
   }
 
   disconnectedCallback() {
@@ -278,6 +252,7 @@ export class ArcShell extends LitElement {
 
   private _handleUnauthorized() {
     console.warn('[Amsha Agent] Stale API key detected (401). Redirecting to onboarding...');
+    clearPersistedOwnerApiKey();
     this._apiKey = '';
     this._updateContext();
     window.location.hash = '#/onboarding';
