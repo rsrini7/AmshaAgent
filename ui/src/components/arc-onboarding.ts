@@ -40,6 +40,8 @@ export class ArcOnboarding extends LitElement {
   @state() private _error = '';
   @state() private _vaultPriority: boolean | null = null;
   @state() private _isAdvanced = false;
+  @state() private _bootstrapState: 'CLAIMING' | 'CLAIMED' | null = null;
+  @state() private _ownerApiKey = '';
 
   static styles = [
     formStyles,
@@ -161,6 +163,39 @@ export class ArcOnboarding extends LitElement {
       .mode-toggle:hover {
         color: var(--accent);
       }
+
+      .bootstrap-recovery {
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-3);
+        margin-top: var(--space-4);
+        padding: var(--space-4);
+        background: var(--bg-elevated);
+        border: 1px solid var(--border-card);
+        border-radius: var(--radius-md);
+      }
+
+      .bootstrap-recovery p {
+        color: var(--text-muted);
+        font-size: var(--font-size-xs);
+        line-height: 1.5;
+      }
+
+      .bootstrap-recovery input {
+        width: 100%;
+        padding: var(--space-3);
+        color: var(--text-primary);
+        background: var(--bg-surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-md);
+        font: inherit;
+      }
+
+      .bootstrap-recovery-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--space-3);
+      }
     `
   ];
 
@@ -175,6 +210,7 @@ export class ArcOnboarding extends LitElement {
     this._draftId = '';
     this._planStages = [];
     this._vaultPriority = null;
+    this._bootstrapState = null;
     try {
       let status: any | undefined;
       const attemptedOwnerApiKey = readPersistedOwnerApiKey();
@@ -220,9 +256,10 @@ export class ArcOnboarding extends LitElement {
           this._client = new ArcClient('/api/v1', claim.apiKey.trim());
         }
       } else if (boot.status === 'CLAIMING') {
+        this._bootstrapState = 'CLAIMING';
         throw new Error('Bootstrap ownership is currently being claimed; retry in a moment.');
       } else if (boot.status === 'CLAIMED') {
-        throw new Error('Bootstrap is already claimed. Sign in with the owner API key to continue.');
+        this._bootstrapState = 'CLAIMED';
       }
 
       status = await this._client.onboardingStatus();
@@ -265,10 +302,48 @@ export class ArcOnboarding extends LitElement {
         }
       }
     } catch (e: any) {
-      this._error = `Failed to load draft: ${e.message}`;
+      if (this._bootstrapState === 'CLAIMED' && e instanceof ArcApiError && e.status === 401) {
+        this._error = 'Bootstrap is already claimed. Sign in with the owner API key to continue.';
+      } else {
+        this._error = `Failed to load draft: ${e.message}`;
+      }
     } finally {
       this._loading = false;
     }
+  }
+
+  private async _recoverLocalOwner() {
+    this._loading = true;
+    this._error = '';
+    try {
+      clearPersistedOwnerApiKey();
+      const recovery = await this._client.recoverLocalOwner();
+      if (typeof recovery?.apiKey !== 'string' || !recovery.apiKey.trim()) {
+        throw new Error('Local recovery did not return an owner credential.');
+      }
+      persistOwnerApiKey(recovery.apiKey);
+      this._client = new ArcClient('/api/v1', recovery.apiKey.trim());
+      await this._initDraft();
+    } catch (error: any) {
+      if (error instanceof ArcApiError && error.status === 403) {
+        this._error = 'Local owner recovery is disabled. Set AMSHA_BOOTSTRAP_LOCAL_RECOVERY=true and restart.';
+      } else {
+        this._error = `Local owner recovery failed: ${error.message}`;
+      }
+    } finally {
+      this._loading = false;
+    }
+  }
+
+  private async _signInOwner() {
+    const apiKey = this._ownerApiKey.trim();
+    if (!apiKey) {
+      this._error = 'Enter the owner API key to continue.';
+      return;
+    }
+    persistOwnerApiKey(apiKey);
+    this._client = new ArcClient('/api/v1', apiKey);
+    await this._initDraft();
   }
 
   private async _saveAndNavigate(targetStepId: string, payloadUpdates?: Partial<O1DraftPayload>) {
@@ -482,7 +557,47 @@ export class ArcOnboarding extends LitElement {
               </div>
             `
           : ''}
-        ${this._error ? html`<div class="status-msg error">${this._error}</div>` : ''}
+        ${this._error
+          ? html`
+              <div class="status-msg error" role="alert">${this._error}</div>
+              ${this._bootstrapState === 'CLAIMED'
+                ? html`
+                    <div class="bootstrap-recovery">
+                      <p>
+                        This installation already has an owner. Clearing browser state cannot replace that
+                        owner; use the owner API key or retry the existing browser cookie.
+                      </p>
+                      <input
+                        type="password"
+                        autocomplete="current-password"
+                        placeholder="Owner API key"
+                        .value="${this._ownerApiKey}"
+                        @input="${(event: InputEvent) =>
+                          (this._ownerApiKey = (event.target as HTMLInputElement).value)}"
+                      />
+                      <div class="bootstrap-recovery-actions">
+                        <button class="btn-primary" @click="${this._signInOwner}" ?disabled="${this._loading}">
+                          Sign In With Owner Key
+                        </button>
+                        <button class="btn-primary" @click="${this._recoverLocalOwner}" ?disabled="${this._loading}">
+                          Recover Local Owner Session
+                        </button>
+                      </div>
+                    </div>
+                  `
+                : this._bootstrapState === 'CLAIMING'
+                  ? html`
+                      <div class="bootstrap-recovery">
+                        <div class="bootstrap-recovery-actions">
+                          <button class="btn-primary" @click="${this._initDraft}" ?disabled="${this._loading}">
+                            Retry Bootstrap
+                          </button>
+                        </div>
+                      </div>
+                    `
+                  : ''}
+            `
+          : ''}
           ${this._loading ? html`<div class="status-msg loading"><div class="spinner"></div> Loading...</div>` : ''}
           
           <div style="margin-top: var(--space-4);">

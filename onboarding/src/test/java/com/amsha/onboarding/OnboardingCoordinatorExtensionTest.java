@@ -551,6 +551,33 @@ class OnboardingCoordinatorExtensionTest {
     }
 
     @Test
+    void updateStep_allowsQuickStartToSkipRoutesBeforeReview() {
+        OnboardingDraftDto draft = new OnboardingDraftDto(
+                "d-quick-review",
+                "owner-1",
+                OnboardingDraftPurpose.FIRST_RUN,
+                "welcome->connections->routes->review",
+                "connections",
+                List.of(),
+                List.of(),
+                null,
+                null,
+                OnboardingDraftState.DRAFT,
+                1,
+                Instant.now().plus(Duration.ofDays(7)),
+                Instant.now(),
+                Instant.now());
+        when(draftStore.findById("d-quick-review")).thenReturn(Optional.of(draft));
+        when(draftStore.update(any(), eq(1))).thenReturn(true);
+
+        Optional<OnboardingDraftDto> result = coordinator.updateStep("d-quick-review", "review", List.of());
+
+        assertTrue(result.isPresent());
+        assertEquals("review", result.get().currentStepId());
+        assertEquals(List.of("connections", "routes"), result.get().completedStepIds());
+    }
+
+    @Test
     void commitDraft_rejectsNonReviewStep() {
         OnboardingDraftDto d = new OnboardingDraftDto(
                 "d-notreview",

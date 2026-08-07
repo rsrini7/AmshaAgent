@@ -29,6 +29,8 @@ Generate secrets: `openssl rand -base64 32` (Linux/macOS) or `[Convert]::ToBase6
 
 `AMSHA_UI_SKIP_ONBOARDING=false` keeps the first-run wizard enabled. `AMSHA_LLM_VAULT_PRIORITY=true` allows committed wizard connections to replace environment-backed LLM routing; it is reported by the authenticated `/api/v1/onboarding/status` response as `vaultPriority`.
 
+For local development only, `AMSHA_BOOTSTRAP_LOCAL_RECOVERY=true` enables the loopback-only onboarding recovery button. It reissues the existing owner credential without deleting data; keep it disabled on shared or production hosts.
+
 For native `dist` testing, `AMSHA_DATA_DIR` selects the runtime database directory. A directory whose bootstrap state is already `CLAIMED` cannot be used for a new anonymous first-owner claim. Choose a new data directory for a fresh test rather than deleting existing data implicitly. After Java or UI changes, rebuild and repackage the native binary; `dist/.env` supplies runtime values when the packaged runner is launched from `dist`.
 
 ## Per-Persona / Per-Group Model Routing

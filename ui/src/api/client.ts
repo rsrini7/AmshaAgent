@@ -296,6 +296,10 @@ export class ArcClient {
     });
   }
 
+  async recoverLocalOwner(): Promise<any> {
+    return this.request<any>('/onboarding/bootstrap/local-recovery', { method: 'POST' });
+  }
+
   async getActiveDraftId(): Promise<string> {
     return this.request<string>('/onboarding/drafts');
   }

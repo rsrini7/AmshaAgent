@@ -21,6 +21,7 @@ public class FlywayEnabledTestProfile implements QuarkusTestProfile {
                 "quarkus.flyway.enabled", "true",
                 "quarkus.flyway.migrate-at-start", "true",
                 "amsha.ui.skip-onboarding", "false",
+                "amsha.bootstrap.local-recovery-enabled", "true",
                 "amsha.llm.provider", "mock-provider");
     }
 }

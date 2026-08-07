@@ -128,6 +128,15 @@ class BootstrapResourceTest {
                 .then()
                 .statusCode(409)
                 .body("code", is("ALREADY_CLAIMED"));
+
+        given().contentType(ContentType.JSON)
+                .when()
+                .post("/onboarding/bootstrap/local-recovery")
+                .then()
+                .statusCode(200)
+                .body("ownerId", not(isEmptyOrNullString()))
+                .body("apiKey", not(isEmptyOrNullString()))
+                .cookie("AMSHA_API_KEY", not(isEmptyOrNullString()));
     }
 
     @ApplicationScoped

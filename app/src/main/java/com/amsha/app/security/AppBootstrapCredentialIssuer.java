@@ -58,11 +58,13 @@ public class AppBootstrapCredentialIssuer implements BootstrapCredentialIssuer {
         BootstrapStateDto state = bootstrapStateStore
                 .getState()
                 .orElseThrow(() -> new IllegalStateException("No bootstrap state for activation"));
-        // CREDENTIAL_ISSUED is the normal activation state; CLAIMING is the explicit operator-only
-        // recovery widening (reserved-but-never-activated owner within its reissue TTL).
-        if ((!state.isCredentialIssued() && !state.isClaiming()) || state.revision() != expectedRevision) {
-            throw new IllegalStateException("Bootstrap reservation mismatch: expected CREDENTIAL_ISSUED/CLAIMING@"
-                    + expectedRevision + " but was " + state.status() + "@" + state.revision());
+        // CREDENTIAL_ISSUED is normal activation; CLAIMING is operator-only recovery for a
+        // reserved-but-never-activated owner; CLAIMED is loopback-only local owner recovery.
+        if ((!state.isCredentialIssued() && !state.isClaiming() && !state.isClaimed())
+                || state.revision() != expectedRevision) {
+            throw new IllegalStateException(
+                    "Bootstrap reservation mismatch: expected CREDENTIAL_ISSUED/CLAIMING/CLAIMED@" + expectedRevision
+                            + " but was " + state.status() + "@" + state.revision());
         }
         if (!state.ownerId().equals(prepared.ownerId())) {
             throw new IllegalStateException("Bootstrap reservation owner mismatch");

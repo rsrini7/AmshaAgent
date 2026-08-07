@@ -284,10 +284,12 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
         boolean isInternalUiKey = apiKeyRegistry.hasRole(apiKey, "OWNER") || apiKeyRegistry.hasRole(apiKey, "internal");
         boolean isReadOnlyPolling =
                 "GET".equals(method) && POLL_LIKE_PATHS.stream().anyMatch(finalPath::startsWith);
+        boolean isWebSocketTokenRequest = "POST".equals(method) && "/chat/ws-token".equals(finalPath);
 
         if (!(isReadOnlyPolling && isInternalUiKey)) {
-            boolean allowed =
-                    "GET".equals(method) ? apiKeyRegistry.isAllowed(apiKey) : apiKeyRegistry.isMutationAllowed(apiKey);
+            boolean allowed = "GET".equals(method) || isWebSocketTokenRequest
+                    ? apiKeyRegistry.isAllowed(apiKey)
+                    : apiKeyRegistry.isMutationAllowed(apiKey);
             if (!allowed) {
                 logAudit(safeKey, finalPath, method, "RATE_LIMITED", ip, System.currentTimeMillis() - startTime);
                 auditService.record(

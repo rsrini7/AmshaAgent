@@ -56,9 +56,10 @@ public interface BootstrapStateJdbiDao {
             + "WHERE id = 'bootstrap' AND status = 'CLAIMING' AND revision = :expectedRevision")
     int rollbackClaiming(@Bind("expectedRevision") int expectedRevision, @Bind("rolledBackAt") Instant rolledBackAt);
 
-    @SqlUpdate("UPDATE bootstrap_state SET credential_digest = :newDigest, issued_at = :issuedAt, "
-            + "revision = bootstrap_state.revision + 1, updated_at = :updatedAt "
-            + "WHERE id = 'bootstrap' AND status IN ('CREDENTIAL_ISSUED', 'CLAIMING') AND revision = :expectedRevision")
+    @SqlUpdate(
+            "UPDATE bootstrap_state SET credential_digest = :newDigest, issued_at = :issuedAt, "
+                    + "revision = bootstrap_state.revision + 1, updated_at = :updatedAt "
+                    + "WHERE id = 'bootstrap' AND status IN ('CREDENTIAL_ISSUED', 'CLAIMING', 'CLAIMED') AND revision = :expectedRevision")
     int replaceCredential(
             @Bind("expectedRevision") int expectedRevision,
             @Bind("newDigest") String newDigest,

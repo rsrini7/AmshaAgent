@@ -33,6 +33,7 @@ import com.amsha.persistence.api.IdentityUserDto;
 import com.amsha.persistence.api.IdentityWorkspaceDto;
 import com.amsha.persistence.api.WorkspaceMembershipDto;
 
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
 import io.smallrye.common.annotation.RunOnVirtualThread;
@@ -66,6 +67,9 @@ public class BootstrapResource {
 
     @Inject
     HttpServerRequest request;
+
+    @ConfigProperty(name = "amsha.bootstrap.local-recovery-enabled", defaultValue = "false")
+    boolean localRecoveryEnabled;
 
     @GET
     @Path("/status")
@@ -154,6 +158,30 @@ public class BootstrapResource {
         return Response.ok(new ClaimResponse(ownerId, workspaceId, issued.rawKey()))
                 .cookie(apiCookie)
                 .build();
+    }
+
+    @POST
+    @Path("/local-recovery")
+    public Response localRecovery() {
+        if (!localRecoveryEnabled || !isLoopbackRequest()) {
+            return Response.status(Response.Status.FORBIDDEN)
+                    .entity(new ErrorResponse("LOCAL_RECOVERY_DISABLED", "Local bootstrap recovery is disabled."))
+                    .build();
+        }
+        Optional<BootstrapStateDto> existing = bootstrapStateStore.getState();
+        if (existing.isEmpty() || !existing.get().isClaimed()) {
+            return Response.status(Response.Status.BAD_REQUEST)
+                    .entity(new ErrorResponse("INVALID_STATE", "Bootstrap is not in a claimed state."))
+                    .build();
+        }
+        BootstrapStateDto state = existing.get();
+        auditService.recordMandatory(
+                "bootstrap-local-recovery",
+                state.ownerId(),
+                "system",
+                SecurityEventType.ONBOARDING_COMPLETED,
+                "action=reissue_claimed_owner_credential");
+        return recover(state);
     }
 
     @POST

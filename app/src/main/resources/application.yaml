@@ -374,6 +374,9 @@ amsha:
     max-depth: ${AMSHA_DELEGATION_MAX_DEPTH:3}
   ui:
     skip-onboarding: ${AMSHA_UI_SKIP_ONBOARDING:false}
+  bootstrap:
+    # Loopback-only owner credential rotation for local development recovery.
+    local-recovery-enabled: ${AMSHA_BOOTSTRAP_LOCAL_RECOVERY:false}
   llm:
     provider: ${AMSHA_LLM_PROVIDER:groq}
     profile-routing:
