@@ -1696,6 +1696,12 @@ Always verify with a runtime startup log check when adding CDI beans from a new 
   messages (e.g., `[SelfEvolve] Enabled`). See §15.1-15.2 for the full protocol.
 
 ### 16.4 Session Management (§16.4 INVARIANT)
+Onboarding configuration source and precedence are defined in [ADR: Onboarding
+Configuration Sources and Precedence](../Ideas-Pending/ADR-Onboarding-Configuration-Source-and-Precedence.md).
+Web drafts stage owner-scoped secrets before commit; LLM activation with vault
+priority promotes selected values into system-vault keys, while the CLI bootstrap
+wizard patches deployment `.env` values.
+
 #### 16.4.1 Session and first-owner bootstrap cookie invariants
 
 - The first-owner flow is an authentication boundary, not a normal onboarding draft flow. `GET /onboarding/bootstrap/status` is safe before ownership exists; `POST /onboarding/bootstrap/claim` issues the one-time `HttpOnly` `AMSHA_API_KEY` cookie; `/onboarding/status`, draft, and commit endpoints require the resulting owner credential.

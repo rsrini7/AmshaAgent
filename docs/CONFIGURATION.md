@@ -33,6 +33,15 @@ For local development only, `AMSHA_BOOTSTRAP_LOCAL_RECOVERY=true` enables the lo
 
 For native `dist` testing, `AMSHA_DATA_DIR` selects the runtime database directory. A directory whose bootstrap state is already `CLAIMED` cannot be used for a new anonymous first-owner claim. Choose a new data directory for a fresh test rather than deleting existing data implicitly. After Java or UI changes, rebuild and repackage the native binary; `dist/.env` supplies runtime values when the packaged runner is launched from `dist`.
 
+## Onboarding configuration sources
+
+The web onboarding wizard never edits `.env`. It stores drafts and staged secrets in
+the configured persistence/vault layers; `AMSHA_LLM_VAULT_PRIORITY` controls whether
+committed system-vault LLM settings override environment configuration. The CLI
+first-run wizard is environment bootstrap and may patch the distribution `.env`.
+See [ADR: Onboarding Configuration Sources and Precedence](../Ideas-Pending/ADR-Onboarding-Configuration-Source-and-Precedence.md)
+for the complete lifecycle and credential-scope rules.
+
 ## Per-Persona / Per-Group Model Routing
 
 Override the default LLM model per agent persona or group (Loka). Resolution order: persona override → group default → global default.
