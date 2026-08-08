@@ -1704,6 +1704,11 @@ wizard patches deployment `.env` values.
 
 #### 16.4.1 Session and first-owner bootstrap cookie invariants
 
+- Authenticated onboarding status/settings MUST expose non-secret effective LLM provenance: source
+  (`ENVIRONMENT`, `VAULT`, or `DEFAULT`), credential state (`NOT_REQUIRED`, `CONFIGURED`, or `MISSING`),
+  credential source, and effective provider/model/base URL. `credentialsOk` remains workflow completion
+  and MUST NOT be interpreted as provenance.
+
 - The first-owner flow is an authentication boundary, not a normal onboarding draft flow. `GET /onboarding/bootstrap/status` is safe before ownership exists; `POST /onboarding/bootstrap/claim` issues the one-time `HttpOnly` `AMSHA_API_KEY` cookie; `/onboarding/status`, draft, and commit endpoints require the resulting owner credential.
 - The successful first-owner claim may return the raw owner API key exactly once as a credential-creation response, alongside the HttpOnly cookie. The UI MAY persist that one-time key as a refresh fallback; it MUST never log or place it in URLs. A failed request MUST NOT erase the persisted key. The UI may clear only the exact key used by that request after a credential-free retry succeeds and proves the HttpOnly cookie is valid. Concurrent pre-claim status requests MUST NOT erase a newly issued key. Wizard actions MUST remain unavailable until authenticated draft creation returns a non-empty draft ID.
 - The bootstrap cookie MUST use `SameSite=Strict`, `Path=/`, and `HttpOnly`. `Secure` MUST be set for HTTPS and non-loopback deployments, but MUST be clear for explicit loopback HTTP development so browsers accept `http://localhost` and `http://[::1]` cookies.

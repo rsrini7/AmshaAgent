@@ -23,8 +23,6 @@ import com.amsha.core.api.dto.AmshaErrorResponse;
 import com.amsha.core.audit.AuditService;
 import com.amsha.core.audit.SecurityEventType;
 import com.amsha.core.routing.ChatModelPool;
-import com.amsha.core.security.SecretVault;
-import com.amsha.core.security.VaultConstants;
 import com.amsha.core.util.HttpConstants;
 import com.amsha.onboarding.dto.OnboardingStatusDto;
 import com.amsha.onboarding.spi.OnboardingValidationResult;
@@ -68,10 +66,10 @@ public class OnboardingResource {
     LlmProfileStorePort profileStore;
 
     @Inject
-    SecretVault vault;
+    BootstrapStateStorePort bootstrapStateStore;
 
     @Inject
-    BootstrapStateStorePort bootstrapStateStore;
+    LlmConfigurationProvenance configurationProvenance;
 
     @Context
     SecurityContext securityContext;
@@ -81,12 +79,6 @@ public class OnboardingResource {
 
     @ConfigProperty(name = "amsha.ui.skip-onboarding", defaultValue = "false")
     boolean skipOnboarding;
-
-    @ConfigProperty(name = "amsha.llm.provider", defaultValue = "groq")
-    String configuredProvider;
-
-    @ConfigProperty(name = "amsha.llm.vault-priority", defaultValue = "false")
-    boolean vaultPriority;
 
     @ConfigProperty(name = "amsha.api.keys.internal", defaultValue = "key-internal-changeme")
     String internalApiKey;
@@ -100,7 +92,8 @@ public class OnboardingResource {
         // When the deployment is pre-configured (skip-onboarding or backend LLM already configured),
         // the status is reachable without an authenticated owner so the UI can skip the wizard.
         // Explicit skip remains supported, and environment-backed providers may skip the wizard.
-        boolean skip = skipOnboarding || backendLlmConfigured();
+        LlmConfigurationProvenance.Resolution configuration = configurationProvenance.resolve();
+        boolean skip = skipOnboarding || configuration.ready();
         boolean unclaimed =
                 bootstrapStateStore.getState().map(state -> state.isUnclaimed()).orElse(true);
         if (!authed && !skip && !unclaimed) {
@@ -125,14 +118,46 @@ public class OnboardingResource {
                             : null,
                     draft.state() != OnboardingDraftState.DRAFT,
                     skip,
-                    vaultPriority);
+                    configuration.vaultPriority(),
+                    configuration.effectiveProvider(),
+                    configuration.effectiveModel(),
+                    configuration.effectiveBaseUrl(),
+                    configuration.effectiveSource(),
+                    configuration.credentialState(),
+                    configuration.credentialSource());
         } else if (skip) {
             // Pre-auth skip: report the deployment as already configured so the UI can go straight to chat.
-            dto = new OnboardingStatusDto(0, "COMPLETE", configuredProvider, null, true, true, vaultPriority);
+            dto = new OnboardingStatusDto(
+                    0,
+                    "COMPLETE",
+                    configuration.effectiveProvider(),
+                    configuration.effectiveModel(),
+                    true,
+                    true,
+                    configuration.vaultPriority(),
+                    configuration.effectiveProvider(),
+                    configuration.effectiveModel(),
+                    configuration.effectiveBaseUrl(),
+                    configuration.effectiveSource(),
+                    configuration.credentialState(),
+                    configuration.credentialSource());
         } else {
             // Before first-owner claim, expose only the non-secret wizard/configuration state.
             // This avoids using an expected 401 as browser bootstrap control flow.
-            dto = new OnboardingStatusDto(1, "welcome", null, null, false, false, vaultPriority);
+            dto = new OnboardingStatusDto(
+                    1,
+                    "welcome",
+                    null,
+                    null,
+                    false,
+                    false,
+                    configuration.vaultPriority(),
+                    configuration.effectiveProvider(),
+                    configuration.effectiveModel(),
+                    configuration.effectiveBaseUrl(),
+                    configuration.effectiveSource(),
+                    configuration.credentialState(),
+                    configuration.credentialSource());
         }
 
         Response.ResponseBuilder rb = Response.ok(dto);
@@ -142,35 +167,6 @@ public class OnboardingResource {
             rb.cookie(buildSkipCookie(internalApiKey));
         }
         return rb.build();
-    }
-
-    private boolean backendLlmConfigured() {
-        if (skipOnboarding) {
-            return true;
-        }
-        if (vaultPriority && vault.systemKeyExists(VaultConstants.LLM_API_KEY)) {
-            return true;
-        }
-        String provider = configuredProvider != null ? configuredProvider.trim() : "";
-        if (provider.isBlank()) {
-            return false;
-        }
-        if (provider.equalsIgnoreCase("ollama")
-                || provider.equalsIgnoreCase("claude-code")
-                || provider.equalsIgnoreCase("omlx")
-                || provider.equalsIgnoreCase("llamacpp")) {
-            return true;
-        }
-        String apiKey = System.getProperty("AMSHA_LLM_API_KEY", System.getenv("AMSHA_LLM_API_KEY"));
-        if (apiKey != null && !apiKey.isBlank()) {
-            return true;
-        }
-        if (!vaultPriority && provider.equalsIgnoreCase("infinite-loop")) {
-            String providers = System.getProperty(
-                    "AMSHA_INFINITE_LOOP_LLM_PROVIDERS", System.getenv("AMSHA_INFINITE_LOOP_LLM_PROVIDERS"));
-            return providers != null && !providers.isBlank();
-        }
-        return false;
     }
 
     private NewCookie buildSkipCookie(String rawKey) {

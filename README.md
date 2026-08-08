@@ -54,7 +54,7 @@ cd amsha
 
 # Copy and edit .env (see docs/CONFIGURATION.md for all variables)
 cp .env.example .env
-# At minimum: AMSHA_LLM_API_KEY=gsk_... (Groq), AMSHA_VAULT_PEPPER=<random>
+# At minimum: AMSHA_GROQ_API_KEY=gsk_... (Groq), AMSHA_VAULT_PEPPER=<random>
 
 # Dev mode (hot reload, no sandbox isolation)
 ./mvnw quarkus:dev -pl amsha-app -am "-Dquarkus.args=chat"
@@ -207,6 +207,7 @@ Set `AMSHA_UI_SKIP_ONBOARDING=true` if you want the web UI to skip the setup wiz
 | Doc | What it covers |
 |-----|---------------|
 | [QUICK_START.md](./docs/QUICK_START.md) | Dev mode, packaged JAR, native image, Docker Compose |
+| [ONBOARDING.md](./docs/ONBOARDING.md) | End-to-end CLI/native and web UI onboarding, configuration layers, credentials, recovery |
 | [SETUP.md](./docs/SETUP.md) | Manual setup, prerequisites, OS-specific, troubleshooting |
 | [MANUAL_SETUP.md](./docs/MANUAL_SETUP.md) | Detailed configuration and optional dependency setup |
 | [MISE_SETUP.md](./docs/MISE_SETUP.md) | Mise-based development environment and task automation |

@@ -7,4 +7,10 @@ public record OnboardingStatusDto(
         String model,
         boolean credentialsOk,
         boolean skipOnboarding,
-        boolean vaultPriority) {}
+        boolean vaultPriority,
+        String effectiveProvider,
+        String effectiveModel,
+        String effectiveBaseUrl,
+        String effectiveSource,
+        String credentialState,
+        String credentialSource) {}

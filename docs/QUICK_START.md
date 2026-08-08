@@ -14,7 +14,7 @@ cd amsha
 
 # Copy and configure .env
 cp .env.example .env
-# Edit .env: set AMSHA_LLM_API_KEY (Groq key starting with gsk_)
+# Edit .env: set AMSHA_GROQ_API_KEY (Groq key starting with gsk_)
 #          set AMSHA_VAULT_PEPPER (32+ random chars)
 
 # Start in chat mode with hot reload
@@ -93,3 +93,7 @@ mise run compose:up  # or: docker compose up -d
 | [SETUP.md](./SETUP.md) | Detailed setup, prerequisites, OS-specific guide |
 | [CONFIGURATION.md](./CONFIGURATION.md) | All environment variables |
 | [ARCHITECTURE.md](./ARCHITECTURE.md) | Architecture overview |
+
+For the complete CLI-versus-web onboarding lifecycle, configuration precedence,
+bootstrap authentication, recovery, and reset behavior, see
+[ONBOARDING.md](./ONBOARDING.md).

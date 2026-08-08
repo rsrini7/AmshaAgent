@@ -15,12 +15,13 @@ The current configuration model uses provider-specific environment variables:
 
 `AMSHA_LLM_API_KEY` is not present in the current `.env.example` or native
 `dist/.env`. It remains in older documentation, Docker configuration, tests,
-error messages, startup validation, and onboarding/settings skip detection.
+error messages, and startup validation. Onboarding/settings skip detection now
+uses the selected provider's canonical key instead of this legacy variable.
 
 The variable is therefore a legacy compatibility path, not an alias that is
-automatically derived from provider-specific keys. If it is exported in the
-process environment, onboarding may incorrectly treat the deployment as
-already configured and skip the wizard.
+automatically derived from provider-specific keys. Exporting it alone does not
+prove that the selected provider can route requests; deployments must migrate
+to the canonical provider-specific key before relying on automatic skip.
 
 The internal vault key `VaultConstants.LLM_API_KEY` is different: it is the
 stable vault slot used by onboarding and vault-priority runtime routing. It

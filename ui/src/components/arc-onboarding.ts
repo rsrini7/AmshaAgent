@@ -7,7 +7,7 @@ import {
   persistOwnerApiKey,
   readPersistedOwnerApiKey,
 } from '../api/client';
-import { O1DraftPayload, ConnectionDraft, ProviderDescriptor } from '../api/types';
+import { O1DraftPayload, ConnectionDraft, OnboardingStatusDto, ProviderDescriptor } from '../api/types';
 import { formStyles } from './arc-onboarding-styles';
 import './onboarding/arc-onboarding-plan-stepper';
 import './onboarding/arc-onboarding-step-welcome';
@@ -39,6 +39,9 @@ export class ArcOnboarding extends LitElement {
   @state() private _loading = false;
   @state() private _error = '';
   @state() private _vaultPriority: boolean | null = null;
+  @state() private _effectiveSource: string | null = null;
+  @state() private _credentialState: string | null = null;
+  @state() private _credentialSource: string | null = null;
   @state() private _isAdvanced = false;
   @state() private _bootstrapState: 'CLAIMING' | 'CLAIMED' | null = null;
   @state() private _ownerApiKey = '';
@@ -210,9 +213,12 @@ export class ArcOnboarding extends LitElement {
     this._draftId = '';
     this._planStages = [];
     this._vaultPriority = null;
+    this._effectiveSource = null;
+    this._credentialState = null;
+    this._credentialSource = null;
     this._bootstrapState = null;
     try {
-      let status: any | undefined;
+      let status: OnboardingStatusDto | undefined;
       const attemptedOwnerApiKey = readPersistedOwnerApiKey();
       try {
         status = await this._client.onboardingStatus();
@@ -234,7 +240,7 @@ export class ArcOnboarding extends LitElement {
           }
         }
       }
-      if (typeof status?.vaultPriority === 'boolean') this._vaultPriority = status.vaultPriority;
+      this._updateConfigurationStatus(status);
       if (status?.credentialsOk || status?.skipOnboarding) {
         this.dispatchEvent(
           new CustomEvent('api-key-set', {
@@ -263,8 +269,8 @@ export class ArcOnboarding extends LitElement {
       }
 
       status = await this._client.onboardingStatus();
-    if (typeof status.vaultPriority === 'boolean') this._vaultPriority = status.vaultPriority;
-    if (status.credentialsOk || status.skipOnboarding) {
+      this._updateConfigurationStatus(status);
+      if (status.credentialsOk || status.skipOnboarding) {
         this.dispatchEvent(
           new CustomEvent('api-key-set', {
             bubbles: true,
@@ -310,6 +316,14 @@ export class ArcOnboarding extends LitElement {
     } finally {
       this._loading = false;
     }
+  }
+
+  private _updateConfigurationStatus(status?: OnboardingStatusDto) {
+    if (!status) return;
+    if (typeof status.vaultPriority === 'boolean') this._vaultPriority = status.vaultPriority;
+    this._effectiveSource = status.effectiveSource || null;
+    this._credentialState = status.credentialState || null;
+    this._credentialSource = status.credentialSource || null;
   }
 
   private async _recoverLocalOwner() {
@@ -549,11 +563,25 @@ export class ArcOnboarding extends LitElement {
           : ''}
 
       <div class="wizard-body">
-        ${this._vaultPriority === false
+        ${this._vaultPriority === false && this._currentStepId !== 'review'
           ? html`
               <div class="status-msg" style="color:var(--text-warning);margin-bottom:var(--space-3)">
                 Vault priority is disabled. Connections selected here will not replace environment configuration
                 unless AMSHA_LLM_VAULT_PRIORITY=true.
+              </div>
+            `
+          : ''}
+        ${this._currentStepId === 'review' && this._vaultPriority === false
+          ? html`
+              <div class="status-msg" style="color:var(--text-warning);margin-bottom:var(--space-3)">
+                Review warning: this UI-selected LLM will be stored for onboarding, but the running agent will continue using environment configuration until vault priority is enabled and the process is restarted.
+              </div>
+            `
+          : ''}
+        ${this._currentStepId === 'review' && this._effectiveSource
+          ? html`
+              <div class="status-msg" style="margin-bottom:var(--space-3)">
+                Active configuration source: ${this._effectiveSource}. Credential state: ${this._credentialState || 'unknown'}. Credential source: ${this._credentialSource || 'unknown'}.
               </div>
             `
           : ''}

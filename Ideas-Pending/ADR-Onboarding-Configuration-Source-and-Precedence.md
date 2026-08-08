@@ -147,16 +147,16 @@ than receiving this skip cookie.
 - Environment credential presence cannot be shown as a secret value in the UI.
 - The CLI bootstrap wizard and web wizard are not feature-equivalent.
 
-## Current status contract and required UX follow-up
+## Current status contract and implemented provenance
 
-The current `OnboardingStatusDto.credentialsOk` field does not identify the
-effective credential or configuration source. In the current implementation it
-indicates workflow completion for the authenticated draft, or the pre-authenticated
-skip/complete response; it must not be interpreted as proof that the active LLM came
-from the vault or from the environment. The provenance invariant below is a target
-contract, not a claim that the current status DTO already satisfies it.
+The current `OnboardingStatusDto.credentialsOk` field still means workflow completion
+for the authenticated draft, or the pre-authenticated skip/complete response; it must
+not be interpreted as proof that the active LLM came from the vault or environment.
+The status DTO now separately exposes non-secret effective provider/model/base URL,
+`effectiveSource`, `credentialState`, and `credentialSource`. Settings exposes the same
+metadata plus `vaultPriority`; these fields never contain credential material.
 
-The architecture remains unchanged, but the UI should expose non-secret provenance:
+The architecture remains unchanged, and the UI exposes non-secret provenance:
 
 - effective source: `ENVIRONMENT`, `VAULT`, or `DEFAULT`;
 - vault-priority state;
@@ -183,6 +183,7 @@ web onboarding.
    credential in the current web flow. Any future environment-credential reference
    must be explicit, non-secret, and governed by a documented activation policy; it
    must never be an implicit fallback.
-5. Target runtime status must distinguish committed draft state from effective active
-   LLM configuration. The current `credentialsOk` field is workflow completion only
-   and does not yet satisfy this provenance requirement.
+5. Runtime status distinguishes committed draft state from effective active LLM
+   configuration. `credentialsOk` remains workflow completion only; separate
+   effective provider/model/base URL and provenance fields satisfy the non-secret
+   source-reporting portion of this invariant.

@@ -61,6 +61,9 @@ public class SettingsResource {
     OnboardingCoordinator coordinator;
 
     @Inject
+    LlmConfigurationProvenance configurationProvenance;
+
+    @Inject
     DomainEventBus eventBus;
 
     @Inject
@@ -71,12 +74,6 @@ public class SettingsResource {
 
     @ConfigProperty(name = "amsha.api.keys.internal", defaultValue = "key-internal-changeme")
     String internalApiKey;
-
-    @ConfigProperty(name = "amsha.llm.provider", defaultValue = "groq")
-    String configuredProvider;
-
-    @ConfigProperty(name = "amsha.llm.vault-priority", defaultValue = "false")
-    boolean vaultPriority;
 
     @ConfigProperty(name = "amsha.ui.skip-onboarding", defaultValue = "false")
     boolean skipOnboarding;
@@ -99,27 +96,7 @@ public class SettingsResource {
     }
 
     private boolean backendLlmConfigured() {
-        if (skipOnboarding) {
-            return true;
-        }
-        if (vaultPriority && vault.systemKeyExists(VaultConstants.LLM_API_KEY)) {
-            return true;
-        }
-        String provider = configuredProvider != null ? configuredProvider.trim() : "";
-        if (provider.isBlank()) {
-            return false;
-        }
-        if (provider.equalsIgnoreCase("ollama")
-                || provider.equalsIgnoreCase("claude-code")
-                || provider.equalsIgnoreCase("omlx")
-                || provider.equalsIgnoreCase("llamacpp")) {
-            return true;
-        }
-        String apiKey = System.getProperty("AMSHA_LLM_API_KEY", System.getenv("AMSHA_LLM_API_KEY"));
-        if (apiKey != null && !apiKey.isBlank()) {
-            return true;
-        }
-        return false;
+        return skipOnboarding || configurationProvenance.resolve().ready();
     }
 
     @GET
@@ -131,23 +108,22 @@ public class SettingsResource {
                     .entity(new AmshaErrorResponse("Unauthorized", "Invalid or missing API Key"))
                     .build());
         }
-        // Reflect the same source-of-truth the runtime uses (see ChatModelProducer):
-        // when vault-priority is on, the effective provider/model come from the system
-        // vault; otherwise they come from the configured amsha.llm.provider.
-        String provider;
-        String model;
-        if (vaultPriority) {
-            provider = readVaultString(VaultConstants.LLM_PROVIDER_KEY, configuredProvider);
-            model = readVaultString(VaultConstants.LLM_MODEL_KEY, "");
-        } else {
-            provider = configuredProvider;
-            model = readVaultString(VaultConstants.LLM_MODEL_KEY, "");
-        }
+        LlmConfigurationProvenance.Resolution configuration = configurationProvenance.resolve();
         String prompt = readVaultString(VaultConstants.SYSTEM_PROMPT_KEY, "");
-        boolean hasKey = vault.systemKeyExists(VaultConstants.LLM_API_KEY);
         String displayPrompt = prompt.length() > 200 ? prompt.substring(0, 199) + "…" : prompt;
-        boolean effectiveSkipOnboarding = skipOnboarding || backendLlmConfigured();
-        return new SettingsDto(provider, model, displayPrompt, hasKey, appVersion, effectiveSkipOnboarding);
+        boolean effectiveSkipOnboarding = backendLlmConfigured();
+        return new SettingsDto(
+                configuration.effectiveProvider(),
+                configuration.effectiveModel(),
+                displayPrompt,
+                vault.systemKeyExists(VaultConstants.LLM_API_KEY),
+                appVersion,
+                effectiveSkipOnboarding,
+                configuration.vaultPriority(),
+                configuration.effectiveBaseUrl(),
+                configuration.effectiveSource(),
+                configuration.credentialState(),
+                configuration.credentialSource());
     }
 
     @GET

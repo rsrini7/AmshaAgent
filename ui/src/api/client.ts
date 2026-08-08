@@ -1,6 +1,6 @@
 import { AgentStatusDto } from './generated/models/AgentStatusDto';
 import { SkillDto } from './generated/models/SkillDto';
-import { PendingApprovalDto, ApprovalResultDto, ToolDto } from './types';
+import { PendingApprovalDto, ApprovalResultDto, OnboardingStatusDto, SettingsDto, ToolDto } from './types';
 
 export class ArcApiError extends Error {
   constructor(public readonly status: number, message: string) {
@@ -336,8 +336,8 @@ export class ArcClient {
   }
 
   // Deprecated legacy facade methods (retained for backward compatibility during migration)
-  async onboardingStatus(): Promise<any> {
-    return this.request<any>('/onboarding/status', { cache: 'no-store' });
+  async onboardingStatus(): Promise<OnboardingStatusDto> {
+    return this.request<OnboardingStatusDto>('/onboarding/status', { cache: 'no-store' });
   }
 
   async onboardingStep(step: number, body?: object): Promise<any> {
@@ -352,8 +352,8 @@ export class ArcClient {
   }
 
   // Settings
-  async getSettings(): Promise<any> {
-    return this.request<any>('/settings');
+  async getSettings(): Promise<SettingsDto> {
+    return this.request<SettingsDto>('/settings');
   }
 
   async patchPrompt(prompt: string): Promise<any> {

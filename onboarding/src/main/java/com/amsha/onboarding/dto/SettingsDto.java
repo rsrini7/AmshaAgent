@@ -6,4 +6,9 @@ public record SettingsDto(
         String systemPrompt,
         boolean hasApiKey,
         String appVersion,
-        boolean skipOnboarding) {}
+        boolean skipOnboarding,
+        boolean vaultPriority,
+        String effectiveBaseUrl,
+        String effectiveSource,
+        String credentialState,
+        String credentialSource) {}

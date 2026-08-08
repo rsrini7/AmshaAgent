@@ -53,9 +53,18 @@ class OnboardingResourceTest {
         OnboardingResource resource = new OnboardingResource();
         resource.securityContext = mock(SecurityContext.class);
         resource.bootstrapStateStore = mock(BootstrapStateStorePort.class);
+        resource.configurationProvenance = mock(LlmConfigurationProvenance.class);
         resource.skipOnboarding = false;
-        resource.configuredProvider = "";
-        resource.vaultPriority = false;
+        when(resource.configurationProvenance.resolve())
+                .thenReturn(new LlmConfigurationProvenance.Resolution(
+                        "",
+                        "",
+                        "",
+                        LlmConfigurationProvenance.SOURCE_DEFAULT,
+                        LlmConfigurationProvenance.CREDENTIAL_MISSING,
+                        LlmConfigurationProvenance.SOURCE_NONE,
+                        false,
+                        false));
 
         when(resource.bootstrapStateStore.getState())
                 .thenReturn(Optional.of(bootstrapState(BootstrapStateDto.STATUS_UNCLAIMED)));
@@ -65,6 +74,8 @@ class OnboardingResourceTest {
             OnboardingStatusDto status = (OnboardingStatusDto) response.getEntity();
             assertEquals("welcome", status.stepName());
             assertFalse(status.credentialsOk());
+            assertEquals(LlmConfigurationProvenance.SOURCE_DEFAULT, status.effectiveSource());
+            assertEquals(LlmConfigurationProvenance.CREDENTIAL_MISSING, status.credentialState());
         }
 
         when(resource.bootstrapStateStore.getState())

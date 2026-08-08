@@ -10,7 +10,7 @@ Generate secrets: `openssl rand -base64 32` (Linux/macOS) or `[Convert]::ToBase6
 
 | Variable | Default | Description |
 |---|---|---|
-| `AMSHA_LLM_API_KEY` | — | LLM provider API key (Groq = `gsk_...`) |
+| `AMSHA_{PROVIDER}_API_KEY` | — | Provider-specific LLM API key, for example `AMSHA_GROQ_API_KEY` (`gsk_...`) |
 | `AMSHA_LLM_PROVIDER` | `groq` | Provider: `groq`, `openai`, `ollama`, `openrouter`, `claude-code`, `cerebras`, `gemini`, `nvidia`, `omlx`, `generic-openai` |
 | `AMSHA_LLM_MAX_OUTPUT_TOKENS` | `8192` | Max output tokens per LLM call |
 | `AMSHA_LLM_MAX_RETRIES` | `3` | Max LLM retry attempts |
@@ -41,6 +41,11 @@ committed system-vault LLM settings override environment configuration. The CLI
 first-run wizard is environment bootstrap and may patch the distribution `.env`.
 See [ADR: Onboarding Configuration Sources and Precedence](../Ideas-Pending/ADR-Onboarding-Configuration-Source-and-Precedence.md)
 for the complete lifecycle and credential-scope rules.
+
+Authenticated onboarding status and settings also report non-secret effective LLM provenance
+(`ENVIRONMENT`, `VAULT`, or `DEFAULT`), credential state (`NOT_REQUIRED`, `CONFIGURED`,
+or `MISSING`), credential source, and effective base URL. `credentialsOk` remains a workflow
+completion flag; use the provenance fields to determine which configuration is active.
 
 ## Per-Persona / Per-Group Model Routing
 

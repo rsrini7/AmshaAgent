@@ -52,6 +52,25 @@ export interface OnboardingStatusDto {
   credentialsOk: boolean;
   skipOnboarding: boolean;
   vaultPriority: boolean;
+  effectiveProvider?: string | null;
+  effectiveModel?: string | null;
+  effectiveBaseUrl?: string | null;
+  effectiveSource?: 'ENVIRONMENT' | 'VAULT' | 'DEFAULT' | 'NONE' | string;
+  credentialState?: 'NOT_REQUIRED' | 'CONFIGURED' | 'MISSING' | string;
+  credentialSource?: 'ENVIRONMENT' | 'VAULT' | 'NONE' | string;
+}
+export interface SettingsDto {
+  provider: string;
+  model: string;
+  systemPrompt: string;
+  hasApiKey: boolean;
+  appVersion: string;
+  skipOnboarding: boolean;
+  vaultPriority: boolean;
+  effectiveBaseUrl?: string | null;
+  effectiveSource?: 'ENVIRONMENT' | 'VAULT' | 'DEFAULT' | 'NONE' | string;
+  credentialState?: 'NOT_REQUIRED' | 'CONFIGURED' | 'MISSING' | string;
+  credentialSource?: 'ENVIRONMENT' | 'VAULT' | 'NONE' | string;
 }
 
 export interface ProviderCatalogModel {
