@@ -1,3 +1,11 @@
+> [!WARNING]
+> Superseded for Amsha integration decisions as of 2026-08-11. This note contains
+> contradictory and outdated claims about Native Image, native extensions, runtime
+> package downloads, and `Context` concurrency. Use
+> [Sarvam GraalPy Phase 0 Research](Sarvam-GraalPy-Phase-0-Research.md) and
+> [SarvamAI GraalPy Feasibility](SarvamAI-GraalPy-Feasibility.md) as the evidence
+> baseline; do not use this file to justify adoption or implementation.
+
 GraalPy is a high-performance, embeddable Python 3 runtime built on the GraalVM platform, primarily targeting the JVM ecosystem. It allows Python code to run inside Java applications and vice versa, making it especially useful for developers like you who work deeply within the Java/Quarkus ecosystem.
 
 ## What It Is
