@@ -120,9 +120,9 @@ We are requesting written scope, not a technical compatibility warranty. GraalPy
 
 Thank you,
 
-`<human requester>`<br>
-Amsha Agent<br>
-`<organization and contact details>`
+Srinivasan Ragothaman<br>
+Maintainer, Amsha Agent<br>
+GitHub: [@rsrini7](https://github.com/rsrini7)
 
 This is a draft. A human must review recipients, organization details, confidentiality language, and the exact artifact scope before sending.
 
