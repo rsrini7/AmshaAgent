@@ -2,10 +2,12 @@
 """Freeze Sarvam Python SDK inputs without installing or executing packages.
 
 This helper is deliberately an evidence tool. It talks only to public PyPI and
-the explicitly allowlisted public OSV vulnerability endpoint,
-downloads archive bytes into the approved ignored cache, reads wheel/sdist
-metadata with the standard library, and writes a hash-pinned lock. It never
-invokes pip, imports a package, runs an sdist hook, or calls the Sarvam API.
+the explicitly allowlisted public OSV vulnerability endpoint, downloads
+archive bytes into the separately documented ignored evidence cache, reads
+wheel/sdist metadata with the standard library, and writes a hash-pinned lock.
+It is intentionally authorization-pinned to sarvamai==0.1.30 until a human
+updates the private-PoC scope. It never invokes pip, imports a package, runs an
+sdist hook, or calls the Sarvam API.
 """
 
 from __future__ import annotations
@@ -28,15 +30,14 @@ from typing import Any
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_VERSION = "0.1.30"
-DEFAULT_CACHE = REPO_ROOT / "data/smoke/sarvam-graalpy-phase-0/cache"
+AUTHORIZED_VERSION = "0.1.30"
+DEFAULT_CACHE = REPO_ROOT / ".scratch/sarvam-graalpy-phase-0/cache"
 DEFAULT_EVIDENCE = REPO_ROOT / ".scratch/sarvam-graalpy-phase-0/evidence/sgp-01"
 PYPI_PROJECT = "https://pypi.org/pypi"
 PYPI_HOSTS = {"pypi.org", "files.pythonhosted.org"}
 OSV_BATCH = "https://api.osv.dev/v1/querybatch"
 GRAALPY_NATIVE_TAG = "graalpy312-graalpy250_312_native"
 NATIVE_SUFFIXES = (
-    "macosx_10_12_x86_64.whl",
     "macosx_11_0_arm64.whl",
     "manylinux_2_17_aarch64.manylinux2014_aarch64.whl",
     "manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
@@ -94,10 +95,9 @@ def wheel_identity(filename: str) -> dict[str, str]:
             (
                 label
                 for suffix, label in {
-                    NATIVE_SUFFIXES[0]: "macOS x86-64",
-                    NATIVE_SUFFIXES[1]: "macOS arm64",
-                    NATIVE_SUFFIXES[2]: "Linux arm64",
-                    NATIVE_SUFFIXES[3]: "Linux x86-64",
+                    NATIVE_SUFFIXES[0]: "macOS arm64",
+                    NATIVE_SUFFIXES[1]: "Linux arm64",
+                    NATIVE_SUFFIXES[2]: "Linux x86-64",
                 }.items()
                 if filename.endswith(suffix)
             ),
@@ -225,8 +225,22 @@ def parse_requirements(metadata: str | list[str]) -> list[tuple[str, str]]:
     return requirements
 
 
-def archive_metadata(path: Path) -> tuple[str, list[str], list[str]]:
-    """Return metadata text, archive members, and native members without import."""
+def license_records(entries: list[tuple[str, bytes]]) -> list[dict[str, Any]]:
+    records = []
+    for name, content in entries:
+        records.append(
+            {
+                "filename": name,
+                "bytes": len(content),
+                "sha256": hashlib.sha256(content).hexdigest(),
+                "content": content.decode("utf-8", "replace"),
+            }
+        )
+    return records
+
+
+def archive_metadata(path: Path) -> tuple[str, list[str], list[str], list[dict[str, Any]]]:
+    """Return metadata, members, native members, and licence contents without import."""
 
     if path.suffix == ".whl":
         with zipfile.ZipFile(path) as archive:
@@ -237,9 +251,15 @@ def archive_metadata(path: Path) -> tuple[str, list[str], list[str]]:
             if metadata_name is None:
                 raise FreezeError(f"Wheel has no METADATA: {path.name}")
             names = archive.namelist()
-            return archive.read(metadata_name).decode("utf-8", "replace"), names, [
-                name for name in names if name.endswith((".so", ".dylib", ".dll", ".pyd"))
+            license_names = [
+                name for name in names if any(part in name.lower() for part in ("license", "copying", "notice"))
             ]
+            return (
+                archive.read(metadata_name).decode("utf-8", "replace"),
+                names,
+                [name for name in names if name.endswith((".so", ".dylib", ".dll", ".pyd"))],
+                license_records([(name, archive.read(name)) for name in license_names]),
+            )
     if path.name.endswith(".tar.gz"):
         with tarfile.open(path, "r:gz") as archive:
             metadata_member = next(
@@ -252,9 +272,23 @@ def archive_metadata(path: Path) -> tuple[str, list[str], list[str]]:
             if extracted is None:
                 raise FreezeError(f"Cannot read PKG-INFO: {path.name}")
             names = archive.getnames()
-            return extracted.read().decode("utf-8", "replace"), names, [
-                name for name in names if name.endswith((".so", ".dylib", ".dll", ".pyd"))
+            license_members = [
+                member
+                for member in archive.getmembers()
+                if any(part in member.name.lower() for part in ("license", "copying", "notice"))
+                and member.isfile()
             ]
+            license_entries = []
+            for member in license_members:
+                extracted_license = archive.extractfile(member)
+                if extracted_license is not None:
+                    license_entries.append((member.name, extracted_license.read()))
+            return (
+                extracted.read().decode("utf-8", "replace"),
+                names,
+                [name for name in names if name.endswith((".so", ".dylib", ".dll", ".pyd"))],
+                license_records(license_entries),
+            )
     raise FreezeError(f"Unsupported archive type: {path.name}")
 
 
@@ -517,13 +551,6 @@ def resolve_graph(root_version: str) -> tuple[list[dict[str, Any]], list[str]]:
         )
     else:
         gaps.append(f"sarvamai=={root_version}: no source archive was available for static inspection")
-    gaps.append(
-        "No graalpy252 pydantic-core wheel was selected; current native inputs use the graalpy250 ABI tag"
-    )
-    gaps.append("No Windows GraalPy pydantic-core wheel was selected; Windows is regression/isolation only")
-    gaps.append(
-        "Transitive versions are selected from live PyPI metadata at capture time; the resulting lock is immutable, but reruns are new captures"
-    )
     return records, gaps
 
 
@@ -537,11 +564,12 @@ def write_evidence(records: list[dict[str, Any]], gaps: list[str], cache: Path, 
         raise FreezeError(f"Refusing symlink evidence root: {evidence}")
     evidence.mkdir(parents=True, exist_ok=True)
     normalized: list[dict[str, Any]] = []
+    legal_notes: list[str] = []
     for record in records:
         item = record["artifact"]
         target = cache / item["filename"]
         digest, size = download_artifact(item["url"], target, item.get("digests", {}).get("sha256"))
-        metadata, names, native = archive_metadata(target)
+        metadata, names, native, archive_licenses = archive_metadata(target)
         identity = wheel_identity(item["filename"])
         archive_requires = [
             f"{dependency}{specifier}"
@@ -569,14 +597,25 @@ def write_evidence(records: list[dict[str, Any]], gaps: list[str], cache: Path, 
                 "wheel": identity,
                 "native_files": native,
                 "license": metadata_value(metadata, "License-Expression") or metadata_value(metadata, "License"),
-                "license_files": [name for name in names if any(part in name.lower() for part in ("license", "copying", "notice"))],
+                "license_status": (
+                    "recorded"
+                    if metadata_value(metadata, "License-Expression") or metadata_value(metadata, "License")
+                    else "recorded-archive"
+                    if archive_licenses
+                    else "unresolved"
+                ),
+                "license_files": archive_licenses,
             }
         )
     if any(
-        item["name"] == "sarvamai" and item["role"] == "direct" and not item["license"] and not item["license_files"]
+        item["name"] == "sarvamai"
+        and item["role"] == "direct"
+        and item["license_status"] == "unresolved"
         for item in normalized
     ):
-        gaps.append("sarvamai has no licence expression or licence file in the inspected artifact")
+        legal_notes.append(
+            "sarvamai has no licence expression or licence file in the inspected artifact; record for SGP-00A/SGP-00B review"
+        )
     selected = [record for record in normalized if record["role"] != "inspection-only-sdist"]
     vulnerability_results = query_osv(selected)
     if vulnerability_results.get("status") != "pass":
@@ -585,10 +624,16 @@ def write_evidence(records: list[dict[str, Any]], gaps: list[str], cache: Path, 
         "schema": "amsha.sarvam-graalpy.static-freeze.v1",
         "captured_on": date.today().isoformat(),
         "cache_root": str(cache),
-        "runtime_target": "GraalPy 3.12; pydantic-core GraalPy 25.0-tagged native wheels",
+        "runtime_target": "GraalPy 3.12; approved Sarvam matrix: macOS arm64, Linux x86-64, Linux arm64",
         "resolver_policy": "Resolve latest non-yanked PyPI release satisfying all observed constraints, then freeze exact artifact hashes; reruns are new evidence captures.",
+        "handoff_observations": [
+            "The available native wheels carry the graalpy312-graalpy250_312_native ABI tag; ABI alignment is handed to SGP-02.",
+            "Windows has no Sarvam GraalPy native artifact and remains a normal-Amsha regression/isolation gate only.",
+            "The static freezer uses live PyPI metadata; this captured lock is immutable, while reruns are new evidence captures.",
+        ],
         "packages": normalized,
         "gaps": gaps,
+        "legal_notes": legal_notes,
         "prohibited_actions_not_run": ["install", "import", "execute", "sdist/build hooks", "Sarvam API calls"],
         "resolution_status": "static archive inputs only; runtime/offline resolver proof is not claimed",
     }
@@ -612,7 +657,8 @@ def write_evidence(records: list[dict[str, Any]], gaps: list[str], cache: Path, 
                 "filename": record["artifact"]["filename"],
                 "hashes": [{"alg": "SHA-256", "content": record["artifact"]["sha256"]}],
                 "licenses": [record["license"]] if record["license"] else [],
-                "license_status": "unresolved" if not record["license"] else "recorded",
+                "license_status": record["license_status"],
+                "license_files": record["license_files"],
                 "native": bool(record["native_files"]),
                 "wheel": record["wheel"],
                 "native_files": record["native_files"],
@@ -630,7 +676,9 @@ def write_evidence(records: list[dict[str, Any]], gaps: list[str], cache: Path, 
     licence_inventory = {
         "schema": "amsha.sarvam-graalpy.static-freeze.licence-provenance.v1",
         "captured_on": lock["captured_on"],
-        "status": "unresolved" if any(not record["license"] for record in selected) else "recorded",
+        "status": "unresolved"
+        if any(record["license_status"] == "unresolved" for record in selected)
+        else "recorded",
         "components": [
             {
                 "name": record["name"],
@@ -642,7 +690,7 @@ def write_evidence(records: list[dict[str, Any]], gaps: list[str], cache: Path, 
                 "release_metadata_url": record["release_metadata_url"],
                 "project_urls": record["project_urls"],
                 "redistribution_status": "unresolved: SGP-00B remains open",
-                "status": "unresolved" if not record["license"] else "recorded",
+                "status": record["license_status"],
             }
             for record in selected
         ],
@@ -670,6 +718,9 @@ byte counts and SHA-256 digests. It used only `zipfile`/`tarfile` metadata
 inspection and did not install, import, execute, patch, vendor, or build any
 third-party package. No credentials or Sarvam API calls were used.
 
+The evidence cache is the gitignored `.scratch/sarvam-graalpy-phase-0/cache/`
+directory; it is separate from the transient `data/smoke/` runtime tree.
+
 The lock and SBOM inputs are reproducible from this command:
 
 ```text
@@ -685,22 +736,29 @@ JVM/Native Image gates remain open.
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("version", nargs="?", default=None, help="sarvamai version (default: SARVAMAI_VERSION or 0.1.30)")
-    parser.add_argument("--cache", type=Path, default=DEFAULT_CACHE, help=argparse.SUPPRESS)
-    parser.add_argument("--evidence", type=Path, default=DEFAULT_EVIDENCE, help=argparse.SUPPRESS)
+    parser.add_argument(
+        "version",
+        nargs="?",
+        default=None,
+        help=f"sarvamai version (default: SARVAMAI_VERSION or {AUTHORIZED_VERSION})",
+    )
     return parser.parse_args()
 
 
 def main() -> int:
     args = parse_args()
-    version = args.version or os.environ.get("SARVAMAI_VERSION", DEFAULT_VERSION)
+    version = args.version or os.environ.get("SARVAMAI_VERSION", AUTHORIZED_VERSION)
     if not re.fullmatch(r"\d+(?:\.\d+){1,3}", version):
         raise FreezeError(f"Invalid sarvamai version: {version}")
+    if version != AUTHORIZED_VERSION:
+        raise FreezeError(
+            f"sarvamai=={version} is outside the current private-PoC authorization; only {AUTHORIZED_VERSION} is permitted"
+        )
     records, gaps = resolve_graph(version)
-    write_evidence(records, gaps, args.cache, args.evidence)
+    write_evidence(records, gaps, DEFAULT_CACHE, DEFAULT_EVIDENCE)
     print(f"Static freeze complete for sarvamai=={version}: {len(records)} archive inputs; {len(gaps)} gap(s)")
-    print(f"Cache: {args.cache}")
-    print(f"Evidence: {args.evidence}")
+    print(f"Cache: {DEFAULT_CACHE}")
+    print(f"Evidence: {DEFAULT_EVIDENCE}")
     return 0
 
 
