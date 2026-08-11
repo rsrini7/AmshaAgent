@@ -215,3 +215,20 @@ and the memory section in `docs/Architecture_Invariants.md`.
   `rest-http/scripts/run_all_validations.sh` and child scripts through
   `rest-http/scripts/common_env.sh`.
 - The master validator must return a nonzero exit code when any suite fails.
+
+## Agent skills
+
+### Issue tracker
+
+Issues are tracked as local Markdown files under
+`.scratch/<feature-slug>/issues/`. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+The default five-role triage vocabulary is used. See
+`docs/agents/triage-labels.md`.
+
+### Domain docs
+
+This is a single-context repository using root `CONTEXT.md` when present and
+`Ideas-Pending/ADR-*.md` for ADRs. See `docs/agents/domain.md`.
