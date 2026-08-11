@@ -650,7 +650,15 @@ This fail-fast pattern ensures misconfigured production deployments are caught a
 
 ### Q: How does the API rate limiter work?
 
-`ApiKeyAuthFilter` extracts the `Authorization: Bearer <key>` header and validates it against `ApiKeyRegistry` using constant-time comparison (preventing timing attacks). Each valid key is tracked in a per-key sliding window. If a key exceeds `amsha.api.rate-limit.requests-per-minute` (default 20), the filter returns `HTTP 429` with a `Retry-After` header. The implementation uses `AtomicLong` counters and does not require a Redis sidecar.
+Read and mutation requests use separate per-key buckets. Read requests use
+`amsha.api.rate-limit.requests-per-minute` (default 20); mutating requests use
+`amsha.api.rate-limit.mutation-per-minute` (default 10). Onboarding draft
+creates, step updates, commits, and discards use the mutation bucket, so they
+can return `HTTP 429` when that bucket is exhausted even if the general request
+bucket still has capacity. The valid API key is still required; this only
+controls throttling.
+
+`ApiKeyAuthFilter` extracts the `Authorization: Bearer <key>` header and validates it against `ApiKeyRegistry` using constant-time comparison (preventing timing attacks). Either bucket returns `HTTP 429` with a `Retry-After` header when exhausted. The implementation uses `AtomicLong` counters and does not require a Redis sidecar.
 
 ---
 

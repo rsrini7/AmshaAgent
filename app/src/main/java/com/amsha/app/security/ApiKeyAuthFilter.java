@@ -286,11 +286,9 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
         boolean isReadOnlyPolling =
                 "GET".equals(method) && POLL_LIKE_PATHS.stream().anyMatch(finalPath::startsWith);
         boolean isWebSocketTokenRequest = "POST".equals(method) && "/chat/ws-token".equals(finalPath);
-        boolean isOnboardingDraftRequest =
-                "/onboarding/drafts".equals(finalPath) || finalPath.startsWith("/onboarding/drafts/");
 
         if (!(isReadOnlyPolling && isInternalUiKey)) {
-            boolean allowed = "GET".equals(method) || isWebSocketTokenRequest || isOnboardingDraftRequest
+            boolean allowed = ("GET".equals(method) || isWebSocketTokenRequest)
                     ? apiKeyRegistry.isAllowed(apiKey)
                     : apiKeyRegistry.isMutationAllowed(apiKey);
             if (!allowed) {

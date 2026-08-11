@@ -3,6 +3,7 @@ package com.amsha.core.agent.loop;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 import com.amsha.common.util.LogUtil;
@@ -106,6 +107,7 @@ class ParallelBatchResumeHandler {
                 continue;
             }
 
+            ParallelToolCall executionCall = call;
             try {
                 String effectiveRole =
                         checkpoint.getPendingToolRole() != null ? checkpoint.getPendingToolRole() : context.agentRole();
@@ -122,10 +124,17 @@ class ParallelBatchResumeHandler {
                 }
                 final String invocationToolName = toolName;
                 final String invocationParamsJson = paramsJson;
+                if (!invocationToolName.equals(call.toolName())
+                        || !Objects.equals(invocationParamsJson, call.paramsJson())) {
+                    executionCall = new ParallelToolCall(
+                            call.callId(), invocationToolName, Map.of(), invocationParamsJson, null, false);
+                }
 
                 var parsedParams = invocationParamsJson != null && !invocationParamsJson.isBlank()
                         ? objectMapper.readValue(invocationParamsJson, new TypeReference<Map<String, Object>>() {})
                         : Map.<String, Object>of();
+                executionCall = new ParallelToolCall(
+                        call.callId(), invocationToolName, parsedParams, invocationParamsJson, null, false);
 
                 ToolInvocationGuard.GuardDecision decision = guard != null
                         ? guard.evaluate(
@@ -140,7 +149,8 @@ class ParallelBatchResumeHandler {
                         : new ToolInvocationGuard.GuardDecision.Allow();
 
                 if (decision instanceof ToolInvocationGuard.GuardDecision.Blocked b) {
-                    completed.add(call.withResult("Tool execution blocked by safety guard: " + b.observation(), false));
+                    completed.add(executionCall.withResult(
+                            "Tool execution blocked by safety guard: " + b.observation(), false));
                     continue;
                 }
 
@@ -155,12 +165,12 @@ class ParallelBatchResumeHandler {
 
                 completed.add(
                         switch (response) {
-                            case ToolResponse.ToolSuccess success -> call.withResult(success.output(), true);
-                            case ToolResponse.ToolFailure failure -> call.withResult(failure.output(), false);
-                            case ToolResponse.ToolPending pending -> call.withResult(pending.output(), false);
+                            case ToolResponse.ToolSuccess success -> executionCall.withResult(success.output(), true);
+                            case ToolResponse.ToolFailure failure -> executionCall.withResult(failure.output(), false);
+                            case ToolResponse.ToolPending pending -> executionCall.withResult(pending.output(), false);
                         });
             } catch (Exception e) {
-                completed.add(call.withResult(
+                completed.add(executionCall.withResult(
                         "Tool execution failed on resume: " + AgentErrorMessageUtil.safeMessage(e), false));
             }
         }

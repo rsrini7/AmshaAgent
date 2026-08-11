@@ -8,6 +8,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 
+import com.amsha.core.routing.ClaudeCodeOAuthTokenExtractor;
 import com.amsha.core.routing.ModelDefaults;
 import com.amsha.core.routing.provider.LlmProviderDescriptor;
 import com.amsha.core.routing.provider.LlmProviderOnboardingAdapter;
@@ -85,6 +86,9 @@ public class LlmConfigurationProvenance {
     LlmProviderOnboardingAdapter providerCatalog;
 
     @Inject
+    ClaudeCodeOAuthTokenExtractor claudeCodeTokenExtractor;
+
+    @Inject
     Config config;
 
     @ConfigProperty(name = "amsha.llm.provider", defaultValue = "groq")
@@ -117,19 +121,26 @@ public class LlmConfigurationProvenance {
                 .descriptor(normalizedProvider)
                 .map(LlmProviderDescriptor::requiresApiKey)
                 .orElse(true);
-        boolean vaultCredentialConfigured = vaultActive && vault.systemKeyExists(VaultConstants.LLM_API_KEY);
-        boolean environmentCredentialConfigured = hasConfiguredEnvironmentValue(environmentSpec.apiKeyKey());
+        boolean claudeCode = ModelDefaults.PROVIDER_CLAUDE_CODE.equals(normalizedProvider);
+        boolean vaultCredentialConfigured = claudeCode
+                ? vault.systemKeyExists(VaultConstants.CLAUDE_CODE_OAUTH_TOKEN_KEY)
+                : vaultActive && vault.systemKeyExists(VaultConstants.LLM_API_KEY);
+        boolean environmentCredentialConfigured = claudeCode
+                ? claudeCodeTokenExtractor != null
+                        && claudeCodeTokenExtractor.extractToken().isPresent()
+                : hasConfiguredEnvironmentValue(environmentSpec.apiKeyKey());
         boolean credentialConfigured = vaultCredentialConfigured || environmentCredentialConfigured;
-        String credentialState = requiresApiKey
+        boolean credentialRequired = requiresApiKey || claudeCode;
+        String credentialState = credentialRequired
                 ? credentialConfigured ? CREDENTIAL_CONFIGURED : CREDENTIAL_MISSING
                 : CREDENTIAL_NOT_REQUIRED;
-        String credentialSource = !requiresApiKey
+        String credentialSource = !credentialRequired
                 ? SOURCE_NONE
                 : vaultCredentialConfigured
                         ? SOURCE_VAULT
                         : environmentCredentialConfigured ? SOURCE_ENVIRONMENT : SOURCE_NONE;
         boolean ready = !normalizedProvider.isBlank()
-                && (!requiresApiKey || credentialConfigured)
+                && (!credentialRequired || credentialConfigured)
                 && (!ModelDefaults.PROVIDER_GENERIC_OPENAI.equals(normalizedProvider) || !effectiveBaseUrl.isBlank())
                 && (!ModelDefaults.PROVIDER_INFINITE_LOOP.equals(normalizedProvider)
                         || hasConfiguredEnvironmentValue("AMSHA_INFINITE_LOOP_LLM_PROVIDERS"));

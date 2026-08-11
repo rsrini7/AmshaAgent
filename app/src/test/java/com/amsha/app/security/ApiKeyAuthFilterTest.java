@@ -79,7 +79,7 @@ class ApiKeyAuthFilterTest {
     }
 
     @Test
-    void onboardingDraftMutationUsesNormalRequestBucket() {
+    void onboardingDraftMutationUsesMutationBucket() {
         when(apiKeyRegistryMock.isAllowed("valid-key")).thenReturn(true);
         when(apiKeyRegistryMock.isMutationAllowed("valid-key")).thenReturn(false);
 
@@ -89,7 +89,7 @@ class ApiKeyAuthFilterTest {
                 .when()
                 .put("/api/v1/onboarding/drafts/draft-test/steps/review")
                 .then()
-                .statusCode(Matchers.not(429));
+                .statusCode(429);
     }
 
     @Test

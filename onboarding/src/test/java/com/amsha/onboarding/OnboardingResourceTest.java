@@ -4,6 +4,8 @@ import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.*;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -25,6 +27,8 @@ import org.junit.jupiter.api.Test;
 import io.quarkus.test.junit.QuarkusTest;
 import io.quarkus.test.junit.TestProfile;
 import io.restassured.http.ContentType;
+import io.vertx.core.http.HttpServerRequest;
+import io.vertx.core.net.SocketAddress;
 
 @QuarkusTest
 @TestProfile(FlywayEnabledTestProfile.class)
@@ -54,7 +58,9 @@ class OnboardingResourceTest {
         resource.securityContext = mock(SecurityContext.class);
         resource.bootstrapStateStore = mock(BootstrapStateStorePort.class);
         resource.configurationProvenance = mock(LlmConfigurationProvenance.class);
+        resource.request = mock(HttpServerRequest.class);
         resource.skipOnboarding = false;
+        when(resource.request.remoteAddress()).thenReturn(SocketAddress.inetSocketAddress(8080, "127.0.0.1"));
         when(resource.configurationProvenance.resolve())
                 .thenReturn(new LlmConfigurationProvenance.Resolution(
                         "",
@@ -74,8 +80,17 @@ class OnboardingResourceTest {
             OnboardingStatusDto status = (OnboardingStatusDto) response.getEntity();
             assertEquals("welcome", status.stepName());
             assertFalse(status.credentialsOk());
-            assertEquals(LlmConfigurationProvenance.SOURCE_DEFAULT, status.effectiveSource());
-            assertEquals(LlmConfigurationProvenance.CREDENTIAL_MISSING, status.credentialState());
+            assertNull(status.provider());
+            assertNull(status.effectiveSource());
+            assertNull(status.credentialState());
+            assertTrue(response.getCookies().isEmpty());
+        }
+
+        when(resource.request.remoteAddress()).thenReturn(SocketAddress.inetSocketAddress(8080, "192.0.2.10"));
+        when(resource.bootstrapStateStore.getState())
+                .thenReturn(Optional.of(bootstrapState(BootstrapStateDto.STATUS_UNCLAIMED)));
+        try (Response response = resource.status()) {
+            assertEquals(Response.Status.UNAUTHORIZED.getStatusCode(), response.getStatus());
         }
 
         when(resource.bootstrapStateStore.getState())

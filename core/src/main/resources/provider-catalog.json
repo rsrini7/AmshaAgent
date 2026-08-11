@@ -41,6 +41,7 @@
     "defaultModel": "claude-sonnet-4-5",
     "embeddingCapable": false,
     "requiresApiKey": false,
+    "authScheme": "CLI_OAUTH",
     "hasBaseUrl": false
   },
   {

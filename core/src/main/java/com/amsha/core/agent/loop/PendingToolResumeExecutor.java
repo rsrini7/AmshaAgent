@@ -62,13 +62,13 @@ final class PendingToolResumeExecutor {
         restoreCheckpointHistory(context, history, checkpoint);
 
         String toolName = checkpoint.getPendingToolName();
+        String originalToolName = toolName;
         String paramsJson = checkpoint.getPendingToolParametersJson();
         String sessionId = context.sessionId();
         String effectiveRole =
                 checkpoint.getPendingToolRole() != null ? checkpoint.getPendingToolRole() : context.agentRole();
         var owner = delegationResolver.resolveOwner(effectiveRole, toolName);
         if (owner.isPresent()) {
-            String originalToolName = toolName;
             toolName = ToolCapability.DELEGATE_TO_AGENT.toolName();
             paramsJson = buildDelegationParams(originalToolName, paramsJson, owner.get());
             log.warnf(
@@ -86,6 +86,7 @@ final class PendingToolResumeExecutor {
                 channelType,
                 stateMachineRunner,
                 toolName,
+                originalToolName,
                 paramsJson,
                 sessionId,
                 effectiveRole));
@@ -161,7 +162,7 @@ final class PendingToolResumeExecutor {
                 response instanceof ToolResponse.ToolSuccess,
                 request.history(),
                 request.sessionId());
-        if (ToolCapability.INGEST_DOCUMENT.toolName().equals(request.toolName())) {
+        if (ToolCapability.INGEST_DOCUMENT.toolName().equals(request.originalToolName())) {
             request.history()
                     .add(ReasoningStep.systemMessage("The document ingested successfully. "
                             + "Summarize what was stored for the user in a natural conversational tone."));
@@ -309,6 +310,7 @@ final class PendingToolResumeExecutor {
             String channelType,
             AgentStateMachineRunner stateMachineRunner,
             String toolName,
+            String originalToolName,
             String paramsJson,
             String sessionId,
             String effectiveRole) {}

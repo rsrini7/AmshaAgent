@@ -12,6 +12,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+import com.amsha.core.routing.ClaudeCodeOAuthTokenExtractor;
 import com.amsha.core.routing.provider.LlmProviderDescriptor;
 import com.amsha.core.routing.provider.LlmProviderOnboardingAdapter;
 import com.amsha.core.routing.provider.ModelEntry;
@@ -149,6 +150,80 @@ class LlmConfigurationProvenanceTest {
     }
 
     @Test
+    void claudeCodeRequiresOAuthCredentialFromVaultOrCliFile() {
+        LlmConfigurationProvenance provenance = provenanceFor("claude-code", false, Map.of());
+        when(provenance.providerCatalog.descriptor("claude-code"))
+                .thenReturn(Optional.of(new LlmProviderDescriptor(
+                        "claude-code",
+                        "Claude Code",
+                        "claude-code",
+                        "CLI_OAUTH",
+                        "",
+                        false,
+                        false,
+                        List.of(new ModelEntry("claude-sonnet-4-5", "Claude", null)),
+                        Map.of())));
+        when(provenance.vault.systemKeyExists(VaultConstants.CLAUDE_CODE_OAUTH_TOKEN_KEY))
+                .thenReturn(false);
+        when(provenance.claudeCodeTokenExtractor.extractToken()).thenReturn(Optional.empty());
+
+        LlmConfigurationProvenance.Resolution resolution = provenance.resolve();
+
+        assertEquals(LlmConfigurationProvenance.CREDENTIAL_MISSING, resolution.credentialState());
+        assertEquals(LlmConfigurationProvenance.SOURCE_NONE, resolution.credentialSource());
+        assertTrue(!resolution.ready());
+    }
+
+    @Test
+    void claudeCodeIsReadyWhenCliOAuthFileIsAvailable() {
+        LlmConfigurationProvenance provenance = provenanceFor("claude-code", false, Map.of());
+        when(provenance.providerCatalog.descriptor("claude-code"))
+                .thenReturn(Optional.of(new LlmProviderDescriptor(
+                        "claude-code",
+                        "Claude Code",
+                        "claude-code",
+                        "CLI_OAUTH",
+                        "",
+                        false,
+                        false,
+                        List.of(new ModelEntry("claude-sonnet-4-5", "Claude", null)),
+                        Map.of())));
+        when(provenance.vault.systemKeyExists(VaultConstants.CLAUDE_CODE_OAUTH_TOKEN_KEY))
+                .thenReturn(false);
+        when(provenance.claudeCodeTokenExtractor.extractToken()).thenReturn(Optional.of("oauth-token"));
+
+        LlmConfigurationProvenance.Resolution resolution = provenance.resolve();
+
+        assertEquals(LlmConfigurationProvenance.CREDENTIAL_CONFIGURED, resolution.credentialState());
+        assertEquals(LlmConfigurationProvenance.SOURCE_ENVIRONMENT, resolution.credentialSource());
+        assertTrue(resolution.ready());
+    }
+
+    @Test
+    void claudeCodeIsReadyWhenOAuthTokenIsInVault() {
+        LlmConfigurationProvenance provenance = provenanceFor("claude-code", false, Map.of());
+        when(provenance.providerCatalog.descriptor("claude-code"))
+                .thenReturn(Optional.of(new LlmProviderDescriptor(
+                        "claude-code",
+                        "Claude Code",
+                        "claude-code",
+                        "CLI_OAUTH",
+                        "",
+                        false,
+                        false,
+                        List.of(new ModelEntry("claude-sonnet-4-5", "Claude", null)),
+                        Map.of())));
+        when(provenance.vault.systemKeyExists(VaultConstants.CLAUDE_CODE_OAUTH_TOKEN_KEY))
+                .thenReturn(true);
+
+        LlmConfigurationProvenance.Resolution resolution = provenance.resolve();
+
+        assertEquals(LlmConfigurationProvenance.CREDENTIAL_CONFIGURED, resolution.credentialState());
+        assertEquals(LlmConfigurationProvenance.SOURCE_VAULT, resolution.credentialSource());
+        assertTrue(resolution.ready());
+    }
+
+    @Test
     void defaultProviderSourceIsAvailableWhenConfigComesFromApplicationDefaults() {
         LlmConfigurationProvenance provenance = provenanceFor("ollama", false, Map.of());
         provenance.config = mockConfig(Map.of(), "application.yaml");
@@ -192,6 +267,7 @@ class LlmConfigurationProvenanceTest {
         LlmConfigurationProvenance provenance = new LlmConfigurationProvenance();
         provenance.vault = mock(SecretVault.class);
         provenance.providerCatalog = mock(LlmProviderOnboardingAdapter.class);
+        provenance.claudeCodeTokenExtractor = mock(ClaudeCodeOAuthTokenExtractor.class);
         provenance.config = mockConfig(values, "test-profile");
         provenance.configuredProvider = provider;
         provenance.vaultPriority = vaultPriority;

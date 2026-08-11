@@ -25,7 +25,8 @@ class ProviderOnboardingAdapterTest {
         assertTrue(descriptors.stream().noneMatch(d -> d.id().equals("anthropic")));
         LlmProviderDescriptor groq = adapter.descriptor("groq").orElseThrow();
         assertEquals("https://api.groq.com/openai/v1", groq.defaultBaseUrl());
-        assertTrue(adapter.descriptor("claude-code").orElseThrow().authScheme().equals("NONE"));
+        assertEquals(
+                "CLI_OAUTH", adapter.descriptor("claude-code").orElseThrow().authScheme());
     }
 
     @Test

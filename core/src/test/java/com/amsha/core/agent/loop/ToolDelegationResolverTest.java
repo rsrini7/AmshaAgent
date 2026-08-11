@@ -89,6 +89,18 @@ class ToolDelegationResolverTest {
                 .isEmpty());
     }
 
+    @Test
+    void runtimeRegistryFallbackUsesDeclaredPriorityInsteadOfAlphabeticalOrder() {
+        CapabilityRegistry registry = new CapabilityRegistry();
+        registry.grant(AgentRoleEnum.ARCHITECT_ID, "custom_tool");
+        registry.grant(AgentRoleEnum.RESEARCHER_ID, "custom_tool");
+        ToolDelegationResolver runtimeResolver = new ToolDelegationResolver(registry);
+
+        assertEquals(
+                Optional.of(AgentRoleEnum.RESEARCHER_ID),
+                runtimeResolver.resolveOwner(AgentRoleEnum.CODER_ID, "custom_tool"));
+    }
+
     static Stream<String> builtInRoles() {
         return AgentRoleEnum.values().stream().map(AgentRoleEnum::id);
     }

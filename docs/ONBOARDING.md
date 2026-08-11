@@ -158,6 +158,11 @@ The connections catalog controls whether a provider needs an API-key field.
 Generic OpenAI connections require a valid absolute HTTP(S) endpoint. Ollama
 and OMLX are keyless when configured as local providers.
 
+Claude Code is also keyless in the wizard and uses `CLI_OAUTH`: runtime
+readiness comes from the system-vault Claude OAuth token or the local Claude
+Code credentials file (`~/.claude/credentials.json`). Status exposes only
+configured/missing credential state; it never returns the token.
+
 At Review, the selected LLM configuration is validated and the commit saga
 activates it. With vault priority enabled, provider, model, base URL, and API
 key values are written to system-vault keys used by runtime routing. With vault

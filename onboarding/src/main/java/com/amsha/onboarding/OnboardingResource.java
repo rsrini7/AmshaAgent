@@ -89,14 +89,13 @@ public class OnboardingResource {
     public Response status() {
         String ownerId = requireOwner();
         boolean authed = ownerId != null;
-        // When the deployment is pre-configured (skip-onboarding or backend LLM already configured),
-        // the status is reachable without an authenticated owner so the UI can skip the wizard.
-        // Explicit skip remains supported, and environment-backed providers may skip the wizard.
+        // Before first-owner claim, unauthenticated status is limited to a loopback welcome preview.
+        // Once claimed, status requires an owner; authenticated preconfigured status may signal skip.
         LlmConfigurationProvenance.Resolution configuration = configurationProvenance.resolve();
         boolean skip = skipOnboarding || configuration.ready();
         boolean unclaimed =
                 bootstrapStateStore.getState().map(state -> state.isUnclaimed()).orElse(true);
-        if (!authed && !skip && !unclaimed) {
+        if (!authed && (!unclaimed || !isLoopbackRequest())) {
             log.warnf("Onboarding /status denied: missing or invalid principal");
             return Response.status(401)
                     .header(HttpHeaders.CACHE_CONTROL, "no-store")
@@ -125,22 +124,6 @@ public class OnboardingResource {
                     configuration.effectiveSource(),
                     configuration.credentialState(),
                     configuration.credentialSource());
-        } else if (skip) {
-            // Pre-auth skip: report the deployment as already configured so the UI can go straight to chat.
-            dto = new OnboardingStatusDto(
-                    0,
-                    "COMPLETE",
-                    configuration.effectiveProvider(),
-                    configuration.effectiveModel(),
-                    true,
-                    true,
-                    configuration.vaultPriority(),
-                    configuration.effectiveProvider(),
-                    configuration.effectiveModel(),
-                    configuration.effectiveBaseUrl(),
-                    configuration.effectiveSource(),
-                    configuration.credentialState(),
-                    configuration.credentialSource());
         } else {
             // Before first-owner claim, expose only the non-secret wizard/configuration state.
             // This avoids using an expected 401 as browser bootstrap control flow.
@@ -152,17 +135,17 @@ public class OnboardingResource {
                     false,
                     false,
                     configuration.vaultPriority(),
-                    configuration.effectiveProvider(),
-                    configuration.effectiveModel(),
-                    configuration.effectiveBaseUrl(),
-                    configuration.effectiveSource(),
-                    configuration.credentialState(),
-                    configuration.credentialSource());
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null);
         }
 
         Response.ResponseBuilder rb = Response.ok(dto);
         rb.header(HttpHeaders.CACHE_CONTROL, "no-store");
-        if (skip) {
+        if (authed && skip) {
             // Mirror main: authenticate the UI for chat via the internal API-key cookie.
             rb.cookie(buildSkipCookie(internalApiKey));
         }
@@ -188,6 +171,13 @@ public class OnboardingResource {
         boolean loopback = HttpConstants.isLoopbackHost(host);
         String scheme = request.scheme();
         return !(loopback && "http".equalsIgnoreCase(scheme));
+    }
+
+    private boolean isLoopbackRequest() {
+        if (request == null || request.remoteAddress() == null) {
+            return false;
+        }
+        return HttpConstants.isLoopbackHost(request.remoteAddress().host());
     }
 
     @GET

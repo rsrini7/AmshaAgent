@@ -71,7 +71,9 @@ public class StaticProviderCatalogAdapter implements LlmProviderOnboardingAdapte
                 r.id,
                 r.name,
                 r.id,
-                r.requiresApiKey ? "API_KEY" : "NONE",
+                r.authScheme == null || r.authScheme.isBlank()
+                        ? (Boolean.TRUE.equals(r.requiresApiKey) ? "API_KEY" : "NONE")
+                        : r.authScheme,
                 ModelDefaults.defaultBaseUrlForProvider(r.id),
                 Boolean.TRUE.equals(r.requiresApiKey),
                 Boolean.TRUE.equals(r.embeddingCapable),
@@ -133,6 +135,7 @@ public class StaticProviderCatalogAdapter implements LlmProviderOnboardingAdapte
         public String defaultModel;
         public Boolean embeddingCapable;
         public Boolean requiresApiKey;
+        public String authScheme;
         public Boolean hasBaseUrl;
     }
 }

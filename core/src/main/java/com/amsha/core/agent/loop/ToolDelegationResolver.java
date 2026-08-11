@@ -4,6 +4,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
 import java.util.Comparator;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
@@ -27,6 +28,19 @@ public final class ToolDelegationResolver {
     private static final String COORDINATOR = AgentRoleEnum.COORDINATOR_ID;
     private static final String RESEARCHER = AgentRoleEnum.RESEARCHER_ID;
     private static final String CODER = AgentRoleEnum.CODER_ID;
+    private static final List<String> FALLBACK_OWNER_PRIORITY = List.of(
+            COORDINATOR,
+            RESEARCHER,
+            CODER,
+            AgentRoleEnum.DEBUGGER_ID,
+            AgentRoleEnum.ARCHITECT_ID,
+            AgentRoleEnum.SYNTHESIZER_ID,
+            AgentRoleEnum.NURTURER_ID,
+            AgentRoleEnum.OPTIMIZER_ID,
+            AgentRoleEnum.SENTINEL_ID,
+            AgentRoleEnum.HEALER_ID,
+            AgentRoleEnum.PROTECTOR_ID,
+            AgentRoleEnum.PURIFIER_ID);
 
     private static final Set<String> ALL_BUILT_IN_ROLES =
             AgentRoleEnum.values().stream().map(AgentRoleEnum::id).collect(Collectors.toUnmodifiableSet());
@@ -149,8 +163,14 @@ public final class ToolDelegationResolver {
                 .filter(role -> !role.equals(current))
                 .filter(role -> !role.isBlank())
                 .filter(role -> !AgentRoleEnum.isSkillRole(role) || capabilityRegistry.hasCapability(role, toolName))
-                .sorted(Comparator.naturalOrder())
+                .sorted(Comparator.comparingInt(ToolDelegationResolver::fallbackPriority)
+                        .thenComparing(Comparator.naturalOrder()))
                 .findFirst();
+    }
+
+    private static int fallbackPriority(String role) {
+        int priority = FALLBACK_OWNER_PRIORITY.indexOf(role);
+        return priority >= 0 ? priority : Integer.MAX_VALUE;
     }
 
     /** Returns whether the resolver has a static ownership rule for a tool. */

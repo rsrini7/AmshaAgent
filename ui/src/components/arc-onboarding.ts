@@ -330,7 +330,6 @@ export class ArcOnboarding extends LitElement {
     this._loading = true;
     this._error = '';
     try {
-      clearPersistedOwnerApiKey();
       const recovery = await this._client.recoverLocalOwner();
       if (typeof recovery?.apiKey !== 'string' || !recovery.apiKey.trim()) {
         throw new Error('Local recovery did not return an owner credential.');

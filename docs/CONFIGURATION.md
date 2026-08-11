@@ -25,6 +25,11 @@ Generate secrets: `openssl rand -base64 32` (Linux/macOS) or `[Convert]::ToBase6
 
 | `AMSHA_LLM_CIRCUIT_BREAKER_ENABLED` | `true` | Enable per-model circuit breaker isolation |
 
+Claude Code uses `CLI_OAUTH` rather than an API-key environment variable. The
+runtime resolves its OAuth token from the system vault or the local Claude Code
+credentials file (`~/.claude/credentials.json`); onboarding status reports only
+whether the credential is configured.
+
 ### Onboarding and native first-run testing
 
 `AMSHA_UI_SKIP_ONBOARDING=false` keeps the first-run wizard enabled. `AMSHA_LLM_VAULT_PRIORITY=true` allows committed wizard connections to replace environment-backed LLM routing; it is reported by the authenticated `/api/v1/onboarding/status` response as `vaultPriority`.
