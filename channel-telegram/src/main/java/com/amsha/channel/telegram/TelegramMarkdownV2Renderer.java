@@ -22,7 +22,7 @@ import org.jboss.logging.Logger;
  * Mandatory escaping: '_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!'
  * must be escaped with a backslash in all parts of the message EXCEPT:
  * 1. Inside {@code pre} (CodeBlock) and {@code code} (InlineCode) entities.
- * 2. Inside the text part of {@code [...]()} (InlineLink) - though not used in Phase 47.
+ * 2. Inside the text part of {@code [...]()} (InlineLink) - though not used in production.
  */
 @ApplicationScoped
 public class TelegramMarkdownV2Renderer implements ReplyRenderer {

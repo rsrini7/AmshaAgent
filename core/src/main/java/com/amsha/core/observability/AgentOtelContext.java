@@ -16,7 +16,7 @@ import io.opentelemetry.context.Scope;
 /**
  * OTel session-level span management.
  * <p>
- * Phase 9 OpenTelemetry implementation for tracking agent root sessions and
+ * OpenTelemetry implementation for tracking agent root sessions and
  * emitting child spans with semantic conventions for token consumption.
  */
 @ApplicationScoped

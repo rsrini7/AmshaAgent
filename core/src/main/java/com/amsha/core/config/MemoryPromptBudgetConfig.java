@@ -7,7 +7,7 @@ import io.smallrye.config.WithDefault;
  * Configuration for tiered memory prompt injection budget.
  * Controls size caps and ordering for memory blocks injected into the system prompt.
  * <p>
- * Phase 4 will enforce these budgets in {@code ChatHistoryAssembler}.
+ * Agent will enforce these budgets in {@code ChatHistoryAssembler}.
  */
 @ConfigMapping(prefix = "amsha.memory.prompt-budget")
 public interface MemoryPromptBudgetConfig {

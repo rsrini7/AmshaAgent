@@ -7,7 +7,12 @@ Read [AGENTS.md](AGENTS.md) before making changes; it is the canonical guide.
 - Use `ToolCapability.toolName()`, `ChannelType.*.id()`, and
   `LogUtil.rootMessage(e)` instead of duplicated literals or raw exception messages.
 - `ReplyNode` is sealed: use a pattern-matching `switch` on concrete node types.
-- PMD limits: 500 lines per file, 80 per method, cognitive complexity 15.
+- Java quality gate: run `python3 ./scripts/fix_fqns.py && ./mvnw spotless:apply -q`,
+  then `./mvnw -pl <affected-module> -am pmd:check -DskipTests`; PMD is bound to
+  `verify`, not `package`.
+- PMD limits from `app/src/main/resources/amsha-rules.xml`: 500 lines per class,
+  80 NCSS statements per method, and cognitive complexity 50.
+- Before handoff, run `mise run sonar:issues` after the local Maven gates.
 - SQLite diagnostics: `sqlite3 data/amsha-meta.db ".tables"` and
   `sqlite3 data/amsha-fts.db ".tables"`.
 - Local OMLX/ONNX validation uses `mise run smoke:local-runtime -- <command>`. The

@@ -9,6 +9,7 @@ import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
@@ -116,6 +117,22 @@ class McpOnboardingExtensionTest {
     }
 
     @Test
+    void validateRejectsCommaInServerNameBecauseReceiptsUseCommaDelimiter() {
+        OnboardingExtension ext = extension();
+
+        OnboardingValidationResult result = ext.validate(
+                ctx(),
+                ext.prepare(ctx()),
+                new OnboardingInput(
+                        "mcp",
+                        "{\"name\":\"svc,prod\",\"endpoint\":\"https://mcp.example.com\","
+                                + "\"category\":\"NETWORK\"}"));
+
+        assertFalse(result.valid());
+        assertTrue(result.safeFieldErrors().contains("name cannot contain a comma"));
+    }
+
+    @Test
     void validateRejectsUnknownCategory() {
         OnboardingExtension ext = extension();
         doNothing().when(lifecycleService).validateHttpRegistration(any(), anyMap());
@@ -148,5 +165,40 @@ class McpOnboardingExtensionTest {
 
         commit.compensate("op-1", receipt);
         verify(lifecycleService).deleteByNameAndUserId("mysvc", "owner-1");
+    }
+
+    @Test
+    void emptyOptionalPayloadIsValidAndDoesNotPersist() {
+        McpOnboardingExtension ext = extension();
+        OnboardingValidationResult result = ext.validate(ctx(), ext.prepare(ctx()), new OnboardingInput("mcp", "{}"));
+        assertTrue(result.valid());
+
+        var commit = ext.plan(
+                ctx(),
+                ext.prepare(ctx()),
+                new ValidatedOnboardingInput(new OnboardingInput("mcp", "{}"), OnboardingValidationResult.ok()));
+        assertEquals("", commit.commit("op-empty"));
+        verify(lifecycleService, never()).persistSuccessfulHttp(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void uiServerListPayloadPersistsEveryHttpServer() {
+        McpOnboardingExtension ext = extension();
+        doNothing().when(lifecycleService).validateHttpRegistration(any(), anyMap());
+        String payload = "{\"servers\":["
+                + "{\"name\":\"one\",\"endpoint\":\"https://one.example\",\"category\":\"NETWORK\"},"
+                + "{\"name\":\"two\",\"endpoint\":\"https://two.example\",\"category\":\"COMPUTE\"}]}";
+        OnboardingInput input = new OnboardingInput("mcp", payload);
+        assertTrue(ext.validate(ctx(), ext.prepare(ctx()), input).valid());
+
+        var commit = ext.plan(
+                ctx(), ext.prepare(ctx()), new ValidatedOnboardingInput(input, OnboardingValidationResult.ok()));
+        assertEquals("one,two", commit.commit("op-many"));
+        verify(lifecycleService)
+                .persistSuccessfulHttp(
+                        eq("one"), eq("https://one.example"), eq(ToolCategory.NETWORK), eq("owner-1"), anyMap());
+        verify(lifecycleService)
+                .persistSuccessfulHttp(
+                        eq("two"), eq("https://two.example"), eq(ToolCategory.COMPUTE), eq("owner-1"), anyMap());
     }
 }

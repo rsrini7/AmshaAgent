@@ -27,7 +27,7 @@ public class ArchivalMemoryService {
      * embedding are written independently. Callers that need vector search must also
      * call {@code VectorIngestionService.ingestVector(chunkId, embedding)} separately.
      * If one succeeds and the other fails, BM25 search still works — the system
-     * degrades gracefully. Phase 6 tool path must handle this two-step pattern.
+     * degrades gracefully. Tool path must handle this two-step pattern.
      */
     public void upsert(ArchivalChunkDto chunk) {
         store.upsert(chunk);

@@ -49,7 +49,7 @@ public class IntentShadowEvaluationService {
         this.executor = Objects.requireNonNull(executor, "executor");
         this.meterRegistry = Objects.requireNonNull(meterRegistry, "meterRegistry");
         this.confidence = DistributionSummary.builder("amsha.classifier.intent.shadow.confidence")
-                .description("Confidence distribution for Phase 2 intent shadow opinions")
+                .description("Confidence distribution for intent shadow opinions")
                 .serviceLevelObjectives(0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0)
                 .register(meterRegistry);
     }
@@ -90,7 +90,7 @@ public class IntentShadowEvaluationService {
 
     private void recordOutcome(String outcome, String reason, String scoreBand) {
         Counter.builder("amsha.classifier.intent.shadow.results")
-                .description("Privacy-safe Phase 2 intent shadow comparison results")
+                .description("Privacy-safe intent shadow comparison results")
                 .tag("outcome", outcome)
                 .tag("reason", reason)
                 .tag("score_band", scoreBand)

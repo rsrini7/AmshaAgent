@@ -242,10 +242,10 @@ class DelegateToAgentToolDeepTest {
     }
 
     @Test
-    void testGetDelegatableAgentList_excludesCoordinator() {
+    void testGetDelegatableAgentList_includesCoordinator() {
         String list = processor.getDelegatableAgentList();
         // Coordinator should not be in the delegatable list
-        assertFalse(list.startsWith("coordinator,") && !list.contains(", coordinator"));
+        assertTrue(list.contains("coordinator"));
     }
 
     // ── handleSubAgentResult ─────────────────────────────────────────────

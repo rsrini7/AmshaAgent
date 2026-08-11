@@ -72,6 +72,10 @@ try {
     Copy-Item -Path "ui/dist/*" -Destination $target -Recurse -Force
     Write-Host '✅  UI copied to Quarkus resources.'
 
+    # Repackage after the UI copy; the first Maven phase runs before the UI build.
+    & $mvnw verify -pl app -am -DskipTests --no-transfer-progress -T $threads
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
     Write-Host '✅  Build complete: app/target/quarkus-app/quarkus-run.jar'
 } finally {
     if ($envBackup -and (Test-Path '.env.build-backup')) {

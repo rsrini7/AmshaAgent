@@ -7,8 +7,10 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
+import com.amsha.core.agent.role.ToolMetadata;
 import com.amsha.core.audit.AuditService;
 import com.amsha.core.reflex.PiiScanReflex;
 import com.amsha.core.security.AutonomyLevel;
@@ -57,6 +59,14 @@ class IngestDocumentToolTest {
                 null,
                 null,
                 null);
+    }
+
+    @Test
+    void metadataGrantsIngestDocumentToNurturer() {
+        ToolMetadata metadata = IngestDocumentTool.class.getAnnotation(ToolMetadata.class);
+
+        assertTrue(metadata != null);
+        assertTrue(List.of(metadata.defaultRoles()).contains("nurturer"));
     }
 
     @Test

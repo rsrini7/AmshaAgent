@@ -28,7 +28,7 @@ import io.micrometer.core.instrument.Timer;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 
 /**
- * Phase 12 test: Verifies thread safety of memory operations.
+ * Test: Verifies thread safety of memory operations.
  * <p>
  * Tests concurrent access to the MemoryMetricsObserver (shared mutable state)
  * and concurrent NoOp store calls through the service layer.

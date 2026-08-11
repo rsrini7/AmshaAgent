@@ -9,6 +9,7 @@ import jakarta.ws.rs.Path;
 import jakarta.ws.rs.PathParam;
 import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.Context;
+import jakarta.ws.rs.core.HttpHeaders;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.NewCookie;
 import jakarta.ws.rs.core.Response;
@@ -22,11 +23,10 @@ import com.amsha.core.api.dto.AmshaErrorResponse;
 import com.amsha.core.audit.AuditService;
 import com.amsha.core.audit.SecurityEventType;
 import com.amsha.core.routing.ChatModelPool;
-import com.amsha.core.security.SecretVault;
-import com.amsha.core.security.VaultConstants;
 import com.amsha.core.util.HttpConstants;
 import com.amsha.onboarding.dto.OnboardingStatusDto;
 import com.amsha.onboarding.spi.OnboardingValidationResult;
+import com.amsha.persistence.api.BootstrapStateStorePort;
 import com.amsha.persistence.api.LlmProfileStorePort;
 import com.amsha.persistence.api.OnboardingDraftDto;
 import com.amsha.persistence.api.OnboardingDraftState;
@@ -66,7 +66,10 @@ public class OnboardingResource {
     LlmProfileStorePort profileStore;
 
     @Inject
-    SecretVault vault;
+    BootstrapStateStorePort bootstrapStateStore;
+
+    @Inject
+    LlmConfigurationProvenance configurationProvenance;
 
     @Context
     SecurityContext securityContext;
@@ -77,12 +80,6 @@ public class OnboardingResource {
     @ConfigProperty(name = "amsha.ui.skip-onboarding", defaultValue = "false")
     boolean skipOnboarding;
 
-    @ConfigProperty(name = "amsha.llm.provider", defaultValue = "groq")
-    String configuredProvider;
-
-    @ConfigProperty(name = "amsha.llm.vault-priority", defaultValue = "false")
-    boolean vaultPriority;
-
     @ConfigProperty(name = "amsha.api.keys.internal", defaultValue = "key-internal-changeme")
     String internalApiKey;
 
@@ -92,12 +89,16 @@ public class OnboardingResource {
     public Response status() {
         String ownerId = requireOwner();
         boolean authed = ownerId != null;
-        // When the deployment is pre-configured (skip-onboarding or backend LLM already configured),
-        // the status is reachable without an authenticated owner so the UI can skip the wizard.
-        boolean skip = skipOnboarding || backendLlmConfigured();
-        if (!authed && !skip) {
+        // Before first-owner claim, unauthenticated status is limited to a loopback welcome preview.
+        // Once claimed, status requires an owner; authenticated preconfigured status may signal skip.
+        LlmConfigurationProvenance.Resolution configuration = configurationProvenance.resolve();
+        boolean skip = skipOnboarding || configuration.ready();
+        boolean unclaimed =
+                bootstrapStateStore.getState().map(state -> state.isUnclaimed()).orElse(true);
+        if (!authed && (!unclaimed || !isLoopbackRequest())) {
             log.warnf("Onboarding /status denied: missing or invalid principal");
             return Response.status(401)
+                    .header(HttpHeaders.CACHE_CONTROL, "no-store")
                     .entity(new AmshaErrorResponse("Unauthorized", "Authentication required"))
                     .build();
         }
@@ -115,47 +116,40 @@ public class OnboardingResource {
                             ? draft.selectedNonSecretIds().get(1)
                             : null,
                     draft.state() != OnboardingDraftState.DRAFT,
-                    skip);
+                    skip,
+                    configuration.vaultPriority(),
+                    configuration.effectiveProvider(),
+                    configuration.effectiveModel(),
+                    configuration.effectiveBaseUrl(),
+                    configuration.effectiveSource(),
+                    configuration.credentialState(),
+                    configuration.credentialSource());
         } else {
-            // Pre-auth skip: report the deployment as already configured so the UI can go straight to chat.
-            dto = new OnboardingStatusDto(0, "COMPLETE", configuredProvider, null, true, true);
+            // Before first-owner claim, expose only the non-secret wizard/configuration state.
+            // This avoids using an expected 401 as browser bootstrap control flow.
+            dto = new OnboardingStatusDto(
+                    1,
+                    "welcome",
+                    null,
+                    null,
+                    false,
+                    false,
+                    configuration.vaultPriority(),
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null);
         }
 
         Response.ResponseBuilder rb = Response.ok(dto);
-        if (skip) {
+        rb.header(HttpHeaders.CACHE_CONTROL, "no-store");
+        if (authed && skip) {
             // Mirror main: authenticate the UI for chat via the internal API-key cookie.
             rb.cookie(buildSkipCookie(internalApiKey));
         }
         return rb.build();
-    }
-
-    private boolean backendLlmConfigured() {
-        if (skipOnboarding) {
-            return true;
-        }
-        if (vault.systemKeyExists(VaultConstants.LLM_API_KEY)) {
-            return true;
-        }
-        String provider = configuredProvider != null ? configuredProvider.trim() : "";
-        if (provider.isBlank()) {
-            return false;
-        }
-        if (provider.equalsIgnoreCase("ollama")
-                || provider.equalsIgnoreCase("claude-code")
-                || provider.equalsIgnoreCase("omlx")
-                || provider.equalsIgnoreCase("llamacpp")) {
-            return true;
-        }
-        String apiKey = System.getProperty("AMSHA_LLM_API_KEY", System.getenv("AMSHA_LLM_API_KEY"));
-        if (apiKey != null && !apiKey.isBlank()) {
-            return true;
-        }
-        if (!vaultPriority && provider.equalsIgnoreCase("infinite-loop")) {
-            String providers = System.getProperty(
-                    "AMSHA_INFINITE_LOOP_LLM_PROVIDERS", System.getenv("AMSHA_INFINITE_LOOP_LLM_PROVIDERS"));
-            return providers != null && !providers.isBlank();
-        }
-        return false;
     }
 
     private NewCookie buildSkipCookie(String rawKey) {
@@ -174,9 +168,16 @@ public class OnboardingResource {
             return false;
         }
         String host = request.remoteAddress().host();
-        boolean loopback = "127.0.0.1".equals(host) || "0:0:0:0:0:0:0:1".equals(host) || "localhost".equals(host);
+        boolean loopback = HttpConstants.isLoopbackHost(host);
         String scheme = request.scheme();
         return !(loopback && "http".equalsIgnoreCase(scheme));
+    }
+
+    private boolean isLoopbackRequest() {
+        if (request == null || request.remoteAddress() == null) {
+            return false;
+        }
+        return HttpConstants.isLoopbackHost(request.remoteAddress().host());
     }
 
     @GET

@@ -14,7 +14,7 @@ public class WebAllowlist implements ChannelAllowlist {
 
     @Override
     public boolean isAllowed(String platformUserId, String username) {
-        // Phase 79: If requireAuth is true, the WebSocket edge (WebChatEndpoint)
+        // If requireAuth is true, the WebSocket edge (WebChatEndpoint)
         // already validated the API key upon connection setup. All messages reaching
         // the pipeline are inherently from an authenticated session.
         return platformUserId != null && !platformUserId.isBlank();

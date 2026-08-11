@@ -74,8 +74,8 @@ public class CoreMemoryService {
      * <p>
      * <b>Scaling Model Boundary:</b> Agent-facing tools ({@code core_memory_append}) are strictly
      * limited to the 5-key {@link #ALLOWED_BLOCK_KEYS} allowlist. However, the {@code maxBlocksPerUser}
-     * limit is enforced here to govern non-agent creation paths (e.g., Phase 1 Admin API,
-     * Phase 10 Self-Evolve synthesis) that may introduce arbitrary block keys.
+     * limit is enforced here to govern non-agent creation paths (e.g., Admin API,
+     * Self-Evolve synthesis) that may introduce arbitrary block keys.
      * <p>
      * Unlike {@link #upsert}, append rejects content that would exceed the block size limit
      * rather than silently truncating. This forces the agent to deliberately curate the block

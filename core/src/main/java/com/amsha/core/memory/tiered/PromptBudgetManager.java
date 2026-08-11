@@ -41,7 +41,7 @@ public class PromptBudgetManager {
      *
      * @param coreMemory        raw core memory text (nullable)
      * @param compactionSummary raw compaction summary text (nullable)
-     * @param archivalContext    raw archival context text (nullable, Phase 6+)
+     * @param archivalContext    raw archival context text (nullable)
      * @return budget-enforced sections with truncation flags
      */
     public BudgetEnforcedSections enforce(String coreMemory, String compactionSummary, String archivalContext) {

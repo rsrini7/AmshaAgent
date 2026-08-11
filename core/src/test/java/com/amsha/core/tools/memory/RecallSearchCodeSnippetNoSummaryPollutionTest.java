@@ -20,7 +20,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
 /**
- * Phase 3 Test 1: Verify RecallMemorySearchTool excludes COMPACTION_SUMMARY by default.
+ * Verify RecallMemorySearchTool excludes COMPACTION_SUMMARY by default.
  * Setup: Ingest a raw code snippet (Turn 5) and a Compaction Summary that mentions the code.
  * Action: Call recall_memory_search with the function name.
  * Assert: Result contains ONLY the raw code snippet. Summary is ABSENT.

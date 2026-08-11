@@ -157,11 +157,7 @@ public enum ToolCapability {
 
     public String description() {
         if (this == DELEGATE_TO_AGENT) {
-            String delegatableRoles = AgentRoleEnum.values().stream()
-                    .filter(r -> !r.equals(AgentRoleEnum.COORDINATOR))
-                    .flatMap(r -> r.definition().aliases().stream())
-                    .sorted()
-                    .collect(Collectors.joining(", "));
+            String delegatableRoles = AgentRoleEnum.getDelegatableRoleNames();
 
             return "Delegate a task to a domain expert sub-agent. " + "REQUIRED: 'agent' (string name: "
                     + delegatableRoles + "), 'goal' (string self-contained task description). "

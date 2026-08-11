@@ -10,6 +10,7 @@ import java.util.Optional;
 
 import com.amsha.core.agent.AgentSentinels;
 import com.amsha.core.agent.reasoning.ReasoningEngine;
+import com.amsha.core.agent.reasoning.ReasoningStep;
 import com.amsha.core.agent.result.AgentResult;
 import com.amsha.core.agent.role.ToolCapability;
 import com.amsha.core.domain.model.AgentCheckpoint;
@@ -128,6 +129,27 @@ class ResumeStrategyDispatcherUnitTest {
                 dispatcher.handle(ctx, new ArrayList<>(), mock(MessageContext.class), stateMachineRunner, cp);
         assertTrue(result instanceof AgentResult.Finished);
         verify(cp).setStatus(CheckpointStatus.IN_PROGRESS);
+    }
+
+    @Test
+    void testDelegatedIngestResumeAddsOriginalToolFollowUp() {
+        AgentExecutionContext ctx = mock(AgentExecutionContext.class);
+        mockContext(ctx, "ingest document", "sess-ingest");
+        when(ctx.agentRole()).thenReturn("coder");
+
+        AgentCheckpoint cp = mock(AgentCheckpoint.class);
+        when(cp.getPendingToolName()).thenReturn(ToolCapability.INGEST_DOCUMENT.toolName());
+        when(cp.getPendingToolParametersJson()).thenReturn("{\"path\":\"document.pdf\"}");
+        when(toolRegistry.invokeTool(eq(ToolCapability.DELEGATE_TO_AGENT.toolName()), anyString(), eq("sess-ingest")))
+                .thenReturn(ToolResponse.success("Coordinator ingested the document"));
+
+        List<ReasoningStep> history = new ArrayList<>();
+        AgentResult result = dispatcher.handle(ctx, history, mock(MessageContext.class), stateMachineRunner, cp);
+
+        assertTrue(result instanceof AgentResult.Finished);
+        assertTrue(history.stream()
+                .anyMatch(step ->
+                        step.observation() != null && step.observation().contains("document ingested successfully")));
     }
 
     @Test

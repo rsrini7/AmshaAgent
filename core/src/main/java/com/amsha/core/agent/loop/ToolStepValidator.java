@@ -37,15 +37,25 @@ public class ToolStepValidator {
     private final ToolRegistry toolRegistry;
     private final Instance<AgentObserver> observers;
     private final Instance<DynamicToolLookup> dynamicToolLookup;
+    private final ToolDelegationResolver delegationResolver;
 
     @Inject
     public ToolStepValidator(
             ToolRegistry toolRegistry,
             Instance<AgentObserver> observers,
-            Instance<DynamicToolLookup> dynamicToolLookup) {
+            Instance<DynamicToolLookup> dynamicToolLookup,
+            ToolDelegationResolver delegationResolver) {
         this.toolRegistry = toolRegistry;
         this.observers = observers;
         this.dynamicToolLookup = dynamicToolLookup;
+        this.delegationResolver = delegationResolver;
+    }
+
+    ToolStepValidator(
+            ToolRegistry toolRegistry,
+            Instance<AgentObserver> observers,
+            Instance<DynamicToolLookup> dynamicToolLookup) {
+        this(toolRegistry, observers, dynamicToolLookup, new ToolDelegationResolver());
     }
 
     /**
@@ -74,6 +84,11 @@ public class ToolStepValidator {
 
         // Known or Dynamic Tool check
         if (ToolStepResolutionUtils.isKnownTool(toolName, toolRegistry, dynamicToolLookup)) {
+            var owner = delegationResolver.resolveOwner(context.agentRole(), toolName);
+            if (owner.isPresent()) {
+                return StepDecision.proceedWithFailures(
+                        redirectToDelegate(step, context.sessionId(), owner.get()), consecutiveFailures);
+            }
             return null;
         }
 

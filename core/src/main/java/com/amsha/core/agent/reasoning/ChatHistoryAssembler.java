@@ -98,7 +98,7 @@ public class ChatHistoryAssembler {
      * These are filtered from history reconstruction to prevent the override
      * from persisting across turns.
      *
-     * Updated per Phase 53.3: Authoritative version copied and then updated to cover
+     * Authoritative version copied and then updated to cover
      * legacy manual checks.
      */
     static final Pattern COMPLIANCE_OVERRIDE_PATTERN = Pattern.compile(
@@ -113,7 +113,7 @@ public class ChatHistoryAssembler {
     public List<ChatMessage> assemble(String sessionId, String goal, List<ReasoningStep> history) {
         List<ChatMessage> messages = new ArrayList<>();
 
-        // STEP -1: Get raw Core Memory text (Phase 1, no truncation from renderer)
+        // STEP -1: Get raw Core Memory text (no truncation from renderer)
         String coreText = null;
         if (tieredMemoryConfig.enabled() && tieredMemoryConfig.coreMemory().enabled()) {
             String userId = WorkspaceContext.getUserIdOrUnknown();
@@ -130,7 +130,7 @@ public class ChatHistoryAssembler {
             }
         }
 
-        // STEP 0.3: Pre-fetched archival context (Phase 6 — O(1) cache lookup, no I/O)
+        // STEP 0.3: Pre-fetched archival context (O(1) cache lookup, no I/O)
         String archivalText = null;
         if (tieredMemoryConfig.enabled()
                 && tieredMemoryConfig.archival() != null
@@ -162,7 +162,7 @@ public class ChatHistoryAssembler {
             messages.add(SystemMessage.systemMessage(block));
         }
 
-        // STEP 1.5: Archival context (Phase 6 — pre-fetched, budget-enforced)
+        // STEP 1.5: Archival context (pre-fetched, budget-enforced)
         // Structural guard: only inject when archival text was cached with actual results.
         // Empty results are never cached (tool guards against this), so if we get here,
         // the text always contains real knowledge.
@@ -174,7 +174,7 @@ public class ChatHistoryAssembler {
             messages.add(SystemMessage.systemMessage(block));
         }
 
-        // 4. [BEHAVIORAL DIRECTIVES] — Phase 10: Self-Evolve directive injection
+        // 4. [BEHAVIORAL DIRECTIVES] — Self-Evolve directive injection
         injectDirectives(messages, sessionId);
 
         appendChatHistory(messages, sessionId);

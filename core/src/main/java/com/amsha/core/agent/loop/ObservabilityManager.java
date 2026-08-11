@@ -20,7 +20,7 @@ import io.opentelemetry.context.Context;
  * Manages OpenTelemetry span lifecycle and {@link AgentObserver} callbacks
  * for the agent reasoning loop.
  *
- * <p>Extracted from {@code AgentLoop.runWithRole} as part of Phase 2
+ * <p>Extracted from {@code AgentLoop.runWithRole} as part of
  * God-class decomposition. Owns two of the seven original responsibilities:
  * <ul>
  *   <li><strong>OTel spans</strong> - begin/end the session-level root span

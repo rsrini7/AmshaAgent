@@ -345,9 +345,30 @@ All three `build:native*` tasks auto-shield `.env` before building and restore i
 build:native
   ├─ .env         → .env.build-backup   (if .env exists)
   ├─ build.env    → .env                (if build.env exists)
-  ├─ mvnw clean package -Pnative ...
+  ├─ build:ui:copy
+  ├─ mvnw clean verify -Pnative ...
   └─ .env.build-backup → .env           (always restored)
 ```
+
+### Build verification gates
+
+The JVM `build:app` and `build:full` tasks rebuild the UI after the backend
+OpenAPI phase, copy `ui/dist` into Quarkus resources, and run Maven `verify`
+again so the packaged artifact contains the current UI and executes PMD.
+Native tasks run `build:ui:copy` before packaging and use `clean verify`; this
+prevents a native binary from embedding a stale UI bundle and ensures the PMD
+gate runs even with tests skipped.
+
+For a fast module-scoped check during development, run:
+
+```bash
+./mvnw -pl core -am pmd:check -DskipTests
+```
+
+The PMD rules are project-specific: 500 lines per class, 80 NCSS statements
+per method, and cognitive complexity 50. `package` does not execute this gate;
+`verify` does. Before handoff, run `mise run sonar:issues` when the SonarQube
+service is available.
 
 ### Native build strategy
 

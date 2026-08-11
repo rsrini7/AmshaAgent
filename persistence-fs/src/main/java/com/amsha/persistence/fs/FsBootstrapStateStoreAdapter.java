@@ -123,7 +123,9 @@ public class FsBootstrapStateStoreAdapter implements BootstrapStateStorePort {
             int expectedRevision, String newDigest, Instant issuedAt, Instant updatedAt) {
         Optional<BootstrapStateDto> existing = getState();
         if (existing.isEmpty()
-                || (!existing.get().isCredentialIssued() && !existing.get().isClaiming())
+                || (!existing.get().isCredentialIssued()
+                        && !existing.get().isClaiming()
+                        && !existing.get().isClaimed())
                 || existing.get().revision() != expectedRevision) {
             return false;
         }

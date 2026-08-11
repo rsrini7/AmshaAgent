@@ -1,6 +1,6 @@
 import { LitElement, css, html } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
-import { ConnectionDraft } from '../../api/types';
+import { ConnectionDraft, ProviderDescriptor } from '../../api/types';
 import { formStyles } from '../arc-onboarding-styles';
 
 @customElement('arc-onboarding-step-connections')
@@ -64,7 +64,8 @@ export class ArcOnboardingStepConnections extends LitElement {
   ];
 
   @property({ type: Array }) connections: ConnectionDraft[] = [];
-  @property({ type: Array }) catalog: any[] = [];
+  @property({ type: Array }) catalog: ProviderDescriptor[] = [];
+  @property({ type: Object }) modelDefaults: Record<string, { defaultModel: string; defaultBaseUrl?: string }> = {};
 
   @state() private _selectedProviderId = 'groq';
   @state() private _apiKey = '';
@@ -81,11 +82,19 @@ export class ArcOnboardingStepConnections extends LitElement {
     this._loadProviderDefaults();
   }
 
+  protected updated(changedProperties: Map<string, unknown>) {
+    if ((changedProperties.has('catalog') || changedProperties.has('modelDefaults'))
+      && this.catalog.length > 0 && !this._modelId) {
+      this._loadProviderDefaults();
+    }
+  }
+
   private _loadProviderDefaults() {
     const prov = this.catalog.find(p => p.id === this._selectedProviderId);
     if (prov) {
-      this._modelId = prov.defaultModel || '';
-      this._baseUrl = prov.hasBaseUrl ? '' : '';
+      const defaults = this.modelDefaults[prov.id];
+      this._modelId = defaults?.defaultModel || prov.modelCatalog?.[0]?.id || '';
+      this._baseUrl = '';
       this._targetUrl = '';
     }
   }
@@ -104,6 +113,9 @@ export class ArcOnboardingStepConnections extends LitElement {
   }
 
   private _addConnection() {
+    const provider = this.catalog.find(p => p.id === this._selectedProviderId);
+    if (provider?.requiresApiKey && !this._apiKey.trim()) return;
+    if (this._selectedProviderId === 'generic-openai' && !this._isHttpUrl(this._targetUrl)) return;
     const conn: ConnectionDraft = {
       provider: this._selectedProviderId,
       apiKey: this._apiKey || undefined,
@@ -133,6 +145,24 @@ export class ArcOnboardingStepConnections extends LitElement {
     this._loadProviderDefaults();
   }
 
+  private _isHttpUrl(value: string): boolean {
+    try {
+      const url = new URL(value.trim());
+      return (url.protocol === 'http:' || url.protocol === 'https:') && url.hostname.length > 0;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  private _connectionValidationMessage(): string {
+    const provider = this.catalog.find(p => p.id === this._selectedProviderId);
+    if (provider?.requiresApiKey && !this._apiKey.trim()) return 'An API key is required for this provider.';
+    if (this._selectedProviderId === 'generic-openai' && !this._isHttpUrl(this._targetUrl)) {
+      return 'Generic OpenAI requires a valid HTTP(S) target URL.';
+    }
+    return '';
+  }
+
   private _removeConnection(idx: number) {
     const updated = this.connections.filter((_, i) => i !== idx);
     this.dispatchEvent(
@@ -149,7 +179,7 @@ export class ArcOnboardingStepConnections extends LitElement {
   }
 
   render() {
-    const activeProvider = this.catalog.find(p => p.id === this._selectedProviderId) || {};
+    const activeProvider: Partial<ProviderDescriptor> = this.catalog.find(p => p.id === this._selectedProviderId) || {};
 
     return html`
       <div class="connections-header">
@@ -160,15 +190,15 @@ export class ArcOnboardingStepConnections extends LitElement {
         ${this.connections.length === 0
           ? html`<div style="font-size:12px;color:var(--text-muted);text-align:center;padding:var(--space-4)">No connections configured yet.</div>`
           : this.connections.map((c, idx) => {
-              const prov = this.catalog.find(p => p.id === c.provider) || {};
+          const prov: Partial<ProviderDescriptor> = this.catalog.find(p => p.id === c.provider) || {};
               return html`
                 <div class="connection-row">
                   <div class="connection-info">
-                    <div class="provider-icon" style="background:${prov.color || '#888'}22;color:${prov.color || '#888'}">
-                      ${prov.icon || '?'}
+              <div class="provider-icon" style="background:${prov.attributes?.color || '#888'}22;color:${prov.attributes?.color || '#888'}">
+                ${prov.attributes?.icon || '?'}
                     </div>
                     <div>
-                      <div class="provider-name">${prov.name || c.provider}</div>
+                <div class="provider-name">${prov.displayName || c.provider}</div>
                       <div class="provider-tag">${c.modelId} (${c.contextWindow.toLocaleString()} ctx)</div>
                     </div>
                   </div>
@@ -184,12 +214,12 @@ export class ArcOnboardingStepConnections extends LitElement {
           ${this.catalog.map(p => html`
             <div class="provider-card ${this._selectedProviderId === p.id ? 'selected' : ''}"
                  @click="${() => this._onProviderSelect(p.id)}">
-              <div class="provider-icon" style="background:${p.color}22;color:${p.color}">
-                ${p.icon}
+            <div class="provider-icon" style="background:${p.attributes?.color || '#888'}22;color:${p.attributes?.color || '#888'}">
+              ${p.attributes?.icon || '?'}
               </div>
               <div>
-                <div class="provider-name">${p.name}</div>
-                <div class="provider-tag">${p.tag}</div>
+              <div class="provider-name">${p.displayName}</div>
+              <div class="provider-tag">${p.attributes?.tag || ''}</div>
               </div>
             </div>
           `)}
@@ -218,11 +248,11 @@ export class ArcOnboardingStepConnections extends LitElement {
             `
           : ''}
 
-        ${activeProvider.hasBaseUrl
+        ${(activeProvider.defaultBaseUrl || activeProvider.attributes?.hasBaseUrl === 'true')
           ? html`
               <div style="margin-bottom:var(--space-4)">
                 <span class="field-label">Base URL Override (Optional)</span>
-                <input class="field-input" type="text" placeholder="https://api.openai.com/v1"
+                <input class="field-input" type="text" placeholder="${activeProvider.defaultBaseUrl || ''}"
                        .value="${this._baseUrl}" @input="${(e: any) => (this._baseUrl = e.target.value)}" />
               </div>
             `
@@ -273,7 +303,10 @@ export class ArcOnboardingStepConnections extends LitElement {
           </div>
         </div>
 
-        <button class="btn-ghost" style="width:100%" @click="${this._addConnection}">
+  ${this._connectionValidationMessage()
+    ? html`<div style="color:var(--text-danger);font-size:12px;margin-bottom:var(--space-2)">${this._connectionValidationMessage()}</div>`
+    : ''}
+  <button class="btn-ghost" style="width:100%" ?disabled="${!!this._connectionValidationMessage()}" @click="${this._addConnection}">
           + Add Connection Profile
         </button>
       </div>

@@ -67,6 +67,40 @@ class ApiKeyAuthFilterTest {
     }
 
     @Test
+    void webSocketTokenUsesNormalRequestBucket() {
+        when(apiKeyRegistryMock.isAllowed("valid-key")).thenReturn(true);
+        when(apiKeyRegistryMock.isMutationAllowed("valid-key")).thenReturn(false);
+
+        given().header("X-Amsha-API-Key", "valid-key")
+                .when()
+                .post("/api/v1/chat/ws-token")
+                .then()
+                .statusCode(Matchers.not(429));
+    }
+
+    @Test
+    void onboardingDraftMutationUsesMutationBucket() {
+        when(apiKeyRegistryMock.isAllowed("valid-key")).thenReturn(true);
+        when(apiKeyRegistryMock.isMutationAllowed("valid-key")).thenReturn(false);
+
+        given().header("X-Amsha-API-Key", "valid-key")
+                .contentType("application/json")
+                .body("{}")
+                .when()
+                .put("/api/v1/onboarding/drafts/draft-test/steps/review")
+                .then()
+                .statusCode(429);
+    }
+
+    @Test
+    void localBootstrapRecoveryIsNotBlockedByApiRateLimit() {
+        given().when()
+                .post("/api/v1/onboarding/bootstrap/local-recovery")
+                .then()
+                .statusCode(Matchers.not(429));
+    }
+
+    @Test
     void testValidKeyBypassesAuthFilter() {
         given().header("X-Amsha-API-Key", "valid-key")
                 .when()

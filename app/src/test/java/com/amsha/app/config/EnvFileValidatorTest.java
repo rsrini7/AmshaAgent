@@ -53,6 +53,22 @@ class EnvFileValidatorTest {
     }
 
     @Test
+    void testValidate_acceptsExplicitOptOutValues(@TempDir Path tempDir) throws IOException {
+        Path envFile = tempDir.resolve(".env");
+        Files.write(
+                envFile,
+                List.of(
+                        "AMSHA_TOOLS_BRAVE_API_KEY=none",
+                        "AMSHA_TOOLS_SERPER_API_KEY=false",
+                        "AMSHA_TOOLS_GITHUB_TOKEN=skip"));
+
+        EnvFileValidator.ValidationResult result = EnvFileValidator.validate(envFile);
+
+        assertFalse(result.hasIssues());
+        assertEquals(0, result.placeholderValues().size());
+    }
+
+    @Test
     void testValidate_stripsTabAndSpaceInlineComments(@TempDir Path tempDir) throws IOException {
         Path envFile = tempDir.resolve(".env");
         Files.write(

@@ -26,6 +26,6 @@ public class AgentCheckpointTest {
         Field pendingToolParams = clazz.getDeclaredField("pendingToolParametersJson");
         Assertions.assertTrue(
                 pendingToolParams.isAnnotationPresent(JsonIgnore.class),
-                "pendingToolParametersJson must have @JsonIgnore for PII privacy (Phase 41)");
+                "pendingToolParametersJson must have @JsonIgnore for PII privacy");
     }
 }

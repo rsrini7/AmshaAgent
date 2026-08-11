@@ -6,10 +6,12 @@ import static org.mockito.Mockito.*;
 
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.Optional;
 
 import com.amsha.core.routing.provider.LlmProviderOnboardingAdapter;
 import com.amsha.core.routing.provider.ProviderValidationResult;
 import com.amsha.core.security.SecretVault;
+import com.amsha.core.security.VaultKey;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.junit.jupiter.api.Test;
@@ -66,5 +68,36 @@ class OnboardingSelectionScrubberTest {
         List<String> selections = List.of("{\"connections\":[{\"provider\":\"openai\",\"apiKey\":\"k\"}]}");
         String err = scrubber.validateConnections(selections);
         assertNull(err);
+    }
+
+    @Test
+    void scrubsAuthenticationHeadersForEveryMcpServer() {
+        List<String> selections = List.of("{\"mcp\":{\"servers\":["
+                + "{\"name\":\"one\",\"headers\":{\"Authorization\":\"Bearer one\"}},"
+                + "{\"name\":\"two\",\"headers\":{\"X-Token\":\"two\"}}]}}");
+
+        List<String> scrubbed = scrubber.processAndScrubSecrets("user-1", selections);
+
+        assertFalse(scrubbed.get(0).contains("Bearer one"));
+        assertFalse(scrubbed.get(0).contains("\"X-Token\":\"two\""));
+        assertTrue(scrubbed.get(0).contains("headerVaultRefs"));
+        verify(vault, times(2)).store(startsWith("mcp-header-"), any(), eq("user-1"));
+    }
+
+    @Test
+    void resolvesAuthenticationHeadersForEveryMcpServer() {
+        String payload = "{\"servers\":["
+                + "{\"name\":\"one\",\"headerVaultRefs\":{\"Authorization\":\"ref-one\"}},"
+                + "{\"name\":\"two\",\"headerVaultRefs\":{\"X-Token\":\"ref-two\"}}]}";
+        when(vault.get(eq("ref-one"), eq("user-1")))
+                .thenReturn(Optional.of(new VaultKey("Bearer one".getBytes(StandardCharsets.UTF_8))));
+        when(vault.get(eq("ref-two"), eq("user-1")))
+                .thenReturn(Optional.of(new VaultKey("two".getBytes(StandardCharsets.UTF_8))));
+
+        String resolved = scrubber.resolveVaultReferences("user-1", payload);
+
+        assertTrue(resolved.contains("Bearer one"));
+        assertTrue(resolved.contains("\"X-Token\":\"two\""));
+        assertFalse(resolved.contains("headerVaultRefs"));
     }
 }

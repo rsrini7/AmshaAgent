@@ -27,7 +27,7 @@ public enum SecurityEventType {
     REFLEX_COMMAND, // HaltReflex / ResetReflex / StatusReflex executed
 
     // Vault layer
-    VAULT_ACCESS, // Phase 44: replaces VAULT_STORE/RETRIEVE for mandatory tracking
+    VAULT_ACCESS, // replaces VAULT_STORE/RETRIEVE for mandatory tracking
     VAULT_STORE, // SecretVaultImpl.store() called
     VAULT_RETRIEVE, // SecretVaultImpl.get() called
     VAULT_RETRIEVE_MISS, // SecretVaultImpl.get() returned Optional.empty
@@ -45,15 +45,15 @@ public enum SecurityEventType {
     CONTEXT_COMPACTED, // session history summary created
 
     // Compliance
-    BUDGET_EXCEEDED, // Phase 44: standalone mandatory budget violation event
+    BUDGET_EXCEEDED, // standalone mandatory budget violation event
 
-    // Cron lifecycle (Phase 46)
+    // Cron lifecycle
     CRONCREATED, // ScheduleTaskTool persisted a new cron row
     CRONFIRED, // AgentCronScheduler dispatched successfully
     CRONFAILED, // AgentCronScheduler caught exception
     CRONDELETED, // Reflex or tool deleted a cron row
 
-    // Skills lifecycle (Phase 60) - telemetry tier
+    // Skills lifecycle - telemetry tier
     SKILL_LOADED, // SkillLoader completed a full load cycle
     SKILL_REFRESHED, // Manual refresh via GET /api/v1/skills/refresh
     MCP_TOOL_INVOKED, // External call to an internal tool via MCP server
@@ -70,7 +70,7 @@ public enum SecurityEventType {
     // Configuration changes
     SETTINGS_CHANGED, // LLM provider/model/prompt updated
     SETTINGS_RESET, // all settings nuked via /settings/reset
-    CLASSIFIER_RUNTIME_CHANGE_REQUESTED, // internal Phase 3 classifier kill-switch mutation requested
+    CLASSIFIER_RUNTIME_CHANGE_REQUESTED, // internal classifier kill-switch mutation requested
     CLASSIFIER_RUNTIME_CHANGE_ACCEPTED, // classifier kill-switch mutation accepted
     CLASSIFIER_RUNTIME_CHANGE_REJECTED, // classifier kill-switch mutation rejected after REQUESTED
     ONNX_MODEL_UNLOAD_REQUESTED, // internal ONNX model lifecycle mutation

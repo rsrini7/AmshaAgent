@@ -1,6 +1,6 @@
 import { LitElement, css, html } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
-import { ConcernRoutes, ConnectionDraft } from '../../api/types';
+import { ConcernRoutes, ConnectionDraft, ProviderDescriptor } from '../../api/types';
 import { formStyles } from '../arc-onboarding-styles';
 
 @customElement('arc-onboarding-step-review')
@@ -56,7 +56,7 @@ export class ArcOnboardingStepReview extends LitElement {
   ];
 
   @property({ type: Array }) connections: ConnectionDraft[] = [];
-  @property({ type: Array }) catalog: any[] = [];
+  @property({ type: Array }) catalog: ProviderDescriptor[] = [];
   @property({ type: Object }) concernRoutes: ConcernRoutes = {
     agentLoop: [],
     compaction: [],
@@ -71,8 +71,8 @@ export class ArcOnboardingStepReview extends LitElement {
   private _getConnName(idx: number): string {
     const c = this.connections[idx];
     if (!c) return 'Default';
-    const prov = this.catalog.find(p => p.id === c.provider) || {};
-    return `${prov.name || c.provider} (${c.modelId})`;
+    const prov: Partial<ProviderDescriptor> = this.catalog.find(p => p.id === c.provider) || {};
+    return `${prov.displayName || c.provider} (${c.modelId})`;
   }
 
   render() {

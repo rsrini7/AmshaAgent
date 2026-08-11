@@ -68,7 +68,7 @@ public class AnswerQualityShadowEvaluationService {
         this.testDataCollectionService = testDataCollectionService;
         this.testDataCollectionEnabled = testDataCollectionEnabled;
         this.confidence = DistributionSummary.builder("amsha.classifier.answer_quality.shadow.confidence")
-                .description("Confidence distribution for Phase 2 answer-quality shadow opinions")
+                .description("Confidence distribution for answer-quality shadow opinions")
                 .serviceLevelObjectives(0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0)
                 .register(meterRegistry);
     }
@@ -106,7 +106,7 @@ public class AnswerQualityShadowEvaluationService {
 
     private void recordOutcome(String outcome, String prediction, String reason, String scoreBand) {
         Counter.builder("amsha.classifier.answer_quality.shadow.results")
-                .description("Payload-free Phase 2 answer-quality shadow results for accepted answers")
+                .description("Payload-free answer-quality shadow results for accepted answers")
                 .tag("outcome", outcome)
                 .tag("prediction", prediction)
                 .tag("reason", reason)

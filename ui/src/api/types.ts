@@ -46,10 +46,49 @@ export function parseAgentPayload(payload: string): { status: string; task: stri
 // Onboarding DTOs
 export interface OnboardingStatusDto {
   step: number;
-  name: string;
+  stepName: string;
   provider: string | null;
   model: string | null;
-  credentialsValidated: boolean;
+  credentialsOk: boolean;
+  skipOnboarding: boolean;
+  vaultPriority: boolean;
+  effectiveProvider?: string | null;
+  effectiveModel?: string | null;
+  effectiveBaseUrl?: string | null;
+  effectiveSource?: 'ENVIRONMENT' | 'VAULT' | 'DEFAULT' | 'NONE' | string;
+  credentialState?: 'NOT_REQUIRED' | 'CONFIGURED' | 'MISSING' | string;
+  credentialSource?: 'ENVIRONMENT' | 'VAULT' | 'NONE' | string;
+}
+export interface SettingsDto {
+  provider: string;
+  model: string;
+  systemPrompt: string;
+  hasApiKey: boolean;
+  appVersion: string;
+  skipOnboarding: boolean;
+  vaultPriority: boolean;
+  effectiveBaseUrl?: string | null;
+  effectiveSource?: 'ENVIRONMENT' | 'VAULT' | 'DEFAULT' | 'NONE' | string;
+  credentialState?: 'NOT_REQUIRED' | 'CONFIGURED' | 'MISSING' | string;
+  credentialSource?: 'ENVIRONMENT' | 'VAULT' | 'NONE' | string;
+}
+
+export interface ProviderCatalogModel {
+  id: string;
+  label: string;
+  apiTier?: string | null;
+}
+
+export interface ProviderDescriptor {
+  id: string;
+  displayName: string;
+  i18nKey: string;
+  authScheme: string;
+  defaultBaseUrl: string | null;
+  requiresApiKey: boolean;
+  embeddingCapable: boolean;
+  modelCatalog: ProviderCatalogModel[];
+  attributes: Record<string, string>;
 }
 
 export interface OnboardingCompleteDto {
@@ -168,6 +207,8 @@ export interface O1DraftPayload {
   personaRoutes?: Record<string, RouteAssignment>;
   groupRoutes?: Record<string, RouteAssignment>;
   mcpServers?: McpServerDraft[];
+  /** Backend MCP extension payload; generated from mcpServers before persistence. */
+  mcp?: { servers: Array<{ name: string; endpoint: string; category: string; headers?: Record<string, string> }> };
   integrations?: IntegrationsConfig;
   advanced?: AdvancedSettings;
   memory?: MemoryConfig;

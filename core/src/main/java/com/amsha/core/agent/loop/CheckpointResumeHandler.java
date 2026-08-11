@@ -72,7 +72,6 @@ public class CheckpointResumeHandler {
         this.strategyDispatcher = null;
     }
 
-    @Inject
     public CheckpointResumeHandler(
             StatefulAgentStore agentStore,
             ToolRegistry toolRegistry,
@@ -84,6 +83,35 @@ public class CheckpointResumeHandler {
             CliResultBridge cliResultBridge,
             ExecutionFailureRecoveryService recoveryService,
             PersonaEscalationService escalationService) {
+        this(
+                agentStore,
+                toolRegistry,
+                objectMapper,
+                agentLoop,
+                reasoningEngine,
+                channelPluginRegistry,
+                cronStore,
+                cliResultBridge,
+                recoveryService,
+                escalationService,
+                new ToolDelegationResolver(),
+                null);
+    }
+
+    @Inject
+    public CheckpointResumeHandler(
+            StatefulAgentStore agentStore,
+            ToolRegistry toolRegistry,
+            ObjectMapper objectMapper,
+            AgentLoop agentLoop,
+            ReasoningEngine reasoningEngine,
+            ChannelPluginRegistry channelPluginRegistry,
+            CronStorePort cronStore,
+            CliResultBridge cliResultBridge,
+            ExecutionFailureRecoveryService recoveryService,
+            PersonaEscalationService escalationService,
+            ToolDelegationResolver delegationResolver,
+            ToolInvocationGuard guard) {
         this.agentStore = agentStore;
         this.agentLoop = agentLoop;
         this.reasoningEngine = reasoningEngine;
@@ -92,7 +120,14 @@ public class CheckpointResumeHandler {
         this.cronStore = cronStore;
         this.objectMapper = objectMapper;
         this.strategyDispatcher = new ResumeStrategyDispatcher(
-                agentStore, toolRegistry, objectMapper, reasoningEngine, recoveryService, escalationService);
+                agentStore,
+                toolRegistry,
+                objectMapper,
+                reasoningEngine,
+                recoveryService,
+                escalationService,
+                delegationResolver,
+                guard);
     }
 
     @Inject

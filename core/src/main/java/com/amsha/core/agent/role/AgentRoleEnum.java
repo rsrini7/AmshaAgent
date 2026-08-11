@@ -5,6 +5,8 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import io.quarkus.qute.TemplateData;
 
@@ -275,5 +277,14 @@ public record AgentRoleEnum(String id) {
     /** Drop-in replacement for the enum-generated values() calls. */
     public static List<AgentRoleEnum> values() {
         return BUILT_IN;
+    }
+
+    /** Returns a comma-separated list of all delegatable role names and aliases. */
+    public static String getDelegatableRoleNames() {
+        return values().stream()
+                .flatMap(role -> Stream.concat(
+                        Stream.of(role.definition().canonicalName()), role.definition().aliases().stream()))
+                .sorted()
+                .collect(Collectors.joining(", "));
     }
 }

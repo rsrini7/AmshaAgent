@@ -133,8 +133,8 @@ public class DelegateToAgentTool implements AgentTool {
                 .addProperty(
                         PARAM_AGENT,
                         JsonStringSchema.builder()
-                                .description(
-                                        "The name of the specialist sub-agent (e.g., shiva, brahma, saraswati, brihaspati, dattatreya, ganesha, kartikeya, lakshmi, durga, kali, parvati, coordinator).")
+                                .description("The name of the specialist sub-agent (e.g., "
+                                        + AgentRoleEnum.getDelegatableRoleNames() + ").")
                                 .build())
                 .addProperty(
                         PARAM_GOAL,

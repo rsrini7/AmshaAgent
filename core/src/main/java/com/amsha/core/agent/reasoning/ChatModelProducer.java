@@ -64,6 +64,7 @@ public class ChatModelProducer {
         String effectiveProvider = provider;
         String effectiveKey = null;
         String effectiveModel = null;
+        String effectiveBaseUrl = null;
 
         if (vaultPriority) {
             Optional<VaultKey> vaultProvider = vault.retrieveSystemKey(VaultConstants.LLM_PROVIDER_KEY);
@@ -73,9 +74,13 @@ public class ChatModelProducer {
                     effectiveProvider = p;
                     Optional<VaultKey> vaultKey = vault.retrieveSystemKey(VaultConstants.LLM_API_KEY);
                     Optional<VaultKey> vaultModel = vault.retrieveSystemKey(VaultConstants.LLM_MODEL_KEY);
+                    Optional<VaultKey> vaultBaseUrl = vault.retrieveSystemKey(VaultConstants.LLM_BASE_URL_KEY);
                     effectiveKey = vaultKey.map(k -> new String(k.get(), StandardCharsets.UTF_8))
                             .orElse(null);
                     effectiveModel = vaultModel
+                            .map(k -> new String(k.get(), StandardCharsets.UTF_8))
+                            .orElse(null);
+                    effectiveBaseUrl = vaultBaseUrl
                             .map(k -> new String(k.get(), StandardCharsets.UTF_8))
                             .orElse(null);
                     log.infof("ChatModelProducer: using vault provider=%s model=%s", effectiveProvider, effectiveModel);
@@ -84,24 +89,46 @@ public class ChatModelProducer {
         }
 
         AgentChatModelProvider providerFactory = findProvider(effectiveProvider);
-        if (effectiveKey != null && effectiveModel != null) {
-            String baseUrl = PROVIDER_BASE_URLS.getOrDefault(effectiveProvider, "");
-            if (!baseUrl.isBlank()) {
-                log.infof(
-                        "ChatModelProducer: building model from vault values (provider=%s baseUrl=%s)",
-                        effectiveProvider, baseUrl);
-                return ChatModelFactory.createOpenAi(
-                        baseUrl,
-                        effectiveKey,
-                        effectiveModel,
-                        agentConfig.maxTokens(),
-                        agentConfig.timeout(),
-                        agentConfig.maxRetries(),
-                        agentConfig.temperature(),
-                        agentConfig.logHttp());
-            }
+        String baseUrl = effectiveBaseUrl == null || effectiveBaseUrl.isBlank()
+                ? PROVIDER_BASE_URLS.getOrDefault(effectiveProvider, "")
+                : effectiveBaseUrl;
+        if (hasText(effectiveKey) && hasText(effectiveModel) && !baseUrl.isBlank()) {
+            log.infof(
+                    "ChatModelProducer: building model from vault values (provider=%s baseUrl=%s)",
+                    effectiveProvider, baseUrl);
+            return ChatModelFactory.createForAdapter(
+                    effectiveProvider, baseUrl, effectiveKey, effectiveModel, agentConfig);
+        }
+        if (hasText(effectiveModel) || hasText(effectiveBaseUrl)) {
+            return createKeylessVaultModel(effectiveProvider, providerFactory, baseUrl, effectiveModel);
         }
         return providerFactory.create();
+    }
+
+    private ChatModel createKeylessVaultModel(
+            String providerName, AgentChatModelProvider providerFactory, String baseUrl, String model) {
+        String cleanProvider = clean(providerName);
+        if ("ollama".equalsIgnoreCase(cleanProvider)) {
+            return ChatModelFactory.createOllama(baseUrl, model, agentConfig);
+        }
+        if (("omlx".equalsIgnoreCase(cleanProvider) || "llamacpp".equalsIgnoreCase(cleanProvider))
+                && hasText(model)
+                && !baseUrl.isBlank()) {
+            return ChatModelFactory.createOpenAi(
+                    baseUrl,
+                    "not-needed",
+                    model,
+                    agentConfig.maxTokens(),
+                    agentConfig.timeout(),
+                    agentConfig.maxRetries(),
+                    agentConfig.temperature(),
+                    agentConfig.logHttp());
+        }
+        return hasText(model) ? providerFactory.create(model) : providerFactory.create();
+    }
+
+    private static boolean hasText(String value) {
+        return value != null && !value.isBlank();
     }
 
     private String resolveProvider() {

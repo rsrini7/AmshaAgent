@@ -3,6 +3,7 @@ import { customElement, state } from 'lit/decorators.js';
 import { ArcClient } from '../api/client';
 import { consume } from '@lit/context';
 import { arcContext, ArcAppContext } from '../context/arc-context';
+import { SettingsDto } from '../api/types';
 
 
 @customElement('arc-settings')
@@ -22,6 +23,7 @@ export class ArcSettings extends LitElement {
   @state() private _error = '';
   @state() private _success = '';
   @state() private _skipOnboarding = false;
+  @state() private _settings: SettingsDto | null = null;
 
   static styles = css`
     :host {
@@ -80,6 +82,7 @@ export class ArcSettings extends LitElement {
     try {
       this._loading = true;
       const data = await this._client.getSettings();
+      this._settings = data;
       this._appVersion = data.appVersion;
       this._skipOnboarding = data.skipOnboarding;
       // Load the full system prompt via the dedicated endpoint.
@@ -135,9 +138,24 @@ export class ArcSettings extends LitElement {
 
       ${this._error ? html`<div class="status-msg error">${this._error}</div>` : ''}
       ${this._success ? html`<div class="status-msg success">${this._success}</div>` : ''}
+      ${this._renderConfigurationSummary()}
 
       ${this._activeTab === 'prompt' ? this._renderPrompt() : ''}
       ${this._activeTab === 'danger' ? this._renderDanger() : ''}
+    `;
+  }
+
+  private _renderConfigurationSummary() {
+    if (!this._settings) return '';
+    return html`
+      <div class="status-msg" style="line-height:1.6;margin-bottom:var(--space-4)">
+        <strong>Effective LLM configuration</strong><br />
+        Provider: ${this._settings.provider || 'not configured'} · Model: ${this._settings.model || 'default'}<br />
+        Source: ${this._settings.effectiveSource || 'unknown'} · Credential: ${this._settings.credentialState || 'unknown'} (${this._settings.credentialSource || 'unknown'})
+        ${this._settings.vaultPriority
+          ? html` · Vault priority: enabled`
+          : html` · Vault priority: disabled (environment configuration remains active)`}
+      </div>
     `;
   }
 
@@ -157,7 +175,7 @@ export class ArcSettings extends LitElement {
     if (this._skipOnboarding) {
       return html`
         <div class="section">
-          <p style="color:var(--text-muted);font-size:var(--font-size-sm);">Onboarding is managed via environment variables. Reset is not available.</p>
+              <p style="color:var(--text-muted);font-size:var(--font-size-sm);">Onboarding is pre-configured and managed externally. Reset is not available.</p>
         </div>
       `;
     }

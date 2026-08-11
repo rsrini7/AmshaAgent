@@ -175,7 +175,7 @@ Budget tracking: `GovernanceStrategy.recordLlmCall()` checks per-session token b
 **Step B: FINISH Action Handler:** Extracts answer from `actionInput["answer"]` or
 `thought`. Unescapes HTML/Unicode. Role guard: non-coder roles cannot generate bare code
 blocks. Raw tool-call leak guard. The authoritative answer guard prevents LLM echoing
-injected RAG headers. After deterministic acceptance, the ordered optional Phase 2.5
+injected RAG headers. After deterministic acceptance, the ordered optional
 answer-quality dispatcher may consume one corrective retry only if no tool has been
 invoked in the turn. Absence or failure preserves the accepted answer.
 
@@ -250,11 +250,11 @@ ToolFailure (any role, any tool)
 6. **Post-policy tool risk** — ordered optional opinions may only raise provisional
    allow to approval or block; absence and failure preserve allow
 
-### Phase 3A Classifier Runtime Control
+### Classifier Runtime Control
 
 `OnnxClassifierRuntimeControl` owns independent atomic state for intent, tool-risk, and
 answer-quality activation. Active ONNX interceptors (`OnnxPostPolicyToolRiskInterceptor`,
-`OnnxAnswerQualityInterceptor`) bridge this state to the core Phase 2.5 SPIs.
+`OnnxAnswerQualityInterceptor`) bridge this state to the core SPIs.
 Startup configuration seeds requested state, but effective state requires a registered
 ready active implementation. If no implementation is registered, enable requests fail
 closed, and the interceptors preserve the deterministic guard path. Disable blocks
@@ -317,22 +317,22 @@ When a `host_exec` goal matches `HostExecTool.BROWSER_PREVIEW_GOAL_PATTERN` and 
 
 | Role | Persona | Tools | Max Iter |
 |---|---|---|---|
-| `coordinator` | Vishnu | github, web_fetch, schedule, memory (5), garuda, agent_task | 7 |
-| `coder` | Brahma | sandbox_exec, manage_checklist, memory (5), garuda | 15 |
-| `debugger` | Shiva | github, sandbox_exec, manage_checklist, recall_memory_search, garuda | 15 |
-| `researcher` | Saraswati | github, web_fetch, brave/serper search, memory (5), garuda, agent_task | 10 |
-| `architect` | Brihaspati | github, memory (5), garuda | 7 |
-| `synthesizer` | Dattatreya | github, web_fetch, schedule, brave/serper search, memory (5), ingest_document, garuda, agent_task | 10 |
-| `optimizer` | Ganesha | sandbox_exec, garuda | 10 |
-| `sentinel` | Kartikeya | sandbox_exec, garuda | 10 |
-| `healer` | Lakshmi | garuda | 10 |
-| `protector` | Durga | garuda | 10 |
-| `purifier` | Kali | garuda | 10 |
-| `nurturer` | Parvati | garuda | 10 |
+| `coordinator` | Vishnu | github, web_fetch, schedule/manage, memory (6), ingest_document, self_evolve_reflect, garuda, agent_task | 7 |
+| `coder` | Brahma | sandbox_exec, manage_checklist, register_mcp_server, memory (6), garuda | 15 |
+| `debugger` | Shiva | github, sandbox_exec, manage_checklist, register_mcp_server, recall_memory_search, garuda | 15 |
+| `researcher` | Saraswati | github, web_fetch, brave/serper search, memory (6), garuda, agent_task | 10 |
+| `architect` | Brihaspati | github, memory (6), garuda | 7 |
+| `synthesizer` | Dattatreya | github, web_fetch, schedule/manage, brave/serper search, memory (6), ingest_document, garuda, agent_task | 10 |
+| `optimizer` | Ganesha | garuda; unsupported tools redelegate to their owner | 10 |
+| `sentinel` | Kartikeya | garuda; unsupported tools redelegate to their owner | 10 |
+| `healer` | Lakshmi | garuda; unsupported tools redelegate to their owner | 10 |
+| `protector` | Durga | garuda; unsupported tools redelegate to their owner | 10 |
+| `purifier` | Kali | garuda; unsupported tools redelegate to their owner | 10 |
+| `nurturer` | Parvati | garuda, ingest_document | 10 |
 
-**memory (5)** = `recall_memory_search`, `archival_memory_search`, `core_memory_read`, `core_memory_append`, `core_memory_replace`, `archival_memory_insert` (6 tools; debugger only gets `recall_memory_search`).
+**memory (6)** = `recall_memory_search`, `archival_memory_search`, `core_memory_read`, `core_memory_append`, `core_memory_replace`, `archival_memory_insert` (debugger only gets `recall_memory_search`).
 
-All 12 roles have `garuda` for delegation. Tool schemas dynamically assembled via `@ToolMetadata(defaultRoles=...)`.
+All 12 roles have `garuda` for delegation. An unauthorized known tool is rewritten to a `garuda` call targeting the centralized owner persona; this applies in the normal loop, approval resume, and parallel-batch resume. Tool schemas are dynamically assembled via `@ToolMetadata(defaultRoles=...)`.
 
 ---
 
@@ -445,12 +445,12 @@ graph TD
     *   `PostgresEvolutionEventStore` is selected for PostgreSQL persistence.
     *   `FsEvolutionEventStore` / `NoOpEvolutionEventStore` is resolved for FS persistence.
 
-#### 2. Pattern Extraction (Phase 9)
+#### 2. Pattern Extraction
 The `MemoryExtractorLite` evaluates captured session traces offline. It parses tool execution inputs, results, and exceptions, identifying patterns of successful operations versus operations that resulted in failure or errors.
 *   Extracted patterns are stored in the `extracted_memories` table (or filesystem JSON files).
 *   Provides structured semantic records mapping the target goal, tool, input parameters, and failure/success outcomes.
 
-#### 3. Directive Synthesis & Lifecycle (Phase 10)
+#### 3. Directive Synthesis & Lifecycle
 The `InteractionPolicySynthesizer` aggregates extracted memories over multiple turns. When a specific failure/success pattern recurs, it synthesizes a new **behavioral directive** to optimize the agent's behavior. An out-of-band daily cron pass (`SelfEvolveSynthesisScheduler`, trigger-gated by `amsha.self-evolve.synthesis-trigger=cron`) synthesizes directives for all known users in a batch, isolating per-user errors so one failure does not abort the whole run.
 
 Directives follow a strict lifecycle state machine:
@@ -583,20 +583,20 @@ graph TD
 | Serper Web Search | `serper_web_search` | `NETWORK_OUTBOUND` | researcher, synthesizer |
 | Smart Web Fetch | `web_fetch` | `NETWORK_OUTBOUND` | researcher, synthesizer, coordinator |
 | Sandbox Exec | `sandbox_exec` | `EXECUTE_SHELL` | coder, debugger |
-| Playwright CLI | `browser_navigate` | `NETWORK_OUTBOUND` | coder |
+| Playwright CLI | `browser_navigate` | `NETWORK_OUTBOUND` | researcher (delegation owner) |
 | Recall Memory Search | `recall_memory_search` | `READ_FS` | architect, coordinator, researcher, synthesizer, coder, debugger |
 | Archival Memory Search | `archival_memory_search` | `READ_FS` | architect, coordinator, researcher, synthesizer, coder |
 | Core Memory Read | `core_memory_read` | `READ_FS` | architect, coordinator, researcher, synthesizer, coder |
 | Core Memory Append | `core_memory_append` | `WRITE_MEMORY` | architect, coordinator, researcher, synthesizer, coder |
 | Core Memory Replace | `core_memory_replace` | `WRITE_MEMORY` | architect, coordinator, researcher, synthesizer, coder |
 | Archival Memory Insert | `archival_memory_insert` | `WRITE_FS` | architect, coordinator, researcher, synthesizer, coder |
-| Ingest Document | `ingest_document` | `WRITE_MEMORY` | coordinator, synthesizer |
+| Ingest Document | `ingest_document` | `WRITE_MEMORY` | coordinator, synthesizer, nurturer |
 | Schedule Task | `schedule_task` | `SCHEDULE_AUTONOMOUS` | coordinator, synthesizer |
 | Manage Schedule | `manage_schedule` | `READ_FS` | coordinator, synthesizer |
 | Manage Checklist | `manage_checklist` | `READ_FS` | coder, debugger |
 | Agent Task | `agent_task` | `WRITE_FS` | coordinator, synthesizer, researcher |
 | Delegate (Garuda) | `garuda` | `DELEGATE_AUTONOMOUS` | all 12 roles |
-| Register MCP Server | `register_mcp_server` | `NETWORK_OUTBOUND` | (dynamic) |
+| Register MCP Server | `register_mcp_server` | `NETWORK_OUTBOUND` | coder, debugger |
 | MCP dynamic tools | (varies) | (varies) | all roles with MCP |
 
 ### Governance by Autonomy Level

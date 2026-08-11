@@ -1,7 +1,13 @@
 import { LitElement, css, html } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
-import { ArcClient } from '../api/client';
-import { O1DraftPayload, ConnectionDraft } from '../api/types';
+import {
+  ArcApiError,
+  ArcClient,
+  clearPersistedOwnerApiKey,
+  persistOwnerApiKey,
+  readPersistedOwnerApiKey,
+} from '../api/client';
+import { O1DraftPayload, ConnectionDraft, OnboardingStatusDto, ProviderDescriptor } from '../api/types';
 import { formStyles } from './arc-onboarding-styles';
 import './onboarding/arc-onboarding-plan-stepper';
 import './onboarding/arc-onboarding-step-welcome';
@@ -28,20 +34,27 @@ export class ArcOnboarding extends LitElement {
     connections: [],
     concernRoutes: { agentLoop: [], compaction: [], classifier: [], embedding: [] }
   };
-  @state() private _catalog: any[] = [];
+  @state() private _catalog: ProviderDescriptor[] = [];
   @state() private _modelDefaults: Record<string, { defaultModel: string; defaultBaseUrl?: string }> = {};
   @state() private _loading = false;
   @state() private _error = '';
+  @state() private _vaultPriority: boolean | null = null;
+  @state() private _effectiveSource: string | null = null;
+  @state() private _credentialState: string | null = null;
+  @state() private _credentialSource: string | null = null;
   @state() private _isAdvanced = false;
+  @state() private _bootstrapState: 'CLAIMING' | 'CLAIMED' | null = null;
+  @state() private _ownerApiKey = '';
 
   static styles = [
     formStyles,
     css`
       :host {
         display: flex;
-        align-items: center;
+        align-items: flex-start;
         justify-content: center;
         min-height: 100%;
+        box-sizing: border-box;
         background: var(--bg-base);
         font-family: var(--font-family);
         padding: var(--space-6) var(--space-4);
@@ -56,6 +69,7 @@ export class ArcOnboarding extends LitElement {
         box-shadow: var(--shadow-lg), var(--shadow-glow);
         overflow: hidden;
         position: relative;
+        margin-block: auto;
         animation: card-in 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
         transition: max-width var(--transition);
       }
@@ -152,6 +166,39 @@ export class ArcOnboarding extends LitElement {
       .mode-toggle:hover {
         color: var(--accent);
       }
+
+      .bootstrap-recovery {
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-3);
+        margin-top: var(--space-4);
+        padding: var(--space-4);
+        background: var(--bg-elevated);
+        border: 1px solid var(--border-card);
+        border-radius: var(--radius-md);
+      }
+
+      .bootstrap-recovery p {
+        color: var(--text-muted);
+        font-size: var(--font-size-xs);
+        line-height: 1.5;
+      }
+
+      .bootstrap-recovery input {
+        width: 100%;
+        padding: var(--space-3);
+        color: var(--text-primary);
+        background: var(--bg-surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-md);
+        font: inherit;
+      }
+
+      .bootstrap-recovery-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--space-3);
+      }
     `
   ];
 
@@ -163,10 +210,75 @@ export class ArcOnboarding extends LitElement {
   private async _initDraft() {
     this._loading = true;
     this._error = '';
+    this._draftId = '';
+    this._planStages = [];
+    this._vaultPriority = null;
+    this._effectiveSource = null;
+    this._credentialState = null;
+    this._credentialSource = null;
+    this._bootstrapState = null;
     try {
+      let status: OnboardingStatusDto | undefined;
+      const attemptedOwnerApiKey = readPersistedOwnerApiKey();
+      try {
+        status = await this._client.onboardingStatus();
+      } catch (error) {
+        // A clean deployment deliberately protects onboarding/status until the
+        // first owner exists. Bootstrap is the unauthenticated entry point.
+        if (!(error instanceof ArcApiError) || error.status !== 401) throw error;
+        if (attemptedOwnerApiKey) {
+          try {
+            // Test the HttpOnly cookie without deleting the persisted key first.
+            // Only a successful cookie-authenticated response proves the stored
+            // header is stale and safe to remove.
+            status = await new ArcClient('/api/v1', undefined, false).onboardingStatus();
+            clearPersistedOwnerApiKey(attemptedOwnerApiKey);
+          } catch (retryError) {
+            if (!(retryError instanceof ArcApiError) || retryError.status !== 401) {
+              throw retryError;
+            }
+          }
+        }
+      }
+      this._updateConfigurationStatus(status);
+      if (status?.credentialsOk || status?.skipOnboarding) {
+        this.dispatchEvent(
+          new CustomEvent('api-key-set', {
+            bubbles: true,
+            composed: true,
+            detail: { key: 'authenticated' }
+          })
+        );
+        return;
+      }
+
       const boot = await this._client.getBootstrapStatus();
-      if (boot.status === 'UNCLAIMED' || boot.status === 'CLAIMING') {
-        await this._client.claimFirstOwner();
+      if (boot.status === 'UNCLAIMED' || boot.status === 'CREDENTIAL_ISSUED') {
+        const claim = await this._client.claimFirstOwner();
+        if (typeof claim?.apiKey === 'string' && claim.apiKey.trim()) {
+          persistOwnerApiKey(claim.apiKey);
+          // Keep the issued credential in memory for this claim flow even if
+          // browser storage is restricted; the HttpOnly cookie remains primary.
+          this._client = new ArcClient('/api/v1', claim.apiKey.trim());
+        }
+      } else if (boot.status === 'CLAIMING') {
+        this._bootstrapState = 'CLAIMING';
+        throw new Error('Bootstrap ownership is currently being claimed; retry in a moment.');
+      } else if (boot.status === 'CLAIMED') {
+        this._bootstrapState = 'CLAIMED';
+      }
+
+      status = await this._client.onboardingStatus();
+      this._updateConfigurationStatus(status);
+      if (status.credentialsOk || status.skipOnboarding) {
+        this.dispatchEvent(
+          new CustomEvent('api-key-set', {
+            bubbles: true,
+            composed: true,
+            detail: { key: 'authenticated' },
+          }),
+        );
+        return;
       }
 
       this._catalog = await this._client.getProviderCatalog();
@@ -182,23 +294,80 @@ export class ArcOnboarding extends LitElement {
       this._planStages = res.planFingerprint.split('->');
       if (res.selectedNonSecretIds && res.selectedNonSecretIds.length > 0) {
         try {
-          this._draftPayload = JSON.parse(res.selectedNonSecretIds[0]);
+          const parsed = JSON.parse(res.selectedNonSecretIds[0]);
+          if (!parsed.mcpServers && parsed.mcp?.servers) {
+            parsed.mcpServers = parsed.mcp.servers.map((server: any) => ({
+              name: server.name,
+              transport: 'sse',
+              url: server.endpoint,
+            }));
+          }
+          this._draftPayload = parsed;
         } catch (_) {
           // Payload is clean/empty
         }
       }
     } catch (e: any) {
-      this._error = `Failed to load draft: ${e.message}`;
+      if (this._bootstrapState === 'CLAIMED' && e instanceof ArcApiError && e.status === 401) {
+        this._error = 'Bootstrap is already claimed. Sign in with the owner API key to continue.';
+      } else {
+        this._error = `Failed to load draft: ${e.message}`;
+      }
     } finally {
       this._loading = false;
     }
   }
 
-  private async _saveAndNavigate(targetStepId: string, payloadUpdates?: Partial<O1DraftPayload>) {
+  private _updateConfigurationStatus(status?: OnboardingStatusDto) {
+    if (!status) return;
+    if (typeof status.vaultPriority === 'boolean') this._vaultPriority = status.vaultPriority;
+    this._effectiveSource = status.effectiveSource || null;
+    this._credentialState = status.credentialState || null;
+    this._credentialSource = status.credentialSource || null;
+  }
+
+  private async _recoverLocalOwner() {
     this._loading = true;
     this._error = '';
     try {
-      const newPayload = { ...this._draftPayload, ...payloadUpdates };
+      const recovery = await this._client.recoverLocalOwner();
+      if (typeof recovery?.apiKey !== 'string' || !recovery.apiKey.trim()) {
+        throw new Error('Local recovery did not return an owner credential.');
+      }
+      persistOwnerApiKey(recovery.apiKey);
+      this._client = new ArcClient('/api/v1', recovery.apiKey.trim());
+      await this._initDraft();
+    } catch (error: any) {
+      if (error instanceof ArcApiError && error.status === 403) {
+        this._error = 'Local owner recovery is disabled. Set AMSHA_BOOTSTRAP_LOCAL_RECOVERY=true and restart.';
+      } else {
+        this._error = `Local owner recovery failed: ${error.message}`;
+      }
+    } finally {
+      this._loading = false;
+    }
+  }
+
+  private async _signInOwner() {
+    const apiKey = this._ownerApiKey.trim();
+    if (!apiKey) {
+      this._error = 'Enter the owner API key to continue.';
+      return;
+    }
+    persistOwnerApiKey(apiKey);
+    this._client = new ArcClient('/api/v1', apiKey);
+    await this._initDraft();
+  }
+
+  private async _saveAndNavigate(targetStepId: string, payloadUpdates?: Partial<O1DraftPayload>) {
+    if (!this._draftId) {
+      this._error = 'Onboarding is not ready. Retry after authentication completes.';
+      return;
+    }
+    this._loading = true;
+    this._error = '';
+    try {
+      const newPayload = this._withMcpExtensionPayload({ ...this._draftPayload, ...payloadUpdates });
       const serialized = JSON.stringify(newPayload);
       
       const res = await this._client.updateDraftStep(this._draftId, targetStepId, {
@@ -275,33 +444,36 @@ export class ArcOnboarding extends LitElement {
   }
 
   private _handleQuickStart() {
-    const groq = this._catalog.find(p => p.id === 'groq') || {};
-    const groqDefault = this._modelDefaults['groq'] || {};
+    // Quick Start must never stage a key-required provider without a key. Prefer
+    // Ollama, then any catalog provider that explicitly needs no API key.
+    const quickProvider = this._catalog.find(p => p.id === 'ollama' && !p.requiresApiKey && p.embeddingCapable)
+      || this._catalog.find(p => !p.requiresApiKey && p.embeddingCapable)
+      || this._catalog.find(p => p.id === 'ollama' && !p.requiresApiKey)
+      || this._catalog.find(p => !p.requiresApiKey);
+    if (!quickProvider) {
+      this._error = 'No keyless provider is available. Use Advanced setup to configure a provider.';
+      this._isAdvanced = true;
+      this._saveAndNavigate('connections');
+      return;
+    }
+    const defaultModel = quickProvider.modelCatalog?.[0]?.id
+      || this._modelDefaults[quickProvider.id]?.defaultModel
+      || '';
     const defaultConn: ConnectionDraft = {
-      provider: 'groq',
-      modelId: groq.defaultModel || groqDefault.defaultModel || 'meta-llama/llama-4-scout-17b-16e-instruct',
+      provider: quickProvider.id,
+      modelId: defaultModel,
       contextWindow: 8192,
       structuredOutputMode: 'NATIVE',
       capabilities: ['tool-calling']
     };
 
-    const ollama = this._catalog.find(p => p.id === 'ollama') || {};
-    const ollamaDefault = this._modelDefaults['ollama'] || {};
-    const defaultEmbed: ConnectionDraft = {
-      provider: 'ollama',
-      modelId: ollama.defaultModel || ollamaDefault.defaultModel || 'mistral-small:latest',
-      contextWindow: 8192,
-      structuredOutputMode: 'NATIVE',
-      capabilities: []
-    };
-    
     const preseededPayload: O1DraftPayload = {
-      connections: [defaultConn, defaultEmbed],
+      connections: [defaultConn],
       concernRoutes: {
         agentLoop: [0],
         compaction: [0],
         classifier: [0],
-        embedding: [1]
+      embedding: quickProvider.embeddingCapable ? [0] : []
       }
     };
 
@@ -327,6 +499,17 @@ export class ArcOnboarding extends LitElement {
 
   private _handleUpdateMcp(e: CustomEvent) {
     this._draftPayload = { ...this._draftPayload, mcpServers: e.detail.mcpServers };
+  }
+
+  private _withMcpExtensionPayload(payload: O1DraftPayload): O1DraftPayload {
+    const payloadWithoutUiOnlyMcp = { ...payload };
+    delete payloadWithoutUiOnlyMcp.mcpServers;
+    const servers = (payload.mcpServers || []).map(server => ({
+      name: server.name.trim(),
+      endpoint: (server.url || '').trim(),
+      category: 'INTERNAL',
+    }));
+    return { ...payloadWithoutUiOnlyMcp, mcp: { servers } };
   }
 
   private _handleUpdateIntegrations(e: CustomEvent) {
@@ -355,6 +538,7 @@ export class ArcOnboarding extends LitElement {
 
   render() {
     const isWide = ['connections', 'routes', 'persona-routing', 'review'].includes(this._currentStepId);
+    const draftReady = Boolean(this._draftId);
 
     return html`
       <div class="wizard-card ${isWide ? 'wide' : ''}">
@@ -377,27 +561,93 @@ export class ArcOnboarding extends LitElement {
             `
           : ''}
 
-        <div class="wizard-body">
-          ${this._error ? html`<div class="status-msg error">${this._error}</div>` : ''}
+      <div class="wizard-body">
+        ${this._vaultPriority === false && this._currentStepId !== 'review'
+          ? html`
+              <div class="status-msg" style="color:var(--text-warning);margin-bottom:var(--space-3)">
+                Vault priority is disabled. Connections selected here will not replace environment configuration
+                unless AMSHA_LLM_VAULT_PRIORITY=true.
+              </div>
+            `
+          : ''}
+        ${this._currentStepId === 'review' && this._vaultPriority === false
+          ? html`
+              <div class="status-msg" style="color:var(--text-warning);margin-bottom:var(--space-3)">
+                Review warning: this UI-selected LLM will be stored for onboarding, but the running agent will continue using environment configuration until vault priority is enabled and the process is restarted.
+              </div>
+            `
+          : ''}
+        ${this._currentStepId === 'review' && this._effectiveSource
+          ? html`
+              <div class="status-msg" style="margin-bottom:var(--space-3)">
+                Active configuration source: ${this._effectiveSource}. Credential state: ${this._credentialState || 'unknown'}. Credential source: ${this._credentialSource || 'unknown'}.
+              </div>
+            `
+          : ''}
+        ${this._error
+          ? html`
+              <div class="status-msg error" role="alert">${this._error}</div>
+              ${this._bootstrapState === 'CLAIMED'
+                ? html`
+                    <div class="bootstrap-recovery">
+                      <p>
+                        This installation already has an owner. Clearing browser state cannot replace that
+                        owner; use the owner API key or retry the existing browser cookie.
+                      </p>
+                      <input
+                        type="password"
+                        autocomplete="current-password"
+                        placeholder="Owner API key"
+                        .value="${this._ownerApiKey}"
+                        @input="${(event: InputEvent) =>
+                          (this._ownerApiKey = (event.target as HTMLInputElement).value)}"
+                      />
+                      <div class="bootstrap-recovery-actions">
+                        <button class="btn-primary" @click="${this._signInOwner}" ?disabled="${this._loading}">
+                          Sign In With Owner Key
+                        </button>
+                        <button class="btn-primary" @click="${this._recoverLocalOwner}" ?disabled="${this._loading}">
+                          Recover Local Owner Session
+                        </button>
+                      </div>
+                    </div>
+                  `
+                : this._bootstrapState === 'CLAIMING'
+                  ? html`
+                      <div class="bootstrap-recovery">
+                        <div class="bootstrap-recovery-actions">
+                          <button class="btn-primary" @click="${this._initDraft}" ?disabled="${this._loading}">
+                            Retry Bootstrap
+                          </button>
+                        </div>
+                      </div>
+                    `
+                  : ''}
+            `
+          : ''}
           ${this._loading ? html`<div class="status-msg loading"><div class="spinner"></div> Loading...</div>` : ''}
           
           <div style="margin-top: var(--space-4);">
-            ${this._renderStepContent()}
+            ${draftReady && !this._loading && !this._error ? this._renderStepContent() : ''}
           </div>
         </div>
 
-        <div class="wizard-footer">
-          <button class="mode-toggle" @click="${() => (this._isAdvanced = !this._isAdvanced)}">
-            ${this._isAdvanced ? 'Switch to Quick Start' : 'Enable Advanced Setup'}
-          </button>
-          ${this._currentStepId !== 'welcome' && this._currentStepId !== 'complete'
-            ? html`
-                <button class="mode-toggle" style="color: var(--error);" @click="${this._discard}">
-                  Discard & Restart
+        ${draftReady && !this._loading && !this._error
+          ? html`
+              <div class="wizard-footer">
+                <button class="mode-toggle" @click="${() => (this._isAdvanced = !this._isAdvanced)}">
+                  ${this._isAdvanced ? 'Switch to Quick Start' : 'Enable Advanced Setup'}
                 </button>
-              `
-            : ''}
-        </div>
+                ${this._currentStepId !== 'welcome' && this._currentStepId !== 'complete'
+                  ? html`
+                      <button class="mode-toggle" style="color: var(--error);" @click="${this._discard}">
+                        Discard & Restart
+                      </button>
+                    `
+                  : ''}
+              </div>
+            `
+          : ''}
       </div>
     `;
   }
@@ -416,6 +666,7 @@ export class ArcOnboarding extends LitElement {
           <arc-onboarding-step-connections
             .connections="${this._draftPayload.connections || []}"
             .catalog="${this._catalog}"
+            .modelDefaults="${this._modelDefaults}"
             @update-connections="${this._handleUpdateConnections}"
             @next="${this._navigateNext}"
           ></arc-onboarding-step-connections>

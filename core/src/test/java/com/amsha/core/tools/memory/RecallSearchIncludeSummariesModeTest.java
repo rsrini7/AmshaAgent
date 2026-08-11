@@ -20,7 +20,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
 /**
- * Phase 3 Test 2: Verify include_summaries=true returns both raw messages and summaries,
+ * Verify include_summaries=true returns both raw messages and summaries,
  * with raw messages ranked higher.
  */
 class RecallSearchIncludeSummariesModeTest {

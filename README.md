@@ -8,8 +8,8 @@
   ![Native Image Ready](https://img.shields.io/badge/Native_Image-Ready-orange.svg?style=flat&logo=graalvm)
   ![OpenTelemetry](https://img.shields.io/badge/OpenTelemetry-Tracing-blueviolet.svg?style=flat&logo=opentelemetry)
   ![Podman](https://img.shields.io/badge/Isolation-Rootless_Podman-purple.svg?style=flat&logo=podman)
-  ![Tests](https://img.shields.io/badge/Tests-4089_passing-brightgreen.svg?style=flat)
-  ![Coverage](https://img.shields.io/badge/Coverage-70.10%25-brightgreen.svg?style=flat)
+  ![Tests](https://img.shields.io/badge/Tests-4158_passing-brightgreen.svg?style=flat)
+  ![Coverage](https://img.shields.io/badge/Coverage-70.23%25-brightgreen.svg?style=flat)
   [![Built with Devbox](https://img.shields.io/badge/built_with-devbox-green.svg?style=flat)](https://www.jetify.com/devbox/)
   [![Built with mise](https://img.shields.io/badge/built_with-mise-blue.svg?style=flat)](https://jdx.dev)
 </div>
@@ -54,7 +54,7 @@ cd amsha
 
 # Copy and edit .env (see docs/CONFIGURATION.md for all variables)
 cp .env.example .env
-# At minimum: AMSHA_LLM_API_KEY=gsk_... (Groq), AMSHA_VAULT_PEPPER=<random>
+# At minimum: AMSHA_GROQ_API_KEY=gsk_... (Groq), AMSHA_VAULT_PEPPER=<random>
 
 # Dev mode (hot reload, no sandbox isolation)
 ./mvnw quarkus:dev -pl amsha-app -am "-Dquarkus.args=chat"
@@ -88,11 +88,11 @@ See [docs/QUICK_START.md](./docs/QUICK_START.md) for detailed setup options.
 - **Secret-safe application logging** — console and file filters redact credential-shaped URLs, bearer values, assignments, formatted parameters, and throwable cause/suppressed chains before rendering
 - **Tamper-evident HMAC audit chain** — every action logged as append-only, verifiable record
 - **MemGPT-style three-tier memory** — prompt-injected Core context, exact-turn Recall history, and semantic Archival knowledge; retrieval combines FTS5 and sqlite-vec with Reciprocal Rank Fusion
-- **Opt-in in-process local ML inference** — Phase 1 ONNX Runtime (`1.27.0`) and DJL Tokenizers (`0.33.0`) embedding implementation runs verified local bundles without Python containers, downloads, or external inference sidecars; Linux native records and signed release provenance remain open gates
+- **Opt-in in-process local ML inference** — ONNX Runtime (`1.27.0`) and DJL Tokenizers (`0.33.0`) embedding implementation runs verified local bundles without Python containers, downloads, or external inference sidecars; Linux native records and signed release provenance remain open gates
 - **Vector index descriptor fingerprinting & non-destructive safety** — 15-field `EmbeddingIndexDescriptor` validates model, tokenizer, pooling, and dimension compatibility across SQLite (`sqlite-vec`), PostgreSQL (`pgvector`), and Lucene Filesystem backends; mismatched indices degrade non-destructively to BM25/FTS5 keyword search without auto-deleting vectors
 - **Non-authoritative classifier shadow path** — disabled-by-default intent, tool-risk, and answer-quality adapters emit bounded payload-free comparisons without changing routing, authorization, retry, or answer behavior; reproducible review/training/export tooling is present, while human-approved datasets and promoted models remain pending
-- **Phase 2.5 classifier safety gate** — core now provides ordered post-policy tool-risk and answer-quality SPIs with monotonic risk upgrades, existing HITL preservation, and one pre-tool retry budget; no active ONNX implementation is wired, so model evidence remains required before behavioral activation
-- **Phase 3A non-activating classifier controls** — internal-only, mandatory-audited per-classifier runtime switches distinguish requested from effective state, reject enablement without a ready active implementation, and drain accepted work after disable; no ONNX classifier is behaviorally active
+- **classifier safety gate** — core now provides ordered post-policy tool-risk and answer-quality SPIs with monotonic risk upgrades, existing HITL preservation, and one pre-tool retry budget; no active ONNX implementation is wired, so model evidence remains required before behavioral activation
+- **Non-activating classifier controls** — internal-only, mandatory-audited per-classifier runtime switches distinguish requested from effective state, reject enablement without a ready active implementation, and drain accepted work after disable; no ONNX classifier is behaviorally active
 - **Reusable local ML verification** — one secret-safe mise workflow checks authenticated OMLX through `generic-openai`, bundle digests, ONNX health/index descriptors, real inference metric movement, and isolated native startup/shutdown without selecting Ollama
 - **Document ingestion** — add knowledge to the RAG store for retrieval in future agent turns
 - **Extensible Skills system** — YAML/Markdown custom roles from database, classpath, or SkillsJars with hot reload and optional adaptive execution
@@ -207,6 +207,7 @@ Set `AMSHA_UI_SKIP_ONBOARDING=true` if you want the web UI to skip the setup wiz
 | Doc | What it covers |
 |-----|---------------|
 | [QUICK_START.md](./docs/QUICK_START.md) | Dev mode, packaged JAR, native image, Docker Compose |
+| [ONBOARDING.md](./docs/ONBOARDING.md) | End-to-end CLI/native and web UI onboarding, configuration layers, credentials, recovery |
 | [SETUP.md](./docs/SETUP.md) | Manual setup, prerequisites, OS-specific, troubleshooting |
 | [MANUAL_SETUP.md](./docs/MANUAL_SETUP.md) | Detailed configuration and optional dependency setup |
 | [MISE_SETUP.md](./docs/MISE_SETUP.md) | Mise-based development environment and task automation |

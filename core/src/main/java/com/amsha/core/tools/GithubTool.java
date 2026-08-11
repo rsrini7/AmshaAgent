@@ -327,7 +327,7 @@ public class GithubTool implements AgentTool {
                 .addStringProperty(
                         "ref",
                         "Optional branch, tag, or commit SHA. Pass EXACTLY as-is including hyphens. "
-                                + "Examples: Phase-63, main, v0.1.0, feature/my-branch. "
+                                + "Examples: main, v0.1.0, feature/my-branch. "
                                 + "Only valid when action=repo and command=view. "
                                 + "CRITICAL: If not needed, you MUST OMIT the 'ref' key entirely. NEVER pass null.")
                 .required("action", "command")

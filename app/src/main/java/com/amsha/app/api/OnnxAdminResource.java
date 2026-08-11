@@ -162,7 +162,7 @@ public class OnnxAdminResource {
         return Response.ok(payload).build();
     }
 
-    /** Returns the protected, payload-free state of all Phase 3 classifier switches. */
+    /** Returns the protected, payload-free state of all shadow classifier switches. */
     @GET
     @Path("/classifiers")
     public Response classifierRuntimeStatus() {

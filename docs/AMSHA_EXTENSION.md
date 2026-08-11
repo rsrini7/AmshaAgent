@@ -643,13 +643,12 @@ bypass mandatory validation or authorization.
 > `ToolGuardInterceptor` that inspects `history` and returns
 > `GuardDecision.Deduplicate` with the chosen cached observation.
 
-Probabilistic risk scoring must not be added to this pre-policy SPI. The Phase 2.5
+Probabilistic risk scoring must not be added to this pre-policy SPI. The
 `PostPolicyToolRiskInterceptor` runs only after the deterministic path provisionally
 allows a tool and can return only `REQUIRE_APPROVAL`, `BLOCK`, or `NoOpinion`. The
 ordered `AnswerQualityInterceptor` runs only after deterministic answer acceptance;
 its retry opinion is honored once at most and never after a tool boundary. Implementing
-either active SPI for ONNX requires the corresponding Phase 2 model evidence and Phase
-3 activation gates from the ONNX ADR; `local-ml-onnx` currently implements neither.
+either active SPI for ONNX requires the corresponding model evidence and activation gates from the ONNX ADR; `local-ml-onnx` currently implements neither.
 
 ---
 

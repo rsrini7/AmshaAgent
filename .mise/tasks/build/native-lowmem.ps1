@@ -62,8 +62,11 @@ try {
     $env:GRAALVM_HOME = $graalPath
     $env:JAVA_HOME = $graalPath
 
-    $env:MAVEN_OPTS = '--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow'
-    & $mvnw clean package -Pnative -pl app -am -DskipTests `
+$env:MAVEN_OPTS = '--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow'
+mise run build:ui:copy
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+& $mvnw clean verify -Pnative -pl app -am -DskipTests `
         "-Damsha.persistence.backend=sqlite" `
         "-Dquarkus.profile=prod" `
         '-Dquarkus.native.container-build=false' `

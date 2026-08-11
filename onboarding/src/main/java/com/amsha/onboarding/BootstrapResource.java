@@ -9,6 +9,7 @@ import jakarta.ws.rs.POST;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.Context;
+import jakarta.ws.rs.core.HttpHeaders;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.NewCookie;
 import jakarta.ws.rs.core.Response;
@@ -32,6 +33,7 @@ import com.amsha.persistence.api.IdentityUserDto;
 import com.amsha.persistence.api.IdentityWorkspaceDto;
 import com.amsha.persistence.api.WorkspaceMembershipDto;
 
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
 import io.smallrye.common.annotation.RunOnVirtualThread;
@@ -66,6 +68,9 @@ public class BootstrapResource {
     @Inject
     HttpServerRequest request;
 
+    @ConfigProperty(name = "amsha.bootstrap.local-recovery-enabled", defaultValue = "false")
+    boolean localRecoveryEnabled;
+
     @GET
     @Path("/status")
     public Response status() {
@@ -74,6 +79,7 @@ public class BootstrapResource {
                 BOOTSTRAP_ID, BootstrapStateDto.STATUS_UNCLAIMED, null, null, null, null, null, 0, Instant.now()));
         // Status discloses only state and safe revision; never owner/workspace ID, digest, or proof.
         return Response.ok(new BootstrapStatusResponse(state.status(), state.revision()))
+                .header(HttpHeaders.CACHE_CONTROL, "no-store")
                 .build();
     }
 
@@ -149,9 +155,33 @@ public class BootstrapResource {
                 "action=claim_first_owner ownerId=" + ownerId + " workspaceId=" + workspaceId);
 
         NewCookie apiCookie = buildCookie(issued.rawKey());
-        return Response.ok(new ClaimResponse(ownerId, workspaceId))
+        return Response.ok(new ClaimResponse(ownerId, workspaceId, issued.rawKey()))
                 .cookie(apiCookie)
                 .build();
+    }
+
+    @POST
+    @Path("/local-recovery")
+    public Response localRecovery() {
+        if (!localRecoveryEnabled || !isLoopbackRequest()) {
+            return Response.status(Response.Status.FORBIDDEN)
+                    .entity(new ErrorResponse("LOCAL_RECOVERY_DISABLED", "Local bootstrap recovery is disabled."))
+                    .build();
+        }
+        Optional<BootstrapStateDto> existing = bootstrapStateStore.getState();
+        if (existing.isEmpty() || !existing.get().isClaimed()) {
+            return Response.status(Response.Status.BAD_REQUEST)
+                    .entity(new ErrorResponse("INVALID_STATE", "Bootstrap is not in a claimed state."))
+                    .build();
+        }
+        BootstrapStateDto state = existing.get();
+        auditService.recordMandatory(
+                "bootstrap-local-recovery",
+                state.ownerId(),
+                "system",
+                SecurityEventType.ONBOARDING_COMPLETED,
+                "action=reissue_claimed_owner_credential");
+        return recover(state);
     }
 
     @POST
@@ -237,7 +267,7 @@ public class BootstrapResource {
                     .build();
         }
         NewCookie apiCookie = buildCookie(newIssued.rawKey());
-        return Response.ok(new ClaimResponse(state.ownerId(), state.workspaceId()))
+        return Response.ok(new ClaimResponse(state.ownerId(), state.workspaceId(), newIssued.rawKey()))
                 .cookie(apiCookie)
                 .build();
     }
@@ -269,7 +299,7 @@ public class BootstrapResource {
         // Required on HTTPS/non-loopback deployments; not forced for explicit loopback HTTP dev.
         if (request == null || request.remoteAddress() == null) return true;
         String host = request.remoteAddress().host();
-        boolean loopback = "127.0.0.1".equals(host) || "0:0:0:0:0:0:0:1".equals(host) || "localhost".equals(host);
+        boolean loopback = HttpConstants.isLoopbackHost(host);
         String scheme = request.scheme();
         return !(loopback && "http".equalsIgnoreCase(scheme));
     }
@@ -279,12 +309,13 @@ public class BootstrapResource {
             return false;
         }
         String host = request.remoteAddress().host();
-        return "127.0.0.1".equals(host) || "0:0:0:0:0:0:0:1".equals(host) || "localhost".equals(host);
+        return HttpConstants.isLoopbackHost(host);
     }
 
     public record BootstrapStatusResponse(String status, int revision) {}
 
-    public record ClaimResponse(String ownerId, String workspaceId) {}
+    /** One-time bootstrap response; the same key is also delivered as an HttpOnly cookie. */
+    public record ClaimResponse(String ownerId, String workspaceId, String apiKey) {}
 
     public record ConfirmResponse(boolean success) {}
 

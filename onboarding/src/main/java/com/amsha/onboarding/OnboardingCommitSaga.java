@@ -31,6 +31,7 @@ import com.amsha.persistence.api.OnboardingDraftState;
 import com.amsha.persistence.api.OnboardingDraftStorePort;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
 /**
@@ -61,6 +62,9 @@ public class OnboardingCommitSaga {
 
     @Inject
     OnboardingSelectionScrubber scrubber;
+
+    @ConfigProperty(name = "amsha.llm.vault-priority", defaultValue = "false")
+    boolean vaultPriority;
 
     /**
      * Commits the draft with crash-safe extension saga support. Receipts are persisted in the
@@ -116,6 +120,7 @@ public class OnboardingCommitSaga {
      */
     @SuppressWarnings("unchecked")
     public void activateLlmSettings(OnboardingDraftDto d) {
+        if (!vaultPriority) return;
         if (d.selectedNonSecretIds() == null || d.selectedNonSecretIds().isEmpty()) return;
         try {
             String payloadStr = d.selectedNonSecretIds().get(0);
@@ -138,6 +143,8 @@ public class OnboardingCommitSaga {
             Map<String, Object> activeConn = (Map<String, Object>) activeConnection;
             storeSystemSetting(activeConn, "provider", VaultConstants.LLM_PROVIDER_KEY);
             storeSystemSetting(activeConn, "modelId", VaultConstants.LLM_MODEL_KEY);
+            storeOptionalSystemSetting(
+                    activeConn, VaultConstants.LLM_BASE_URL_KEY, "customBaseUrl", "baseUrl", "targetUrl");
             Object vaultRefRaw = activeConn.get("apiKeyVaultRef");
             if (vaultRefRaw instanceof String vaultRef && !vaultRef.isBlank()) {
                 vault.get(vaultRef, d.ownerId()).ifPresent(vk -> {
@@ -167,6 +174,10 @@ public class OnboardingCommitSaga {
             OnboardingDraftDto d, OnboardingExtension ext, Map<String, OnboardingCommitReceiptDto> alreadyCommitted) {
         String extId = ext.descriptor().extensionId();
         if (!d.completedStepIds().contains(extId)) return null;
+        if (ext.descriptor().optional()
+                && isEmptyOptionalExtensionPayload(scrubber.extractExtensionPayload(d.selectedNonSecretIds(), extId))) {
+            return null;
+        }
         String operationId = d.draftId() + ":" + extId;
 
         OnboardingCommitReceiptDto prior = alreadyCommitted.get(extId);
@@ -300,6 +311,34 @@ public class OnboardingCommitSaga {
         if (value != null) {
             vault.storeSystemKey(vaultKey, value.getBytes(StandardCharsets.UTF_8));
         }
+    }
+
+    @SuppressWarnings("unchecked")
+    private boolean isEmptyOptionalExtensionPayload(String payload) {
+        if (payload == null || payload.isBlank() || "{}".equals(payload)) return true;
+        try {
+            Map<String, Object> parsed = objectMapper.readValue(payload, Map.class);
+            Object servers = parsed.get("servers");
+            return parsed.size() == 1 && servers instanceof List<?> serverList && serverList.isEmpty();
+        } catch (Exception _) {
+            return false;
+        }
+    }
+
+    private void storeOptionalSystemSetting(Map<String, Object> conn, String vaultKey, String... sourceKeys) {
+        String value = null;
+        for (String sourceKey : sourceKeys) {
+            Object rawValue = conn.get(sourceKey);
+            if (rawValue instanceof String candidate && !candidate.isBlank()) {
+                value = candidate;
+                break;
+            }
+        }
+        if (value == null) {
+            vault.removeSystemKey(vaultKey);
+            return;
+        }
+        vault.storeSystemKey(vaultKey, value.getBytes(StandardCharsets.UTF_8));
     }
 
     private record ActiveCommit(

@@ -2120,7 +2120,9 @@ class PersistencePortContractTest {
         @Override
         public boolean replaceCredential(int expectedRevision, String newDigest, Instant issuedAt, Instant updatedAt) {
             if (state == null
-                    || (!CREDENTIAL_ISSUED.equals(state.status()) && !CLAIMING.equals(state.status()))
+                    || (!CREDENTIAL_ISSUED.equals(state.status())
+                            && !CLAIMING.equals(state.status())
+                            && !CLAIMED.equals(state.status()))
                     || state.revision() != expectedRevision) {
                 return false;
             }

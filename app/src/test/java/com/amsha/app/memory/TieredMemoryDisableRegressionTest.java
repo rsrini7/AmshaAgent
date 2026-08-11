@@ -22,9 +22,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 /**
- * Phase 12 test: Regression tests for disabled tiered memory.
+ * Test: Regression tests for disabled tiered memory.
  * <p>
- * When tiered memory is disabled, the system should fall back to pre-Phase 0
+ * When tiered memory is disabled, the system should fall back to pre-shadow
  * behavior with no crashes, no hangs, and clean empty results. This test
  * verifies the full disabled path through the service layer using NoOp stores.
  */

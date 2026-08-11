@@ -21,7 +21,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 /**
- * Integration-style tests for Phase 75: Pre-execution and Delegation.
+ * Integration-style tests for Pre-execution and Delegation.
  * Covers P75-A (Safe tool pre-execution) and P75-B (Approval delegation).
  */
 @ExtendWith(MockitoExtension.class)

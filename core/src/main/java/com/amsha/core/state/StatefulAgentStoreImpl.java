@@ -27,7 +27,7 @@ import org.jboss.logging.Logger;
 /**
  * Domain-level orchestrator for agent checkpoint persistence.
  *
- * <p>Post-C2 Phase 1 decomposition: This class delegates three extracted
+ * <p>Post-C2 decomposition: This class delegates three extracted
  * responsibilities to focused services:
  * <ul>
  *   <li><strong>Serialization</strong> → {@link CheckpointSerializer}</li>

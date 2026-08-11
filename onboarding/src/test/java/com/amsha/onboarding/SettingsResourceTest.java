@@ -2,6 +2,7 @@ package com.amsha.onboarding;
 
 import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.is;
+import static org.hamcrest.Matchers.notNullValue;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
 
@@ -42,7 +43,15 @@ public class SettingsResourceTest {
 
     @Test
     void testGetSettings() {
-        givenAuth().when().get("/settings").then().statusCode(200);
+        givenAuth()
+                .when()
+                .get("/settings")
+                .then()
+                .statusCode(200)
+                .body("effectiveSource", notNullValue())
+                .body("credentialState", is("MISSING"))
+                .body("credentialSource", is("NONE"))
+                .body("vaultPriority", is(false));
     }
 
     @Test

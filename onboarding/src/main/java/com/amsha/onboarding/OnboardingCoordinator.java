@@ -193,13 +193,19 @@ public class OnboardingCoordinator {
         }
         if (targetIdx > routesIdx
                 && !d.completedStepIds().contains("routes")
-                && !d.currentStepId().equals("routes")) {
+                && !d.currentStepId().equals("routes")
+                && !(targetStepId.equals("review") && d.currentStepId().equals("connections"))) {
             return Optional.empty();
         }
 
         List<String> completed = new ArrayList<>(d.completedStepIds());
         if (!completed.contains(d.currentStepId()) && !"welcome".equals(d.currentStepId())) {
             completed.add(d.currentStepId());
+        }
+        // Quick Start intentionally skips the optional routing screen. Persist that skipped
+        // stage so the review transition remains consistent with the durable plan.
+        if (targetStepId.equals("review") && d.currentStepId().equals("connections") && !completed.contains("routes")) {
+            completed.add("routes");
         }
 
         List<String> processedSelections = scrubber.processAndScrubSecrets(

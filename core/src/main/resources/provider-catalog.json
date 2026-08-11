@@ -33,26 +33,16 @@
     "hasBaseUrl": true
   },
   {
-    "id": "anthropic",
-    "name": "Anthropic",
-    "tag": "Claude series",
-    "icon": "A",
-    "color": "#cc785c",
-    "defaultModel": "claude-haiku-4-5",
-    "embeddingCapable": false,
-    "requiresApiKey": true,
-    "hasBaseUrl": true
-  },
-  {
     "id": "claude-code",
     "name": "Claude Code",
-    "tag": "CLI tool",
+    "tag": "CLI OAuth",
     "icon": "C",
     "color": "#8b5cf6",
     "defaultModel": "claude-sonnet-4-5",
     "embeddingCapable": false,
-    "requiresApiKey": true,
-    "hasBaseUrl": true
+    "requiresApiKey": false,
+    "authScheme": "CLI_OAUTH",
+    "hasBaseUrl": false
   },
   {
     "id": "openrouter",

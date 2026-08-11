@@ -1003,7 +1003,7 @@ Flyway V<n> migrations must exist in both `persistence-sqlite` and `persistence-
 each port should have matches for all 3 backends.
 
 **Known failures**:
-- P104: Phase 8/9 self-evolve stores were built for SQLite + PostgreSQL but the FS backend was missed entirely.
+- P104: self-evolve stores were built for SQLite + PostgreSQL but the FS backend was missed entirely.
 - P104b: Tiered memory stores (`CoreMemoryStorePort`, `RecallMemoryStorePort`, `ArchivalMemoryStorePort`) had no `@TieredBackend("fs")` implementations — runtime error `No @TieredBackend("fs") RecallMemoryStorePort implementation found`.
 - P104c: `%filesystem` profile in `application.yaml` was missing `amsha.memory.tiered.backend: fs` — caused tiered memory to default to SQLite while FS backend was active.
 
@@ -1273,7 +1273,7 @@ The `embedding vector(768)` column and HNSW index MUST be similarly guarded with
      safely on a virtual thread. Use `Context.isOnEventLoopThread()`; do not infer
      the current thread from `Vertx.currentContext().isEventLoopContext()`.
 
-7.13.2 INVARIANT: Phase 2.5 post-policy tool-risk decision SPIs
+7.13.2 INVARIANT: post-policy tool-risk decision SPIs
      (`PostPolicyToolRiskInterceptor`) MUST execute only after `ToolInvocationGuard`
      validation, deduplication, tool recognition, and deterministic HITL checks produce a
      provisional `Allow`. A pre-policy `ToolGuardInterceptor` returning `Allow` MUST continue
@@ -1286,7 +1286,7 @@ The `embedding vector(768)` column and HNSW index MUST be similarly guarded with
      absence, or no optional implementation, `PostPolicyToolRiskDispatcher` MUST preserve the
      provisional allow through `NoOpinion`; metrics MUST remain bounded and payload-free.
 
-7.13.3 INVARIANT: Phase 2.5 `AnswerQualityInterceptor` SPIs MUST be evaluated in
+7.13.3 INVARIANT: `AnswerQualityInterceptor` SPIs MUST be evaluated in
      `FinishActionHandler` only after the authoritative `AnswerGuardStrategy` accepts the answer
      candidate. Interceptors MUST use stable priority/class-name ordering. A `REQUEST_RETRY`
      opinion may be honored only when no tool has been invoked in the current turn and
@@ -1299,7 +1299,7 @@ The `embedding vector(768)` column and HNSW index MUST be similarly guarded with
      implementations MUST NOT perform network I/O or log, persist, export, metric-label, or
      retain the payload beyond one synchronous in-process evaluation.
 
-7.13.4 INVARIANT: Phase 3 classifier runtime control MUST distinguish startup/requested
+7.13.4 INVARIANT: classifier runtime control MUST distinguish startup/requested
      state from effective enablement. Effective enablement additionally requires a ready,
      promotion-approved active implementation registration. Shadow classifiers MUST NOT
      register as active implementations or acquire active leases. Enabling without a ready
@@ -1310,7 +1310,7 @@ The `embedding vector(768)` column and HNSW index MUST be similarly guarded with
      leave state unchanged. Control responses and audit details MUST NOT contain model IDs,
      inputs, outputs, scores, labels, goals, answers, or tool parameters.
 
-7.13.5 INVARIANT: Phase 4 Classifier Automated Data Collection MUST NOT compromise
+7.13.5 INVARIANT: Classifier Automated Data Collection MUST NOT compromise
      the isolation or safety of the core loop. The collection hook MUST operate on
      sanitized copies of context data (`@InputSanitizer.PII` qualified) and MUST NOT
      block execution or leak data. Collection MUST be strictly opt-in via
@@ -1696,6 +1696,31 @@ Always verify with a runtime startup log check when adding CDI beans from a new 
   messages (e.g., `[SelfEvolve] Enabled`). See §15.1-15.2 for the full protocol.
 
 ### 16.4 Session Management (§16.4 INVARIANT)
+Onboarding configuration source and precedence are defined in [ADR: Onboarding
+Configuration Sources and Precedence](../Ideas-Pending/ADR-Onboarding-Configuration-Source-and-Precedence.md).
+Web drafts stage owner-scoped secrets before commit; LLM activation with vault
+priority promotes selected values into system-vault keys, while the CLI bootstrap
+wizard patches deployment `.env` values.
+
+#### 16.4.1 Session and first-owner bootstrap cookie invariants
+
+- Authenticated onboarding status/settings MUST expose non-secret effective LLM provenance: source
+  (`ENVIRONMENT`, `VAULT`, or `DEFAULT`), credential state (`NOT_REQUIRED`, `CONFIGURED`, or `MISSING`),
+  credential source, and effective provider/model/base URL. `credentialsOk` remains workflow completion
+  and MUST NOT be interpreted as provenance.
+
+- The first-owner flow is an authentication boundary, not a normal onboarding draft flow. `GET /onboarding/bootstrap/status` is safe before ownership exists; `POST /onboarding/bootstrap/claim` issues the one-time `HttpOnly` `AMSHA_API_KEY` cookie; `/onboarding/status`, draft, and commit endpoints require the resulting owner credential.
+- The successful first-owner claim may return the raw owner API key exactly once as a credential-creation response, alongside the HttpOnly cookie. The UI MAY persist that one-time key as a refresh fallback; it MUST never log or place it in URLs. A failed request MUST NOT erase the persisted key. The UI may clear only the exact key used by that request after a credential-free retry succeeds and proves the HttpOnly cookie is valid. Concurrent pre-claim status requests MUST NOT erase a newly issued key. Wizard actions MUST remain unavailable until authenticated draft creation returns a non-empty draft ID.
+- The bootstrap cookie MUST use `SameSite=Strict`, `Path=/`, and `HttpOnly`. `Secure` MUST be set for HTTPS and non-loopback deployments, but MUST be clear for explicit loopback HTTP development so browsers accept `http://localhost` and `http://[::1]` cookies.
+- Loopback detection MUST be centralized and recognize `localhost`, IPv4 `127.0.0.0/8`, IPv6 `::1` (including expanded form), and IPv4-mapped loopback. Individual resources MUST NOT maintain narrower host lists.
+- A lost claim response or discarded browser cookie does not make the deployment claimable again. The correct result is `/onboarding/status` → `401` together with bootstrap state `CLAIMED`; code MUST NOT silently create a second owner or reissue credentials through the public claim endpoint. Development recovery uses the authenticated owner credential or a new explicitly selected data directory; existing data MUST NOT be deleted implicitly.
+- `vaultPriority` in `OnboardingStatusDto` is authoritative only after the status request is authenticated (or the deployment is intentionally pre-authenticated by skip/configured state). For a native distribution, rebuild and repackage after Java/UI changes, keep runtime settings in `dist/.env`, and verify the authenticated response reports the configured `AMSHA_LLM_VAULT_PRIORITY` value.
+- The UI MUST render the vault-priority warning only when an authoritative status response explicitly reports `vaultPriority=false`; unknown/loading/error state MUST NOT be presented as disabled configuration.
+- Browser-facing CORS configuration MUST allow every REST mutation verb used by the UI, including `PUT` for onboarding step transitions. REST validation MUST send an `OPTIONS` preflight with `Origin` and `Access-Control-Request-Method: PUT`; a headerless curl `PUT` is insufficient evidence because it bypasses browser preflight.
+- Before first-owner claim, unauthenticated `/onboarding/status` MUST return only a non-secret `welcome` preview with `credentialsOk=false`, `skipOnboarding=false`, and the effective `vaultPriority`; it MUST use `Cache-Control: no-store`. Once bootstrap is claimed, the same unauthenticated request MUST return `401`. Bootstrap status is also non-cacheable so a pre-claim response cannot survive into refresh control flow.
+- `arc-onboarding` is the single owner of browser status/bootstrap initialization; `arc-shell` MUST NOT issue a parallel onboarding-status probe. A cookie-only retry is allowed only after a request actually used a persisted owner key. The wizard container MUST remain vertically scrollable when browser chrome or a short viewport makes a step taller than the available content area.
+- The minimum local smoke contract is: fresh data directory → bootstrap `UNCLAIMED` → claim `200` with a non-secure local HTTP cookie → authenticated onboarding status `200` with the expected `vaultPriority` → no-cookie status `401` while bootstrap remains `CLAIMED`.
+
 - Amsha Agent primarily uses RESTEasy Reactive (`quarkus-rest`).
 - Since RESTEasy Reactive does NOT support CDI `@SessionScoped` by default (due to bypassing the Servlet layer), wizard state (like onboarding) MUST use `@ApplicationScoped` if session-isolated state is not strictly required by the multi-user runtime model.
 - If true session isolation is required in a Reactive module, implement a manual session registry keyed by a `UUID` stored in a secure Cookie.

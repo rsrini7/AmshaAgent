@@ -57,6 +57,7 @@ public class OnboardingSelectionScrubber {
 
                 modified |= scrubConnectionApiKeys(payload, ownerId);
                 modified |= scrubMcpHeaders(payload, ownerId);
+                modified |= scrubMcpServerHeaders(payload, ownerId);
 
                 if (modified) {
                     scrubbed.add(objectMapper.writeValueAsString(payload));
@@ -82,6 +83,7 @@ public class OnboardingSelectionScrubber {
                 Map<String, Object> payload = objectMapper.readValue(sel, Map.class);
                 cleanupConnectionSecrets(payload, draft);
                 cleanupMcpHeaderSecrets(payload, draft);
+                cleanupMcpServerHeaderSecrets(payload, draft);
             } catch (Exception _) {
                 // not a JSON map; skip
             }
@@ -96,24 +98,12 @@ public class OnboardingSelectionScrubber {
     public String resolveVaultReferences(String ownerId, String payload) {
         try {
             Map<String, Object> map = objectMapper.readValue(payload, Map.class);
-            Map<String, String> headerVaultRefs = (Map<String, String>) map.get("headerVaultRefs");
-            if (headerVaultRefs == null || headerVaultRefs.isEmpty()) return payload;
-            Map<String, String> resolvedHeaders = new LinkedHashMap<>();
-            for (Map.Entry<String, String> entry : headerVaultRefs.entrySet()) {
-                String headerName = entry.getKey();
-                String vaultRef = entry.getValue();
-                Optional<VaultKey> key = vault.get(vaultRef, ownerId);
-                if (key.isPresent()) {
-                    try (VaultKey k = key.get()) {
-                        resolvedHeaders.put(headerName, new String(k.get(), StandardCharsets.UTF_8));
-                    }
-                } else {
-                    throw new IllegalStateException("A staged MCP authentication header could not be resolved");
-                }
+            boolean modified = resolveMcpHeaders(map, ownerId);
+            Object nestedMcp = map.get("mcp");
+            if (nestedMcp instanceof Map<?, ?> rawMcp) {
+                modified |= resolveMcpHeaders((Map<String, Object>) rawMcp, ownerId);
             }
-            map.remove("headerVaultRefs");
-            map.put("headers", resolvedHeaders);
-            return objectMapper.writeValueAsString(map);
+            return modified ? objectMapper.writeValueAsString(map) : payload;
         } catch (IllegalStateException e) {
             throw e;
         } catch (Exception e) {
@@ -156,7 +146,11 @@ public class OnboardingSelectionScrubber {
                 for (Map<String, Object> conn : connections) {
                     String provider = String.valueOf(conn.getOrDefault("provider", ""));
                     String model = String.valueOf(conn.getOrDefault("modelId", ""));
-                    String baseUrl = String.valueOf(conn.getOrDefault("customBaseUrl", ""));
+                    String baseUrl = String.valueOf(conn.getOrDefault(
+                            "customBaseUrl", conn.getOrDefault("baseUrl", conn.getOrDefault("targetUrl", ""))));
+                    if ("generic-openai".equalsIgnoreCase(provider) && baseUrl.isBlank()) {
+                        errors.add("Provider generic-openai requires a targetUrl or baseUrl");
+                    }
                     boolean hasKey = conn.containsKey("apiKeyVaultRef")
                             || (conn.get("apiKey") != null
                                     && !String.valueOf(conn.get("apiKey")).isBlank());
@@ -233,6 +227,88 @@ public class OnboardingSelectionScrubber {
     }
 
     @SuppressWarnings("unchecked")
+    private boolean scrubMcpServerHeaders(Map<String, Object> payload, String ownerId) {
+        Object rawMcp = payload.get("mcp");
+        if (!(rawMcp instanceof Map<?, ?> rawMap)) return false;
+        Map<String, Object> mcp = (Map<String, Object>) rawMap;
+        Object rawServers = mcp.get("servers");
+        if (!(rawServers instanceof List<?> servers)) return false;
+        boolean modified = false;
+        for (Object rawServer : servers) {
+            if (rawServer instanceof Map<?, ?> rawServerMap) {
+                modified |= scrubMcpHeaderMap((Map<String, Object>) rawServerMap, ownerId);
+            }
+        }
+        return modified;
+    }
+
+    @SuppressWarnings("unchecked")
+    private boolean scrubMcpHeaderMap(Map<String, Object> mcp, String ownerId) {
+        Object rawHeaders = mcp.get("headers");
+        if (!(rawHeaders instanceof Map<?, ?> headers) || headers.isEmpty()) return false;
+        Map<String, String> headerVaultRefs = new LinkedHashMap<>();
+        Object rawRefs = mcp.get("headerVaultRefs");
+        if (rawRefs instanceof Map<?, ?> refs) {
+            for (Map.Entry<?, ?> entry : refs.entrySet()) {
+                if (entry.getKey() instanceof String key && entry.getValue() instanceof String ref) {
+                    headerVaultRefs.put(key, ref);
+                }
+            }
+        }
+        for (Map.Entry<?, ?> entry : headers.entrySet()) {
+            if (entry.getKey() instanceof String headerName
+                    && entry.getValue() instanceof String headerValue
+                    && !headerValue.isBlank()) {
+                String ref = "mcp-header-"
+                        + UUID.randomUUID().toString().replace("-", "").substring(0, 16);
+                vault.store(ref, headerValue.getBytes(StandardCharsets.UTF_8), ownerId);
+                headerVaultRefs.put(headerName, ref);
+            }
+        }
+        if (headerVaultRefs.isEmpty()) return false;
+        mcp.put("headerVaultRefs", headerVaultRefs);
+        mcp.remove("headers");
+        return true;
+    }
+
+    @SuppressWarnings("unchecked")
+    private boolean resolveMcpHeaders(Map<String, Object> payload, String ownerId) {
+        boolean modified = resolveMcpHeaderMap(payload, ownerId);
+        Object rawServers = payload.get("servers");
+        if (rawServers instanceof List<?> servers) {
+            for (Object rawServer : servers) {
+                if (rawServer instanceof Map<?, ?> rawServerMap) {
+                    modified |= resolveMcpHeaderMap((Map<String, Object>) rawServerMap, ownerId);
+                }
+            }
+        }
+        return modified;
+    }
+
+    private boolean resolveMcpHeaderMap(Map<String, Object> payload, String ownerId) {
+        Object rawRefs = payload.get("headerVaultRefs");
+        if (!(rawRefs instanceof Map<?, ?> refs) || refs.isEmpty()) return false;
+        Map<String, String> resolvedHeaders = new LinkedHashMap<>();
+        for (Map.Entry<?, ?> entry : refs.entrySet()) {
+            if (!(entry.getKey() instanceof String headerName)
+                    || !(entry.getValue() instanceof String vaultRef)
+                    || vaultRef.isBlank()) {
+                throw new IllegalStateException("A staged MCP authentication header reference is invalid");
+            }
+            Optional<VaultKey> key = vault.get(vaultRef, ownerId);
+            if (key.isEmpty()) {
+                throw new IllegalStateException("A staged MCP authentication header could not be resolved");
+            }
+            try (VaultKey resolvedKey = key.get()) {
+                resolvedHeaders.put(headerName, new String(resolvedKey.get(), StandardCharsets.UTF_8));
+            }
+        }
+        payload.remove("headerVaultRefs");
+        payload.put("headers", resolvedHeaders);
+        return true;
+    }
+
+    @SuppressWarnings("unchecked")
     private void cleanupConnectionSecrets(Map<String, Object> payload, OnboardingDraftDto draft) {
         List<Map<String, Object>> connections = (List<Map<String, Object>>) payload.get("connections");
         if (connections == null) return;
@@ -245,6 +321,34 @@ public class OnboardingSelectionScrubber {
                 } catch (Exception e) {
                     log.warnf("[ONBOARDING] Failed to clean staged secret %s: %s", vaultRef, e.getMessage());
                 }
+            }
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private void cleanupMcpServerHeaderSecrets(Map<String, Object> payload, OnboardingDraftDto draft) {
+        Object rawMcp = payload.get("mcp");
+        if (!(rawMcp instanceof Map<?, ?> rawMap)) return;
+        Map<String, Object> mcp = (Map<String, Object>) rawMap;
+        Object rawServers = mcp.get("servers");
+        if (!(rawServers instanceof List<?> servers)) return;
+        for (Object rawServer : servers) {
+            if (rawServer instanceof Map<?, ?> rawServerMap) {
+                cleanupMcpHeaderMap((Map<String, Object>) rawServerMap, draft);
+            }
+        }
+    }
+
+    private void cleanupMcpHeaderMap(Map<String, Object> mcp, OnboardingDraftDto draft) {
+        Object rawRefs = mcp.get("headerVaultRefs");
+        if (!(rawRefs instanceof Map<?, ?> refs)) return;
+        for (Object rawRef : refs.values()) {
+            if (!(rawRef instanceof String ref)) continue;
+            try {
+                vault.remove(ref, draft.ownerId());
+                log.debugf("[ONBOARDING] Cleaned staged MCP header %s draft %s", ref, draft.draftId());
+            } catch (Exception e) {
+                log.warnf("[ONBOARDING] Failed clean staged MCP header %s: %s", ref, e.getMessage());
             }
         }
     }

@@ -200,18 +200,20 @@ Apache Camel's `camel-telegram` component handles the long-polling lifecycle, gr
 
 | Role | Deity | Key Constraint | Use For |
 |---|---|---|---|
-| `coordinator` | Vishnu | Can use all tools | General tasks, delegation, scheduling |
-| `researcher` | Saraswati | Read-only tools only; never fabricates | External data retrieval, GitHub lookups |
-| `coder` | Brahma | sandbox_exec + manage_checklist + register_mcp_server | Code execution, engineering tasks |
-| `debugger` | Shiva | GitHub only; contrarian by design | Bug analysis, stack traces, security audits |
-| `architect` | Brihaspati | GitHub + memory search; never writes code | ADRs, design reviews, trade-off analysis |
-| `synthesizer` | Dattatreya | All tools; only for cross-domain tasks | Multi-agent output integration |
-| `optimizer` | Ganesha | GitHub + sandbox; sub-agent of Shiva | Complex logic, obstacle removal, recursion |
-| `sentinel` | Kartikeya | GitHub + sandbox; sub-agent of Shiva | Security scanning, input validation |
-| `healer` | Lakshmi | GitHub + memory; dual role | Error recovery, token optimization |
-| `protector` | Durga | GitHub + memory | Policy enforcement, guardrails |
-| `purifier` | Kali | GitHub + memory | Cleanup, lifecycle management |
-| `nurturer` | Parvati | GitHub + memory | Empathy, tone analysis, sentiment |
+| `coordinator` | Vishnu | Orchestration tools, memory, ingest_document, web_fetch, scheduling, garuda | General tasks, scheduling, delegation |
+| `researcher` | Saraswati | GitHub, web/search/fetch, memory, agent_task, garuda | External data retrieval and source-backed analysis |
+| `coder` | Brahma | sandbox_exec, manage_checklist, register_mcp_server, memory, garuda | Code execution and engineering tasks |
+| `debugger` | Shiva | GitHub, sandbox_exec, manage_checklist, register_mcp_server, recall_memory_search, garuda | Bug analysis, stack traces, security audits |
+| `architect` | Brihaspati | GitHub, memory, garuda; never executes code | ADRs, design reviews, trade-off analysis |
+| `synthesizer` | Dattatreya | GitHub, web/search/fetch, scheduling, memory, ingest_document, agent_task, garuda | Cross-domain output integration |
+| `optimizer` | Ganesha | garuda; unsupported tools redelegate to their owner | Complex logic and obstacle removal |
+| `sentinel` | Kartikeya | garuda; unsupported tools redelegate to their owner | Security scanning and input validation |
+| `healer` | Lakshmi | garuda; unsupported tools redelegate to their owner | Error recovery and token optimization |
+| `protector` | Durga | garuda; unsupported tools redelegate to their owner | Policy enforcement and guardrails |
+| `purifier` | Kali | garuda; unsupported tools redelegate to their owner | Cleanup and lifecycle management |
+| `nurturer` | Parvati | ingest_document, garuda | Empathy, tone analysis, sentiment |
+
+Direct access is intentionally narrow. If any persona requests a known tool it does not own, the loop delegates through `garuda` to the tool's owner; approval-resume and parallel-batch paths use the same rule. This preserves least privilege without granting every persona every tool.
 
 The `SkillAwareIntentDetector` checks `SkillRegistry` first (zero classification tokens), then falls through to `llama-3.1-8b-instant` to auto-route incoming messages to the best role. You can also specify a role explicitly via `--role` on the CLI or `agentRole` in the REST payload.
 
@@ -507,7 +509,7 @@ Agents with `recall_memory_search` in their tool list (coordinator, researcher, 
 
 ### Q: What is the `backfill_fts5.sql` script for?
 
-It is a **one-time migration script** to be run after deploying the Phase 45 FTS5 feature on a database that already has `compaction_summary` rows. It backfills the `user_id` column (using `audit_event` as the source of truth) and populates the `compaction_summary_fts` FTS index for all existing rows. New rows written after the deployment are indexed automatically.
+It is a **one-time migration script** to be run after deploying the FTS5 feature on a database that already has `compaction_summary` rows. It backfills the `user_id` column (using `audit_event` as the source of truth) and populates the `compaction_summary_fts` FTS index for all existing rows. New rows written after the deployment are indexed automatically.
 
 ---
 
@@ -648,7 +650,15 @@ This fail-fast pattern ensures misconfigured production deployments are caught a
 
 ### Q: How does the API rate limiter work?
 
-`ApiKeyAuthFilter` extracts the `Authorization: Bearer <key>` header and validates it against `ApiKeyRegistry` using constant-time comparison (preventing timing attacks). Each valid key is tracked in a per-key sliding window. If a key exceeds `amsha.api.rate-limit.requests-per-minute` (default 20), the filter returns `HTTP 429` with a `Retry-After` header. The implementation uses `AtomicLong` counters and does not require a Redis sidecar.
+Read and mutation requests use separate per-key buckets. Read requests use
+`amsha.api.rate-limit.requests-per-minute` (default 20); mutating requests use
+`amsha.api.rate-limit.mutation-per-minute` (default 10). Onboarding draft
+creates, step updates, commits, and discards use the mutation bucket, so they
+can return `HTTP 429` when that bucket is exhausted even if the general request
+bucket still has capacity. The valid API key is still required; this only
+controls throttling.
+
+`ApiKeyAuthFilter` extracts the `Authorization: Bearer <key>` header and validates it against `ApiKeyRegistry` using constant-time comparison (preventing timing attacks). Either bucket returns `HTTP 429` with a `Retry-After` header when exhausted. The implementation uses `AtomicLong` counters and does not require a Redis sidecar.
 
 ---
 
@@ -872,7 +882,7 @@ A daily cron scheduler (`MemoryRetentionScheduler` executing at 2 AM and 3 AM) m
 
 ### Q: How does Amsha run local ML models in-process without Python or containers?
 
-Amsha uses **ONNX Runtime Java** (`1.27.0`) and **DJL Hugging Face Tokenizers** (`0.33.0`) in `amsha-local-ml-onnx`. The JVM path executes a verified local `model.onnx` and `tokenizer.json` without Python sidecars, containers, or inference-time model downloads. Native-image runtime execution is still a Phase 0 release gate, not a completed support claim.
+Amsha uses **ONNX Runtime Java** (`1.27.0`) and **DJL Hugging Face Tokenizers** (`0.33.0`) in `amsha-local-ml-onnx`. The JVM path executes a verified local `model.onnx` and `tokenizer.json` without Python sidecars, containers, or inference-time model downloads. Native-image runtime execution is still a release gate, not a completed support claim.
 
 ---
 
