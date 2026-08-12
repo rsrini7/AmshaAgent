@@ -639,7 +639,7 @@ def write_evidence(records: list[dict[str, Any]], gaps: list[str], cache: Path, 
     }
     evidence_file(evidence, "dependency-lock.json").write_text(json.dumps(lock, indent=2) + "\n", encoding="utf-8")
     sums = "".join(
-        f"{record['artifact']['sha256']}  {cache / record['artifact']['filename']}\n" for record in normalized
+        f"{record['artifact']['sha256']}  {record['artifact']['filename']}\n" for record in normalized
     )
     evidence_file(evidence, "sha256sums.txt").write_text(sums, encoding="utf-8")
 
