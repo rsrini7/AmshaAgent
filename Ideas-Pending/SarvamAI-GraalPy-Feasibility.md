@@ -184,8 +184,9 @@ governing identifiers and current actionable states.
 | `SGP-01` | Freeze SDK dependency graph, hashes, SBOM inputs, provenance/licence inventory, vulnerabilities, and prove offline resolution | `resolved`; private-PoC exception covered static work only; SGP-00A/00B remain unresolved |
 | `SGP-02` | Select and approve one compatible GraalPy/Truffle/GraalVM/JDK 25/`pydantic-core` ABI line | `resolved`; exact aligned-25.0.2 candidate approved for Phase 0 evaluation only |
 | `SGP-03` | Build an isolated, reusable macOS-arm64 Quarkus JVM VFS PoC harness; import and close the public SDK; load process-trusted `pydantic-core`; prove default-artifact isolation and native extraction paths | `resolved`; human acceptance 2026-08-14; evidence `.scratch/sarvam-graalpy-phase-0/evidence/sgp-03/sgp-03.index.json`; SGP-00A/SGP-00B remain unresolved. |
-| `SGP-04` | Begin deterministic loopback-only mocked chat/translation contract tests: serialization, decoding, errors, retries, and authentication headers | `ready-for-agent`; SGP-03 resolved; all authentication values are synthetic non-secret fixture data only; loopback-only and HostIO.READ `ACCEPTED_LIMITATION` controls apply through SGP-06. |
-| `SGP-05` | Compare serialized synchronous and single-context asynchronous execution; prove bounded concurrency, cancellation, context propagation, transaction separation, and shutdown | `needs-triage`; SGP-04 and approved async-bridge design |
+| `SGP-04` | Deterministic SDK contract evidence: sync chat/translation, serialization, decoding, errors, retries, authentication headers, tools, and structured tool schemas | `resolved`; human acceptance 2026-08-14; evidence `.scratch/sarvam-graalpy-phase-0/evidence/sgp-04/sgp-04.index.json`; sync contract PASS; async execution is NO-GO under the approved no-socket policy; `async_token` and native `response_format` are `UNSUPPORTED_BY_PINNED_PUBLIC_SDK`; tool-schema structured output PASS; original eight-active GraalPy concurrency target is not satisfied. |
+| `SGP-J01` | Compare the implementation-neutral SGP-04 corpus with Amsha's native Java/LangChain4j ChatModel path and recommend Java, GraalPy, or additional evidence | `ready-for-agent`; SGP-04 resolved |
+| `SGP-05` | Compare serialized synchronous and single-context asynchronous execution; prove bounded concurrency, cancellation, context propagation, transaction separation, and shutdown | `needs-triage`; SGP-J01 comparison must complete and a human must decide that GraalPy remains a contender before SGP-05 or its async-bridge design begins |
 | `SGP-06` | Human Phase 0A checkpoint over SGP-03–05 evidence before any live-provider platform work | `needs-triage`; SGP-03 through SGP-05; record SGP-00B separately |
 | `SGP-07` | Named, sanitized live authentication/transport probes and separately scored provider-model evaluation | `needs-triage`; requires a future SGP-00A pass with explicit written live-test permission, SGP-06, credentials/quota/cost approval, and Sarvam availability |
 | `SGP-08` | Separate JVM records for macOS arm64, Linux x86-64, and Linux arm64; Windows normal-artifact isolation regression | `needs-triage`; SGP-06/07, matching runners, and frozen artifacts |
@@ -197,6 +198,16 @@ The order follows the phased evidence-gate pattern in
 [ADR-ONNX-In-Process-Local-ML-Inference.md](ADR-ONNX-In-Process-Local-ML-Inference.md):
 supply chain and compatibility precede integration; JVM and Native Image
 evidence remain separate; activation is a later human decision.
+
+### SGP-04 terminal dispositions
+
+The accepted SGP-04 result records the public synchronous contract as `PASS`, async
+execution under the approved no-socket policy as `NO-GO`, `async_token` authentication
+as `UNSUPPORTED_BY_PINNED_PUBLIC_SDK`, and the native `response_format` parameter as
+`UNSUPPORTED_BY_PINNED_PUBLIC_SDK`. Tool-schema structured output is `PASS`. These
+terminal dispositions do not claim async parity and do not satisfy the original
+eight-active GraalPy concurrency target. SGP-J01 must complete before SGP-05 can be
+considered for execution; a human must first decide that GraalPy remains a contender.
 
 ## 4. Quantitative go/no-go gates
 
@@ -214,8 +225,8 @@ is a no-go for adoption on the declared Sarvam matrix.
 | Toolchain ABI | Exact GraalPy/Truffle/GraalVM/JDK 25/Python/native-wheel versions are recorded; all wheel tags pass normal installer compatibility; no unproved 25.2.4/native-wheel cross-install is accepted. |
 | Native extraction | Each required cell passes startup/request/shutdown from at least three arbitrary working directories, including read-only; every loaded native path is normalized absolute and independent of launch directory. |
 | Default isolation | Normal JVM/Native Image artifacts contain no Sarvam/GraalPy/Python payload; disabled mode creates no context/worker; forced selected-mode failure affects only readiness. |
-| Mocked protocol parity | At least 50 canonical variants pass serialization/decoding, bounded error mapping, retry accounting for 400, 401/403, 408, 409, 429, and 5xx, plus tool/structured-output schemas. |
-| Authentication modes | Mocked sync/async header behavior and redaction pass; any later live probe uses a documented public SDK mode and is scored separately from model quality. |
+| Mocked protocol parity | At least 50 canonical variants pass sync serialization/decoding, bounded error mapping, retry accounting for 400, 401/403, 408, 409, 429, and 5xx, plus tool/structured-output schemas; async execution is a terminal no-go under the approved no-socket policy. |
+| Authentication modes | Sync `api-subscription-key` and redaction pass; async bearer/`async_token` behavior is `UNSUPPORTED_BY_PINNED_PUBLIC_SDK`; native `response_format` is `UNSUPPORTED_BY_PINNED_PUBLIC_SDK`; any later live probe uses a documented public SDK mode and is scored separately from model quality. |
 | Concurrency/context | Exactly eight active calls, queue 32, bounded overload rejection, zero Python/native work on virtual threads, and 100% workspace/session binding through all task outcomes. |
 | Deterministic overhead | Against the same local deterministic fixture/replay server and CPython baseline, GraalPy p95 is no worse than `1.25x + 50 ms` and sustained throughput is at least 80% at concurrency one and eight. Real-service latency is reported separately. |
 | Phase 0A checkpoint | Named human continue/stop decision after SGP-03–05 and before SGP-07–10 funding; continue authorizes only the next spike phase. |
