@@ -46,17 +46,47 @@ submission, completion, cancellation, timeout, rejection, and shutdown. Java
 virtual threads must not execute Python or native-extension work. Never start
 Sarvam HTTP I/O while a transaction is active.
 
-At the Python boundary, deny Java host-class access, arbitrary filesystem access,
-runtime installation, and child processes. These controls do not contain
-process-trusted `pydantic-core` native code. If security requires OS-level
-containment, an independently approved OS sandbox/container becomes mandatory;
-the in-process variant is then a technical no-go until that gate passes.
+At the Python boundary, deny Java host-class access, filesystem access where
+the GraalPy VFS policy supports it, runtime installation, and child processes.
+These controls do not contain process-trusted `pydantic-core` native code.
+For SGP-03, SGP-04, and SGP-05 only, the 2026-08-14 maintainer decision
+extends the private Phase 0A path to accept GraalPy
+`VirtualFileSystem.HostIO.READ` as an `ACCEPTED_LIMITATION`: the minimum
+mode that loads the pinned classpath VFS/native payload, while permitting
+process-accessible host-file reads. This is never a filesystem-security PASS.
+The failing `HostIO.NONE` import probe and permissive `HostIO.READ` probe
+remain retained evidence. The exception is private, local, non-production,
+and non-distributable; it requires frozen hash-verified inputs, a dedicated
+low-privilege sanitized environment, synthetic non-secret fixture credentials
+only, loopback traffic only, and no external HTTP/DNS, Sarvam/provider calls,
+real credentials, or untrusted inputs. It expires at the SGP-06 human
+checkpoint, does not pass SGP-00A or SGP-00B, and is not a licence grant,
+adoption approval, or deployable-variant approval. Process-trusted
+`pydantic-core` remains outside Polyglot containment. Any future deployable
+variant requires separately approved OS-level containment or a newer
+documented GraalPy capability.
 
 Stop Phase 0A if SDK modification, vendoring, private/generated SDK APIs,
 external traffic, credentials, unpinned or mismatched artifacts, unexpected
 native-library paths, virtual-thread Python/native execution, or unsanitized
 retained evidence becomes necessary. SGP-00B remains an independent
 redistribution and adoption blocker.
+
+### Phase 0A HostIO.READ limitation (SGP-03–SGP-05)
+
+On 2026-08-14, Srinivasan Ragothaman accepted `HostIO.READ` as an
+`ACCEPTED_LIMITATION` for SGP-03 through SGP-05 in the private local PoC.
+This named project-risk acceptance is not a licence grant, rights-gate pass,
+filesystem-security pass, adoption approval, or deployable-variant approval.
+It requires frozen hash-verified inputs, a dedicated low-privilege sanitized
+environment, synthetic non-secret fixture credentials only, loopback traffic
+only, no external HTTP/DNS, Sarvam/provider calls, real credentials,
+untrusted inputs, or redistribution, and expires at the SGP-06 human
+checkpoint. Production, customer use, adoption, and Native Image work remain
+unauthorized. The HostIO.NONE failure and permissive HostIO.READ evidence and
+the rejected multi-context-native option remain preserved. Any future
+deployable variant requires separately approved OS-level containment or a
+newer documented GraalPy capability.
 
 ### Open-source publication boundary
 
@@ -153,8 +183,8 @@ governing identifiers and current actionable states.
 | `SGP-00B` | Resolve licence redistribution/adoption rights | `needs-info`; redistribution response independently blocks packaging and adoption |
 | `SGP-01` | Freeze SDK dependency graph, hashes, SBOM inputs, provenance/licence inventory, vulnerabilities, and prove offline resolution | `resolved`; private-PoC exception covered static work only; SGP-00A/00B remain unresolved |
 | `SGP-02` | Select and approve one compatible GraalPy/Truffle/GraalVM/JDK 25/`pydantic-core` ABI line | `resolved`; exact aligned-25.0.2 candidate approved for Phase 0 evaluation only |
-| `SGP-03` | Build an isolated, reusable macOS-arm64 Quarkus JVM VFS PoC harness; import and close the public SDK; load process-trusted `pydantic-core`; prove default-artifact isolation and native extraction paths | `ready-for-agent`; resolved SGP-02 and effective 2026-08-12 maintainer/native-code security risk acceptance under the private exception while SGP-00A remains unresolved. Its first Maven-freeze stage is a hard pre-import gate. |
-| `SGP-04` | Begin deterministic loopback-only mocked chat/translation contract tests: serialization, decoding, errors, retries, and authentication headers | `needs-triage`; SGP-03 and fixed SDK/API fixtures |
+| `SGP-03` | Build an isolated, reusable macOS-arm64 Quarkus JVM VFS PoC harness; import and close the public SDK; load process-trusted `pydantic-core`; prove default-artifact isolation and native extraction paths | `resolved`; human acceptance 2026-08-14; evidence `.scratch/sarvam-graalpy-phase-0/evidence/sgp-03/sgp-03.index.json`; SGP-00A/SGP-00B remain unresolved. |
+| `SGP-04` | Begin deterministic loopback-only mocked chat/translation contract tests: serialization, decoding, errors, retries, and authentication headers | `ready-for-agent`; SGP-03 resolved; all authentication values are synthetic non-secret fixture data only; loopback-only and HostIO.READ `ACCEPTED_LIMITATION` controls apply through SGP-06. |
 | `SGP-05` | Compare serialized synchronous and single-context asynchronous execution; prove bounded concurrency, cancellation, context propagation, transaction separation, and shutdown | `needs-triage`; SGP-04 and approved async-bridge design |
 | `SGP-06` | Human Phase 0A checkpoint over SGP-03–05 evidence before any live-provider platform work | `needs-triage`; SGP-03 through SGP-05; record SGP-00B separately |
 | `SGP-07` | Named, sanitized live authentication/transport probes and separately scored provider-model evaluation | `needs-triage`; requires a future SGP-00A pass with explicit written live-test permission, SGP-06, credentials/quota/cost approval, and Sarvam availability |
@@ -190,12 +220,20 @@ is a no-go for adoption on the declared Sarvam matrix.
 | Deterministic overhead | Against the same local deterministic fixture/replay server and CPython baseline, GraalPy p95 is no worse than `1.25x + 50 ms` and sustained throughput is at least 80% at concurrency one and eight. Real-service latency is reported separately. |
 | Phase 0A checkpoint | Named human continue/stop decision after SGP-03–05 and before SGP-07–10 funding; continue authorizes only the next spike phase. |
 | Lifecycle/resources | Three fresh build/start/request/shutdown cycles per cell; 60-minute/10,000-call mocked stress has RSS slope ≤5 MiB/hour, no leaked non-daemon resources, and shutdown ≤10 seconds; idle RSS delta ≤300 MB and peak delta ≤750 MB. |
-| Python/native security | Python-level host/file/process/install denials pass. Native code remains process-trusted unless a separately approved OS sandbox/container gate passes; zero secret/prompt/response leakage and zero transaction-bound HTTP. |
+| Python/native security | Python-level host/file/process/install denials pass where supported; SGP-03–05 `HostIO.READ` is an `ACCEPTED_LIMITATION`, not a filesystem-isolation PASS. Native code remains process-trusted; deployable variants require separately approved OS containment or newer documented GraalPy capability; zero secret/prompt/response leakage and no external or transaction-bound HTTP. |
 | Platform matrix | macOS arm64, Linux x86-64, and Linux arm64 each pass independently on JVM and Native Image. Windows records only normal-Amsha regression/isolation. |
 
 No average may hide a failed platform, deployment mode, security check,
 correctness cohort, or overhead ceiling. Any threshold revision requires
 recorded human approval before the affected spike continues.
+
+The generic Python/native-security row above is superseded for SGP-03–05 by the
+named `HostIO.READ` `ACCEPTED_LIMITATION`: filesystem isolation is not PASS,
+the `HostIO.NONE` failure and permissive `HostIO.READ` result remain evidence,
+and any deployable variant requires separately approved OS-level containment or
+a newer documented GraalPy capability. This private exception does not pass
+SGP-00A or SGP-00B and does not authorize live provider calls, production,
+customer use, adoption, redistribution, Native Image work, or SGP-06+.
 
 ## 5. Open decisions requiring human approval
 
