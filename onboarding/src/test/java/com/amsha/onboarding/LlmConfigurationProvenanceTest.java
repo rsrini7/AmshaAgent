@@ -262,6 +262,28 @@ class LlmConfigurationProvenanceTest {
         assertTrue(resolution.ready());
     }
 
+    @Test
+    void sarvamEnvironmentCredentialIsReported() {
+        LlmConfigurationProvenance provenance = provenanceFor(
+                "sarvam",
+                false,
+                Map.of(
+                        "AMSHA_SARVAM_API_KEY", "sarvam-key",
+                        "AMSHA_SARVAM_MODEL", "sarvam-105b",
+                        "AMSHA_SARVAM_BASE_URL", "https://api.sarvam.ai/v1"));
+        when(provenance.providerCatalog.descriptor("sarvam")).thenReturn(Optional.of(requiredDescriptor("sarvam")));
+
+        LlmConfigurationProvenance.Resolution resolution = provenance.resolve();
+
+        assertEquals("sarvam", resolution.effectiveProvider());
+        assertEquals(LlmConfigurationProvenance.SOURCE_ENVIRONMENT, resolution.effectiveSource());
+        assertEquals("sarvam-105b", resolution.effectiveModel());
+        assertEquals("https://api.sarvam.ai/v1", resolution.effectiveBaseUrl());
+        assertEquals(LlmConfigurationProvenance.CREDENTIAL_CONFIGURED, resolution.credentialState());
+        assertEquals(LlmConfigurationProvenance.SOURCE_ENVIRONMENT, resolution.credentialSource());
+        assertTrue(resolution.ready());
+    }
+
     private static LlmConfigurationProvenance provenanceFor(
             String provider, boolean vaultPriority, Map<String, String> values) {
         LlmConfigurationProvenance provenance = new LlmConfigurationProvenance();

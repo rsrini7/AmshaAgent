@@ -154,6 +154,7 @@ public class ModelProfileCredentialResolver {
         OPENAI(ModelDefaults.DEFAULT_OPENAI_BASE_URL),
         OPENROUTER(ModelDefaults.DEFAULT_OPENROUTER_BASE_URL),
         CEREBRAS(ModelDefaults.DEFAULT_CEREBRAS_BASE_URL),
+        SARVAM(ModelDefaults.DEFAULT_SARVAM_BASE_URL),
         NVIDIA(ModelDefaults.DEFAULT_NVIDIA_BASE_URL),
         GEMINI(ModelDefaults.DEFAULT_GEMINI_BASE_URL),
         OLLAMA(ModelDefaults.DEFAULT_OLLAMA_BASE_URL),

@@ -419,6 +419,10 @@ amsha:
     openrouter:
       app-name: "${AMSHA_OPENROUTER_APP_NAME:https://github.com/rsrini7/amsha}"
       site-url: "${AMSHA_OPENROUTER_SITE_URL:https://github.com/rsrini7/amsha}"
+    sarvam:
+      api-key: "${AMSHA_SARVAM_API_KEY:}"
+      base-url: "${AMSHA_SARVAM_BASE_URL:https://api.sarvam.ai/v1}"
+      model: "${AMSHA_SARVAM_MODEL:sarvam-105b}"
   infinite-loop:
     llm:
       providers: ${AMSHA_INFINITE_LOOP_LLM_PROVIDERS:omlx,groq,openrouter}
@@ -449,6 +453,14 @@ amsha:
       timeout-seconds: ${AMSHA_EMBEDDING_ONNX_TIMEOUT_SECONDS:5}
       space-id: "${AMSHA_EMBEDDING_ONNX_SPACE_ID:}"
       space-revision: "${AMSHA_EMBEDDING_ONNX_SPACE_REVISION:}"
+  compaction:
+    sarvam:
+      base-url: "${AMSHA_COMPACTION_SARVAM_BASE_URL:https://api.sarvam.ai/v1}"
+      model: "${AMSHA_COMPACTION_SARVAM_MODEL:sarvam-105b}"
+  classifier:
+    sarvam:
+      base-url: "${AMSHA_CLASSIFIER_SARVAM_BASE_URL:https://api.sarvam.ai/v1}"
+      model: "${AMSHA_CLASSIFIER_SARVAM_MODEL:sarvam-105b}"
   agent:
     default-timezone: "${AMSHA_DEFAULT_TIMEZONE:Asia/Kolkata}"
     rate-limit:

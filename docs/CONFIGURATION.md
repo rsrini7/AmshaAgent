@@ -11,7 +11,7 @@ Generate secrets: `openssl rand -base64 32` (Linux/macOS) or `[Convert]::ToBase6
 | Variable | Default | Description |
 |---|---|---|
 | `AMSHA_{PROVIDER}_API_KEY` | — | Provider-specific LLM API key, for example `AMSHA_GROQ_API_KEY` (`gsk_...`) |
-| `AMSHA_LLM_PROVIDER` | `groq` | Provider: `groq`, `openai`, `ollama`, `openrouter`, `claude-code`, `cerebras`, `gemini`, `nvidia`, `omlx`, `generic-openai` |
+| `AMSHA_LLM_PROVIDER` | `groq` | Provider: `groq`, `openai`, `ollama`, `openrouter`, `claude-code`, `cerebras`, `gemini`, `nvidia`, `sarvam`, `omlx`, `generic-openai` |
 | `AMSHA_LLM_MAX_OUTPUT_TOKENS` | `8192` | Max output tokens per LLM call |
 | `AMSHA_LLM_MAX_RETRIES` | `3` | Max LLM retry attempts |
 | `AMSHA_LLM_TEMPERATURE` | `0.1` | LLM temperature |
@@ -161,7 +161,7 @@ provider in the list has its own slot with independent health tracking.
 | `AMSHA_COMPACTION_AWAIT_TIMEOUT_SECONDS` | `60` | Compaction loop await timeout (s) |
 
 For non-Groq providers, mirror the pattern with `AMSHA_COMPACTION_{PROVIDER}_{KEY}`.
-Available providers: `groq`, `openai`, `openrouter`, `cerebras`, `gemini`, `nvidia`,
+Available providers: `groq`, `openai`, `openrouter`, `cerebras`, `gemini`, `nvidia`, `sarvam`,
 `omlx`, `ollama`, `generic-openai`. Local providers (`ollama`, `omlx`) do not require an API key.
 
 Generic OpenAI compaction variables:

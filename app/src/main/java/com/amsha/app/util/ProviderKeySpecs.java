@@ -72,6 +72,13 @@ public final class ProviderKeySpecs {
             "1. Run:  mlx_lm.server --model mlx-community/<model> --port 8000",
             "2. Add:  AMSHA_OMLX_API_KEY=not-needed");
 
+    public static final VarSpec SARVAM_KEY_SPEC = new VarSpec(
+            "AMSHA_SARVAM_API_KEY",
+            "Sarvam AI API key.",
+            "1. Sign up at https://dashboard.sarvam.ai",
+            "2. Create an API key",
+            "3. Add:  AMSHA_SARVAM_API_KEY=your_key_here");
+
     public static final VarSpec GENERIC_OPENAI_KEY_SPEC = new VarSpec(
             "AMSHA_GENERIC_OPENAI_API_KEY",
             "Generic OpenAI-compatible API key.",
@@ -94,6 +101,7 @@ public final class ProviderKeySpecs {
             case "gemini" -> GEMINI_KEY_SPEC;
             case "nvidia" -> NVIDIA_KEY_SPEC;
             case "cerebras" -> CEREBRAS_KEY_SPEC;
+            case "sarvam" -> SARVAM_KEY_SPEC;
             case "omlx" -> OMLX_KEY_SPEC;
             case "generic-openai" -> GENERIC_OPENAI_KEY_SPEC;
             case "ollama" -> null;
@@ -123,6 +131,8 @@ public final class ProviderKeySpecs {
                 providerKeySpec("cerebras", "AMSHA_COMPACTION_CEREBRAS_API_KEY", "csk-", "https://cloud.cerebras.ai");
             case "nvidia" ->
                 providerKeySpec("nvidia", "AMSHA_COMPACTION_NVIDIA_API_KEY", "nvapi-", "https://build.nvidia.com");
+            case "sarvam" ->
+                providerKeySpec("sarvam", "AMSHA_COMPACTION_SARVAM_API_KEY", "", "https://dashboard.sarvam.ai");
             case "generic-openai" ->
                 providerKeySpec(
                         "generic-openai", "AMSHA_COMPACTION_GENERIC_OPENAI_API_KEY", "", "your provider dashboard");
@@ -152,6 +162,8 @@ public final class ProviderKeySpecs {
                 providerKeySpec("cerebras", "AMSHA_CLASSIFIER_CEREBRAS_API_KEY", "csk-", "https://cloud.cerebras.ai");
             case "nvidia" ->
                 providerKeySpec("nvidia", "AMSHA_CLASSIFIER_NVIDIA_API_KEY", "nvapi-", "https://build.nvidia.com");
+            case "sarvam" ->
+                providerKeySpec("sarvam", "AMSHA_CLASSIFIER_SARVAM_API_KEY", "", "https://dashboard.sarvam.ai");
             case "generic-openai" ->
                 providerKeySpec(
                         "generic-openai", "AMSHA_CLASSIFIER_GENERIC_OPENAI_API_KEY", "", "your provider dashboard");

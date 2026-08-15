@@ -1,0 +1,47 @@
+# amsha-core
+
+Core engine for Amsha Agent. Contains the agent loop, reasoning engines, model routing,
+reflexes, safety guards, tool interfaces, and built-in LLM providers.
+
+## LLM Providers
+
+`amsha-core` hosts both the agent reasoning SPI (`AgentChatModelProvider`) and routing SPI
+(`RoutingChatModelProvider`) for built-in LLM providers.
+
+### Built-in Providers
+
+| Provider | Provider ID | Default Model | Default Base URL |
+|---|---|---|---|
+| Groq | `groq` | `meta-llama/llama-4-scout-17b-16e-instruct` | `https://api.groq.com/openai/v1` |
+| OpenAI | `openai` | `gpt-4o-mini` | `https://api.openai.com/v1` |
+| Ollama | `ollama` | `mistral-small:latest` | `http://localhost:11434` |
+| OpenRouter | `openrouter` | `openai/gpt-oss-20b:free` | `https://openrouter.ai/api/v1` |
+| NVIDIA | `nvidia` | `bytedance/seed-oss-36b-instruct` | `https://integrate.api.nvidia.com/v1` |
+| Cerebras | `cerebras` | `qwen-3-235b-a22b-instruct-2507` | `https://api.cerebras.ai/v1` |
+| Sarvam AI | `sarvam` | `sarvam-105b` | `https://api.sarvam.ai/v1` |
+| Gemini | `gemini` | `gemini-2.5-flash-lite` | `https://generativelanguage.googleapis.com/v1beta` |
+| OMLX | `omlx` | `mlx-community/Qwen3.6-35B-A3B-4bit` | `http://127.0.0.1:8000/v1` |
+| Llama.cpp | `llamacpp` | `qwen3` | `http://127.0.0.1:9000/v1` |
+| Generic OpenAI | `generic-openai` | `gpt-4o-mini` | *(Configured via `AMSHA_GENERIC_OPENAI_BASE_URL`)* |
+
+## Sarvam AI Configuration
+
+| Property | Env Var | Default | Description |
+|---|---|---|---|
+| `amsha.llm.sarvam.api-key` | `AMSHA_SARVAM_API_KEY` | — | Sarvam AI API key |
+| `amsha.llm.sarvam.base-url` | `AMSHA_SARVAM_BASE_URL` | `https://api.sarvam.ai/v1` | Sarvam AI v1 API base URL |
+| `amsha.llm.sarvam.model` | `AMSHA_SARVAM_MODEL` | `sarvam-105b` | Default chat model |
+| `amsha.compaction.sarvam.api-key` | `AMSHA_COMPACTION_SARVAM_API_KEY` | — | Sarvam API key for compaction slot |
+| `amsha.compaction.sarvam.model` | `AMSHA_COMPACTION_SARVAM_MODEL` | `sarvam-105b` | Compaction slot model |
+| `amsha.compaction.sarvam.base-url` | `AMSHA_COMPACTION_SARVAM_BASE_URL` | `https://api.sarvam.ai/v1` | Compaction slot base URL |
+| `amsha.classifier.sarvam.api-key` | `AMSHA_CLASSIFIER_SARVAM_API_KEY` | — | Sarvam API key for classifier slot |
+| `amsha.classifier.sarvam.model` | `AMSHA_CLASSIFIER_SARVAM_MODEL` | `sarvam-105b` | Classifier slot model |
+| `amsha.classifier.sarvam.base-url` | `AMSHA_CLASSIFIER_SARVAM_BASE_URL` | `https://api.sarvam.ai/v1` | Classifier slot base URL |
+
+## Testing
+
+Run core tests:
+
+```bash
+./mvnw test -pl core
+```

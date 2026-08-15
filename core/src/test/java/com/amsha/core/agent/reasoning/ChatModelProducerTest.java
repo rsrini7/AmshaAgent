@@ -84,15 +84,21 @@ class ChatModelProducerTest {
     }
 
     @Test
+    void providerBaseUrls_containsSarvam() throws Exception {
+        Map<String, String> urls = getProviderBaseUrls();
+        assertEquals("https://api.sarvam.ai/v1", urls.get("sarvam"));
+    }
+
+    @Test
     void providerBaseUrls_containsGemini() throws Exception {
         Map<String, String> urls = getProviderBaseUrls();
         assertEquals("https://generativelanguage.googleapis.com/v1beta", urls.get("gemini"));
     }
 
     @Test
-    void providerBaseUrls_hasNineEntries() throws Exception {
+    void providerBaseUrls_hasExpectedCount() throws Exception {
         Map<String, String> urls = getProviderBaseUrls();
-        assertEquals(10, urls.size());
+        assertEquals(11, urls.size());
     }
 
     @Test

@@ -52,11 +52,14 @@ public class InteractiveSetupWizard {
             "AMSHA_COMPACTION_GROQ_API_KEY",
             "AMSHA_COMPACTION_CEREBRAS_API_KEY",
             "AMSHA_COMPACTION_OPENROUTER_API_KEY",
+            "AMSHA_COMPACTION_SARVAM_API_KEY",
             "AMSHA_COMPACTION_GENERIC_OPENAI_API_KEY",
             "AMSHA_CLASSIFIER_GROQ_API_KEY",
             "AMSHA_CLASSIFIER_CEREBRAS_API_KEY",
             "AMSHA_CLASSIFIER_OPENROUTER_API_KEY",
-            "AMSHA_CLASSIFIER_GENERIC_OPENAI_API_KEY");
+            "AMSHA_CLASSIFIER_SARVAM_API_KEY",
+            "AMSHA_CLASSIFIER_GENERIC_OPENAI_API_KEY",
+            "AMSHA_SARVAM_API_KEY");
 
     private static final Set<String> AUTO_GENERATABLE_KEYS = Set.of(
             "AMSHA_VAULT_PEPPER",
@@ -137,8 +140,9 @@ public class InteractiveSetupWizard {
         System.err.println("  │  7. Cerebras - Ultra-fast LPU inference");
         System.err.println("  │  8. OMLX - Local MLX-based server (no API key needed)");
         System.err.println("  │  9. Generic OpenAI - any OpenAI-compatible endpoint");
+        System.err.println("  │  10. Sarvam - Indic-language models");
         System.err.println("  │");
-        String choice = readLineWithFallback(System.console(), "  └─ Select provider [1-8, Default: 1]: ");
+        String choice = readLineWithFallback(System.console(), "  └─ Select provider [1-10, Default: 1]: ");
         String provider =
                 switch (choice != null ? choice.trim() : "") {
                     case "2" -> "openrouter";
@@ -149,6 +153,7 @@ public class InteractiveSetupWizard {
                     case "7" -> "cerebras";
                     case "8" -> "omlx";
                     case "9" -> "generic-openai";
+                    case "10" -> "sarvam";
                     default -> "groq";
                 };
         System.setProperty("AMSHA_LLM_PROVIDER", provider);
@@ -182,6 +187,19 @@ public class InteractiveSetupWizard {
                 infiniteLoop
                         ? configuredProviderList("AMSHA_INFINITE_LOOP_CLASSIFIER_PROVIDERS", "groq,ollama")
                         : provider);
+        if ("sarvam".equalsIgnoreCase(provider)) {
+            patchBaseConfig(envFile, "AMSHA_COMPACTION_SARVAM_MODEL", "sarvam-105b");
+            patchBaseConfig(envFile, "AMSHA_COMPACTION_SARVAM_BASE_URL", "https://api.sarvam.ai/v1");
+            patchBaseConfig(envFile, "AMSHA_CLASSIFIER_SARVAM_MODEL", "sarvam-105b");
+            patchBaseConfig(envFile, "AMSHA_CLASSIFIER_SARVAM_BASE_URL", "https://api.sarvam.ai/v1");
+        }
+    }
+
+    private static void patchBaseConfig(Path envFile, String key, String value) {
+        EnvConfigInitializer.patchEnvFile(envFile, key, value, EnvConfigInitializer.PatchMode.INIT);
+        if (System.getProperty(key) == null && System.getenv(key) == null) {
+            System.setProperty(key, value);
+        }
     }
 
     private static void patchProviderList(Path envFile, String key, String value) {
@@ -260,6 +278,7 @@ public class InteractiveSetupWizard {
             case "gemini" -> "AMSHA_GEMINI_API_KEY";
             case "cerebras" -> "AMSHA_CEREBRAS_API_KEY";
             case "nvidia" -> "AMSHA_NVIDIA_API_KEY";
+            case "sarvam" -> "AMSHA_SARVAM_API_KEY";
             case "omlx" -> "AMSHA_OMLX_API_KEY";
             case "generic-openai" -> "AMSHA_GENERIC_OPENAI_API_KEY";
             default -> "AMSHA_GROQ_API_KEY";
@@ -278,6 +297,7 @@ public class InteractiveSetupWizard {
             case "gemini" -> "AMSHA_COMPACTION_GEMINI_API_KEY";
             case "cerebras" -> "AMSHA_COMPACTION_CEREBRAS_API_KEY";
             case "nvidia" -> "AMSHA_COMPACTION_NVIDIA_API_KEY";
+            case "sarvam" -> "AMSHA_COMPACTION_SARVAM_API_KEY";
             case "generic-openai" -> "AMSHA_COMPACTION_GENERIC_OPENAI_API_KEY";
             default -> "AMSHA_COMPACTION_GROQ_API_KEY";
         };
@@ -295,6 +315,7 @@ public class InteractiveSetupWizard {
             case "gemini" -> "AMSHA_CLASSIFIER_GEMINI_API_KEY";
             case "cerebras" -> "AMSHA_CLASSIFIER_CEREBRAS_API_KEY";
             case "nvidia" -> "AMSHA_CLASSIFIER_NVIDIA_API_KEY";
+            case "sarvam" -> "AMSHA_CLASSIFIER_SARVAM_API_KEY";
             case "generic-openai" -> "AMSHA_CLASSIFIER_GENERIC_OPENAI_API_KEY";
             default -> "AMSHA_CLASSIFIER_GROQ_API_KEY";
         };

@@ -19,5 +19,15 @@ class ModelDefaultsResourceUnitTest {
         Map<?, ?> map = (Map<?, ?>) response.getEntity();
         assertTrue(map.containsKey("groq"));
         assertTrue(map.containsKey("openai"));
+        assertTrue(map.containsKey("sarvam"));
+    }
+
+    @Test
+    void testGetDefaultForProviderSarvam() {
+        Response response = resource.getDefaultForProvider("sarvam");
+        assertEquals(200, response.getStatus());
+        Map<?, ?> map = (Map<?, ?>) response.getEntity();
+        assertEquals("sarvam-105b", map.get("defaultModel"));
+        assertEquals("https://api.sarvam.ai/v1", map.get("defaultBaseUrl"));
     }
 }

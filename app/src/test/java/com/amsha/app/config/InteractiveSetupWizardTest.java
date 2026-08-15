@@ -93,6 +93,23 @@ class InteractiveSetupWizardTest {
     }
 
     @Test
+    void ensureBaseConfigs_patchesSarvamCompactionAndClassifierDefaults(@TempDir Path tempDir) throws Exception {
+        Path envFile = tempDir.resolve(".env");
+        Files.writeString(envFile, "AMSHA_LLM_PROVIDER=sarvam\n");
+        System.setProperty("AMSHA_LLM_PROVIDER", "sarvam");
+
+        Method ensure = InteractiveSetupWizard.class.getDeclaredMethod("ensureBaseConfigsInEnv", Path.class);
+        ensure.setAccessible(true);
+        ensure.invoke(null, envFile);
+
+        String content = Files.readString(envFile);
+        assertTrue(content.contains("AMSHA_COMPACTION_SARVAM_MODEL=sarvam-105b"));
+        assertTrue(content.contains("AMSHA_COMPACTION_SARVAM_BASE_URL=https://api.sarvam.ai/v1"));
+        assertTrue(content.contains("AMSHA_CLASSIFIER_SARVAM_MODEL=sarvam-105b"));
+        assertTrue(content.contains("AMSHA_CLASSIFIER_SARVAM_BASE_URL=https://api.sarvam.ai/v1"));
+    }
+
+    @Test
     void testHelperMethodsViaReflection() throws Exception {
         Method llmKey = InteractiveSetupWizard.class.getDeclaredMethod("llmApiKeyForProvider", String.class);
         llmKey.setAccessible(true);
@@ -100,18 +117,21 @@ class InteractiveSetupWizardTest {
         assertEquals("AMSHA_OPENAI_API_KEY", llmKey.invoke(null, "openai"));
         assertEquals("AMSHA_GEMINI_API_KEY", llmKey.invoke(null, "gemini"));
         assertEquals("AMSHA_GROQ_API_KEY", llmKey.invoke(null, "groq"));
+        assertEquals("AMSHA_SARVAM_API_KEY", llmKey.invoke(null, "sarvam"));
 
         Method compactionKey =
                 InteractiveSetupWizard.class.getDeclaredMethod("compactionApiKeyForProvider", String.class);
         compactionKey.setAccessible(true);
         assertNull(compactionKey.invoke(null, "ollama"));
         assertEquals("AMSHA_COMPACTION_OPENROUTER_API_KEY", compactionKey.invoke(null, "openrouter"));
+        assertEquals("AMSHA_COMPACTION_SARVAM_API_KEY", compactionKey.invoke(null, "sarvam"));
 
         Method classifierKey =
                 InteractiveSetupWizard.class.getDeclaredMethod("classifierApiKeyForProvider", String.class);
         classifierKey.setAccessible(true);
         assertNull(classifierKey.invoke(null, "omlx"));
         assertEquals("AMSHA_CLASSIFIER_GROQ_API_KEY", classifierKey.invoke(null, "groq"));
+        assertEquals("AMSHA_CLASSIFIER_SARVAM_API_KEY", classifierKey.invoke(null, "sarvam"));
 
         Method genRand = InteractiveSetupWizard.class.getDeclaredMethod("generateRandomValue");
         genRand.setAccessible(true);

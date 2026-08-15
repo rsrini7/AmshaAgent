@@ -42,6 +42,7 @@ class EnvFileValidatorTest {
                         "KEY_A=value1",
                         "KEY_A=value2",
                         "AMSHA_GROQ_API_KEY=changeme",
+                        "AMSHA_SARVAM_API_KEY=your_key_here",
                         "MALFORMED_LINE_WITHOUT_EQUALS"));
 
         EnvFileValidator.ValidationResult result = EnvFileValidator.validate(envFile);
@@ -49,7 +50,7 @@ class EnvFileValidatorTest {
         assertTrue(result.hasIssues());
         assertEquals(1, result.duplicateKeys().size());
         assertEquals(1, result.malformedLines().size());
-        assertEquals(1, result.placeholderValues().size());
+        assertEquals(2, result.placeholderValues().size());
     }
 
     @Test

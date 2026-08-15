@@ -65,6 +65,9 @@ public class LlmConfigurationProvenance {
                     ModelDefaults.PROVIDER_CEREBRAS,
                     new EnvironmentSpec("AMSHA_CEREBRAS_MODEL", "AMSHA_CEREBRAS_BASE_URL", "AMSHA_CEREBRAS_API_KEY")),
             Map.entry(
+                    ModelDefaults.PROVIDER_SARVAM,
+                    new EnvironmentSpec("AMSHA_SARVAM_MODEL", "AMSHA_SARVAM_BASE_URL", "AMSHA_SARVAM_API_KEY")),
+            Map.entry(
                     ModelDefaults.PROVIDER_GEMINI,
                     new EnvironmentSpec("AMSHA_GEMINI_MODEL", "", "AMSHA_GEMINI_API_KEY")),
             Map.entry(ModelDefaults.PROVIDER_OMLX, new EnvironmentSpec("AMSHA_OMLX_MODEL", "AMSHA_OMLX_BASE_URL", "")),

@@ -22,6 +22,7 @@ class LlmModelFactoryTest {
         assertEquals("openai", LlmModelFactory.inferProviderFromUrl("https://api.openai.com/v1"));
         assertEquals("nvidia", LlmModelFactory.inferProviderFromUrl("https://integrate.api.nvidia.com/v1"));
         assertEquals("cerebras", LlmModelFactory.inferProviderFromUrl("https://api.cerebras.ai/v1"));
+        assertEquals("sarvam", LlmModelFactory.inferProviderFromUrl("https://api.sarvam.ai/v1"));
         assertEquals(
                 "gemini",
                 LlmModelFactory.inferProviderFromUrl("https://generativelanguage.googleapis.com/v1beta/openai/"));
@@ -62,6 +63,13 @@ class LlmModelFactoryTest {
                 1,
                 null,
                 null);
+        assertNotNull(model);
+    }
+
+    @Test
+    void testCreateSarvamModel() {
+        ChatModel model = factory.createModel(
+                "sarvam", "https://api.sarvam.ai/v1", "test-key", "sarvam-105b", 100, null, 1, null, null);
         assertNotNull(model);
     }
 

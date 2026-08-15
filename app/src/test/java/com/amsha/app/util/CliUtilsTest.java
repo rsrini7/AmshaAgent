@@ -241,6 +241,12 @@ class CliUtilsTest {
     }
 
     @Test
+    void llmKeySpecFor_sarvam() {
+        assertEquals(
+                "AMSHA_SARVAM_API_KEY", ProviderKeySpecs.llmKeySpecFor("sarvam").key());
+    }
+
+    @Test
     void llmKeySpecFor_omlx() {
         assertEquals(
                 "AMSHA_OMLX_API_KEY", ProviderKeySpecs.llmKeySpecFor("omlx").key());

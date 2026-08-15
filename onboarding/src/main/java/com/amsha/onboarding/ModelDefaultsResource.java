@@ -53,6 +53,9 @@ public class ModelDefaultsResource {
                 ModelDefaults.PROVIDER_CEREBRAS,
                 providerEntry(ModelDefaults.DEFAULT_CEREBRAS_MODEL, ModelDefaults.DEFAULT_CEREBRAS_BASE_URL));
         result.put(
+                ModelDefaults.PROVIDER_SARVAM,
+                providerEntry(ModelDefaults.DEFAULT_SARVAM_MODEL, ModelDefaults.DEFAULT_SARVAM_BASE_URL));
+        result.put(
                 ModelDefaults.PROVIDER_GEMINI,
                 providerEntry(ModelDefaults.DEFAULT_GEMINI_MODEL, ModelDefaults.DEFAULT_GEMINI_BASE_URL));
         result.put(

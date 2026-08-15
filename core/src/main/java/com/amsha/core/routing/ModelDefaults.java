@@ -23,6 +23,7 @@ public final class ModelDefaults {
     public static final String PROVIDER_OPENROUTER = "openrouter";
     public static final String PROVIDER_NVIDIA = "nvidia";
     public static final String PROVIDER_CEREBRAS = "cerebras";
+    public static final String PROVIDER_SARVAM = "sarvam";
     public static final String PROVIDER_GEMINI = "gemini";
     public static final String PROVIDER_OMLX = "omlx";
     public static final String PROVIDER_LLAMACPP = "llamacpp";
@@ -39,6 +40,7 @@ public final class ModelDefaults {
     public static final String DEFAULT_OPENROUTER_MODEL = "openai/gpt-oss-20b:free";
     public static final String DEFAULT_NVIDIA_MODEL = "bytedance/seed-oss-36b-instruct";
     public static final String DEFAULT_CEREBRAS_MODEL = "qwen-3-235b-a22b-instruct-2507";
+    public static final String DEFAULT_SARVAM_MODEL = "sarvam-105b";
     public static final String DEFAULT_GEMINI_MODEL = "gemini-2.5-flash-lite";
     public static final String DEFAULT_OMLX_MODEL = "mlx-community/Qwen3.6-35B-A3B-4bit";
     public static final String DEFAULT_LLAMACPP_MODEL = "qwen3";
@@ -54,6 +56,7 @@ public final class ModelDefaults {
     public static final String DEFAULT_OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
     public static final String DEFAULT_NVIDIA_BASE_URL = "https://integrate.api.nvidia.com/v1";
     public static final String DEFAULT_CEREBRAS_BASE_URL = "https://api.cerebras.ai/v1";
+    public static final String DEFAULT_SARVAM_BASE_URL = "https://api.sarvam.ai/v1";
     public static final String DEFAULT_GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta";
     public static final String DEFAULT_OMLX_BASE_URL = "http://127.0.0.1:8000/v1";
     public static final String DEFAULT_LLAMACPP_BASE_URL = "http://127.0.0.1:9000/v1";
@@ -74,6 +77,7 @@ public final class ModelDefaults {
             Map.entry("groq.com", PROVIDER_GROQ),
             Map.entry("nvidia.com", PROVIDER_NVIDIA),
             Map.entry("cerebras.ai", PROVIDER_CEREBRAS),
+            Map.entry("sarvam.ai", PROVIDER_SARVAM),
             Map.entry("googleapis.com", PROVIDER_GEMINI),
             Map.entry("anthropic.com", PROVIDER_ANTHROPIC),
             Map.entry("localhost:11434", PROVIDER_OLLAMA),
@@ -98,6 +102,7 @@ public final class ModelDefaults {
             case PROVIDER_OPENROUTER -> DEFAULT_OPENROUTER_MODEL;
             case PROVIDER_NVIDIA -> DEFAULT_NVIDIA_MODEL;
             case PROVIDER_CEREBRAS -> DEFAULT_CEREBRAS_MODEL;
+            case PROVIDER_SARVAM -> DEFAULT_SARVAM_MODEL;
             case PROVIDER_GEMINI -> DEFAULT_GEMINI_MODEL;
             case PROVIDER_OMLX -> DEFAULT_OMLX_MODEL;
             case PROVIDER_LLAMACPP -> DEFAULT_LLAMACPP_MODEL;
@@ -121,6 +126,7 @@ public final class ModelDefaults {
             case PROVIDER_OPENROUTER -> DEFAULT_OPENROUTER_BASE_URL;
             case PROVIDER_NVIDIA -> DEFAULT_NVIDIA_BASE_URL;
             case PROVIDER_CEREBRAS -> DEFAULT_CEREBRAS_BASE_URL;
+            case PROVIDER_SARVAM -> DEFAULT_SARVAM_BASE_URL;
             case PROVIDER_GEMINI -> DEFAULT_GEMINI_BASE_URL;
             case PROVIDER_OMLX -> DEFAULT_OMLX_BASE_URL;
             case PROVIDER_LLAMACPP -> DEFAULT_LLAMACPP_BASE_URL;

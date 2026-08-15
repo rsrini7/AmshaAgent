@@ -120,6 +120,7 @@ public class LlmModelFactory {
             "groq.com", ModelDefaults.PROVIDER_GROQ,
             "nvidia.com", ModelDefaults.PROVIDER_NVIDIA,
             "cerebras.ai", ModelDefaults.PROVIDER_CEREBRAS,
+            "sarvam.ai", ModelDefaults.PROVIDER_SARVAM,
             "googleapis.com", ModelDefaults.PROVIDER_GEMINI,
             "localhost:11434", ModelDefaults.PROVIDER_OLLAMA,
             "localhost:9000", ModelDefaults.PROVIDER_LLAMACPP);
