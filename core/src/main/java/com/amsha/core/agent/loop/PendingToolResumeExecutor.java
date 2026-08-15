@@ -67,6 +67,15 @@ final class PendingToolResumeExecutor {
         String sessionId = context.sessionId();
         String effectiveRole =
                 checkpoint.getPendingToolRole() != null ? checkpoint.getPendingToolRole() : context.agentRole();
+
+        if (toolName == null || toolName.isBlank()) {
+            log.warnf(
+                    "[ResumeStrategy] No pending tool found in checkpoint for session %s role %s — completing checkpoint and running finish pass",
+                    sessionId, effectiveRole);
+            completeInProgressCheckpoint(checkpoint);
+            return stateMachineRunner.runFinishPass(context, reasoningEngine, history);
+        }
+
         var owner = delegationResolver.resolveOwner(effectiveRole, toolName);
         if (owner.isPresent()) {
             toolName = ToolCapability.DELEGATE_TO_AGENT.toolName();

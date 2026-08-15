@@ -5,9 +5,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import dev.langchain4j.agent.tool.ToolExecutionRequest;
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.SystemMessage;
+import dev.langchain4j.data.message.ToolExecutionResultMessage;
 import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
 
@@ -89,6 +91,65 @@ class ReasoningMessageAssemblerTest {
         assertFalse(
                 containsHint(result, "STOP repeating") || containsHint(result, "STOP inspecting"),
                 "No hint should be injected when history shows progress");
+    }
+
+    @Test
+    void assemble_convertsToolMessagesToTextWhenForceFinishRetryActive() throws Exception {
+        ChatHistoryAssembler historyAssembler = mock(ChatHistoryAssembler.class);
+        when(historyAssembler.assemble("sess-1", "goal", Collections.emptyList()))
+                .thenReturn(List.of(
+                        AiMessage.aiMessage(List.of(ToolExecutionRequest.builder()
+                                .id("call-1")
+                                .name("sandbox_exec")
+                                .arguments("{\"code\":\"foo\"}")
+                                .build())),
+                        ToolExecutionResultMessage.toolExecutionResultMessage("call-1", "sandbox_exec", "9973")));
+        ReasoningMessageAssembler assembler = createAssembler(historyAssembler);
+
+        AgentExecutionContext context = new AgentExecutionContext(
+                "sess-1",
+                "user-1",
+                "chat-1",
+                "coder",
+                "goal",
+                AutonomyLevel.FULL,
+                StructuredOutputMode.NATIVE,
+                10,
+                0,
+                "TELEGRAM",
+                "123",
+                null,
+                Map.of());
+        context.setForceFinishRetry(true);
+
+        ReasoningMessageAssembler.AssembledMessages result = assembler.assemble(
+                context,
+                "coder",
+                "goal",
+                Collections.emptyList(),
+                "system prompt",
+                Set.of(ToolCapability.SANDBOX_EXEC.toolName()),
+                false,
+                false,
+                false);
+
+        // Tool specifications must be empty
+        assertTrue(result.tools().isEmpty(), "Tools must be empty during forceFinishRetry");
+
+        // There should be NO raw ToolExecutionResultMessage or AiMessage with toolExecutionRequests
+        assertFalse(
+                result.messages().stream().anyMatch(m -> m instanceof ToolExecutionResultMessage),
+                "Raw ToolExecutionResultMessage must not be present");
+        assertFalse(
+                result.messages().stream().anyMatch(m -> m instanceof AiMessage ai && ai.hasToolExecutionRequests()),
+                "AiMessage with toolExecutionRequests must not be present");
+
+        // Tool output must be preserved as user message text
+        assertTrue(
+                result.messages().stream()
+                        .anyMatch(m -> m instanceof UserMessage u
+                                && u.singleText().contains("[Tool Output from sandbox_exec]: 9973")),
+                "Tool output must be preserved as plain text user message");
     }
 
     private static ReasoningMessageAssembler createAssembler() throws Exception {

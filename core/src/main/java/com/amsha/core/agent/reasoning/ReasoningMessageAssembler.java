@@ -1,10 +1,11 @@
 package com.amsha.core.agent.reasoning;
 
+import dev.langchain4j.agent.tool.ToolExecutionRequest;
 import dev.langchain4j.agent.tool.ToolSpecification;
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.ChatMessage;
-import dev.langchain4j.data.message.ChatMessageType;
 import dev.langchain4j.data.message.SystemMessage;
+import dev.langchain4j.data.message.ToolExecutionResultMessage;
 import dev.langchain4j.data.message.UserMessage;
 
 import jakarta.enterprise.context.ApplicationScoped;
@@ -189,11 +190,26 @@ public class ReasoningMessageAssembler {
             List<ChatMessage> filteredAssembled, boolean isSimpleChitchat, boolean isForceFinishRetry) {
         if (isSimpleChitchat || isForceFinishRetry) {
             return filteredAssembled.stream()
-                    .filter(m -> !isSimpleChitchat || m.type() != ChatMessageType.TOOL_EXECUTION_RESULT)
                     .map(m -> {
+                        if (m instanceof ToolExecutionResultMessage tool) {
+                            if (isSimpleChitchat) return null;
+                            return (ChatMessage) UserMessage.userMessage(
+                                    "[Tool Output from " + tool.toolName() + "]: " + tool.text());
+                        }
                         if (m instanceof AiMessage ai && ai.hasToolExecutionRequests()) {
-                            if (!isSimpleChitchat) return m;
-                            return (ai.text() != null && !ai.text().isBlank()) ? AiMessage.aiMessage(ai.text()) : null;
+                            if (isSimpleChitchat) {
+                                return (ai.text() != null && !ai.text().isBlank())
+                                        ? AiMessage.aiMessage(ai.text())
+                                        : null;
+                            }
+                            String text = (ai.text() != null && !ai.text().isBlank())
+                                    ? ai.text()
+                                    : "[Executed tool: "
+                                            + ai.toolExecutionRequests().stream()
+                                                    .map(ToolExecutionRequest::name)
+                                                    .collect(Collectors.joining(", "))
+                                            + "]";
+                            return (ChatMessage) AiMessage.aiMessage(text);
                         }
                         return m;
                     })

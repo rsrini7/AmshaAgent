@@ -80,8 +80,23 @@ class ResumeStrategyDispatcher {
             MessageContext messageContext,
             AgentStateMachineRunner stateMachineRunner,
             AgentCheckpoint checkpoint) {
-        if (AgentSentinels.GOAL_DENY_APPROVED.equals(context.goal())) {
+        if (AgentSentinels.GOAL_DENY_APPROVED.equals(context.goal())
+                || CheckpointStatus.DENIED == checkpoint.getStatus()) {
             return performDenialCleanup(context, history, checkpoint);
+        }
+
+        if (checkpoint.hasBatchToolDecisions()) {
+            try {
+                Map<String, ToolDecision> decisions = objectMapper.readValue(
+                        checkpoint.getBatchToolDecisions(), new TypeReference<Map<String, ToolDecision>>() {});
+                boolean allDenied =
+                        !decisions.isEmpty() && decisions.values().stream().allMatch(ToolDecision.DENIED::equals);
+                if (allDenied) {
+                    return performDenialCleanup(context, history, checkpoint);
+                }
+            } catch (Exception _) {
+                log.debugf("Failed to parse batch decisions during denial check for session %s", context.sessionId());
+            }
         }
 
         String messageGoal = messageContext == null ? null : messageContext.getGoal();
