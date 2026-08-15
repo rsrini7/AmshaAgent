@@ -1,26 +1,30 @@
 # Sarvam Java SDK Options
 
-**Research snapshot:** 2026-08-14. This note compares the current private
-GraalPy spike with Java alternatives. It is a technical recommendation, not
-legal advice or an adoption ADR.
+> [GraalPy research archive](README.md)
+
+**Decision snapshot:** 2026-08-15. The private comparison is complete. Java is
+selected for the exercised synchronous Sarvam contract, and the GraalPy SDK
+path is closed. See
+[ADR-GraalPy-Integration-Boundary.md](ADR-GraalPy-Integration-Boundary.md) and
+[Sarvam-GraalPy-Experiment-Closeout.md](Sarvam-GraalPy-Experiment-Closeout.md).
 
 ## Recommendation
 
-We have enough evidence to choose the next experiment, but not enough to choose
-the final implementation.
+The final direction is a thin Java `ChatModel` adapter over Sarvam's documented
+OpenAI-compatible HTTP contract. GraalPy is not retained as a provider runtime
+or generic Python-library wrapper.
 
-1. Finish `SGP-04`. Its provider-neutral wire fixtures remain useful even if
-   GraalPy is later rejected.
+1. Reuse the completed SGP-04 and SGP-J01 provider-neutral fixtures for any
+   separately authorized production implementation.
 2. Do **not** port or copy `sarvam-ai-sdk` into Java. It is a Vercel AI SDK
    provider, not Sarvam's first-class JavaScript client, and it has no published
    source licence.
-3. After `SGP-04`, run a small Java comparison against the same fixtures. Try
-   Amsha's existing LangChain4j OpenAI-compatible `ChatModel` first, adding only
-   the documented Sarvam subscription-key header. Build a selective typed Java
-   client only for contract gaps that this adapter cannot cover.
-4. Run `SGP-05` only while GraalPy remains a contender. It is the evidence that
-   decides whether GraalPy's concurrency, cancellation, resource, and overhead
-   costs are acceptable.
+3. Use the existing `generic-openai` path for a minimal authorized smoke, but
+   promote the selective JDK `HttpClient`/Jackson adapter when first-class
+   per-request model-option parity is required; SGP-J01 demonstrated that gap.
+4. Keep translation as a separate typed call. Do not add Python, GraalPy,
+   Pydantic, Node, or TypeScript runtime dependencies.
+5. Do not run SGP-05. The human stop decision removed GraalPy from contention.
 
 The likely long-term fit for Amsha is the thin Java path. Sarvam explicitly
 describes `/v2/chat/completions` as OpenAI-compatible in its
@@ -188,20 +192,18 @@ This design is reusable by other LangChain4j applications and concentrates
 provider drift in one module. It is intentionally not a full Java clone of
 Sarvam's Python/JavaScript SDKs.
 
-## Evidence required for the decision
+## Evidence and final disposition
 
 | Evidence | What it decides |
 | --- | --- |
 | `SGP-03` resolved | Already proves that the pinned Python SDK imports, loads its native dependency, packages offline, and shuts down on the private macOS-arm64 JVM harness. It is sufficient for “can GraalPy run it?”, not for adoption. |
-| `SGP-04` | Proves the real Python SDK's required chat and translation wire behavior. Its canonical fixtures should be implementation-neutral and reused by Java. Do not discard or interrupt this work. |
-| Small Java contract spike | Run the same `SGP-04` chat cohort through the LangChain4j path, then through a selective client only if needed. Record request/response parity, retries, errors, dependency delta, startup/RSS, normal-artifact isolation, JVM compile, and Native Image reachability metadata. This evidence does not exist yet. |
-| `SGP-05` | Required only to keep GraalPy in the final comparison: bounded concurrency, context propagation, cancellation, shutdown, and GraalPy-versus-CPython overhead. |
-| `SGP-07` | Not required to choose the transport. Live provider/model behavior is common to both paths and remains separately gated. |
-| `SGP-08`–`SGP-10` | Required before adopting a GraalPy variant across the declared JVM/Native Image matrix. A Java adapter still needs normal Amsha platform/native verification, but avoids the Python ABI, native-extension, VFS, and `HostIO.READ` gates. |
+| `SGP-04` resolved | Proved the real Python SDK's required synchronous chat and translation wire behavior over the implementation-neutral corpus. |
+| `SGP-J01` resolved | Proved the selective Java candidate can satisfy the same exercised synchronous contract with zero incremental runtime JAR bytes. |
+| `SGP-05` wontfix | Not run because GraalPy no longer remains in the final comparison. |
+| `SGP-07`–`SGP-10` wontfix | Live SDK and GraalPy deployment-matrix work stopped. Any future Java-provider validation is new work under separate authorization. |
 
-The decision point is after `SGP-04` plus the small Java contract spike. Choose
-the thin Java module if it passes the same primary chat contracts without a
-provider-specific loss that matters to Amsha. Continue to `SGP-05` only if the
-Python SDK supplies material behavior that the Java path cannot reproduce from
-the authorized public contract, or if using the official SDK is itself a
-non-negotiable product goal.
+The Python SDK did not supply material required behavior that justified the
+additional runtime, native, threading, security, and platform surface. The
+Java/OpenAI-compatible path is therefore the final technical direction for
+Sarvam, while current production behavior remains unchanged until separately
+implemented and approved.

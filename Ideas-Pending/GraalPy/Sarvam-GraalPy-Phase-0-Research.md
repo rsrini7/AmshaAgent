@@ -1,6 +1,8 @@
 # Sarvam Python SDK Through GraalPy: Phase 0 Research Baseline
 
-- Evidence status: pre-spike research; no adoption decision
+> [GraalPy research archive](README.md)
+
+- Evidence status: historical pre-spike research; experiment closed 2026-08-15
 - Scope: text-only, non-streaming chat first; text translation second
 - Repository baseline: `1ddcf24cdd523f34287859f96e6768bd16260290`
 - Evidence captured: 2026-08-11 (Asia/Kolkata)
@@ -10,6 +12,11 @@
 
 This note records facts that Phase 0 must prove or disprove. It is not an adoption
 ADR and does not authorize implementation.
+
+The completed outcome is recorded in
+[Sarvam-GraalPy-Experiment-Closeout.md](Sarvam-GraalPy-Experiment-Closeout.md)
+and [ADR-GraalPy-Integration-Boundary.md](ADR-GraalPy-Integration-Boundary.md).
+Do not use this pre-spike baseline to reopen or justify GraalPy adoption.
 
 ## 1. Current Sarvam artifact
 
@@ -249,7 +256,7 @@ Official GraalPy test tiers are indicators, not support commitments.
 A pass in one row cannot close another row. JVM and Native Image results must
 also remain separate within the same OS/architecture.
 
-## 5. Reconciliation of `Ideas-Pending/GraalPy.md`
+## 5. Reconciliation of `Ideas-Pending/GraalPy/README.md`
 
 | Existing claim | Primary-source result |
 | --- | --- |

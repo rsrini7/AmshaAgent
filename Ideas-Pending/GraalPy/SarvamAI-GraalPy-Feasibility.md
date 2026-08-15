@@ -1,14 +1,21 @@
 # Sarvam Python SDK Through GraalPy Feasibility
 
+> [GraalPy research archive](README.md)
+
 ## 1. Concise feasibility specification
 
-**Status:** Phase 0A private exception effective 2026-08-12. SGP-00A remains
-`needs-info`, unresolved, and unpassed while the authoritative evaluation-rights
-response is pending. No adoption, production implementation, redistribution, or
-customer use is authorized. SGP-00B also remains unresolved and continues to
-block redistribution and adoption. The exception below is a separate, narrowly
-scoped project-risk authorization for local evidence; it is not a Sarvam licence
-grant and does not waive or pass either rights gate.
+**Status:** Closed with a maintainer stop decision on 2026-08-15. The private
+Phase 0A exception has expired. GraalPy is not adopted as a generic
+Python-library wrapper or as the Sarvam provider implementation. No adoption,
+production implementation, redistribution, customer use, or further executable
+SDK work is authorized by this document.
+
+The experiment record is preserved in
+[Sarvam-GraalPy-Experiment-Closeout.md](Sarvam-GraalPy-Experiment-Closeout.md),
+and the architectural decision is recorded in
+[ADR-GraalPy-Integration-Boundary.md](ADR-GraalPy-Integration-Boundary.md).
+The SDK rights questions were never passed; they are terminally closed for the
+retired SDK path rather than treated as granted.
 
 ### Maintainer-authorized private Phase 0A feasibility exception
 
@@ -21,6 +28,10 @@ non-distributable macOS-arm64 Quarkus JVM harness. Srinivasan Ragothaman is the
 named maintainer and native-code security risk owner when no separate
 organizational security reviewer exists; no legal, procurement, or security
 approver is inferred.
+
+This exception is historical. It ended with the 2026-08-15 stop decision and
+must not be used to authorize a new SDK, Python library, GraalPy context, or
+native-wheel experiment.
 
 Only the resolved SGP-02 aligned-25.0.2 stack and hash-pinned artifacts in the
 approved cache may be used. SGP-03 must begin with a static Maven freeze stage;
@@ -105,7 +116,7 @@ Proposed `LICENSE`, `README`, and `THIRD-PARTY-NOTICES` wording:
 
 The independently checked baseline is
 [Sarvam-GraalPy-Phase-0-Research.md](Sarvam-GraalPy-Phase-0-Research.md). It
-corrects contradictory claims in [GraalPy.md](GraalPy.md): current GraalPy
+corrects contradictory claims in [the archive README](README.md): current GraalPy
 25.2.4 supports JVM embedding and Native Image, Maven-packaged Python
 resources can avoid runtime downloads, and Polyglot `Context` is not
 categorically thread-unsafe. The Quarkus/Sarvam graph and native-extension
@@ -149,24 +160,23 @@ tasks, and Quarkus 3.27.2. The spike must record one internally consistent
 GraalPy/Truffle/GraalVM/JDK 25/Quarkus line, with Temurin and GraalVM JDK
 implications measured separately.
 
-**Feasibility conclusion:** SGP-00A remains unresolved and unpassed. The
-effective private exception authorizes only the local `SGP-03` → `SGP-04` →
-`SGP-05` evidence path. SGP-07 additionally requires SGP-00A to pass with
-explicit written live-test permission, as well as its human checkpoint,
-credential, quota, cost, and availability controls. SGP-00B still blocks
-distributable packaging and adoption. Only after the declared evidence gates
-pass may maintainers consider a separate adoption ADR.
+**Feasibility conclusion:** the pinned Sarvam graph is technically feasible for
+the demonstrated private synchronous JVM slice, but the evidence does not
+support a generic Python-library wrapper. The Java/OpenAI-compatible path won
+the SGP-J01 comparison. The GraalPy path and its private exception are closed;
+unrun deployment gates remain explicitly `NOT_RUN — STOP DECISION`.
 
 ## 2. Options and trade-offs
 
 | Option | Advantages | Costs and disposition |
 | --- | --- | --- |
-| Opt-in GraalPy/Sarvam variant | Uses the requested SDK and generated models; supports build-time VFS packaging; can target JVM and Native Image | Adds a Python runtime, experimental native-extension boundary, native access, platform-specific artifacts, and a second toolchain matrix. Preferred Phase 0 subject, not an adoption decision. |
-| Keep Sarvam unintegrated | No new licence, runtime, memory, security, or release burden | Provides no Sarvam capability. Required default until every adoption gate passes. |
+| Opt-in GraalPy/Sarvam variant | Uses the requested SDK and generated models; supports build-time VFS packaging; can target JVM and Native Image | Rejected for adoption after Phase 0: package-specific native ABI, `HostIO.READ`, process-trusted native code, platform-thread constraints, platform artifacts, and a second toolchain matrix. |
+| Java/OpenAI-compatible Sarvam path | Reuses Amsha's `ChatModel` seam and existing runtime graph | Selected by SGP-J01 for the exercised synchronous contract; production implementation and live validation remain separate work. |
+| Keep Sarvam unintegrated | No new licence, runtime, memory, security, or release burden | Remains the current default until a Java-provider change is separately authorized. |
 | One context with serialized synchronous execution | Simplest lifecycle and safest native-module baseline | Does not demonstrate eight simultaneous calls; useful correctness/resource baseline. |
 | One context with asynchronous SDK on one context-aware platform thread | May multiplex calls without virtual threads while preserving workspace/session binding | Adds event-loop, cancellation, future-bridging, and shutdown complexity; candidate only after SGP-05 evidence. |
 | Context-per-worker pool | Straightforward Java-side isolation | Native modules in multiple contexts are not an approved macOS baseline; reject unless authoritative support changes. |
-| Handwritten Java REST client or Python sidecar | Could reduce some runtime constraints | Does not answer the requested SDK-through-GraalPy question and is outside this Phase 0 scope. |
+| CPython sidecar for a future Python-only capability | Preserves upstream CPython compatibility and isolates native packages from the Amsha JVM | Preferred only when the Python library supplies unique required behavior; requires its own narrow JSON contract and operational decision. |
 
 No option may move network I/O into a transaction, execute Python/native code on
 virtual threads, download packages at runtime, or silently change provider.
@@ -179,23 +189,23 @@ governing identifiers and current actionable states.
 
 | ID | Evidence outcome | Blocking dependencies |
 | --- | --- | --- |
-| `SGP-00A` | Secure Sarvam SDK evaluation rights, including explicit SGP-07 live-test permission | `needs-info`; authoritative written evaluation and live-test response remains pending |
-| `SGP-00B` | Resolve licence redistribution/adoption rights | `needs-info`; redistribution response independently blocks packaging and adoption |
+| `SGP-00A` | Secure Sarvam SDK evaluation rights, including explicit SGP-07 live-test permission | `wontfix`; SDK path retired, with no right treated as granted |
+| `SGP-00B` | Resolve SDK licence and redistribution/adoption rights | `wontfix`; no SDK packaging or redistribution will be pursued, with no right treated as granted |
 | `SGP-01` | Freeze SDK dependency graph, hashes, SBOM inputs, provenance/licence inventory, vulnerabilities, and prove offline resolution | `resolved`; private-PoC exception covered static work only; SGP-00A/00B remain unresolved |
 | `SGP-02` | Select and approve one compatible GraalPy/Truffle/GraalVM/JDK 25/`pydantic-core` ABI line | `resolved`; exact aligned-25.0.2 candidate approved for Phase 0 evaluation only |
 | `SGP-03` | Build an isolated, reusable macOS-arm64 Quarkus JVM VFS PoC harness; import and close the public SDK; load process-trusted `pydantic-core`; prove default-artifact isolation and native extraction paths | `resolved`; human acceptance 2026-08-14; evidence `.scratch/sarvam-graalpy-phase-0/evidence/sgp-03/sgp-03.index.json`; SGP-00A/SGP-00B remain unresolved. |
 | `SGP-04` | Deterministic SDK contract evidence: sync chat/translation, serialization, decoding, errors, retries, authentication headers, tools, and structured tool schemas | `resolved`; human acceptance 2026-08-14; evidence `.scratch/sarvam-graalpy-phase-0/evidence/sgp-04/sgp-04.index.json`; sync contract PASS; async execution is NO-GO under the approved no-socket policy; `async_token` and native `response_format` are `UNSUPPORTED_BY_PINNED_PUBLIC_SDK`; tool-schema structured output PASS; original eight-active GraalPy concurrency target is not satisfied. |
-| `SGP-J01` | Compare the implementation-neutral SGP-04 corpus with Amsha's native Java/LangChain4j ChatModel path and recommend Java, GraalPy, or additional evidence | `ready-for-agent`; SGP-04 resolved |
-| `SGP-05` | Compare serialized synchronous and single-context asynchronous execution; prove bounded concurrency, cancellation, context propagation, transaction separation, and shutdown | `needs-triage`; SGP-J01 comparison must complete and a human must decide that GraalPy remains a contender before SGP-05 or its async-bridge design begins |
-| `SGP-06` | Human Phase 0A checkpoint over SGP-03–05 evidence before any live-provider platform work | `needs-triage`; SGP-03 through SGP-05; record SGP-00B separately |
-| `SGP-07` | Named, sanitized live authentication/transport probes and separately scored provider-model evaluation | `needs-triage`; requires a future SGP-00A pass with explicit written live-test permission, SGP-06, credentials/quota/cost approval, and Sarvam availability |
-| `SGP-08` | Separate JVM records for macOS arm64, Linux x86-64, and Linux arm64; Windows normal-artifact isolation regression | `needs-triage`; SGP-06/07, matching runners, and frozen artifacts |
-| `SGP-09` | Independent Native Image records for the three Sarvam targets; Windows normal-artifact isolation regression | `needs-triage`; corresponding SGP-08 records and aligned Native Image host |
-| `SGP-10` | Security, lifecycle, offline-runtime, sensitive-log, and resource gates for every required JVM/Native Image cell | `needs-triage`; SGP-08/09, approved security plan, and telemetry |
-| `SGP-11` | Final signed evidence packet and continue/stop recommendation; unresolved redistribution remains an adoption blocker | `needs-triage`; SGP-00A and SGP-01 through SGP-10; record SGP-00B separately |
+| `SGP-J01` | Compare the implementation-neutral SGP-04 corpus with Amsha's native Java/LangChain4j ChatModel path and recommend Java, GraalPy, or additional evidence | `resolved`; Java selected by the maintainer on 2026-08-15 |
+| `SGP-05` | Compare serialized synchronous and single-context asynchronous execution; prove bounded concurrency, cancellation, context propagation, transaction separation, and shutdown | `wontfix`; not run after Java selection removed GraalPy from contention |
+| `SGP-06` | Human Phase 0A checkpoint before any live-provider platform work | `resolved`; 2026-08-15 stop decision recorded without funding downstream work |
+| `SGP-07` | Named, sanitized live SDK authentication/transport probes and provider-model evaluation | `wontfix`; retired Python-SDK path, with future Java-provider validation tracked separately if authorized |
+| `SGP-08` | Separate GraalPy JVM platform records | `wontfix`; deployment matrix not run after stop decision |
+| `SGP-09` | Independent GraalPy Native Image platform records | `wontfix`; Native Image matrix not run after stop decision |
+| `SGP-10` | GraalPy security, lifecycle, offline-runtime, sensitive-log, and resource gates | `wontfix`; six-cell hardening not run after stop decision |
+| `SGP-11` | Final evidence packet and continue/stop recommendation | `resolved`; stop packet recorded in the experiment closeout |
 
 The order follows the phased evidence-gate pattern in
-[ADR-ONNX-In-Process-Local-ML-Inference.md](ADR-ONNX-In-Process-Local-ML-Inference.md):
+[ADR-ONNX-In-Process-Local-ML-Inference.md](../ADR-ONNX-In-Process-Local-ML-Inference.md):
 supply chain and compatibility precede integration; JVM and Native Image
 evidence remain separate; activation is a later human decision.
 
@@ -206,20 +216,20 @@ execution under the approved no-socket policy as `NO-GO`, `async_token` authenti
 as `UNSUPPORTED_BY_PINNED_PUBLIC_SDK`, and the native `response_format` parameter as
 `UNSUPPORTED_BY_PINNED_PUBLIC_SDK`. Tool-schema structured output is `PASS`. These
 terminal dispositions do not claim async parity and do not satisfy the original
-eight-active GraalPy concurrency target. SGP-J01 must complete before SGP-05 can be
-considered for execution; a human must first decide that GraalPy remains a contender.
+eight-active GraalPy concurrency target. SGP-J01 subsequently selected Java;
+SGP-05 was therefore not run and is terminally closed.
 
 ## 4. Quantitative go/no-go gates
 
-Unless a gate says otherwise, compare the Sarvam-enabled candidate with the
-same commit, persistence backend, configuration, host, and build mode without
-Sarvam; report medians and p95 over at least five runs. A failed required cell
-is a no-go for adoption on the declared Sarvam matrix.
+The table below preserves the original planned adoption gates. It is historical
+test design, not a claim that every gate ran. SGP-05 and SGP-07 through SGP-10
+are `NOT_RUN — STOP DECISION`; the GraalPy variant was rejected before those
+costly gates were funded.
 
 | Gate | Required result |
 | --- | --- |
-| Evaluation rights | SGP-00A remains unresolved and unpassed. The private project-risk exception authorizes only SGP-03–05; it does not satisfy this gate. SGP-07 requires authoritative written permission explicitly covering its live authentication, transport, and model tests, plus its other blockers. SGP-00B remains separate. |
-| Redistribution rights | Written authoritative redistribution rights are required before any distributable artifact or adoption; this gate does not block evaluation-only execution. |
+| Evaluation rights | Not passed. The private project-risk exception covered only completed SGP-03/04 evidence and is expired. SGP-00A is `wontfix` because no further SDK or SGP-07 work will be pursued; no right is treated as granted. |
+| Redistribution rights | Not passed. SGP-00B is `wontfix` because Amsha will not package or redistribute the SDK; no right is treated as granted. |
 | Artifact inventory | Every direct/transitive artifact is hash-pinned and in the SBOM; licences/provenance and vulnerability disposition are recorded; no unapproved high/critical finding. |
 | Maven/Python offline packaging | Hash-pinned Maven and Python graphs resolve from frozen caches; ten clean builds succeed; zero package-index, DNS, or external HTTP attempts and zero runtime installation paths. |
 | Toolchain ABI | Exact GraalPy/Truffle/GraalVM/JDK 25/Python/native-wheel versions are recorded; all wheel tags pass normal installer compatibility; no unproved 25.2.4/native-wheel cross-install is accepted. |
@@ -229,7 +239,7 @@ is a no-go for adoption on the declared Sarvam matrix.
 | Authentication modes | Sync `api-subscription-key` and redaction pass; async bearer/`async_token` behavior is `UNSUPPORTED_BY_PINNED_PUBLIC_SDK`; native `response_format` is `UNSUPPORTED_BY_PINNED_PUBLIC_SDK`; any later live probe uses a documented public SDK mode and is scored separately from model quality. |
 | Concurrency/context | Exactly eight active calls, queue 32, bounded overload rejection, zero Python/native work on virtual threads, and 100% workspace/session binding through all task outcomes. |
 | Deterministic overhead | Against the same local deterministic fixture/replay server and CPython baseline, GraalPy p95 is no worse than `1.25x + 50 ms` and sustained throughput is at least 80% at concurrency one and eight. Real-service latency is reported separately. |
-| Phase 0A checkpoint | Named human continue/stop decision after SGP-03–05 and before SGP-07–10 funding; continue authorizes only the next spike phase. |
+| Phase 0A checkpoint | STOP recorded by the named maintainer on 2026-08-15; SGP-05 and SGP-07–10 were not funded or run. |
 | Lifecycle/resources | Three fresh build/start/request/shutdown cycles per cell; 60-minute/10,000-call mocked stress has RSS slope ≤5 MiB/hour, no leaked non-daemon resources, and shutdown ≤10 seconds; idle RSS delta ≤300 MB and peak delta ≤750 MB. |
 | Python/native security | Python-level host/file/process/install denials pass where supported; SGP-03–05 `HostIO.READ` is an `ACCEPTED_LIMITATION`, not a filesystem-isolation PASS. Native code remains process-trusted; deployable variants require separately approved OS containment or newer documented GraalPy capability; zero secret/prompt/response leakage and no external or transaction-bound HTTP. |
 | Platform matrix | macOS arm64, Linux x86-64, and Linux arm64 each pass independently on JVM and Native Image. Windows records only normal-Amsha regression/isolation. |
@@ -241,40 +251,25 @@ recorded human approval before the affected spike continues.
 The generic Python/native-security row above is superseded for SGP-03–05 by the
 named `HostIO.READ` `ACCEPTED_LIMITATION`: filesystem isolation is not PASS,
 the `HostIO.NONE` failure and permissive `HostIO.READ` result remain evidence,
-and any deployable variant requires separately approved OS-level containment or
-a newer documented GraalPy capability. This private exception does not pass
-SGP-00A or SGP-00B and does not authorize live provider calls, production,
-customer use, adoption, redistribution, Native Image work, or SGP-06+.
+and any deployable variant would require separately approved OS-level
+containment or a newer documented GraalPy capability. This private exception did
+not pass SGP-00A or SGP-00B and is now expired. It does not authorize live
+provider calls, production, customer use, adoption, redistribution, Native
+Image work, or a future Python-library experiment.
 
-## 5. Open decisions requiring human approval
+## 5. Final decisions
 
-1. **Sarvam/legal — evaluation:** obtain written rights to download and execute
-   the SDK for an internal, private, non-distributable spike.
-2. **Sarvam/legal — redistribution:** obtain authoritative redistribution
-   rights and clarify the generated-artifact/source-repository policy. This is
-   independent of evaluation and remains an adoption blocker.
-3. **Phase 0A sponsor:** after SGP-03–05, record continue/stop before funding
-   live-provider and six-cell platform work.
-4. **Security:** retain the pinned native wheel as process-trusted code (the
-   current named owner is Srinivasan Ragothaman) or require an approved OS
-   sandbox/container. Python permission tests cannot establish native
-   containment.
-5. **Release engineering:** approve the aligned 25.0.2 GraalPy/GraalVM/JDK 25/
-   Quarkus line, opt-in artifact names, CI capacity, and host images.
-6. **Runtime:** choose GraalVM Community JDK 25 or Temurin/Polyglot Isolates for
-   any later Sarvam JVM variant; existing Amsha defaults must not change.
-7. **Concurrency:** choose serialized synchronous or single-context
-   asynchronous execution only after SGP-05; a context pool is not approved on
-   the current macOS/Linux matrix without new authoritative native-module
-   support.
-8. **Operations/procurement:** approve any future test account, key custody,
-   quota, rate limits, data-processing terms, and live-spike cost ceiling.
-9. **Gate owners:** approve threshold changes individually. No waiver may
-   satisfy evaluation or redistribution rights, permit secret exposure,
-   transaction-bound I/O, virtual-thread Python/native execution, runtime
-   downloads, or a failed required platform cell. This release/adoption rule
-   does not revoke the separately recorded Phase 0A private project-risk
-   authorization for its limited local evidence path.
-10. **Product maintainers:** decide after Phase 0 whether retained evidence
-    merits a separate adoption ADR. Streaming, implicit translation, and a
-    Windows Sarvam variant require their own future evidence decisions.
+1. **Runtime:** do not adopt GraalPy as a generic Python-library wrapper or as
+   the Sarvam provider implementation.
+2. **Sarvam transport:** use the Java/OpenAI-compatible `ChatModel` direction
+   established by SGP-J01; authorize production work separately.
+3. **Experiment authorization:** the private Phase 0A exception is expired and
+   grants no authority for another SDK, library, native wheel, live request, or
+   production change.
+4. **Rights:** no evaluation or redistribution right is treated as granted. The
+   retired Python-SDK path no longer waits on those answers. Any Java-provider
+   use remains subject to applicable API terms and separately approved live
+   validation.
+5. **Future Python-only capabilities:** prefer a narrow CPython sidecar. A new
+   in-process GraalPy proposal must have a non-negotiable single-process
+   requirement and start with its own library-specific evidence and ADR.

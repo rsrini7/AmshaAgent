@@ -1,8 +1,11 @@
 # Sarvam Python SDK Through GraalPy: Phase 0 Human-Action Packet
 
-**Status:** Draft for human review only. No request has been sent, no credential or artifact has been accessed, no ticket has been edited, and neither rights gate is complete.
+> [GraalPy research archive](README.md)
 
-This packet supports [SGP-00A](../.scratch/sarvam-graalpy-phase-0/issues/01-sgp-00a-evaluation-rights.md) and [SGP-00B](../.scratch/sarvam-graalpy-phase-0/issues/02-sgp-00b-redistribution-rights.md). The [feasibility specification](SarvamAI-GraalPy-Feasibility.md) governs; the [Phase 0 research baseline](Sarvam-GraalPy-Phase-0-Research.md) supplies the artifact and platform evidence. Neither document authorizes adoption or implementation.
+**Status:** Archived and superseded by the 2026-08-15 stop decision. No right
+was established; the retired Python-SDK path no longer awaits either response.
+
+This packet supports [SGP-00A](../../.scratch/sarvam-graalpy-phase-0/issues/01-sgp-00a-evaluation-rights.md) and [SGP-00B](../../.scratch/sarvam-graalpy-phase-0/issues/02-sgp-00b-redistribution-rights.md). The [feasibility specification](SarvamAI-GraalPy-Feasibility.md) governs; the [Phase 0 research baseline](Sarvam-GraalPy-Phase-0-Research.md) supplies the artifact and platform evidence. Neither document authorizes adoption or implementation.
 
 ### Local ticket to governing-plan map
 
@@ -26,7 +29,7 @@ For this packet, **provider data** means API keys or tokens, request headers, pr
 | Item | Proposed scope |
 | --- | --- |
 | SDK under evaluation | `sarvamai==0.1.30` from PyPI. Preferred artifact: `sarvamai-0.1.30-py3-none-any.whl`, SHA-256 `ab586559e041b8dbaa03a536d6c23383f6cda86e9ab9509519408cd54ea66f09`. The published sdist is `sarvamai-0.1.30.tar.gz`, SHA-256 `e53b78ea695351102e880f727715a94cca4d2c7730d9663160066b7618e964d4`; it is not required for execution unless the approved evidence plan says so. |
-| Dependency boundary | The SDK wheel is pure Python, but its unconstrained graph selects native `pydantic-core`. The complete graph, artifact hashes, licenses, provenance, SBOM entries, and vulnerability disposition are not yet frozen. Local ticket [SGP-01](../.scratch/sarvam-graalpy-phase-0/issues/03-sgp-01-freeze-dependency-graph.md) (plan mapping SGP-02) must resolve that graph into an approved offline cache after SGP-00A passes; SGP-00B does not perform dependency resolution. |
+| Dependency boundary | The SDK wheel is pure Python, but its unconstrained graph selects native `pydantic-core`. The complete graph, artifact hashes, licenses, provenance, SBOM entries, and vulnerability disposition are not yet frozen. Local ticket [SGP-01](../../.scratch/sarvam-graalpy-phase-0/issues/03-sgp-01-freeze-dependency-graph.md) (plan mapping SGP-02) must resolve that graph into an approved offline cache after SGP-00A passes; SGP-00B does not perform dependency resolution. |
 | Embedding candidate | GraalPy `org.graalvm.python:python-embedding:25.2.4` with `org.graalvm.python:graalpy-maven-plugin:25.2.4` and build-time `process-graalpy-resources`/VFS packaging. The current `pydantic-core` GraalPy wheels carry `graalpy312-graalpy250_312_native` tags, not `graalpy252`; ABI/toolchain alignment remains an explicit later gate. |
 | Application/runtime envelope | Quarkus `3.27.2`, JDK 25, JVM and Native Image as separate evidence gates. The existing GraalVM Community `25.0.2` Native Image pin and the GraalPy `25.2.4` candidate must be reconciled before compatibility work. |
 | Capability | Text-only, non-streaming chat first through the existing `ChatModel` boundary, including multi-turn history, system/user/assistant messages, tool calls, structured output, usage, bounded errors/timeouts, and model override. Text translation is a separate direct SDK compatibility probe second; it does not inherit chat or insert implicit prompts, tool arguments, or answers. No audio, streaming, or broader provider/product scope is requested. |

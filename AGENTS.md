@@ -231,4 +231,5 @@ The default five-role triage vocabulary is used. See
 ### Domain docs
 
 This is a single-context repository using root `CONTEXT.md` when present and
-`Ideas-Pending/ADR-*.md` for ADRs. See `docs/agents/domain.md`.
+root or topic-local `Ideas-Pending/**/ADR-*.md` files for ADRs. See
+`docs/agents/domain.md`.
