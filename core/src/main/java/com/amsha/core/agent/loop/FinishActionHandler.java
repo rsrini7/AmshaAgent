@@ -10,6 +10,7 @@ import java.util.Locale;
 import java.util.Map;
 
 import com.amsha.core.agent.AgentSentinels;
+import com.amsha.core.agent.IntentClassificationService;
 import com.amsha.core.agent.reasoning.ReasoningStep;
 import com.amsha.core.agent.reasoning.ReasoningStepSupport;
 import com.amsha.core.agent.result.AgentResult;
@@ -61,6 +62,7 @@ public class FinishActionHandler {
     private final FinishOutcomeProcessor resultProcessor;
     private final ToolRegistry toolRegistry;
     private final RoleRegistry roleRegistry;
+    private final IntentClassificationService intentClassifier;
 
     @Inject
     AnswerQualityShadowEvaluationService answerQualityShadowEvaluation;
@@ -78,11 +80,13 @@ public class FinishActionHandler {
             ObjectMapper objectMapper,
             TextPatternUtils textPatternUtils,
             ToolRegistry toolRegistry,
-            RoleRegistry roleRegistry) {
+            RoleRegistry roleRegistry,
+            IntentClassificationService intentClassifier) {
         this.qualityGuard = qualityGuard;
         this.observers = observers;
         this.toolRegistry = toolRegistry;
         this.roleRegistry = roleRegistry;
+        this.intentClassifier = intentClassifier;
         this.resultProcessor = new FinishOutcomeProcessor(
                 qualityGuard,
                 codePolicy,
@@ -90,7 +94,31 @@ public class FinishActionHandler {
                 correctionStrategy,
                 textPatternUtils,
                 toolRegistry,
-                new HallucinationDetector(objectMapper));
+                new HallucinationDetector(objectMapper),
+                intentClassifier);
+    }
+
+    public FinishActionHandler(
+            AnswerGuardStrategy qualityGuard,
+            CodeGenerationPolicy codePolicy,
+            RateLimitTracker rateLimitTracker,
+            Instance<AgentObserver> observers,
+            CorrectionStrategy correctionStrategy,
+            ObjectMapper objectMapper,
+            TextPatternUtils textPatternUtils,
+            ToolRegistry toolRegistry,
+            RoleRegistry roleRegistry) {
+        this(
+                qualityGuard,
+                codePolicy,
+                rateLimitTracker,
+                observers,
+                correctionStrategy,
+                objectMapper,
+                textPatternUtils,
+                toolRegistry,
+                roleRegistry,
+                new IntentClassificationService());
     }
 
     /**
@@ -179,6 +207,16 @@ public class FinishActionHandler {
 
         if (step.actionInput() != null
                 && Boolean.TRUE.equals(step.actionInput().get(ReasoningStep.ACTION_INPUT_INTERCEPTED_EXECUTION_KEY))) {
+            if (context.goal() != null
+                    && intentClassifier != null
+                    && intentClassifier.isSimpleConversational(context.goal())) {
+                log.warnf(
+                        "FINISH-HANDLER: intercepted unrequested execution in simple chitchat for session %s - applying chitchat protections",
+                        sessionId);
+                boolean isGreeting = intentClassifier.isGreeting(context.goal());
+                String fallback = AgentSentinels.resolveConversationalFallback(isGreeting);
+                return new FinishOutcome.Completed(AgentResult.finished(fallback, List.copyOf(history)), fallback);
+            }
             AgentResult result = AgentResult.finished(candidateAnswer, List.copyOf(history));
             return new FinishOutcome.Completed(result, candidateAnswer);
         }
@@ -202,6 +240,21 @@ public class FinishActionHandler {
                     "FINISH-HANDLER: Answer is raw JSON (not tool-call leak) for session %s - retrying with natural-language hint",
                     sessionId);
             ReasoningStep cleanStep = step.withObservation("Your response was raw JSON instead of natural language.");
+            if (intentClassifier != null && intentClassifier.isSimpleConversational(context.goal())) {
+                if (context.isForceFinishRetry()) {
+                    boolean isGreeting = intentClassifier.isGreeting(context.goal());
+                    String fallback = AgentSentinels.resolveConversationalFallback(isGreeting);
+                    log.warnf(
+                            "FINISH-HANDLER: forcing safe fallback after JSON leak in simple chitchat for session %s",
+                            sessionId);
+                    return new FinishOutcome.Completed(AgentResult.finished(fallback, List.copyOf(history)), fallback);
+                }
+                String hint = "System: STOP. Your response was a raw JSON object/array, NOT a natural language answer. "
+                        + "This is a simple conversational message. Answer in plain prose only. "
+                        + "Do NOT output JSON structures or code.";
+                context.setForceFinishRetry(true);
+                return new FinishOutcome.Correction(cleanStep, hint);
+            }
             String hint = "System: STOP. Your response was a raw JSON object/array, NOT a natural language answer. "
                     + "You MUST respond in plain text prose. Do NOT output JSON structures, code blocks, or data formats. "
                     + "Answer the user's question directly in natural language.";
@@ -219,6 +272,16 @@ public class FinishActionHandler {
         FinishOutcome codePolicyOutcome =
                 resultProcessor.applyCodePolicy(sessionId, agentRole, context.goal(), history, answer, step);
         if (codePolicyOutcome != null) {
+            if (intentClassifier != null
+                    && intentClassifier.isSimpleConversational(context.goal())
+                    && context.isForceFinishRetry()) {
+                boolean isGreeting = intentClassifier.isGreeting(context.goal());
+                String fallback = AgentSentinels.resolveConversationalFallback(isGreeting);
+                log.warnf(
+                        "FINISH-HANDLER: forcing safe fallback after code block in simple chitchat for session %s",
+                        sessionId);
+                return new FinishOutcome.Completed(AgentResult.finished(fallback, List.copyOf(history)), fallback);
+            }
             // Correction: LLM will retry with delegation instead of completing with refusal
             if (codePolicyOutcome instanceof FinishOutcome.Correction) {
                 context.setForceFinishRetry(true);
@@ -318,6 +381,9 @@ public class FinishActionHandler {
             String sessionId) {
         String goal = context.goal();
         if (goal == null || goal.isBlank()) return null;
+        if (intentClassifier != null && intentClassifier.isSimpleConversational(goal)) {
+            return null;
+        }
 
         String availableTools = String.join(",", toolRegistry.listTools());
         boolean isRefusal = AgentSentinels.REFUSAL_PATTERN.matcher(answer).find();

@@ -203,7 +203,7 @@ public class SystemPromptBuilder {
                 (structuredOutputModeInstance != null && !structuredOutputModeInstance.isUnsatisfied())
                         ? structuredOutputModeInstance.get()
                         : StructuredOutputMode.NATIVE;
-        if (mode == StructuredOutputMode.PROMPT_DIRECTIVE) {
+        if (mode == StructuredOutputMode.PROMPT_DIRECTIVE && !isSimpleChitchat) {
             sb.append("CRITICAL: You MUST respond ONLY in the required JSON schema. Never respond in prose.\n\n");
         }
 
@@ -227,7 +227,7 @@ public class SystemPromptBuilder {
         // instructions. Keep the active role marker and shared security rules, but
         // avoid prose that cannot affect a direct, tool-free answer.
         if (isCompact && isSimpleChitchat) {
-            baseSystemPrompt = buildCompactChitchatBase(mode, agentRole);
+            baseSystemPrompt = buildCompactChitchatBase(agentRole);
         }
 
         String strictBinding = buildStrictBinding(context, roleEnum, agentRole, isCompact, goal, isSimpleChitchat);
@@ -314,11 +314,8 @@ public class SystemPromptBuilder {
         return finalPrompt;
     }
 
-    private String buildCompactChitchatBase(StructuredOutputMode mode, String agentRole) {
+    private String buildCompactChitchatBase(String agentRole) {
         StringBuilder sb = new StringBuilder();
-        if (mode == StructuredOutputMode.PROMPT_DIRECTIVE) {
-            sb.append("CRITICAL: You MUST respond ONLY in required JSON schema. Never respond in prose.\n\n");
-        }
         sb.append("You Amsha Agent. CURRENT SYSTEM TIME (UTC): ")
                 .append(formatTime(Instant.now()))
                 .append("\n")

@@ -22,7 +22,9 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 import com.amsha.core.agent.AgentSentinels;
+import com.amsha.core.agent.IntentClassificationService;
 import com.amsha.core.agent.loop.AgentExecutionContext;
+import com.amsha.core.agent.loop.CodeGenerationPolicy;
 import com.amsha.core.agent.loop.LoopStuckDetector;
 import com.amsha.core.agent.role.AgentRoleEnum;
 import com.amsha.core.agent.role.ToolCapability;
@@ -34,6 +36,7 @@ import com.amsha.core.tools.AgentTool;
 import com.amsha.core.tools.DynamicToolSchemaParser;
 import com.amsha.core.tools.ToolRegistry;
 import com.amsha.core.tools.search.ToolSearchIndex;
+import com.amsha.core.util.TextPatternUtils;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.jboss.logging.Logger;
@@ -51,6 +54,7 @@ public class ReasoningMessageAssembler {
     private final ChatHistoryAssembler historyAssembler;
     private final ToolRegistry toolRegistry;
     private final LoopStuckDetector loopStuckDetector;
+    private final IntentClassificationService intentClassifier;
 
     @Inject
     ToolSearchIndex toolSearchIndex;
@@ -68,15 +72,30 @@ public class ReasoningMessageAssembler {
     ObjectMapper objectMapper;
 
     @Inject
+    TextPatternUtils textPatternUtils;
+
+    @Inject
+    CodeGenerationPolicy codePolicy;
+
+    @Inject
     public ReasoningMessageAssembler(
-            ChatHistoryAssembler historyAssembler, ToolRegistry toolRegistry, LoopStuckDetector loopStuckDetector) {
+            ChatHistoryAssembler historyAssembler,
+            ToolRegistry toolRegistry,
+            LoopStuckDetector loopStuckDetector,
+            IntentClassificationService intentClassifier) {
         this.historyAssembler = historyAssembler;
         this.toolRegistry = toolRegistry;
         this.loopStuckDetector = loopStuckDetector;
+        this.intentClassifier = intentClassifier;
+    }
+
+    public ReasoningMessageAssembler(
+            ChatHistoryAssembler historyAssembler, ToolRegistry toolRegistry, LoopStuckDetector loopStuckDetector) {
+        this(historyAssembler, toolRegistry, loopStuckDetector, new IntentClassificationService());
     }
 
     protected ReasoningMessageAssembler() {
-        this(null, null, null);
+        this(null, null, null, null);
     }
 
     public record AssembledMessages(List<ChatMessage> messages, List<ToolSpecification> tools) {}
@@ -157,12 +176,40 @@ public class ReasoningMessageAssembler {
     }
 
     private List<ChatMessage> recentConversationContext(List<ChatMessage> history, String goal) {
+        if (intentClassifier != null && intentClassifier.isGreeting(goal)) {
+            return List.of();
+        }
         List<ChatMessage> conversation = history.stream()
                 .filter(m -> m instanceof UserMessage || m instanceof AiMessage)
                 .filter(m -> !(m instanceof UserMessage user && Objects.equals(user.singleText(), goal)))
+                .filter(m -> !containsCodeOrExecution(m))
                 .toList();
         int fromIndex = Math.max(0, conversation.size() - CHITCHAT_CONTEXT_MESSAGES);
         return conversation.subList(fromIndex, conversation.size());
+    }
+
+    private boolean containsCodeOrExecution(ChatMessage m) {
+        if (m instanceof ToolExecutionResultMessage) return true;
+        if (m instanceof AiMessage ai) {
+            if (ai.hasToolExecutionRequests()) return true;
+            String text = ai.text();
+            if (text == null || text.isBlank()) return false;
+            return text.contains("```")
+                    || text.contains("[Executed tool:")
+                    || text.contains("[Tool Output")
+                    || (textPatternUtils != null && textPatternUtils.looksLikeJson(text))
+                    || (codePolicy != null && codePolicy.isGeneratedCodeBlock(text, AgentRoleEnum.CODER.id()));
+        }
+        if (m instanceof UserMessage user) {
+            String text = user.singleText();
+            if (text == null || text.isBlank()) return false;
+            return text.contains("```")
+                    || text.contains("[Tool Output")
+                    || text.contains("[Executed tool:")
+                    || (textPatternUtils != null
+                            && (textPatternUtils.goalRequestsExecution(text) || textPatternUtils.looksLikeJson(text)));
+        }
+        return false;
     }
 
     private String resolveSystemPrompt(

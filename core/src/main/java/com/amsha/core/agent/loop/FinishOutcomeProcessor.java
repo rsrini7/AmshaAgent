@@ -7,6 +7,7 @@ import java.util.Map;
 import java.util.regex.Pattern;
 
 import com.amsha.core.agent.AgentSentinels;
+import com.amsha.core.agent.IntentClassificationService;
 import com.amsha.core.agent.reasoning.ReasoningStep;
 import com.amsha.core.agent.result.AgentResult;
 import com.amsha.core.agent.role.AgentRoleEnum;
@@ -23,15 +24,12 @@ import org.jboss.logging.Logger;
 public class FinishOutcomeProcessor {
 
     private static final Logger log = Logger.getLogger(FinishOutcomeProcessor.class);
-
     static final int SALVAGE_MIN_LENGTH = 5;
-
     static final String SALVAGE_REJECT_PHRASE = "completed the task";
 
     private static final Pattern INTERNAL_JVM_ERROR_PATTERN = Pattern.compile(
-            "(?:java\\.lang\\.)?" + "(?:NullPointerException|IllegalArgumentException|"
-                    + "IllegalStateException|StackOverflowError|OutOfMemoryError)"
-                    + "(?::\\s.+)",
+            "(?:java\\.lang\\.)?(?:NullPointerException|IllegalArgumentException|"
+                    + "IllegalStateException|StackOverflowError|OutOfMemoryError)(?::\\s.+)",
             Pattern.MULTILINE);
 
     private static final Pattern TOOL_CALL_JSON_LEAK =
@@ -60,6 +58,26 @@ public class FinishOutcomeProcessor {
     private final TextPatternUtils textPatternUtils;
     private final ToolRegistry toolRegistry;
     private final HallucinationDetector hallucinationDetector;
+    private final IntentClassificationService intentClassifier;
+
+    public FinishOutcomeProcessor(
+            AnswerGuardStrategy qualityGuard,
+            CodeGenerationPolicy codePolicy,
+            RateLimitTracker rateLimitTracker,
+            CorrectionStrategy correctionStrategy,
+            TextPatternUtils textPatternUtils,
+            ToolRegistry toolRegistry,
+            HallucinationDetector hallucinationDetector,
+            IntentClassificationService intentClassifier) {
+        this.qualityGuard = qualityGuard;
+        this.codePolicy = codePolicy;
+        this.rateLimitTracker = rateLimitTracker;
+        this.correctionStrategy = correctionStrategy;
+        this.textPatternUtils = textPatternUtils;
+        this.toolRegistry = toolRegistry;
+        this.hallucinationDetector = hallucinationDetector;
+        this.intentClassifier = intentClassifier;
+    }
 
     public FinishOutcomeProcessor(
             AnswerGuardStrategy qualityGuard,
@@ -69,20 +87,22 @@ public class FinishOutcomeProcessor {
             TextPatternUtils textPatternUtils,
             ToolRegistry toolRegistry,
             HallucinationDetector hallucinationDetector) {
-        this.qualityGuard = qualityGuard;
-        this.codePolicy = codePolicy;
-        this.rateLimitTracker = rateLimitTracker;
-        this.correctionStrategy = correctionStrategy;
-        this.textPatternUtils = textPatternUtils;
-        this.toolRegistry = toolRegistry;
-        this.hallucinationDetector = hallucinationDetector;
+        this(
+                qualityGuard,
+                codePolicy,
+                rateLimitTracker,
+                correctionStrategy,
+                textPatternUtils,
+                toolRegistry,
+                hallucinationDetector,
+                new IntentClassificationService());
     }
 
     private String findSearchTool(String availableTools) {
-        for (String name : SEARCH_TOOL_NAMES) {
-            if (availableTools.contains(name)) return name;
-        }
-        return null;
+        return SEARCH_TOOL_NAMES.stream()
+                .filter(availableTools::contains)
+                .findFirst()
+                .orElse(null);
     }
 
     public String extractCandidateAnswer(ReasoningStep step) {
@@ -90,7 +110,6 @@ public class FinishOutcomeProcessor {
         if (step.actionInput() != null && step.actionInput().containsKey(ReasoningStep.ACTION_INPUT_ANSWER_KEY)) {
             candidateAnswer = String.valueOf(step.actionInput().get(ReasoningStep.ACTION_INPUT_ANSWER_KEY));
         }
-
         if (candidateAnswer != null) {
             candidateAnswer = candidateAnswer.strip();
             candidateAnswer = PREFIX_TOKEN_LEAK.matcher(candidateAnswer).replaceFirst("");
@@ -126,33 +145,39 @@ public class FinishOutcomeProcessor {
                 && codePolicy.isGeneratedCodeBlock(answer, agentRole)
                 && !codePolicy.canGenerateCode(agentRole)) {
             log.infof("FINISH-HANDLER code-gen blocked for role '%s' in session %s", agentRole, sessionId);
-
             ReasoningStep cleanStep = step.withObservation("Code generation blocked for " + agentRole);
 
-            // Detect deep delegation context — if we're already inside a delegation chain,
-            // telling the LLM to "use garuda" would create a delegate→blocked→FINISH→blocked loop.
             boolean inDeepDelegation = sessionId != null
                     && sessionId.split(Pattern.quote(AgentSentinels.DELEGATE_SESSION_SENTINEL)).length - 1 >= 2;
-
-            String hint;
             if (inDeepDelegation) {
-                hint = "System: You attempted to output code in your FINISH answer, but your role (" + agentRole
-                        + ") cannot generate code and you are already at maximum delegation depth. "
-                        + "You CANNOT delegate to a coder. FINISH now with a plain text summary of "
-                        + "what was accomplished, what the issue is, and what remains to be done. "
-                        + "Do NOT output code blocks. Do NOT use garuda.";
+                log.infof(
+                        "FINISH-HANDLER code-gen blocked in deep delegation chain (depth >= 2) for session %s — forcing final answer without re-delegation",
+                        sessionId);
+                String hint = "System: You have reached maximum delegation depth. "
+                        + "You CANNOT delegate further. Provide your final response in plain text without code blocks, "
+                        + "or summarize what was accomplished so far. Do NOT call the delegate tool.";
                 return new FinishActionHandler.FinishOutcome.Correction(cleanStep, hint);
-            } else {
-                Map<String, Object> args = new HashMap<>();
-                args.put(
-                        "agent",
-                        AgentRoleEnum.CODER.definition().aliases().stream()
-                                .findFirst()
-                                .orElse(AgentRoleEnum.CODER.id()));
-                args.put("goal", buildCoderDelegationGoal(goal, answer));
-                return new FinishActionHandler.FinishOutcome.InjectToolCall(
-                        ToolCapability.DELEGATE_TO_AGENT.toolName(), args, cleanStep);
             }
+
+            if (intentClassifier != null && intentClassifier.isSimpleConversational(goal)) {
+                log.infof(
+                        "FINISH-HANDLER simple chitchat in session %s for role '%s' attempted code generation; forcing plain-text correction without delegation",
+                        sessionId, agentRole);
+                String hint = "System: STOP. This request is a simple conversational greeting or message. "
+                        + "You MUST respond ONLY with a short, friendly plain-text response (1-2 sentences). "
+                        + "Do NOT output code blocks, JSON structures, or tool calls. Do NOT delegate.";
+                return new FinishActionHandler.FinishOutcome.Correction(cleanStep, hint);
+            }
+
+            Map<String, Object> args = new HashMap<>();
+            args.put(
+                    "agent",
+                    AgentRoleEnum.CODER.definition().aliases().stream()
+                            .findFirst()
+                            .orElse(AgentRoleEnum.CODER.id()));
+            args.put("goal", buildCoderDelegationGoal(goal, answer));
+            return new FinishActionHandler.FinishOutcome.InjectToolCall(
+                    ToolCapability.DELEGATE_TO_AGENT.toolName(), args, cleanStep);
         }
         return null;
     }
@@ -167,11 +192,9 @@ public class FinishOutcomeProcessor {
 
     public String sanitizeErrorForUser(String answer, String sessionId) {
         if (answer == null) return null;
-
         if (sessionId != null && sessionId.contains(AgentSentinels.DELEGATE_SESSION_SENTINEL)) {
             return answer;
         }
-
         if (INTERNAL_JVM_ERROR_PATTERN.matcher(answer).find()) {
             log.errorf("INTERNAL-LEAK BLOCKED in session %s: detected JVM exception in answer", sessionId);
             return "I encountered an internal error while formatting the response. Please try again.";
@@ -188,28 +211,26 @@ public class FinishOutcomeProcessor {
             String goal) {
 
         boolean isLeak = qualityGuard.isRawToolCallLeak(candidateAnswer);
-
         if (isLeak && rateLimitTracker.isBackingOff("primary")) {
             log.warnf("FINISH-HANDLER rate-limited - stripping leak instead of retrying for session %s", sessionId);
             String stripped = qualityGuard.stripRawToolJson(candidateAnswer);
-
             AnswerGuardStrategy.AnswerGuardResult guardResult = qualityGuard.guard(stripped, history);
             String finalAnswer = guardResult.answer();
-
             AgentResult result = AgentResult.finished(finalAnswer, List.copyOf(history));
             return new FinishActionHandler.FinishOutcome.Completed(result, finalAnswer);
         }
 
-        String cleanThought = qualityGuard.stripRawToolJson(candidateAnswer);
+        String rawThought = step.thought();
+        String strippedThought =
+                (rawThought != null && qualityGuard != null) ? qualityGuard.stripRawToolJson(rawThought) : rawThought;
+        String cleanThought = strippedThought != null ? strippedThought : "";
         boolean isBrokenFragment = FENCE_ONLY_PATTERN.matcher(cleanThought).matches();
-
         if (isBrokenFragment) {
             log.warnf(
                     "FINISH-HANDLER: Detected broken JSON fragment in answer for session %s - treating as leak.",
                     sessionId);
         }
 
-        // Try to parse the leaked tool call FIRST — before early salvage strips it
         var leakedCall = qualityGuard.extractLeakedToolCall(candidateAnswer);
         if (leakedCall.isPresent()) {
             var call = leakedCall.get();
@@ -222,10 +243,27 @@ public class FinishOutcomeProcessor {
                     call.toolName(), call.arguments(), cleanStep);
         }
 
-        // JSON detected but no tool-call keys (e.g. {"response":"..."}) — treat as valid answer, not a leak.
-        // UNLESS it's thinking-style JSON ({"thoughts":...,"plan":...,"criticism":...}) — the LLM's
-        // internal reasoning leaked into the answer. Retry with a direct-answer hint.
-        if (isLeak && !containsToolCallKeys(candidateAnswer)) {
+        if ((isLeak || looksLikeJson(candidateAnswer)) && !containsToolCallKeys(candidateAnswer)) {
+            boolean isSimpleChitchat = intentClassifier != null && intentClassifier.isSimpleConversational(goal);
+            if (isSimpleChitchat) {
+                boolean isGreeting = intentClassifier != null && intentClassifier.isGreeting(goal);
+                String fallback = AgentSentinels.resolveConversationalFallback(isGreeting);
+                if (llmSchemaErrorCount == 0 && correctionStrategy.withinBudget(llmSchemaErrorCount)) {
+                    log.warnf(
+                            "FINISH-HANDLER session %s: JSON without tool-call keys in simple chitchat - retrying once",
+                            sessionId);
+                    ReasoningStep cleanStep =
+                            step.withObservation("Your response was raw JSON instead of plain prose.");
+                    String hint = "System: STOP. Your response was a JSON structure, NOT a natural language answer. "
+                            + "This request is a simple conversational message. Answer ONLY in plain prose (1-2 sentences). "
+                            + "Do NOT output JSON, code blocks, or tool calls.";
+                    return new FinishActionHandler.FinishOutcome.Correction(cleanStep, hint);
+                }
+                log.warnf("FINISH-HANDLER session %s: forcing safe fallback after JSON in simple chitchat", sessionId);
+                return new FinishActionHandler.FinishOutcome.Completed(
+                        AgentResult.finished(fallback, List.copyOf(history)), fallback);
+            }
+
             if (isThinkingJson(candidateAnswer)) {
                 log.warnf("FINISH-HANDLER session %s: thinking-style JSON leaked into answer - retrying", sessionId);
                 if (correctionStrategy.withinBudget(llmSchemaErrorCount)) {
@@ -236,14 +274,29 @@ public class FinishOutcomeProcessor {
                             + "in plain text using FINISH. Do NOT output JSON, tool calls, or structured data.";
                     return new FinishActionHandler.FinishOutcome.Correction(cleanStep, hint);
                 }
-                // Budget exceeded — salvage what we can
                 String stripped = qualityGuard.stripRawToolJson(candidateAnswer);
                 if (!stripped.isBlank() && stripped.length() > SALVAGE_MIN_LENGTH) {
                     return new FinishActionHandler.FinishOutcome.Completed(
                             AgentResult.finished(stripped, List.copyOf(history)), stripped);
                 }
             }
-            log.infof("FINISH-HANDLER session %s: JSON without tool-call keys - treating as valid answer", sessionId);
+
+            if (looksLikeJson(candidateAnswer)) {
+                log.warnf(
+                        "FINISH-HANDLER session %s: raw JSON in answer without tool keys - retrying with prose hint",
+                        sessionId);
+                if (correctionStrategy.withinBudget(llmSchemaErrorCount)) {
+                    ReasoningStep cleanStep =
+                            step.withObservation("Your response was raw JSON instead of natural language prose.");
+                    String hint =
+                            "System: STOP. Your response was a raw JSON structure, NOT a natural language answer. "
+                                    + "You MUST respond in plain text prose. Do NOT output JSON structures, code blocks, or data formats. "
+                                    + "Answer the user's question directly in natural language.";
+                    return new FinishActionHandler.FinishOutcome.Correction(cleanStep, hint);
+                }
+            }
+
+            log.infof("FINISH-HANDLER session %s: JSON without tool-call keys - guarding answer", sessionId);
             var guarded = qualityGuard.guard(candidateAnswer, history).answer();
             return new FinishActionHandler.FinishOutcome.Completed(
                     AgentResult.finished(guarded, List.copyOf(history)), guarded);
@@ -253,57 +306,26 @@ public class FinishOutcomeProcessor {
                 && !cleanThought.isBlank()
                 && !isBrokenFragment
                 && cleanThought.length() > SALVAGE_MIN_LENGTH
-                && !cleanThought.contains(SALVAGE_REJECT_PHRASE)) {
-
-            if (looksLikeJson(cleanThought)) {
-                if (correctionStrategy.withinBudget(llmSchemaErrorCount)) {
-                    log.warnf(
-                            "FINISH-HANDLER salvaged thought is still JSON for session %s - retrying with direct-answer hint",
-                            sessionId);
-                    ReasoningStep cleanStep = step.withObservation("");
-                    String leakedTool = qualityGuard.extractLeakedToolName(candidateAnswer);
-                    String directHint = "System: Your response was raw JSON, NOT a valid answer. "
-                            + "You are NOT allowed to write tool calls as text. "
-                            + "The information the user asked for IS in the conversation history above. "
-                            + "Read the history carefully and answer DIRECTLY in plain text using FINISH. "
-                            + "Do NOT call any tools. Do NOT output JSON.";
-                    return new FinishActionHandler.FinishOutcome.RetryLeak(cleanStep, directHint, leakedTool);
-                }
-
-                log.warnf(
-                        "FINISH-HANDLER salvaged thought is still JSON - not usable, failing turn for session %s",
-                        sessionId);
-                AgentResult failed = AgentResult.failed(
-                        "I encountered a formatting error (JSON echo) and could not complete your request.",
-                        AgentResult.FailureCategory.SCHEMA_ERROR,
-                        List.copyOf(history));
-                return new FinishActionHandler.FinishOutcome.SalvageFailed(failed);
-            }
-
+                && !cleanThought.contains(SALVAGE_REJECT_PHRASE)
+                && !looksLikeJson(cleanThought)
+                && !qualityGuard.isRawToolCallLeak(cleanThought)) {
             log.warnf(
                     "FINISH-HANDLER early salvage after %d leaks for session %s - clean thought is usable",
                     llmSchemaErrorCount, sessionId);
-
             AnswerGuardStrategy.AnswerGuardResult guardResult = qualityGuard.guard(cleanThought, history);
             String finalAnswer = guardResult.answer();
-
             FinishActionHandler.FinishOutcome injected = tryInjectOnRefusal(finalAnswer, goal, sessionId, step);
             if (injected != null) return injected;
-
             return new FinishActionHandler.FinishOutcome.Completed(
                     AgentResult.finished(finalAnswer, List.copyOf(history)), finalAnswer);
         }
 
-        // Record quality failure for the slot that produced this leak
         InfiniteLoopChatModel.getLastUsedSlot().ifPresent(InfiniteLoopChatModel::recordQualityFailure);
-
         if (correctionStrategy.withinBudget(llmSchemaErrorCount)) {
             log.warnf(
                     "STATE-MACHINE session %s FINISH answer contains raw tool call JSON - retrying (attempt %d)",
                     sessionId, llmSchemaErrorCount + 1);
-
             ReasoningStep cleanStep = step.withObservation(cleanThought);
-
             String leakedTool = qualityGuard.extractLeakedToolName(candidateAnswer);
             String severity = llmSchemaErrorCount >= 2 ? "CRITICAL" : "WARNING";
             String correctionHint = "System: " + severity + ". Your last response contained raw JSON/tool-call "
@@ -315,13 +337,11 @@ public class FinishOutcomeProcessor {
                     + "(3) If the information you need is already in the conversation history above, "
                     + "read it carefully and answer DIRECTLY in plain text using FINISH. "
                     + "Do NOT call any tools. Do NOT output JSON. Just answer the user's question.";
-
             return new FinishActionHandler.FinishOutcome.RetryLeak(cleanStep, correctionHint, leakedTool);
         }
         return salvage(candidateAnswer, history, sessionId);
     }
 
-    /** Returns true if the answer contains JSON keys characteristic of tool calls vs benign JSON. */
     private boolean containsToolCallKeys(String answer) {
         if (answer == null) return false;
         return answer.contains("\"name\"")
@@ -337,12 +357,10 @@ public class FinishOutcomeProcessor {
     private FinishActionHandler.FinishOutcome salvage(
             String candidateAnswer, List<ReasoningStep> history, String sessionId) {
         String salvaged = qualityGuard.stripRawToolJson(candidateAnswer);
-
         if (!salvaged.isBlank()
                 && !FENCE_ONLY_PATTERN.matcher(salvaged).matches()
                 && salvaged.length() > SALVAGE_MIN_LENGTH
                 && !salvaged.contains(SALVAGE_REJECT_PHRASE)) {
-
             if (looksLikeJson(salvaged)) {
                 log.errorf(
                         "STATE-MACHINE session %s exceeded schema limit. Salvaged thought is still JSON - failing turn.",
@@ -353,7 +371,6 @@ public class FinishOutcomeProcessor {
                         List.copyOf(history));
                 return new FinishActionHandler.FinishOutcome.SalvageFailed(failed);
             }
-
             log.errorf(
                     "STATE-MACHINE session %s exceeded schema self-correction limit after raw tool call leak. "
                             + "Salvaging partially clean answer.",
@@ -376,15 +393,10 @@ public class FinishOutcomeProcessor {
         return textPatternUtils.looksLikeJson(text);
     }
 
-    /**
-     * Detects thinking-style JSON structures that small models emit instead of answers.
-     * E.g., {"thoughts": {"text": "...", "reasoning": "...", "plan": "...", "criticism": "..."}}
-     */
     private boolean isThinkingJson(String text) {
         if (text == null) return false;
         String lower = text.strip().toLowerCase(Locale.ROOT);
         if (!lower.startsWith("{")) return false;
-        // Check for common thinking-structure keys
         int thinkingKeys = 0;
         for (String key : List.of("thoughts", "reasoning", "plan", "criticism", "speak", "thought")) {
             if (lower.contains("\"" + key + "\"")) thinkingKeys++;
@@ -411,23 +423,16 @@ public class FinishOutcomeProcessor {
         return collapsed;
     }
 
-    /**
-     * If the agent finished without using the right tool, inject it.
-     * Handles two cases:
-     * 1. Refusal + research goal → inject search tool
-     * 2. Execution goal + no code in answer + sandbox available → inject sandbox_exec
-     */
     private FinishActionHandler.FinishOutcome tryInjectOnRefusal(
             String answer, String goal, String sessionId, ReasoningStep step) {
-        if (goal == null) {
-            log.debugf("TOOL-INJECT skip: goal is null for session %s", sessionId);
+        if (goal == null || (intentClassifier != null && intentClassifier.isSimpleConversational(goal))) {
+            log.debugf("TOOL-INJECT skip: goal is null or simple chitchat for session %s", sessionId);
             return null;
         }
 
         String availableTools = String.join(",", toolRegistry.listTools());
         boolean isRefusal = AgentSentinels.REFUSAL_PATTERN.matcher(answer).find();
 
-        // Case 1: Refusal + research goal → inject search
         if (isRefusal && AgentSentinels.RESEARCH_KEYWORDS.matcher(goal).find()) {
             String searchTool = findSearchTool(availableTools);
             if (searchTool != null) {
@@ -444,7 +449,6 @@ public class FinishOutcomeProcessor {
             }
         }
 
-        // Case 2: Execution goal + no code in answer + sandbox available → retry with correction
         if (AgentSentinels.EXECUTION_KEYWORDS.matcher(goal).find()
                 && availableTools.contains(ToolCapability.SANDBOX_EXEC.toolName())
                 && !answer.contains("```")) {

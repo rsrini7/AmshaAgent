@@ -26,7 +26,7 @@ public class IntentClassificationService {
                     + "(?:[.!?]+\\s*)?(?:\\s+.*)?$");
 
     private static final Pattern TOOL_VERB_PATTERN = Pattern.compile(
-            "\\b(search|find|fetch|list|get|github|gh|repo|read|browse|open|go to|url|site|web|run|exec|execute|code|script|program|schedule|at|every|after|in|save|store|ingest|remember|note|weather|news|price|latest|stock|status|info|history|check|bullet|recap|summarize|summary)\\b",
+            "\\b(search|find|fetch|list|get|github|gh|repo|read|browse|open|go to|url|site|web|run|exec|execute|code|script|program|schedule|at|every|after|in|save|store|ingest|remember|note|weather|news|price|latest|stock|status|info|history|check|bullet|recap|summarize|summary|sandbox|compile|write|create|generate|build|implement|develop|solve|compute|calculate|debug|fix|test|translate|convert|transform|parse|analyze|diagram|draw|plot|java|python|rust|golang|sql|bash|html|css|json|yaml|xml)\\b",
             Pattern.CASE_INSENSITIVE);
 
     private static final Pattern HISTORY_QUERY_PATTERN = Pattern.compile(
@@ -95,12 +95,27 @@ public class IntentClassificationService {
         return SELF_EVOLVE_INTENT_PATTERN.matcher(text).find();
     }
 
+    private static final Pattern GREETING_PATTERN = Pattern.compile(
+            "(?i)^\\s*(?:hi|hello|hey|howdy|hola|namaste|greetings|good\\s+(?:morning|afternoon|evening|day))(?::?[.!?]*|(?:\\s+(?:there|all|everyone|team|friend|amsha|assistant|bot|folks))?[.!?]*)?\\s*$");
+
     /**
-     * Returns true for short messages that lack any verbs suggesting tool usage.
+     * Returns true if the text is a pure greeting (e.g. "Hi", "Hello", "Hey", "Good morning").
+     */
+    public boolean isGreeting(String text) {
+        if (text == null || text.isBlank()) return false;
+        String trimmed = text.trim();
+        return GREETING_PATTERN.matcher(trimmed).matches()
+                && !TOOL_VERB_PATTERN.matcher(trimmed).find();
+    }
+
+    /**
+     * Returns true if the text is a simple conversational message (e.g. greeting or polite remark)
+     * that does NOT require external tools, code generation, or task delegation.
      * Used to strip tool definitions from system prompt to save tokens (Fix B).
      */
     public boolean isSimpleConversational(String text) {
         if (text == null || text.isBlank()) return true;
+        if (isGreeting(text)) return true;
         // §Issue 2: PII-redacted goals should be treated as simple chitchat
         if (text.contains(AgentSentinels.REDACTED_HYPHEN)) return true;
 

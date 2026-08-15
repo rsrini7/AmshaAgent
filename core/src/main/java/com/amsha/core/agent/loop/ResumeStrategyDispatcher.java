@@ -3,6 +3,7 @@ package com.amsha.core.agent.loop;
 import java.util.List;
 import java.util.Map;
 
+import com.amsha.common.util.LogUtil;
 import com.amsha.core.agent.AgentSentinels;
 import com.amsha.core.agent.reasoning.ReasoningEngine;
 import com.amsha.core.agent.reasoning.ReasoningStep;
@@ -94,8 +95,11 @@ class ResumeStrategyDispatcher {
                 if (allDenied) {
                     return performDenialCleanup(context, history, checkpoint);
                 }
-            } catch (Exception _) {
-                log.debugf("Failed to parse batch decisions during denial check for session %s", context.sessionId());
+            } catch (Exception e) {
+                log.warnf(
+                        "Failed to parse batch decisions during denial check for session %s: %s",
+                        context.sessionId(), LogUtil.rootMessage(e));
+                return performDenialCleanup(context, history, checkpoint);
             }
         }
 

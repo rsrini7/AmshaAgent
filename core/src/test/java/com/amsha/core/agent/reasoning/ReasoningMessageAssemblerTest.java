@@ -1,5 +1,6 @@
 package com.amsha.core.agent.reasoning;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
@@ -21,6 +22,7 @@ import java.util.Optional;
 import java.util.Set;
 
 import com.amsha.core.agent.loop.AgentExecutionContext;
+import com.amsha.core.agent.loop.CodeGenerationPolicy;
 import com.amsha.core.agent.loop.LoopStuckDetector;
 import com.amsha.core.agent.role.ToolCapability;
 import com.amsha.core.security.AutonomyLevel;
@@ -29,6 +31,7 @@ import com.amsha.core.skill.SkillRegistry;
 import com.amsha.core.tools.AgentTool;
 import com.amsha.core.tools.ToolRegistry;
 import com.amsha.core.tools.search.ToolSearchIndex;
+import com.amsha.core.util.TextPatternUtils;
 
 import org.junit.jupiter.api.Test;
 
@@ -152,6 +155,64 @@ class ReasoningMessageAssemblerTest {
                 "Tool output must be preserved as plain text user message");
     }
 
+    @Test
+    void assemble_greetingWithPriorCodeHistory_excludesPriorCodeFromModelContext() throws Exception {
+        ChatHistoryAssembler historyAssembler = mock(ChatHistoryAssembler.class);
+        when(historyAssembler.assemble("sess-1", "Hi", Collections.emptyList()))
+                .thenReturn(List.of(
+                        UserMessage.userMessage(
+                                "write java program prime number finder largest below 10K and execute it"),
+                        AiMessage.aiMessage(
+                                "```java\npublic class PrimeFinder { public static void main(String[] args) {} }\n```"),
+                        UserMessage.userMessage("[Tool Output from sandbox_exec]: 9973")));
+        ReasoningMessageAssembler assembler = createAssembler(historyAssembler);
+
+        AgentExecutionContext context = new AgentExecutionContext(
+                "sess-1",
+                "user-1",
+                "chat-1",
+                "coordinator",
+                "Hi",
+                AutonomyLevel.FULL,
+                StructuredOutputMode.NATIVE,
+                10,
+                0,
+                "TELEGRAM",
+                "123",
+                null,
+                Map.of());
+
+        ReasoningMessageAssembler.AssembledMessages result = assembler.assemble(
+                context, "coordinator", "Hi", Collections.emptyList(), "system prompt", Set.of(), false, true, false);
+
+        // Tools must be empty for simple chitchat
+        assertTrue(result.tools().isEmpty(), "Tools must be empty for greeting");
+
+        // Prior prime finder and code execution must NOT be in the greeting context
+        assertFalse(
+                result.messages().stream()
+                        .anyMatch(m ->
+                                m instanceof UserMessage u && u.singleText().contains("prime number finder")),
+                "Prior code generation task must not leak into greeting message context");
+        assertFalse(
+                result.messages().stream()
+                        .anyMatch(m -> m instanceof AiMessage ai && ai.text().contains("PrimeFinder")),
+                "Prior generated Java code must not leak into greeting message context");
+        assertFalse(
+                result.messages().stream()
+                        .anyMatch(m ->
+                                m instanceof UserMessage u && u.singleText().contains("[Tool Output")),
+                "Prior tool output must not leak into greeting message context");
+
+        // The only user message should be the current greeting "Hi"
+        List<UserMessage> userMessages = result.messages().stream()
+                .filter(m -> m instanceof UserMessage)
+                .map(m -> (UserMessage) m)
+                .toList();
+        assertEquals(1, userMessages.size(), "Should only have the current user greeting");
+        assertEquals("Hi", userMessages.getFirst().singleText());
+    }
+
     private static ReasoningMessageAssembler createAssembler() throws Exception {
         ChatHistoryAssembler historyAssembler = mock(ChatHistoryAssembler.class);
         when(historyAssembler.assemble("sess-1", "goal", Collections.emptyList()))
@@ -177,6 +238,8 @@ class ReasoningMessageAssemblerTest {
         injectField(assembler, "toolSearchIndex", mock(ToolSearchIndex.class));
         injectField(assembler, "skillRegistry", mock(SkillRegistry.class));
         injectField(assembler, "adaptationManager", mock(SkillAdaptationManager.class));
+        injectField(assembler, "textPatternUtils", new TextPatternUtils());
+        injectField(assembler, "codePolicy", new CodeGenerationPolicy());
         return assembler;
     }
 

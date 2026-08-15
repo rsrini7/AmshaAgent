@@ -118,4 +118,35 @@ class IntentClassificationServiceTest {
         assertFalse(intentDetector.isSelfEvolveIntent(null));
         assertFalse(intentDetector.isSelfEvolveIntent(""));
     }
+
+    @Test
+    void testGreetingDetectionRejectsToolVerbs() {
+        assertTrue(intentDetector.isGreeting("Hi"));
+        assertTrue(intentDetector.isGreeting("Hello"));
+        assertTrue(intentDetector.isGreeting("Hey there"));
+        assertTrue(intentDetector.isGreeting("Good morning"));
+        assertTrue(intentDetector.isGreeting("Hello everyone"));
+        assertTrue(intentDetector.isGreeting("Namaste"));
+        assertTrue(intentDetector.isGreeting("Hi team"));
+        assertTrue(intentDetector.isGreeting("Hello!"));
+
+        // Action verbs / tool keywords must NOT be classified as greetings
+        assertFalse(intentDetector.isGreeting("Hi execute"));
+        assertFalse(intentDetector.isGreeting("Hello debug"));
+        assertFalse(intentDetector.isGreeting("Hey write"));
+        assertFalse(intentDetector.isGreeting("Hi run"));
+        assertFalse(intentDetector.isGreeting("Hello search"));
+    }
+
+    @Test
+    void testSimpleConversationalDoesNotFalseFlagConversationalPhrases() {
+        assertTrue(intentDetector.isSimpleConversational("make me laugh"));
+        assertTrue(intentDetector.isSimpleConversational("show me empathy"));
+        assertTrue(intentDetector.isSimpleConversational("tell me a joke"));
+        assertTrue(intentDetector.isSimpleConversational("what do you think?"));
+
+        assertFalse(intentDetector.isSimpleConversational("search for recipes on web"));
+        assertFalse(intentDetector.isSimpleConversational("execute prime number finder"));
+        assertFalse(intentDetector.isSimpleConversational("run the script in sandbox"));
+    }
 }

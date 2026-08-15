@@ -104,4 +104,90 @@ class ResumeStrategyDispatcherTest {
         String goal = dispatcher.resolveResumeGoal("s1", "role1");
         assertEquals("My goal", goal);
     }
+
+    @Test
+    void testHandle_checkpointStatusDenied_performsDenialCleanup() {
+        AgentExecutionContext ctx = new AgentExecutionContext(
+                "s1",
+                "u1",
+                "c1",
+                "DEFAULT",
+                "some goal",
+                AutonomyLevel.FULL,
+                StructuredOutputMode.NATIVE,
+                10,
+                0,
+                "CLI",
+                "p1",
+                null,
+                null);
+
+        when(checkpoint.getStatus()).thenReturn(CheckpointStatus.DENIED);
+
+        AgentResult result = dispatcher.handle(ctx, new ArrayList<>(), messageContext, stateMachineRunner, checkpoint);
+
+        assertNotNull(result);
+        assertInstanceOf(AgentResult.Finished.class, result);
+        assertTrue(((AgentResult.Finished) result).answer().contains("denied"));
+        verify(checkpoint).setStatus(CheckpointStatus.FAILED);
+        verify(agentStore).save(checkpoint);
+    }
+
+    @Test
+    void testHandle_allBatchDecisionsDenied_performsDenialCleanup() {
+        AgentExecutionContext ctx = new AgentExecutionContext(
+                "s1",
+                "u1",
+                "c1",
+                "DEFAULT",
+                "some goal",
+                AutonomyLevel.FULL,
+                StructuredOutputMode.NATIVE,
+                10,
+                0,
+                "CLI",
+                "p1",
+                null,
+                null);
+
+        when(checkpoint.hasBatchToolDecisions()).thenReturn(true);
+        when(checkpoint.getBatchToolDecisions()).thenReturn("{\"sandbox_exec\":\"DENIED\"}");
+
+        AgentResult result = dispatcher.handle(ctx, new ArrayList<>(), messageContext, stateMachineRunner, checkpoint);
+
+        assertNotNull(result);
+        assertInstanceOf(AgentResult.Finished.class, result);
+        assertTrue(((AgentResult.Finished) result).answer().contains("denied"));
+        verify(checkpoint).setStatus(CheckpointStatus.FAILED);
+        verify(agentStore).save(checkpoint);
+    }
+
+    @Test
+    void testHandle_malformedBatchDecisions_performsDenialCleanup() {
+        AgentExecutionContext ctx = new AgentExecutionContext(
+                "s1",
+                "u1",
+                "c1",
+                "DEFAULT",
+                "some goal",
+                AutonomyLevel.FULL,
+                StructuredOutputMode.NATIVE,
+                10,
+                0,
+                "CLI",
+                "p1",
+                null,
+                null);
+
+        when(checkpoint.hasBatchToolDecisions()).thenReturn(true);
+        when(checkpoint.getBatchToolDecisions()).thenReturn("malformed-json-{{{");
+
+        AgentResult result = dispatcher.handle(ctx, new ArrayList<>(), messageContext, stateMachineRunner, checkpoint);
+
+        assertNotNull(result);
+        assertInstanceOf(AgentResult.Finished.class, result);
+        assertTrue(((AgentResult.Finished) result).answer().contains("denied"));
+        verify(checkpoint).setStatus(CheckpointStatus.FAILED);
+        verify(agentStore).save(checkpoint);
+    }
 }

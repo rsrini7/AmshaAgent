@@ -439,4 +439,24 @@ class SystemPromptBuilderTest {
         assertTrue(result.contains("EXECUTION BOUNDARY:"));
         assertFalse(result.contains("middle context omitted"));
     }
+
+    @Test
+    void testBuildSystemPrompt_promptDirectiveMode_simpleChitchat_doesNotContainJsonDirective() throws Exception {
+        when(intentService.isSimpleConversational(any())).thenReturn(true);
+        when(agentPersonaRegistry.getPersonaPrompt(any(), any())).thenReturn("MOCK_PERSONA");
+
+        Instance<StructuredOutputMode> modeInstance = mock(Instance.class);
+        when(modeInstance.isUnsatisfied()).thenReturn(false);
+        when(modeInstance.get()).thenReturn(StructuredOutputMode.PROMPT_DIRECTIVE);
+        setField(builder, "structuredOutputModeInstance", modeInstance);
+        setField(builder, "compactPromptEnabled", true);
+
+        String result = builder.build(createCtx("s1"), "coordinator", "s1", "Hi", false);
+
+        assertTrue(result.contains("STRICT MODE - SIMPLE CONVERSATION"));
+        assertTrue(result.contains("Respond directly as plain text."));
+        assertFalse(result.contains("CRITICAL: You MUST respond ONLY in required JSON schema"));
+        assertFalse(result.contains("CRITICAL: You MUST respond ONLY in the required JSON schema"));
+        assertFalse(result.contains("Never respond in prose"));
+    }
 }

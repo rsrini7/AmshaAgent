@@ -48,6 +48,12 @@ public final class AgentSentinels {
 
     // Intent/Chitchat
     public static final String DATA_IS_SIMPLE_CHITCHAT = "isSimpleChitchat";
+    public static final String GREETING_FALLBACK_ANSWER = "Hello! How can I help you today?";
+    public static final String CONVERSATIONAL_FALLBACK_ANSWER = "I'm here to help. What would you like to discuss?";
+
+    public static String resolveConversationalFallback(boolean isGreeting) {
+        return isGreeting ? GREETING_FALLBACK_ANSWER : CONVERSATIONAL_FALLBACK_ANSWER;
+    }
 
     // Scheduling
     public static final String SCHEDULE_SUCCESS_MESSAGE = "Task scheduled successfully";

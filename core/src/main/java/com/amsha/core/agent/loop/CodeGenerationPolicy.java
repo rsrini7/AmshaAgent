@@ -41,11 +41,18 @@ public class CodeGenerationPolicy {
     static final Pattern FENCE_HEADER_PATTERN = Pattern.compile("^```([\\w-]*)\\R");
 
     /**
-     * Keywords that strongly suggest the block is actual source code,
-     * not just formatted data or version numbers.
+     * Keywords and syntax structures that strongly suggest the block is actual source code,
+     * not just formatted configuration, structured data, or version numbers.
      */
-    static final Pattern SOURCE_CODE_INDICATOR =
-            Pattern.compile("(?i)\\b(public|private|class|import|def|function|lambda|if\\s*__name__|npm|mvn|pip)\\b");
+    static final Pattern SOURCE_CODE_INDICATOR = Pattern.compile(
+            "(?m)(?:^\\s*(?:public|private|protected)\\s+(?:class|interface|record|enum|static|final|abstract|void|int|long|double|boolean|String|var)|"
+                    + "^\\s*(?:import|package)\\s+[\\w.]+;|"
+                    + "^\\s*def\\s+\\w+\\s*\\(.*?\\):|"
+                    + "^\\s*class\\s+\\w+\\s*[:{(]|"
+                    + "^\\s*(?:async\\s+)?function\\s+\\w+\\s*\\(.*?\\)|"
+                    + "^\\s*if\\s+__name__\\s*==\\s*['\"]__main__['\"]:|"
+                    + "\\b(?:System\\.out\\.println|console\\.log)\\s*\\()",
+            Pattern.CASE_INSENSITIVE);
 
     /**
      * Returns {@code true} if the answer contains a generated code block.
@@ -99,7 +106,7 @@ public class CodeGenerationPolicy {
                 || "text".equals(language)
                 || "markdown".equals(language)
                 || "md".equals(language)) {
-            return true;
+            return !SOURCE_CODE_INDICATOR.matcher(body).find();
         }
 
         boolean jsonLike = (body.startsWith("{") && body.endsWith("}")) || (body.startsWith("[") && body.endsWith("]"));
