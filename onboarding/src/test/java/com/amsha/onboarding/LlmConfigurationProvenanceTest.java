@@ -1,6 +1,7 @@
 package com.amsha.onboarding;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -349,6 +350,71 @@ class LlmConfigurationProvenanceTest {
         assertEquals(LlmConfigurationProvenance.CREDENTIAL_CONFIGURED, resolution.credentialState());
         assertEquals(LlmConfigurationProvenance.SOURCE_ENVIRONMENT, resolution.credentialSource());
         assertTrue(resolution.ready());
+    }
+
+    @Test
+    void cloudflareEnvironmentCredentialIsReported() {
+        LlmConfigurationProvenance provenance = provenanceFor(
+                "cloudflare",
+                false,
+                Map.of(
+                        "AMSHA_CLOUDFLARE_API_KEY", "cf_key_123",
+                        "AMSHA_CLOUDFLARE_MODEL", "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+                        "AMSHA_CLOUDFLARE_BASE_URL", "https://api.cloudflare.com/client/v4/accounts/abc123/ai/v1"));
+        when(provenance.providerCatalog.descriptor("cloudflare"))
+                .thenReturn(Optional.of(requiredDescriptor("cloudflare")));
+
+        LlmConfigurationProvenance.Resolution resolution = provenance.resolve();
+
+        assertEquals("cloudflare", resolution.effectiveProvider());
+        assertEquals(LlmConfigurationProvenance.SOURCE_ENVIRONMENT, resolution.effectiveSource());
+        assertEquals("@cf/meta/llama-3.3-70b-instruct-fp8-fast", resolution.effectiveModel());
+        assertEquals("https://api.cloudflare.com/client/v4/accounts/abc123/ai/v1", resolution.effectiveBaseUrl());
+        assertEquals(LlmConfigurationProvenance.CREDENTIAL_CONFIGURED, resolution.credentialState());
+        assertEquals(LlmConfigurationProvenance.SOURCE_ENVIRONMENT, resolution.credentialSource());
+        assertTrue(resolution.ready());
+    }
+
+    @Test
+    void cloudflareEnvironmentWithTemplateAndAccountIdIsReportedAndReady() {
+        LlmConfigurationProvenance provenance = provenanceFor(
+                "cloudflare",
+                false,
+                Map.of(
+                        "AMSHA_CLOUDFLARE_API_KEY", "cf_key_123",
+                        "AMSHA_CLOUDFLARE_ACCOUNT_ID", "acc_456",
+                        "AMSHA_CLOUDFLARE_MODEL", "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+                        "AMSHA_CLOUDFLARE_BASE_URL",
+                                "https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/v1"));
+        when(provenance.providerCatalog.descriptor("cloudflare"))
+                .thenReturn(Optional.of(requiredDescriptor("cloudflare")));
+
+        LlmConfigurationProvenance.Resolution resolution = provenance.resolve();
+
+        assertEquals("cloudflare", resolution.effectiveProvider());
+        assertEquals("https://api.cloudflare.com/client/v4/accounts/acc_456/ai/v1", resolution.effectiveBaseUrl());
+        assertEquals(LlmConfigurationProvenance.CREDENTIAL_CONFIGURED, resolution.credentialState());
+        assertTrue(resolution.ready());
+    }
+
+    @Test
+    void cloudflareEnvironmentWithTemplateAndMissingAccountIdIsNotReady() {
+        LlmConfigurationProvenance provenance = provenanceFor(
+                "cloudflare",
+                false,
+                Map.of(
+                        "AMSHA_CLOUDFLARE_API_KEY", "cf_key_123",
+                        "AMSHA_CLOUDFLARE_MODEL", "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+                        "AMSHA_CLOUDFLARE_BASE_URL",
+                                "https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/v1"));
+        when(provenance.providerCatalog.descriptor("cloudflare"))
+                .thenReturn(Optional.of(requiredDescriptor("cloudflare")));
+
+        LlmConfigurationProvenance.Resolution resolution = provenance.resolve();
+
+        assertEquals("cloudflare", resolution.effectiveProvider());
+        assertEquals(LlmConfigurationProvenance.CREDENTIAL_MISSING, resolution.credentialState());
+        assertFalse(resolution.ready());
     }
 
     private static LlmConfigurationProvenance provenanceFor(

@@ -147,8 +147,9 @@ public class InteractiveSetupWizard {
         System.err.println("  │  11. OpenCode - OpenAI-compatible endpoint (Zen / Go)");
         System.err.println("  │  12. Hugging Face - Inference API / Router");
         System.err.println("  │  13. Mistral AI - Codestral & Mistral models");
+        System.err.println("  │  14. Cloudflare Workers AI - Serverless inference");
         System.err.println("  │");
-        String choice = readLineWithFallback(System.console(), "  └─ Select provider [1-13, Default: 1]: ");
+        String choice = readLineWithFallback(System.console(), "  └─ Select provider [1-14, Default: 1]: ");
         String provider =
                 switch (choice != null ? choice.trim() : "") {
                     case "2" -> "openrouter";
@@ -163,6 +164,7 @@ public class InteractiveSetupWizard {
                     case "11" -> "opencode";
                     case "12" -> "huggingface";
                     case "13" -> "mistral";
+                    case "14" -> "cloudflare";
                     default -> "groq";
                 };
         System.setProperty("AMSHA_LLM_PROVIDER", provider);
@@ -219,6 +221,19 @@ public class InteractiveSetupWizard {
             patchBaseConfig(envFile, "AMSHA_COMPACTION_MISTRAL_BASE_URL", "https://api.mistral.ai/v1");
             patchBaseConfig(envFile, "AMSHA_CLASSIFIER_MISTRAL_MODEL", "codestral-latest");
             patchBaseConfig(envFile, "AMSHA_CLASSIFIER_MISTRAL_BASE_URL", "https://api.mistral.ai/v1");
+        }
+        if ("cloudflare".equalsIgnoreCase(provider)) {
+            patchBaseConfig(envFile, "AMSHA_CLOUDFLARE_ACCOUNT_ID", "");
+            patchBaseConfig(envFile, "AMSHA_COMPACTION_CLOUDFLARE_MODEL", "@cf/meta/llama-3.3-70b-instruct-fp8-fast");
+            patchBaseConfig(
+                    envFile,
+                    "AMSHA_COMPACTION_CLOUDFLARE_BASE_URL",
+                    "https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/v1");
+            patchBaseConfig(envFile, "AMSHA_CLASSIFIER_CLOUDFLARE_MODEL", "@cf/meta/llama-3.3-70b-instruct-fp8-fast");
+            patchBaseConfig(
+                    envFile,
+                    "AMSHA_CLASSIFIER_CLOUDFLARE_BASE_URL",
+                    "https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/v1");
         }
     }
 
@@ -295,6 +310,24 @@ public class InteractiveSetupWizard {
             EnvConfigInitializer.patchEnvFile(envFile, classifierKey, key, EnvConfigInitializer.PatchMode.UPDATE);
             System.setProperty(classifierKey, key);
         }
+        if ("cloudflare".equalsIgnoreCase(provider)) {
+            String currentAcc = Optional.ofNullable(System.getProperty("AMSHA_CLOUDFLARE_ACCOUNT_ID"))
+                    .or(() -> Optional.ofNullable(System.getenv("AMSHA_CLOUDFLARE_ACCOUNT_ID")))
+                    .orElse("");
+            if (currentAcc.isBlank()) {
+                String accId = readLineWithFallback(
+                        System.console(), "  └─ Enter Cloudflare Account ID (dash.cloudflare.com): ");
+                if (accId != null && !accId.isBlank()) {
+                    EnvConfigInitializer.patchEnvFile(
+                            envFile,
+                            "AMSHA_CLOUDFLARE_ACCOUNT_ID",
+                            accId.trim(),
+                            EnvConfigInitializer.PatchMode.UPDATE);
+                    System.setProperty("AMSHA_CLOUDFLARE_ACCOUNT_ID", accId.trim());
+                    System.err.println("     ✓ Cloudflare Account ID saved.");
+                }
+            }
+        }
         System.err.println("     ✓ Unified key saved.");
     }
 
@@ -309,6 +342,7 @@ public class InteractiveSetupWizard {
             case "opencode" -> "AMSHA_OPENCODE_API_KEY";
             case "huggingface" -> "AMSHA_HUGGINGFACE_API_KEY";
             case "mistral" -> "AMSHA_MISTRAL_API_KEY";
+            case "cloudflare" -> "AMSHA_CLOUDFLARE_API_KEY";
             case "omlx" -> "AMSHA_OMLX_API_KEY";
             case "generic-openai" -> "AMSHA_GENERIC_OPENAI_API_KEY";
             default -> "AMSHA_GROQ_API_KEY";
@@ -331,6 +365,7 @@ public class InteractiveSetupWizard {
             case "opencode" -> "AMSHA_COMPACTION_OPENCODE_API_KEY";
             case "huggingface" -> "AMSHA_COMPACTION_HUGGINGFACE_API_KEY";
             case "mistral" -> "AMSHA_COMPACTION_MISTRAL_API_KEY";
+            case "cloudflare" -> "AMSHA_COMPACTION_CLOUDFLARE_API_KEY";
             case "generic-openai" -> "AMSHA_COMPACTION_GENERIC_OPENAI_API_KEY";
             default -> "AMSHA_COMPACTION_GROQ_API_KEY";
         };
@@ -352,6 +387,7 @@ public class InteractiveSetupWizard {
             case "opencode" -> "AMSHA_CLASSIFIER_OPENCODE_API_KEY";
             case "huggingface" -> "AMSHA_CLASSIFIER_HUGGINGFACE_API_KEY";
             case "mistral" -> "AMSHA_CLASSIFIER_MISTRAL_API_KEY";
+            case "cloudflare" -> "AMSHA_CLASSIFIER_CLOUDFLARE_API_KEY";
             case "generic-openai" -> "AMSHA_CLASSIFIER_GENERIC_OPENAI_API_KEY";
             default -> "AMSHA_CLASSIFIER_GROQ_API_KEY";
         };

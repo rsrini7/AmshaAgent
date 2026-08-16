@@ -5,6 +5,8 @@ import jakarta.enterprise.context.Dependent;
 import jakarta.enterprise.inject.Default;
 import jakarta.enterprise.inject.Produces;
 
+import java.util.Locale;
+
 import com.amsha.core.agent.reasoning.StructuredOutputMode;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
@@ -26,15 +28,19 @@ public class CompactionModelProducer {
 
     private static final Logger log = Logger.getLogger(CompactionModelProducer.class);
 
-    @ConfigProperty(name = "amsha.compaction.structured-output-mode", defaultValue = "NATIVE")
+    @ConfigProperty(name = "amsha.compaction.structured-output-mode", defaultValue = "PROMPT_DIRECTIVE")
     String compactionMode;
 
     @Produces
     @Dependent
     @Identifier("compaction-mode")
     public StructuredOutputMode compactionMode() {
-        StructuredOutputMode mode = StructuredOutputMode.valueOf(compactionMode.toUpperCase());
-        log.infof("CompactionModelProducer structured-output-mode=%s", mode);
-        return mode;
+        try {
+            StructuredOutputMode mode = StructuredOutputMode.valueOf(compactionMode.toUpperCase(Locale.ROOT));
+            log.infof("CompactionModelProducer structured-output-mode=%s", mode);
+            return mode;
+        } catch (IllegalArgumentException _) {
+            return StructuredOutputMode.PROMPT_DIRECTIVE;
+        }
     }
 }

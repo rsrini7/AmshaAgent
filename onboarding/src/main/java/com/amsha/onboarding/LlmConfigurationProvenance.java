@@ -78,6 +78,10 @@ public class LlmConfigurationProvenance {
                     ModelDefaults.PROVIDER_MISTRAL,
                     new EnvironmentSpec("AMSHA_MISTRAL_MODEL", "AMSHA_MISTRAL_BASE_URL", "AMSHA_MISTRAL_API_KEY")),
             Map.entry(
+                    ModelDefaults.PROVIDER_CLOUDFLARE,
+                    new EnvironmentSpec(
+                            "AMSHA_CLOUDFLARE_MODEL", "AMSHA_CLOUDFLARE_BASE_URL", "AMSHA_CLOUDFLARE_API_KEY")),
+            Map.entry(
                     ModelDefaults.PROVIDER_GEMINI,
                     new EnvironmentSpec("AMSHA_GEMINI_MODEL", "", "AMSHA_GEMINI_API_KEY")),
             Map.entry(ModelDefaults.PROVIDER_OMLX, new EnvironmentSpec("AMSHA_OMLX_MODEL", "AMSHA_OMLX_BASE_URL", "")),
@@ -135,6 +139,16 @@ public class LlmConfigurationProvenance {
                 .map(LlmProviderDescriptor::requiresApiKey)
                 .orElse(true);
         boolean claudeCode = ModelDefaults.PROVIDER_CLAUDE_CODE.equals(normalizedProvider);
+        boolean cloudflare = ModelDefaults.PROVIDER_CLOUDFLARE.equals(normalizedProvider);
+        if (cloudflare && effectiveBaseUrl.contains("{account_id}")) {
+            Optional<String> accountId =
+                    configValue("AMSHA_CLOUDFLARE_ACCOUNT_ID").or(() -> configValue("amsha.llm.cloudflare.account-id"));
+            if (accountId.isPresent() && !accountId.get().isBlank()) {
+                effectiveBaseUrl =
+                        effectiveBaseUrl.replace("{account_id}", accountId.get().trim());
+            }
+        }
+        boolean cloudflareAccountConfigured = !cloudflare || !effectiveBaseUrl.contains("{account_id}");
         boolean vaultCredentialConfigured = claudeCode
                 ? vault.systemKeyExists(VaultConstants.CLAUDE_CODE_OAUTH_TOKEN_KEY)
                 : vaultActive && vault.systemKeyExists(VaultConstants.LLM_API_KEY);
@@ -142,8 +156,9 @@ public class LlmConfigurationProvenance {
                 ? claudeCodeTokenExtractor != null
                         && claudeCodeTokenExtractor.extractToken().isPresent()
                 : hasConfiguredEnvironmentValue(environmentSpec.apiKeyKey());
-        boolean credentialConfigured = vaultCredentialConfigured || environmentCredentialConfigured;
-        boolean credentialRequired = requiresApiKey || claudeCode;
+        boolean credentialConfigured =
+                (vaultCredentialConfigured || environmentCredentialConfigured) && cloudflareAccountConfigured;
+        boolean credentialRequired = requiresApiKey || claudeCode || cloudflare;
         String credentialState = credentialRequired
                 ? credentialConfigured ? CREDENTIAL_CONFIGURED : CREDENTIAL_MISSING
                 : CREDENTIAL_NOT_REQUIRED;
@@ -155,6 +170,7 @@ public class LlmConfigurationProvenance {
         boolean ready = !normalizedProvider.isBlank()
                 && (!credentialRequired || credentialConfigured)
                 && (!ModelDefaults.PROVIDER_GENERIC_OPENAI.equals(normalizedProvider) || !effectiveBaseUrl.isBlank())
+                && (!cloudflare || !effectiveBaseUrl.contains("{account_id}"))
                 && (!ModelDefaults.PROVIDER_INFINITE_LOOP.equals(normalizedProvider)
                         || hasConfiguredEnvironmentValue("AMSHA_INFINITE_LOOP_LLM_PROVIDERS"));
 

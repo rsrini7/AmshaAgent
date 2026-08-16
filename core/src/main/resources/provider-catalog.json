@@ -126,6 +126,18 @@
     "hasBaseUrl": true
   },
   {
+    "id": "cloudflare",
+    "name": "Cloudflare Workers AI",
+    "tag": "Serverless inference",
+    "icon": "CF",
+    "color": "#f38020",
+    "defaultModel": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+    "embeddingCapable": false,
+    "requiresApiKey": true,
+    "authScheme": "BEARER",
+    "hasBaseUrl": true
+  },
+  {
     "id": "gemini",
     "name": "Gemini",
     "tag": "Google AI",

@@ -100,6 +100,14 @@ public final class ProviderKeySpecs {
             "2. Create an API key",
             "3. Add:  AMSHA_MISTRAL_API_KEY=your_key_here");
 
+    public static final VarSpec CLOUDFLARE_KEY_SPEC = new VarSpec(
+            "AMSHA_CLOUDFLARE_API_KEY",
+            "Cloudflare API token for Workers AI.",
+            "1. Sign up at https://dash.cloudflare.com",
+            "2. Create an API token with Workers AI Read/Edit permissions",
+            "3. Add:  AMSHA_CLOUDFLARE_API_KEY=your_api_token_here",
+            "4. Add:  AMSHA_CLOUDFLARE_ACCOUNT_ID=your_account_id_here");
+
     public static final VarSpec GENERIC_OPENAI_KEY_SPEC = new VarSpec(
             "AMSHA_GENERIC_OPENAI_API_KEY",
             "Generic OpenAI-compatible API key.",
@@ -126,6 +134,7 @@ public final class ProviderKeySpecs {
             case "opencode" -> OPENCODE_KEY_SPEC;
             case "huggingface" -> HUGGINGFACE_KEY_SPEC;
             case "mistral" -> MISTRAL_KEY_SPEC;
+            case "cloudflare" -> CLOUDFLARE_KEY_SPEC;
             case "omlx" -> OMLX_KEY_SPEC;
             case "generic-openai" -> GENERIC_OPENAI_KEY_SPEC;
             case "ollama" -> null;
@@ -167,6 +176,8 @@ public final class ProviderKeySpecs {
                         "https://huggingface.co/settings/tokens");
             case "mistral" ->
                 providerKeySpec("mistral", "AMSHA_COMPACTION_MISTRAL_API_KEY", "", "https://console.mistral.ai");
+            case "cloudflare" ->
+                providerKeySpec("cloudflare", "AMSHA_COMPACTION_CLOUDFLARE_API_KEY", "", "https://dash.cloudflare.com");
             case "generic-openai" ->
                 providerKeySpec(
                         "generic-openai", "AMSHA_COMPACTION_GENERIC_OPENAI_API_KEY", "", "your provider dashboard");
@@ -208,6 +219,8 @@ public final class ProviderKeySpecs {
                         "https://huggingface.co/settings/tokens");
             case "mistral" ->
                 providerKeySpec("mistral", "AMSHA_CLASSIFIER_MISTRAL_API_KEY", "", "https://console.mistral.ai");
+            case "cloudflare" ->
+                providerKeySpec("cloudflare", "AMSHA_CLASSIFIER_CLOUDFLARE_API_KEY", "", "https://dash.cloudflare.com");
             case "generic-openai" ->
                 providerKeySpec(
                         "generic-openai", "AMSHA_CLASSIFIER_GENERIC_OPENAI_API_KEY", "", "your provider dashboard");

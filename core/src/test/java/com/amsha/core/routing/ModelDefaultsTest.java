@@ -17,6 +17,7 @@ class ModelDefaultsTest {
         assertEquals(ModelDefaults.DEFAULT_OPENCODE_MODEL, ModelDefaults.defaultModelForProvider("opencode"));
         assertEquals(ModelDefaults.DEFAULT_HUGGINGFACE_MODEL, ModelDefaults.defaultModelForProvider("huggingface"));
         assertEquals(ModelDefaults.DEFAULT_MISTRAL_MODEL, ModelDefaults.defaultModelForProvider("mistral"));
+        assertEquals(ModelDefaults.DEFAULT_CLOUDFLARE_MODEL, ModelDefaults.defaultModelForProvider("cloudflare"));
     }
 
     @Test
@@ -27,6 +28,7 @@ class ModelDefaultsTest {
         assertEquals(ModelDefaults.DEFAULT_OPENCODE_MODEL, ModelDefaults.defaultModelForProvider("OPENCODE"));
         assertEquals(ModelDefaults.DEFAULT_HUGGINGFACE_MODEL, ModelDefaults.defaultModelForProvider("HUGGINGFACE"));
         assertEquals(ModelDefaults.DEFAULT_MISTRAL_MODEL, ModelDefaults.defaultModelForProvider("MISTRAL"));
+        assertEquals(ModelDefaults.DEFAULT_CLOUDFLARE_MODEL, ModelDefaults.defaultModelForProvider("CLOUDFLARE"));
         assertEquals(ModelDefaults.DEFAULT_GROQ_MODEL, ModelDefaults.defaultModelForProvider(null));
         assertEquals(ModelDefaults.DEFAULT_GROQ_MODEL, ModelDefaults.defaultModelForProvider("unknown-provider"));
     }
@@ -41,6 +43,7 @@ class ModelDefaultsTest {
         assertEquals(
                 ModelDefaults.DEFAULT_HUGGINGFACE_BASE_URL, ModelDefaults.defaultBaseUrlForProvider("huggingface"));
         assertEquals(ModelDefaults.DEFAULT_MISTRAL_BASE_URL, ModelDefaults.defaultBaseUrlForProvider("mistral"));
+        assertEquals(ModelDefaults.DEFAULT_CLOUDFLARE_BASE_URL, ModelDefaults.defaultBaseUrlForProvider("cloudflare"));
         assertEquals("", ModelDefaults.defaultBaseUrlForProvider("claude-code"));
         assertEquals("", ModelDefaults.defaultBaseUrlForProvider(null));
         assertEquals("", ModelDefaults.defaultBaseUrlForProvider("unknown"));
@@ -58,6 +61,9 @@ class ModelDefaultsTest {
                 ModelDefaults.PROVIDER_HUGGINGFACE,
                 ModelDefaults.inferProviderFromUrl("https://router.huggingface.co/v1"));
         assertEquals(ModelDefaults.PROVIDER_MISTRAL, ModelDefaults.inferProviderFromUrl("https://api.mistral.ai/v1"));
+        assertEquals(
+                ModelDefaults.PROVIDER_CLOUDFLARE,
+                ModelDefaults.inferProviderFromUrl("https://api.cloudflare.com/client/v4/accounts/abc123/ai/v1"));
         assertEquals(ModelDefaults.PROVIDER_OLLAMA, ModelDefaults.inferProviderFromUrl("http://localhost:11434"));
         assertEquals(ModelDefaults.PROVIDER_LLAMACPP, ModelDefaults.inferProviderFromUrl("http://localhost:9000/v1"));
         assertEquals(ModelDefaults.PROVIDER_OPENROUTER, ModelDefaults.inferProviderFromUrl(null));
@@ -82,6 +88,9 @@ class ModelDefaultsTest {
         assertEquals(
                 ModelDefaults.PROVIDER_MISTRAL,
                 ModelDefaults.inferProviderFromUrl(ModelDefaults.DEFAULT_MISTRAL_BASE_URL));
+        assertEquals(
+                ModelDefaults.PROVIDER_CLOUDFLARE,
+                ModelDefaults.inferProviderFromUrl(ModelDefaults.DEFAULT_CLOUDFLARE_BASE_URL));
         assertEquals(
                 ModelDefaults.PROVIDER_OMLX, ModelDefaults.inferProviderFromUrl(ModelDefaults.DEFAULT_OMLX_BASE_URL));
         assertEquals(

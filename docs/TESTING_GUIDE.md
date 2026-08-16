@@ -2512,4 +2512,4 @@ For `AMSHA_VAULT_PEPPER` and `AMSHA_AUDIT_HMAC_KEY`, use stable 32+ character va
 
 ---
 
-*Last updated: Amsha Agent V0.1.0 · Quarkus 3.27.2 · JDK 25 · 1664 tests · 18 modules · 21 tools · 15 LLM providers · Tiered Memory · Answer Quality Guard*
+*Last updated: Amsha Agent V0.1.0 · Quarkus 3.27.2 · JDK 25 · 1664 tests · 18 modules · 21 tools · 16 LLM providers · Tiered Memory · Answer Quality Guard*

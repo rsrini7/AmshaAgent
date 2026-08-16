@@ -28,6 +28,9 @@ class LlmModelFactoryTest {
         assertEquals("huggingface", LlmModelFactory.inferProviderFromUrl("https://router.huggingface.co/v1"));
         assertEquals("mistral", LlmModelFactory.inferProviderFromUrl("https://api.mistral.ai/v1"));
         assertEquals(
+                "cloudflare",
+                LlmModelFactory.inferProviderFromUrl("https://api.cloudflare.com/client/v4/accounts/abc123/ai/v1"));
+        assertEquals(
                 "gemini",
                 LlmModelFactory.inferProviderFromUrl("https://generativelanguage.googleapis.com/v1beta/openai/"));
         assertEquals("ollama", LlmModelFactory.inferProviderFromUrl("http://localhost:11434"));
@@ -114,6 +117,21 @@ class LlmModelFactoryTest {
                 "https://api.mistral.ai/v1",
                 "test-mistral-key",
                 "codestral-latest",
+                100,
+                null,
+                1,
+                null,
+                null);
+        assertNotNull(model);
+    }
+
+    @Test
+    void testCreateCloudflareModel() {
+        ChatModel model = factory.createModel(
+                "cloudflare",
+                "https://api.cloudflare.com/client/v4/accounts/abc123/ai/v1",
+                "test-cf-key",
+                "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
                 100,
                 null,
                 1,

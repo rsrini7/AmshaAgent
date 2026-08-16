@@ -23,6 +23,7 @@ class ModelDefaultsResourceUnitTest {
         assertTrue(map.containsKey("opencode"));
         assertTrue(map.containsKey("huggingface"));
         assertTrue(map.containsKey("mistral"));
+        assertTrue(map.containsKey("cloudflare"));
     }
 
     @Test
@@ -59,5 +60,14 @@ class ModelDefaultsResourceUnitTest {
         Map<?, ?> map = (Map<?, ?>) response.getEntity();
         assertEquals("codestral-latest", map.get("defaultModel"));
         assertEquals("https://api.mistral.ai/v1", map.get("defaultBaseUrl"));
+    }
+
+    @Test
+    void testGetDefaultForProviderCloudflare() {
+        Response response = resource.getDefaultForProvider("cloudflare");
+        assertEquals(200, response.getStatus());
+        Map<?, ?> map = (Map<?, ?>) response.getEntity();
+        assertEquals("@cf/meta/llama-3.3-70b-instruct-fp8-fast", map.get("defaultModel"));
+        assertEquals("https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/v1", map.get("defaultBaseUrl"));
     }
 }

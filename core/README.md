@@ -22,6 +22,7 @@ reflexes, safety guards, tool interfaces, and built-in LLM providers.
 | OpenCode | `opencode` | `deepseek-v4-flash-free` | `https://opencode.ai/zen/v1` |
 | Hugging Face | `huggingface` | `meta-llama/Llama-3.3-70B-Instruct` | `https://router.huggingface.co/v1` |
 | Mistral AI | `mistral` | `codestral-latest` | `https://api.mistral.ai/v1` |
+| Cloudflare Workers AI | `cloudflare` | `@cf/meta/llama-3.3-70b-instruct-fp8-fast` | `https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/v1` |
 | Gemini | `gemini` | `gemini-2.5-flash-lite` | `https://generativelanguage.googleapis.com/v1beta` |
 | OMLX | `omlx` | `mlx-community/Qwen3.6-35B-A3B-4bit` | `http://127.0.0.1:8000/v1` |
 | Llama.cpp | `llamacpp` | `qwen3` | `http://127.0.0.1:9000/v1` |
@@ -82,6 +83,25 @@ reflexes, safety guards, tool interfaces, and built-in LLM providers.
 | `amsha.classifier.mistral.api-key` | `AMSHA_CLASSIFIER_MISTRAL_API_KEY` | — | Mistral API key for classifier slot |
 | `amsha.classifier.mistral.model` | `AMSHA_CLASSIFIER_MISTRAL_MODEL` | `codestral-latest` | Classifier slot model |
 | `amsha.classifier.mistral.base-url` | `AMSHA_CLASSIFIER_MISTRAL_BASE_URL` | `https://api.mistral.ai/v1` | Classifier slot base URL |
+
+## Cloudflare Workers AI Configuration
+
+| Property | Env Var | Default | Description |
+|---|---|---|---|
+| `amsha.llm.cloudflare.api-key` | `AMSHA_CLOUDFLARE_API_KEY` | — | Cloudflare API token |
+| `amsha.llm.cloudflare.account-id` | `AMSHA_CLOUDFLARE_ACCOUNT_ID` | — | Cloudflare Account ID |
+| `amsha.llm.cloudflare.base-url` | `AMSHA_CLOUDFLARE_BASE_URL` | `https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/v1` | Workers AI v1 API base URL |
+| `amsha.llm.cloudflare.unresolved-base-url` | — | same template | Template used as nested MP Config default (avoids `${ENV:…/{account_id}/…}` early-`}` close) |
+| `amsha.llm.cloudflare.model` | `AMSHA_CLOUDFLARE_MODEL` | `@cf/meta/llama-3.3-70b-instruct-fp8-fast` | Default chat model |
+| `amsha.compaction.cloudflare.api-key` | `AMSHA_COMPACTION_CLOUDFLARE_API_KEY` | — | Cloudflare API token for compaction slot |
+| `amsha.compaction.cloudflare.account-id` | `AMSHA_COMPACTION_CLOUDFLARE_ACCOUNT_ID` | — | Cloudflare Account ID for compaction slot |
+| `amsha.compaction.cloudflare.model` | `AMSHA_COMPACTION_CLOUDFLARE_MODEL` | `@cf/meta/llama-3.3-70b-instruct-fp8-fast` | Compaction slot model |
+| `amsha.compaction.cloudflare.base-url` | `AMSHA_COMPACTION_CLOUDFLARE_BASE_URL` | `https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/v1` | Compaction slot base URL |
+| `amsha.compaction.structured-output-mode` | `AMSHA_COMPACTION_STRUCTURED_OUTPUT_MODE` | `PROMPT_DIRECTIVE` | Structured output mode for compaction |
+| `amsha.classifier.cloudflare.api-key` | `AMSHA_CLASSIFIER_CLOUDFLARE_API_KEY` | — | Cloudflare API token for classifier slot |
+| `amsha.classifier.cloudflare.account-id` | `AMSHA_CLASSIFIER_CLOUDFLARE_ACCOUNT_ID` | — | Cloudflare Account ID for classifier slot |
+| `amsha.classifier.cloudflare.model` | `AMSHA_CLASSIFIER_CLOUDFLARE_MODEL` | `@cf/meta/llama-3.3-70b-instruct-fp8-fast` | Classifier slot model |
+| `amsha.classifier.cloudflare.base-url` | `AMSHA_CLASSIFIER_CLOUDFLARE_BASE_URL` | `https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/v1` | Classifier slot base URL |
 
 ## Testing
 

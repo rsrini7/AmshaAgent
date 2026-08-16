@@ -120,8 +120,8 @@ public class RecallMemorySearchTool implements AgentTool {
             }
         }
 
-        boolean includeSummaries = Boolean.TRUE.equals(params.get("include_summaries"));
-        int limit = params.containsKey("limit") ? ((Number) params.get("limit")).intValue() : 5;
+        boolean includeSummaries = parseBoolean(params.get("include_summaries"), false);
+        int limit = parseLimit(params.get("limit"), 5);
 
         // Sanitize query for FTS5 (SQLite) and plainto_tsquery (Postgres).
         // toFts5Phrase strips special chars (+, (), :, etc.) to prevent FTS5 syntax errors.
@@ -157,5 +157,30 @@ public class RecallMemorySearchTool implements AgentTool {
             sb.append(msg.content()).append("\n\n");
         }
         return ToolResponse.success(sb.toString());
+    }
+
+    /** Accepts JSON numbers or LLM-emitted digit strings; clamps to [1, 50]. */
+    private static int parseLimit(Object raw, int defaultLimit) {
+        if (raw instanceof Number n) {
+            return Math.max(1, Math.min(n.intValue(), 50));
+        }
+        if (raw instanceof String s) {
+            try {
+                return Math.max(1, Math.min(Integer.parseInt(s.trim()), 50));
+            } catch (NumberFormatException _) {
+                // fall through
+            }
+        }
+        return defaultLimit;
+    }
+
+    /** Accepts JSON booleans or common LLM string forms ("true"/"false"). */
+    private static boolean parseBoolean(Object raw, boolean defaultValue) {
+        return switch (raw) {
+            case null -> defaultValue;
+            case Boolean b -> b;
+            case String s -> Boolean.parseBoolean(s.trim());
+            default -> defaultValue;
+        };
     }
 }

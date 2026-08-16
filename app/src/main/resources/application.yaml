@@ -332,17 +332,27 @@ amsha:
       queue-capacity: ${AMSHA_CLASSIFIER_SHADOW_QUEUE_CAPACITY:64}
       shutdown-grace: ${AMSHA_CLASSIFIER_SHADOW_SHUTDOWN_GRACE:PT5S}
     sarvam:
+      api-key: "${AMSHA_CLASSIFIER_SARVAM_API_KEY:${AMSHA_SARVAM_API_KEY:}}"
       base-url: "${AMSHA_CLASSIFIER_SARVAM_BASE_URL:https://api.sarvam.ai/v1}"
       model: "${AMSHA_CLASSIFIER_SARVAM_MODEL:sarvam-105b}"
     opencode:
+      api-key: "${AMSHA_CLASSIFIER_OPENCODE_API_KEY:${AMSHA_OPENCODE_API_KEY:}}"
       base-url: "${AMSHA_CLASSIFIER_OPENCODE_BASE_URL:https://opencode.ai/zen/v1}"
       model: "${AMSHA_CLASSIFIER_OPENCODE_MODEL:deepseek-v4-flash-free}"
     huggingface:
+      api-key: "${AMSHA_CLASSIFIER_HUGGINGFACE_API_KEY:${AMSHA_HUGGINGFACE_API_KEY:}}"
       base-url: "${AMSHA_CLASSIFIER_HUGGINGFACE_BASE_URL:https://router.huggingface.co/v1}"
       model: "${AMSHA_CLASSIFIER_HUGGINGFACE_MODEL:meta-llama/Llama-3.3-70B-Instruct}"
     mistral:
+      api-key: "${AMSHA_CLASSIFIER_MISTRAL_API_KEY:${AMSHA_MISTRAL_API_KEY:}}"
       base-url: "${AMSHA_CLASSIFIER_MISTRAL_BASE_URL:https://api.mistral.ai/v1}"
       model: "${AMSHA_CLASSIFIER_MISTRAL_MODEL:codestral-latest}"
+    cloudflare:
+      api-key: "${AMSHA_CLASSIFIER_CLOUDFLARE_API_KEY:${AMSHA_CLOUDFLARE_API_KEY:}}"
+      account-id: "${AMSHA_CLASSIFIER_CLOUDFLARE_ACCOUNT_ID:${AMSHA_CLOUDFLARE_ACCOUNT_ID:}}"
+      # Do not put {account_id} inside ${ENV:default} — MP Config closes on the first '}'.
+      base-url: "${AMSHA_CLASSIFIER_CLOUDFLARE_BASE_URL:${amsha.llm.cloudflare.unresolved-base-url}}"
+      model: "${AMSHA_CLASSIFIER_CLOUDFLARE_MODEL:@cf/meta/llama-3.3-70b-instruct-fp8-fast}"
   onnx:
     enabled: ${AMSHA_ONNX_ENABLED:false}
     model-root: "${AMSHA_ONNX_MODEL_ROOT:data/models}"
@@ -447,6 +457,14 @@ amsha:
       api-key: "${AMSHA_MISTRAL_API_KEY:}"
       base-url: "${AMSHA_MISTRAL_BASE_URL:https://api.mistral.ai/v1}"
       model: "${AMSHA_MISTRAL_MODEL:codestral-latest}"
+    cloudflare:
+      api-key: "${AMSHA_CLOUDFLARE_API_KEY:}"
+      account-id: "${AMSHA_CLOUDFLARE_ACCOUNT_ID:}"
+      # Keep braces out of ${ENV:default} — MP Config treats the first '}' as end-of-expression,
+      # which otherwise appends a literal "/ai/v1}" and breaks URI parsing.
+      unresolved-base-url: "https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/v1"
+      base-url: "${AMSHA_CLOUDFLARE_BASE_URL:${amsha.llm.cloudflare.unresolved-base-url}}"
+      model: "${AMSHA_CLOUDFLARE_MODEL:@cf/meta/llama-3.3-70b-instruct-fp8-fast}"
   infinite-loop:
     llm:
       providers: ${AMSHA_INFINITE_LOOP_LLM_PROVIDERS:omlx,groq,openrouter}
@@ -478,18 +496,29 @@ amsha:
       space-id: "${AMSHA_EMBEDDING_ONNX_SPACE_ID:}"
       space-revision: "${AMSHA_EMBEDDING_ONNX_SPACE_REVISION:}"
   compaction:
+    structured-output-mode: "${AMSHA_COMPACTION_STRUCTURED_OUTPUT_MODE:PROMPT_DIRECTIVE}"
     sarvam:
+      api-key: "${AMSHA_COMPACTION_SARVAM_API_KEY:${AMSHA_SARVAM_API_KEY:}}"
       base-url: "${AMSHA_COMPACTION_SARVAM_BASE_URL:https://api.sarvam.ai/v1}"
       model: "${AMSHA_COMPACTION_SARVAM_MODEL:sarvam-105b}"
     opencode:
+      api-key: "${AMSHA_COMPACTION_OPENCODE_API_KEY:${AMSHA_OPENCODE_API_KEY:}}"
       base-url: "${AMSHA_COMPACTION_OPENCODE_BASE_URL:https://opencode.ai/zen/v1}"
       model: "${AMSHA_COMPACTION_OPENCODE_MODEL:deepseek-v4-flash-free}"
     huggingface:
+      api-key: "${AMSHA_COMPACTION_HUGGINGFACE_API_KEY:${AMSHA_HUGGINGFACE_API_KEY:}}"
       base-url: "${AMSHA_COMPACTION_HUGGINGFACE_BASE_URL:https://router.huggingface.co/v1}"
       model: "${AMSHA_COMPACTION_HUGGINGFACE_MODEL:meta-llama/Llama-3.3-70B-Instruct}"
     mistral:
+      api-key: "${AMSHA_COMPACTION_MISTRAL_API_KEY:${AMSHA_MISTRAL_API_KEY:}}"
       base-url: "${AMSHA_COMPACTION_MISTRAL_BASE_URL:https://api.mistral.ai/v1}"
       model: "${AMSHA_COMPACTION_MISTRAL_MODEL:codestral-latest}"
+    cloudflare:
+      api-key: "${AMSHA_COMPACTION_CLOUDFLARE_API_KEY:${AMSHA_CLOUDFLARE_API_KEY:}}"
+      account-id: "${AMSHA_COMPACTION_CLOUDFLARE_ACCOUNT_ID:${AMSHA_CLOUDFLARE_ACCOUNT_ID:}}"
+      # Do not put {account_id} inside ${ENV:default} — MP Config closes on the first '}'.
+      base-url: "${AMSHA_COMPACTION_CLOUDFLARE_BASE_URL:${amsha.llm.cloudflare.unresolved-base-url}}"
+      model: "${AMSHA_COMPACTION_CLOUDFLARE_MODEL:@cf/meta/llama-3.3-70b-instruct-fp8-fast}"
   agent:
     default-timezone: "${AMSHA_DEFAULT_TIMEZONE:Asia/Kolkata}"
     rate-limit:

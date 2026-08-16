@@ -65,6 +65,9 @@ public class ModelDefaultsResource {
                 ModelDefaults.PROVIDER_MISTRAL,
                 providerEntry(ModelDefaults.DEFAULT_MISTRAL_MODEL, ModelDefaults.DEFAULT_MISTRAL_BASE_URL));
         result.put(
+                ModelDefaults.PROVIDER_CLOUDFLARE,
+                providerEntry(ModelDefaults.DEFAULT_CLOUDFLARE_MODEL, ModelDefaults.DEFAULT_CLOUDFLARE_BASE_URL));
+        result.put(
                 ModelDefaults.PROVIDER_GEMINI,
                 providerEntry(ModelDefaults.DEFAULT_GEMINI_MODEL, ModelDefaults.DEFAULT_GEMINI_BASE_URL));
         result.put(

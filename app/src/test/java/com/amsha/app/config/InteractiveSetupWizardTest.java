@@ -161,6 +161,28 @@ class InteractiveSetupWizardTest {
     }
 
     @Test
+    void ensureBaseConfigs_patchesCloudflareCompactionAndClassifierDefaults(@TempDir Path tempDir) throws Exception {
+        Path envFile = tempDir.resolve(".env");
+        Files.writeString(envFile, "AMSHA_LLM_PROVIDER=cloudflare\n");
+        System.setProperty("AMSHA_LLM_PROVIDER", "cloudflare");
+
+        Method ensure = InteractiveSetupWizard.class.getDeclaredMethod("ensureBaseConfigsInEnv", Path.class);
+        ensure.setAccessible(true);
+        ensure.invoke(null, envFile);
+
+        String content = Files.readString(envFile);
+        assertTrue(content.contains("AMSHA_CLOUDFLARE_ACCOUNT_ID="));
+        assertTrue(content.contains("AMSHA_COMPACTION_CLOUDFLARE_MODEL=@cf/meta/llama-3.3-70b-instruct-fp8-fast"));
+        assertTrue(
+                content.contains(
+                        "AMSHA_COMPACTION_CLOUDFLARE_BASE_URL=https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/v1"));
+        assertTrue(content.contains("AMSHA_CLASSIFIER_CLOUDFLARE_MODEL=@cf/meta/llama-3.3-70b-instruct-fp8-fast"));
+        assertTrue(
+                content.contains(
+                        "AMSHA_CLASSIFIER_CLOUDFLARE_BASE_URL=https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/v1"));
+    }
+
+    @Test
     void testHelperMethodsViaReflection() throws Exception {
         Method llmKey = InteractiveSetupWizard.class.getDeclaredMethod("llmApiKeyForProvider", String.class);
         llmKey.setAccessible(true);
@@ -172,6 +194,7 @@ class InteractiveSetupWizardTest {
         assertEquals("AMSHA_OPENCODE_API_KEY", llmKey.invoke(null, "opencode"));
         assertEquals("AMSHA_HUGGINGFACE_API_KEY", llmKey.invoke(null, "huggingface"));
         assertEquals("AMSHA_MISTRAL_API_KEY", llmKey.invoke(null, "mistral"));
+        assertEquals("AMSHA_CLOUDFLARE_API_KEY", llmKey.invoke(null, "cloudflare"));
 
         Method compactionKey =
                 InteractiveSetupWizard.class.getDeclaredMethod("compactionApiKeyForProvider", String.class);
@@ -182,6 +205,7 @@ class InteractiveSetupWizardTest {
         assertEquals("AMSHA_COMPACTION_OPENCODE_API_KEY", compactionKey.invoke(null, "opencode"));
         assertEquals("AMSHA_COMPACTION_HUGGINGFACE_API_KEY", compactionKey.invoke(null, "huggingface"));
         assertEquals("AMSHA_COMPACTION_MISTRAL_API_KEY", compactionKey.invoke(null, "mistral"));
+        assertEquals("AMSHA_COMPACTION_CLOUDFLARE_API_KEY", compactionKey.invoke(null, "cloudflare"));
 
         Method classifierKey =
                 InteractiveSetupWizard.class.getDeclaredMethod("classifierApiKeyForProvider", String.class);
@@ -192,6 +216,7 @@ class InteractiveSetupWizardTest {
         assertEquals("AMSHA_CLASSIFIER_OPENCODE_API_KEY", classifierKey.invoke(null, "opencode"));
         assertEquals("AMSHA_CLASSIFIER_HUGGINGFACE_API_KEY", classifierKey.invoke(null, "huggingface"));
         assertEquals("AMSHA_CLASSIFIER_MISTRAL_API_KEY", classifierKey.invoke(null, "mistral"));
+        assertEquals("AMSHA_CLASSIFIER_CLOUDFLARE_API_KEY", classifierKey.invoke(null, "cloudflare"));
 
         Method genRand = InteractiveSetupWizard.class.getDeclaredMethod("generateRandomValue");
         genRand.setAccessible(true);

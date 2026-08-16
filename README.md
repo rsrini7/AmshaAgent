@@ -70,7 +70,7 @@ See [docs/QUICK_START.md](./docs/QUICK_START.md) for detailed setup options.
 
 ## Key Capabilities
 
-- **ReAct agent loop** across 15 LLM providers, with per-persona model routing and resilient multi-provider fallback
+- **ReAct agent loop** across 16 LLM providers, with per-persona model routing and resilient multi-provider fallback
 - **12 specialist personas** with per-role tool schemas and Qute-rendered system prompts
 - **Realm-based grouped agents** — personas organized into 4 Lokas (Kailasa, Brahmaloka, Vaikunta, Loka-Bahir) with group leads that consult family members
 - **Agent delegation** — any role can delegate via `garuda`; capability-subset enforcement prevents privilege escalation
@@ -258,4 +258,4 @@ Use `--module app`, `--top 10`, `--badge`, or `--json` to narrow or automate rep
 
 ---
 
-> **Last updated**: Amsha Agent V0.1.0 · Quarkus 3.27.2 · JDK 25 · 19 modules · 21 tools · 20 reflexes · 15 LLM providers
+> **Last updated**: Amsha Agent V0.1.0 · Quarkus 3.27.2 · JDK 25 · 19 modules · 21 tools · 20 reflexes · 16 LLM providers

@@ -108,6 +108,12 @@ class ChatModelProducerTest {
     }
 
     @Test
+    void providerBaseUrls_containsCloudflare() throws Exception {
+        Map<String, String> urls = getProviderBaseUrls();
+        assertEquals("https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/v1", urls.get("cloudflare"));
+    }
+
+    @Test
     void providerBaseUrls_containsGemini() throws Exception {
         Map<String, String> urls = getProviderBaseUrls();
         assertEquals("https://generativelanguage.googleapis.com/v1beta", urls.get("gemini"));
@@ -116,7 +122,7 @@ class ChatModelProducerTest {
     @Test
     void providerBaseUrls_hasExpectedCount() throws Exception {
         Map<String, String> urls = getProviderBaseUrls();
-        assertEquals(14, urls.size());
+        assertEquals(15, urls.size());
     }
 
     @Test
