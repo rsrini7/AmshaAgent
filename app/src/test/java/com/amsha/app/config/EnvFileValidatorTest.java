@@ -44,6 +44,7 @@ class EnvFileValidatorTest {
                         "AMSHA_GROQ_API_KEY=changeme",
                         "AMSHA_SARVAM_API_KEY=your_key_here",
                         "AMSHA_OPENCODE_API_KEY=<your-key>",
+                        "AMSHA_HUGGINGFACE_API_KEY=hf_your_key_here",
                         "MALFORMED_LINE_WITHOUT_EQUALS"));
 
         EnvFileValidator.ValidationResult result = EnvFileValidator.validate(envFile);
@@ -51,7 +52,7 @@ class EnvFileValidatorTest {
         assertTrue(result.hasIssues());
         assertEquals(1, result.duplicateKeys().size());
         assertEquals(1, result.malformedLines().size());
-        assertEquals(3, result.placeholderValues().size());
+        assertEquals(4, result.placeholderValues().size());
     }
 
     @Test

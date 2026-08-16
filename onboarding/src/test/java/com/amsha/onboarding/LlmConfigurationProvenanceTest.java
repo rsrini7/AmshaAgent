@@ -306,6 +306,29 @@ class LlmConfigurationProvenanceTest {
         assertTrue(resolution.ready());
     }
 
+    @Test
+    void huggingfaceEnvironmentCredentialIsReported() {
+        LlmConfigurationProvenance provenance = provenanceFor(
+                "huggingface",
+                false,
+                Map.of(
+                        "AMSHA_HUGGINGFACE_API_KEY", "hf_key_123",
+                        "AMSHA_HUGGINGFACE_MODEL", "meta-llama/Llama-3.3-70B-Instruct",
+                        "AMSHA_HUGGINGFACE_BASE_URL", "https://router.huggingface.co/v1"));
+        when(provenance.providerCatalog.descriptor("huggingface"))
+                .thenReturn(Optional.of(requiredDescriptor("huggingface")));
+
+        LlmConfigurationProvenance.Resolution resolution = provenance.resolve();
+
+        assertEquals("huggingface", resolution.effectiveProvider());
+        assertEquals(LlmConfigurationProvenance.SOURCE_ENVIRONMENT, resolution.effectiveSource());
+        assertEquals("meta-llama/Llama-3.3-70B-Instruct", resolution.effectiveModel());
+        assertEquals("https://router.huggingface.co/v1", resolution.effectiveBaseUrl());
+        assertEquals(LlmConfigurationProvenance.CREDENTIAL_CONFIGURED, resolution.credentialState());
+        assertEquals(LlmConfigurationProvenance.SOURCE_ENVIRONMENT, resolution.credentialSource());
+        assertTrue(resolution.ready());
+    }
+
     private static LlmConfigurationProvenance provenanceFor(
             String provider, boolean vaultPriority, Map<String, String> values) {
         LlmConfigurationProvenance provenance = new LlmConfigurationProvenance();

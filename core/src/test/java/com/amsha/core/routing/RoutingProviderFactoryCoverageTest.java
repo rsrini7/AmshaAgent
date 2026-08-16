@@ -25,6 +25,7 @@ class RoutingProviderFactoryCoverageTest {
                 new OmlxLlmProviderFactory(),
                 new OpenAiLlmProviderFactory(),
                 new OpenCodeLlmProviderFactory(),
+                new HuggingFaceLlmProviderFactory(),
                 new OpenRouterLlmProviderFactory(),
                 new SarvamLlmProviderFactory());
     }

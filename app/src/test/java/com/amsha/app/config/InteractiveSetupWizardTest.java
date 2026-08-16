@@ -127,6 +127,23 @@ class InteractiveSetupWizardTest {
     }
 
     @Test
+    void ensureBaseConfigs_patchesHuggingFaceCompactionAndClassifierDefaults(@TempDir Path tempDir) throws Exception {
+        Path envFile = tempDir.resolve(".env");
+        Files.writeString(envFile, "AMSHA_LLM_PROVIDER=huggingface\n");
+        System.setProperty("AMSHA_LLM_PROVIDER", "huggingface");
+
+        Method ensure = InteractiveSetupWizard.class.getDeclaredMethod("ensureBaseConfigsInEnv", Path.class);
+        ensure.setAccessible(true);
+        ensure.invoke(null, envFile);
+
+        String content = Files.readString(envFile);
+        assertTrue(content.contains("AMSHA_COMPACTION_HUGGINGFACE_MODEL=meta-llama/Llama-3.3-70B-Instruct"));
+        assertTrue(content.contains("AMSHA_COMPACTION_HUGGINGFACE_BASE_URL=https://router.huggingface.co/v1"));
+        assertTrue(content.contains("AMSHA_CLASSIFIER_HUGGINGFACE_MODEL=meta-llama/Llama-3.3-70B-Instruct"));
+        assertTrue(content.contains("AMSHA_CLASSIFIER_HUGGINGFACE_BASE_URL=https://router.huggingface.co/v1"));
+    }
+
+    @Test
     void testHelperMethodsViaReflection() throws Exception {
         Method llmKey = InteractiveSetupWizard.class.getDeclaredMethod("llmApiKeyForProvider", String.class);
         llmKey.setAccessible(true);
@@ -136,6 +153,7 @@ class InteractiveSetupWizardTest {
         assertEquals("AMSHA_GROQ_API_KEY", llmKey.invoke(null, "groq"));
         assertEquals("AMSHA_SARVAM_API_KEY", llmKey.invoke(null, "sarvam"));
         assertEquals("AMSHA_OPENCODE_API_KEY", llmKey.invoke(null, "opencode"));
+        assertEquals("AMSHA_HUGGINGFACE_API_KEY", llmKey.invoke(null, "huggingface"));
 
         Method compactionKey =
                 InteractiveSetupWizard.class.getDeclaredMethod("compactionApiKeyForProvider", String.class);
@@ -144,6 +162,7 @@ class InteractiveSetupWizardTest {
         assertEquals("AMSHA_COMPACTION_OPENROUTER_API_KEY", compactionKey.invoke(null, "openrouter"));
         assertEquals("AMSHA_COMPACTION_SARVAM_API_KEY", compactionKey.invoke(null, "sarvam"));
         assertEquals("AMSHA_COMPACTION_OPENCODE_API_KEY", compactionKey.invoke(null, "opencode"));
+        assertEquals("AMSHA_COMPACTION_HUGGINGFACE_API_KEY", compactionKey.invoke(null, "huggingface"));
 
         Method classifierKey =
                 InteractiveSetupWizard.class.getDeclaredMethod("classifierApiKeyForProvider", String.class);
@@ -152,6 +171,7 @@ class InteractiveSetupWizardTest {
         assertEquals("AMSHA_CLASSIFIER_GROQ_API_KEY", classifierKey.invoke(null, "groq"));
         assertEquals("AMSHA_CLASSIFIER_SARVAM_API_KEY", classifierKey.invoke(null, "sarvam"));
         assertEquals("AMSHA_CLASSIFIER_OPENCODE_API_KEY", classifierKey.invoke(null, "opencode"));
+        assertEquals("AMSHA_CLASSIFIER_HUGGINGFACE_API_KEY", classifierKey.invoke(null, "huggingface"));
 
         Method genRand = InteractiveSetupWizard.class.getDeclaredMethod("generateRandomValue");
         genRand.setAccessible(true);

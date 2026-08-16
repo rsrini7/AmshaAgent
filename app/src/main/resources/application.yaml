@@ -337,6 +337,9 @@ amsha:
     opencode:
       base-url: "${AMSHA_CLASSIFIER_OPENCODE_BASE_URL:https://opencode.ai/zen/v1}"
       model: "${AMSHA_CLASSIFIER_OPENCODE_MODEL:deepseek-v4-flash-free}"
+    huggingface:
+      base-url: "${AMSHA_CLASSIFIER_HUGGINGFACE_BASE_URL:https://router.huggingface.co/v1}"
+      model: "${AMSHA_CLASSIFIER_HUGGINGFACE_MODEL:meta-llama/Llama-3.3-70B-Instruct}"
   onnx:
     enabled: ${AMSHA_ONNX_ENABLED:false}
     model-root: "${AMSHA_ONNX_MODEL_ROOT:data/models}"
@@ -433,6 +436,10 @@ amsha:
       api-key: "${AMSHA_OPENCODE_API_KEY:}"
       base-url: "${AMSHA_OPENCODE_BASE_URL:https://opencode.ai/zen/v1}"
       model: "${AMSHA_OPENCODE_MODEL:deepseek-v4-flash-free}"
+    huggingface:
+      api-key: "${AMSHA_HUGGINGFACE_API_KEY:}"
+      base-url: "${AMSHA_HUGGINGFACE_BASE_URL:https://router.huggingface.co/v1}"
+      model: "${AMSHA_HUGGINGFACE_MODEL:meta-llama/Llama-3.3-70B-Instruct}"
   infinite-loop:
     llm:
       providers: ${AMSHA_INFINITE_LOOP_LLM_PROVIDERS:omlx,groq,openrouter}
@@ -470,6 +477,9 @@ amsha:
     opencode:
       base-url: "${AMSHA_COMPACTION_OPENCODE_BASE_URL:https://opencode.ai/zen/v1}"
       model: "${AMSHA_COMPACTION_OPENCODE_MODEL:deepseek-v4-flash-free}"
+    huggingface:
+      base-url: "${AMSHA_COMPACTION_HUGGINGFACE_BASE_URL:https://router.huggingface.co/v1}"
+      model: "${AMSHA_COMPACTION_HUGGINGFACE_MODEL:meta-llama/Llama-3.3-70B-Instruct}"
   agent:
     default-timezone: "${AMSHA_DEFAULT_TIMEZONE:Asia/Kolkata}"
     rate-limit:

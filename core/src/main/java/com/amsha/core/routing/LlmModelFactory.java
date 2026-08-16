@@ -122,6 +122,7 @@ public class LlmModelFactory {
             "cerebras.ai", ModelDefaults.PROVIDER_CEREBRAS,
             "sarvam.ai", ModelDefaults.PROVIDER_SARVAM,
             "opencode.ai", ModelDefaults.PROVIDER_OPENCODE,
+            "huggingface.co", ModelDefaults.PROVIDER_HUGGINGFACE,
             "googleapis.com", ModelDefaults.PROVIDER_GEMINI,
             "localhost:11434", ModelDefaults.PROVIDER_OLLAMA,
             "localhost:9000", ModelDefaults.PROVIDER_LLAMACPP);

@@ -156,6 +156,7 @@ public class ModelProfileCredentialResolver {
         CEREBRAS(ModelDefaults.DEFAULT_CEREBRAS_BASE_URL),
         SARVAM(ModelDefaults.DEFAULT_SARVAM_BASE_URL),
         OPENCODE(ModelDefaults.DEFAULT_OPENCODE_BASE_URL),
+        HUGGINGFACE(ModelDefaults.DEFAULT_HUGGINGFACE_BASE_URL),
         NVIDIA(ModelDefaults.DEFAULT_NVIDIA_BASE_URL),
         GEMINI(ModelDefaults.DEFAULT_GEMINI_BASE_URL),
         OLLAMA(ModelDefaults.DEFAULT_OLLAMA_BASE_URL),

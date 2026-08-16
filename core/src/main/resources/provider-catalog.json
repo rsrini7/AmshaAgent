@@ -102,6 +102,18 @@
     "hasBaseUrl": true
   },
   {
+    "id": "huggingface",
+    "name": "Hugging Face",
+    "tag": "Inference API / Router",
+    "icon": "HF",
+    "color": "#ffcc4d",
+    "defaultModel": "meta-llama/Llama-3.3-70B-Instruct",
+    "embeddingCapable": false,
+    "requiresApiKey": true,
+    "authScheme": "BEARER",
+    "hasBaseUrl": true
+  },
+  {
     "id": "gemini",
     "name": "Gemini",
     "tag": "Google AI",

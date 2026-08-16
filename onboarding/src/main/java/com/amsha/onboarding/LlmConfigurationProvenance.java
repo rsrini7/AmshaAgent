@@ -71,6 +71,10 @@ public class LlmConfigurationProvenance {
                     ModelDefaults.PROVIDER_OPENCODE,
                     new EnvironmentSpec("AMSHA_OPENCODE_MODEL", "AMSHA_OPENCODE_BASE_URL", "AMSHA_OPENCODE_API_KEY")),
             Map.entry(
+                    ModelDefaults.PROVIDER_HUGGINGFACE,
+                    new EnvironmentSpec(
+                            "AMSHA_HUGGINGFACE_MODEL", "AMSHA_HUGGINGFACE_BASE_URL", "AMSHA_HUGGINGFACE_API_KEY")),
+            Map.entry(
                     ModelDefaults.PROVIDER_GEMINI,
                     new EnvironmentSpec("AMSHA_GEMINI_MODEL", "", "AMSHA_GEMINI_API_KEY")),
             Map.entry(ModelDefaults.PROVIDER_OMLX, new EnvironmentSpec("AMSHA_OMLX_MODEL", "AMSHA_OMLX_BASE_URL", "")),

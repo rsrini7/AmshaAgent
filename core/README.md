@@ -20,6 +20,7 @@ reflexes, safety guards, tool interfaces, and built-in LLM providers.
 | Cerebras | `cerebras` | `qwen-3-235b-a22b-instruct-2507` | `https://api.cerebras.ai/v1` |
 | Sarvam AI | `sarvam` | `sarvam-105b` | `https://api.sarvam.ai/v1` |
 | OpenCode | `opencode` | `deepseek-v4-flash-free` | `https://opencode.ai/zen/v1` |
+| Hugging Face | `huggingface` | `meta-llama/Llama-3.3-70B-Instruct` | `https://router.huggingface.co/v1` |
 | Gemini | `gemini` | `gemini-2.5-flash-lite` | `https://generativelanguage.googleapis.com/v1beta` |
 | OMLX | `omlx` | `mlx-community/Qwen3.6-35B-A3B-4bit` | `http://127.0.0.1:8000/v1` |
 | Llama.cpp | `llamacpp` | `qwen3` | `http://127.0.0.1:9000/v1` |
@@ -52,6 +53,20 @@ reflexes, safety guards, tool interfaces, and built-in LLM providers.
 | `amsha.classifier.opencode.api-key` | `AMSHA_CLASSIFIER_OPENCODE_API_KEY` | — | OpenCode API key for classifier slot |
 | `amsha.classifier.opencode.model` | `AMSHA_CLASSIFIER_OPENCODE_MODEL` | `deepseek-v4-flash-free` | Classifier slot model |
 | `amsha.classifier.opencode.base-url` | `AMSHA_CLASSIFIER_OPENCODE_BASE_URL` | `https://opencode.ai/zen/v1` | Classifier slot base URL |
+
+## Hugging Face Configuration
+
+| Property | Env Var | Default | Description |
+|---|---|---|---|
+| `amsha.llm.huggingface.api-key` | `AMSHA_HUGGINGFACE_API_KEY` | — | Hugging Face User Access Token (`hf_...`) |
+| `amsha.llm.huggingface.base-url` | `AMSHA_HUGGINGFACE_BASE_URL` | `https://router.huggingface.co/v1` | Hugging Face Inference API / Router base URL |
+| `amsha.llm.huggingface.model` | `AMSHA_HUGGINGFACE_MODEL` | `meta-llama/Llama-3.3-70B-Instruct` | Default chat model |
+| `amsha.compaction.huggingface.api-key` | `AMSHA_COMPACTION_HUGGINGFACE_API_KEY` | — | Hugging Face API key for compaction slot |
+| `amsha.compaction.huggingface.model` | `AMSHA_COMPACTION_HUGGINGFACE_MODEL` | `meta-llama/Llama-3.3-70B-Instruct` | Compaction slot model |
+| `amsha.compaction.huggingface.base-url` | `AMSHA_COMPACTION_HUGGINGFACE_BASE_URL` | `https://router.huggingface.co/v1` | Compaction slot base URL |
+| `amsha.classifier.huggingface.api-key` | `AMSHA_CLASSIFIER_HUGGINGFACE_API_KEY` | — | Hugging Face API key for classifier slot |
+| `amsha.classifier.huggingface.model` | `AMSHA_CLASSIFIER_HUGGINGFACE_MODEL` | `meta-llama/Llama-3.3-70B-Instruct` | Classifier slot model |
+| `amsha.classifier.huggingface.base-url` | `AMSHA_CLASSIFIER_HUGGINGFACE_BASE_URL` | `https://router.huggingface.co/v1` | Classifier slot base URL |
 
 ## Testing
 

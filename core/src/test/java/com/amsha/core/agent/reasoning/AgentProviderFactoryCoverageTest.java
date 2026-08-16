@@ -30,7 +30,8 @@ class AgentProviderFactoryCoverageTest {
                 OpenAiProviderFactory.class,
                 OpenRouterProviderFactory.class,
                 SarvamProviderFactory.class,
-                OpenCodeProviderFactory.class);
+                OpenCodeProviderFactory.class,
+                HuggingFaceProviderFactory.class);
     }
 
     @ParameterizedTest

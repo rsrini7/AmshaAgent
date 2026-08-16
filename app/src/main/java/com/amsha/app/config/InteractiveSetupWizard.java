@@ -145,8 +145,9 @@ public class InteractiveSetupWizard {
         System.err.println("  │  9. Generic OpenAI - any OpenAI-compatible endpoint");
         System.err.println("  │  10. Sarvam - Indic-language models");
         System.err.println("  │  11. OpenCode - OpenAI-compatible endpoint (Zen / Go)");
+        System.err.println("  │  12. Hugging Face - Inference API / Router");
         System.err.println("  │");
-        String choice = readLineWithFallback(System.console(), "  └─ Select provider [1-11, Default: 1]: ");
+        String choice = readLineWithFallback(System.console(), "  └─ Select provider [1-12, Default: 1]: ");
         String provider =
                 switch (choice != null ? choice.trim() : "") {
                     case "2" -> "openrouter";
@@ -159,6 +160,7 @@ public class InteractiveSetupWizard {
                     case "9" -> "generic-openai";
                     case "10" -> "sarvam";
                     case "11" -> "opencode";
+                    case "12" -> "huggingface";
                     default -> "groq";
                 };
         System.setProperty("AMSHA_LLM_PROVIDER", provider);
@@ -203,6 +205,12 @@ public class InteractiveSetupWizard {
             patchBaseConfig(envFile, "AMSHA_COMPACTION_OPENCODE_BASE_URL", "https://opencode.ai/zen/v1");
             patchBaseConfig(envFile, "AMSHA_CLASSIFIER_OPENCODE_MODEL", "deepseek-v4-flash-free");
             patchBaseConfig(envFile, "AMSHA_CLASSIFIER_OPENCODE_BASE_URL", "https://opencode.ai/zen/v1");
+        }
+        if ("huggingface".equalsIgnoreCase(provider)) {
+            patchBaseConfig(envFile, "AMSHA_COMPACTION_HUGGINGFACE_MODEL", "meta-llama/Llama-3.3-70B-Instruct");
+            patchBaseConfig(envFile, "AMSHA_COMPACTION_HUGGINGFACE_BASE_URL", "https://router.huggingface.co/v1");
+            patchBaseConfig(envFile, "AMSHA_CLASSIFIER_HUGGINGFACE_MODEL", "meta-llama/Llama-3.3-70B-Instruct");
+            patchBaseConfig(envFile, "AMSHA_CLASSIFIER_HUGGINGFACE_BASE_URL", "https://router.huggingface.co/v1");
         }
     }
 
@@ -291,6 +299,7 @@ public class InteractiveSetupWizard {
             case "nvidia" -> "AMSHA_NVIDIA_API_KEY";
             case "sarvam" -> "AMSHA_SARVAM_API_KEY";
             case "opencode" -> "AMSHA_OPENCODE_API_KEY";
+            case "huggingface" -> "AMSHA_HUGGINGFACE_API_KEY";
             case "omlx" -> "AMSHA_OMLX_API_KEY";
             case "generic-openai" -> "AMSHA_GENERIC_OPENAI_API_KEY";
             default -> "AMSHA_GROQ_API_KEY";
@@ -311,6 +320,7 @@ public class InteractiveSetupWizard {
             case "nvidia" -> "AMSHA_COMPACTION_NVIDIA_API_KEY";
             case "sarvam" -> "AMSHA_COMPACTION_SARVAM_API_KEY";
             case "opencode" -> "AMSHA_COMPACTION_OPENCODE_API_KEY";
+            case "huggingface" -> "AMSHA_COMPACTION_HUGGINGFACE_API_KEY";
             case "generic-openai" -> "AMSHA_COMPACTION_GENERIC_OPENAI_API_KEY";
             default -> "AMSHA_COMPACTION_GROQ_API_KEY";
         };
@@ -330,6 +340,7 @@ public class InteractiveSetupWizard {
             case "nvidia" -> "AMSHA_CLASSIFIER_NVIDIA_API_KEY";
             case "sarvam" -> "AMSHA_CLASSIFIER_SARVAM_API_KEY";
             case "opencode" -> "AMSHA_CLASSIFIER_OPENCODE_API_KEY";
+            case "huggingface" -> "AMSHA_CLASSIFIER_HUGGINGFACE_API_KEY";
             case "generic-openai" -> "AMSHA_CLASSIFIER_GENERIC_OPENAI_API_KEY";
             default -> "AMSHA_CLASSIFIER_GROQ_API_KEY";
         };

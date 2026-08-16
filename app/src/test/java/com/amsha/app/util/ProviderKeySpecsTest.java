@@ -16,6 +16,7 @@ class ProviderKeySpecsTest {
         assertNotNull(ProviderKeySpecs.llmKeySpecFor("cerebras"));
         assertNotNull(ProviderKeySpecs.llmKeySpecFor("sarvam"));
         assertNotNull(ProviderKeySpecs.llmKeySpecFor("opencode"));
+        assertNotNull(ProviderKeySpecs.llmKeySpecFor("huggingface"));
         assertNotNull(ProviderKeySpecs.llmKeySpecFor("omlx"));
         assertNotNull(ProviderKeySpecs.llmKeySpecFor("generic-openai"));
         assertNull(ProviderKeySpecs.llmKeySpecFor("ollama"));
@@ -34,6 +35,7 @@ class ProviderKeySpecsTest {
         assertNotNull(ProviderKeySpecs.compactionKeySpecFor("nvidia"));
         assertNotNull(ProviderKeySpecs.compactionKeySpecFor("sarvam"));
         assertNotNull(ProviderKeySpecs.compactionKeySpecFor("opencode"));
+        assertNotNull(ProviderKeySpecs.compactionKeySpecFor("huggingface"));
         assertNotNull(ProviderKeySpecs.compactionKeySpecFor("generic-openai"));
     }
 
@@ -49,6 +51,7 @@ class ProviderKeySpecsTest {
         assertNotNull(ProviderKeySpecs.classifierKeySpecFor("nvidia"));
         assertNotNull(ProviderKeySpecs.classifierKeySpecFor("sarvam"));
         assertNotNull(ProviderKeySpecs.classifierKeySpecFor("opencode"));
+        assertNotNull(ProviderKeySpecs.classifierKeySpecFor("huggingface"));
         assertNotNull(ProviderKeySpecs.classifierKeySpecFor("generic-openai"));
     }
 

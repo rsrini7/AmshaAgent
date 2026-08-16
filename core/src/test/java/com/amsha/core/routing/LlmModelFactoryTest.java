@@ -25,6 +25,7 @@ class LlmModelFactoryTest {
         assertEquals("sarvam", LlmModelFactory.inferProviderFromUrl("https://api.sarvam.ai/v1"));
         assertEquals("opencode", LlmModelFactory.inferProviderFromUrl("https://opencode.ai/zen/v1"));
         assertEquals("opencode", LlmModelFactory.inferProviderFromUrl("https://opencode.ai/zen/go/v1"));
+        assertEquals("huggingface", LlmModelFactory.inferProviderFromUrl("https://router.huggingface.co/v1"));
         assertEquals(
                 "gemini",
                 LlmModelFactory.inferProviderFromUrl("https://generativelanguage.googleapis.com/v1beta/openai/"));
@@ -82,6 +83,21 @@ class LlmModelFactoryTest {
                 "https://opencode.ai/zen/v1",
                 "test-key",
                 "deepseek-v4-flash-free",
+                100,
+                null,
+                1,
+                null,
+                null);
+        assertNotNull(model);
+    }
+
+    @Test
+    void testCreateHuggingFaceModel() {
+        ChatModel model = factory.createModel(
+                "huggingface",
+                "https://router.huggingface.co/v1",
+                "hf_test_key",
+                "meta-llama/Llama-3.3-70B-Instruct",
                 100,
                 null,
                 1,

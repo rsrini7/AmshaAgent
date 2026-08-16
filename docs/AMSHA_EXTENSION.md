@@ -523,7 +523,9 @@ AMSHA_LLM_MODEL_NAME=my-model-name
 | `CerebrasProviderFactory` | `cerebras` | `AgentChatModelProvider` | `amsha-core` |
 | `SarvamProviderFactory` | `sarvam` | `AgentChatModelProvider` | `amsha-core` |
 | `OpenCodeProviderFactory` | `opencode` | `AgentChatModelProvider` | `amsha-core` |
+| `HuggingFaceProviderFactory` | `huggingface` | `AgentChatModelProvider` | `amsha-core` |
 | `LlamaCppProviderFactory` | `llamacpp` | `AgentChatModelProvider` | `amsha-core` |
+| `GenericOpenAiProviderFactory` | `generic-openai` | `AgentChatModelProvider` | `amsha-core` |
 | `InfiniteLoopAgentChatModelProvider` | `infiniteloop` | `AgentChatModelProvider` | `amsha-core` |
 
 Each provider also has a corresponding `RoutingChatModelProvider` implementation in `amsha-core` for intent classification and compaction.
@@ -921,4 +923,4 @@ If your new class is used reflectively at runtime (e.g., Jackson deserialization
 
 ---
 
-*Last updated: Amsha Agent V0.1.0 · Quarkus 3.27.2 · JDK 25 · 13 LLM providers*
+*Last updated: Amsha Agent V0.1.0 · Quarkus 3.27.2 · JDK 25 · 14 LLM providers*
