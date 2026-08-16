@@ -16,6 +16,7 @@ class ModelDefaultsTest {
         assertEquals(ModelDefaults.DEFAULT_SARVAM_MODEL, ModelDefaults.defaultModelForProvider("sarvam"));
         assertEquals(ModelDefaults.DEFAULT_OPENCODE_MODEL, ModelDefaults.defaultModelForProvider("opencode"));
         assertEquals(ModelDefaults.DEFAULT_HUGGINGFACE_MODEL, ModelDefaults.defaultModelForProvider("huggingface"));
+        assertEquals(ModelDefaults.DEFAULT_MISTRAL_MODEL, ModelDefaults.defaultModelForProvider("mistral"));
     }
 
     @Test
@@ -25,6 +26,7 @@ class ModelDefaultsTest {
         assertEquals(ModelDefaults.DEFAULT_SARVAM_MODEL, ModelDefaults.defaultModelForProvider("SARVAM"));
         assertEquals(ModelDefaults.DEFAULT_OPENCODE_MODEL, ModelDefaults.defaultModelForProvider("OPENCODE"));
         assertEquals(ModelDefaults.DEFAULT_HUGGINGFACE_MODEL, ModelDefaults.defaultModelForProvider("HUGGINGFACE"));
+        assertEquals(ModelDefaults.DEFAULT_MISTRAL_MODEL, ModelDefaults.defaultModelForProvider("MISTRAL"));
         assertEquals(ModelDefaults.DEFAULT_GROQ_MODEL, ModelDefaults.defaultModelForProvider(null));
         assertEquals(ModelDefaults.DEFAULT_GROQ_MODEL, ModelDefaults.defaultModelForProvider("unknown-provider"));
     }
@@ -38,6 +40,7 @@ class ModelDefaultsTest {
         assertEquals(ModelDefaults.DEFAULT_OPENCODE_BASE_URL, ModelDefaults.defaultBaseUrlForProvider("opencode"));
         assertEquals(
                 ModelDefaults.DEFAULT_HUGGINGFACE_BASE_URL, ModelDefaults.defaultBaseUrlForProvider("huggingface"));
+        assertEquals(ModelDefaults.DEFAULT_MISTRAL_BASE_URL, ModelDefaults.defaultBaseUrlForProvider("mistral"));
         assertEquals("", ModelDefaults.defaultBaseUrlForProvider("claude-code"));
         assertEquals("", ModelDefaults.defaultBaseUrlForProvider(null));
         assertEquals("", ModelDefaults.defaultBaseUrlForProvider("unknown"));
@@ -54,6 +57,7 @@ class ModelDefaultsTest {
         assertEquals(
                 ModelDefaults.PROVIDER_HUGGINGFACE,
                 ModelDefaults.inferProviderFromUrl("https://router.huggingface.co/v1"));
+        assertEquals(ModelDefaults.PROVIDER_MISTRAL, ModelDefaults.inferProviderFromUrl("https://api.mistral.ai/v1"));
         assertEquals(ModelDefaults.PROVIDER_OLLAMA, ModelDefaults.inferProviderFromUrl("http://localhost:11434"));
         assertEquals(ModelDefaults.PROVIDER_LLAMACPP, ModelDefaults.inferProviderFromUrl("http://localhost:9000/v1"));
         assertEquals(ModelDefaults.PROVIDER_OPENROUTER, ModelDefaults.inferProviderFromUrl(null));
@@ -72,6 +76,12 @@ class ModelDefaultsTest {
         assertEquals(
                 ModelDefaults.PROVIDER_OPENCODE,
                 ModelDefaults.inferProviderFromUrl(ModelDefaults.DEFAULT_OPENCODE_BASE_URL));
+        assertEquals(
+                ModelDefaults.PROVIDER_HUGGINGFACE,
+                ModelDefaults.inferProviderFromUrl(ModelDefaults.DEFAULT_HUGGINGFACE_BASE_URL));
+        assertEquals(
+                ModelDefaults.PROVIDER_MISTRAL,
+                ModelDefaults.inferProviderFromUrl(ModelDefaults.DEFAULT_MISTRAL_BASE_URL));
         assertEquals(
                 ModelDefaults.PROVIDER_OMLX, ModelDefaults.inferProviderFromUrl(ModelDefaults.DEFAULT_OMLX_BASE_URL));
         assertEquals(

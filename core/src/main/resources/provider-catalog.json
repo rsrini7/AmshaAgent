@@ -114,6 +114,18 @@
     "hasBaseUrl": true
   },
   {
+    "id": "mistral",
+    "name": "Mistral AI",
+    "tag": "Codestral & Mistral models",
+    "icon": "MIST",
+    "color": "#fd6f00",
+    "defaultModel": "codestral-latest",
+    "embeddingCapable": false,
+    "requiresApiKey": true,
+    "authScheme": "BEARER",
+    "hasBaseUrl": true
+  },
+  {
     "id": "gemini",
     "name": "Gemini",
     "tag": "Google AI",

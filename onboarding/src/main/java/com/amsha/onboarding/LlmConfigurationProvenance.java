@@ -75,6 +75,9 @@ public class LlmConfigurationProvenance {
                     new EnvironmentSpec(
                             "AMSHA_HUGGINGFACE_MODEL", "AMSHA_HUGGINGFACE_BASE_URL", "AMSHA_HUGGINGFACE_API_KEY")),
             Map.entry(
+                    ModelDefaults.PROVIDER_MISTRAL,
+                    new EnvironmentSpec("AMSHA_MISTRAL_MODEL", "AMSHA_MISTRAL_BASE_URL", "AMSHA_MISTRAL_API_KEY")),
+            Map.entry(
                     ModelDefaults.PROVIDER_GEMINI,
                     new EnvironmentSpec("AMSHA_GEMINI_MODEL", "", "AMSHA_GEMINI_API_KEY")),
             Map.entry(ModelDefaults.PROVIDER_OMLX, new EnvironmentSpec("AMSHA_OMLX_MODEL", "AMSHA_OMLX_BASE_URL", "")),

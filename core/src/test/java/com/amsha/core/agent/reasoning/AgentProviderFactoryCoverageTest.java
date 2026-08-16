@@ -31,7 +31,8 @@ class AgentProviderFactoryCoverageTest {
                 OpenRouterProviderFactory.class,
                 SarvamProviderFactory.class,
                 OpenCodeProviderFactory.class,
-                HuggingFaceProviderFactory.class);
+                HuggingFaceProviderFactory.class,
+                MistralProviderFactory.class);
     }
 
     @ParameterizedTest

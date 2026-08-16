@@ -26,6 +26,7 @@ public final class ModelDefaults {
     public static final String PROVIDER_SARVAM = "sarvam";
     public static final String PROVIDER_OPENCODE = "opencode";
     public static final String PROVIDER_HUGGINGFACE = "huggingface";
+    public static final String PROVIDER_MISTRAL = "mistral";
     public static final String PROVIDER_GEMINI = "gemini";
     public static final String PROVIDER_OMLX = "omlx";
     public static final String PROVIDER_LLAMACPP = "llamacpp";
@@ -45,6 +46,7 @@ public final class ModelDefaults {
     public static final String DEFAULT_SARVAM_MODEL = "sarvam-105b";
     public static final String DEFAULT_OPENCODE_MODEL = "deepseek-v4-flash-free";
     public static final String DEFAULT_HUGGINGFACE_MODEL = "meta-llama/Llama-3.3-70B-Instruct";
+    public static final String DEFAULT_MISTRAL_MODEL = "codestral-latest";
     public static final String DEFAULT_GEMINI_MODEL = "gemini-2.5-flash-lite";
     public static final String DEFAULT_OMLX_MODEL = "mlx-community/Qwen3.6-35B-A3B-4bit";
     public static final String DEFAULT_LLAMACPP_MODEL = "qwen3";
@@ -63,6 +65,7 @@ public final class ModelDefaults {
     public static final String DEFAULT_SARVAM_BASE_URL = "https://api.sarvam.ai/v1";
     public static final String DEFAULT_OPENCODE_BASE_URL = "https://opencode.ai/zen/v1";
     public static final String DEFAULT_HUGGINGFACE_BASE_URL = "https://router.huggingface.co/v1";
+    public static final String DEFAULT_MISTRAL_BASE_URL = "https://api.mistral.ai/v1";
     public static final String DEFAULT_GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta";
     public static final String DEFAULT_OMLX_BASE_URL = "http://127.0.0.1:8000/v1";
     public static final String DEFAULT_LLAMACPP_BASE_URL = "http://127.0.0.1:9000/v1";
@@ -86,6 +89,7 @@ public final class ModelDefaults {
             Map.entry("sarvam.ai", PROVIDER_SARVAM),
             Map.entry("opencode.ai", PROVIDER_OPENCODE),
             Map.entry("huggingface.co", PROVIDER_HUGGINGFACE),
+            Map.entry("mistral.ai", PROVIDER_MISTRAL),
             Map.entry("googleapis.com", PROVIDER_GEMINI),
             Map.entry("anthropic.com", PROVIDER_ANTHROPIC),
             Map.entry("localhost:11434", PROVIDER_OLLAMA),
@@ -113,6 +117,7 @@ public final class ModelDefaults {
             case PROVIDER_SARVAM -> DEFAULT_SARVAM_MODEL;
             case PROVIDER_OPENCODE -> DEFAULT_OPENCODE_MODEL;
             case PROVIDER_HUGGINGFACE -> DEFAULT_HUGGINGFACE_MODEL;
+            case PROVIDER_MISTRAL -> DEFAULT_MISTRAL_MODEL;
             case PROVIDER_GEMINI -> DEFAULT_GEMINI_MODEL;
             case PROVIDER_OMLX -> DEFAULT_OMLX_MODEL;
             case PROVIDER_LLAMACPP -> DEFAULT_LLAMACPP_MODEL;
@@ -139,6 +144,7 @@ public final class ModelDefaults {
             case PROVIDER_SARVAM -> DEFAULT_SARVAM_BASE_URL;
             case PROVIDER_OPENCODE -> DEFAULT_OPENCODE_BASE_URL;
             case PROVIDER_HUGGINGFACE -> DEFAULT_HUGGINGFACE_BASE_URL;
+            case PROVIDER_MISTRAL -> DEFAULT_MISTRAL_BASE_URL;
             case PROVIDER_GEMINI -> DEFAULT_GEMINI_BASE_URL;
             case PROVIDER_OMLX -> DEFAULT_OMLX_BASE_URL;
             case PROVIDER_LLAMACPP -> DEFAULT_LLAMACPP_BASE_URL;

@@ -22,6 +22,7 @@ class ModelDefaultsResourceUnitTest {
         assertTrue(map.containsKey("sarvam"));
         assertTrue(map.containsKey("opencode"));
         assertTrue(map.containsKey("huggingface"));
+        assertTrue(map.containsKey("mistral"));
     }
 
     @Test
@@ -49,5 +50,14 @@ class ModelDefaultsResourceUnitTest {
         Map<?, ?> map = (Map<?, ?>) response.getEntity();
         assertEquals("meta-llama/Llama-3.3-70B-Instruct", map.get("defaultModel"));
         assertEquals("https://router.huggingface.co/v1", map.get("defaultBaseUrl"));
+    }
+
+    @Test
+    void testGetDefaultForProviderMistral() {
+        Response response = resource.getDefaultForProvider("mistral");
+        assertEquals(200, response.getStatus());
+        Map<?, ?> map = (Map<?, ?>) response.getEntity();
+        assertEquals("codestral-latest", map.get("defaultModel"));
+        assertEquals("https://api.mistral.ai/v1", map.get("defaultBaseUrl"));
     }
 }

@@ -668,6 +668,7 @@ See [SETUP.md](./SETUP.md) for detailed backend switching instructions.
 | Sarvam | `sarvam-105b` | Indic-language models |
 | OpenCode | `deepseek-v4-flash-free` | OpenAI-compatible endpoint (Zen / Go) |
 | Hugging Face | `meta-llama/Llama-3.3-70B-Instruct` | Inference API / Router |
+| Mistral | `codestral-latest` | Codestral & Mistral frontier models |
 | OMLX | `mlx-community/Qwen3.6-35B-A3B-4bit` | OMLX inference |
 | LlamaCpp | `qwen3` | Local inference via OpenAI-compatible API on port 9000 |
 | Generic OpenAI | `gpt-4o-mini` | Any OpenAI-compatible endpoint |

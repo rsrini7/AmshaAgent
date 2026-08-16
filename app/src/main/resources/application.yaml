@@ -340,6 +340,9 @@ amsha:
     huggingface:
       base-url: "${AMSHA_CLASSIFIER_HUGGINGFACE_BASE_URL:https://router.huggingface.co/v1}"
       model: "${AMSHA_CLASSIFIER_HUGGINGFACE_MODEL:meta-llama/Llama-3.3-70B-Instruct}"
+    mistral:
+      base-url: "${AMSHA_CLASSIFIER_MISTRAL_BASE_URL:https://api.mistral.ai/v1}"
+      model: "${AMSHA_CLASSIFIER_MISTRAL_MODEL:codestral-latest}"
   onnx:
     enabled: ${AMSHA_ONNX_ENABLED:false}
     model-root: "${AMSHA_ONNX_MODEL_ROOT:data/models}"
@@ -440,6 +443,10 @@ amsha:
       api-key: "${AMSHA_HUGGINGFACE_API_KEY:}"
       base-url: "${AMSHA_HUGGINGFACE_BASE_URL:https://router.huggingface.co/v1}"
       model: "${AMSHA_HUGGINGFACE_MODEL:meta-llama/Llama-3.3-70B-Instruct}"
+    mistral:
+      api-key: "${AMSHA_MISTRAL_API_KEY:}"
+      base-url: "${AMSHA_MISTRAL_BASE_URL:https://api.mistral.ai/v1}"
+      model: "${AMSHA_MISTRAL_MODEL:codestral-latest}"
   infinite-loop:
     llm:
       providers: ${AMSHA_INFINITE_LOOP_LLM_PROVIDERS:omlx,groq,openrouter}
@@ -480,6 +487,9 @@ amsha:
     huggingface:
       base-url: "${AMSHA_COMPACTION_HUGGINGFACE_BASE_URL:https://router.huggingface.co/v1}"
       model: "${AMSHA_COMPACTION_HUGGINGFACE_MODEL:meta-llama/Llama-3.3-70B-Instruct}"
+    mistral:
+      base-url: "${AMSHA_COMPACTION_MISTRAL_BASE_URL:https://api.mistral.ai/v1}"
+      model: "${AMSHA_COMPACTION_MISTRAL_MODEL:codestral-latest}"
   agent:
     default-timezone: "${AMSHA_DEFAULT_TIMEZONE:Asia/Kolkata}"
     rate-limit:

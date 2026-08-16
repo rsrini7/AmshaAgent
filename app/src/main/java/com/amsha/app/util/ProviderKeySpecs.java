@@ -93,6 +93,13 @@ public final class ProviderKeySpecs {
             "2. Create an access token at https://huggingface.co/settings/tokens",
             "3. Add:  AMSHA_HUGGINGFACE_API_KEY=hf_your_key_here");
 
+    public static final VarSpec MISTRAL_KEY_SPEC = new VarSpec(
+            "AMSHA_MISTRAL_API_KEY",
+            "Mistral AI API key.",
+            "1. Sign up at https://console.mistral.ai",
+            "2. Create an API key",
+            "3. Add:  AMSHA_MISTRAL_API_KEY=your_key_here");
+
     public static final VarSpec GENERIC_OPENAI_KEY_SPEC = new VarSpec(
             "AMSHA_GENERIC_OPENAI_API_KEY",
             "Generic OpenAI-compatible API key.",
@@ -118,6 +125,7 @@ public final class ProviderKeySpecs {
             case "sarvam" -> SARVAM_KEY_SPEC;
             case "opencode" -> OPENCODE_KEY_SPEC;
             case "huggingface" -> HUGGINGFACE_KEY_SPEC;
+            case "mistral" -> MISTRAL_KEY_SPEC;
             case "omlx" -> OMLX_KEY_SPEC;
             case "generic-openai" -> GENERIC_OPENAI_KEY_SPEC;
             case "ollama" -> null;
@@ -157,6 +165,8 @@ public final class ProviderKeySpecs {
                         "AMSHA_COMPACTION_HUGGINGFACE_API_KEY",
                         "hf_",
                         "https://huggingface.co/settings/tokens");
+            case "mistral" ->
+                providerKeySpec("mistral", "AMSHA_COMPACTION_MISTRAL_API_KEY", "", "https://console.mistral.ai");
             case "generic-openai" ->
                 providerKeySpec(
                         "generic-openai", "AMSHA_COMPACTION_GENERIC_OPENAI_API_KEY", "", "your provider dashboard");
@@ -196,6 +206,8 @@ public final class ProviderKeySpecs {
                         "AMSHA_CLASSIFIER_HUGGINGFACE_API_KEY",
                         "hf_",
                         "https://huggingface.co/settings/tokens");
+            case "mistral" ->
+                providerKeySpec("mistral", "AMSHA_CLASSIFIER_MISTRAL_API_KEY", "", "https://console.mistral.ai");
             case "generic-openai" ->
                 providerKeySpec(
                         "generic-openai", "AMSHA_CLASSIFIER_GENERIC_OPENAI_API_KEY", "", "your provider dashboard");

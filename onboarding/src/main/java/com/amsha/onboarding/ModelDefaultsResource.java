@@ -62,6 +62,9 @@ public class ModelDefaultsResource {
                 ModelDefaults.PROVIDER_HUGGINGFACE,
                 providerEntry(ModelDefaults.DEFAULT_HUGGINGFACE_MODEL, ModelDefaults.DEFAULT_HUGGINGFACE_BASE_URL));
         result.put(
+                ModelDefaults.PROVIDER_MISTRAL,
+                providerEntry(ModelDefaults.DEFAULT_MISTRAL_MODEL, ModelDefaults.DEFAULT_MISTRAL_BASE_URL));
+        result.put(
                 ModelDefaults.PROVIDER_GEMINI,
                 providerEntry(ModelDefaults.DEFAULT_GEMINI_MODEL, ModelDefaults.DEFAULT_GEMINI_BASE_URL));
         result.put(

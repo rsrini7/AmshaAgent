@@ -329,6 +329,28 @@ class LlmConfigurationProvenanceTest {
         assertTrue(resolution.ready());
     }
 
+    @Test
+    void mistralEnvironmentCredentialIsReported() {
+        LlmConfigurationProvenance provenance = provenanceFor(
+                "mistral",
+                false,
+                Map.of(
+                        "AMSHA_MISTRAL_API_KEY", "mistral_key_123",
+                        "AMSHA_MISTRAL_MODEL", "codestral-latest",
+                        "AMSHA_MISTRAL_BASE_URL", "https://api.mistral.ai/v1"));
+        when(provenance.providerCatalog.descriptor("mistral")).thenReturn(Optional.of(requiredDescriptor("mistral")));
+
+        LlmConfigurationProvenance.Resolution resolution = provenance.resolve();
+
+        assertEquals("mistral", resolution.effectiveProvider());
+        assertEquals(LlmConfigurationProvenance.SOURCE_ENVIRONMENT, resolution.effectiveSource());
+        assertEquals("codestral-latest", resolution.effectiveModel());
+        assertEquals("https://api.mistral.ai/v1", resolution.effectiveBaseUrl());
+        assertEquals(LlmConfigurationProvenance.CREDENTIAL_CONFIGURED, resolution.credentialState());
+        assertEquals(LlmConfigurationProvenance.SOURCE_ENVIRONMENT, resolution.credentialSource());
+        assertTrue(resolution.ready());
+    }
+
     private static LlmConfigurationProvenance provenanceFor(
             String provider, boolean vaultPriority, Map<String, String> values) {
         LlmConfigurationProvenance provenance = new LlmConfigurationProvenance();

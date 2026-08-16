@@ -21,6 +21,7 @@ reflexes, safety guards, tool interfaces, and built-in LLM providers.
 | Sarvam AI | `sarvam` | `sarvam-105b` | `https://api.sarvam.ai/v1` |
 | OpenCode | `opencode` | `deepseek-v4-flash-free` | `https://opencode.ai/zen/v1` |
 | Hugging Face | `huggingface` | `meta-llama/Llama-3.3-70B-Instruct` | `https://router.huggingface.co/v1` |
+| Mistral AI | `mistral` | `codestral-latest` | `https://api.mistral.ai/v1` |
 | Gemini | `gemini` | `gemini-2.5-flash-lite` | `https://generativelanguage.googleapis.com/v1beta` |
 | OMLX | `omlx` | `mlx-community/Qwen3.6-35B-A3B-4bit` | `http://127.0.0.1:8000/v1` |
 | Llama.cpp | `llamacpp` | `qwen3` | `http://127.0.0.1:9000/v1` |
@@ -67,6 +68,20 @@ reflexes, safety guards, tool interfaces, and built-in LLM providers.
 | `amsha.classifier.huggingface.api-key` | `AMSHA_CLASSIFIER_HUGGINGFACE_API_KEY` | — | Hugging Face API key for classifier slot |
 | `amsha.classifier.huggingface.model` | `AMSHA_CLASSIFIER_HUGGINGFACE_MODEL` | `meta-llama/Llama-3.3-70B-Instruct` | Classifier slot model |
 | `amsha.classifier.huggingface.base-url` | `AMSHA_CLASSIFIER_HUGGINGFACE_BASE_URL` | `https://router.huggingface.co/v1` | Classifier slot base URL |
+
+## Mistral AI Configuration
+
+| Property | Env Var | Default | Description |
+|---|---|---|---|
+| `amsha.llm.mistral.api-key` | `AMSHA_MISTRAL_API_KEY` | — | Mistral AI API key |
+| `amsha.llm.mistral.base-url` | `AMSHA_MISTRAL_BASE_URL` | `https://api.mistral.ai/v1` | Mistral AI v1 API base URL |
+| `amsha.llm.mistral.model` | `AMSHA_MISTRAL_MODEL` | `codestral-latest` | Default chat model |
+| `amsha.compaction.mistral.api-key` | `AMSHA_COMPACTION_MISTRAL_API_KEY` | — | Mistral API key for compaction slot |
+| `amsha.compaction.mistral.model` | `AMSHA_COMPACTION_MISTRAL_MODEL` | `codestral-latest` | Compaction slot model |
+| `amsha.compaction.mistral.base-url` | `AMSHA_COMPACTION_MISTRAL_BASE_URL` | `https://api.mistral.ai/v1` | Compaction slot base URL |
+| `amsha.classifier.mistral.api-key` | `AMSHA_CLASSIFIER_MISTRAL_API_KEY` | — | Mistral API key for classifier slot |
+| `amsha.classifier.mistral.model` | `AMSHA_CLASSIFIER_MISTRAL_MODEL` | `codestral-latest` | Classifier slot model |
+| `amsha.classifier.mistral.base-url` | `AMSHA_CLASSIFIER_MISTRAL_BASE_URL` | `https://api.mistral.ai/v1` | Classifier slot base URL |
 
 ## Testing
 

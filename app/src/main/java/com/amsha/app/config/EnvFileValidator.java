@@ -50,6 +50,7 @@ public class EnvFileValidator {
             "AMSHA_SARVAM_API_KEY",
             "AMSHA_OPENCODE_API_KEY",
             "AMSHA_HUGGINGFACE_API_KEY",
+            "AMSHA_MISTRAL_API_KEY",
             "AMSHA_OMLX_API_KEY",
             "AMSHA_GENERIC_OPENAI_API_KEY",
             "AMSHA_EMBEDDING_JINA_API_KEY",

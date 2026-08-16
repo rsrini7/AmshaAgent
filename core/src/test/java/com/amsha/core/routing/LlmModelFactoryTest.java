@@ -26,6 +26,7 @@ class LlmModelFactoryTest {
         assertEquals("opencode", LlmModelFactory.inferProviderFromUrl("https://opencode.ai/zen/v1"));
         assertEquals("opencode", LlmModelFactory.inferProviderFromUrl("https://opencode.ai/zen/go/v1"));
         assertEquals("huggingface", LlmModelFactory.inferProviderFromUrl("https://router.huggingface.co/v1"));
+        assertEquals("mistral", LlmModelFactory.inferProviderFromUrl("https://api.mistral.ai/v1"));
         assertEquals(
                 "gemini",
                 LlmModelFactory.inferProviderFromUrl("https://generativelanguage.googleapis.com/v1beta/openai/"));
@@ -98,6 +99,21 @@ class LlmModelFactoryTest {
                 "https://router.huggingface.co/v1",
                 "hf_test_key",
                 "meta-llama/Llama-3.3-70B-Instruct",
+                100,
+                null,
+                1,
+                null,
+                null);
+        assertNotNull(model);
+    }
+
+    @Test
+    void testCreateMistralModel() {
+        ChatModel model = factory.createModel(
+                "mistral",
+                "https://api.mistral.ai/v1",
+                "test-mistral-key",
+                "codestral-latest",
                 100,
                 null,
                 1,

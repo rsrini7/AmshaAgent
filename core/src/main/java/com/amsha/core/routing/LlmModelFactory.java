@@ -115,17 +115,18 @@ public class LlmModelFactory {
         return factory.create(config);
     }
 
-    private static final Map<String, String> URL_PROVIDER_MAP = Map.of(
-            "openai.com", ModelDefaults.PROVIDER_OPENAI,
-            "groq.com", ModelDefaults.PROVIDER_GROQ,
-            "nvidia.com", ModelDefaults.PROVIDER_NVIDIA,
-            "cerebras.ai", ModelDefaults.PROVIDER_CEREBRAS,
-            "sarvam.ai", ModelDefaults.PROVIDER_SARVAM,
-            "opencode.ai", ModelDefaults.PROVIDER_OPENCODE,
-            "huggingface.co", ModelDefaults.PROVIDER_HUGGINGFACE,
-            "googleapis.com", ModelDefaults.PROVIDER_GEMINI,
-            "localhost:11434", ModelDefaults.PROVIDER_OLLAMA,
-            "localhost:9000", ModelDefaults.PROVIDER_LLAMACPP);
+    private static final Map<String, String> URL_PROVIDER_MAP = Map.ofEntries(
+            Map.entry("openai.com", ModelDefaults.PROVIDER_OPENAI),
+            Map.entry("groq.com", ModelDefaults.PROVIDER_GROQ),
+            Map.entry("nvidia.com", ModelDefaults.PROVIDER_NVIDIA),
+            Map.entry("cerebras.ai", ModelDefaults.PROVIDER_CEREBRAS),
+            Map.entry("sarvam.ai", ModelDefaults.PROVIDER_SARVAM),
+            Map.entry("opencode.ai", ModelDefaults.PROVIDER_OPENCODE),
+            Map.entry("huggingface.co", ModelDefaults.PROVIDER_HUGGINGFACE),
+            Map.entry("mistral.ai", ModelDefaults.PROVIDER_MISTRAL),
+            Map.entry("googleapis.com", ModelDefaults.PROVIDER_GEMINI),
+            Map.entry("localhost:11434", ModelDefaults.PROVIDER_OLLAMA),
+            Map.entry("localhost:9000", ModelDefaults.PROVIDER_LLAMACPP));
 
     public static String inferProviderFromUrl(String baseUrl) {
         if (baseUrl == null || baseUrl.isBlank()) return ModelDefaults.PROVIDER_OPENROUTER;

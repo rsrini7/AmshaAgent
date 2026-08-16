@@ -102,6 +102,12 @@ class ChatModelProducerTest {
     }
 
     @Test
+    void providerBaseUrls_containsMistral() throws Exception {
+        Map<String, String> urls = getProviderBaseUrls();
+        assertEquals("https://api.mistral.ai/v1", urls.get("mistral"));
+    }
+
+    @Test
     void providerBaseUrls_containsGemini() throws Exception {
         Map<String, String> urls = getProviderBaseUrls();
         assertEquals("https://generativelanguage.googleapis.com/v1beta", urls.get("gemini"));
@@ -110,7 +116,7 @@ class ChatModelProducerTest {
     @Test
     void providerBaseUrls_hasExpectedCount() throws Exception {
         Map<String, String> urls = getProviderBaseUrls();
-        assertEquals(13, urls.size());
+        assertEquals(14, urls.size());
     }
 
     @Test
