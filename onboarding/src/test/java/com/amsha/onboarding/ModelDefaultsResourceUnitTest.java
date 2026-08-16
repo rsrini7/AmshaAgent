@@ -20,6 +20,7 @@ class ModelDefaultsResourceUnitTest {
         assertTrue(map.containsKey("groq"));
         assertTrue(map.containsKey("openai"));
         assertTrue(map.containsKey("sarvam"));
+        assertTrue(map.containsKey("opencode"));
     }
 
     @Test
@@ -29,5 +30,14 @@ class ModelDefaultsResourceUnitTest {
         Map<?, ?> map = (Map<?, ?>) response.getEntity();
         assertEquals("sarvam-105b", map.get("defaultModel"));
         assertEquals("https://api.sarvam.ai/v1", map.get("defaultBaseUrl"));
+    }
+
+    @Test
+    void testGetDefaultForProviderOpenCode() {
+        Response response = resource.getDefaultForProvider("opencode");
+        assertEquals(200, response.getStatus());
+        Map<?, ?> map = (Map<?, ?>) response.getEntity();
+        assertEquals("deepseek-v4-flash-free", map.get("defaultModel"));
+        assertEquals("https://opencode.ai/zen/v1", map.get("defaultBaseUrl"));
     }
 }

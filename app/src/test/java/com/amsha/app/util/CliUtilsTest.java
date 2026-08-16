@@ -247,6 +247,13 @@ class CliUtilsTest {
     }
 
     @Test
+    void llmKeySpecFor_opencode() {
+        assertEquals(
+                "AMSHA_OPENCODE_API_KEY",
+                ProviderKeySpecs.llmKeySpecFor("opencode").key());
+    }
+
+    @Test
     void llmKeySpecFor_omlx() {
         assertEquals(
                 "AMSHA_OMLX_API_KEY", ProviderKeySpecs.llmKeySpecFor("omlx").key());

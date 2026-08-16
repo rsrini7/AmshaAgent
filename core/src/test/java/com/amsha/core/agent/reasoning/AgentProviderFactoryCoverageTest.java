@@ -29,7 +29,8 @@ class AgentProviderFactoryCoverageTest {
                 OmlxProviderFactory.class,
                 OpenAiProviderFactory.class,
                 OpenRouterProviderFactory.class,
-                SarvamProviderFactory.class);
+                SarvamProviderFactory.class,
+                OpenCodeProviderFactory.class);
     }
 
     @ParameterizedTest

@@ -90,6 +90,18 @@
     "hasBaseUrl": true
   },
   {
+    "id": "opencode",
+    "name": "OpenCode",
+    "tag": "OpenCode Zen / Go",
+    "icon": "OC",
+    "color": "#3b82f6",
+    "defaultModel": "deepseek-v4-flash-free",
+    "embeddingCapable": false,
+    "requiresApiKey": true,
+    "authScheme": "BEARER",
+    "hasBaseUrl": true
+  },
+  {
     "id": "gemini",
     "name": "Gemini",
     "tag": "Google AI",

@@ -56,6 +56,9 @@ public class ModelDefaultsResource {
                 ModelDefaults.PROVIDER_SARVAM,
                 providerEntry(ModelDefaults.DEFAULT_SARVAM_MODEL, ModelDefaults.DEFAULT_SARVAM_BASE_URL));
         result.put(
+                ModelDefaults.PROVIDER_OPENCODE,
+                providerEntry(ModelDefaults.DEFAULT_OPENCODE_MODEL, ModelDefaults.DEFAULT_OPENCODE_BASE_URL));
+        result.put(
                 ModelDefaults.PROVIDER_GEMINI,
                 providerEntry(ModelDefaults.DEFAULT_GEMINI_MODEL, ModelDefaults.DEFAULT_GEMINI_BASE_URL));
         result.put(

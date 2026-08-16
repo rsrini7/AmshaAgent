@@ -284,6 +284,28 @@ class LlmConfigurationProvenanceTest {
         assertTrue(resolution.ready());
     }
 
+    @Test
+    void opencodeEnvironmentCredentialIsReported() {
+        LlmConfigurationProvenance provenance = provenanceFor(
+                "opencode",
+                false,
+                Map.of(
+                        "AMSHA_OPENCODE_API_KEY", "opencode-key",
+                        "AMSHA_OPENCODE_MODEL", "deepseek-v4-flash-free",
+                        "AMSHA_OPENCODE_BASE_URL", "https://opencode.ai/zen/v1"));
+        when(provenance.providerCatalog.descriptor("opencode")).thenReturn(Optional.of(requiredDescriptor("opencode")));
+
+        LlmConfigurationProvenance.Resolution resolution = provenance.resolve();
+
+        assertEquals("opencode", resolution.effectiveProvider());
+        assertEquals(LlmConfigurationProvenance.SOURCE_ENVIRONMENT, resolution.effectiveSource());
+        assertEquals("deepseek-v4-flash-free", resolution.effectiveModel());
+        assertEquals("https://opencode.ai/zen/v1", resolution.effectiveBaseUrl());
+        assertEquals(LlmConfigurationProvenance.CREDENTIAL_CONFIGURED, resolution.credentialState());
+        assertEquals(LlmConfigurationProvenance.SOURCE_ENVIRONMENT, resolution.credentialSource());
+        assertTrue(resolution.ready());
+    }
+
     private static LlmConfigurationProvenance provenanceFor(
             String provider, boolean vaultPriority, Map<String, String> values) {
         LlmConfigurationProvenance provenance = new LlmConfigurationProvenance();

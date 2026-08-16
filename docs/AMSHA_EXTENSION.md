@@ -522,6 +522,7 @@ AMSHA_LLM_MODEL_NAME=my-model-name
 | `NvidiaProviderFactory` | `nvidia` | `AgentChatModelProvider` | `amsha-core` |
 | `CerebrasProviderFactory` | `cerebras` | `AgentChatModelProvider` | `amsha-core` |
 | `SarvamProviderFactory` | `sarvam` | `AgentChatModelProvider` | `amsha-core` |
+| `OpenCodeProviderFactory` | `opencode` | `AgentChatModelProvider` | `amsha-core` |
 | `LlamaCppProviderFactory` | `llamacpp` | `AgentChatModelProvider` | `amsha-core` |
 | `InfiniteLoopAgentChatModelProvider` | `infiniteloop` | `AgentChatModelProvider` | `amsha-core` |
 
@@ -920,4 +921,4 @@ If your new class is used reflectively at runtime (e.g., Jackson deserialization
 
 ---
 
-*Last updated: Amsha Agent V0.1.0 · Quarkus 3.27.2 · JDK 25 · 12 LLM providers*
+*Last updated: Amsha Agent V0.1.0 · Quarkus 3.27.2 · JDK 25 · 13 LLM providers*

@@ -79,6 +79,13 @@ public final class ProviderKeySpecs {
             "2. Create an API key",
             "3. Add:  AMSHA_SARVAM_API_KEY=your_key_here");
 
+    public static final VarSpec OPENCODE_KEY_SPEC = new VarSpec(
+            "AMSHA_OPENCODE_API_KEY",
+            "OpenCode AI API key.",
+            "1. Sign up at https://opencode.ai/zen",
+            "2. Create an API key",
+            "3. Add:  AMSHA_OPENCODE_API_KEY=your_key_here");
+
     public static final VarSpec GENERIC_OPENAI_KEY_SPEC = new VarSpec(
             "AMSHA_GENERIC_OPENAI_API_KEY",
             "Generic OpenAI-compatible API key.",
@@ -102,6 +109,7 @@ public final class ProviderKeySpecs {
             case "nvidia" -> NVIDIA_KEY_SPEC;
             case "cerebras" -> CEREBRAS_KEY_SPEC;
             case "sarvam" -> SARVAM_KEY_SPEC;
+            case "opencode" -> OPENCODE_KEY_SPEC;
             case "omlx" -> OMLX_KEY_SPEC;
             case "generic-openai" -> GENERIC_OPENAI_KEY_SPEC;
             case "ollama" -> null;
@@ -133,6 +141,8 @@ public final class ProviderKeySpecs {
                 providerKeySpec("nvidia", "AMSHA_COMPACTION_NVIDIA_API_KEY", "nvapi-", "https://build.nvidia.com");
             case "sarvam" ->
                 providerKeySpec("sarvam", "AMSHA_COMPACTION_SARVAM_API_KEY", "", "https://dashboard.sarvam.ai");
+            case "opencode" ->
+                providerKeySpec("opencode", "AMSHA_COMPACTION_OPENCODE_API_KEY", "", "https://opencode.ai/zen");
             case "generic-openai" ->
                 providerKeySpec(
                         "generic-openai", "AMSHA_COMPACTION_GENERIC_OPENAI_API_KEY", "", "your provider dashboard");
@@ -164,6 +174,8 @@ public final class ProviderKeySpecs {
                 providerKeySpec("nvidia", "AMSHA_CLASSIFIER_NVIDIA_API_KEY", "nvapi-", "https://build.nvidia.com");
             case "sarvam" ->
                 providerKeySpec("sarvam", "AMSHA_CLASSIFIER_SARVAM_API_KEY", "", "https://dashboard.sarvam.ai");
+            case "opencode" ->
+                providerKeySpec("opencode", "AMSHA_CLASSIFIER_OPENCODE_API_KEY", "", "https://opencode.ai/zen");
             case "generic-openai" ->
                 providerKeySpec(
                         "generic-openai", "AMSHA_CLASSIFIER_GENERIC_OPENAI_API_KEY", "", "your provider dashboard");

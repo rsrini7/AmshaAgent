@@ -19,6 +19,7 @@ reflexes, safety guards, tool interfaces, and built-in LLM providers.
 | NVIDIA | `nvidia` | `bytedance/seed-oss-36b-instruct` | `https://integrate.api.nvidia.com/v1` |
 | Cerebras | `cerebras` | `qwen-3-235b-a22b-instruct-2507` | `https://api.cerebras.ai/v1` |
 | Sarvam AI | `sarvam` | `sarvam-105b` | `https://api.sarvam.ai/v1` |
+| OpenCode | `opencode` | `deepseek-v4-flash-free` | `https://opencode.ai/zen/v1` |
 | Gemini | `gemini` | `gemini-2.5-flash-lite` | `https://generativelanguage.googleapis.com/v1beta` |
 | OMLX | `omlx` | `mlx-community/Qwen3.6-35B-A3B-4bit` | `http://127.0.0.1:8000/v1` |
 | Llama.cpp | `llamacpp` | `qwen3` | `http://127.0.0.1:9000/v1` |
@@ -37,6 +38,20 @@ reflexes, safety guards, tool interfaces, and built-in LLM providers.
 | `amsha.classifier.sarvam.api-key` | `AMSHA_CLASSIFIER_SARVAM_API_KEY` | — | Sarvam API key for classifier slot |
 | `amsha.classifier.sarvam.model` | `AMSHA_CLASSIFIER_SARVAM_MODEL` | `sarvam-105b` | Classifier slot model |
 | `amsha.classifier.sarvam.base-url` | `AMSHA_CLASSIFIER_SARVAM_BASE_URL` | `https://api.sarvam.ai/v1` | Classifier slot base URL |
+
+## OpenCode Configuration
+
+| Property | Env Var | Default | Description |
+|---|---|---|---|
+| `amsha.llm.opencode.api-key` | `AMSHA_OPENCODE_API_KEY` | — | OpenCode API key |
+| `amsha.llm.opencode.base-url` | `AMSHA_OPENCODE_BASE_URL` | `https://opencode.ai/zen/v1` | OpenCode API base URL (Zen: `.../zen/v1`, Go: `.../zen/go/v1`) |
+| `amsha.llm.opencode.model` | `AMSHA_OPENCODE_MODEL` | `deepseek-v4-flash-free` | Default chat model |
+| `amsha.compaction.opencode.api-key` | `AMSHA_COMPACTION_OPENCODE_API_KEY` | — | OpenCode API key for compaction slot |
+| `amsha.compaction.opencode.model` | `AMSHA_COMPACTION_OPENCODE_MODEL` | `deepseek-v4-flash-free` | Compaction slot model |
+| `amsha.compaction.opencode.base-url` | `AMSHA_COMPACTION_OPENCODE_BASE_URL` | `https://opencode.ai/zen/v1` | Compaction slot base URL |
+| `amsha.classifier.opencode.api-key` | `AMSHA_CLASSIFIER_OPENCODE_API_KEY` | — | OpenCode API key for classifier slot |
+| `amsha.classifier.opencode.model` | `AMSHA_CLASSIFIER_OPENCODE_MODEL` | `deepseek-v4-flash-free` | Classifier slot model |
+| `amsha.classifier.opencode.base-url` | `AMSHA_CLASSIFIER_OPENCODE_BASE_URL` | `https://opencode.ai/zen/v1` | Classifier slot base URL |
 
 ## Testing
 
