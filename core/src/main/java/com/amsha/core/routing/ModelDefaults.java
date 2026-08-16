@@ -28,6 +28,7 @@ public final class ModelDefaults {
     public static final String PROVIDER_HUGGINGFACE = "huggingface";
     public static final String PROVIDER_MISTRAL = "mistral";
     public static final String PROVIDER_CLOUDFLARE = "cloudflare";
+    public static final String PROVIDER_COHERE = "cohere";
     public static final String PROVIDER_GEMINI = "gemini";
     public static final String PROVIDER_OMLX = "omlx";
     public static final String PROVIDER_LLAMACPP = "llamacpp";
@@ -49,6 +50,7 @@ public final class ModelDefaults {
     public static final String DEFAULT_HUGGINGFACE_MODEL = "meta-llama/Llama-3.3-70B-Instruct";
     public static final String DEFAULT_MISTRAL_MODEL = "codestral-latest";
     public static final String DEFAULT_CLOUDFLARE_MODEL = "@cf/meta/llama-3.3-70b-instruct-fp8-fast";
+    public static final String DEFAULT_COHERE_MODEL = "command-r-plus-08-2024";
     public static final String DEFAULT_GEMINI_MODEL = "gemini-2.5-flash-lite";
     public static final String DEFAULT_OMLX_MODEL = "mlx-community/Qwen3.6-35B-A3B-4bit";
     public static final String DEFAULT_LLAMACPP_MODEL = "qwen3";
@@ -70,6 +72,7 @@ public final class ModelDefaults {
     public static final String DEFAULT_MISTRAL_BASE_URL = "https://api.mistral.ai/v1";
     public static final String DEFAULT_CLOUDFLARE_BASE_URL =
             "https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/v1";
+    public static final String DEFAULT_COHERE_BASE_URL = "https://api.cohere.ai/compatibility/v1";
     public static final String DEFAULT_GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta";
     public static final String DEFAULT_OMLX_BASE_URL = "http://127.0.0.1:8000/v1";
     public static final String DEFAULT_LLAMACPP_BASE_URL = "http://127.0.0.1:9000/v1";
@@ -95,6 +98,7 @@ public final class ModelDefaults {
             Map.entry("huggingface.co", PROVIDER_HUGGINGFACE),
             Map.entry("mistral.ai", PROVIDER_MISTRAL),
             Map.entry("cloudflare.com", PROVIDER_CLOUDFLARE),
+            Map.entry("cohere.ai", PROVIDER_COHERE),
             Map.entry("googleapis.com", PROVIDER_GEMINI),
             Map.entry("anthropic.com", PROVIDER_ANTHROPIC),
             Map.entry("localhost:11434", PROVIDER_OLLAMA),
@@ -124,6 +128,7 @@ public final class ModelDefaults {
             case PROVIDER_HUGGINGFACE -> DEFAULT_HUGGINGFACE_MODEL;
             case PROVIDER_MISTRAL -> DEFAULT_MISTRAL_MODEL;
             case PROVIDER_CLOUDFLARE -> DEFAULT_CLOUDFLARE_MODEL;
+            case PROVIDER_COHERE -> DEFAULT_COHERE_MODEL;
             case PROVIDER_GEMINI -> DEFAULT_GEMINI_MODEL;
             case PROVIDER_OMLX -> DEFAULT_OMLX_MODEL;
             case PROVIDER_LLAMACPP -> DEFAULT_LLAMACPP_MODEL;
@@ -152,6 +157,7 @@ public final class ModelDefaults {
             case PROVIDER_HUGGINGFACE -> DEFAULT_HUGGINGFACE_BASE_URL;
             case PROVIDER_MISTRAL -> DEFAULT_MISTRAL_BASE_URL;
             case PROVIDER_CLOUDFLARE -> DEFAULT_CLOUDFLARE_BASE_URL;
+            case PROVIDER_COHERE -> DEFAULT_COHERE_BASE_URL;
             case PROVIDER_GEMINI -> DEFAULT_GEMINI_BASE_URL;
             case PROVIDER_OMLX -> DEFAULT_OMLX_BASE_URL;
             case PROVIDER_LLAMACPP -> DEFAULT_LLAMACPP_BASE_URL;

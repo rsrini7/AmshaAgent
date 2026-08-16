@@ -159,6 +159,7 @@ public class ModelProfileCredentialResolver {
         HUGGINGFACE(ModelDefaults.DEFAULT_HUGGINGFACE_BASE_URL),
         MISTRAL(ModelDefaults.DEFAULT_MISTRAL_BASE_URL),
         CLOUDFLARE(ModelDefaults.DEFAULT_CLOUDFLARE_BASE_URL),
+        COHERE(ModelDefaults.DEFAULT_COHERE_BASE_URL),
         NVIDIA(ModelDefaults.DEFAULT_NVIDIA_BASE_URL),
         GEMINI(ModelDefaults.DEFAULT_GEMINI_BASE_URL),
         OLLAMA(ModelDefaults.DEFAULT_OLLAMA_BASE_URL),

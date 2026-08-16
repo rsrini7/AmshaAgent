@@ -353,6 +353,10 @@ amsha:
       # Do not put {account_id} inside ${ENV:default} — MP Config closes on the first '}'.
       base-url: "${AMSHA_CLASSIFIER_CLOUDFLARE_BASE_URL:${amsha.llm.cloudflare.unresolved-base-url}}"
       model: "${AMSHA_CLASSIFIER_CLOUDFLARE_MODEL:@cf/meta/llama-3.3-70b-instruct-fp8-fast}"
+    cohere:
+      api-key: "${AMSHA_CLASSIFIER_COHERE_API_KEY:${AMSHA_COHERE_API_KEY:}}"
+      base-url: "${AMSHA_CLASSIFIER_COHERE_BASE_URL:https://api.cohere.ai/compatibility/v1}"
+      model: "${AMSHA_CLASSIFIER_COHERE_MODEL:command-r-plus-08-2024}"
   onnx:
     enabled: ${AMSHA_ONNX_ENABLED:false}
     model-root: "${AMSHA_ONNX_MODEL_ROOT:data/models}"
@@ -465,6 +469,10 @@ amsha:
       unresolved-base-url: "https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/v1"
       base-url: "${AMSHA_CLOUDFLARE_BASE_URL:${amsha.llm.cloudflare.unresolved-base-url}}"
       model: "${AMSHA_CLOUDFLARE_MODEL:@cf/meta/llama-3.3-70b-instruct-fp8-fast}"
+    cohere:
+      api-key: "${AMSHA_COHERE_API_KEY:}"
+      base-url: "${AMSHA_COHERE_BASE_URL:https://api.cohere.ai/compatibility/v1}"
+      model: "${AMSHA_COHERE_MODEL:command-r-plus-08-2024}"
   infinite-loop:
     llm:
       providers: ${AMSHA_INFINITE_LOOP_LLM_PROVIDERS:omlx,groq,openrouter}
@@ -519,6 +527,10 @@ amsha:
       # Do not put {account_id} inside ${ENV:default} — MP Config closes on the first '}'.
       base-url: "${AMSHA_COMPACTION_CLOUDFLARE_BASE_URL:${amsha.llm.cloudflare.unresolved-base-url}}"
       model: "${AMSHA_COMPACTION_CLOUDFLARE_MODEL:@cf/meta/llama-3.3-70b-instruct-fp8-fast}"
+    cohere:
+      api-key: "${AMSHA_COMPACTION_COHERE_API_KEY:${AMSHA_COHERE_API_KEY:}}"
+      base-url: "${AMSHA_COMPACTION_COHERE_BASE_URL:https://api.cohere.ai/compatibility/v1}"
+      model: "${AMSHA_COMPACTION_COHERE_MODEL:command-r-plus-08-2024}"
   agent:
     default-timezone: "${AMSHA_DEFAULT_TIMEZONE:Asia/Kolkata}"
     rate-limit:

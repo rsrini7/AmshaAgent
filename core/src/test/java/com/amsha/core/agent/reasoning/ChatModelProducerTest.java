@@ -114,6 +114,12 @@ class ChatModelProducerTest {
     }
 
     @Test
+    void providerBaseUrls_containsCohere() throws Exception {
+        Map<String, String> urls = getProviderBaseUrls();
+        assertEquals("https://api.cohere.ai/compatibility/v1", urls.get("cohere"));
+    }
+
+    @Test
     void providerBaseUrls_containsGemini() throws Exception {
         Map<String, String> urls = getProviderBaseUrls();
         assertEquals("https://generativelanguage.googleapis.com/v1beta", urls.get("gemini"));
@@ -122,7 +128,7 @@ class ChatModelProducerTest {
     @Test
     void providerBaseUrls_hasExpectedCount() throws Exception {
         Map<String, String> urls = getProviderBaseUrls();
-        assertEquals(15, urls.size());
+        assertEquals(16, urls.size());
     }
 
     @Test

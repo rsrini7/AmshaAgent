@@ -19,6 +19,7 @@ class ProviderKeySpecsTest {
         assertNotNull(ProviderKeySpecs.llmKeySpecFor("huggingface"));
         assertNotNull(ProviderKeySpecs.llmKeySpecFor("mistral"));
         assertNotNull(ProviderKeySpecs.llmKeySpecFor("cloudflare"));
+        assertNotNull(ProviderKeySpecs.llmKeySpecFor("cohere"));
         assertNotNull(ProviderKeySpecs.llmKeySpecFor("omlx"));
         assertNotNull(ProviderKeySpecs.llmKeySpecFor("generic-openai"));
         assertNull(ProviderKeySpecs.llmKeySpecFor("ollama"));
@@ -40,6 +41,7 @@ class ProviderKeySpecsTest {
         assertNotNull(ProviderKeySpecs.compactionKeySpecFor("huggingface"));
         assertNotNull(ProviderKeySpecs.compactionKeySpecFor("mistral"));
         assertNotNull(ProviderKeySpecs.compactionKeySpecFor("cloudflare"));
+        assertNotNull(ProviderKeySpecs.compactionKeySpecFor("cohere"));
         assertNotNull(ProviderKeySpecs.compactionKeySpecFor("generic-openai"));
     }
 
@@ -58,6 +60,7 @@ class ProviderKeySpecsTest {
         assertNotNull(ProviderKeySpecs.classifierKeySpecFor("huggingface"));
         assertNotNull(ProviderKeySpecs.classifierKeySpecFor("mistral"));
         assertNotNull(ProviderKeySpecs.classifierKeySpecFor("cloudflare"));
+        assertNotNull(ProviderKeySpecs.classifierKeySpecFor("cohere"));
         assertNotNull(ProviderKeySpecs.classifierKeySpecFor("generic-openai"));
     }
 

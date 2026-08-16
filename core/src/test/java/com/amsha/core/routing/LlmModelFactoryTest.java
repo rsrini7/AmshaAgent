@@ -30,6 +30,7 @@ class LlmModelFactoryTest {
         assertEquals(
                 "cloudflare",
                 LlmModelFactory.inferProviderFromUrl("https://api.cloudflare.com/client/v4/accounts/abc123/ai/v1"));
+        assertEquals("cohere", LlmModelFactory.inferProviderFromUrl("https://api.cohere.ai/compatibility/v1"));
         assertEquals(
                 "gemini",
                 LlmModelFactory.inferProviderFromUrl("https://generativelanguage.googleapis.com/v1beta/openai/"));
@@ -132,6 +133,21 @@ class LlmModelFactoryTest {
                 "https://api.cloudflare.com/client/v4/accounts/abc123/ai/v1",
                 "test-cf-key",
                 "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+                100,
+                null,
+                1,
+                null,
+                null);
+        assertNotNull(model);
+    }
+
+    @Test
+    void testCreateCohereModel() {
+        ChatModel model = factory.createModel(
+                "cohere",
+                "https://api.cohere.ai/compatibility/v1",
+                "test-cohere-key",
+                "command-r-plus-08-2024",
                 100,
                 null,
                 1,

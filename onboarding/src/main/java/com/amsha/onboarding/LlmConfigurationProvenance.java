@@ -82,6 +82,9 @@ public class LlmConfigurationProvenance {
                     new EnvironmentSpec(
                             "AMSHA_CLOUDFLARE_MODEL", "AMSHA_CLOUDFLARE_BASE_URL", "AMSHA_CLOUDFLARE_API_KEY")),
             Map.entry(
+                    ModelDefaults.PROVIDER_COHERE,
+                    new EnvironmentSpec("AMSHA_COHERE_MODEL", "AMSHA_COHERE_BASE_URL", "AMSHA_COHERE_API_KEY")),
+            Map.entry(
                     ModelDefaults.PROVIDER_GEMINI,
                     new EnvironmentSpec("AMSHA_GEMINI_MODEL", "", "AMSHA_GEMINI_API_KEY")),
             Map.entry(ModelDefaults.PROVIDER_OMLX, new EnvironmentSpec("AMSHA_OMLX_MODEL", "AMSHA_OMLX_BASE_URL", "")),

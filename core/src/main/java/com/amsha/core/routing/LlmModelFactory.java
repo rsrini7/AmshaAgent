@@ -125,6 +125,7 @@ public class LlmModelFactory {
             Map.entry("huggingface.co", ModelDefaults.PROVIDER_HUGGINGFACE),
             Map.entry("mistral.ai", ModelDefaults.PROVIDER_MISTRAL),
             Map.entry("cloudflare.com", ModelDefaults.PROVIDER_CLOUDFLARE),
+            Map.entry("cohere.ai", ModelDefaults.PROVIDER_COHERE),
             Map.entry("googleapis.com", ModelDefaults.PROVIDER_GEMINI),
             Map.entry("localhost:11434", ModelDefaults.PROVIDER_OLLAMA),
             Map.entry("localhost:9000", ModelDefaults.PROVIDER_LLAMACPP));

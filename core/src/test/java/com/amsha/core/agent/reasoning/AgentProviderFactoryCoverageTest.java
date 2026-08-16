@@ -33,7 +33,8 @@ class AgentProviderFactoryCoverageTest {
                 OpenCodeProviderFactory.class,
                 HuggingFaceProviderFactory.class,
                 MistralProviderFactory.class,
-                CloudflareProviderFactory.class);
+                CloudflareProviderFactory.class,
+                CohereProviderFactory.class);
     }
 
     @ParameterizedTest

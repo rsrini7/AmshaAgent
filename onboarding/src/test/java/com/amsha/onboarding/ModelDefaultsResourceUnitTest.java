@@ -24,6 +24,7 @@ class ModelDefaultsResourceUnitTest {
         assertTrue(map.containsKey("huggingface"));
         assertTrue(map.containsKey("mistral"));
         assertTrue(map.containsKey("cloudflare"));
+        assertTrue(map.containsKey("cohere"));
     }
 
     @Test
@@ -69,5 +70,14 @@ class ModelDefaultsResourceUnitTest {
         Map<?, ?> map = (Map<?, ?>) response.getEntity();
         assertEquals("@cf/meta/llama-3.3-70b-instruct-fp8-fast", map.get("defaultModel"));
         assertEquals("https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/v1", map.get("defaultBaseUrl"));
+    }
+
+    @Test
+    void testGetDefaultForProviderCohere() {
+        Response response = resource.getDefaultForProvider("cohere");
+        assertEquals(200, response.getStatus());
+        Map<?, ?> map = (Map<?, ?>) response.getEntity();
+        assertEquals("command-r-plus-08-2024", map.get("defaultModel"));
+        assertEquals("https://api.cohere.ai/compatibility/v1", map.get("defaultBaseUrl"));
     }
 }

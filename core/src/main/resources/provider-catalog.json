@@ -138,6 +138,18 @@
     "hasBaseUrl": true
   },
   {
+    "id": "cohere",
+    "name": "Cohere",
+    "tag": "Command R+ & Enterprise",
+    "icon": "Co",
+    "color": "#39594d",
+    "defaultModel": "command-r-plus-08-2024",
+    "embeddingCapable": false,
+    "requiresApiKey": true,
+    "authScheme": "BEARER",
+    "hasBaseUrl": true
+  },
+  {
     "id": "gemini",
     "name": "Gemini",
     "tag": "Google AI",

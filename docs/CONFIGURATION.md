@@ -11,7 +11,7 @@ Generate secrets: `openssl rand -base64 32` (Linux/macOS) or `[Convert]::ToBase6
 | Variable | Default | Description |
 |---|---|---|
 | `AMSHA_{PROVIDER}_API_KEY` | — | Provider-specific LLM API key, for example `AMSHA_GROQ_API_KEY` (`gsk_...`) |
-| `AMSHA_LLM_PROVIDER` | `groq` | Provider: `groq`, `openai`, `ollama`, `openrouter`, `claude-code`, `cerebras`, `gemini`, `nvidia`, `sarvam`, `opencode`, `huggingface`, `mistral`, `cloudflare`, `omlx`, `generic-openai` |
+| `AMSHA_LLM_PROVIDER` | `groq` | Provider: `groq`, `openai`, `ollama`, `openrouter`, `claude-code`, `cerebras`, `gemini`, `nvidia`, `sarvam`, `opencode`, `huggingface`, `mistral`, `cloudflare`, `cohere`, `omlx`, `generic-openai` |
 | `AMSHA_LLM_MAX_OUTPUT_TOKENS` | `8192` | Max output tokens per LLM call |
 | `AMSHA_LLM_MAX_RETRIES` | `3` | Max LLM retry attempts |
 | `AMSHA_LLM_TEMPERATURE` | `0.1` | LLM temperature |
@@ -133,6 +133,9 @@ Cloudflare Workers AI provider for serverless model inference. Requires an API t
 | `AMSHA_CLOUDFLARE_BASE_URL` | `https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/v1` | Base URL for Workers AI endpoint |
 | `AMSHA_COMPACTION_CLOUDFLARE_ACCOUNT_ID` | — | Account ID override for compaction slot |
 | `AMSHA_CLASSIFIER_CLOUDFLARE_ACCOUNT_ID` | — | Account ID override for classifier slot |
+| `AMSHA_COHERE_API_KEY` | — | Cohere API key |
+| `AMSHA_COHERE_MODEL` | `command-r-plus-08-2024` | Default chat model |
+| `AMSHA_COHERE_BASE_URL` | `https://api.cohere.ai/compatibility/v1` | Base URL for Cohere OpenAI-compatibility endpoint |
 
 Do not put `{account_id}` inside a MicroProfile `${ENV:default}` default string.
 MP Config closes on the first `}`, which corrupts the URL (e.g. trailing `/ai/v1}`).
@@ -180,7 +183,7 @@ provider in the list has its own slot with independent health tracking.
 
 For non-Groq providers, mirror the pattern with `AMSHA_COMPACTION_{PROVIDER}_{KEY}`.
 Available providers: `groq`, `openai`, `openrouter`, `cerebras`, `gemini`, `nvidia`, `sarvam`,
-`opencode`, `huggingface`, `mistral`, `cloudflare`, `omlx`, `ollama`, `generic-openai`. Local providers (`ollama`, `omlx`) do not require an API key.
+`opencode`, `huggingface`, `mistral`, `cloudflare`, `cohere`, `omlx`, `ollama`, `generic-openai`. Local providers (`ollama`, `omlx`) do not require an API key.
 
 Generic OpenAI compaction variables:
 `AMSHA_COMPACTION_GENERIC_OPENAI_API_KEY`, `AMSHA_COMPACTION_GENERIC_OPENAI_MODEL`,

@@ -670,6 +670,7 @@ See [SETUP.md](./SETUP.md) for detailed backend switching instructions.
 | Hugging Face | `meta-llama/Llama-3.3-70B-Instruct` | Inference API / Router |
 | Mistral | `codestral-latest` | Codestral & Mistral frontier models |
 | Cloudflare | `@cf/meta/llama-3.3-70b-instruct-fp8-fast` | Workers AI serverless inference with account-scoped routing |
+| Cohere | `command-r-plus-08-2024` | Command R+ & enterprise models via OpenAI compatibility API |
 | OMLX | `mlx-community/Qwen3.6-35B-A3B-4bit` | OMLX inference |
 | LlamaCpp | `qwen3` | Local inference via OpenAI-compatible API on port 9000 |
 | Generic OpenAI | `gpt-4o-mini` | Any OpenAI-compatible endpoint |

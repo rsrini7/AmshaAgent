@@ -108,6 +108,13 @@ public final class ProviderKeySpecs {
             "3. Add:  AMSHA_CLOUDFLARE_API_KEY=your_api_token_here",
             "4. Add:  AMSHA_CLOUDFLARE_ACCOUNT_ID=your_account_id_here");
 
+    public static final VarSpec COHERE_KEY_SPEC = new VarSpec(
+            "AMSHA_COHERE_API_KEY",
+            "Cohere API key for Command R+ & enterprise models.",
+            "1. Sign up at https://dashboard.cohere.com",
+            "2. Create an API key",
+            "3. Add:  AMSHA_COHERE_API_KEY=your_key_here");
+
     public static final VarSpec GENERIC_OPENAI_KEY_SPEC = new VarSpec(
             "AMSHA_GENERIC_OPENAI_API_KEY",
             "Generic OpenAI-compatible API key.",
@@ -135,6 +142,7 @@ public final class ProviderKeySpecs {
             case "huggingface" -> HUGGINGFACE_KEY_SPEC;
             case "mistral" -> MISTRAL_KEY_SPEC;
             case "cloudflare" -> CLOUDFLARE_KEY_SPEC;
+            case "cohere" -> COHERE_KEY_SPEC;
             case "omlx" -> OMLX_KEY_SPEC;
             case "generic-openai" -> GENERIC_OPENAI_KEY_SPEC;
             case "ollama" -> null;
@@ -178,6 +186,8 @@ public final class ProviderKeySpecs {
                 providerKeySpec("mistral", "AMSHA_COMPACTION_MISTRAL_API_KEY", "", "https://console.mistral.ai");
             case "cloudflare" ->
                 providerKeySpec("cloudflare", "AMSHA_COMPACTION_CLOUDFLARE_API_KEY", "", "https://dash.cloudflare.com");
+            case "cohere" ->
+                providerKeySpec("cohere", "AMSHA_COMPACTION_COHERE_API_KEY", "", "https://dashboard.cohere.com");
             case "generic-openai" ->
                 providerKeySpec(
                         "generic-openai", "AMSHA_COMPACTION_GENERIC_OPENAI_API_KEY", "", "your provider dashboard");
@@ -221,6 +231,8 @@ public final class ProviderKeySpecs {
                 providerKeySpec("mistral", "AMSHA_CLASSIFIER_MISTRAL_API_KEY", "", "https://console.mistral.ai");
             case "cloudflare" ->
                 providerKeySpec("cloudflare", "AMSHA_CLASSIFIER_CLOUDFLARE_API_KEY", "", "https://dash.cloudflare.com");
+            case "cohere" ->
+                providerKeySpec("cohere", "AMSHA_CLASSIFIER_COHERE_API_KEY", "", "https://dashboard.cohere.com");
             case "generic-openai" ->
                 providerKeySpec(
                         "generic-openai", "AMSHA_CLASSIFIER_GENERIC_OPENAI_API_KEY", "", "your provider dashboard");

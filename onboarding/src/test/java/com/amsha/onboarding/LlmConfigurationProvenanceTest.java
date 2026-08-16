@@ -376,6 +376,28 @@ class LlmConfigurationProvenanceTest {
     }
 
     @Test
+    void cohereEnvironmentCredentialIsReported() {
+        LlmConfigurationProvenance provenance = provenanceFor(
+                "cohere",
+                false,
+                Map.of(
+                        "AMSHA_COHERE_API_KEY", "cohere_key_123",
+                        "AMSHA_COHERE_MODEL", "command-r-plus-08-2024",
+                        "AMSHA_COHERE_BASE_URL", "https://api.cohere.ai/compatibility/v1"));
+        when(provenance.providerCatalog.descriptor("cohere")).thenReturn(Optional.of(requiredDescriptor("cohere")));
+
+        LlmConfigurationProvenance.Resolution resolution = provenance.resolve();
+
+        assertEquals("cohere", resolution.effectiveProvider());
+        assertEquals(LlmConfigurationProvenance.SOURCE_ENVIRONMENT, resolution.effectiveSource());
+        assertEquals("command-r-plus-08-2024", resolution.effectiveModel());
+        assertEquals("https://api.cohere.ai/compatibility/v1", resolution.effectiveBaseUrl());
+        assertEquals(LlmConfigurationProvenance.CREDENTIAL_CONFIGURED, resolution.credentialState());
+        assertEquals(LlmConfigurationProvenance.SOURCE_ENVIRONMENT, resolution.credentialSource());
+        assertTrue(resolution.ready());
+    }
+
+    @Test
     void cloudflareEnvironmentWithTemplateAndAccountIdIsReportedAndReady() {
         LlmConfigurationProvenance provenance = provenanceFor(
                 "cloudflare",
