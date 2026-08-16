@@ -21,6 +21,10 @@ public class CodeLanguageDetector {
 
     private static final Pattern FS_ILLEGAL_CHARS = Pattern.compile("[:<>\"\\\\|?*]");
 
+    public static final List<String> SUPPORTED_LANGUAGES = List.of("java", "python", "python3", "go", "node", "bash");
+
+    public static final String SUPPORTED_LANGUAGES_HINT = "'java', 'go', 'python', 'bash', 'node'";
+
     private static final boolean IS_WINDOWS =
             System.getProperty("os.name", "").toLowerCase(Locale.ROOT).contains("win");
 

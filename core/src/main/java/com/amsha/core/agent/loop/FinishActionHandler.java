@@ -19,6 +19,7 @@ import com.amsha.core.agent.role.ToolCapability;
 import com.amsha.core.classifier.ClassifierResult;
 import com.amsha.core.governance.RateLimitTracker;
 import com.amsha.core.observability.AgentObserver;
+import com.amsha.core.tools.CodeLanguageDetector;
 import com.amsha.core.tools.ToolRegistry;
 import com.amsha.core.util.AgentErrorMessageUtil;
 import com.amsha.core.util.TextPatternUtils;
@@ -415,8 +416,10 @@ public class FinishActionHandler {
             log.infof("TOOL-INJECT session %s: execution goal but no code in answer, forcing correction", sessionId);
             return new FinishOutcome.Correction(
                     step.withObservation("Agent finished without writing code for an execution goal"),
-                    "STOP. You MUST write a complete Java program and call sandbox_exec to execute it. "
-                            + "The sandbox_exec tool requires 'language' (e.g. 'java') and 'code' parameters. "
+                    "STOP. You MUST write a complete program and call sandbox_exec to execute it. "
+                            + "The sandbox_exec tool requires 'language' (e.g. "
+                            + CodeLanguageDetector.SUPPORTED_LANGUAGES_HINT
+                            + ") and 'code' parameters. "
                             + "Do NOT explain. Do NOT research. Write the code NOW and call sandbox_exec immediately.");
         }
 

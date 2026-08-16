@@ -14,6 +14,7 @@ import com.amsha.core.agent.role.AgentRoleEnum;
 import com.amsha.core.agent.role.ToolCapability;
 import com.amsha.core.governance.RateLimitTracker;
 import com.amsha.core.routing.InfiniteLoopChatModel;
+import com.amsha.core.tools.CodeLanguageDetector;
 import com.amsha.core.tools.ToolRegistry;
 import com.amsha.core.util.HtmlArtifactUtil;
 import com.amsha.core.util.TextPatternUtils;
@@ -314,7 +315,8 @@ public class FinishOutcomeProcessor {
                     llmSchemaErrorCount, sessionId);
             AnswerGuardStrategy.AnswerGuardResult guardResult = qualityGuard.guard(cleanThought, history);
             String finalAnswer = guardResult.answer();
-            FinishActionHandler.FinishOutcome injected = tryInjectOnRefusal(finalAnswer, goal, sessionId, step);
+            FinishActionHandler.FinishOutcome injected =
+                    tryInjectOnRefusal(finalAnswer, goal, sessionId, step, history);
             if (injected != null) return injected;
             return new FinishActionHandler.FinishOutcome.Completed(
                     AgentResult.finished(finalAnswer, List.copyOf(history)), finalAnswer);
@@ -424,7 +426,7 @@ public class FinishOutcomeProcessor {
     }
 
     private FinishActionHandler.FinishOutcome tryInjectOnRefusal(
-            String answer, String goal, String sessionId, ReasoningStep step) {
+            String answer, String goal, String sessionId, ReasoningStep step, List<ReasoningStep> history) {
         if (goal == null || (intentClassifier != null && intentClassifier.isSimpleConversational(goal))) {
             log.debugf("TOOL-INJECT skip: goal is null or simple chitchat for session %s", sessionId);
             return null;
@@ -451,14 +453,25 @@ public class FinishOutcomeProcessor {
 
         if (AgentSentinels.EXECUTION_KEYWORDS.matcher(goal).find()
                 && availableTools.contains(ToolCapability.SANDBOX_EXEC.toolName())
-                && !answer.contains("```")) {
+                && !answer.contains("```")
+                && !historyContainsSuccess(ToolCapability.SANDBOX_EXEC.toolName(), history)) {
             log.infof("TOOL-INJECT session %s: execution goal but no code in answer, forcing correction", sessionId);
             return new FinishActionHandler.FinishOutcome.Correction(
                     step.withObservation("Agent finished without writing code for an execution goal"),
                     "STOP. You MUST write a complete program and call sandbox_exec to execute it. "
-                            + "The sandbox_exec tool requires 'language' (e.g. 'java') and 'code' parameters. "
+                            + "The sandbox_exec tool requires 'language' (e.g. "
+                            + CodeLanguageDetector.SUPPORTED_LANGUAGES_HINT
+                            + ") and 'code' parameters. "
                             + "Do NOT explain. Do NOT research. Write the code NOW and call sandbox_exec immediately.");
         }
         return null;
+    }
+
+    private static boolean historyContainsSuccess(String toolName, List<ReasoningStep> history) {
+        return history != null
+                && history.stream()
+                        .anyMatch(s -> s instanceof ReasoningStep.ToolCallStep tc
+                                && toolName.equals(tc.action())
+                                && Boolean.TRUE.equals(tc.success()));
     }
 }

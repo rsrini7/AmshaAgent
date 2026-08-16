@@ -138,7 +138,8 @@ public class SandboxExecTool implements AgentTool {
         return JsonObjectSchema.builder()
                 .addStringProperty("code", "The source code to execute")
                 .addStringProperty("command", "Alias for 'code'. The command or script to execute.")
-                .addStringProperty("language", "The programming language (python, python3, java, go, node, bash).")
+                .addStringProperty(
+                        "language", "The programming language (" + CodeLanguageDetector.SUPPORTED_LANGUAGES_HINT + ").")
                 .required("code", "language")
                 .build();
     }
