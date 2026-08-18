@@ -9,6 +9,8 @@ import java.time.Duration;
 import java.util.Optional;
 import java.util.stream.Stream;
 
+import com.amsha.core.routing.CodexTokenResolver;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -34,7 +36,8 @@ class AgentProviderFactoryCoverageTest {
                 HuggingFaceProviderFactory.class,
                 MistralProviderFactory.class,
                 CloudflareProviderFactory.class,
-                CohereProviderFactory.class);
+                CohereProviderFactory.class,
+                CodexProviderFactory.class);
     }
 
     @ParameterizedTest
@@ -93,6 +96,12 @@ class AgentProviderFactoryCoverageTest {
                 field.set(target, Optional.empty());
             } else if (field.getType() == String.class) {
                 field.set(target, "http://localhost:11434");
+            } else if (field.getType() == CodexTokenResolver.class) {
+                CodexTokenResolver resolver = mock(CodexTokenResolver.class);
+                Mockito.when(resolver.resolveToken(Mockito.any()))
+                        .thenThrow(new IllegalStateException("Missing credentials"));
+                Mockito.when(resolver.resolveToken()).thenThrow(new IllegalStateException("Missing credentials"));
+                field.set(target, resolver);
             } else if (!field.getType().isPrimitive()) {
                 field.set(target, mock(field.getType()));
             }

@@ -357,6 +357,10 @@ amsha:
       api-key: "${AMSHA_CLASSIFIER_COHERE_API_KEY:${AMSHA_COHERE_API_KEY:}}"
       base-url: "${AMSHA_CLASSIFIER_COHERE_BASE_URL:https://api.cohere.ai/compatibility/v1}"
       model: "${AMSHA_CLASSIFIER_COHERE_MODEL:command-r-plus-08-2024}"
+    codex:
+      api-key: "${AMSHA_CLASSIFIER_CODEX_API_KEY:${AMSHA_CODEX_API_KEY:}}"
+      base-url: "${AMSHA_CLASSIFIER_CODEX_BASE_URL:https://chatgpt.com/backend-api/codex}"
+      model: "${AMSHA_CLASSIFIER_CODEX_MODEL:gpt-5.6-luna}"
   onnx:
     enabled: ${AMSHA_ONNX_ENABLED:false}
     model-root: "${AMSHA_ONNX_MODEL_ROOT:data/models}"
@@ -473,6 +477,10 @@ amsha:
       api-key: "${AMSHA_COHERE_API_KEY:}"
       base-url: "${AMSHA_COHERE_BASE_URL:https://api.cohere.ai/compatibility/v1}"
       model: "${AMSHA_COHERE_MODEL:command-r-plus-08-2024}"
+    codex:
+      api-key: "${AMSHA_CODEX_API_KEY:}"
+      base-url: "${AMSHA_CODEX_BASE_URL:https://chatgpt.com/backend-api/codex}"
+      model: "${AMSHA_CODEX_MODEL:gpt-5.6-luna}"
   infinite-loop:
     llm:
       providers: ${AMSHA_INFINITE_LOOP_LLM_PROVIDERS:omlx,groq,openrouter}
@@ -531,6 +539,10 @@ amsha:
       api-key: "${AMSHA_COMPACTION_COHERE_API_KEY:${AMSHA_COHERE_API_KEY:}}"
       base-url: "${AMSHA_COMPACTION_COHERE_BASE_URL:https://api.cohere.ai/compatibility/v1}"
       model: "${AMSHA_COMPACTION_COHERE_MODEL:command-r-plus-08-2024}"
+    codex:
+      api-key: "${AMSHA_COMPACTION_CODEX_API_KEY:${AMSHA_CODEX_API_KEY:}}"
+      base-url: "${AMSHA_COMPACTION_CODEX_BASE_URL:https://chatgpt.com/backend-api/codex}"
+      model: "${AMSHA_COMPACTION_CODEX_MODEL:gpt-5.6-luna}"
   agent:
     default-timezone: "${AMSHA_DEFAULT_TIMEZONE:Asia/Kolkata}"
     rate-limit:

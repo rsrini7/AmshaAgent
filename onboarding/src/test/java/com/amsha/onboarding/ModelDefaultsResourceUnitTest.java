@@ -25,6 +25,16 @@ class ModelDefaultsResourceUnitTest {
         assertTrue(map.containsKey("mistral"));
         assertTrue(map.containsKey("cloudflare"));
         assertTrue(map.containsKey("cohere"));
+        assertTrue(map.containsKey("codex"));
+    }
+
+    @Test
+    void testGetDefaultForProviderCodex() {
+        Response response = resource.getDefaultForProvider("codex");
+        assertEquals(200, response.getStatus());
+        Map<?, ?> map = (Map<?, ?>) response.getEntity();
+        assertEquals("gpt-5.6-luna", map.get("defaultModel"));
+        assertEquals("https://chatgpt.com/backend-api/codex", map.get("defaultBaseUrl"));
     }
 
     @Test

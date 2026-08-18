@@ -18,6 +18,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 import com.amsha.app.util.CliUtils;
+import com.amsha.app.util.ProviderKeySpecs;
 import com.amsha.app.util.VarSpec;
 import com.amsha.common.util.LogUtil;
 
@@ -149,8 +150,9 @@ public class InteractiveSetupWizard {
         System.err.println("  │  13. Mistral AI - Codestral & Mistral models");
         System.err.println("  │  14. Cloudflare Workers AI - Serverless inference");
         System.err.println("  │  15. Cohere - Command R+ & Enterprise models");
+        System.err.println("  │  16. Codex CLI - ChatGPT Plus OAuth (zero-config)");
         System.err.println("  │");
-        String choice = readLineWithFallback(System.console(), "  └─ Select provider [1-15, Default: 1]: ");
+        String choice = readLineWithFallback(System.console(), "  └─ Select provider [1-16, Default: 1]: ");
         String provider =
                 switch (choice != null ? choice.trim() : "") {
                     case "2" -> "openrouter";
@@ -167,6 +169,7 @@ public class InteractiveSetupWizard {
                     case "13" -> "mistral";
                     case "14" -> "cloudflare";
                     case "15" -> "cohere";
+                    case "16" -> "codex";
                     default -> "groq";
                 };
         System.setProperty("AMSHA_LLM_PROVIDER", provider);
@@ -242,6 +245,12 @@ public class InteractiveSetupWizard {
             patchBaseConfig(envFile, "AMSHA_COMPACTION_COHERE_BASE_URL", "https://api.cohere.ai/compatibility/v1");
             patchBaseConfig(envFile, "AMSHA_CLASSIFIER_COHERE_MODEL", "command-r-plus-08-2024");
             patchBaseConfig(envFile, "AMSHA_CLASSIFIER_COHERE_BASE_URL", "https://api.cohere.ai/compatibility/v1");
+        }
+        if ("codex".equalsIgnoreCase(provider)) {
+            patchBaseConfig(envFile, "AMSHA_COMPACTION_CODEX_MODEL", "gpt-5.6-luna");
+            patchBaseConfig(envFile, "AMSHA_COMPACTION_CODEX_BASE_URL", "http://127.0.0.1:8787/v1");
+            patchBaseConfig(envFile, "AMSHA_CLASSIFIER_CODEX_MODEL", "gpt-5.6-luna");
+            patchBaseConfig(envFile, "AMSHA_CLASSIFIER_CODEX_BASE_URL", "http://127.0.0.1:8787/v1");
         }
     }
 
@@ -352,6 +361,7 @@ public class InteractiveSetupWizard {
             case "mistral" -> "AMSHA_MISTRAL_API_KEY";
             case "cloudflare" -> "AMSHA_CLOUDFLARE_API_KEY";
             case "cohere" -> "AMSHA_COHERE_API_KEY";
+            case "codex" -> "AMSHA_CODEX_API_KEY";
             case "omlx" -> "AMSHA_OMLX_API_KEY";
             case "generic-openai" -> "AMSHA_GENERIC_OPENAI_API_KEY";
             default -> "AMSHA_GROQ_API_KEY";
@@ -360,11 +370,13 @@ public class InteractiveSetupWizard {
 
     /**
      * Returns the per-provider env-var name for the compaction slot's API key,
-     * or {@code null} if the provider does not require an API key (e.g. ollama, omlx).
+     * or {@code null} if the provider does not require an API key (e.g. ollama, omlx, codex).
      */
     private static String compactionApiKeyForProvider(String provider) {
+        if (ProviderKeySpecs.isCompactionClassifierKeyless(provider)) {
+            return null;
+        }
         return switch (provider.toLowerCase(Locale.ROOT)) {
-            case "ollama", "omlx" -> null;
             case "openrouter" -> "AMSHA_COMPACTION_OPENROUTER_API_KEY";
             case "openai" -> "AMSHA_COMPACTION_OPENAI_API_KEY";
             case "gemini" -> "AMSHA_COMPACTION_GEMINI_API_KEY";
@@ -383,11 +395,13 @@ public class InteractiveSetupWizard {
 
     /**
      * Returns the per-provider env-var name for the intent-classifier slot's API key,
-     * or {@code null} if the provider does not require an API key (e.g. ollama, omlx).
+     * or {@code null} if the provider does not require an API key (e.g. ollama, omlx, codex).
      */
     private static String classifierApiKeyForProvider(String provider) {
+        if (ProviderKeySpecs.isCompactionClassifierKeyless(provider)) {
+            return null;
+        }
         return switch (provider.toLowerCase(Locale.ROOT)) {
-            case "ollama", "omlx" -> null;
             case "openrouter" -> "AMSHA_CLASSIFIER_OPENROUTER_API_KEY";
             case "openai" -> "AMSHA_CLASSIFIER_OPENAI_API_KEY";
             case "gemini" -> "AMSHA_CLASSIFIER_GEMINI_API_KEY";

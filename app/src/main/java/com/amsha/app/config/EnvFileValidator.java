@@ -54,6 +54,7 @@ public class EnvFileValidator {
             "AMSHA_CLOUDFLARE_API_KEY",
             "AMSHA_CLOUDFLARE_ACCOUNT_ID",
             "AMSHA_COHERE_API_KEY",
+            "AMSHA_CODEX_API_KEY",
             "AMSHA_OMLX_API_KEY",
             "AMSHA_GENERIC_OPENAI_API_KEY",
             "AMSHA_EMBEDDING_JINA_API_KEY",

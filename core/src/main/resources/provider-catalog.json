@@ -150,6 +150,18 @@
     "hasBaseUrl": true
   },
   {
+    "id": "codex",
+    "name": "Codex CLI",
+    "tag": "ChatGPT Plus OAuth",
+    "icon": "Cx",
+    "color": "#10a37f",
+    "defaultModel": "gpt-5.6-luna",
+    "embeddingCapable": false,
+    "requiresApiKey": false,
+    "authScheme": "CLI_OAUTH",
+    "hasBaseUrl": true
+  },
+  {
     "id": "gemini",
     "name": "Gemini",
     "tag": "Google AI",

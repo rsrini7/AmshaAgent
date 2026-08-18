@@ -19,6 +19,7 @@ class ModelDefaultsTest {
         assertEquals(ModelDefaults.DEFAULT_MISTRAL_MODEL, ModelDefaults.defaultModelForProvider("mistral"));
         assertEquals(ModelDefaults.DEFAULT_CLOUDFLARE_MODEL, ModelDefaults.defaultModelForProvider("cloudflare"));
         assertEquals(ModelDefaults.DEFAULT_COHERE_MODEL, ModelDefaults.defaultModelForProvider("cohere"));
+        assertEquals(ModelDefaults.DEFAULT_CODEX_MODEL, ModelDefaults.defaultModelForProvider("codex"));
     }
 
     @Test
@@ -31,6 +32,7 @@ class ModelDefaultsTest {
         assertEquals(ModelDefaults.DEFAULT_MISTRAL_MODEL, ModelDefaults.defaultModelForProvider("MISTRAL"));
         assertEquals(ModelDefaults.DEFAULT_CLOUDFLARE_MODEL, ModelDefaults.defaultModelForProvider("CLOUDFLARE"));
         assertEquals(ModelDefaults.DEFAULT_COHERE_MODEL, ModelDefaults.defaultModelForProvider("COHERE"));
+        assertEquals(ModelDefaults.DEFAULT_CODEX_MODEL, ModelDefaults.defaultModelForProvider("CODEX"));
         assertEquals(ModelDefaults.DEFAULT_GROQ_MODEL, ModelDefaults.defaultModelForProvider(null));
         assertEquals(ModelDefaults.DEFAULT_GROQ_MODEL, ModelDefaults.defaultModelForProvider("unknown-provider"));
     }
@@ -47,6 +49,9 @@ class ModelDefaultsTest {
         assertEquals(ModelDefaults.DEFAULT_MISTRAL_BASE_URL, ModelDefaults.defaultBaseUrlForProvider("mistral"));
         assertEquals(ModelDefaults.DEFAULT_CLOUDFLARE_BASE_URL, ModelDefaults.defaultBaseUrlForProvider("cloudflare"));
         assertEquals(ModelDefaults.DEFAULT_COHERE_BASE_URL, ModelDefaults.defaultBaseUrlForProvider("cohere"));
+        assertEquals(ModelDefaults.DEFAULT_CODEX_BASE_URL, ModelDefaults.defaultBaseUrlForProvider("codex"));
+        assertEquals("https://api.openai.com/v1", ModelDefaults.DEFAULT_CODEX_OPENAI_BASE_URL);
+        assertEquals("http://127.0.0.1:8787/v1", ModelDefaults.DEFAULT_CODEX_HROOM_BASE_URL);
         assertEquals("", ModelDefaults.defaultBaseUrlForProvider("claude-code"));
         assertEquals("", ModelDefaults.defaultBaseUrlForProvider(null));
         assertEquals("", ModelDefaults.defaultBaseUrlForProvider("unknown"));

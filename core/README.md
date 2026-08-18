@@ -24,6 +24,7 @@ reflexes, safety guards, tool interfaces, and built-in LLM providers.
 | Mistral AI | `mistral` | `codestral-latest` | `https://api.mistral.ai/v1` |
 | Cloudflare Workers AI | `cloudflare` | `@cf/meta/llama-3.3-70b-instruct-fp8-fast` | `https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/v1` |
 | Cohere | `cohere` | `command-r-plus-08-2024` | `https://api.cohere.ai/compatibility/v1` |
+| Codex CLI | `codex` | `gpt-5.6-luna` | `https://chatgpt.com/backend-api/codex` |
 | Gemini | `gemini` | `gemini-2.5-flash-lite` | `https://generativelanguage.googleapis.com/v1beta` |
 | OMLX | `omlx` | `mlx-community/Qwen3.6-35B-A3B-4bit` | `http://127.0.0.1:8000/v1` |
 | Llama.cpp | `llamacpp` | `qwen3` | `http://127.0.0.1:9000/v1` |
@@ -117,6 +118,20 @@ reflexes, safety guards, tool interfaces, and built-in LLM providers.
 | `amsha.classifier.cohere.api-key` | `AMSHA_CLASSIFIER_COHERE_API_KEY` | — | Cohere API key for classifier slot |
 | `amsha.classifier.cohere.model` | `AMSHA_CLASSIFIER_COHERE_MODEL` | `command-r-plus-08-2024` | Classifier slot model |
 | `amsha.classifier.cohere.base-url` | `AMSHA_CLASSIFIER_COHERE_BASE_URL` | `https://api.cohere.ai/compatibility/v1` | Classifier slot base URL |
+
+## Codex Configuration
+
+| Property | Env Var | Default | Description |
+|---|---|---|---|
+| `amsha.llm.codex.api-key` | `AMSHA_CODEX_API_KEY` | — | Optional direct API key / token (defaults to `~/.codex/auth.json` OAuth session) |
+| `amsha.llm.codex.base-url` | `AMSHA_CODEX_BASE_URL` | `https://chatgpt.com/backend-api/codex` | Codex endpoint (defaults to direct ChatGPT Plus Responses endpoint; or `http://127.0.0.1:8787/v1` for hroom proxy, or `https://api.openai.com/v1`) |
+| `amsha.llm.codex.model` | `AMSHA_CODEX_MODEL` | `gpt-5.6-luna` | Default chat model |
+| `amsha.compaction.codex.api-key` | `AMSHA_COMPACTION_CODEX_API_KEY` | — | Codex API key for compaction slot |
+| `amsha.compaction.codex.model` | `AMSHA_COMPACTION_CODEX_MODEL` | `gpt-5.6-luna` | Compaction slot model |
+| `amsha.compaction.codex.base-url` | `AMSHA_COMPACTION_CODEX_BASE_URL` | `https://chatgpt.com/backend-api/codex` | Compaction slot base URL |
+| `amsha.classifier.codex.api-key` | `AMSHA_CLASSIFIER_CODEX_API_KEY` | — | Codex API key for classifier slot |
+| `amsha.classifier.codex.model` | `AMSHA_CLASSIFIER_CODEX_MODEL` | `gpt-5.6-luna` | Classifier slot model |
+| `amsha.classifier.codex.base-url` | `AMSHA_CLASSIFIER_CODEX_BASE_URL` | `https://chatgpt.com/backend-api/codex` | Classifier slot base URL |
 
 ## Testing
 

@@ -200,6 +200,23 @@ class InteractiveSetupWizardTest {
     }
 
     @Test
+    void ensureBaseConfigs_patchesCodexCompactionAndClassifierDefaults(@TempDir Path tempDir) throws Exception {
+        Path envFile = tempDir.resolve(".env");
+        Files.writeString(envFile, "AMSHA_LLM_PROVIDER=codex\n");
+        System.setProperty("AMSHA_LLM_PROVIDER", "codex");
+
+        Method ensure = InteractiveSetupWizard.class.getDeclaredMethod("ensureBaseConfigsInEnv", Path.class);
+        ensure.setAccessible(true);
+        ensure.invoke(null, envFile);
+
+        String content = Files.readString(envFile);
+        assertTrue(content.contains("AMSHA_COMPACTION_CODEX_MODEL=gpt-5.6-luna"));
+        assertTrue(content.contains("AMSHA_COMPACTION_CODEX_BASE_URL=http://127.0.0.1:8787/v1"));
+        assertTrue(content.contains("AMSHA_CLASSIFIER_CODEX_MODEL=gpt-5.6-luna"));
+        assertTrue(content.contains("AMSHA_CLASSIFIER_CODEX_BASE_URL=http://127.0.0.1:8787/v1"));
+    }
+
+    @Test
     void testHelperMethodsViaReflection() throws Exception {
         Method llmKey = InteractiveSetupWizard.class.getDeclaredMethod("llmApiKeyForProvider", String.class);
         llmKey.setAccessible(true);
@@ -213,11 +230,13 @@ class InteractiveSetupWizardTest {
         assertEquals("AMSHA_MISTRAL_API_KEY", llmKey.invoke(null, "mistral"));
         assertEquals("AMSHA_CLOUDFLARE_API_KEY", llmKey.invoke(null, "cloudflare"));
         assertEquals("AMSHA_COHERE_API_KEY", llmKey.invoke(null, "cohere"));
+        assertEquals("AMSHA_CODEX_API_KEY", llmKey.invoke(null, "codex"));
 
         Method compactionKey =
                 InteractiveSetupWizard.class.getDeclaredMethod("compactionApiKeyForProvider", String.class);
         compactionKey.setAccessible(true);
         assertNull(compactionKey.invoke(null, "ollama"));
+        assertNull(compactionKey.invoke(null, "codex"));
         assertEquals("AMSHA_COMPACTION_OPENROUTER_API_KEY", compactionKey.invoke(null, "openrouter"));
         assertEquals("AMSHA_COMPACTION_SARVAM_API_KEY", compactionKey.invoke(null, "sarvam"));
         assertEquals("AMSHA_COMPACTION_OPENCODE_API_KEY", compactionKey.invoke(null, "opencode"));
@@ -230,6 +249,7 @@ class InteractiveSetupWizardTest {
                 InteractiveSetupWizard.class.getDeclaredMethod("classifierApiKeyForProvider", String.class);
         classifierKey.setAccessible(true);
         assertNull(classifierKey.invoke(null, "omlx"));
+        assertNull(classifierKey.invoke(null, "codex"));
         assertEquals("AMSHA_CLASSIFIER_GROQ_API_KEY", classifierKey.invoke(null, "groq"));
         assertEquals("AMSHA_CLASSIFIER_SARVAM_API_KEY", classifierKey.invoke(null, "sarvam"));
         assertEquals("AMSHA_CLASSIFIER_OPENCODE_API_KEY", classifierKey.invoke(null, "opencode"));

@@ -9,6 +9,7 @@ import java.util.Map;
 import java.util.Optional;
 
 import com.amsha.core.routing.ClaudeCodeOAuthTokenExtractor;
+import com.amsha.core.routing.CodexOAuthTokenExtractor;
 import com.amsha.core.routing.ModelDefaults;
 import com.amsha.core.routing.provider.LlmProviderDescriptor;
 import com.amsha.core.routing.provider.LlmProviderOnboardingAdapter;
@@ -85,6 +86,9 @@ public class LlmConfigurationProvenance {
                     ModelDefaults.PROVIDER_COHERE,
                     new EnvironmentSpec("AMSHA_COHERE_MODEL", "AMSHA_COHERE_BASE_URL", "AMSHA_COHERE_API_KEY")),
             Map.entry(
+                    ModelDefaults.PROVIDER_CODEX,
+                    new EnvironmentSpec("AMSHA_CODEX_MODEL", "AMSHA_CODEX_BASE_URL", "AMSHA_CODEX_API_KEY")),
+            Map.entry(
                     ModelDefaults.PROVIDER_GEMINI,
                     new EnvironmentSpec("AMSHA_GEMINI_MODEL", "", "AMSHA_GEMINI_API_KEY")),
             Map.entry(ModelDefaults.PROVIDER_OMLX, new EnvironmentSpec("AMSHA_OMLX_MODEL", "AMSHA_OMLX_BASE_URL", "")),
@@ -107,6 +111,9 @@ public class LlmConfigurationProvenance {
 
     @Inject
     ClaudeCodeOAuthTokenExtractor claudeCodeTokenExtractor;
+
+    @Inject
+    CodexOAuthTokenExtractor codexTokenExtractor;
 
     @Inject
     Config config;
@@ -142,6 +149,7 @@ public class LlmConfigurationProvenance {
                 .map(LlmProviderDescriptor::requiresApiKey)
                 .orElse(true);
         boolean claudeCode = ModelDefaults.PROVIDER_CLAUDE_CODE.equals(normalizedProvider);
+        boolean codex = ModelDefaults.PROVIDER_CODEX.equals(normalizedProvider);
         boolean cloudflare = ModelDefaults.PROVIDER_CLOUDFLARE.equals(normalizedProvider);
         if (cloudflare && effectiveBaseUrl.contains("{account_id}")) {
             Optional<String> accountId =
@@ -152,16 +160,12 @@ public class LlmConfigurationProvenance {
             }
         }
         boolean cloudflareAccountConfigured = !cloudflare || !effectiveBaseUrl.contains("{account_id}");
-        boolean vaultCredentialConfigured = claudeCode
-                ? vault.systemKeyExists(VaultConstants.CLAUDE_CODE_OAUTH_TOKEN_KEY)
-                : vaultActive && vault.systemKeyExists(VaultConstants.LLM_API_KEY);
-        boolean environmentCredentialConfigured = claudeCode
-                ? claudeCodeTokenExtractor != null
-                        && claudeCodeTokenExtractor.extractToken().isPresent()
-                : hasConfiguredEnvironmentValue(environmentSpec.apiKeyKey());
+        boolean vaultCredentialConfigured = isVaultCredentialConfigured(normalizedProvider, vaultActive);
+        boolean environmentCredentialConfigured =
+                isEnvironmentCredentialConfigured(normalizedProvider, environmentSpec);
         boolean credentialConfigured =
                 (vaultCredentialConfigured || environmentCredentialConfigured) && cloudflareAccountConfigured;
-        boolean credentialRequired = requiresApiKey || claudeCode || cloudflare;
+        boolean credentialRequired = requiresApiKey || claudeCode || codex || cloudflare;
         String credentialState = credentialRequired
                 ? credentialConfigured ? CREDENTIAL_CONFIGURED : CREDENTIAL_MISSING
                 : CREDENTIAL_NOT_REQUIRED;
@@ -225,6 +229,28 @@ public class LlmConfigurationProvenance {
                     }
                 })
                 .filter(value -> !value.isBlank());
+    }
+
+    private boolean isVaultCredentialConfigured(String normalizedProvider, boolean vaultActive) {
+        return switch (normalizedProvider) {
+            case ModelDefaults.PROVIDER_CLAUDE_CODE ->
+                vault.systemKeyExists(VaultConstants.CLAUDE_CODE_OAUTH_TOKEN_KEY);
+            case ModelDefaults.PROVIDER_CODEX -> vault.systemKeyExists(VaultConstants.CODEX_OAUTH_TOKEN_KEY);
+            default -> vaultActive && vault.systemKeyExists(VaultConstants.LLM_API_KEY);
+        };
+    }
+
+    private boolean isEnvironmentCredentialConfigured(String normalizedProvider, EnvironmentSpec environmentSpec) {
+        return switch (normalizedProvider) {
+            case ModelDefaults.PROVIDER_CLAUDE_CODE ->
+                claudeCodeTokenExtractor != null
+                        && claudeCodeTokenExtractor.extractToken().isPresent();
+            case ModelDefaults.PROVIDER_CODEX ->
+                (codexTokenExtractor != null
+                                && codexTokenExtractor.extractToken().isPresent())
+                        || hasConfiguredEnvironmentValue(environmentSpec.apiKeyKey());
+            default -> hasConfiguredEnvironmentValue(environmentSpec.apiKeyKey());
+        };
     }
 
     private String normalize(String provider) {

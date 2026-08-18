@@ -314,6 +314,7 @@ public final class ChatModelFactory {
             case "gemini" -> createGemini(baseUrl, apiKey, model, config);
             case "anthropic", "claude", "claude-code" -> createAnthropic(baseUrl, apiKey, model, config);
             case "ollama" -> createOllama(baseUrl, model, config);
+            case "codex" -> createCodex(baseUrl, apiKey, null, model, config);
             default ->
                 createOpenAi(
                         baseUrl,
@@ -325,6 +326,43 @@ public final class ChatModelFactory {
                         config.temperature(),
                         config.logHttp());
         };
+    }
+
+    /** Builds a Codex ChatModel (direct ChatGPT Plus Responses endpoint or OpenAI proxy). */
+    public static ChatModel createCodex(
+            String baseUrl, String token, String accountId, String model, AgentLlmConfig config) {
+        return createCodex(
+                baseUrl,
+                token,
+                accountId,
+                model,
+                config.maxTokens(),
+                config.timeout(),
+                config.maxRetries(),
+                config.temperature(),
+                config.logHttp());
+    }
+
+    /** Builds a Codex ChatModel with explicit parameter overrides. */
+    public static ChatModel createCodex(
+            String baseUrl,
+            String token,
+            String accountId,
+            String model,
+            Integer maxTokens,
+            Duration timeout,
+            Integer maxRetries,
+            Double temperature,
+            boolean logHttp) {
+        if (baseUrl == null || baseUrl.isBlank() || baseUrl.contains("chatgpt.com/backend-api/codex")) {
+            String endpoint = (baseUrl != null && baseUrl.endsWith("/responses"))
+                    ? baseUrl
+                    : (baseUrl != null && !baseUrl.isBlank()
+                            ? baseUrl + "/responses"
+                            : "https://chatgpt.com/backend-api/codex/responses");
+            return new CodexResponsesChatModel(endpoint, token, accountId, model, maxTokens, timeout, temperature);
+        }
+        return createOpenAi(baseUrl, token, model, maxTokens, timeout, maxRetries, temperature, logHttp);
     }
 
     /** Builds a Gemini ChatModel from a resolved credential. */

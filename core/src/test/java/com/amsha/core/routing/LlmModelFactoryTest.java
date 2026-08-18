@@ -157,6 +157,59 @@ class LlmModelFactoryTest {
     }
 
     @Test
+    void testCreateCodexModel() {
+        ChatModel model = factory.createModel(
+                "codex",
+                "http://127.0.0.1:8787/v1",
+                "test-codex-oauth-token",
+                "gpt-5.6-luna",
+                100,
+                null,
+                1,
+                null,
+                null);
+        assertNotNull(model);
+    }
+
+    @Test
+    void testCreateCodexModel_directOpenAiBaseUrl() {
+        ChatModel model = factory.createModel(
+                "codex",
+                "https://api.openai.com/v1",
+                "test-codex-oauth-token",
+                "gpt-5.6-luna",
+                100,
+                null,
+                1,
+                null,
+                null);
+        assertNotNull(model);
+    }
+
+    @Test
+    void testCreateCodexModel_directChatGptResponsesEndpoint() {
+        ChatModel model = factory.createModel(
+                "codex",
+                "https://chatgpt.com/backend-api/codex",
+                "test-codex-oauth-token",
+                "gpt-5.6-luna",
+                100,
+                null,
+                1,
+                null,
+                null);
+        assertNotNull(model);
+        assertTrue(model instanceof CodexResponsesChatModel);
+    }
+
+    @Test
+    void testCreateProvider_missingApiKey_throwsException() {
+        assertThrows(IllegalStateException.class, () -> {
+            factory.createModel("groq", "https://api.groq.com/openai/v1", "", "llama3", 100, null, 1, null, null);
+        });
+    }
+
+    @Test
     void testUnknownProvider() {
         assertThrows(IllegalStateException.class, () -> {
             factory.createModel("unknown", null, null, null, null, null, 1, null, null);

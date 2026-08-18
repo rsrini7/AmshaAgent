@@ -1,6 +1,7 @@
 package com.amsha.app.util;
 
 import java.util.Locale;
+import java.util.Set;
 
 /**
  * Provider-specific API-key specifications for Amsha Agent.
@@ -11,12 +12,23 @@ import java.util.Locale;
  * {@link #compactionKeySpecFor}, {@link #classifierKeySpecFor},
  * {@link #embeddingKeySpecFor}) map a normalized provider name to the
  * correct {@link VarSpec}, returning {@code null} for providers that
- * do not require an API key (e.g. ollama).
+ * do not require an API key (e.g. ollama, codex).
  */
 public final class ProviderKeySpecs {
 
+    public static final Set<String> LLM_KEYLESS_PROVIDERS = Set.of("ollama", "codex");
+    public static final Set<String> COMPACTION_CLASSIFIER_KEYLESS_PROVIDERS = Set.of("ollama", "omlx", "codex");
+
     private ProviderKeySpecs() {
         // utility class
+    }
+
+    public static boolean isLlmKeyless(String provider) {
+        return provider != null && LLM_KEYLESS_PROVIDERS.contains(provider.toLowerCase(Locale.ROOT));
+    }
+
+    public static boolean isCompactionClassifierKeyless(String provider) {
+        return provider != null && COMPACTION_CLASSIFIER_KEYLESS_PROVIDERS.contains(provider.toLowerCase(Locale.ROOT));
     }
 
     // -----------------------------------------------------------------------
@@ -128,10 +140,16 @@ public final class ProviderKeySpecs {
 
     /**
      * Resolves the primary LLM API-key {@link VarSpec} for a provider name.
-     * Returns {@code null} for {@code ollama} (no key required).
+     * Returns {@code null} for keyless providers (e.g. ollama, codex).
      */
     public static VarSpec llmKeySpecFor(String provider) {
-        return switch (provider == null ? "groq" : provider.toLowerCase(Locale.ROOT)) {
+        if (provider == null) {
+            return GROQ_KEY_SPEC;
+        }
+        if (isLlmKeyless(provider)) {
+            return null;
+        }
+        return switch (provider.toLowerCase(Locale.ROOT)) {
             case "openrouter" -> OPENROUTER_KEY_SPEC;
             case "openai" -> OPENAI_KEY_SPEC;
             case "gemini" -> GEMINI_KEY_SPEC;
@@ -145,7 +163,6 @@ public final class ProviderKeySpecs {
             case "cohere" -> COHERE_KEY_SPEC;
             case "omlx" -> OMLX_KEY_SPEC;
             case "generic-openai" -> GENERIC_OPENAI_KEY_SPEC;
-            case "ollama" -> null;
             default -> GROQ_KEY_SPEC;
         };
     }
@@ -156,11 +173,13 @@ public final class ProviderKeySpecs {
 
     /**
      * Per-provider API-key spec for the compaction slot. Returns {@code null}
-     * for providers that don't need a key (ollama, omlx).
+     * for providers that don't need a key (ollama, omlx, codex).
      */
     public static VarSpec compactionKeySpecFor(String provider) {
+        if (isCompactionClassifierKeyless(provider)) {
+            return null;
+        }
         return switch (provider) {
-            case "ollama", "omlx" -> null;
             case "openrouter" ->
                 providerKeySpec(
                         "openrouter", "AMSHA_COMPACTION_OPENROUTER_API_KEY", "sk-or-v1-", "https://openrouter.ai");
@@ -201,11 +220,13 @@ public final class ProviderKeySpecs {
 
     /**
      * Per-provider API-key spec for the intent-classifier slot. Returns {@code null}
-     * for providers that don't need a key (ollama, omlx).
+     * for providers that don't need a key (ollama, omlx, codex).
      */
     public static VarSpec classifierKeySpecFor(String provider) {
+        if (isCompactionClassifierKeyless(provider)) {
+            return null;
+        }
         return switch (provider) {
-            case "ollama", "omlx" -> null;
             case "openrouter" ->
                 providerKeySpec(
                         "openrouter", "AMSHA_CLASSIFIER_OPENROUTER_API_KEY", "sk-or-v1-", "https://openrouter.ai");

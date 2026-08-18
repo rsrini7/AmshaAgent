@@ -29,6 +29,7 @@ class RoutingProviderFactoryCoverageTest {
                 new MistralLlmProviderFactory(),
                 new CloudflareLlmProviderFactory(),
                 new CohereLlmProviderFactory(),
+                new CodexLlmProviderFactory(),
                 new OpenRouterLlmProviderFactory(),
                 new SarvamLlmProviderFactory());
     }

@@ -120,6 +120,12 @@ class ChatModelProducerTest {
     }
 
     @Test
+    void providerBaseUrls_containsCodex() throws Exception {
+        Map<String, String> urls = getProviderBaseUrls();
+        assertEquals("https://chatgpt.com/backend-api/codex", urls.get("codex"));
+    }
+
+    @Test
     void providerBaseUrls_containsGemini() throws Exception {
         Map<String, String> urls = getProviderBaseUrls();
         assertEquals("https://generativelanguage.googleapis.com/v1beta", urls.get("gemini"));
@@ -128,7 +134,7 @@ class ChatModelProducerTest {
     @Test
     void providerBaseUrls_hasExpectedCount() throws Exception {
         Map<String, String> urls = getProviderBaseUrls();
-        assertEquals(16, urls.size());
+        assertEquals(17, urls.size());
     }
 
     @Test
@@ -335,6 +341,19 @@ class ChatModelProducerTest {
         AgentChatModelProvider result = (AgentChatModelProvider) m.invoke(producer, "openai#variant");
         assertNotNull(result);
         assertEquals("openai", result.providerName());
+    }
+
+    @Test
+    void findProvider_unknownProvider_throwsIllegalStateException() throws Exception {
+        ChatModelProducer producer = new ChatModelProducer();
+        setField(producer, "providers", createEmptyInstance());
+
+        Method m = ChatModelProducer.class.getDeclaredMethod("findProvider", String.class);
+        m.setAccessible(true);
+        InvocationTargetException ite =
+                assertThrows(InvocationTargetException.class, () -> m.invoke(producer, "non-existent-provider"));
+        assertTrue(ite.getCause() instanceof IllegalStateException);
+        assertTrue(ite.getCause().getMessage().contains("No AgentChatModelProvider found for"));
     }
 
     // -----------------------------------------------------------------------

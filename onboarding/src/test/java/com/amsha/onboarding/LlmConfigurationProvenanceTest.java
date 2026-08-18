@@ -14,6 +14,8 @@ import java.util.Map;
 import java.util.Optional;
 
 import com.amsha.core.routing.ClaudeCodeOAuthTokenExtractor;
+import com.amsha.core.routing.CodexOAuthTokenExtractor;
+import com.amsha.core.routing.ModelDefaults;
 import com.amsha.core.routing.provider.LlmProviderDescriptor;
 import com.amsha.core.routing.provider.LlmProviderOnboardingAdapter;
 import com.amsha.core.routing.provider.ModelEntry;
@@ -439,12 +441,51 @@ class LlmConfigurationProvenanceTest {
         assertFalse(resolution.ready());
     }
 
+    @Test
+    void codexEnvironmentCredentialIsReported() {
+        LlmConfigurationProvenance provenance = provenanceFor(
+                "codex",
+                false,
+                Map.of(
+                        "AMSHA_CODEX_API_KEY", "test-codex-key",
+                        "AMSHA_CODEX_MODEL", "gpt-5.6-luna",
+                        "AMSHA_CODEX_BASE_URL", "http://127.0.0.1:8787/v1"));
+        when(provenance.providerCatalog.descriptor("codex")).thenReturn(Optional.of(requiredDescriptor("codex")));
+
+        LlmConfigurationProvenance.Resolution resolution = provenance.resolve();
+
+        assertEquals("codex", resolution.effectiveProvider());
+        assertEquals("gpt-5.6-luna", resolution.effectiveModel());
+        assertEquals("http://127.0.0.1:8787/v1", resolution.effectiveBaseUrl());
+        assertEquals(LlmConfigurationProvenance.CREDENTIAL_CONFIGURED, resolution.credentialState());
+        assertEquals(LlmConfigurationProvenance.SOURCE_ENVIRONMENT, resolution.credentialSource());
+        assertTrue(resolution.ready());
+    }
+
+    @Test
+    void codexDefaultModelFallbackIsReported() {
+        LlmConfigurationProvenance provenance = provenanceFor(
+                "codex",
+                false,
+                Map.of(
+                        "AMSHA_CODEX_API_KEY", "test-codex-key",
+                        "AMSHA_CODEX_BASE_URL", "http://127.0.0.1:8787/v1"));
+        when(provenance.providerCatalog.descriptor("codex")).thenReturn(Optional.of(requiredDescriptor("codex")));
+
+        LlmConfigurationProvenance.Resolution resolution = provenance.resolve();
+
+        assertEquals("codex", resolution.effectiveProvider());
+        assertEquals(ModelDefaults.DEFAULT_CODEX_MODEL, resolution.effectiveModel());
+        assertTrue(resolution.ready());
+    }
+
     private static LlmConfigurationProvenance provenanceFor(
             String provider, boolean vaultPriority, Map<String, String> values) {
         LlmConfigurationProvenance provenance = new LlmConfigurationProvenance();
         provenance.vault = mock(SecretVault.class);
         provenance.providerCatalog = mock(LlmProviderOnboardingAdapter.class);
         provenance.claudeCodeTokenExtractor = mock(ClaudeCodeOAuthTokenExtractor.class);
+        provenance.codexTokenExtractor = mock(CodexOAuthTokenExtractor.class);
         provenance.config = mockConfig(values, "test-profile");
         provenance.configuredProvider = provider;
         provenance.vaultPriority = vaultPriority;
