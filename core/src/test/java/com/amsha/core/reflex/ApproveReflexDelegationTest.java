@@ -50,6 +50,12 @@ public class ApproveReflexDelegationTest {
     CheckpointResumeHandler checkpointResumeHandler;
 
     @Mock
+    ResumeResultHelper resumeResultHelper;
+
+    @Mock
+    DelegateApprovalGuard delegateGuard;
+
+    @Mock
     ApprovalNotificationService notificationService;
 
     ObjectMapper objectMapper = new ObjectMapper();
@@ -132,5 +138,53 @@ public class ApproveReflexDelegationTest {
 
         verify(checkpointApprovalService).approveTool("s1", ToolCapability.GITHUB.toolName(), "CLI approve");
         assertNotNull(result);
+    }
+
+    @Test
+    void test_bareApprove_resolvesChildDelegatedSession() {
+        String childSessionId = "s1:delegate:brahma:1787031717243";
+        AgentCheckpoint childCp = new AgentCheckpointRecord();
+        childCp.setSessionId(childSessionId);
+        childCp.setAgentRole("coder");
+        childCp.setPendingToolName("sandbox_exec");
+
+        when(statefulAgentStore.findLatestAwaitingApproval("s1")).thenReturn(Optional.empty());
+        when(statefulAgentStore.findLatestAwaitingApprovalBySessionContaining("s1"))
+                .thenReturn(Optional.of(childCp));
+
+        MessageContext context = mock(MessageContext.class);
+        ChannelUser user = new ChannelUser("u1", "u1", "u1", ChannelType.CLI);
+        when(context.getUser()).thenReturn(user);
+        when(resumeResultHelper.runSync(childSessionId, "coder", "u1", "c1")).thenReturn("Executed star pattern");
+
+        ReflexResult result = approveReflex.execute("s1", "u1", "c1", "/approve", context);
+
+        verify(checkpointApprovalService).approveAll(childSessionId, "CLI approve");
+        verify(resumeResultHelper).runSync(childSessionId, "coder", "u1", "c1");
+        assertNotNull(result);
+        assertEquals("Executed star pattern", result.commandResponse().orElse(null));
+    }
+
+    @Test
+    void test_explicitApprove_resolvesChildDelegatedSessionWithoutDelegateRole() {
+        String childSessionId = "s1:delegate:brahma:1787031717243";
+        AgentCheckpoint childCp = new AgentCheckpointRecord();
+        childCp.setSessionId(childSessionId);
+        childCp.setAgentRole("coder");
+        childCp.setPendingToolName("sandbox_exec");
+
+        when(statefulAgentStore.findLatestAwaitingApproval(childSessionId)).thenReturn(Optional.of(childCp));
+
+        MessageContext context = mock(MessageContext.class);
+        ChannelUser user = new ChannelUser("u1", "u1", "u1", ChannelType.CLI);
+        when(context.getUser()).thenReturn(user);
+        when(resumeResultHelper.runSync(childSessionId, "coder", "u1", "c1")).thenReturn("Executed star pattern");
+
+        ReflexResult result = approveReflex.execute("s1", "u1", "c1", "/approve " + childSessionId, context);
+
+        verify(checkpointApprovalService).approveAll(childSessionId, "CLI approve");
+        verify(resumeResultHelper).runSync(childSessionId, "coder", "u1", "c1");
+        assertNotNull(result);
+        assertEquals("Executed star pattern", result.commandResponse().orElse(null));
     }
 }

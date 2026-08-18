@@ -133,13 +133,17 @@ public interface ChannelCommand {
             Pattern.compile("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$");
 
     private static Optional<String> parseTargetId(Optional<String> argOpt) {
-        // Explicit targets can be a hyphenated ID, a numeric option, or an alphanumeric prefix of at least 4 chars.
-        return argOpt.filter(
-                arg -> arg.contains("-") || arg.matches("\\d+") || (arg.length() >= 4 && arg.matches("[0-9a-fA-F]+")));
+        // Explicit targets can be a hyphenated ID, a delegated session with colons, a numeric option, or an
+        // alphanumeric prefix of at least 4 chars.
+        return argOpt.filter(arg -> arg.contains("-")
+                || arg.contains(":")
+                || arg.matches("\\d+")
+                || (arg.length() >= 4 && arg.matches("[0-9a-fA-F]+")));
     }
 
     private static Optional<String> parseToolName(Optional<String> argOpt) {
         return argOpt.filter(arg -> !arg.contains("-")
+                && !arg.contains(":")
                 && !arg.matches("\\d+")
                 && !(arg.length() >= 4 && arg.matches("[0-9a-fA-F]+"))
                 && !arg.isBlank());

@@ -5,6 +5,7 @@ import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
 import java.util.List;
+import java.util.Locale;
 
 import com.amsha.common.util.LogUtil;
 import com.amsha.core.agent.IntentClassificationService;
@@ -204,16 +205,16 @@ public class AgentStateMachineRunner {
         String observation = lastToolStep.observation();
 
         if (isShellTool(action)) {
-            boolean generatedArtifact = ToolStepResolutionUtils.isArtifactCompletionSignal(lastToolStep)
-                    || looksLikeLargeArtifact(observation);
+            boolean isHtml = isHtmlArtifact(observation);
+            boolean generatedArtifact = isHtml || ToolStepResolutionUtils.isArtifactCompletionSignal(lastToolStep);
             if (generatedArtifact) {
                 return includeGuidance
-                        ? "The approved shell tool completed successfully. Summarize the generated artifact briefly without repeating raw shell output."
+                        ? "The approved shell tool completed successfully. Summarize the generated artifact briefly without repeating raw HTML."
                         : GENERIC_TERMINAL_ARTIFACT_SUCCESS;
             }
             return includeGuidance
-                    ? "The approved shell tool completed successfully. Summarize the result briefly without repeating raw shell output."
-                    : GENERIC_TERMINAL_SUCCESS;
+                    ? "The approved tool completed successfully with the execution output above. Present the result to the user."
+                    : (observation != null && !observation.isBlank() ? observation : GENERIC_TERMINAL_SUCCESS);
         }
 
         // Non-shell tools commonly return long web/page content. Do not echo the raw
@@ -223,25 +224,15 @@ public class AgentStateMachineRunner {
                 : GENERIC_TERMINAL_SUCCESS;
     }
 
-    private boolean looksLikeLargeArtifact(String observation) {
+    private boolean isHtmlArtifact(String observation) {
         if (observation == null || observation.isBlank()) {
             return false;
         }
 
-        if (observation.length() > MAX_TERMINAL_ECHO_CHARS) {
-            return true;
-        }
-
-        long newlineCount = observation.chars().filter(ch -> ch == '\n').count();
-        if (newlineCount >= 4) {
-            return true;
-        }
-
-        String lower = observation.toLowerCase();
+        String lower = observation.toLowerCase(Locale.ROOT);
         return lower.contains("<html")
                 || lower.contains("</html")
                 || lower.contains("<!doctype html")
-                || lower.contains("```")
                 || lower.contains("<body")
                 || lower.contains("<script");
     }

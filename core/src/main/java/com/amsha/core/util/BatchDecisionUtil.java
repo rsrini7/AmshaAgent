@@ -20,7 +20,7 @@ public final class BatchDecisionUtil {
      * Returns tool names whose decision is still PENDING. §7.20
      */
     public static List<String> pendingToolNames(AgentCheckpoint cp, ObjectMapper objectMapper) {
-        if (!cp.hasBatchToolDecisions()) return List.of();
+        if (cp == null || !cp.hasBatchToolDecisions()) return List.of();
         try {
             Map<String, ToolDecision> map =
                     objectMapper.readValue(cp.getBatchToolDecisions(), new TypeReference<>() {});
@@ -37,7 +37,7 @@ public final class BatchDecisionUtil {
      * Returns all tool names regardless of decision status.
      */
     public static List<String> allToolNames(AgentCheckpoint cp, ObjectMapper objectMapper) {
-        if (!cp.hasBatchToolDecisions()) return List.of();
+        if (cp == null || !cp.hasBatchToolDecisions()) return List.of();
         try {
             Map<String, ToolDecision> map =
                     objectMapper.readValue(cp.getBatchToolDecisions(), new TypeReference<>() {});
