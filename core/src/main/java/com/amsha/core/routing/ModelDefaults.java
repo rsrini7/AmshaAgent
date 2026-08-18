@@ -65,6 +65,7 @@ public final class ModelDefaults {
     public static final String DEFAULT_OPENAI_BASE_URL = "https://api.openai.com/v1";
     public static final String DEFAULT_OLLAMA_BASE_URL = "http://localhost:11434";
     public static final String DEFAULT_ANTHROPIC_BASE_URL = "https://api.anthropic.com";
+    public static final String DEFAULT_CLAUDE_CODE_BASE_URL = "https://api.anthropic.com";
     public static final String DEFAULT_OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
     public static final String DEFAULT_NVIDIA_BASE_URL = "https://integrate.api.nvidia.com/v1";
     public static final String DEFAULT_CEREBRAS_BASE_URL = "https://api.cerebras.ai/v1";
@@ -155,6 +156,7 @@ public final class ModelDefaults {
             case PROVIDER_OPENAI -> DEFAULT_OPENAI_BASE_URL;
             case PROVIDER_OLLAMA -> DEFAULT_OLLAMA_BASE_URL;
             case PROVIDER_ANTHROPIC -> DEFAULT_ANTHROPIC_BASE_URL;
+            case PROVIDER_CLAUDE_CODE -> DEFAULT_CLAUDE_CODE_BASE_URL;
             case PROVIDER_OPENROUTER -> DEFAULT_OPENROUTER_BASE_URL;
             case PROVIDER_NVIDIA -> DEFAULT_NVIDIA_BASE_URL;
             case PROVIDER_CEREBRAS -> DEFAULT_CEREBRAS_BASE_URL;

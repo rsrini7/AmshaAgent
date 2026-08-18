@@ -12,6 +12,7 @@ import com.amsha.core.routing.ChatModelFactory;
 import com.amsha.core.routing.CodexTokenResolver;
 import com.amsha.core.routing.ModelDefaults;
 import com.amsha.core.routing.MultiModelChatModel;
+import com.amsha.core.security.http.GovernedTransportService;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 
@@ -26,6 +27,9 @@ public class CodexProviderFactory implements AgentChatModelProvider {
 
     @Inject
     CodexTokenResolver tokenResolver;
+
+    @Inject
+    GovernedTransportService governedTransport;
 
     @ConfigProperty(name = "amsha.llm.codex.api-key")
     Optional<String> apiKey;
@@ -82,7 +86,8 @@ public class CodexProviderFactory implements AgentChatModelProvider {
                         agentConfig.timeout(),
                         agentConfig.maxRetries(),
                         agentConfig.temperature(),
-                        agentConfig.logHttp()));
+                        agentConfig.logHttp(),
+                        governedTransport));
         if (entries.size() == 1) return entries.getFirst().model();
         return new MultiModelChatModel(ModelDefaults.PROVIDER_CODEX, entries, 5);
     }

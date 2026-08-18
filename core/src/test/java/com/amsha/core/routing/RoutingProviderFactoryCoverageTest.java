@@ -30,6 +30,7 @@ class RoutingProviderFactoryCoverageTest {
                 new CloudflareLlmProviderFactory(),
                 new CohereLlmProviderFactory(),
                 new CodexLlmProviderFactory(),
+                new ClaudeCodeProviderFactory(),
                 new OpenRouterLlmProviderFactory(),
                 new SarvamLlmProviderFactory());
     }

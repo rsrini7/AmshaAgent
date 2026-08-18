@@ -1,39 +1,34 @@
 package com.amsha.core.routing;
 
-import dev.langchain4j.model.anthropic.AnthropicChatModel;
 import dev.langchain4j.model.chat.ChatModel;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
-import java.nio.charset.StandardCharsets;
 import java.time.Duration;
-import java.util.Optional;
 
-import com.amsha.core.security.SecretVault;
-import com.amsha.core.security.VaultConstants;
-import com.amsha.core.security.VaultKey;
+import com.amsha.core.security.http.GovernedTransportService;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
-import org.jboss.logging.Logger;
 
 /**
- * Component A3 - ClaudeCodeProviderFactory.
- * Creates an Anthropic chat model using credentials from Claude Code CLI.
+ * Component - ClaudeCodeProviderFactory.
+ * Creates a ClaudeCodeResponsesChatModel using credentials from Claude Code CLI or environment.
  */
 @ApplicationScoped
 public class ClaudeCodeProviderFactory implements RoutingChatModelProvider {
 
-    private static final Logger log = Logger.getLogger(ClaudeCodeProviderFactory.class);
+    @Inject
+    ClaudeCodeTokenResolver tokenResolver;
 
     @Inject
-    ClaudeCodeOAuthTokenExtractor tokenExtractor;
+    GovernedTransportService governedTransport;
 
-    @Inject
-    SecretVault secretVault;
+    @ConfigProperty(name = "amsha.llm.claude-code.base-url", defaultValue = ModelDefaults.DEFAULT_CLAUDE_CODE_BASE_URL)
+    String configuredBaseUrl;
 
-    @ConfigProperty(name = "amsha.llm.log-http", defaultValue = "false")
-    boolean logHttp;
+    @ConfigProperty(name = "amsha.llm.temperature", defaultValue = "0.1")
+    double defaultTemperature;
 
     @Override
     public String providerId() {
@@ -42,43 +37,23 @@ public class ClaudeCodeProviderFactory implements RoutingChatModelProvider {
 
     @Override
     public ChatModel create(LlmModelConfig config) {
-        // 1. Try to retrieve token from vault using the standard system key (Fix I5)
-        Optional<String> token = secretVault
-                .retrieveSystemKey(VaultConstants.CLAUDE_CODE_OAUTH_TOKEN_KEY)
-                .map(VaultKey::get)
-                .map(bytes -> new String(bytes, StandardCharsets.UTF_8));
+        String token = tokenResolver.resolveToken(config.apiKey());
 
-        if (token.isEmpty()) {
-            // 2. Fall back to tokenExtractor (filesystem extraction from ~/.claude/credentials.json)
-            token = tokenExtractor.extractToken();
-
-            if (token.isPresent()) {
-                // 3. Store in vault for future use to avoid repeated FS access
-                secretVault.storeSystemKey(
-                        VaultConstants.CLAUDE_CODE_OAUTH_TOKEN_KEY, token.get().getBytes(StandardCharsets.UTF_8));
-                log.info("Claude Code provider: token loaded from file and stored in vault.");
-            }
-        } else {
-            log.info("Claude Code provider: token loaded from vault.");
-        }
-
-        if (token.isEmpty()) {
-            throw new IllegalStateException("Claude Code provider requires an OAuth token. "
-                    + "Please run `claude login` in your local terminal first.");
-        }
-
-        // 5. Clean up model name assignment (Fix I1)
         String modelName = config.modelName();
         if (modelName == null || modelName.isBlank() || "mistral-small".equalsIgnoreCase(modelName)) {
             modelName = ModelDefaults.DEFAULT_CLAUDE_CODE_MODEL;
         }
 
-        return AnthropicChatModel.builder()
-                .apiKey(token.get())
-                .modelName(modelName)
-                .timeout(config.timeout().orElse(Duration.ofMinutes(3)))
-                .logRequests(logHttp)
-                .logResponses(logHttp)
-                .build();
+        String baseUrl =
+                (config.baseUrl() != null && !config.baseUrl().isBlank()) ? config.baseUrl() : configuredBaseUrl;
+
+        return new ClaudeCodeResponsesChatModel(
+                baseUrl,
+                token,
+                modelName,
+                config.maxTokens().orElse(4096),
+                config.timeout().orElse(Duration.ofMinutes(3)),
+                defaultTemperature,
+                governedTransport);
     }
 }

@@ -42,7 +42,7 @@
     "embeddingCapable": false,
     "requiresApiKey": false,
     "authScheme": "CLI_OAUTH",
-    "hasBaseUrl": false
+    "hasBaseUrl": true
   },
   {
     "id": "openrouter",

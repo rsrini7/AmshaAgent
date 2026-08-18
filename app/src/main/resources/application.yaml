@@ -361,6 +361,10 @@ amsha:
       api-key: "${AMSHA_CLASSIFIER_CODEX_API_KEY:${AMSHA_CODEX_API_KEY:}}"
       base-url: "${AMSHA_CLASSIFIER_CODEX_BASE_URL:https://chatgpt.com/backend-api/codex}"
       model: "${AMSHA_CLASSIFIER_CODEX_MODEL:gpt-5.6-luna}"
+    claude-code:
+      api-key: "${AMSHA_CLASSIFIER_CLAUDE_CODE_API_KEY:${AMSHA_CLAUDE_CODE_API_KEY:}}"
+      base-url: "${AMSHA_CLASSIFIER_CLAUDE_CODE_BASE_URL:https://api.anthropic.com}"
+      model: "${AMSHA_CLASSIFIER_CLAUDE_CODE_MODEL:claude-sonnet-4-5}"
   onnx:
     enabled: ${AMSHA_ONNX_ENABLED:false}
     model-root: "${AMSHA_ONNX_MODEL_ROOT:data/models}"
@@ -481,6 +485,10 @@ amsha:
       api-key: "${AMSHA_CODEX_API_KEY:}"
       base-url: "${AMSHA_CODEX_BASE_URL:https://chatgpt.com/backend-api/codex}"
       model: "${AMSHA_CODEX_MODEL:gpt-5.6-luna}"
+    claude-code:
+      api-key: "${AMSHA_CLAUDE_CODE_API_KEY:}"
+      base-url: "${AMSHA_CLAUDE_CODE_BASE_URL:https://api.anthropic.com}"
+      model: "${AMSHA_CLAUDE_CODE_MODEL:claude-sonnet-4-5}"
   infinite-loop:
     llm:
       providers: ${AMSHA_INFINITE_LOOP_LLM_PROVIDERS:omlx,groq,openrouter}
@@ -543,6 +551,10 @@ amsha:
       api-key: "${AMSHA_COMPACTION_CODEX_API_KEY:${AMSHA_CODEX_API_KEY:}}"
       base-url: "${AMSHA_COMPACTION_CODEX_BASE_URL:https://chatgpt.com/backend-api/codex}"
       model: "${AMSHA_COMPACTION_CODEX_MODEL:gpt-5.6-luna}"
+    claude-code:
+      api-key: "${AMSHA_COMPACTION_CLAUDE_CODE_API_KEY:${AMSHA_CLAUDE_CODE_API_KEY:}}"
+      base-url: "${AMSHA_COMPACTION_CLAUDE_CODE_BASE_URL:https://api.anthropic.com}"
+      model: "${AMSHA_COMPACTION_CLAUDE_CODE_MODEL:claude-sonnet-4-5}"
   agent:
     default-timezone: "${AMSHA_DEFAULT_TIMEZONE:Asia/Kolkata}"
     rate-limit:

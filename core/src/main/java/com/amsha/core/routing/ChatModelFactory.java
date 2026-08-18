@@ -20,12 +20,16 @@ import java.util.regex.Pattern;
 import com.amsha.common.util.LogUtil;
 import com.amsha.core.agent.reasoning.AgentLlmConfig;
 import com.amsha.core.agent.reasoning.StructuredOutputMode;
+import com.amsha.core.security.http.GovernedTransportService;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.jboss.logging.Logger;
 
 import io.quarkiverse.langchain4j.ai.runtime.gemini.AiGeminiChatLanguageModel;
+import io.quarkus.arc.Arc;
+import io.quarkus.arc.ArcContainer;
+import io.quarkus.arc.InstanceHandle;
 
 /**
  * Shared factory for building LangChain4j ChatModel instances.
@@ -312,7 +316,8 @@ public final class ChatModelFactory {
         String adapter = adapterId == null ? "" : adapterId.toLowerCase();
         return switch (adapter) {
             case "gemini" -> createGemini(baseUrl, apiKey, model, config);
-            case "anthropic", "claude", "claude-code" -> createAnthropic(baseUrl, apiKey, model, config);
+            case "anthropic", "claude" -> createAnthropic(baseUrl, apiKey, model, config);
+            case "claude-code" -> createClaudeCode(baseUrl, apiKey, model, config);
             case "ollama" -> createOllama(baseUrl, model, config);
             case "codex" -> createCodex(baseUrl, apiKey, null, model, config);
             default ->
@@ -328,6 +333,47 @@ public final class ChatModelFactory {
         };
     }
 
+    private static GovernedTransportService resolveGovernedTransport() {
+        try {
+            ArcContainer container = Arc.container();
+            if (container != null) {
+                InstanceHandle<GovernedTransportService> handle = container.instance(GovernedTransportService.class);
+                if (handle.isAvailable()) {
+                    return handle.get();
+                }
+            }
+        } catch (Exception _) {
+            // CDI not active
+        }
+        return null;
+    }
+
+    /** Builds a Claude Code ChatModel (direct Anthropic Messages endpoint supporting CLI OAuth / API keys). */
+    public static ChatModel createClaudeCode(String baseUrl, String token, String model, AgentLlmConfig config) {
+        return createClaudeCode(baseUrl, token, model, config, resolveGovernedTransport());
+    }
+
+    /** Builds a Claude Code ChatModel with explicit governed transport. */
+    public static ChatModel createClaudeCode(
+            String baseUrl,
+            String token,
+            String model,
+            AgentLlmConfig config,
+            GovernedTransportService governedTransport) {
+        String modelName = model;
+        if (modelName == null || modelName.isBlank() || "mistral-small".equalsIgnoreCase(modelName)) {
+            modelName = ModelDefaults.DEFAULT_CLAUDE_CODE_MODEL;
+        }
+        return new ClaudeCodeResponsesChatModel(
+                baseUrl,
+                token,
+                modelName,
+                config.maxTokens(),
+                config.timeout(),
+                config.temperature(),
+                governedTransport != null ? governedTransport : resolveGovernedTransport());
+    }
+
     /** Builds a Codex ChatModel (direct ChatGPT Plus Responses endpoint or OpenAI proxy). */
     public static ChatModel createCodex(
             String baseUrl, String token, String accountId, String model, AgentLlmConfig config) {
@@ -340,7 +386,8 @@ public final class ChatModelFactory {
                 config.timeout(),
                 config.maxRetries(),
                 config.temperature(),
-                config.logHttp());
+                config.logHttp(),
+                resolveGovernedTransport());
     }
 
     /** Builds a Codex ChatModel with explicit parameter overrides. */
@@ -354,13 +401,39 @@ public final class ChatModelFactory {
             Integer maxRetries,
             Double temperature,
             boolean logHttp) {
+        return createCodex(
+                baseUrl,
+                token,
+                accountId,
+                model,
+                maxTokens,
+                timeout,
+                maxRetries,
+                temperature,
+                logHttp,
+                resolveGovernedTransport());
+    }
+
+    /** Builds a Codex ChatModel with explicit parameter overrides and governed transport. */
+    public static ChatModel createCodex(
+            String baseUrl,
+            String token,
+            String accountId,
+            String model,
+            Integer maxTokens,
+            Duration timeout,
+            Integer maxRetries,
+            Double temperature,
+            boolean logHttp,
+            GovernedTransportService governedTransport) {
         if (baseUrl == null || baseUrl.isBlank() || baseUrl.contains("chatgpt.com/backend-api/codex")) {
             String endpoint = (baseUrl != null && baseUrl.endsWith("/responses"))
                     ? baseUrl
                     : (baseUrl != null && !baseUrl.isBlank()
                             ? baseUrl + "/responses"
                             : "https://chatgpt.com/backend-api/codex/responses");
-            return new CodexResponsesChatModel(endpoint, token, accountId, model, maxTokens, timeout, temperature);
+            return new CodexResponsesChatModel(
+                    endpoint, token, accountId, model, maxTokens, timeout, temperature, governedTransport);
         }
         return createOpenAi(baseUrl, token, model, maxTokens, timeout, maxRetries, temperature, logHttp);
     }

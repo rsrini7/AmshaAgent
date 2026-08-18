@@ -166,6 +166,8 @@ public class ModelProfileCredentialResolver {
         OLLAMA(ModelDefaults.DEFAULT_OLLAMA_BASE_URL),
         OMLX(ModelDefaults.DEFAULT_OMLX_BASE_URL),
         LLAMACPP(ModelDefaults.DEFAULT_LLAMACPP_BASE_URL),
+        ANTHROPIC(ModelDefaults.DEFAULT_ANTHROPIC_BASE_URL),
+        CLAUDE_CODE(ModelDefaults.DEFAULT_CLAUDE_CODE_BASE_URL),
         GENERIC_OPENAI("");
 
         private final String defaultUrl;

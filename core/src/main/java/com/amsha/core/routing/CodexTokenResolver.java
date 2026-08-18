@@ -4,6 +4,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 import java.util.Optional;
 
 import com.amsha.core.security.SecretVault;
@@ -46,13 +47,14 @@ public class CodexTokenResolver {
         }
 
         if (secretVault != null) {
-            Optional<String> vaultToken = secretVault
-                    .retrieveSystemKey(VaultConstants.CODEX_OAUTH_TOKEN_KEY)
-                    .map(VaultKey::get)
-                    .map(bytes -> new String(bytes, StandardCharsets.UTF_8))
-                    .filter(k -> !k.isBlank());
-            if (vaultToken.isPresent()) {
-                return vaultToken.get();
+            Optional<VaultKey> codexKey = secretVault.retrieveSystemKey(VaultConstants.CODEX_OAUTH_TOKEN_KEY);
+            if (codexKey.isPresent()) {
+                try (VaultKey keyHandle = codexKey.get()) {
+                    String token = new String(keyHandle.get(), StandardCharsets.UTF_8).trim();
+                    if (!token.isBlank()) {
+                        return token;
+                    }
+                }
             }
         }
 
@@ -60,10 +62,13 @@ public class CodexTokenResolver {
             Optional<String> extracted = tokenExtractor.extractToken();
             if (extracted.isPresent()) {
                 if (secretVault != null) {
-                    secretVault.storeSystemKey(
-                            VaultConstants.CODEX_OAUTH_TOKEN_KEY,
-                            extracted.get().getBytes(StandardCharsets.UTF_8));
-                    log.info("Codex provider: token loaded from auth.json and stored in vault.");
+                    byte[] tokenBytes = extracted.get().getBytes(StandardCharsets.UTF_8);
+                    try {
+                        secretVault.storeSystemKey(VaultConstants.CODEX_OAUTH_TOKEN_KEY, tokenBytes);
+                        log.info("Codex provider: token loaded from auth.json and stored in vault.");
+                    } finally {
+                        Arrays.fill(tokenBytes, (byte) 0);
+                    }
                 }
                 return extracted.get();
             }

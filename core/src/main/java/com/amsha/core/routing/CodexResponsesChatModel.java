@@ -17,7 +17,6 @@ import java.io.BufferedReader;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.net.URI;
-import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
@@ -27,25 +26,31 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import com.amsha.common.util.LogUtil;
+import com.amsha.core.security.OutboundPurpose;
+import com.amsha.core.security.http.GovernedTransportService;
 import com.amsha.core.tools.ToolSchemaProvider;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import io.quarkus.arc.Arc;
+import io.quarkus.arc.ArcContainer;
+import io.quarkus.arc.InstanceHandle;
+
 /**
  * Direct LangChain4j ChatModel implementation for the OpenAI Responses API
  * (https://chatgpt.com/backend-api/codex/responses).
- * Connects directly using ChatGPT Plus subscriber OAuth tokens with zero proxy dependencies.
+ * Connects directly using ChatGPT Plus subscriber OAuth tokens with governed transport.
  */
 public class CodexResponsesChatModel implements ChatModel {
 
-    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
-
     private final String endpoint;
-    private final String token;
+    private final char[] token;
     private final String accountId;
     private final String model;
     private final Duration timeout;
-    private final HttpClient httpClient;
+    private final ObjectMapper objectMapper;
+    private final GovernedTransportService governedTransport;
 
     public CodexResponsesChatModel(
             String endpoint,
@@ -55,25 +60,62 @@ public class CodexResponsesChatModel implements ChatModel {
             Integer maxTokens,
             Duration timeout,
             Double temperature) {
+        this(endpoint, token, accountId, model, maxTokens, timeout, temperature, null);
+    }
+
+    public CodexResponsesChatModel(
+            String endpoint,
+            String token,
+            String accountId,
+            String model,
+            Integer maxTokens,
+            Duration timeout,
+            Double temperature,
+            GovernedTransportService governedTransport) {
         this.endpoint =
                 endpoint != null && !endpoint.isBlank() ? endpoint : "https://chatgpt.com/backend-api/codex/responses";
-        this.token = token;
+        this.token = (token != null && !token.isBlank()) ? token.trim().toCharArray() : new char[0];
         this.accountId = accountId;
         this.model = model != null && !model.isBlank() ? model : "gpt-5.6-luna";
         this.timeout = timeout != null ? timeout : Duration.ofMinutes(3);
-        this.httpClient = HttpClient.newBuilder().connectTimeout(this.timeout).build();
+        this.objectMapper = new ObjectMapper();
+        this.governedTransport = resolveGovernedTransport(governedTransport);
+    }
+
+    private static GovernedTransportService resolveGovernedTransport(GovernedTransportService explicit) {
+        if (explicit != null) {
+            return explicit;
+        }
+        try {
+            ArcContainer container = Arc.container();
+            if (container != null) {
+                InstanceHandle<GovernedTransportService> handle = container.instance(GovernedTransportService.class);
+                if (handle.isAvailable()) {
+                    return handle.get();
+                }
+            }
+        } catch (Exception _) {
+            // CDI not active
+        }
+        return null;
     }
 
     @Override
     public ChatResponse chat(ChatRequest request) {
+        if (governedTransport == null) {
+            throw new IllegalStateException(
+                    "Governed outbound transport (GovernedTransportService) is mandatory for provider calls to "
+                            + endpoint);
+        }
+
         try {
             Map<String, Object> payload = buildPayload(request);
-            String jsonBody = OBJECT_MAPPER.writeValueAsString(payload);
+            String jsonBody = objectMapper.writeValueAsString(payload);
 
             HttpRequest.Builder httpReqBuilder = HttpRequest.newBuilder()
                     .uri(URI.create(endpoint))
                     .timeout(timeout)
-                    .header("Authorization", "Bearer " + token)
+                    .header("Authorization", "Bearer " + new String(token))
                     .header("Content-Type", "application/json")
                     .header("Accept", "text/event-stream")
                     .POST(HttpRequest.BodyPublishers.ofString(jsonBody, StandardCharsets.UTF_8));
@@ -82,16 +124,22 @@ public class CodexResponsesChatModel implements ChatModel {
                 httpReqBuilder.header("ChatGPT-Account-ID", accountId);
             }
 
-            HttpResponse<InputStream> httpResp =
-                    httpClient.send(httpReqBuilder.build(), HttpResponse.BodyHandlers.ofInputStream());
+            HttpRequest httpRequest = httpReqBuilder.build();
+            HttpResponse<InputStream> httpResp = governedTransport.send(
+                    endpoint,
+                    OutboundPurpose.PROVIDER_API_CALL,
+                    null,
+                    "system",
+                    true,
+                    httpRequest,
+                    HttpResponse.BodyHandlers.ofInputStream());
 
             if (httpResp.statusCode() != 200) {
-                String errorBody;
                 try (InputStream errStream = httpResp.body()) {
-                    errorBody = new String(errStream.readAllBytes(), StandardCharsets.UTF_8);
+                    errStream.readAllBytes();
                 }
                 throw new IllegalStateException(
-                        "Codex Responses API error HTTP " + httpResp.statusCode() + ": " + errorBody);
+                        "Codex Responses API request failed with HTTP " + httpResp.statusCode());
             }
 
             return parseSseStream(httpResp.body());
@@ -99,7 +147,7 @@ public class CodexResponsesChatModel implements ChatModel {
         } catch (IllegalStateException e) {
             throw e;
         } catch (Exception e) {
-            throw new RuntimeException("Failed to execute Codex chat request: " + e.getMessage(), e);
+            throw new RuntimeException("Failed to execute Codex chat request: " + LogUtil.rootMessage(e), e);
         }
     }
 
@@ -193,7 +241,7 @@ public class CodexResponsesChatModel implements ChatModel {
                 String data = line.substring(5).trim();
                 if (data.isEmpty() || "[DONE]".equals(data)) continue;
 
-                JsonNode node = OBJECT_MAPPER.readTree(data);
+                JsonNode node = objectMapper.readTree(data);
                 acc.handleEvent(node, data);
             }
         }

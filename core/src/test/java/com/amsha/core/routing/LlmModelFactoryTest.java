@@ -203,6 +203,22 @@ class LlmModelFactoryTest {
     }
 
     @Test
+    void testCreateClaudeCodeModel() {
+        ChatModel model = factory.createModel(
+                "claude-code",
+                "https://api.anthropic.com",
+                "test-claude-token",
+                "claude-sonnet-4-5",
+                100,
+                null,
+                1,
+                null,
+                null);
+        assertNotNull(model);
+        assertTrue(model instanceof ClaudeCodeResponsesChatModel);
+    }
+
+    @Test
     void testCreateProvider_missingApiKey_throwsException() {
         assertThrows(IllegalStateException.class, () -> {
             factory.createModel("groq", "https://api.groq.com/openai/v1", "", "llama3", 100, null, 1, null, null);

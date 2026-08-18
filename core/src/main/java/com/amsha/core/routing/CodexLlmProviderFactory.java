@@ -8,6 +8,8 @@ import jakarta.inject.Inject;
 
 import java.time.Duration;
 
+import com.amsha.core.security.http.GovernedTransportService;
+
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 /**
@@ -19,6 +21,9 @@ public class CodexLlmProviderFactory implements RoutingChatModelProvider {
 
     @Inject
     CodexTokenResolver tokenResolver;
+
+    @Inject
+    GovernedTransportService governedTransport;
 
     @ConfigProperty(name = "amsha.llm.log-http", defaultValue = "false")
     boolean logHttp;
@@ -50,7 +55,8 @@ public class CodexLlmProviderFactory implements RoutingChatModelProvider {
                     config.timeout().orElse(Duration.ofMinutes(3)),
                     config.maxRetries().orElse(2),
                     0.0,
-                    logHttp);
+                    logHttp,
+                    governedTransport);
         }
 
         OpenAiChatModel.OpenAiChatModelBuilder builder = ChatModelFactory.openAiBuilder(

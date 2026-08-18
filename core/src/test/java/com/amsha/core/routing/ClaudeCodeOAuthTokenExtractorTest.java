@@ -8,68 +8,150 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Optional;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 class ClaudeCodeOAuthTokenExtractorTest {
 
-    private ClaudeCodeOAuthTokenExtractor extractor;
-    private ObjectMapper objectMapper = new ObjectMapper();
-
     @TempDir
     Path tempDir;
+
+    private ClaudeCodeOAuthTokenExtractor extractor;
 
     @BeforeEach
     void setUp() {
         extractor = new ClaudeCodeOAuthTokenExtractor();
-        extractor.objectMapper = objectMapper;
     }
 
     @Test
-    void testCredentialsFileMissingReturnsEmpty() {
-        Path missingPath = tempDir.resolve("non-existent.json");
-        Optional<String> result = extractor.extractToken(missingPath);
-        assertTrue(result.isEmpty());
+    void extractToken_fromAccessTokenField() throws IOException {
+        String json = """
+                {
+                  "accessToken": "sk-ant-oauth-token-12345",
+                  "refreshToken": "ref-67890"
+                }
+                """;
+        Path creds = tempDir.resolve(".credentials.json");
+        Files.writeString(creds, json);
+
+        Optional<String> token = extractor.extractTokenFromPath(creds);
+        assertTrue(token.isPresent());
+        assertEquals("sk-ant-oauth-token-12345", token.get());
     }
 
     @Test
-    void testValidCredentialsReturnsToken() throws IOException {
+    void extractToken_fromBearerTokenField() throws IOException {
+        String json = """
+                {
+                  "bearerToken": "bearer-token-abcde"
+                }
+                """;
         Path creds = tempDir.resolve("credentials.json");
-        Files.writeString(creds, "{\"accessToken\": \"sk-ant-oauth-123\"}");
+        Files.writeString(creds, json);
 
-        Optional<String> result = extractor.extractToken(creds);
-        assertTrue(result.isPresent());
-        assertEquals("sk-ant-oauth-123", result.get());
+        Optional<String> token = extractor.extractTokenFromPath(creds);
+        assertTrue(token.isPresent());
+        assertEquals("bearer-token-abcde", token.get());
     }
 
     @Test
-    void testFallbackToBearerToken() throws IOException {
-        Path creds = tempDir.resolve("credentials.json");
-        Files.writeString(creds, "{\"bearerToken\": \"sk-ant-bearer-456\"}");
+    void extractToken_fromApiKeyField() throws IOException {
+        String json = """
+                {
+                  "apiKey": "sk-ant-api03-test-key"
+                }
+                """;
+        Path creds = tempDir.resolve(".claude.json");
+        Files.writeString(creds, json);
 
-        Optional<String> result = extractor.extractToken(creds);
-        assertTrue(result.isPresent());
-        assertEquals("sk-ant-bearer-456", result.get());
+        Optional<String> token = extractor.extractTokenFromPath(creds);
+        assertTrue(token.isPresent());
+        assertEquals("sk-ant-api03-test-key", token.get());
     }
 
     @Test
-    void testMalformedJsonReturnsEmpty() throws IOException {
-        Path creds = tempDir.resolve("malformed.json");
-        Files.writeString(creds, "{ malformed: }");
+    void extractToken_fromNestedTokensObject() throws IOException {
+        String json = """
+                {
+                  "tokens": {
+                    "access_token": "nested-token-999"
+                  }
+                }
+                """;
+        Path creds = tempDir.resolve(".credentials.json");
+        Files.writeString(creds, json);
 
-        Optional<String> result = extractor.extractToken(creds);
-        assertTrue(result.isEmpty());
+        Optional<String> token = extractor.extractTokenFromPath(creds);
+        assertTrue(token.isPresent());
+        assertEquals("nested-token-999", token.get());
     }
 
     @Test
-    void testTokenFieldMissingReturnsEmpty() throws IOException {
-        Path creds = tempDir.resolve("wrong.json");
-        Files.writeString(creds, "{\"otherField\": \"data\"}");
+    void extractToken_fromNestedClaudeObject() throws IOException {
+        String json = """
+                {
+                  "claude": {
+                    "accessToken": "nested-claude-token-555"
+                  }
+                }
+                """;
+        Path creds = tempDir.resolve(".credentials.json");
+        Files.writeString(creds, json);
 
-        Optional<String> result = extractor.extractToken(creds);
-        assertTrue(result.isEmpty());
+        Optional<String> token = extractor.extractTokenFromPath(creds);
+        assertTrue(token.isPresent());
+        assertEquals("nested-claude-token-555", token.get());
+    }
+
+    @Test
+    void extractToken_fromRealClaudeAiOauthStructure() throws IOException {
+        String json = """
+                {
+                  "claudeAiOauth": {
+                    "accessToken": "sk-ant-oauth-real-claude-cli-token-12345",
+                    "refreshToken": "sk-ant-refresh-token",
+                    "expiresAt": 1740000000000
+                  }
+                }
+                """;
+        Path creds = tempDir.resolve(".credentials.json");
+        Files.writeString(creds, json);
+
+        Optional<String> token = extractor.extractTokenFromPath(creds);
+        assertTrue(token.isPresent());
+        assertEquals("sk-ant-oauth-real-claude-cli-token-12345", token.get());
+    }
+
+    @Test
+    void extractToken_fromOauthAccountStructure() throws IOException {
+        String json = """
+                {
+                  "oauthAccount": {
+                    "accessToken": "sk-ant-oauth-account-token-777",
+                    "accountUuid": "acc-123"
+                  }
+                }
+                """;
+        Path creds = tempDir.resolve(".claude.json");
+        Files.writeString(creds, json);
+
+        Optional<String> token = extractor.extractTokenFromPath(creds);
+        assertTrue(token.isPresent());
+        assertEquals("sk-ant-oauth-account-token-777", token.get());
+    }
+
+    @Test
+    void extractToken_nonExistentPath_returnsEmpty() {
+        Optional<String> token = extractor.extractTokenFromPath(tempDir.resolve("missing.json"));
+        assertTrue(token.isEmpty());
+    }
+
+    @Test
+    void extractToken_invalidJson_returnsEmpty() throws IOException {
+        Path badJson = tempDir.resolve("bad.json");
+        Files.writeString(badJson, "{ invalid-json ");
+        Optional<String> token = extractor.extractTokenFromPath(badJson);
+        assertTrue(token.isEmpty());
     }
 }

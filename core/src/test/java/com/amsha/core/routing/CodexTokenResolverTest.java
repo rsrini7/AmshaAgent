@@ -10,11 +10,13 @@ import static org.mockito.Mockito.when;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicReference;
 
 import com.amsha.core.security.SecretVault;
 import com.amsha.core.security.VaultConstants;
 import com.amsha.core.security.VaultKey;
 
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
@@ -58,12 +60,18 @@ class CodexTokenResolverTest {
                 .thenReturn(Optional.empty());
         when(tokenExtractor.extractToken()).thenReturn(Optional.of("extracted-oauth-token"));
 
+        AtomicReference<byte[]> stored = new AtomicReference<>();
+        Mockito.doAnswer(inv -> {
+                    stored.set(((byte[]) inv.getArgument(1)).clone());
+                    return null;
+                })
+                .when(secretVault)
+                .storeSystemKey(any(), any());
+
         String token = resolver.resolveToken();
         assertEquals("extracted-oauth-token", token);
-        verify(secretVault)
-                .storeSystemKey(
-                        eq(VaultConstants.CODEX_OAUTH_TOKEN_KEY),
-                        eq("extracted-oauth-token".getBytes(StandardCharsets.UTF_8)));
+        Assertions.assertArrayEquals("extracted-oauth-token".getBytes(StandardCharsets.UTF_8), stored.get());
+        verify(secretVault).storeSystemKey(eq(VaultConstants.CODEX_OAUTH_TOKEN_KEY), any(byte[].class));
     }
 
     @Test

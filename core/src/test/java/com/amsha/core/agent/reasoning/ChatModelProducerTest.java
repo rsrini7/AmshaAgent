@@ -132,9 +132,27 @@ class ChatModelProducerTest {
     }
 
     @Test
+    void providerBaseUrls_containsClaudeCode() throws Exception {
+        Map<String, String> urls = getProviderBaseUrls();
+        assertEquals("https://api.anthropic.com", urls.get("claude-code"));
+    }
+
+    @Test
+    void providerBaseUrls_containsAnthropic() throws Exception {
+        Map<String, String> urls = getProviderBaseUrls();
+        assertEquals("https://api.anthropic.com", urls.get("anthropic"));
+    }
+
+    @Test
+    void providerBaseUrls_containsLlamaCpp() throws Exception {
+        Map<String, String> urls = getProviderBaseUrls();
+        assertEquals("http://127.0.0.1:9000/v1", urls.get("llamacpp"));
+    }
+
+    @Test
     void providerBaseUrls_hasExpectedCount() throws Exception {
         Map<String, String> urls = getProviderBaseUrls();
-        assertEquals(17, urls.size());
+        assertEquals(19, urls.size());
     }
 
     @Test

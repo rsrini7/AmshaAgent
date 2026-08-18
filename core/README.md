@@ -25,6 +25,7 @@ reflexes, safety guards, tool interfaces, and built-in LLM providers.
 | Cloudflare Workers AI | `cloudflare` | `@cf/meta/llama-3.3-70b-instruct-fp8-fast` | `https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/v1` |
 | Cohere | `cohere` | `command-r-plus-08-2024` | `https://api.cohere.ai/compatibility/v1` |
 | Codex CLI | `codex` | `gpt-5.6-luna` | `https://chatgpt.com/backend-api/codex` |
+| Claude Code | `claude-code` | `claude-sonnet-4-5` | `https://api.anthropic.com` |
 | Gemini | `gemini` | `gemini-2.5-flash-lite` | `https://generativelanguage.googleapis.com/v1beta` |
 | OMLX | `omlx` | `mlx-community/Qwen3.6-35B-A3B-4bit` | `http://127.0.0.1:8000/v1` |
 | Llama.cpp | `llamacpp` | `qwen3` | `http://127.0.0.1:9000/v1` |
@@ -132,6 +133,20 @@ reflexes, safety guards, tool interfaces, and built-in LLM providers.
 | `amsha.classifier.codex.api-key` | `AMSHA_CLASSIFIER_CODEX_API_KEY` | — | Codex API key for classifier slot |
 | `amsha.classifier.codex.model` | `AMSHA_CLASSIFIER_CODEX_MODEL` | `gpt-5.6-luna` | Classifier slot model |
 | `amsha.classifier.codex.base-url` | `AMSHA_CLASSIFIER_CODEX_BASE_URL` | `https://chatgpt.com/backend-api/codex` | Classifier slot base URL |
+
+## Claude Code Configuration
+
+| Property | Env Var | Default | Description |
+|---|---|---|---|
+| `amsha.llm.claude-code.api-key` | `AMSHA_CLAUDE_CODE_API_KEY` | — | Optional direct API key / token (defaults to macOS Keychain or `~/.claude/.credentials.json`) |
+| `amsha.llm.claude-code.base-url` | `AMSHA_CLAUDE_CODE_BASE_URL` | `https://api.anthropic.com` | Anthropic Messages endpoint (defaults to `https://api.anthropic.com`) |
+| `amsha.llm.claude-code.model` | `AMSHA_CLAUDE_CODE_MODEL` | `claude-sonnet-4-5` | Default chat model |
+| `amsha.compaction.claude-code.api-key` | `AMSHA_COMPACTION_CLAUDE_CODE_API_KEY` | — | Claude Code API key for compaction slot |
+| `amsha.compaction.claude-code.model` | `AMSHA_COMPACTION_CLAUDE_CODE_MODEL` | `claude-sonnet-4-5` | Compaction slot model |
+| `amsha.compaction.claude-code.base-url` | `AMSHA_COMPACTION_CLAUDE_CODE_BASE_URL` | `https://api.anthropic.com` | Compaction slot base URL |
+| `amsha.classifier.claude-code.api-key` | `AMSHA_CLASSIFIER_CLAUDE_CODE_API_KEY` | — | Claude Code API key for classifier slot |
+| `amsha.classifier.claude-code.model` | `AMSHA_CLASSIFIER_CLAUDE_CODE_MODEL` | `claude-sonnet-4-5` | Classifier slot model |
+| `amsha.classifier.claude-code.base-url` | `AMSHA_CLASSIFIER_CLAUDE_CODE_BASE_URL` | `https://api.anthropic.com` | Classifier slot base URL |
 
 ## Testing
 

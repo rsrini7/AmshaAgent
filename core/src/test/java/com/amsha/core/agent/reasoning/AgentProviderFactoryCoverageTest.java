@@ -9,6 +9,7 @@ import java.time.Duration;
 import java.util.Optional;
 import java.util.stream.Stream;
 
+import com.amsha.core.routing.ClaudeCodeTokenResolver;
 import com.amsha.core.routing.CodexTokenResolver;
 
 import org.junit.jupiter.api.Test;
@@ -98,6 +99,12 @@ class AgentProviderFactoryCoverageTest {
                 field.set(target, "http://localhost:11434");
             } else if (field.getType() == CodexTokenResolver.class) {
                 CodexTokenResolver resolver = mock(CodexTokenResolver.class);
+                Mockito.when(resolver.resolveToken(Mockito.any()))
+                        .thenThrow(new IllegalStateException("Missing credentials"));
+                Mockito.when(resolver.resolveToken()).thenThrow(new IllegalStateException("Missing credentials"));
+                field.set(target, resolver);
+            } else if (field.getType() == ClaudeCodeTokenResolver.class) {
+                ClaudeCodeTokenResolver resolver = mock(ClaudeCodeTokenResolver.class);
                 Mockito.when(resolver.resolveToken(Mockito.any()))
                         .thenThrow(new IllegalStateException("Missing credentials"));
                 Mockito.when(resolver.resolveToken()).thenThrow(new IllegalStateException("Missing credentials"));

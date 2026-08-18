@@ -42,7 +42,9 @@ public class ModelDefaultsResource {
         result.put(
                 ModelDefaults.PROVIDER_ANTHROPIC,
                 providerEntry(ModelDefaults.DEFAULT_ANTHROPIC_MODEL, ModelDefaults.DEFAULT_ANTHROPIC_BASE_URL));
-        result.put(ModelDefaults.PROVIDER_CLAUDE_CODE, providerEntry(ModelDefaults.DEFAULT_CLAUDE_CODE_MODEL, ""));
+        result.put(
+                ModelDefaults.PROVIDER_CLAUDE_CODE,
+                providerEntry(ModelDefaults.DEFAULT_CLAUDE_CODE_MODEL, ModelDefaults.DEFAULT_CLAUDE_CODE_BASE_URL));
         result.put(
                 ModelDefaults.PROVIDER_OPENROUTER,
                 providerEntry(ModelDefaults.DEFAULT_OPENROUTER_MODEL, ModelDefaults.DEFAULT_OPENROUTER_BASE_URL));

@@ -10,6 +10,7 @@ import jakarta.enterprise.inject.Produces;
 import jakarta.inject.Inject;
 
 import java.nio.charset.StandardCharsets;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 
@@ -46,6 +47,8 @@ public class ChatModelProducer {
             Map.entry(ModelDefaults.PROVIDER_OLLAMA, ModelDefaults.DEFAULT_OLLAMA_BASE_URL),
             Map.entry(ModelDefaults.PROVIDER_OMLX, ModelDefaults.DEFAULT_OMLX_BASE_URL),
             Map.entry(ModelDefaults.PROVIDER_LLAMACPP, ModelDefaults.DEFAULT_LLAMACPP_BASE_URL),
+            Map.entry(ModelDefaults.PROVIDER_ANTHROPIC, ModelDefaults.DEFAULT_ANTHROPIC_BASE_URL),
+            Map.entry(ModelDefaults.PROVIDER_CLAUDE_CODE, ModelDefaults.DEFAULT_CLAUDE_CODE_BASE_URL),
             Map.entry(ModelDefaults.PROVIDER_GEMINI, ModelDefaults.DEFAULT_GEMINI_BASE_URL),
             Map.entry(ModelDefaults.PROVIDER_GENERIC_OPENAI, ""));
 
@@ -76,21 +79,44 @@ public class ChatModelProducer {
         if (vaultPriority) {
             Optional<VaultKey> vaultProvider = vault.retrieveSystemKey(VaultConstants.LLM_PROVIDER_KEY);
             if (vaultProvider.isPresent()) {
-                String p = new String(vaultProvider.get().get(), StandardCharsets.UTF_8);
-                if (!p.isBlank()) {
-                    effectiveProvider = p;
-                    Optional<VaultKey> vaultKey = vault.retrieveSystemKey(VaultConstants.LLM_API_KEY);
-                    Optional<VaultKey> vaultModel = vault.retrieveSystemKey(VaultConstants.LLM_MODEL_KEY);
-                    Optional<VaultKey> vaultBaseUrl = vault.retrieveSystemKey(VaultConstants.LLM_BASE_URL_KEY);
-                    effectiveKey = vaultKey.map(k -> new String(k.get(), StandardCharsets.UTF_8))
-                            .orElse(null);
-                    effectiveModel = vaultModel
-                            .map(k -> new String(k.get(), StandardCharsets.UTF_8))
-                            .orElse(null);
-                    effectiveBaseUrl = vaultBaseUrl
-                            .map(k -> new String(k.get(), StandardCharsets.UTF_8))
-                            .orElse(null);
-                    log.infof("ChatModelProducer: using vault provider=%s model=%s", effectiveProvider, effectiveModel);
+                try (VaultKey pKey = vaultProvider.get()) {
+                    String p = new String(pKey.get(), StandardCharsets.UTF_8).trim();
+                    if (!p.isBlank()) {
+                        effectiveProvider = p;
+
+                        String vaultKeyName =
+                                switch (p.toLowerCase(Locale.ROOT)) {
+                                    case ModelDefaults.PROVIDER_CLAUDE_CODE ->
+                                        VaultConstants.CLAUDE_CODE_OAUTH_TOKEN_KEY;
+                                    case ModelDefaults.PROVIDER_CODEX -> VaultConstants.CODEX_OAUTH_TOKEN_KEY;
+                                    default -> VaultConstants.LLM_API_KEY;
+                                };
+
+                        Optional<VaultKey> vaultKey = vault.retrieveSystemKey(vaultKeyName);
+                        if (vaultKey.isPresent()) {
+                            try (VaultKey vk = vaultKey.get()) {
+                                effectiveKey = new String(vk.get(), StandardCharsets.UTF_8).trim();
+                            }
+                        }
+
+                        Optional<VaultKey> vaultModel = vault.retrieveSystemKey(VaultConstants.LLM_MODEL_KEY);
+                        if (vaultModel.isPresent()) {
+                            try (VaultKey vm = vaultModel.get()) {
+                                effectiveModel = new String(vm.get(), StandardCharsets.UTF_8).trim();
+                            }
+                        }
+
+                        Optional<VaultKey> vaultBaseUrl = vault.retrieveSystemKey(VaultConstants.LLM_BASE_URL_KEY);
+                        if (vaultBaseUrl.isPresent()) {
+                            try (VaultKey vb = vaultBaseUrl.get()) {
+                                effectiveBaseUrl = new String(vb.get(), StandardCharsets.UTF_8).trim();
+                            }
+                        }
+
+                        log.infof(
+                                "ChatModelProducer: using vault provider=%s model=%s",
+                                effectiveProvider, effectiveModel);
+                    }
                 }
             }
         }

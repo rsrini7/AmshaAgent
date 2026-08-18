@@ -5,6 +5,7 @@ import jakarta.inject.Inject;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Arrays;
 import java.util.Optional;
 
 import com.amsha.common.util.LogUtil;
@@ -47,8 +48,9 @@ public class CodexOAuthTokenExtractor {
             return Optional.empty();
         }
 
+        byte[] content = null;
         try {
-            byte[] content = Files.readAllBytes(path);
+            content = Files.readAllBytes(path);
             ObjectMapper mapper = objectMapper != null ? objectMapper : new ObjectMapper();
             JsonNode root = mapper.readTree(content);
 
@@ -79,6 +81,10 @@ public class CodexOAuthTokenExtractor {
         } catch (Exception e) {
             log.warnf("Failed to parse Codex credentials: %s", LogUtil.rootMessage(e));
             return Optional.empty();
+        } finally {
+            if (content != null) {
+                Arrays.fill(content, (byte) 0);
+            }
         }
     }
 

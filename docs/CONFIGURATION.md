@@ -25,10 +25,10 @@ Generate secrets: `openssl rand -base64 32` (Linux/macOS) or `[Convert]::ToBase6
 
 | `AMSHA_LLM_CIRCUIT_BREAKER_ENABLED` | `true` | Enable per-model circuit breaker isolation |
 
-Claude Code uses `CLI_OAUTH` rather than an API-key environment variable. The
-runtime resolves its OAuth token from the system vault or the local Claude Code
-credentials file (`~/.claude/credentials.json`); onboarding status reports only
-whether the credential is configured.
+Claude Code uses `CLI_OAUTH` with optional direct API key fallback. The
+runtime resolves its credentials from the system vault, macOS Keychain, local Claude Code
+credentials file (`~/.claude/.credentials.json`), or `AMSHA_CLAUDE_CODE_API_KEY` / `CLAUDE_CODE_OAUTH_TOKEN`;
+onboarding status reports only whether the credential is configured.
 
 ### Onboarding and native first-run testing
 

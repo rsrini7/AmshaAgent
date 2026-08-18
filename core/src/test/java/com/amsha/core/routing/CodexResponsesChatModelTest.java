@@ -1,6 +1,9 @@
 package com.amsha.core.routing;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyString;
 
 import dev.langchain4j.agent.tool.ToolSpecification;
 import dev.langchain4j.data.message.ChatMessage;
@@ -16,6 +19,9 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -23,6 +29,7 @@ import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import com.amsha.core.security.http.GovernedTransportService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sun.net.httpserver.HttpExchange;
@@ -32,6 +39,7 @@ import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 
 /**
  * Loopback test for direct ChatGPT Plus Responses SSE transport ({@link CodexResponsesChatModel}).
@@ -41,13 +49,22 @@ class CodexResponsesChatModelTest {
     private HttpServer server;
     private int port;
     private String endpoint;
+    private GovernedTransportService governedTransport;
     private final List<String> capturedHeaders = new CopyOnWriteArrayList<>();
     private final List<String> capturedBodies = new CopyOnWriteArrayList<>();
     private final AtomicInteger requestCount = new AtomicInteger(0);
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @BeforeEach
-    void setUp() throws IOException {
+    void setUp() throws Exception {
+        HttpClient client = HttpClient.newHttpClient();
+        governedTransport = Mockito.mock(GovernedTransportService.class);
+        Mockito.when(governedTransport.send(anyString(), any(), any(), any(), anyBoolean(), any(), any()))
+                .thenAnswer(inv -> {
+                    HttpRequest req = inv.getArgument(5);
+                    return client.send(req, HttpResponse.BodyHandlers.ofInputStream());
+                });
+
         server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         port = server.getAddress().getPort();
         endpoint = "http://127.0.0.1:" + port + "/backend-api/codex/responses";
@@ -73,7 +90,8 @@ class CodexResponsesChatModelTest {
                 "gpt-5.6-luna",
                 1024,
                 Duration.ofSeconds(5),
-                0.0);
+                0.0,
+                governedTransport);
 
         // Turn 1: User sends prompt; Model returns function_call via SSE
         ToolSpecification toolSpec = ToolSpecification.builder()
@@ -174,5 +192,25 @@ class CodexResponsesChatModelTest {
                 os.write(bytes);
             }
         }
+    }
+
+    @Test
+    void testRemoteEndpointWithoutGovernedTransport_throwsIllegalStateException() {
+        CodexResponsesChatModel model = new CodexResponsesChatModel(
+                "https://chatgpt.com/backend-api/codex/responses",
+                "test-oauth-access-token",
+                "test-account-id-123",
+                "gpt-5.6-luna",
+                1024,
+                Duration.ofSeconds(5),
+                0.0,
+                null);
+
+        IllegalStateException ex = assertThrows(
+                IllegalStateException.class,
+                () -> model.chat(ChatRequest.builder()
+                        .messages(List.of(UserMessage.from("Ping remote")))
+                        .build()));
+        assertTrue(ex.getMessage().contains("Governed outbound transport"));
     }
 }

@@ -54,7 +54,10 @@ public class LlmConfigurationProvenance {
                             "quarkus.langchain4j.ollama.chat-model.model-id",
                             "quarkus.langchain4j.ollama.base-url",
                             "")),
-            Map.entry(ModelDefaults.PROVIDER_CLAUDE_CODE, new EnvironmentSpec("amsha.llm.model-name", "", "")),
+            Map.entry(
+                    ModelDefaults.PROVIDER_CLAUDE_CODE,
+                    new EnvironmentSpec(
+                            "AMSHA_CLAUDE_CODE_MODEL", "AMSHA_CLAUDE_CODE_BASE_URL", "AMSHA_CLAUDE_CODE_API_KEY")),
             Map.entry(
                     ModelDefaults.PROVIDER_OPENROUTER,
                     new EnvironmentSpec(
@@ -243,8 +246,9 @@ public class LlmConfigurationProvenance {
     private boolean isEnvironmentCredentialConfigured(String normalizedProvider, EnvironmentSpec environmentSpec) {
         return switch (normalizedProvider) {
             case ModelDefaults.PROVIDER_CLAUDE_CODE ->
-                claudeCodeTokenExtractor != null
-                        && claudeCodeTokenExtractor.extractToken().isPresent();
+                (claudeCodeTokenExtractor != null
+                                && claudeCodeTokenExtractor.extractToken().isPresent())
+                        || hasConfiguredEnvironmentValue(environmentSpec.apiKeyKey());
             case ModelDefaults.PROVIDER_CODEX ->
                 (codexTokenExtractor != null
                                 && codexTokenExtractor.extractToken().isPresent())

@@ -52,7 +52,7 @@ class ModelDefaultsTest {
         assertEquals(ModelDefaults.DEFAULT_CODEX_BASE_URL, ModelDefaults.defaultBaseUrlForProvider("codex"));
         assertEquals("https://api.openai.com/v1", ModelDefaults.DEFAULT_CODEX_OPENAI_BASE_URL);
         assertEquals("http://127.0.0.1:8787/v1", ModelDefaults.DEFAULT_CODEX_HROOM_BASE_URL);
-        assertEquals("", ModelDefaults.defaultBaseUrlForProvider("claude-code"));
+        assertEquals("https://api.anthropic.com", ModelDefaults.defaultBaseUrlForProvider("claude-code"));
         assertEquals("", ModelDefaults.defaultBaseUrlForProvider(null));
         assertEquals("", ModelDefaults.defaultBaseUrlForProvider("unknown"));
     }

@@ -22,6 +22,9 @@ import com.amsha.core.audit.AuditVerifier;
 import com.amsha.core.audit.SecurityEventType;
 import com.amsha.core.cron.AgentJobCompleted;
 import com.amsha.core.cron.CronTaskScheduled;
+import com.amsha.core.routing.ClaudeCodeOAuthTokenExtractor;
+import com.amsha.core.routing.ClaudeCodeResponsesChatModel;
+import com.amsha.core.routing.ClaudeCodeTokenResolver;
 import com.amsha.core.routing.CodexOAuthTokenExtractor;
 import com.amsha.core.routing.CodexResponsesChatModel;
 import com.amsha.core.routing.CodexTokenResolver;
@@ -157,7 +160,10 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             ExternalIdentityProvider.class,
             CodexOAuthTokenExtractor.class,
             CodexTokenResolver.class,
-            CodexResponsesChatModel.class
+            CodexResponsesChatModel.class,
+            ClaudeCodeOAuthTokenExtractor.class,
+            ClaudeCodeTokenResolver.class,
+            ClaudeCodeResponsesChatModel.class
         },
         classNames = {
             "com.amsha.core.routing.provider.StaticProviderCatalogAdapter$RawProvider",
