@@ -318,6 +318,7 @@ public final class ChatModelFactory {
             case "gemini" -> createGemini(baseUrl, apiKey, model, config);
             case "anthropic", "claude" -> createAnthropic(baseUrl, apiKey, model, config);
             case "claude-code" -> createClaudeCode(baseUrl, apiKey, model, config);
+            case "agy", "antigravity" -> createAgy(baseUrl, apiKey, model, config);
             case "ollama" -> createOllama(baseUrl, model, config);
             case "codex" -> createCodex(baseUrl, apiKey, null, model, config);
             default ->
@@ -346,6 +347,32 @@ public final class ChatModelFactory {
             // CDI not active
         }
         return null;
+    }
+
+    /** Builds an Antigravity/AGY ChatModel (direct Gemini API endpoint supporting CLI OAuth / API keys). */
+    public static ChatModel createAgy(String baseUrl, String token, String model, AgentLlmConfig config) {
+        return createAgy(baseUrl, token, model, config, resolveGovernedTransport());
+    }
+
+    /** Builds an Antigravity/AGY ChatModel with explicit governed transport. */
+    public static ChatModel createAgy(
+            String baseUrl,
+            String token,
+            String model,
+            AgentLlmConfig config,
+            GovernedTransportService governedTransport) {
+        String modelName = model;
+        if (modelName == null || modelName.isBlank() || "mistral-small".equalsIgnoreCase(modelName)) {
+            modelName = ModelDefaults.DEFAULT_AGY_MODEL;
+        }
+        return new AgyResponsesChatModel(
+                baseUrl,
+                token,
+                modelName,
+                config.maxTokens(),
+                config.timeout(),
+                config.temperature(),
+                governedTransport != null ? governedTransport : resolveGovernedTransport());
     }
 
     /** Builds a Claude Code ChatModel (direct Anthropic Messages endpoint supporting CLI OAuth / API keys). */

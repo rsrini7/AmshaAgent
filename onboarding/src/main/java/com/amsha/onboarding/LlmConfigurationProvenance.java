@@ -8,6 +8,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 
+import com.amsha.core.routing.AgyOAuthTokenExtractor;
 import com.amsha.core.routing.ClaudeCodeOAuthTokenExtractor;
 import com.amsha.core.routing.CodexOAuthTokenExtractor;
 import com.amsha.core.routing.ModelDefaults;
@@ -92,6 +93,9 @@ public class LlmConfigurationProvenance {
                     ModelDefaults.PROVIDER_CODEX,
                     new EnvironmentSpec("AMSHA_CODEX_MODEL", "AMSHA_CODEX_BASE_URL", "AMSHA_CODEX_API_KEY")),
             Map.entry(
+                    ModelDefaults.PROVIDER_AGY,
+                    new EnvironmentSpec("AMSHA_AGY_MODEL", "AMSHA_AGY_BASE_URL", "AMSHA_AGY_API_KEY")),
+            Map.entry(
                     ModelDefaults.PROVIDER_GEMINI,
                     new EnvironmentSpec("AMSHA_GEMINI_MODEL", "", "AMSHA_GEMINI_API_KEY")),
             Map.entry(ModelDefaults.PROVIDER_OMLX, new EnvironmentSpec("AMSHA_OMLX_MODEL", "AMSHA_OMLX_BASE_URL", "")),
@@ -117,6 +121,9 @@ public class LlmConfigurationProvenance {
 
     @Inject
     CodexOAuthTokenExtractor codexTokenExtractor;
+
+    @Inject
+    AgyOAuthTokenExtractor agyTokenExtractor;
 
     @Inject
     Config config;
@@ -153,6 +160,7 @@ public class LlmConfigurationProvenance {
                 .orElse(true);
         boolean claudeCode = ModelDefaults.PROVIDER_CLAUDE_CODE.equals(normalizedProvider);
         boolean codex = ModelDefaults.PROVIDER_CODEX.equals(normalizedProvider);
+        boolean agy = ModelDefaults.PROVIDER_AGY.equals(normalizedProvider);
         boolean cloudflare = ModelDefaults.PROVIDER_CLOUDFLARE.equals(normalizedProvider);
         if (cloudflare && effectiveBaseUrl.contains("{account_id}")) {
             Optional<String> accountId =
@@ -168,7 +176,7 @@ public class LlmConfigurationProvenance {
                 isEnvironmentCredentialConfigured(normalizedProvider, environmentSpec);
         boolean credentialConfigured =
                 (vaultCredentialConfigured || environmentCredentialConfigured) && cloudflareAccountConfigured;
-        boolean credentialRequired = requiresApiKey || claudeCode || codex || cloudflare;
+        boolean credentialRequired = requiresApiKey || claudeCode || codex || agy || cloudflare;
         String credentialState = credentialRequired
                 ? credentialConfigured ? CREDENTIAL_CONFIGURED : CREDENTIAL_MISSING
                 : CREDENTIAL_NOT_REQUIRED;
@@ -239,6 +247,7 @@ public class LlmConfigurationProvenance {
             case ModelDefaults.PROVIDER_CLAUDE_CODE ->
                 vault.systemKeyExists(VaultConstants.CLAUDE_CODE_OAUTH_TOKEN_KEY);
             case ModelDefaults.PROVIDER_CODEX -> vault.systemKeyExists(VaultConstants.CODEX_OAUTH_TOKEN_KEY);
+            case ModelDefaults.PROVIDER_AGY -> vault.systemKeyExists(VaultConstants.AGY_OAUTH_TOKEN_KEY);
             default -> vaultActive && vault.systemKeyExists(VaultConstants.LLM_API_KEY);
         };
     }
@@ -252,6 +261,9 @@ public class LlmConfigurationProvenance {
             case ModelDefaults.PROVIDER_CODEX ->
                 (codexTokenExtractor != null
                                 && codexTokenExtractor.extractToken().isPresent())
+                        || hasConfiguredEnvironmentValue(environmentSpec.apiKeyKey());
+            case ModelDefaults.PROVIDER_AGY ->
+                (agyTokenExtractor != null && agyTokenExtractor.extractToken().isPresent())
                         || hasConfiguredEnvironmentValue(environmentSpec.apiKeyKey());
             default -> hasConfiguredEnvironmentValue(environmentSpec.apiKeyKey());
         };

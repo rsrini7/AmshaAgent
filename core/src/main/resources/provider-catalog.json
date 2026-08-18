@@ -162,12 +162,24 @@
     "hasBaseUrl": true
   },
   {
+    "id": "agy",
+    "name": "Antigravity CLI",
+    "tag": "CLI OAuth / Gemini",
+    "icon": "AG",
+    "color": "#4285f4",
+    "defaultModel": "gemini-3.1-flash-lite",
+    "embeddingCapable": false,
+    "requiresApiKey": false,
+    "authScheme": "CLI_OAUTH",
+    "hasBaseUrl": true
+  },
+  {
     "id": "gemini",
     "name": "Gemini",
     "tag": "Google AI",
     "icon": "Ge",
     "color": "#4285f4",
-    "defaultModel": "gemini-2.5-flash-lite",
+    "defaultModel": "gemini-3.1-flash-lite",
     "embeddingCapable": true,
     "requiresApiKey": true,
     "hasBaseUrl": true

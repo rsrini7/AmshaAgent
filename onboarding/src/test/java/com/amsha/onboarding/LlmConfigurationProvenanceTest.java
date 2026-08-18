@@ -13,6 +13,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+import com.amsha.core.routing.AgyOAuthTokenExtractor;
 import com.amsha.core.routing.ClaudeCodeOAuthTokenExtractor;
 import com.amsha.core.routing.CodexOAuthTokenExtractor;
 import com.amsha.core.routing.ModelDefaults;
@@ -217,6 +218,80 @@ class LlmConfigurationProvenanceTest {
                         List.of(new ModelEntry("claude-sonnet-4-5", "Claude", null)),
                         Map.of())));
         when(provenance.vault.systemKeyExists(VaultConstants.CLAUDE_CODE_OAUTH_TOKEN_KEY))
+                .thenReturn(true);
+
+        LlmConfigurationProvenance.Resolution resolution = provenance.resolve();
+
+        assertEquals(LlmConfigurationProvenance.CREDENTIAL_CONFIGURED, resolution.credentialState());
+        assertEquals(LlmConfigurationProvenance.SOURCE_VAULT, resolution.credentialSource());
+        assertTrue(resolution.ready());
+    }
+
+    @Test
+    void agyRequiresOAuthCredentialFromVaultOrCliFile() {
+        LlmConfigurationProvenance provenance = provenanceFor("agy", false, Map.of());
+        when(provenance.providerCatalog.descriptor("agy"))
+                .thenReturn(Optional.of(new LlmProviderDescriptor(
+                        "agy",
+                        "Antigravity CLI",
+                        "agy",
+                        "CLI_OAUTH",
+                        "",
+                        false,
+                        false,
+                        List.of(new ModelEntry("gemini-3.1-flash-lite", "Gemini", null)),
+                        Map.of())));
+        when(provenance.vault.systemKeyExists(VaultConstants.AGY_OAUTH_TOKEN_KEY))
+                .thenReturn(false);
+        when(provenance.agyTokenExtractor.extractToken()).thenReturn(Optional.empty());
+
+        LlmConfigurationProvenance.Resolution resolution = provenance.resolve();
+
+        assertEquals(LlmConfigurationProvenance.CREDENTIAL_MISSING, resolution.credentialState());
+        assertEquals(LlmConfigurationProvenance.SOURCE_NONE, resolution.credentialSource());
+        assertTrue(!resolution.ready());
+    }
+
+    @Test
+    void agyIsReadyWhenCliOAuthFileIsAvailable() {
+        LlmConfigurationProvenance provenance = provenanceFor("agy", false, Map.of());
+        when(provenance.providerCatalog.descriptor("agy"))
+                .thenReturn(Optional.of(new LlmProviderDescriptor(
+                        "agy",
+                        "Antigravity CLI",
+                        "agy",
+                        "CLI_OAUTH",
+                        "",
+                        false,
+                        false,
+                        List.of(new ModelEntry("gemini-3.1-flash-lite", "Gemini", null)),
+                        Map.of())));
+        when(provenance.vault.systemKeyExists(VaultConstants.AGY_OAUTH_TOKEN_KEY))
+                .thenReturn(false);
+        when(provenance.agyTokenExtractor.extractToken()).thenReturn(Optional.of("oauth-token"));
+
+        LlmConfigurationProvenance.Resolution resolution = provenance.resolve();
+
+        assertEquals(LlmConfigurationProvenance.CREDENTIAL_CONFIGURED, resolution.credentialState());
+        assertEquals(LlmConfigurationProvenance.SOURCE_ENVIRONMENT, resolution.credentialSource());
+        assertTrue(resolution.ready());
+    }
+
+    @Test
+    void agyIsReadyWhenOAuthTokenIsInVault() {
+        LlmConfigurationProvenance provenance = provenanceFor("agy", false, Map.of());
+        when(provenance.providerCatalog.descriptor("agy"))
+                .thenReturn(Optional.of(new LlmProviderDescriptor(
+                        "agy",
+                        "Antigravity CLI",
+                        "agy",
+                        "CLI_OAUTH",
+                        "",
+                        false,
+                        false,
+                        List.of(new ModelEntry("gemini-3.1-flash-lite", "Gemini", null)),
+                        Map.of())));
+        when(provenance.vault.systemKeyExists(VaultConstants.AGY_OAUTH_TOKEN_KEY))
                 .thenReturn(true);
 
         LlmConfigurationProvenance.Resolution resolution = provenance.resolve();
@@ -486,6 +561,7 @@ class LlmConfigurationProvenanceTest {
         provenance.providerCatalog = mock(LlmProviderOnboardingAdapter.class);
         provenance.claudeCodeTokenExtractor = mock(ClaudeCodeOAuthTokenExtractor.class);
         provenance.codexTokenExtractor = mock(CodexOAuthTokenExtractor.class);
+        provenance.agyTokenExtractor = mock(AgyOAuthTokenExtractor.class);
         provenance.config = mockConfig(values, "test-profile");
         provenance.configuredProvider = provider;
         provenance.vaultPriority = vaultPriority;

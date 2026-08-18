@@ -26,7 +26,8 @@ reflexes, safety guards, tool interfaces, and built-in LLM providers.
 | Cohere | `cohere` | `command-r-plus-08-2024` | `https://api.cohere.ai/compatibility/v1` |
 | Codex CLI | `codex` | `gpt-5.6-luna` | `https://chatgpt.com/backend-api/codex` |
 | Claude Code | `claude-code` | `claude-sonnet-4-5` | `https://api.anthropic.com` |
-| Gemini | `gemini` | `gemini-2.5-flash-lite` | `https://generativelanguage.googleapis.com/v1beta` |
+| Antigravity CLI | `agy` | `gemini-3.1-flash-lite` | `https://generativelanguage.googleapis.com/v1beta/openai` |
+| Gemini | `gemini` | `gemini-3.1-flash-lite` | `https://generativelanguage.googleapis.com/v1beta` |
 | OMLX | `omlx` | `mlx-community/Qwen3.6-35B-A3B-4bit` | `http://127.0.0.1:8000/v1` |
 | Llama.cpp | `llamacpp` | `qwen3` | `http://127.0.0.1:9000/v1` |
 | Generic OpenAI | `generic-openai` | `gpt-4o-mini` | *(Configured via `AMSHA_GENERIC_OPENAI_BASE_URL`)* |
@@ -147,6 +148,24 @@ reflexes, safety guards, tool interfaces, and built-in LLM providers.
 | `amsha.classifier.claude-code.api-key` | `AMSHA_CLASSIFIER_CLAUDE_CODE_API_KEY` | — | Claude Code API key for classifier slot |
 | `amsha.classifier.claude-code.model` | `AMSHA_CLASSIFIER_CLAUDE_CODE_MODEL` | `claude-sonnet-4-5` | Classifier slot model |
 | `amsha.classifier.claude-code.base-url` | `AMSHA_CLASSIFIER_CLAUDE_CODE_BASE_URL` | `https://api.anthropic.com` | Classifier slot base URL |
+
+## Antigravity (agy) Configuration
+
+The `agy` provider supports two execution paths:
+1. **HTTP Mode (OpenAI-compatible)**: Uses governed transport against `https://generativelanguage.googleapis.com/v1beta/openai` with full SSE streaming and native tool execution. Activated when an API key or unexpired OAuth session token is present.
+2. **Local CLI Subprocess Mode**: Direct execution via local `agy` binary (`agy -p ... --output-format json`) leveraging your active Google user session with zero API key required.
+
+| Property | Env Var | Default | Description |
+|---|---|---|---|
+| `amsha.llm.agy.api-key` | `AMSHA_AGY_API_KEY` | — | Optional direct API key / token (defaults to macOS Keychain, `~/.gemini/*`, or local `agy` binary) |
+| `amsha.llm.agy.base-url` | `AMSHA_AGY_BASE_URL` | `https://generativelanguage.googleapis.com/v1beta/openai` | Gemini OpenAI-compatible endpoint |
+| `amsha.llm.agy.model` | `AMSHA_AGY_MODEL` | `gemini-3.1-flash-lite` | Default chat model |
+| `amsha.compaction.agy.api-key` | `AMSHA_COMPACTION_AGY_API_KEY` | — | Antigravity API key for compaction slot |
+| `amsha.compaction.agy.model` | `AMSHA_COMPACTION_AGY_MODEL` | `gemini-3.1-flash-lite` | Compaction slot model |
+| `amsha.compaction.agy.base-url` | `AMSHA_COMPACTION_AGY_BASE_URL` | `https://generativelanguage.googleapis.com/v1beta/openai` | Compaction slot base URL |
+| `amsha.classifier.agy.api-key` | `AMSHA_CLASSIFIER_AGY_API_KEY` | — | Antigravity API key for classifier slot |
+| `amsha.classifier.agy.model` | `AMSHA_CLASSIFIER_AGY_MODEL` | `gemini-3.1-flash-lite` | Classifier slot model |
+| `amsha.classifier.agy.base-url` | `AMSHA_CLASSIFIER_AGY_BASE_URL` | `https://generativelanguage.googleapis.com/v1beta/openai` | Classifier slot base URL |
 
 ## Testing
 

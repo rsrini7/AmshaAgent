@@ -36,6 +36,11 @@ public final class VaultConstants {
     public static final String CODEX_OAUTH_TOKEN_KEY = "codex-oauth-token";
 
     /**
+     * System-level key for Antigravity (agy) CLI OAuth provider.
+     */
+    public static final String AGY_OAUTH_TOKEN_KEY = "agy-oauth-token";
+
+    /**
      * The name of the system secret used to derive the audit hmac key.
      */
     public static final String AUDIT_HMAC_KEY_NAME = "amsha-audit-hmac-key";

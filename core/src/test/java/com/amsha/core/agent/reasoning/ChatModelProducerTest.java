@@ -138,6 +138,12 @@ class ChatModelProducerTest {
     }
 
     @Test
+    void providerBaseUrls_containsAgy() throws Exception {
+        Map<String, String> urls = getProviderBaseUrls();
+        assertEquals("https://generativelanguage.googleapis.com/v1beta/openai", urls.get("agy"));
+    }
+
+    @Test
     void providerBaseUrls_containsAnthropic() throws Exception {
         Map<String, String> urls = getProviderBaseUrls();
         assertEquals("https://api.anthropic.com", urls.get("anthropic"));
@@ -152,7 +158,7 @@ class ChatModelProducerTest {
     @Test
     void providerBaseUrls_hasExpectedCount() throws Exception {
         Map<String, String> urls = getProviderBaseUrls();
-        assertEquals(19, urls.size());
+        assertEquals(20, urls.size());
     }
 
     @Test

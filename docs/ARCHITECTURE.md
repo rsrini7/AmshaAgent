@@ -662,7 +662,7 @@ See [SETUP.md](./SETUP.md) for detailed backend switching instructions.
 | Ollama | `mistral-small:latest` | Local inference |
 | OpenRouter | `openai/gpt-oss-20b:free` | Unified multi-model API |
 | Claude Code | Claude's models | Reads OAuth token from local Claude Code CLI |
-| Gemini | `gemini-2.5-flash-lite` | Google Gemini API |
+| Gemini | `gemini-3.1-flash-lite` | Google Gemini API |
 | Cerebras | `qwen-3-235b-a22b-instruct-2507` | Daily quota detection disables slot permanently |
 | Nvidia | `bytedance/seed-oss-36b-instruct` | NVIDIA inference API |
 | Sarvam | `sarvam-105b` | Indic-language models |

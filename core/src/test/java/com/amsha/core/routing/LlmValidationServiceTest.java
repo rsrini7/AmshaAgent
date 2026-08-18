@@ -107,6 +107,28 @@ class LlmValidationServiceTest {
     }
 
     @Test
+    @DisplayName("validate skips vault store for agy provider")
+    void validateSkipsVaultForAgy() throws LlmValidationException {
+        when(modelFactory.createModel(
+                        anyString(),
+                        anyString(),
+                        anyString(),
+                        anyString(),
+                        anyInt(),
+                        any(Duration.class),
+                        anyInt(),
+                        any(),
+                        any()))
+                .thenReturn(chatModel);
+        when(chatModel.chat("hi")).thenReturn("Hey there!");
+
+        boolean result = service.validate("agy", "gemini-3.1-flash-lite", "sk-agy-key");
+
+        assertTrue(result);
+        verify(vault, never()).storeSystemKey(anyString(), any(byte[].class));
+    }
+
+    @Test
     @DisplayName("validate maps each provider to its expected base URL")
     void validateMapsProviderToBaseUrl() throws LlmValidationException {
         when(modelFactory.createModel(

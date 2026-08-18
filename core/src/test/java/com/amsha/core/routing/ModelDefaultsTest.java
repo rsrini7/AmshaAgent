@@ -12,6 +12,7 @@ class ModelDefaultsTest {
         assertEquals(ModelDefaults.DEFAULT_OPENAI_MODEL, ModelDefaults.defaultModelForProvider("openai"));
         assertEquals(ModelDefaults.DEFAULT_OLLAMA_MODEL, ModelDefaults.defaultModelForProvider("ollama"));
         assertEquals(ModelDefaults.DEFAULT_CLAUDE_CODE_MODEL, ModelDefaults.defaultModelForProvider("claude-code"));
+        assertEquals(ModelDefaults.DEFAULT_AGY_MODEL, ModelDefaults.defaultModelForProvider("agy"));
         assertEquals(ModelDefaults.DEFAULT_GEMINI_MODEL, ModelDefaults.defaultModelForProvider("gemini"));
         assertEquals(ModelDefaults.DEFAULT_SARVAM_MODEL, ModelDefaults.defaultModelForProvider("sarvam"));
         assertEquals(ModelDefaults.DEFAULT_OPENCODE_MODEL, ModelDefaults.defaultModelForProvider("opencode"));
@@ -26,6 +27,7 @@ class ModelDefaultsTest {
     void testDefaultModelForProvider_caseInsensitiveAndNull() {
         assertEquals(ModelDefaults.DEFAULT_GROQ_MODEL, ModelDefaults.defaultModelForProvider("GROQ"));
         assertEquals(ModelDefaults.DEFAULT_OPENAI_MODEL, ModelDefaults.defaultModelForProvider("OpenAI"));
+        assertEquals(ModelDefaults.DEFAULT_AGY_MODEL, ModelDefaults.defaultModelForProvider("AGY"));
         assertEquals(ModelDefaults.DEFAULT_SARVAM_MODEL, ModelDefaults.defaultModelForProvider("SARVAM"));
         assertEquals(ModelDefaults.DEFAULT_OPENCODE_MODEL, ModelDefaults.defaultModelForProvider("OPENCODE"));
         assertEquals(ModelDefaults.DEFAULT_HUGGINGFACE_MODEL, ModelDefaults.defaultModelForProvider("HUGGINGFACE"));
@@ -53,6 +55,9 @@ class ModelDefaultsTest {
         assertEquals("https://api.openai.com/v1", ModelDefaults.DEFAULT_CODEX_OPENAI_BASE_URL);
         assertEquals("http://127.0.0.1:8787/v1", ModelDefaults.DEFAULT_CODEX_HROOM_BASE_URL);
         assertEquals("https://api.anthropic.com", ModelDefaults.defaultBaseUrlForProvider("claude-code"));
+        assertEquals(
+                "https://generativelanguage.googleapis.com/v1beta/openai",
+                ModelDefaults.defaultBaseUrlForProvider("agy"));
         assertEquals("", ModelDefaults.defaultBaseUrlForProvider(null));
         assertEquals("", ModelDefaults.defaultBaseUrlForProvider("unknown"));
     }

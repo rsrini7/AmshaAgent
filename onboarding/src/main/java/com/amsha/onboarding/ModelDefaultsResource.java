@@ -76,6 +76,9 @@ public class ModelDefaultsResource {
                 ModelDefaults.PROVIDER_CODEX,
                 providerEntry(ModelDefaults.DEFAULT_CODEX_MODEL, ModelDefaults.DEFAULT_CODEX_BASE_URL));
         result.put(
+                ModelDefaults.PROVIDER_AGY,
+                providerEntry(ModelDefaults.DEFAULT_AGY_MODEL, ModelDefaults.DEFAULT_AGY_BASE_URL));
+        result.put(
                 ModelDefaults.PROVIDER_GEMINI,
                 providerEntry(ModelDefaults.DEFAULT_GEMINI_MODEL, ModelDefaults.DEFAULT_GEMINI_BASE_URL));
         result.put(
