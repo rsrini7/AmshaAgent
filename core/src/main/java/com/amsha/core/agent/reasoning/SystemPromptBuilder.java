@@ -9,6 +9,7 @@ import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -49,6 +50,14 @@ public class SystemPromptBuilder {
     private final RoleRegistry roleRegistry;
     private final IntentClassificationService intentService;
     private final Instance<ContextEnricher> contextEnrichers;
+
+    @Inject
+    @ConfigProperty(name = "amsha.llm.provider", defaultValue = "openai")
+    String defaultProvider = "openai";
+
+    @Inject
+    @ConfigProperty(name = "amsha.llm.model")
+    Optional<String> defaultModel = Optional.empty();
 
     @Inject
     public SystemPromptBuilder(
@@ -207,9 +216,16 @@ public class SystemPromptBuilder {
             sb.append("CRITICAL: You MUST respond ONLY in the required JSON schema. Never respond in prose.\n\n");
         }
 
+        String modelDisplay = defaultModel
+                .filter(m -> !m.isBlank())
+                .map(m -> defaultProvider + "/" + m)
+                .orElse(defaultProvider);
         sb.append("You are Amsha Agent. CURRENT SYSTEM TIME (UTC): ")
                 .append(formatTime(Instant.now()))
                 .append("\n")
+                .append("Underlying inference engine: ")
+                .append(modelDisplay)
+                .append(".\n")
                 .append("Your active persona is described below.\n\n")
                 .append(personaPrompt)
                 .append("\n\n");
@@ -315,13 +331,22 @@ public class SystemPromptBuilder {
     }
 
     private String buildCompactChitchatBase(String agentRole) {
+        String modelDisplay = defaultModel
+                .filter(m -> !m.isBlank())
+                .map(m -> defaultProvider + "/" + m)
+                .orElse(defaultProvider);
         StringBuilder sb = new StringBuilder();
-        sb.append("You Amsha Agent. CURRENT SYSTEM TIME (UTC): ")
+        sb.append("You are Amsha Agent. CURRENT SYSTEM TIME (UTC): ")
                 .append(formatTime(Instant.now()))
                 .append("\n")
                 .append("You are Amsha Agent, the application-level assistant, not the underlying model or provider.\n")
+                .append("Underlying inference engine: ")
+                .append(modelDisplay)
+                .append(".\n")
                 .append(
-                        "If asked who you are, identify yourself as Amsha Agent; mention Gemma only if explicitly asked about the underlying model.\n")
+                        "If asked who you are or what model is powering this chat, identify yourself as Amsha Agent and mention that you are running on ")
+                .append(modelDisplay)
+                .append(".\n")
                 .append(
                         "Amsha Agent orchestrates specialized subagents. Built-in roles include Brihaspati (architect), Saraswati (researcher), Brahma (coder), Shiva (debugger), Dattatreya (synthesizer), Ganesha (optimizer), Kartikeya (sentinel), Lakshmi (healer), Durga (protector), Kali (purifier), and Parvati (nurturer).\n")
                 .append(

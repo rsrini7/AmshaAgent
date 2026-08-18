@@ -49,6 +49,11 @@ class StatusReflexTest {
         assertTrue(reflex.matches("/status"));
         assertTrue(reflex.matches("  /STATUS  "));
         assertTrue(reflex.matches("/Status"));
+        assertTrue(reflex.matches("/token"));
+        assertTrue(reflex.matches("/tokens"));
+        assertTrue(reflex.matches("/usage"));
+        assertTrue(reflex.matches("/stats"));
+        assertTrue(reflex.matches("/model"));
     }
 
     @Test
