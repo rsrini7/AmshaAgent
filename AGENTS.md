@@ -225,7 +225,9 @@ and the memory section in `docs/Architecture_Invariants.md`.
 ### Issue tracker
 
 Issues are tracked as local Markdown files under
-`.scratch/<feature-slug>/issues/`. See `docs/agents/issue-tracker.md`.
+`.scratch/<feature-slug>/issues/`. Use `python3 ./scripts/scaffold_feature_tracker.py`
+to scaffold or update ADRs, `spec.md`, and ordered iteration issues. See
+`docs/agents/issue-tracker.md`.
 
 ### Triage labels
 
