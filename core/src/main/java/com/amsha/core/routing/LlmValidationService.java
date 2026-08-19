@@ -42,7 +42,10 @@ public class LlmValidationService implements LlmValidationGateway {
     @Override
     public boolean validate(String provider, String model, String apiKey) throws LlmValidationException {
         try {
-            if (!ModelDefaults.PROVIDER_CLAUDE_CODE.equals(provider)) {
+            if (!ModelDefaults.PROVIDER_CLAUDE_CODE.equals(provider)
+                    && !ModelDefaults.PROVIDER_CODEX.equals(provider)
+                    && !ModelDefaults.PROVIDER_AGY.equals(provider)
+                    && !ModelDefaults.PROVIDER_FOUNDRY.equals(provider)) {
                 vault.storeSystemKey(VaultConstants.LLM_API_KEY, apiKey.getBytes(StandardCharsets.UTF_8));
             }
             String effectiveBaseUrl =
@@ -52,6 +55,17 @@ public class LlmValidationService implements LlmValidationGateway {
                         case ModelDefaults.PROVIDER_ANTHROPIC -> ModelDefaults.DEFAULT_ANTHROPIC_BASE_URL;
                         case ModelDefaults.PROVIDER_OPENROUTER -> ModelDefaults.DEFAULT_OPENROUTER_BASE_URL;
                         case ModelDefaults.PROVIDER_CEREBRAS -> ModelDefaults.DEFAULT_CEREBRAS_BASE_URL;
+                        case ModelDefaults.PROVIDER_SARVAM -> ModelDefaults.DEFAULT_SARVAM_BASE_URL;
+                        case ModelDefaults.PROVIDER_OPENCODE -> ModelDefaults.DEFAULT_OPENCODE_BASE_URL;
+                        case ModelDefaults.PROVIDER_HUGGINGFACE -> ModelDefaults.DEFAULT_HUGGINGFACE_BASE_URL;
+                        case ModelDefaults.PROVIDER_MISTRAL -> ModelDefaults.DEFAULT_MISTRAL_BASE_URL;
+                        case ModelDefaults.PROVIDER_CLOUDFLARE -> ModelDefaults.DEFAULT_CLOUDFLARE_BASE_URL;
+                        case ModelDefaults.PROVIDER_COHERE -> ModelDefaults.DEFAULT_COHERE_BASE_URL;
+                        case ModelDefaults.PROVIDER_CODEX -> ModelDefaults.DEFAULT_CODEX_BASE_URL;
+                        case ModelDefaults.PROVIDER_AGY -> ModelDefaults.DEFAULT_AGY_BASE_URL;
+                        case ModelDefaults.PROVIDER_KIMCHI -> ModelDefaults.DEFAULT_KIMCHI_BASE_URL;
+                        case ModelDefaults.PROVIDER_FOUNDRY -> ModelDefaults.DEFAULT_FOUNDRY_BASE_URL;
+                        case ModelDefaults.PROVIDER_GEMINI -> ModelDefaults.DEFAULT_GEMINI_BASE_URL;
                         case ModelDefaults.PROVIDER_OLLAMA -> ModelDefaults.DEFAULT_OLLAMA_BASE_URL;
                         case ModelDefaults.PROVIDER_NVIDIA -> ModelDefaults.DEFAULT_NVIDIA_BASE_URL;
                         case ModelDefaults.PROVIDER_OMLX -> ModelDefaults.DEFAULT_OMLX_BASE_URL;

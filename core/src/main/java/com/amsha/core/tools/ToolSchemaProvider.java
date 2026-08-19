@@ -43,7 +43,7 @@ public class ToolSchemaProvider {
     }
 
     @SuppressWarnings("java:S1192")
-    private Map<String, Object> schemaToMap(JsonObjectSchema schema) {
+    public static Map<String, Object> schemaToMap(JsonObjectSchema schema) {
         if (schema == null) return null;
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("type", "object");
@@ -62,7 +62,7 @@ public class ToolSchemaProvider {
     }
 
     @SuppressWarnings("java:S1192")
-    private Object elementToMap(JsonSchemaElement el) {
+    public static Object elementToMap(JsonSchemaElement el) {
         if (el == null) return null;
         return switch (el) {
             case JsonObjectSchema o -> schemaToMap(o);
@@ -100,7 +100,9 @@ public class ToolSchemaProvider {
             }
             case JsonAnyOfSchema a -> {
                 var m = new LinkedHashMap<String, Object>();
-                m.put("anyOf", a.anyOf().stream().map(this::elementToMap).toList());
+                m.put(
+                        "anyOf",
+                        a.anyOf().stream().map(ToolSchemaProvider::elementToMap).toList());
                 if (a.description() != null) m.put("description", a.description());
                 yield m;
             }

@@ -3,6 +3,8 @@ package com.amsha.core.util;
 import jakarta.enterprise.context.ApplicationScoped;
 
 import java.util.Locale;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 
@@ -79,20 +81,35 @@ public class TextPatternUtils {
         return null;
     }
 
+    private static final Pattern FENCE_HEADER_PATTERN = Pattern.compile("^```([\\w-]*)\\R");
+
     /**
-     * Returns true if the text appears to be a raw JSON object or array.
-     * Includes a line-count guard to avoid false positives on multi-line prose
-     * that happens to end with a closing brace.
+     * Returns true if the text appears to be a raw or fenced JSON object or array.
+     * Includes checks for markdown fences (```json ... ```).
      */
     public boolean looksLikeJson(String text) {
-        if (text == null) return false;
+        if (text == null || text.isBlank()) return false;
         String trimmed = text.strip();
+        if (trimmed.startsWith("```")) {
+            Matcher headerMatcher = FENCE_HEADER_PATTERN.matcher(trimmed);
+            if (headerMatcher.find()) {
+                String lang = headerMatcher.group(1).toLowerCase(Locale.ROOT);
+                if (!lang.isEmpty() && !lang.equals("json") && !lang.equals("jsonc")) {
+                    return false;
+                }
+            }
+            trimmed = trimmed.replaceFirst("^```[\\w-]*\\R", "")
+                    .replaceFirst("\\R```\\s*$", "")
+                    .strip();
+        }
 
-        // Only flag single-block JSON - multi-line prose ending with } is valid.
-        // 20 lines covers all realistic tool-call JSON echoes.
-        long lineCount = trimmed.lines().count();
-        if (lineCount > jsonSalvageMaxLines) return false;
+        int maxLines = jsonSalvageMaxLines > 0 ? jsonSalvageMaxLines : 30;
+        if (trimmed.lines().count() > maxLines) {
+            return false;
+        }
 
-        return (trimmed.startsWith("{") && trimmed.endsWith("}")) || (trimmed.startsWith("[") && trimmed.endsWith("]"));
+        boolean isObject = trimmed.startsWith("{") && trimmed.endsWith("}") && trimmed.contains(":");
+        boolean isArray = trimmed.startsWith("[") && trimmed.endsWith("]");
+        return isObject || isArray;
     }
 }

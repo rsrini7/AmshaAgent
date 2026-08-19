@@ -114,8 +114,8 @@ class AnswerQualityGuardDeepTest {
         }
 
         @Test
-        void isRawToolCallLeak_looksLikeJson_returnsTrue() {
-            assertTrue(guard.isRawToolCallLeak("{\"key\":\"val\"}"));
+        void isRawToolCallLeak_genericJsonWithoutToolCall_returnsFalse() {
+            assertFalse(guard.isRawToolCallLeak("{\"key\":\"val\"}"));
         }
 
         @Test

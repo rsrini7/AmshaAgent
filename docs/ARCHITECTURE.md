@@ -658,15 +658,23 @@ See [SETUP.md](./SETUP.md) for detailed backend switching instructions.
 | Provider | Default Model | Notes |
 |---|---|---|
 | Groq | `meta-llama/llama-4-scout-17b-16e-instruct` | Default; OpenAI-compatible API |
-| OpenAI | `gpt-4o` | Official OpenAI API |
+| OpenAI | `gpt-4o-mini` | Official OpenAI API |
 | Ollama | `mistral-small:latest` | Local inference |
-| OpenRouter | — | Unified multi-model API |
+| OpenRouter | `openai/gpt-oss-20b:free` | Unified multi-model API |
 | Claude Code | Claude's models | Reads OAuth token from local Claude Code CLI |
-| Gemini | Gemini models | Google Gemini API |
-| Cerebras | Cerebras models | Daily quota detection disables slot permanently |
-| Nvidia | Nvidia models | NVIDIA inference API |
-| OMLX | OMLX models | OMLX inference |
-| LlamaCpp | `llama.cpp` models | Local inference via OpenAI-compatible API on port 9000 |
+| Gemini | `gemini-3.1-flash-lite` | Google Gemini API |
+| Cerebras | `qwen-3-235b-a22b-instruct-2507` | Daily quota detection disables slot permanently |
+| Nvidia | `bytedance/seed-oss-36b-instruct` | NVIDIA inference API |
+| Sarvam | `sarvam-105b` | Indic-language models |
+| OpenCode | `deepseek-v4-flash-free` | OpenAI-compatible endpoint (Zen / Go) |
+| Hugging Face | `meta-llama/Llama-3.3-70B-Instruct` | Inference API / Router |
+| Mistral | `codestral-latest` | Codestral & Mistral frontier models |
+| Cloudflare | `@cf/meta/llama-3.3-70b-instruct-fp8-fast` | Workers AI serverless inference with account-scoped routing |
+| Cohere | `command-r-plus-08-2024` | Command R+ & enterprise models via OpenAI compatibility API |
+| Codex CLI | `gpt-5.6-luna` | ChatGPT Plus OAuth session from local Codex CLI / Headroom proxy |
+| OMLX | `mlx-community/Qwen3.6-35B-A3B-4bit` | OMLX inference |
+| LlamaCpp | `qwen3` | Local inference via OpenAI-compatible API on port 9000 |
+| Generic OpenAI | `gpt-4o-mini` | Any OpenAI-compatible endpoint |
 | Infinite Loop | Multi-slot | Quality tracking + cooldown between providers |
 
 The **compaction model** is separate — always a lighter/cheaper model regardless of reasoning provider.

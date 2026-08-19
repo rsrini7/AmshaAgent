@@ -11,7 +11,7 @@ Generate secrets: `openssl rand -base64 32` (Linux/macOS) or `[Convert]::ToBase6
 | Variable | Default | Description |
 |---|---|---|
 | `AMSHA_{PROVIDER}_API_KEY` | — | Provider-specific LLM API key, for example `AMSHA_GROQ_API_KEY` (`gsk_...`) |
-| `AMSHA_LLM_PROVIDER` | `groq` | Provider: `groq`, `openai`, `ollama`, `openrouter`, `claude-code`, `cerebras`, `gemini`, `nvidia`, `omlx`, `generic-openai` |
+| `AMSHA_LLM_PROVIDER` | `groq` | Provider: `groq`, `openai`, `ollama`, `openrouter`, `claude-code`, `cerebras`, `gemini`, `nvidia`, `sarvam`, `opencode`, `huggingface`, `mistral`, `cloudflare`, `cohere`, `codex`, `omlx`, `generic-openai` |
 | `AMSHA_LLM_MAX_OUTPUT_TOKENS` | `8192` | Max output tokens per LLM call |
 | `AMSHA_LLM_MAX_RETRIES` | `3` | Max LLM retry attempts |
 | `AMSHA_LLM_TEMPERATURE` | `0.1` | LLM temperature |
@@ -25,10 +25,10 @@ Generate secrets: `openssl rand -base64 32` (Linux/macOS) or `[Convert]::ToBase6
 
 | `AMSHA_LLM_CIRCUIT_BREAKER_ENABLED` | `true` | Enable per-model circuit breaker isolation |
 
-Claude Code uses `CLI_OAUTH` rather than an API-key environment variable. The
-runtime resolves its OAuth token from the system vault or the local Claude Code
-credentials file (`~/.claude/credentials.json`); onboarding status reports only
-whether the credential is configured.
+Claude Code uses `CLI_OAUTH` with optional direct API key fallback. The
+runtime resolves its credentials from the system vault, macOS Keychain, local Claude Code
+credentials file (`~/.claude/.credentials.json`), or `AMSHA_CLAUDE_CODE_API_KEY` / `CLAUDE_CODE_OAUTH_TOKEN`;
+onboarding status reports only whether the credential is configured.
 
 ### Onboarding and native first-run testing
 
@@ -121,6 +121,30 @@ Compaction and classifier slots also support `generic-openai`:
 `AMSHA_COMPACTION_GENERIC_OPENAI_BASE_URL` and `AMSHA_CLASSIFIER_GENERIC_OPENAI_*`
 vars. See Compaction and Intent Classification sections below.
 
+## Cloudflare Workers AI Provider
+
+Cloudflare Workers AI provider for serverless model inference. Requires an API token and Cloudflare Account ID.
+
+| Variable | Default | Description |
+|---|---|---|
+| `AMSHA_CLOUDFLARE_API_KEY` | — | Cloudflare API token (Workers AI permissions) |
+| `AMSHA_CLOUDFLARE_ACCOUNT_ID` | — | Cloudflare Account ID (resolves `{account_id}` placeholder) |
+| `AMSHA_CLOUDFLARE_MODEL` | `@cf/meta/llama-3.3-70b-instruct-fp8-fast` | Default chat model |
+| `AMSHA_CLOUDFLARE_BASE_URL` | `https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/v1` | Base URL for Workers AI endpoint |
+| `AMSHA_COMPACTION_CLOUDFLARE_ACCOUNT_ID` | — | Account ID override for compaction slot |
+| `AMSHA_CLASSIFIER_CLOUDFLARE_ACCOUNT_ID` | — | Account ID override for classifier slot |
+| `AMSHA_COHERE_API_KEY` | — | Cohere API key |
+| `AMSHA_COHERE_MODEL` | `command-r-plus-08-2024` | Default chat model |
+| `AMSHA_COHERE_BASE_URL` | `https://api.cohere.ai/compatibility/v1` | Base URL for Cohere OpenAI-compatibility endpoint |
+| `AMSHA_CODEX_API_KEY` | — | Optional direct API key / token (defaults to `~/.codex/auth.json` OAuth session) |
+| `AMSHA_CODEX_MODEL` | `gpt-5.6-luna` | Default chat model |
+| `AMSHA_CODEX_BASE_URL` | `https://chatgpt.com/backend-api/codex` | Base URL for Codex endpoint (defaults to direct ChatGPT Plus Responses endpoint; or `http://127.0.0.1:8787/v1` for hroom proxy, or `https://api.openai.com/v1`) |
+
+Do not put `{account_id}` inside a MicroProfile `${ENV:default}` default string.
+MP Config closes on the first `}`, which corrupts the URL (e.g. trailing `/ai/v1}`).
+`application.yaml` keeps the template in `amsha.llm.cloudflare.unresolved-base-url`
+and references that property from the env expression instead.
+
 ### Local OMLX smoke workflow
 
 The repository smoke runner intentionally sources its endpoint credentials from
@@ -161,14 +185,17 @@ provider in the list has its own slot with independent health tracking.
 | `AMSHA_COMPACTION_AWAIT_TIMEOUT_SECONDS` | `60` | Compaction loop await timeout (s) |
 
 For non-Groq providers, mirror the pattern with `AMSHA_COMPACTION_{PROVIDER}_{KEY}`.
-Available providers: `groq`, `openai`, `openrouter`, `cerebras`, `gemini`, `nvidia`,
-`omlx`, `ollama`, `generic-openai`. Local providers (`ollama`, `omlx`) do not require an API key.
+Available providers: `groq`, `openai`, `openrouter`, `cerebras`, `gemini`, `nvidia`, `sarvam`,
+`opencode`, `huggingface`, `mistral`, `cloudflare`, `cohere`, `codex`, `omlx`, `ollama`, `generic-openai`. Local providers (`ollama`, `omlx`, `codex`) do not require an API key.
 
 Generic OpenAI compaction variables:
 `AMSHA_COMPACTION_GENERIC_OPENAI_API_KEY`, `AMSHA_COMPACTION_GENERIC_OPENAI_MODEL`,
 `AMSHA_COMPACTION_GENERIC_OPENAI_BASE_URL`
 
 ## Intent Classification
+
+Intent classification routes incoming messages to personas or fast-path reflexes.
+It uses the same multi-slot failover as compaction, falling back to heuristic routing
 when all slots are exhausted.
 
 | Variable | Default | Description |

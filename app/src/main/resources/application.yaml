@@ -331,6 +331,51 @@ amsha:
       threads: ${AMSHA_CLASSIFIER_SHADOW_THREADS:2}
       queue-capacity: ${AMSHA_CLASSIFIER_SHADOW_QUEUE_CAPACITY:64}
       shutdown-grace: ${AMSHA_CLASSIFIER_SHADOW_SHUTDOWN_GRACE:PT5S}
+    sarvam:
+      api-key: "${AMSHA_CLASSIFIER_SARVAM_API_KEY:${AMSHA_SARVAM_API_KEY:}}"
+      base-url: "${AMSHA_CLASSIFIER_SARVAM_BASE_URL:https://api.sarvam.ai/v1}"
+      model: "${AMSHA_CLASSIFIER_SARVAM_MODEL:sarvam-105b}"
+    opencode:
+      api-key: "${AMSHA_CLASSIFIER_OPENCODE_API_KEY:${AMSHA_OPENCODE_API_KEY:}}"
+      base-url: "${AMSHA_CLASSIFIER_OPENCODE_BASE_URL:https://opencode.ai/zen/v1}"
+      model: "${AMSHA_CLASSIFIER_OPENCODE_MODEL:deepseek-v4-flash-free}"
+    huggingface:
+      api-key: "${AMSHA_CLASSIFIER_HUGGINGFACE_API_KEY:${AMSHA_HUGGINGFACE_API_KEY:}}"
+      base-url: "${AMSHA_CLASSIFIER_HUGGINGFACE_BASE_URL:https://router.huggingface.co/v1}"
+      model: "${AMSHA_CLASSIFIER_HUGGINGFACE_MODEL:meta-llama/Llama-3.3-70B-Instruct}"
+    mistral:
+      api-key: "${AMSHA_CLASSIFIER_MISTRAL_API_KEY:${AMSHA_MISTRAL_API_KEY:}}"
+      base-url: "${AMSHA_CLASSIFIER_MISTRAL_BASE_URL:https://api.mistral.ai/v1}"
+      model: "${AMSHA_CLASSIFIER_MISTRAL_MODEL:codestral-latest}"
+    cloudflare:
+      api-key: "${AMSHA_CLASSIFIER_CLOUDFLARE_API_KEY:${AMSHA_CLOUDFLARE_API_KEY:}}"
+      account-id: "${AMSHA_CLASSIFIER_CLOUDFLARE_ACCOUNT_ID:${AMSHA_CLOUDFLARE_ACCOUNT_ID:}}"
+      # Do not put {account_id} inside ${ENV:default} — MP Config closes on the first '}'.
+      base-url: "${AMSHA_CLASSIFIER_CLOUDFLARE_BASE_URL:${amsha.llm.cloudflare.unresolved-base-url}}"
+      model: "${AMSHA_CLASSIFIER_CLOUDFLARE_MODEL:@cf/meta/llama-3.3-70b-instruct-fp8-fast}"
+    cohere:
+      api-key: "${AMSHA_CLASSIFIER_COHERE_API_KEY:${AMSHA_COHERE_API_KEY:}}"
+      base-url: "${AMSHA_CLASSIFIER_COHERE_BASE_URL:https://api.cohere.ai/compatibility/v1}"
+      model: "${AMSHA_CLASSIFIER_COHERE_MODEL:command-r-plus-08-2024}"
+    codex:
+      api-key: "${AMSHA_CLASSIFIER_CODEX_API_KEY:${AMSHA_CODEX_API_KEY:}}"
+      base-url: "${AMSHA_CLASSIFIER_CODEX_BASE_URL:https://chatgpt.com/backend-api/codex}"
+      model: "${AMSHA_CLASSIFIER_CODEX_MODEL:gpt-5.6-luna}"
+    claude-code:
+      api-key: "${AMSHA_CLASSIFIER_CLAUDE_CODE_API_KEY:${AMSHA_CLAUDE_CODE_API_KEY:}}"
+      base-url: "${AMSHA_CLASSIFIER_CLAUDE_CODE_BASE_URL:https://api.anthropic.com}"
+      model: "${AMSHA_CLASSIFIER_CLAUDE_CODE_MODEL:claude-sonnet-4-5}"
+    agy:
+      api-key: "${AMSHA_CLASSIFIER_AGY_API_KEY:${AMSHA_AGY_API_KEY:}}"
+      base-url: "${AMSHA_CLASSIFIER_AGY_BASE_URL:https://generativelanguage.googleapis.com/v1beta/openai}"
+      model: "${AMSHA_CLASSIFIER_AGY_MODEL:gemini-3.1-flash-lite}"
+    kimchi:
+      api-key: "${AMSHA_CLASSIFIER_KIMCHI_API_KEY:${AMSHA_KIMCHI_API_KEY:}}"
+      base-url: "${AMSHA_CLASSIFIER_KIMCHI_BASE_URL:https://llm.kimchi.dev/openai/v1}"
+      model: "${AMSHA_CLASSIFIER_KIMCHI_MODEL:minimax-m3}"
+    foundry:
+      base-url: "${AMSHA_CLASSIFIER_FOUNDRY_BASE_URL:${AMSHA_FOUNDRY_BASE_URL:http://127.0.0.1:8000/v1}}"
+      model: "${AMSHA_CLASSIFIER_FOUNDRY_MODEL:qwen3-14b}"
   onnx:
     enabled: ${AMSHA_ONNX_ENABLED:false}
     model-root: "${AMSHA_ONNX_MODEL_ROOT:data/models}"
@@ -419,6 +464,53 @@ amsha:
     openrouter:
       app-name: "${AMSHA_OPENROUTER_APP_NAME:https://github.com/rsrini7/amsha}"
       site-url: "${AMSHA_OPENROUTER_SITE_URL:https://github.com/rsrini7/amsha}"
+    sarvam:
+      api-key: "${AMSHA_SARVAM_API_KEY:}"
+      base-url: "${AMSHA_SARVAM_BASE_URL:https://api.sarvam.ai/v1}"
+      model: "${AMSHA_SARVAM_MODEL:sarvam-105b}"
+    opencode:
+      api-key: "${AMSHA_OPENCODE_API_KEY:}"
+      base-url: "${AMSHA_OPENCODE_BASE_URL:https://opencode.ai/zen/v1}"
+      model: "${AMSHA_OPENCODE_MODEL:deepseek-v4-flash-free}"
+    huggingface:
+      api-key: "${AMSHA_HUGGINGFACE_API_KEY:}"
+      base-url: "${AMSHA_HUGGINGFACE_BASE_URL:https://router.huggingface.co/v1}"
+      model: "${AMSHA_HUGGINGFACE_MODEL:meta-llama/Llama-3.3-70B-Instruct}"
+    mistral:
+      api-key: "${AMSHA_MISTRAL_API_KEY:}"
+      base-url: "${AMSHA_MISTRAL_BASE_URL:https://api.mistral.ai/v1}"
+      model: "${AMSHA_MISTRAL_MODEL:codestral-latest}"
+    cloudflare:
+      api-key: "${AMSHA_CLOUDFLARE_API_KEY:}"
+      account-id: "${AMSHA_CLOUDFLARE_ACCOUNT_ID:}"
+      # Keep braces out of ${ENV:default} — MP Config treats the first '}' as end-of-expression,
+      # which otherwise appends a literal "/ai/v1}" and breaks URI parsing.
+      unresolved-base-url: "https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/v1"
+      base-url: "${AMSHA_CLOUDFLARE_BASE_URL:${amsha.llm.cloudflare.unresolved-base-url}}"
+      model: "${AMSHA_CLOUDFLARE_MODEL:@cf/meta/llama-3.3-70b-instruct-fp8-fast}"
+    cohere:
+      api-key: "${AMSHA_COHERE_API_KEY:}"
+      base-url: "${AMSHA_COHERE_BASE_URL:https://api.cohere.ai/compatibility/v1}"
+      model: "${AMSHA_COHERE_MODEL:command-r-plus-08-2024}"
+    codex:
+      api-key: "${AMSHA_CODEX_API_KEY:}"
+      base-url: "${AMSHA_CODEX_BASE_URL:https://chatgpt.com/backend-api/codex}"
+      model: "${AMSHA_CODEX_MODEL:gpt-5.6-luna}"
+    claude-code:
+      api-key: "${AMSHA_CLAUDE_CODE_API_KEY:}"
+      base-url: "${AMSHA_CLAUDE_CODE_BASE_URL:https://api.anthropic.com}"
+      model: "${AMSHA_CLAUDE_CODE_MODEL:claude-sonnet-4-5}"
+    agy:
+      api-key: "${AMSHA_AGY_API_KEY:}"
+      base-url: "${AMSHA_AGY_BASE_URL:https://generativelanguage.googleapis.com/v1beta/openai}"
+      model: "${AMSHA_AGY_MODEL:gemini-3.1-flash-lite}"
+    kimchi:
+      api-key: "${AMSHA_KIMCHI_API_KEY:}"
+      base-url: "${AMSHA_KIMCHI_BASE_URL:https://llm.kimchi.dev/openai/v1}"
+      model: "${AMSHA_KIMCHI_MODEL:minimax-m3}"
+    foundry:
+      base-url: "${AMSHA_FOUNDRY_BASE_URL:http://127.0.0.1:8000/v1}"
+      model: "${AMSHA_FOUNDRY_MODEL:qwen3-14b}"
   infinite-loop:
     llm:
       providers: ${AMSHA_INFINITE_LOOP_LLM_PROVIDERS:omlx,groq,openrouter}
@@ -449,6 +541,53 @@ amsha:
       timeout-seconds: ${AMSHA_EMBEDDING_ONNX_TIMEOUT_SECONDS:5}
       space-id: "${AMSHA_EMBEDDING_ONNX_SPACE_ID:}"
       space-revision: "${AMSHA_EMBEDDING_ONNX_SPACE_REVISION:}"
+  compaction:
+    structured-output-mode: "${AMSHA_COMPACTION_STRUCTURED_OUTPUT_MODE:PROMPT_DIRECTIVE}"
+    sarvam:
+      api-key: "${AMSHA_COMPACTION_SARVAM_API_KEY:${AMSHA_SARVAM_API_KEY:}}"
+      base-url: "${AMSHA_COMPACTION_SARVAM_BASE_URL:https://api.sarvam.ai/v1}"
+      model: "${AMSHA_COMPACTION_SARVAM_MODEL:sarvam-105b}"
+    opencode:
+      api-key: "${AMSHA_COMPACTION_OPENCODE_API_KEY:${AMSHA_OPENCODE_API_KEY:}}"
+      base-url: "${AMSHA_COMPACTION_OPENCODE_BASE_URL:https://opencode.ai/zen/v1}"
+      model: "${AMSHA_COMPACTION_OPENCODE_MODEL:deepseek-v4-flash-free}"
+    huggingface:
+      api-key: "${AMSHA_COMPACTION_HUGGINGFACE_API_KEY:${AMSHA_HUGGINGFACE_API_KEY:}}"
+      base-url: "${AMSHA_COMPACTION_HUGGINGFACE_BASE_URL:https://router.huggingface.co/v1}"
+      model: "${AMSHA_COMPACTION_HUGGINGFACE_MODEL:meta-llama/Llama-3.3-70B-Instruct}"
+    mistral:
+      api-key: "${AMSHA_COMPACTION_MISTRAL_API_KEY:${AMSHA_MISTRAL_API_KEY:}}"
+      base-url: "${AMSHA_COMPACTION_MISTRAL_BASE_URL:https://api.mistral.ai/v1}"
+      model: "${AMSHA_COMPACTION_MISTRAL_MODEL:codestral-latest}"
+    cloudflare:
+      api-key: "${AMSHA_COMPACTION_CLOUDFLARE_API_KEY:${AMSHA_CLOUDFLARE_API_KEY:}}"
+      account-id: "${AMSHA_COMPACTION_CLOUDFLARE_ACCOUNT_ID:${AMSHA_CLOUDFLARE_ACCOUNT_ID:}}"
+      # Do not put {account_id} inside ${ENV:default} — MP Config closes on the first '}'.
+      base-url: "${AMSHA_COMPACTION_CLOUDFLARE_BASE_URL:${amsha.llm.cloudflare.unresolved-base-url}}"
+      model: "${AMSHA_COMPACTION_CLOUDFLARE_MODEL:@cf/meta/llama-3.3-70b-instruct-fp8-fast}"
+    cohere:
+      api-key: "${AMSHA_COMPACTION_COHERE_API_KEY:${AMSHA_COHERE_API_KEY:}}"
+      base-url: "${AMSHA_COMPACTION_COHERE_BASE_URL:https://api.cohere.ai/compatibility/v1}"
+      model: "${AMSHA_COMPACTION_COHERE_MODEL:command-r-plus-08-2024}"
+    codex:
+      api-key: "${AMSHA_COMPACTION_CODEX_API_KEY:${AMSHA_CODEX_API_KEY:}}"
+      base-url: "${AMSHA_COMPACTION_CODEX_BASE_URL:https://chatgpt.com/backend-api/codex}"
+      model: "${AMSHA_COMPACTION_CODEX_MODEL:gpt-5.6-luna}"
+    claude-code:
+      api-key: "${AMSHA_COMPACTION_CLAUDE_CODE_API_KEY:${AMSHA_CLAUDE_CODE_API_KEY:}}"
+      base-url: "${AMSHA_COMPACTION_CLAUDE_CODE_BASE_URL:https://api.anthropic.com}"
+      model: "${AMSHA_COMPACTION_CLAUDE_CODE_MODEL:claude-sonnet-4-5}"
+    agy:
+      api-key: "${AMSHA_COMPACTION_AGY_API_KEY:${AMSHA_AGY_API_KEY:}}"
+      base-url: "${AMSHA_COMPACTION_AGY_BASE_URL:https://generativelanguage.googleapis.com/v1beta/openai}"
+      model: "${AMSHA_COMPACTION_AGY_MODEL:gemini-3.1-flash-lite}"
+    kimchi:
+      api-key: "${AMSHA_COMPACTION_KIMCHI_API_KEY:${AMSHA_KIMCHI_API_KEY:}}"
+      base-url: "${AMSHA_COMPACTION_KIMCHI_BASE_URL:https://llm.kimchi.dev/openai/v1}"
+      model: "${AMSHA_COMPACTION_KIMCHI_MODEL:minimax-m3}"
+    foundry:
+      base-url: "${AMSHA_COMPACTION_FOUNDRY_BASE_URL:${AMSHA_FOUNDRY_BASE_URL:http://127.0.0.1:8000/v1}}"
+      model: "${AMSHA_COMPACTION_FOUNDRY_MODEL:qwen3-14b}"
   agent:
     default-timezone: "${AMSHA_DEFAULT_TIMEZONE:Asia/Kolkata}"
     rate-limit:

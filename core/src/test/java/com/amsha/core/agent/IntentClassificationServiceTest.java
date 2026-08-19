@@ -118,4 +118,79 @@ class IntentClassificationServiceTest {
         assertFalse(intentDetector.isSelfEvolveIntent(null));
         assertFalse(intentDetector.isSelfEvolveIntent(""));
     }
+
+    @Test
+    void testGreetingDetectionRejectsToolVerbs() {
+        assertTrue(intentDetector.isGreeting("Hi"));
+        assertTrue(intentDetector.isGreeting("Hello"));
+        assertTrue(intentDetector.isGreeting("Hey there"));
+        assertTrue(intentDetector.isGreeting("Good morning"));
+        assertTrue(intentDetector.isGreeting("Hello everyone"));
+        assertTrue(intentDetector.isGreeting("Namaste"));
+        assertTrue(intentDetector.isGreeting("Hi team"));
+        assertTrue(intentDetector.isGreeting("Hello!"));
+
+        // Action verbs / tool keywords must NOT be classified as greetings
+        assertFalse(intentDetector.isGreeting("Hi execute"));
+        assertFalse(intentDetector.isGreeting("Hello debug"));
+        assertFalse(intentDetector.isGreeting("Hey write"));
+        assertFalse(intentDetector.isGreeting("Hi run"));
+        assertFalse(intentDetector.isGreeting("Hello search"));
+    }
+
+    @Test
+    void testSimpleConversationalDoesNotFalseFlagConversationalPhrases() {
+        // Humor & empathy
+        assertTrue(intentDetector.isSimpleConversational("make me laugh"));
+        assertTrue(intentDetector.isSimpleConversational("show me empathy"));
+        assertTrue(intentDetector.isSimpleConversational("tell me a joke"));
+        assertTrue(intentDetector.isSimpleConversational("what do you think?"));
+
+        // Politeness, acknowledgments, small talk & closings
+        assertTrue(intentDetector.isSimpleConversational("thanks"));
+        assertTrue(intentDetector.isSimpleConversational("thank you so much"));
+        assertTrue(intentDetector.isSimpleConversational("thanks for the help"));
+        assertTrue(intentDetector.isSimpleConversational("how are you"));
+        assertTrue(intentDetector.isSimpleConversational("how are you doing"));
+        assertTrue(intentDetector.isSimpleConversational("goodbye"));
+        assertTrue(intentDetector.isSimpleConversational("have a nice day"));
+        assertTrue(intentDetector.isSimpleConversational("got it"));
+        assertTrue(intentDetector.isSimpleConversational("sounds good"));
+        assertTrue(intentDetector.isSimpleConversational("nice job!"));
+
+        // Greetings
+        assertTrue(intentDetector.isSimpleConversational("Hi"));
+        assertTrue(intentDetector.isSimpleConversational("Hello there"));
+        assertTrue(intentDetector.isSimpleConversational("Good morning"));
+
+        // Non-conversational instructions, tool calls, and short questions
+        assertFalse(intentDetector.isSimpleConversational("search for recipes on web"));
+        assertFalse(intentDetector.isSimpleConversational("execute prime number finder"));
+        assertFalse(intentDetector.isSimpleConversational("run the script in sandbox"));
+        assertFalse(intentDetector.isSimpleConversational("explain quicksort"));
+        assertFalse(intentDetector.isSimpleConversational("who r u"));
+        assertFalse(intentDetector.isSimpleConversational("who are you"));
+    }
+
+    @Test
+    void testIdentityQueryDetection() {
+        // User identity queries (memory lookup)
+        assertTrue(intentDetector.isIdentityQuery("who am i"));
+        assertTrue(intentDetector.isIdentityQuery("do you know my name?"));
+        assertTrue(intentDetector.isIdentityQuery("what is my email?"));
+
+        // Agent identity & capability queries (persona lookup)
+        assertTrue(intentDetector.isIdentityQuery("who r u"));
+        assertTrue(intentDetector.isIdentityQuery("who are you"));
+        assertTrue(intentDetector.isIdentityQuery("who is this"));
+        assertTrue(intentDetector.isIdentityQuery("what is your name"));
+        assertTrue(intentDetector.isIdentityQuery("what model are you"));
+        assertTrue(intentDetector.isIdentityQuery("tell me about yourself"));
+        assertTrue(intentDetector.isIdentityQuery("what can you do"));
+        assertTrue(intentDetector.isIdentityQuery("what is amsha"));
+        assertTrue(intentDetector.isIdentityQuery("who is amsha"));
+
+        assertFalse(intentDetector.isIdentityQuery("what is 2+2"));
+        assertFalse(intentDetector.isIdentityQuery("how does recursion work"));
+    }
 }

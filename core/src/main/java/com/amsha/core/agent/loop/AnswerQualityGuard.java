@@ -184,8 +184,7 @@ public class AnswerQualityGuard implements AnswerGuardStrategy {
                 || DSML_TOOL_CALL_PATTERN.matcher(answer).find()
                 || XML_TOOL_CALL_PATTERN.matcher(answer).find()
                 || (nakedFunctionCallPattern != null
-                        && nakedFunctionCallPattern.matcher(answer).find())
-                || textPatternUtils.looksLikeJson(answer);
+                        && nakedFunctionCallPattern.matcher(answer).find());
     }
 
     /**

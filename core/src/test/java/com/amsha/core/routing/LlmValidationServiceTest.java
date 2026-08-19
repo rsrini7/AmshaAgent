@@ -107,6 +107,50 @@ class LlmValidationServiceTest {
     }
 
     @Test
+    @DisplayName("validate skips vault store for agy provider")
+    void validateSkipsVaultForAgy() throws LlmValidationException {
+        when(modelFactory.createModel(
+                        anyString(),
+                        anyString(),
+                        anyString(),
+                        anyString(),
+                        anyInt(),
+                        any(Duration.class),
+                        anyInt(),
+                        any(),
+                        any()))
+                .thenReturn(chatModel);
+        when(chatModel.chat("hi")).thenReturn("Hey there!");
+
+        boolean result = service.validate("agy", "gemini-3.1-flash-lite", "sk-agy-key");
+
+        assertTrue(result);
+        verify(vault, never()).storeSystemKey(anyString(), any(byte[].class));
+    }
+
+    @Test
+    @DisplayName("validate skips vault store for foundry provider")
+    void validateSkipsVaultForFoundry() throws LlmValidationException {
+        when(modelFactory.createModel(
+                        anyString(),
+                        anyString(),
+                        anyString(),
+                        anyString(),
+                        anyInt(),
+                        any(Duration.class),
+                        anyInt(),
+                        any(),
+                        any()))
+                .thenReturn(chatModel);
+        when(chatModel.chat("hi")).thenReturn("Hey there!");
+
+        boolean result = service.validate("foundry", "qwen3-14b", "not-needed");
+
+        assertTrue(result);
+        verify(vault, never()).storeSystemKey(anyString(), any(byte[].class));
+    }
+
+    @Test
     @DisplayName("validate maps each provider to its expected base URL")
     void validateMapsProviderToBaseUrl() throws LlmValidationException {
         when(modelFactory.createModel(
@@ -130,6 +174,37 @@ class LlmValidationServiceTest {
                         eq("https://api.groq.com/openai/v1"),
                         eq("key"),
                         eq("model"),
+                        eq(10),
+                        any(Duration.class),
+                        eq(1),
+                        any(),
+                        any());
+    }
+
+    @Test
+    @DisplayName("validate maps foundry to its expected base URL")
+    void validateMapsFoundryToBaseUrl() throws LlmValidationException {
+        when(modelFactory.createModel(
+                        anyString(),
+                        anyString(),
+                        anyString(),
+                        anyString(),
+                        anyInt(),
+                        any(Duration.class),
+                        anyInt(),
+                        any(),
+                        any()))
+                .thenReturn(chatModel);
+        when(chatModel.chat("hi")).thenReturn("ok");
+
+        service.validate("foundry", "qwen3-14b", "not-needed");
+
+        verify(modelFactory)
+                .createModel(
+                        eq("foundry"),
+                        eq(ModelDefaults.DEFAULT_FOUNDRY_BASE_URL),
+                        eq("not-needed"),
+                        eq("qwen3-14b"),
                         eq(10),
                         any(Duration.class),
                         eq(1),

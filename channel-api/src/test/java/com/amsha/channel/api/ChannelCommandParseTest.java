@@ -68,6 +68,11 @@ class ChannelCommandParseTest {
     @Test
     void parseStatus() {
         assertInstanceOf(ChannelCommand.Status.class, ChannelCommand.parse("/status"));
+        assertInstanceOf(ChannelCommand.Status.class, ChannelCommand.parse("/token"));
+        assertInstanceOf(ChannelCommand.Status.class, ChannelCommand.parse("/tokens"));
+        assertInstanceOf(ChannelCommand.Status.class, ChannelCommand.parse("/usage"));
+        assertInstanceOf(ChannelCommand.Status.class, ChannelCommand.parse("/stats"));
+        assertInstanceOf(ChannelCommand.Status.class, ChannelCommand.parse("/model"));
     }
 
     @Test

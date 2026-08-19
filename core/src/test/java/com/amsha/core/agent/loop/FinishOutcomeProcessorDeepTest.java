@@ -524,26 +524,52 @@ class FinishOutcomeProcessorDeepTest {
         }
     }
 
-    // ── checkHallucination ───────────────────────────────────────────────
+    // ── Execution Goal Refusal Tests ─────────────────────────────────────────
 
     @Nested
-    class CheckHallucinationTests {
+    class ExecutionGoalRefusalTests {
 
         @Test
-        void checkHallucination_delegatesToDetector() {
-            // The real HallucinationDetector is used, so test with a clean answer
-            ReasoningStep step = new ReasoningStep.FinishStep("thought", null, 0, 0, false);
-            var result = processor.checkHallucination("s1", List.of(), step, "The answer is 42.");
-            assertNull(result); // No hallucination detected
+        void executionGoal_withSandboxSuccessInHistory_doesNotInjectCorrection() {
+            ReasoningStep toolStep = new ReasoningStep.ToolCallStep(
+                    "thought",
+                    "sandbox_exec",
+                    Map.of("language", "go"),
+                    "output: 13",
+                    10,
+                    10,
+                    true,
+                    null,
+                    null,
+                    null,
+                    false,
+                    false);
+            ReasoningStep finishStep = new ReasoningStep.FinishStep("thought", null, 10, 10, false);
+            when(qualityGuard.stripRawToolJson(any())).thenReturn("Fibonacci(7) = 13");
+            when(qualityGuard.isRawToolCallLeak(any())).thenReturn(false);
+            when(qualityGuard.guard(eq("Fibonacci(7) = 13"), anyList()))
+                    .thenReturn(new AnswerGuardStrategy.AnswerGuardResult("Fibonacci(7) = 13", false, null));
+
+            var result = processor.handleLeak(
+                    "Fibonacci(7) = 13", finishStep, List.of(toolStep), 1, "s1", "Write go program and execute");
+
+            assertInstanceOf(FinishActionHandler.FinishOutcome.Completed.class, result);
         }
 
         @Test
-        void checkHallucination_hallucinatedSchedule_detected() {
-            ReasoningStep step = new ReasoningStep.FinishStep("thought", null, 0, 0, false);
-            var result = processor.checkHallucination(
-                    "s1", List.of(), step, "I have scheduled the task for tomorrow at 9 AM.");
-            // Hallucination detected if no actual schedule_task in history
-            assertNotNull(result);
+        void executionGoal_withoutSandboxSuccessInHistory_injectsCorrection() {
+            ReasoningStep finishStep = new ReasoningStep.FinishStep("thought", null, 10, 10, false);
+            when(qualityGuard.stripRawToolJson(any())).thenReturn("Fibonacci(7) = 13");
+            when(qualityGuard.isRawToolCallLeak(any())).thenReturn(false);
+            when(qualityGuard.guard(eq("Fibonacci(7) = 13"), anyList()))
+                    .thenReturn(new AnswerGuardStrategy.AnswerGuardResult("Fibonacci(7) = 13", false, null));
+
+            var result = processor.handleLeak(
+                    "Fibonacci(7) = 13", finishStep, List.of(), 1, "s1", "Write go program and execute");
+
+            assertInstanceOf(FinishActionHandler.FinishOutcome.Correction.class, result);
+            var correction = (FinishActionHandler.FinishOutcome.Correction) result;
+            assertTrue(correction.correctionHint().contains("sandbox_exec"));
         }
     }
 }

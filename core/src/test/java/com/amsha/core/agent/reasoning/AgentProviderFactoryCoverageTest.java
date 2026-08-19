@@ -9,6 +9,11 @@ import java.time.Duration;
 import java.util.Optional;
 import java.util.stream.Stream;
 
+import com.amsha.core.routing.AgyTokenResolver;
+import com.amsha.core.routing.ClaudeCodeTokenResolver;
+import com.amsha.core.routing.CodexTokenResolver;
+import com.amsha.core.routing.KimchiTokenResolver;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -18,17 +23,27 @@ class AgentProviderFactoryCoverageTest {
 
     static Stream<Class<? extends AgentChatModelProvider>> providerTypes() {
         return Stream.of(
+                AgyProviderFactory.class,
                 CerebrasProviderFactory.class,
                 ClaudeCodeProviderFactory.class,
+                FoundryProviderFactory.class,
                 GeminiProviderFactory.class,
                 GenericOpenAiProviderFactory.class,
                 GroqProviderFactory.class,
+                KimchiProviderFactory.class,
                 LlamaCppProviderFactory.class,
                 NvidiaProviderFactory.class,
                 OllamaProviderFactory.class,
                 OmlxProviderFactory.class,
                 OpenAiProviderFactory.class,
-                OpenRouterProviderFactory.class);
+                OpenRouterProviderFactory.class,
+                SarvamProviderFactory.class,
+                OpenCodeProviderFactory.class,
+                HuggingFaceProviderFactory.class,
+                MistralProviderFactory.class,
+                CloudflareProviderFactory.class,
+                CohereProviderFactory.class,
+                CodexProviderFactory.class);
     }
 
     @ParameterizedTest
@@ -87,6 +102,30 @@ class AgentProviderFactoryCoverageTest {
                 field.set(target, Optional.empty());
             } else if (field.getType() == String.class) {
                 field.set(target, "http://localhost:11434");
+            } else if (field.getType() == CodexTokenResolver.class) {
+                CodexTokenResolver resolver = mock(CodexTokenResolver.class);
+                Mockito.when(resolver.resolveToken(Mockito.any()))
+                        .thenThrow(new IllegalStateException("Missing credentials"));
+                Mockito.when(resolver.resolveToken()).thenThrow(new IllegalStateException("Missing credentials"));
+                field.set(target, resolver);
+            } else if (field.getType() == ClaudeCodeTokenResolver.class) {
+                ClaudeCodeTokenResolver resolver = mock(ClaudeCodeTokenResolver.class);
+                Mockito.when(resolver.resolveToken(Mockito.any()))
+                        .thenThrow(new IllegalStateException("Missing credentials"));
+                Mockito.when(resolver.resolveToken()).thenThrow(new IllegalStateException("Missing credentials"));
+                field.set(target, resolver);
+            } else if (field.getType() == AgyTokenResolver.class) {
+                AgyTokenResolver resolver = mock(AgyTokenResolver.class);
+                Mockito.when(resolver.resolveToken(Mockito.any()))
+                        .thenThrow(new IllegalStateException("Missing credentials"));
+                Mockito.when(resolver.resolveToken()).thenThrow(new IllegalStateException("Missing credentials"));
+                field.set(target, resolver);
+            } else if (field.getType() == KimchiTokenResolver.class) {
+                KimchiTokenResolver resolver = mock(KimchiTokenResolver.class);
+                Mockito.when(resolver.resolveToken(Mockito.any()))
+                        .thenThrow(new IllegalStateException("Missing credentials"));
+                Mockito.when(resolver.resolveToken()).thenThrow(new IllegalStateException("Missing credentials"));
+                field.set(target, resolver);
             } else if (!field.getType().isPrimitive()) {
                 field.set(target, mock(field.getType()));
             }

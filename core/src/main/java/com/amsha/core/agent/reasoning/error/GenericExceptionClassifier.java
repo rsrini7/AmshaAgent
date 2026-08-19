@@ -29,6 +29,7 @@ public class GenericExceptionClassifier extends LlmExceptionClassifierChain {
 
         String msg = AgentErrorMessageUtil.safeMessage(cause);
         if (isRateLimitError(msg)) return new LlmRateLimitException(msg, original);
+        if (isAuthError(msg)) return new LlmAuthenticationException(msg, original);
 
         if (msg != null) {
             String lower = msg.toLowerCase(Locale.ROOT);
@@ -49,5 +50,18 @@ public class GenericExceptionClassifier extends LlmExceptionClassifierChain {
             }
         }
         return null;
+    }
+
+    private static boolean isAuthError(String msg) {
+        if (msg == null) return false;
+        String lower = msg.toLowerCase(Locale.ROOT);
+        return lower.contains("missing required authentication credential")
+                || lower.contains("unauthenticated")
+                || lower.contains("unauthorized")
+                || lower.contains("invalid api key")
+                || lower.contains("incorrect api key")
+                || lower.contains("http 401")
+                || lower.contains("status 401")
+                || lower.contains("status code: 401");
     }
 }

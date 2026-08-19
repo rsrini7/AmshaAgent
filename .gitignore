@@ -110,3 +110,4 @@ __pycache__/
 
 *.diff
 *files.txt
+.scratch/

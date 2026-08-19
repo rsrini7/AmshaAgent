@@ -31,6 +31,21 @@ public final class VaultConstants {
     public static final String CLAUDE_CODE_OAUTH_TOKEN_KEY = "claude-code-oauth-token";
 
     /**
+     * System-level key for Codex CLI (ChatGPT Plus) OAuth provider.
+     */
+    public static final String CODEX_OAUTH_TOKEN_KEY = "codex-oauth-token";
+
+    /**
+     * System-level key for Antigravity (agy) CLI OAuth provider.
+     */
+    public static final String AGY_OAUTH_TOKEN_KEY = "agy-oauth-token";
+
+    /**
+     * System-level key for Kimchi CLI OAuth provider.
+     */
+    public static final String KIMCHI_OAUTH_TOKEN_KEY = "kimchi-oauth-token";
+
+    /**
      * The name of the system secret used to derive the audit hmac key.
      */
     public static final String AUDIT_HMAC_KEY_NAME = "amsha-audit-hmac-key";

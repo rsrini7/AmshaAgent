@@ -42,7 +42,9 @@ public class ModelDefaultsResource {
         result.put(
                 ModelDefaults.PROVIDER_ANTHROPIC,
                 providerEntry(ModelDefaults.DEFAULT_ANTHROPIC_MODEL, ModelDefaults.DEFAULT_ANTHROPIC_BASE_URL));
-        result.put(ModelDefaults.PROVIDER_CLAUDE_CODE, providerEntry(ModelDefaults.DEFAULT_CLAUDE_CODE_MODEL, ""));
+        result.put(
+                ModelDefaults.PROVIDER_CLAUDE_CODE,
+                providerEntry(ModelDefaults.DEFAULT_CLAUDE_CODE_MODEL, ModelDefaults.DEFAULT_CLAUDE_CODE_BASE_URL));
         result.put(
                 ModelDefaults.PROVIDER_OPENROUTER,
                 providerEntry(ModelDefaults.DEFAULT_OPENROUTER_MODEL, ModelDefaults.DEFAULT_OPENROUTER_BASE_URL));
@@ -52,6 +54,36 @@ public class ModelDefaultsResource {
         result.put(
                 ModelDefaults.PROVIDER_CEREBRAS,
                 providerEntry(ModelDefaults.DEFAULT_CEREBRAS_MODEL, ModelDefaults.DEFAULT_CEREBRAS_BASE_URL));
+        result.put(
+                ModelDefaults.PROVIDER_SARVAM,
+                providerEntry(ModelDefaults.DEFAULT_SARVAM_MODEL, ModelDefaults.DEFAULT_SARVAM_BASE_URL));
+        result.put(
+                ModelDefaults.PROVIDER_OPENCODE,
+                providerEntry(ModelDefaults.DEFAULT_OPENCODE_MODEL, ModelDefaults.DEFAULT_OPENCODE_BASE_URL));
+        result.put(
+                ModelDefaults.PROVIDER_HUGGINGFACE,
+                providerEntry(ModelDefaults.DEFAULT_HUGGINGFACE_MODEL, ModelDefaults.DEFAULT_HUGGINGFACE_BASE_URL));
+        result.put(
+                ModelDefaults.PROVIDER_MISTRAL,
+                providerEntry(ModelDefaults.DEFAULT_MISTRAL_MODEL, ModelDefaults.DEFAULT_MISTRAL_BASE_URL));
+        result.put(
+                ModelDefaults.PROVIDER_CLOUDFLARE,
+                providerEntry(ModelDefaults.DEFAULT_CLOUDFLARE_MODEL, ModelDefaults.DEFAULT_CLOUDFLARE_BASE_URL));
+        result.put(
+                ModelDefaults.PROVIDER_COHERE,
+                providerEntry(ModelDefaults.DEFAULT_COHERE_MODEL, ModelDefaults.DEFAULT_COHERE_BASE_URL));
+        result.put(
+                ModelDefaults.PROVIDER_CODEX,
+                providerEntry(ModelDefaults.DEFAULT_CODEX_MODEL, ModelDefaults.DEFAULT_CODEX_BASE_URL));
+        result.put(
+                ModelDefaults.PROVIDER_AGY,
+                providerEntry(ModelDefaults.DEFAULT_AGY_MODEL, ModelDefaults.DEFAULT_AGY_BASE_URL));
+        result.put(
+                ModelDefaults.PROVIDER_KIMCHI,
+                providerEntry(ModelDefaults.DEFAULT_KIMCHI_MODEL, ModelDefaults.DEFAULT_KIMCHI_BASE_URL));
+        result.put(
+                ModelDefaults.PROVIDER_FOUNDRY,
+                providerEntry(ModelDefaults.DEFAULT_FOUNDRY_MODEL, ModelDefaults.DEFAULT_FOUNDRY_BASE_URL));
         result.put(
                 ModelDefaults.PROVIDER_GEMINI,
                 providerEntry(ModelDefaults.DEFAULT_GEMINI_MODEL, ModelDefaults.DEFAULT_GEMINI_BASE_URL));

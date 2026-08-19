@@ -3,6 +3,7 @@ package com.amsha.core.agent.loop;
 import java.util.List;
 import java.util.Map;
 
+import com.amsha.common.util.LogUtil;
 import com.amsha.core.agent.AgentSentinels;
 import com.amsha.core.agent.reasoning.ReasoningEngine;
 import com.amsha.core.agent.reasoning.ReasoningStep;
@@ -80,8 +81,26 @@ class ResumeStrategyDispatcher {
             MessageContext messageContext,
             AgentStateMachineRunner stateMachineRunner,
             AgentCheckpoint checkpoint) {
-        if (AgentSentinels.GOAL_DENY_APPROVED.equals(context.goal())) {
+        if (AgentSentinels.GOAL_DENY_APPROVED.equals(context.goal())
+                || CheckpointStatus.DENIED == checkpoint.getStatus()) {
             return performDenialCleanup(context, history, checkpoint);
+        }
+
+        if (checkpoint.hasBatchToolDecisions()) {
+            try {
+                Map<String, ToolDecision> decisions = objectMapper.readValue(
+                        checkpoint.getBatchToolDecisions(), new TypeReference<Map<String, ToolDecision>>() {});
+                boolean allDenied =
+                        !decisions.isEmpty() && decisions.values().stream().allMatch(ToolDecision.DENIED::equals);
+                if (allDenied) {
+                    return performDenialCleanup(context, history, checkpoint);
+                }
+            } catch (Exception e) {
+                log.warnf(
+                        "Failed to parse batch decisions during denial check for session %s: %s",
+                        context.sessionId(), LogUtil.rootMessage(e));
+                return performDenialCleanup(context, history, checkpoint);
+            }
         }
 
         String messageGoal = messageContext == null ? null : messageContext.getGoal();

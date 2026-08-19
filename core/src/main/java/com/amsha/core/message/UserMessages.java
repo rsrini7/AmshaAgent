@@ -56,6 +56,7 @@ public final class UserMessages {
     public static final String HISTORY_AI_PREFIX = ". 🤖 *Amsha Agent:* ";
     public static final String STATUS_FORMAT = """
             📊 *Status:* %s
+            🤖 *Model:* %s
             💰 *Cost:* $%.4f / $%.2f (%.1f%%)
             🔢 *Tokens:* %d in + %d out = %d total
             🧠 *Memory:* %s
@@ -194,6 +195,7 @@ public final class UserMessages {
 
     public static String statusMessage(
             String status,
+            String model,
             double cost,
             double budget,
             double pct,
@@ -202,7 +204,20 @@ public final class UserMessages {
             int total,
             String memory,
             String sessionId) {
-        return String.format(STATUS_FORMAT, status, cost, budget, pct, input, output, total, memory, sessionId);
+        return String.format(STATUS_FORMAT, status, model, cost, budget, pct, input, output, total, memory, sessionId);
+    }
+
+    public static String statusMessage(
+            String status,
+            double cost,
+            double budget,
+            double pct,
+            int input,
+            int output,
+            int total,
+            String memory,
+            String sessionId) {
+        return statusMessage(status, "default", cost, budget, pct, input, output, total, memory, sessionId);
     }
 
     public static String sessionReset(long deletedCrons) {

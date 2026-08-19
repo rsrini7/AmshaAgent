@@ -1,6 +1,7 @@
 package com.amsha.core.agent.loop;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -429,6 +430,131 @@ class FinishActionHandlerTest {
         String hint = ((FinishActionHandler.FinishOutcome.Correction) outcome).correctionHint();
         assertTrue(hint.contains(
                 "STOP. The user requested a future/scheduled action, but you did NOT call the schedule_task tool"));
+    }
+
+    @Test
+    void testHandle_fencedJsonWithCodeForGreeting_neverInjectsToolsOrApprovals() {
+        AgentExecutionContext ctx = context("coordinator", "Hi");
+
+        String fencedJson =
+                "```json\n{\n\"status\": \"done\",\n\"code\": \"public class PrimeFinder {\\n public static void main(String[] args) {}\\n}\"\n}\n```";
+        when(textPatternUtils.looksLikeJson(anyString())).thenReturn(true);
+
+        ReasoningStep step = ReasoningStep.pending("thought", ReasoningStep.FINISH, Map.of("answer", fencedJson), 0, 0);
+
+        // Turn 1: Should return Correction (plain text instruction), NEVER InjectToolCall
+        FinishActionHandler.FinishOutcome outcome1 = handler.handle(ctx, List.of(), step, 0);
+        assertTrue(
+                outcome1 instanceof FinishActionHandler.FinishOutcome.Correction,
+                "Greeting with JSON should trigger Correction, not InjectToolCall");
+        assertFalse(
+                outcome1 instanceof FinishActionHandler.FinishOutcome.InjectToolCall,
+                "Greeting must NEVER inject tool calls or garuda");
+
+        // Turn 2 (forceFinishRetry): Model still returns JSON -> Must safely fall back to plain-text greeting
+        ctx.setForceFinishRetry(true);
+        FinishActionHandler.FinishOutcome outcome2 = handler.handle(ctx, List.of(), step, 1);
+        assertTrue(
+                outcome2 instanceof FinishActionHandler.FinishOutcome.Completed,
+                "Force-finish retry on greeting with JSON should complete with safe fallback");
+        FinishActionHandler.FinishOutcome.Completed completed = (FinishActionHandler.FinishOutcome.Completed) outcome2;
+        assertFalse(completed.answer().contains("```"), "Final answer must not contain code blocks");
+        assertFalse(completed.answer().contains("\"status\":"), "Final answer must not contain JSON fields");
+        assertTrue(completed.answer().contains("Hello"), "Final answer should be a safe greeting");
+    }
+
+    @Test
+    void testHandle_fencedJavaCodeForGreeting_neverInjectsToolsOrApprovals() {
+        AgentExecutionContext ctx = context("coordinator", "Hi");
+
+        String javaCode = "```java\npublic class PrimeFinder {\n    public static void main(String[] args) {}\n}\n```";
+        when(textPatternUtils.looksLikeJson(anyString())).thenReturn(false);
+        when(codePolicy.isGeneratedCodeBlock(anyString(), anyString())).thenReturn(true);
+        when(codePolicy.canGenerateCode("coordinator")).thenReturn(false);
+
+        ReasoningStep step = ReasoningStep.pending("thought", ReasoningStep.FINISH, Map.of("answer", javaCode), 0, 0);
+
+        // Turn 1: Should return Correction, NEVER InjectToolCall for garuda
+        FinishActionHandler.FinishOutcome outcome1 = handler.handle(ctx, List.of(), step, 0);
+        assertTrue(
+                outcome1 instanceof FinishActionHandler.FinishOutcome.Correction,
+                "Greeting with code should trigger Correction, not InjectToolCall");
+        assertFalse(
+                outcome1 instanceof FinishActionHandler.FinishOutcome.InjectToolCall,
+                "Greeting must NEVER inject garuda delegation or create approvals");
+
+        // Turn 2 (forceFinishRetry): Safe greeting fallback
+        ctx.setForceFinishRetry(true);
+        FinishActionHandler.FinishOutcome outcome2 = handler.handle(ctx, List.of(), step, 1);
+        assertTrue(
+                outcome2 instanceof FinishActionHandler.FinishOutcome.Completed,
+                "Force-finish retry on greeting with code should complete with safe fallback");
+        FinishActionHandler.FinishOutcome.Completed completed = (FinishActionHandler.FinishOutcome.Completed) outcome2;
+        assertFalse(completed.answer().contains("```"), "Final answer must not contain code blocks");
+        assertTrue(completed.answer().contains("Hello"), "Final answer should be a safe greeting");
+    }
+
+    @Test
+    void testHandle_legitimateCodeRequest_coordinatorDelegatesToCoder() {
+        String codeGoal = "Write a prime number finder in java and execute it";
+        AgentExecutionContext ctx = context("coordinator", codeGoal);
+
+        String javaCode = "```java\npublic class PrimeFinder {\n    public static void main(String[] args) {}\n}\n```";
+        when(textPatternUtils.looksLikeJson(anyString())).thenReturn(false);
+        when(codePolicy.isGeneratedCodeBlock(anyString(), anyString())).thenReturn(true);
+        when(codePolicy.canGenerateCode("coordinator")).thenReturn(false);
+
+        ReasoningStep step = ReasoningStep.pending("thought", ReasoningStep.FINISH, Map.of("answer", javaCode), 0, 0);
+
+        FinishActionHandler.FinishOutcome outcome = handler.handle(ctx, List.of(), step, 0);
+        assertTrue(
+                outcome instanceof FinishActionHandler.FinishOutcome.InjectToolCall,
+                "Legitimate code request from coordinator MUST delegate to coder");
+        FinishActionHandler.FinishOutcome.InjectToolCall injected =
+                (FinishActionHandler.FinishOutcome.InjectToolCall) outcome;
+        assertEquals(ToolCapability.DELEGATE_TO_AGENT.toolName(), injected.toolName());
+        assertEquals("brahma", injected.arguments().get("agent"));
+    }
+
+    @Test
+    void testHandle_interceptedExecutionInGreeting_neverExposesCode() {
+        AgentExecutionContext ctx = context("coordinator", "Hi");
+
+        String javaCode = "```java\npublic class PrimeFinder {\n    public static void main(String[] args) {}\n}\n```";
+        ReasoningStep step = ReasoningStep.pending(
+                "thought",
+                ReasoningStep.FINISH,
+                Map.of(
+                        ReasoningStep.ACTION_INPUT_ANSWER_KEY,
+                        javaCode,
+                        ReasoningStep.ACTION_INPUT_INTERCEPTED_EXECUTION_KEY,
+                        true),
+                0,
+                0);
+
+        FinishActionHandler.FinishOutcome outcome = handler.handle(ctx, List.of(), step, 0);
+        assertTrue(outcome instanceof FinishActionHandler.FinishOutcome.Completed);
+        FinishActionHandler.FinishOutcome.Completed completed = (FinishActionHandler.FinishOutcome.Completed) outcome;
+        assertFalse(completed.answer().contains("```"), "Intercepted execution in greeting must not leak code");
+        assertTrue(completed.answer().contains("Hello"), "Should complete with safe greeting fallback");
+    }
+
+    @Test
+    void testHandle_nonGreetingConversationalFallback_doesNotSayHello() {
+        String conversationalGoal = "Tell me a joke";
+        AgentExecutionContext ctx = context("coordinator", conversationalGoal);
+        ctx.setForceFinishRetry(true);
+
+        String rawJson = "{\"joke\": \"why did the chicken cross the road?\"}";
+        when(textPatternUtils.looksLikeJson(anyString())).thenReturn(true);
+
+        ReasoningStep step = ReasoningStep.pending("thought", ReasoningStep.FINISH, Map.of("answer", rawJson), 0, 0);
+
+        FinishActionHandler.FinishOutcome outcome = handler.handle(ctx, List.of(), step, 1);
+        assertTrue(outcome instanceof FinishActionHandler.FinishOutcome.Completed);
+        FinishActionHandler.FinishOutcome.Completed completed = (FinishActionHandler.FinishOutcome.Completed) outcome;
+        assertFalse(completed.answer().contains("Hello!"), "Non-greeting conversational fallback must not say Hello");
+        assertFalse(completed.answer().contains("{"), "Must not leak raw JSON");
     }
 
     private static AgentExecutionContext context(String role, String goal) {

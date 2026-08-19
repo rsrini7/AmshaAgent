@@ -465,7 +465,7 @@ The `LangChainReasoningEngine` discovers the active provider by matching `provid
 
 ### 6b. Routing/intent-classification provider (`RoutingChatModelProvider`)
 
-Located in `amsha-app`. Implement `RoutingChatModelProvider` and mark it `@ApplicationScoped`:
+Located in `amsha-core`. Implement `RoutingChatModelProvider` and mark it `@ApplicationScoped`:
 
 ```java
 @ApplicationScoped
@@ -521,10 +521,18 @@ AMSHA_LLM_MODEL_NAME=my-model-name
 | `GeminiProviderFactory` | `gemini` | `AgentChatModelProvider` | `amsha-core` |
 | `NvidiaProviderFactory` | `nvidia` | `AgentChatModelProvider` | `amsha-core` |
 | `CerebrasProviderFactory` | `cerebras` | `AgentChatModelProvider` | `amsha-core` |
+| `SarvamProviderFactory` | `sarvam` | `AgentChatModelProvider` | `amsha-core` |
+| `OpenCodeProviderFactory` | `opencode` | `AgentChatModelProvider` | `amsha-core` |
+| `HuggingFaceProviderFactory` | `huggingface` | `AgentChatModelProvider` | `amsha-core` |
+| `MistralProviderFactory` | `mistral` | `AgentChatModelProvider` | `amsha-core` |
+| `CloudflareProviderFactory` | `cloudflare` | `AgentChatModelProvider` | `amsha-core` |
+| `CohereProviderFactory` | `cohere` | `AgentChatModelProvider` | `amsha-core` |
+| `CodexProviderFactory` | `codex` | `AgentChatModelProvider` | `amsha-core` |
 | `LlamaCppProviderFactory` | `llamacpp` | `AgentChatModelProvider` | `amsha-core` |
+| `GenericOpenAiProviderFactory` | `generic-openai` | `AgentChatModelProvider` | `amsha-core` |
 | `InfiniteLoopAgentChatModelProvider` | `infiniteloop` | `AgentChatModelProvider` | `amsha-core` |
 
-Each provider also has a corresponding `RoutingChatModelProvider` implementation in `amsha-app` for intent classification and compaction.
+Each provider also has a corresponding `RoutingChatModelProvider` implementation in `amsha-core` for intent classification and compaction.
 
 ---
 
@@ -899,7 +907,7 @@ Code location matters for module boundary correctness:
 | Concern | Correct module |
 |---|---|
 | New `AgentTool`, `AgentReflex`, `MessageHandler`, `ContextEnricher`, `IntentRoutingProvider`, `GovernanceStrategy` | `amsha-core` |
-| New `RoutingChatModelProvider` | `amsha-app` |
+| New `RoutingChatModelProvider` | `amsha-core` |
 | New `EmbeddingProviderFactory` | `amsha-rag` |
 | New `SkillProvider` | `amsha-core` (or new module) |
 | New persistence port implementation | New module (see `amsha-persistence-sqlite` as reference) |
@@ -919,4 +927,4 @@ If your new class is used reflectively at runtime (e.g., Jackson deserialization
 
 ---
 
-*Last updated: Amsha Agent V0.1.0 · Quarkus 3.27.2 · JDK 25 · 11 LLM providers*
+*Last updated: Amsha Agent V0.1.0 · Quarkus 3.27.2 · JDK 25 · 18 LLM providers*

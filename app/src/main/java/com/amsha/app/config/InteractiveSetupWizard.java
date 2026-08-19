@@ -18,6 +18,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 import com.amsha.app.util.CliUtils;
+import com.amsha.app.util.ProviderKeySpecs;
 import com.amsha.app.util.VarSpec;
 import com.amsha.common.util.LogUtil;
 
@@ -52,11 +53,17 @@ public class InteractiveSetupWizard {
             "AMSHA_COMPACTION_GROQ_API_KEY",
             "AMSHA_COMPACTION_CEREBRAS_API_KEY",
             "AMSHA_COMPACTION_OPENROUTER_API_KEY",
+            "AMSHA_COMPACTION_SARVAM_API_KEY",
+            "AMSHA_COMPACTION_OPENCODE_API_KEY",
             "AMSHA_COMPACTION_GENERIC_OPENAI_API_KEY",
             "AMSHA_CLASSIFIER_GROQ_API_KEY",
             "AMSHA_CLASSIFIER_CEREBRAS_API_KEY",
             "AMSHA_CLASSIFIER_OPENROUTER_API_KEY",
-            "AMSHA_CLASSIFIER_GENERIC_OPENAI_API_KEY");
+            "AMSHA_CLASSIFIER_SARVAM_API_KEY",
+            "AMSHA_CLASSIFIER_OPENCODE_API_KEY",
+            "AMSHA_CLASSIFIER_GENERIC_OPENAI_API_KEY",
+            "AMSHA_SARVAM_API_KEY",
+            "AMSHA_OPENCODE_API_KEY");
 
     private static final Set<String> AUTO_GENERATABLE_KEYS = Set.of(
             "AMSHA_VAULT_PEPPER",
@@ -137,8 +144,15 @@ public class InteractiveSetupWizard {
         System.err.println("  │  7. Cerebras - Ultra-fast LPU inference");
         System.err.println("  │  8. OMLX - Local MLX-based server (no API key needed)");
         System.err.println("  │  9. Generic OpenAI - any OpenAI-compatible endpoint");
+        System.err.println("  │  10. Sarvam - Indic-language models");
+        System.err.println("  │  11. OpenCode - OpenAI-compatible endpoint (Zen / Go)");
+        System.err.println("  │  12. Hugging Face - Inference API / Router");
+        System.err.println("  │  13. Mistral AI - Codestral & Mistral models");
+        System.err.println("  │  14. Cloudflare Workers AI - Serverless inference");
+        System.err.println("  │  15. Cohere - Command R+ & Enterprise models");
+        System.err.println("  │  16. Codex CLI - ChatGPT Plus OAuth (zero-config)");
         System.err.println("  │");
-        String choice = readLineWithFallback(System.console(), "  └─ Select provider [1-8, Default: 1]: ");
+        String choice = readLineWithFallback(System.console(), "  └─ Select provider [1-16, Default: 1]: ");
         String provider =
                 switch (choice != null ? choice.trim() : "") {
                     case "2" -> "openrouter";
@@ -149,6 +163,13 @@ public class InteractiveSetupWizard {
                     case "7" -> "cerebras";
                     case "8" -> "omlx";
                     case "9" -> "generic-openai";
+                    case "10" -> "sarvam";
+                    case "11" -> "opencode";
+                    case "12" -> "huggingface";
+                    case "13" -> "mistral";
+                    case "14" -> "cloudflare";
+                    case "15" -> "cohere";
+                    case "16" -> "codex";
                     default -> "groq";
                 };
         System.setProperty("AMSHA_LLM_PROVIDER", provider);
@@ -182,6 +203,62 @@ public class InteractiveSetupWizard {
                 infiniteLoop
                         ? configuredProviderList("AMSHA_INFINITE_LOOP_CLASSIFIER_PROVIDERS", "groq,ollama")
                         : provider);
+        if ("sarvam".equalsIgnoreCase(provider)) {
+            patchBaseConfig(envFile, "AMSHA_COMPACTION_SARVAM_MODEL", "sarvam-105b");
+            patchBaseConfig(envFile, "AMSHA_COMPACTION_SARVAM_BASE_URL", "https://api.sarvam.ai/v1");
+            patchBaseConfig(envFile, "AMSHA_CLASSIFIER_SARVAM_MODEL", "sarvam-105b");
+            patchBaseConfig(envFile, "AMSHA_CLASSIFIER_SARVAM_BASE_URL", "https://api.sarvam.ai/v1");
+        }
+        if ("opencode".equalsIgnoreCase(provider)) {
+            patchBaseConfig(envFile, "AMSHA_COMPACTION_OPENCODE_MODEL", "deepseek-v4-flash-free");
+            patchBaseConfig(envFile, "AMSHA_COMPACTION_OPENCODE_BASE_URL", "https://opencode.ai/zen/v1");
+            patchBaseConfig(envFile, "AMSHA_CLASSIFIER_OPENCODE_MODEL", "deepseek-v4-flash-free");
+            patchBaseConfig(envFile, "AMSHA_CLASSIFIER_OPENCODE_BASE_URL", "https://opencode.ai/zen/v1");
+        }
+        if ("huggingface".equalsIgnoreCase(provider)) {
+            patchBaseConfig(envFile, "AMSHA_COMPACTION_HUGGINGFACE_MODEL", "meta-llama/Llama-3.3-70B-Instruct");
+            patchBaseConfig(envFile, "AMSHA_COMPACTION_HUGGINGFACE_BASE_URL", "https://router.huggingface.co/v1");
+            patchBaseConfig(envFile, "AMSHA_CLASSIFIER_HUGGINGFACE_MODEL", "meta-llama/Llama-3.3-70B-Instruct");
+            patchBaseConfig(envFile, "AMSHA_CLASSIFIER_HUGGINGFACE_BASE_URL", "https://router.huggingface.co/v1");
+        }
+        if ("mistral".equalsIgnoreCase(provider)) {
+            patchBaseConfig(envFile, "AMSHA_COMPACTION_MISTRAL_MODEL", "codestral-latest");
+            patchBaseConfig(envFile, "AMSHA_COMPACTION_MISTRAL_BASE_URL", "https://api.mistral.ai/v1");
+            patchBaseConfig(envFile, "AMSHA_CLASSIFIER_MISTRAL_MODEL", "codestral-latest");
+            patchBaseConfig(envFile, "AMSHA_CLASSIFIER_MISTRAL_BASE_URL", "https://api.mistral.ai/v1");
+        }
+        if ("cloudflare".equalsIgnoreCase(provider)) {
+            patchBaseConfig(envFile, "AMSHA_CLOUDFLARE_ACCOUNT_ID", "");
+            patchBaseConfig(envFile, "AMSHA_COMPACTION_CLOUDFLARE_MODEL", "@cf/meta/llama-3.3-70b-instruct-fp8-fast");
+            patchBaseConfig(
+                    envFile,
+                    "AMSHA_COMPACTION_CLOUDFLARE_BASE_URL",
+                    "https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/v1");
+            patchBaseConfig(envFile, "AMSHA_CLASSIFIER_CLOUDFLARE_MODEL", "@cf/meta/llama-3.3-70b-instruct-fp8-fast");
+            patchBaseConfig(
+                    envFile,
+                    "AMSHA_CLASSIFIER_CLOUDFLARE_BASE_URL",
+                    "https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/v1");
+        }
+        if ("cohere".equalsIgnoreCase(provider)) {
+            patchBaseConfig(envFile, "AMSHA_COMPACTION_COHERE_MODEL", "command-r-plus-08-2024");
+            patchBaseConfig(envFile, "AMSHA_COMPACTION_COHERE_BASE_URL", "https://api.cohere.ai/compatibility/v1");
+            patchBaseConfig(envFile, "AMSHA_CLASSIFIER_COHERE_MODEL", "command-r-plus-08-2024");
+            patchBaseConfig(envFile, "AMSHA_CLASSIFIER_COHERE_BASE_URL", "https://api.cohere.ai/compatibility/v1");
+        }
+        if ("codex".equalsIgnoreCase(provider)) {
+            patchBaseConfig(envFile, "AMSHA_COMPACTION_CODEX_MODEL", "gpt-5.6-luna");
+            patchBaseConfig(envFile, "AMSHA_COMPACTION_CODEX_BASE_URL", "http://127.0.0.1:8787/v1");
+            patchBaseConfig(envFile, "AMSHA_CLASSIFIER_CODEX_MODEL", "gpt-5.6-luna");
+            patchBaseConfig(envFile, "AMSHA_CLASSIFIER_CODEX_BASE_URL", "http://127.0.0.1:8787/v1");
+        }
+    }
+
+    private static void patchBaseConfig(Path envFile, String key, String value) {
+        EnvConfigInitializer.patchEnvFile(envFile, key, value, EnvConfigInitializer.PatchMode.INIT);
+        if (System.getProperty(key) == null && System.getenv(key) == null) {
+            System.setProperty(key, value);
+        }
     }
 
     private static void patchProviderList(Path envFile, String key, String value) {
@@ -250,6 +327,24 @@ public class InteractiveSetupWizard {
             EnvConfigInitializer.patchEnvFile(envFile, classifierKey, key, EnvConfigInitializer.PatchMode.UPDATE);
             System.setProperty(classifierKey, key);
         }
+        if ("cloudflare".equalsIgnoreCase(provider)) {
+            String currentAcc = Optional.ofNullable(System.getProperty("AMSHA_CLOUDFLARE_ACCOUNT_ID"))
+                    .or(() -> Optional.ofNullable(System.getenv("AMSHA_CLOUDFLARE_ACCOUNT_ID")))
+                    .orElse("");
+            if (currentAcc.isBlank()) {
+                String accId = readLineWithFallback(
+                        System.console(), "  └─ Enter Cloudflare Account ID (dash.cloudflare.com): ");
+                if (accId != null && !accId.isBlank()) {
+                    EnvConfigInitializer.patchEnvFile(
+                            envFile,
+                            "AMSHA_CLOUDFLARE_ACCOUNT_ID",
+                            accId.trim(),
+                            EnvConfigInitializer.PatchMode.UPDATE);
+                    System.setProperty("AMSHA_CLOUDFLARE_ACCOUNT_ID", accId.trim());
+                    System.err.println("     ✓ Cloudflare Account ID saved.");
+                }
+            }
+        }
         System.err.println("     ✓ Unified key saved.");
     }
 
@@ -260,6 +355,13 @@ public class InteractiveSetupWizard {
             case "gemini" -> "AMSHA_GEMINI_API_KEY";
             case "cerebras" -> "AMSHA_CEREBRAS_API_KEY";
             case "nvidia" -> "AMSHA_NVIDIA_API_KEY";
+            case "sarvam" -> "AMSHA_SARVAM_API_KEY";
+            case "opencode" -> "AMSHA_OPENCODE_API_KEY";
+            case "huggingface" -> "AMSHA_HUGGINGFACE_API_KEY";
+            case "mistral" -> "AMSHA_MISTRAL_API_KEY";
+            case "cloudflare" -> "AMSHA_CLOUDFLARE_API_KEY";
+            case "cohere" -> "AMSHA_COHERE_API_KEY";
+            case "codex" -> "AMSHA_CODEX_API_KEY";
             case "omlx" -> "AMSHA_OMLX_API_KEY";
             case "generic-openai" -> "AMSHA_GENERIC_OPENAI_API_KEY";
             default -> "AMSHA_GROQ_API_KEY";
@@ -268,16 +370,24 @@ public class InteractiveSetupWizard {
 
     /**
      * Returns the per-provider env-var name for the compaction slot's API key,
-     * or {@code null} if the provider does not require an API key (e.g. ollama, omlx).
+     * or {@code null} if the provider does not require an API key (e.g. ollama, omlx, codex).
      */
     private static String compactionApiKeyForProvider(String provider) {
+        if (ProviderKeySpecs.isCompactionClassifierKeyless(provider)) {
+            return null;
+        }
         return switch (provider.toLowerCase(Locale.ROOT)) {
-            case "ollama", "omlx" -> null;
             case "openrouter" -> "AMSHA_COMPACTION_OPENROUTER_API_KEY";
             case "openai" -> "AMSHA_COMPACTION_OPENAI_API_KEY";
             case "gemini" -> "AMSHA_COMPACTION_GEMINI_API_KEY";
             case "cerebras" -> "AMSHA_COMPACTION_CEREBRAS_API_KEY";
             case "nvidia" -> "AMSHA_COMPACTION_NVIDIA_API_KEY";
+            case "sarvam" -> "AMSHA_COMPACTION_SARVAM_API_KEY";
+            case "opencode" -> "AMSHA_COMPACTION_OPENCODE_API_KEY";
+            case "huggingface" -> "AMSHA_COMPACTION_HUGGINGFACE_API_KEY";
+            case "mistral" -> "AMSHA_COMPACTION_MISTRAL_API_KEY";
+            case "cloudflare" -> "AMSHA_COMPACTION_CLOUDFLARE_API_KEY";
+            case "cohere" -> "AMSHA_COMPACTION_COHERE_API_KEY";
             case "generic-openai" -> "AMSHA_COMPACTION_GENERIC_OPENAI_API_KEY";
             default -> "AMSHA_COMPACTION_GROQ_API_KEY";
         };
@@ -285,16 +395,24 @@ public class InteractiveSetupWizard {
 
     /**
      * Returns the per-provider env-var name for the intent-classifier slot's API key,
-     * or {@code null} if the provider does not require an API key (e.g. ollama, omlx).
+     * or {@code null} if the provider does not require an API key (e.g. ollama, omlx, codex).
      */
     private static String classifierApiKeyForProvider(String provider) {
+        if (ProviderKeySpecs.isCompactionClassifierKeyless(provider)) {
+            return null;
+        }
         return switch (provider.toLowerCase(Locale.ROOT)) {
-            case "ollama", "omlx" -> null;
             case "openrouter" -> "AMSHA_CLASSIFIER_OPENROUTER_API_KEY";
             case "openai" -> "AMSHA_CLASSIFIER_OPENAI_API_KEY";
             case "gemini" -> "AMSHA_CLASSIFIER_GEMINI_API_KEY";
             case "cerebras" -> "AMSHA_CLASSIFIER_CEREBRAS_API_KEY";
             case "nvidia" -> "AMSHA_CLASSIFIER_NVIDIA_API_KEY";
+            case "sarvam" -> "AMSHA_CLASSIFIER_SARVAM_API_KEY";
+            case "opencode" -> "AMSHA_CLASSIFIER_OPENCODE_API_KEY";
+            case "huggingface" -> "AMSHA_CLASSIFIER_HUGGINGFACE_API_KEY";
+            case "mistral" -> "AMSHA_CLASSIFIER_MISTRAL_API_KEY";
+            case "cloudflare" -> "AMSHA_CLASSIFIER_CLOUDFLARE_API_KEY";
+            case "cohere" -> "AMSHA_CLASSIFIER_COHERE_API_KEY";
             case "generic-openai" -> "AMSHA_CLASSIFIER_GENERIC_OPENAI_API_KEY";
             default -> "AMSHA_CLASSIFIER_GROQ_API_KEY";
         };

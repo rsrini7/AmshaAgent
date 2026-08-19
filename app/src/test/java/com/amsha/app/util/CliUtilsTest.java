@@ -31,12 +31,20 @@ class CliUtilsTest {
         "AMSHA_COMPACTION_OPENAI_API_KEY",
         "AMSHA_COMPACTION_GEMINI_API_KEY",
         "AMSHA_COMPACTION_NVIDIA_API_KEY",
+        "AMSHA_COMPACTION_OPENCODE_API_KEY",
+        "AMSHA_COMPACTION_HUGGINGFACE_API_KEY",
+        "AMSHA_COMPACTION_MISTRAL_API_KEY",
+        "AMSHA_COMPACTION_CLOUDFLARE_API_KEY",
         "AMSHA_CLASSIFIER_GROQ_API_KEY",
         "AMSHA_CLASSIFIER_CEREBRAS_API_KEY",
         "AMSHA_CLASSIFIER_OPENROUTER_API_KEY",
         "AMSHA_CLASSIFIER_OPENAI_API_KEY",
         "AMSHA_CLASSIFIER_GEMINI_API_KEY",
         "AMSHA_CLASSIFIER_NVIDIA_API_KEY",
+        "AMSHA_CLASSIFIER_OPENCODE_API_KEY",
+        "AMSHA_CLASSIFIER_HUGGINGFACE_API_KEY",
+        "AMSHA_CLASSIFIER_MISTRAL_API_KEY",
+        "AMSHA_CLASSIFIER_CLOUDFLARE_API_KEY",
         "AMSHA_EMBEDDING_JINA_API_KEY",
         "AMSHA_EMBEDDING_OPENAI_API_KEY",
     };
@@ -238,6 +246,19 @@ class CliUtilsTest {
         assertEquals(
                 "AMSHA_CEREBRAS_API_KEY",
                 ProviderKeySpecs.llmKeySpecFor("cerebras").key());
+    }
+
+    @Test
+    void llmKeySpecFor_sarvam() {
+        assertEquals(
+                "AMSHA_SARVAM_API_KEY", ProviderKeySpecs.llmKeySpecFor("sarvam").key());
+    }
+
+    @Test
+    void llmKeySpecFor_opencode() {
+        assertEquals(
+                "AMSHA_OPENCODE_API_KEY",
+                ProviderKeySpecs.llmKeySpecFor("opencode").key());
     }
 
     @Test

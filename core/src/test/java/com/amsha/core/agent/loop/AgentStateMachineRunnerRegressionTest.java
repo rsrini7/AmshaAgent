@@ -510,4 +510,52 @@ class AgentStateMachineRunnerRegressionTest {
         assertEquals("The approved tool was executed successfully and the requested artifact was generated.", answer);
         assertTrue(!answer.contains("<html>"));
     }
+
+    @Test
+    void testRunFinishPassPreservesExecutionOutputForSandboxExec() {
+        String trianglePattern = "*\n**\n***\n****\n*****";
+        ReasoningStep toolStep = ReasoningStep.pending(
+                        "execute star pattern",
+                        ToolCapability.SANDBOX_EXEC.toolName(),
+                        Map.of("code", "public class Main { ... }", "language", "java"),
+                        100,
+                        100)
+                .withObservation(trianglePattern, true);
+
+        // When the engine fails to produce a clean FINISH step and triggers fallback:
+        when(engine.nextStep(any(), anyString(), anyString(), anyList()))
+                .thenReturn(ReasoningStep.pending(
+                        "still thinking",
+                        ToolCapability.SANDBOX_EXEC.toolName(),
+                        Map.of("code", "public class Main { ... }", "language", "java"),
+                        100,
+                        100))
+                .thenReturn(ReasoningStep.pending(
+                        "still thinking",
+                        ToolCapability.SANDBOX_EXEC.toolName(),
+                        Map.of("code", "public class Main { ... }", "language", "java"),
+                        100,
+                        100));
+
+        AgentExecutionContext ctx = new AgentExecutionContext(
+                "s1",
+                "u1",
+                "c1",
+                "coder",
+                "write java program which will print star pattern of triangle execute it",
+                AutonomyLevel.FULL,
+                StructuredOutputMode.NATIVE,
+                5,
+                0,
+                null,
+                null,
+                null,
+                null);
+
+        AgentResult result = runner.runFinishPass(ctx, engine, new ArrayList<>(List.of(toolStep)));
+
+        assertInstanceOf(AgentResult.Finished.class, result);
+        String answer = ((AgentResult.Finished) result).answer();
+        assertEquals(trianglePattern, answer);
+    }
 }

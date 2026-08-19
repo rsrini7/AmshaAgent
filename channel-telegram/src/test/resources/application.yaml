@@ -3,7 +3,7 @@ amsha:
     model: "test-model"
     gemini:
       api-key: "dummy-gemini-key"
-      model-name: "gemini-2.5-flash-lite"
+      model-name: "gemini-3.1-flash-lite"
   data-dir: "./target"
   workspace:
     root-dir: "./target/workspaces"  

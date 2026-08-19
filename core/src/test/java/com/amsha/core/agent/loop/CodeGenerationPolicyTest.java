@@ -37,4 +37,20 @@ class CodeGenerationPolicyTest {
 
         assertTrue(policy.isGeneratedCodeBlock(answer, "researcher"));
     }
+
+    @Test
+    void researcherStructuredDataWithClassOrMethodKeysIsNotTreatedAsCode() {
+        String answer = """
+                ```json
+                {
+                  "service": "OrderService",
+                  "class": "com.example.OrderHandler",
+                  "method": "POST",
+                  "function": "processPayment"
+                }
+                ```
+                """;
+
+        assertFalse(policy.isGeneratedCodeBlock(answer, "researcher"));
+    }
 }

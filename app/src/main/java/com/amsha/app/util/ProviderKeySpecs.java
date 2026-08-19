@@ -1,6 +1,7 @@
 package com.amsha.app.util;
 
 import java.util.Locale;
+import java.util.Set;
 
 /**
  * Provider-specific API-key specifications for Amsha Agent.
@@ -11,12 +12,25 @@ import java.util.Locale;
  * {@link #compactionKeySpecFor}, {@link #classifierKeySpecFor},
  * {@link #embeddingKeySpecFor}) map a normalized provider name to the
  * correct {@link VarSpec}, returning {@code null} for providers that
- * do not require an API key (e.g. ollama).
+ * do not require an API key (e.g. ollama, codex).
  */
 public final class ProviderKeySpecs {
 
+    public static final Set<String> LLM_KEYLESS_PROVIDERS =
+            Set.of("ollama", "codex", "claude-code", "agy", "kimchi", "foundry");
+    public static final Set<String> COMPACTION_CLASSIFIER_KEYLESS_PROVIDERS =
+            Set.of("ollama", "omlx", "codex", "claude-code", "agy", "kimchi", "foundry");
+
     private ProviderKeySpecs() {
         // utility class
+    }
+
+    public static boolean isLlmKeyless(String provider) {
+        return provider != null && LLM_KEYLESS_PROVIDERS.contains(provider.toLowerCase(Locale.ROOT));
+    }
+
+    public static boolean isCompactionClassifierKeyless(String provider) {
+        return provider != null && COMPACTION_CLASSIFIER_KEYLESS_PROVIDERS.contains(provider.toLowerCase(Locale.ROOT));
     }
 
     // -----------------------------------------------------------------------
@@ -72,6 +86,49 @@ public final class ProviderKeySpecs {
             "1. Run:  mlx_lm.server --model mlx-community/<model> --port 8000",
             "2. Add:  AMSHA_OMLX_API_KEY=not-needed");
 
+    public static final VarSpec SARVAM_KEY_SPEC = new VarSpec(
+            "AMSHA_SARVAM_API_KEY",
+            "Sarvam AI API key.",
+            "1. Sign up at https://dashboard.sarvam.ai",
+            "2. Create an API key",
+            "3. Add:  AMSHA_SARVAM_API_KEY=your_key_here");
+
+    public static final VarSpec OPENCODE_KEY_SPEC = new VarSpec(
+            "AMSHA_OPENCODE_API_KEY",
+            "OpenCode AI API key.",
+            "1. Sign up at https://opencode.ai/zen",
+            "2. Create an API key",
+            "3. Add:  AMSHA_OPENCODE_API_KEY=your_key_here");
+
+    public static final VarSpec HUGGINGFACE_KEY_SPEC = new VarSpec(
+            "AMSHA_HUGGINGFACE_API_KEY",
+            "Hugging Face User Access Token. Starts with 'hf_'.",
+            "1. Sign up at https://huggingface.co",
+            "2. Create an access token at https://huggingface.co/settings/tokens",
+            "3. Add:  AMSHA_HUGGINGFACE_API_KEY=hf_your_key_here");
+
+    public static final VarSpec MISTRAL_KEY_SPEC = new VarSpec(
+            "AMSHA_MISTRAL_API_KEY",
+            "Mistral AI API key.",
+            "1. Sign up at https://console.mistral.ai",
+            "2. Create an API key",
+            "3. Add:  AMSHA_MISTRAL_API_KEY=your_key_here");
+
+    public static final VarSpec CLOUDFLARE_KEY_SPEC = new VarSpec(
+            "AMSHA_CLOUDFLARE_API_KEY",
+            "Cloudflare API token for Workers AI.",
+            "1. Sign up at https://dash.cloudflare.com",
+            "2. Create an API token with Workers AI Read/Edit permissions",
+            "3. Add:  AMSHA_CLOUDFLARE_API_KEY=your_api_token_here",
+            "4. Add:  AMSHA_CLOUDFLARE_ACCOUNT_ID=your_account_id_here");
+
+    public static final VarSpec COHERE_KEY_SPEC = new VarSpec(
+            "AMSHA_COHERE_API_KEY",
+            "Cohere API key for Command R+ & enterprise models.",
+            "1. Sign up at https://dashboard.cohere.com",
+            "2. Create an API key",
+            "3. Add:  AMSHA_COHERE_API_KEY=your_key_here");
+
     public static final VarSpec GENERIC_OPENAI_KEY_SPEC = new VarSpec(
             "AMSHA_GENERIC_OPENAI_API_KEY",
             "Generic OpenAI-compatible API key.",
@@ -85,18 +142,29 @@ public final class ProviderKeySpecs {
 
     /**
      * Resolves the primary LLM API-key {@link VarSpec} for a provider name.
-     * Returns {@code null} for {@code ollama} (no key required).
+     * Returns {@code null} for keyless providers (e.g. ollama, codex).
      */
     public static VarSpec llmKeySpecFor(String provider) {
-        return switch (provider == null ? "groq" : provider.toLowerCase(Locale.ROOT)) {
+        if (provider == null) {
+            return GROQ_KEY_SPEC;
+        }
+        if (isLlmKeyless(provider)) {
+            return null;
+        }
+        return switch (provider.toLowerCase(Locale.ROOT)) {
             case "openrouter" -> OPENROUTER_KEY_SPEC;
             case "openai" -> OPENAI_KEY_SPEC;
             case "gemini" -> GEMINI_KEY_SPEC;
             case "nvidia" -> NVIDIA_KEY_SPEC;
             case "cerebras" -> CEREBRAS_KEY_SPEC;
+            case "sarvam" -> SARVAM_KEY_SPEC;
+            case "opencode" -> OPENCODE_KEY_SPEC;
+            case "huggingface" -> HUGGINGFACE_KEY_SPEC;
+            case "mistral" -> MISTRAL_KEY_SPEC;
+            case "cloudflare" -> CLOUDFLARE_KEY_SPEC;
+            case "cohere" -> COHERE_KEY_SPEC;
             case "omlx" -> OMLX_KEY_SPEC;
             case "generic-openai" -> GENERIC_OPENAI_KEY_SPEC;
-            case "ollama" -> null;
             default -> GROQ_KEY_SPEC;
         };
     }
@@ -107,11 +175,13 @@ public final class ProviderKeySpecs {
 
     /**
      * Per-provider API-key spec for the compaction slot. Returns {@code null}
-     * for providers that don't need a key (ollama, omlx).
+     * for providers that don't need a key (ollama, omlx, codex).
      */
     public static VarSpec compactionKeySpecFor(String provider) {
+        if (isCompactionClassifierKeyless(provider)) {
+            return null;
+        }
         return switch (provider) {
-            case "ollama", "omlx" -> null;
             case "openrouter" ->
                 providerKeySpec(
                         "openrouter", "AMSHA_COMPACTION_OPENROUTER_API_KEY", "sk-or-v1-", "https://openrouter.ai");
@@ -123,6 +193,22 @@ public final class ProviderKeySpecs {
                 providerKeySpec("cerebras", "AMSHA_COMPACTION_CEREBRAS_API_KEY", "csk-", "https://cloud.cerebras.ai");
             case "nvidia" ->
                 providerKeySpec("nvidia", "AMSHA_COMPACTION_NVIDIA_API_KEY", "nvapi-", "https://build.nvidia.com");
+            case "sarvam" ->
+                providerKeySpec("sarvam", "AMSHA_COMPACTION_SARVAM_API_KEY", "", "https://dashboard.sarvam.ai");
+            case "opencode" ->
+                providerKeySpec("opencode", "AMSHA_COMPACTION_OPENCODE_API_KEY", "", "https://opencode.ai/zen");
+            case "huggingface" ->
+                providerKeySpec(
+                        "huggingface",
+                        "AMSHA_COMPACTION_HUGGINGFACE_API_KEY",
+                        "hf_",
+                        "https://huggingface.co/settings/tokens");
+            case "mistral" ->
+                providerKeySpec("mistral", "AMSHA_COMPACTION_MISTRAL_API_KEY", "", "https://console.mistral.ai");
+            case "cloudflare" ->
+                providerKeySpec("cloudflare", "AMSHA_COMPACTION_CLOUDFLARE_API_KEY", "", "https://dash.cloudflare.com");
+            case "cohere" ->
+                providerKeySpec("cohere", "AMSHA_COMPACTION_COHERE_API_KEY", "", "https://dashboard.cohere.com");
             case "generic-openai" ->
                 providerKeySpec(
                         "generic-openai", "AMSHA_COMPACTION_GENERIC_OPENAI_API_KEY", "", "your provider dashboard");
@@ -136,11 +222,13 @@ public final class ProviderKeySpecs {
 
     /**
      * Per-provider API-key spec for the intent-classifier slot. Returns {@code null}
-     * for providers that don't need a key (ollama, omlx).
+     * for providers that don't need a key (ollama, omlx, codex).
      */
     public static VarSpec classifierKeySpecFor(String provider) {
+        if (isCompactionClassifierKeyless(provider)) {
+            return null;
+        }
         return switch (provider) {
-            case "ollama", "omlx" -> null;
             case "openrouter" ->
                 providerKeySpec(
                         "openrouter", "AMSHA_CLASSIFIER_OPENROUTER_API_KEY", "sk-or-v1-", "https://openrouter.ai");
@@ -152,6 +240,22 @@ public final class ProviderKeySpecs {
                 providerKeySpec("cerebras", "AMSHA_CLASSIFIER_CEREBRAS_API_KEY", "csk-", "https://cloud.cerebras.ai");
             case "nvidia" ->
                 providerKeySpec("nvidia", "AMSHA_CLASSIFIER_NVIDIA_API_KEY", "nvapi-", "https://build.nvidia.com");
+            case "sarvam" ->
+                providerKeySpec("sarvam", "AMSHA_CLASSIFIER_SARVAM_API_KEY", "", "https://dashboard.sarvam.ai");
+            case "opencode" ->
+                providerKeySpec("opencode", "AMSHA_CLASSIFIER_OPENCODE_API_KEY", "", "https://opencode.ai/zen");
+            case "huggingface" ->
+                providerKeySpec(
+                        "huggingface",
+                        "AMSHA_CLASSIFIER_HUGGINGFACE_API_KEY",
+                        "hf_",
+                        "https://huggingface.co/settings/tokens");
+            case "mistral" ->
+                providerKeySpec("mistral", "AMSHA_CLASSIFIER_MISTRAL_API_KEY", "", "https://console.mistral.ai");
+            case "cloudflare" ->
+                providerKeySpec("cloudflare", "AMSHA_CLASSIFIER_CLOUDFLARE_API_KEY", "", "https://dash.cloudflare.com");
+            case "cohere" ->
+                providerKeySpec("cohere", "AMSHA_CLASSIFIER_COHERE_API_KEY", "", "https://dashboard.cohere.com");
             case "generic-openai" ->
                 providerKeySpec(
                         "generic-openai", "AMSHA_CLASSIFIER_GENERIC_OPENAI_API_KEY", "", "your provider dashboard");

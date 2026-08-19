@@ -20,6 +20,10 @@ incidents live in [Architecture Invariants](docs/Architecture_Invariants.md).
 
 ## Non-negotiable invariants
 
+### Git staging and review hygiene
+
+- Never stage or unstage files (`git add`, `git reset`, `git restore --staged`, `git commit`). Leave all git staging and commit decisions exclusively to the human user for review and learning.
+
 ### Transactions, persistence, and native image
 
 - Never perform LLM calls, network I/O, or external tool execution inside
@@ -215,3 +219,21 @@ and the memory section in `docs/Architecture_Invariants.md`.
   `rest-http/scripts/run_all_validations.sh` and child scripts through
   `rest-http/scripts/common_env.sh`.
 - The master validator must return a nonzero exit code when any suite fails.
+
+## Agent skills
+
+### Issue tracker
+
+Issues are tracked as local Markdown files under
+`.scratch/<feature-slug>/issues/`. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+The default five-role triage vocabulary is used. See
+`docs/agents/triage-labels.md`.
+
+### Domain docs
+
+This is a single-context repository using root `CONTEXT.md` when present and
+root or topic-local `Ideas-Pending/**/ADR-*.md` files for ADRs. See
+`docs/agents/domain.md`.

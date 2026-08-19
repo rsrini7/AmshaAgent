@@ -54,7 +54,7 @@ amsha:
     model: "test-model"
     gemini:
       api-key: "dummy-gemini-key"
-      model-name: "gemini-2.5-flash-lite"
+      model-name: "gemini-3.1-flash-lite"
   channel:
     telegram:
       bot-token: "mock"

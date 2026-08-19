@@ -14,9 +14,16 @@ class ProviderKeySpecsTest {
         assertNotNull(ProviderKeySpecs.llmKeySpecFor("gemini"));
         assertNotNull(ProviderKeySpecs.llmKeySpecFor("nvidia"));
         assertNotNull(ProviderKeySpecs.llmKeySpecFor("cerebras"));
+        assertNotNull(ProviderKeySpecs.llmKeySpecFor("sarvam"));
+        assertNotNull(ProviderKeySpecs.llmKeySpecFor("opencode"));
+        assertNotNull(ProviderKeySpecs.llmKeySpecFor("huggingface"));
+        assertNotNull(ProviderKeySpecs.llmKeySpecFor("mistral"));
+        assertNotNull(ProviderKeySpecs.llmKeySpecFor("cloudflare"));
+        assertNotNull(ProviderKeySpecs.llmKeySpecFor("cohere"));
         assertNotNull(ProviderKeySpecs.llmKeySpecFor("omlx"));
         assertNotNull(ProviderKeySpecs.llmKeySpecFor("generic-openai"));
         assertNull(ProviderKeySpecs.llmKeySpecFor("ollama"));
+        assertNull(ProviderKeySpecs.llmKeySpecFor("codex"));
         assertNotNull(ProviderKeySpecs.llmKeySpecFor(null));
     }
 
@@ -24,12 +31,19 @@ class ProviderKeySpecsTest {
     void testCompactionKeySpecFor() {
         assertNull(ProviderKeySpecs.compactionKeySpecFor("ollama"));
         assertNull(ProviderKeySpecs.compactionKeySpecFor("omlx"));
+        assertNull(ProviderKeySpecs.compactionKeySpecFor("codex"));
         assertNotNull(ProviderKeySpecs.compactionKeySpecFor("groq"));
         assertNotNull(ProviderKeySpecs.compactionKeySpecFor("openrouter"));
         assertNotNull(ProviderKeySpecs.compactionKeySpecFor("openai"));
         assertNotNull(ProviderKeySpecs.compactionKeySpecFor("gemini"));
         assertNotNull(ProviderKeySpecs.compactionKeySpecFor("cerebras"));
         assertNotNull(ProviderKeySpecs.compactionKeySpecFor("nvidia"));
+        assertNotNull(ProviderKeySpecs.compactionKeySpecFor("sarvam"));
+        assertNotNull(ProviderKeySpecs.compactionKeySpecFor("opencode"));
+        assertNotNull(ProviderKeySpecs.compactionKeySpecFor("huggingface"));
+        assertNotNull(ProviderKeySpecs.compactionKeySpecFor("mistral"));
+        assertNotNull(ProviderKeySpecs.compactionKeySpecFor("cloudflare"));
+        assertNotNull(ProviderKeySpecs.compactionKeySpecFor("cohere"));
         assertNotNull(ProviderKeySpecs.compactionKeySpecFor("generic-openai"));
     }
 
@@ -37,12 +51,19 @@ class ProviderKeySpecsTest {
     void testClassifierKeySpecFor() {
         assertNull(ProviderKeySpecs.classifierKeySpecFor("ollama"));
         assertNull(ProviderKeySpecs.classifierKeySpecFor("omlx"));
+        assertNull(ProviderKeySpecs.classifierKeySpecFor("codex"));
         assertNotNull(ProviderKeySpecs.classifierKeySpecFor("groq"));
         assertNotNull(ProviderKeySpecs.classifierKeySpecFor("openrouter"));
         assertNotNull(ProviderKeySpecs.classifierKeySpecFor("openai"));
         assertNotNull(ProviderKeySpecs.classifierKeySpecFor("gemini"));
         assertNotNull(ProviderKeySpecs.classifierKeySpecFor("cerebras"));
         assertNotNull(ProviderKeySpecs.classifierKeySpecFor("nvidia"));
+        assertNotNull(ProviderKeySpecs.classifierKeySpecFor("sarvam"));
+        assertNotNull(ProviderKeySpecs.classifierKeySpecFor("opencode"));
+        assertNotNull(ProviderKeySpecs.classifierKeySpecFor("huggingface"));
+        assertNotNull(ProviderKeySpecs.classifierKeySpecFor("mistral"));
+        assertNotNull(ProviderKeySpecs.classifierKeySpecFor("cloudflare"));
+        assertNotNull(ProviderKeySpecs.classifierKeySpecFor("cohere"));
         assertNotNull(ProviderKeySpecs.classifierKeySpecFor("generic-openai"));
     }
 
@@ -60,5 +81,19 @@ class ProviderKeySpecsTest {
         assertEquals("groq", ProviderKeySpecs.firstProvider(""));
         assertEquals("openai", ProviderKeySpecs.firstProvider("openai,ollama"));
         assertEquals("gemini", ProviderKeySpecs.firstProvider("gemini"));
+    }
+
+    @Test
+    void testKeylessHelpers() {
+        assertTrue(ProviderKeySpecs.isLlmKeyless("ollama"));
+        assertTrue(ProviderKeySpecs.isLlmKeyless("CODEX"));
+        assertFalse(ProviderKeySpecs.isLlmKeyless("groq"));
+        assertFalse(ProviderKeySpecs.isLlmKeyless(null));
+
+        assertTrue(ProviderKeySpecs.isCompactionClassifierKeyless("ollama"));
+        assertTrue(ProviderKeySpecs.isCompactionClassifierKeyless("omlx"));
+        assertTrue(ProviderKeySpecs.isCompactionClassifierKeyless("codex"));
+        assertFalse(ProviderKeySpecs.isCompactionClassifierKeyless("openai"));
+        assertFalse(ProviderKeySpecs.isCompactionClassifierKeyless(null));
     }
 }

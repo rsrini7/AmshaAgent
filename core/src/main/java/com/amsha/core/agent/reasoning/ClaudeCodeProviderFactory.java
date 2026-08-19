@@ -1,22 +1,18 @@
 package com.amsha.core.agent.reasoning;
 
-import dev.langchain4j.model.anthropic.AnthropicChatModel;
 import dev.langchain4j.model.chat.ChatModel;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
-import java.nio.charset.StandardCharsets;
 import java.util.Optional;
 
-import com.amsha.core.routing.ClaudeCodeOAuthTokenExtractor;
+import com.amsha.core.routing.ClaudeCodeResponsesChatModel;
+import com.amsha.core.routing.ClaudeCodeTokenResolver;
 import com.amsha.core.routing.ModelDefaults;
-import com.amsha.core.security.SecretVault;
-import com.amsha.core.security.VaultConstants;
-import com.amsha.core.security.VaultKey;
+import com.amsha.core.security.http.GovernedTransportService;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
-import org.jboss.logging.Logger;
 
 /**
  * {@link AgentChatModelProvider} for Anthropic Claude models using Claude Code CLI credentials.
@@ -25,19 +21,23 @@ import org.jboss.logging.Logger;
 @ApplicationScoped
 public class ClaudeCodeProviderFactory implements AgentChatModelProvider {
 
-    private static final Logger log = Logger.getLogger(ClaudeCodeProviderFactory.class);
-
     @Inject
     AgentLlmConfig agentConfig;
 
     @Inject
-    ClaudeCodeOAuthTokenExtractor tokenExtractor;
+    ClaudeCodeTokenResolver tokenResolver;
 
     @Inject
-    SecretVault secretVault;
+    GovernedTransportService governedTransport;
 
-    @ConfigProperty(name = "amsha.llm.model-name", defaultValue = ModelDefaults.DEFAULT_CLAUDE_CODE_MODEL)
+    @ConfigProperty(name = "amsha.llm.claude-code.model", defaultValue = ModelDefaults.DEFAULT_CLAUDE_CODE_MODEL)
     String modelName;
+
+    @ConfigProperty(name = "amsha.llm.claude-code.base-url", defaultValue = ModelDefaults.DEFAULT_CLAUDE_CODE_BASE_URL)
+    String baseUrl;
+
+    @ConfigProperty(name = "amsha.llm.claude-code.api-key")
+    Optional<String> apiKey;
 
     @Override
     public String providerName() {
@@ -60,38 +60,20 @@ public class ClaudeCodeProviderFactory implements AgentChatModelProvider {
     }
 
     private ChatModel doCreate(String overrideModel) {
-        Optional<String> token = secretVault
-                .retrieveSystemKey(VaultConstants.CLAUDE_CODE_OAUTH_TOKEN_KEY)
-                .map(VaultKey::get)
-                .map(bytes -> new String(bytes, StandardCharsets.UTF_8));
-
-        if (token.isEmpty()) {
-            token = tokenExtractor.extractToken();
-            if (token.isPresent()) {
-                secretVault.storeSystemKey(
-                        VaultConstants.CLAUDE_CODE_OAUTH_TOKEN_KEY, token.get().getBytes(StandardCharsets.UTF_8));
-                log.info("Claude Code provider: token loaded from file and stored in vault.");
-            }
-        } else {
-            log.info("Claude Code provider: token loaded from vault.");
-        }
-
-        if (token.isEmpty()) {
-            throw new IllegalStateException("Claude Code provider requires an OAuth token. "
-                    + "Please run `claude login` in your local terminal first.");
-        }
+        String token = tokenResolver.resolveToken(apiKey);
 
         String resolvedModel = overrideModel != null ? overrideModel : modelName;
         if (resolvedModel == null || resolvedModel.isBlank() || "mistral-small".equalsIgnoreCase(resolvedModel)) {
             resolvedModel = ModelDefaults.DEFAULT_CLAUDE_CODE_MODEL;
         }
 
-        return AnthropicChatModel.builder()
-                .apiKey(token.get())
-                .modelName(resolvedModel)
-                .timeout(agentConfig.timeout())
-                .logRequests(agentConfig.logHttp())
-                .logResponses(agentConfig.logHttp())
-                .build();
+        return new ClaudeCodeResponsesChatModel(
+                baseUrl,
+                token,
+                resolvedModel,
+                agentConfig.maxTokens(),
+                agentConfig.timeout(),
+                agentConfig.temperature(),
+                governedTransport);
     }
 }

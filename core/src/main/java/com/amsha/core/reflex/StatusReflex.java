@@ -7,6 +7,8 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
+import java.util.Optional;
 
 import com.amsha.core.agent.role.AgentRoleEnum;
 import com.amsha.core.domain.model.AgentCheckpoint;
@@ -16,6 +18,8 @@ import com.amsha.core.pipeline.MessageContext;
 import com.amsha.core.state.CheckpointStatus;
 import com.amsha.core.state.StatefulAgentStore;
 import com.amsha.persistence.api.CompactionStorePort;
+
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 @ApplicationScoped
 @ReflexPriority(500)
@@ -30,9 +34,22 @@ public class StatusReflex implements AgentReflex {
     @Inject
     GovernanceStrategy governanceStrategy;
 
+    @ConfigProperty(name = "amsha.llm.provider", defaultValue = "openai")
+    String provider = "openai";
+
+    @ConfigProperty(name = "amsha.llm.model")
+    Optional<String> modelName = Optional.empty();
+
     @Override
     public boolean matches(String input) {
-        return input != null && input.trim().equalsIgnoreCase("/status");
+        if (input == null) return false;
+        String trimmed = input.trim().toLowerCase(Locale.ROOT);
+        return trimmed.equals("/status")
+                || trimmed.equals("/token")
+                || trimmed.equals("/tokens")
+                || trimmed.equals("/usage")
+                || trimmed.equals("/stats")
+                || trimmed.equals("/model");
     }
 
     @Override
@@ -62,9 +79,23 @@ public class StatusReflex implements AgentReflex {
                 .orElse("Not compacted - session within active window");
 
         String shortId = sessionId.length() > 8 ? sessionId.substring(sessionId.length() - 8) : sessionId;
+        String prov = provider != null ? provider : "openai";
+        String modelDisplay =
+                (modelName != null && modelName.isPresent() && !modelName.get().isBlank())
+                        ? prov + "/" + modelName.get()
+                        : prov;
 
         String output = UserMessages.statusMessage(
-                status, cost, budgetUsd, pct, inputTokens, outputTokens, totalTokens, memoryLine, shortId);
+                status,
+                modelDisplay,
+                cost,
+                budgetUsd,
+                pct,
+                inputTokens,
+                outputTokens,
+                totalTokens,
+                memoryLine,
+                shortId);
 
         return ReflexResult.respond(output, context);
     }

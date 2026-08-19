@@ -1,3 +1,25 @@
+# GraalPy research archive
+
+> [!WARNING]
+> Superseded for Amsha integration decisions as of 2026-08-11 and closed by the
+> 2026-08-15 maintainer decision. This note contains
+> contradictory and outdated claims about Native Image, native extensions, runtime
+> package downloads, and `Context` concurrency. Use
+> [Sarvam GraalPy Phase 0 Research](Sarvam-GraalPy-Phase-0-Research.md) and
+> [SarvamAI GraalPy Feasibility](SarvamAI-GraalPy-Feasibility.md),
+> [experiment closeout](Sarvam-GraalPy-Experiment-Closeout.md), and
+> [accepted ADR](ADR-GraalPy-Integration-Boundary.md) as the evidence baseline;
+> do not use this file to justify adoption or implementation.
+
+## Archive contents
+
+- [Accepted integration-boundary ADR](ADR-GraalPy-Integration-Boundary.md)
+- [Experiment closeout and evidence ledger](Sarvam-GraalPy-Experiment-Closeout.md)
+- [Governing feasibility record](SarvamAI-GraalPy-Feasibility.md)
+- [Phase 0 research baseline](Sarvam-GraalPy-Phase-0-Research.md)
+- [Java SDK options and selected direction](Sarvam-Java-SDK-Options.md)
+- [Archived human-action packet](Sarvam-GraalPy-Phase-0-Human-Action-Packet.md)
+
 GraalPy is a high-performance, embeddable Python 3 runtime built on the GraalVM platform, primarily targeting the JVM ecosystem. It allows Python code to run inside Java applications and vice versa, making it especially useful for developers like you who work deeply within the Java/Quarkus ecosystem.
 
 ## What It Is

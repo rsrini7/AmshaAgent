@@ -42,7 +42,7 @@
     "embeddingCapable": false,
     "requiresApiKey": false,
     "authScheme": "CLI_OAUTH",
-    "hasBaseUrl": false
+    "hasBaseUrl": true
   },
   {
     "id": "openrouter",
@@ -78,12 +78,132 @@
     "hasBaseUrl": true
   },
   {
+    "id": "sarvam",
+    "name": "Sarvam AI",
+    "tag": "Indic-language models",
+    "icon": "Sa",
+    "color": "#f26a2e",
+    "defaultModel": "sarvam-105b",
+    "embeddingCapable": false,
+    "requiresApiKey": true,
+    "authScheme": "BEARER",
+    "hasBaseUrl": true
+  },
+  {
+    "id": "opencode",
+    "name": "OpenCode",
+    "tag": "OpenCode Zen / Go",
+    "icon": "OC",
+    "color": "#3b82f6",
+    "defaultModel": "deepseek-v4-flash-free",
+    "embeddingCapable": false,
+    "requiresApiKey": true,
+    "authScheme": "BEARER",
+    "hasBaseUrl": true
+  },
+  {
+    "id": "huggingface",
+    "name": "Hugging Face",
+    "tag": "Inference API / Router",
+    "icon": "HF",
+    "color": "#ffcc4d",
+    "defaultModel": "meta-llama/Llama-3.3-70B-Instruct",
+    "embeddingCapable": false,
+    "requiresApiKey": true,
+    "authScheme": "BEARER",
+    "hasBaseUrl": true
+  },
+  {
+    "id": "mistral",
+    "name": "Mistral AI",
+    "tag": "Codestral & Mistral models",
+    "icon": "MIST",
+    "color": "#fd6f00",
+    "defaultModel": "codestral-latest",
+    "embeddingCapable": false,
+    "requiresApiKey": true,
+    "authScheme": "BEARER",
+    "hasBaseUrl": true
+  },
+  {
+    "id": "cloudflare",
+    "name": "Cloudflare Workers AI",
+    "tag": "Serverless inference",
+    "icon": "CF",
+    "color": "#f38020",
+    "defaultModel": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+    "embeddingCapable": false,
+    "requiresApiKey": true,
+    "authScheme": "BEARER",
+    "hasBaseUrl": true
+  },
+  {
+    "id": "cohere",
+    "name": "Cohere",
+    "tag": "Command R+ & Enterprise",
+    "icon": "Co",
+    "color": "#39594d",
+    "defaultModel": "command-r-plus-08-2024",
+    "embeddingCapable": false,
+    "requiresApiKey": true,
+    "authScheme": "BEARER",
+    "hasBaseUrl": true
+  },
+  {
+    "id": "codex",
+    "name": "Codex CLI",
+    "tag": "ChatGPT Plus OAuth",
+    "icon": "Cx",
+    "color": "#10a37f",
+    "defaultModel": "gpt-5.6-luna",
+    "embeddingCapable": false,
+    "requiresApiKey": false,
+    "authScheme": "CLI_OAUTH",
+    "hasBaseUrl": true
+  },
+  {
+    "id": "agy",
+    "name": "Antigravity CLI",
+    "tag": "CLI OAuth / Gemini",
+    "icon": "AG",
+    "color": "#4285f4",
+    "defaultModel": "gemini-3.1-flash-lite",
+    "embeddingCapable": false,
+    "requiresApiKey": false,
+    "authScheme": "CLI_OAUTH",
+    "hasBaseUrl": true
+  },
+  {
+    "id": "kimchi",
+    "name": "Kimchi",
+    "tag": "Open-Source LLMs / Free Tier",
+    "icon": "Ki",
+    "color": "#e05638",
+    "defaultModel": "minimax-m3",
+    "embeddingCapable": false,
+    "requiresApiKey": false,
+    "authScheme": "CLI_OAUTH",
+    "hasBaseUrl": true
+  },
+  {
+    "id": "foundry",
+    "name": "Foundry Local",
+    "tag": "Local ONNX / CLI",
+    "icon": "Fn",
+    "color": "#0078d4",
+    "defaultModel": "qwen3-14b",
+    "embeddingCapable": true,
+    "requiresApiKey": false,
+    "authScheme": "NONE",
+    "hasBaseUrl": true
+  },
+  {
     "id": "gemini",
     "name": "Gemini",
     "tag": "Google AI",
     "icon": "Ge",
     "color": "#4285f4",
-    "defaultModel": "gemini-2.5-flash-lite",
+    "defaultModel": "gemini-3.1-flash-lite",
     "embeddingCapable": true,
     "requiresApiKey": true,
     "hasBaseUrl": true

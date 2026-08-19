@@ -47,7 +47,7 @@ public interface ChannelCommand {
     // Group 2: first token (id or toolName)
     // Group 3: rest of the line (optional reason)
     Pattern CMD_PATTERN = Pattern.compile(
-            "^/(start|approve|deny|status|halt|reset|history|newsession|sessions|resume|cron|crons|deletecron|list(?:tasks?)?)(?:\\s+(\\S+))?(?:\\s+(.*))?",
+            "^/(start|approve|deny|status|token|tokens|usage|stats|model|halt|reset|history|newsession|sessions|resume|cron|crons|deletecron|list(?:tasks?)?)(?:\\s+(\\S+))?(?:\\s+(.*))?",
             Pattern.CASE_INSENSITIVE);
 
     Pattern WHITESPACE_PATTERN = Pattern.compile("\\s+");
@@ -104,7 +104,7 @@ public interface ChannelCommand {
         return switch (cmd) {
             case "approve" -> new Approve(parseTargetId(optArg), parseToolName(optArg), optReason);
             case "deny" -> new Deny(parseTargetId(optArg), parseToolName(optArg), optReason);
-            case "status" -> new Status();
+            case "status", "token", "tokens", "usage", "stats", "model" -> new Status();
             case "halt" -> new Halt();
             case "reset" -> new Reset();
             case "history" -> new History();
@@ -133,13 +133,17 @@ public interface ChannelCommand {
             Pattern.compile("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$");
 
     private static Optional<String> parseTargetId(Optional<String> argOpt) {
-        // Explicit targets can be a hyphenated ID, a numeric option, or an alphanumeric prefix of at least 4 chars.
-        return argOpt.filter(
-                arg -> arg.contains("-") || arg.matches("\\d+") || (arg.length() >= 4 && arg.matches("[0-9a-fA-F]+")));
+        // Explicit targets can be a hyphenated ID, a delegated session with colons, a numeric option, or an
+        // alphanumeric prefix of at least 4 chars.
+        return argOpt.filter(arg -> arg.contains("-")
+                || arg.contains(":")
+                || arg.matches("\\d+")
+                || (arg.length() >= 4 && arg.matches("[0-9a-fA-F]+")));
     }
 
     private static Optional<String> parseToolName(Optional<String> argOpt) {
         return argOpt.filter(arg -> !arg.contains("-")
+                && !arg.contains(":")
                 && !arg.matches("\\d+")
                 && !(arg.length() >= 4 && arg.matches("[0-9a-fA-F]+"))
                 && !arg.isBlank());

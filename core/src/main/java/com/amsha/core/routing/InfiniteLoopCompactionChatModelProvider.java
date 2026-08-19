@@ -13,6 +13,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Optional;
 
 import com.amsha.core.agent.reasoning.StructuredOutputMode;
 
@@ -133,8 +134,32 @@ public class InfiniteLoopCompactionChatModelProvider {
         var config = ConfigProvider.getConfig();
         String baseUrl = resolveRequired(config, providerName, "base-url");
         String apiKey = resolveOptional(config, providerName, "api-key", "");
+        if (apiKey.isBlank()) {
+            apiKey = config.getOptionalValue("amsha.llm." + providerName + ".api-key", String.class)
+                    .or(() -> Optional.ofNullable(System.getProperty(
+                            "AMSHA_" + providerName.toUpperCase().replace('-', '_') + "_API_KEY")))
+                    .or(() -> Optional.ofNullable(
+                            System.getenv("AMSHA_" + providerName.toUpperCase().replace('-', '_') + "_API_KEY")))
+                    .orElse("");
+        }
         String model = resolveRequired(config, providerName, "model");
         int retries = resolveOptionalInt(config, providerName, "max-retries", 3);
+        String accountId = resolveOptional(config, providerName, "account-id", "");
+        if (accountId.isBlank()) {
+            accountId = config.getOptionalValue("amsha.llm." + providerName + ".account-id", String.class)
+                    .or(() -> Optional.ofNullable(System.getProperty(
+                            "AMSHA_" + providerName.toUpperCase().replace('-', '_') + "_ACCOUNT_ID")))
+                    .or(() -> Optional.ofNullable(
+                            System.getenv("AMSHA_" + providerName.toUpperCase().replace('-', '_') + "_ACCOUNT_ID")))
+                    .orElse("");
+        }
+        if (baseUrl.contains("{account_id}") && !accountId.isBlank()) {
+            String cleanAccId = sanitizeAccountId(accountId);
+            baseUrl = baseUrl.replace("{account_id}", cleanAccId);
+        }
+        baseUrl = normalizeBaseUrl(baseUrl);
+
+        StructuredOutputMode mode = resolveStructuredOutputMode(config, providerName);
 
         return new ModelAndBaseUrl(
                 modelFactory.createModel(
@@ -147,9 +172,53 @@ public class InfiniteLoopCompactionChatModelProvider {
                         retries,
                         baseUrl,
                         model,
-                        StructuredOutputMode.NATIVE,
+                        mode,
                         true),
                 baseUrl);
+    }
+
+    private static StructuredOutputMode resolveStructuredOutputMode(Config config, String providerName) {
+        String modeStr = config.getOptionalValue(CONFIG_PREFIX + providerName + ".structured-output-mode", String.class)
+                .or(() -> config.getOptionalValue("amsha.compaction.structured-output-mode", String.class))
+                .or(() -> Optional.ofNullable(System.getProperty("AMSHA_COMPACTION_STRUCTURED_OUTPUT_MODE")))
+                .or(() -> Optional.ofNullable(System.getenv("AMSHA_COMPACTION_STRUCTURED_OUTPUT_MODE")))
+                .orElse("PROMPT_DIRECTIVE");
+        try {
+            return StructuredOutputMode.valueOf(modeStr.toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException _) {
+            return StructuredOutputMode.PROMPT_DIRECTIVE;
+        }
+    }
+
+    private static String sanitizeAccountId(String rawAccId) {
+        if (rawAccId == null || rawAccId.isBlank()) return "";
+        String clean = rawAccId.trim();
+        if (clean.contains("accounts/")) {
+            clean = clean.substring(clean.indexOf("accounts/") + "accounts/".length());
+        }
+        if (clean.contains("/")) {
+            clean = clean.substring(0, clean.indexOf("/"));
+        }
+        return clean.trim();
+    }
+
+    private static String normalizeBaseUrl(String url) {
+        if (url == null || url.isBlank()) return url;
+        String normalized = url.trim();
+        // Defense for MP Config "${ENV:…/{account_id}/ai/v1}" early-'}' corruption.
+        while (normalized.endsWith("}")) {
+            normalized = normalized.substring(0, normalized.length() - 1).trim();
+        }
+        while (normalized.contains("/ai/v1/ai/v1")) {
+            normalized = normalized.replace("/ai/v1/ai/v1", "/ai/v1");
+        }
+        while (normalized.contains("/v1/v1")) {
+            normalized = normalized.replace("/v1/v1", "/v1");
+        }
+        if (normalized.indexOf('}') >= 0) {
+            throw new IllegalStateException("Cloudflare Workers AI base URL contains illegal '}': " + normalized);
+        }
+        return normalized;
     }
 
     private static String resolveRequired(Config config, String provider, String key) {
