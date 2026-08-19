@@ -34,7 +34,16 @@ public class IntentClassificationService {
             Pattern.CASE_INSENSITIVE);
 
     private static final Pattern IDENTITY_QUERY_PATTERN = Pattern.compile(
-            "\\b(who am i|my name|do you know me|user name|user identity|what i love|my hobby|my hobbies|my preference|my interests|about me|my contact|my phone|my number|my email|my address|contact num|phone num|email addr)\\b",
+            "\\b(who\\s+am\\s+i|my\\s+name|do\\s+you\\s+know\\s+me|user\\s+name|user\\s+identity|what\\s+i\\s+love|my\\s+hobby|my\\s+hobbies|my\\s+preference|my\\s+interests|about\\s+me|my\\s+contact|my\\s+phone|my\\s+number|my\\s+email|my\\s+address|contact\\s+num|phone\\s+num|email\\s+addr|"
+                    + "who\\s+(?:are|r)\\s+(?:you|u)|who\\s+(?:is|s)\\s+this|what\\s+(?:are|r)\\s+(?:you|u)|what\\s+is\\s+your\\s+name|what\\s+model|which\\s+model|tell\\s+me\\s+about\\s+yourself|what\\s+can\\s+you\\s+do|what\\s+is\\s+amsha|who\\s+is\\s+amsha|your\\s+identity|your\\s+name|your\\s+role|your\\s+purpose)\\b",
+            Pattern.CASE_INSENSITIVE);
+
+    private static final Pattern CONVERSATIONAL_PHRASE_PATTERN = Pattern.compile(
+            "^\\s*(?:how\\s+(?:are\\s+you(?:\\s+doing)?|r\\s+u|is\\s+it\\s+going|do\\s+you\\s+do)|"
+                    + "thanks(?:\\s+(?:a\\s+lot|very\\s+much|for\\s+the\\s+help))?|thank\\s+you(?:\\s+(?:so\\s+much|very\\s+much|for\\s+(?:the\\s+help|your\\s+help)))?|thx|ty|"
+                    + "ok|okay|cool|nice(?:\\s+job)?|great|awesome|got\\s+it|sounds\\s+good|perfect|sure|understood|"
+                    + "bye|goodbye|cya|see\\s+you|farewell|good\\s+night|have\\s+a\\s+(?:good|nice|great)\\s+day|"
+                    + "tell\\s+me\\s+a\\s+joke|make\\s+me\\s+laugh|show\\s+me\\s+empathy|what\\s+do\\s+you\\s+think\\??)\\s*[.!?]*$",
             Pattern.CASE_INSENSITIVE);
 
     private static final Pattern SCHEDULE_INTENT_PATTERN = Pattern.compile(
@@ -71,7 +80,8 @@ public class IntentClassificationService {
     }
 
     /**
-     * Returns true if the goal is an identity-related query requiring memory lookup.
+     * Returns true if the goal is an identity-related query requiring memory lookup
+     * or agent self-identity / capabilities.
      */
     public boolean isIdentityQuery(String text) {
         if (text == null || text.isBlank()) return false;
@@ -96,7 +106,8 @@ public class IntentClassificationService {
     }
 
     private static final Pattern GREETING_PATTERN = Pattern.compile(
-            "(?i)^\\s*(?:hi|hello|hey|howdy|hola|namaste|greetings|good\\s+(?:morning|afternoon|evening|day))(?::?[.!?]*|(?:\\s+(?:there|all|everyone|team|friend|amsha|assistant|bot|folks))?[.!?]*)?\\s*$");
+            "^\\s*(?:hi|hello|hey|howdy|hola|namaste|greetings|good\\s+(?:morning|afternoon|evening|day))(?::?[.!?]*|(?:\\s+(?:there|all|everyone|team|friend|amsha|assistant|bot|folks))?[.!?]*)?\\s*$",
+            Pattern.CASE_INSENSITIVE);
 
     /**
      * Returns true if the text is a pure greeting (e.g. "Hi", "Hello", "Hey", "Good morning").
@@ -119,14 +130,13 @@ public class IntentClassificationService {
         // §Issue 2: PII-redacted goals should be treated as simple chitchat
         if (text.contains(AgentSentinels.REDACTED_HYPHEN)) return true;
 
-        // § Bug 2: Identity queries should not be classified as chitchat because they require memory lookup
+        // Identity queries should not be classified as chitchat because they require memory lookup or persona identity
         if (isIdentityQuery(text)) return false;
 
         // Execution follow-ups must retain context and tool availability.
         if (isFollowUpHeuristic(text)) return false;
 
-        if (text.length() > 60) return false;
-        return !TOOL_VERB_PATTERN.matcher(text).find();
+        return CONVERSATIONAL_PHRASE_PATTERN.matcher(text.trim()).matches();
     }
 
     private static final Pattern FOLLOWUP_PATTERN = Pattern.compile(
