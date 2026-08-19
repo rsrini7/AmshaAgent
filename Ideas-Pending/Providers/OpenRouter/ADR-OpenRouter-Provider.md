@@ -3,7 +3,7 @@
 - **Status**: Approved
 - **Date**: 2026-08-19
 - **Provider ID**: `openrouter`
-- **Default Model**: `deepseek/deepseek-chat` (or `openai/gpt-oss-20b:free`)
+- **Default Model**: `openai/gpt-oss-20b:free`
 - **Default Base URL**: `https://openrouter.ai/api/v1`
 - **Credential Type**: `API_KEY` (`AMSHA_OPENROUTER_API_KEY`)
 

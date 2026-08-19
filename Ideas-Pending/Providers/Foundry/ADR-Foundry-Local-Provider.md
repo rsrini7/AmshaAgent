@@ -3,7 +3,7 @@
 - **Status**: Approved
 - **Date**: 2026-08-19
 - **Provider ID**: `foundry`
-- **Default Model**: `qwen3-14b` (or `phi-4-mini`, `qwen2.5-coder-7b`)
+- **Default Model**: `qwen3-14b`
 - **Default Base URL**: `http://127.0.0.1:8000/v1` (dynamically overridden by daemon port)
 - **Credential Type**: `NONE` (Keyless local provider)
 

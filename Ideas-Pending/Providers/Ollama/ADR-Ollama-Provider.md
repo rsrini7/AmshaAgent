@@ -3,7 +3,7 @@
 - **Status**: Approved
 - **Date**: 2026-08-19
 - **Provider ID**: `ollama`
-- **Default Model**: `mistral-small:latest` (or `llama3.2:3b`, `qwen2.5-coder:7b`)
+- **Default Model**: `mistral-small:latest`
 - **Default Base URL**: `http://localhost:11434`
 - **Credential Type**: `NONE` (Keyless local provider)
 

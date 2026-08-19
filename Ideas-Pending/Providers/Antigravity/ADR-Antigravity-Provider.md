@@ -3,7 +3,7 @@
 - **Status**: Approved
 - **Date**: 2026-08-19
 - **Provider ID**: `agy`
-- **Default Model**: `gemini-3.1-flash-lite` (or `gemini-2.5-pro`)
+- **Default Model**: `gemini-3.1-flash-lite`
 - **Default Base URL**: `https://generativelanguage.googleapis.com/v1beta/openai`
 - **Credential Type**: `CLI_OAUTH` / Direct API Key
 
