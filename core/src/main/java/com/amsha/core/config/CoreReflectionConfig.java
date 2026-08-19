@@ -32,6 +32,10 @@ import com.amsha.core.routing.ClaudeCodeTokenResolver;
 import com.amsha.core.routing.CodexOAuthTokenExtractor;
 import com.amsha.core.routing.CodexResponsesChatModel;
 import com.amsha.core.routing.CodexTokenResolver;
+import com.amsha.core.routing.FoundryCliExecutor;
+import com.amsha.core.routing.FoundryDiscoveryHelper;
+import com.amsha.core.routing.FoundryLlmProviderFactory;
+import com.amsha.core.routing.FoundryResponsesChatModel;
 import com.amsha.core.routing.KimchiLlmProviderFactory;
 import com.amsha.core.routing.KimchiOAuthTokenExtractor;
 import com.amsha.core.routing.KimchiResponsesChatModel;
@@ -179,7 +183,11 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             KimchiOAuthTokenExtractor.class,
             KimchiTokenResolver.class,
             KimchiLlmProviderFactory.class,
-            KimchiResponsesChatModel.class
+            KimchiResponsesChatModel.class,
+            FoundryDiscoveryHelper.class,
+            FoundryCliExecutor.class,
+            FoundryLlmProviderFactory.class,
+            FoundryResponsesChatModel.class
         },
         classNames = {
             "com.amsha.core.routing.provider.StaticProviderCatalogAdapter$RawProvider",

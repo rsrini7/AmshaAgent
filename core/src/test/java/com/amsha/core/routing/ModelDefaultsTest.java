@@ -14,6 +14,7 @@ class ModelDefaultsTest {
         assertEquals(ModelDefaults.DEFAULT_CLAUDE_CODE_MODEL, ModelDefaults.defaultModelForProvider("claude-code"));
         assertEquals(ModelDefaults.DEFAULT_AGY_MODEL, ModelDefaults.defaultModelForProvider("agy"));
         assertEquals(ModelDefaults.DEFAULT_KIMCHI_MODEL, ModelDefaults.defaultModelForProvider("kimchi"));
+        assertEquals(ModelDefaults.DEFAULT_FOUNDRY_MODEL, ModelDefaults.defaultModelForProvider("foundry"));
         assertEquals(ModelDefaults.DEFAULT_GEMINI_MODEL, ModelDefaults.defaultModelForProvider("gemini"));
         assertEquals(ModelDefaults.DEFAULT_SARVAM_MODEL, ModelDefaults.defaultModelForProvider("sarvam"));
         assertEquals(ModelDefaults.DEFAULT_OPENCODE_MODEL, ModelDefaults.defaultModelForProvider("opencode"));
@@ -60,6 +61,7 @@ class ModelDefaultsTest {
                 "https://generativelanguage.googleapis.com/v1beta/openai",
                 ModelDefaults.defaultBaseUrlForProvider("agy"));
         assertEquals(ModelDefaults.DEFAULT_KIMCHI_BASE_URL, ModelDefaults.defaultBaseUrlForProvider("kimchi"));
+        assertEquals(ModelDefaults.DEFAULT_FOUNDRY_BASE_URL, ModelDefaults.defaultBaseUrlForProvider("foundry"));
         assertEquals("", ModelDefaults.defaultBaseUrlForProvider(null));
         assertEquals("", ModelDefaults.defaultBaseUrlForProvider("unknown"));
     }

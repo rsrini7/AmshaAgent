@@ -44,7 +44,8 @@ public class LlmValidationService implements LlmValidationGateway {
         try {
             if (!ModelDefaults.PROVIDER_CLAUDE_CODE.equals(provider)
                     && !ModelDefaults.PROVIDER_CODEX.equals(provider)
-                    && !ModelDefaults.PROVIDER_AGY.equals(provider)) {
+                    && !ModelDefaults.PROVIDER_AGY.equals(provider)
+                    && !ModelDefaults.PROVIDER_FOUNDRY.equals(provider)) {
                 vault.storeSystemKey(VaultConstants.LLM_API_KEY, apiKey.getBytes(StandardCharsets.UTF_8));
             }
             String effectiveBaseUrl =
@@ -63,6 +64,7 @@ public class LlmValidationService implements LlmValidationGateway {
                         case ModelDefaults.PROVIDER_CODEX -> ModelDefaults.DEFAULT_CODEX_BASE_URL;
                         case ModelDefaults.PROVIDER_AGY -> ModelDefaults.DEFAULT_AGY_BASE_URL;
                         case ModelDefaults.PROVIDER_KIMCHI -> ModelDefaults.DEFAULT_KIMCHI_BASE_URL;
+                        case ModelDefaults.PROVIDER_FOUNDRY -> ModelDefaults.DEFAULT_FOUNDRY_BASE_URL;
                         case ModelDefaults.PROVIDER_GEMINI -> ModelDefaults.DEFAULT_GEMINI_BASE_URL;
                         case ModelDefaults.PROVIDER_OLLAMA -> ModelDefaults.DEFAULT_OLLAMA_BASE_URL;
                         case ModelDefaults.PROVIDER_NVIDIA -> ModelDefaults.DEFAULT_NVIDIA_BASE_URL;

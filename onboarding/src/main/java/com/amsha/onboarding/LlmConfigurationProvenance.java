@@ -100,6 +100,9 @@ public class LlmConfigurationProvenance {
                     ModelDefaults.PROVIDER_KIMCHI,
                     new EnvironmentSpec("AMSHA_KIMCHI_MODEL", "AMSHA_KIMCHI_BASE_URL", "AMSHA_KIMCHI_API_KEY")),
             Map.entry(
+                    ModelDefaults.PROVIDER_FOUNDRY,
+                    new EnvironmentSpec("AMSHA_FOUNDRY_MODEL", "AMSHA_FOUNDRY_BASE_URL", "")),
+            Map.entry(
                     ModelDefaults.PROVIDER_GEMINI,
                     new EnvironmentSpec("AMSHA_GEMINI_MODEL", "", "AMSHA_GEMINI_API_KEY")),
             Map.entry(ModelDefaults.PROVIDER_OMLX, new EnvironmentSpec("AMSHA_OMLX_MODEL", "AMSHA_OMLX_BASE_URL", "")),

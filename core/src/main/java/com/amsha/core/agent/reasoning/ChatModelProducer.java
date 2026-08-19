@@ -51,6 +51,7 @@ public class ChatModelProducer {
             Map.entry(ModelDefaults.PROVIDER_CLAUDE_CODE, ModelDefaults.DEFAULT_CLAUDE_CODE_BASE_URL),
             Map.entry(ModelDefaults.PROVIDER_AGY, ModelDefaults.DEFAULT_AGY_BASE_URL),
             Map.entry(ModelDefaults.PROVIDER_KIMCHI, ModelDefaults.DEFAULT_KIMCHI_BASE_URL),
+            Map.entry(ModelDefaults.PROVIDER_FOUNDRY, ModelDefaults.DEFAULT_FOUNDRY_BASE_URL),
             Map.entry(ModelDefaults.PROVIDER_GEMINI, ModelDefaults.DEFAULT_GEMINI_BASE_URL),
             Map.entry(ModelDefaults.PROVIDER_GENERIC_OPENAI, ""));
 

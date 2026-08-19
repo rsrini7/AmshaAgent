@@ -26,6 +26,7 @@ class AgentProviderFactoryCoverageTest {
                 AgyProviderFactory.class,
                 CerebrasProviderFactory.class,
                 ClaudeCodeProviderFactory.class,
+                FoundryProviderFactory.class,
                 GeminiProviderFactory.class,
                 GenericOpenAiProviderFactory.class,
                 GroqProviderFactory.class,

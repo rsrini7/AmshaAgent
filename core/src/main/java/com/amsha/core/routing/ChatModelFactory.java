@@ -35,21 +35,16 @@ import io.quarkus.arc.InstanceHandle;
  * Shared factory for building LangChain4j ChatModel instances.
  * Consolidates the OpenAiChatModel builder pattern previously duplicated across
  * every RoutingChatModelProvider and AgentChatModelProvider implementation.
- * New providers should use these methods instead of repeating builder calls.
  */
 public final class ChatModelFactory {
 
     private static final Logger LOG = Logger.getLogger(ChatModelFactory.class);
-
-    /** Matches headroom proxy ports 8788–8797 (e.g. {@code :8789}). */
     private static final Pattern HEADROOM_PORT_PATTERN = Pattern.compile(":87[89]\\d");
+    private static final ObjectMapper EXTRA_BODY_MAPPER = new ObjectMapper();
 
     private ChatModelFactory() {}
 
-    /**
-     * Creates an {@link OpenAiChatModel} builder with the given parameters.
-     * Caller may further customize (customHeaders, responseFormat, etc.) before {@code build()}.
-     */
+    /** Creates an {@link OpenAiChatModel} builder with the given parameters. */
     public static OpenAiChatModel.OpenAiChatModelBuilder openAiBuilder(
             String baseUrl,
             String apiKey,
@@ -72,20 +67,13 @@ public final class ChatModelFactory {
                 .logResponses(logResponses);
     }
 
-    /**
-     * Applies {@link ResponseFormat#JSON} when the model supports native structured output
-     * and no tools are needed (toolless mode). Used by intent-classifier and compaction models.
-     */
+    /** Applies JSON format when model supports native structured output and toolless mode is active. */
     public static void applyJsonResponseFormat(
             OpenAiChatModel.OpenAiChatModelBuilder builder, StructuredOutputMode mode, boolean toolless) {
         applyJsonResponseFormat(builder, mode, toolless, null);
     }
 
-    /**
-     * Applies {@link ResponseFormat#JSON} when the model supports native structured output
-     * and no tools are needed (toolless mode). Used by intent-classifier and compaction models.
-     * Bypasses JSON mode if the base URL routes through any Headroom proxy (ports 8788–8797).
-     */
+    /** Applies JSON format when model supports native structured output and toolless mode is active. */
     public static void applyJsonResponseFormat(
             OpenAiChatModel.OpenAiChatModelBuilder builder,
             StructuredOutputMode mode,
@@ -100,7 +88,6 @@ public final class ChatModelFactory {
         }
     }
 
-    /** Returns {@code true} if the URL routes through a Headroom proxy instance. */
     private static boolean isHeadroomProxyUrl(String url) {
         if (url == null) return false;
         String lower = url.toLowerCase();
@@ -108,10 +95,7 @@ public final class ChatModelFactory {
                 || HEADROOM_PORT_PATTERN.matcher(lower).find();
     }
 
-    /**
-     * Convenience: builds an OpenAI-compatible ChatModel from an {@link LlmModelConfig}.
-     * Used by RoutingChatModelProvider implementations that need no custom headers.
-     */
+    /** Convenience: builds an OpenAI-compatible ChatModel from an {@link LlmModelConfig}. */
     public static ChatModel createFromConfig(LlmModelConfig config) {
         return openAiBuilder(
                         config.baseUrl(),
@@ -128,10 +112,7 @@ public final class ChatModelFactory {
                 .build();
     }
 
-    /**
-     * Convenience: builds an OpenAI-compatible ChatModel from direct parameters.
-     * Used by AgentChatModelProvider implementations.
-     */
+    /** Convenience: builds an OpenAI-compatible ChatModel from direct parameters. */
     public static ChatModel createOpenAi(
             String baseUrl,
             String apiKey,
@@ -144,10 +125,7 @@ public final class ChatModelFactory {
         return createOpenAi(baseUrl, apiKey, modelName, maxTokens, timeout, maxRetries, temperature, logHttp, Map.of());
     }
 
-    /**
-     * Builds an OpenAI-compatible ChatModel with optional custom request parameters.
-     * Used by AgentChatModelProvider implementations that need extra body params (e.g. enable_thinking).
-     */
+    /** Builds an OpenAI-compatible ChatModel with optional custom request parameters. */
     public static ChatModel createOpenAi(
             String baseUrl,
             String apiKey,
@@ -168,44 +146,25 @@ public final class ChatModelFactory {
         return builder.build();
     }
 
-    /**
-     * Applies OpenRouter-specific HTTP-Referer and X-Title headers to a builder.
-     */
+    /** Applies OpenRouter-specific HTTP-Referer and X-Title headers to a builder. */
     public static OpenAiChatModel.OpenAiChatModelBuilder withOpenRouterHeaders(
             OpenAiChatModel.OpenAiChatModelBuilder builder, String siteUrl, String appName) {
         return builder.customHeaders(Map.of("HTTP-Referer", siteUrl, "X-Title", appName));
     }
 
-    /**
-     * Check if the model name is a DeepSeek thinking-capable model that defaults to
-     * thinking mode and returns {@code reasoning_content}.
-     *
-     * <p>DeepSeek v4 and r1 series default to thinking mode. This causes 400 errors
-     * in OpenAI-compatible clients that do not passthrough {@code reasoning_content}.
-     */
+    /** Check if model name defaults to thinking mode and returns {@code reasoning_content}. */
     public static boolean isDeepSeekThinkingModel(String modelName) {
         if (modelName == null || modelName.isBlank()) return false;
         String lower = modelName.trim().toLowerCase();
         return lower.contains("deepseek-v") || lower.contains("deepseek-r");
     }
 
-    /**
-     * Returns a map with DeepSeek thinking workaround ({@code thinking: {type: "disabled"}})
-     * if the model is a DeepSeek v4/thinking model, otherwise {@code null}.
-     */
+    /** Returns map with DeepSeek thinking workaround if model is DeepSeek thinking-capable. */
     public static Map<String, Object> deepSeekWorkaroundParams(String modelName) {
-        if (isDeepSeekThinkingModel(modelName)) {
-            return Map.of("thinking", Map.of("type", "disabled"));
-        }
-        return Map.of();
+        return isDeepSeekThinkingModel(modelName) ? Map.of("thinking", Map.of("type", "disabled")) : Map.of();
     }
 
-    private static final ObjectMapper EXTRA_BODY_MAPPER = new ObjectMapper();
-
-    /**
-     * Parses a JSON string from {@code AMSHA_GENERIC_OPENAI_EXTRA_BODY} into a map.
-     * Returns {@code null} if blank or unparseable (logs a warning).
-     */
+    /** Parses a JSON string from {@code AMSHA_GENERIC_OPENAI_EXTRA_BODY} into a map. */
     public static Map<String, Object> parseExtraBody(String json) {
         if (json == null || json.isBlank()) return Map.of();
         try {
@@ -216,101 +175,57 @@ public final class ChatModelFactory {
         }
     }
 
-    /**
-     * Merges auto-detected custom parameters with user-supplied extra-body params.
-     * User values win on key collision. Returns an empty map when both inputs are empty.
-     */
+    /** Merges auto-detected custom parameters with user-supplied extra-body params. */
     public static Map<String, Object> mergeCustomParameters(Map<String, Object> auto, Map<String, Object> user) {
-        if (auto == null || auto.isEmpty()) {
-            return user == null ? Map.of() : user;
-        }
-        if (user == null || user.isEmpty()) {
-            return auto;
-        }
+        if (auto == null || auto.isEmpty()) return user == null ? Map.of() : user;
+        if (user == null || user.isEmpty()) return auto;
         HashMap<String, Object> merged = new HashMap<>(auto);
         merged.putAll(user);
         return merged;
     }
 
-    /**
-     * Builds a list of MultiModelChatModel.ModelEntry from comma-separated API keys and model names.
-     * Pairing rules:
-     * - Single key + single model → 1 entry
-     * - Multiple keys + single model → one entry per key (same model)
-     * - Single key + multiple models → one entry per model (same key)
-     * - Multiple keys + multiple models → paired by index (zip, up to shorter list)
-     *
-     * @param keys comma-separated API keys
-     * @param models comma-separated model names
-     * @param providerName for logging
-     * @param modelFactory function that creates a ChatModel from (apiKey, modelName)
-     * @return list of ModelEntry, never empty
-     */
+    /** Builds a list of MultiModelChatModel.ModelEntry from comma-separated API keys and model names. */
     public static List<MultiModelChatModel.ModelEntry> buildMultiModelEntries(
             String keys, String models, String providerName, BiFunction<String, String, ChatModel> modelFactory) {
-        String[] keyArr = keys.split(",", -1);
-        String[] modelArr = models.split(",", -1);
-
-        // Trim and filter empty values
-        keyArr = Arrays.stream(keyArr)
+        String[] keyArr = Arrays.stream(keys.split(",", -1))
                 .map(String::trim)
                 .filter(s -> !s.isEmpty())
                 .toArray(String[]::new);
-        modelArr = Arrays.stream(modelArr)
+        String[] modelArr = Arrays.stream(models.split(",", -1))
                 .map(String::trim)
                 .filter(s -> !s.isEmpty())
                 .toArray(String[]::new);
 
         List<MultiModelChatModel.ModelEntry> entries = new ArrayList<>();
-
         if (keyArr.length == 1 && modelArr.length == 1) {
-            // Single key + single model
             entries.add(new MultiModelChatModel.ModelEntry(providerName, modelFactory.apply(keyArr[0], modelArr[0])));
         } else if (keyArr.length > 1 && modelArr.length == 1) {
-            // Multiple keys, single model
             for (int i = 0; i < keyArr.length; i++) {
-                String label = providerName + "-key" + (i + 1);
-                entries.add(new MultiModelChatModel.ModelEntry(label, modelFactory.apply(keyArr[i], modelArr[0])));
+                entries.add(new MultiModelChatModel.ModelEntry(
+                        providerName + "-key" + (i + 1), modelFactory.apply(keyArr[i], modelArr[0])));
             }
         } else if (keyArr.length == 1 && modelArr.length > 1) {
-            // Single key, multiple models
-            for (int i = 0; i < modelArr.length; i++) {
-                String label = providerName + "-" + modelArr[i];
-                entries.add(new MultiModelChatModel.ModelEntry(label, modelFactory.apply(keyArr[0], modelArr[i])));
+            for (String m : modelArr) {
+                entries.add(
+                        new MultiModelChatModel.ModelEntry(providerName + "-" + m, modelFactory.apply(keyArr[0], m)));
             }
         } else {
-            // Multiple keys AND models — pair by index
             int len = Math.min(keyArr.length, modelArr.length);
             if (keyArr.length != modelArr.length) {
-                Logger.getLogger(ChatModelFactory.class)
-                        .warnf(
-                                "Provider %s: %d API keys but %d models — pairing by index (using first %d)",
-                                providerName, keyArr.length, modelArr.length, len);
+                LOG.warnf(
+                        "Provider %s: %d keys but %d models — pairing by index (using first %d)",
+                        providerName, keyArr.length, modelArr.length, len);
             }
             for (int i = 0; i < len; i++) {
-                String label = providerName + "-key" + (i + 1) + "/" + modelArr[i];
-                entries.add(new MultiModelChatModel.ModelEntry(label, modelFactory.apply(keyArr[i], modelArr[i])));
+                entries.add(new MultiModelChatModel.ModelEntry(
+                        providerName + "-key" + (i + 1) + "/" + modelArr[i],
+                        modelFactory.apply(keyArr[i], modelArr[i])));
             }
         }
-
         return entries;
     }
 
-    /**
-     * Builds a {@link ChatModel} for a resolved profile credential, honoring the persisted provider
-     * adapter ID. OpenAI-compatible adapters (groq, openai, openrouter, cerebras, nvidia, omlx,
-     * generic-openai, llamacpp, etc.) use the OpenAI chat protocol; gemini, anthropic/claude, and
-     * ollama use their native LangChain4j builders. This is the runtime factory path required by the
-     * onboarding ADR: clients are built from a short-lived, closable credential view rather than the
-     * deployment {@code AgentChatModelProvider.create(model)} path that reads deployment config.
-     *
-     * @param adapterId the persisted provider adapter ID (e.g. "openai", "gemini", "anthropic")
-     * @param baseUrl   resolved base URL (adapter default or connection customBaseUrl)
-     * @param apiKey    plaintext key from the closable {@link com.amsha.core.routing.ResolvedCredential}
-     * @param model     model id from the resolved profile
-     * @param config    shared LLM tuning config
-     * @return a configured ChatModel
-     */
+    /** Builds a {@link ChatModel} for a resolved profile credential. */
     public static ChatModel createForAdapter(
             String adapterId, String baseUrl, String apiKey, String model, AgentLlmConfig config) {
         String adapter = adapterId == null ? "" : adapterId.toLowerCase();
@@ -320,6 +235,7 @@ public final class ChatModelFactory {
             case "claude-code" -> createClaudeCode(baseUrl, apiKey, model, config);
             case "agy", "antigravity" -> createAgy(baseUrl, apiKey, model, config);
             case "kimchi" -> createKimchi(baseUrl, apiKey, model, config);
+            case "foundry", "foundrylocal" -> createFoundry(baseUrl, model, config);
             case "ollama" -> createOllama(baseUrl, model, config);
             case "codex" -> createCodex(baseUrl, apiKey, null, model, config);
             default ->
@@ -340,9 +256,7 @@ public final class ChatModelFactory {
             ArcContainer container = Arc.container();
             if (container != null) {
                 InstanceHandle<GovernedTransportService> handle = container.instance(GovernedTransportService.class);
-                if (handle.isAvailable()) {
-                    return handle.get();
-                }
+                if (handle.isAvailable()) return handle.get();
             }
         } catch (Exception _) {
             // CDI not active
@@ -350,7 +264,7 @@ public final class ChatModelFactory {
         return null;
     }
 
-    /** Builds an Antigravity/AGY ChatModel (direct Gemini API endpoint supporting CLI OAuth / API keys). */
+    /** Builds an Antigravity/AGY ChatModel. */
     public static ChatModel createAgy(String baseUrl, String token, String model, AgentLlmConfig config) {
         return createAgy(baseUrl, token, model, config, resolveGovernedTransport());
     }
@@ -362,10 +276,9 @@ public final class ChatModelFactory {
             String model,
             AgentLlmConfig config,
             GovernedTransportService governedTransport) {
-        String modelName = model;
-        if (modelName == null || modelName.isBlank() || "mistral-small".equalsIgnoreCase(modelName)) {
-            modelName = ModelDefaults.DEFAULT_AGY_MODEL;
-        }
+        String modelName = (model == null || model.isBlank() || "mistral-small".equalsIgnoreCase(model))
+                ? ModelDefaults.DEFAULT_AGY_MODEL
+                : model;
         return new AgyResponsesChatModel(
                 baseUrl,
                 token,
@@ -376,7 +289,7 @@ public final class ChatModelFactory {
                 governedTransport != null ? governedTransport : resolveGovernedTransport());
     }
 
-    /** Builds a Claude Code ChatModel (direct Anthropic Messages endpoint supporting CLI OAuth / API keys). */
+    /** Builds a Claude Code ChatModel. */
     public static ChatModel createClaudeCode(String baseUrl, String token, String model, AgentLlmConfig config) {
         return createClaudeCode(baseUrl, token, model, config, resolveGovernedTransport());
     }
@@ -388,10 +301,9 @@ public final class ChatModelFactory {
             String model,
             AgentLlmConfig config,
             GovernedTransportService governedTransport) {
-        String modelName = model;
-        if (modelName == null || modelName.isBlank() || "mistral-small".equalsIgnoreCase(modelName)) {
-            modelName = ModelDefaults.DEFAULT_CLAUDE_CODE_MODEL;
-        }
+        String modelName = (model == null || model.isBlank() || "mistral-small".equalsIgnoreCase(model))
+                ? ModelDefaults.DEFAULT_CLAUDE_CODE_MODEL
+                : model;
         return new ClaudeCodeResponsesChatModel(
                 baseUrl,
                 token,
@@ -402,7 +314,7 @@ public final class ChatModelFactory {
                 governedTransport != null ? governedTransport : resolveGovernedTransport());
     }
 
-    /** Builds a Codex ChatModel (direct ChatGPT Plus Responses endpoint or OpenAI proxy). */
+    /** Builds a Codex ChatModel. */
     public static ChatModel createCodex(
             String baseUrl, String token, String accountId, String model, AgentLlmConfig config) {
         return createCodex(
@@ -477,7 +389,6 @@ public final class ChatModelFactory {
                 .timeout(config.timeout())
                 .logRequests(config.logHttp())
                 .logResponses(config.logHttp());
-        // Honor a persisted custom endpoint; otherwise the adapter default is used.
         if (baseUrl != null && !baseUrl.isBlank()) {
             builder.baseUrl(Optional.of(baseUrl));
         }
@@ -493,7 +404,6 @@ public final class ChatModelFactory {
                 .timeout(config.timeout())
                 .logRequests(config.logHttp())
                 .logResponses(config.logHttp());
-        // Honor a persisted custom endpoint; otherwise the Anthropic default is used.
         if (baseUrl != null && !baseUrl.isBlank()) {
             builder.baseUrl(baseUrl);
         }
@@ -512,7 +422,7 @@ public final class ChatModelFactory {
                 .build();
     }
 
-    /** Builds a Kimchi ChatModel (direct OpenAI-compatible endpoint with required kimchi User-Agent). */
+    /** Builds a Kimchi ChatModel. */
     public static ChatModel createKimchi(String baseUrl, String token, String model, AgentLlmConfig config) {
         return createKimchi(baseUrl, token, model, config, resolveGovernedTransport());
     }
@@ -524,13 +434,32 @@ public final class ChatModelFactory {
             String model,
             AgentLlmConfig config,
             GovernedTransportService governedTransport) {
-        String modelName = model;
-        if (modelName == null || modelName.isBlank() || "mistral-small".equalsIgnoreCase(modelName)) {
-            modelName = ModelDefaults.DEFAULT_KIMCHI_MODEL;
-        }
+        String modelName = (model == null || model.isBlank() || "mistral-small".equalsIgnoreCase(model))
+                ? ModelDefaults.DEFAULT_KIMCHI_MODEL
+                : model;
         return new KimchiResponsesChatModel(
                 baseUrl,
                 token,
+                modelName,
+                config.maxTokens(),
+                config.timeout(),
+                config.temperature(),
+                governedTransport != null ? governedTransport : resolveGovernedTransport());
+    }
+
+    /** Builds a Microsoft Foundry Local ChatModel. */
+    public static ChatModel createFoundry(String baseUrl, String model, AgentLlmConfig config) {
+        return createFoundry(baseUrl, model, config, resolveGovernedTransport());
+    }
+
+    /** Builds a Microsoft Foundry Local ChatModel with explicit governed transport. */
+    public static ChatModel createFoundry(
+            String baseUrl, String model, AgentLlmConfig config, GovernedTransportService governedTransport) {
+        String modelName = (model == null || model.isBlank() || "mistral-small".equalsIgnoreCase(model))
+                ? ModelDefaults.DEFAULT_FOUNDRY_MODEL
+                : model;
+        return new FoundryResponsesChatModel(
+                baseUrl,
                 modelName,
                 config.maxTokens(),
                 config.timeout(),

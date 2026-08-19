@@ -629,6 +629,29 @@ class LlmConfigurationProvenanceTest {
         assertTrue(resolution.ready());
     }
 
+    @Test
+    void foundryKeylessProviderDoesNotRequireSecret() {
+        LlmConfigurationProvenance provenance = provenanceFor("foundry", false, Map.of());
+        when(provenance.providerCatalog.descriptor("foundry"))
+                .thenReturn(Optional.of(new LlmProviderDescriptor(
+                        "foundry",
+                        "Foundry Local",
+                        "foundry",
+                        "NONE",
+                        "http://127.0.0.1:8000/v1",
+                        false,
+                        false,
+                        List.of(new ModelEntry("qwen3-14b", "Qwen3 14B", null)),
+                        Map.of())));
+
+        LlmConfigurationProvenance.Resolution resolution = provenance.resolve();
+
+        assertEquals("foundry", resolution.effectiveProvider());
+        assertEquals(LlmConfigurationProvenance.CREDENTIAL_NOT_REQUIRED, resolution.credentialState());
+        assertEquals(LlmConfigurationProvenance.SOURCE_NONE, resolution.credentialSource());
+        assertTrue(resolution.ready());
+    }
+
     private static LlmConfigurationProvenance provenanceFor(
             String provider, boolean vaultPriority, Map<String, String> values) {
         LlmConfigurationProvenance provenance = new LlmConfigurationProvenance();

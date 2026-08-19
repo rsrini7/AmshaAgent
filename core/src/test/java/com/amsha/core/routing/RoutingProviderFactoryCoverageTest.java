@@ -17,6 +17,7 @@ class RoutingProviderFactoryCoverageTest {
         return Stream.of(
                 new AgyProviderFactory(),
                 new CerebrasLlmProviderFactory(),
+                new FoundryLlmProviderFactory(),
                 new GeminiLlmProviderFactory(),
                 new GenericOpenAiLlmProviderFactory(),
                 new GroqLlmProviderFactory(),

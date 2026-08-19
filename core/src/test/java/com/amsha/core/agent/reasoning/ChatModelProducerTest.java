@@ -156,9 +156,15 @@ class ChatModelProducerTest {
     }
 
     @Test
+    void providerBaseUrls_containsFoundry() throws Exception {
+        Map<String, String> urls = getProviderBaseUrls();
+        assertEquals(ModelDefaults.DEFAULT_FOUNDRY_BASE_URL, urls.get("foundry"));
+    }
+
+    @Test
     void providerBaseUrls_hasExpectedCount() throws Exception {
         Map<String, String> urls = getProviderBaseUrls();
-        assertEquals(20, urls.size());
+        assertEquals(22, urls.size());
     }
 
     @Test

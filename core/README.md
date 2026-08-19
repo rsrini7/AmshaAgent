@@ -28,6 +28,7 @@ reflexes, safety guards, tool interfaces, and built-in LLM providers.
 | Claude Code | `claude-code` | `claude-sonnet-4-5` | `https://api.anthropic.com` |
 | Antigravity CLI | `agy` | `gemini-3.1-flash-lite` | `https://generativelanguage.googleapis.com/v1beta/openai` |
 | Kimchi | `kimchi` | `minimax-m3` | `https://llm.kimchi.dev/openai/v1` |
+| Foundry Local | `foundry` | `qwen3-14b` | `http://127.0.0.1:8000/v1` (or dynamic daemon port) |
 | Gemini | `gemini` | `gemini-3.1-flash-lite` | `https://generativelanguage.googleapis.com/v1beta` |
 | OMLX | `omlx` | `mlx-community/Qwen3.6-35B-A3B-4bit` | `http://127.0.0.1:8000/v1` |
 | Llama.cpp | `llamacpp` | `qwen3` | `http://127.0.0.1:9000/v1` |
@@ -183,6 +184,19 @@ The `kimchi` provider integrates with `https://llm.kimchi.dev/openai/v1` and aut
 | `amsha.classifier.kimchi.api-key` | `AMSHA_CLASSIFIER_KIMCHI_API_KEY` | — | Kimchi API key for classifier slot |
 | `amsha.classifier.kimchi.model` | `AMSHA_CLASSIFIER_KIMCHI_MODEL` | `minimax-m3` | Classifier slot model |
 | `amsha.classifier.kimchi.base-url` | `AMSHA_CLASSIFIER_KIMCHI_BASE_URL` | `https://llm.kimchi.dev/openai/v1` | Classifier slot base URL |
+
+## Foundry Local Configuration
+
+The `foundry` provider integrates with Microsoft Foundry Local daemon (`foundry server`) and CLI (`foundry complete`). It automatically discovers the running daemon port from `~/.foundry/daemon.json` and seamlessly falls back to CLI execution if the HTTP daemon is stopped.
+
+| Property | Env Var | Default | Description |
+|---|---|---|---|
+| `amsha.llm.foundry.base-url` | `AMSHA_FOUNDRY_BASE_URL` | `http://127.0.0.1:8000/v1` | Foundry Local HTTP API endpoint (or dynamic daemon port) |
+| `amsha.llm.foundry.model` | `AMSHA_FOUNDRY_MODEL` | `qwen3-14b` | Default chat model |
+| `amsha.compaction.foundry.model` | `AMSHA_COMPACTION_FOUNDRY_MODEL` | `qwen3-14b` | Compaction slot model |
+| `amsha.compaction.foundry.base-url` | `AMSHA_COMPACTION_FOUNDRY_BASE_URL` | `http://127.0.0.1:8000/v1` | Compaction slot base URL |
+| `amsha.classifier.foundry.model` | `AMSHA_CLASSIFIER_FOUNDRY_MODEL` | `qwen3-14b` | Classifier slot model |
+| `amsha.classifier.foundry.base-url` | `AMSHA_CLASSIFIER_FOUNDRY_BASE_URL` | `http://127.0.0.1:8000/v1` | Classifier slot base URL |
 
 ## Testing
 

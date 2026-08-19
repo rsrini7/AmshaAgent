@@ -16,9 +16,10 @@ import java.util.Set;
  */
 public final class ProviderKeySpecs {
 
-    public static final Set<String> LLM_KEYLESS_PROVIDERS = Set.of("ollama", "codex", "claude-code", "agy", "kimchi");
+    public static final Set<String> LLM_KEYLESS_PROVIDERS =
+            Set.of("ollama", "codex", "claude-code", "agy", "kimchi", "foundry");
     public static final Set<String> COMPACTION_CLASSIFIER_KEYLESS_PROVIDERS =
-            Set.of("ollama", "omlx", "codex", "claude-code", "agy", "kimchi");
+            Set.of("ollama", "omlx", "codex", "claude-code", "agy", "kimchi", "foundry");
 
     private ProviderKeySpecs() {
         // utility class

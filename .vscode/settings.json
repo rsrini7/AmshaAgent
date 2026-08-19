@@ -20,7 +20,7 @@
     "microprofile.tools.validation.unassigned.excluded": [
         "amsha.api.keys"
     ],
-    "java.jdt.ls.vmargs": "-XX:GCTimeRatio=4 -XX:AdaptiveSizePolicyWeight=90 -Dsun.zip.disableMemoryMapping=true -Xmx6G -Xms100m",
+    "java.jdt.ls.vmargs": "-XX:GCTimeRatio=4 -XX:AdaptiveSizePolicyWeight=90 -Dsun.zip.disableMemoryMapping=true -Xmx12G -Xms100m",
     "java.import.exclusions": [
         "**/target/**",
         "**/.tox/**",

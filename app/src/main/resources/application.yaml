@@ -373,6 +373,9 @@ amsha:
       api-key: "${AMSHA_CLASSIFIER_KIMCHI_API_KEY:${AMSHA_KIMCHI_API_KEY:}}"
       base-url: "${AMSHA_CLASSIFIER_KIMCHI_BASE_URL:https://llm.kimchi.dev/openai/v1}"
       model: "${AMSHA_CLASSIFIER_KIMCHI_MODEL:minimax-m3}"
+    foundry:
+      base-url: "${AMSHA_CLASSIFIER_FOUNDRY_BASE_URL:${AMSHA_FOUNDRY_BASE_URL:http://127.0.0.1:8000/v1}}"
+      model: "${AMSHA_CLASSIFIER_FOUNDRY_MODEL:qwen3-14b}"
   onnx:
     enabled: ${AMSHA_ONNX_ENABLED:false}
     model-root: "${AMSHA_ONNX_MODEL_ROOT:data/models}"
@@ -505,6 +508,9 @@ amsha:
       api-key: "${AMSHA_KIMCHI_API_KEY:}"
       base-url: "${AMSHA_KIMCHI_BASE_URL:https://llm.kimchi.dev/openai/v1}"
       model: "${AMSHA_KIMCHI_MODEL:minimax-m3}"
+    foundry:
+      base-url: "${AMSHA_FOUNDRY_BASE_URL:http://127.0.0.1:8000/v1}"
+      model: "${AMSHA_FOUNDRY_MODEL:qwen3-14b}"
   infinite-loop:
     llm:
       providers: ${AMSHA_INFINITE_LOOP_LLM_PROVIDERS:omlx,groq,openrouter}
@@ -579,6 +585,9 @@ amsha:
       api-key: "${AMSHA_COMPACTION_KIMCHI_API_KEY:${AMSHA_KIMCHI_API_KEY:}}"
       base-url: "${AMSHA_COMPACTION_KIMCHI_BASE_URL:https://llm.kimchi.dev/openai/v1}"
       model: "${AMSHA_COMPACTION_KIMCHI_MODEL:minimax-m3}"
+    foundry:
+      base-url: "${AMSHA_COMPACTION_FOUNDRY_BASE_URL:${AMSHA_FOUNDRY_BASE_URL:http://127.0.0.1:8000/v1}}"
+      model: "${AMSHA_COMPACTION_FOUNDRY_MODEL:qwen3-14b}"
   agent:
     default-timezone: "${AMSHA_DEFAULT_TIMEZONE:Asia/Kolkata}"
     rate-limit:

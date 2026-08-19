@@ -186,6 +186,18 @@
     "hasBaseUrl": true
   },
   {
+    "id": "foundry",
+    "name": "Foundry Local",
+    "tag": "Local ONNX / CLI",
+    "icon": "Fn",
+    "color": "#0078d4",
+    "defaultModel": "qwen3-14b",
+    "embeddingCapable": true,
+    "requiresApiKey": false,
+    "authScheme": "NONE",
+    "hasBaseUrl": true
+  },
+  {
     "id": "gemini",
     "name": "Gemini",
     "tag": "Google AI",

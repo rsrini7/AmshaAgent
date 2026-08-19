@@ -99,4 +99,13 @@ class ModelDefaultsResourceUnitTest {
         assertEquals("minimax-m3", map.get("defaultModel"));
         assertEquals("https://llm.kimchi.dev/openai/v1", map.get("defaultBaseUrl"));
     }
+
+    @Test
+    void testGetDefaultForProviderFoundry() {
+        Response response = resource.getDefaultForProvider("foundry");
+        assertEquals(200, response.getStatus());
+        Map<?, ?> map = (Map<?, ?>) response.getEntity();
+        assertEquals("qwen3-14b", map.get("defaultModel"));
+        assertEquals("http://127.0.0.1:8000/v1", map.get("defaultBaseUrl"));
+    }
 }
