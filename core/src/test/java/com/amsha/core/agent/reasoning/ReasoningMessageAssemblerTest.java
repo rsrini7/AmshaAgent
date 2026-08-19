@@ -32,6 +32,7 @@ import com.amsha.core.tools.AgentTool;
 import com.amsha.core.tools.ToolRegistry;
 import com.amsha.core.tools.search.ToolSearchIndex;
 import com.amsha.core.util.TextPatternUtils;
+import com.amsha.llm.api.StructuredOutputMode;
 
 import org.junit.jupiter.api.Test;
 

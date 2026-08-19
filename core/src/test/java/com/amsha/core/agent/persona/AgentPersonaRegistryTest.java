@@ -8,9 +8,9 @@ import static org.mockito.Mockito.when;
 import java.util.List;
 
 import com.amsha.core.agent.loop.AgentExecutionContext;
-import com.amsha.core.agent.reasoning.StructuredOutputMode;
 import com.amsha.core.agent.role.AgentRoleEnum;
 import com.amsha.core.security.AutonomyLevel;
+import com.amsha.llm.api.StructuredOutputMode;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

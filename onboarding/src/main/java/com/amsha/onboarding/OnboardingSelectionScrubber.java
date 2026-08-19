@@ -11,11 +11,11 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
-import com.amsha.core.routing.provider.ConnectionValidationRequest;
-import com.amsha.core.routing.provider.LlmProviderOnboardingAdapter;
-import com.amsha.core.routing.provider.ProviderValidationResult;
 import com.amsha.core.security.SecretVault;
 import com.amsha.core.security.VaultKey;
+import com.amsha.llm.api.ConnectionValidationRequest;
+import com.amsha.llm.api.LlmProviderOnboardingAdapter;
+import com.amsha.llm.api.ProviderValidationResult;
 import com.amsha.persistence.api.OnboardingDraftDto;
 import com.fasterxml.jackson.databind.ObjectMapper;
 

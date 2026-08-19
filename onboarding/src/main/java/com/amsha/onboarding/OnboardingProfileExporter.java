@@ -9,7 +9,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import com.amsha.core.routing.ModelDefaults;
+import com.amsha.llm.api.ModelDefaults;
 import com.amsha.persistence.api.LlmConnectionDto;
 import com.amsha.persistence.api.LlmProfileStorePort;
 import com.amsha.persistence.api.ModelProfileDto;

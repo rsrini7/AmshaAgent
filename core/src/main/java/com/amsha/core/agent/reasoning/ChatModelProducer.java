@@ -14,11 +14,14 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 
-import com.amsha.core.routing.ChatModelFactory;
-import com.amsha.core.routing.ModelDefaults;
 import com.amsha.core.security.SecretVault;
 import com.amsha.core.security.VaultConstants;
 import com.amsha.core.security.VaultKey;
+import com.amsha.llm.api.AgentChatModelProvider;
+import com.amsha.llm.api.AgentLlmConfig;
+import com.amsha.llm.api.ChatModelCreationPort;
+import com.amsha.llm.api.ModelDefaults;
+import com.amsha.llm.api.StructuredOutputMode;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
@@ -71,96 +74,113 @@ public class ChatModelProducer {
     @Inject
     AgentLlmConfig agentConfig;
 
+    @Inject
+    @Any
+    Instance<ChatModelCreationPort> chatModelCreationPort;
+
+    private Optional<ChatModelCreationPort> findCreationPort() {
+        return chatModelCreationPort != null ? chatModelCreationPort.stream().findFirst() : Optional.empty();
+    }
+
+    private ChatModelCreationPort creationPort() {
+        return findCreationPort()
+                .orElseThrow(
+                        () -> new IllegalStateException(
+                                "No ChatModelCreationPort bean found on classpath. Ensure amsha-llm-providers is included in the application."));
+    }
+
+    private record VaultLlmConfig(String provider, String key, String model, String baseUrl) {}
+
     @Produces
     @ApplicationScoped
     public ChatModel chatModel() {
-        String effectiveProvider = provider;
-        String effectiveKey = null;
-        String effectiveModel = null;
-        String effectiveBaseUrl = null;
+        VaultLlmConfig vc = vaultPriority ? resolveVaultPriorityConfig() : resolveStandardVaultConfig();
 
-        if (vaultPriority) {
-            Optional<VaultKey> vaultProvider = vault.retrieveSystemKey(VaultConstants.LLM_PROVIDER_KEY);
-            if (vaultProvider.isPresent()) {
-                try (VaultKey pKey = vaultProvider.get()) {
-                    String p = new String(pKey.get(), StandardCharsets.UTF_8).trim();
-                    if (!p.isBlank()) {
-                        effectiveProvider = p;
+        AgentChatModelProvider providerFactory = findProvider(vc.provider());
+        String baseUrl = vc.baseUrl() == null || vc.baseUrl().isBlank()
+                ? PROVIDER_BASE_URLS.getOrDefault(vc.provider(), "")
+                : vc.baseUrl();
+        if (hasText(vc.key()) && hasText(vc.model()) && !baseUrl.isBlank()) {
+            log.infof(
+                    "ChatModelProducer: building model from vault values (provider=%s baseUrl=%s)",
+                    vc.provider(), baseUrl);
+            return creationPort().createForAdapter(vc.provider(), baseUrl, vc.key(), vc.model(), agentConfig);
+        }
+        if (hasText(vc.model()) || hasText(vc.baseUrl())) {
+            return createKeylessVaultModel(vc.provider(), providerFactory, baseUrl, vc.model());
+        }
+        return providerFactory.create();
+    }
 
-                        String vaultKeyName =
-                                switch (p.toLowerCase(Locale.ROOT)) {
-                                    case ModelDefaults.PROVIDER_CLAUDE_CODE ->
-                                        VaultConstants.CLAUDE_CODE_OAUTH_TOKEN_KEY;
-                                    case ModelDefaults.PROVIDER_CODEX -> VaultConstants.CODEX_OAUTH_TOKEN_KEY;
-                                    case ModelDefaults.PROVIDER_AGY -> VaultConstants.AGY_OAUTH_TOKEN_KEY;
-                                    case ModelDefaults.PROVIDER_KIMCHI -> VaultConstants.KIMCHI_OAUTH_TOKEN_KEY;
-                                    default -> VaultConstants.LLM_API_KEY;
-                                };
+    private VaultLlmConfig resolveVaultPriorityConfig() {
+        Optional<VaultKey> vaultProvider = vault.retrieveSystemKey(VaultConstants.LLM_PROVIDER_KEY);
+        if (vaultProvider.isEmpty()) {
+            return new VaultLlmConfig(provider, null, null, null);
+        }
+        try (VaultKey pKey = vaultProvider.get()) {
+            String p = new String(pKey.get(), StandardCharsets.UTF_8).trim();
+            if (p.isBlank()) {
+                return new VaultLlmConfig(provider, null, null, null);
+            }
+            String key = readVaultKeyForProvider(p);
+            String model = readVaultString(VaultConstants.LLM_MODEL_KEY);
+            String baseUrl = readVaultString(VaultConstants.LLM_BASE_URL_KEY);
+            log.infof("ChatModelProducer: using vault provider=%s model=%s", p, model);
+            return new VaultLlmConfig(p, key, model, baseUrl);
+        }
+    }
 
-                        Optional<VaultKey> vaultKey = vault.retrieveSystemKey(vaultKeyName);
-                        if (vaultKey.isPresent()) {
-                            try (VaultKey vk = vaultKey.get()) {
-                                effectiveKey = new String(vk.get(), StandardCharsets.UTF_8).trim();
-                            }
-                        }
+    private VaultLlmConfig resolveStandardVaultConfig() {
+        String effectiveProv = provider;
+        String key = readVaultKeyForProvider(effectiveProv);
+        String model = readVaultString(VaultConstants.LLM_MODEL_KEY);
+        String baseUrl = readVaultString(VaultConstants.LLM_BASE_URL_KEY);
 
-                        Optional<VaultKey> vaultModel = vault.retrieveSystemKey(VaultConstants.LLM_MODEL_KEY);
-                        if (vaultModel.isPresent()) {
-                            try (VaultKey vm = vaultModel.get()) {
-                                effectiveModel = new String(vm.get(), StandardCharsets.UTF_8).trim();
-                            }
-                        }
-
-                        Optional<VaultKey> vaultBaseUrl = vault.retrieveSystemKey(VaultConstants.LLM_BASE_URL_KEY);
-                        if (vaultBaseUrl.isPresent()) {
-                            try (VaultKey vb = vaultBaseUrl.get()) {
-                                effectiveBaseUrl = new String(vb.get(), StandardCharsets.UTF_8).trim();
-                            }
-                        }
-
-                        log.infof(
-                                "ChatModelProducer: using vault provider=%s model=%s",
-                                effectiveProvider, effectiveModel);
+        if (!hasText(key)) {
+            Optional<VaultKey> vaultProv = vault.retrieveSystemKey(VaultConstants.LLM_PROVIDER_KEY);
+            if (vaultProv.isPresent()) {
+                try (VaultKey pKey = vaultProv.get()) {
+                    String vp = new String(pKey.get(), StandardCharsets.UTF_8).trim();
+                    if ("ollama".equalsIgnoreCase(vp)
+                            || "omlx".equalsIgnoreCase(vp)
+                            || "llamacpp".equalsIgnoreCase(vp)) {
+                        effectiveProv = vp;
+                        log.infof("ChatModelProducer: using vault provider=%s model=%s", effectiveProv, model);
                     }
                 }
             }
         }
+        return new VaultLlmConfig(effectiveProv, key, model, baseUrl);
+    }
 
-        AgentChatModelProvider providerFactory = findProvider(effectiveProvider);
-        String baseUrl = effectiveBaseUrl == null || effectiveBaseUrl.isBlank()
-                ? PROVIDER_BASE_URLS.getOrDefault(effectiveProvider, "")
-                : effectiveBaseUrl;
-        if (hasText(effectiveKey) && hasText(effectiveModel) && !baseUrl.isBlank()) {
-            log.infof(
-                    "ChatModelProducer: building model from vault values (provider=%s baseUrl=%s)",
-                    effectiveProvider, baseUrl);
-            return ChatModelFactory.createForAdapter(
-                    effectiveProvider, baseUrl, effectiveKey, effectiveModel, agentConfig);
+    private String readVaultString(String keyName) {
+        Optional<VaultKey> vk = vault.retrieveSystemKey(keyName);
+        if (vk.isPresent()) {
+            try (VaultKey k = vk.get()) {
+                return new String(k.get(), StandardCharsets.UTF_8).trim();
+            }
         }
-        if (hasText(effectiveModel) || hasText(effectiveBaseUrl)) {
-            return createKeylessVaultModel(effectiveProvider, providerFactory, baseUrl, effectiveModel);
-        }
-        return providerFactory.create();
+        return null;
+    }
+
+    private String readVaultKeyForProvider(String providerName) {
+        String vaultKeyName =
+                switch (providerName.toLowerCase(Locale.ROOT)) {
+                    case ModelDefaults.PROVIDER_CLAUDE_CODE -> VaultConstants.CLAUDE_CODE_OAUTH_TOKEN_KEY;
+                    case ModelDefaults.PROVIDER_CODEX -> VaultConstants.CODEX_OAUTH_TOKEN_KEY;
+                    case ModelDefaults.PROVIDER_AGY -> VaultConstants.AGY_OAUTH_TOKEN_KEY;
+                    case ModelDefaults.PROVIDER_KIMCHI -> VaultConstants.KIMCHI_OAUTH_TOKEN_KEY;
+                    default -> VaultConstants.LLM_API_KEY;
+                };
+        return readVaultString(vaultKeyName);
     }
 
     private ChatModel createKeylessVaultModel(
             String providerName, AgentChatModelProvider providerFactory, String baseUrl, String model) {
         String cleanProvider = clean(providerName);
-        if ("ollama".equalsIgnoreCase(cleanProvider)) {
-            return ChatModelFactory.createOllama(baseUrl, model, agentConfig);
-        }
-        if (("omlx".equalsIgnoreCase(cleanProvider) || "llamacpp".equalsIgnoreCase(cleanProvider))
-                && hasText(model)
-                && !baseUrl.isBlank()) {
-            return ChatModelFactory.createOpenAi(
-                    baseUrl,
-                    "not-needed",
-                    model,
-                    agentConfig.maxTokens(),
-                    agentConfig.timeout(),
-                    agentConfig.maxRetries(),
-                    agentConfig.temperature(),
-                    agentConfig.logHttp());
+        Optional<ChatModelCreationPort> port = findCreationPort();
+        if (port.isPresent() && port.get().supportsAdapter(cleanProvider) && hasText(model)) {
+            return port.get().createForAdapter(cleanProvider, baseUrl, "not-needed", model, agentConfig);
         }
         return hasText(model) ? providerFactory.create(model) : providerFactory.create();
     }

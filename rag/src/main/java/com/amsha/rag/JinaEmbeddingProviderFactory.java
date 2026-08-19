@@ -5,7 +5,7 @@ import dev.langchain4j.model.openai.OpenAiEmbeddingModel;
 
 import jakarta.enterprise.context.ApplicationScoped;
 
-import com.amsha.core.routing.ModelDefaults;
+import com.amsha.llm.api.ModelDefaults;
 
 import org.jboss.logging.Logger;
 

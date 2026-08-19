@@ -1728,7 +1728,7 @@ wizard patches deployment `.env` values.
 ### 16.5 Core Mocking in Tests
 - Tests that trigger bean-scanning of core handlers MUST satisfy their dependencies via `@ApplicationScoped` mocks in `src/test/java`:
   - `IntentDetector` (satisfies `IntentClassificationHandler`)
-  - `AgentChatModelProvider` (satisfies `ChatModel` injections)
+  - `AgentChatModelProvider` from `com.amsha.llm.api` (satisfies `ChatModel` injections)
   - `ChatModel` with `@Identifier("compaction")` (satisfies `CompactionService`)
 
 ### 16.6 JVM Shutdown Hang in Tests (§16.6 INVARIANT)
@@ -1816,15 +1816,15 @@ Run this checklist mentally before every major refactor touching persistence, ap
 
 ## 20. Routing and Classification Consolidation
 
-### 20.1 Implementation Proximity
-- Interface implementations for core SPIs (e.g. IntentDetector) SHOULD reside in the same module as their primary injection points (e.g. IntentClassificationHandler in amsha-core).
-- **Rationale:** Placing the only implementation of a required core bean in a downstream module (like amsha-app) frequently triggers jakarta.enterprise.inject.UnsatisfiedResolutionException during the validation phase of the upstream module's build, especially in native-image compilation.
-- Consolidated IntentDetectorModelProducer, SkillAwareIntentDetector, and their associated LlmModelFactory into amsha-core to ensure reliable CDI resolution and build stability.
+### 20.1 Implementation Proximity and Provider Modularization
+- Interface implementations for mandatory singleton core SPIs (e.g. `IntentDetector`) SHOULD reside in the same module as their primary injection points (`amsha-core`).
+- **Provider Multi-Bean SPIs Exception:** LLM Provider contracts reside in `amsha-llm-provider-api` (`com.amsha.llm.api`). Core orchestration consumes them through `Instance<AgentChatModelProvider>`, `Instance<RoutingChatModelProvider>`, and the decoupled `ChatModelCreationPort`. Concrete provider SDK implementations reside in `amsha-llm-providers` (`com.amsha.llm.providers`). Multi-bean injection (`Instance<T>`) allows dynamic provider plugin discovery across modules without triggering `jakarta.enterprise.inject.UnsatisfiedResolutionException`.
+- `ChatModelFactory` (implementing `ChatModelCreationPort` as an `@ApplicationScoped @Unremovable` bean) resides in `amsha-llm-providers` and is discovered by `amsha-app` at runtime.
 
 ### 20.2 LLM Provider Dependencies
-- When moving routing logic into amsha-core, all required LLM provider extensions (e.g. quarkus-langchain4j-anthropic) MUST also be added to amsha-core.
-- Failure to do so leads to ClassNotFoundException or unresolved imports in the routing factories (e.g. ClaudeCodeProviderFactory).
-- T1-2 boundary is an abstraction seam within `amsha-core`, not a Maven module split. `LangChain4jLlmAdapter` MUST remain in `amsha-core` per §20.1.
+- Concrete provider SDK dependencies (`quarkus-langchain4j-openai`, `quarkus-langchain4j-anthropic`, `quarkus-langchain4j-ollama`, `quarkus-langchain4j-ai-gemini`) reside exclusively in `amsha-llm-providers` (and downstream `amsha-app`).
+- `amsha-core` depends only on `amsha-llm-provider-api` and core abstractions, remaining decoupled from vendor LLM SDKs.
+- `InfiniteLoopAgentChatModelProvider` remains in `amsha-core` as internal fallback logic.
 
 ---
 

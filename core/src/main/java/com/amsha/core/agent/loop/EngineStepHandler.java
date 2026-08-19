@@ -18,7 +18,6 @@ import java.util.stream.Stream;
 import com.amsha.core.agent.AgentSentinels;
 import com.amsha.core.agent.reasoning.ReasoningEngine;
 import com.amsha.core.agent.reasoning.ReasoningStep;
-import com.amsha.core.agent.reasoning.StructuredOutputMode;
 import com.amsha.core.agent.reasoning.ToolCallJsonKeys;
 import com.amsha.core.agent.reasoning.error.LlmAuthenticationException;
 import com.amsha.core.agent.reasoning.error.LlmContentFilterException;
@@ -37,6 +36,7 @@ import com.amsha.core.observability.AgentObserver;
 import com.amsha.core.state.CheckpointStatus;
 import com.amsha.core.state.StatefulAgentStore;
 import com.amsha.core.util.AgentErrorMessageUtil;
+import com.amsha.llm.api.StructuredOutputMode;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;

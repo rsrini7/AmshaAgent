@@ -21,8 +21,9 @@ import com.amsha.core.agent.persona.AgentRole;
 import com.amsha.core.agent.reasoning.PromptTemplateEngine;
 import com.amsha.core.agent.reasoning.ReasoningEngine;
 import com.amsha.core.agent.reasoning.ReasoningStep;
-import com.amsha.core.agent.reasoning.StructuredOutputMode;
 import com.amsha.core.routing.LlmModelFactory;
+import com.amsha.llm.api.ChatModelCreationPort;
+import com.amsha.llm.api.StructuredOutputMode;
 
 import io.smallrye.common.annotation.Identifier;
 
@@ -106,6 +107,12 @@ public class TestMockProducers {
     @ApplicationScoped
     public PromptTemplateEngine promptTemplateEngine() {
         return mock(PromptTemplateEngine.class);
+    }
+
+    @Produces
+    @ApplicationScoped
+    public ChatModelCreationPort chatModelCreationPort() {
+        return mock(ChatModelCreationPort.class);
     }
 
     @Produces

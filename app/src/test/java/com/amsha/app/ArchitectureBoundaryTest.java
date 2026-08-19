@@ -109,4 +109,44 @@ public class ArchitectureBoundaryTest {
             .should()
             .callMethod(AbstractInboundMessagePipeline.class, "isProcessing", String.class)
             .allowEmptyShould(true);
+
+    // 10. com.amsha.core does NOT import com.amsha.llm.providers..
+    @ArchTest
+    static final ArchRule coreShouldNotImportLlmProviders = noClasses()
+            .that()
+            .resideInAPackage("com.amsha.core..")
+            .should()
+            .dependOnClassesThat()
+            .resideInAPackage("com.amsha.llm.providers..")
+            .allowEmptyShould(true);
+
+    // 11. com.amsha.llm.api does NOT import com.amsha.core.. or com.amsha.llm.providers..
+    @ArchTest
+    static final ArchRule llmProviderApiShouldNotImportCoreOrProviders = noClasses()
+            .that()
+            .resideInAPackage("com.amsha.llm.api..")
+            .should()
+            .dependOnClassesThat()
+            .resideInAnyPackage("com.amsha.core..", "com.amsha.llm.providers..")
+            .allowEmptyShould(true);
+
+    // 12. com.amsha.llm.providers does NOT import com.amsha.app..
+    @ArchTest
+    static final ArchRule llmProvidersShouldNotImportApp = noClasses()
+            .that()
+            .resideInAPackage("com.amsha.llm.providers..")
+            .should()
+            .dependOnClassesThat()
+            .resideInAPackage("com.amsha.app..")
+            .allowEmptyShould(true);
+
+    // 13. com.amsha.onboarding does NOT import com.amsha.llm.providers..
+    @ArchTest
+    static final ArchRule onboardingShouldNotImportLlmProviders = noClasses()
+            .that()
+            .resideInAPackage("com.amsha.onboarding..")
+            .should()
+            .dependOnClassesThat()
+            .resideInAPackage("com.amsha.llm.providers..")
+            .allowEmptyShould(true);
 }

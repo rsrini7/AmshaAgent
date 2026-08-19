@@ -22,26 +22,7 @@ import com.amsha.core.audit.AuditVerifier;
 import com.amsha.core.audit.SecurityEventType;
 import com.amsha.core.cron.AgentJobCompleted;
 import com.amsha.core.cron.CronTaskScheduled;
-import com.amsha.core.routing.AgyCliExecutor;
-import com.amsha.core.routing.AgyOAuthTokenExtractor;
-import com.amsha.core.routing.AgyResponsesChatModel;
-import com.amsha.core.routing.AgyTokenResolver;
-import com.amsha.core.routing.ClaudeCodeOAuthTokenExtractor;
-import com.amsha.core.routing.ClaudeCodeResponsesChatModel;
-import com.amsha.core.routing.ClaudeCodeTokenResolver;
-import com.amsha.core.routing.CodexOAuthTokenExtractor;
-import com.amsha.core.routing.CodexResponsesChatModel;
-import com.amsha.core.routing.CodexTokenResolver;
-import com.amsha.core.routing.FoundryCliExecutor;
-import com.amsha.core.routing.FoundryDiscoveryHelper;
-import com.amsha.core.routing.FoundryLlmProviderFactory;
-import com.amsha.core.routing.FoundryResponsesChatModel;
-import com.amsha.core.routing.KimchiLlmProviderFactory;
-import com.amsha.core.routing.KimchiOAuthTokenExtractor;
-import com.amsha.core.routing.KimchiResponsesChatModel;
-import com.amsha.core.routing.KimchiTokenResolver;
 import com.amsha.core.routing.ModelCacheInvalidator;
-import com.amsha.core.routing.ModelDefaults;
 import com.amsha.core.routing.ModelProfileCredentialResolver;
 import com.amsha.core.routing.ModelProfileResolverImpl;
 import com.amsha.core.routing.ModelRouter;
@@ -51,15 +32,7 @@ import com.amsha.core.routing.ResolvedCredential;
 import com.amsha.core.routing.ResolvedProfile;
 import com.amsha.core.routing.RouteResolution;
 import com.amsha.core.routing.SystemProfileMigration;
-import com.amsha.core.routing.provider.ConnectionValidationRequest;
-import com.amsha.core.routing.provider.LlmProviderDescriptor;
-import com.amsha.core.routing.provider.LlmProviderOnboardingAdapter;
-import com.amsha.core.routing.provider.ModelEntry;
 import com.amsha.core.routing.provider.NetworkPolicyEnforcer;
-import com.amsha.core.routing.provider.NetworkPolicyViolation;
-import com.amsha.core.routing.provider.NetworkProfilePolicy;
-import com.amsha.core.routing.provider.ProviderValidationResult;
-import com.amsha.core.routing.provider.StaticProviderCatalogAdapter;
 import com.amsha.core.sandbox.SandboxResult;
 import com.amsha.core.security.ExternalIdentityProvider;
 import com.amsha.core.security.OutboundHttpPolicyService;
@@ -145,16 +118,7 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             ModelRoutingException.class,
             SystemProfileMigration.class,
             ModelCacheInvalidator.class,
-            ModelDefaults.class,
-            LlmProviderDescriptor.class,
-            ModelEntry.class,
-            LlmProviderOnboardingAdapter.class,
-            StaticProviderCatalogAdapter.class,
-            ConnectionValidationRequest.class,
-            ProviderValidationResult.class,
             NetworkPolicyEnforcer.class,
-            NetworkPolicyViolation.class,
-            NetworkProfilePolicy.class,
             LlmModelExhaustedException.class,
             GroupConsultationEngine.GroupConsultationResult.class,
             GroupConsultationService.TriageResult.class,
@@ -169,28 +133,9 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             GovernedHttpClient.class,
             GovernedTransportService.class,
             OutboundHttpException.class,
-            ExternalIdentityProvider.class,
-            CodexOAuthTokenExtractor.class,
-            CodexTokenResolver.class,
-            CodexResponsesChatModel.class,
-            ClaudeCodeOAuthTokenExtractor.class,
-            ClaudeCodeTokenResolver.class,
-            ClaudeCodeResponsesChatModel.class,
-            AgyOAuthTokenExtractor.class,
-            AgyTokenResolver.class,
-            AgyResponsesChatModel.class,
-            AgyCliExecutor.class,
-            KimchiOAuthTokenExtractor.class,
-            KimchiTokenResolver.class,
-            KimchiLlmProviderFactory.class,
-            KimchiResponsesChatModel.class,
-            FoundryDiscoveryHelper.class,
-            FoundryCliExecutor.class,
-            FoundryLlmProviderFactory.class,
-            FoundryResponsesChatModel.class
+            ExternalIdentityProvider.class
         },
         classNames = {
-            "com.amsha.core.routing.provider.StaticProviderCatalogAdapter$RawProvider",
             "com.github.benmanes.caffeine.cache.SSLMSA",
             "com.github.benmanes.caffeine.cache.SSLMS",
             "com.github.benmanes.caffeine.cache.SSMS",

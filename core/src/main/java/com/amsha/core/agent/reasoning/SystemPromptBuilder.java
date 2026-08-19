@@ -21,6 +21,7 @@ import com.amsha.core.agent.role.AgentRoleEnum;
 import com.amsha.core.agent.role.RoleRegistry;
 import com.amsha.core.agent.role.ToolCapability;
 import com.amsha.core.skill.SkillRegistry;
+import com.amsha.llm.api.StructuredOutputMode;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;

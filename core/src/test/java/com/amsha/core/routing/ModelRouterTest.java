@@ -11,10 +11,12 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Optional;
 import java.util.function.Supplier;
+import java.util.stream.Stream;
 
-import com.amsha.core.agent.reasoning.AgentChatModelProvider;
-import com.amsha.core.agent.reasoning.AgentLlmConfig;
 import com.amsha.core.agent.role.AgentGroupRegistry;
+import com.amsha.llm.api.AgentChatModelProvider;
+import com.amsha.llm.api.AgentLlmConfig;
+import com.amsha.llm.api.ChatModelCreationPort;
 import com.amsha.persistence.api.LlmConnectionDto;
 import com.amsha.persistence.api.LlmProfileStorePort;
 
@@ -60,6 +62,9 @@ class ModelRouterTest {
     @Mock
     AgentLlmConfig agentConfig;
 
+    @Mock
+    ChatModelCreationPort chatModelCreationPort;
+
     ModelRouter router;
 
     @BeforeEach
@@ -73,6 +78,10 @@ class ModelRouterTest {
         router.credentialResolver = credentialResolver;
         router.profileStore = profileStore;
         router.agentConfig = agentConfig;
+        @SuppressWarnings("unchecked")
+        Instance<ChatModelCreationPort> creationPortInstance = mock(Instance.class);
+        when(creationPortInstance.stream()).thenAnswer(inv -> Stream.of(chatModelCreationPort));
+        router.chatModelCreationPort = creationPortInstance;
         router.profileRoutingEnabled = false;
 
         // Mock providers Instance

@@ -7,6 +7,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.Instant;
 
+import com.amsha.llm.api.NetworkPolicyViolation;
+import com.amsha.llm.api.NetworkProfilePolicy;
 import com.amsha.persistence.api.LlmConnectionDto;
 
 import org.junit.jupiter.api.Test;

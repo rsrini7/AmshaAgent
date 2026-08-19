@@ -15,11 +15,11 @@ import java.util.Map;
 
 import com.amsha.core.agent.reasoning.ReasoningEngine;
 import com.amsha.core.agent.reasoning.ReasoningStep;
-import com.amsha.core.agent.reasoning.StructuredOutputMode;
 import com.amsha.core.agent.result.AgentResult;
 import com.amsha.core.governance.GovernanceStrategy;
 import com.amsha.core.observability.AgentOtelContext;
 import com.amsha.core.security.AutonomyLevel;
+import com.amsha.llm.api.StructuredOutputMode;
 
 import org.junit.jupiter.api.Test;
 

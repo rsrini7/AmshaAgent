@@ -8,7 +8,6 @@ import java.util.Optional;
 
 import com.amsha.core.agent.AgentSentinels;
 import com.amsha.core.agent.reasoning.ReasoningEngine;
-import com.amsha.core.agent.reasoning.StructuredOutputMode;
 import com.amsha.core.agent.result.AgentResult;
 import com.amsha.core.domain.model.AgentCheckpoint;
 import com.amsha.core.pipeline.MessageContext;
@@ -16,6 +15,7 @@ import com.amsha.core.security.AutonomyLevel;
 import com.amsha.core.state.CheckpointStatus;
 import com.amsha.core.state.StatefulAgentStore;
 import com.amsha.core.tools.ToolRegistry;
+import com.amsha.llm.api.StructuredOutputMode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.junit.jupiter.api.BeforeEach;

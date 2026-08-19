@@ -1,0 +1,45 @@
+AMSHA_LLM_API_KEY: "dummy-test-key"
+
+amsha:
+  data-dir: "./target"
+  llm:
+    model: "test-model"
+  workspace:
+    root-dir: "./target/workspaces"
+  vault:
+    pepper: "test-pepper-value-not-used-in-tests"
+    master-key: "test-master-key-32-chars-padded!"
+
+quarkus:
+  application:
+    name: amsha-llm-providers-test
+  http:
+    test-port: 0
+    host: 127.0.0.1
+  management:
+    host: 127.0.0.1
+    test-port: 0
+  arc:
+    exclude-types:
+      - com.amsha.core.**
+      - com.amsha.channel.**
+  langchain4j:
+    timeout: 10s
+    chat-model:
+      provider: openai
+    openai:
+      api-key: "dummy-test-key"
+      base-url: "http://localhost:9999"
+      chat-model:
+        model-name: "gpt-4o-mini"
+      embedding-model:
+        enabled: false
+    ollama:
+      embedding-model:
+        enabled: false
+    ai-gemini:
+      embedding-model:
+        enabled: false
+  otel:
+    sdk:
+      disabled: true

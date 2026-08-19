@@ -19,7 +19,6 @@ import java.util.Optional;
 
 import com.amsha.core.agent.reasoning.ParallelToolCall;
 import com.amsha.core.agent.reasoning.ReasoningStep;
-import com.amsha.core.agent.reasoning.StructuredOutputMode;
 import com.amsha.core.agent.result.AgentResult;
 import com.amsha.core.governance.ApprovalFrame;
 import com.amsha.core.governance.GovernanceStrategy;
@@ -27,6 +26,7 @@ import com.amsha.core.governance.RateLimitTracker;
 import com.amsha.core.observability.AgentObserver;
 import com.amsha.core.security.AutonomyLevel;
 import com.amsha.core.tools.ToolResponse;
+import com.amsha.llm.api.StructuredOutputMode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.junit.jupiter.api.BeforeEach;

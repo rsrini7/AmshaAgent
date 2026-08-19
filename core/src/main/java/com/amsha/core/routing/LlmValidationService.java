@@ -21,6 +21,7 @@ import com.amsha.core.llm.LlmValidationException;
 import com.amsha.core.llm.LlmValidationGateway;
 import com.amsha.core.security.SecretVault;
 import com.amsha.core.security.VaultConstants;
+import com.amsha.llm.api.ModelDefaults;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 

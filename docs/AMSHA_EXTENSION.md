@@ -419,25 +419,34 @@ curl -X POST http://localhost:8080/api/v1/skills \
 
 ## 6. Add a New LLM Provider
 
-Amsha Agent has **two** LLM provider SPIs - one for agent reasoning, one for intent classification and compaction. Both must be implemented if you want to use a new provider end-to-end.
+Amsha Agent has **two** LLM provider SPIs defined in `amsha-llm-provider-api` - one for agent reasoning (`AgentChatModelProvider`), and one for routing/intent classification/compaction (`RoutingChatModelProvider`). Concrete implementations are housed in `amsha-llm-providers`. Both must be implemented if you want to use a new provider end-to-end.
 
 ### 6a. Agent reasoning provider (`AgentChatModelProvider`)
 
-Located in `amsha-core`. Implement `AgentChatModelProvider` and mark it `@ApplicationScoped`:
+Located in `amsha-llm-providers` under `com.amsha.llm.providers.reasoning`. Implement `AgentChatModelProvider` and mark it `@ApplicationScoped @Unremovable`:
 
 ```java
+package com.amsha.llm.providers.reasoning;
+
+import dev.langchain4j.model.chat.ChatModel;
+import jakarta.enterprise.context.ApplicationScoped;
+import io.quarkus.arc.Unremovable;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
+import com.amsha.llm.api.AgentChatModelProvider;
+
 @ApplicationScoped
+@Unremovable
 public class MyProviderFactory implements AgentChatModelProvider {
 
-    @ConfigProperty(name = "amsha.myprovider.base-url",
+    @ConfigProperty(name = "amsha.llm.myprovider.base-url",
                     defaultValue = "https://api.myprovider.com/v1")
     String baseUrl;
 
-    @ConfigProperty(name = "amsha.myprovider.api-key",
+    @ConfigProperty(name = "amsha.llm.myprovider.api-key",
                     defaultValue = "not-configured")
     String apiKey;
 
-    @ConfigProperty(name = "amsha.myprovider.model",
+    @ConfigProperty(name = "amsha.llm.myprovider.model",
                     defaultValue = "my-model-name")
     String modelName;
 
@@ -448,7 +457,7 @@ public class MyProviderFactory implements AgentChatModelProvider {
     public ChatModel create() {
         if ("not-configured".equals(apiKey)) {
             throw new IllegalStateException(
-                "MyProvider requires amsha.myprovider.api-key to be set.");
+                "MyProvider requires amsha.llm.myprovider.api-key to be set.");
         }
         return OpenAiChatModel.builder()   // OpenAI-compatible, or use a native client
                 .baseUrl(baseUrl)
@@ -461,14 +470,23 @@ public class MyProviderFactory implements AgentChatModelProvider {
 }
 ```
 
-The `LangChainReasoningEngine` discovers the active provider by matching `providerName()` against the `amsha.llm.provider` config property.
+The `LangChainReasoningEngine` and `ChatModelProducer` discover active providers dynamically through CDI multi-bean resolution (`Instance<AgentChatModelProvider>`).
 
 ### 6b. Routing/intent-classification provider (`RoutingChatModelProvider`)
 
-Located in `amsha-core`. Implement `RoutingChatModelProvider` and mark it `@ApplicationScoped`:
+Located in `amsha-llm-providers` under `com.amsha.llm.providers.routing`. Implement `RoutingChatModelProvider` and mark it `@ApplicationScoped @Unremovable`:
 
 ```java
+package com.amsha.llm.providers.routing;
+
+import dev.langchain4j.model.chat.ChatModel;
+import jakarta.enterprise.context.ApplicationScoped;
+import io.quarkus.arc.Unremovable;
+import com.amsha.llm.api.LlmModelConfig;
+import com.amsha.llm.api.RoutingChatModelProvider;
+
 @ApplicationScoped
+@Unremovable
 public class MyRoutingProviderFactory implements RoutingChatModelProvider {
 
     @Override
@@ -494,9 +512,11 @@ public class MyRoutingProviderFactory implements RoutingChatModelProvider {
 }
 ```
 
-### 6c. Wire the provider
+### 6c. Wire and Register the provider
 
-Set in your `.env`:
+1. Register new classes in `LlmProvidersReflectionConfig` in `amsha-llm-providers` for GraalVM native reflection.
+2. If adding new adapter branches, register in `ChatModelFactory.java`.
+3. Set in your `.env`:
 
 ```properties
 AMSHA_LLM_PROVIDER=myprovider
@@ -512,27 +532,30 @@ AMSHA_LLM_MODEL_NAME=my-model-name
 
 | Provider | Provider ID | SPI | Module |
 |---|---|---|---|
-| `GroqProviderFactory` | `groq` | `AgentChatModelProvider` | `amsha-core` |
-| `OpenAiProviderFactory` | `openai` | `AgentChatModelProvider` | `amsha-core` |
-| `OllamaProviderFactory` | `ollama` | `AgentChatModelProvider` | `amsha-core` |
-| `OpenRouterProviderFactory` | `openrouter` | `AgentChatModelProvider` | `amsha-core` |
-| `ClaudeCodeProviderFactory` | `claude` | `AgentChatModelProvider` | `amsha-core` |
-| `OmlxProviderFactory` | `omlx` | `AgentChatModelProvider` | `amsha-core` |
-| `GeminiProviderFactory` | `gemini` | `AgentChatModelProvider` | `amsha-core` |
-| `NvidiaProviderFactory` | `nvidia` | `AgentChatModelProvider` | `amsha-core` |
-| `CerebrasProviderFactory` | `cerebras` | `AgentChatModelProvider` | `amsha-core` |
-| `SarvamProviderFactory` | `sarvam` | `AgentChatModelProvider` | `amsha-core` |
-| `OpenCodeProviderFactory` | `opencode` | `AgentChatModelProvider` | `amsha-core` |
-| `HuggingFaceProviderFactory` | `huggingface` | `AgentChatModelProvider` | `amsha-core` |
-| `MistralProviderFactory` | `mistral` | `AgentChatModelProvider` | `amsha-core` |
-| `CloudflareProviderFactory` | `cloudflare` | `AgentChatModelProvider` | `amsha-core` |
-| `CohereProviderFactory` | `cohere` | `AgentChatModelProvider` | `amsha-core` |
-| `CodexProviderFactory` | `codex` | `AgentChatModelProvider` | `amsha-core` |
-| `LlamaCppProviderFactory` | `llamacpp` | `AgentChatModelProvider` | `amsha-core` |
-| `GenericOpenAiProviderFactory` | `generic-openai` | `AgentChatModelProvider` | `amsha-core` |
+| `GroqProviderFactory` | `groq` | `AgentChatModelProvider` | `amsha-llm-providers` |
+| `OpenAiProviderFactory` | `openai` | `AgentChatModelProvider` | `amsha-llm-providers` |
+| `OllamaProviderFactory` | `ollama` | `AgentChatModelProvider` | `amsha-llm-providers` |
+| `OpenRouterProviderFactory` | `openrouter` | `AgentChatModelProvider` | `amsha-llm-providers` |
+| `ClaudeCodeProviderFactory` | `claude` | `AgentChatModelProvider` | `amsha-llm-providers` |
+| `OmlxProviderFactory` | `omlx` | `AgentChatModelProvider` | `amsha-llm-providers` |
+| `GeminiProviderFactory` | `gemini` | `AgentChatModelProvider` | `amsha-llm-providers` |
+| `NvidiaProviderFactory` | `nvidia` | `AgentChatModelProvider` | `amsha-llm-providers` |
+| `CerebrasProviderFactory` | `cerebras` | `AgentChatModelProvider` | `amsha-llm-providers` |
+| `SarvamProviderFactory` | `sarvam` | `AgentChatModelProvider` | `amsha-llm-providers` |
+| `OpenCodeProviderFactory` | `opencode` | `AgentChatModelProvider` | `amsha-llm-providers` |
+| `HuggingFaceProviderFactory` | `huggingface` | `AgentChatModelProvider` | `amsha-llm-providers` |
+| `MistralProviderFactory` | `mistral` | `AgentChatModelProvider` | `amsha-llm-providers` |
+| `CloudflareProviderFactory` | `cloudflare` | `AgentChatModelProvider` | `amsha-llm-providers` |
+| `CohereProviderFactory` | `cohere` | `AgentChatModelProvider` | `amsha-llm-providers` |
+| `CodexProviderFactory` | `codex` | `AgentChatModelProvider` | `amsha-llm-providers` |
+| `AgyProviderFactory` | `agy` | `AgentChatModelProvider` | `amsha-llm-providers` |
+| `KimchiProviderFactory` | `kimchi` | `AgentChatModelProvider` | `amsha-llm-providers` |
+| `FoundryProviderFactory` | `foundry` | `AgentChatModelProvider` | `amsha-llm-providers` |
+| `LlamaCppProviderFactory` | `llamacpp` | `AgentChatModelProvider` | `amsha-llm-providers` |
+| `GenericOpenAiProviderFactory` | `generic-openai` | `AgentChatModelProvider` | `amsha-llm-providers` |
 | `InfiniteLoopAgentChatModelProvider` | `infiniteloop` | `AgentChatModelProvider` | `amsha-core` |
 
-Each provider also has a corresponding `RoutingChatModelProvider` implementation in `amsha-core` for intent classification and compaction.
+Each provider also has a corresponding `RoutingChatModelProvider` implementation in `amsha-llm-providers` for intent classification and compaction.
 
 ---
 
@@ -907,7 +930,7 @@ Code location matters for module boundary correctness:
 | Concern | Correct module |
 |---|---|
 | New `AgentTool`, `AgentReflex`, `MessageHandler`, `ContextEnricher`, `IntentRoutingProvider`, `GovernanceStrategy` | `amsha-core` |
-| New `RoutingChatModelProvider` | `amsha-core` |
+| New `AgentChatModelProvider` or `RoutingChatModelProvider` | `amsha-llm-providers` (contracts in `amsha-llm-provider-api`) |
 | New `EmbeddingProviderFactory` | `amsha-rag` |
 | New `SkillProvider` | `amsha-core` (or new module) |
 | New persistence port implementation | New module (see `amsha-persistence-sqlite` as reference) |

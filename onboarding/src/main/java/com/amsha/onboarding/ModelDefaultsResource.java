@@ -12,7 +12,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 import com.amsha.core.api.dto.AmshaErrorResponse;
-import com.amsha.core.routing.ModelDefaults;
+import com.amsha.llm.api.ModelDefaults;
 
 import io.smallrye.common.annotation.RunOnVirtualThread;
 

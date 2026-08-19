@@ -26,10 +26,10 @@ Integrating `codex` as a first-class provider in Amsha allows users to utilize O
    - Shared `@ApplicationScoped CodexTokenResolver` manages token resolution, secret vault caching, and env/system property fallbacks across reasoning and routing factories.
    - Provides clear actionable instructions if login is missing: `Please run 'codex login' in your local terminal first, or set AMSHA_CODEX_API_KEY.`
 4. **SPI Conformance & Shared Transport**:
-   - `CodexProviderFactory` (`AgentChatModelProvider` in `com.amsha.core.agent.reasoning`) uses `ChatModelFactory.buildMultiModelEntries` and `ChatModelFactory.createCodex`.
-   - `CodexLlmProviderFactory` (`RoutingChatModelProvider` in `com.amsha.core.routing`) delegates to `ChatModelFactory.createCodex` for direct ChatGPT endpoints and `ChatModelFactory.openAiBuilder` for proxy endpoints.
+   - `CodexProviderFactory` (`AgentChatModelProvider` in `com.amsha.llm.providers.reasoning`) uses `ChatModelFactory.buildMultiModelEntries` and `ChatModelFactory.createCodex`.
+   - `CodexLlmProviderFactory` (`RoutingChatModelProvider` in `com.amsha.llm.providers.routing`) delegates to `ChatModelFactory.createCodex` for direct ChatGPT endpoints and `ChatModelFactory.openAiBuilder` for proxy endpoints.
 5. **Reflection & Config**:
-   - Registered in `CoreReflectionConfig` (`CodexOAuthTokenExtractor.class`, `CodexTokenResolver.class`, `CodexResponsesChatModel.class`).
+   - Registered in `LlmProvidersReflectionConfig` and `LlmProviderApiReflectionConfig` (`CodexOAuthTokenExtractor.class`, `CodexTokenResolver.class`, `CodexResponsesChatModel.class`).
 
 ## Consequences
 - Codex CLI / ChatGPT Plus is available as a first-class provider (`AMSHA_LLM_PROVIDER=codex`) and as a slot in `infinite-loop`.

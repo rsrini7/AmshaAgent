@@ -8,9 +8,9 @@ import jakarta.ws.rs.core.Response;
 import java.util.List;
 import java.util.Map;
 
-import com.amsha.core.routing.provider.LlmProviderDescriptor;
-import com.amsha.core.routing.provider.LlmProviderOnboardingAdapter;
-import com.amsha.core.routing.provider.ModelEntry;
+import com.amsha.llm.api.LlmProviderDescriptor;
+import com.amsha.llm.api.LlmProviderOnboardingAdapter;
+import com.amsha.llm.api.ModelEntry;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;

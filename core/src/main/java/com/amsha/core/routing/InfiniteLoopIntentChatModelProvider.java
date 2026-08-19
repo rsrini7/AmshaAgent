@@ -15,7 +15,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 
-import com.amsha.core.agent.reasoning.StructuredOutputMode;
+import com.amsha.llm.api.StructuredOutputMode;
 
 import org.eclipse.microprofile.config.Config;
 import org.eclipse.microprofile.config.ConfigProvider;

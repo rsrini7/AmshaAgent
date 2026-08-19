@@ -18,7 +18,6 @@ import com.amsha.channel.api.ChannelType;
 import com.amsha.channel.api.ChannelUser;
 import com.amsha.core.agent.reasoning.ParallelToolCall;
 import com.amsha.core.agent.reasoning.ReasoningEngine;
-import com.amsha.core.agent.reasoning.StructuredOutputMode;
 import com.amsha.core.domain.model.AgentCheckpoint;
 import com.amsha.core.domain.model.AgentCheckpointRecord;
 import com.amsha.core.pipeline.MessageContext;
@@ -29,6 +28,7 @@ import com.amsha.core.state.StatefulAgentStore;
 import com.amsha.core.state.ToolDecision;
 import com.amsha.core.tools.ToolRegistry;
 import com.amsha.core.tools.ToolResponse;
+import com.amsha.llm.api.StructuredOutputMode;
 import com.amsha.persistence.api.CronStorePort;
 import com.fasterxml.jackson.databind.ObjectMapper;
 

@@ -61,6 +61,11 @@
             <artifactId>quarkus-opentelemetry</artifactId>
         </dependency>
 
+        <dependency>
+            <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-rest</artifactId>
+        </dependency>
+
         <!-- Test dependencies -->
         <dependency>
             <groupId>io.quarkus</groupId>

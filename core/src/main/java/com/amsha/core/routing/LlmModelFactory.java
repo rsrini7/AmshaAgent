@@ -13,7 +13,10 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
-import com.amsha.core.agent.reasoning.StructuredOutputMode;
+import com.amsha.llm.api.LlmModelConfig;
+import com.amsha.llm.api.ModelDefaults;
+import com.amsha.llm.api.RoutingChatModelProvider;
+import com.amsha.llm.api.StructuredOutputMode;
 
 /**
  * Common factory for creating LangChain4j ChatModels based on provider configuration.
@@ -26,6 +29,12 @@ public class LlmModelFactory {
     @Inject
     @Any
     Instance<RoutingChatModelProvider> factories;
+
+    public LlmModelFactory() {}
+
+    public LlmModelFactory(Instance<RoutingChatModelProvider> factories) {
+        this.factories = factories;
+    }
 
     public ChatModel createModel(
             String provider,

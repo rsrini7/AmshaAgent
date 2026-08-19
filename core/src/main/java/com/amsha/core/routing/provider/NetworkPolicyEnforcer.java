@@ -9,6 +9,8 @@ import java.util.Optional;
 import com.amsha.core.security.OutboundHttpPolicyService;
 import com.amsha.core.security.OutboundPolicyDecision;
 import com.amsha.core.security.OutboundPurpose;
+import com.amsha.llm.api.NetworkPolicyViolation;
+import com.amsha.llm.api.NetworkProfilePolicy;
 import com.amsha.persistence.api.LlmConnectionDto;
 
 import org.jboss.logging.Logger;

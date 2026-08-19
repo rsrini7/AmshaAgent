@@ -11,9 +11,9 @@
 
 `amsha-core` currently owns over 100 files of provider and integration code on top of the agent state machine, reasoning loop, memory tiers, security governance, and tool execution engines.
 
-Inside `amsha-core`, two parallel SPI seams exist:
-1. **Agent Reasoning SPI**: `com.amsha.core.agent.reasoning.AgentChatModelProvider` (22 implementations: 21 external providers + 1 internal `InfiniteLoopAgentChatModelProvider`)
-2. **Internal Routing SPI**: `com.amsha.core.routing.RoutingChatModelProvider` (21 implementations)
+Inside `amsha-llm-provider-api`, two parallel SPI seams exist:
+1. **Agent Reasoning SPI**: `com.amsha.llm.api.AgentChatModelProvider` (21 implementations in `amsha-llm-providers` + 1 internal `InfiniteLoopAgentChatModelProvider` in `core`)
+2. **Internal Routing SPI**: `com.amsha.llm.api.RoutingChatModelProvider` (21 implementations in `amsha-llm-providers`)
 
 Every provider is implemented twice (e.g. `KimchiProviderFactory` vs `KimchiLlmProviderFactory`), each averaging ~100 lines of code. Around them sit provider-private machinery:
 - **5 Custom ChatModel Wrappers**: `AgyResponsesChatModel`, `CodexResponsesChatModel`, `KimchiResponsesChatModel`, `FoundryResponsesChatModel`, `ClaudeCodeResponsesChatModel`.
@@ -187,12 +187,12 @@ quarkus:
 
 ## 7. Verification Checklist
 
-- [ ] `amsha-llm-provider-api` compiles with zero core dependencies.
-- [ ] `ChatModelCreationPort` successfully abstracts provider creation from `amsha-core`.
-- [ ] `amsha-llm-providers` compiles with all 21 concrete providers and passes test suites.
-- [ ] ArchUnit tests in `amsha-app` enforce import and package boundaries.
-- [ ] `quarkus.index-dependency` in `application.yaml` includes both new modules.
-- [ ] `./mvnw -pl llm-provider-api,llm-providers,core,app -am pmd:check -DskipTests` passes with 0 violations.
-- [ ] Startup logs confirm CDI discovery of all 21 providers in both JVM and native modes.
-- [ ] Native binary packages cleanly (`mise run build:native-local`) and passes local runtime smoke tests.
-- [ ] `python3 ./scripts/verify_docs.py` passes with 0 errors and 0 warnings.
+- [x] `amsha-llm-provider-api` compiles with zero core dependencies.
+- [x] `ChatModelCreationPort` successfully abstracts provider creation from `amsha-core`.
+- [x] `amsha-llm-providers` compiles with all 21 concrete providers and passes test suites.
+- [x] ArchUnit tests in `amsha-app` enforce import and package boundaries.
+- [x] `quarkus.index-dependency` in `application.yaml` includes both new modules.
+- [x] `./mvnw -pl llm-provider-api,llm-providers,core,app -am pmd:check -DskipTests` passes with 0 violations.
+- [x] Startup logs confirm CDI discovery of all 21 providers in both JVM and native modes.
+- [x] Native binary packages cleanly (`mise run build:native-local`) and passes local runtime smoke tests.
+- [x] `python3 ./scripts/verify_docs.py` passes with 0 errors and 0 warnings.

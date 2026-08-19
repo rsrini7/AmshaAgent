@@ -12,6 +12,7 @@ import com.amsha.core.scope.ActiveWorkspaceContext;
 import com.amsha.core.scope.WorkspaceContext;
 import com.amsha.core.security.SecretVault;
 import com.amsha.core.security.VaultKey;
+import com.amsha.llm.api.ModelDefaults;
 import com.amsha.persistence.api.LlmConnectionDto;
 import com.amsha.persistence.api.LlmConnectionSecretRefDto;
 import com.amsha.persistence.api.LlmProfileStorePort;

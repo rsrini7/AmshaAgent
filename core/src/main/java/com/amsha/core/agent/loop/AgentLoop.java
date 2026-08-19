@@ -15,7 +15,6 @@ import com.amsha.common.util.LogUtil;
 import com.amsha.core.agent.IntentClassificationService;
 import com.amsha.core.agent.reasoning.ReasoningEngine;
 import com.amsha.core.agent.reasoning.ReasoningStep;
-import com.amsha.core.agent.reasoning.StructuredOutputMode;
 import com.amsha.core.agent.result.AgentResult;
 import com.amsha.core.agent.role.AgentRoleEnum;
 import com.amsha.core.agent.sse.AgentSseService;
@@ -35,6 +34,7 @@ import com.amsha.core.structured.StructuredOutputException;
 import com.amsha.core.util.AgentErrorMessageUtil;
 import com.amsha.core.util.ClassUtils;
 import com.amsha.core.util.MdcManaged;
+import com.amsha.llm.api.StructuredOutputMode;
 
 import org.jboss.logging.Logger;
 

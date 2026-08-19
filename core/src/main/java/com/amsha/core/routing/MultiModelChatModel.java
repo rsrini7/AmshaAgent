@@ -20,6 +20,7 @@ import com.amsha.core.agent.reasoning.error.LlmServiceUnavailableException;
 import com.amsha.core.agent.reasoning.error.LlmToolCallException;
 import com.amsha.core.lifecycle.WorkspaceManager;
 import com.amsha.core.scope.WorkspaceContext;
+import com.amsha.llm.api.ModelEntry;
 
 import org.jboss.logging.Logger;
 
