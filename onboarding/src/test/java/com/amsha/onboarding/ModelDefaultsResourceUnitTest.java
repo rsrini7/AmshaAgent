@@ -90,4 +90,13 @@ class ModelDefaultsResourceUnitTest {
         assertEquals("command-r-plus-08-2024", map.get("defaultModel"));
         assertEquals("https://api.cohere.ai/compatibility/v1", map.get("defaultBaseUrl"));
     }
+
+    @Test
+    void testGetDefaultForProviderKimchi() {
+        Response response = resource.getDefaultForProvider("kimchi");
+        assertEquals(200, response.getStatus());
+        Map<?, ?> map = (Map<?, ?>) response.getEntity();
+        assertEquals("minimax-m3", map.get("defaultModel"));
+        assertEquals("https://llm.kimchi.dev/openai/v1", map.get("defaultBaseUrl"));
+    }
 }

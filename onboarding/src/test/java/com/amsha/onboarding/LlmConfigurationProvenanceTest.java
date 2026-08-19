@@ -16,6 +16,7 @@ import java.util.Optional;
 import com.amsha.core.routing.AgyOAuthTokenExtractor;
 import com.amsha.core.routing.ClaudeCodeOAuthTokenExtractor;
 import com.amsha.core.routing.CodexOAuthTokenExtractor;
+import com.amsha.core.routing.KimchiOAuthTokenExtractor;
 import com.amsha.core.routing.ModelDefaults;
 import com.amsha.core.routing.provider.LlmProviderDescriptor;
 import com.amsha.core.routing.provider.LlmProviderOnboardingAdapter;
@@ -302,6 +303,80 @@ class LlmConfigurationProvenanceTest {
     }
 
     @Test
+    void kimchiRequiresOAuthCredentialFromVaultOrCliFile() {
+        LlmConfigurationProvenance provenance = provenanceFor("kimchi", false, Map.of());
+        when(provenance.providerCatalog.descriptor("kimchi"))
+                .thenReturn(Optional.of(new LlmProviderDescriptor(
+                        "kimchi",
+                        "Kimchi",
+                        "kimchi",
+                        "CLI_OAUTH",
+                        "https://llm.kimchi.dev/openai/v1",
+                        false,
+                        false,
+                        List.of(new ModelEntry("minimax-m3", "MiniMax M3", null)),
+                        Map.of())));
+        when(provenance.vault.systemKeyExists(VaultConstants.KIMCHI_OAUTH_TOKEN_KEY))
+                .thenReturn(false);
+        when(provenance.kimchiTokenExtractor.extractToken()).thenReturn(Optional.empty());
+
+        LlmConfigurationProvenance.Resolution resolution = provenance.resolve();
+
+        assertEquals(LlmConfigurationProvenance.CREDENTIAL_MISSING, resolution.credentialState());
+        assertEquals(LlmConfigurationProvenance.SOURCE_NONE, resolution.credentialSource());
+        assertFalse(resolution.ready());
+    }
+
+    @Test
+    void kimchiIsReadyWhenCliFileIsAvailable() {
+        LlmConfigurationProvenance provenance = provenanceFor("kimchi", false, Map.of());
+        when(provenance.providerCatalog.descriptor("kimchi"))
+                .thenReturn(Optional.of(new LlmProviderDescriptor(
+                        "kimchi",
+                        "Kimchi",
+                        "kimchi",
+                        "CLI_OAUTH",
+                        "https://llm.kimchi.dev/openai/v1",
+                        false,
+                        false,
+                        List.of(new ModelEntry("minimax-m3", "MiniMax M3", null)),
+                        Map.of())));
+        when(provenance.vault.systemKeyExists(VaultConstants.KIMCHI_OAUTH_TOKEN_KEY))
+                .thenReturn(false);
+        when(provenance.kimchiTokenExtractor.extractToken()).thenReturn(Optional.of("kimchi-key-123"));
+
+        LlmConfigurationProvenance.Resolution resolution = provenance.resolve();
+
+        assertEquals(LlmConfigurationProvenance.CREDENTIAL_CONFIGURED, resolution.credentialState());
+        assertEquals(LlmConfigurationProvenance.SOURCE_ENVIRONMENT, resolution.credentialSource());
+        assertTrue(resolution.ready());
+    }
+
+    @Test
+    void kimchiIsReadyWhenOAuthTokenIsInVault() {
+        LlmConfigurationProvenance provenance = provenanceFor("kimchi", false, Map.of());
+        when(provenance.providerCatalog.descriptor("kimchi"))
+                .thenReturn(Optional.of(new LlmProviderDescriptor(
+                        "kimchi",
+                        "Kimchi",
+                        "kimchi",
+                        "CLI_OAUTH",
+                        "https://llm.kimchi.dev/openai/v1",
+                        false,
+                        false,
+                        List.of(new ModelEntry("minimax-m3", "MiniMax M3", null)),
+                        Map.of())));
+        when(provenance.vault.systemKeyExists(VaultConstants.KIMCHI_OAUTH_TOKEN_KEY))
+                .thenReturn(true);
+
+        LlmConfigurationProvenance.Resolution resolution = provenance.resolve();
+
+        assertEquals(LlmConfigurationProvenance.CREDENTIAL_CONFIGURED, resolution.credentialState());
+        assertEquals(LlmConfigurationProvenance.SOURCE_VAULT, resolution.credentialSource());
+        assertTrue(resolution.ready());
+    }
+
+    @Test
     void defaultProviderSourceIsAvailableWhenConfigComesFromApplicationDefaults() {
         LlmConfigurationProvenance provenance = provenanceFor("ollama", false, Map.of());
         provenance.config = mockConfig(Map.of(), "application.yaml");
@@ -562,6 +637,7 @@ class LlmConfigurationProvenanceTest {
         provenance.claudeCodeTokenExtractor = mock(ClaudeCodeOAuthTokenExtractor.class);
         provenance.codexTokenExtractor = mock(CodexOAuthTokenExtractor.class);
         provenance.agyTokenExtractor = mock(AgyOAuthTokenExtractor.class);
+        provenance.kimchiTokenExtractor = mock(KimchiOAuthTokenExtractor.class);
         provenance.config = mockConfig(values, "test-profile");
         provenance.configuredProvider = provider;
         provenance.vaultPriority = vaultPriority;

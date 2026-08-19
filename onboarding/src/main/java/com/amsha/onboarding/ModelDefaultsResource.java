@@ -79,6 +79,9 @@ public class ModelDefaultsResource {
                 ModelDefaults.PROVIDER_AGY,
                 providerEntry(ModelDefaults.DEFAULT_AGY_MODEL, ModelDefaults.DEFAULT_AGY_BASE_URL));
         result.put(
+                ModelDefaults.PROVIDER_KIMCHI,
+                providerEntry(ModelDefaults.DEFAULT_KIMCHI_MODEL, ModelDefaults.DEFAULT_KIMCHI_BASE_URL));
+        result.put(
                 ModelDefaults.PROVIDER_GEMINI,
                 providerEntry(ModelDefaults.DEFAULT_GEMINI_MODEL, ModelDefaults.DEFAULT_GEMINI_BASE_URL));
         result.put(

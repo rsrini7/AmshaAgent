@@ -15,10 +15,12 @@ class RoutingProviderFactoryCoverageTest {
 
     static Stream<RoutingChatModelProvider> providers() {
         return Stream.of(
+                new AgyProviderFactory(),
                 new CerebrasLlmProviderFactory(),
                 new GeminiLlmProviderFactory(),
                 new GenericOpenAiLlmProviderFactory(),
                 new GroqLlmProviderFactory(),
+                new KimchiLlmProviderFactory(),
                 new LlamaCppLlmProviderFactory(),
                 new NvidiaLlmProviderFactory(),
                 new OllamaLlmProviderFactory(),

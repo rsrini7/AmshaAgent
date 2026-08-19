@@ -20,6 +20,10 @@ incidents live in [Architecture Invariants](docs/Architecture_Invariants.md).
 
 ## Non-negotiable invariants
 
+### Git staging and review hygiene
+
+- Never stage or unstage files (`git add`, `git reset`, `git restore --staged`, `git commit`). Leave all git staging and commit decisions exclusively to the human user for review and learning.
+
 ### Transactions, persistence, and native image
 
 - Never perform LLM calls, network I/O, or external tool execution inside

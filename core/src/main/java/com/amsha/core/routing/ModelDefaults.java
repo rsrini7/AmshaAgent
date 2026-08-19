@@ -31,6 +31,7 @@ public final class ModelDefaults {
     public static final String PROVIDER_COHERE = "cohere";
     public static final String PROVIDER_CODEX = "codex";
     public static final String PROVIDER_AGY = "agy";
+    public static final String PROVIDER_KIMCHI = "kimchi";
     public static final String PROVIDER_GEMINI = "gemini";
     public static final String PROVIDER_OMLX = "omlx";
     public static final String PROVIDER_LLAMACPP = "llamacpp";
@@ -55,6 +56,7 @@ public final class ModelDefaults {
     public static final String DEFAULT_COHERE_MODEL = "command-r-plus-08-2024";
     public static final String DEFAULT_CODEX_MODEL = "gpt-5.6-luna";
     public static final String DEFAULT_AGY_MODEL = "gemini-3.1-flash-lite";
+    public static final String DEFAULT_KIMCHI_MODEL = "minimax-m3";
     public static final String DEFAULT_GEMINI_MODEL = "gemini-2.5-flash-lite";
     public static final String DEFAULT_OMLX_MODEL = "mlx-community/Qwen3.6-35B-A3B-4bit";
     public static final String DEFAULT_LLAMACPP_MODEL = "qwen3";
@@ -82,6 +84,7 @@ public final class ModelDefaults {
     public static final String DEFAULT_CODEX_OPENAI_BASE_URL = "https://api.openai.com/v1";
     public static final String DEFAULT_CODEX_HROOM_BASE_URL = "http://127.0.0.1:8787/v1";
     public static final String DEFAULT_AGY_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai";
+    public static final String DEFAULT_KIMCHI_BASE_URL = "https://llm.kimchi.dev/openai/v1";
     public static final String DEFAULT_GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta";
     public static final String DEFAULT_OMLX_BASE_URL = "http://127.0.0.1:8000/v1";
     public static final String DEFAULT_LLAMACPP_BASE_URL = "http://127.0.0.1:9000/v1";
@@ -110,6 +113,7 @@ public final class ModelDefaults {
             Map.entry("cohere.ai", PROVIDER_COHERE),
             Map.entry("googleapis.com", PROVIDER_GEMINI),
             Map.entry("anthropic.com", PROVIDER_ANTHROPIC),
+            Map.entry("kimchi.dev", PROVIDER_KIMCHI),
             Map.entry("localhost:11434", PROVIDER_OLLAMA),
             Map.entry("127.0.0.1:11434", PROVIDER_OLLAMA),
             Map.entry("localhost:8000", PROVIDER_OMLX),
@@ -140,6 +144,7 @@ public final class ModelDefaults {
             case PROVIDER_COHERE -> DEFAULT_COHERE_MODEL;
             case PROVIDER_CODEX -> DEFAULT_CODEX_MODEL;
             case PROVIDER_AGY -> DEFAULT_AGY_MODEL;
+            case PROVIDER_KIMCHI -> DEFAULT_KIMCHI_MODEL;
             case PROVIDER_GEMINI -> DEFAULT_GEMINI_MODEL;
             case PROVIDER_OMLX -> DEFAULT_OMLX_MODEL;
             case PROVIDER_LLAMACPP -> DEFAULT_LLAMACPP_MODEL;
@@ -172,6 +177,7 @@ public final class ModelDefaults {
             case PROVIDER_COHERE -> DEFAULT_COHERE_BASE_URL;
             case PROVIDER_CODEX -> DEFAULT_CODEX_BASE_URL;
             case PROVIDER_AGY -> DEFAULT_AGY_BASE_URL;
+            case PROVIDER_KIMCHI -> DEFAULT_KIMCHI_BASE_URL;
             case PROVIDER_GEMINI -> DEFAULT_GEMINI_BASE_URL;
             case PROVIDER_OMLX -> DEFAULT_OMLX_BASE_URL;
             case PROVIDER_LLAMACPP -> DEFAULT_LLAMACPP_BASE_URL;

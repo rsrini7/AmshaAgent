@@ -1,0 +1,94 @@
+package com.amsha.core.agent.reasoning;
+
+import dev.langchain4j.model.chat.ChatModel;
+
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+
+import java.util.List;
+import java.util.Optional;
+
+import com.amsha.core.routing.ChatModelFactory;
+import com.amsha.core.routing.KimchiResponsesChatModel;
+import com.amsha.core.routing.KimchiTokenResolver;
+import com.amsha.core.routing.ModelDefaults;
+import com.amsha.core.routing.MultiModelChatModel;
+import com.amsha.core.security.http.GovernedTransportService;
+
+import org.eclipse.microprofile.config.inject.ConfigProperty;
+
+/**
+ * {@link AgentChatModelProvider} for Kimchi (kimchi.dev) models using Kimchi CLI credentials.
+ * Mirrors {@link com.amsha.core.routing.KimchiLlmProviderFactory} for the agent reasoning engine.
+ */
+@ApplicationScoped
+public class KimchiProviderFactory implements AgentChatModelProvider {
+
+    @Inject
+    AgentLlmConfig agentConfig;
+
+    @Inject
+    KimchiTokenResolver tokenResolver;
+
+    @Inject
+    GovernedTransportService governedTransport;
+
+    @ConfigProperty(name = "amsha.llm.kimchi.model", defaultValue = ModelDefaults.DEFAULT_KIMCHI_MODEL)
+    String modelName;
+
+    @ConfigProperty(name = "amsha.llm.kimchi.base-url", defaultValue = ModelDefaults.DEFAULT_KIMCHI_BASE_URL)
+    String baseUrl;
+
+    @ConfigProperty(name = "amsha.llm.kimchi.api-key")
+    Optional<String> apiKey;
+
+    @Override
+    public String providerName() {
+        return ModelDefaults.PROVIDER_KIMCHI;
+    }
+
+    @Override
+    public StructuredOutputMode structuredOutputMode() {
+        return agentConfig.structuredOutputMode();
+    }
+
+    @Override
+    public String baseUrl() {
+        return baseUrl;
+    }
+
+    @Override
+    public ChatModel create() {
+        return doCreate(null);
+    }
+
+    @Override
+    public ChatModel create(String customModelName) {
+        return doCreate(customModelName);
+    }
+
+    private ChatModel doCreate(String overrideModel) {
+        String key = tokenResolver.resolveToken(apiKey);
+
+        String resolvedModel = (overrideModel != null && !overrideModel.isBlank()) ? overrideModel : modelName;
+        if (resolvedModel == null || resolvedModel.isBlank() || "mistral-small".equalsIgnoreCase(resolvedModel)) {
+            resolvedModel = ModelDefaults.DEFAULT_KIMCHI_MODEL;
+        }
+
+        List<MultiModelChatModel.ModelEntry> entries = ChatModelFactory.buildMultiModelEntries(
+                key,
+                resolvedModel,
+                ModelDefaults.PROVIDER_KIMCHI,
+                (k, m) -> new KimchiResponsesChatModel(
+                        baseUrl,
+                        k,
+                        m,
+                        agentConfig.maxTokens(),
+                        agentConfig.timeout(),
+                        agentConfig.temperature(),
+                        governedTransport));
+
+        if (entries.size() == 1) return entries.get(0).model();
+        return new MultiModelChatModel(ModelDefaults.PROVIDER_KIMCHI, entries, 5);
+    }
+}

@@ -11,6 +11,7 @@ import java.util.Optional;
 import com.amsha.core.routing.AgyOAuthTokenExtractor;
 import com.amsha.core.routing.ClaudeCodeOAuthTokenExtractor;
 import com.amsha.core.routing.CodexOAuthTokenExtractor;
+import com.amsha.core.routing.KimchiOAuthTokenExtractor;
 import com.amsha.core.routing.ModelDefaults;
 import com.amsha.core.routing.provider.LlmProviderDescriptor;
 import com.amsha.core.routing.provider.LlmProviderOnboardingAdapter;
@@ -96,6 +97,9 @@ public class LlmConfigurationProvenance {
                     ModelDefaults.PROVIDER_AGY,
                     new EnvironmentSpec("AMSHA_AGY_MODEL", "AMSHA_AGY_BASE_URL", "AMSHA_AGY_API_KEY")),
             Map.entry(
+                    ModelDefaults.PROVIDER_KIMCHI,
+                    new EnvironmentSpec("AMSHA_KIMCHI_MODEL", "AMSHA_KIMCHI_BASE_URL", "AMSHA_KIMCHI_API_KEY")),
+            Map.entry(
                     ModelDefaults.PROVIDER_GEMINI,
                     new EnvironmentSpec("AMSHA_GEMINI_MODEL", "", "AMSHA_GEMINI_API_KEY")),
             Map.entry(ModelDefaults.PROVIDER_OMLX, new EnvironmentSpec("AMSHA_OMLX_MODEL", "AMSHA_OMLX_BASE_URL", "")),
@@ -126,6 +130,9 @@ public class LlmConfigurationProvenance {
     AgyOAuthTokenExtractor agyTokenExtractor;
 
     @Inject
+    KimchiOAuthTokenExtractor kimchiTokenExtractor;
+
+    @Inject
     Config config;
 
     @ConfigProperty(name = "amsha.llm.provider", defaultValue = "groq")
@@ -138,29 +145,33 @@ public class LlmConfigurationProvenance {
     public Resolution resolve() {
         Optional<String> vaultProvider =
                 vaultPriority ? readVaultString(VaultConstants.LLM_PROVIDER_KEY) : Optional.empty();
-        boolean vaultActive = vaultProvider.isPresent();
-        String effectiveProvider = vaultActive ? vaultProvider.get() : configuredProvider;
-        String normalizedProvider = normalize(effectiveProvider);
+        String normalizedProvider = normalize(vaultProvider.orElseGet(() -> configuredProvider));
         EnvironmentSpec environmentSpec = ENVIRONMENT_SPECS.getOrDefault(normalizedProvider, EnvironmentSpec.EMPTY);
-        String source =
-                vaultActive ? SOURCE_VAULT : configuredProviderIsExplicitlySet() ? SOURCE_ENVIRONMENT : SOURCE_DEFAULT;
 
+        Optional<String> vaultModel = vaultPriority ? readVaultString(VaultConstants.LLM_MODEL_KEY) : Optional.empty();
         String effectiveModel = resolveValue(
-                vaultActive ? readVaultString(VaultConstants.LLM_MODEL_KEY) : Optional.empty(),
-                environmentSpec.modelKey(),
-                ModelDefaults.defaultModelForProvider(normalizedProvider));
+                vaultModel, environmentSpec.modelKey(), ModelDefaults.defaultModelForProvider(normalizedProvider));
+
+        Optional<String> vaultBaseUrl =
+                vaultPriority ? readVaultString(VaultConstants.LLM_BASE_URL_KEY) : Optional.empty();
         String effectiveBaseUrl = resolveValue(
-                vaultActive ? readVaultString(VaultConstants.LLM_BASE_URL_KEY) : Optional.empty(),
+                vaultBaseUrl,
                 environmentSpec.baseUrlKey(),
                 ModelDefaults.defaultBaseUrlForProvider(normalizedProvider));
 
-        boolean requiresApiKey = providerCatalog
-                .descriptor(normalizedProvider)
-                .map(LlmProviderDescriptor::requiresApiKey)
-                .orElse(true);
+        String source = vaultProvider.isPresent()
+                ? SOURCE_VAULT
+                : configuredProviderIsExplicitlySet() ? SOURCE_ENVIRONMENT : SOURCE_DEFAULT;
+
+        boolean requiresApiKey = providerCatalog != null
+                && providerCatalog
+                        .descriptor(normalizedProvider)
+                        .map(LlmProviderDescriptor::requiresApiKey)
+                        .orElse(true);
         boolean claudeCode = ModelDefaults.PROVIDER_CLAUDE_CODE.equals(normalizedProvider);
         boolean codex = ModelDefaults.PROVIDER_CODEX.equals(normalizedProvider);
         boolean agy = ModelDefaults.PROVIDER_AGY.equals(normalizedProvider);
+        boolean kimchi = ModelDefaults.PROVIDER_KIMCHI.equals(normalizedProvider);
         boolean cloudflare = ModelDefaults.PROVIDER_CLOUDFLARE.equals(normalizedProvider);
         if (cloudflare && effectiveBaseUrl.contains("{account_id}")) {
             Optional<String> accountId =
@@ -171,12 +182,13 @@ public class LlmConfigurationProvenance {
             }
         }
         boolean cloudflareAccountConfigured = !cloudflare || !effectiveBaseUrl.contains("{account_id}");
-        boolean vaultCredentialConfigured = isVaultCredentialConfigured(normalizedProvider, vaultActive);
+        boolean vaultCredentialConfigured = isVaultCredentialConfigured(normalizedProvider, vaultProvider.isPresent());
         boolean environmentCredentialConfigured =
                 isEnvironmentCredentialConfigured(normalizedProvider, environmentSpec);
         boolean credentialConfigured =
                 (vaultCredentialConfigured || environmentCredentialConfigured) && cloudflareAccountConfigured;
-        boolean credentialRequired = requiresApiKey || claudeCode || codex || agy || cloudflare;
+        boolean credentialRequired = requiresApiKey || claudeCode || codex || agy || kimchi || cloudflare;
+
         String credentialState = credentialRequired
                 ? credentialConfigured ? CREDENTIAL_CONFIGURED : CREDENTIAL_MISSING
                 : CREDENTIAL_NOT_REQUIRED;
@@ -248,6 +260,7 @@ public class LlmConfigurationProvenance {
                 vault.systemKeyExists(VaultConstants.CLAUDE_CODE_OAUTH_TOKEN_KEY);
             case ModelDefaults.PROVIDER_CODEX -> vault.systemKeyExists(VaultConstants.CODEX_OAUTH_TOKEN_KEY);
             case ModelDefaults.PROVIDER_AGY -> vault.systemKeyExists(VaultConstants.AGY_OAUTH_TOKEN_KEY);
+            case ModelDefaults.PROVIDER_KIMCHI -> vault.systemKeyExists(VaultConstants.KIMCHI_OAUTH_TOKEN_KEY);
             default -> vaultActive && vault.systemKeyExists(VaultConstants.LLM_API_KEY);
         };
     }
@@ -264,6 +277,10 @@ public class LlmConfigurationProvenance {
                         || hasConfiguredEnvironmentValue(environmentSpec.apiKeyKey());
             case ModelDefaults.PROVIDER_AGY ->
                 (agyTokenExtractor != null && agyTokenExtractor.extractToken().isPresent())
+                        || hasConfiguredEnvironmentValue(environmentSpec.apiKeyKey());
+            case ModelDefaults.PROVIDER_KIMCHI ->
+                (kimchiTokenExtractor != null
+                                && kimchiTokenExtractor.extractToken().isPresent())
                         || hasConfiguredEnvironmentValue(environmentSpec.apiKeyKey());
             default -> hasConfiguredEnvironmentValue(environmentSpec.apiKeyKey());
         };

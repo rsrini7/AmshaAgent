@@ -13,6 +13,7 @@ class ModelDefaultsTest {
         assertEquals(ModelDefaults.DEFAULT_OLLAMA_MODEL, ModelDefaults.defaultModelForProvider("ollama"));
         assertEquals(ModelDefaults.DEFAULT_CLAUDE_CODE_MODEL, ModelDefaults.defaultModelForProvider("claude-code"));
         assertEquals(ModelDefaults.DEFAULT_AGY_MODEL, ModelDefaults.defaultModelForProvider("agy"));
+        assertEquals(ModelDefaults.DEFAULT_KIMCHI_MODEL, ModelDefaults.defaultModelForProvider("kimchi"));
         assertEquals(ModelDefaults.DEFAULT_GEMINI_MODEL, ModelDefaults.defaultModelForProvider("gemini"));
         assertEquals(ModelDefaults.DEFAULT_SARVAM_MODEL, ModelDefaults.defaultModelForProvider("sarvam"));
         assertEquals(ModelDefaults.DEFAULT_OPENCODE_MODEL, ModelDefaults.defaultModelForProvider("opencode"));
@@ -58,6 +59,7 @@ class ModelDefaultsTest {
         assertEquals(
                 "https://generativelanguage.googleapis.com/v1beta/openai",
                 ModelDefaults.defaultBaseUrlForProvider("agy"));
+        assertEquals(ModelDefaults.DEFAULT_KIMCHI_BASE_URL, ModelDefaults.defaultBaseUrlForProvider("kimchi"));
         assertEquals("", ModelDefaults.defaultBaseUrlForProvider(null));
         assertEquals("", ModelDefaults.defaultBaseUrlForProvider("unknown"));
     }
@@ -80,6 +82,8 @@ class ModelDefaultsTest {
         assertEquals(
                 ModelDefaults.PROVIDER_COHERE,
                 ModelDefaults.inferProviderFromUrl("https://api.cohere.ai/compatibility/v1"));
+        assertEquals(
+                ModelDefaults.PROVIDER_KIMCHI, ModelDefaults.inferProviderFromUrl("https://llm.kimchi.dev/openai/v1"));
         assertEquals(ModelDefaults.PROVIDER_OLLAMA, ModelDefaults.inferProviderFromUrl("http://localhost:11434"));
         assertEquals(ModelDefaults.PROVIDER_LLAMACPP, ModelDefaults.inferProviderFromUrl("http://localhost:9000/v1"));
         assertEquals(ModelDefaults.PROVIDER_OPENROUTER, ModelDefaults.inferProviderFromUrl(null));

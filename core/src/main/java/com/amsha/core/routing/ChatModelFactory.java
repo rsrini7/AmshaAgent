@@ -319,6 +319,7 @@ public final class ChatModelFactory {
             case "anthropic", "claude" -> createAnthropic(baseUrl, apiKey, model, config);
             case "claude-code" -> createClaudeCode(baseUrl, apiKey, model, config);
             case "agy", "antigravity" -> createAgy(baseUrl, apiKey, model, config);
+            case "kimchi" -> createKimchi(baseUrl, apiKey, model, config);
             case "ollama" -> createOllama(baseUrl, model, config);
             case "codex" -> createCodex(baseUrl, apiKey, null, model, config);
             default ->
@@ -509,5 +510,31 @@ public final class ChatModelFactory {
                 .logRequests(config.logHttp())
                 .logResponses(config.logHttp())
                 .build();
+    }
+
+    /** Builds a Kimchi ChatModel (direct OpenAI-compatible endpoint with required kimchi User-Agent). */
+    public static ChatModel createKimchi(String baseUrl, String token, String model, AgentLlmConfig config) {
+        return createKimchi(baseUrl, token, model, config, resolveGovernedTransport());
+    }
+
+    /** Builds a Kimchi ChatModel with explicit governed transport. */
+    public static ChatModel createKimchi(
+            String baseUrl,
+            String token,
+            String model,
+            AgentLlmConfig config,
+            GovernedTransportService governedTransport) {
+        String modelName = model;
+        if (modelName == null || modelName.isBlank() || "mistral-small".equalsIgnoreCase(modelName)) {
+            modelName = ModelDefaults.DEFAULT_KIMCHI_MODEL;
+        }
+        return new KimchiResponsesChatModel(
+                baseUrl,
+                token,
+                modelName,
+                config.maxTokens(),
+                config.timeout(),
+                config.temperature(),
+                governedTransport != null ? governedTransport : resolveGovernedTransport());
     }
 }

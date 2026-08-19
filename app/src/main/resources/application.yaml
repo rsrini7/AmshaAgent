@@ -369,6 +369,10 @@ amsha:
       api-key: "${AMSHA_CLASSIFIER_AGY_API_KEY:${AMSHA_AGY_API_KEY:}}"
       base-url: "${AMSHA_CLASSIFIER_AGY_BASE_URL:https://generativelanguage.googleapis.com/v1beta/openai}"
       model: "${AMSHA_CLASSIFIER_AGY_MODEL:gemini-3.1-flash-lite}"
+    kimchi:
+      api-key: "${AMSHA_CLASSIFIER_KIMCHI_API_KEY:${AMSHA_KIMCHI_API_KEY:}}"
+      base-url: "${AMSHA_CLASSIFIER_KIMCHI_BASE_URL:https://llm.kimchi.dev/openai/v1}"
+      model: "${AMSHA_CLASSIFIER_KIMCHI_MODEL:minimax-m3}"
   onnx:
     enabled: ${AMSHA_ONNX_ENABLED:false}
     model-root: "${AMSHA_ONNX_MODEL_ROOT:data/models}"
@@ -497,6 +501,10 @@ amsha:
       api-key: "${AMSHA_AGY_API_KEY:}"
       base-url: "${AMSHA_AGY_BASE_URL:https://generativelanguage.googleapis.com/v1beta/openai}"
       model: "${AMSHA_AGY_MODEL:gemini-3.1-flash-lite}"
+    kimchi:
+      api-key: "${AMSHA_KIMCHI_API_KEY:}"
+      base-url: "${AMSHA_KIMCHI_BASE_URL:https://llm.kimchi.dev/openai/v1}"
+      model: "${AMSHA_KIMCHI_MODEL:minimax-m3}"
   infinite-loop:
     llm:
       providers: ${AMSHA_INFINITE_LOOP_LLM_PROVIDERS:omlx,groq,openrouter}
@@ -567,6 +575,10 @@ amsha:
       api-key: "${AMSHA_COMPACTION_AGY_API_KEY:${AMSHA_AGY_API_KEY:}}"
       base-url: "${AMSHA_COMPACTION_AGY_BASE_URL:https://generativelanguage.googleapis.com/v1beta/openai}"
       model: "${AMSHA_COMPACTION_AGY_MODEL:gemini-3.1-flash-lite}"
+    kimchi:
+      api-key: "${AMSHA_COMPACTION_KIMCHI_API_KEY:${AMSHA_KIMCHI_API_KEY:}}"
+      base-url: "${AMSHA_COMPACTION_KIMCHI_BASE_URL:https://llm.kimchi.dev/openai/v1}"
+      model: "${AMSHA_COMPACTION_KIMCHI_MODEL:minimax-m3}"
   agent:
     default-timezone: "${AMSHA_DEFAULT_TIMEZONE:Asia/Kolkata}"
     rate-limit:

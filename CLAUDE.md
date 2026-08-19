@@ -4,6 +4,7 @@ Read [AGENTS.md](AGENTS.md) before making changes; it is the canonical guide.
 
 ## Local reminders
 
+- Never stage or unstage files (`git add`, `git reset`, `git restore --staged`, `git commit`). Leave all git staging and commit decisions exclusively to the user for review.
 - Use `ToolCapability.toolName()`, `ChannelType.*.id()`, and
   `LogUtil.rootMessage(e)` instead of duplicated literals or raw exception messages.
 - `ReplyNode` is sealed: use a pattern-matching `switch` on concrete node types.

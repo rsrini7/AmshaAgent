@@ -27,6 +27,7 @@ reflexes, safety guards, tool interfaces, and built-in LLM providers.
 | Codex CLI | `codex` | `gpt-5.6-luna` | `https://chatgpt.com/backend-api/codex` |
 | Claude Code | `claude-code` | `claude-sonnet-4-5` | `https://api.anthropic.com` |
 | Antigravity CLI | `agy` | `gemini-3.1-flash-lite` | `https://generativelanguage.googleapis.com/v1beta/openai` |
+| Kimchi | `kimchi` | `minimax-m3` | `https://llm.kimchi.dev/openai/v1` |
 | Gemini | `gemini` | `gemini-3.1-flash-lite` | `https://generativelanguage.googleapis.com/v1beta` |
 | OMLX | `omlx` | `mlx-community/Qwen3.6-35B-A3B-4bit` | `http://127.0.0.1:8000/v1` |
 | Llama.cpp | `llamacpp` | `qwen3` | `http://127.0.0.1:9000/v1` |
@@ -166,6 +167,22 @@ The `agy` provider supports two execution paths:
 | `amsha.classifier.agy.api-key` | `AMSHA_CLASSIFIER_AGY_API_KEY` | — | Antigravity API key for classifier slot |
 | `amsha.classifier.agy.model` | `AMSHA_CLASSIFIER_AGY_MODEL` | `gemini-3.1-flash-lite` | Classifier slot model |
 | `amsha.classifier.agy.base-url` | `AMSHA_CLASSIFIER_AGY_BASE_URL` | `https://generativelanguage.googleapis.com/v1beta/openai` | Classifier slot base URL |
+
+## Kimchi Configuration
+
+The `kimchi` provider integrates with `https://llm.kimchi.dev/openai/v1` and automatically resolves credentials from `~/.config/kimchi/config.json`, `~/.config/opencode/opencode.json`, macOS Keychain, or `AMSHA_KIMCHI_API_KEY`.
+
+| Property | Env Var | Default | Description |
+|---|---|---|---|
+| `amsha.llm.kimchi.api-key` | `AMSHA_KIMCHI_API_KEY` | — | Optional direct API key (defaults to automatic resolution) |
+| `amsha.llm.kimchi.base-url` | `AMSHA_KIMCHI_BASE_URL` | `https://llm.kimchi.dev/openai/v1` | Kimchi OpenAI-compatible endpoint |
+| `amsha.llm.kimchi.model` | `AMSHA_KIMCHI_MODEL` | `minimax-m3` | Default chat model |
+| `amsha.compaction.kimchi.api-key` | `AMSHA_COMPACTION_KIMCHI_API_KEY` | — | Kimchi API key for compaction slot |
+| `amsha.compaction.kimchi.model` | `AMSHA_COMPACTION_KIMCHI_MODEL` | `minimax-m3` | Compaction slot model |
+| `amsha.compaction.kimchi.base-url` | `AMSHA_COMPACTION_KIMCHI_BASE_URL` | `https://llm.kimchi.dev/openai/v1` | Compaction slot base URL |
+| `amsha.classifier.kimchi.api-key` | `AMSHA_CLASSIFIER_KIMCHI_API_KEY` | — | Kimchi API key for classifier slot |
+| `amsha.classifier.kimchi.model` | `AMSHA_CLASSIFIER_KIMCHI_MODEL` | `minimax-m3` | Classifier slot model |
+| `amsha.classifier.kimchi.base-url` | `AMSHA_CLASSIFIER_KIMCHI_BASE_URL` | `https://llm.kimchi.dev/openai/v1` | Classifier slot base URL |
 
 ## Testing
 

@@ -50,6 +50,7 @@ public class ChatModelProducer {
             Map.entry(ModelDefaults.PROVIDER_ANTHROPIC, ModelDefaults.DEFAULT_ANTHROPIC_BASE_URL),
             Map.entry(ModelDefaults.PROVIDER_CLAUDE_CODE, ModelDefaults.DEFAULT_CLAUDE_CODE_BASE_URL),
             Map.entry(ModelDefaults.PROVIDER_AGY, ModelDefaults.DEFAULT_AGY_BASE_URL),
+            Map.entry(ModelDefaults.PROVIDER_KIMCHI, ModelDefaults.DEFAULT_KIMCHI_BASE_URL),
             Map.entry(ModelDefaults.PROVIDER_GEMINI, ModelDefaults.DEFAULT_GEMINI_BASE_URL),
             Map.entry(ModelDefaults.PROVIDER_GENERIC_OPENAI, ""));
 
@@ -91,6 +92,7 @@ public class ChatModelProducer {
                                         VaultConstants.CLAUDE_CODE_OAUTH_TOKEN_KEY;
                                     case ModelDefaults.PROVIDER_CODEX -> VaultConstants.CODEX_OAUTH_TOKEN_KEY;
                                     case ModelDefaults.PROVIDER_AGY -> VaultConstants.AGY_OAUTH_TOKEN_KEY;
+                                    case ModelDefaults.PROVIDER_KIMCHI -> VaultConstants.KIMCHI_OAUTH_TOKEN_KEY;
                                     default -> VaultConstants.LLM_API_KEY;
                                 };
 
