@@ -5,10 +5,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 
 import com.amsha.llm.api.ModelDefaults;
-import com.amsha.llm.providers.catalog.*;
-import com.amsha.llm.providers.reasoning.*;
-import com.amsha.llm.providers.routing.*;
-import com.amsha.llm.providers.wrapper.*;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 

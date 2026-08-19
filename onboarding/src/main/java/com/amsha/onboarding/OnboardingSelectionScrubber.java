@@ -242,7 +242,6 @@ public class OnboardingSelectionScrubber {
         return modified;
     }
 
-    @SuppressWarnings("unchecked")
     private boolean scrubMcpHeaderMap(Map<String, Object> mcp, String ownerId) {
         Object rawHeaders = mcp.get("headers");
         if (!(rawHeaders instanceof Map<?, ?> headers) || headers.isEmpty()) return false;

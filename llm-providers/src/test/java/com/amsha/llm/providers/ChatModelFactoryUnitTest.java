@@ -8,11 +8,6 @@ import java.util.Map;
 
 import com.amsha.llm.api.AgentLlmConfig;
 import com.amsha.llm.api.StructuredOutputMode;
-import com.amsha.llm.providers.catalog.*;
-import com.amsha.llm.providers.helper.*;
-import com.amsha.llm.providers.reasoning.*;
-import com.amsha.llm.providers.routing.*;
-import com.amsha.llm.providers.wrapper.*;
 
 import org.junit.jupiter.api.Test;
 

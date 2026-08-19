@@ -14,10 +14,6 @@ import com.amsha.llm.api.AgentLlmConfig;
 import com.amsha.llm.api.ModelDefaults;
 import com.amsha.llm.api.StructuredOutputMode;
 import com.amsha.llm.providers.ChatModelFactory;
-import com.amsha.llm.providers.catalog.*;
-import com.amsha.llm.providers.helper.*;
-import com.amsha.llm.providers.routing.*;
-import com.amsha.llm.providers.wrapper.*;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 

@@ -11,10 +11,6 @@ import java.util.stream.Collectors;
 
 import com.amsha.core.routing.LlmModelFactory;
 import com.amsha.llm.api.RoutingChatModelProvider;
-import com.amsha.llm.providers.catalog.*;
-import com.amsha.llm.providers.helper.*;
-import com.amsha.llm.providers.reasoning.*;
-import com.amsha.llm.providers.wrapper.*;
 
 import org.junit.jupiter.api.Test;
 

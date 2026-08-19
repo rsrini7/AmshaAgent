@@ -9,10 +9,6 @@ import java.util.stream.Stream;
 import com.amsha.llm.api.LlmModelConfig;
 import com.amsha.llm.api.RoutingChatModelProvider;
 import com.amsha.llm.api.StructuredOutputMode;
-import com.amsha.llm.providers.catalog.*;
-import com.amsha.llm.providers.helper.*;
-import com.amsha.llm.providers.reasoning.*;
-import com.amsha.llm.providers.wrapper.*;
 
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;

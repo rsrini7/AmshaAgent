@@ -82,7 +82,6 @@ public class TestBeanProducer {
                         any(HttpResponse.BodyHandler.class)))
                 .thenAnswer(inv -> {
                     HttpRequest req = inv.getArgument(5);
-                    @SuppressWarnings("unchecked")
                     HttpResponse.BodyHandler<Object> handler = inv.getArgument(6);
                     try {
                         return client.send(req, handler);

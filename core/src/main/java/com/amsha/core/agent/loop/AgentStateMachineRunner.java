@@ -37,7 +37,6 @@ public class AgentStateMachineRunner {
     private static final String GENERIC_TERMINAL_SUCCESS = "The approved tool was executed successfully.";
     private static final String GENERIC_TERMINAL_ARTIFACT_SUCCESS =
             "The approved tool was executed successfully and the requested artifact was generated.";
-    private static final int MAX_TERMINAL_ECHO_CHARS = 512;
 
     @Inject
     TaskClassifierService classifierService;

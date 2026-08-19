@@ -14,10 +14,6 @@ import com.amsha.llm.api.ConnectionValidationRequest;
 import com.amsha.llm.api.LlmProviderDescriptor;
 import com.amsha.llm.api.ModelEntry;
 import com.amsha.llm.api.ProviderValidationResult;
-import com.amsha.llm.providers.helper.*;
-import com.amsha.llm.providers.reasoning.*;
-import com.amsha.llm.providers.routing.*;
-import com.amsha.llm.providers.wrapper.*;
 
 import org.junit.jupiter.api.Test;
 

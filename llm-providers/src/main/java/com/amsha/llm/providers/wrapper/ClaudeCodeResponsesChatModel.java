@@ -31,10 +31,6 @@ import com.amsha.core.security.OutboundPurpose;
 import com.amsha.core.security.http.GovernedTransportService;
 import com.amsha.core.tools.ToolSchemaProvider;
 import com.amsha.llm.api.ModelDefaults;
-import com.amsha.llm.providers.catalog.*;
-import com.amsha.llm.providers.helper.*;
-import com.amsha.llm.providers.reasoning.*;
-import com.amsha.llm.providers.routing.*;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -252,7 +248,6 @@ public class ClaudeCodeResponsesChatModel implements ChatModel {
         }
     }
 
-    @SuppressWarnings("unchecked")
     private List<Map<String, Object>> mergeConsecutiveRoles(List<Map<String, Object>> rawMessages) {
         List<Map<String, Object>> merged = new ArrayList<>();
         for (Map<String, Object> msg : rawMessages) {
