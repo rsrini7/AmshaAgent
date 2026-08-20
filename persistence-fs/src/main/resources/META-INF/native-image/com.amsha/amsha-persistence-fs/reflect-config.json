@@ -22,5 +22,35 @@
     "allDeclaredConstructors": true,
     "allPublicMethods": true,
     "reason": "Lucene TestSecrets.<clinit> — same lambda references FilterIndexInput.class constant"
+  },
+  {
+    "name": "org.apache.lucene.codecs.lucene104.Lucene104Codec",
+    "allDeclaredConstructors": true,
+    "allPublicMethods": true
+  },
+  {
+    "name": "org.apache.lucene.codecs.lucene104.Lucene104PostingsFormat",
+    "allDeclaredConstructors": true,
+    "allPublicMethods": true
+  },
+  {
+    "name": "org.apache.lucene.codecs.lucene90.Lucene90DocValuesFormat",
+    "allDeclaredConstructors": true,
+    "allPublicMethods": true
+  },
+  {
+    "name": "org.apache.lucene.codecs.lucene99.Lucene99HnswVectorsFormat",
+    "allDeclaredConstructors": true,
+    "allPublicMethods": true
+  },
+  {
+    "name": "org.apache.lucene.codecs.lucene104.Lucene104ScalarQuantizedVectorsFormat",
+    "allDeclaredConstructors": true,
+    "allPublicMethods": true
+  },
+  {
+    "name": "org.apache.lucene.codecs.lucene104.Lucene104HnswScalarQuantizedVectorsFormat",
+    "allDeclaredConstructors": true,
+    "allPublicMethods": true
   }
 ]

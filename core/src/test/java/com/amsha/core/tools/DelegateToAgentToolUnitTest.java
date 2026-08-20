@@ -76,7 +76,7 @@ class DelegateToAgentToolUnitTest {
     RoleRegistry roleRegistry;
 
     @Mock
-    VerificationGate verificationGate;
+    Instance<VerificationGate> verificationGate;
 
     @InjectMocks
     DelegateToAgentTool tool;
@@ -86,6 +86,7 @@ class DelegateToAgentToolUnitTest {
         when(agentLoop.get()).thenReturn(mockAgentLoop);
         lenient().when(delegationProcessor.getDelegatableAgentList()).thenReturn("shiva, brahma");
         lenient().when(checkpointCrud.findBySessionAndRole(any(), any())).thenReturn(Optional.empty());
+        lenient().when(verificationGate.isResolvable()).thenReturn(false);
     }
 
     @Test

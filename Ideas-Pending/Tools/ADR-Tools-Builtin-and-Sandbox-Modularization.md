@@ -175,7 +175,7 @@ To prevent cyclic dependencies and maintain strict module boundaries, we adopt a
 #### 1. `amsha-sandbox` (Package Root: `com.amsha.sandbox.*`)
 - **Executors**: `PodmanContainerExecutor`, `ProcessIsolationExecutor` (implements `SandboxExecutionPort`, `@Startup @ApplicationScoped @Unremovable`), `NamespaceExecutor`, `DirectExecutor`
 - **Safety & Transports**: `SandboxCircuitBreaker` (`@ApplicationScoped @Unremovable`), `SandboxCodeSafetyScanner`, `SandboxSecretResolver`, `TmpfsSecretTransport`, `SecretTransport`, `SandboxStrategy`, `SandboxImageResolver`
-- **Health Checks**: `com.amsha.sandbox.health.PodmanHealthCheck`, `com.amsha.sandbox.health.PodmanImageHealthCheck`
+- **Health Checks**: `com.amsha.sandbox.PodmanHealthCheck`, `com.amsha.sandbox.PodmanImageHealthCheck`
 - **Exceptions**: `SandboxImageMissingException`, `PodmanUnavailableException`, `ToolExecutionException`
 - **Native Configuration**: `SandboxReflectionConfig`
 - **CDI & Descriptors**: `META-INF/beans.xml` (Jakarta EE 10, version 4.0, annotated discovery), `jandex-maven-plugin` (`make-index`), Surefire `<forkCount>1</forkCount>`, `<reuseForks>true</reuseForks>`, `<forkedProcessExitTimeoutInSeconds>10</forkedProcessExitTimeoutInSeconds>`
@@ -188,7 +188,7 @@ To prevent cyclic dependencies and maintain strict module boundaries, we adopt a
 - **Checklist**: `CheckListTool` (adapts core `CheckList` records)
 - **Sandbox Tool**: `SandboxExecTool` (uses `SandboxCodeSafetyScanner` from `amsha-sandbox`), `SandboxVerificationGate`
 - **Memory Tools**: `ArchivalMemoryInsertTool`, `ArchivalMemorySearchTool`, `CoreMemoryReadTool`, `CoreMemoryAppendTool`, `CoreMemoryReplaceTool`, `RecallMemorySearchTool`
-- **Dynamic Search**: `com.amsha.tools.builtin.search.ToolSearchIndex` (implements `ToolSearchPort` via Lucene, observes `ToolDiscoveryCompleted`)
+- **Dynamic Search**: `com.amsha.tools.builtin.ToolSearchIndex` (implements `ToolSearchPort` via Lucene, observes `ToolDiscoveryCompleted`)
 - **Native Configuration**: `ToolsBuiltinReflectionConfig`
 - **CDI & Descriptors**: `META-INF/beans.xml` (Jakarta EE 10, version 4.0, annotated discovery), `jandex-maven-plugin` (`make-index`), Surefire `<forkCount>1</forkCount>`, `<reuseForks>true</reuseForks>`, `<forkedProcessExitTimeoutInSeconds>10</forkedProcessExitTimeoutInSeconds>`
 
@@ -204,24 +204,24 @@ To prevent cyclic dependencies and maintain strict module boundaries, we adopt a
 
 The extraction MUST use this file-level manifest. No wildcard deletion or package-wide move is permitted.
 
-- **Move to `tools-builtin` (19 core production files)**: `core/src/main/java/com/amsha/core/tools/BraveWebSearchTool.java`, `SerperWebSearchTool.java`, `SmartWebFetchTool.java`, `HostExecTool.java`, `HostJavaCompiler.java`, `LocalSocksProxy.java`, `GithubTool.java`, `ScheduleTaskTool.java`, `ManageScheduleTool.java`, `CheckListTool.java`, `SandboxExecTool.java`, `SandboxVerificationGate.java`, `memory/ArchivalMemoryInsertTool.java`, `memory/ArchivalMemorySearchTool.java`, `memory/CoreMemoryAppendTool.java`, `memory/CoreMemoryReadTool.java`, `memory/CoreMemoryReplaceTool.java`, `memory/RecallMemorySearchTool.java`, and `search/ToolSearchIndex.java`.
+- **Move to `tools-builtin` (19 core production files)**: `core/src/main/java/com/amsha/core/tools/BraveWebSearchTool.java`, `SerperWebSearchTool.java`, `SmartWebFetchTool.java`, `HostExecTool.java`, `HostJavaCompiler.java`, `LocalSocksProxy.java`, `GithubTool.java`, `ScheduleTaskTool.java`, `ManageScheduleTool.java`, `CheckListTool.java`, `SandboxExecTool.java`, `SandboxVerificationGate.java`, `memory/ArchivalMemoryInsertTool.java`, `memory/ArchivalMemorySearchTool.java`, `memory/CoreMemoryAppendTool.java`, `memory/CoreMemoryReadTool.java`, `memory/CoreMemoryReplaceTool.java`, `memory/RecallMemorySearchTool.java`, and `ToolSearchIndex.java`.
 - **Move to `sandbox` (13 core sandbox production files)**: `DirectExecutor.java`, `NamespaceExecutor.java`, `PodmanContainerExecutor.java`, `PodmanUnavailableException.java`, `ProcessIsolationExecutor.java`, `SandboxCircuitBreaker.java`, `SandboxCodeSafetyScanner.java`, `SandboxImageMissingException.java`, `SandboxSecretResolver.java`, `SandboxStrategy.java`, `SecretTransport.java`, `TmpfsSecretTransport.java`, and `ToolExecutionException.java` from `core/src/main/java/com/amsha/core/sandbox/`.
-- **Move to `sandbox` health package**: `core/src/main/java/com/amsha/core/health/PodmanHealthCheck.java` and `PodmanImageHealthCheck.java` become `com.amsha.sandbox.health.*`.
-- **Retain in core**: `SandboxExecutionPort.java` and `SandboxResult.java`; no implementation may remain in `com.amsha.core.sandbox` after Iteration 3.
+- **Move to `sandbox` package**: `core/src/main/java/com/amsha/core/health/PodmanHealthCheck.java` and `PodmanImageHealthCheck.java` become `com.amsha.sandbox.PodmanHealthCheck` and `com.amsha.sandbox.PodmanImageHealthCheck`.
+- **Retain in core**: `SandboxExecutionPort.java`, `SandboxResult.java`, and `SandboxFailureMessages.java`; no implementation may remain in `com.amsha.core.sandbox` after Iteration 3.
 - **Tests**: the Issue 02 and Issue 03 test lists are the complete migration matrix. Every moved implementation test changes module and package together; registry/SPI/ArchUnit tests remain in core/app as listed in Issue 04.
 
 ### Native reflection inventory
 
 - `CoreReflectionConfig.targets` retains `SandboxResult.class`, `CheckListEvent.class`, `CheckList.class`, `CheckListItem.class`, and `CheckListStatus.class`; migrated tool classes are removed from core imports and targets.
-- `ToolsBuiltinReflectionConfig.targets` registers the 15 built-in tool classes and any nested JSON DTO/record types used by their public schemas. `SandboxReflectionConfig.targets` registers sandbox DTOs/exceptions only when they are reflectively serialized; ordinary CDI beans are not registered speculatively.
-- The Lucene `classNames` inventory is exact: `org.apache.lucene.index.ConcurrentMergeScheduler`, `org.apache.lucene.index.SegmentReader`, `org.apache.lucene.index.IndexWriter`, and `org.apache.lucene.store.FilterIndexInput`, with declared constructors and public methods enabled as required by §6.9.
+- `ToolsBuiltinReflectionConfig.targets` registers the 15 built-in tool classes and supporting components. The Lucene `classNames` inventory is exact: `org.apache.lucene.internal.tests.TestSecrets`, `org.apache.lucene.index.ConcurrentMergeScheduler`, `org.apache.lucene.index.SegmentReader`, `org.apache.lucene.index.IndexWriter`, and `org.apache.lucene.store.FilterIndexInput`, with declared constructors and public methods enabled as required by §6.9.
+- `SandboxReflectionConfig.targets` registers sandbox DTOs, strategies, resolvers, and exceptions (`PodmanUnavailableException`, `SandboxImageMissingException`, `SandboxImageResolver`, `SandboxStrategy`, `SecretTransport`, `TmpfsSecretTransport`, `ToolExecutionException`); ordinary CDI beans are not registered speculatively.
 - The full-package runtime-init flag lives in the `app` native-image metadata `native-image.properties` and preserves existing arguments while adding `--initialize-at-run-time=org.apache.lucene`.
 
 ### Acceptance evidence
 
 - Startup logs must prove `ToolRegistry` discovery, `ToolSearchIndex` index readiness, `CoreSpiResolutionValidator` cardinality, and the sandbox provider bean after app wiring. Missing log evidence fails the gate even if isolated tests pass.
 - The raw `AgentTool` manifest is exactly 21 names; active manifests use named test profiles with explicit configuration and expected sets. A provider `infraFailure` test proves the sanitized message is stable and excludes its raw reason.
-- The old-package scan covers Java, YAML/YML, JSON reflection configuration, native properties, and tests. It scans both package declarations/paths and fully qualified references. The only permitted `com.amsha.core.sandbox` types are `SandboxExecutionPort` and `SandboxResult`.
+- The old-package scan covers Java, YAML/YML, JSON reflection configuration, native properties, and tests. It scans both package declarations/paths and fully qualified references. The only permitted `com.amsha.core.sandbox` types are `SandboxExecutionPort`, `SandboxResult`, and `SandboxFailureMessages`.
 
 ## 5. Key Invariants & Non-Functional Requirements
 

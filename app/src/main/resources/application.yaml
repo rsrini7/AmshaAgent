@@ -53,6 +53,15 @@ quarkus:
     amsha-llm-providers:
       group-id: com.amsha
       artifact-id: amsha-llm-providers
+    amsha-sandbox:
+      group-id: com.amsha
+      artifact-id: amsha-sandbox
+    amsha-tools-builtin:
+      group-id: com.amsha
+      artifact-id: amsha-tools-builtin
+    amsha-self-evolve:
+      group-id: com.amsha
+      artifact-id: amsha-self-evolve
 
   devservices:
     enabled: false
@@ -242,7 +251,7 @@ smallrye:
         level: DEBUG
       "com.amsha.core.agent.loop.AgentStateMachineRunner":
         level: WARN       # ← suppress goal logging noise (isInfoEnabled guard handles the rest)
-      "com.amsha.core.sandbox.PodmanContainerExecutor":
+      "com.amsha.sandbox.PodmanContainerExecutor":
         level: WARN       # ← suppress container start/stop/exec noise
       "org.jboss.resteasy.reactive.server.handlers.PublisherResponseHandler":
         level: ERROR
@@ -848,6 +857,7 @@ amsha:
   sandbox:
     enabled: "${AMSHA_SANDBOX_ENABLED:true}"
     strategy: "${AMSHA_SANDBOX_STRATEGY:PODMAN}"
+    image: "${AMSHA_SANDBOX_IMAGE:}"
     podman-path: "${AMSHA_SANDBOX_PODMAN_PATH:podman}"
     podman-image: "${AMSHA_SANDBOX_PODMAN_IMAGE:localhost/amsha-tool-runner:latest}"
     timeout-seconds: "${AMSHA_SANDBOX_TIMEOUT_SECONDS:30}"

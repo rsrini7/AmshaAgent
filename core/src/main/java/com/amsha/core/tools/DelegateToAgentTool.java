@@ -42,11 +42,13 @@ import org.jboss.logging.Logger;
 
 import io.opentelemetry.api.trace.Span;
 import io.opentelemetry.api.trace.StatusCode;
+import io.quarkus.arc.Unremovable;
 
 /**
  * Allows the coordinator to delegate specialized tasks (like coding or debugging)
  * to domain expert sub-agents (e.g., Shiva, Brahma).
  */
+@Unremovable
 @ApplicationScoped
 @ToolMetadata(
         capabilityId = "garuda",
@@ -102,7 +104,7 @@ public class DelegateToAgentTool implements AgentTool {
     RoleRegistry roleRegistry;
 
     @Inject
-    VerificationGate verificationGate;
+    Instance<VerificationGate> verificationGate;
 
     @ConfigProperty(name = "amsha.delegation.max-depth", defaultValue = "3")
     int maxDelegationDepth = 3;
@@ -490,8 +492,9 @@ public class DelegateToAgentTool implements AgentTool {
                 answer = sf.answer();
             }
 
-            if (answer != null) {
-                VerificationGate.VerificationResult vRes = verificationGate.verify(ctx, answer);
+            if (answer != null && verificationGate != null && verificationGate.isResolvable()) {
+                VerificationGate.VerificationResult vRes =
+                        verificationGate.get().verify(ctx, answer);
                 if (!vRes.success()) {
                     log.warnf(
                             "[VerificationGate] Coder output failed verification. Auto-routing execution error to Shiva debugger...");

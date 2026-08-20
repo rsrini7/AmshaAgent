@@ -55,6 +55,14 @@ Refer to the [Module Architecture Diagram](assets/amsha_module_architecture.svg)
 ### 1.5 Channel type policy
 - POLICY: WorkspaceContext.channelType() returns Optional<String>. Use requireChannelType() only at call sites where a missing channelType is a fatal invariant violation. Use channelType().orElse("UNKNOWN") at call sites where a fallback is acceptable (e.g., audit logging only).
 
+### 1.6 Sandbox module (`amsha-sandbox`)
+- `amsha-sandbox` owns process isolation, Podman container execution, namespace execution, safety scanners, and circuit breakers.
+- `amsha-core` MUST NOT depend on `amsha-sandbox`; interaction flows strictly through the `SandboxExecutionPort` SPI in `amsha-core`. (Enforced by ArchUnit Rule 14 in `ArchitectureBoundaryTest`).
+
+### 1.7 Built-in tools module (`amsha-tools-builtin`)
+- `amsha-tools-builtin` owns the 15 standard built-in concrete `AgentTool` implementations, Lucene dynamic tool search index, memory management tools, and host execution wrappers.
+- `amsha-core` MUST NOT depend on `amsha-tools-builtin`; interaction flows strictly through the `ToolSearchPort` SPI in `amsha-core` and standard CDI `Instance<AgentTool>` discovery. (Enforced by ArchUnit Rule 15 in `ArchitectureBoundaryTest`).
+
 ---
 
 ## 2. Context and session binding

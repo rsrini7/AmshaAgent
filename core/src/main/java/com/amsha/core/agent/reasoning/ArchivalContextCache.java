@@ -19,7 +19,7 @@ import com.amsha.core.scope.WorkspaceScoped;
  * two separate volatile fields.
  *
  * @see ChatHistoryAssembler
- * @see com.amsha.core.tools.memory.ArchivalMemorySearchTool
+ * @see com.amsha.tools.builtin.memory.ArchivalMemorySearchTool
  */
 @WorkspaceScoped
 public class ArchivalContextCache {

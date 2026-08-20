@@ -149,4 +149,24 @@ public class ArchitectureBoundaryTest {
             .dependOnClassesThat()
             .resideInAPackage("com.amsha.llm.providers..")
             .allowEmptyShould(true);
+
+    // 14. com.amsha.core does NOT import com.amsha.sandbox..
+    @ArchTest
+    static final ArchRule coreShouldNotImportSandbox = noClasses()
+            .that()
+            .resideInAPackage("com.amsha.core..")
+            .should()
+            .dependOnClassesThat()
+            .resideInAPackage("com.amsha.sandbox..")
+            .allowEmptyShould(true);
+
+    // 15. com.amsha.core does NOT import com.amsha.tools.builtin..
+    @ArchTest
+    static final ArchRule coreShouldNotImportToolsBuiltin = noClasses()
+            .that()
+            .resideInAPackage("com.amsha.core..")
+            .should()
+            .dependOnClassesThat()
+            .resideInAPackage("com.amsha.tools.builtin..")
+            .allowEmptyShould(true);
 }

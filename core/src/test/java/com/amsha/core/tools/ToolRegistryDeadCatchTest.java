@@ -26,8 +26,8 @@ public class ToolRegistryDeadCatchTest {
         // Call invokeTool with an unknown role string ("phantom_role").
         // Assert it returns a 403 failure and does not crash or silently swallow exceptions.
         WorkspaceContext.run("test-session", "user", "chat", AutonomyLevel.FULL, "phantom_role", () -> {
-            ToolResponse response =
-                    registry.invokeTool(ToolCapability.GITHUB.toolName(), Map.of("action", "repo", "command", "list"));
+            ToolResponse response = registry.invokeTool(
+                    ToolCapability.DELEGATE_TO_AGENT.toolName(), Map.of("agent", "coder", "goal", "list"));
             assertEquals(403, response.exitCode());
             assertTrue(
                     response.output().contains("Agent role 'phantom_role' is not permitted to use tool"),

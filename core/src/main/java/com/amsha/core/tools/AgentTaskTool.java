@@ -19,11 +19,14 @@ import com.amsha.core.task.TaskFile;
 import com.amsha.core.task.TaskManager;
 import com.amsha.core.task.TaskState;
 
+import io.quarkus.arc.Unremovable;
+
 /**
  * Agent-callable tool for creating, querying, and managing markdown-based task files.
  * <p>
  * Tasks are plain Markdown files with YAML frontmatter in the workspace — no database required.
  */
+@Unremovable
 @ApplicationScoped
 @ToolMetadata(
         capabilityId = "agent_task",

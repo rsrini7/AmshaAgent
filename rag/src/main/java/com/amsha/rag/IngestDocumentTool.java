@@ -24,6 +24,9 @@ import com.amsha.persistence.api.IngestResult;
 import com.amsha.persistence.api.MemoryEntryDto;
 import com.amsha.persistence.api.MemoryRetrievalPort;
 
+import io.quarkus.arc.Unremovable;
+
+@Unremovable
 @ApplicationScoped
 @ToolMetadata(
         capabilityId = "ingest_document",

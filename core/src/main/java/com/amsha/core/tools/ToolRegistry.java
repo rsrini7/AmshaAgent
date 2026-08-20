@@ -2,8 +2,9 @@ package com.amsha.core.tools;
 
 import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.enterprise.event.Observes;
+import jakarta.enterprise.event.Event;
 import jakarta.enterprise.inject.Instance;
+import jakarta.enterprise.inject.spi.BeanManager;
 import jakarta.inject.Inject;
 
 import java.nio.file.Files;
@@ -11,7 +12,6 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -24,7 +24,9 @@ import com.amsha.core.agent.role.ToolCapability;
 import com.amsha.core.audit.AuditService;
 import com.amsha.core.audit.ComplianceViolationException;
 import com.amsha.core.audit.SecurityEventType;
-import com.amsha.core.sandbox.ProcessIsolationExecutor;
+import com.amsha.core.config.CoreSpiResolutionValidator;
+import com.amsha.core.sandbox.SandboxExecutionPort;
+import com.amsha.core.sandbox.SandboxFailureMessages;
 import com.amsha.core.sandbox.SandboxResult;
 import com.amsha.core.scope.WorkspaceContext;
 import com.amsha.core.scope.WorkspaceScopeHolder;
@@ -43,7 +45,7 @@ import org.jboss.logging.Logger;
 
 import io.opentelemetry.api.trace.Span;
 import io.quarkus.arc.Unremovable;
-import io.quarkus.runtime.StartupEvent;
+import io.quarkus.runtime.Startup;
 
 /**
  * CDI-based tool registry with governance enforcement.
@@ -62,6 +64,7 @@ import io.quarkus.runtime.StartupEvent;
  * ScopedValues - NOT MDC. MDC is ThreadLocal and dies at virtual thread boundaries;
  * ScopedValues are propagated correctly across Quarkus virtual threads.
  */
+@Startup
 @ApplicationScoped
 @Unremovable
 public class ToolRegistry {
@@ -78,7 +81,10 @@ public class ToolRegistry {
     ToolSecretExtractor secretExtractor;
 
     @Inject
-    ProcessIsolationExecutor isolationExecutor;
+    BeanManager beanManager;
+
+    @Inject
+    Event<ToolDiscoveryCompleted> toolDiscoveryCompleted;
 
     @Inject
     ObjectMapper objectMapper;
@@ -98,10 +104,9 @@ public class ToolRegistry {
     @PostConstruct
     void initialize() {
         discoveryService.discover();
-    }
-
-    void onStart(@Observes StartupEvent ev) {
-        log.info("ToolRegistry: Eager startup verification complete.");
+        int count = listTools().size();
+        log.infof("ToolRegistry: Eager startup discovery complete. Discovered and registered %d tools.", count);
+        toolDiscoveryCompleted.fire(new ToolDiscoveryCompleted(count));
     }
 
     /**
@@ -113,11 +118,11 @@ public class ToolRegistry {
     }
 
     public List<String> listTools() {
-        LinkedHashSet<String> names =
-                new LinkedHashSet<>(discoveryService.getToolIndex().keySet());
+        List<String> names = new ArrayList<>(discoveryService.getToolIndex().keySet());
         if (dynamicToolInvokers != null && !dynamicToolInvokers.isUnsatisfied()) {
             dynamicToolInvokers.forEach(invoker -> invoker.listTools().forEach(tool -> names.add(tool.name())));
         }
+        Collections.sort(names);
         return List.copyOf(names);
     }
 
@@ -272,13 +277,21 @@ public class ToolRegistry {
             }
 
             tool.prepareWorkspace(workspaceRoot, params);
+            Optional<SandboxExecutionPort> sandboxPort =
+                    CoreSpiResolutionValidator.resolveOptional(beanManager, SandboxExecutionPort.class);
+            if (sandboxPort.isEmpty()) {
+                log.warnf("Tool '%s' requires sandbox isolation, but SandboxExecutionPort is unavailable.", toolName);
+                return ToolResponse.infraFailure(SandboxFailureMessages.SANDBOX_OFFLINE_MESSAGE);
+            }
+
             var command = tool.sandboxCommand(ctx, params);
-
             SandboxResult result =
-                    isolationExecutor.executeSandboxed(ctx.sessionId(), workspaceRoot, command, requiredSecrets);
+                    sandboxPort.get().executeSandboxed(ctx.sessionId(), workspaceRoot, command, requiredSecrets);
 
-            if (result.isInfraFailure()) {
-                return ToolResponse.infraFailure(result.reason());
+            if (result == null || result.isInfraFailure()) {
+                String reason = result != null ? result.reason() : "Sandbox executor returned null";
+                log.warnf("Tool '%s' sandbox execution encountered infra failure: %s", toolName, reason);
+                return ToolResponse.infraFailure(SandboxFailureMessages.SANDBOX_OFFLINE_MESSAGE);
             }
 
             if (!result.success()) {
@@ -295,7 +308,8 @@ public class ToolRegistry {
             return ToolResponse.failure(1, "Security violation: " + e.getMessage());
         } catch (Exception e) {
             if (e instanceof ComplianceViolationException cve) throw cve;
-            return handleExecutionException(ctx, toolName, e);
+            log.errorf("Tool '%s' sandboxed execution infra failure: %s", toolName, LogUtil.rootMessage(e));
+            return ToolResponse.infraFailure(SandboxFailureMessages.SANDBOX_OFFLINE_MESSAGE);
         }
     }
 

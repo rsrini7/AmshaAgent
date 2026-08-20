@@ -35,8 +35,10 @@ import com.amsha.core.tools.ToolResponse;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
+import io.quarkus.arc.Unremovable;
+
 /**
- * Replaces PlaywrightBrowserTool + PlaywrightPageRunner + PageContentExtractor +
+ * Modern, process-isolated Playwright CLI tool. Replaces the old 1,200-line
  * ScreenshotCapture + NavigationStrategy with a single class that shells out to
  * the official {@code playwright-cli} daemon.
  * <p>
@@ -47,6 +49,7 @@ import org.jboss.logging.Logger;
  * Requirements: Node.js 20+, {@code npm install -g @playwright/cli},
  * {@code playwright-cli install-browser chromium}.
  */
+@Unremovable
 @ApplicationScoped
 @ToolMetadata(
         capabilityId = "browser_navigate",

@@ -49,10 +49,11 @@ import com.amsha.core.skill.SkillDefinition;
 import com.amsha.core.skill.SkillFrontmatter;
 import com.amsha.core.skill.SkillLoader;
 import com.amsha.core.skill.SkillPromptParams;
-import com.amsha.core.tools.GithubTool;
-import com.amsha.core.tools.ManageScheduleTool;
-import com.amsha.core.tools.SandboxExecTool;
-import com.amsha.core.tools.ScheduleTaskTool;
+import com.amsha.core.tools.CheckList;
+import com.amsha.core.tools.CheckListEvent;
+import com.amsha.core.tools.CheckListItem;
+import com.amsha.core.tools.CheckListStatus;
+import com.amsha.core.tools.ToolDiscoveryCompleted;
 import com.amsha.core.tools.ToolRegistry;
 import com.amsha.core.tools.ToolResponse;
 import com.amsha.persistence.api.SessionCatalogEntry;
@@ -88,10 +89,6 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             ToolRegistry.ToolDescriptor.class,
             AuditOutcome.class,
             SecurityEventType.class,
-            GithubTool.class,
-            SandboxExecTool.class,
-            ScheduleTaskTool.class,
-            ManageScheduleTool.class,
             SkillDefinition.class,
             SkillAdmissionEvaluator.AdmissionDecision.class,
             SkillLoader.QuarantinedSkill.class,
@@ -107,6 +104,11 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             ToolResponse.ToolPending.class,
             ReasoningStepDeserializer.class,
             ReasoningStepSerializer.class,
+            CheckList.class,
+            CheckListItem.class,
+            CheckListStatus.class,
+            CheckListEvent.class,
+            ToolDiscoveryCompleted.class,
             ModelRouter.ModelConfig.class,
             OrderedFailoverChatModel.class,
             OrderedFailoverChatModel.Entry.class,

@@ -22,6 +22,8 @@ import com.amsha.selfevolve.store.DirectiveStorePort;
 
 import org.jboss.logging.Logger;
 
+import io.quarkus.arc.Unremovable;
+
 /**
  * Agent tool that triggers self-evolution directive synthesis on-demand.
  * <p>
@@ -29,6 +31,7 @@ import org.jboss.logging.Logger;
  * and creates them in SHADOW mode for safe evaluation.
  * Also performs lifecycle reconciliation on existing SHADOW directives.
  */
+@Unremovable
 @ApplicationScoped
 @ToolMetadata(
         capabilityId = "self_evolve_reflect",

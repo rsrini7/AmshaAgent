@@ -21,6 +21,10 @@
     </dependency>
     <dependency>
       <groupId>com.amsha</groupId>
+      <artifactId>amsha-sandbox</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.amsha</groupId>
       <artifactId>amsha-persistence-api</artifactId>
       <version>${project.version}</version>
     </dependency>

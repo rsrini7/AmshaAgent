@@ -62,7 +62,7 @@ public interface AgentTool {
     ToolOperation requiredOperation();
 
     /**
-     * Whether this tool's execution should be wrapped by ProcessIsolationExecutor.
+     * Whether this tool's execution should be wrapped by {@link com.amsha.core.sandbox.SandboxExecutionPort}.
      * Defaults to {@code true} - opt-OUT is the exception, not the rule.
      * <p>
      * Set to {@code false} only for trusted in-memory tools that do not

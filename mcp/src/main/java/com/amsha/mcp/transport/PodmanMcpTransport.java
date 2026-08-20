@@ -20,11 +20,11 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import com.amsha.common.util.LogUtil;
-import com.amsha.core.sandbox.SandboxCircuitBreaker;
 import com.amsha.mcp.tool.DynamicToolCapability;
 import com.amsha.mcp.tool.DynamicToolCapabilityRegistry;
 import com.amsha.mcp.tool.DynamicToolOperationDefaults;
 import com.amsha.mcp.tool.McpTransportType;
+import com.amsha.sandbox.SandboxCircuitBreaker;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;

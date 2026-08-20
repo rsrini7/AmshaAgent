@@ -3,6 +3,7 @@ package com.amsha.mcp.transport;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -107,6 +108,94 @@ class McpManagementServiceTest {
         assertThrows(McpConnectionException.class, () -> service.enableTool("user-1", "server", "search", false));
 
         verify(lifecycleService).setToolEnabled("id-1", "user-1", "search", false);
+    }
+
+    @Test
+    void testRequestDiscovery() {
+        when(approvalService.request(
+                        eq("user-1"),
+                        eq(McpApprovalService.Operation.DISCOVER),
+                        eq("server"),
+                        eq("https://example.com"),
+                        any(),
+                        any()))
+                .thenReturn(new McpApprovalService.PendingApproval(
+                        "task-1", "DISCOVER", "server", "https://example.com", null, now, null));
+
+        var pending = service.requestDiscovery("user-1", "server", "https://example.com", Map.of());
+        assertEquals("task-1", pending.taskId());
+    }
+
+    @Test
+    void testRequestConnect() {
+        when(approvalService.request(
+                        eq("user-1"),
+                        eq(McpApprovalService.Operation.CONNECT),
+                        eq("server"),
+                        eq("https://example.com"),
+                        any(),
+                        any()))
+                .thenReturn(new McpApprovalService.PendingApproval(
+                        "task-2", "CONNECT", "server", "https://example.com", null, now, null));
+
+        var pending = service.requestConnect("user-1", "server", "https://example.com", Map.of());
+        assertEquals("task-2", pending.taskId());
+    }
+
+    @Test
+    void testRequestReconnect() {
+        McpConnectionDto connection = connection("server", "DISCONNECTED");
+        when(lifecycleService.findByNameAndUserId("server", "user-1")).thenReturn(Optional.of(connection));
+        when(approvalService.request(
+                        eq("user-1"),
+                        eq(McpApprovalService.Operation.RECONNECT),
+                        eq("server"),
+                        eq("https://example.test/mcp"),
+                        any(),
+                        any(),
+                        any()))
+                .thenReturn(new McpApprovalService.PendingApproval(
+                        "task-3", "RECONNECT", "server", "https://example.test/mcp", null, now, null));
+
+        var pending = service.requestReconnect("user-1", "server");
+        assertEquals("task-3", pending.taskId());
+    }
+
+    @Test
+    void testRequestRotateHeaders() {
+        McpConnectionDto connection = connection("server", "CONNECTED");
+        when(lifecycleService.findByNameAndUserId("server", "user-1")).thenReturn(Optional.of(connection));
+        when(approvalService.request(
+                        eq("user-1"),
+                        eq(McpApprovalService.Operation.ROTATE_HEADERS),
+                        eq("server"),
+                        eq("https://example.test/mcp"),
+                        any(),
+                        any(),
+                        any()))
+                .thenReturn(new McpApprovalService.PendingApproval(
+                        "task-4", "ROTATE_HEADERS", "server", "https://example.test/mcp", null, now, null));
+
+        var pending = service.requestRotateHeaders("user-1", "server", Map.of("X-Key", "val"));
+        assertEquals("task-4", pending.taskId());
+    }
+
+    @Test
+    void testRejectApproval() {
+        when(approvalService.reject("user-1", "task-1")).thenReturn(true);
+        when(approvalService.find("user-1", "task-1")).thenReturn(Optional.empty());
+
+        boolean rejected = service.rejectApproval("user-1", "task-1");
+        assertEquals(true, rejected);
+    }
+
+    @Test
+    void testListAndPendingApprovals() {
+        when(approvalService.list("user-1")).thenReturn(List.of());
+        assertEquals(0, service.pendingApprovals("user-1").size());
+
+        when(lifecycleService.listByUserId("user-1")).thenReturn(List.of());
+        assertEquals(0, service.list("user-1").size());
     }
 
     private McpConnectionDto connection(String name, String state) {

@@ -28,6 +28,8 @@ import com.amsha.core.tools.ToolResponse;
 import com.amsha.mcp.transport.McpClientService;
 import com.amsha.mcp.transport.McpManagementService;
 
+import io.quarkus.arc.Unremovable;
+
 /**
  * Component A4 - McpSelfRegisterTool.
  * Allows agents to dynamically register new MCP servers.
@@ -35,6 +37,7 @@ import com.amsha.mcp.transport.McpManagementService;
  * This tool requires manual approval (HITL) as it can grant the agent
  * access to new capabilities and external systems.
  */
+@Unremovable
 @ApplicationScoped
 @ToolMetadata(
         capabilityId = "register_mcp_server",

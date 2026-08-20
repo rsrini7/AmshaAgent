@@ -10,6 +10,7 @@ import dev.langchain4j.data.message.UserMessage;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Instance;
+import jakarta.enterprise.inject.spi.BeanManager;
 import jakarta.inject.Inject;
 
 import java.nio.file.Files;
@@ -28,6 +29,7 @@ import com.amsha.core.agent.loop.CodeGenerationPolicy;
 import com.amsha.core.agent.loop.LoopStuckDetector;
 import com.amsha.core.agent.role.AgentRoleEnum;
 import com.amsha.core.agent.role.ToolCapability;
+import com.amsha.core.config.CoreSpiResolutionValidator;
 import com.amsha.core.security.AutonomyLevel;
 import com.amsha.core.skill.SkillAdaptationManager;
 import com.amsha.core.skill.SkillRegistry;
@@ -35,7 +37,7 @@ import com.amsha.core.tool.DynamicToolInvoker;
 import com.amsha.core.tools.AgentTool;
 import com.amsha.core.tools.DynamicToolSchemaParser;
 import com.amsha.core.tools.ToolRegistry;
-import com.amsha.core.tools.search.ToolSearchIndex;
+import com.amsha.core.tools.search.ToolSearchPort;
 import com.amsha.core.util.TextPatternUtils;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -57,7 +59,7 @@ public class ReasoningMessageAssembler {
     private final IntentClassificationService intentClassifier;
 
     @Inject
-    ToolSearchIndex toolSearchIndex;
+    BeanManager beanManager;
 
     @Inject
     SkillRegistry skillRegistry;
@@ -292,11 +294,18 @@ public class ReasoningMessageAssembler {
         }
 
         List<String> ranked = new ArrayList<>();
-        if (toolSearchIndex != null && goal != null && !goal.isBlank()) {
-            List<String> searchResults = toolSearchIndex.search(goal, allowedTools.size());
-            for (String name : searchResults) {
-                if (allowedTools.contains(name)) {
-                    ranked.add(name);
+        if (goal != null && !goal.isBlank()) {
+            Optional<ToolSearchPort> searchPortOpt =
+                    CoreSpiResolutionValidator.resolveOptional(beanManager, ToolSearchPort.class);
+            if (searchPortOpt.isPresent()) {
+                ToolSearchPort searchPort = searchPortOpt.get();
+                if (searchPort.isReady()) {
+                    List<String> searchResults = searchPort.search(goal, allowedTools.size());
+                    for (String name : searchResults) {
+                        if (allowedTools.contains(name)) {
+                            ranked.add(name);
+                        }
+                    }
                 }
             }
         }

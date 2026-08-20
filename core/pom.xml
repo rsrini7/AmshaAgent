@@ -93,6 +93,11 @@
       <scope>test</scope>
     </dependency>
 
+    <dependency>
+      <groupId>com.cronutils</groupId>
+      <artifactId>cron-utils</artifactId>
+    </dependency>
+
     <!-- LangChain4J Core (common abstractions) -->
     <dependency>
       <groupId>io.quarkiverse.langchain4j</groupId>
@@ -110,12 +115,6 @@
       </exclusions>
     </dependency>
 
-    <!-- Scheduler / Cron -->
-    <dependency>
-      <groupId>com.cronutils</groupId>
-      <artifactId>cron-utils</artifactId>
-    </dependency>
-
     <!-- HTML Escape -->
     <dependency>
       <groupId>org.apache.commons</groupId>
@@ -130,20 +129,6 @@
     <dependency>
       <groupId>org.commonmark</groupId>
       <artifactId>commonmark-ext-gfm-tables</artifactId>
-    </dependency>
-
-    <!-- Lucene — dynamic tool search index -->
-    <dependency>
-      <groupId>org.apache.lucene</groupId>
-      <artifactId>lucene-core</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.lucene</groupId>
-      <artifactId>lucene-queryparser</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.lucene</groupId>
-      <artifactId>lucene-analysis-common</artifactId>
     </dependency>
 
     <!-- Caffeine cache for ProcessingLockManager -->

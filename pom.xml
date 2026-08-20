@@ -19,6 +19,8 @@
     <module>persistence-common</module>
     <module>common</module>
     <module>core</module>
+    <module>sandbox</module>
+    <module>tools-builtin</module>
     <module>llm-providers</module>
     <module>persistence-sqlite</module>
     <module>persistence-fs</module>
@@ -123,6 +125,16 @@
       <dependency>
         <groupId>com.amsha</groupId>
         <artifactId>amsha-common</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.amsha</groupId>
+        <artifactId>amsha-tools-builtin</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.amsha</groupId>
+        <artifactId>amsha-sandbox</artifactId>
         <version>${project.version}</version>
       </dependency>
       <dependency>
@@ -424,6 +436,11 @@
           <groupId>org.jacoco</groupId>
           <artifactId>jacoco-maven-plugin</artifactId>
           <version>${jacoco.version}</version>
+        </plugin>
+        <plugin>
+          <groupId>io.smallrye</groupId>
+          <artifactId>jandex-maven-plugin</artifactId>
+          <version>3.6.0</version>
         </plugin>
       </plugins>
     </pluginManagement>
