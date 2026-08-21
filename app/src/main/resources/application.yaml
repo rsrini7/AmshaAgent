@@ -711,8 +711,8 @@ amsha:
       internal: "${AMSHA_API_KEYS_INTERNAL:key-internal-changeme}"
       ci: "${AMSHA_API_KEYS_CI:key-ci-changeme}"
     rate-limit:
-      requests-per-minute: 60
-      mutation-per-minute: 10
+      requests-per-minute: ${AMSHA_API_RATE_LIMIT_REQUESTS_PER_MINUTE:6000}
+      mutation-per-minute: ${AMSHA_API_RATE_LIMIT_MUTATION_PER_MINUTE:1000}
   
   tools:
     # Per-category thread pool isolation to prevent cross-category starvation.
