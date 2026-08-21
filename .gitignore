@@ -41,7 +41,7 @@ Thumbs.db
 test-output.log
 api-surface*.txt
 workspaces/
-data/
+data*/
 !**/scripts/data/
 lib/
 

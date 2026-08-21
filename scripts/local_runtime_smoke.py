@@ -356,9 +356,31 @@ def verify_digest(path: Path, expected_bytes: object, expected_digest: object, l
         raise SmokeFailure(f"Bundle {label} digest did not match its manifest")
 
 
-def verify_bundle(model_root: Path, bundle_id: str, emit: Emitter = print) -> None:
+def verify_bundle(
+    model_root: Path,
+    bundle_id: str,
+    emit: Emitter = print,
+    project_root: Path | None = None,
+) -> None:
     bundle_directory = model_root.expanduser().resolve() / bundle_id
     manifest_path = bundle_directory / "manifest.json"
+    if not manifest_path.is_file() and project_root is not None:
+        installer = project_root / ".mise" / "tasks" / "models" / "install-mpnet.py"
+        if bundle_id == DEFAULT_BUNDLE and installer.is_file():
+            emit(f"INFO Pinned ONNX bundle '{bundle_id}' missing at {model_root}. Downloading via installer...")
+            env = dict(os.environ)
+            env["AMSHA_ONNX_MODEL_ROOT"] = str(model_root.expanduser().resolve())
+            result = subprocess.run(
+                [sys.executable, str(installer)],
+                cwd=project_root,
+                env=env,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if result.returncode != 0:
+                error_detail = result.stderr.strip() or result.stdout.strip()
+                raise SmokeFailure(f"Failed to auto-download model bundle: {error_detail}")
     try:
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     except FileNotFoundError:
@@ -632,7 +654,7 @@ def run_native(args: argparse.Namespace, project_root: Path, config: OmlxConfig,
     if not available_port(args.port):
         raise SmokeFailure("Requested native smoke port is already in use")
 
-    verify_bundle(model_root, args.bundle, emit)
+    verify_bundle(model_root, args.bundle, emit, project_root)
     run_omlx_checks(config, args.request_timeout, emit)
 
     smoke_root = project_root / "data" / "smoke"
@@ -750,7 +772,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             internal_api_key = require_setting(settings, INTERNAL_API_KEY)
             base_url = normalized_base_url(args.amsha_base_url, "Amsha base URL")
             run_omlx_checks(config, args.request_timeout)
-            verify_bundle(model_root, args.bundle)
+            verify_bundle(model_root, args.bundle, project_root=project_root)
             run_amsha_checks(base_url, internal_api_key, args.request_timeout, args.dimensions)
             internal_api_key = ""
         elif args.command == "native":
