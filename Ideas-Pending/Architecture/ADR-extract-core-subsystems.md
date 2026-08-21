@@ -1,6 +1,6 @@
 # ADR: Extract Core Shared Surfaces and Subsystems from amsha-core
 
-- **Status**: Proposed (rev 2 — addresses review feedback P1-1…P1-6)
+- **Status**: Proposed (rev 4 — addresses review feedback P1-1…P1-6, second-review blockers, and the core→memory fence exemption)
 - **Date**: 2026-08-21
 - **Decision Owners**: Amsha Architecture Committee
 - **Related Invariants**: `docs/Architecture_Invariants.md` §5, §15.1–15.2, §16.1–16.3, §16.6–16.7, §20.1–20.2; `AGENTS.md` §8
@@ -158,8 +158,9 @@ domain model.
 - `com.amsha.security.api` receives: `SecretVault` (interface, moved as-is), `VaultKey`, `VaultConstants`,
   `CryptoConstants`, `RequiresSecret`/`RequiresSecrets`, `ToolOperation`, `OutboundPurpose`,
   `OutboundPolicyDecision`, `AutonomyLevel`.
-- **`RiskLevel` extraction:** `ToolOperation` embeds `ApprovalFrame.RiskLevel` in every constant (18 repo-wide
-  references). `RiskLevel` is extracted as a top-level enum in `com.amsha.security.api`; `ApprovalFrame`
+- **`RiskLevel` extraction:** `ToolOperation` embeds `ApprovalFrame.RiskLevel` in every constant (27 repo-wide
+  qualified references, measured). `RiskLevel` is extracted as a top-level enum in `com.amsha.security.api`;
+  `ApprovalFrame`
   (core.governance) and all 18 references re-point. No duplicate risk vocabulary is created.
 - Consumers re-pointed in the same iteration: `core.tools`, `core.agent.loop`, `core.governance`, plus
   sandbox/tools-builtin/llm-providers/mcp/onboarding imports of these vocabulary types.
@@ -246,9 +247,12 @@ domain model.
 ## 4. Key Invariants & Non-Functional Requirements
 
 1. **Two-tier ArchUnit fences (§2.1)**: api modules must not depend on `com.amsha.core..`; core must not depend on
-   impl modules (`com.amsha.security`, `com.amsha.memory`, `com.amsha.skills`, `com.amsha.sandbox`,
-   `com.amsha.tools.builtin`); persistence impls must not depend on core. Impl→core dependencies are legal and
-   intentional.
+   impl modules (`com.amsha.security`, `com.amsha.skills`, `com.amsha.sandbox`, `com.amsha.tools.builtin`);
+   persistence impls must not depend on core. Impl→core dependencies are legal and intentional.
+   **`com.amsha.memory` is the single exempted impl module**: it keeps a zero-core gate itself (no cycle is
+   possible), and core consumes its concrete services (`AgentLoop`, `ChatHistoryAssembler`, `CompactionService`,
+   `PersistentChatMemoryStore`), so the legal direction is core → memory. The fence list and Issue-01 rule
+   deliberately exclude it.
 2. **CDI Discovery (§15.1–15.2, §16.1–16.3)**: moved beans are `@ApplicationScoped` + `@Unremovable`; optional SPIs
    resolve via the shared `BeanManager.getBeans(Object.class)` resolver with deterministic >1 failure;
    `CoreSpiResolutionValidator` extended for new optional ports.
@@ -314,3 +318,7 @@ domain model.
   direction, no `amsha-skills` edge in `core/pom.xml`); security consumer policy made honest (vocabulary-only
   consumers use `security-api`; `llm-providers`/`mcp`/`onboarding` declare direct `amsha-security` deps for
   concrete governed-HTTP/bootstrap classes — impl→impl precedent).
+- **rev 4 (2026-08-22)**: implementation-readiness fixes — `com.amsha.memory` exempted from the
+  core-never-imports-impl fence (zero-core impl consumed by core via a legal core → memory edge; fence list,
+  Issue-01 rule, and Issue-10 audit updated); `RiskLevel` reference count corrected to the measured 27;
+  status line aligned with revision history.
