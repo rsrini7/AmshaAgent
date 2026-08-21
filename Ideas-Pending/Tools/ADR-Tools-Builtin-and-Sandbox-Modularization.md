@@ -66,7 +66,7 @@ To prevent cyclic dependencies and maintain strict module boundaries, we adopt a
   4. Added `CheckListWireCompatibilityTest` in `amsha-core` asserting bidirectional JSON serialization matches legacy schema.
 
 ### 2. `amsha-mcp` Dependency on `SandboxCircuitBreaker`
-- **Problem**: `PodmanMcpTransport` and its test in `amsha-mcp` directly injected `com.amsha.core.sandbox.SandboxCircuitBreaker`.
+- **Problem**: `PodmanMcpTransport` and its test in `amsha-mcp` directly depended on the sandbox circuit breaker through the old core boundary.
 - **Solution**:
   1. `SandboxCircuitBreaker` moves to `amsha-sandbox` (`com.amsha.sandbox.SandboxCircuitBreaker`).
   2. Add `amsha-sandbox` dependency to `mcp/pom.xml`.
@@ -194,7 +194,7 @@ To prevent cyclic dependencies and maintain strict module boundaries, we adopt a
 
 #### 3. Retained in `amsha-core` (`com.amsha.core.*`)
 - **Core SPIs & Governance**: `AgentTool`, `ToolExecutionContext`, `ToolResponse`, `IdempotencyMode`, `ToolCategory`, `ToolRegistry`, `ToolDiscoveryService`, `ToolGovernanceGuard`, `ToolSecretExtractor`, `ToolSchemaProvider`, `ToolCategoryMapper`, `ToolContractExporter`, `DynamicToolSchemaParser`, `VerificationGate`
-- **Decoupling Ports & Lifecycle**: `SandboxExecutionPort`, `SandboxResult` (`com.amsha.core.sandbox`), `ToolSearchPort`, `CoreSpiResolutionValidator`, `ToolDiscoveryCompleted`
+- **Decoupling Ports & Lifecycle**: `SandboxExecutionPort`, `SandboxResult`, `SandboxFailureMessages` (`com.amsha.core.sandbox`), `ToolSearchPort`, `CoreSpiResolutionValidator`, `ToolDiscoveryCompleted`
 - **Coordination Tools**: `DelegateToAgentTool`, `DelegationProcessor`, `AgentTaskTool`
 - **Shared Utilities & Events**: `CodeLanguageDetector`, `OutputTruncator`, `CheckListEvent`, `CheckList`, `CheckListItem`, `CheckListStatus` (in `com.amsha.core.tools`), `CronScheduleUtil`
 
@@ -237,7 +237,7 @@ The extraction MUST use this file-level manifest. No wildcard deletion or packag
    - Centralized `SandboxReflectionConfig` and `ToolsBuiltinReflectionConfig`.
    - Apply the exact target/class-name inventory above and prune migrated tool classes from `CoreReflectionConfig`.
    - Full package runtime initialization for Lucene: `--initialize-at-run-time=org.apache.lucene`.
-   - Register the four Lucene `TestSecrets` classes by class name; a native build is not sufficient without the runtime startup smoke assertion.
+   - Register the five Lucene classes in the exact `classNames` inventory by class name; a native build is not sufficient without the runtime startup smoke assertion.
 5. **ConfigProperty Governance**:
    - All `@ConfigProperty` entries in `amsha-sandbox` (`amsha.sandbox.*`) and `amsha-tools-builtin` (`amsha.tools.*`, Brave, Serper, GitHub, SOCKS) must be documented in their respective module READMEs and verified against `application.yaml` and `.env.example`.
    - Standardize on `amsha.sandbox.image` with fallback `amsha.sandbox.podman-image`, preserving `localhost/amsha-tool-runner:latest` as the default.

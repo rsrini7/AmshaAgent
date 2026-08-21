@@ -58,6 +58,8 @@ class CoreSpiResolutionValidatorTest {
         var result = CoreSpiResolutionValidator.resolveOptional(bm, TestSpi.class);
         assertTrue(result.isPresent());
         assertSame(expectedInstance, result.get());
+        verify(bm, times(1)).resolve(anySet());
+        verify(bm, times(1)).getReference(bean, TestSpi.class, cc);
     }
 
     @Test

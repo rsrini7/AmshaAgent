@@ -63,7 +63,9 @@ public class NamespaceExecutor {
         }
         String result = output.trim();
         if (process.exitValue() != 0) {
-            throw new ToolExecutionException("Tool failed (exit " + process.exitValue() + "): " + result);
+            throw new ToolExecutionException(
+                    result.isBlank() ? "Tool process exited with code " + process.exitValue() : result,
+                    process.exitValue());
         }
         return result.isBlank() ? "(no execution output)" : result;
     }

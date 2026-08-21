@@ -51,6 +51,7 @@ public class ToolSearchIndex implements ToolSearchPort {
     private volatile boolean ready = false;
 
     void onDiscoveryCompleted(@Observes ToolDiscoveryCompleted event) {
+        LOG.infof("ToolSearchIndex: received ToolDiscoveryCompleted for %d tools.", event.discoveredToolCount());
         rebuild();
     }
 

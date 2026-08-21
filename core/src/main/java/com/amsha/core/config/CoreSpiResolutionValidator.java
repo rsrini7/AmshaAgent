@@ -76,14 +76,17 @@ public class CoreSpiResolutionValidator {
             return Optional.empty();
         }
 
+        Set<Bean<?>> candidates = new HashSet<>(matchingBeans);
         Bean<?> selectedBean;
         try {
-            selectedBean = beanManager.resolve(new HashSet<>(matchingBeans));
+            // Always let CDI select the active bean, including the single-candidate case.
+            // This is what excludes disabled and shadow-only providers.
+            selectedBean = beanManager.resolve(candidates);
         } catch (Exception _) {
             selectedBean = null;
         }
 
-        if (selectedBean == null) {
+        if (selectedBean == null || !candidates.contains(selectedBean)) {
             if (matchingBeans.size() > 1) {
                 List<String> sortedNames = matchingBeans.stream()
                         .map(b -> b.getBeanClass().getName())

@@ -11,8 +11,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
-import com.amsha.common.util.LogUtil;
 import com.amsha.core.sandbox.SandboxExecutionPort;
+import com.amsha.core.sandbox.SandboxFailureMessages;
 import com.amsha.core.sandbox.SandboxResult;
 import com.amsha.sandbox.SandboxCircuitBreaker.CircuitBreakerState;
 
@@ -85,8 +85,8 @@ public class ProcessIsolationExecutor implements SandboxExecutionPort {
             } catch (Exception e) {
                 log.warnf(
                         "Podman not found on PATH - isolation degraded to NAMESPACE strategy (error: %s)",
-                        LogUtil.rootMessage(e));
-                log.debugf("Podman check exception details: %s", LogUtil.trimmedStack(e));
+                        e.getClass().getSimpleName());
+                log.debugf("Podman check failed (type=%s)", e.getClass().getSimpleName());
                 circuitBreaker.openCircuit();
             }
         }
@@ -130,19 +130,20 @@ public class ProcessIsolationExecutor implements SandboxExecutionPort {
             } catch (Exception nsEx) {
                 if (allowInsecureFallback) {
                     log.warnf(
-                            "[SANDBOX] Namespace unavailable (%s) - degrading to host execution",
-                            LogUtil.rootMessage(nsEx));
+                            "[SANDBOX] Namespace unavailable (type=%s) - degrading to host execution",
+                            nsEx.getClass().getSimpleName());
                     return fallbackToHostExecution(workspaceRoot, command, requiredSecrets);
                 }
                 throw nsEx;
             }
         } catch (ToolExecutionException e) {
-            return SandboxResult.failure(e.getMessage());
+            log.warnf("[SANDBOX] Tool execution failed with exit code %d", e.exitCode());
+            return SandboxResult.failure();
         } catch (Exception e) {
             log.errorf(
-                    "[SANDBOX] Unexpected infrastructure failure (sessionId=%s): %s",
-                    sessionId, LogUtil.rootMessage(e));
-            return SandboxResult.infraFailure("SANDBOX_OFFLINE: Infrastructure failure");
+                    "[SANDBOX] Unexpected infrastructure failure (sessionId=%s, type=%s)",
+                    sessionId, e.getClass().getSimpleName());
+            return SandboxResult.infraFailure(SandboxFailureMessages.SANDBOX_OFFLINE_MESSAGE);
         }
     }
 
@@ -188,41 +189,39 @@ public class ProcessIsolationExecutor implements SandboxExecutionPort {
             return SandboxResult.success(result);
 
         } catch (SandboxImageMissingException e) {
-            log.errorf("[SANDBOX] Image missing (session=%s): %s", sessionId, LogUtil.rootMessage(e));
+            log.errorf("[SANDBOX] Image missing (session=%s)", sessionId);
             if (allowInsecureFallback) {
                 return fallbackToHostExecution(workspaceRoot, command, requiredSecrets);
             }
-            return SandboxResult.infraFailure("SANDBOX_OFFLINE: The sandbox image is missing. "
-                    + "Please rebuild it: podman build --no-cache -t amsha-tool-runner "
-                    + "-f ./sandbox/Dockerfile.toolrunner .");
+            return SandboxResult.infraFailure(SandboxFailureMessages.SANDBOX_OFFLINE_MESSAGE);
 
         } catch (PodmanUnavailableException e) {
-            String errMsg =
-                    e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
-            log.warnf("Podman unavailable (%s) - checking fallback for session %s", errMsg, sessionId);
+            log.warnf(
+                    "Podman unavailable (type=%s) - checking fallback for session %s",
+                    e.getClass().getSimpleName(), sessionId);
             if (allowInsecureFallback) {
                 return fallbackToHostExecution(workspaceRoot, command, requiredSecrets);
             }
             circuitBreaker.recordFailure(stateAtCall);
-            return SandboxResult.infraFailure("SANDBOX_OFFLINE: Podman is unavailable - " + errMsg);
+            return SandboxResult.infraFailure(SandboxFailureMessages.SANDBOX_OFFLINE_MESSAGE);
 
         } catch (IOException e) {
-            String errMsg =
-                    e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
-            log.warnf("Podman unavailable (%s) - checking fallback for session %s", errMsg, sessionId);
+            log.warnf(
+                    "Podman unavailable (type=%s) - checking fallback for session %s",
+                    e.getClass().getSimpleName(), sessionId);
             if (allowInsecureFallback) {
                 return fallbackToHostExecution(workspaceRoot, command, requiredSecrets);
             }
             circuitBreaker.recordFailure(stateAtCall);
-            return SandboxResult.infraFailure("SANDBOX_OFFLINE: Podman is unavailable - " + errMsg);
+            return SandboxResult.infraFailure(SandboxFailureMessages.SANDBOX_OFFLINE_MESSAGE);
 
         } catch (ToolExecutionException e) {
             throw e;
         } catch (Exception e) {
-            String errMsg =
-                    e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
-            log.errorf("Sandbox execution failed unexpectedly (session=%s): %s", sessionId, errMsg);
-            return SandboxResult.infraFailure("SANDBOX_OFFLINE: Unexpected error - " + errMsg);
+            log.errorf(
+                    "Sandbox execution failed unexpectedly (session=%s, type=%s)",
+                    sessionId, e.getClass().getSimpleName());
+            return SandboxResult.infraFailure(SandboxFailureMessages.SANDBOX_OFFLINE_MESSAGE);
         }
     }
 
@@ -240,7 +239,9 @@ public class ProcessIsolationExecutor implements SandboxExecutionPort {
         try {
             return secretResolver.resolveSecrets(requiredSecrets);
         } catch (Exception e) {
-            log.warnf("Failed to resolve sandbox secrets for fallback: %s", LogUtil.rootMessage(e));
+            log.warnf(
+                    "Failed to resolve sandbox secrets for fallback (type=%s)",
+                    e.getClass().getSimpleName());
             return Collections.emptyMap();
         }
     }

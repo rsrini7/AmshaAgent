@@ -289,13 +289,12 @@ public class ToolRegistry {
                     sandboxPort.get().executeSandboxed(ctx.sessionId(), workspaceRoot, command, requiredSecrets);
 
             if (result == null || result.isInfraFailure()) {
-                String reason = result != null ? result.reason() : "Sandbox executor returned null";
-                log.warnf("Tool '%s' sandbox execution encountered infra failure: %s", toolName, reason);
+                log.warnf("Tool '%s' sandbox execution encountered an infrastructure failure.", toolName);
                 return ToolResponse.infraFailure(SandboxFailureMessages.SANDBOX_OFFLINE_MESSAGE);
             }
 
             if (!result.success()) {
-                return ToolResponse.failure(1, result.reason());
+                return ToolResponse.failure(1, SandboxFailureMessages.SANDBOX_EXECUTION_FAILED_MESSAGE);
             }
 
             String postProcessedOutput = tool.postProcessOutput(result.output(), params);
@@ -308,7 +307,9 @@ public class ToolRegistry {
             return ToolResponse.failure(1, "Security violation: " + e.getMessage());
         } catch (Exception e) {
             if (e instanceof ComplianceViolationException cve) throw cve;
-            log.errorf("Tool '%s' sandboxed execution infra failure: %s", toolName, LogUtil.rootMessage(e));
+            log.errorf(
+                    "Tool '%s' sandboxed execution infra failure (type=%s)",
+                    toolName, e.getClass().getSimpleName());
             return ToolResponse.infraFailure(SandboxFailureMessages.SANDBOX_OFFLINE_MESSAGE);
         }
     }

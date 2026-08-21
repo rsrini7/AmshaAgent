@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -14,6 +15,7 @@ import jakarta.enterprise.context.spi.CreationalContext;
 import jakarta.enterprise.inject.spi.Bean;
 import jakarta.enterprise.inject.spi.BeanManager;
 
+import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -23,6 +25,7 @@ import com.amsha.core.agent.role.ToolCapability;
 import com.amsha.core.audit.AuditService;
 import com.amsha.core.governance.BudgetExceededException;
 import com.amsha.core.sandbox.SandboxExecutionPort;
+import com.amsha.core.sandbox.SandboxFailureMessages;
 import com.amsha.core.sandbox.SandboxResult;
 import com.amsha.core.scope.WorkspaceContext;
 import com.amsha.core.security.AutonomyLevel;
@@ -291,7 +294,7 @@ class SandboxExecToolTest {
 
             assertFalse(r.success());
             assertEquals(1, r.exitCode());
-            assertTrue(r.output().contains("exit 1"));
+            assertEquals(SandboxFailureMessages.SANDBOX_EXECUTION_FAILED_MESSAGE, r.output());
             return null;
         });
     }
@@ -405,14 +408,30 @@ class SandboxExecToolTest {
     void java_language_returns_error_on_failure() throws Exception {
         WorkspaceContext.run("test-session", "user1", "chat1", AutonomyLevel.FULL, "coder", () -> {
             when(mockIsolationExecutor.executeSandboxed(any(), any(), any(), any()))
-                    .thenReturn(SandboxResult.failure("syntax error"));
+                    .thenReturn(SandboxResult.failure("raw-provider-diagnostic"));
 
             String code = "public class Main { public static void main(String[] a) { /* valid code */ } }";
             Map<String, Object> params = Map.of("code", code, "language", "java");
             ToolResponse r = tool.execute(ctx(), params);
 
             assertFalse(r.success());
-            assertTrue(r.output().contains("syntax error"));
+            assertEquals(SandboxFailureMessages.SANDBOX_EXECUTION_FAILED_MESSAGE, r.output());
+            return null;
+        });
+    }
+
+    @Test
+    void java_compiler_diagnostics_are_sanitized() throws Exception {
+        WorkspaceContext.run("test-session", "user1", "chat1", AutonomyLevel.FULL, "coder", () -> {
+            doThrow(new IOException("raw-javac-diagnostic"))
+                    .when(mockHostJavaCompiler)
+                    .compile(any(), any());
+
+            ToolResponse response = tool.execute(ctx(), Map.of("code", "public class Main {}", "language", "java"));
+
+            assertFalse(response.success());
+            assertEquals(SandboxFailureMessages.SANDBOX_EXECUTION_FAILED_MESSAGE, response.output());
+            assertFalse(response.output().contains("raw-javac-diagnostic"));
             return null;
         });
     }

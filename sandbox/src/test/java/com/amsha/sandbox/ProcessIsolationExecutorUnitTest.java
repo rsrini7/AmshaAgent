@@ -8,6 +8,7 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 
+import com.amsha.core.sandbox.SandboxFailureMessages;
 import com.amsha.core.sandbox.SandboxResult;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -73,6 +74,28 @@ class ProcessIsolationExecutorUnitTest {
     }
 
     @Test
+    void testToolExecutionFailureIsSanitized() throws Exception {
+        when(circuitBreaker.shouldAttemptPodman()).thenReturn(true);
+        when(podmanExecutor.executeInContainer(any(), any(), any(), any()))
+                .thenThrow(new ToolExecutionException("raw-provider-diagnostic", 7));
+
+        SandboxResult result =
+                executor.executeSandboxed("sess-1", Path.of("./target"), List.of("echo", "hi"), Map.of());
+
+        assertFalse(result.success());
+        assertEquals(SandboxFailureMessages.SANDBOX_EXECUTION_FAILED_MESSAGE, result.output());
+        assertFalse(result.output().contains("raw-provider-diagnostic"));
+    }
+
+    @Test
+    void testInfrastructureFailureReasonIsSanitized() {
+        SandboxResult result = SandboxResult.infraFailure("raw-provider-diagnostic");
+
+        assertEquals(SandboxFailureMessages.SANDBOX_OFFLINE_MESSAGE, result.reason());
+        assertFalse(result.reason().contains("raw-provider-diagnostic"));
+    }
+
+    @Test
     void testExecuteSandboxedPodmanImageMissing() throws Exception {
         when(circuitBreaker.shouldAttemptPodman()).thenReturn(true);
         when(podmanExecutor.executeInContainer(any(), any(), any(), any()))
@@ -80,6 +103,6 @@ class ProcessIsolationExecutorUnitTest {
 
         SandboxResult res = executor.executeSandboxed("sess-1", Path.of("./target"), List.of("echo", "hi"), Map.of());
         assertFalse(res.success());
-        assertTrue(res.reason().contains("SANDBOX_OFFLINE"));
+        assertEquals(SandboxFailureMessages.SANDBOX_OFFLINE_MESSAGE, res.reason());
     }
 }
