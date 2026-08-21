@@ -422,10 +422,15 @@ def require_onnx_health(health: Mapping[str, object]) -> None:
     runtime = health_check(health, "Local ONNX Runtime")
     runtime_data = runtime.get("data")
     if runtime.get("status") != "UP" or not isinstance(runtime_data, dict) or runtime_data.get("status") != "ready":
-        raise SmokeFailure("Local ONNX Runtime health is not ready")
+        raise SmokeFailure("Local ONNX Runtime health is not ready (ensure AMSHA_ONNX_ENABLED=true in environment or .env)")
     indexes = health_check(health, "Vector Index Compatibility")
     index_data = indexes.get("data")
-    if indexes.get("status") != "UP" or not isinstance(index_data, dict) or index_data.get("vectorStatus") != "READY":
+    vector_status = index_data.get("vectorStatus") if isinstance(index_data, dict) else None
+    if indexes.get("status") != "UP" or not isinstance(index_data, dict) or vector_status != "READY":
+        if vector_status == "DEGRADED":
+            raise SmokeFailure("ONNX vector index compatibility is DEGRADED (model mismatch with existing DB rows; reset dev data directory)")
+        if vector_status == "NOT_ACTIVE":
+            raise SmokeFailure("ONNX vector index compatibility is NOT_ACTIVE (ensure 'onnx' is in AMSHA_INFINITE_LOOP_EMBEDDING_PROVIDERS and AMSHA_ONNX_ENABLED=true)")
         raise SmokeFailure("ONNX vector index compatibility is not READY")
 
 
