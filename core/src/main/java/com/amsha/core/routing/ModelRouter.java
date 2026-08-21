@@ -5,6 +5,7 @@ import dev.langchain4j.model.chat.ChatModel;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Any;
 import jakarta.enterprise.inject.Instance;
+import jakarta.enterprise.inject.spi.BeanManager;
 import jakarta.inject.Inject;
 
 import java.util.ArrayList;
@@ -15,6 +16,7 @@ import java.util.Optional;
 import com.amsha.core.agent.loop.TaskClassifierService;
 import com.amsha.core.agent.role.AgentGroupRegistry;
 import com.amsha.core.agent.role.AgentPersona;
+import com.amsha.core.config.CoreSpiResolutionValidator;
 import com.amsha.core.scope.WorkspaceContext;
 import com.amsha.core.util.MdcKeys;
 import com.amsha.llm.api.AgentChatModelProvider;
@@ -75,11 +77,10 @@ public class ModelRouter {
     AgentLlmConfig agentConfig;
 
     @Inject
-    @Any
-    Instance<ChatModelCreationPort> chatModelCreationPort;
+    BeanManager beanManager;
 
     private Optional<ChatModelCreationPort> findCreationPort() {
-        return chatModelCreationPort != null ? chatModelCreationPort.stream().findFirst() : Optional.empty();
+        return CoreSpiResolutionValidator.resolveOptional(beanManager, ChatModelCreationPort.class);
     }
 
     private ChatModelCreationPort creationPort() {

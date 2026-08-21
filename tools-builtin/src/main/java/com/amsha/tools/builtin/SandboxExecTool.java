@@ -293,22 +293,26 @@ public class SandboxExecTool implements AgentTool {
             log.errorf(
                     "[SandboxExecTool] Execution timed out (type=%s)",
                     e.getClass().getSimpleName());
-            return ToolResponse.infraFailure(SANDBOX_OFFLINE_MESSAGE);
+            return offline();
         } catch (Exception e) {
             if (e.getCause() instanceof TimeoutException
                     || (e.getMessage() != null && e.getMessage().contains("timed out"))) {
                 log.errorf(
                         "[SandboxExecTool] Execution timed out (type=%s)",
                         e.getClass().getSimpleName());
-                return ToolResponse.infraFailure(SANDBOX_OFFLINE_MESSAGE);
+                return offline();
             }
             if (e.getClass().getSimpleName().equals("ToolExecutionException")) {
                 return ToolResponse.failure(1, SandboxFailureMessages.SANDBOX_EXECUTION_FAILED_MESSAGE);
             }
             log.errorf(
                     "[SandboxExecTool] Execution failed (type=%s)", e.getClass().getSimpleName());
-            return ToolResponse.infraFailure(SANDBOX_OFFLINE_MESSAGE);
+            return offline();
         }
+    }
+
+    private static ToolResponse offline() {
+        return ToolResponse.infraFailure(SANDBOX_OFFLINE_MESSAGE);
     }
 
     private ToolResponse executeJavaFallback(
@@ -330,13 +334,13 @@ public class SandboxExecTool implements AgentTool {
 
         SandboxExecutionPort port = getSandboxPort();
         if (port == null) {
-            return ToolResponse.infraFailure(SANDBOX_OFFLINE_MESSAGE);
+            return offline();
         }
 
         SandboxResult result = port.executeSandboxed(sessionId, workspaceRoot, runCmd, secrets);
         if (result == null || result.isInfraFailure()) {
             log.errorf("[SandboxExecTool] Infra failure (java-fallback) sessionId=%s", sessionId);
-            return ToolResponse.infraFailure(SANDBOX_OFFLINE_MESSAGE);
+            return offline();
         }
         if (!result.success()) {
             return ToolResponse.failure(1, SandboxFailureMessages.SANDBOX_EXECUTION_FAILED_MESSAGE);
@@ -366,13 +370,13 @@ public class SandboxExecTool implements AgentTool {
 
         SandboxExecutionPort port = getSandboxPort();
         if (port == null) {
-            return ToolResponse.infraFailure(SANDBOX_OFFLINE_MESSAGE);
+            return offline();
         }
 
         SandboxResult result = port.executeSandboxed(sessionId, workspaceRoot, commandList, secrets);
         if (result == null || result.isInfraFailure()) {
             log.errorf("[SandboxExecTool] Infra failure (interpreted/%s) session=%s", lang, sessionId);
-            return ToolResponse.infraFailure(SANDBOX_OFFLINE_MESSAGE);
+            return offline();
         }
         if (!result.success()) {
             return ToolResponse.failure(1, SandboxFailureMessages.SANDBOX_EXECUTION_FAILED_MESSAGE);
@@ -390,13 +394,13 @@ public class SandboxExecTool implements AgentTool {
         try {
             SandboxExecutionPort port = getSandboxPort();
             if (port == null) {
-                return ToolResponse.infraFailure(SANDBOX_OFFLINE_MESSAGE);
+                return offline();
             }
 
             SandboxResult result = port.executeSandboxed(sessionId, workspaceRoot, runCmd, secrets);
             if (result == null || result.isInfraFailure()) {
                 log.errorf("[SandboxExecTool] Infra failure (go) session=%s", sessionId);
-                return ToolResponse.infraFailure(SANDBOX_OFFLINE_MESSAGE);
+                return offline();
             }
             if (!result.success()) {
                 return ToolResponse.failure(1, SandboxFailureMessages.SANDBOX_EXECUTION_FAILED_MESSAGE);

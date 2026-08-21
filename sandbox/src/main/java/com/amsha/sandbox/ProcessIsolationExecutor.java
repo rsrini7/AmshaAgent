@@ -137,7 +137,7 @@ public class ProcessIsolationExecutor implements SandboxExecutionPort {
                 throw nsEx;
             }
         } catch (ToolExecutionException e) {
-            log.warnf("[SANDBOX] Tool execution failed with exit code %d", e.exitCode());
+            log.warnf("[SANDBOX] Tool execution failed with exit code %d (sessionId=%s)", e.exitCode(), sessionId);
             return SandboxResult.failure();
         } catch (Exception e) {
             log.errorf(

@@ -9,6 +9,7 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 
+import com.amsha.core.sandbox.SandboxFailureMessages;
 import com.amsha.core.sandbox.SandboxResult;
 import com.amsha.core.scope.WorkspaceScopeHolder;
 
@@ -96,8 +97,9 @@ public class ProcessIsolationExecutorTest {
                     assertFalse(result.success());
                     // Allow for either a direct process error (NONE strategy) or a sandbox infra failure (PODMAN
                     // strategy)
-                    String reason = result.reason();
-                    assertTrue(reason.contains("SANDBOX_OFFLINE") || reason.contains("nonexistent-command"));
+                    assertTrue(result.isInfraFailure()
+                            || result.reason().contains(SandboxFailureMessages.SANDBOX_OFFLINE_MESSAGE)
+                            || result.reason().contains(SandboxFailureMessages.SANDBOX_EXECUTION_FAILED_MESSAGE));
                 } finally {
                     Files.deleteIfExists(workspaceRoot);
                 }

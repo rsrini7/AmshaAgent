@@ -7,6 +7,7 @@ import jakarta.enterprise.context.Dependent;
 import jakarta.enterprise.inject.Any;
 import jakarta.enterprise.inject.Instance;
 import jakarta.enterprise.inject.Produces;
+import jakarta.enterprise.inject.spi.BeanManager;
 import jakarta.inject.Inject;
 
 import java.nio.charset.StandardCharsets;
@@ -14,6 +15,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 
+import com.amsha.core.config.CoreSpiResolutionValidator;
 import com.amsha.core.security.SecretVault;
 import com.amsha.core.security.VaultConstants;
 import com.amsha.core.security.VaultKey;
@@ -75,11 +77,10 @@ public class ChatModelProducer {
     AgentLlmConfig agentConfig;
 
     @Inject
-    @Any
-    Instance<ChatModelCreationPort> chatModelCreationPort;
+    BeanManager beanManager;
 
     private Optional<ChatModelCreationPort> findCreationPort() {
-        return chatModelCreationPort != null ? chatModelCreationPort.stream().findFirst() : Optional.empty();
+        return CoreSpiResolutionValidator.resolveOptional(beanManager, ChatModelCreationPort.class);
     }
 
     private ChatModelCreationPort creationPort() {

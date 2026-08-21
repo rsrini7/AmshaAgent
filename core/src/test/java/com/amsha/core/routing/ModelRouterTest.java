@@ -6,12 +6,14 @@ import static org.mockito.Mockito.*;
 import dev.langchain4j.model.chat.ChatModel;
 
 import jakarta.enterprise.inject.Instance;
+import jakarta.enterprise.inject.spi.Bean;
+import jakarta.enterprise.inject.spi.BeanManager;
 
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.function.Supplier;
-import java.util.stream.Stream;
 
 import com.amsha.core.agent.role.AgentGroupRegistry;
 import com.amsha.llm.api.AgentChatModelProvider;
@@ -77,11 +79,16 @@ class ModelRouterTest {
         router.profileResolver = profileResolver;
         router.credentialResolver = credentialResolver;
         router.profileStore = profileStore;
-        router.agentConfig = agentConfig;
+        BeanManager mockBeanManager = mock(BeanManager.class);
         @SuppressWarnings("unchecked")
-        Instance<ChatModelCreationPort> creationPortInstance = mock(Instance.class);
-        when(creationPortInstance.stream()).thenAnswer(inv -> Stream.of(chatModelCreationPort));
-        router.chatModelCreationPort = creationPortInstance;
+        Bean<ChatModelCreationPort> mockBean = mock(Bean.class);
+        when(mockBean.getBeanClass()).thenReturn((Class) ChatModelCreationPort.class);
+        when(mockBean.getTypes()).thenReturn(Set.of(ChatModelCreationPort.class));
+        when(mockBeanManager.getBeans(Object.class)).thenReturn(Set.of(mockBean));
+        when(mockBeanManager.resolve(any())).thenAnswer(inv -> mockBean);
+        when(mockBeanManager.getReference(eq(mockBean), eq(ChatModelCreationPort.class), any()))
+                .thenReturn(chatModelCreationPort);
+        router.beanManager = mockBeanManager;
         router.profileRoutingEnabled = false;
 
         // Mock providers Instance

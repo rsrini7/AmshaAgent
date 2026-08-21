@@ -111,7 +111,7 @@ To prevent cyclic dependencies and maintain strict module boundaries, we adopt a
   4. **Call-Site Handling & Security-Compliant Sanitization (AGENTS.md:126)**:
      - A core-owned `SandboxFailureMessages.SANDBOX_OFFLINE_MESSAGE` is the single stable user-facing message. `ToolRegistry` and `SandboxExecTool` resolve `SandboxExecutionPort`; absence and every provider `infraFailure` map to `ToolResponse.infraFailure(SANDBOX_OFFLINE_MESSAGE)`.
      - `ReasoningMessageAssembler` resolves `ToolSearchPort`. If unsatisfied or indexing is degraded, returns `List.of()` empty rankings.
-     - Raw provider reasons are logged internally with `LogUtil.rootMessage(e)` only after redaction; command lines, secrets, process output, stack traces, and Podman diagnostics are NEVER echoed to logs or LLM responses. Tests assert that a raw infra reason cannot appear in either response path.
+     - Sandbox infrastructure logs expose exception types only (`e.getClass().getSimpleName()`); command lines, secrets, compiler stderr, process output, stack traces, and Podman diagnostics are NEVER echoed to logs or LLM responses. Tests assert that a raw infra reason cannot appear in either response path.
 
 ### 4. Discovery / Search Lifecycle & Deterministic Sorting
 - **Problem**: `ToolSearchIndex.@PostConstruct` rebuilt before `ToolRegistry` discovery finished, and `ToolRegistry` had duplicate `@PostConstruct` and `@Observes StartupEvent` discovery paths.

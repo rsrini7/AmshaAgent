@@ -154,6 +154,11 @@ three-tuple `(channelType, channelId, userId)`.
 - Every tool response MUST be sanitized before history append.
 - No tool type is exempt, including GitHub, MCP, sandbox, or internal tools.
 
+### 3.3.1 Sandbox execution error logging and sanitization
+- Sandbox infrastructure failures (in `ProcessIsolationExecutor`, `SandboxExecTool`, and `ToolRegistry`) MUST expose exception types only (`e.getClass().getSimpleName()`) in logs.
+- This is a justified, security-mandated exception to the general `LogUtil.rootMessage(e)` convention: because compiler stderr, Podman diagnostics, container errors, and arbitrary command lines may ride inside raw exception messages, logging raw exception messages in sandbox execution paths introduces severe leakage risk.
+- Responses to the agent/LLM must map all unexpected infrastructure failures strictly to `SandboxFailureMessages.SANDBOX_OFFLINE_MESSAGE` and execution failures strictly to `SandboxFailureMessages.SANDBOX_EXECUTION_FAILED_MESSAGE`. Raw provider reasons, diagnostics, and stack traces must never reach caller or LLM tool responses.
+
 ### 3.4 Approval handling
 - Approval-required executions MUST persist checkpoint state before exiting the loop.
 - Resume/deny behavior must use the checkpoint lifecycle, not ad hoc retry logic.
