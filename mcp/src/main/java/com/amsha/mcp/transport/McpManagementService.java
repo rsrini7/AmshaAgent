@@ -489,7 +489,10 @@ public class McpManagementService extends McpManagementServiceModels {
 
     public DisconnectResult disconnectWithResult(String userId, String name, Long expectedRevision) {
         McpManagementSupport.requireUser(userId);
-        McpConnectionDto connection = support.findConnection(userId, name);
+        var connection = lifecycleService.findByNameAndUserId(name, userId).orElse(null);
+        if (connection == null) {
+            return new DisconnectResult(false, 0);
+        }
         McpManagementSupport.checkRevision(connection, expectedRevision);
         int removedTools = support.clearRegisteredTools(userId, name);
         boolean deleted = lifecycleService.deleteByNameAndUserId(name, userId);

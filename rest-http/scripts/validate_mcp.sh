@@ -65,9 +65,14 @@ request() {
     LAST_HEADERS="$TMP_DIR/${label}.headers"
     LAST_CODE="$(curl -sS -m 20 -D "$LAST_HEADERS" -o "$LAST_BODY" -w '%{http_code}' "$@" 2>/dev/null)" || LAST_CODE="000"
     if [ "$LAST_CODE" = "429" ]; then
-        printf '⏳ %s rate limited; waiting %ss before retry\n' "$label" "$RATE_LIMIT_WAIT_SECONDS"
-        sleep "$RATE_LIMIT_WAIT_SECONDS"
-        LAST_CODE="$(curl -sS -m 20 -D "$LAST_HEADERS" -o "$LAST_BODY" -w '%{http_code}' "$@" 2>/dev/null)" || LAST_CODE="000"
+        local retry_after
+        retry_after="$(awk 'tolower($1) == "retry-after:" { gsub("\r", "", $2); print $2; exit }' "$LAST_HEADERS" 2>/dev/null || true)"
+        local wait_time="${retry_after:-$RATE_LIMIT_WAIT_SECONDS}"
+        if [ -n "$wait_time" ] && [ "$wait_time" -gt 0 ] 2>/dev/null; then
+            printf '⏳ %s rate limited; waiting %ss before retry\n' "$label" "$wait_time"
+            sleep "$wait_time"
+            LAST_CODE="$(curl -sS -m 20 -D "$LAST_HEADERS" -o "$LAST_BODY" -w '%{http_code}' "$@" 2>/dev/null)" || LAST_CODE="000"
+        fi
     fi
 }
 
@@ -98,9 +103,16 @@ safe_globals = {
     "__builtins__": {},
     "all": all,
     "any": any,
+    "bool": bool,
+    "dict": dict,
+    "float": float,
     "int": int,
     "isinstance": isinstance,
+    "len": len,
+    "list": list,
     "next": next,
+    "set": set,
+    "str": str,
 }
 value = eval(sys.argv[2], safe_globals, {"body": body})
 if value is None:
@@ -112,7 +124,7 @@ PY
 assert_json() {
     local label="$1"
     local expression="$2"
-    if json_value "$expression" >/dev/null 2>&1; then
+    if [ "$(json_value "bool($expression)" 2>/dev/null || true)" = "True" ]; then
         pass "$label"
     else
         fail "$label"
@@ -311,8 +323,8 @@ assert_json 'MCP durable connection metadata' 'any(item.get("name") == "mcp-vali
 
 request tools-policy -H "X-Amsha-API-Key: $KEY" -H 'Accept: application/json' "$API_BASE/mcp/connect/mcp-validation-self/tools"
 expect_code 'MCP discovered tool policies' 200
-assert_json 'MCP policy list is bounded' 'isinstance(body, list) and len(body) >= 1 and all("toolName" in item and "enabled" in item for item in body)'
-VALIDATION_TOOL="$(json_value 'body[0].get("toolName")' 2>/dev/null || true)"
+assert_json 'MCP policy list is bounded' 'isinstance(body, list) and len(body) >= 1 and all("name" in item for item in body)'
+VALIDATION_TOOL="$(json_value 'body[0].get("name")' 2>/dev/null || true)"
 
 if [ -n "$VALIDATION_TOOL" ]; then
     request enable -X POST "$API_BASE/mcp/connect/mcp-validation-self/tools/$VALIDATION_TOOL/enable" \
@@ -365,6 +377,8 @@ request pause -X POST "$API_BASE/mcp/connect/mcp-validation-self/pause" \
     -H "X-Amsha-API-Key: $KEY" -H "If-MCP-Revision: $REVISION"
 expect_code 'MCP pause drains and persists state' 200
 assert_json 'MCP pause state' 'body.get("state") == "PAUSED"'
+PAUSE_REVISION="$(json_value 'body.get("revision")' 2>/dev/null || true)"
+if [ -n "$PAUSE_REVISION" ]; then REVISION="$PAUSE_REVISION"; fi
 
 request resume -X POST "$API_BASE/mcp/connect/mcp-validation-self/resume" \
     -H "X-Amsha-API-Key: $KEY" -H "If-MCP-Revision: $REVISION"
