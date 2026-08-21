@@ -50,10 +50,10 @@ CODE=$(run_req POST "$VALID_KEY" "$B/api/v1/sessions/$SESS_ID/run" '{"goal":"Sch
 sleep "$SLEEP"
 
 info "CRON-REST-2: List cron jobs via GET /cron"
-CODE=$(run_req GET "$VALID_KEY" "$B/api/v1/cron")
+CODE=$(run_req GET "$VALID_KEY" "$B/api/v1/cron?status=ACTIVE")
 [ "$CODE" = "200" ] && ok "$CODE" || fail "$CODE"
 
-CRON_ID=$(python3 -c "import json; crons=json.load(open('/tmp/resp')).get('crons',[]); print(crons[0].get('id','') if crons else '')" 2>/dev/null)
+CRON_ID=$(python3 -c "import json; crons=[c for c in json.load(open('/tmp/resp')).get('crons',[]) if c.get('status')=='ACTIVE']; print(crons[0].get('id','') if crons else '')" 2>/dev/null)
 if [ -z "$CRON_ID" ]; then
   echo "  ⚠️  No active cron job found in list. Skipping REST API verification checks."
   run_req DELETE "$VALID_KEY" "$B/api/v1/sessions/$SESS_ID" >/dev/null 2>&1
