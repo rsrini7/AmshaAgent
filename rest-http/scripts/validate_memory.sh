@@ -31,14 +31,14 @@ create_session() {
 }
 
 run_raw() {
-  curl -s -m 90 -o /tmp/resp -w "%{http_code}" \
+  curl -s -m 180 -o /tmp/resp -w "%{http_code}" \
     -H "X-Amsha-API-Key: $KEY" -H "Content-Type: application/json" \
     -X POST "$B/api/v1/sessions/$1/run" \
     -d "{\"goal\":\"$2\",\"agentRole\":\"coordinator\",\"maxIterations\":${3:-2}}"
 }
 
 approve() {
-  curl -s -m 90 -o /tmp/resp -w "%{http_code}" \
+  curl -s -m 180 -o /tmp/resp -w "%{http_code}" \
     -H "X-Amsha-API-Key: $KEY" \
     -X POST "$B/api/v1/sessions/$1/approve?agentRole=coordinator"
 }

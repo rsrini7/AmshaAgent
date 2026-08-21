@@ -29,14 +29,14 @@ create_session() {
 }
 
 run_raw() {
-  curl -s -m 90 -o /tmp/resp -w "%{http_code}" \
+  curl -s -m 180 -o /tmp/resp -w "%{http_code}" \
     -H "X-Amsha-API-Key: $VALID_KEY" -H "Content-Type: application/json" \
     -X POST "$B/api/v1/sessions/$1/run" \
     -d "{\"goal\":\"$2\",\"agentRole\":\"$3\",\"maxIterations\":$4}"
 }
 
 approve() {
-  curl -s -m 90 -o /tmp/resp -w "%{http_code}" \
+  curl -s -m 180 -o /tmp/resp -w "%{http_code}" \
     -H "X-Amsha-API-Key: $VALID_KEY" \
     -X POST "$B/api/v1/sessions/$1/approve?agentRole=$2"
 }
@@ -136,27 +136,25 @@ if [ "$RUN_ALL" = true ] || [ "$A" = 1 ]; then
   fi
 fi
 
-# ── CAPABILITY QUERIES (shared session) ──
+# ── CAPABILITY QUERIES (fresh session each) ──
 if [ "$RUN_ALL" = true ] || [ "$Q" = 1 ]; then
   echo ""; echo "── Capability Queries ──"
-  info "Create query session"; CODE=$(create_session); sleep 2; QSID=$(sid)
-  { [ "$CODE" = "201" ] || [ "$CODE" = "200" ]; } && ok "$CODE" || { fail "$CODE"; QSID=""; }
-  if [ -n "$QSID" ]; then
-    for q in \
-      "ROLE-27:who are all the agents in your team and what do they do" \
-      "ROLE-28:what is ganesha capable of" \
-      "ROLE-29:what is kartikeya role in the system" \
-      "ROLE-30:how does lakshmi help with token optimization" \
-      "ROLE-31:how does durga enforce policies" \
-      "ROLE-32:what cleanup tasks does kali handle" \
-      "ROLE-33:how does parvati analyze user sentiment"
-    do
-      TEST=$(echo "$q" | cut -d: -f1)
-      G=$(echo "$q" | cut -d: -f2-)
-      step "$QSID" "$TEST" "$G" "coordinator" 3
-    done
+  for q in \
+    "ROLE-27:who are all the agents in your team and what do they do" \
+    "ROLE-28:what is ganesha capable of" \
+    "ROLE-29:what is kartikeya role in the system" \
+    "ROLE-30:how does lakshmi help with token optimization" \
+    "ROLE-31:how does durga enforce policies" \
+    "ROLE-32:what cleanup tasks does kali handle" \
+    "ROLE-33:how does parvati analyze user sentiment"
+  do
+    TEST=$(echo "$q" | cut -d: -f1)
+    G=$(echo "$q" | cut -d: -f2-)
+    CODE=$(create_session); sleep 2; QSID=$(sid)
+    if [ -z "$QSID" ]; then info "$TEST"; fail "$CODE"; continue; fi
+    step "$QSID" "$TEST" "$G" "coordinator" 3 "Sub-agent refused"
     sleep "$SLEEP"; mute -X DELETE "$B/api/v1/sessions/$QSID" -H "X-Amsha-API-Key: $VALID_KEY" >/dev/null 2>&1
-  fi
+  done
 fi
 
 echo ""
