@@ -20,11 +20,11 @@ import com.amsha.core.skill.CompiledSkillEntry;
 import com.amsha.core.tool.DynamicToolAdmissionLookup;
 import com.amsha.core.tool.InterceptorPriority;
 import com.amsha.core.tool.ToolGuardInterceptor;
-import com.amsha.core.tools.AgentTool;
-import com.amsha.core.tools.IdempotencyMode;
 import com.amsha.core.tools.ToolRegistry;
 import com.amsha.security.api.AutonomyLevel;
 import com.amsha.security.api.ToolOperation;
+import com.amsha.tool.api.AgentTool;
+import com.amsha.tool.api.IdempotencyMode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.junit.jupiter.api.Test;

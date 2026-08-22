@@ -15,13 +15,11 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import com.amsha.core.agent.AgentSentinels;
 import com.amsha.core.agent.reasoning.ReasoningEngine;
 import com.amsha.core.agent.reasoning.ReasoningStep;
 import com.amsha.core.agent.reasoning.error.LlmErrorClassificationService;
 import com.amsha.core.agent.result.AgentResult;
 import com.amsha.core.agent.role.AgentRoleEnum;
-import com.amsha.core.agent.role.ToolCapability;
 import com.amsha.core.governance.BudgetExceededException;
 import com.amsha.core.governance.BudgetWarningException;
 import com.amsha.core.governance.GovernanceStrategy;
@@ -37,6 +35,8 @@ import com.amsha.llm.api.error.LlmProviderException;
 import com.amsha.llm.api.error.LlmRateLimitException;
 import com.amsha.llm.api.error.LlmToolCallException;
 import com.amsha.persistence.api.CheckpointStatus;
+import com.amsha.tool.api.AgentSentinels;
+import com.amsha.tool.api.ToolCapability;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;

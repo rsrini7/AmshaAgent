@@ -13,9 +13,9 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import com.amsha.core.agent.role.AgentRoleEnum;
-import com.amsha.core.agent.role.ToolCapability;
 import com.amsha.core.scope.WorkspaceContext;
 import com.amsha.core.util.TextPatternUtils;
+import com.amsha.tool.api.ToolCapability;
 
 import org.jboss.logging.Logger;
 

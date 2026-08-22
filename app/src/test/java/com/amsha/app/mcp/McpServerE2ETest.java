@@ -10,11 +10,11 @@ import java.util.Map;
 import java.util.Optional;
 
 import com.amsha.app.security.ApiKeyRegistry;
-import com.amsha.core.agent.role.ToolCapability;
 import com.amsha.core.persistence.AsyncPersistenceEngine;
-import com.amsha.core.tools.AgentTool;
 import com.amsha.core.tools.ToolRegistry;
-import com.amsha.core.tools.ToolResponse;
+import com.amsha.tool.api.AgentTool;
+import com.amsha.tool.api.ToolCapability;
+import com.amsha.tool.api.ToolResponse;
 
 import org.junit.jupiter.api.*;
 

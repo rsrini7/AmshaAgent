@@ -8,7 +8,6 @@ import jakarta.transaction.Transactional;
 import java.util.Optional;
 import java.util.concurrent.locks.ReentrantLock;
 
-import com.amsha.core.agent.AgentSentinels;
 import com.amsha.core.audit.AuditService;
 import com.amsha.core.audit.SecurityEventType;
 import com.amsha.core.observability.AgentOTelConstants;
@@ -21,6 +20,7 @@ import com.amsha.persistence.api.WorkspaceMembershipDto;
 import com.amsha.security.api.SecretVault;
 import com.amsha.security.api.VaultConstants;
 import com.amsha.security.api.VaultKey;
+import com.amsha.tool.api.AgentSentinels;
 
 import io.opentelemetry.api.trace.Span;
 import io.opentelemetry.api.trace.StatusCode;

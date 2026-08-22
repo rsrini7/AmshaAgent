@@ -1,4 +1,4 @@
-package com.amsha.core.tools;
+package com.amsha.tool.api;
 
 /**
  * Defines the idempotency contract for an agent tool.

@@ -15,7 +15,6 @@ import com.amsha.core.agent.loop.AgentExecutionContext;
 import com.amsha.core.agent.reasoning.port.LlmProviderPort;
 import com.amsha.core.agent.role.AgentRoleEnum;
 import com.amsha.core.agent.role.RoleRegistry;
-import com.amsha.core.agent.role.ToolCapability;
 import com.amsha.core.governance.RateLimitTracker;
 import com.amsha.core.guardrail.GuardrailCoordinator;
 import com.amsha.core.observability.AgentOTelConstants;
@@ -25,6 +24,7 @@ import com.amsha.core.util.TextPatternUtils;
 import com.amsha.llm.api.error.LlmMalformedResponseException;
 import com.amsha.llm.api.error.LlmRateLimitException;
 import com.amsha.llm.api.error.LlmToolCallException;
+import com.amsha.tool.api.ToolCapability;
 
 import org.jboss.logging.Logger;
 

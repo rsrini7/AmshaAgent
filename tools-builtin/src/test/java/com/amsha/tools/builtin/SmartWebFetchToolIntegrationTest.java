@@ -8,8 +8,8 @@ import static org.mockito.Mockito.mock;
 import java.util.Map;
 
 import com.amsha.core.audit.AuditService;
-import com.amsha.core.tools.ToolExecutionContext;
-import com.amsha.core.tools.ToolResponse;
+import com.amsha.tool.api.ToolExecutionContext;
+import com.amsha.tool.api.ToolResponse;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;

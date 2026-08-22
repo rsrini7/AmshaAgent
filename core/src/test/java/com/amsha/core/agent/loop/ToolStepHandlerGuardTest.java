@@ -17,16 +17,16 @@ import java.util.Optional;
 
 import com.amsha.core.agent.reasoning.ReasoningStep;
 import com.amsha.core.agent.result.AgentResult;
-import com.amsha.core.agent.role.ToolCapability;
 import com.amsha.core.governance.ApprovalFrame;
 import com.amsha.core.observability.AgentObserver;
 import com.amsha.core.tool.DynamicToolLookup;
-import com.amsha.core.tools.AgentTool;
 import com.amsha.core.tools.ToolRegistry;
-import com.amsha.core.tools.ToolResponse;
 import com.amsha.llm.api.StructuredOutputMode;
 import com.amsha.security.api.AutonomyLevel;
 import com.amsha.security.api.RiskLevel;
+import com.amsha.tool.api.AgentTool;
+import com.amsha.tool.api.ToolCapability;
+import com.amsha.tool.api.ToolResponse;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

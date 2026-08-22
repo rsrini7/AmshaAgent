@@ -11,8 +11,8 @@ import java.util.Map;
 import java.util.Set;
 
 import com.amsha.common.util.LogUtil;
-import com.amsha.core.tools.ToolExecutionContext;
-import com.amsha.core.tools.ToolResponse;
+import com.amsha.tool.api.ToolExecutionContext;
+import com.amsha.tool.api.ToolResponse;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;

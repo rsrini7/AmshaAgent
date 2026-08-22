@@ -6,9 +6,11 @@ import jakarta.inject.Inject;
 
 import java.util.Optional;
 
-import com.amsha.core.agent.role.ToolCapability;
-import com.amsha.core.agent.role.ToolMetadata;
 import com.amsha.core.tool.DynamicToolCategoryLookup;
+import com.amsha.tool.api.AgentTool;
+import com.amsha.tool.api.ToolCapability;
+import com.amsha.tool.api.ToolCategory;
+import com.amsha.tool.api.ToolMetadata;
 
 import org.jboss.logging.Logger;
 

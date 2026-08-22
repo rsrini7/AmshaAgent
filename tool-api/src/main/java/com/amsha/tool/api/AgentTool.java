@@ -1,4 +1,4 @@
-package com.amsha.core.tools;
+package com.amsha.tool.api;
 
 import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
 
@@ -14,7 +14,8 @@ import com.amsha.security.api.ToolOperation;
  * Contract for all Amsha Agent agent tools.
  * <p>
  * Implementations are discovered via CDI {@code Instance<AgentTool>} in
- * {@link ToolRegistry}. Each tool declares:
+ * {@code com.amsha.core.tools.ToolRegistry} (core-side registry; this api module
+ * stays core-free). Each tool declares:
  * <ul>
  * <li>{@link #name()} - unique identifier used for invocation lookup.</li>
  * <li>{@link #description()} - human-readable purpose (surfaced to LLM
@@ -44,7 +45,7 @@ public interface AgentTool {
      * The execution category for thread-pool bulkhead isolation.
      * <p>
      * Tools should override this if they belong to a category other than INTERNAL.
-     * Built-in tools are mapped via {@link com.amsha.core.agent.role.ToolCapability#category()}
+     * Built-in tools are mapped via {@link ToolCapability#category()}
      * — this method is the contract for dynamically discovered tools (MCP, plugins)
      * that don't have a ToolCapability entry.
      */
@@ -62,7 +63,7 @@ public interface AgentTool {
     ToolOperation requiredOperation();
 
     /**
-     * Whether this tool's execution should be wrapped by {@link com.amsha.core.sandbox.SandboxExecutionPort}.
+     * Whether this tool's execution should be wrapped by the sandbox execution port.
      * Defaults to {@code true} - opt-OUT is the exception, not the rule.
      * <p>
      * Set to {@code false} only for trusted in-memory tools that do not

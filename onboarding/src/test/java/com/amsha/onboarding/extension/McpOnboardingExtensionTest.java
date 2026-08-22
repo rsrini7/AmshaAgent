@@ -15,7 +15,6 @@ import static org.mockito.Mockito.verify;
 
 import java.util.Map;
 
-import com.amsha.core.tools.ToolCategory;
 import com.amsha.mcp.transport.McpConnectionLifecycleService;
 import com.amsha.onboarding.spi.OnboardingContext;
 import com.amsha.onboarding.spi.OnboardingExtension;
@@ -24,6 +23,7 @@ import com.amsha.onboarding.spi.OnboardingStepDescriptor;
 import com.amsha.onboarding.spi.OnboardingValidationResult;
 import com.amsha.onboarding.spi.PreparedOnboardingStep;
 import com.amsha.onboarding.spi.ValidatedOnboardingInput;
+import com.amsha.tool.api.ToolCategory;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;

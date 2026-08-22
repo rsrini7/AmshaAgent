@@ -52,7 +52,6 @@ import com.amsha.core.tools.CheckListItem;
 import com.amsha.core.tools.CheckListStatus;
 import com.amsha.core.tools.ToolDiscoveryCompleted;
 import com.amsha.core.tools.ToolRegistry;
-import com.amsha.core.tools.ToolResponse;
 import com.amsha.persistence.api.SessionCatalogEntry;
 
 import io.quarkus.runtime.annotations.RegisterForReflection;
@@ -95,10 +94,6 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             SandboxResult.class,
             AgentJobCompleted.class,
             CronTaskScheduled.class,
-            ToolResponse.class,
-            ToolResponse.ToolSuccess.class,
-            ToolResponse.ToolFailure.class,
-            ToolResponse.ToolPending.class,
             ReasoningStepDeserializer.class,
             ReasoningStepSerializer.class,
             CheckList.class,

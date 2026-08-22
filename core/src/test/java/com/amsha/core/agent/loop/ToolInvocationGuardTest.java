@@ -26,12 +26,12 @@ import com.amsha.core.classifier.ClassifierResult;
 import com.amsha.core.classifier.ClassifierResult.NoOpinionReason;
 import com.amsha.core.scope.WorkspaceContext;
 import com.amsha.core.tool.ToolGuardInterceptor;
-import com.amsha.core.tools.AgentTool;
-import com.amsha.core.tools.IdempotencyMode;
 import com.amsha.core.tools.ToolRegistry;
 import com.amsha.security.api.AutonomyLevel;
 import com.amsha.security.api.RiskLevel;
 import com.amsha.security.api.ToolOperation;
+import com.amsha.tool.api.AgentTool;
+import com.amsha.tool.api.IdempotencyMode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.junit.jupiter.api.BeforeEach;

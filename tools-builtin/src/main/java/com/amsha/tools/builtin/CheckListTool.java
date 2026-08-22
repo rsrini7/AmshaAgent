@@ -12,18 +12,18 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
-import com.amsha.core.agent.role.ToolCapability;
-import com.amsha.core.agent.role.ToolMetadata;
 import com.amsha.core.audit.AuditService;
 import com.amsha.core.audit.SecurityEventType;
-import com.amsha.core.tools.AgentTool;
 import com.amsha.core.tools.CheckList;
 import com.amsha.core.tools.CheckListEvent;
 import com.amsha.core.tools.CheckListItem;
 import com.amsha.core.tools.CheckListStatus;
-import com.amsha.core.tools.ToolExecutionContext;
-import com.amsha.core.tools.ToolResponse;
 import com.amsha.security.api.ToolOperation;
+import com.amsha.tool.api.AgentTool;
+import com.amsha.tool.api.ToolCapability;
+import com.amsha.tool.api.ToolExecutionContext;
+import com.amsha.tool.api.ToolMetadata;
+import com.amsha.tool.api.ToolResponse;
 
 import io.quarkus.arc.Unremovable;
 

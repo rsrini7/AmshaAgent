@@ -9,13 +9,13 @@ import jakarta.inject.Inject;
 import java.util.List;
 import java.util.Map;
 
-import com.amsha.core.agent.AgentSentinels;
 import com.amsha.core.agent.reasoning.ReasoningStep;
-import com.amsha.core.agent.role.ToolCapability;
 import com.amsha.core.audit.AuditService;
 import com.amsha.core.domain.model.AgentCheckpoint;
 import com.amsha.core.scope.WorkspaceScopeHolder;
 import com.amsha.persistence.api.CheckpointStatus;
+import com.amsha.tool.api.AgentSentinels;
+import com.amsha.tool.api.ToolCapability;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;

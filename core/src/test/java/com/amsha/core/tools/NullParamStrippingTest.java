@@ -16,6 +16,8 @@ import java.util.Map;
 import com.amsha.core.scope.WorkspaceContext;
 import com.amsha.security.api.AutonomyLevel;
 import com.amsha.security.api.ToolOperation;
+import com.amsha.tool.api.AgentTool;
+import com.amsha.tool.api.ToolResponse;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

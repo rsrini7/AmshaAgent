@@ -12,9 +12,9 @@ import java.util.regex.Pattern;
 import com.amsha.core.agent.loop.ToolInvocationGuard;
 import com.amsha.core.agent.loop.ToolInvoker;
 import com.amsha.core.governance.RequiresApprovalException;
-import com.amsha.core.tools.ToolExecutionContext;
-import com.amsha.core.tools.ToolResponse;
 import com.amsha.core.tools.VerificationGate;
+import com.amsha.tool.api.ToolExecutionContext;
+import com.amsha.tool.api.ToolResponse;
 
 import org.jboss.logging.Logger;
 

@@ -17,7 +17,7 @@ import com.amsha.core.events.ToolExecutionEvent;
 import com.amsha.core.governance.RequiresApprovalException;
 import com.amsha.core.observability.AgentOtelContext;
 import com.amsha.core.tools.ToolRegistry;
-import com.amsha.core.tools.ToolResponse;
+import com.amsha.tool.api.ToolResponse;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

@@ -6,7 +6,7 @@ import jakarta.inject.Inject;
 import java.util.Optional;
 
 import com.amsha.core.tool.DynamicToolCategoryLookup;
-import com.amsha.core.tools.ToolCategory;
+import com.amsha.tool.api.ToolCategory;
 
 @ApplicationScoped
 public class DynamicToolCategoryLookupImpl implements DynamicToolCategoryLookup {

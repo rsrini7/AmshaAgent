@@ -1,8 +1,7 @@
-package com.amsha.core.tool;
+package com.amsha.tool.api;
 
 import java.util.Objects;
 
-import com.amsha.core.tools.ToolCategory;
 import com.amsha.security.api.ToolOperation;
 
 /** Public description of a dynamically registered tool. */

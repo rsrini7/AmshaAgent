@@ -9,7 +9,7 @@ import jakarta.interceptor.Interceptor;
 import java.util.List;
 
 import com.amsha.core.agent.role.CapabilityRegistry;
-import com.amsha.core.agent.role.ToolCapability;
+import com.amsha.tool.api.ToolCapability;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;

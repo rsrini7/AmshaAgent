@@ -6,9 +6,9 @@ import java.util.Map;
 import java.util.regex.Pattern;
 
 import com.amsha.common.util.HtmlArtifactUtil;
-import com.amsha.core.agent.AgentSentinels;
 import com.amsha.core.agent.reasoning.ReasoningStep;
 import com.amsha.core.agent.result.AgentResult;
+import com.amsha.tool.api.AgentSentinels;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 

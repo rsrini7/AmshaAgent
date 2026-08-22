@@ -10,6 +10,8 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
+import com.amsha.tool.api.ToolCapability;
+
 @ApplicationScoped
 public class RoleRegistry {
 

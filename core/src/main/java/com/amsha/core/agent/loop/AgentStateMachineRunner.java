@@ -12,13 +12,13 @@ import com.amsha.core.agent.IntentClassificationService;
 import com.amsha.core.agent.reasoning.ReasoningEngine;
 import com.amsha.core.agent.reasoning.ReasoningStep;
 import com.amsha.core.agent.result.AgentResult;
-import com.amsha.core.agent.role.ToolCapability;
 import com.amsha.core.governance.BudgetExceededException;
 import com.amsha.core.observability.AgentObserver;
 import com.amsha.core.observability.AgentOtelContext;
 import com.amsha.core.skill.SkillRegistry;
 import com.amsha.core.task.TaskManager;
 import com.amsha.core.util.AgentErrorMessageUtil;
+import com.amsha.tool.api.ToolCapability;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;

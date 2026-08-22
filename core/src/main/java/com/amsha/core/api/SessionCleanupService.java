@@ -10,7 +10,6 @@ import java.util.concurrent.Callable;
 import com.amsha.channel.api.ChannelMessage;
 import com.amsha.channel.api.ChannelType;
 import com.amsha.channel.api.ChannelUser;
-import com.amsha.core.agent.AgentSentinels;
 import com.amsha.core.agent.role.AgentRoleEnum;
 import com.amsha.core.api.dto.RunAgentRequest;
 import com.amsha.core.api.dto.ServiceResult;
@@ -23,6 +22,7 @@ import com.amsha.core.reflex.ReflexResult;
 import com.amsha.core.scope.WorkspaceContext;
 import com.amsha.core.scope.WorkspaceScopeHolder;
 import com.amsha.security.api.AutonomyLevel;
+import com.amsha.tool.api.AgentSentinels;
 
 import org.jboss.logging.Logger;
 

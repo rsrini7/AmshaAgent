@@ -1,4 +1,4 @@
-package com.amsha.core.tools;
+package com.amsha.tool.api;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonSubTypes;

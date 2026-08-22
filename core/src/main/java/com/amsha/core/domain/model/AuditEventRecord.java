@@ -4,10 +4,10 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 
-import com.amsha.core.agent.AgentSentinels;
 import com.amsha.core.audit.AuditOutcome;
 import com.amsha.core.audit.SecurityEventType;
 import com.amsha.persistence.api.AuditEventDto;
+import com.amsha.tool.api.AgentSentinels;
 
 public final class AuditEventRecord implements AuditEvent {
 

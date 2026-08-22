@@ -13,8 +13,8 @@ import java.util.Map;
 
 import com.amsha.core.agent.loop.ToolInvocationGuard;
 import com.amsha.core.agent.loop.ToolInvoker;
-import com.amsha.core.tools.ToolExecutionContext;
-import com.amsha.core.tools.ToolResponse;
+import com.amsha.tool.api.ToolExecutionContext;
+import com.amsha.tool.api.ToolResponse;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

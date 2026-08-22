@@ -16,7 +16,6 @@ import com.amsha.channel.api.ChannelMessage;
 import com.amsha.channel.api.ChannelType;
 import com.amsha.channel.api.ChannelUser;
 import com.amsha.common.util.LogUtil;
-import com.amsha.core.agent.AgentSentinels;
 import com.amsha.core.agent.hitl.CheckpointApprovalService;
 import com.amsha.core.agent.loop.AgentLoop;
 import com.amsha.core.agent.loop.CheckpointResumeHandler;
@@ -47,6 +46,7 @@ import com.amsha.core.util.MdcManaged;
 import com.amsha.persistence.api.CheckpointStatus;
 import com.amsha.persistence.api.ToolDecision;
 import com.amsha.security.api.AutonomyLevel;
+import com.amsha.tool.api.AgentSentinels;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;

@@ -10,15 +10,15 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import com.amsha.core.agent.role.ToolMetadata;
 import com.amsha.core.audit.AuditService;
 import com.amsha.core.reflex.PiiScanReflex;
-import com.amsha.core.tools.ToolExecutionContext;
-import com.amsha.core.tools.ToolResponse;
 import com.amsha.persistence.api.IngestResult;
 import com.amsha.persistence.api.MemoryEntryDto;
 import com.amsha.persistence.api.MemoryRetrievalPort;
 import com.amsha.security.api.AutonomyLevel;
+import com.amsha.tool.api.ToolExecutionContext;
+import com.amsha.tool.api.ToolMetadata;
+import com.amsha.tool.api.ToolResponse;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

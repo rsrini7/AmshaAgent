@@ -8,8 +8,8 @@ import java.util.Locale;
 
 import com.amsha.app.ui.dto.AgentEvent;
 import com.amsha.core.agent.reasoning.ReasoningStep;
-import com.amsha.core.agent.role.ToolCapability;
 import com.amsha.core.observability.AgentObserver;
+import com.amsha.tool.api.ToolCapability;
 
 @ApplicationScoped
 public class AgentProgressObserver implements AgentObserver {

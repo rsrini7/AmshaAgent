@@ -12,7 +12,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import com.amsha.core.agent.reasoning.PromptInstructionLibrary;
-import com.amsha.core.agent.role.ToolCapability;
+import com.amsha.tool.api.ToolCapability;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;

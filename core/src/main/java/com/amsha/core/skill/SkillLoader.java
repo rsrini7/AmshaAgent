@@ -20,15 +20,15 @@ import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
 import java.util.stream.Collectors;
 
-import com.amsha.core.agent.AgentSentinels;
 import com.amsha.core.agent.role.AgentRoleEnum;
 import com.amsha.core.agent.role.CapabilityRegistry;
 import com.amsha.core.agent.role.RoleDefinition;
 import com.amsha.core.agent.role.RoleRegistry;
-import com.amsha.core.agent.role.ToolCapability;
 import com.amsha.core.audit.SecurityEventType;
 import com.amsha.core.audit.TelemetryAuditService;
-import com.amsha.core.tools.ToolCategory;
+import com.amsha.tool.api.AgentSentinels;
+import com.amsha.tool.api.ToolCapability;
+import com.amsha.tool.api.ToolCategory;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;

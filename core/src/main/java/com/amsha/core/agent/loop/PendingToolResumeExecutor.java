@@ -7,15 +7,15 @@ import com.amsha.common.util.LogUtil;
 import com.amsha.core.agent.reasoning.ReasoningEngine;
 import com.amsha.core.agent.reasoning.ReasoningStep;
 import com.amsha.core.agent.result.AgentResult;
-import com.amsha.core.agent.role.ToolCapability;
 import com.amsha.core.domain.model.AgentCheckpoint;
 import com.amsha.core.lifecycle.WorkspaceManager;
 import com.amsha.core.scope.WorkspaceContext;
 import com.amsha.core.state.StatefulAgentStore;
 import com.amsha.core.tools.ToolRegistry;
-import com.amsha.core.tools.ToolResponse;
 import com.amsha.core.util.AgentErrorMessageUtil;
 import com.amsha.persistence.api.CheckpointStatus;
+import com.amsha.tool.api.ToolCapability;
+import com.amsha.tool.api.ToolResponse;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 

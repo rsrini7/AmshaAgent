@@ -1,12 +1,10 @@
-package com.amsha.core.agent.role;
+package com.amsha.tool.api;
 
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Inherited;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
-
-import com.amsha.core.tools.ToolCategory;
 
 /**
  * Metadata for auto-registering a tool's capability and default role grants.

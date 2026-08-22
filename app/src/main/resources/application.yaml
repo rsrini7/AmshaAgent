@@ -62,6 +62,9 @@ quarkus:
     amsha-self-evolve:
       group-id: com.amsha
       artifact-id: amsha-self-evolve
+    amsha-tool-api:
+      group-id: com.amsha
+      artifact-id: amsha-tool-api
 
   devservices:
     enabled: false

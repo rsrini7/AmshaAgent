@@ -31,22 +31,32 @@ if (Test-Path '.env') {
 }
 
 # --- Ensure env-example is a real copy (not symlink) for native-image ---
-$envExampleSrc = '.env.example'
-$envExampleDst = 'app/src/main/resources/env-example'
-if ((Test-Path $envExampleSrc) -and (Test-Path $envExampleSrc)) {
-    $srcItem = Get-Item $envExampleSrc -ErrorAction SilentlyContinue
-    if ($srcItem) {
-        if ((Test-Path $envExampleDst) -and ((Get-Item $envExampleDst).Attributes -band [IO.FileAttributes]::ReparsePoint)) {
-            Remove-Item $envExampleDst -Force
-        }
-        $dstItem = Get-Item $envExampleDst -ErrorAction SilentlyContinue
-        if (-not $dstItem -or $srcItem.LastWriteTime -gt $dstItem.LastWriteTime) {
-            Copy-Item -Path $envExampleSrc -Destination $envExampleDst -Force
-            Write-Host 'ℹ️   .env.example copied to app/src/main/resources/env-example'
-        }
-    } else {
-        Write-Host '⚠️   .env.example not found — skipping copy (native build may fail).'
+$repoRoot = if ($env:MISE_PROJECT_ROOT -and (Test-Path "$env:MISE_PROJECT_ROOT/.env.example")) {
+    $env:MISE_PROJECT_ROOT
+} elseif ($PSScriptRoot -and (Test-Path "$PSScriptRoot/../../../.env.example")) {
+    (Resolve-Path "$PSScriptRoot/../../..").Path
+} elseif (Test-Path '.env.example') {
+    (Get-Location).Path
+} else {
+    $null
+}
+
+$envExampleSrc = if ($repoRoot) { Join-Path $repoRoot '.env.example' } else { '.env.example' }
+$envExampleDst = if ($repoRoot) { Join-Path $repoRoot 'app/src/main/resources/env-example' } else { 'app/src/main/resources/env-example' }
+$srcItem = Get-Item $envExampleSrc -ErrorAction SilentlyContinue
+if ($srcItem) {
+    if ((Test-Path $envExampleDst) -and ((Get-Item $envExampleDst).Attributes -band [IO.FileAttributes]::ReparsePoint)) {
+        Remove-Item $envExampleDst -Force
     }
+    $dstItem = Get-Item $envExampleDst -ErrorAction SilentlyContinue
+    if (-not $dstItem -or $srcItem.LastWriteTime -gt $dstItem.LastWriteTime) {
+        Copy-Item -Path $envExampleSrc -Destination $envExampleDst -Force
+        Write-Host 'ℹ️   .env.example copied to app/src/main/resources/env-example'
+    }
+} elseif (Test-Path $envExampleDst) {
+    Write-Host 'ℹ️   Using existing app/src/main/resources/env-example for native build.'
+} else {
+    Write-Host '⚠️   .env.example not found — skipping copy (native build may fail).'
 }
 
 try {

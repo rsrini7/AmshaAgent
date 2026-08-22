@@ -33,7 +33,6 @@ import com.amsha.core.agent.reasoning.SystemPromptBuilder;
 import com.amsha.core.agent.reasoning.port.LlmProviderPort;
 import com.amsha.core.agent.result.AgentResult;
 import com.amsha.core.agent.role.RoleRegistry;
-import com.amsha.core.agent.role.ToolCapability;
 import com.amsha.core.agent.sse.AgentSseService;
 import com.amsha.core.audit.AuditHashUtil;
 import com.amsha.core.domain.model.AgentCheckpoint;
@@ -48,6 +47,7 @@ import com.amsha.core.tools.ToolRegistry;
 import com.amsha.core.util.TextPatternUtils;
 import com.amsha.persistence.api.CheckpointStatus;
 import com.amsha.security.api.AutonomyLevel;
+import com.amsha.tool.api.ToolCapability;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.junit.jupiter.api.BeforeEach;

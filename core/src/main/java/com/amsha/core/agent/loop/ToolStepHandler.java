@@ -11,16 +11,16 @@ import java.util.Map;
 import java.util.Objects;
 
 import com.amsha.common.util.LogUtil;
-import com.amsha.core.agent.AgentSentinels;
 import com.amsha.core.agent.reasoning.ReasoningStep;
 import com.amsha.core.agent.result.AgentResult;
-import com.amsha.core.agent.role.ToolCapability;
 import com.amsha.core.governance.RequiresApprovalException;
 import com.amsha.core.observability.AgentObserver;
 import com.amsha.core.scope.WorkspaceContext;
 import com.amsha.core.skill.CompiledSkillEntry;
-import com.amsha.core.tools.ToolResponse;
 import com.amsha.security.api.AutonomyLevel;
+import com.amsha.tool.api.AgentSentinels;
+import com.amsha.tool.api.ToolCapability;
+import com.amsha.tool.api.ToolResponse;
 
 import org.jboss.logging.Logger;
 

@@ -6,8 +6,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.util.Optional;
 
 import com.amsha.core.tool.DynamicToolAdmission;
-import com.amsha.core.tools.ToolCategory;
 import com.amsha.security.api.ToolOperation;
+import com.amsha.tool.api.ToolCategory;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

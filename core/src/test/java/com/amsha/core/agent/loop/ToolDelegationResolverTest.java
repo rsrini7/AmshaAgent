@@ -9,7 +9,7 @@ import java.util.stream.Stream;
 
 import com.amsha.core.agent.role.AgentRoleEnum;
 import com.amsha.core.agent.role.CapabilityRegistry;
-import com.amsha.core.agent.role.ToolCapability;
+import com.amsha.tool.api.ToolCapability;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;

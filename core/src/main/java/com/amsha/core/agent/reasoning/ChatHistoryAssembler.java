@@ -21,7 +21,6 @@ import java.util.Optional;
 import java.util.regex.Pattern;
 
 import com.amsha.common.util.LogUtil;
-import com.amsha.core.agent.AgentSentinels;
 import com.amsha.core.config.TieredMemoryConfig;
 import com.amsha.core.memory.tiered.CoreMemoryPromptRenderer;
 import com.amsha.core.memory.tiered.CoreMemoryService;
@@ -31,6 +30,7 @@ import com.amsha.core.memory.tiered.PromptBudgetManager;
 import com.amsha.core.scope.WorkspaceContext;
 import com.amsha.llm.api.ToolCallJsonKeys;
 import com.amsha.persistence.api.CoreMemoryBlockDto;
+import com.amsha.tool.api.AgentSentinels;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;

@@ -34,16 +34,16 @@ import com.amsha.core.agent.IntentClassificationService;
 import com.amsha.core.agent.loop.AgentExecutionContext;
 import com.amsha.core.agent.reasoning.port.LlmProviderPort;
 import com.amsha.core.agent.role.RoleRegistry;
-import com.amsha.core.agent.role.ToolCapability;
 import com.amsha.core.governance.BudgetWarningException;
 import com.amsha.core.governance.GovernanceStrategy;
 import com.amsha.core.scope.WorkspaceScopeHolder;
 import com.amsha.core.skill.SkillRegistry;
-import com.amsha.core.tools.AgentTool;
 import com.amsha.core.tools.ToolRegistry;
 import com.amsha.llm.api.StructuredOutputMode;
 import com.amsha.llm.api.error.LlmToolCallException;
 import com.amsha.security.api.AutonomyLevel;
+import com.amsha.tool.api.AgentTool;
+import com.amsha.tool.api.ToolCapability;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.junit.jupiter.api.BeforeEach;

@@ -6,13 +6,13 @@ import jakarta.inject.Inject;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import com.amsha.core.agent.AgentSentinels;
 import com.amsha.core.agent.result.AgentResult;
 import com.amsha.core.api.dto.AmshaErrorResponse;
 import com.amsha.core.audit.AuditService;
 import com.amsha.core.audit.SecurityEventType;
 import com.amsha.core.scope.WorkspaceContext;
 import com.amsha.persistence.api.CheckpointStatus;
+import com.amsha.tool.api.AgentSentinels;
 
 import org.jboss.logging.Logger;
 

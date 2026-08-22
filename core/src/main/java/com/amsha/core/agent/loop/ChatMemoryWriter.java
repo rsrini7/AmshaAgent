@@ -15,10 +15,10 @@ import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import com.amsha.core.agent.AgentSentinels;
 import com.amsha.core.events.ConversationMessageEvent;
 import com.amsha.core.scope.WorkspaceContext;
 import com.amsha.core.security.InputSanitizer;
+import com.amsha.tool.api.AgentSentinels;
 
 /**
  * Persists goals and answers to the ChatMemoryStore.

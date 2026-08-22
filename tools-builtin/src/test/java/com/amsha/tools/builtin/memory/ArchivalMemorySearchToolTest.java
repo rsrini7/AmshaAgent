@@ -15,11 +15,11 @@ import java.util.Map;
 import com.amsha.core.agent.reasoning.ArchivalContextCache;
 import com.amsha.core.config.TieredMemoryConfig;
 import com.amsha.core.scope.WorkspaceContext;
-import com.amsha.core.tools.ToolExecutionContext;
-import com.amsha.core.tools.ToolResponse;
 import com.amsha.persistence.api.ArchivalChunkDto;
 import com.amsha.persistence.api.ArchivalMemoryStorePort;
 import com.amsha.security.api.AutonomyLevel;
+import com.amsha.tool.api.ToolExecutionContext;
+import com.amsha.tool.api.ToolResponse;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;

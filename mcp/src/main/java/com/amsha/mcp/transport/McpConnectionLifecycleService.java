@@ -17,12 +17,10 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 import com.amsha.common.util.LogUtil;
-import com.amsha.core.agent.AgentSentinels;
 import com.amsha.core.audit.AuditService;
 import com.amsha.core.audit.SecurityEventType;
 import com.amsha.core.scope.WorkspaceScopeHolder;
 import com.amsha.core.security.OutboundHttpPolicyService;
-import com.amsha.core.tools.ToolCategory;
 import com.amsha.mcp.tool.DynamicToolCapabilityRegistry;
 import com.amsha.mcp.tool.McpTransportType;
 import com.amsha.persistence.api.McpConnectionCleanupFailureDto;
@@ -34,6 +32,8 @@ import com.amsha.security.api.OutboundPolicyDecision;
 import com.amsha.security.api.OutboundPurpose;
 import com.amsha.security.api.SecretVault;
 import com.amsha.security.api.VaultConstants;
+import com.amsha.tool.api.AgentSentinels;
+import com.amsha.tool.api.ToolCategory;
 
 import org.jboss.logging.Logger;
 

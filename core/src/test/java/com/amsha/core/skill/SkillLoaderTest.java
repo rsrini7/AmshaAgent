@@ -17,10 +17,10 @@ import java.util.Optional;
 import com.amsha.core.agent.role.CapabilityRegistry;
 import com.amsha.core.agent.role.RoleDefinition;
 import com.amsha.core.agent.role.RoleRegistry;
-import com.amsha.core.agent.role.ToolCapability;
 import com.amsha.core.audit.TelemetryAuditService;
 import com.amsha.persistence.api.SkillDto;
 import com.amsha.persistence.api.SkillStorePort;
+import com.amsha.tool.api.ToolCapability;
 
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;

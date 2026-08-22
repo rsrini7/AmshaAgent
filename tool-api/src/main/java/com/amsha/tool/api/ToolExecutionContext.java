@@ -1,4 +1,4 @@
-package com.amsha.core.tools;
+package com.amsha.tool.api;
 
 import com.amsha.security.api.AutonomyLevel;
 

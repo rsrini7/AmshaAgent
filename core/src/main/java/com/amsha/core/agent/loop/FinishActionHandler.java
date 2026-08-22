@@ -9,13 +9,11 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
-import com.amsha.core.agent.AgentSentinels;
 import com.amsha.core.agent.IntentClassificationService;
 import com.amsha.core.agent.reasoning.ReasoningStep;
 import com.amsha.core.agent.reasoning.ReasoningStepSupport;
 import com.amsha.core.agent.result.AgentResult;
 import com.amsha.core.agent.role.RoleRegistry;
-import com.amsha.core.agent.role.ToolCapability;
 import com.amsha.core.classifier.ClassifierResult;
 import com.amsha.core.governance.RateLimitTracker;
 import com.amsha.core.observability.AgentObserver;
@@ -23,6 +21,8 @@ import com.amsha.core.tools.CodeLanguageDetector;
 import com.amsha.core.tools.ToolRegistry;
 import com.amsha.core.util.AgentErrorMessageUtil;
 import com.amsha.core.util.TextPatternUtils;
+import com.amsha.tool.api.AgentSentinels;
+import com.amsha.tool.api.ToolCapability;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.jboss.logging.Logger;

@@ -8,12 +8,13 @@ import jakarta.inject.Inject;
 import java.util.Locale;
 
 import com.amsha.common.util.LogUtil;
-import com.amsha.core.agent.AgentSentinels;
 import com.amsha.core.agent.loop.GroupConsultationService;
 import com.amsha.core.agent.result.AgentResult;
 import com.amsha.core.agent.role.AgentRoleEnum;
 import com.amsha.core.agent.role.RoleRegistry;
 import com.amsha.core.util.AgentResultFormatter;
+import com.amsha.tool.api.AgentSentinels;
+import com.amsha.tool.api.ToolResponse;
 
 import org.jboss.logging.Logger;
 

@@ -8,7 +8,7 @@ import java.util.Map;
 import com.amsha.common.util.LogUtil;
 import com.amsha.core.agent.reasoning.ParallelToolCall;
 import com.amsha.core.scope.WorkspaceContext;
-import com.amsha.core.tools.ToolResponse;
+import com.amsha.tool.api.ToolResponse;
 
 import org.jboss.logging.Logger;
 

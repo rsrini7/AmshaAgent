@@ -2,8 +2,8 @@ package com.amsha.core.tool;
 
 import java.util.Objects;
 
-import com.amsha.core.tools.ToolCategory;
 import com.amsha.security.api.ToolOperation;
+import com.amsha.tool.api.ToolCategory;
 
 /** Validated admission metadata for a dynamically registered (non-ToolRegistry) tool. */
 public record DynamicToolAdmission(

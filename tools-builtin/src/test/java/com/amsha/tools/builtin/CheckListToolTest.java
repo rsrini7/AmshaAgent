@@ -17,9 +17,9 @@ import com.amsha.core.audit.SecurityEventType;
 import com.amsha.core.scope.WorkspaceContext;
 import com.amsha.core.tools.CheckListEvent;
 import com.amsha.core.tools.CheckListStatus;
-import com.amsha.core.tools.ToolExecutionContext;
-import com.amsha.core.tools.ToolResponse;
 import com.amsha.security.api.AutonomyLevel;
+import com.amsha.tool.api.ToolExecutionContext;
+import com.amsha.tool.api.ToolResponse;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

@@ -12,16 +12,16 @@ import java.util.concurrent.ConcurrentHashMap;
 
 import com.amsha.common.util.LogUtil;
 import com.amsha.core.agent.role.AgentRoleEnum;
-import com.amsha.core.agent.role.ToolCapability;
 import com.amsha.core.audit.AuditService;
 import com.amsha.core.audit.SecurityEventType;
 import com.amsha.core.scope.WorkspaceContext;
-import com.amsha.core.tools.AgentTool;
 import com.amsha.core.tools.ToolRegistry;
-import com.amsha.core.tools.ToolResponse;
 import com.amsha.core.tools.ToolSchemaProvider;
 import com.amsha.mcp.config.McpToolAllowlist;
 import com.amsha.security.api.AutonomyLevel;
+import com.amsha.tool.api.AgentTool;
+import com.amsha.tool.api.ToolCapability;
+import com.amsha.tool.api.ToolResponse;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.jboss.logging.Logger;

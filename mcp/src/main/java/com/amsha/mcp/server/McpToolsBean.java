@@ -4,9 +4,9 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
-import com.amsha.core.agent.role.ToolCapability;
 import com.amsha.mcp.bridge.McpToolBridge;
 import com.amsha.mcp.bridge.McpToolRequest;
+import com.amsha.tool.api.ToolCapability;
 
 import io.quarkiverse.mcp.server.Tool;
 import io.vertx.core.http.HttpServerRequest;

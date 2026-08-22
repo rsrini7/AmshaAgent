@@ -8,11 +8,11 @@ import java.util.List;
 import java.util.Map;
 
 import com.amsha.channel.api.ChannelType;
-import com.amsha.core.agent.AgentSentinels;
 import com.amsha.core.agent.result.AgentResult;
 import com.amsha.core.event.DomainEventBus;
 import com.amsha.core.governance.ApprovalFrame;
 import com.amsha.security.api.RiskLevel;
+import com.amsha.tool.api.AgentSentinels;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

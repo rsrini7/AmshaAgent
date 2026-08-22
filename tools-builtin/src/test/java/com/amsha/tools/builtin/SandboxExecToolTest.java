@@ -21,18 +21,18 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeoutException;
 
-import com.amsha.core.agent.role.ToolCapability;
 import com.amsha.core.audit.AuditService;
 import com.amsha.core.governance.BudgetExceededException;
 import com.amsha.core.sandbox.SandboxExecutionPort;
 import com.amsha.core.sandbox.SandboxFailureMessages;
 import com.amsha.core.sandbox.SandboxResult;
 import com.amsha.core.scope.WorkspaceContext;
-import com.amsha.core.tools.ToolExecutionContext;
-import com.amsha.core.tools.ToolResponse;
 import com.amsha.sandbox.ProcessIsolationExecutor;
 import com.amsha.sandbox.ToolExecutionException;
 import com.amsha.security.api.AutonomyLevel;
+import com.amsha.tool.api.ToolCapability;
+import com.amsha.tool.api.ToolExecutionContext;
+import com.amsha.tool.api.ToolResponse;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

@@ -11,6 +11,8 @@ import java.util.Map;
 
 import com.amsha.core.audit.AuditService;
 import com.amsha.security.api.ToolOperation;
+import com.amsha.tool.api.AgentTool;
+import com.amsha.tool.api.ToolResponse;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.junit.jupiter.api.BeforeEach;

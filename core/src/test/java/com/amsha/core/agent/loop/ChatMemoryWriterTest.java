@@ -9,8 +9,8 @@ import static org.mockito.Mockito.verify;
 
 import dev.langchain4j.store.memory.chat.ChatMemoryStore;
 
-import com.amsha.core.agent.AgentSentinels;
 import com.amsha.core.security.InputSanitizer;
+import com.amsha.tool.api.AgentSentinels;
 
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;

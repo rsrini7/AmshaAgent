@@ -17,8 +17,9 @@ import java.util.TreeMap;
 
 import com.amsha.core.agent.role.Capability;
 import com.amsha.core.agent.role.CapabilityRegistry;
-import com.amsha.core.agent.role.ToolMetadata;
 import com.amsha.core.util.ClassUtils;
+import com.amsha.tool.api.AgentTool;
+import com.amsha.tool.api.ToolMetadata;
 
 import org.jboss.logging.Logger;
 

@@ -24,10 +24,10 @@ import com.amsha.core.governance.ApprovalFrame;
 import com.amsha.core.governance.GovernanceStrategy;
 import com.amsha.core.governance.RateLimitTracker;
 import com.amsha.core.observability.AgentObserver;
-import com.amsha.core.tools.ToolResponse;
 import com.amsha.llm.api.StructuredOutputMode;
 import com.amsha.security.api.AutonomyLevel;
 import com.amsha.security.api.RiskLevel;
+import com.amsha.tool.api.ToolResponse;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.junit.jupiter.api.BeforeEach;

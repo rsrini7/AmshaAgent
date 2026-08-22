@@ -19,9 +19,9 @@ import com.amsha.core.agent.reasoning.ReasoningStep;
 import com.amsha.core.agent.result.AgentResult;
 import com.amsha.core.observability.AgentObserver;
 import com.amsha.core.tool.DynamicToolLookup;
-import com.amsha.core.tools.AgentTool;
 import com.amsha.core.tools.ToolRegistry;
 import com.amsha.security.api.AutonomyLevel;
+import com.amsha.tool.api.AgentTool;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

@@ -13,12 +13,12 @@ import java.util.Map;
 import java.util.Optional;
 
 import com.amsha.core.agent.loop.ToolInvocationGuard;
-import com.amsha.core.agent.role.ToolCapability;
 import com.amsha.core.domain.model.AgentCheckpoint;
 import com.amsha.core.domain.model.AgentCheckpointRecord;
 import com.amsha.core.state.StatefulAgentStore;
 import com.amsha.persistence.api.CheckpointStatus;
 import com.amsha.security.api.AutonomyLevel;
+import com.amsha.tool.api.ToolCapability;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.junit.jupiter.api.BeforeEach;

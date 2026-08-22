@@ -4,10 +4,10 @@ import java.util.List;
 import java.util.Map;
 
 import com.amsha.core.audit.SecurityEventType;
-import com.amsha.core.tools.ToolCategory;
 import com.amsha.mcp.tool.McpTransportType;
 import com.amsha.persistence.api.McpConnectionDto;
 import com.amsha.persistence.api.McpConnectionHeaderSecretRefDto;
+import com.amsha.tool.api.ToolCategory;
 
 /** Owns throwaway discovery and first durable connection setup. */
 final class McpManagementConnectionSetup {

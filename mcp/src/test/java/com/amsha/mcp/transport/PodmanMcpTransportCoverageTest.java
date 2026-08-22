@@ -6,9 +6,9 @@ import static org.mockito.Mockito.*;
 import java.util.List;
 import java.util.Map;
 
-import com.amsha.core.tools.ToolCategory;
 import com.amsha.mcp.tool.DynamicToolCapabilityRegistry;
 import com.amsha.sandbox.SandboxCircuitBreaker;
+import com.amsha.tool.api.ToolCategory;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.junit.jupiter.api.Test;

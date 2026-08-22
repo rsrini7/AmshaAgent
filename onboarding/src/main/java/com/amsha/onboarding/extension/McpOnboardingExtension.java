@@ -9,7 +9,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-import com.amsha.core.tools.ToolCategory;
 import com.amsha.mcp.transport.McpConnectionLifecycleService;
 import com.amsha.onboarding.spi.CompensatableOnboardingCommit;
 import com.amsha.onboarding.spi.OnboardingContext;
@@ -21,6 +20,7 @@ import com.amsha.onboarding.spi.OnboardingStepDescriptor;
 import com.amsha.onboarding.spi.OnboardingValidationResult;
 import com.amsha.onboarding.spi.PreparedOnboardingStep;
 import com.amsha.onboarding.spi.ValidatedOnboardingInput;
+import com.amsha.tool.api.ToolCategory;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 

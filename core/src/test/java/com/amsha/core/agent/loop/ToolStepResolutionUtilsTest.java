@@ -7,7 +7,7 @@ import java.util.List;
 import java.util.Map;
 
 import com.amsha.core.agent.reasoning.ReasoningStep;
-import com.amsha.core.agent.role.ToolCapability;
+import com.amsha.tool.api.ToolCapability;
 
 import org.junit.jupiter.api.Test;
 

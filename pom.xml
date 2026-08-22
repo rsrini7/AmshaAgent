@@ -16,6 +16,7 @@
     <module>channel-api</module>
     <module>llm-provider-api</module>
     <module>security-api</module>
+    <module>tool-api</module>
     <module>persistence-api</module>
     <module>persistence-common</module>
     <module>common</module>
@@ -115,6 +116,11 @@
       <dependency>
         <groupId>com.amsha</groupId>
         <artifactId>amsha-security-api</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.amsha</groupId>
+        <artifactId>amsha-tool-api</artifactId>
         <version>${project.version}</version>
       </dependency>
       <dependency>

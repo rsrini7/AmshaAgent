@@ -11,14 +11,14 @@ import java.util.Map;
 import com.amsha.core.audit.AuditService;
 import com.amsha.core.audit.SecurityEventType;
 import com.amsha.core.scope.WorkspaceContext;
-import com.amsha.core.tool.DynamicToolDescriptor;
 import com.amsha.core.tool.DynamicToolInvoker;
-import com.amsha.core.tools.ToolExecutionContext;
-import com.amsha.core.tools.ToolResponse;
 import com.amsha.mcp.tool.DynamicToolCapability;
 import com.amsha.mcp.tool.DynamicToolCapabilityRegistry;
 import com.amsha.mcp.transport.McpClientService;
 import com.amsha.mcp.transport.PodmanMcpTransport;
+import com.amsha.tool.api.DynamicToolDescriptor;
+import com.amsha.tool.api.ToolExecutionContext;
+import com.amsha.tool.api.ToolResponse;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.jboss.logging.Logger;

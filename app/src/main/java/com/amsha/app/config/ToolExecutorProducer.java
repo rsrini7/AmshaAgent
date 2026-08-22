@@ -7,7 +7,7 @@ import jakarta.inject.Inject;
 
 import java.util.List;
 
-import com.amsha.core.tools.ToolCategory;
+import com.amsha.tool.api.ToolCategory;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.eclipse.microprofile.context.ManagedExecutor;

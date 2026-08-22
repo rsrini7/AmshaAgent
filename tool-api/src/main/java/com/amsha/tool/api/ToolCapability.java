@@ -1,11 +1,9 @@
-package com.amsha.core.agent.role;
+package com.amsha.tool.api;
 
 import java.util.Arrays;
 import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
-
-import com.amsha.core.tools.ToolCategory;
 
 import io.quarkus.qute.TemplateData;
 
@@ -130,7 +128,7 @@ public enum ToolCapability {
     private final String description;
 
     private static final Map<String, ToolCapability> BY_TOOL_NAME =
-            Arrays.stream(values()).collect(Collectors.toMap(c -> c.toolName, c -> c));
+            Map.copyOf(Arrays.stream(values()).collect(Collectors.toMap(c -> c.toolName, c -> c)));
 
     ToolCapability(String toolName, ToolCategory category, String description) {
         this.toolName = toolName;
@@ -155,9 +153,16 @@ public enum ToolCapability {
         return toolName;
     }
 
+    /** Pinned delegatable-role vocabulary; drift-checked against core personas by CoreRoleVocabularyDriftTest. */
+    public static final String DELEGATABLE_ROLE_NAMES =
+            "architect, brahaspati, brahma, brihaspati, coder, coordinator, datta, dattatreya, debugger, "
+                    + "durga, ganesh, ganesha, healer, kali, kartikeya, lakshmi, murugan, nurturer, optimizer, "
+                    + "parvati, protector, purifier, researcher, saraswati, sentinel, shiva, skanda, synthesizer, "
+                    + "uma, vishnu";
+
     public String description() {
         if (this == DELEGATE_TO_AGENT) {
-            String delegatableRoles = AgentRoleEnum.getDelegatableRoleNames();
+            String delegatableRoles = DELEGATABLE_ROLE_NAMES;
 
             return "Delegate a task to a domain expert sub-agent. " + "REQUIRED: 'agent' (string name: "
                     + delegatableRoles + "), 'goal' (string self-contained task description). "

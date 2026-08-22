@@ -16,10 +16,10 @@ import java.util.Optional;
 import java.util.Set;
 
 import com.amsha.core.audit.AuditService;
-import com.amsha.core.tools.ToolCategory;
 import com.amsha.mcp.tool.DynamicToolCapabilityRegistry;
 import com.amsha.persistence.api.McpConnectionDto;
 import com.amsha.persistence.api.McpConnectionToolPolicyDto;
+import com.amsha.tool.api.ToolCategory;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

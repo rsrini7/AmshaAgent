@@ -1,4 +1,4 @@
-package com.amsha.core.agent.role;
+package com.amsha.tool.api;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;

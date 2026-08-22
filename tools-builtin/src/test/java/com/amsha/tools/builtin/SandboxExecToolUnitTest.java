@@ -9,11 +9,11 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 
-import com.amsha.core.agent.role.ToolCapability;
 import com.amsha.core.audit.AuditService;
-import com.amsha.core.tools.ToolExecutionContext;
 import com.amsha.sandbox.ProcessIsolationExecutor;
 import com.amsha.security.api.AutonomyLevel;
+import com.amsha.tool.api.ToolCapability;
+import com.amsha.tool.api.ToolExecutionContext;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

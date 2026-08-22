@@ -21,7 +21,6 @@ import java.util.stream.Collectors;
 import com.amsha.common.util.LogUtil;
 import com.amsha.common.util.PathSanitizer;
 import com.amsha.core.agent.role.AgentRoleEnum;
-import com.amsha.core.agent.role.ToolCapability;
 import com.amsha.core.audit.AuditService;
 import com.amsha.core.audit.ComplianceViolationException;
 import com.amsha.core.audit.SecurityEventType;
@@ -37,6 +36,10 @@ import com.amsha.core.tool.DynamicToolInvoker;
 import com.amsha.core.util.ClassUtils;
 import com.amsha.security.api.AutonomyLevel;
 import com.amsha.security.api.RequiresSecret;
+import com.amsha.tool.api.AgentTool;
+import com.amsha.tool.api.ToolCapability;
+import com.amsha.tool.api.ToolExecutionContext;
+import com.amsha.tool.api.ToolResponse;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 

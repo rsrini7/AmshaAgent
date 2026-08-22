@@ -6,11 +6,11 @@ import java.lang.reflect.Method;
 import java.util.List;
 import java.util.Map;
 
-import com.amsha.core.agent.role.ToolCapability;
-import com.amsha.core.tools.IdempotencyMode;
-import com.amsha.core.tools.ToolExecutionContext;
-import com.amsha.core.tools.ToolResponse;
 import com.amsha.security.api.ToolOperation;
+import com.amsha.tool.api.IdempotencyMode;
+import com.amsha.tool.api.ToolCapability;
+import com.amsha.tool.api.ToolExecutionContext;
+import com.amsha.tool.api.ToolResponse;
 
 import org.junit.jupiter.api.Test;
 

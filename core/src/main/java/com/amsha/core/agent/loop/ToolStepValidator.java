@@ -13,10 +13,10 @@ import java.util.regex.Pattern;
 import com.amsha.core.agent.reasoning.ReasoningStep;
 import com.amsha.core.agent.result.AgentResult;
 import com.amsha.core.agent.role.AgentRoleEnum;
-import com.amsha.core.agent.role.ToolCapability;
 import com.amsha.core.observability.AgentObserver;
 import com.amsha.core.tool.DynamicToolLookup;
 import com.amsha.core.tools.ToolRegistry;
+import com.amsha.tool.api.ToolCapability;
 
 import org.jboss.logging.Logger;
 

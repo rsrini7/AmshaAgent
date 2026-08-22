@@ -1,4 +1,4 @@
-package com.amsha.core.tools;
+package com.amsha.tool.api;
 
 public enum ToolCategory {
     NETWORK("network-tool-executor", 8, 20),

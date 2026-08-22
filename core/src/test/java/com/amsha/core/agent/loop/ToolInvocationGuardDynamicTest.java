@@ -21,11 +21,11 @@ import com.amsha.core.classifier.ClassifierResult.NoOpinionReason;
 import com.amsha.core.tool.DynamicToolAdmission;
 import com.amsha.core.tool.DynamicToolAdmissionLookup;
 import com.amsha.core.tool.ToolGuardInterceptor;
-import com.amsha.core.tools.ToolCategory;
 import com.amsha.core.tools.ToolRegistry;
 import com.amsha.security.api.AutonomyLevel;
 import com.amsha.security.api.RiskLevel;
 import com.amsha.security.api.ToolOperation;
+import com.amsha.tool.api.ToolCategory;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.junit.jupiter.api.BeforeEach;

@@ -18,8 +18,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.TimeoutException;
 
-import com.amsha.core.agent.role.ToolCapability;
-import com.amsha.core.agent.role.ToolMetadata;
 import com.amsha.core.audit.AuditService;
 import com.amsha.core.audit.SecurityEventType;
 import com.amsha.core.config.CoreSpiResolutionValidator;
@@ -27,13 +25,15 @@ import com.amsha.core.governance.BudgetExceededException;
 import com.amsha.core.sandbox.SandboxExecutionPort;
 import com.amsha.core.sandbox.SandboxFailureMessages;
 import com.amsha.core.sandbox.SandboxResult;
-import com.amsha.core.tools.AgentTool;
 import com.amsha.core.tools.CodeLanguageDetector;
 import com.amsha.core.tools.OutputTruncator;
-import com.amsha.core.tools.ToolExecutionContext;
-import com.amsha.core.tools.ToolResponse;
 import com.amsha.sandbox.SandboxCodeSafetyScanner;
 import com.amsha.security.api.ToolOperation;
+import com.amsha.tool.api.AgentTool;
+import com.amsha.tool.api.ToolCapability;
+import com.amsha.tool.api.ToolExecutionContext;
+import com.amsha.tool.api.ToolMetadata;
+import com.amsha.tool.api.ToolResponse;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 

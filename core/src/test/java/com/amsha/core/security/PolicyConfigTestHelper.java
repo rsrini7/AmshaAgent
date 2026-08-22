@@ -2,8 +2,8 @@ package com.amsha.core.security;
 
 import java.util.List;
 
-import com.amsha.core.agent.role.ToolCapability;
 import com.amsha.core.config.PolicyConfig;
+import com.amsha.tool.api.ToolCapability;
 
 /**
  * Provides a default PolicyConfig for tests that don't run in a Quarkus container.

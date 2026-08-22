@@ -14,9 +14,9 @@ import java.util.concurrent.atomic.AtomicInteger;
 import com.amsha.core.agent.reasoning.ReasoningEngine;
 import com.amsha.core.agent.reasoning.ReasoningStep;
 import com.amsha.core.agent.result.AgentResult;
-import com.amsha.core.agent.role.ToolCapability;
 import com.amsha.core.scope.WorkspaceContext;
 import com.amsha.core.scope.WorkspaceScopeHolder;
+import com.amsha.tool.api.ToolCapability;
 
 import org.junit.jupiter.api.Test;
 

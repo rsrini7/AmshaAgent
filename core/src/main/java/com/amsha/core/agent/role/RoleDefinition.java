@@ -4,6 +4,8 @@ import java.util.HashSet;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import com.amsha.tool.api.ToolCapability;
+
 import io.quarkus.qute.TemplateData;
 
 /**

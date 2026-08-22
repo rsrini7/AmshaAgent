@@ -11,10 +11,10 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import com.amsha.common.util.HtmlArtifactUtil;
-import com.amsha.core.agent.AgentSentinels;
 import com.amsha.core.agent.reasoning.ReasoningStep;
 import com.amsha.core.tools.ToolRegistry;
 import com.amsha.core.util.TextPatternUtils;
+import com.amsha.tool.api.AgentSentinels;
 
 import org.jboss.logging.Logger;
 

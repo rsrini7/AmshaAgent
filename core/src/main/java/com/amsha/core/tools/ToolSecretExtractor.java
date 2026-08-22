@@ -9,6 +9,7 @@ import java.util.Map;
 
 import com.amsha.security.api.RequiresSecret;
 import com.amsha.security.api.RequiresSecrets;
+import com.amsha.tool.api.AgentTool;
 
 import org.jboss.logging.Logger;
 
