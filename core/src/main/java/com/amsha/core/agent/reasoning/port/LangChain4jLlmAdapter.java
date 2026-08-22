@@ -9,10 +9,10 @@ import jakarta.inject.Inject;
 
 import java.util.concurrent.ConcurrentHashMap;
 
-import com.amsha.core.agent.reasoning.error.LlmExceptionClassifier;
-import com.amsha.core.agent.reasoning.error.LlmMalformedResponseException;
-import com.amsha.core.agent.reasoning.error.LlmToolCallException;
+import com.amsha.core.agent.reasoning.error.LlmErrorClassificationService;
 import com.amsha.core.routing.ModelRouter;
+import com.amsha.llm.api.error.LlmMalformedResponseException;
+import com.amsha.llm.api.error.LlmToolCallException;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
@@ -150,7 +150,7 @@ public class LangChain4jLlmAdapter implements LlmProviderPort {
                 throw e;
             } catch (Exception e) {
                 onFailure();
-                throw LlmExceptionClassifier.classify(e);
+                throw LlmErrorClassificationService.classify(e);
             }
         }
 

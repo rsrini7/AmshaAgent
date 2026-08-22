@@ -32,7 +32,6 @@ import java.util.Set;
 
 import com.amsha.core.agent.IntentClassificationService;
 import com.amsha.core.agent.loop.AgentExecutionContext;
-import com.amsha.core.agent.reasoning.error.LlmToolCallException;
 import com.amsha.core.agent.reasoning.port.LlmProviderPort;
 import com.amsha.core.agent.role.RoleRegistry;
 import com.amsha.core.agent.role.ToolCapability;
@@ -44,6 +43,7 @@ import com.amsha.core.skill.SkillRegistry;
 import com.amsha.core.tools.AgentTool;
 import com.amsha.core.tools.ToolRegistry;
 import com.amsha.llm.api.StructuredOutputMode;
+import com.amsha.llm.api.error.LlmToolCallException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.junit.jupiter.api.BeforeEach;

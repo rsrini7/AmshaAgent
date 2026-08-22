@@ -1,8 +1,8 @@
-package com.amsha.core.agent.reasoning.error;
+package com.amsha.llm.api.error;
 
 import java.util.Locale;
 
-public abstract class LlmExceptionClassifierChain {
+public abstract class LlmExceptionClassifierChain implements LlmExceptionClassifier {
     protected LlmExceptionClassifierChain next;
 
     public void setNext(LlmExceptionClassifierChain next) {

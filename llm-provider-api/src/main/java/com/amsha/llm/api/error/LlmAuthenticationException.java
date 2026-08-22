@@ -1,4 +1,4 @@
-package com.amsha.core.agent.reasoning.error;
+package com.amsha.llm.api.error;
 
 public final class LlmAuthenticationException extends LlmProviderException {
     public LlmAuthenticationException(String message) {

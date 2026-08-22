@@ -1,6 +1,23 @@
-package com.amsha.core.agent.reasoning.error;
+package com.amsha.llm.providers.error;
 
+import jakarta.enterprise.context.ApplicationScoped;
+
+import com.amsha.llm.api.error.LlmContentFilterException;
+import com.amsha.llm.api.error.LlmExceptionClassifierChain;
+import com.amsha.llm.api.error.LlmProviderException;
+
+import io.quarkus.arc.Unremovable;
+
+@ApplicationScoped
+@Unremovable
 public class GeminiExceptionClassifier extends LlmExceptionClassifierChain {
+
+    public static final int ORDER = 0;
+
+    @Override
+    public int order() {
+        return ORDER;
+    }
 
     @Override
     public LlmProviderException classify(Throwable t) {

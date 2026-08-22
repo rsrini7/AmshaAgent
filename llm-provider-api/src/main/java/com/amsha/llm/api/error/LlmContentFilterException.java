@@ -1,4 +1,4 @@
-package com.amsha.core.agent.reasoning.error;
+package com.amsha.llm.api.error;
 
 public final class LlmContentFilterException extends LlmProviderException {
     public LlmContentFilterException(String message) {

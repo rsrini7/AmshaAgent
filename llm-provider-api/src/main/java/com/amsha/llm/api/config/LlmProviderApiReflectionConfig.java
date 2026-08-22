@@ -10,6 +10,17 @@ import com.amsha.llm.api.NetworkPolicyViolation;
 import com.amsha.llm.api.NetworkProfilePolicy;
 import com.amsha.llm.api.ProviderValidationResult;
 import com.amsha.llm.api.StructuredOutputMode;
+import com.amsha.llm.api.error.LlmAuthenticationException;
+import com.amsha.llm.api.error.LlmContentFilterException;
+import com.amsha.llm.api.error.LlmContextOverflowException;
+import com.amsha.llm.api.error.LlmExceptionClassifier;
+import com.amsha.llm.api.error.LlmExceptionClassifierChain;
+import com.amsha.llm.api.error.LlmMalformedResponseException;
+import com.amsha.llm.api.error.LlmModelExhaustedException;
+import com.amsha.llm.api.error.LlmProviderException;
+import com.amsha.llm.api.error.LlmRateLimitException;
+import com.amsha.llm.api.error.LlmServiceUnavailableException;
+import com.amsha.llm.api.error.LlmToolCallException;
 import com.amsha.llm.api.oauth.AgyOAuthTokenExtractor;
 import com.amsha.llm.api.oauth.ClaudeCodeOAuthTokenExtractor;
 import com.amsha.llm.api.oauth.CodexOAuthTokenExtractor;
@@ -34,6 +45,17 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             NetworkProfilePolicy.EgressMode.class,
             NetworkProfilePolicy.TlsTrustMode.class,
             NetworkPolicyViolation.class,
+            LlmProviderException.class,
+            LlmRateLimitException.class,
+            LlmContextOverflowException.class,
+            LlmContentFilterException.class,
+            LlmAuthenticationException.class,
+            LlmServiceUnavailableException.class,
+            LlmMalformedResponseException.class,
+            LlmToolCallException.class,
+            LlmModelExhaustedException.class,
+            LlmExceptionClassifierChain.class,
+            LlmExceptionClassifier.class,
             AgyOAuthTokenExtractor.class,
             ClaudeCodeOAuthTokenExtractor.class,
             CodexOAuthTokenExtractor.class,

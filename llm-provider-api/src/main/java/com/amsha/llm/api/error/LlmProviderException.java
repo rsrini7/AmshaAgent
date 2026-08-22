@@ -1,4 +1,4 @@
-package com.amsha.core.agent.reasoning.error;
+package com.amsha.llm.api.error;
 
 import com.amsha.common.exception.AmshaException;
 

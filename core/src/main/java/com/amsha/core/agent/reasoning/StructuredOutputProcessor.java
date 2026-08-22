@@ -14,8 +14,6 @@ import java.util.ArrayList;
 import java.util.List;
 
 import com.amsha.common.util.LogUtil;
-import com.amsha.core.agent.reasoning.error.LlmProviderException;
-import com.amsha.core.agent.reasoning.error.LlmRateLimitException;
 import com.amsha.core.agent.reasoning.port.LlmProviderPort;
 import com.amsha.core.governance.BudgetExceededException;
 import com.amsha.core.governance.BudgetWarningException;
@@ -23,6 +21,8 @@ import com.amsha.core.governance.GovernanceStrategy;
 import com.amsha.core.observability.AgentOTelConstants;
 import com.amsha.core.observability.AgentOtelContext;
 import com.amsha.core.util.AgentErrorMessageUtil;
+import com.amsha.llm.api.error.LlmProviderException;
+import com.amsha.llm.api.error.LlmRateLimitException;
 
 import org.jboss.logging.Logger;
 

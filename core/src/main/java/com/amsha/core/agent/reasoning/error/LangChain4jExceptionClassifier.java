@@ -3,11 +3,36 @@ package com.amsha.core.agent.reasoning.error;
 import dev.langchain4j.exception.HttpException;
 import dev.langchain4j.exception.InvalidRequestException;
 
+import jakarta.enterprise.context.ApplicationScoped;
+
 import java.util.Locale;
 
 import com.amsha.core.util.AgentErrorMessageUtil;
+import com.amsha.llm.api.error.LlmAuthenticationException;
+import com.amsha.llm.api.error.LlmExceptionClassifierChain;
+import com.amsha.llm.api.error.LlmMalformedResponseException;
+import com.amsha.llm.api.error.LlmProviderException;
+import com.amsha.llm.api.error.LlmRateLimitException;
+import com.amsha.llm.api.error.LlmServiceUnavailableException;
+import com.amsha.llm.api.error.LlmToolCallException;
 
+import io.quarkus.arc.Unremovable;
+
+/**
+ * Framework-level classifier for langchain4j transport exceptions. Stays in core:
+ * it reuses {@link AgentErrorMessageUtil} and its langchain4j-core coupling is
+ * framework-generic rather than provider-specific (Issue 03 decision).
+ */
+@ApplicationScoped
+@Unremovable
 public class LangChain4jExceptionClassifier extends LlmExceptionClassifierChain {
+
+    public static final int ORDER = 100;
+
+    @Override
+    public int order() {
+        return ORDER;
+    }
 
     @Override
     public LlmProviderException classify(Throwable t) {

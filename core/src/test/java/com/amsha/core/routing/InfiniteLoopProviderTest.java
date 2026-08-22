@@ -5,7 +5,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import com.amsha.core.agent.reasoning.error.LlmAuthenticationException;
+import com.amsha.llm.api.error.LlmAuthenticationException;
 
 import org.junit.jupiter.api.Test;
 

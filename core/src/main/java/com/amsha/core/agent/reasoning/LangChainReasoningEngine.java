@@ -12,9 +12,6 @@ import java.util.Set;
 
 import com.amsha.core.agent.IntentClassificationService;
 import com.amsha.core.agent.loop.AgentExecutionContext;
-import com.amsha.core.agent.reasoning.error.LlmMalformedResponseException;
-import com.amsha.core.agent.reasoning.error.LlmRateLimitException;
-import com.amsha.core.agent.reasoning.error.LlmToolCallException;
 import com.amsha.core.agent.reasoning.port.LlmProviderPort;
 import com.amsha.core.agent.role.AgentRoleEnum;
 import com.amsha.core.agent.role.RoleRegistry;
@@ -25,6 +22,9 @@ import com.amsha.core.observability.AgentOTelConstants;
 import com.amsha.core.observability.AgentOtelContext;
 import com.amsha.core.scope.WorkspaceContext;
 import com.amsha.core.util.TextPatternUtils;
+import com.amsha.llm.api.error.LlmMalformedResponseException;
+import com.amsha.llm.api.error.LlmRateLimitException;
+import com.amsha.llm.api.error.LlmToolCallException;
 
 import org.jboss.logging.Logger;
 

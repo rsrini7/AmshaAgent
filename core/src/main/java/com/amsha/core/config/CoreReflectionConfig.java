@@ -8,7 +8,6 @@ import com.amsha.core.agent.reasoning.ParallelToolCall;
 import com.amsha.core.agent.reasoning.ReasoningStep;
 import com.amsha.core.agent.reasoning.ReasoningStepDeserializer;
 import com.amsha.core.agent.reasoning.ReasoningStepSerializer;
-import com.amsha.core.agent.reasoning.error.LlmModelExhaustedException;
 import com.amsha.core.agent.result.AgentResult;
 import com.amsha.core.api.AgentResponseMapper;
 import com.amsha.core.api.dto.AmshaErrorResponse;
@@ -121,7 +120,6 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             SystemProfileMigration.class,
             ModelCacheInvalidator.class,
             NetworkPolicyEnforcer.class,
-            LlmModelExhaustedException.class,
             GroupConsultationEngine.GroupConsultationResult.class,
             GroupConsultationService.TriageResult.class,
             GroupAnalyticsService.DomainComboStats.class,

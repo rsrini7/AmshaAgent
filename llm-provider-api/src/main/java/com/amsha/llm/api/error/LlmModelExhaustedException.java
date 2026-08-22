@@ -1,7 +1,7 @@
-package com.amsha.core.agent.reasoning.error;
+package com.amsha.llm.api.error;
 
 /**
- * Thrown by {@link com.amsha.core.routing.OrderedFailoverChatModel} when every profile in
+ * Thrown by the failover routing layer (core's ordered-failover chat model) when every profile in
  * the assigned chain is permanently disabled or in cooldown. Callers that already catch
  * {@link LlmProviderException} can handle this exception — it extends
  * {@link LlmServiceUnavailableException} so the existing retry/fallback logic applies.

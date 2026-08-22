@@ -1,5 +1,6 @@
 # Maven
 target/
+target_test-classes/
 pom.xml.tag
 pom.xml.releaseBackup
 pom.xml.versionsBackup

@@ -18,13 +18,7 @@ import java.util.stream.Stream;
 import com.amsha.core.agent.AgentSentinels;
 import com.amsha.core.agent.reasoning.ReasoningEngine;
 import com.amsha.core.agent.reasoning.ReasoningStep;
-import com.amsha.core.agent.reasoning.error.LlmAuthenticationException;
-import com.amsha.core.agent.reasoning.error.LlmContentFilterException;
-import com.amsha.core.agent.reasoning.error.LlmExceptionClassifier;
-import com.amsha.core.agent.reasoning.error.LlmMalformedResponseException;
-import com.amsha.core.agent.reasoning.error.LlmProviderException;
-import com.amsha.core.agent.reasoning.error.LlmRateLimitException;
-import com.amsha.core.agent.reasoning.error.LlmToolCallException;
+import com.amsha.core.agent.reasoning.error.LlmErrorClassificationService;
 import com.amsha.core.agent.result.AgentResult;
 import com.amsha.core.agent.role.AgentRoleEnum;
 import com.amsha.core.agent.role.ToolCapability;
@@ -36,6 +30,12 @@ import com.amsha.core.state.StatefulAgentStore;
 import com.amsha.core.util.AgentErrorMessageUtil;
 import com.amsha.llm.api.StructuredOutputMode;
 import com.amsha.llm.api.ToolCallJsonKeys;
+import com.amsha.llm.api.error.LlmAuthenticationException;
+import com.amsha.llm.api.error.LlmContentFilterException;
+import com.amsha.llm.api.error.LlmMalformedResponseException;
+import com.amsha.llm.api.error.LlmProviderException;
+import com.amsha.llm.api.error.LlmRateLimitException;
+import com.amsha.llm.api.error.LlmToolCallException;
 import com.amsha.persistence.api.CheckpointStatus;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
@@ -224,7 +224,7 @@ public class EngineStepHandler {
             List<ReasoningStep> history,
             String _transientError) {
 
-        LlmProviderException classified = LlmExceptionClassifier.classify(e);
+        LlmProviderException classified = LlmErrorClassificationService.classify(e);
 
         if (classified instanceof LlmMalformedResponseException) {
             llmSchemaErrorCount++;

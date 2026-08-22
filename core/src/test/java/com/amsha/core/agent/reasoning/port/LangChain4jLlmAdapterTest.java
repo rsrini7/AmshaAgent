@@ -11,10 +11,10 @@ import dev.langchain4j.model.chat.response.ChatResponse;
 
 import java.util.List;
 
-import com.amsha.core.agent.reasoning.error.LlmMalformedResponseException;
-import com.amsha.core.agent.reasoning.error.LlmRateLimitException;
-import com.amsha.core.agent.reasoning.error.LlmToolCallException;
 import com.amsha.core.routing.ModelRouter;
+import com.amsha.llm.api.error.LlmMalformedResponseException;
+import com.amsha.llm.api.error.LlmRateLimitException;
+import com.amsha.llm.api.error.LlmToolCallException;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
