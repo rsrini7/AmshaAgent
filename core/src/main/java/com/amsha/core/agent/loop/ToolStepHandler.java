@@ -18,9 +18,9 @@ import com.amsha.core.agent.role.ToolCapability;
 import com.amsha.core.governance.RequiresApprovalException;
 import com.amsha.core.observability.AgentObserver;
 import com.amsha.core.scope.WorkspaceContext;
-import com.amsha.core.security.AutonomyLevel;
 import com.amsha.core.skill.CompiledSkillEntry;
 import com.amsha.core.tools.ToolResponse;
+import com.amsha.security.api.AutonomyLevel;
 
 import org.jboss.logging.Logger;
 

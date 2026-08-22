@@ -24,9 +24,10 @@ import com.amsha.core.governance.ApprovalFrame;
 import com.amsha.core.governance.GovernanceStrategy;
 import com.amsha.core.governance.RateLimitTracker;
 import com.amsha.core.observability.AgentObserver;
-import com.amsha.core.security.AutonomyLevel;
 import com.amsha.core.tools.ToolResponse;
 import com.amsha.llm.api.StructuredOutputMode;
+import com.amsha.security.api.AutonomyLevel;
+import com.amsha.security.api.RiskLevel;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -196,7 +197,7 @@ class ParallelToolStepExecutorPreExecTest {
 
         when(guard.evaluate(any(), any(), any(), eq("unsafe_write"), any(), any(), any(), any()))
                 .thenReturn(new ToolInvocationGuard.GuardDecision.PauseForApproval(
-                        new ApprovalFrame("unsafe_write", Map.of(), ApprovalFrame.RiskLevel.MEDIUM)));
+                        new ApprovalFrame("unsafe_write", Map.of(), RiskLevel.MEDIUM)));
 
         when(toolInvoker.invoke(eq("safe_read"), any(), eq(sessionId)))
                 .thenReturn(ToolResponse.success("pre-exec-data"));
@@ -237,7 +238,7 @@ class ParallelToolStepExecutorPreExecTest {
 
         when(guard.evaluate(any(), any(), any(), eq("unsafe_write"), any(), any(), any(), any()))
                 .thenReturn(new ToolInvocationGuard.GuardDecision.PauseForApproval(
-                        new ApprovalFrame("unsafe_write", Map.of(), ApprovalFrame.RiskLevel.MEDIUM)));
+                        new ApprovalFrame("unsafe_write", Map.of(), RiskLevel.MEDIUM)));
 
         when(toolInvoker.invoke(eq("safe_read"), any(), eq(sessionId)))
                 .thenThrow(new RuntimeException("IO error during pre-exec"));

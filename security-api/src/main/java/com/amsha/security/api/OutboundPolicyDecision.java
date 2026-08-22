@@ -1,4 +1,4 @@
-package com.amsha.core.security;
+package com.amsha.security.api;
 
 import java.util.Optional;
 

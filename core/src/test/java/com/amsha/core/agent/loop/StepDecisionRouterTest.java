@@ -18,7 +18,7 @@ import java.util.Optional;
 
 import com.amsha.core.agent.reasoning.ReasoningStep;
 import com.amsha.core.agent.result.AgentResult;
-import com.amsha.core.security.AutonomyLevel;
+import com.amsha.security.api.AutonomyLevel;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

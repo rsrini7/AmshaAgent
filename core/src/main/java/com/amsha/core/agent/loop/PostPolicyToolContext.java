@@ -5,7 +5,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 
-import com.amsha.core.security.AutonomyLevel;
+import com.amsha.security.api.AutonomyLevel;
 
 /**
  * Minimum immutable context exposed only after deterministic policy provisionally allows a tool.

@@ -1,6 +1,6 @@
 package com.amsha.core.security.http;
 
-import com.amsha.core.security.OutboundPurpose;
+import com.amsha.security.api.OutboundPurpose;
 
 /**
  * Output of a successful {@link ApprovalReceiptIssuer#verifyAndConsume(String, OutboundPurpose, String)}.

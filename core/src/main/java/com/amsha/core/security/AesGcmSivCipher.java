@@ -5,6 +5,8 @@ import jakarta.enterprise.context.ApplicationScoped;
 import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
 
+import com.amsha.security.api.VaultKey;
+
 import org.bouncycastle.crypto.InvalidCipherTextException;
 import org.bouncycastle.crypto.engines.AESEngine;
 import org.bouncycastle.crypto.modes.GCMSIVBlockCipher;

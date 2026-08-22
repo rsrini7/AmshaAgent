@@ -16,11 +16,11 @@ import java.util.stream.Collectors;
 import com.amsha.core.audit.AuditService;
 import com.amsha.core.audit.SecurityEventType;
 import com.amsha.core.scope.WorkspaceScopeHolder;
-import com.amsha.core.security.VaultConstants;
 import com.amsha.mcp.tool.DynamicToolCapabilityRegistry;
 import com.amsha.persistence.api.McpConnectionDto;
 import com.amsha.persistence.api.McpConnectionHeaderSecretRefDto;
 import com.amsha.persistence.api.McpConnectionToolPolicyDto;
+import com.amsha.security.api.VaultConstants;
 
 /** Cohesive persistence, registry, and response helpers for MCP management. */
 final class McpManagementSupport {

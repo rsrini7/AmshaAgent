@@ -2,8 +2,8 @@ package com.amsha.core.tool;
 
 import java.util.Objects;
 
-import com.amsha.core.security.ToolOperation;
 import com.amsha.core.tools.ToolCategory;
+import com.amsha.security.api.ToolOperation;
 
 /** Public description of a dynamically registered tool. */
 public record DynamicToolDescriptor(

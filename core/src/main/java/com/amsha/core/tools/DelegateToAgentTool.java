@@ -31,11 +31,11 @@ import com.amsha.core.governance.BudgetExceededException;
 import com.amsha.core.observability.AgentOTelConstants;
 import com.amsha.core.observability.AgentOtelContext;
 import com.amsha.core.scope.WorkspaceContext;
-import com.amsha.core.security.AutonomyLevel;
-import com.amsha.core.security.ToolOperation;
 import com.amsha.core.util.AgentGuards;
 import com.amsha.persistence.api.CheckpointCrudPort;
 import com.amsha.persistence.api.CheckpointDto;
+import com.amsha.security.api.AutonomyLevel;
+import com.amsha.security.api.ToolOperation;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;

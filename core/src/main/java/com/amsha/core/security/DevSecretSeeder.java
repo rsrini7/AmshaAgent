@@ -11,6 +11,8 @@ import java.util.Arrays;
 import java.util.Base64;
 
 import com.amsha.common.util.LogUtil;
+import com.amsha.security.api.SecretVault;
+import com.amsha.security.api.VaultConstants;
 
 import org.eclipse.microprofile.config.ConfigProvider;
 import org.eclipse.microprofile.config.inject.ConfigProperty;

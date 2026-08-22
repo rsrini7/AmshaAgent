@@ -7,8 +7,8 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 
-import com.amsha.core.security.RequiresSecret;
-import com.amsha.core.security.ToolOperation;
+import com.amsha.security.api.RequiresSecret;
+import com.amsha.security.api.ToolOperation;
 
 /**
  * Contract for all Amsha Agent agent tools.

@@ -28,12 +28,12 @@ import java.util.Optional;
 
 import com.amsha.common.util.LogUtil;
 import com.amsha.core.security.OutboundHttpPolicyService;
-import com.amsha.core.security.OutboundPolicyDecision;
-import com.amsha.core.security.OutboundPurpose;
-import com.amsha.core.security.SecretVault;
-import com.amsha.core.security.VaultKey;
 import com.amsha.llm.api.NetworkProfilePolicy;
 import com.amsha.persistence.api.LlmConnectionDto;
+import com.amsha.security.api.OutboundPolicyDecision;
+import com.amsha.security.api.OutboundPurpose;
+import com.amsha.security.api.SecretVault;
+import com.amsha.security.api.VaultKey;
 
 import org.jboss.logging.Logger;
 

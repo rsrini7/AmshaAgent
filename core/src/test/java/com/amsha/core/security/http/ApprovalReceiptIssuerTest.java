@@ -6,7 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 
 import java.time.Duration;
 
-import com.amsha.core.security.OutboundPurpose;
+import com.amsha.security.api.OutboundPurpose;
 
 import org.junit.jupiter.api.Test;
 

@@ -5,6 +5,7 @@ import jakarta.annotation.PreDestroy;
 import java.util.concurrent.locks.ReentrantLock;
 
 import com.amsha.core.scope.WorkspaceScoped;
+import com.amsha.security.api.VaultKey;
 
 /**
  * Caches the derived session key for the duration of a Workspace session.

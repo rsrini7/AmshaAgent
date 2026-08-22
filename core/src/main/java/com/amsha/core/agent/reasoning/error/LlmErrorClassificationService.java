@@ -98,10 +98,7 @@ public class LlmErrorClassificationService {
                 .sorted(Comparator.comparing(b -> b.getBeanClass().getName()))
                 .map(b -> {
                     CreationalContext<?> ctx = beanManager.createCreationalContext(b);
-                    @SuppressWarnings("unchecked")
-                    LlmExceptionClassifier instance =
-                            (LlmExceptionClassifier) beanManager.getReference(b, LlmExceptionClassifier.class, ctx);
-                    return instance;
+                    return (LlmExceptionClassifier) beanManager.getReference(b, LlmExceptionClassifier.class, ctx);
                 })
                 .sorted(Comparator.comparingInt(LlmExceptionClassifier::order)
                         .thenComparing(c -> c.getClass().getName()))
@@ -146,5 +143,10 @@ public class LlmErrorClassificationService {
     /** @return the ordered, immutable classifier chain (exposed for diagnostics/tests). */
     public List<LlmExceptionClassifier> classifiers() {
         return chain;
+    }
+
+    /** Test seam: binds or unbinds the shared instance without a container. */
+    public static void bindSharedForTest(LlmErrorClassificationService service) {
+        shared = service;
     }
 }

@@ -7,7 +7,7 @@ import java.util.Map;
 import java.util.Set;
 
 import com.amsha.core.agent.reasoning.ParallelToolCall;
-import com.amsha.core.security.AutonomyLevel;
+import com.amsha.security.api.AutonomyLevel;
 
 import org.junit.jupiter.api.Test;
 

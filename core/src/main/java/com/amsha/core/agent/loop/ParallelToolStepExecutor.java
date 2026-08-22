@@ -29,7 +29,6 @@ import com.amsha.core.governance.RateLimitTracker;
 import com.amsha.core.lifecycle.WorkspaceManager;
 import com.amsha.core.observability.AgentObserver;
 import com.amsha.core.scope.WorkspaceContext;
-import com.amsha.core.security.AutonomyLevel;
 import com.amsha.core.tools.ToolCategory;
 import com.amsha.core.tools.ToolCategoryMapper;
 import com.amsha.core.tools.ToolResponse;
@@ -37,6 +36,7 @@ import com.amsha.core.util.AgentErrorMessageUtil;
 import com.amsha.core.util.MdcCleaner;
 import com.amsha.core.util.MdcKeys;
 import com.amsha.core.util.PreExecutionFilter;
+import com.amsha.security.api.AutonomyLevel;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 

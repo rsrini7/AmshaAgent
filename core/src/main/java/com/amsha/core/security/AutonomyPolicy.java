@@ -1,5 +1,8 @@
 package com.amsha.core.security;
 
+import com.amsha.security.api.AutonomyLevel;
+import com.amsha.security.api.ToolOperation;
+
 /**
  * Interface for making autonomy decisions.
  */

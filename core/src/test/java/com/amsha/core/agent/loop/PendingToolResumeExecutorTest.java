@@ -14,11 +14,11 @@ import java.util.Map;
 import com.amsha.core.agent.reasoning.ReasoningEngine;
 import com.amsha.core.agent.result.AgentResult;
 import com.amsha.core.domain.model.AgentCheckpoint;
-import com.amsha.core.security.AutonomyLevel;
 import com.amsha.core.state.StatefulAgentStore;
 import com.amsha.core.tools.ToolRegistry;
 import com.amsha.llm.api.StructuredOutputMode;
 import com.amsha.persistence.api.CheckpointStatus;
+import com.amsha.security.api.AutonomyLevel;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.junit.jupiter.api.BeforeEach;

@@ -16,8 +16,8 @@ import com.amsha.core.pipeline.parsers.CommandParserRegistry;
 import com.amsha.core.reflex.ReflexRegistry;
 import com.amsha.core.reflex.ReflexResult;
 import com.amsha.core.scope.WorkspaceContext;
-import com.amsha.core.security.AutonomyLevel;
 import com.amsha.core.util.TimeContextInjector;
+import com.amsha.security.api.AutonomyLevel;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;

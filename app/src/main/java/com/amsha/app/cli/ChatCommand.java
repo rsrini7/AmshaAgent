@@ -35,10 +35,10 @@ import com.amsha.core.pipeline.TurnDispatchResult;
 import com.amsha.core.pipeline.TurnDispatchService;
 import com.amsha.core.pipeline.TurnRequest;
 import com.amsha.core.scope.WorkspaceContext;
-import com.amsha.core.security.AutonomyLevel;
 import com.amsha.core.session.SessionCatalogService;
 import com.amsha.persistence.api.BootstrapStateDto;
 import com.amsha.persistence.api.BootstrapStateStorePort;
+import com.amsha.security.api.AutonomyLevel;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.fusesource.jansi.AnsiConsole;

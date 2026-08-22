@@ -5,9 +5,9 @@ import java.util.Map;
 import java.util.Set;
 
 import com.amsha.core.audit.SecurityEventType;
-import com.amsha.core.security.OutboundPurpose;
 import com.amsha.core.tools.ToolCategory;
 import com.amsha.persistence.api.McpConnectionDto;
+import com.amsha.security.api.OutboundPurpose;
 
 /** Executes the governed reconnect path for the MCP management façade. */
 final class McpManagementConnectionOperations {

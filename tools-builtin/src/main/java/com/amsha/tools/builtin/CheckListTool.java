@@ -16,7 +16,6 @@ import com.amsha.core.agent.role.ToolCapability;
 import com.amsha.core.agent.role.ToolMetadata;
 import com.amsha.core.audit.AuditService;
 import com.amsha.core.audit.SecurityEventType;
-import com.amsha.core.security.ToolOperation;
 import com.amsha.core.tools.AgentTool;
 import com.amsha.core.tools.CheckList;
 import com.amsha.core.tools.CheckListEvent;
@@ -24,6 +23,7 @@ import com.amsha.core.tools.CheckListItem;
 import com.amsha.core.tools.CheckListStatus;
 import com.amsha.core.tools.ToolExecutionContext;
 import com.amsha.core.tools.ToolResponse;
+import com.amsha.security.api.ToolOperation;
 
 import io.quarkus.arc.Unremovable;
 

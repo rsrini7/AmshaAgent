@@ -8,12 +8,12 @@ import java.util.Map;
 import java.util.Optional;
 
 import com.amsha.core.audit.AuditService;
-import com.amsha.core.security.AutonomyLevel;
-import com.amsha.core.security.SecretVault;
-import com.amsha.core.security.ToolOperation;
 import com.amsha.core.tools.IdempotencyMode;
 import com.amsha.core.tools.ToolExecutionContext;
 import com.amsha.core.tools.ToolResponse;
+import com.amsha.security.api.AutonomyLevel;
+import com.amsha.security.api.SecretVault;
+import com.amsha.security.api.ToolOperation;
 
 import org.junit.jupiter.api.Test;
 

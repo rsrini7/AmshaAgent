@@ -19,9 +19,9 @@ import com.amsha.core.governance.RateLimitTracker;
 import com.amsha.core.pipeline.HandleResult;
 import com.amsha.core.pipeline.MessageContext;
 import com.amsha.core.scope.WorkspaceContext;
-import com.amsha.core.security.AutonomyLevel;
 import com.amsha.core.state.CompactionEventBridge;
 import com.amsha.core.state.CompactionService;
+import com.amsha.security.api.AutonomyLevel;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;

@@ -8,9 +8,9 @@ import java.util.Optional;
 
 import com.amsha.core.agent.reasoning.ReasoningStep;
 import com.amsha.core.agent.role.ToolCapability;
-import com.amsha.core.security.AutonomyLevel;
 import com.amsha.persistence.api.CheckpointDto;
 import com.amsha.persistence.api.CheckpointStatus;
+import com.amsha.security.api.AutonomyLevel;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 
 public final class AgentCheckpointRecord implements AgentCheckpoint {

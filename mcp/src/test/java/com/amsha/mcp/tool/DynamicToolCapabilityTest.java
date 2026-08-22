@@ -2,8 +2,8 @@ package com.amsha.mcp.tool;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-import com.amsha.core.security.ToolOperation;
 import com.amsha.core.tools.ToolCategory;
+import com.amsha.security.api.ToolOperation;
 
 import org.junit.jupiter.api.Test;
 

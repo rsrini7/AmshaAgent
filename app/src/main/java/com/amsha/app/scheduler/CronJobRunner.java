@@ -28,10 +28,10 @@ import com.amsha.core.domain.model.AgentCron;
 import com.amsha.core.lifecycle.SessionHeartbeatTracker;
 import com.amsha.core.pipeline.MessageContext;
 import com.amsha.core.scope.WorkspaceContext;
-import com.amsha.core.security.AutonomyLevel;
 import com.amsha.persistence.api.CronRunDto;
 import com.amsha.persistence.api.CronRunStorePort;
 import com.amsha.persistence.api.CronStorePort;
+import com.amsha.security.api.AutonomyLevel;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 

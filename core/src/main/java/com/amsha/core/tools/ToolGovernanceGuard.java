@@ -15,9 +15,9 @@ import com.amsha.core.audit.SecurityEventType;
 import com.amsha.core.config.PolicyConfig;
 import com.amsha.core.governance.ApprovalFrame;
 import com.amsha.core.governance.RequiresApprovalException;
-import com.amsha.core.security.AutonomyLevel;
 import com.amsha.core.security.AutonomyPolicy;
-import com.amsha.core.security.ToolOperation;
+import com.amsha.security.api.AutonomyLevel;
+import com.amsha.security.api.ToolOperation;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.jboss.logging.Logger;

@@ -1,4 +1,4 @@
-package com.amsha.core.security;
+package com.amsha.security.api;
 
 /**
  * Purpose of an outbound HTTP request. Used for HITL gating, audit, and per-purpose timeout policy.

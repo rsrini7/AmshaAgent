@@ -11,12 +11,12 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
-import com.amsha.core.security.SecretVault;
-import com.amsha.core.security.VaultKey;
 import com.amsha.llm.api.ConnectionValidationRequest;
 import com.amsha.llm.api.LlmProviderOnboardingAdapter;
 import com.amsha.llm.api.ProviderValidationResult;
 import com.amsha.persistence.api.OnboardingDraftDto;
+import com.amsha.security.api.SecretVault;
+import com.amsha.security.api.VaultKey;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.jboss.logging.Logger;

@@ -17,13 +17,13 @@ import java.util.Optional;
 import com.amsha.core.audit.AuditService;
 import com.amsha.core.audit.SecurityEventType;
 import com.amsha.core.scope.WorkspaceContext;
-import com.amsha.core.security.AutonomyLevel;
 import com.amsha.core.security.http.ApprovalReceiptIssuer;
 import com.amsha.core.tools.ToolCategory;
 import com.amsha.core.tools.ToolExecutionContext;
 import com.amsha.core.tools.ToolResponse;
 import com.amsha.mcp.transport.McpClientService;
 import com.amsha.mcp.transport.McpManagementService;
+import com.amsha.security.api.AutonomyLevel;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

@@ -14,9 +14,9 @@ import java.util.concurrent.ConcurrentHashMap;
 
 import com.amsha.core.audit.AuditService;
 import com.amsha.core.audit.SecurityEventType;
-import com.amsha.core.security.OutboundPurpose;
 import com.amsha.core.state.StatefulAgentStore;
 import com.amsha.persistence.api.ToolDecision;
+import com.amsha.security.api.OutboundPurpose;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 

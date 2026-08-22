@@ -8,8 +8,8 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 
-import com.amsha.core.security.SecretVault;
-import com.amsha.core.security.VaultKey;
+import com.amsha.security.api.SecretVault;
+import com.amsha.security.api.VaultKey;
 
 import io.quarkus.arc.Unremovable;
 

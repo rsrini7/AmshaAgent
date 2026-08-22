@@ -12,11 +12,11 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
-import com.amsha.core.security.SecretVault;
-import com.amsha.core.security.VaultKey;
 import com.amsha.persistence.api.LlmConnectionDto;
 import com.amsha.persistence.api.LlmProfileStorePort;
 import com.amsha.persistence.api.ModelRouteAssignmentDto;
+import com.amsha.security.api.SecretVault;
+import com.amsha.security.api.VaultKey;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;

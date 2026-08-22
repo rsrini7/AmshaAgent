@@ -16,13 +16,13 @@ import java.util.stream.Stream;
 import com.amsha.core.agent.AgentSentinels;
 import com.amsha.core.audit.AuditService;
 import com.amsha.core.audit.SecurityEventType;
-import com.amsha.core.security.SecretVault;
 import com.amsha.core.tools.ToolCategory;
 import com.amsha.mcp.tool.McpTransportType;
 import com.amsha.persistence.api.McpConnectionCleanupFailureDto;
 import com.amsha.persistence.api.McpConnectionDto;
 import com.amsha.persistence.api.McpConnectionHeaderSecretRefDto;
 import com.amsha.persistence.api.McpConnectionStorePort;
+import com.amsha.security.api.SecretVault;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

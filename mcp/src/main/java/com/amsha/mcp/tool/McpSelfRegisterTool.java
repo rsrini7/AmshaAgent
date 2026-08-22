@@ -18,8 +18,6 @@ import com.amsha.core.agent.role.ToolCapability;
 import com.amsha.core.agent.role.ToolMetadata;
 import com.amsha.core.audit.AuditService;
 import com.amsha.core.audit.SecurityEventType;
-import com.amsha.core.security.OutboundPurpose;
-import com.amsha.core.security.ToolOperation;
 import com.amsha.core.security.http.ApprovalReceiptIssuer;
 import com.amsha.core.tools.AgentTool;
 import com.amsha.core.tools.ToolCategory;
@@ -27,6 +25,8 @@ import com.amsha.core.tools.ToolExecutionContext;
 import com.amsha.core.tools.ToolResponse;
 import com.amsha.mcp.transport.McpClientService;
 import com.amsha.mcp.transport.McpManagementService;
+import com.amsha.security.api.OutboundPurpose;
+import com.amsha.security.api.ToolOperation;
 
 import io.quarkus.arc.Unremovable;
 

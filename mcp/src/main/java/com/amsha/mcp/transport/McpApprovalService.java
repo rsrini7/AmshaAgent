@@ -12,8 +12,8 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
-import com.amsha.core.security.OutboundPurpose;
 import com.amsha.core.security.http.ApprovalReceiptIssuer;
+import com.amsha.security.api.OutboundPurpose;
 
 /**
  * User-scoped approval queue for MCP operations initiated outside an agent

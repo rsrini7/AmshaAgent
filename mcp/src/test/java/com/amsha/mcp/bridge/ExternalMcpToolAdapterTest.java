@@ -7,7 +7,6 @@ import java.util.Map;
 import java.util.Optional;
 
 import com.amsha.core.audit.AuditService;
-import com.amsha.core.security.AutonomyLevel;
 import com.amsha.core.tools.ToolExecutionContext;
 import com.amsha.core.tools.ToolResponse;
 import com.amsha.mcp.tool.DynamicToolCapability;
@@ -15,6 +14,7 @@ import com.amsha.mcp.tool.DynamicToolCapabilityRegistry;
 import com.amsha.mcp.tool.McpTransportType;
 import com.amsha.mcp.transport.McpClientService;
 import com.amsha.mcp.transport.PodmanMcpTransport;
+import com.amsha.security.api.AutonomyLevel;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.junit.jupiter.api.BeforeEach;

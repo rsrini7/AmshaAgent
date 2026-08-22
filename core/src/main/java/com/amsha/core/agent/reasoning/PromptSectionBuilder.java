@@ -13,10 +13,10 @@ import com.amsha.core.agent.loop.AgentExecutionContext;
 import com.amsha.core.agent.role.AgentRoleEnum;
 import com.amsha.core.agent.role.CapabilityRegistry;
 import com.amsha.core.agent.role.ToolCapability;
-import com.amsha.core.security.AutonomyLevel;
 import com.amsha.core.tool.DynamicToolInvoker;
 import com.amsha.core.tools.AgentTool;
 import com.amsha.core.tools.ToolRegistry;
+import com.amsha.security.api.AutonomyLevel;
 
 /**
  * Shared logic for building common prompt sections (permitted tools, contamination guards, etc.).

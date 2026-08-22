@@ -28,11 +28,11 @@ import com.amsha.core.sandbox.SandboxExecutionPort;
 import com.amsha.core.sandbox.SandboxFailureMessages;
 import com.amsha.core.sandbox.SandboxResult;
 import com.amsha.core.scope.WorkspaceContext;
-import com.amsha.core.security.AutonomyLevel;
 import com.amsha.core.tools.ToolExecutionContext;
 import com.amsha.core.tools.ToolResponse;
 import com.amsha.sandbox.ProcessIsolationExecutor;
 import com.amsha.sandbox.ToolExecutionException;
+import com.amsha.security.api.AutonomyLevel;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

@@ -11,11 +11,11 @@ import com.amsha.core.audit.AuditService;
 import com.amsha.core.audit.SecurityEventType;
 import com.amsha.core.scope.WorkspaceContext;
 import com.amsha.core.scope.WorkspaceScopeHolder;
-import com.amsha.core.security.SecretVault;
 import com.amsha.core.state.StatefulAgentStore;
 import com.amsha.core.tools.ToolRegistry;
 import com.amsha.persistence.api.AuditEventDto;
 import com.amsha.persistence.api.AuditEventStorePort;
+import com.amsha.security.api.SecretVault;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;

@@ -18,8 +18,8 @@ import com.amsha.core.agent.reasoning.ReasoningStep;
 import com.amsha.core.agent.result.AgentResult;
 import com.amsha.core.governance.GovernanceStrategy;
 import com.amsha.core.observability.AgentOtelContext;
-import com.amsha.core.security.AutonomyLevel;
 import com.amsha.llm.api.StructuredOutputMode;
+import com.amsha.security.api.AutonomyLevel;
 
 import org.junit.jupiter.api.Test;
 

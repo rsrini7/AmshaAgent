@@ -7,8 +7,8 @@ import java.util.concurrent.Callable;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import com.amsha.common.util.LogUtil;
-import com.amsha.core.security.AutonomyLevel;
 import com.amsha.core.util.MdcKeys;
+import com.amsha.security.api.AutonomyLevel;
 
 import org.jboss.logging.Logger;
 import org.jboss.logging.MDC;

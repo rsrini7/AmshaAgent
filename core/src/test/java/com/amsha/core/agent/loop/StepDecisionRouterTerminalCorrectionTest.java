@@ -13,8 +13,8 @@ import java.util.List;
 import java.util.Map;
 
 import com.amsha.core.agent.reasoning.ReasoningStep;
-import com.amsha.core.security.AutonomyLevel;
 import com.amsha.llm.api.StructuredOutputMode;
+import com.amsha.security.api.AutonomyLevel;
 
 import org.junit.jupiter.api.Test;
 

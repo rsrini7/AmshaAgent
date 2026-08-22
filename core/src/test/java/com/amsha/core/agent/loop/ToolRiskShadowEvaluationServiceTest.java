@@ -9,7 +9,7 @@ import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.atomic.AtomicReference;
 
 import com.amsha.core.classifier.ClassifierResult;
-import com.amsha.core.security.AutonomyLevel;
+import com.amsha.security.api.AutonomyLevel;
 
 import org.junit.jupiter.api.Test;
 

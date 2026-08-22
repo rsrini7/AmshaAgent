@@ -27,13 +27,13 @@ import com.amsha.core.governance.BudgetExceededException;
 import com.amsha.core.sandbox.SandboxExecutionPort;
 import com.amsha.core.sandbox.SandboxFailureMessages;
 import com.amsha.core.sandbox.SandboxResult;
-import com.amsha.core.security.ToolOperation;
 import com.amsha.core.tools.AgentTool;
 import com.amsha.core.tools.CodeLanguageDetector;
 import com.amsha.core.tools.OutputTruncator;
 import com.amsha.core.tools.ToolExecutionContext;
 import com.amsha.core.tools.ToolResponse;
 import com.amsha.sandbox.SandboxCodeSafetyScanner;
+import com.amsha.security.api.ToolOperation;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 

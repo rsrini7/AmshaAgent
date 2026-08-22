@@ -14,7 +14,7 @@ import com.amsha.core.agent.result.AgentResult;
 import com.amsha.core.agent.role.AgentRoleEnum;
 import com.amsha.core.agent.role.RoleDefinition;
 import com.amsha.core.agent.role.RoleRegistry;
-import com.amsha.core.security.ToolOperation;
+import com.amsha.security.api.ToolOperation;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

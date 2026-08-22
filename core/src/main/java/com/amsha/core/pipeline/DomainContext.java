@@ -1,7 +1,7 @@
 package com.amsha.core.pipeline;
 
 import com.amsha.core.agent.result.AgentState;
-import com.amsha.core.security.AutonomyLevel;
+import com.amsha.security.api.AutonomyLevel;
 
 /**
  * Encapsulates domain-layer metadata and enriched state for a message.

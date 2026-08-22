@@ -9,7 +9,7 @@ import com.amsha.channel.api.ChannelMessage;
 import com.amsha.core.audit.AuditService;
 import com.amsha.core.lifecycle.SessionHeartbeatTracker;
 import com.amsha.core.reflex.ReflexRegistry;
-import com.amsha.core.security.AutonomyLevel;
+import com.amsha.security.api.AutonomyLevel;
 
 import org.jboss.logging.Logger;
 import org.junit.jupiter.api.BeforeEach;

@@ -15,7 +15,6 @@ import com.amsha.core.audit.AuditService;
 import com.amsha.core.audit.SecurityEventType;
 import com.amsha.core.reflex.PiiScanReflex;
 import com.amsha.core.scope.WorkspaceScopeHolder;
-import com.amsha.core.security.ToolOperation;
 import com.amsha.core.tools.AgentTool;
 import com.amsha.core.tools.IdempotencyMode;
 import com.amsha.core.tools.ToolExecutionContext;
@@ -23,6 +22,7 @@ import com.amsha.core.tools.ToolResponse;
 import com.amsha.persistence.api.IngestResult;
 import com.amsha.persistence.api.MemoryEntryDto;
 import com.amsha.persistence.api.MemoryRetrievalPort;
+import com.amsha.security.api.ToolOperation;
 
 import io.quarkus.arc.Unremovable;
 

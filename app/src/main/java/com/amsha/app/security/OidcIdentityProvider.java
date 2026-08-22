@@ -25,8 +25,8 @@ import java.util.concurrent.TimeUnit;
 
 import com.amsha.core.security.ExternalIdentityProvider;
 import com.amsha.core.security.ExternalUserProfile;
-import com.amsha.core.security.SecretVault;
-import com.amsha.core.security.VaultKey;
+import com.amsha.security.api.SecretVault;
+import com.amsha.security.api.VaultKey;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 

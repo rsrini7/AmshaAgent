@@ -19,12 +19,12 @@ import com.amsha.core.config.TieredMemoryConfig;
 import com.amsha.core.memory.tiered.ArchivalMemoryService;
 import com.amsha.core.memory.tiered.MemoryWriteGovernance;
 import com.amsha.core.scope.WorkspaceContext;
-import com.amsha.core.security.ToolOperation;
 import com.amsha.core.tools.AgentTool;
 import com.amsha.core.tools.IdempotencyMode;
 import com.amsha.core.tools.ToolExecutionContext;
 import com.amsha.core.tools.ToolResponse;
 import com.amsha.persistence.api.ArchivalChunkDto;
+import com.amsha.security.api.ToolOperation;
 
 import org.jboss.logging.Logger;
 

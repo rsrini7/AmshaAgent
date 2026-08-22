@@ -11,14 +11,14 @@ import java.util.List;
 import java.util.Optional;
 
 import com.amsha.common.util.LogUtil;
-import com.amsha.core.security.SecretVault;
-import com.amsha.core.security.VaultConstants;
 import com.amsha.llm.api.ModelDefaults;
 import com.amsha.persistence.api.LlmConnectionDto;
 import com.amsha.persistence.api.LlmConnectionSecretRefDto;
 import com.amsha.persistence.api.LlmProfileStorePort;
 import com.amsha.persistence.api.ModelProfileDto;
 import com.amsha.persistence.api.ModelRouteAssignmentDto;
+import com.amsha.security.api.SecretVault;
+import com.amsha.security.api.VaultConstants;
 
 import org.jboss.logging.Logger;
 

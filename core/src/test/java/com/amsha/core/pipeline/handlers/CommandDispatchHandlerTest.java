@@ -27,7 +27,7 @@ import com.amsha.core.pipeline.parsers.CommandParserRegistry;
 import com.amsha.core.reflex.ReflexRegistry;
 import com.amsha.core.reflex.ReflexResult;
 import com.amsha.core.scope.WorkspaceContext;
-import com.amsha.core.security.AutonomyLevel;
+import com.amsha.security.api.AutonomyLevel;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;

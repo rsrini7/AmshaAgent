@@ -27,9 +27,9 @@ import java.util.List;
 import java.util.Map;
 
 import com.amsha.common.util.LogUtil;
-import com.amsha.core.security.OutboundPurpose;
 import com.amsha.core.security.http.GovernedTransportService;
 import com.amsha.core.tools.ToolSchemaProvider;
+import com.amsha.security.api.OutboundPurpose;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 

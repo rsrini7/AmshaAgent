@@ -31,12 +31,12 @@ import com.amsha.core.sandbox.SandboxFailureMessages;
 import com.amsha.core.sandbox.SandboxResult;
 import com.amsha.core.scope.WorkspaceContext;
 import com.amsha.core.scope.WorkspaceScopeHolder;
-import com.amsha.core.security.AutonomyLevel;
 import com.amsha.core.security.AutonomyPolicy;
-import com.amsha.core.security.RequiresSecret;
 import com.amsha.core.skill.SkillRegistry;
 import com.amsha.core.tool.DynamicToolInvoker;
 import com.amsha.core.util.ClassUtils;
+import com.amsha.security.api.AutonomyLevel;
+import com.amsha.security.api.RequiresSecret;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 

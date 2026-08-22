@@ -14,10 +14,10 @@ import com.amsha.core.agent.role.ToolCapability;
 import com.amsha.core.agent.role.ToolMetadata;
 import com.amsha.core.audit.AuditService;
 import com.amsha.core.audit.SecurityEventType;
-import com.amsha.core.security.ToolOperation;
 import com.amsha.core.task.TaskFile;
 import com.amsha.core.task.TaskManager;
 import com.amsha.core.task.TaskState;
+import com.amsha.security.api.ToolOperation;
 
 import io.quarkus.arc.Unremovable;
 

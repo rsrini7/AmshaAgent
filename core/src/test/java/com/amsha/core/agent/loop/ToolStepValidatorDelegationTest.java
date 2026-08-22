@@ -15,11 +15,11 @@ import com.amsha.core.agent.reasoning.ReasoningStep;
 import com.amsha.core.agent.role.AgentRoleEnum;
 import com.amsha.core.agent.role.ToolCapability;
 import com.amsha.core.observability.AgentObserver;
-import com.amsha.core.security.AutonomyLevel;
 import com.amsha.core.tool.DynamicToolLookup;
 import com.amsha.core.tools.AgentTool;
 import com.amsha.core.tools.ToolRegistry;
 import com.amsha.llm.api.StructuredOutputMode;
+import com.amsha.security.api.AutonomyLevel;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

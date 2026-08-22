@@ -24,14 +24,14 @@ import com.amsha.core.agent.reasoning.ReasoningStep;
 import com.amsha.core.agent.role.RoleRegistry;
 import com.amsha.core.classifier.ClassifierResult;
 import com.amsha.core.classifier.ClassifierResult.NoOpinionReason;
-import com.amsha.core.governance.ApprovalFrame;
 import com.amsha.core.scope.WorkspaceContext;
-import com.amsha.core.security.AutonomyLevel;
-import com.amsha.core.security.ToolOperation;
 import com.amsha.core.tool.ToolGuardInterceptor;
 import com.amsha.core.tools.AgentTool;
 import com.amsha.core.tools.IdempotencyMode;
 import com.amsha.core.tools.ToolRegistry;
+import com.amsha.security.api.AutonomyLevel;
+import com.amsha.security.api.RiskLevel;
+import com.amsha.security.api.ToolOperation;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -159,7 +159,7 @@ class ToolInvocationGuardTest {
                 assertInstanceOf(ToolInvocationGuard.GuardDecision.PauseForApproval.class, result);
         assertEquals("tool", approval.frame().tool());
         assertEquals(parameters, approval.frame().params());
-        assertEquals(ApprovalFrame.RiskLevel.LOW, approval.frame().riskLevel());
+        assertEquals(RiskLevel.LOW, approval.frame().riskLevel());
         verify(toolRiskShadowEvaluation, never())
                 .observeProvisionalAllow(anyString(), any(ToolRiskShadowContext.class));
     }

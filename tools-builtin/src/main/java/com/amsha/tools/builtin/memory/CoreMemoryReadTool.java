@@ -13,12 +13,12 @@ import com.amsha.core.agent.role.ToolCapability;
 import com.amsha.core.agent.role.ToolMetadata;
 import com.amsha.core.memory.tiered.CoreMemoryService;
 import com.amsha.core.scope.WorkspaceContext;
-import com.amsha.core.security.ToolOperation;
 import com.amsha.core.tools.AgentTool;
 import com.amsha.core.tools.IdempotencyMode;
 import com.amsha.core.tools.ToolExecutionContext;
 import com.amsha.core.tools.ToolResponse;
 import com.amsha.persistence.api.CoreMemoryBlockDto;
+import com.amsha.security.api.ToolOperation;
 
 import org.jboss.logging.Logger;
 

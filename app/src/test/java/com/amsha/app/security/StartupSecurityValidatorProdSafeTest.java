@@ -7,7 +7,7 @@ import jakarta.inject.Inject;
 
 import java.util.Map;
 
-import com.amsha.core.security.SecretVault;
+import com.amsha.security.api.SecretVault;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

@@ -21,10 +21,10 @@ import com.amsha.core.agent.role.AgentRoleEnum;
 import com.amsha.core.agent.role.RoleRegistry;
 import com.amsha.core.audit.AuditService;
 import com.amsha.core.observability.AgentOtelContext;
-import com.amsha.core.security.AutonomyLevel;
-import com.amsha.core.security.ToolOperation;
 import com.amsha.persistence.api.CheckpointCrudPort;
 import com.amsha.persistence.api.CheckpointDto;
+import com.amsha.security.api.AutonomyLevel;
+import com.amsha.security.api.ToolOperation;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

@@ -7,8 +7,8 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-import com.amsha.core.security.RequiresSecret;
-import com.amsha.core.security.RequiresSecrets;
+import com.amsha.security.api.RequiresSecret;
+import com.amsha.security.api.RequiresSecrets;
 
 import org.jboss.logging.Logger;
 

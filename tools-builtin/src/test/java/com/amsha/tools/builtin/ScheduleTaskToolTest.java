@@ -19,12 +19,12 @@ import com.amsha.core.agent.AgentSentinels;
 import com.amsha.core.audit.AuditService;
 import com.amsha.core.audit.SecurityEventType;
 import com.amsha.core.cron.CronTaskScheduled;
-import com.amsha.core.security.AutonomyLevel;
-import com.amsha.core.security.ToolOperation;
 import com.amsha.core.tools.ToolExecutionContext;
 import com.amsha.core.tools.ToolResponse;
 import com.amsha.persistence.api.AgentCronDto;
 import com.amsha.persistence.api.CronStorePort;
+import com.amsha.security.api.AutonomyLevel;
+import com.amsha.security.api.ToolOperation;
 
 import org.junit.jupiter.api.Test;
 

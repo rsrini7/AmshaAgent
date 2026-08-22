@@ -11,10 +11,10 @@ import java.util.Optional;
 
 import com.amsha.core.audit.AuditService;
 import com.amsha.core.audit.SecurityEventType;
-import com.amsha.core.security.AutonomyLevel;
 import com.amsha.persistence.api.CheckpointDto;
 import com.amsha.persistence.api.CheckpointStatus;
 import com.amsha.persistence.api.CheckpointStorePort;
+import com.amsha.security.api.AutonomyLevel;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

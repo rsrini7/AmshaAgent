@@ -43,7 +43,6 @@ import com.amsha.core.governance.RateLimitTracker;
 import com.amsha.core.observability.AgentObserver;
 import com.amsha.core.observability.AgentOtelContext;
 import com.amsha.core.scope.WorkspaceContext;
-import com.amsha.core.security.AutonomyLevel;
 import com.amsha.core.security.DestructiveVocabularyFilter;
 import com.amsha.core.security.InputSanitizer;
 import com.amsha.core.skill.SkillRegistry;
@@ -54,6 +53,8 @@ import com.amsha.core.tools.ToolRegistry;
 import com.amsha.core.tools.ToolResponse;
 import com.amsha.core.util.TextPatternUtils;
 import com.amsha.llm.api.StructuredOutputMode;
+import com.amsha.security.api.AutonomyLevel;
+import com.amsha.security.api.RiskLevel;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -321,7 +322,7 @@ class AgentStateMachineRunnerRegressionTest {
                                     anyString(),
                                     anyList()))
                             .thenReturn(new ToolInvocationGuard.GuardDecision.PauseForApproval(
-                                    new ApprovalFrame("protected-tool", Map.of(), ApprovalFrame.RiskLevel.MEDIUM)));
+                                    new ApprovalFrame("protected-tool", Map.of(), RiskLevel.MEDIUM)));
                     when(agentStore.load(anyString(), anyString()))
                             .thenReturn(Optional.of(new AgentCheckpointRecord()));
 

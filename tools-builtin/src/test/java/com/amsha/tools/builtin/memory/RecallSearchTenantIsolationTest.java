@@ -8,12 +8,12 @@ import java.util.List;
 import java.util.Map;
 
 import com.amsha.core.scope.WorkspaceContext;
-import com.amsha.core.security.AutonomyLevel;
 import com.amsha.core.tools.ToolExecutionContext;
 import com.amsha.core.tools.ToolResponse;
 import com.amsha.persistence.api.RecallMemoryStorePort;
 import com.amsha.persistence.api.RecallMessageDto;
 import com.amsha.persistence.api.RecallSearchQuery;
+import com.amsha.security.api.AutonomyLevel;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

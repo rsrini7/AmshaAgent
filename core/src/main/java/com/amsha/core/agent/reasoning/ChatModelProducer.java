@@ -16,14 +16,14 @@ import java.util.Map;
 import java.util.Optional;
 
 import com.amsha.core.config.CoreSpiResolutionValidator;
-import com.amsha.core.security.SecretVault;
-import com.amsha.core.security.VaultConstants;
-import com.amsha.core.security.VaultKey;
 import com.amsha.llm.api.AgentChatModelProvider;
 import com.amsha.llm.api.AgentLlmConfig;
 import com.amsha.llm.api.ChatModelCreationPort;
 import com.amsha.llm.api.ModelDefaults;
 import com.amsha.llm.api.StructuredOutputMode;
+import com.amsha.security.api.SecretVault;
+import com.amsha.security.api.VaultConstants;
+import com.amsha.security.api.VaultKey;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;

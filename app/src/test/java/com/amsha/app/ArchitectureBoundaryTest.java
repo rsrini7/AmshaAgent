@@ -7,6 +7,8 @@ import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noMethods;
 import jakarta.transaction.Transactional;
 
 import com.amsha.channel.api.AbstractInboundMessagePipeline;
+import com.tngtech.archunit.base.DescribedPredicate;
+import com.tngtech.archunit.core.domain.JavaClass;
 import com.tngtech.archunit.core.importer.ImportOption;
 import com.tngtech.archunit.junit.AnalyzeClasses;
 import com.tngtech.archunit.junit.ArchTest;
@@ -193,13 +195,21 @@ public class ArchitectureBoundaryTest {
 
     // 17. Impl tier: com.amsha.core does NOT import the amsha-security impl
     //     (vacuously green until Issue 06 creates it; com.amsha.memory is exempt per ADR §4.1 rev 4)
+    // 17. Impl tier: com.amsha.core does NOT import the amsha-security impl
+    //     — but depending on the security-api vocabulary (com.amsha.security.api..)
+    //     is the entire point of S4, so it is explicitly excluded from the target side.
     @ArchTest
     static final ArchRule coreShouldNotImportSecurityImpl = noClasses()
             .that()
             .resideInAPackage("com.amsha.core..")
             .should()
-            .dependOnClassesThat()
-            .resideInAPackage("com.amsha.security..")
+            .dependOnClassesThat(new DescribedPredicate<JavaClass>("reside in security impl packages") {
+                @Override
+                public boolean test(JavaClass clazz) {
+                    String pkg = clazz.getPackageName();
+                    return pkg.startsWith("com.amsha.security") && !pkg.startsWith("com.amsha.security.api");
+                }
+            })
             .allowEmptyShould(true);
 
     // 18. Impl tier: com.amsha.core does NOT import the amsha-skills machinery

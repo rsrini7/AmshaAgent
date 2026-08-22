@@ -18,7 +18,7 @@ import java.util.concurrent.CompletableFuture;
 
 import com.amsha.core.audit.AuditHashUtil;
 import com.amsha.core.scope.WorkspaceContext;
-import com.amsha.core.security.AutonomyLevel;
+import com.amsha.security.api.AutonomyLevel;
 
 import org.eclipse.microprofile.context.ManagedExecutor;
 import org.junit.jupiter.api.AfterEach;

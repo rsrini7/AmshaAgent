@@ -21,11 +21,11 @@ import com.amsha.core.audit.SecurityEventType;
 import com.amsha.core.domain.model.AgentCron;
 import com.amsha.core.domain.model.AgentCronRecord;
 import com.amsha.core.message.UserMessages;
-import com.amsha.core.security.ToolOperation;
 import com.amsha.core.tools.AgentTool;
 import com.amsha.core.tools.ToolExecutionContext;
 import com.amsha.core.tools.ToolResponse;
 import com.amsha.persistence.api.CronStorePort;
+import com.amsha.security.api.ToolOperation;
 
 import io.quarkus.arc.Unremovable;
 

@@ -1,6 +1,6 @@
 package com.amsha.core.tools;
 
-import com.amsha.core.security.AutonomyLevel;
+import com.amsha.security.api.AutonomyLevel;
 
 /**
  * Contextual information for tool execution.

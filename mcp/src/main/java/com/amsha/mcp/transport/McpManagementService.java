@@ -8,10 +8,10 @@ import java.util.Map;
 
 import com.amsha.core.audit.AuditService;
 import com.amsha.core.audit.SecurityEventType;
-import com.amsha.core.security.OutboundPurpose;
 import com.amsha.core.tools.ToolCategory;
 import com.amsha.mcp.tool.DynamicToolCapabilityRegistry;
 import com.amsha.persistence.api.McpConnectionDto;
+import com.amsha.security.api.OutboundPurpose;
 
 /** Shared, user-scoped orchestration for MCP lifecycle surfaces. */
 @ApplicationScoped

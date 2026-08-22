@@ -2,8 +2,8 @@ package com.amsha.mcp.tool;
 
 import java.util.Objects;
 
-import com.amsha.core.security.ToolOperation;
 import com.amsha.core.tools.ToolCategory;
+import com.amsha.security.api.ToolOperation;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;

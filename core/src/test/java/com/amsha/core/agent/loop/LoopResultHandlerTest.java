@@ -9,8 +9,8 @@ import com.amsha.core.agent.IntentClassificationService;
 import com.amsha.core.agent.result.AgentResult;
 import com.amsha.core.agent.sse.AgentSseService;
 import com.amsha.core.channel.ChannelPluginRegistry;
-import com.amsha.core.security.AutonomyLevel;
 import com.amsha.core.state.StatefulAgentStore;
+import com.amsha.security.api.AutonomyLevel;
 
 import org.junit.jupiter.api.Test;
 

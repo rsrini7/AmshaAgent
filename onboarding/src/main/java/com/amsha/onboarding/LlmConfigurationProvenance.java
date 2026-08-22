@@ -8,9 +8,6 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 
-import com.amsha.core.security.SecretVault;
-import com.amsha.core.security.VaultConstants;
-import com.amsha.core.security.VaultKey;
 import com.amsha.llm.api.LlmProviderDescriptor;
 import com.amsha.llm.api.LlmProviderOnboardingAdapter;
 import com.amsha.llm.api.ModelDefaults;
@@ -18,6 +15,9 @@ import com.amsha.llm.api.oauth.AgyOAuthTokenExtractor;
 import com.amsha.llm.api.oauth.ClaudeCodeOAuthTokenExtractor;
 import com.amsha.llm.api.oauth.CodexOAuthTokenExtractor;
 import com.amsha.llm.api.oauth.KimchiOAuthTokenExtractor;
+import com.amsha.security.api.SecretVault;
+import com.amsha.security.api.VaultConstants;
+import com.amsha.security.api.VaultKey;
 
 import org.eclipse.microprofile.config.Config;
 import org.eclipse.microprofile.config.ConfigProvider;

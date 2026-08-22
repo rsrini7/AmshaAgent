@@ -20,8 +20,6 @@ import com.amsha.core.agent.role.RoleRegistry;
 import com.amsha.core.agent.role.ToolCapability;
 import com.amsha.core.classifier.ClassifierResult;
 import com.amsha.core.governance.ApprovalFrame;
-import com.amsha.core.security.AutonomyLevel;
-import com.amsha.core.security.ToolOperation;
 import com.amsha.core.skill.CompiledSkillEntry;
 import com.amsha.core.tool.DynamicToolAdmission;
 import com.amsha.core.tool.DynamicToolAdmissionLookup;
@@ -30,6 +28,8 @@ import com.amsha.core.tool.ToolGuardInterceptor;
 import com.amsha.core.tools.AgentTool;
 import com.amsha.core.tools.IdempotencyMode;
 import com.amsha.core.tools.ToolRegistry;
+import com.amsha.security.api.AutonomyLevel;
+import com.amsha.security.api.ToolOperation;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.jboss.logging.Logger;

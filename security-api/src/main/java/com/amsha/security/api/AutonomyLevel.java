@@ -1,4 +1,4 @@
-package com.amsha.core.security;
+package com.amsha.security.api;
 
 /**
  * Defines the level of autonomy the agent has within a workspace.

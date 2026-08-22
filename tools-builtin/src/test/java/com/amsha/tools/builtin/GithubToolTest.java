@@ -7,8 +7,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.util.Map;
 
 import com.amsha.core.audit.AuditService;
-import com.amsha.core.security.AutonomyLevel;
 import com.amsha.core.tools.ToolExecutionContext;
+import com.amsha.security.api.AutonomyLevel;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;

@@ -30,10 +30,10 @@ import com.amsha.core.governance.BudgetExceededException;
 import com.amsha.core.pipeline.MessageContext;
 import com.amsha.core.pipeline.SessionContext;
 import com.amsha.core.scope.WorkspaceContext;
-import com.amsha.core.security.AutonomyLevel;
 import com.amsha.core.skill.SkillRegistry;
 import com.amsha.core.state.StatefulAgentStore;
 import com.amsha.core.util.TimeContextInjector;
+import com.amsha.security.api.AutonomyLevel;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;

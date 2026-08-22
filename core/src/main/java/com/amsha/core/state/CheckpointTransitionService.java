@@ -8,9 +8,9 @@ import java.time.Instant;
 import com.amsha.core.audit.AuditService;
 import com.amsha.core.audit.SecurityEventType;
 import com.amsha.core.domain.model.AgentCheckpoint;
-import com.amsha.core.security.AutonomyLevel;
 import com.amsha.persistence.api.CheckpointStatus;
 import com.amsha.persistence.api.CheckpointStorePort;
+import com.amsha.security.api.AutonomyLevel;
 
 import org.jboss.logging.Logger;
 

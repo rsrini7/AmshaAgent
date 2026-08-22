@@ -14,8 +14,8 @@ import java.util.HashMap;
 import java.util.Map;
 
 import com.amsha.core.scope.WorkspaceContext;
-import com.amsha.core.security.AutonomyLevel;
-import com.amsha.core.security.ToolOperation;
+import com.amsha.security.api.AutonomyLevel;
+import com.amsha.security.api.ToolOperation;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

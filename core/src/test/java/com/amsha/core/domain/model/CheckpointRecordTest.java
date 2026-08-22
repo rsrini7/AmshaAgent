@@ -6,9 +6,9 @@ import java.time.Instant;
 import java.util.List;
 
 import com.amsha.core.agent.reasoning.ReasoningStep;
-import com.amsha.core.security.AutonomyLevel;
 import com.amsha.persistence.api.CheckpointDto;
 import com.amsha.persistence.api.CheckpointStatus;
+import com.amsha.security.api.AutonomyLevel;
 
 import org.junit.jupiter.api.Test;
 

@@ -14,9 +14,9 @@ import com.amsha.core.event.EventTypeCatalog;
 import com.amsha.core.lifecycle.SessionHeartbeatTracker;
 import com.amsha.core.pipeline.SessionIdResolver;
 import com.amsha.core.reflex.ApprovalNotificationService;
-import com.amsha.core.security.AutonomyLevel;
 import com.amsha.persistence.api.SessionCatalogEntry;
 import com.amsha.persistence.api.SessionCatalogStore;
+import com.amsha.security.api.AutonomyLevel;
 
 import org.jboss.logging.Logger;
 

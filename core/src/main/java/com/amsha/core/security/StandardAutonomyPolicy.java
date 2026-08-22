@@ -2,6 +2,9 @@ package com.amsha.core.security;
 
 import jakarta.enterprise.context.ApplicationScoped;
 
+import com.amsha.security.api.AutonomyLevel;
+import com.amsha.security.api.ToolOperation;
+
 @ApplicationScoped
 public class StandardAutonomyPolicy implements AutonomyPolicy {
     @Override

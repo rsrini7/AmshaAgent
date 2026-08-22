@@ -13,8 +13,8 @@ import com.amsha.core.agent.loop.ToolRiskAction;
 import com.amsha.core.agent.loop.ToolRiskPrediction;
 import com.amsha.core.classifier.ClassifierResult;
 import com.amsha.core.classifier.ClassifierResult.NoOpinionReason;
-import com.amsha.core.security.AutonomyLevel;
 import com.amsha.localml.onnx.OnnxClassifierRuntimeControl.Classifier;
+import com.amsha.security.api.AutonomyLevel;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.junit.jupiter.api.Test;

@@ -17,7 +17,7 @@ import java.util.stream.Collectors;
 import com.amsha.app.ui.dto.AgentStatusDto;
 import com.amsha.core.agent.sse.AgentSseService;
 import com.amsha.core.lifecycle.SessionHeartbeatTracker;
-import com.amsha.core.security.AutonomyLevel;
+import com.amsha.security.api.AutonomyLevel;
 
 import org.eclipse.microprofile.openapi.annotations.Operation;
 import org.jboss.resteasy.reactive.RestStreamElementType;

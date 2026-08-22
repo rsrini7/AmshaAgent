@@ -28,13 +28,13 @@ import com.amsha.core.memory.tiered.DirectiveFeedbackPort;
 import com.amsha.core.pipeline.MessageContext;
 import com.amsha.core.scope.WorkspaceContext;
 import com.amsha.core.scope.WorkspaceScopeHolder;
-import com.amsha.core.security.AutonomyLevel;
 import com.amsha.core.state.StatefulAgentStore;
 import com.amsha.core.structured.StructuredOutputException;
 import com.amsha.core.util.AgentErrorMessageUtil;
 import com.amsha.core.util.ClassUtils;
 import com.amsha.core.util.MdcManaged;
 import com.amsha.llm.api.StructuredOutputMode;
+import com.amsha.security.api.AutonomyLevel;
 
 import org.jboss.logging.Logger;
 

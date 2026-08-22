@@ -20,7 +20,6 @@ import com.amsha.core.config.CoreSpiResolutionValidator;
 import com.amsha.core.sandbox.SandboxExecutionPort;
 import com.amsha.core.sandbox.SandboxFailureMessages;
 import com.amsha.core.scope.WorkspaceContext;
-import com.amsha.core.security.AutonomyLevel;
 import com.amsha.core.tools.AgentTool;
 import com.amsha.core.tools.ToolExecutionContext;
 import com.amsha.core.tools.ToolRegistry;
@@ -30,6 +29,7 @@ import com.amsha.mcp.tool.DynamicToolCapability;
 import com.amsha.mcp.tool.DynamicToolCapabilityRegistry;
 import com.amsha.mcp.tool.McpTransportType;
 import com.amsha.sandbox.ProcessIsolationExecutor;
+import com.amsha.security.api.AutonomyLevel;
 import com.amsha.tools.builtin.SandboxExecTool;
 import com.amsha.tools.builtin.ToolSearchIndex;
 

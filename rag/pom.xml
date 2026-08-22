@@ -65,6 +65,12 @@
       <version>${quarkus.version}</version>
       <scope>test</scope>
     </dependency>
+          <!-- Security vocabulary (vault interface, tool operation, autonomy) -->
+          <dependency>
+              <groupId>com.amsha</groupId>
+              <artifactId>amsha-security-api</artifactId>
+              <version>${project.version}</version>
+          </dependency>
   </dependencies>
 
   <build>

@@ -22,10 +22,6 @@ import com.amsha.core.audit.AuditService;
 import com.amsha.core.audit.SecurityEventType;
 import com.amsha.core.scope.WorkspaceScopeHolder;
 import com.amsha.core.security.OutboundHttpPolicyService;
-import com.amsha.core.security.OutboundPolicyDecision;
-import com.amsha.core.security.OutboundPurpose;
-import com.amsha.core.security.SecretVault;
-import com.amsha.core.security.VaultConstants;
 import com.amsha.core.tools.ToolCategory;
 import com.amsha.mcp.tool.DynamicToolCapabilityRegistry;
 import com.amsha.mcp.tool.McpTransportType;
@@ -34,6 +30,10 @@ import com.amsha.persistence.api.McpConnectionDto;
 import com.amsha.persistence.api.McpConnectionHeaderSecretRefDto;
 import com.amsha.persistence.api.McpConnectionStorePort;
 import com.amsha.persistence.api.McpConnectionToolPolicyDto;
+import com.amsha.security.api.OutboundPolicyDecision;
+import com.amsha.security.api.OutboundPurpose;
+import com.amsha.security.api.SecretVault;
+import com.amsha.security.api.VaultConstants;
 
 import org.jboss.logging.Logger;
 

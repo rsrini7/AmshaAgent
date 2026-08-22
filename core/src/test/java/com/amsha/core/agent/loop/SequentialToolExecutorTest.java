@@ -9,8 +9,8 @@ import static org.mockito.Mockito.when;
 import java.util.Map;
 
 import com.amsha.core.agent.reasoning.ParallelToolCall;
-import com.amsha.core.security.AutonomyLevel;
 import com.amsha.core.tools.ToolResponse;
+import com.amsha.security.api.AutonomyLevel;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

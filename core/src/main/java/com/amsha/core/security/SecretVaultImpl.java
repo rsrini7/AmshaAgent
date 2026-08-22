@@ -18,6 +18,9 @@ import com.amsha.persistence.api.IdentityStorePort;
 import com.amsha.persistence.api.SecretDto;
 import com.amsha.persistence.api.SecretStorePort;
 import com.amsha.persistence.api.WorkspaceMembershipDto;
+import com.amsha.security.api.SecretVault;
+import com.amsha.security.api.VaultConstants;
+import com.amsha.security.api.VaultKey;
 
 import io.opentelemetry.api.trace.Span;
 import io.opentelemetry.api.trace.StatusCode;

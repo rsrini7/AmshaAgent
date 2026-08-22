@@ -5,9 +5,9 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import com.amsha.core.security.AutonomyLevel;
 import com.amsha.llm.api.StructuredOutputMode;
 import com.amsha.persistence.api.CheckpointStatus;
+import com.amsha.security.api.AutonomyLevel;
 
 import org.junit.jupiter.api.Test;
 

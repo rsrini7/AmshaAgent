@@ -7,8 +7,8 @@ import java.util.Set;
 
 import com.amsha.core.agent.loop.ToolInvocationGuard;
 import com.amsha.core.agent.reasoning.ReasoningStep;
-import com.amsha.core.security.AutonomyLevel;
 import com.amsha.core.skill.CompiledSkillEntry;
+import com.amsha.security.api.AutonomyLevel;
 
 /**
  * SPI for providing tool-specific guard logic (intent checks, deep dedup)

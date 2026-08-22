@@ -12,9 +12,9 @@ import java.time.Duration;
 import com.amsha.core.audit.AuditService;
 import com.amsha.core.audit.SecurityEventType;
 import com.amsha.core.security.OutboundHttpPolicyService;
-import com.amsha.core.security.OutboundPurpose;
-import com.amsha.core.security.SecretVault;
 import com.amsha.persistence.api.LlmConnectionDto;
+import com.amsha.security.api.OutboundPurpose;
+import com.amsha.security.api.SecretVault;
 
 import org.jboss.logging.Logger;
 

@@ -16,11 +16,11 @@ import com.amsha.core.agent.sse.AgentSseService;
 import com.amsha.core.audit.ComplianceViolationException;
 import com.amsha.core.channel.ChannelPluginRegistry;
 import com.amsha.core.pipeline.MessageContext;
-import com.amsha.core.security.AutonomyLevel;
 import com.amsha.core.state.StatefulAgentStore;
 import com.amsha.core.util.AgentErrorMessageUtil;
 import com.amsha.core.util.ClassUtils;
 import com.amsha.persistence.api.CheckpointStatus;
+import com.amsha.security.api.AutonomyLevel;
 
 import org.jboss.logging.Logger;
 

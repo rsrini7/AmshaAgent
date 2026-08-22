@@ -22,6 +22,7 @@ import com.amsha.core.tools.ToolResponse;
 import com.amsha.llm.api.ToolCallJsonKeys;
 import com.amsha.persistence.api.CheckpointStatus;
 import com.amsha.persistence.api.ToolDecision;
+import com.amsha.security.api.RiskLevel;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.jboss.logging.Logger;
@@ -148,7 +149,7 @@ public class ApprovalCheckpointManager {
         } catch (Exception e) {
             log.debugf("Serialization fallback (non-fatal): %s", LogUtil.rootMessage(e));
         }
-        ApprovalFrame frame = new ApprovalFrame(toolName, params, ApprovalFrame.RiskLevel.MEDIUM);
+        ApprovalFrame frame = new ApprovalFrame(toolName, params, RiskLevel.MEDIUM);
         return persist(
                 context,
                 frame,
@@ -227,13 +228,12 @@ public class ApprovalCheckpointManager {
                         HitlEventType.AWAITING_APPROVAL.wireValue(),
                         compositeName,
                         originalBatchJson,
-                        ApprovalFrame.RiskLevel.MEDIUM.name(),
+                        RiskLevel.MEDIUM.name(),
                         null,
                         Instant.now()));
 
         // Create a synthetic frame for the result
-        ApprovalFrame frame =
-                new ApprovalFrame(compositeName, Map.of("batch", originalBatchJson), ApprovalFrame.RiskLevel.MEDIUM);
+        ApprovalFrame frame = new ApprovalFrame(compositeName, Map.of("batch", originalBatchJson), RiskLevel.MEDIUM);
         return AgentResult.awaitingApproval(frame, sessionId, List.copyOf(history));
     }
 
@@ -317,12 +317,12 @@ public class ApprovalCheckpointManager {
                         HitlEventType.AWAITING_APPROVAL.wireValue(),
                         compositeName,
                         originalBatchJson,
-                        ApprovalFrame.RiskLevel.MEDIUM.name(),
+                        RiskLevel.MEDIUM.name(),
                         null,
                         Instant.now()));
 
-        ApprovalFrame frame = new ApprovalFrame(
-                compositeName, Map.of(ToolCallJsonKeys.BATCH, originalBatchJson), ApprovalFrame.RiskLevel.MEDIUM);
+        ApprovalFrame frame =
+                new ApprovalFrame(compositeName, Map.of(ToolCallJsonKeys.BATCH, originalBatchJson), RiskLevel.MEDIUM);
         return AgentResult.awaitingApproval(frame, sessionId, List.copyOf(history));
     }
 }

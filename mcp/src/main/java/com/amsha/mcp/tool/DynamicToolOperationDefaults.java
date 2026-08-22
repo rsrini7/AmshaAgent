@@ -1,7 +1,7 @@
 package com.amsha.mcp.tool;
 
-import com.amsha.core.security.ToolOperation;
 import com.amsha.core.tools.ToolCategory;
+import com.amsha.security.api.ToolOperation;
 
 /**
  * Registration-site defaults for MCP dynamic tools.

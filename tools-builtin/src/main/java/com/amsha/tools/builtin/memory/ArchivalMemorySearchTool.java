@@ -18,7 +18,6 @@ import com.amsha.core.agent.role.ToolCapability;
 import com.amsha.core.agent.role.ToolMetadata;
 import com.amsha.core.config.TieredMemoryConfig;
 import com.amsha.core.scope.WorkspaceContext;
-import com.amsha.core.security.ToolOperation;
 import com.amsha.core.tools.AgentTool;
 import com.amsha.core.tools.IdempotencyMode;
 import com.amsha.core.tools.ToolExecutionContext;
@@ -27,6 +26,7 @@ import com.amsha.core.util.Fts5QueryUtil;
 import com.amsha.persistence.api.ArchivalChunkDto;
 import com.amsha.persistence.api.ArchivalMemoryStorePort;
 import com.amsha.persistence.api.ArchivalSearchQuery;
+import com.amsha.security.api.ToolOperation;
 
 import org.jboss.logging.Logger;
 

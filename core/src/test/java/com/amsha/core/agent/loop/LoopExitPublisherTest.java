@@ -12,6 +12,7 @@ import com.amsha.core.agent.AgentSentinels;
 import com.amsha.core.agent.result.AgentResult;
 import com.amsha.core.event.DomainEventBus;
 import com.amsha.core.governance.ApprovalFrame;
+import com.amsha.security.api.RiskLevel;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -46,7 +47,7 @@ class LoopExitPublisherTest {
         assertEquals(
                 "waiting-approval",
                 LoopExitPublisher.toWireStatus(new AgentResult.AwaitingApproval(
-                        new ApprovalFrame("tool", Map.of(), ApprovalFrame.RiskLevel.HIGH), "sess", List.of(), 1, 1)));
+                        new ApprovalFrame("tool", Map.of(), RiskLevel.HIGH), "sess", List.of(), 1, 1)));
         assertEquals(
                 "waiting-retry",
                 LoopExitPublisher.toWireStatus(new AgentResult.AwaitingRetry("sess", 1000, List.of(), 1, 1)));

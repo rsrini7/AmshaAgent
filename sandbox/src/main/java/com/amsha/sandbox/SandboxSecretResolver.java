@@ -6,8 +6,8 @@ import jakarta.inject.Inject;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-import com.amsha.core.security.SecretVault;
-import com.amsha.core.security.VaultKey;
+import com.amsha.security.api.SecretVault;
+import com.amsha.security.api.VaultKey;
 
 import org.jboss.logging.Logger;
 

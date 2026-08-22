@@ -5,7 +5,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import java.util.Map;
 
 import com.amsha.core.agent.role.ToolMetadata;
-import com.amsha.core.security.ToolOperation;
+import com.amsha.security.api.ToolOperation;
 
 @ApplicationScoped
 @ToolMetadata(

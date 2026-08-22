@@ -11,8 +11,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import com.amsha.core.security.AutonomyLevel;
 import com.amsha.core.tools.ToolExecutionContext;
+import com.amsha.security.api.AutonomyLevel;
 
 import org.junit.jupiter.api.Test;
 

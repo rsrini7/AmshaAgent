@@ -30,7 +30,6 @@ import com.amsha.core.agent.loop.LoopStuckDetector;
 import com.amsha.core.agent.role.AgentRoleEnum;
 import com.amsha.core.agent.role.ToolCapability;
 import com.amsha.core.config.CoreSpiResolutionValidator;
-import com.amsha.core.security.AutonomyLevel;
 import com.amsha.core.skill.SkillAdaptationManager;
 import com.amsha.core.skill.SkillRegistry;
 import com.amsha.core.tool.DynamicToolInvoker;
@@ -39,6 +38,7 @@ import com.amsha.core.tools.DynamicToolSchemaParser;
 import com.amsha.core.tools.ToolRegistry;
 import com.amsha.core.tools.search.ToolSearchPort;
 import com.amsha.core.util.TextPatternUtils;
+import com.amsha.security.api.AutonomyLevel;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.jboss.logging.Logger;

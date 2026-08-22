@@ -9,8 +9,8 @@ import java.util.Map;
 import java.util.Optional;
 
 import com.amsha.core.agent.role.ToolMetadata;
-import com.amsha.core.security.ToolOperation;
 import com.amsha.core.tool.DynamicToolCategoryLookup;
+import com.amsha.security.api.ToolOperation;
 
 import org.junit.jupiter.api.Test;
 

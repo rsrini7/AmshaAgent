@@ -10,7 +10,7 @@ import java.util.Collections;
 import java.util.Map;
 
 import com.amsha.core.audit.AuditService;
-import com.amsha.core.security.ToolOperation;
+import com.amsha.security.api.ToolOperation;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.junit.jupiter.api.BeforeEach;

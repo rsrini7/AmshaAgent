@@ -14,8 +14,8 @@ import java.util.List;
 
 import com.amsha.core.agent.role.ToolCapability;
 import com.amsha.core.scope.WorkspaceContext;
-import com.amsha.core.security.AutonomyLevel;
 import com.amsha.core.util.TextPatternUtils;
+import com.amsha.security.api.AutonomyLevel;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.junit.jupiter.api.BeforeEach;

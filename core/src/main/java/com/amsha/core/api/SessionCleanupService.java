@@ -22,7 +22,7 @@ import com.amsha.core.reflex.ReflexRegistry;
 import com.amsha.core.reflex.ReflexResult;
 import com.amsha.core.scope.WorkspaceContext;
 import com.amsha.core.scope.WorkspaceScopeHolder;
-import com.amsha.core.security.AutonomyLevel;
+import com.amsha.security.api.AutonomyLevel;
 
 import org.jboss.logging.Logger;
 

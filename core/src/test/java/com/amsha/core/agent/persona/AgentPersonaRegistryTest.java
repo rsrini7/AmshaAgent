@@ -9,8 +9,8 @@ import java.util.List;
 
 import com.amsha.core.agent.loop.AgentExecutionContext;
 import com.amsha.core.agent.role.AgentRoleEnum;
-import com.amsha.core.security.AutonomyLevel;
 import com.amsha.llm.api.StructuredOutputMode;
+import com.amsha.security.api.AutonomyLevel;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

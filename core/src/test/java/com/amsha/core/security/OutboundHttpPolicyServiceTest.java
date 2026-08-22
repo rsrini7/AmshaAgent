@@ -5,6 +5,8 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.amsha.core.audit.AuditService;
+import com.amsha.security.api.OutboundPolicyDecision;
+import com.amsha.security.api.OutboundPurpose;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

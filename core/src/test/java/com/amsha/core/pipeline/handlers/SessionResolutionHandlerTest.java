@@ -14,8 +14,8 @@ import com.amsha.channel.api.ChannelUser;
 import com.amsha.core.lifecycle.SessionHeartbeatTracker;
 import com.amsha.core.pipeline.MessageContext;
 import com.amsha.core.pipeline.SessionIdResolver;
-import com.amsha.core.security.AutonomyLevel;
 import com.amsha.core.state.StatefulAgentStore;
+import com.amsha.security.api.AutonomyLevel;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
