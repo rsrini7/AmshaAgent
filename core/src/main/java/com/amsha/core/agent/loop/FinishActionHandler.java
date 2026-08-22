@@ -17,6 +17,7 @@ import com.amsha.core.agent.role.RoleRegistry;
 import com.amsha.core.classifier.ClassifierResult;
 import com.amsha.core.governance.RateLimitTracker;
 import com.amsha.core.observability.AgentObserver;
+import com.amsha.core.routing.ModelRouter;
 import com.amsha.core.tools.CodeLanguageDetector;
 import com.amsha.core.tools.ToolRegistry;
 import com.amsha.core.util.AgentErrorMessageUtil;
@@ -70,6 +71,14 @@ public class FinishActionHandler {
 
     @Inject
     AnswerQualityDispatcher answerQualityDispatcher;
+
+    /**
+     * Optional escalation-tier probe for memory-synthesis corrections. Null in
+     * manually-constructed test harnesses; absence means "no higher tier" and the
+     * deterministic verbatim-memory fallback fires one attempt earlier.
+     */
+    @Inject
+    ModelRouter modelRouter;
 
     @Inject
     public FinishActionHandler(
@@ -130,6 +139,7 @@ public class FinishActionHandler {
             permits FinishOutcome.Completed,
                     FinishOutcome.RetryLeak,
                     FinishOutcome.Correction,
+                    FinishOutcome.SynthesisCorrection,
                     FinishOutcome.SalvageFailed,
                     FinishOutcome.ExecuteLeakedTool,
                     FinishOutcome.InjectToolCall {
@@ -149,6 +159,14 @@ public class FinishActionHandler {
          * A hallucination or policy violation was detected that requires a corrective turn.
          */
         record Correction(ReasoningStep correctedStep, String correctionHint) implements FinishOutcome {}
+
+        /**
+         * Memory-search results exist but the answer disclaims knowledge. Carries the verbatim
+         * memory result so the handler can budget the correction and fall back to quoting the
+         * stored facts when the model cannot synthesize them.
+         */
+        record SynthesisCorrection(ReasoningStep correctedStep, String correctionHint, String memoryResult)
+                implements FinishOutcome {}
 
         /**
          * The schema self-correction budget was exhausted and no salvageable
@@ -265,6 +283,9 @@ public class FinishActionHandler {
 
         // --- Hallucination detection ---
         FinishOutcome hallucinationCheck = resultProcessor.checkHallucination(sessionId, history, step, answer);
+        if (hallucinationCheck instanceof FinishOutcome.SynthesisCorrection synthesis) {
+            return handleSynthesisCorrection(context, history, synthesis);
+        }
         if (hallucinationCheck != null) {
             return hallucinationCheck;
         }
@@ -354,6 +375,52 @@ public class FinishActionHandler {
             // Optional answer-quality decisions fail open to the authoritative accepted answer.
         }
         return null;
+    }
+
+    /**
+     * Bounded economics ladder for repeated memory-synthesis failures. The memory tools
+     * returned results but the model keeps disclaiming knowledge, so blind retries against
+     * the same cheap slot deterministically burn the iteration budget (observed on native
+     * runs: recall → archival → core read, then two identical blocked FINISHes = 5/5 steps).
+     *
+     * <p>Ladder: attempt 1 gets the fill-in-template correction hint; attempt 2 is escalated
+     * to a non-lightweight model tier when one is configured, otherwise it exits immediately
+     * with the verbatim memory content; attempt 3+ always exits with the verbatim content.
+     * Termination is guaranteed within maxIterations and the user always receives the stored
+     * facts rather than a false disclaimer.
+     */
+    private FinishOutcome handleSynthesisCorrection(
+            AgentExecutionContext context, List<ReasoningStep> history, FinishOutcome.SynthesisCorrection synthesis) {
+        int attempt = context.bumpMemorySynthesisCorrections();
+        String sessionId = context.sessionId();
+        boolean escalationTierAvailable = modelRouter != null
+                && context.agentRole() != null
+                && modelRouter.hasDistinctEscalationTier(context.agentRole());
+
+        if (attempt == 1) {
+            context.setForceFinishRetry(true);
+            log.infof(
+                    "FINISH-HANDLER: memory-synthesis correction 1/2 for session %s — template hint, same tier",
+                    sessionId);
+            return new FinishOutcome.Correction(synthesis.correctedStep(), synthesis.correctionHint());
+        }
+        if (attempt == 2 && escalationTierAvailable) {
+            context.requestReasoningEscalation();
+            context.setForceFinishRetry(true);
+            log.infof(
+                    "FINISH-HANDLER: memory-synthesis correction 2 for session %s — escalating next reasoning call to non-lightweight tier",
+                    sessionId);
+            return new FinishOutcome.Correction(synthesis.correctedStep(), synthesis.correctionHint());
+        }
+
+        // Budget exhausted or nothing better to escalate to: exit honestly with the stored facts.
+        String fallback = "Here's what my memory of you contains:\n"
+                + synthesis.memoryResult()
+                + "\n\n(Quoted directly from your stored memory — I couldn't summarize it reliably just now.)";
+        log.warnf(
+                "FINISH-HANDLER: memory-synthesis correction budget exhausted after %d attempt(s) for session %s — exiting with verbatim memory content",
+                attempt, sessionId);
+        return new FinishOutcome.Completed(AgentResult.finished(fallback, List.copyOf(history)), fallback);
     }
 
     private void observeAcceptedAnswer(AgentExecutionContext context, String answer, boolean toolInvokedInTurn) {

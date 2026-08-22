@@ -24,6 +24,7 @@ import com.amsha.core.classifier.ClassifierResult;
 import com.amsha.core.classifier.ClassifierResult.NoOpinionReason;
 import com.amsha.core.governance.RateLimitTracker;
 import com.amsha.core.observability.AgentObserver;
+import com.amsha.core.routing.ModelRouter;
 import com.amsha.core.tools.ToolRegistry;
 import com.amsha.core.util.TextPatternUtils;
 import com.amsha.llm.api.StructuredOutputMode;
@@ -572,5 +573,93 @@ class FinishActionHandlerTest {
                 null,
                 null,
                 Map.of());
+    }
+
+    private static ReasoningStep memorySearchStep() {
+        return new ReasoningStep.ToolCallStep(
+                "t",
+                "recall_memory_search",
+                Map.of("query", "user name"),
+                "Name: Alice",
+                0,
+                0,
+                true,
+                null,
+                null,
+                null,
+                false,
+                false);
+    }
+
+    private static ReasoningStep disclaimerFinishStep() {
+        return new ReasoningStep.FinishStep(
+                "t",
+                Map.of(ReasoningStep.ACTION_INPUT_ANSWER_KEY, "I do not have any information about your name"),
+                0,
+                0,
+                false);
+    }
+
+    @Test
+    void memorySynthesisFirstBlockReturnsTemplateCorrection() {
+        AgentExecutionContext ctx = context("coordinator", "who am i");
+
+        FinishActionHandler.FinishOutcome outcome =
+                handler.handle(ctx, List.of(memorySearchStep()), disclaimerFinishStep(), 0);
+
+        assertTrue(
+                outcome instanceof FinishActionHandler.FinishOutcome.Correction, "first block must correct, not exit");
+        String hint = ((FinishActionHandler.FinishOutcome.Correction) outcome).correctionHint();
+        assertTrue(hint.contains("Based on my memory of you"), "hint must be a fill-in template");
+        assertTrue(hint.contains("Name: Alice"), "hint must quote the memory result verbatim");
+        assertTrue(ctx.isForceFinishRetry());
+    }
+
+    @Test
+    void memorySynthesisSecondBlockExitsWithVerbatimMemoryWhenNoEscalationTier() {
+        AgentExecutionContext ctx = context("coordinator", "who am i");
+
+        handler.handle(ctx, List.of(memorySearchStep()), disclaimerFinishStep(), 0); // attempt 1: corrected
+        FinishActionHandler.FinishOutcome outcome =
+                handler.handle(ctx, List.of(memorySearchStep()), disclaimerFinishStep(), 0); // attempt 2
+
+        assertTrue(outcome instanceof FinishActionHandler.FinishOutcome.Completed, "no tier → deterministic exit");
+        String answer = ((FinishActionHandler.FinishOutcome.Completed) outcome).answer();
+        assertTrue(answer.contains("Here's what my memory of you contains"));
+        assertTrue(answer.contains("Name: Alice"), "fallback must quote stored facts verbatim");
+        assertFalse(answer.contains("I do not have any information"), "false disclaimer must not survive");
+    }
+
+    @Test
+    void memorySynthesisSecondBlockEscalatesWhenDistinctTierExists() {
+        handler.modelRouter = mock(ModelRouter.class);
+        when(handler.modelRouter.hasDistinctEscalationTier(anyString())).thenReturn(true);
+        AgentExecutionContext ctx = context("coordinator", "who am i");
+
+        handler.handle(ctx, List.of(memorySearchStep()), disclaimerFinishStep(), 0); // attempt 1: corrected
+        FinishActionHandler.FinishOutcome outcome =
+                handler.handle(ctx, List.of(memorySearchStep()), disclaimerFinishStep(), 0); // attempt 2
+
+        assertTrue(
+                outcome instanceof FinishActionHandler.FinishOutcome.Correction, "tier exists → one escalated retry");
+        assertTrue(ctx.consumeReasoningEscalation(), "escalation flag must be armed for the next call");
+        assertFalse(ctx.consumeReasoningEscalation(), "flag is one-shot");
+    }
+
+    @Test
+    void memorySynthesisThirdBlock_exitsWithVerbatimMemoryEvenWhenTierExists() {
+        handler.modelRouter = mock(ModelRouter.class);
+        when(handler.modelRouter.hasDistinctEscalationTier(anyString())).thenReturn(true);
+        AgentExecutionContext ctx = context("coordinator", "who am i");
+
+        handler.handle(ctx, List.of(memorySearchStep()), disclaimerFinishStep(), 0); // attempt 1: corrected
+        handler.handle(ctx, List.of(memorySearchStep()), disclaimerFinishStep(), 0); // attempt 2: escalated retry
+        FinishActionHandler.FinishOutcome outcome =
+                handler.handle(ctx, List.of(memorySearchStep()), disclaimerFinishStep(), 0); // attempt 3: exhausted
+
+        assertTrue(
+                outcome instanceof FinishActionHandler.FinishOutcome.Completed, "ladder must terminate at attempt 3");
+        String answer = ((FinishActionHandler.FinishOutcome.Completed) outcome).answer();
+        assertTrue(answer.contains("Name: Alice"), "fallback must quote stored facts verbatim");
     }
 }

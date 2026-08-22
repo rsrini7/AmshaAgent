@@ -52,7 +52,12 @@ public class LangChain4jLlmAdapter implements LlmProviderPort {
 
     @Override
     public ChatResponse nextStep(ChatRequest request, String agentRole) {
-        ChatModel resolvedModel = resolveModel(agentRole);
+        return nextStep(request, agentRole, false);
+    }
+
+    @Override
+    public ChatResponse nextStep(ChatRequest request, String agentRole, boolean bypassLightweightRouting) {
+        ChatModel resolvedModel = resolveModel(agentRole, bypassLightweightRouting);
 
         if (!cbEnabled) {
             return resolvedModel.chat(request);
@@ -64,12 +69,12 @@ public class LangChain4jLlmAdapter implements LlmProviderPort {
         return cb.execute(request, resolvedModel);
     }
 
-    private ChatModel resolveModel(String agentRole) {
+    private ChatModel resolveModel(String agentRole, boolean bypassLightweightRouting) {
         if (agentRole == null || agentRole.isBlank()) {
             return globalChatModel;
         }
         try {
-            return modelRouter.resolve(agentRole);
+            return modelRouter.resolve(agentRole, bypassLightweightRouting);
         } catch (Exception e) {
             log.warnf(
                     "[LLM-ADAPTER] Model resolution failed for role=%s, falling back to global: %s",

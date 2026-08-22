@@ -319,9 +319,15 @@ public class LangChainReasoningEngine implements ReasoningEngine {
                     configCompact,
                     isSimpleChitchat,
                     context.isForceFinishRetry());
+            // Consume once per call; normal calls keep the legacy 2-arg port shape so existing
+            // port implementations and stubs are unaffected. Only an armed memory-synthesis
+            // escalation takes the bypass-lightweight-routing overload.
+            boolean escalateThisCall = context.consumeReasoningEscalation();
             ChatResponse response = ScopedValue.where(WorkspaceContext.IS_WRITE_INTENT, isWriteIntent)
                     .where(WorkspaceContext.IS_COMPACT, isCompact)
-                    .call(() -> llmProviderPort.nextStep(request, agentRole));
+                    .call(() -> escalateThisCall
+                            ? llmProviderPort.nextStep(request, agentRole, true)
+                            : llmProviderPort.nextStep(request, agentRole));
             if (span != null) {
                 if (response.tokenUsage() != null) {
                     span.setAttribute(AgentOTelConstants.ATTR_LLM_INPUT_TOKENS, (long)

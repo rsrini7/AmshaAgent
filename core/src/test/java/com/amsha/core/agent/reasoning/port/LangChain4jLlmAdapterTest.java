@@ -68,7 +68,7 @@ class LangChain4jLlmAdapterTest {
     @Test
     void nextStep_routesToResolvedModel_whenAgentRoleProvided() {
         ChatModel personaModel = mock(ChatModel.class);
-        when(modelRouter.resolve("coder")).thenReturn(personaModel);
+        when(modelRouter.resolve("coder", false)).thenReturn(personaModel);
         when(personaModel.chat(any(ChatRequest.class))).thenReturn(response());
 
         ChatResponse result = adapter.nextStep(request(), "coder");
@@ -80,13 +80,50 @@ class LangChain4jLlmAdapterTest {
 
     @Test
     void nextStep_fallsBackToGlobal_whenModelResolutionFails() {
-        when(modelRouter.resolve("unknown")).thenThrow(new RuntimeException("No provider"));
+        when(modelRouter.resolve("unknown", false)).thenThrow(new RuntimeException("No provider"));
         when(globalModel.chat(any(ChatRequest.class))).thenReturn(response());
 
         ChatResponse result = adapter.nextStep(request(), "unknown");
 
         assertNotNull(result);
         verify(globalModel).chat(any(ChatRequest.class));
+    }
+
+    @Test
+    void nextStep_twoArgOverload_resolvesWithoutBypass() {
+        ChatModel personaModel = mock(ChatModel.class);
+        when(modelRouter.resolve("coder", false)).thenReturn(personaModel);
+        when(personaModel.chat(any(ChatRequest.class))).thenReturn(response());
+
+        adapter.nextStep(request(), "coder", false);
+
+        verify(modelRouter).resolve("coder", false);
+        verify(personaModel).chat(any(ChatRequest.class));
+    }
+
+    @Test
+    void nextStep_bypassFlag_isPassedThroughToRouter() {
+        ChatModel escalatedModel = mock(ChatModel.class);
+        when(modelRouter.resolve("coder", true)).thenReturn(escalatedModel);
+        when(escalatedModel.chat(any(ChatRequest.class))).thenReturn(response());
+
+        ChatResponse result = adapter.nextStep(request(), "coder", true);
+
+        assertNotNull(result);
+        verify(modelRouter).resolve("coder", true);
+        verify(escalatedModel).chat(any(ChatRequest.class));
+        verify(globalModel, never()).chat(any(ChatRequest.class));
+    }
+
+    @Test
+    void nextStep_bypassWithBlankRole_stillUsesGlobalModel() {
+        when(globalModel.chat(any(ChatRequest.class))).thenReturn(response());
+
+        ChatResponse result = adapter.nextStep(request(), "  ", true);
+
+        assertNotNull(result);
+        verify(globalModel).chat(any(ChatRequest.class));
+        verifyNoInteractions(modelRouter);
     }
 
     @Test

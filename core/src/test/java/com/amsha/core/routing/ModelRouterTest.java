@@ -16,6 +16,7 @@ import java.util.Set;
 import java.util.function.Supplier;
 
 import com.amsha.core.agent.role.AgentGroupRegistry;
+import com.amsha.core.scope.WorkspaceContext;
 import com.amsha.llm.api.AgentChatModelProvider;
 import com.amsha.llm.api.AgentLlmConfig;
 import com.amsha.llm.api.ChatModelCreationPort;
@@ -251,5 +252,42 @@ class ModelRouterTest {
         ChatModel result = router.resolve("coder");
 
         assertSame(groqModel, result);
+    }
+
+    @Test
+    void lightweightGoal_downgradesToGlobalProviderConfig() throws Exception {
+        List<ModelRouter.ModelConfig> configs =
+                ScopedValue.where(WorkspaceContext.RAW_USER_GOAL, "hi").call(() -> router.resolveConfigs("coder"));
+
+        assertEquals(1, configs.size());
+        assertEquals(new ModelRouter.ModelConfig("groq", "llama-3.3-70b"), configs.get(0));
+    }
+
+    @Test
+    void resolveConfigs_bypassLightweightDowngrade_skipsDowngradeBranch() throws Exception {
+        // No persona/group configs exist in this harness: bypass must skip the lightweight
+        // downgrade branch and land on the persona→group→global path (same global fallback here).
+        List<ModelRouter.ModelConfig> configs = ScopedValue.where(WorkspaceContext.RAW_USER_GOAL, "hi")
+                .call(() -> router.resolveConfigs("coder", true));
+
+        assertEquals(1, configs.size());
+        assertEquals(new ModelRouter.ModelConfig("groq", "llama-3.3-70b"), configs.get(0));
+    }
+
+    @Test
+    void hasDistinctEscalationTier_singleTierDeployment_returnsFalse() throws Exception {
+        boolean distinct = ScopedValue.where(WorkspaceContext.RAW_USER_GOAL, "hi")
+                .call(() -> router.hasDistinctEscalationTier("coder"));
+
+        assertFalse(distinct, "single-tier deployment has nothing to escalate to");
+    }
+
+    @Test
+    void hasDistinctEscalationTier_resolutionFailure_returnsFalse() {
+        when(groupRegistry.findByMember(anyString())).thenThrow(new RuntimeException("registry down"));
+
+        boolean distinct = router.hasDistinctEscalationTier("coder");
+
+        assertFalse(distinct, "routing-metadata failures must read as 'no escalation tier'");
     }
 }

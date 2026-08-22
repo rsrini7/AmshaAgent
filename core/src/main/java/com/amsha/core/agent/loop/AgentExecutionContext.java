@@ -38,9 +38,11 @@ public final class AgentExecutionContext {
     private volatile CheckpointStatus lastCheckpointStatus;
     private volatile boolean statusDirty = true;
     private volatile boolean forceFinishRetry = false;
+    private volatile boolean escalateNextReasoningCall = false;
     private int truncationRetryCount = 0;
     private int answerQualityRetryCount = 0;
     private int checkpointRestoreOffset = 0;
+    private int memorySynthesisCorrections = 0;
 
     public AgentExecutionContext(
             String sessionId,
@@ -168,6 +170,23 @@ public final class AgentExecutionContext {
         return answerQualityRetryCount;
     }
 
+    /** Increments and returns the count of blocked memory-synthesis FINISH attempts this goal. */
+    public int bumpMemorySynthesisCorrections() {
+        return ++memorySynthesisCorrections;
+    }
+
+    /** Requests that the next reasoning call bypass lightweight model downgrading (one-shot). */
+    public void requestReasoningEscalation() {
+        this.escalateNextReasoningCall = true;
+    }
+
+    /** Reads and clears the one-shot reasoning-escalation request. */
+    public boolean consumeReasoningEscalation() {
+        boolean requested = escalateNextReasoningCall;
+        escalateNextReasoningCall = false;
+        return requested;
+    }
+
     public int getCheckpointRestoreOffset() {
         return checkpointRestoreOffset;
     }
@@ -229,6 +248,8 @@ public final class AgentExecutionContext {
         copy.truncationRetryCount = this.truncationRetryCount;
         copy.checkpointRestoreOffset = this.checkpointRestoreOffset;
         copy.forceFinishRetry = false;
+        copy.escalateNextReasoningCall = false;
+        copy.memorySynthesisCorrections = 0;
         copy.lastCheckpointStatus = null;
         copy.statusDirty = true;
         return copy;

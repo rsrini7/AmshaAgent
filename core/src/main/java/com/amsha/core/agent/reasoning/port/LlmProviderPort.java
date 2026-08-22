@@ -31,4 +31,19 @@ public interface LlmProviderPort {
      * @throws com.amsha.llm.api.error.LlmProviderException if the provider throws an error.
      */
     ChatResponse nextStep(ChatRequest request, String agentRole);
+
+    /**
+     * Executes a chat request for the given agent role, optionally bypassing lightweight-goal
+     * model downgrading for exactly this call (memory-synthesis escalation).
+     *
+     * @param request                   The chat request.
+     * @param agentRole                 The agent role ID used for per-persona model routing.
+     * @param bypassLightweightRouting  When true, persona/group/global resolution applies even
+     *                                  if the goal was classified as lightweight.
+     * @return The chat response.
+     * @throws com.amsha.llm.api.error.LlmProviderException if the provider throws an error.
+     */
+    default ChatResponse nextStep(ChatRequest request, String agentRole, boolean bypassLightweightRouting) {
+        return nextStep(request, agentRole);
+    }
 }

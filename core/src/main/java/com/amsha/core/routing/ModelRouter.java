@@ -106,17 +106,44 @@ public class ModelRouter {
      * Otherwise resolution is the legacy persona → group → global path.
      */
     public ChatModel resolve(String agentRole) {
-        if (profileRoutingEnabled) {
+        return resolve(agentRole, false);
+    }
+
+    /**
+     * Resolves the ChatModel for a given agent role, optionally bypassing the lightweight-goal
+     * downgrade for exactly this call (memory-synthesis escalation: one stronger-model pass
+     * after repeated failed cheap-model synthesis).
+     */
+    public ChatModel resolve(String agentRole, boolean bypassLightweightDowngrade) {
+        if (profileRoutingEnabled && !bypassLightweightDowngrade) {
             ChatModel profiled = resolveProfileRouted(agentRole);
             if (profiled != null) {
                 return profiled;
             }
         }
-        var configs = resolveConfigs(agentRole);
+        var configs = resolveConfigs(agentRole, bypassLightweightDowngrade);
         if (configs.isEmpty()) {
             return getOrCreateModel(globalProvider, globalModel.orElse(""));
         }
         return buildModelFromConfigs(configs);
+    }
+
+    /**
+     * Returns true when bypassing the lightweight downgrade would resolve a different primary
+     * provider/model than the downgrade path — i.e. a genuinely higher tier exists to escalate to.
+     */
+    public boolean hasDistinctEscalationTier(String agentRole) {
+        try {
+            var downgraded = resolveConfigs(agentRole, false);
+            var escalated = resolveConfigs(agentRole, true);
+            if (downgraded.isEmpty() || escalated.isEmpty()) return false;
+            var b = downgraded.get(0);
+            var e = escalated.get(0);
+            return !b.provider().equals(e.provider()) || !b.model().equals(e.model());
+        } catch (RuntimeException ignored) {
+            // Routing metadata is best-effort; treat resolution failures as "no escalation tier".
+            return false;
+        }
     }
 
     /**
@@ -191,8 +218,17 @@ public class ModelRouter {
      * Returns a list — single entry for single model, multiple for fallback chain.
      */
     public List<ModelConfig> resolveConfigs(String agentRole) {
+        return resolveConfigs(agentRole, false);
+    }
+
+    /**
+     * Resolves provider+model configs for a role. When {@code bypassLightweightDowngrade} is
+     * set, the lightweight-goal downgrade to the low-cost global provider is skipped so the
+     * persona/group/global (full-strength) path applies — used by memory-synthesis escalation.
+     */
+    public List<ModelConfig> resolveConfigs(String agentRole, boolean bypassLightweightDowngrade) {
         String goal = WorkspaceContext.RAW_USER_GOAL.isBound() ? WorkspaceContext.RAW_USER_GOAL.get() : null;
-        if (goal != null && isLightweightTask(goal)) {
+        if (!bypassLightweightDowngrade && goal != null && isLightweightTask(goal)) {
             log.infof(
                     "[MODEL-ROUTER] Goal classified as lightweight. Routing to default low-cost provider: %s",
                     globalProvider);

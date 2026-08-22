@@ -154,6 +154,40 @@ class LangChainReasoningEngineTest {
     }
 
     @Test
+    void testArmedEscalationRoutesThroughThreeArgPortOverload() {
+        // Arrange: memory-synthesis escalation armed on the context — the engine must dispatch
+        // through nextStep(request, role, true) instead of the legacy 2-arg shape.
+        ChatResponse escalatedResponse = ChatResponse.builder()
+                .aiMessage(AiMessage.aiMessage("I have finished the task"))
+                .tokenUsage(new TokenUsage(10, 10))
+                .finishReason(FinishReason.STOP)
+                .build();
+        when(llmProviderPort.nextStep(any(ChatRequest.class), any(String.class), eq(Boolean.TRUE)))
+                .thenReturn(escalatedResponse);
+        when(promptBuilder.build(any(), any(), any(), any(), ArgumentMatchers.anyBoolean()))
+                .thenReturn("System Prompt");
+        when(historyAssembler.assemble(any(), any(), any())).thenReturn(List.of());
+        when(stepParser.parse(any(), any(), any()))
+                .thenReturn(ReasoningStep.pending(
+                        "I have finished the task",
+                        ReasoningStep.FINISH,
+                        Map.of("answer", "I have finished the task"),
+                        10,
+                        10));
+        AgentExecutionContext ctx = createCtx("test-session");
+        ctx.requestReasoningEscalation();
+
+        // Act
+        ReasoningStep step = reasoningEngine.nextStep(ctx, "coordinator", "who am i", List.of());
+
+        // Assert
+        assertNotNull(step);
+        verify(llmProviderPort).nextStep(any(ChatRequest.class), any(String.class), eq(Boolean.TRUE));
+        verify(llmProviderPort, never()).nextStep(any(ChatRequest.class), any(String.class));
+        assertFalse(ctx.consumeReasoningEscalation(), "flag must be consumed by the call");
+    }
+
+    @Test
     void testNextStepWithToolExecution() {
         // Arrange
         ToolExecutionRequest toolRequest = ToolExecutionRequest.builder()
