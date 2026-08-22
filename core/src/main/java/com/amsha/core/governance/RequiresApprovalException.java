@@ -2,7 +2,7 @@ package com.amsha.core.governance;
 
 import java.util.Map;
 
-import com.amsha.core.exception.AmshaException;
+import com.amsha.common.exception.AmshaException;
 
 /**
  * Exception thrown when a tool execution requires explicit human approval.

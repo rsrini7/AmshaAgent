@@ -6,9 +6,9 @@ import jakarta.inject.Inject;
 import com.amsha.core.agent.loop.CheckpointResumeHandler;
 import com.amsha.core.agent.loop.CliResultBridge;
 import com.amsha.core.agent.result.AgentResult;
-import com.amsha.core.state.CheckpointStatus;
 import com.amsha.core.state.StatefulAgentStore;
 import com.amsha.core.util.AgentResultFormatter;
+import com.amsha.persistence.api.CheckpointStatus;
 
 @Dependent
 public class ResumeResultHelper {

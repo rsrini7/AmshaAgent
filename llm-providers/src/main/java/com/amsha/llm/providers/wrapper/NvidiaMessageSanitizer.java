@@ -22,7 +22,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import com.amsha.common.util.LogUtil;
-import com.amsha.core.agent.reasoning.ToolCallJsonKeys;
+import com.amsha.llm.api.ToolCallJsonKeys;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 

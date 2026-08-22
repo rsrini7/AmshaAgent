@@ -1,6 +1,6 @@
 package com.amsha.sandbox;
 
-import com.amsha.core.exception.AmshaException;
+import com.amsha.common.exception.AmshaException;
 import com.amsha.core.sandbox.SandboxResult;
 
 /**

@@ -12,7 +12,7 @@ import com.amsha.core.api.dto.AmshaErrorResponse;
 import com.amsha.core.audit.AuditService;
 import com.amsha.core.audit.SecurityEventType;
 import com.amsha.core.scope.WorkspaceContext;
-import com.amsha.core.state.CheckpointStatus;
+import com.amsha.persistence.api.CheckpointStatus;
 
 import org.jboss.logging.Logger;
 

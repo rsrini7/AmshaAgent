@@ -8,8 +8,8 @@ import java.time.Instant;
 import java.util.List;
 
 import com.amsha.core.domain.model.AgentCheckpointRecord;
-import com.amsha.core.state.CheckpointStatus;
 import com.amsha.core.state.StatefulAgentStore;
+import com.amsha.persistence.api.CheckpointStatus;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

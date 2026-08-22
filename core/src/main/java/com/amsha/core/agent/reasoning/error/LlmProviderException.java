@@ -1,6 +1,6 @@
 package com.amsha.core.agent.reasoning.error;
 
-import com.amsha.core.exception.AmshaException;
+import com.amsha.common.exception.AmshaException;
 
 public abstract sealed class LlmProviderException extends AmshaException
         permits LlmRateLimitException,

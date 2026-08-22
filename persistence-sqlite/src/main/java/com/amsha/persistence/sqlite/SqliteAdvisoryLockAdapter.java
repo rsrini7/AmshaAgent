@@ -6,7 +6,7 @@ import jakarta.inject.Inject;
 import java.time.Instant;
 import java.util.UUID;
 
-import com.amsha.core.util.TemporalUtils;
+import com.amsha.common.util.TemporalUtils;
 import com.amsha.persistence.api.AdvisoryLockPort;
 import com.amsha.persistence.sqlite.jdbi.LockJdbiDao;
 

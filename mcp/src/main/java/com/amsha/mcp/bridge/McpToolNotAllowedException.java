@@ -1,6 +1,6 @@
 package com.amsha.mcp.bridge;
 
-import com.amsha.core.exception.AmshaException;
+import com.amsha.common.exception.AmshaException;
 
 public class McpToolNotAllowedException extends AmshaException {
     public McpToolNotAllowedException(String message) {

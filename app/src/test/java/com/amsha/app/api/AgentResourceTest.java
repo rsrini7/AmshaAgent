@@ -26,10 +26,10 @@ import com.amsha.core.domain.model.AgentCheckpoint;
 import com.amsha.core.lifecycle.SessionHeartbeatTracker;
 import com.amsha.core.pipeline.TurnDispatchResult;
 import com.amsha.core.pipeline.TurnDispatchService;
-import com.amsha.core.state.CheckpointStatus;
 import com.amsha.core.state.StatefulAgentStore;
 import com.amsha.persistence.api.CheckpointCrudPort;
 import com.amsha.persistence.api.CheckpointDto;
+import com.amsha.persistence.api.CheckpointStatus;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

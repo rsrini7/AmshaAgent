@@ -8,10 +8,10 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
-import com.amsha.core.routing.ModelCacheInvalidator;
 import com.amsha.persistence.api.LlmConnectionDto;
 import com.amsha.persistence.api.LlmConnectionSecretRefDto;
 import com.amsha.persistence.api.LlmProfileStorePort;
+import com.amsha.persistence.api.ModelCacheInvalidationPort;
 import com.amsha.persistence.api.ModelProfileDto;
 import com.amsha.persistence.api.ModelRouteAssignmentDto;
 import com.amsha.persistence.api.WorkspaceConnectionGrantDto;
@@ -31,10 +31,10 @@ import io.quarkus.arc.properties.IfBuildProperty;
 public class SqliteLlmProfileStoreAdapter implements LlmProfileStorePort, WorkspaceConnectionGrantStorePort {
 
     private final Jdbi jdbi;
-    private final ModelCacheInvalidator cacheInvalidator;
+    private final ModelCacheInvalidationPort cacheInvalidator;
 
     @Inject
-    public SqliteLlmProfileStoreAdapter(Jdbi jdbi, @Nullable ModelCacheInvalidator cacheInvalidator) {
+    public SqliteLlmProfileStoreAdapter(Jdbi jdbi, @Nullable ModelCacheInvalidationPort cacheInvalidator) {
         this.jdbi = jdbi;
         this.cacheInvalidator = cacheInvalidator;
     }

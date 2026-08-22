@@ -8,8 +8,8 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
-import com.amsha.core.state.CronStatus;
 import com.amsha.persistence.api.AgentCronDto;
+import com.amsha.persistence.api.CronStatus;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;

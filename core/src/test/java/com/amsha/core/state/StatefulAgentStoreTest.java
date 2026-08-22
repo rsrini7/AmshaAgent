@@ -15,6 +15,7 @@ import com.amsha.core.agent.role.ToolCapability;
 import com.amsha.core.audit.AuditService;
 import com.amsha.core.domain.model.AgentCheckpoint;
 import com.amsha.core.scope.WorkspaceScopeHolder;
+import com.amsha.persistence.api.CheckpointStatus;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;

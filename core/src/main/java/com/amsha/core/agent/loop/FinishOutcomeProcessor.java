@@ -6,6 +6,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.regex.Pattern;
 
+import com.amsha.common.util.HtmlArtifactUtil;
 import com.amsha.core.agent.AgentSentinels;
 import com.amsha.core.agent.IntentClassificationService;
 import com.amsha.core.agent.reasoning.ReasoningStep;
@@ -16,7 +17,6 @@ import com.amsha.core.governance.RateLimitTracker;
 import com.amsha.core.routing.InfiniteLoopChatModel;
 import com.amsha.core.tools.CodeLanguageDetector;
 import com.amsha.core.tools.ToolRegistry;
-import com.amsha.core.util.HtmlArtifactUtil;
 import com.amsha.core.util.TextPatternUtils;
 
 import org.apache.commons.text.StringEscapeUtils;

@@ -8,7 +8,7 @@ import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.UUID;
 
-import com.amsha.core.util.TemporalUtils;
+import com.amsha.common.util.TemporalUtils;
 import com.amsha.persistence.api.CheckpointDto;
 import com.amsha.persistence.api.CheckpointStorePort;
 import com.amsha.persistence.sqlite.jdbi.CheckpointJdbiDao;

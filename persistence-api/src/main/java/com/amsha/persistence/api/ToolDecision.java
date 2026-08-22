@@ -1,4 +1,4 @@
-package com.amsha.core.state;
+package com.amsha.persistence.api;
 
 /**
  * Represents the human-in-the-loop decision state for a single tool in a batch.

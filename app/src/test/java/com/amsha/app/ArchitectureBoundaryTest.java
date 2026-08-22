@@ -15,6 +15,16 @@ import com.tngtech.archunit.lang.ArchRule;
 /**
  * Architectural boundary enforcement via ArchUnit.
  * Matches Tier 2-3 hardening requirements.
+ *
+ * <p>Two-tier boundary policy (extract-core-subsystems, ADR §2.1/§4.1):
+ * <ul>
+ *   <li><b>API tier</b> ({@code llm-provider-api}, {@code persistence-api}, {@code channel-api}, and future
+ *       {@code tool-api}/{@code classifier-api}/{@code security-api}): zero {@code com.amsha.core} imports.</li>
+ *   <li><b>Impl tier</b> ({@code sandbox}, {@code tools-builtin}, future {@code amsha-security}/
+ *       {@code amsha-skills}): may depend on core when consuming core services; core must never import an
+ *       impl module. {@code com.amsha.memory} is the exempted zero-core impl consumed by core
+ *       (legal core → memory edge).</li>
+ * </ul>
  */
 @AnalyzeClasses(packages = "com.amsha", importOptions = ImportOption.DoNotIncludeTests.class)
 public class ArchitectureBoundaryTest {
@@ -168,5 +178,50 @@ public class ArchitectureBoundaryTest {
             .should()
             .dependOnClassesThat()
             .resideInAPackage("com.amsha.tools.builtin..")
+            .allowEmptyShould(true);
+
+    // 16. API tier: future api modules must NOT depend on com.amsha.core..
+    //     (vacuously green until the modules exist; becomes meaningful in Issues 04-06)
+    @ArchTest
+    static final ArchRule apiModulesShouldNotImportCore = noClasses()
+            .that()
+            .resideInAnyPackage("com.amsha.tool.api..", "com.amsha.classifier.api..", "com.amsha.security.api..")
+            .should()
+            .dependOnClassesThat()
+            .resideInAPackage("com.amsha.core..")
+            .allowEmptyShould(true);
+
+    // 17. Impl tier: com.amsha.core does NOT import the amsha-security impl
+    //     (vacuously green until Issue 06 creates it; com.amsha.memory is exempt per ADR §4.1 rev 4)
+    @ArchTest
+    static final ArchRule coreShouldNotImportSecurityImpl = noClasses()
+            .that()
+            .resideInAPackage("com.amsha.core..")
+            .should()
+            .dependOnClassesThat()
+            .resideInAPackage("com.amsha.security..")
+            .allowEmptyShould(true);
+
+    // 18. Impl tier: com.amsha.core does NOT import the amsha-skills machinery
+    //     (vacuously green until Issue 08 creates it; contracts stay in core.skill)
+    @ArchTest
+    static final ArchRule coreShouldNotImportSkillsImpl = noClasses()
+            .that()
+            .resideInAPackage("com.amsha.core..")
+            .should()
+            .dependOnClassesThat()
+            .resideInAPackage("com.amsha.skills..")
+            .allowEmptyShould(true);
+
+    // 19. Impl tier: persistence store implementations must NOT depend on core
+    //     (§5 — persistence knows only persistence-api; activated with Issue 02)
+    @ArchTest
+    static final ArchRule persistenceImplsShouldNotImportCore = noClasses()
+            .that()
+            .resideInAnyPackage(
+                    "com.amsha.persistence.sqlite..", "com.amsha.persistence.fs..", "com.amsha.persistence.postgres..")
+            .should()
+            .dependOnClassesThat()
+            .resideInAPackage("com.amsha.core..")
             .allowEmptyShould(true);
 }

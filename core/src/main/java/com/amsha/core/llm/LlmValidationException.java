@@ -1,6 +1,6 @@
 package com.amsha.core.llm;
 
-import com.amsha.core.exception.AmshaException;
+import com.amsha.common.exception.AmshaException;
 
 public class LlmValidationException extends AmshaException {
     public LlmValidationException(String msg) {

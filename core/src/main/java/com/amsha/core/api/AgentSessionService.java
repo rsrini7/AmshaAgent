@@ -43,10 +43,10 @@ import com.amsha.core.scope.WorkspaceContext;
 import com.amsha.core.scope.WorkspaceScopeHolder;
 import com.amsha.core.security.AutonomyLevel;
 import com.amsha.core.session.SessionCatalogService;
-import com.amsha.core.state.CheckpointStatus;
 import com.amsha.core.state.StatefulAgentStore;
-import com.amsha.core.state.ToolDecision;
 import com.amsha.core.util.MdcManaged;
+import com.amsha.persistence.api.CheckpointStatus;
+import com.amsha.persistence.api.ToolDecision;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;

@@ -9,6 +9,7 @@ import com.amsha.channel.api.hitl.PendingApprovalChecker;
 import com.amsha.core.agent.reasoning.ReasoningStep;
 import com.amsha.core.domain.model.AgentCheckpoint;
 import com.amsha.core.security.AutonomyLevel;
+import com.amsha.persistence.api.CheckpointStatus;
 
 /**
  * Contract for persisting and retrieving agent reasoning checkpoints.

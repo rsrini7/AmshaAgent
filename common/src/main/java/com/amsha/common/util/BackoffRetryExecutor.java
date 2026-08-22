@@ -1,10 +1,8 @@
-package com.amsha.core.util;
+package com.amsha.common.util;
 
 import java.util.concurrent.Callable;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.function.Predicate;
-
-import com.amsha.common.util.LogUtil;
 
 import org.jboss.logging.Logger;
 

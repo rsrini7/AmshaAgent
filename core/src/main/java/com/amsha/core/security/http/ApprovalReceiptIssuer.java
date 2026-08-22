@@ -16,7 +16,7 @@ import com.amsha.core.audit.AuditService;
 import com.amsha.core.audit.SecurityEventType;
 import com.amsha.core.security.OutboundPurpose;
 import com.amsha.core.state.StatefulAgentStore;
-import com.amsha.core.state.ToolDecision;
+import com.amsha.persistence.api.ToolDecision;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 

@@ -10,6 +10,7 @@ import com.amsha.core.config.TieredMemoryConfig;
 import com.amsha.persistence.api.ArchivalMemoryStorePort;
 import com.amsha.persistence.api.CoreMemoryStorePort;
 import com.amsha.persistence.api.RecallMemoryStorePort;
+import com.amsha.persistence.api.TieredBackend;
 
 /**
  * CDI producer that resolves the active tiered memory backends once at startup.

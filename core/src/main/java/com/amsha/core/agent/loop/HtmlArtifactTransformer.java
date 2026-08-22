@@ -2,8 +2,8 @@ package com.amsha.core.agent.loop;
 
 import jakarta.enterprise.context.ApplicationScoped;
 
+import com.amsha.common.util.HtmlArtifactUtil;
 import com.amsha.core.agent.role.ToolCapability;
-import com.amsha.core.util.HtmlArtifactUtil;
 
 /**
  * Collapses generated HTML artifacts from shell tools into a short browser-preview notice.

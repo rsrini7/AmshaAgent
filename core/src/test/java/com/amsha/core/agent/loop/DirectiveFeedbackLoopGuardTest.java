@@ -20,8 +20,8 @@ import com.amsha.core.governance.BudgetExceededException;
 import com.amsha.core.memory.tiered.DirectiveFeedbackPort;
 import com.amsha.core.scope.WorkspaceContext;
 import com.amsha.core.security.AutonomyLevel;
-import com.amsha.core.state.CheckpointStatus;
 import com.amsha.core.state.StatefulAgentStore;
+import com.amsha.persistence.api.CheckpointStatus;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

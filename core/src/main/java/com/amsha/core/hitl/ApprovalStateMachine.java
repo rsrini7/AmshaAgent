@@ -19,10 +19,10 @@ import com.amsha.core.agent.loop.CheckpointResumeHandler;
 import com.amsha.core.domain.model.AgentCheckpoint;
 import com.amsha.core.event.DomainEventBus;
 import com.amsha.core.event.EventTypeCatalog;
-import com.amsha.core.state.CheckpointStatus;
 import com.amsha.core.state.StatefulAgentStore;
-import com.amsha.core.state.ToolDecision;
 import com.amsha.core.util.BatchDecisionUtil;
+import com.amsha.persistence.api.CheckpointStatus;
+import com.amsha.persistence.api.ToolDecision;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 

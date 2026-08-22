@@ -6,10 +6,10 @@ import jakarta.inject.Inject;
 import java.util.List;
 import java.util.Optional;
 
-import com.amsha.core.memory.tiered.TieredBackend;
 import com.amsha.persistence.api.ArchivalChunkDto;
 import com.amsha.persistence.api.ArchivalMemoryStorePort;
 import com.amsha.persistence.api.ArchivalSearchQuery;
+import com.amsha.persistence.api.TieredBackend;
 import com.amsha.persistence.postgres.jdbi.ArchivalMemoryJdbiDao;
 
 import org.jboss.logging.Logger;

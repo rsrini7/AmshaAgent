@@ -2,6 +2,8 @@ package com.amsha.core.memory.tiered;
 
 import jakarta.enterprise.util.AnnotationLiteral;
 
+import com.amsha.persistence.api.TieredBackend;
+
 /**
  * Annotation literal for programmatic CDI-qualified selection of a
  * {@code TieredMemoryStorePort} backend.

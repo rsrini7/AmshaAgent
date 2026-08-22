@@ -24,6 +24,7 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import com.amsha.common.util.HtmlArtifactUtil;
 import com.amsha.core.agent.role.ToolCapability;
 import com.amsha.core.agent.role.ToolMetadata;
 import com.amsha.core.audit.AuditService;
@@ -34,7 +35,6 @@ import com.amsha.core.tools.CodeLanguageDetector;
 import com.amsha.core.tools.OutputTruncator;
 import com.amsha.core.tools.ToolExecutionContext;
 import com.amsha.core.tools.ToolResponse;
-import com.amsha.core.util.HtmlArtifactUtil;
 import com.amsha.sandbox.DirectExecutor;
 import com.amsha.sandbox.ToolExecutionException;
 

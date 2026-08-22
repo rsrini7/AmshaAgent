@@ -8,10 +8,10 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
-import com.amsha.core.routing.ModelCacheInvalidator;
 import com.amsha.persistence.api.LlmConnectionDto;
 import com.amsha.persistence.api.LlmConnectionSecretRefDto;
 import com.amsha.persistence.api.LlmProfileStorePort;
+import com.amsha.persistence.api.ModelCacheInvalidationPort;
 import com.amsha.persistence.api.ModelProfileDto;
 import com.amsha.persistence.api.ModelRouteAssignmentDto;
 import com.amsha.persistence.api.WorkspaceConnectionGrantDto;
@@ -37,7 +37,7 @@ public class FsLlmProfileStoreAdapter implements LlmProfileStorePort, WorkspaceC
 
     @Inject
     @Nullable
-    ModelCacheInvalidator cacheInvalidator;
+    ModelCacheInvalidationPort cacheInvalidator;
 
     private void fireConnectionChanged(@Nullable String connectionId) {
         if (cacheInvalidator != null && connectionId != null) {

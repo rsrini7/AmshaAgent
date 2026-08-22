@@ -14,6 +14,7 @@ import java.nio.file.attribute.BasicFileAttributes;
 import java.util.concurrent.ConcurrentHashMap;
 
 import com.amsha.common.util.LogUtil;
+import com.amsha.common.util.PathSanitizer;
 import com.amsha.core.agent.loop.CliResultBridge;
 import com.amsha.core.agent.loop.ToolInvocationGuard;
 import com.amsha.core.audit.AuditObserver;
@@ -21,7 +22,6 @@ import com.amsha.core.governance.GovernanceStrategy;
 import com.amsha.core.scope.WorkspaceScopeContext;
 import com.amsha.core.scope.WorkspaceScoped;
 import com.amsha.core.state.StatefulAgentStore;
-import com.amsha.core.util.PathSanitizer;
 import com.amsha.persistence.api.CheckpointStorePort;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;

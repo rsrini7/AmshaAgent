@@ -1,4 +1,4 @@
-package com.amsha.core.state;
+package com.amsha.persistence.api;
 
 import java.util.Locale;
 

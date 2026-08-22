@@ -38,9 +38,9 @@ import com.amsha.core.domain.model.AgentCheckpoint;
 import com.amsha.core.domain.model.AgentCheckpointRecord;
 import com.amsha.core.pipeline.MessageContext;
 import com.amsha.core.scope.WorkspaceScopeHolder;
-import com.amsha.core.state.CheckpointStatus;
 import com.amsha.core.state.StatefulAgentStore;
 import com.amsha.persistence.api.AgentCronDto;
+import com.amsha.persistence.api.CheckpointStatus;
 import com.amsha.persistence.api.CronStorePort;
 
 import org.junit.jupiter.api.AfterEach;

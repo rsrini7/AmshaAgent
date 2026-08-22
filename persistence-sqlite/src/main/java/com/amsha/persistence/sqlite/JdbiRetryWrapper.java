@@ -5,7 +5,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import java.util.concurrent.Callable;
 import java.util.function.Predicate;
 
-import com.amsha.core.util.BackoffRetryExecutor;
+import com.amsha.common.util.BackoffRetryExecutor;
 
 import org.jboss.logging.Logger;
 import org.jdbi.v3.core.statement.UnableToExecuteStatementException;

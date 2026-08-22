@@ -1,5 +1,7 @@
 package com.amsha.core.memory.tiered;
 
+import com.amsha.persistence.api.TieredBackend;
+
 /**
  * Supported tiered memory backends.
  * Used by {@link TieredMemoryBackendSelector} and {@link TieredBackend} qualifier.

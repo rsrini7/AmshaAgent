@@ -10,8 +10,8 @@ import java.util.stream.Collectors;
 
 import com.amsha.common.util.LogUtil;
 import com.amsha.core.agent.loop.AnswerGuardStrategy.LeakedToolCall;
-import com.amsha.core.agent.reasoning.ToolCallJsonKeys;
 import com.amsha.core.tools.ToolRegistry;
+import com.amsha.llm.api.ToolCallJsonKeys;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 

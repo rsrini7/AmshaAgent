@@ -279,6 +279,10 @@ domain model.
   (protected by seeded/admin-edit invariants); reflex/pipeline extraction (core's spine).
 - Role/registry machinery extraction (`RoleDefinition`, `RoleRegistry`, `CapabilityRegistry`) — required for any
   future zero-core `amsha-skills`; blocked by persona/escalation invariants this round.
+- **Markdown rendering for chat channels**: the deleted core `MarkdownService` (sole commonmark user) was never
+  wired to Telegram or any channel — `channel-telegram` renders MarkdownV2 via its own
+  `TelegramMarkdownV2Renderer` with plain-text fallback. If richer markdown conversion is wanted later, scope a
+  parser dependency to the channel module only; revisit after this program completes.
 
 ## 6. Verification Checklist (program-level)
 

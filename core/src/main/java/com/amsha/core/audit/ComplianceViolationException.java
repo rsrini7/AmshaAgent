@@ -1,6 +1,6 @@
 package com.amsha.core.audit;
 
-import com.amsha.core.exception.AmshaException;
+import com.amsha.common.exception.AmshaException;
 
 /**
  * Thrown when a CRITICAL (MANDATORY) audit event could not be persisted

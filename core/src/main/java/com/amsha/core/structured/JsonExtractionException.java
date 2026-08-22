@@ -1,6 +1,6 @@
 package com.amsha.core.structured;
 
-import com.amsha.core.exception.AmshaException;
+import com.amsha.common.exception.AmshaException;
 
 /**
  * Thrown when JSON extraction fails despite permissive parsing.

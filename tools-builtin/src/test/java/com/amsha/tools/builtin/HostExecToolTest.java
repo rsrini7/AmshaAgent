@@ -18,6 +18,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 
+import com.amsha.common.util.HtmlArtifactUtil;
 import com.amsha.core.agent.role.ToolCapability;
 import com.amsha.core.audit.AuditService;
 import com.amsha.core.scope.WorkspaceContext;
@@ -25,7 +26,6 @@ import com.amsha.core.security.AutonomyLevel;
 import com.amsha.core.security.ToolOperation;
 import com.amsha.core.tools.ToolExecutionContext;
 import com.amsha.core.tools.ToolResponse;
-import com.amsha.core.util.HtmlArtifactUtil;
 import com.amsha.sandbox.DirectExecutor;
 import com.amsha.sandbox.ToolExecutionException;
 

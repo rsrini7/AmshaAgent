@@ -13,6 +13,7 @@ import com.amsha.core.audit.AuditService;
 import com.amsha.core.audit.SecurityEventType;
 import com.amsha.core.security.AutonomyLevel;
 import com.amsha.persistence.api.CheckpointDto;
+import com.amsha.persistence.api.CheckpointStatus;
 import com.amsha.persistence.api.CheckpointStorePort;
 
 import org.junit.jupiter.api.DisplayName;

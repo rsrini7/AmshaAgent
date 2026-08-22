@@ -38,9 +38,9 @@ import com.amsha.core.pipeline.TurnDispatchService;
 import com.amsha.core.scope.WorkspaceContext;
 import com.amsha.core.scope.WorkspaceScopeHolder;
 import com.amsha.core.security.AutonomyLevel;
-import com.amsha.core.state.CheckpointStatus;
 import com.amsha.core.state.StatefulAgentStore;
 import com.amsha.core.util.MdcKeys;
+import com.amsha.persistence.api.CheckpointStatus;
 
 import org.jboss.logging.Logger;
 import org.jboss.logging.MDC;

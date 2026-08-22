@@ -1,4 +1,4 @@
-package com.amsha.core.memory.tiered;
+package com.amsha.persistence.api;
 
 import static java.lang.annotation.ElementType.*;
 

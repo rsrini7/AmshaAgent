@@ -5,8 +5,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import java.lang.reflect.Field;
 import java.util.Map;
 
+import com.amsha.common.util.HtmlArtifactUtil;
 import com.amsha.core.tools.OutputTruncator;
-import com.amsha.core.util.HtmlArtifactUtil;
 
 import org.junit.jupiter.api.Test;
 

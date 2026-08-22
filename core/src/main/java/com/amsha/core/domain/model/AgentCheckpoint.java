@@ -4,7 +4,7 @@ import java.time.Instant;
 import java.util.List;
 
 import com.amsha.core.security.AutonomyLevel;
-import com.amsha.core.state.CheckpointStatus;
+import com.amsha.persistence.api.CheckpointStatus;
 
 public interface AgentCheckpoint {
 

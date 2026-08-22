@@ -1,6 +1,6 @@
 package com.amsha.sandbox;
 
-import com.amsha.core.exception.AmshaException;
+import com.amsha.common.exception.AmshaException;
 
 public class ToolExecutionException extends AmshaException {
     private final int exitCode;

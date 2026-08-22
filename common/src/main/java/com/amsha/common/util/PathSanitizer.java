@@ -1,4 +1,4 @@
-package com.amsha.core.util;
+package com.amsha.common.util;
 
 import java.util.regex.Pattern;
 

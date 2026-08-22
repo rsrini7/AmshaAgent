@@ -1,4 +1,4 @@
-package com.amsha.core.agent.reasoning;
+package com.amsha.llm.api;
 
 /**
  * Shared JSON field name constants for tool call parsing.

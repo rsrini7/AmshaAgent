@@ -13,8 +13,8 @@ import com.amsha.core.lifecycle.WorkspaceManager;
 import com.amsha.core.message.UserMessages;
 import com.amsha.core.pipeline.MessageContext;
 import com.amsha.core.scope.WorkspaceContext;
-import com.amsha.core.state.CheckpointStatus;
 import com.amsha.core.state.StatefulAgentStore;
+import com.amsha.persistence.api.CheckpointStatus;
 import com.amsha.persistence.api.CompactionStorePort;
 import com.amsha.persistence.api.CronStorePort;
 

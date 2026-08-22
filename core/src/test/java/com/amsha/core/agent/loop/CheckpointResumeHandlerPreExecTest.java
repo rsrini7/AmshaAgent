@@ -23,13 +23,13 @@ import com.amsha.core.domain.model.AgentCheckpointRecord;
 import com.amsha.core.pipeline.MessageContext;
 import com.amsha.core.scope.WorkspaceContext;
 import com.amsha.core.security.AutonomyLevel;
-import com.amsha.core.state.CheckpointStatus;
 import com.amsha.core.state.StatefulAgentStore;
-import com.amsha.core.state.ToolDecision;
 import com.amsha.core.tools.ToolRegistry;
 import com.amsha.core.tools.ToolResponse;
 import com.amsha.llm.api.StructuredOutputMode;
+import com.amsha.persistence.api.CheckpointStatus;
 import com.amsha.persistence.api.CronStorePort;
+import com.amsha.persistence.api.ToolDecision;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.junit.jupiter.api.BeforeEach;

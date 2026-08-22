@@ -16,10 +16,10 @@ import com.amsha.core.domain.model.AgentCheckpoint;
 import com.amsha.core.domain.model.AgentCheckpointRecord;
 import com.amsha.core.governance.ApprovalFrame;
 import com.amsha.core.security.AutonomyLevel;
-import com.amsha.core.state.CheckpointStatus;
 import com.amsha.core.state.StatefulAgentStore;
-import com.amsha.core.state.ToolDecision;
 import com.amsha.core.tools.ToolResponse;
+import com.amsha.persistence.api.CheckpointStatus;
+import com.amsha.persistence.api.ToolDecision;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.junit.jupiter.api.BeforeEach;

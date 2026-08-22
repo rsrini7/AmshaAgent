@@ -8,8 +8,8 @@ import com.amsha.core.agent.role.ToolCapability;
 import com.amsha.core.domain.model.AgentCheckpoint;
 import com.amsha.core.domain.model.AgentCheckpointRecord;
 import com.amsha.core.domain.model.CheckpointRecord;
-import com.amsha.core.state.CheckpointStatus;
 import com.amsha.persistence.api.CheckpointDto;
+import com.amsha.persistence.api.CheckpointStatus;
 
 import org.junit.jupiter.api.Test;
 

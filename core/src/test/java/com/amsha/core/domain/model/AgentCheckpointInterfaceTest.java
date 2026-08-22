@@ -5,8 +5,8 @@ import static org.junit.jupiter.api.Assertions.*;
 import java.time.Instant;
 
 import com.amsha.core.security.AutonomyLevel;
-import com.amsha.core.state.CheckpointStatus;
 import com.amsha.persistence.api.CheckpointDto;
+import com.amsha.persistence.api.CheckpointStatus;
 
 import org.junit.jupiter.api.Test;
 

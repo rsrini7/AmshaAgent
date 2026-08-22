@@ -15,9 +15,9 @@ import java.util.concurrent.atomic.AtomicLong;
 
 import com.amsha.common.util.LogUtil;
 import com.amsha.core.domain.model.AgentCheckpoint;
-import com.amsha.core.state.CheckpointStatus;
 import com.amsha.core.state.StatefulAgentStore;
 import com.amsha.core.util.DatabaseSafetyGuard;
+import com.amsha.persistence.api.CheckpointStatus;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;

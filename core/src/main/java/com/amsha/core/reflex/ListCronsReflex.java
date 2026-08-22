@@ -15,7 +15,7 @@ import com.amsha.core.domain.model.AgentCronRecord;
 import com.amsha.core.message.UserMessages;
 import com.amsha.core.pipeline.MessageContext;
 import com.amsha.core.scope.WorkspaceScopeHolder;
-import com.amsha.core.state.CronStatus;
+import com.amsha.persistence.api.CronStatus;
 import com.amsha.persistence.api.CronStorePort;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;

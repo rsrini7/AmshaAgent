@@ -1,4 +1,4 @@
-package com.amsha.core.exception;
+package com.amsha.common.exception;
 
 public abstract class AmshaException extends RuntimeException {
 

@@ -6,8 +6,8 @@ import java.util.Objects;
 
 import com.amsha.core.api.dto.RunAgentRequest;
 import com.amsha.core.security.AutonomyLevel;
-import com.amsha.core.state.CheckpointStatus;
 import com.amsha.llm.api.StructuredOutputMode;
+import com.amsha.persistence.api.CheckpointStatus;
 
 /**
  * Immutable context for an agent loop execution.
