@@ -28,10 +28,24 @@
             <version>${project.version}</version>
         </dependency>
 
+        <!-- Shared utilities (LogUtil, SecretRedactor) — persistence knows only common + persistence-api -->
+        <dependency>
+            <groupId>com.amsha</groupId>
+            <artifactId>amsha-common</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
+        <!-- LangChain4j embedding types for vector stores -->
+        <dependency>
+            <groupId>dev.langchain4j</groupId>
+            <artifactId>langchain4j-core</artifactId>
+        </dependency>
+
         <dependency>
             <groupId>com.amsha</groupId>
             <artifactId>amsha-core</artifactId>
             <version>${project.version}</version>
+            <scope>test</scope>
         </dependency>
 
         <dependency>

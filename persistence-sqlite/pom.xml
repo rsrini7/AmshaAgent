@@ -29,11 +29,25 @@
             <version>${project.version}</version>
         </dependency>
 
-        <!-- Amsha Agent core domain (entities + core logic) -->
+        <!-- Shared utilities (LogUtil, SecretRedactor) — persistence knows only common + persistence-api -->
+        <dependency>
+            <groupId>com.amsha</groupId>
+            <artifactId>amsha-common</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
+        <!-- LangChain4j embedding types for GlobalKnowledgeBase -->
+        <dependency>
+            <groupId>dev.langchain4j</groupId>
+            <artifactId>langchain4j-core</artifactId>
+        </dependency>
+
+        <!-- Amsha Agent core domain (test fixtures only) -->
         <dependency>
             <groupId>com.amsha</groupId>
             <artifactId>amsha-core</artifactId>
             <version>${project.version}</version>
+            <scope>test</scope>
         </dependency>
 
         <!-- Quarkus CDI -->
