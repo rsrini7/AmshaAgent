@@ -1,8 +1,9 @@
 # ADR: Extract Core Shared Surfaces and Subsystems from amsha-core
 
-- **Status**: Implemented (rev 9 — all streams complete and gated: S1–S9 extractions plus Issue 10 final
-  wiring — app wiring audit, reflection normalization, JVM CDI startup proof, full reactor green at 70.35%
-  coverage, native build + smoke PASS)
+- **Status**: Implemented (rev 10 — S1–S9 extractions plus Issue 10 final wiring all complete and gated:
+  app wiring audit, reflection normalization, JVM CDI startup proof, full reactor green at 70.35%
+  coverage, native build + smoke PASS; rev 10 post-close amendment: `tool-playwright` absorbed into
+  `tools-builtin`, module count now 28)
 - **Date**: 2026-08-22 (rev 5; originally 2026-08-21)
 - **Decision Owners**: Amsha Architecture Committee
 - **Related Invariants**: `docs/Architecture_Invariants.md` §5, §15.1–15.2, §16.1–16.3, §16.6–16.7, §20.1–20.2; `AGENTS.md` §8
@@ -86,8 +87,9 @@ jakarta, langchain4j, and two config/util types to relocate) and keeps that stri
         amsha-memory (zero-core)  │              │            amsha-security (impl: may use core
         over persistence-api      │              │             audit/observability; BouncyCastle lives here)
                    ▲              │              │                    ▲
-                   │      tools-builtin · mcp · rag · self-evolve · tool-playwright
+                   │      tools-builtin · mcp · rag · self-evolve
                    │       (consume tool-api + security-api instead of core internals)
+                   │       (rev 10: standalone tool-playwright absorbed into tools-builtin)
                    ▲
                amsha-core (state machine, reasoning, routing composites, reflex/pipeline,
                            prompt building, governance, lifecycle, audit, domain model)
@@ -304,6 +306,7 @@ domain model.
       llm-providers/mcp/onboarding vocabulary call sites. **Done (Issue 04)**.
 - [x] tools-builtin/mcp/rag/self-evolve/tool-playwright no longer import `core.tools.AgentTool`,
       `core.agent.role.ToolCapability/Metadata`, `core.agent.AgentSentinels` (S5). **Done (Issue 05)**.
+      *(Point-in-time record — standalone `tool-playwright` was absorbed into `tools-builtin` post-close, rev 10.)*
 - [x] local-ml-onnx no longer imports `core.agent.loop` classifier types (S6). **Done (Issue 06; 13 types moved,
       `ClassifierFailureMetrics` retained in core — see §8)**.
 - [x] `bcprov-jdk18on` absent from `core/pom.xml`, present only in `amsha-security` (S7); core imports no
@@ -360,6 +363,11 @@ the onboarding quarkus-jacoco agent flake (0-byte exec with green tests; observe
 re-running `./mvnw verify -pl onboarding`) deserves a dedicated investigation issue.
 
 ## 9. Revision History
+
+- **rev 10 (2026-08-23)**: Post-close amendment — standalone `tool-playwright` module absorbed into
+  `tools-builtin` (`PlaywrightCliTool` + helper relocated, package renamed; directory deleted; manifest
+  still 21 AgentTools with tools-builtin now contributing 16). Diagram and S5 checklist annotated;
+  see the Tools ADR amendment for the enumeration-level record.
 
 - **rev 9 (2026-08-23)**: Issue 10 complete — program closed. Wiring audit + register-everything
   index-dependency convention (+2 api entries); rule 16 extended to persistence-api/channel-api;

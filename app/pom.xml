@@ -334,36 +334,37 @@
       <groupId>io.quarkus</groupId>
       <artifactId>quarkus-micrometer-registry-prometheus</artifactId>
     </dependency>
-          <!-- Security vocabulary (vault interface, tool operation, autonomy) -->
-          <dependency>
-              <groupId>com.amsha</groupId>
-              <artifactId>amsha-security-api</artifactId>
-          </dependency>
-          <!-- Tool authoring contracts -->
-          <dependency>
-              <groupId>com.amsha</groupId>
-              <artifactId>amsha-tool-api</artifactId>
-          </dependency>
-          <!-- Shadow-classifier contracts (AgentResource exposes prediction enums) -->
-          <dependency>
-              <groupId>com.amsha</groupId>
-              <artifactId>amsha-classifier-api</artifactId>
-          </dependency>
-          <!-- Security implementation wiring (bootstrap issuer, dev seeder) -->
-          <dependency>
-              <groupId>com.amsha</groupId>
-              <artifactId>amsha-security</artifactId>
-          </dependency>
-          <!-- Tiered memory services (admin resources, retention scheduler) -->
-          <dependency>
-              <groupId>com.amsha</groupId>
-              <artifactId>amsha-memory</artifactId>
-          </dependency>
-          <!-- Skill loading machinery (SkillResource admin endpoints) -->
-          <dependency>
-              <groupId>com.amsha</groupId>
-              <artifactId>amsha-skills</artifactId>
-          </dependency>
+
+    <!-- Security vocabulary (vault interface, tool operation, autonomy) -->
+    <dependency>
+      <groupId>com.amsha</groupId>
+      <artifactId>amsha-security-api</artifactId>
+    </dependency>
+    <!-- Tool authoring contracts -->
+    <dependency>
+      <groupId>com.amsha</groupId>
+      <artifactId>amsha-tool-api</artifactId>
+    </dependency>
+    <!-- Shadow-classifier contracts (AgentResource exposes prediction enums) -->
+    <dependency>
+      <groupId>com.amsha</groupId>
+      <artifactId>amsha-classifier-api</artifactId>
+    </dependency>
+    <!-- Security implementation wiring (bootstrap issuer, dev seeder) -->
+    <dependency>
+      <groupId>com.amsha</groupId>
+      <artifactId>amsha-security</artifactId>
+    </dependency>
+    <!-- Tiered memory services (admin resources, retention scheduler) -->
+    <dependency>
+      <groupId>com.amsha</groupId>
+      <artifactId>amsha-memory</artifactId>
+    </dependency>
+    <!-- Skill loading machinery (SkillResource admin endpoints) -->
+    <dependency>
+      <groupId>com.amsha</groupId>
+      <artifactId>amsha-skills</artifactId>
+    </dependency>
   </dependencies>
 
   <build>

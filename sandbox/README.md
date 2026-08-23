@@ -21,3 +21,15 @@ This module provides OS-level process isolation, Podman rootless container execu
 | `amsha.sandbox.circuit-breaker.failure-threshold` | `3` | Number of consecutive failures before opening the circuit breaker |
 | `amsha.sandbox.circuit-breaker.reset-timeout-seconds` | `30` | Cool-down period in seconds before half-opening the circuit breaker |
 | `amsha.workspace.root-dir` | `./data/workspaces` | Base directory for session workspaces |
+
+### Image Resolution
+
+Container image resolution (`SandboxImageResolver`) applies the following precedence:
+
+1. `AMSHA_SANDBOX_IMAGE` (environment / system property)
+2. `amsha.sandbox.image` (configuration property)
+3. `AMSHA_SANDBOX_PODMAN_IMAGE` (environment / system property)
+4. `amsha.sandbox.podman-image` (configuration property)
+5. Default `localhost/amsha-tool-runner:latest`
+
+Blank values are skipped, so an unset or empty variable falls through to the next level.

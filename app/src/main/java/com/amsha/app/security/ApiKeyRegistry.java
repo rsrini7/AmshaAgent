@@ -40,10 +40,10 @@ public class ApiKeyRegistry {
     @ConfigProperty(name = "amsha.auth.hmac-key")
     String hmacSecret;
 
-    @ConfigProperty(name = "amsha.api.rate-limit.requests-per-minute", defaultValue = "20")
+    @ConfigProperty(name = "amsha.api.rate-limit.requests-per-minute", defaultValue = "6000")
     int requestsPerMinute;
 
-    @ConfigProperty(name = "amsha.api.rate-limit.mutation-per-minute", defaultValue = "10")
+    @ConfigProperty(name = "amsha.api.rate-limit.mutation-per-minute", defaultValue = "1000")
     int mutationPerMinute;
 
     @ConfigProperty(name = "amsha.auth.session.rotation-grace-seconds", defaultValue = "30")
