@@ -1,4 +1,4 @@
-package com.amsha.core.skill;
+package com.amsha.skills;
 
 import jakarta.enterprise.context.ApplicationScoped;
 
@@ -12,6 +12,8 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import com.amsha.core.agent.reasoning.PromptInstructionLibrary;
+import com.amsha.core.skill.SkillDefinition;
+import com.amsha.core.skill.SkillFrontmatter;
 import com.amsha.tool.api.ToolCapability;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;

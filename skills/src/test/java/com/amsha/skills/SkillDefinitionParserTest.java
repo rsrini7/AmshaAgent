@@ -1,8 +1,9 @@
-package com.amsha.core.skill;
+package com.amsha.skills;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 import com.amsha.core.agent.reasoning.PromptInstructionLibrary;
+import com.amsha.core.skill.SkillDefinition;
 
 import org.junit.jupiter.api.Test;
 

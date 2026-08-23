@@ -1,6 +1,8 @@
-package com.amsha.core.skill;
+package com.amsha.skills;
 
 import java.util.List;
+
+import com.amsha.core.skill.SkillDefinition;
 
 /**
  * SPI for skill source discovery.

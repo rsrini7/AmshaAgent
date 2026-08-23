@@ -1,4 +1,4 @@
-package com.amsha.core.skill;
+package com.amsha.skills;
 
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -9,6 +9,8 @@ import java.util.List;
 import java.util.Optional;
 
 import com.amsha.core.agent.role.CapabilityRegistry;
+import com.amsha.core.skill.CompiledSkillEntry;
+import com.amsha.core.skill.SkillRegistry;
 import com.amsha.tool.api.ToolCapability;
 
 import org.junit.jupiter.api.Test;

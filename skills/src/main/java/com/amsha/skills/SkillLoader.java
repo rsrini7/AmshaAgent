@@ -1,4 +1,4 @@
-package com.amsha.core.skill;
+package com.amsha.skills;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
@@ -26,6 +26,9 @@ import com.amsha.core.agent.role.RoleDefinition;
 import com.amsha.core.agent.role.RoleRegistry;
 import com.amsha.core.audit.SecurityEventType;
 import com.amsha.core.audit.TelemetryAuditService;
+import com.amsha.core.skill.CompiledSkillEntry;
+import com.amsha.core.skill.SkillDefinition;
+import com.amsha.core.skill.SkillRegistry;
 import com.amsha.tool.api.AgentSentinels;
 import com.amsha.tool.api.ToolCapability;
 import com.amsha.tool.api.ToolCategory;
@@ -33,11 +36,13 @@ import com.amsha.tool.api.ToolCategory;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
+import io.quarkus.runtime.Startup;
 import io.quarkus.runtime.StartupEvent;
 
 /**
  * Orchestrates the loading and compilation of agent skills via {@link SkillProvider} SPI.
  */
+@Startup
 @ApplicationScoped
 public class SkillLoader {
 
@@ -93,6 +98,10 @@ public class SkillLoader {
         List<SkillProvider> ordered = providers.stream()
                 .sorted(Comparator.comparingInt(SkillProvider::priority))
                 .toList();
+        if (ordered.isEmpty()) {
+            LOG.warn("No SkillProvider beans discovered - skill registry will stay empty. "
+                    + "This is a wiring error, not a disabled feature.");
+        }
 
         for (SkillProvider provider : ordered) {
             LOG.infof("Loading skills from provider: %s (priority=%d)", provider.sourceName(), provider.priority());
@@ -214,6 +223,16 @@ public class SkillLoader {
                     String normalized = str.toUpperCase(Locale.ROOT).replace("_", "");
                     for (ToolCapability cap : ToolCapability.values()) {
                         if (cap.name().replace("_", "").equals(normalized)) {
+                            if (cap == ToolCapability.HOST_EXEC) {
+                                // Invariant: host_exec is granted ONLY by HostExecSkillGrant via
+                                // amsha.tools.host-exec.skills — never self-granted from frontmatter.
+                                String w = "Skill '" + skillName
+                                        + "' declared host_exec in frontmatter - ignored. host_exec is granted "
+                                        + "exclusively via amsha.tools.host-exec.skills (HostExecSkillGrant).";
+                                LOG.warnf(w);
+                                warnings.add(w);
+                                return null;
+                            }
                             return cap;
                         }
                     }

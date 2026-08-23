@@ -1,0 +1,26 @@
+amsha:
+  vault:
+    pepper: mock-pepper
+  data-dir: target/skills-data
+  skills:
+    hot-reload: false
+    data-dir: target/skills-data
+
+quarkus:
+  langchain4j:
+    openai:
+      timeout: 30s
+
+quarkus:
+  transaction-manager:
+    enable-recovery: false
+  shutdown:
+    timeout: 5S
+
+quarkiverse:
+  mcp:
+    server:
+      http:
+        enabled: false
+      stdio:
+        enabled: false

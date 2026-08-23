@@ -245,4 +245,15 @@ public class ArchitectureBoundaryTest {
             .dependOnClassesThat()
             .resideInAPackage("com.amsha.core..")
             .allowEmptyShould(true);
+
+    // 21. Impl tier: amsha-skills machinery must NOT depend on core reflexes (reflexes are core command
+    //     dispatch; skills consume core contracts via core.skill — activated with Issue 09)
+    @ArchTest
+    static final ArchRule skillsMustNotImportCoreReflex = noClasses()
+            .that()
+            .resideInAPackage("com.amsha.skills..")
+            .should()
+            .dependOnClassesThat()
+            .resideInAPackage("com.amsha.core.reflex..")
+            .allowEmptyShould(true);
 }

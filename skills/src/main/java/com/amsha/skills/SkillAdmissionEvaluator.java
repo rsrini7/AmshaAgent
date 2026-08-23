@@ -1,4 +1,4 @@
-package com.amsha.core.skill;
+package com.amsha.skills;
 
 import jakarta.enterprise.context.ApplicationScoped;
 
@@ -7,6 +7,8 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Pattern;
+
+import com.amsha.core.skill.SkillDefinition;
 
 /** Evaluates third-party skills for compatibility with Amsha's single-tool execution model. */
 @ApplicationScoped

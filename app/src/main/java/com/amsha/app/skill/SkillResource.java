@@ -1,6 +1,5 @@
 package com.amsha.app.skill;
 
-import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.DELETE;
@@ -9,8 +8,10 @@ import jakarta.ws.rs.POST;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.PathParam;
 import jakarta.ws.rs.Produces;
+import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
+import jakarta.ws.rs.core.SecurityContext;
 
 import java.time.Instant;
 import java.util.List;
@@ -19,17 +20,17 @@ import java.util.stream.Collectors;
 import com.amsha.core.api.dto.AmshaErrorResponse;
 import com.amsha.core.audit.AuditService;
 import com.amsha.core.audit.SecurityEventType;
-import com.amsha.core.skill.SkillDefinitionParser;
-import com.amsha.core.skill.SkillLoader;
+import com.amsha.core.scope.WorkspaceContext;
 import com.amsha.core.skill.SkillRegistry;
 import com.amsha.persistence.api.SkillDto;
 import com.amsha.persistence.api.SkillStorePort;
+import com.amsha.skills.SkillDefinitionParser;
+import com.amsha.skills.SkillLoader;
 
 import org.eclipse.microprofile.openapi.annotations.Operation;
 
 import io.smallrye.common.annotation.RunOnVirtualThread;
 
-@ApplicationScoped
 @Path("/skills")
 @Produces(MediaType.APPLICATION_JSON)
 @Consumes(MediaType.APPLICATION_JSON)
@@ -50,6 +51,9 @@ public class SkillResource {
 
     @Inject
     AuditService auditService;
+
+    @Context
+    SecurityContext securityContext;
 
     @GET
     @Operation(summary = "List all active agent skills")
@@ -79,6 +83,13 @@ public class SkillResource {
     @Consumes(MediaType.TEXT_PLAIN)
     @Operation(summary = "Create or update a skill from YAML definition")
     public Response upsertSkill(String rawYamlDoc) {
+        if (!isInternal()) {
+            return Response.status(Response.Status.FORBIDDEN)
+                    .entity(new AmshaErrorResponse(
+                            "Internal authorization required", "upsert requires an internal API key"))
+                    .build();
+        }
+        String userId = resolveUserId();
         try {
             // Pre-validate that it parses correctly before saving
             var def = parser.parse(rawYamlDoc);
@@ -98,8 +109,8 @@ public class SkillResource {
 
             auditService.recordMandatory(
                     "skills",
+                    userId,
                     "admin",
-                    "system",
                     SecurityEventType.SKILL_CREATED,
                     "skill=" + def.name() + " op=" + (existingOptional.isPresent() ? "update" : "create"));
 
@@ -118,6 +129,13 @@ public class SkillResource {
     @Path("/{name}")
     @Operation(summary = "Delete a skill and reload registry")
     public Response deleteSkill(@PathParam("name") String name) {
+        if (!isInternal()) {
+            return Response.status(Response.Status.FORBIDDEN)
+                    .entity(new AmshaErrorResponse(
+                            "Internal authorization required", "delete requires an internal API key"))
+                    .build();
+        }
+        String userId = resolveUserId();
         var existing = skillStore.findByName(name);
         if (existing.isEmpty()) {
             return Response.status(Response.Status.NOT_FOUND)
@@ -133,7 +151,7 @@ public class SkillResource {
         }
         skillLoader.reloadAll(false);
 
-        auditService.recordMandatory("skills", "admin", "system", SecurityEventType.SKILL_DELETED, "skill=" + name);
+        auditService.recordMandatory("skills", userId, "admin", SecurityEventType.SKILL_DELETED, "skill=" + name);
 
         return Response.ok(new MessageResponse("Deleted and reloaded: " + name)).build();
     }
@@ -142,8 +160,25 @@ public class SkillResource {
     @Path("/refresh")
     @Operation(summary = "Force reload of all skills from filesystem and database")
     public Response refresh() {
+        if (!isInternal()) {
+            return Response.status(Response.Status.FORBIDDEN)
+                    .entity(new AmshaErrorResponse(
+                            "Internal authorization required", "refresh requires an internal API key"))
+                    .build();
+        }
         skillLoader.reloadAll(true);
         return Response.ok(new MessageResponse("Skill registry refreshed")).build();
+    }
+
+    private boolean isInternal() {
+        return securityContext != null && securityContext.isUserInRole("internal");
+    }
+
+    private String resolveUserId() {
+        if (securityContext != null && securityContext.getUserPrincipal() != null) {
+            return securityContext.getUserPrincipal().getName();
+        }
+        return WorkspaceContext.getUserIdOrUnknown();
     }
 
     public record SkillResponse(

@@ -1,4 +1,4 @@
-package com.amsha.core.skill;
+package com.amsha.app.skill;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -18,8 +18,14 @@ import com.amsha.core.agent.role.CapabilityRegistry;
 import com.amsha.core.agent.role.RoleDefinition;
 import com.amsha.core.agent.role.RoleRegistry;
 import com.amsha.core.audit.TelemetryAuditService;
+import com.amsha.core.skill.CompiledSkillEntry;
+import com.amsha.core.skill.SkillDefinition;
+import com.amsha.core.skill.SkillRegistry;
 import com.amsha.persistence.api.SkillDto;
 import com.amsha.persistence.api.SkillStorePort;
+import com.amsha.skills.ClasspathSkillProvider;
+import com.amsha.skills.SkillLoader;
+import com.amsha.skills.SkillsJarSkillProvider;
 import com.amsha.tool.api.ToolCapability;
 
 import org.junit.jupiter.api.Assertions;

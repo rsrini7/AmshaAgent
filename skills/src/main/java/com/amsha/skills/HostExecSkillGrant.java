@@ -1,4 +1,4 @@
-package com.amsha.core.skill;
+package com.amsha.skills;
 
 import jakarta.annotation.Priority;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -9,6 +9,7 @@ import jakarta.interceptor.Interceptor;
 import java.util.List;
 
 import com.amsha.core.agent.role.CapabilityRegistry;
+import com.amsha.core.skill.SkillRegistry;
 import com.amsha.tool.api.ToolCapability;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;

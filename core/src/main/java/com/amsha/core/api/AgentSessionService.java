@@ -412,7 +412,13 @@ public class AgentSessionService {
 
         auditService.recordMandatory(sessionId, userId, "system", SecurityEventType.SESSION_TERMINATED, "via=REST");
         sessionTestLabelStore.clearSession(sessionId);
-        workspaceManager.terminateSession(sessionId);
+        try {
+            workspaceManager.terminateSession(sessionId);
+        } catch (IllegalStateException e) {
+            // F12 resume guard: the session is mid batch-resume and must not be torn down now.
+            // Surface as a retryable conflict instead of leaking a 500 through the exception mapper.
+            return ServiceResult.error("SESSION_BUSY", e.getMessage());
+        }
         return ServiceResult.success(null);
     }
 

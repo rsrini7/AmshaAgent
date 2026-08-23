@@ -1,4 +1,4 @@
-package com.amsha.core.skill;
+package com.amsha.skills;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -11,8 +11,11 @@ import java.util.ArrayList;
 import java.util.List;
 
 import com.amsha.common.util.LogUtil;
+import com.amsha.core.skill.SkillDefinition;
 
 import org.jboss.logging.Logger;
+
+import io.quarkus.arc.Unremovable;
 
 /**
  * Loads bundled skills from the static classpath index at {@code /skills/index.txt}.
@@ -21,6 +24,7 @@ import org.jboss.logging.Logger;
  * which has a distinct {@code sourceName()} of {@code "skillsjars"} to enable
  * third-party security checks (HITL approval for sensitive capabilities).
  */
+@Unremovable
 @ApplicationScoped
 public class ClasspathSkillProvider implements SkillProvider {
 

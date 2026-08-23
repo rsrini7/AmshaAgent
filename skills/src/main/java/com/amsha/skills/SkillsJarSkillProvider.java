@@ -1,4 +1,4 @@
-package com.amsha.core.skill;
+package com.amsha.skills;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -26,9 +26,14 @@ import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
 import com.amsha.common.util.LogUtil;
+import com.amsha.core.skill.SkillAdaptationManager;
+import com.amsha.core.skill.SkillDefinition;
 
 import org.jboss.logging.Logger;
 
+import io.quarkus.arc.Unremovable;
+
+@Unremovable
 @ApplicationScoped
 public class SkillsJarSkillProvider implements SkillProvider {
 

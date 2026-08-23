@@ -277,7 +277,7 @@ public class AgentResource {
                 Response.status(Response.Status.CONFLICT)
                         .entity(new AmshaErrorResponse(result.errorMessage()))
                         .build();
-            case "NO_PENDING_APPROVAL" ->
+            case "NO_PENDING_APPROVAL", "SESSION_BUSY" ->
                 Response.status(Response.Status.CONFLICT)
                         .entity(new AmshaErrorResponse(result.errorMessage()))
                         .build();

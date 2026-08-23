@@ -44,7 +44,8 @@ class SkillPersonaRoutingTest {
 
     @BeforeEach
     void setup() {
-        apiKeyRegistry.register("test-key", "key-internal-changeme");
+        // Register under the "internal" role name so mutating skill endpoints authorize this key.
+        apiKeyRegistry.register("internal", "key-internal-changeme");
 
         skillStore.deleteAll();
 

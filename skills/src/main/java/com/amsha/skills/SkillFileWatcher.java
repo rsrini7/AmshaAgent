@@ -1,4 +1,4 @@
-package com.amsha.core.skill;
+package com.amsha.skills;
 
 import static java.nio.file.StandardWatchEventKinds.ENTRY_CREATE;
 import static java.nio.file.StandardWatchEventKinds.ENTRY_DELETE;
@@ -27,6 +27,8 @@ import com.amsha.tool.api.AgentSentinels;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
+import io.quarkus.runtime.Startup;
+
 /**
  * Watches the workspace skills directory for file changes and triggers
  * a hot-reload of the {@link SkillRegistry}.
@@ -35,6 +37,7 @@ import org.jboss.logging.Logger;
  * Debounces rapid events (e.g. editor save → create + modify) by coalescing
  * within a rolling 2-second window.
  */
+@Startup
 @ApplicationScoped
 public class SkillFileWatcher {
 

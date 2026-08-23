@@ -1,6 +1,6 @@
 # ADR: Extract Core Shared Surfaces and Subsystems from amsha-core
 
-- **Status**: Partially Implemented (rev 7 — streams S1–S8 complete and gated: `amsha-common` utils, `persistence-api`, `llm-provider-api`, `security-api`, `tool-api`, `classifier-api`, `amsha-security` impl, `amsha-memory`; S9–S10 pending)
+- **Status**: Partially Implemented (rev 8 — streams S1–S9 complete and gated: `amsha-common` utils, `persistence-api`, `llm-provider-api`, `security-api`, `tool-api`, `classifier-api`, `amsha-security` impl, `amsha-memory`, `amsha-skills`; Issue 10 final wiring pending)
 - **Date**: 2026-08-22 (rev 5; originally 2026-08-21)
 - **Decision Owners**: Amsha Architecture Committee
 - **Related Invariants**: `docs/Architecture_Invariants.md` §5, §15.1–15.2, §16.1–16.3, §16.6–16.7, §20.1–20.2; `AGENTS.md` §8
@@ -98,8 +98,8 @@ jakarta, langchain4j, and two config/util types to relocate) and keeps that stri
 
 ### 2.3 Work Streams (execution order)
 
-> **Progress (rev 7):** S1–S8 are implemented and gated — see §8 for the per-stream status table and
-> deviations. S9 and the final wiring round (Issue 10) are pending.
+> **Progress (rev 8):** S1–S9 are implemented and gated — see §8 for the per-stream status table and
+> deviations. Only the final wiring round (Issue 10) remains.
 
 | # | Stream | Type | Moves out of core | Est. size |
 |---|---|---|---|---|
@@ -331,11 +331,17 @@ domain model.
 | S6 classifier api | 06 | ✅ Complete | 13 types → `com.amsha.classifier.api`: the 10 `core.agent.loop` answer-quality/tool-risk contracts + `PostPolicyToolContext`, `IntentShadowClassifier`, and both `core.classifier` primitives (`ClassifierResult` family incl. nested `NoOpinionReason`, `ShadowClassifier`). **Deviation:** `ClassifierFailureMetrics` retained in core (micrometer dep outside the module's declared set; consumers are the retained dispatchers — issue escape clause). ArchUnit coverage comes from shared rule 16 (`apiModulesShouldNotImportCore`, which already includes `com.amsha.classifier.api..`; a dedicated rule added during S6 was removed post-review as redundant); `ClassifierContractsTest` pins vocabularies; local-ml-onnx re-pointed off `core.agent.loop` classifiers. |
 | S7 security impl | 07 | ✅ Complete | 15 types → `com.amsha.security` (+ `.http`): vault/crypto (`SecretVaultImpl`, `VaultKeyCache`, `AesGcmSivCipher`, `Argon2idKeyDerivation`), bootstrap credential trio, `DevSecretSeeder`, `StandardAutonomyPolicy`, and the six governed-HTTP classes. **Deviation:** six types retained in core per the escape clause — `InputSanitizer` (8 core consumers), `DestructiveVocabularyFilter` (3), `AutonomyPolicy` interface, `OutboundHttpPolicyService` (`NetworkPolicyEnforcer`), `SessionOwnerResolver` (`ChannelServicesImpl`) — plus the issue-mandated `ExternalIdentity*`. BouncyCastle left core (FIPS exclusions + native init metadata relocated verbatim); direct `amsha-security` deps for llm-providers/mcp/onboarding/sandbox (census-found consumer)/app; `CoreSpiResolutionValidator` validates the vault port; test-fixture producers keep core QuarkusTests (vault, autonomy) bootable. |
 | S8 memory | 08 | ✅ Complete | 16 tiered-memory services + both `@ConfigMapping` types (+7 suites, 38 tests) → `com.amsha.memory`. **Zero-core gate held** (grep proof clean; new ArchUnit rule 20, suite at 20). **Deviation:** issue's `amsha-common`/Jackson deps omitted — nothing in the moved sources imports them (hygiene precedent); consumers re-pointed: core (legal direction), tools-builtin, self-evolve, app. |
+| S9 skills | 09 | ✅ Complete | 9 machinery files (+6 unit suites; loader integration test homed in app) →
+`com.amsha.skills`. **Cycle gate held** (`amsha-skills` absent from core/pom.xml; rule 18 live, new rule 21,
+suite at 21). **Deviation:** SkillLoaderTest is a full-graph CDI integration test — homed in `app/src/test`
+(only module seeing both core and skills), replaced in-module by pure-unit `SkillLoaderOrchestrationTest`
+(31 skills tests green). |
 
-**Fence evolution**: `ArchitectureBoundaryTest` grew from 15 rules (at ADR acceptance) to **20 rules** — the
+**Fence evolution**: `ArchitectureBoundaryTest` grew from 15 rules (at ADR acceptance) to **21 rules** — the
 api-tier fence for `tool-api`/`classifier-api`/`security-api` is the single shared rule 16
-(`apiModulesShouldNotImportCore`); persistence-impl core-freeness, skills reservation, and the strict
-zero-core gate for `amsha-memory` (rule 20) round out the set.
+(`apiModulesShouldNotImportCore`); persistence-impl core-freeness, the strict zero-core gate for
+`amsha-memory` (rule 20), and the skills reflex fence (rule 21, live since Issue 09 along with rule 18)
+round out the set.
 
 **Adjacent work during this window** (not an ADR stream; tracked in Issue 05 Comments 10–12): a bounded
 memory-synthesis correction ladder in `FinishActionHandler` (correction budget → one-call model-tier escalation
@@ -343,9 +349,7 @@ memory-synthesis correction ladder in `FinishActionHandler` (correction budget �
 
 ## 8. Remaining Work
 
-1. **S9 `amsha-skills` (Issue 09)**: 9-file loading machinery only; registry/contracts stay in core; no
-   `amsha-skills` edge in `core/pom.xml`.
-2. **Issue 10 final wiring**: app wiring audit, two-tier boundary audit, reflection-config audit, JVM CDI
+1. **Issue 10 final wiring**: app wiring audit, two-tier boundary audit, reflection-config audit, JVM CDI
    startup proof (21-bean manifest), full reactor gates + native smoke.
 
 ## 9. Revision History
@@ -366,6 +370,9 @@ memory-synthesis correction ladder in `FinishActionHandler` (correction budget �
   core-never-imports-impl fence (zero-core impl consumed by core via a legal core → memory edge; fence list,
   Issue-01 rule, and Issue-10 audit updated); `RiskLevel` reference count corrected to the measured 27;
   status line aligned with revision history.
+- **rev 8 (2026-08-23)**: S9 complete — `amsha-skills` created one-way over core (cycle gate enforced),
+machinery moved with reflection ownership migrated, rule 21 added (suite 21), loader integration test
+homed in app with in-module unit replacement; §6 checklist updated.
 - **rev 7 (2026-08-22)**: S8 complete — `amsha-memory` created as the one strict zero-core impl module (rule 20), 18 types + configs moved with their suites, four consumer modules re-pointed; §6 checklist and §2.3 progress updated.
 - **rev 6 (2026-08-22)**: S7 complete — `amsha-security` created (tier-2 impl; BouncyCastle relocated), 15 types moved with their suites, six retained in core with documented reasons, consumers re-pointed (incl. census-discovered sandbox edge); §3.7 seam updated to the as-executed placement; §8 remaining work now S8–S10.
 - **rev 5 (2026-08-22)**: progress update — S1–S6 implemented and gated (`amsha-common` utils, `persistence-api`,

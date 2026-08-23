@@ -36,10 +36,8 @@ import com.amsha.core.sandbox.SandboxResult;
 import com.amsha.core.security.ExternalIdentityProvider;
 import com.amsha.core.security.OutboundHttpPolicyService;
 import com.amsha.core.skill.CompiledSkillEntry;
-import com.amsha.core.skill.SkillAdmissionEvaluator;
 import com.amsha.core.skill.SkillDefinition;
 import com.amsha.core.skill.SkillFrontmatter;
-import com.amsha.core.skill.SkillLoader;
 import com.amsha.core.skill.SkillPromptParams;
 import com.amsha.core.tools.CheckList;
 import com.amsha.core.tools.CheckListEvent;
@@ -81,8 +79,6 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             AuditOutcome.class,
             SecurityEventType.class,
             SkillDefinition.class,
-            SkillAdmissionEvaluator.AdmissionDecision.class,
-            SkillLoader.QuarantinedSkill.class,
             SkillFrontmatter.class,
             CompiledSkillEntry.class,
             SkillPromptParams.class,

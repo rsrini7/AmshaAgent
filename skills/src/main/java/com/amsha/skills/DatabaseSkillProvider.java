@@ -1,4 +1,4 @@
-package com.amsha.core.skill;
+package com.amsha.skills;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -7,11 +7,15 @@ import java.util.ArrayList;
 import java.util.List;
 
 import com.amsha.common.util.LogUtil;
+import com.amsha.core.skill.SkillDefinition;
 import com.amsha.persistence.api.SkillDto;
 import com.amsha.persistence.api.SkillStorePort;
 
 import org.jboss.logging.Logger;
 
+import io.quarkus.arc.Unremovable;
+
+@Unremovable
 @ApplicationScoped
 public class DatabaseSkillProvider implements SkillProvider {
 
