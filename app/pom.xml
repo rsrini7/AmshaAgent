@@ -366,6 +366,12 @@
               <artifactId>amsha-security</artifactId>
               <version>${project.version}</version>
           </dependency>
+          <!-- Tiered memory services (admin resources, retention scheduler) -->
+          <dependency>
+              <groupId>com.amsha</groupId>
+              <artifactId>amsha-memory</artifactId>
+              <version>${project.version}</version>
+          </dependency>
   </dependencies>
 
   <build>

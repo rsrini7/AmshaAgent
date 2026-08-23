@@ -2,9 +2,9 @@ package com.amsha.app.scheduler;
 
 import static org.mockito.Mockito.*;
 
-import com.amsha.core.config.TieredMemoryConfig;
-import com.amsha.core.memory.tiered.ArchivalMemoryService;
-import com.amsha.core.memory.tiered.RecallMemoryService;
+import com.amsha.memory.config.TieredMemoryConfig;
+import com.amsha.memory.tiered.ArchivalMemoryService;
+import com.amsha.memory.tiered.RecallMemoryService;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

@@ -234,4 +234,15 @@ public class ArchitectureBoundaryTest {
             .dependOnClassesThat()
             .resideInAPackage("com.amsha.core..")
             .allowEmptyShould(true);
+
+    // 20. Impl tier: amsha-memory is the one strict zero-core impl module (ADR §4.1 — the legal
+    //     direction is core -> memory, never memory -> core; activated with Issue 08)
+    @ArchTest
+    static final ArchRule memoryMustNotImportCore = noClasses()
+            .that()
+            .resideInAPackage("com.amsha.memory..")
+            .should()
+            .dependOnClassesThat()
+            .resideInAPackage("com.amsha.core..")
+            .allowEmptyShould(true);
 }

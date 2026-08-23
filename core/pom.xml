@@ -18,6 +18,11 @@
       <groupId>com.amsha</groupId>
       <artifactId>amsha-common</artifactId>
     </dependency>
+    <!-- Tiered memory services (legal core -> memory direction; memory is zero-core) -->
+    <dependency>
+      <groupId>com.amsha</groupId>
+      <artifactId>amsha-memory</artifactId>
+    </dependency>
     <dependency>
       <groupId>com.amsha</groupId>
       <artifactId>amsha-channel-api</artifactId>

@@ -17,8 +17,8 @@ import java.lang.annotation.Target;
  * CDI-qualified selection rather than by class-name substring matching
  * or runtime reflection on bean classes.
  * <p>
- * Use {@link TieredBackendLiteral} for programmatic selection via
- * {@code Instance<TieredMemoryStorePort>.select(new TieredBackendLiteral("sqlite"))}.
+ * For programmatic selection use the {@code TieredBackendLiteral} annotation literal
+ * (amsha-memory): {@code Instance<TieredMemoryStorePort>.select(new TieredBackendLiteral("sqlite"))}.
  */
 @Qualifier
 @Retention(RetentionPolicy.RUNTIME)

@@ -9,8 +9,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-import com.amsha.core.memory.tiered.CoreMemoryService;
 import com.amsha.core.scope.WorkspaceContext;
+import com.amsha.memory.tiered.CoreMemoryService;
 import com.amsha.persistence.api.CoreMemoryBlockDto;
 import com.amsha.security.api.ToolOperation;
 import com.amsha.tool.api.AgentTool;

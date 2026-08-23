@@ -9,9 +9,9 @@ import java.util.Map;
 
 import com.amsha.core.audit.AuditService;
 import com.amsha.core.audit.SecurityEventType;
-import com.amsha.core.memory.tiered.CoreMemoryService;
-import com.amsha.core.memory.tiered.MemoryWriteGovernance;
 import com.amsha.core.scope.WorkspaceContext;
+import com.amsha.memory.tiered.CoreMemoryService;
+import com.amsha.memory.tiered.MemoryWriteGovernance;
 import com.amsha.security.api.ToolOperation;
 import com.amsha.tool.api.AgentTool;
 import com.amsha.tool.api.IdempotencyMode;

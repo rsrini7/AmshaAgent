@@ -21,6 +21,7 @@
     <module>persistence-api</module>
     <module>persistence-common</module>
     <module>common</module>
+    <module>memory</module>
     <module>core</module>
     <module>security</module>
     <module>sandbox</module>
@@ -163,6 +164,11 @@
       <dependency>
         <groupId>com.amsha</groupId>
         <artifactId>amsha-core</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.amsha</groupId>
+        <artifactId>amsha-memory</artifactId>
         <version>${project.version}</version>
       </dependency>
       <dependency>

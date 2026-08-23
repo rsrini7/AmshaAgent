@@ -9,10 +9,10 @@ import static org.mockito.Mockito.verify;
 import java.util.Map;
 
 import com.amsha.core.audit.AuditService;
-import com.amsha.core.config.TieredMemoryConfig;
-import com.amsha.core.memory.tiered.ArchivalMemoryService;
-import com.amsha.core.memory.tiered.MemoryWriteGovernance;
 import com.amsha.core.scope.WorkspaceContext;
+import com.amsha.memory.config.TieredMemoryConfig;
+import com.amsha.memory.tiered.ArchivalMemoryService;
+import com.amsha.memory.tiered.MemoryWriteGovernance;
 import com.amsha.persistence.api.ArchivalChunkDto;
 import com.amsha.security.api.AutonomyLevel;
 import com.amsha.security.api.ToolOperation;

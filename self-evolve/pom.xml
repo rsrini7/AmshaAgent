@@ -21,6 +21,10 @@
       <groupId>com.amsha</groupId>
       <artifactId>amsha-core</artifactId>
     </dependency>
+    <dependency>
+      <groupId>com.amsha</groupId>
+      <artifactId>amsha-memory</artifactId>
+    </dependency>
 
     <!-- Persistence API — for store ports -->
     <dependency>

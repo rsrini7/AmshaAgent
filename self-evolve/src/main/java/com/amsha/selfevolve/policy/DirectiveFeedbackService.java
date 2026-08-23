@@ -10,16 +10,19 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 import com.amsha.core.config.SelfEvolveConfig;
-import com.amsha.core.memory.tiered.DirectiveFeedbackPort;
+import com.amsha.memory.tiered.DirectiveFeedbackPort;
 import com.amsha.selfevolve.api.SynthesizedDirective;
 import com.amsha.selfevolve.store.DirectiveStorePort;
 
 import org.jboss.logging.Logger;
 
+import io.quarkus.arc.Unremovable;
+
 /**
  * Tracks shadow directive injection per session and records hit/miss feedback
  * once the session reaches a terminal outcome.
  */
+@Unremovable
 @ApplicationScoped
 public class DirectiveFeedbackService implements DirectiveFeedbackPort {
 

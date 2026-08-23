@@ -59,6 +59,9 @@ quarkus:
     amsha-security:
       group-id: com.amsha
       artifact-id: amsha-security
+    amsha-memory:
+      group-id: com.amsha
+      artifact-id: amsha-memory
     amsha-tools-builtin:
       group-id: com.amsha
       artifact-id: amsha-tools-builtin

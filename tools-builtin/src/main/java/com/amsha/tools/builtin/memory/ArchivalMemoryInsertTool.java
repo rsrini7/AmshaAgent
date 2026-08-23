@@ -13,10 +13,10 @@ import java.util.UUID;
 
 import com.amsha.core.audit.AuditService;
 import com.amsha.core.audit.SecurityEventType;
-import com.amsha.core.config.TieredMemoryConfig;
-import com.amsha.core.memory.tiered.ArchivalMemoryService;
-import com.amsha.core.memory.tiered.MemoryWriteGovernance;
 import com.amsha.core.scope.WorkspaceContext;
+import com.amsha.memory.config.TieredMemoryConfig;
+import com.amsha.memory.tiered.ArchivalMemoryService;
+import com.amsha.memory.tiered.MemoryWriteGovernance;
 import com.amsha.persistence.api.ArchivalChunkDto;
 import com.amsha.security.api.ToolOperation;
 import com.amsha.tool.api.AgentTool;

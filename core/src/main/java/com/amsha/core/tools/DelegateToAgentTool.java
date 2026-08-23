@@ -333,16 +333,8 @@ public class DelegateToAgentTool implements AgentTool {
         return result;
     }
 
-    private ToolResponse handleRunSubAgentException(AgentRoleEnum targetRole, Exception e) {
-        return handleRunSubAgentException(targetRole, null, e);
-    }
-
     private ToolResponse handleRunSubAgentException(AgentRoleEnum targetRole, String requestedPersona, Exception e) {
         return delegationProcessor.handleRunSubAgentException(targetRole, requestedPersona, e);
-    }
-
-    private ToolResponse handleSubAgentResult(AgentResult result, AgentRoleEnum targetRole, String outerSessionId) {
-        return handleSubAgentResult(result, targetRole, outerSessionId, null);
     }
 
     private ToolResponse handleSubAgentResult(

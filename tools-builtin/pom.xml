@@ -28,6 +28,10 @@
     </dependency>
     <dependency>
       <groupId>com.amsha</groupId>
+      <artifactId>amsha-memory</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.amsha</groupId>
       <artifactId>amsha-sandbox</artifactId>
     </dependency>
     <dependency>

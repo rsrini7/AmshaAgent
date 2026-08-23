@@ -11,7 +11,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
-import com.amsha.core.memory.tiered.CoreMemoryService;
+import com.amsha.memory.tiered.CoreMemoryService;
 import com.amsha.persistence.api.CoreMemoryBlockDto;
 
 import org.junit.jupiter.api.BeforeEach;

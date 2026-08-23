@@ -11,10 +11,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-import com.amsha.core.config.TieredMemoryConfig;
-import com.amsha.core.memory.tiered.CoreMemoryPromptRenderer;
-import com.amsha.core.memory.tiered.CoreMemoryService;
-import com.amsha.core.memory.tiered.PromptBudgetManager;
+import com.amsha.memory.config.TieredMemoryConfig;
+import com.amsha.memory.tiered.CoreMemoryPromptRenderer;
+import com.amsha.memory.tiered.CoreMemoryService;
+import com.amsha.memory.tiered.PromptBudgetManager;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.jboss.logging.Logger;

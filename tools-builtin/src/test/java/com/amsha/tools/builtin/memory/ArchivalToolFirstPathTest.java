@@ -16,7 +16,7 @@ import java.util.List;
 import java.util.Map;
 
 import com.amsha.core.agent.reasoning.ArchivalContextCache;
-import com.amsha.core.config.TieredMemoryConfig;
+import com.amsha.memory.config.TieredMemoryConfig;
 import com.amsha.persistence.api.ArchivalChunkDto;
 import com.amsha.persistence.api.ArchivalMemoryStorePort;
 import com.amsha.tool.api.ToolExecutionContext;
