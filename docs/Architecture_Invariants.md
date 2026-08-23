@@ -60,7 +60,7 @@ Refer to the [Module Architecture Diagram](assets/amsha_module_architecture.svg)
 - `amsha-core` MUST NOT depend on `amsha-sandbox`; interaction flows strictly through the `SandboxExecutionPort` SPI in `amsha-core`. (Enforced by ArchUnit Rule 14 in `ArchitectureBoundaryTest`).
 
 ### 1.7 Built-in tools module (`amsha-tools-builtin`)
-- `amsha-tools-builtin` owns the 15 standard built-in concrete `AgentTool` implementations, Lucene dynamic tool search index, memory management tools, and host execution wrappers.
+- `amsha-tools-builtin` owns 16 concrete `AgentTool` implementations — the 15 standard built-ins plus Playwright CLI automation absorbed from the former `amsha-tool-playwright` module — plus the Lucene dynamic tool search index, memory management tools, and host execution wrappers.
 - `amsha-core` MUST NOT depend on `amsha-tools-builtin`; interaction flows strictly through the `ToolSearchPort` SPI in `amsha-core` and standard CDI `Instance<AgentTool>` discovery. (Enforced by ArchUnit Rule 15 in `ArchitectureBoundaryTest`).
 
 ### 1.8 Two-tier module boundary policy (extract-core-subsystems)

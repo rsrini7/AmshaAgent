@@ -123,7 +123,7 @@ links, reconfiguration, import, and testing. Module/API details are in [`mcp/REA
 | `persistence-*/` | Hexagonal persistence: API ports + SQLite / PostgreSQL / FS adapters |
 | `channel-*/` | Channel adapters: Telegram, WebSocket |
 | `ui/` | Lit 3.x + TypeScript web frontend |
-| `mcp/`, `rag/`, `local-ml-onnx/`, `tool-playwright/`, `self-evolve/` | Optional runtime modules for MCP, retrieval, verified local ML, browser automation, and self-evolution |
+| `mcp/`, `rag/`, `local-ml-onnx/`, `self-evolve/` | Optional runtime modules for MCP, retrieval, verified local ML, and self-evolution |
 | `onboarding/` | Guided provider, credential, prompt, and MCP setup wizard |
 
 ---
@@ -177,12 +177,11 @@ persistence-postgres/ ← PostgreSQL adapter
 persistence-fs/       ← Filesystem adapter (JSON store)
 llm-providers/        ← 21 concrete provider factories + SDKs
 sandbox/              ← Process & Podman isolation
-tools-builtin/        ← Built-in AgentTool implementations + Lucene tool search
+tools-builtin/        ← Built-in AgentTool implementations + Lucene tool search + Playwright CLI automation
 rag/                  ← Two-tier vector (vec0) + FTS5 RAG memory
 local-ml-onnx/        ← Verified local ONNX embeddings + shadow classifiers
 mcp/                  ← MCP server bridge + dynamic client tool loading
 onboarding/           ← 6-step setup wizard REST API
-tool-playwright/      ← Playwright browser automation tool
 self-evolve/          ← Trace capture and self-evolution learning loop
 deployment/           ← Build-time: custom CDI scope, MCP reflection
 │

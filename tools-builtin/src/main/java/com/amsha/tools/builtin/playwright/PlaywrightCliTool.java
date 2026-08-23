@@ -1,4 +1,4 @@
-package com.amsha.tool.playwright;
+package com.amsha.tools.builtin.playwright;
 
 import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
 

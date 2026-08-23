@@ -41,9 +41,6 @@ quarkus:
     amsha-rag:
       group-id: com.amsha
       artifact-id: amsha-rag
-    amsha-tool-playwright:
-      group-id: com.amsha
-      artifact-id: amsha-tool-playwright
     amsha-mcp:
       group-id: com.amsha
       artifact-id: amsha-mcp

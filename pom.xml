@@ -37,7 +37,6 @@
     <module>onboarding</module>
     <module>channel-web</module>
     <module>channel-telegram</module>
-    <module>tool-playwright</module>
     <module>self-evolve</module>
     <module>deployment</module>
     <module>ui</module>

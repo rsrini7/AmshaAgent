@@ -28,7 +28,7 @@ REAL_ROOT_DIRS = {
     'app', 'core', 'channel-api', 'channel-telegram', 'channel-web', 'common',
     'deployment', 'mcp', 'onboarding', 'persistence-api', 'persistence-common',
     'persistence-fs', 'persistence-postgres', 'persistence-sqlite', 'rag',
-    'rest-http', 'tool-playwright', 'ui', 'autotest', 'docs', 'docs-test', 'Ideas-Pending'
+    'rest-http', 'ui', 'autotest', 'docs', 'docs-test', 'Ideas-Pending'
 }
 
 # Mapping of artifactId to directory name
@@ -48,7 +48,6 @@ ARTIFACT_TO_DIR = {
     'amsha-persistence-postgres': 'persistence-postgres',
     'amsha-persistence-sqlite': 'persistence-sqlite',
     'amsha-rag': 'rag',
-    'amsha-tool-playwright': 'tool-playwright',
     'amsha-ui': 'ui'
 }
 

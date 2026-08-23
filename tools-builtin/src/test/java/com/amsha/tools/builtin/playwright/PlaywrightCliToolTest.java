@@ -1,4 +1,4 @@
-package com.amsha.tool.playwright;
+package com.amsha.tools.builtin.playwright;
 
 import static org.junit.jupiter.api.Assertions.*;
 

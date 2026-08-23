@@ -43,7 +43,6 @@ The reactor enforces strict architectural separation that prevents accidental de
 - **`amsha-onboarding`** - First-run setup wizard. Isolated so it can be excluded from headless/CI deployments.
 - **`amsha-channel-web`** - WebSocket-based web channel. Can be excluded for Telegram-only or API-only deployments.
 - **`amsha-channel-telegram`** - Full Telegram channel implementation with its own test suite. Can be excluded for non-Telegram deployments.
-- **`amsha-tool-playwright`** - Playwright browser automation tool. Optional; requires Playwright CLI binary.
 - **`amsha-self-evolve`** - Optional trace capture, pattern extraction, and behavioral-directive synthesis.
 - **`amsha-deployment`** - Quarkus build-time processors. Contains the `@BuildStep` logic that wires up `@WorkspaceScoped`, `AgentFunctionProcessor`, `RestResourceBuildStep`, MCP build steps, and RAG resource steps.
 - **`ui`** - Frontend (Lit 3.x Web Components + TypeScript + Vite). No Java source; excluded from Maven build.

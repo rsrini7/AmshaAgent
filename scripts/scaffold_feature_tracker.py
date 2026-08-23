@@ -297,11 +297,11 @@ To prevent cyclic dependencies and maintain strict module boundaries, we adopt a
 2. **Retained Coordination Tools (2 `AgentTool` beans in `amsha-core`)**:
    - `DelegateToAgentTool` (`ToolCapability.DELEGATE_TO_AGENT` -> `"garuda"`)
    - `AgentTaskTool` (`ToolCapability.AGENT_TASK` -> `"agent_task"`)
-3. **Module-Owned External Tools (4 `AgentTool` beans)**:
+3. **Module-Owned External Tools (3 `AgentTool` beans)**:
    - `mcp`: `McpSelfRegisterTool` (`ToolCapability.REGISTER_MCP_SERVER` -> `"register_mcp_server"`)
    - `rag`: `IngestDocumentTool` (`ToolCapability.INGEST_DOCUMENT` -> `"ingest_document"`)
    - `self-evolve`: `SelfEvolveReflectTool` (`ToolCapability.SELF_EVOLVE_REFLECT` -> `"self_evolve_reflect"`) (indexed via `quarkus.index-dependency` in `application.yaml`)
-   - `tool-playwright`: `PlaywrightCliTool` (`ToolCapability.BROWSER_NAVIGATE` -> `"browser_navigate"`)
+    - Playwright browser automation lives in `tools-builtin` (`PlaywrightCliTool`, `ToolCapability.BROWSER_NAVIGATE`; merged from the former tool-playwright module)
 - **Total Raw CDI Tool Beans**: 21 static beans discovered across all modules.
 
 ---

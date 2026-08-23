@@ -93,7 +93,7 @@
     <!-- amsha-tools-builtin -->
     <rect x="680" y="64" width="260" height="42" rx="8" fill="#0c447c" stroke="#85b7eb" stroke-width="0.5"/>
     <text x="810" y="80" text-anchor="middle" dominant-baseline="central" font-size="13" font-weight="600" fill="#b5d4f4">amsha-tools-builtin</text>
-    <text x="810" y="95" text-anchor="middle" dominant-baseline="central" font-size="10" fill="#85b7eb">15 built-in tools · Lucene tool search</text>
+    <text x="810" y="95" text-anchor="middle" dominant-baseline="central" font-size="10" fill="#85b7eb">16 AgentTools incl. Playwright CLI · Lucene search</text>
 
     <!-- amsha-sandbox -->
     <rect x="680" y="112" width="260" height="42" rx="8" fill="#0c447c" stroke="#85b7eb" stroke-width="0.5"/>
@@ -110,37 +110,32 @@
     <text x="810" y="224" text-anchor="middle" dominant-baseline="central" font-size="13" font-weight="600" fill="#b5d4f4">amsha-rag</text>
     <text x="810" y="239" text-anchor="middle" dominant-baseline="central" font-size="10" fill="#85b7eb">FTS5 + sqlite-vec embeddings</text>
 
-    <!-- amsha-tool-playwright -->
-    <rect x="680" y="256" width="260" height="42" rx="8" fill="#0c447c" stroke="#85b7eb" stroke-width="0.5"/>
-    <text x="810" y="272" text-anchor="middle" dominant-baseline="central" font-size="13" font-weight="600" fill="#b5d4f4">amsha-tool-playwright</text>
-    <text x="810" y="287" text-anchor="middle" dominant-baseline="central" font-size="10" fill="#85b7eb">Browser automation tool</text>
-
     <!-- channel-web -->
-    <rect x="680" y="304" width="260" height="42" rx="8" fill="#712b13" stroke="#f0997b" stroke-width="0.5"/>
-    <text x="810" y="320" text-anchor="middle" dominant-baseline="central" font-size="13" font-weight="600" fill="#f5c4b3">channel-web</text>
-    <text x="810" y="335" text-anchor="middle" dominant-baseline="central" font-size="10" fill="#f0997b">WebSocket · HITL SSE stream</text>
+    <rect x="680" y="256" width="260" height="42" rx="8" fill="#712b13" stroke="#f0997b" stroke-width="0.5"/>
+    <text x="810" y="272" text-anchor="middle" dominant-baseline="central" font-size="13" font-weight="600" fill="#f5c4b3">channel-web</text>
+    <text x="810" y="287" text-anchor="middle" dominant-baseline="central" font-size="10" fill="#f0997b">WebSocket · HITL SSE stream</text>
 
     <!-- ui -->
-    <rect x="680" y="352" width="260" height="42" rx="8" fill="#3c3489" stroke="#afa9ec" stroke-width="0.5"/>
-    <text x="810" y="368" text-anchor="middle" dominant-baseline="central" font-size="13" font-weight="600" fill="#cecbf6">ui</text>
-    <text x="810" y="383" text-anchor="middle" dominant-baseline="central" font-size="10" fill="#afa9ec">Lit 3.x · TypeScript · Vite SPA</text>
+    <rect x="680" y="304" width="260" height="42" rx="8" fill="#3c3489" stroke="#afa9ec" stroke-width="0.5"/>
+    <text x="810" y="320" text-anchor="middle" dominant-baseline="central" font-size="13" font-weight="600" fill="#cecbf6">ui</text>
+    <text x="810" y="335" text-anchor="middle" dominant-baseline="central" font-size="10" fill="#afa9ec">Lit 3.x · TypeScript · Vite SPA</text>
 
-    <text x="680" y="410" font-size="9" fill="#888">Extracted subsystems (impl tier — wired in amsha-app)</text>
+    <text x="680" y="362" font-size="9" fill="#888">Extracted subsystems (impl tier — wired in amsha-app)</text>
 
     <!-- amsha-security -->
-    <rect x="680" y="416" width="260" height="34" rx="8" fill="#0c447c" stroke="#85b7eb" stroke-width="0.5"/>
-    <text x="810" y="430" text-anchor="middle" dominant-baseline="central" font-size="12" font-weight="600" fill="#b5d4f4">amsha-security</text>
-    <text x="810" y="443" text-anchor="middle" dominant-baseline="central" font-size="9" fill="#85b7eb">Vault · Argon2id · AES-GCM-SIV · governed HTTP</text>
+    <rect x="680" y="368" width="260" height="34" rx="8" fill="#0c447c" stroke="#85b7eb" stroke-width="0.5"/>
+    <text x="810" y="382" text-anchor="middle" dominant-baseline="central" font-size="12" font-weight="600" fill="#b5d4f4">amsha-security</text>
+    <text x="810" y="395" text-anchor="middle" dominant-baseline="central" font-size="9" fill="#85b7eb">Vault · Argon2id · AES-GCM-SIV · governed HTTP</text>
 
     <!-- amsha-memory -->
-    <rect x="680" y="456" width="260" height="34" rx="8" fill="#0c447c" stroke="#85b7eb" stroke-width="0.5"/>
-    <text x="810" y="470" text-anchor="middle" dominant-baseline="central" font-size="12" font-weight="600" fill="#b5d4f4">amsha-memory</text>
-    <text x="810" y="483" text-anchor="middle" dominant-baseline="central" font-size="9" fill="#85b7eb">Tiered core/recall/archival services · zero-core</text>
+    <rect x="680" y="408" width="260" height="34" rx="8" fill="#0c447c" stroke="#85b7eb" stroke-width="0.5"/>
+    <text x="810" y="422" text-anchor="middle" dominant-baseline="central" font-size="12" font-weight="600" fill="#b5d4f4">amsha-memory</text>
+    <text x="810" y="435" text-anchor="middle" dominant-baseline="central" font-size="9" fill="#85b7eb">Tiered core/recall/archival services · zero-core</text>
 
     <!-- amsha-skills -->
-    <rect x="680" y="496" width="260" height="34" rx="8" fill="#0c447c" stroke="#85b7eb" stroke-width="0.5"/>
-    <text x="810" y="510" text-anchor="middle" dominant-baseline="central" font-size="12" font-weight="600" fill="#b5d4f4">amsha-skills</text>
-    <text x="810" y="523" text-anchor="middle" dominant-baseline="central" font-size="9" fill="#85b7eb">Skill loading · admission · providers</text>
+    <rect x="680" y="448" width="260" height="34" rx="8" fill="#0c447c" stroke="#85b7eb" stroke-width="0.5"/>
+    <text x="810" y="462" text-anchor="middle" dominant-baseline="central" font-size="12" font-weight="600" fill="#b5d4f4">amsha-skills</text>
+    <text x="810" y="475" text-anchor="middle" dominant-baseline="central" font-size="9" fill="#85b7eb">Skill loading · admission · providers</text>
   </g>
 
   <!-- Persistence adapters row -->
@@ -182,18 +177,22 @@
   <!-- telegram → channel-api -->
   <line x1="220" y1="212" x2="260" y2="344" stroke="#9c9a92" stroke-width="1.5" marker-end="url(#arrow)"/>
   <!-- channel-web → channel-api -->
-  <line x1="680" y1="320" x2="641" y2="350" stroke="#9c9a92" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <line x1="680" y1="277" x2="641" y2="347" stroke="#9c9a92" stroke-width="1.5" marker-end="url(#arrow)"/>
   <!-- persistence-api → adapters -->
   <line x1="320" y1="404" x2="127" y2="545" stroke="#9c9a92" stroke-width="1" stroke-dasharray="4 3" marker-end="url(#arrow)"/>
   <line x1="400" y1="404" x2="362" y2="545" stroke="#9c9a92" stroke-width="1" stroke-dasharray="4 3" marker-end="url(#arrow)"/>
   <line x1="500" y1="404" x2="597" y2="545" stroke="#9c9a92" stroke-width="1" stroke-dasharray="4 3" marker-end="url(#arrow)"/>
   <path d="M620 404 L620 538 L832 538 L832 545" fill="none" stroke="#9c9a92" stroke-width="1" stroke-dasharray="4 3" marker-end="url(#arrow)"/>
   <!-- amsha-security → core (tier-2 consumer) -->
-  <path d="M680 433 L658 433 L658 126 L640 126" fill="none" stroke="#9c9a92" stroke-width="1" stroke-dasharray="4 3" marker-end="url(#arrow)"/>
+  <path d="M680 385 L658 385 L658 126 L640 126" fill="none" stroke="#9c9a92" stroke-width="1" stroke-dasharray="4 3" marker-end="url(#arrow)"/>
   <!-- amsha-skills → core (skills → core only) -->
-  <path d="M680 513 L666 513 L666 140 L640 140" fill="none" stroke="#9c9a92" stroke-width="1" stroke-dasharray="4 3" marker-end="url(#arrow)"/>
+  <path d="M680 465 L666 465 L666 140 L640 140" fill="none" stroke="#9c9a92" stroke-width="1" stroke-dasharray="4 3" marker-end="url(#arrow)"/>
   <!-- amsha-memory → persistence-api (zero-core: consumes store ports) -->
-  <path d="M680 473 L641 391" fill="none" stroke="#9c9a92" stroke-width="1" stroke-dasharray="4 3" marker-end="url(#arrow)"/>
+  <path d="M680 425 L641 391" fill="none" stroke="#9c9a92" stroke-width="1" stroke-dasharray="4 3" marker-end="url(#arrow)"/>
+  <!-- amsha-tools-builtin → tool-api (implements the AgentTool contracts) -->
+  <path d="M680 85 L641 262" fill="none" stroke="#9c9a92" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <!-- amsha-local-ml-onnx → classifier-api (ONNX shadow-classifier implementations) -->
+  <path d="M220 332 L260 312" fill="none" stroke="#9c9a92" stroke-width="1" stroke-dasharray="4 3" marker-end="url(#arrow)"/>
 
   <!-- Legend -->
   <g font-family="'Segoe UI', system-ui, sans-serif" font-size="11" fill="#c2c0b6">
@@ -202,6 +201,6 @@
     <text x="90" y="636" fill="#c2c0b6">compile dependency</text>
     <line x1="250" y1="632" x2="290" y2="632" stroke="#9c9a92" stroke-width="1.5" stroke-dasharray="4 3" marker-end="url(#arrow)"/>
     <text x="300" y="636" fill="#c2c0b6">optional / build-time / CDI-discovered</text>
-    <text x="40" y="658" fill="#888">29 modules · JDK 25 · Quarkus 3.27.2 · SQLite WAL + FTS5 + vec0 · Multi-provider LLM SPIs · Extracted Security · Memory · Skills · Tool/Classifier APIs</text>
+    <text x="40" y="658" fill="#888">28 modules · JDK 25 · Quarkus 3.27.2 · SQLite WAL + FTS5 + vec0 · Multi-provider LLM SPIs · Extracted Security · Memory · Skills · Tool/Classifier APIs</text>
   </g>
 </svg>

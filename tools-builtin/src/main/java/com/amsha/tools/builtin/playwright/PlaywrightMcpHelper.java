@@ -1,4 +1,4 @@
-package com.amsha.tool.playwright;
+package com.amsha.tools.builtin.playwright;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.spi.Bean;

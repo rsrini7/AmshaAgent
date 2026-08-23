@@ -12,7 +12,7 @@
 ## 1. Context and Problem Statement
 
 Following the extraction of `amsha-llm-providers` and `amsha-llm-provider-api`, `amsha-core` continues to host multiple independent subsystems alongside the agent reasoning engine:
-1. **Concrete Built-in Agent Tools**: 15 concrete `AgentTool` implementations (Brave, Serper, SmartFetch, HostExec, GithubTool, ScheduleTask, ManageSchedule, CheckListTool, SandboxExecTool, 6 memory tools) plus helper classes.
+1. **Concrete Built-in Agent Tools**: 15 concrete `AgentTool` implementations (Brave, Serper, SmartFetch, HostExec, GithubTool, ScheduleTask, ManageSchedule, CheckListTool, SandboxExecTool, 6 memory tools) plus helper classes. *(Amended post-program: `PlaywrightCliTool` absorbed from the former `tool-playwright` module — now 16.)*
 2. **Container Sandbox & Process Isolation**: 14 files implementing Podman container runners, Linux process isolation, tmpfs mount drivers, code safety scanning, secret transports, and Podman health checks.
 3. **Heavyweight Dependencies**: Concrete tool implementations force `amsha-core` to pull in 3 Apache Lucene libraries (`lucene-core`, `lucene-queryparser`, `lucene-analysis-common`) used exclusively for in-memory dynamic tool indexing.
 
@@ -161,11 +161,11 @@ To prevent cyclic dependencies and maintain strict module boundaries, we adopt a
 2. **Retained Coordination Tools (2 `AgentTool` beans in `amsha-core`)**:
    - `DelegateToAgentTool` (`ToolCapability.DELEGATE_TO_AGENT` -> `"garuda"`)
    - `AgentTaskTool` (`ToolCapability.AGENT_TASK` -> `"agent_task"`)
-3. **Module-Owned External Tools (4 `AgentTool` beans)**:
+3. **Module-Owned External Tools (3 `AgentTool` beans)**:
    - `mcp`: `McpSelfRegisterTool` (`ToolCapability.REGISTER_MCP_SERVER` -> `"register_mcp_server"`)
    - `rag`: `IngestDocumentTool` (`ToolCapability.INGEST_DOCUMENT` -> `"ingest_document"`)
    - `self-evolve`: `SelfEvolveReflectTool` (`ToolCapability.SELF_EVOLVE_REFLECT` -> `"self_evolve_reflect"`) (indexed via `quarkus.index-dependency` in `application.yaml`)
-   - `tool-playwright`: `PlaywrightCliTool` (`ToolCapability.BROWSER_NAVIGATE` -> `"browser_navigate"`)
+   - Playwright browser automation lives in `tools-builtin` (`PlaywrightCliTool`, `ToolCapability.BROWSER_NAVIGATE` -> `"browser_navigate"`; merged from the former tool-playwright module)
 - **Total Raw CDI Tool Beans**: 21 static beans discovered across all modules.
 
 ---
