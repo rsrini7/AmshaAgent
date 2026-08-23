@@ -360,6 +360,12 @@
               <artifactId>amsha-classifier-api</artifactId>
               <version>${project.version}</version>
           </dependency>
+          <!-- Security implementation wiring (bootstrap issuer, dev seeder) -->
+          <dependency>
+              <groupId>com.amsha</groupId>
+              <artifactId>amsha-security</artifactId>
+              <version>${project.version}</version>
+          </dependency>
   </dependencies>
 
   <build>

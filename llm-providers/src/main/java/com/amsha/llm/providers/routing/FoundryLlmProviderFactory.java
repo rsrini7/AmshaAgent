@@ -7,11 +7,11 @@ import jakarta.inject.Inject;
 
 import java.time.Duration;
 
-import com.amsha.core.security.http.GovernedTransportService;
 import com.amsha.llm.api.LlmModelConfig;
 import com.amsha.llm.api.ModelDefaults;
 import com.amsha.llm.api.RoutingChatModelProvider;
 import com.amsha.llm.providers.wrapper.FoundryResponsesChatModel;
+import com.amsha.security.http.GovernedTransportService;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 

@@ -25,6 +25,11 @@
     </dependency>
     <dependency>
       <groupId>com.amsha</groupId>
+      <artifactId>amsha-security</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>com.amsha</groupId>
       <artifactId>amsha-sandbox</artifactId>
     </dependency>
     <dependency>

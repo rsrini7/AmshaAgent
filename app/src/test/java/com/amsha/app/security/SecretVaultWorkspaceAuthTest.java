@@ -10,9 +10,9 @@ import java.time.Instant;
 import java.util.Optional;
 
 import com.amsha.core.scope.WorkspaceContext;
-import com.amsha.core.security.SecretVaultImpl;
 import com.amsha.persistence.api.IdentityStorePort;
 import com.amsha.persistence.api.WorkspaceMembershipDto;
+import com.amsha.security.SecretVaultImpl;
 import com.amsha.security.api.VaultKey;
 
 import org.junit.jupiter.api.Test;

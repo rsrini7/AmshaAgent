@@ -16,6 +16,7 @@ import java.util.Set;
 import com.amsha.core.sandbox.SandboxExecutionPort;
 import com.amsha.core.tools.search.ToolSearchPort;
 import com.amsha.llm.api.ChatModelCreationPort;
+import com.amsha.security.api.SecretVault;
 
 import org.jboss.logging.Logger;
 
@@ -40,6 +41,7 @@ public class CoreSpiResolutionValidator {
         validateCardinality(SandboxExecutionPort.class);
         validateCardinality(ToolSearchPort.class);
         validateCardinality(ChatModelCreationPort.class);
+        validateCardinality(SecretVault.class);
         LOG.info("CoreSpiResolutionValidator: SPI resolution validation completed successfully.");
     }
 

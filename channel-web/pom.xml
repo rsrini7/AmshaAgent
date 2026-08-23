@@ -113,6 +113,13 @@
       <artifactId>quarkus-jacoco</artifactId>
       <scope>test</scope>
     </dependency>
+    <!-- Real security impl beans for QuarkusTests booting the core CDI graph (S7 moved them out of core) -->
+    <dependency>
+      <groupId>com.amsha</groupId>
+      <artifactId>amsha-security</artifactId>
+      <version>${project.version}</version>
+      <scope>test</scope>
+    </dependency>
     </dependencies>
 
     <build>

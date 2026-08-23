@@ -9,13 +9,13 @@ import java.time.Instant;
 import java.util.Arrays;
 import java.util.Base64;
 
-import com.amsha.core.security.BootstrapCredentialIssuer;
-import com.amsha.core.security.IssuedCredential;
-import com.amsha.core.security.PreparedBootstrapCredential;
 import com.amsha.persistence.api.ApiCredentialDto;
 import com.amsha.persistence.api.ApiCredentialStorePort;
 import com.amsha.persistence.api.BootstrapStateDto;
 import com.amsha.persistence.api.BootstrapStateStorePort;
+import com.amsha.security.BootstrapCredentialIssuer;
+import com.amsha.security.IssuedCredential;
+import com.amsha.security.PreparedBootstrapCredential;
 
 import org.jboss.logging.Logger;
 

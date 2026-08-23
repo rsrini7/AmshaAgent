@@ -26,6 +26,11 @@
       <groupId>com.amsha</groupId>
       <artifactId>amsha-core</artifactId>
     </dependency>
+    <dependency>
+      <groupId>com.amsha</groupId>
+      <artifactId>amsha-security</artifactId>
+      <version>${project.version}</version>
+    </dependency>
 
     <!-- Quarkus & SmallRye dependencies -->
     <dependency>

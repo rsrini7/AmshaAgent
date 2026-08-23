@@ -56,6 +56,9 @@ quarkus:
     amsha-sandbox:
       group-id: com.amsha
       artifact-id: amsha-sandbox
+    amsha-security:
+      group-id: com.amsha
+      artifact-id: amsha-security
     amsha-tools-builtin:
       group-id: com.amsha
       artifact-id: amsha-tools-builtin

@@ -9,8 +9,8 @@ import static org.mockito.Mockito.when;
 
 import java.util.Map;
 
-import com.amsha.core.security.http.ApprovalReceiptIssuer;
 import com.amsha.security.api.OutboundPurpose;
+import com.amsha.security.http.ApprovalReceiptIssuer;
 
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;

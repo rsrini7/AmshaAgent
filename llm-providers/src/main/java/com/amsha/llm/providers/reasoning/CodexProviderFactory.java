@@ -9,13 +9,13 @@ import java.util.List;
 import java.util.Optional;
 
 import com.amsha.core.routing.MultiModelChatModel;
-import com.amsha.core.security.http.GovernedTransportService;
 import com.amsha.llm.api.AgentChatModelProvider;
 import com.amsha.llm.api.AgentLlmConfig;
 import com.amsha.llm.api.ModelDefaults;
 import com.amsha.llm.api.StructuredOutputMode;
 import com.amsha.llm.providers.ChatModelFactory;
 import com.amsha.llm.providers.helper.CodexTokenResolver;
+import com.amsha.security.http.GovernedTransportService;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 

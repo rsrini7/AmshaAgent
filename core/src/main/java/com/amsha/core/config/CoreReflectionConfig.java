@@ -35,11 +35,6 @@ import com.amsha.core.routing.provider.NetworkPolicyEnforcer;
 import com.amsha.core.sandbox.SandboxResult;
 import com.amsha.core.security.ExternalIdentityProvider;
 import com.amsha.core.security.OutboundHttpPolicyService;
-import com.amsha.core.security.http.ApprovalReceiptIssuer;
-import com.amsha.core.security.http.GovernedHttpClient;
-import com.amsha.core.security.http.GovernedTransportService;
-import com.amsha.core.security.http.OutboundApprovalReceipt;
-import com.amsha.core.security.http.OutboundHttpException;
 import com.amsha.core.skill.CompiledSkillEntry;
 import com.amsha.core.skill.SkillAdmissionEvaluator;
 import com.amsha.core.skill.SkillDefinition;
@@ -119,11 +114,6 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             TaskClassifierService.TaskDomain.class,
             SessionCatalogEntry.class,
             OutboundHttpPolicyService.class,
-            ApprovalReceiptIssuer.class,
-            OutboundApprovalReceipt.class,
-            GovernedHttpClient.class,
-            GovernedTransportService.class,
-            OutboundHttpException.class,
             ExternalIdentityProvider.class
         },
         classNames = {

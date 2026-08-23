@@ -24,13 +24,13 @@ import java.util.Set;
 import java.util.stream.Stream;
 
 import com.amsha.core.scope.WorkspaceContext;
-import com.amsha.core.security.http.ApprovalReceiptIssuer;
-import com.amsha.core.security.http.OutboundApprovalReceipt;
 import com.amsha.mcp.tool.DynamicToolCapabilityRegistry;
 import com.amsha.mcp.tool.McpTransportType;
 import com.amsha.persistence.api.McpConnectionHeaderSecretRefDto;
 import com.amsha.security.api.AutonomyLevel;
 import com.amsha.security.api.OutboundPurpose;
+import com.amsha.security.http.ApprovalReceiptIssuer;
+import com.amsha.security.http.OutboundApprovalReceipt;
 import com.amsha.tool.api.ToolCategory;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.tomakehurst.wiremock.junit5.WireMockExtension;

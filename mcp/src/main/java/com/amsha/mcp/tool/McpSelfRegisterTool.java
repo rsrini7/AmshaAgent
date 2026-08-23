@@ -16,11 +16,11 @@ import java.util.regex.Pattern;
 
 import com.amsha.core.audit.AuditService;
 import com.amsha.core.audit.SecurityEventType;
-import com.amsha.core.security.http.ApprovalReceiptIssuer;
 import com.amsha.mcp.transport.McpClientService;
 import com.amsha.mcp.transport.McpManagementService;
 import com.amsha.security.api.OutboundPurpose;
 import com.amsha.security.api.ToolOperation;
+import com.amsha.security.http.ApprovalReceiptIssuer;
 import com.amsha.tool.api.AgentTool;
 import com.amsha.tool.api.ToolCapability;
 import com.amsha.tool.api.ToolCategory;

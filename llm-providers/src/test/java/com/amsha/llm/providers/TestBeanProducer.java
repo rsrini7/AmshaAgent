@@ -20,12 +20,12 @@ import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
 import com.amsha.core.routing.LlmModelFactory;
-import com.amsha.core.security.http.GovernedTransportService;
 import com.amsha.llm.api.AgentLlmConfig;
 import com.amsha.llm.api.RoutingChatModelProvider;
 import com.amsha.llm.api.StructuredOutputMode;
 import com.amsha.security.api.SecretVault;
 import com.amsha.security.api.VaultKey;
+import com.amsha.security.http.GovernedTransportService;
 
 import io.quarkus.test.Mock;
 

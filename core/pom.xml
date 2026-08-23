@@ -104,17 +104,6 @@
       <artifactId>quarkus-langchain4j-core</artifactId>
     </dependency>
 
-    <!-- BouncyCastle - Argon2id + AES-GCM-SIV (use ONLY bcprov-jdk18on) -->
-    <dependency>
-      <groupId>org.bouncycastle</groupId>
-      <artifactId>bcprov-jdk18on</artifactId>
-      <version>${bouncycastle.version}</version>
-      <exclusions>
-        <exclusion><groupId>org.bouncycastle</groupId><artifactId>bc-fips</artifactId></exclusion>
-        <exclusion><groupId>org.bouncycastle</groupId><artifactId>bcprov-ext-jdk18on</artifactId></exclusion>
-      </exclusions>
-    </dependency>
-
     <!-- HTML Escape -->
     <dependency>
       <groupId>org.apache.commons</groupId>

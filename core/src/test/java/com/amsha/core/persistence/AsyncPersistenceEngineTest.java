@@ -278,6 +278,10 @@ class AsyncPersistenceEngineTest {
 
     @Test
     void drainThread_ContinuesDraining_AfterExhaustingHmacRetries() throws Exception {
+        // The Micrometer registry is shared across the Quarkus test application instance; measure
+        // this drain's contribution as a delta so prior hmac failures from other tests don't leak in.
+        double baseline = registry.counter("amsha.audit.drain.hmac_failure").count();
+
         // All retries fail for first event
         Mockito.doThrow(new IllegalStateException("Audit HMAC key unavailable"))
                 .when(auditHashUtil)
@@ -310,14 +314,14 @@ class AsyncPersistenceEngineTest {
 
         // Wait up to 1s for the counter to increment in the drain thread (avoid race)
         long start = System.currentTimeMillis();
-        while (registry.counter("amsha.audit.drain.hmac_failure").count() < 1
+        while (registry.counter("amsha.audit.drain.hmac_failure").count() < baseline + 1
                 && (System.currentTimeMillis() - start) < 1000) {
             Thread.sleep(10);
         }
 
         assertEquals(
-                1,
-                (int) registry.counter("amsha.audit.drain.hmac_failure").count(),
+                baseline + 1,
+                registry.counter("amsha.audit.drain.hmac_failure").count(),
                 "Failure counter must be incremented once");
     }
 

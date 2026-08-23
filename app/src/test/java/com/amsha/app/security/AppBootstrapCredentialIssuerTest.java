@@ -12,11 +12,11 @@ import static org.mockito.Mockito.when;
 import java.time.Instant;
 import java.util.Optional;
 
-import com.amsha.core.security.IssuedCredential;
-import com.amsha.core.security.PreparedBootstrapCredential;
 import com.amsha.persistence.api.ApiCredentialStorePort;
 import com.amsha.persistence.api.BootstrapStateDto;
 import com.amsha.persistence.api.BootstrapStateStorePort;
+import com.amsha.security.IssuedCredential;
+import com.amsha.security.PreparedBootstrapCredential;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

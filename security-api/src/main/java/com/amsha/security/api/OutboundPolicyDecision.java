@@ -3,8 +3,8 @@ package com.amsha.security.api;
 import java.util.Optional;
 
 /**
- * Immutable decision from the {@link OutboundHttpPolicyService}. A decision is either ALLOW, DENY,
- * or REQUIRE_HITL (human-in-the-loop approval required before proceeding).
+ * Immutable decision from the outbound HTTP policy service (core-side). A decision is either
+ * ALLOW, DENY, or REQUIRE_HITL (human-in-the-loop approval required before proceeding).
  */
 public record OutboundPolicyDecision(
         Decision decision, Optional<String> reason, OutboundPurpose purpose, String actorUserId) {

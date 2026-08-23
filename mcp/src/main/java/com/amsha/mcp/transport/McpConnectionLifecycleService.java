@@ -511,7 +511,7 @@ public class McpConnectionLifecycleService {
      * Runs vault operations inside an active workspace scope.
      *
      * <p>{@link SecretVault} derives and caches per-user keys through the {@code @WorkspaceScoped}
-     * {@link com.amsha.core.security.VaultKeyCache}. REST/admin entry points and the startup
+     * {@link com.amsha.security.VaultKeyCache}. REST/admin entry points and the startup
      * reconnect path execute outside any workspace context, so the scope must be activated
      * explicitly. The vault key is derived from the stable per-user scope id, keeping secrets
      * decryptable across restarts and requests.
