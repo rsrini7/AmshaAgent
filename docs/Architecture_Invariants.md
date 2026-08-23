@@ -63,6 +63,25 @@ Refer to the [Module Architecture Diagram](assets/amsha_module_architecture.svg)
 - `amsha-tools-builtin` owns the 15 standard built-in concrete `AgentTool` implementations, Lucene dynamic tool search index, memory management tools, and host execution wrappers.
 - `amsha-core` MUST NOT depend on `amsha-tools-builtin`; interaction flows strictly through the `ToolSearchPort` SPI in `amsha-core` and standard CDI `Instance<AgentTool>` discovery. (Enforced by ArchUnit Rule 15 in `ArchitectureBoundaryTest`).
 
+### 1.8 Two-tier module boundary policy (extract-core-subsystems)
+
+Modules are split into an **API tier** (pure contract jars) and an **impl tier** (consumers of core services):
+
+- **API tier** — `llm-provider-api`, `security-api`, `tool-api`, `classifier-api`, `persistence-api`,
+  `channel-api`: MUST NOT import `com.amsha.core.*`. (Enforced by ArchUnit Rules 11 and 16.)
+- **Impl tier** — `sandbox`, `tools-builtin`, `security`, `skills`: MAY depend on core when consuming core
+  services, but `amsha-core` MUST NOT depend on any impl module. Core → security-impl is forbidden
+  (Rule 17); core → skills machinery is forbidden (Rule 18); persistence store implementations are zero-core
+  (Rule 19).
+- **`amsha-memory`** is the one strict zero-core impl module: the legal direction is core → memory (memory
+  services consumed by core tools), never memory → core (Rule 20). Skills must not import core reflexes
+  (Rule 21) — skill machinery consumes core contracts via `core.skill` only.
+- Beans resolved through dynamic discovery (`Instance<...>.select(...)`, `BeanManager.getBeans`) MUST carry
+  `@Unremovable` for native retention — including all nine tiered-memory store-port implementations selected
+  via `TieredBackendLiteral`.
+- Reflection registration follows the per-module `*ReflectionConfig` convention; moved types appear exactly
+  once, in their owning module's config.
+
 ---
 
 ## 2. Context and session binding

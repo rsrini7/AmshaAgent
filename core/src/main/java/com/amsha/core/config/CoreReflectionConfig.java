@@ -21,6 +21,7 @@ import com.amsha.core.audit.AuditVerifier;
 import com.amsha.core.audit.SecurityEventType;
 import com.amsha.core.cron.AgentJobCompleted;
 import com.amsha.core.cron.CronTaskScheduled;
+import com.amsha.core.governance.ApprovalFrame;
 import com.amsha.core.routing.ModelCacheInvalidator;
 import com.amsha.core.routing.ModelProfileCredentialResolver;
 import com.amsha.core.routing.ModelProfileResolverImpl;
@@ -78,6 +79,7 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             ToolRegistry.ToolDescriptor.class,
             AuditOutcome.class,
             SecurityEventType.class,
+            ApprovalFrame.class,
             SkillDefinition.class,
             SkillFrontmatter.class,
             CompiledSkillEntry.class,

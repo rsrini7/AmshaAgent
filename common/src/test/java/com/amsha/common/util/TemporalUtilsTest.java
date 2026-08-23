@@ -1,11 +1,9 @@
-package com.amsha.core.util;
+package com.amsha.common.util;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
 import java.time.Instant;
-
-import com.amsha.common.util.TemporalUtils;
 
 import org.junit.jupiter.api.Test;
 

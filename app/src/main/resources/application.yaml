@@ -77,6 +77,12 @@ quarkus:
     amsha-classifier-api:
       group-id: com.amsha
       artifact-id: amsha-classifier-api
+    amsha-security-api:
+      group-id: com.amsha
+      artifact-id: amsha-security-api
+    amsha-persistence-api:
+      group-id: com.amsha
+      artifact-id: amsha-persistence-api
 
   devservices:
     enabled: false

@@ -3,6 +3,29 @@
 Core engine for Amsha Agent. Contains the agent loop, reasoning engines, model routing,
 reflexes, safety guards, and tool interfaces.
 
+## Module Extraction Status
+
+Under the `extract-core-subsystems` program (see
+[`Ideas-Pending/Architecture/ADR-extract-core-subsystems.md`](../Ideas-Pending/Architecture/ADR-extract-core-subsystems.md)),
+large shared surfaces moved out of this module. Contracts consumed from here now live in dedicated API jars,
+and heavy implementations moved into tier-2 modules:
+
+| Extracted surface | New home |
+|---|---|
+| Shared utilities (`AmshaException`, `TemporalUtils`, `PathSanitizer`, `BackoffRetryExecutor`, ...) | `common` |
+| LLM exception taxonomy + `ChatModelCreationPort` | `llm-provider-api` |
+| Persistence contract types (`TieredBackend`, `CronStatus`, `CheckpointStatus`, scope probes) | `persistence-api` |
+| Security vocabulary (`SecretVault`, `VaultKey`, `ToolOperation`/`RiskLevel`, crypto constants) | `security-api` |
+| Vault / crypto (Argon2id, AES-GCM-SIV) / governed HTTP implementation | `security` |
+| `AgentTool` contract surface (`AgentTool`, `ToolResponse`, `ToolExecutionContext`, ...) | `tool-api` |
+| Shadow-classifier contracts | `classifier-api` |
+| Tiered memory services (`CoreMemoryService`, recall/archival, `TieredMemoryProducer`) | `memory` |
+| Skill loading machinery (`SkillLoader`, providers, admission, file watcher) | `skills` |
+
+What remains here: agent loop and state machine, reasoning engines, model routing, reflexes, pipeline,
+governance/HITL coordination, audit, skill registry + entry contracts (`core.skill`), and tool discovery.
+BouncyCastle and commonmark dependencies left `core/pom.xml` with their owners.
+
 ## LLM Providers
 
 LLM provider SPIs (`AgentChatModelProvider`, `RoutingChatModelProvider`, `ChatModelCreationPort`)

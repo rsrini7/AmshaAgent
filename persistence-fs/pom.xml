@@ -62,8 +62,8 @@
 
         <!-- LangChain4j core for EmbeddingModel injection (optional — vector search degrades gracefully) -->
         <dependency>
-            <groupId>io.quarkiverse.langchain4j</groupId>
-            <artifactId>quarkus-langchain4j-core</artifactId>
+            <groupId>dev.langchain4j</groupId>
+            <artifactId>langchain4j-core</artifactId>
         </dependency>
 
         <!-- Jackson for JSON serialization -->

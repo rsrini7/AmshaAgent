@@ -10,8 +10,8 @@ quarkus:
   langchain4j:
     openai:
       timeout: 30s
-
-quarkus:
+  hibernate-orm:
+    enabled: false
   transaction-manager:
     enable-recovery: false
   shutdown:

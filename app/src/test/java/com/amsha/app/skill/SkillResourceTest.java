@@ -13,6 +13,7 @@ import java.util.Optional;
 
 import com.amsha.core.agent.role.RoleDefinition;
 import com.amsha.core.audit.AuditService;
+import com.amsha.core.audit.SecurityEventType;
 import com.amsha.core.skill.CompiledSkillEntry;
 import com.amsha.core.skill.SkillDefinition;
 import com.amsha.core.skill.SkillRegistry;
@@ -171,11 +172,13 @@ class SkillResourceTest {
     }
 
     @Test
-    void refreshReturns200() {
+    void refreshReturns200AndAuditsRefresh() {
         Response resp = resource.refresh();
 
         assertEquals(200, resp.getStatus());
         verify(skillLoader).reloadAll(true);
+        verify(auditService)
+                .recordMandatory("skills", "user-1", "admin", SecurityEventType.SKILL_REFRESHED, "op=refresh");
     }
 
     private CompiledSkillEntry sampleSkillEntry() {

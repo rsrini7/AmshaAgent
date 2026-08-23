@@ -200,7 +200,7 @@ public class SkillLoader {
 
         } catch (PatternSyntaxException e) {
             String w = "Failed to compile trigger-pattern regex for skill '" + def.name() + "': " + e.getMessage();
-            LOG.warnf(w);
+            LOG.warn(w);
             warnings.add(w);
         }
         return warnings;
@@ -229,7 +229,7 @@ public class SkillLoader {
                                 String w = "Skill '" + skillName
                                         + "' declared host_exec in frontmatter - ignored. host_exec is granted "
                                         + "exclusively via amsha.tools.host-exec.skills (HostExecSkillGrant).";
-                                LOG.warnf(w);
+                                LOG.warn(w);
                                 warnings.add(w);
                                 return null;
                             }
@@ -238,7 +238,7 @@ public class SkillLoader {
                     }
                     String w = "Unknown ToolCapability '" + str + "' in skill '" + skillName
                             + "' - excluded. Valid values: " + validCapabilityNames();
-                    LOG.warnf(w);
+                    LOG.warn(w);
                     warnings.add(w);
                     return null;
                 })

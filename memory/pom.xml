@@ -31,8 +31,8 @@
 
         <!-- langchain4j memory message types (ChatMessage etc.) via platform BOM -->
         <dependency>
-            <groupId>io.quarkiverse.langchain4j</groupId>
-            <artifactId>quarkus-langchain4j-core</artifactId>
+            <groupId>dev.langchain4j</groupId>
+            <artifactId>langchain4j-core</artifactId>
         </dependency>
 
         <!-- Direct external APIs used by moved sources -->

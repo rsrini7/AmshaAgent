@@ -166,7 +166,11 @@ public class SkillResource {
                             "Internal authorization required", "refresh requires an internal API key"))
                     .build();
         }
+        String userId = resolveUserId();
         skillLoader.reloadAll(true);
+
+        auditService.recordMandatory("skills", userId, "admin", SecurityEventType.SKILL_REFRESHED, "op=refresh");
+
         return Response.ok(new MessageResponse("Skill registry refreshed")).build();
     }
 

@@ -1,6 +1,8 @@
 # ADR: Extract Core Shared Surfaces and Subsystems from amsha-core
 
-- **Status**: Partially Implemented (rev 8 — streams S1–S9 complete and gated: `amsha-common` utils, `persistence-api`, `llm-provider-api`, `security-api`, `tool-api`, `classifier-api`, `amsha-security` impl, `amsha-memory`, `amsha-skills`; Issue 10 final wiring pending)
+- **Status**: Implemented (rev 9 — all streams complete and gated: S1–S9 extractions plus Issue 10 final
+  wiring — app wiring audit, reflection normalization, JVM CDI startup proof, full reactor green at 70.35%
+  coverage, native build + smoke PASS)
 - **Date**: 2026-08-22 (rev 5; originally 2026-08-21)
 - **Decision Owners**: Amsha Architecture Committee
 - **Related Invariants**: `docs/Architecture_Invariants.md` §5, §15.1–15.2, §16.1–16.3, §16.6–16.7, §20.1–20.2; `AGENTS.md` §8
@@ -98,7 +100,7 @@ jakarta, langchain4j, and two config/util types to relocate) and keeps that stri
 
 ### 2.3 Work Streams (execution order)
 
-> **Progress (rev 8):** S1–S9 are implemented and gated — see §8 for the per-stream status table and
+> **Progress (rev 9):** S1–S10 are implemented and gated — see §8 for the per-stream status table and
 > deviations. Only the final wiring round (Issue 10) remains.
 
 | # | Stream | Type | Moves out of core | Est. size |
@@ -309,17 +311,19 @@ domain model.
       module and converted to package prefixes — fresh native build still to be smoke-validated)**.
 - [x] `amsha-memory` has zero `com.amsha.core` imports; `MemoryPromptBudgetConfig` resolved from the module (S8).
       **Done (Issue 08; zero-core grep proof clean + ArchUnit rule 20 enforces it)**.
-- [ ] `core.skill` retains only contracts + registry (`SkillRegistry`, `CompiledSkillEntry`, `SkillDefinition`,
+- [x] `core.skill` retains only contracts + registry (`SkillRegistry`, `CompiledSkillEntry`, `SkillDefinition`,
       `SkillFrontmatter`, `SkillPromptParams`, `SkillAdaptationManager`, `SkillReflex`); machinery lives in
       `amsha-skills`; **no `amsha-skills` edge in `core/pom.xml`** (cycle gate); skills → core is the only
-      direction; core imports no `com.amsha.skills` classes (S9).
-- [ ] Per-iteration gates: `fix_fqns.py && spotless:apply`, module-scoped `pmd:check`, focused tests,
+      direction; core imports no `com.amsha.skills` classes (S9). **Done (Issue 09; rule 18 live + rule 21
+      added, suite 21; cycle grep clean)**.
+- [x] Per-iteration gates: `fix_fqns.py && spotless:apply`, module-scoped `pmd:check`, focused tests,
       `ArchitectureBoundaryTest`, `./mvnw clean install -DskipTests`, `mise run sonar:issues`; native smoke for
-      native-sensitive rounds.
+      native-sensitive rounds. **Done (Issue 10: full tested reactor 29/29 + 70.35% coverage gate; native
+      build + smoke ALL PASS incl. the S7 BouncyCastle/native-init follow-up; sonar 0 BLOCKER/CRITICAL)**.
 
 ---
 
-## 7. Implementation Progress (rev 6, as of 2026-08-22)
+## 7. Implementation Progress (rev 9, as of 2026-08-23)
 
 | Stream | Issue | Status | Outcome & deviations |
 |---|---|---|---|
@@ -336,10 +340,12 @@ domain model.
 suite at 21). **Deviation:** SkillLoaderTest is a full-graph CDI integration test — homed in `app/src/test`
 (only module seeing both core and skills), replaced in-module by pure-unit `SkillLoaderOrchestrationTest`
 (31 skills tests green). |
+| S10 final wiring | 10 | ✅ Complete | Wiring audit: app pom declares all six program modules; index-dependency register-everything convention adopted (`amsha-security-api` + `amsha-persistence-api` entries added). Boundary audit 21/21 (rule 16 extended to persistence-api/channel-api after the S9 deep-dive review). Reflection audit: repo sweep found exactly two legacy type-level `@RegisterForReflection` violations — `ReasoningStep` (double-registered) and `ApprovalFrame` (bare-only, never centrally registered) — both normalized into `CoreReflectionConfig`. JVM CDI startup proof: `FinalWiringStartupProofTest` binds memory/security/skills/tiered stores at boot; 21-tool manifest unchanged. Deferred `TemporalUtilsTest` relocated to common. LangChain4j coordinate rule adopted; `memory` + `persistence-fs` normalized off the Quarkiverse artifact they never used. Full tested reactor 29/29, coverage gate **70.35%**; native build + smoke **ALL PASS** (closes the S7 native follow-up); sonar 0 BLOCKER/CRITICAL. |
 
 **Fence evolution**: `ArchitectureBoundaryTest` grew from 15 rules (at ADR acceptance) to **21 rules** — the
-api-tier fence for `tool-api`/`classifier-api`/`security-api` is the single shared rule 16
-(`apiModulesShouldNotImportCore`); persistence-impl core-freeness, the strict zero-core gate for
+api-tier fence is the single shared rule 16 (`apiModulesShouldNotImportCore`), whose package list was extended
+during Issue 10 to also cover `persistence-api` and `channel-api` (closing the fence-coverage asymmetry found
+by the post-S9 deep-dive review); persistence-impl core-freeness, the strict zero-core gate for
 `amsha-memory` (rule 20), and the skills reflex fence (rule 21, live since Issue 09 along with rule 18)
 round out the set.
 
@@ -349,10 +355,19 @@ memory-synthesis correction ladder in `FinishActionHandler` (correction budget �
 
 ## 8. Remaining Work
 
-1. **Issue 10 final wiring**: app wiring audit, two-tier boundary audit, reflection-config audit, JVM CDI
-   startup proof (21-bean manifest), full reactor gates + native smoke.
+None — all streams (S1–S10) are implemented and gated. Deferred follow-ups live in the issue tracker:
+the onboarding quarkus-jacoco agent flake (0-byte exec with green tests; observed 4×, always resolved by
+re-running `./mvnw verify -pl onboarding`) deserves a dedicated investigation issue.
 
 ## 9. Revision History
+
+- **rev 9 (2026-08-23)**: Issue 10 complete — program closed. Wiring audit + register-everything
+  index-dependency convention (+2 api entries); rule 16 extended to persistence-api/channel-api;
+  two legacy type-level reflection annotations normalized into `CoreReflectionConfig`
+  (`ReasoningStep`, `ApprovalFrame`); `FinalWiringStartupProofTest` added (memory/security/skills/tiered-store
+  boot bindings; 21-tool manifest unchanged); `TemporalUtilsTest` relocated to common; LangChain4j coordinate
+  rule adopted and memory/persistence-fs normalized; full tested reactor 29/29 at 70.35% coverage; native
+  build + smoke ALL PASS (S7 native follow-up closed); sonar clean.
 
 - **rev 1 (2026-08-21)**: initial proposal.
 - **rev 2 (2026-08-21)**: review fixes — P1-1 `AmshaException` → `amsha-common` before LLM taxonomy move (sealed
