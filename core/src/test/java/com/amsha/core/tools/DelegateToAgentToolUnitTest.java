@@ -167,7 +167,7 @@ class DelegateToAgentToolUnitTest {
         AgentResult finished = AgentResult.finished("Code debugged successfully", List.of());
         when(mockAgentLoop.run(anyString(), anyString(), anyString(), any(), anyInt()))
                 .thenReturn(finished);
-        when(delegationProcessor.handleSubAgentResult(any(), any()))
+        when(delegationProcessor.handleSubAgentResult(any(), any(), any()))
                 .thenReturn(ToolResponse.success("Code debugged successfully"));
 
         ToolResponse res = tool.execute(ctx, Map.of("agent", "shiva", "goal", "debug code"));

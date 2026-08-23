@@ -194,6 +194,9 @@ public class DelegateToAgentTool implements AgentTool {
 
         String agentName = DelegationProcessor.stripSurroundingQuotes(String.valueOf(agentObj));
         String goal = String.valueOf(goalObj);
+        // F5: remember the persona name the requester actually used (alias like "shiva",
+        // "saraswati") so user-facing messages can show it alongside the canonical role.
+        String requestedPersona = agentName;
 
         // Read delegation mode (default: solo)
         Object modeObj = params.get(PARAM_MODE);
@@ -234,7 +237,7 @@ public class DelegateToAgentTool implements AgentTool {
             String leadRoleId = targetRole.toScopedName();
             if (groupConsultationService.isGroupLead(leadRoleId)) {
                 return executeGroupConsultation(
-                        ctx, outerSessionId, leadRoleId, goal, targetRole, userId, chatId, depth);
+                        ctx, outerSessionId, leadRoleId, goal, targetRole, userId, chatId, depth, requestedPersona);
             }
             // Not a group lead — fall through to normal delegation
             log.debugf("[DELEGATE] group_consult mode but %s is not a group lead — delegating normally", leadRoleId);
@@ -249,7 +252,8 @@ public class DelegateToAgentTool implements AgentTool {
 
         log.debugf("GARUDA: Dispatching to agent=%s depth=%d", agentName, depth);
 
-        return executeNormalDelegation(ctx, outerSessionId, agentName, goal, targetRole, userId, chatId, depth);
+        return executeNormalDelegation(
+                ctx, outerSessionId, agentName, goal, targetRole, userId, chatId, depth, requestedPersona);
     }
 
     private AgentResult runSubAgent(
@@ -330,12 +334,21 @@ public class DelegateToAgentTool implements AgentTool {
     }
 
     private ToolResponse handleRunSubAgentException(AgentRoleEnum targetRole, Exception e) {
-        return delegationProcessor.handleRunSubAgentException(targetRole, e);
+        return handleRunSubAgentException(targetRole, null, e);
+    }
+
+    private ToolResponse handleRunSubAgentException(AgentRoleEnum targetRole, String requestedPersona, Exception e) {
+        return delegationProcessor.handleRunSubAgentException(targetRole, requestedPersona, e);
     }
 
     private ToolResponse handleSubAgentResult(AgentResult result, AgentRoleEnum targetRole, String outerSessionId) {
+        return handleSubAgentResult(result, targetRole, outerSessionId, null);
+    }
+
+    private ToolResponse handleSubAgentResult(
+            AgentResult result, AgentRoleEnum targetRole, String outerSessionId, String requestedPersona) {
         log.infof("[DELEGATE] agent=%s completed for session=%s", targetRole.toScopedName(), outerSessionId);
-        return delegationProcessor.handleSubAgentResult(result, targetRole);
+        return delegationProcessor.handleSubAgentResult(result, targetRole, requestedPersona);
     }
 
     /**
@@ -351,14 +364,16 @@ public class DelegateToAgentTool implements AgentTool {
             AgentRoleEnum targetRole,
             String userId,
             String chatId,
-            int depth) {
+            int depth,
+            String requestedPersona) {
 
         // Guard against unavailable registry. NOTE: must go through proxy-safe methods —
         // reading groupConsultationEngine.groupRegistry directly always yields null because
         // field access does not pass through the @ApplicationScoped client proxy.
         if (!groupConsultationEngine.hasGroupRegistry()) {
             log.warnf("[GROUP_CONSULT] groupRegistry unavailable — falling back to normal delegation");
-            return executeNormalDelegation(ctx, outerSessionId, leadRoleId, goal, targetRole, userId, chatId, depth);
+            return executeNormalDelegation(
+                    ctx, outerSessionId, leadRoleId, goal, targetRole, userId, chatId, depth, requestedPersona);
         }
 
         var groupOpt = groupConsultationEngine.findGroupById(groupConsultationService
@@ -368,7 +383,8 @@ public class DelegateToAgentTool implements AgentTool {
         if (groupOpt.isEmpty()) {
             log.warnf("[GROUP_CONSULT] No group found for %s — falling back to normal delegation", leadRoleId);
             goal = delegationProcessor.enhanceGoalWithGroupConsultation(leadRoleId, goal);
-            return executeNormalDelegation(ctx, outerSessionId, leadRoleId, goal, targetRole, userId, chatId, depth);
+            return executeNormalDelegation(
+                    ctx, outerSessionId, leadRoleId, goal, targetRole, userId, chatId, depth, requestedPersona);
         }
 
         var group = groupOpt.get();
@@ -376,7 +392,8 @@ public class DelegateToAgentTool implements AgentTool {
 
         if (subTasks.isEmpty()) {
             log.debugf("[GROUP_CONSULT] %s can self-handle — no family consultation needed", leadRoleId);
-            return executeNormalDelegation(ctx, outerSessionId, leadRoleId, goal, targetRole, userId, chatId, depth);
+            return executeNormalDelegation(
+                    ctx, outerSessionId, leadRoleId, goal, targetRole, userId, chatId, depth, requestedPersona);
         }
 
         log.infof("[GROUP_CONSULT] Spawning %d family members for %s", subTasks.size(), leadRoleId);
@@ -436,7 +453,8 @@ public class DelegateToAgentTool implements AgentTool {
 
         if (!consultResult.hasUsefulResults()) {
             log.warnf("[GROUP_CONSULT] No useful results from family — falling back to lead-only", leadRoleId);
-            return executeNormalDelegation(ctx, outerSessionId, leadRoleId, goal, targetRole, userId, chatId, depth);
+            return executeNormalDelegation(
+                    ctx, outerSessionId, leadRoleId, goal, targetRole, userId, chatId, depth, requestedPersona);
         }
 
         // Enhance the goal with family results and delegate to lead for synthesis
@@ -444,7 +462,7 @@ public class DelegateToAgentTool implements AgentTool {
         log.infof("[GROUP_CONSULT] Family consultation complete — delegating to %s for synthesis", leadRoleId);
 
         return executeNormalDelegation(
-                ctx, outerSessionId, leadRoleId, enhancedGoal, targetRole, userId, chatId, depth);
+                ctx, outerSessionId, leadRoleId, enhancedGoal, targetRole, userId, chatId, depth, requestedPersona);
     }
 
     /**
@@ -458,7 +476,8 @@ public class DelegateToAgentTool implements AgentTool {
             AgentRoleEnum targetRole,
             String userId,
             String chatId,
-            int depth) {
+            int depth,
+            String requestedPersona) {
 
         AgentResult result;
         Span delegationSpan = otelContext.childSpan(outerSessionId, AgentOTelConstants.SPAN_DELEGATION_DISPATCH);
@@ -483,7 +502,7 @@ public class DelegateToAgentTool implements AgentTool {
                 delegationSpan.recordException(e);
                 delegationSpan.end();
             }
-            return handleRunSubAgentException(targetRole, e);
+            return handleRunSubAgentException(targetRole, requestedPersona, e);
         } finally {
             if (delegationSpan != null) delegationSpan.end();
         }
@@ -508,7 +527,7 @@ public class DelegateToAgentTool implements AgentTool {
                         log.warnf(
                                 "[VerificationGate] Max delegation depth reached (%d). Skipping auto-debug recursive call.",
                                 maxDelegationDepth);
-                        return handleSubAgentResult(result, targetRole, outerSessionId);
+                        return handleSubAgentResult(result, targetRole, outerSessionId, "shiva");
                     }
 
                     String debugGoal = "Fix the following execution failure for code generated by the coder:\n\n"
@@ -519,15 +538,15 @@ public class DelegateToAgentTool implements AgentTool {
                         shivaRole = AgentRoleEnum.fromString("debugger");
                     } catch (IllegalArgumentException e) {
                         log.warnf("[VerificationGate] Could not resolve debugger role: %s", e.getMessage());
-                        return handleSubAgentResult(result, targetRole, outerSessionId);
+                        return handleSubAgentResult(result, targetRole, outerSessionId, "shiva");
                     }
 
                     return executeNormalDelegation(
-                            ctx, outerSessionId, "shiva", debugGoal, shivaRole, userId, chatId, depth + 1);
+                            ctx, outerSessionId, "shiva", debugGoal, shivaRole, userId, chatId, depth + 1, "shiva");
                 }
             }
         }
 
-        return handleSubAgentResult(result, targetRole, outerSessionId);
+        return handleSubAgentResult(result, targetRole, outerSessionId, requestedPersona);
     }
 }
