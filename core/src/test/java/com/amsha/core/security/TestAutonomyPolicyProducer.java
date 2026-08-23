@@ -26,8 +26,7 @@ public class TestAutonomyPolicyProducer {
             public boolean isAllowed(AutonomyLevel level, ToolOperation operation) {
                 return switch (level) {
                     case FULL -> true;
-                    case SUPERVISED ->
-                        operation == ToolOperation.READ_FS || operation == ToolOperation.SCHEDULE_AUTONOMOUS;
+                    case SUPERVISED -> operation == ToolOperation.READ_FS;
                     case BACKGROUND ->
                         operation == ToolOperation.READ_FS
                                 || operation == ToolOperation.NETWORK_OUTBOUND

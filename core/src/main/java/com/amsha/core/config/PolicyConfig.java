@@ -49,16 +49,20 @@ public interface PolicyConfig {
 
     interface Governance {
         /**
-         * Tool names that bypass HITL approval in SUPERVISED mode.
+         * Tool names that bypass HITL approval in SUPERVISED mode. `schedule_task` was
+         * removed per ADR-schedule-task-hitl-under-supervised: cron creation under
+         * supervision is operator-consented; `manage_schedule` stays exempt so
+         * list/read/delete management actions remain approval-free.
          */
-        @WithDefault("schedule_task,manage_schedule")
+        @WithDefault("manage_schedule")
         List<String> hitlExemptTools();
 
         /**
          * Tool operations that receive a 409 (pause-for-approval) instead of
          * a hard 403 when running in SUPERVISED autonomy level.
          */
-        @WithDefault("NETWORK_OUTBOUND,VAULT_ACCESS,EXECUTE_SHELL,WRITE_MEMORY,DELEGATE_AUTONOMOUS,WRITE_FS")
+        @WithDefault(
+                "NETWORK_OUTBOUND,VAULT_ACCESS,EXECUTE_SHELL,WRITE_MEMORY,DELEGATE_AUTONOMOUS,WRITE_FS,SCHEDULE_AUTONOMOUS")
         List<String> supervisedSalvageOperations();
     }
 }

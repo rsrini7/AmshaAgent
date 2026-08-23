@@ -994,7 +994,14 @@ mp:
         # garuda is exempt because delegation is the coordinator's primary function —
         # blocking it at SUPERVISED level creates a dead-end (coordinator can't delegate,
         # can't code-gen, can only FINISH with no result).
-        hitl-exempt-tools: ${AMSHA_HITL_EXEMPT_TOOLS:schedule_task,manage_schedule}
+        # schedule_task removed per ADR-schedule-task-hitl-under-supervised (cron
+        # creation under supervision requires approval); manage_schedule stays exempt.
+        hitl-exempt-tools: ${AMSHA_HITL_EXEMPT_TOOLS:manage_schedule}
+        # Ops salvaged to a 409 pause-for-approval instead of a hard 403 under SUPERVISED.
+        # SCHEDULE_AUTONOMOUS added per ADR-schedule-task-hitl-under-supervised so a
+        # supervised scheduling denial surfaces as consent UX rather than a dead-end block.
+        supervised-salvage-operations:
+          ${AMSHA_SUPERVISED_SALVAGE_OPERATIONS:NETWORK_OUTBOUND,VAULT_ACCESS,EXECUTE_SHELL,WRITE_MEMORY,DELEGATE_AUTONOMOUS,WRITE_FS,SCHEDULE_AUTONOMOUS}
 
 "%dev":
   quarkus:
