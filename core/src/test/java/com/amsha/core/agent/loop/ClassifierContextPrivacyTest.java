@@ -5,6 +5,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.Map;
 
+import com.amsha.classifier.api.AnswerQualityContext;
+import com.amsha.classifier.api.AnswerQualityShadowContext;
+import com.amsha.classifier.api.PostPolicyToolContext;
+import com.amsha.classifier.api.ToolRiskShadowContext;
 import com.amsha.security.api.AutonomyLevel;
 
 import org.junit.jupiter.api.Test;

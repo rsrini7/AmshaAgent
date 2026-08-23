@@ -9,10 +9,10 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
 
+import com.amsha.classifier.api.ClassifierResult;
+import com.amsha.classifier.api.ClassifierResult.NoOpinionReason;
+import com.amsha.classifier.api.IntentShadowClassifier;
 import com.amsha.core.agent.role.AgentRoleEnum;
-import com.amsha.core.classifier.ClassifierResult;
-import com.amsha.core.classifier.ClassifierResult.NoOpinionReason;
-import com.amsha.core.routing.IntentShadowClassifier;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 

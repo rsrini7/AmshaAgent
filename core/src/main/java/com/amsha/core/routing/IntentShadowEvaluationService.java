@@ -10,9 +10,10 @@ import java.util.Locale;
 import java.util.Objects;
 import java.util.concurrent.Executor;
 
+import com.amsha.classifier.api.ClassifierResult;
+import com.amsha.classifier.api.ClassifierResult.NoOpinionReason;
+import com.amsha.classifier.api.IntentShadowClassifier;
 import com.amsha.core.agent.role.AgentRoleEnum;
-import com.amsha.core.classifier.ClassifierResult;
-import com.amsha.core.classifier.ClassifierResult.NoOpinionReason;
 import com.amsha.core.classifier.ClassifierShadowDispatcher;
 import com.amsha.core.classifier.ClassifierShadowExecutor;
 

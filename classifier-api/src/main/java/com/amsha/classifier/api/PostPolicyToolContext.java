@@ -1,4 +1,4 @@
-package com.amsha.core.agent.loop;
+package com.amsha.classifier.api;
 
 import java.util.Collections;
 import java.util.LinkedHashMap;

@@ -1,6 +1,4 @@
-package com.amsha.core.agent.loop;
-
-import com.amsha.core.classifier.ShadowClassifier;
+package com.amsha.classifier.api;
 
 /**
  * Optional in-process tool-risk classifier used only after the authoritative guard allows a call.

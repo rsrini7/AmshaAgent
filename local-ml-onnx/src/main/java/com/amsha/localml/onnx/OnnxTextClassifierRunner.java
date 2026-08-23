@@ -10,8 +10,8 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
 
-import com.amsha.core.classifier.ClassifierResult;
-import com.amsha.core.classifier.ClassifierResult.NoOpinionReason;
+import com.amsha.classifier.api.ClassifierResult;
+import com.amsha.classifier.api.ClassifierResult.NoOpinionReason;
 
 /** Executes one verified text-classifier graph without logging or retaining its input. */
 public final class OnnxTextClassifierRunner {

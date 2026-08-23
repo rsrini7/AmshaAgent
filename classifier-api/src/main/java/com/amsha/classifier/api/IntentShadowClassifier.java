@@ -1,7 +1,4 @@
-package com.amsha.core.routing;
-
-import com.amsha.core.classifier.ClassifierResult;
-import com.amsha.core.classifier.ShadowClassifier;
+package com.amsha.classifier.api;
 
 /** Optional intent classifier that observes input but never chooses the active route. */
 public interface IntentShadowClassifier extends ShadowClassifier<String, String> {

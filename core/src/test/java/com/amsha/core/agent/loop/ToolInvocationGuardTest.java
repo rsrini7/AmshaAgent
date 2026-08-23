@@ -20,10 +20,13 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Stream;
 
+import com.amsha.classifier.api.ClassifierResult;
+import com.amsha.classifier.api.ClassifierResult.NoOpinionReason;
+import com.amsha.classifier.api.PostPolicyToolContext;
+import com.amsha.classifier.api.ToolRiskAction;
+import com.amsha.classifier.api.ToolRiskShadowContext;
 import com.amsha.core.agent.reasoning.ReasoningStep;
 import com.amsha.core.agent.role.RoleRegistry;
-import com.amsha.core.classifier.ClassifierResult;
-import com.amsha.core.classifier.ClassifierResult.NoOpinionReason;
 import com.amsha.core.scope.WorkspaceContext;
 import com.amsha.core.tool.ToolGuardInterceptor;
 import com.amsha.core.tools.ToolRegistry;

@@ -1,4 +1,4 @@
-package com.amsha.core.classifier;
+package com.amsha.classifier.api;
 
 /** Generic contract for classifiers whose opinions are observational and non-authoritative. */
 public interface ShadowClassifier<C, T> {

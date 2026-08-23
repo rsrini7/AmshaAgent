@@ -182,8 +182,8 @@ public class ArchitectureBoundaryTest {
             .resideInAPackage("com.amsha.tools.builtin..")
             .allowEmptyShould(true);
 
-    // 16. API tier: future api modules must NOT depend on com.amsha.core..
-    //     (vacuously green until the modules exist; becomes meaningful in Issues 04-06)
+    // 16. API tier: api modules must NOT depend on com.amsha.core..
+    //     (tool-api Issue 05, classifier-api Issue 06, security-api vocabulary Issue 04)
     @ArchTest
     static final ArchRule apiModulesShouldNotImportCore = noClasses()
             .that()

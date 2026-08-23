@@ -65,6 +65,9 @@ quarkus:
     amsha-tool-api:
       group-id: com.amsha
       artifact-id: amsha-tool-api
+    amsha-classifier-api:
+      group-id: com.amsha
+      artifact-id: amsha-classifier-api
 
   devservices:
     enabled: false

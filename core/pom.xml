@@ -215,18 +215,25 @@
       <artifactId>quarkus-jacoco</artifactId>
       <scope>test</scope>
     </dependency>
-          <!-- Security vocabulary (vault interface, tool operation, autonomy) -->
-          <dependency>
-              <groupId>com.amsha</groupId>
-              <artifactId>amsha-security-api</artifactId>
-              <version>${project.version}</version>
-          </dependency>
-          <!-- Tool authoring contracts -->
-          <dependency>
-              <groupId>com.amsha</groupId>
-              <artifactId>amsha-tool-api</artifactId>
-              <version>${project.version}</version>
-          </dependency>
+      <!-- Security vocabulary (vault interface, tool operation, autonomy) -->
+      <dependency>
+        <groupId>com.amsha</groupId>
+        <artifactId>amsha-security-api</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <!-- Tool authoring contracts -->
+      <dependency>
+        <groupId>com.amsha</groupId>
+        <artifactId>amsha-tool-api</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <!-- Shadow-classifier contracts (extract-core-subsystems S6) -->
+      <dependency>
+        <groupId>com.amsha</groupId>
+        <artifactId>amsha-classifier-api</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+
   </dependencies>
 
   <build>

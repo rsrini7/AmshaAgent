@@ -354,6 +354,12 @@
               <artifactId>amsha-tool-api</artifactId>
               <version>${project.version}</version>
           </dependency>
+          <!-- Shadow-classifier contracts (AgentResource exposes prediction enums) -->
+          <dependency>
+              <groupId>com.amsha</groupId>
+              <artifactId>amsha-classifier-api</artifactId>
+              <version>${project.version}</version>
+          </dependency>
   </dependencies>
 
   <build>

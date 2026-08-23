@@ -1,7 +1,7 @@
 # ADR: Extract Core Shared Surfaces and Subsystems from amsha-core
 
-- **Status**: Proposed (rev 4 — addresses review feedback P1-1…P1-6, second-review blockers, and the core→memory fence exemption)
-- **Date**: 2026-08-21
+- **Status**: Partially Implemented (rev 5 — streams S1–S6 complete and gated: `amsha-common` utils, `persistence-api`, `llm-provider-api`, `security-api`, `tool-api`, `classifier-api`; S7–S10 pending)
+- **Date**: 2026-08-22 (rev 5; originally 2026-08-21)
 - **Decision Owners**: Amsha Architecture Committee
 - **Related Invariants**: `docs/Architecture_Invariants.md` §5, §15.1–15.2, §16.1–16.3, §16.6–16.7, §20.1–20.2; `AGENTS.md` §8
 - **Feature Slug**: `extract-core-subsystems`
@@ -97,6 +97,9 @@ jakarta, langchain4j, and two config/util types to relocate) and keeps that stri
 ```
 
 ### 2.3 Work Streams (execution order)
+
+> **Progress (rev 5):** S1–S6 are implemented and gated — see §8 for the per-stream status table and
+> deviations. S7–S9 and the final wiring round (Issue 10) are pending.
 
 | # | Stream | Type | Moves out of core | Est. size |
 |---|---|---|---|---|
@@ -286,17 +289,19 @@ domain model.
 
 ## 6. Verification Checklist (program-level)
 
-- [ ] `grep -r "import com.amsha.core" persistence-sqlite persistence-fs persistence-postgres` → empty (S2),
-      including the workspace-scope probe port replacing `WorkspaceScopeHolder.isActive()`.
-- [ ] `com.amsha.core.exception.AmshaException` no longer exists; all references resolve
-      `com.amsha.common.exception.AmshaException` (S1).
-- [ ] No `GeminiExceptionClassifier` reference under `core/`; `com.amsha.llm.api.error` compiles core-free (S3).
-- [ ] `com.amsha.security.api` exists core-free with `RiskLevel`; `ApprovalFrame.RiskLevel` references re-pointed
+- [x] `grep -r "import com.amsha.core" persistence-sqlite persistence-fs persistence-postgres` → empty (S2),
+      including the workspace-scope probe port replacing `WorkspaceScopeHolder.isActive()`. **Done (Issue 02)**.
+- [x] `com.amsha.core.exception.AmshaException` no longer exists; all references resolve
+      `com.amsha.common.exception.AmshaException` (S1). **Done (Issue 01)**.
+- [x] No `GeminiExceptionClassifier` reference under `core/`; `com.amsha.llm.api.error` compiles core-free (S3).
+      **Done (Issue 03, incl. the `LlmErrorClassificationService` SPI)**.
+- [x] `com.amsha.security.api` exists core-free with `RiskLevel`; `ApprovalFrame.RiskLevel` references re-pointed
       (S4); no `core.security.{SecretVault,VaultKey,ToolOperation,...}` imports remain in sandbox/tools-builtin/
-      llm-providers/mcp/onboarding vocabulary call sites.
-- [ ] tools-builtin/mcp/rag/self-evolve/tool-playwright no longer import `core.tools.AgentTool`,
-      `core.agent.role.ToolCapability/Metadata`, `core.agent.AgentSentinels` (S5).
-- [ ] local-ml-onnx no longer imports `core.agent.loop` classifier types (S6).
+      llm-providers/mcp/onboarding vocabulary call sites. **Done (Issue 04)**.
+- [x] tools-builtin/mcp/rag/self-evolve/tool-playwright no longer import `core.tools.AgentTool`,
+      `core.agent.role.ToolCapability/Metadata`, `core.agent.AgentSentinels` (S5). **Done (Issue 05)**.
+- [x] local-ml-onnx no longer imports `core.agent.loop` classifier types (S6). **Done (Issue 06; 13 types moved,
+      `ClassifierFailureMetrics` retained in core — see §8)**.
 - [ ] `bcprov-jdk18on` absent from `core/pom.xml`, present only in `amsha-security` (S7); core imports no
       `com.amsha.security` impl classes.
 - [ ] `amsha-memory` has zero `com.amsha.core` imports; `MemoryPromptBudgetConfig` resolved from the module (S8).
@@ -308,7 +313,39 @@ domain model.
       `ArchitectureBoundaryTest`, `./mvnw clean install -DskipTests`, `mise run sonar:issues`; native smoke for
       native-sensitive rounds.
 
-## 7. Revision History
+---
+
+## 7. Implementation Progress (rev 5, as of 2026-08-22)
+
+| Stream | Issue | Status | Outcome & deviations |
+|---|---|---|---|
+| S1 baseline fences & quick wins | 01 | ✅ Complete | `AmshaException` → `amsha-common`; `PathSanitizer`, `TemporalUtils`, `HtmlArtifactUtil`, `BackoffRetryExecutor` → common; dead `MarkdownService` + both commonmark libs dropped; baseline ArchUnit fences in. |
+| S2 persistence contracts | 02 | ✅ Complete | `CheckpointStatus`, `CronStatus`, `ToolDecision`, `TieredBackend` → `persistence-api`; `PersistenceScopeProbe` port replaces the direct `WorkspaceScopeHolder` probe; `ModelCacheInvalidationPort` added for the cache-invalidation contract. Persistence impls are core-free. |
+| S3 LLM exception taxonomy | 03 | ✅ Complete | Generic `Llm*Exception` hierarchy + chain seam → `llm-provider-api` (legal post-S1); `GeminiExceptionClassifier` → `llm-providers`; new `LlmErrorClassificationService` SPI keeps classification pluggable. |
+| S4 security vocabulary | 04 | ✅ Complete | `com.amsha.security.api` created core-free: `SecretVault`, `VaultKey`, `VaultConstants`, `CryptoConstants`, `RequiresSecret(s)`, `ToolOperation`, `OutboundPurpose`, `OutboundPolicyDecision`, `AutonomyLevel`, and top-level `RiskLevel` extracted from `ApprovalFrame`. |
+| S5 tool api | 05 | ✅ Complete | `AgentTool`, `ToolResponse` family, `ToolExecutionContext`, `ToolCategory`, `IdempotencyMode`, `ToolCapability`, `ToolMetadata`, `AgentSentinels` → `com.amsha.tool.api`. **Deviation:** `DynamicToolDescriptor` also moved from `core.tool` (`DynamicToolAdmission`/`Lookup` stayed in core per the `ToolSearchPort` precedent). Post-review cleanup: javadoc link fixed to `{@code}`, `BY_TOOL_NAME` wrapped in `Map.copyOf`, unused api edges removed from three poms. 21-bean discovery manifest unchanged. |
+| S6 classifier api | 06 | ✅ Complete | 13 types → `com.amsha.classifier.api`: the 10 `core.agent.loop` answer-quality/tool-risk contracts + `PostPolicyToolContext`, `IntentShadowClassifier`, and both `core.classifier` primitives (`ClassifierResult` family incl. nested `NoOpinionReason`, `ShadowClassifier`). **Deviation:** `ClassifierFailureMetrics` retained in core (micrometer dep outside the module's declared set; consumers are the retained dispatchers — issue escape clause). ArchUnit coverage comes from shared rule 16 (`apiModulesShouldNotImportCore`, which already includes `com.amsha.classifier.api..`; a dedicated rule added during S6 was removed post-review as redundant); `ClassifierContractsTest` pins vocabularies; local-ml-onnx re-pointed off `core.agent.loop` classifiers. |
+
+**Fence evolution**: `ArchitectureBoundaryTest` grew from 15 rules (at ADR acceptance) to **19 rules** — the
+api-tier fence for `tool-api`/`classifier-api`/`security-api` is the single shared rule 16
+(`apiModulesShouldNotImportCore`); persistence-impl core-freeness and skills reservation round out the set.
+
+**Adjacent work during this window** (not an ADR stream; tracked in Issue 05 Comments 10–12): a bounded
+memory-synthesis correction ladder in `FinishActionHandler` (correction budget → one-call model-tier escalation
+→ deterministic verbatim-memory exit), eliminating the step-exhaustion loop observed on native runs.
+
+## 8. Remaining Work
+
+1. **S7 `amsha-security` impl (Issue 07)**: vault+crypto machinery, governed HTTP, hygiene utils (~2,300 lines;
+   BouncyCastle leaves core). Unblocked — the S4 vocabulary it needs is in place.
+2. **S8 `amsha-memory` (Issue 08)**: `memory/tiered/*` (17 files) + `TieredMemoryConfig` +
+   `MemoryPromptBudgetConfig` (~1,080 lines); zero-core gate with the legal core → memory edge.
+3. **S9 `amsha-skills` (Issue 09)**: 9-file loading machinery only; registry/contracts stay in core; no
+   `amsha-skills` edge in `core/pom.xml`.
+4. **Issue 10 final wiring**: app wiring audit, two-tier boundary audit, reflection-config audit, JVM CDI
+   startup proof (21-bean manifest), full reactor gates + native smoke.
+
+## 9. Revision History
 
 - **rev 1 (2026-08-21)**: initial proposal.
 - **rev 2 (2026-08-21)**: review fixes — P1-1 `AmshaException` → `amsha-common` before LLM taxonomy move (sealed
@@ -326,3 +363,9 @@ domain model.
   core-never-imports-impl fence (zero-core impl consumed by core via a legal core → memory edge; fence list,
   Issue-01 rule, and Issue-10 audit updated); `RiskLevel` reference count corrected to the measured 27;
   status line aligned with revision history.
+- **rev 5 (2026-08-22)**: progress update — S1–S6 implemented and gated (`amsha-common` utils, `persistence-api`,
+  `llm-provider-api`, `security-api`, `tool-api`, `classifier-api`); §6 checklist items ticked with evidence;
+  new §7 Implementation Progress table with per-stream deviations (`DynamicToolDescriptor` moved in S5,
+  `ClassifierFailureMetrics` retained in S6), §8 Remaining Work, fence evolution documented
+  (19 rules — api-tier coverage via shared rule 16; an initially added dedicated classifier-api rule was later
+  removed as redundant); Revision History renumbered to §9.

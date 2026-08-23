@@ -1,4 +1,4 @@
-package com.amsha.core.agent.loop;
+package com.amsha.classifier.api;
 
 /** Bounded tool-risk prediction; it is never an authorization decision. */
 public enum ToolRiskPrediction {

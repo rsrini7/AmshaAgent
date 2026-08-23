@@ -17,6 +17,7 @@
     <module>llm-provider-api</module>
     <module>security-api</module>
     <module>tool-api</module>
+    <module>classifier-api</module>
     <module>persistence-api</module>
     <module>persistence-common</module>
     <module>common</module>
@@ -121,6 +122,11 @@
       <dependency>
         <groupId>com.amsha</groupId>
         <artifactId>amsha-tool-api</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.amsha</groupId>
+        <artifactId>amsha-classifier-api</artifactId>
         <version>${project.version}</version>
       </dependency>
       <dependency>

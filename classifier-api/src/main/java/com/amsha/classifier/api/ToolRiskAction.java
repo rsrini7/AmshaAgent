@@ -1,4 +1,4 @@
-package com.amsha.core.agent.loop;
+package com.amsha.classifier.api;
 
 /** Monotonic action available to a post-policy tool-risk interceptor. */
 public enum ToolRiskAction {

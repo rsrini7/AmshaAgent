@@ -15,6 +15,11 @@
   <dependencies>
     <dependency>
       <groupId>com.amsha</groupId>
+      <artifactId>amsha-classifier-api</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>com.amsha</groupId>
       <artifactId>amsha-core</artifactId>
     </dependency>
     <dependency>
@@ -41,6 +46,12 @@
       <groupId>com.microsoft.onnxruntime</groupId>
       <artifactId>onnxruntime</artifactId>
     </dependency>
+    <!-- Security vocabulary (vault interface, tool operation, autonomy) -->
+    <dependency>
+      <groupId>com.amsha</groupId>
+      <artifactId>amsha-security-api</artifactId>
+      <version>${project.version}</version>
+    </dependency>
 
     <!-- Test -->
     <dependency>
@@ -48,12 +59,6 @@
       <artifactId>quarkus-junit5</artifactId>
       <scope>test</scope>
     </dependency>
-          <!-- Security vocabulary (vault interface, tool operation, autonomy) -->
-          <dependency>
-              <groupId>com.amsha</groupId>
-              <artifactId>amsha-security-api</artifactId>
-              <version>${project.version}</version>
-          </dependency>
   </dependencies>
 
   <build>

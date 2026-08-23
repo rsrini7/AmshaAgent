@@ -1,16 +1,16 @@
-package com.amsha.core.agent.loop;
+package com.amsha.classifier.api;
 
 import java.util.Objects;
 
 /**
- * Minimum in-process context observed after the authoritative answer guard accepts.
+ * Minimum immutable context exposed after the authoritative answer guard accepts a candidate.
  *
  * <p>The goal and answer are sensitive, ephemeral classifier input. Implementations must not
  * log, persist, export, metric-label, or retain them beyond one synchronous evaluation.
  */
-public record AnswerQualityShadowContext(String agentRole, String goal, String answer, boolean toolInvokedInTurn) {
+public record AnswerQualityContext(String agentRole, String goal, String answer, boolean toolInvokedInTurn) {
 
-    public AnswerQualityShadowContext {
+    public AnswerQualityContext {
         agentRole = requireNonBlank(agentRole, "agentRole");
         goal = Objects.requireNonNullElse(goal, "");
         Objects.requireNonNull(answer, "answer");
@@ -19,7 +19,7 @@ public record AnswerQualityShadowContext(String agentRole, String goal, String a
     /** Returns a payload-free diagnostic summary. */
     @Override
     public String toString() {
-        return "AnswerQualityShadowContext[agentRole=" + agentRole + ", toolInvokedInTurn=" + toolInvokedInTurn + "]";
+        return "AnswerQualityContext[agentRole=" + agentRole + ", toolInvokedInTurn=" + toolInvokedInTurn + "]";
     }
 
     private static String requireNonBlank(String value, String name) {

@@ -14,6 +14,8 @@ import java.security.MessageDigest;
 import java.util.TreeMap;
 import java.util.concurrent.locks.ReentrantLock;
 
+import com.amsha.classifier.api.AnswerQualityShadowContext;
+import com.amsha.classifier.api.ToolRiskShadowContext;
 import com.amsha.common.util.SecretRedactor;
 import com.amsha.core.security.InputSanitizer;
 import com.fasterxml.jackson.databind.JsonNode;

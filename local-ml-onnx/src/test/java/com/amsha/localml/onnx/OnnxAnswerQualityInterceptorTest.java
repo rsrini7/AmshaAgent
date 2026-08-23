@@ -7,11 +7,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import com.amsha.core.agent.loop.AnswerQualityAction;
-import com.amsha.core.agent.loop.AnswerQualityContext;
-import com.amsha.core.agent.loop.AnswerQualityPrediction;
-import com.amsha.core.classifier.ClassifierResult;
-import com.amsha.core.classifier.ClassifierResult.NoOpinionReason;
+import com.amsha.classifier.api.AnswerQualityAction;
+import com.amsha.classifier.api.AnswerQualityContext;
+import com.amsha.classifier.api.AnswerQualityPrediction;
+import com.amsha.classifier.api.ClassifierResult;
+import com.amsha.classifier.api.ClassifierResult.NoOpinionReason;
 import com.amsha.localml.onnx.OnnxClassifierRuntimeControl.Classifier;
 import com.fasterxml.jackson.databind.ObjectMapper;
 

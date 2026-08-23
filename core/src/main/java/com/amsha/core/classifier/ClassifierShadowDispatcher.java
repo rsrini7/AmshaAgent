@@ -6,7 +6,9 @@ import java.util.concurrent.Executor;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.function.Consumer;
 
-import com.amsha.core.classifier.ClassifierResult.NoOpinionReason;
+import com.amsha.classifier.api.ClassifierResult;
+import com.amsha.classifier.api.ClassifierResult.NoOpinionReason;
+import com.amsha.classifier.api.ShadowClassifier;
 
 /** Shared failure-isolating asynchronous dispatcher for all shadow classifiers. */
 public final class ClassifierShadowDispatcher {

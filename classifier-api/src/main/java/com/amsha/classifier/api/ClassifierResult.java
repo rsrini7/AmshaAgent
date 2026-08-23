@@ -1,4 +1,4 @@
-package com.amsha.core.classifier;
+package com.amsha.classifier.api;
 
 import java.util.Objects;
 
