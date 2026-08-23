@@ -23,7 +23,6 @@
     <dependency>
       <groupId>com.amsha</groupId>
       <artifactId>amsha-persistence-api</artifactId>
-      <version>${project.version}</version>
     </dependency>
 
     <dependency>
@@ -69,13 +68,11 @@
           <dependency>
               <groupId>com.amsha</groupId>
               <artifactId>amsha-security-api</artifactId>
-              <version>${project.version}</version>
           </dependency>
           <!-- Tool authoring contracts -->
           <dependency>
               <groupId>com.amsha</groupId>
               <artifactId>amsha-tool-api</artifactId>
-              <version>${project.version}</version>
           </dependency>
   </dependencies>
 

@@ -26,7 +26,6 @@
     <dependency>
       <groupId>com.amsha</groupId>
       <artifactId>amsha-security</artifactId>
-      <version>${project.version}</version>
     </dependency>
     <dependency>
       <groupId>com.amsha</groupId>
@@ -35,7 +34,6 @@
     <dependency>
       <groupId>com.amsha</groupId>
       <artifactId>amsha-persistence-api</artifactId>
-      <version>${project.version}</version>
     </dependency>
     <dependency>
       <groupId>io.quarkus</groupId>
@@ -93,13 +91,11 @@
           <dependency>
               <groupId>com.amsha</groupId>
               <artifactId>amsha-security-api</artifactId>
-              <version>${project.version}</version>
           </dependency>
           <!-- Tool authoring contracts -->
           <dependency>
               <groupId>com.amsha</groupId>
               <artifactId>amsha-tool-api</artifactId>
-              <version>${project.version}</version>
           </dependency>
   </dependencies>
 

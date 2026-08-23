@@ -21,7 +21,6 @@
         <dependency>
             <groupId>com.amsha</groupId>
             <artifactId>amsha-security-api</artifactId>
-            <version>${project.version}</version>
         </dependency>
 
         <!-- Quarkus Arc CDI annotations + Qute TemplateData -->

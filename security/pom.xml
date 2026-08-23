@@ -21,7 +21,6 @@
         <dependency>
             <groupId>com.amsha</groupId>
             <artifactId>amsha-security-api</artifactId>
-            <version>${project.version}</version>
         </dependency>
 
         <!-- Tier-2 impl: cross-cutting core services (audit, scope, state store) -->

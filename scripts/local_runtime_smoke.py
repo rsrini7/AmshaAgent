@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import base64
 import hashlib
 import json
 import math
@@ -11,6 +12,7 @@ import os
 import re
 import secrets
 import shutil
+import signal
 import socket
 import subprocess
 import sys
@@ -614,7 +616,7 @@ def native_environment(
 
 def wait_for_health(base_url: str, process: subprocess.Popen[bytes], startup_timeout: float) -> None:
     start_time = time.monotonic()
-    while time.monotonic() - start_time < 150:
+    while time.monotonic() - start_time < startup_timeout:
         if process.poll() is not None:
             raise SmokeFailure("Native process exited before health became available")
         try:
@@ -668,7 +670,9 @@ def run_native(args: argparse.Namespace, project_root: Path, config: OmlxConfig,
     data_directory = run_directory / "data"
     data_directory.mkdir()
     log_path = run_directory / "native.log"
-    internal_api_key = secrets.token_urlsafe(32)
+    # Standard Base64 (not urlsafe): EnvConfigInitializer.validateSecurityKeys decodes
+    # AMSHA_API_KEYS_INTERNAL with the standard decoder and warns on '-'/'_' characters.
+    internal_api_key = base64.b64encode(secrets.token_bytes(32)).decode()
     environment = native_environment(
         os.environ,
         config,

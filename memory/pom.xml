@@ -21,7 +21,6 @@
         <dependency>
             <groupId>com.amsha</groupId>
             <artifactId>amsha-persistence-api</artifactId>
-            <version>${project.version}</version>
         </dependency>
 
         <!-- Quarkus Arc CDI (brings smallrye-config for @ConfigMapping) -->

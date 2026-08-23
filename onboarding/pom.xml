@@ -15,22 +15,18 @@
     <dependency>
       <groupId>com.amsha</groupId>
       <artifactId>amsha-core</artifactId>
-      <version>${project.version}</version>
     </dependency>
     <dependency>
       <groupId>com.amsha</groupId>
       <artifactId>amsha-security</artifactId>
-      <version>${project.version}</version>
     </dependency>
     <dependency>
       <groupId>com.amsha</groupId>
       <artifactId>amsha-llm-provider-api</artifactId>
-      <version>${project.version}</version>
     </dependency>
     <dependency>
       <groupId>com.amsha</groupId>
       <artifactId>amsha-mcp</artifactId>
-      <version>${project.version}</version>
     </dependency>
     <dependency>
       <groupId>io.quarkus</groupId>
@@ -111,20 +107,17 @@
     <dependency>
       <groupId>com.amsha</groupId>
       <artifactId>amsha-llm-providers</artifactId>
-      <version>${project.version}</version>
       <scope>test</scope>
     </dependency>
           <!-- Security vocabulary (vault interface, tool operation, autonomy) -->
           <dependency>
               <groupId>com.amsha</groupId>
               <artifactId>amsha-security-api</artifactId>
-              <version>${project.version}</version>
           </dependency>
           <!-- Tool authoring contracts -->
           <dependency>
               <groupId>com.amsha</groupId>
               <artifactId>amsha-tool-api</artifactId>
-              <version>${project.version}</version>
           </dependency>
   </dependencies>
 

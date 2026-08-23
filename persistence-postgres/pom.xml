@@ -18,21 +18,18 @@
         <dependency>
             <groupId>com.amsha</groupId>
             <artifactId>amsha-persistence-api</artifactId>
-            <version>${project.version}</version>
         </dependency>
 
         <!-- Shared DTOs/utilities -->
         <dependency>
             <groupId>com.amsha</groupId>
             <artifactId>amsha-persistence-common</artifactId>
-            <version>${project.version}</version>
         </dependency>
 
         <!-- Shared utilities (LogUtil, SecretRedactor) — persistence knows only common + persistence-api -->
         <dependency>
             <groupId>com.amsha</groupId>
             <artifactId>amsha-common</artifactId>
-            <version>${project.version}</version>
         </dependency>
 
         <!-- LangChain4j embedding types for vector stores -->
@@ -44,7 +41,6 @@
         <dependency>
             <groupId>com.amsha</groupId>
             <artifactId>amsha-core</artifactId>
-            <version>${project.version}</version>
             <scope>test</scope>
         </dependency>
 
@@ -128,7 +124,6 @@
         <dependency>
             <groupId>com.amsha</groupId>
             <artifactId>amsha-channel-api</artifactId>
-            <version>${project.version}</version>
             <scope>test</scope>
         </dependency>
         <dependency>
@@ -145,7 +140,6 @@
     <dependency>
       <groupId>com.amsha</groupId>
       <artifactId>amsha-security</artifactId>
-      <version>${project.version}</version>
       <scope>test</scope>
     </dependency>
     </dependencies>

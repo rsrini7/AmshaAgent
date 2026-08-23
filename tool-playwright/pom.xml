@@ -37,7 +37,6 @@ by shelling out to the official @playwright/cli daemon (Node.js 20+ required).</
     <dependency>
       <groupId>com.amsha</groupId>
       <artifactId>amsha-mcp</artifactId>
-      <version>${project.version}</version>
       <optional>true</optional>
     </dependency>
     <!-- Test -->
@@ -84,13 +83,11 @@ by shelling out to the official @playwright/cli daemon (Node.js 20+ required).</
           <dependency>
               <groupId>com.amsha</groupId>
               <artifactId>amsha-security-api</artifactId>
-              <version>${project.version}</version>
           </dependency>
           <!-- Tool authoring contracts -->
           <dependency>
               <groupId>com.amsha</groupId>
               <artifactId>amsha-tool-api</artifactId>
-              <version>${project.version}</version>
           </dependency>
   </dependencies>
 

@@ -32,7 +32,6 @@
     <dependency>
       <groupId>com.amsha</groupId>
       <artifactId>amsha-security</artifactId>
-      <version>${project.version}</version>
     </dependency>
     <dependency>
       <groupId>com.amsha</groupId>
@@ -172,7 +171,6 @@
           <dependency>
               <groupId>com.amsha</groupId>
               <artifactId>amsha-security-api</artifactId>
-              <version>${project.version}</version>
           </dependency>
   </dependencies>
 

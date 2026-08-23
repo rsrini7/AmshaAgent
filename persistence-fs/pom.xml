@@ -19,7 +19,6 @@
         <dependency>
             <groupId>com.amsha</groupId>
             <artifactId>amsha-persistence-api</artifactId>
-            <version>${project.version}</version>
         </dependency>
 
         <!-- Amsha Agent core domain (domain types + CheckpointMapper) -->
@@ -28,14 +27,12 @@
         <dependency>
             <groupId>com.amsha</groupId>
             <artifactId>amsha-self-evolve</artifactId>
-            <version>${project.version}</version>
         </dependency>
 
         <!-- Shared utilities — persistence knows only common + persistence-api -->
         <dependency>
             <groupId>com.amsha</groupId>
             <artifactId>amsha-common</artifactId>
-            <version>${project.version}</version>
         </dependency>
 
         <!-- Quarkus CDI -->
