@@ -195,22 +195,6 @@ public class McpClientService {
         connectInternal(serverName, serverName, serverUrl, category, handshakeHeaders, false, currentOwner());
     }
 
-    /**
-     * @deprecated use the selective-registration overload and pass the explicitly enabled tool
-     *     names
-     */
-    @Deprecated(since = "1.0", forRemoval = false)
-    public void connectForUser(
-            String serverName,
-            String userId,
-            String serverUrl,
-            ToolCategory category,
-            Map<String, String> handshakeHeaders,
-            boolean preApproved) {
-        connectForUserWithEnabledTools(
-                serverName, userId, serverUrl, category, handshakeHeaders, preApproved, Set.of());
-    }
-
     /** Performs the handshake and returns tool metadata without registering executable tools. */
     public List<DiscoveredTool> discoverForUser(
             String serverName,
@@ -332,22 +316,6 @@ public class McpClientService {
      * while an invalid/expired/mismatched token fails closed to a non-approved connect. When no token
      * is supplied the caller falls back to the unapproved path and must clear HITL on each request.
      */
-    /**
-     * @deprecated use the selective-registration overload and pass the explicitly enabled tool
-     *     names
-     */
-    @Deprecated(since = "1.0", forRemoval = false)
-    public void connectForUser(
-            String serverName,
-            String userId,
-            String serverUrl,
-            ToolCategory category,
-            Map<String, String> handshakeHeaders,
-            String approvalToken) {
-        connectForUserWithEnabledTools(
-                serverName, userId, serverUrl, category, handshakeHeaders, approvalToken, Set.of());
-    }
-
     private List<DiscoveredTool> connectInternal(
             String serverName,
             String runtimeKey,

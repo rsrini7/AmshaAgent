@@ -134,9 +134,9 @@ class BootstrapResourceTest {
                 .post("/onboarding/bootstrap/local-recovery")
                 .then()
                 .statusCode(200)
-                .body("ownerId", not(isEmptyOrNullString()))
-                .body("apiKey", not(isEmptyOrNullString()))
-                .cookie("AMSHA_API_KEY", not(isEmptyOrNullString()));
+                .body("ownerId", not(emptyOrNullString()))
+                .body("apiKey", not(emptyOrNullString()))
+                .cookie("AMSHA_API_KEY", not(emptyOrNullString()));
     }
 
     @ApplicationScoped

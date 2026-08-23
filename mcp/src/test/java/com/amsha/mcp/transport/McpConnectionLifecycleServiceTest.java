@@ -118,7 +118,8 @@ class McpConnectionLifecycleServiceTest {
 
         assertEquals(0, reconnected);
         verify(mcpClientService, never())
-                .connectForUser(anyString(), anyString(), anyString(), any(), any(), anyBoolean());
+                .connectForUserWithEnabledTools(
+                        anyString(), anyString(), anyString(), any(), any(), anyBoolean(), any());
         verify(mcpClientService, never()).configureHeaderSecretRefs(anyString(), anyString(), any());
     }
 

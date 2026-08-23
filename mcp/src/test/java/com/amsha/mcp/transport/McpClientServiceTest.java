@@ -191,8 +191,8 @@ class McpClientServiceTest {
                 .thenReturn(receipt);
 
         WorkspaceContext.run("sess-1", "user-1", "chat-1", AutonomyLevel.FULL, "COORDINATOR", () -> {
-            service.connectForUser(
-                    "app-server", "user-1", wireMock.baseUrl(), ToolCategory.NETWORK, Map.of(), "tok-123");
+            service.connectForUserWithEnabledTools(
+                    "app-server", "user-1", wireMock.baseUrl(), ToolCategory.NETWORK, Map.of(), "tok-123", Set.of());
             assertTrue(service.httpServerUrl("app-server").isPresent());
             return null;
         });
@@ -205,8 +205,14 @@ class McpClientServiceTest {
 
         assertThrows(
                 McpConnectionException.class,
-                () -> service.connectForUser(
-                        "app-server-bad", "user-1", wireMock.baseUrl(), ToolCategory.NETWORK, Map.of(), "bad-tok"));
+                () -> service.connectForUserWithEnabledTools(
+                        "app-server-bad",
+                        "user-1",
+                        wireMock.baseUrl(),
+                        ToolCategory.NETWORK,
+                        Map.of(),
+                        "bad-tok",
+                        Set.of()));
     }
 
     @Test
