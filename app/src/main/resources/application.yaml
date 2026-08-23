@@ -840,7 +840,7 @@ amsha:
       interval-hours: 24
 
   workspace:
-    root-dir: "${AMSHA_DATA_DIR:./data}/workspaces"
+    root-dir: "${AMSHA_WORKSPACE_ROOT_DIR:${AMSHA_DATA_DIR:./data}/workspaces}"
     session-ttl-minutes: 30
     gc-interval: "5m"
     heartbeat-interval: "60s"
@@ -1189,7 +1189,7 @@ mp:
         max-retries-strict: ${AMSHA_AGENT_SCHEMA_CORRECTION_MAX_RETRIES_STRICT:4}
         max-retries-lenient: ${AMSHA_AGENT_SCHEMA_CORRECTION_MAX_RETRIES_LENIENT:6}
     workspace:
-      root-dir: "${AMSHA_DATA_DIR:./data}/workspaces"
+      root-dir: "${AMSHA_WORKSPACE_ROOT_DIR:${AMSHA_DATA_DIR:./data}/workspaces}"
     sandbox:
       strategy: PODMAN
     autonomy:
