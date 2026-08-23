@@ -6,6 +6,7 @@ import jakarta.inject.Inject;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -50,6 +51,20 @@ public class GroupConsultationEngine {
 
     @Inject
     public AgentGroupRegistry groupRegistry;
+
+    /**
+     * Proxy-safe registry availability check. Callers holding an {@code @ApplicationScoped}
+     * client proxy must NOT read the {@code groupRegistry} field directly — field access on a
+     * proxy reads the proxy's own (always null) field, not the contextual instance.
+     */
+    public boolean hasGroupRegistry() {
+        return groupRegistry != null;
+    }
+
+    /** Proxy-safe lookup of a group by id (delegates to the real registry instance). */
+    public Optional<AgentGroup> findGroupById(String groupId) {
+        return groupRegistry.findById(groupId);
+    }
 
     @Inject
     GroupConsultationService consultationService;

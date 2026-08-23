@@ -353,13 +353,15 @@ public class DelegateToAgentTool implements AgentTool {
             String chatId,
             int depth) {
 
-        // Guard against null groupRegistry (CDI injection may fail in some contexts)
-        if (groupConsultationEngine.groupRegistry == null) {
-            log.warnf("[GROUP_CONSULT] groupRegistry is null — falling back to normal delegation");
+        // Guard against unavailable registry. NOTE: must go through proxy-safe methods —
+        // reading groupConsultationEngine.groupRegistry directly always yields null because
+        // field access does not pass through the @ApplicationScoped client proxy.
+        if (!groupConsultationEngine.hasGroupRegistry()) {
+            log.warnf("[GROUP_CONSULT] groupRegistry unavailable — falling back to normal delegation");
             return executeNormalDelegation(ctx, outerSessionId, leadRoleId, goal, targetRole, userId, chatId, depth);
         }
 
-        var groupOpt = groupConsultationEngine.groupRegistry.findById(groupConsultationService
+        var groupOpt = groupConsultationEngine.findGroupById(groupConsultationService
                 .getGroup(leadRoleId)
                 .map(g -> g.groupId())
                 .orElse(""));

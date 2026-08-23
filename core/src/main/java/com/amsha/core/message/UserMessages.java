@@ -39,10 +39,18 @@ public final class UserMessages {
                     + "Only roles with sufficient capabilities (e.g. 'coder') can delegate to this agent. "
                     + "Please request the coordinator to delegate via coder.";
     public static final String DELEGATION_FAILED_FORMAT = "Delegation to '%s' failed: %s";
+    /**
+     * Stable marker embedded in {@link #DELEGATION_PAUSED_FORMAT} so deterministic
+     * terminal guards (ToolResultProcessor.handleDelegateOutcome) can detect a paused
+     * delegation regardless of whether the delegate tool reports it as success or failure.
+     */
+    public static final String DELEGATION_PAUSED_MARKER = "PAUSED awaiting human approval";
+
     public static final String DELEGATION_PAUSED_FORMAT =
-            "Delegation to '%s' requires approval for tool '%s' (session: %s). "
-                    + "The delegated agent is waiting for human approval. "
-                    + "Inform the user that approval is needed and wait for it to be granted.";
+            "Delegation to '%s' is " + DELEGATION_PAUSED_MARKER + ": tool '%s' needs human approval (session: %s). "
+                    + "Do NOT retry garuda and do NOT treat this as an error. "
+                    + "Inform the user that approval is pending; the delegated agent's result "
+                    + "will be delivered once it is granted. You must FINISH this turn now.";
     public static final String DELEGATION_EXCEEDED_FORMAT =
             "Agent '%s' exceeded its iteration budget (%d iterations). Try simplifying the goal.";
     public static final String SESSION_CLEARED = "🧹 Session state and temporary workspace cleared.";

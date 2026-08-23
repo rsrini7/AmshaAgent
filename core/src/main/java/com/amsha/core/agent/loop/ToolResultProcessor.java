@@ -6,6 +6,7 @@ import java.util.Map;
 
 import com.amsha.core.agent.reasoning.ReasoningStep;
 import com.amsha.core.agent.result.AgentResult;
+import com.amsha.core.message.UserMessages;
 import com.amsha.tool.api.ToolCapability;
 import com.amsha.tool.api.ToolResponse;
 
@@ -144,6 +145,15 @@ public class ToolResultProcessor {
 
     private StepDecision handleDelegateOutcome(
             AgentExecutionContext ctx, ToolResponse res, String obs, List<ReasoningStep> history) {
+        // Delegation paused for human approval — deterministic terminal with message, no
+        // retry and no reliance on the model choosing FINISH. The delegate checkpoint is
+        // AWAITING_APPROVAL with channel info so the user can approve the inner session
+        // directly. Matches BOTH shapes: success-shaped (F1 fix) and legacy failure(409).
+        if (res != null && obs.contains(UserMessages.DELEGATION_PAUSED_MARKER)) {
+            String msg = "⏳ " + obs;
+            writer.saveAnswer(ctx.sessionId(), msg);
+            return StepDecision.terminal(AgentResult.finished(msg, List.copyOf(history)));
+        }
         if (res != null
                 && res.success()
                 && !obs.startsWith("⚠️")
@@ -153,9 +163,6 @@ public class ToolResultProcessor {
             // The LLM will decide whether to delegate again, write code, or finish.
             return null;
         }
-        // Delegation paused for human approval — terminal with message, don't retry.
-        // The delegate checkpoint is AWAITING_APPROVAL with channel info so the user
-        // can approve the inner session directly.
         if (res != null && !res.success() && obs.contains("paused for human approval")) {
             String msg = "⏳ " + obs;
             writer.saveAnswer(ctx.sessionId(), msg);

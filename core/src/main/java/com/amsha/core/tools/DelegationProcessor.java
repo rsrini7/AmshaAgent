@@ -87,8 +87,12 @@ public class DelegationProcessor {
 
     public ToolResponse handleSubAgentResult(AgentResult result, AgentRoleEnum targetRole) {
         if (result instanceof AgentResult.AwaitingApproval aa) {
-            return ToolResponse.failure(
-                    409, delegationPaused(targetRole.toScopedName(), aa.toolName(), aa.sessionId()));
+            // A paused delegation is NOT a failure: the child session stays AWAITING_APPROVAL
+            // and is resumed when the human grants the pending approval. Returning a failure
+            // here used to mark the parent checkpoint FAILED (TOOL_FAILED) while the child
+            // kept waiting — divergent state and a misleading /status. Mirror the depth-limit
+            // precedent: return success with a do-not-retry/FINISH instruction.
+            return ToolResponse.success(delegationPaused(targetRole.toScopedName(), aa.toolName(), aa.sessionId()));
         }
         if (result instanceof AgentResult.LoopExceeded) {
             return ToolResponse.failure(
