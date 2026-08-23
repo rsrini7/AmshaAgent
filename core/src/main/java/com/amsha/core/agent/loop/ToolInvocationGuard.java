@@ -23,6 +23,8 @@ import com.amsha.core.agent.reasoning.ReasoningStepSupport;
 import com.amsha.core.agent.role.CapabilityRegistry;
 import com.amsha.core.agent.role.RoleRegistry;
 import com.amsha.core.governance.ApprovalFrame;
+import com.amsha.core.hitl.ApprovalLeaseStore;
+import com.amsha.core.security.AutonomyPolicy;
 import com.amsha.core.skill.CompiledSkillEntry;
 import com.amsha.core.tool.DynamicToolAdmission;
 import com.amsha.core.tool.DynamicToolAdmissionLookup;
@@ -52,6 +54,12 @@ public class ToolInvocationGuard {
 
     @Inject
     public CapabilityRegistry capabilityRegistry;
+
+    @Inject
+    AutonomyPolicy autonomyPolicy;
+
+    @Inject
+    ApprovalLeaseStore approvalLeaseStore;
 
     @Inject
     public ObjectMapper objectMapper;
@@ -174,8 +182,8 @@ public class ToolInvocationGuard {
                     + "'. Use one of your available tools, or delegate this task to a suitable agent.");
         }
 
-        boolean isSchedulingTool = ToolCapability.SCHEDULE_TASK.toolName().equals(toolName)
-                || ToolCapability.MANAGE_SCHEDULE.toolName().equals(toolName);
+        boolean isManagementScheduleTool =
+                ToolCapability.MANAGE_SCHEDULE.toolName().equals(toolName);
 
         boolean staticRequiresApproval =
                 toolOpt.map(tool -> tool.requiresManualApproval(params)).orElse(false);
@@ -189,22 +197,41 @@ public class ToolInvocationGuard {
                         || ToolCapability.ARCHIVAL_MEMORY_SEARCH.toolName().equals(toolName)
                         || ToolCapability.CORE_MEMORY_READ.toolName().equals(toolName);
 
-        boolean isExempt = isSchedulingTool || (isMemoryReadTool && level != AutonomyLevel.READONLY);
+        // ADR-schedule-task-hitl-under-supervised: only management actions stay exempt;
+        // schedule_task (cron CREATION) is operator-consented under supervision.
+        boolean isExempt = isManagementScheduleTool || (isMemoryReadTool && level != AutonomyLevel.READONLY);
 
         ToolOperation op = toolOpt.map(AgentTool::requiredOperation)
                 .orElseGet(() -> Objects.requireNonNull(dynamicAdmission).requiredOperation());
         boolean alwaysRequiresHitl = op == ToolOperation.EXECUTE_SHELL || op == ToolOperation.NETWORK_OUTBOUND;
 
-        if (!isExempt
-                && (alwaysRequiresHitl
-                        || dynamicRequiresApproval
-                        || ((roleRegistry.requiresApprovalForTools(agentRole) || staticRequiresApproval)
-                                && !AutonomyLevel.FULL.equals(level)))) {
-            // HITL is the deliberate stronger control for approved operations. The automated
-            // post-policy classifier is not re-run after this pause/resume boundary.
-            observeToolRiskForCollection(sessionId, agentRole, level, toolName, params, goal);
-            ApprovalFrame frame = new ApprovalFrame(toolName, params, op.riskLevel());
-            return new GuardDecision.PauseForApproval(frame);
+        // ADR-schedule-task-hitl-under-supervised: a policy-disallowed operation under
+        // SUPERVISED for approval-requiring roles must pause BEFORE any call executes —
+        // including inside parallel batches — instead of salvaging to a mid-batch 409.
+        boolean roleRequiresApproval = roleRegistry.requiresApprovalForTools(agentRole);
+        boolean autonomyDrivenPause =
+                roleRequiresApproval && AutonomyLevel.SUPERVISED.equals(level) && !autonomyPolicy.isAllowed(level, op);
+
+        boolean hitlRequired = alwaysRequiresHitl
+                || dynamicRequiresApproval
+                || ((roleRequiresApproval || staticRequiresApproval) && !AutonomyLevel.FULL.equals(level))
+                || autonomyDrivenPause;
+
+        if (!isExempt && hitlRequired) {
+            // Approval lease (ADR-approval-lease-for-parallel-batches): satisfies ONLY the
+            // human prompt. All mandatory checks above already ran, Blocked returns all
+            // precede this point, and the post-policy classifier below still applies —
+            // its REQUIRE_APPROVAL re-pauses even with an active lease.
+            if (approvalLeaseStore != null
+                    && approvalLeaseStore.hasActiveLease(sessionId, agentRole, null, toolName, params)) {
+                log.debugf("GUARD HITL satisfied by active lease session=%s tool=%s", sessionId, toolName);
+            } else {
+                // HITL is the deliberate stronger control for approved operations. The automated
+                // post-policy classifier is not re-run after this pause/resume boundary.
+                observeToolRiskForCollection(sessionId, agentRole, level, toolName, params, goal);
+                ApprovalFrame frame = new ApprovalFrame(toolName, params, op.riskLevel());
+                return new GuardDecision.PauseForApproval(frame);
+            }
         }
         GuardDecision postPolicyDecision =
                 applyPostPolicyToolRisk(agentRole, level, toolName, params, history, goal, op);

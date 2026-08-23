@@ -1,6 +1,9 @@
 # ADR: Require HITL Approval for `schedule_task` under SUPERVISED Autonomy
 
-- **Status**: Accepted (owner sign-off 2026-08-24; implementation to follow)
+- **Status**: Accepted and implemented (owner sign-off 2026-08-24; shipped same day —
+  policy flip in `AutonomyPolicy.Standard`/`StandardAutonomyPolicy`/`TestAutonomyPolicyProducer`,
+  salvage default + exemption narrowing, guard autonomy-driven pause clause; core suite
+  2168/2168, PMD `core,security -am` clean)
 - **Date**: 2026-08-24
 - **Decision Owners**: Amsha Architecture Committee / Operator
 - **Origin**: Native-binary incident review 2026-08-23 (session `cli-937d65b6…`, finding F7);

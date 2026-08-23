@@ -16,6 +16,7 @@ import java.util.stream.Stream;
 
 import com.amsha.core.agent.role.CapabilityRegistry;
 import com.amsha.core.agent.role.RoleRegistry;
+import com.amsha.core.hitl.ApprovalLeaseStore;
 import com.amsha.core.tool.DynamicToolAdmissionLookup;
 import com.amsha.core.tool.ToolGuardInterceptor;
 import com.amsha.core.tools.ToolRegistry;
@@ -57,6 +58,15 @@ class ToolInvocationGuardMemoryReadTest {
         guard.capabilityRegistry = Mockito.mock(CapabilityRegistry.class);
         Mockito.when(guard.capabilityRegistry.hasCapability(ArgumentMatchers.anyString(), ArgumentMatchers.anyString()))
                 .thenReturn(true);
+        guard.autonomyPolicy = new com.amsha.core.security.AutonomyPolicy.Standard();
+        guard.approvalLeaseStore = org.mockito.Mockito.mock(ApprovalLeaseStore.class);
+        org.mockito.Mockito.when(guard.approvalLeaseStore.hasActiveLease(
+                        org.mockito.ArgumentMatchers.anyString(),
+                        org.mockito.ArgumentMatchers.anyString(),
+                        org.mockito.ArgumentMatchers.any(),
+                        org.mockito.ArgumentMatchers.anyString(),
+                        org.mockito.ArgumentMatchers.any()))
+                .thenReturn(false);
         guard.dynamicToolAdmissionLookup = dynamicToolAdmissionLookup;
         guard.init();
     }

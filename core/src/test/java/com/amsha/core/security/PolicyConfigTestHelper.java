@@ -46,8 +46,8 @@ public final class PolicyConfigTestHelper {
                 return new Governance() {
                     @Override
                     public List<String> hitlExemptTools() {
-                        return List.of(
-                                ToolCapability.SCHEDULE_TASK.toolName(), ToolCapability.MANAGE_SCHEDULE.toolName());
+                        // ADR-schedule-task-hitl-under-supervised: only manage_schedule stays exempt.
+                        return List.of(ToolCapability.MANAGE_SCHEDULE.toolName());
                     }
 
                     @Override
@@ -58,7 +58,8 @@ public final class PolicyConfigTestHelper {
                                 "EXECUTE_SHELL",
                                 "WRITE_MEMORY",
                                 "DELEGATE_AUTONOMOUS",
-                                "WRITE_FS");
+                                "WRITE_FS",
+                                "SCHEDULE_AUTONOMOUS");
                     }
                 };
             }

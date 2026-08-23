@@ -785,6 +785,12 @@ amsha:
     pre-executable-tools: ""   # (§75-A1) comma-separated tool names
     delegate-approver-ids: ""  # (§75-B1) comma-separated user IDs
     timeout-hours: 24
+    # Approval lease for parallel batches (ADR-approval-lease-for-parallel-batches).
+    # Session-bound, in-memory, TTL-bounded optimization hints; disabled restores
+    # strict re-prompting.
+    approval-lease:
+      enabled: ${AMSHA_HITL_APPROVAL_LEASE_ENABLED:true}
+      ttl-seconds: ${AMSHA_HITL_APPROVAL_LEASE_TTL_SECONDS:3600}
 
   mcp:
     exposed-tools:

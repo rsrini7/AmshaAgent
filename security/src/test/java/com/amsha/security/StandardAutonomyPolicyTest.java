@@ -24,10 +24,12 @@ class StandardAutonomyPolicyTest {
     }
 
     @Test
-    void supervisedAllowsOnlyReadAndScheduling() {
+    void supervisedAllowsOnlyReads() {
+        // ADR-schedule-task-hitl-under-supervised: SCHEDULE_AUTONOMOUS no longer auto-allows.
         assertTrue(policy.isAllowed(AutonomyLevel.SUPERVISED, ToolOperation.READ_FS));
-        assertTrue(policy.isAllowed(AutonomyLevel.SUPERVISED, ToolOperation.SCHEDULE_AUTONOMOUS));
+        assertFalse(policy.isAllowed(AutonomyLevel.SUPERVISED, ToolOperation.SCHEDULE_AUTONOMOUS));
         assertFalse(policy.isAllowed(AutonomyLevel.SUPERVISED, ToolOperation.NETWORK_OUTBOUND));
+        assertFalse(policy.isAllowed(AutonomyLevel.SUPERVISED, ToolOperation.EXECUTE_SHELL));
     }
 
     @Test

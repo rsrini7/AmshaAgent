@@ -1,6 +1,10 @@
 # ADR: Approval Lease for Parallel Tool Batches (Approval-Fatigue Mitigation)
 
-- **Status**: Accepted (owner sign-off 2026-08-24; implementation to follow)
+- **Status**: Accepted and implemented (owner sign-off 2026-08-24; shipped same day —
+  `ApprovalLeaseStore` in `core/hitl`, grant funnel in `ApprovalStateMachine.decide`,
+  guard consumption inside the deterministic HITL clause with `Blocked`-beats-lease
+  ordering, `HITL_LEASE_REUSED` telemetry, `clearSession` wired at workspace teardown,
+  kill-switch `amsha.hitl.approval-lease.enabled`; core suite 2168/2168)
 - **Date**: 2026-08-24
 - **Decision Owners**: Amsha Architecture Committee / Operator
 - **Origin**: Native-binary incident review 2026-08-23 (session `cli-937d65b6…`, finding F2 —
