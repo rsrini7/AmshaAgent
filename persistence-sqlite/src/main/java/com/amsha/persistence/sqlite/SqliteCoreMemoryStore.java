@@ -16,9 +16,11 @@ import com.amsha.persistence.sqlite.jdbi.CoreMemoryJdbiDao;
 
 import org.jdbi.v3.core.Jdbi;
 
+import io.quarkus.arc.Unremovable;
 import io.quarkus.arc.properties.IfBuildProperty;
 
 @ApplicationScoped
+@Unremovable
 @TieredBackend("sqlite")
 @IfBuildProperty(name = "amsha.persistence.backend", stringValue = "sqlite", enableIfMissing = true)
 public class SqliteCoreMemoryStore implements CoreMemoryStorePort {

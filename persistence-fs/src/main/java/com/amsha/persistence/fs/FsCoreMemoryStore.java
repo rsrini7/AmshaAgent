@@ -16,6 +16,7 @@ import com.amsha.persistence.api.VersionConflictException;
 
 import org.jboss.logging.Logger;
 
+import io.quarkus.arc.Unremovable;
 import io.quarkus.arc.properties.IfBuildProperty;
 
 /**
@@ -23,6 +24,7 @@ import io.quarkus.arc.properties.IfBuildProperty;
  * Stores blocks as JSON per user in {dataDir}/core-memory/{userId}.json.
  */
 @ApplicationScoped
+@Unremovable
 @TieredBackend("fs")
 @IfBuildProperty(name = "amsha.persistence.backend", stringValue = "fs")
 public class FsCoreMemoryStore implements CoreMemoryStorePort {

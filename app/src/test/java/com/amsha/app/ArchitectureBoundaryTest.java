@@ -20,9 +20,9 @@ import com.tngtech.archunit.lang.ArchRule;
  *
  * <p>Two-tier boundary policy (extract-core-subsystems, ADR §2.1/§4.1):
  * <ul>
- *   <li><b>API tier</b> ({@code llm-provider-api}, {@code persistence-api}, {@code channel-api}, and future
- *       {@code tool-api}/{@code classifier-api}/{@code security-api}): zero {@code com.amsha.core} imports.</li>
- *   <li><b>Impl tier</b> ({@code sandbox}, {@code tools-builtin}, future {@code amsha-security}/
+ *   <li><b>API tier</b> ({@code llm-provider-api}, {@code persistence-api}, {@code channel-api},
+ *       {@code tool-api}, {@code classifier-api}, {@code security-api}): zero {@code com.amsha.core} imports.</li>
+ *   <li><b>Impl tier</b> ({@code sandbox}, {@code tools-builtin}, {@code amsha-security},
  *       {@code amsha-skills}): may depend on core when consuming core services; core must never import an
  *       impl module. {@code com.amsha.memory} is the exempted zero-core impl consumed by core
  *       (legal core → memory edge).</li>
@@ -183,19 +183,24 @@ public class ArchitectureBoundaryTest {
             .allowEmptyShould(true);
 
     // 16. API tier: api modules must NOT depend on com.amsha.core..
-    //     (tool-api Issue 05, classifier-api Issue 06, security-api vocabulary Issue 04)
+    //     (llm-api is fenced by rule 11; persistence-api/channel-api added after the S9 deep-dive
+    //     review closed the fence-coverage asymmetry; tool-api Issue 05, classifier-api Issue 06,
+    //     security-api vocabulary Issue 04)
     @ArchTest
     static final ArchRule apiModulesShouldNotImportCore = noClasses()
             .that()
-            .resideInAnyPackage("com.amsha.tool.api..", "com.amsha.classifier.api..", "com.amsha.security.api..")
+            .resideInAnyPackage(
+                    "com.amsha.tool.api..",
+                    "com.amsha.classifier.api..",
+                    "com.amsha.security.api..",
+                    "com.amsha.persistence.api..",
+                    "com.amsha.channel.api..")
             .should()
             .dependOnClassesThat()
             .resideInAPackage("com.amsha.core..")
             .allowEmptyShould(true);
 
-    // 17. Impl tier: com.amsha.core does NOT import the amsha-security impl
-    //     (vacuously green until Issue 06 creates it; com.amsha.memory is exempt per ADR §4.1 rev 4)
-    // 17. Impl tier: com.amsha.core does NOT import the amsha-security impl
+    // 17. Impl tier: com.amsha.core does NOT import the amsha-security impl (module created Issue 07)
     //     — but depending on the security-api vocabulary (com.amsha.security.api..)
     //     is the entire point of S4, so it is explicitly excluded from the target side.
     @ArchTest
@@ -213,7 +218,7 @@ public class ArchitectureBoundaryTest {
             .allowEmptyShould(true);
 
     // 18. Impl tier: com.amsha.core does NOT import the amsha-skills machinery
-    //     (vacuously green until Issue 08 creates it; contracts stay in core.skill)
+    //     (module created Issue 09; contracts stay in core.skill)
     @ArchTest
     static final ArchRule coreShouldNotImportSkillsImpl = noClasses()
             .that()

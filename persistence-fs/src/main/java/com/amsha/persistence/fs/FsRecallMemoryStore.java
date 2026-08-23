@@ -19,6 +19,7 @@ import com.amsha.persistence.api.TieredBackend;
 
 import org.jboss.logging.Logger;
 
+import io.quarkus.arc.Unremovable;
 import io.quarkus.arc.properties.IfBuildProperty;
 
 /**
@@ -27,6 +28,7 @@ import io.quarkus.arc.properties.IfBuildProperty;
  * Search uses case-insensitive substring matching (no FTS5 — FS backend is BM25-free).
  */
 @ApplicationScoped
+@Unremovable
 @TieredBackend("fs")
 @IfBuildProperty(name = "amsha.persistence.backend", stringValue = "fs")
 public class FsRecallMemoryStore implements RecallMemoryStorePort {

@@ -14,9 +14,11 @@ import com.amsha.persistence.postgres.jdbi.RecallMemoryJdbiDao;
 
 import org.jdbi.v3.core.Jdbi;
 
+import io.quarkus.arc.Unremovable;
 import io.quarkus.arc.properties.IfBuildProperty;
 
 @ApplicationScoped
+@Unremovable
 @TieredBackend("postgres")
 @IfBuildProperty(name = "amsha.persistence.backend", stringValue = "postgres")
 public class PostgresRecallMemoryStore implements RecallMemoryStorePort {
