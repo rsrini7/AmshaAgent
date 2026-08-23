@@ -214,14 +214,18 @@ class ToolResultProcessorTest {
         // The terminal guard must still fire deterministically (not rely on the LLM FINISHing).
         var ctx = ctx();
         var step = ReasoningStep.pending("", ToolCapability.DELEGATE_TO_AGENT.toolName(), Map.of());
-        String pausedMsg = UserMessages.delegationPaused("core:researcher", "parallel|batch", "sess-1:delegate:x:1");
+        String pausedMsg = UserMessages.delegationPaused("core:researcher", "parallel|batch");
         assertTrue(pausedMsg.contains(UserMessages.DELEGATION_PAUSED_MARKER));
         var res = ToolResponse.success(pausedMsg);
 
         StepDecision decision = processor.resolveOutcome(
                 ctx, ToolCapability.DELEGATE_TO_AGENT.toolName(), Map.of(), res, pausedMsg, step, List.of(), 0);
         assertEquals(DecisionType.TERMINAL, decision.type());
-        verify(writer).saveAnswer("sess-1", "⏳ " + pausedMsg);
+        String userSafe = "⏳ " + UserMessages.userSafePortion(pausedMsg);
+        verify(writer).saveAnswer("sess-1", userSafe);
+        // Directive tail must never reach the chat channel.
+        assertFalse(userSafe.contains("CRITICAL DIRECTIVE"));
+        assertFalse(userSafe.contains("FINISH"));
     }
 
     @Test
@@ -235,6 +239,7 @@ class ToolResultProcessorTest {
         StepDecision decision = processor.resolveOutcome(
                 ctx, ToolCapability.DELEGATE_TO_AGENT.toolName(), Map.of(), res, obs, step, List.of(), 0);
         assertEquals(DecisionType.TERMINAL, decision.type());
+        verify(writer).saveAnswer("sess-1", "⏳ " + UserMessages.userSafePortion(obs));
     }
 
     @Test

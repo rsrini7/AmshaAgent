@@ -15,6 +15,7 @@ import java.util.Optional;
 import java.util.Set;
 
 import com.amsha.core.agent.reasoning.ReasoningStep;
+import com.amsha.core.agent.role.CapabilityRegistry;
 import com.amsha.core.agent.role.RoleRegistry;
 import com.amsha.core.skill.CompiledSkillEntry;
 import com.amsha.core.tool.DynamicToolAdmissionLookup;
@@ -76,6 +77,8 @@ class ToolGuardOrderingTest {
         manualGuard.roleRegistry = mock(RoleRegistry.class);
         manualGuard.objectMapper = new ObjectMapper();
         manualGuard.toolRegistry = mock(ToolRegistry.class);
+        manualGuard.capabilityRegistry = mock(CapabilityRegistry.class);
+        when(manualGuard.capabilityRegistry.hasCapability(any(), any())).thenReturn(true);
         AgentTool tool = mock(AgentTool.class);
         when(tool.idempotencyMode()).thenReturn(IdempotencyMode.NON_IDEMPOTENT);
         when(tool.requiredOperation()).thenReturn(ToolOperation.WRITE_MEMORY);

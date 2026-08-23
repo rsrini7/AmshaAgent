@@ -14,6 +14,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Stream;
 
+import com.amsha.core.agent.role.CapabilityRegistry;
 import com.amsha.core.agent.role.RoleRegistry;
 import com.amsha.core.tool.DynamicToolAdmissionLookup;
 import com.amsha.core.tool.ToolGuardInterceptor;
@@ -27,6 +28,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentMatchers;
+import org.mockito.Mockito;
 
 class ToolInvocationGuardMemoryReadTest {
 
@@ -51,6 +54,9 @@ class ToolInvocationGuardMemoryReadTest {
         guard.objectMapper = new ObjectMapper();
         guard.toolRegistry = toolRegistry;
         guard.interceptors = interceptors;
+        guard.capabilityRegistry = Mockito.mock(CapabilityRegistry.class);
+        Mockito.when(guard.capabilityRegistry.hasCapability(ArgumentMatchers.anyString(), ArgumentMatchers.anyString()))
+                .thenReturn(true);
         guard.dynamicToolAdmissionLookup = dynamicToolAdmissionLookup;
         guard.init();
     }

@@ -40,17 +40,31 @@ public final class UserMessages {
                     + "Please request the coordinator to delegate via coder.";
     public static final String DELEGATION_FAILED_FORMAT = "Delegation to '%s' failed: %s";
     /**
+     * Separator that splits a model-facing observation into its user-safe head and its
+     * LLM-directive tail. ToolResultProcessor strips everything from this marker onward
+     * before persisting or emitting an answer to the chat channel.
+     */
+    public static final String CRITICAL_DIRECTIVE_SEPARATOR = "\n\nCRITICAL DIRECTIVE:";
+
+    /**
      * Stable marker embedded in {@link #DELEGATION_PAUSED_FORMAT} so deterministic
      * terminal guards (ToolResultProcessor.handleDelegateOutcome) can detect a paused
      * delegation regardless of whether the delegate tool reports it as success or failure.
      */
     public static final String DELEGATION_PAUSED_MARKER = "PAUSED awaiting human approval";
 
+    /**
+     * Model-facing observation for a paused delegation. The user-visible answer is the
+     * head before {@link #CRITICAL_DIRECTIVE_SEPARATOR}; the directive tail is consumed
+     * by the coordinator LLM only and must never reach the chat channel.
+     */
     public static final String DELEGATION_PAUSED_FORMAT =
-            "Delegation to '%s' is " + DELEGATION_PAUSED_MARKER + ": tool '%s' needs human approval (session: %s). "
-                    + "Do NOT retry garuda and do NOT treat this as an error. "
-                    + "Inform the user that approval is pending; the delegated agent's result "
-                    + "will be delivered once it is granted. You must FINISH this turn now.";
+            "Delegation to '%s' is " + DELEGATION_PAUSED_MARKER + ": tool '%s' needs human approval. "
+                    + "The delegated agent's result will be delivered automatically once it is granted."
+                    + CRITICAL_DIRECTIVE_SEPARATOR
+                    + " This is a system status, not an error. Do NOT retry the delegation. "
+                    + "Do NOT add commentary; you must FINISH this turn now.";
+
     public static final String DELEGATION_EXCEEDED_FORMAT =
             "Agent '%s' exceeded its iteration budget (%d iterations). Try simplifying the goal.";
     public static final String SESSION_CLEARED = "🧹 Session state and temporary workspace cleared.";
@@ -92,6 +106,17 @@ public final class UserMessages {
 
     // Generic Errors
     public static final String INTERNAL_ERROR = "⚠️ An internal error occurred. Please try again.";
+    public static final String DELEGATION_PAUSED_USER_FALLBACK =
+            "⏳ Approval is pending — the delegated task's result will be delivered automatically once granted.";
+    /** Stable prefix identifying the escalation handover notice; guards against double-prepend. */
+    public static final String ESCALATION_NOTICE_MARKER = "ℹ️ Note:";
+
+    public static final String PERSONA_ESCALATION_NOTICE_FORMAT =
+            ESCALATION_NOTICE_MARKER + " '%s' could not run '%s', so this request was handled by '%s' instead.\n\n";
+    public static final String PERMISSION_DENIED_NO_WORK_FORMAT =
+            "⚠️ I couldn't complete this task: tool '%s' was denied for role '%s' (permission boundary). "
+                    + "Nothing was executed, so there are no results to report. "
+                    + "Grant the required capability or rephrase the request.";
     public static final String UNEXPECTED_FAULT = "⚠️ An unexpected fault occurred while processing your request.";
     public static final String COULD_NOT_RESUME = "⚠️ Could not resume - session may already be processing.";
     public static final String APPROVAL_ERROR =
@@ -193,8 +218,26 @@ public final class UserMessages {
         return String.format(DELEGATION_FAILED_FORMAT, target, error);
     }
 
-    public static String delegationPaused(String target, String tool, String sessionId) {
-        return String.format(DELEGATION_PAUSED_FORMAT, target, tool, sessionId);
+    public static String delegationPaused(String target, String tool) {
+        return String.format(DELEGATION_PAUSED_FORMAT, target, tool);
+    }
+
+    /**
+     * Strips the LLM-directive tail from a model-facing observation, returning the
+     * user-safe head. Falls back to the generic paused notice when the observation
+     * carries no directive separator.
+     */
+    public static String userSafePortion(String observation) {
+        if (observation == null || observation.isBlank()) {
+            return DELEGATION_PAUSED_USER_FALLBACK;
+        }
+        int idx = observation.indexOf(CRITICAL_DIRECTIVE_SEPARATOR);
+        String head = idx >= 0 ? observation.substring(0, idx).trim() : "";
+        return head.isEmpty() ? DELEGATION_PAUSED_USER_FALLBACK : head;
+    }
+
+    public static String personaEscalationNotice(String fromRole, String toolName, String toRole) {
+        return String.format(PERSONA_ESCALATION_NOTICE_FORMAT, fromRole, toolName, toRole);
     }
 
     public static String delegationExceeded(String target, int iterations) {

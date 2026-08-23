@@ -105,6 +105,48 @@ class FinishActionHandlerTest {
     }
 
     @Test
+    void finishAfterPermissionDenialWithoutSuccessfulToolIsReplacedWithHonestExit() {
+        // F4 regression (dist incident): after a permission-boundary denial with zero
+        // successful executions, a narrative claiming performed work is fabrication and
+        // must be replaced by the deterministic disclosure.
+        AgentExecutionContext ctx = mock(AgentExecutionContext.class);
+        when(ctx.sessionId()).thenReturn("s9");
+        when(ctx.agentRole()).thenReturn("researcher");
+        when(ctx.goal()).thenReturn("create a skill dynamically");
+        ReasoningStep denied = ReasoningStep.pending("t", "host_exec", Map.of("command", "find"), 0, 0)
+                .withObservation(
+                        "Tool execution failed: Agent role 'researcher' is not permitted to use tool 'host_exec'",
+                        false);
+        ReasoningStep finish = ReasoningStep.pending(
+                "FINISH: I searched the filesystem and found no skill files.", ReasoningStep.FINISH, Map.of(), 0, 0);
+
+        FinishActionHandler.FinishOutcome outcome = handler.handle(ctx, List.of(denied), finish, 0);
+
+        String answer = ((FinishActionHandler.FinishOutcome.Completed) outcome).answer();
+        assertTrue(answer.contains("permission boundary"));
+        assertTrue(answer.contains("host_exec"));
+        assertFalse(answer.contains("I searched"));
+    }
+
+    @Test
+    void successfulRealToolExecutionPreventsHonestExitOverride() {
+        AgentExecutionContext ctx = mock(AgentExecutionContext.class);
+        when(ctx.sessionId()).thenReturn("s9");
+        when(ctx.agentRole()).thenReturn("researcher");
+        when(ctx.goal()).thenReturn("summarize the result");
+        ReasoningStep denied = ReasoningStep.pending("t", "host_exec", Map.of(), 0, 0)
+                .withObservation("Tool execution failed: not permitted to use tool 'host_exec'", false);
+        ReasoningStep succeeded = ReasoningStep.pending("t", "recall_memory_search", Map.of(), 0, 0)
+                .withObservation("found it", true);
+        ReasoningStep finish =
+                ReasoningStep.pending("FINISH: Here is the accepted summary.", ReasoningStep.FINISH, Map.of(), 0, 0);
+
+        FinishActionHandler.FinishOutcome outcome = handler.handle(ctx, List.of(denied, succeeded), finish, 0);
+
+        assertEquals("Here is the accepted summary.", ((FinishActionHandler.FinishOutcome.Completed) outcome).answer());
+    }
+
+    @Test
     void testHandleStripsFinishPrefix() {
         AgentExecutionContext ctx = mock(AgentExecutionContext.class);
         ReasoningStep step = ReasoningStep.pending("FINISH: Hello world", ReasoningStep.FINISH, Map.of(), 0, 0);

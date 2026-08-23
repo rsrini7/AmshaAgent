@@ -6,6 +6,7 @@ import java.util.Map;
 import com.amsha.common.util.LogUtil;
 import com.amsha.core.agent.reasoning.ReasoningEngine;
 import com.amsha.core.agent.result.AgentResult;
+import com.amsha.core.message.UserMessages;
 import com.amsha.core.scope.WorkspaceContext;
 import com.amsha.core.tools.ToolRegistry;
 import com.amsha.core.util.AgentErrorMessageUtil;
@@ -159,13 +160,30 @@ final class PendingToolFailureHandler {
                     request.history(),
                     request.sessionId());
             executor.completeInProgressCheckpoint(request.checkpoint());
-            return request.stateMachineRunner().runFinishPass(request.context(), reasoningEngine, request.history());
+            AgentResult finish =
+                    request.stateMachineRunner().runFinishPass(request.context(), reasoningEngine, request.history());
+            return withEscalationNotice(finish, request.effectiveRole(), request.toolName(), targetRole);
         }
 
         log.warnf(
                 "[PersonaEscalation-Resume] Escalation failed: %s, returning original failure",
                 escalation.errorIfFailed());
         return null;
+    }
+
+    /**
+     * Surfaces a silent handover to the user: the requested role could not execute the
+     * pending tool and a different persona completed the work. The notice is prepended
+     * to the finished answer; non-finished results pass through unchanged.
+     */
+    private AgentResult withEscalationNotice(AgentResult result, String fromRole, String toolName, String toRole) {
+        if (!(result instanceof AgentResult.Finished f)
+                || f.answer() == null
+                || f.answer().contains(UserMessages.ESCALATION_NOTICE_MARKER)) {
+            return result;
+        }
+        String notice = UserMessages.personaEscalationNotice(fromRole, toolName, toRole);
+        return new AgentResult.Finished(notice + f.answer(), f.steps(), f.totalInputTokens(), f.totalOutputTokens());
     }
 
     private String extractParam(String paramsJson, String key) {

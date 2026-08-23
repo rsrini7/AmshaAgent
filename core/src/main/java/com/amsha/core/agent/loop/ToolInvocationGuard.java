@@ -20,6 +20,7 @@ import com.amsha.classifier.api.ToolRiskAction;
 import com.amsha.classifier.api.ToolRiskShadowContext;
 import com.amsha.core.agent.reasoning.ReasoningStep;
 import com.amsha.core.agent.reasoning.ReasoningStepSupport;
+import com.amsha.core.agent.role.CapabilityRegistry;
 import com.amsha.core.agent.role.RoleRegistry;
 import com.amsha.core.governance.ApprovalFrame;
 import com.amsha.core.skill.CompiledSkillEntry;
@@ -48,6 +49,9 @@ public class ToolInvocationGuard {
 
     @Inject
     public RoleRegistry roleRegistry;
+
+    @Inject
+    public CapabilityRegistry capabilityRegistry;
 
     @Inject
     public ObjectMapper objectMapper;
@@ -156,6 +160,18 @@ public class ToolInvocationGuard {
             dynamicAdmission = admissionOpt.get();
         } else {
             dynamicAdmission = null;
+        }
+
+        // Role-capability authorization must precede the HITL gate: never ask a human to
+        // approve an action that policy forbids for the requesting role regardless of
+        // approval. Mirrors ToolGovernanceGuard.verifyRoleCapability against the same
+        // CapabilityRegistry source of truth; the invocation-time check remains as backstop.
+        if (isInternalTool && !capabilityRegistry.hasCapability(agentRole, toolName)) {
+            log.warnf(
+                    "GUARD Role '%s' (session=%s) blocked from '%s' — no capability grant",
+                    agentRole, sessionId, toolName);
+            return new GuardDecision.Blocked("Tool '" + toolName + "' is not permitted for role '" + agentRole
+                    + "'. Use one of your available tools, or delegate this task to a suitable agent.");
         }
 
         boolean isSchedulingTool = ToolCapability.SCHEDULE_TASK.toolName().equals(toolName)

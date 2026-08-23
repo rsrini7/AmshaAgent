@@ -26,6 +26,7 @@ import com.amsha.classifier.api.PostPolicyToolContext;
 import com.amsha.classifier.api.ToolRiskAction;
 import com.amsha.classifier.api.ToolRiskShadowContext;
 import com.amsha.core.agent.reasoning.ReasoningStep;
+import com.amsha.core.agent.role.CapabilityRegistry;
 import com.amsha.core.agent.role.RoleRegistry;
 import com.amsha.core.scope.WorkspaceContext;
 import com.amsha.core.tool.ToolGuardInterceptor;
@@ -49,6 +50,7 @@ class ToolInvocationGuardTest {
     private Instance<ToolGuardInterceptor> mockInterceptors;
     private ToolRiskShadowEvaluationService toolRiskShadowEvaluation;
     private PostPolicyToolRiskDispatcher postPolicyToolRiskDispatcher;
+    private CapabilityRegistry capabilityRegistry;
 
     @BeforeEach
     @SuppressWarnings("unchecked")
@@ -60,12 +62,16 @@ class ToolInvocationGuardTest {
         mockInterceptors = mock(Instance.class);
         toolRiskShadowEvaluation = mock(ToolRiskShadowEvaluationService.class);
         postPolicyToolRiskDispatcher = mock(PostPolicyToolRiskDispatcher.class);
+        CapabilityRegistry capabilityRegistry = mock(CapabilityRegistry.class);
+        when(capabilityRegistry.hasCapability(anyString(), anyString())).thenReturn(true);
+        this.capabilityRegistry = capabilityRegistry;
         when(mockInterceptors.iterator()).thenReturn(Collections.emptyIterator());
         when(mockInterceptors.stream()).thenReturn(Stream.empty());
 
         guard.roleRegistry = roleRegistry;
         guard.objectMapper = objectMapper;
         guard.toolRegistry = mockToolRegistry;
+        guard.capabilityRegistry = capabilityRegistry;
         guard.interceptors = mockInterceptors;
         guard.toolRiskShadowEvaluation = toolRiskShadowEvaluation;
         guard.postPolicyToolRiskDispatcher = postPolicyToolRiskDispatcher;
@@ -350,5 +356,32 @@ class ToolInvocationGuardTest {
 
     private void workspaceRun(String sessionId, AutonomyLevel level, Runnable runnable) {
         WorkspaceContext.run(sessionId, "user", "chat", level, "coordinator", runnable);
+    }
+
+    @Test
+    void unauthorizedRoleBlockedBeforeHitlPauseEvenForAlwaysHitlOperation() {
+        // F2 regression: a role without the capability grant must be Blocked up front.
+        // Requesting HITL approval for an action policy forbids anyway wastes a human
+        // approval cycle (dist incident: researcher + host_exec).
+        when(capabilityRegistry.hasCapability("researcher", "host_exec")).thenReturn(false);
+        var shellTool = mock(AgentTool.class);
+        when(shellTool.idempotencyMode()).thenReturn(IdempotencyMode.NON_IDEMPOTENT);
+        when(shellTool.requiredOperation()).thenReturn(ToolOperation.EXECUTE_SHELL);
+        when(mockToolRegistry.findTool("host_exec")).thenReturn(Optional.of(shellTool));
+
+        ToolInvocationGuard.GuardDecision decision = guard.evaluate(
+                "s1",
+                "researcher",
+                AutonomyLevel.SUPERVISED,
+                "host_exec",
+                Map.of("command", "ls"),
+                List.of(),
+                "goal",
+                List.of());
+
+        assertInstanceOf(ToolInvocationGuard.GuardDecision.Blocked.class, decision);
+        assertTrue(((ToolInvocationGuard.GuardDecision.Blocked) decision)
+                .observation()
+                .contains("not permitted for role 'researcher'"));
     }
 }
