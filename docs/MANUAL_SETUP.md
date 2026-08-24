@@ -1,6 +1,6 @@
 # Amsha Agent - Manual Setup Guide
 
-> **Stack**: JDK 25 · Quarkus 3.27.2 · LangChain4J 1.x · SQLite (WAL + FTS5 + sqlite-vec) · Podman (rootless) · Groq Cloud
+> **Stack**: JDK 25 · Quarkus 3.27.5.1 · LangChain4J 1.x · SQLite (WAL + FTS5 + sqlite-vec) · Podman (rootless) · Groq Cloud
 >
 > This guide covers **manual setup without mise** on **macOS**, **WSL2 (Ubuntu)**, and **Windows**. All commands are direct - no wrapper scripts.
 > If you prefer automated setup, see [`MISE_SETUP.md`](./MISE_SETUP.md).
@@ -354,20 +354,24 @@ podman images | grep amsha-tool-runner
 
 ### 6.3 sqlite-vec Extension (RAG Vector Search)
 
-Amsha Agent **auto-installs** the correct `vec0` native extension for your platform (Linux, macOS, Windows) from internal resources on first boot. The binary is extracted to `./lib/vec0` (configurable via `AMSHA_RAG_VEC_PATH`).
+**Resolution order** on boot (fires before the first SQLite connection opens):
+
+1. Reuse an existing binary at `AMSHA_RAG_VEC_PATH` (default `./lib/vec0`).
+2. Extract the vendored copy from JAR resources.
+3. Only when `AMSHA_RAG_VEC_AUTO_DOWNLOAD=true`: download the pinned upstream release asset, verifying its SHA-256 against digests recorded from the official `checksums.txt` (fail-closed) before it is written anywhere. Disabled by default so air-gapped/offline boots never touch the network.
 
 You can manually override this by placing your own build in `lib/`:
 
-| Platform | Runtime Path | Source Archive (v0.1.6) |
+| Platform | Runtime Path | Upstream Asset |
 |---|---|---|
-| Linux / WSL2 | `lib/vec0.so` | `sqlite-vec-0.1.6-loadable-linux-x86_64.tar.gz` |
-| macOS (M1/M2) | `lib/vec0.dylib` | `sqlite-vec-0.1.6-loadable-macos-aarch64.tar.gz` |
-| Windows | `lib/vec0.dll` | `sqlite-vec-0.1.6-loadable-windows-x86_64.tar.gz` |
+| Linux / WSL2 | `lib/vec0.so` | `sqlite-vec-0.1.9-loadable-linux-x86_64.tar.gz` |
+| macOS (M1/M2) | `lib/vec0.dylib` | `sqlite-vec-0.1.9-loadable-macos-aarch64.tar.gz` |
+| Windows | `lib/vec0.dll` | `sqlite-vec-0.1.9-loadable-windows-x86_64.tar.gz` |
 
 SQLite appends the platform suffix automatically - always pass the path **without** extension:
 `AMSHA_RAG_VEC_PATH=./lib/vec0`
 
-If the extension is missing from resources and the filesystem, Amsha Agent degrades gracefully to FTS5-only search.
+If the extension is missing from resources and the filesystem (and auto-download is disabled or fails), Amsha Agent degrades gracefully to FTS5-only search.
 
 ### 6.4 Dynamic Skill Tool Dependencies (Host Fallback Mode)
 
@@ -1151,4 +1155,4 @@ The `init-perms` service in `docker-compose.yaml` handles this automatically by 
 
 ---
 
-*Last updated: Amsha Agent V0.1.0 · Quarkus 3.27.2 · JDK 25*
+*Last updated: Amsha Agent V0.1.0 · Quarkus 3.27.5.1 · JDK 25*

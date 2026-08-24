@@ -360,6 +360,8 @@ schema) and must match the model used by every active provider.
 | `AMSHA_SESSION_CATALOG_ARCHIVE_AFTER_DAYS` | `90` | Inactivity threshold (days) before catalog sessions are archived |
 | `AMSHA_WORKSPACE_SESSION_TTL_MINUTES` | `30` | Time-to-live in minutes for active sessions since the last heartbeat |
 | `AMSHA_RAG_VEC_PATH` | `./lib/vec0` | Path to sqlite-vec native extension |
+| `AMSHA_RAG_VEC_AUTO_DOWNLOAD` | `false` | Auto-download the sqlite-vec release asset (SHA-256 verified) when missing from disk and JAR. Opt-in; offline-safe by default |
+| `AMSHA_RAG_VEC_VERSION` | `0.1.9` | sqlite-vec version used by the auto-downloader; 0.1.9 digests are pinned in code, other versions are verified against the release checksums.txt |
 
 ## In-Process Local ML (ONNX Runtime)
 
