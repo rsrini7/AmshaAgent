@@ -48,10 +48,13 @@
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <quarkus.platform.artifact-id>quarkus-bom</quarkus.platform.artifact-id>
     <quarkus.platform.group-id>io.quarkus.platform</quarkus.platform.group-id>
-    <quarkus.platform.version>3.27.2</quarkus.platform.version>
+    <quarkus.platform.version>3.27.5.1</quarkus.platform.version>
     <quarkus.version>${quarkus.platform.version}</quarkus.version>
     <langchain4j.version>1.0.0-beta1</langchain4j.version>
-    <bouncycastle.version>1.78.1</bouncycastle.version>
+    <!-- Aligned to quarkus-bom 3.27.2 managed value (Issue 02): the previous
+         1.78.1 pin silently downgraded the platform's Bouncy Castle. Re-check at
+         each checkpoint per ADR rule 5 (3.38.3 manages 1.84). -->
+    <bouncycastle.version>1.82</bouncycastle.version>
     <archunit.version>1.4.1</archunit.version>
     <errorprone.version>2.49.0</errorprone.version>
     <camel.quarkus.version>3.27.3</camel.quarkus.version>
@@ -72,7 +75,7 @@
     <embedded-postgres.version>2.2.2</embedded-postgres.version>
     <bucket4j.version>8.16.1</bucket4j.version>
     <wiremock.version>3.9.2</wiremock.version>
-    <jboss-logmanager.version>3.0.6.Final</jboss-logmanager.version>
+    <jboss-logmanager.version>3.1.2.Final</jboss-logmanager.version>
     <jline.version>3.30.11</jline.version>
     <jansi.version>2.4.3</jansi.version>
     <jacoco.version>0.8.14</jacoco.version>

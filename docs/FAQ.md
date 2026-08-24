@@ -537,6 +537,8 @@ Amsha Agent's `TwoTierMemoryService` merges results from two sources using **Rec
 
 `FtsConnectionInterceptor.isVectorSearchEnabled()` checks at startup whether the extension loaded successfully. If not, `TwoTierMemoryService` takes the **fast path**: it skips the RRF merge entirely and returns FTS5 results directly. No error is thrown, no agent functionality is lost - only the semantic vector search dimension is unavailable. Check boot logs for: `vector search disabled - vec0 extension not loaded`.
 
+To recover automatically on networked machines, enable `AMSHA_RAG_VEC_AUTO_DOWNLOAD=true`: when the binary is missing from both disk and JAR resources, Amsha downloads the pinned upstream release asset and verifies its SHA-256 against known digests before writing it (fail-closed; disabled by default so offline boots stay offline).
+
 ---
 
 ### Q: What are `GlobalKnowledgeBase` and `SessionKnowledgeBase`?

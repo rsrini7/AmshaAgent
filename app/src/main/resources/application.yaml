@@ -645,6 +645,14 @@ amsha:
     # Path where sqlite-vec native lib is extracted/loaded from.
     # The OS-specific extension (.so, .dll) is added automatically.
     vec-extension-path: "${AMSHA_RAG_VEC_PATH:./lib/vec0}"
+    # Download the pinned sqlite-vec release asset (SHA-256 verified) when the
+    # binary is absent from both disk and JAR resources. Opt-in: disabled by
+    # default so air-gapped/offline boots never touch the network.
+    vec-auto-download: "${AMSHA_RAG_VEC_AUTO_DOWNLOAD:false}"
+    # sqlite-vec version the downloader resolves when auto-download is enabled.
+    # 0.1.9 digests are pinned in code; any other version is verified against
+    # that release's own checksums.txt (fail-closed).
+    vec-version: "${AMSHA_RAG_VEC_VERSION:0.1.9}"
   auto-seed-secrets: "${AMSHA_AUTO_SEED_SECRETS:false}"
   skills:
     hot-reload: true

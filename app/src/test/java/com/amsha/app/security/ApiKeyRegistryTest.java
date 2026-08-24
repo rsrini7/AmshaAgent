@@ -33,7 +33,11 @@ class ApiKeyRegistryTest {
                     "amsha.api.keys.user-b", "eeee-ffff-gggg-hhhh",
                     "amsha.audit.hmac-key", "test-hmac-key-for-registry-tests",
                     "amsha.auth.hmac-key", "test-hmac-key-for-registry-tests",
-                    "amsha.api.rate-limit.requests-per-minute", "20");
+                    "amsha.api.rate-limit.requests-per-minute", "20",
+                    // Pin the mutation limit explicitly: the threshold test asserts
+                    // blocking after 10 mutations and must not depend on the
+                    // production default (raised from 10 to 1000 in P115).
+                    "amsha.api.rate-limit.mutation-per-minute", "10");
         }
     }
 

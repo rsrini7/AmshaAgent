@@ -1,6 +1,6 @@
 # Amsha Agent - mise Task Runner Guide
 
-> **Stack**: JDK 25 · Quarkus 3.27.2 · LangChain4J 1.x · SQLite · Podman (rootless) · Groq Cloud
+> **Stack**: JDK 25 · Quarkus 3.27.5.1 · LangChain4J 1.x · SQLite · Podman (rootless) · Groq Cloud
 >
 > **This guide** covers `mise` as the unified task runner for **Windows (pwsh)**, **macOS**, **WSL2 (Ubuntu)**, and **Linux**.
 > One config file - `mise.toml` - runs on all platforms via PowerShell (pwsh), which mise installs automatically.
@@ -491,15 +491,15 @@ cd dist; ./amsha.exe serve
 
 ### sqlite-vec (vec0) - auto-install
 
-Amsha Agent **auto-installs** the correct `vec0` native extension for your platform (Linux, macOS, Windows) from internal resources on first boot. The binary is extracted to `./lib/vec0` (configurable via `AMSHA_RAG_VEC_PATH`).
+Amsha Agent **auto-installs** the correct `vec0` native extension for your platform (Linux, macOS, Windows) from internal resources on first boot. The binary is extracted to `./lib/vec0` (configurable via `AMSHA_RAG_VEC_PATH`). When the binary is absent from both disk and JAR resources, set `AMSHA_RAG_VEC_AUTO_DOWNLOAD=true` to fetch the pinned upstream release asset (SHA-256 verified, fail-closed; disabled by default so offline boots never touch the network). Version is controlled by `AMSHA_RAG_VEC_VERSION` (default `0.1.9`).
 
 Manual download is **no longer required**, but you can override the auto-installed binary by placing your own build in `lib/`.
 
-| Platform | Runtime Path | Source Archive (v0.1.6) |
+| Platform | Runtime Path | Upstream Asset |
 |---|---|---|
-| Linux / WSL2 | `lib/vec0.so` | `sqlite-vec-0.1.6-loadable-linux-x86_64.tar.gz` |
-| macOS (M1/M2) | `lib/vec0.dylib` | `sqlite-vec-0.1.6-loadable-macos-aarch64.tar.gz` |
-| Windows | `lib/vec0.dll` | `sqlite-vec-0.1.6-loadable-windows-x86_64.tar.gz` |
+| Linux / WSL2 | `lib/vec0.so` | `sqlite-vec-0.1.9-loadable-linux-x86_64.tar.gz` |
+| macOS (M1/M2) | `lib/vec0.dylib` | `sqlite-vec-0.1.9-loadable-macos-aarch64.tar.gz` |
+| Windows | `lib/vec0.dll` | `sqlite-vec-0.1.9-loadable-windows-x86_64.tar.gz` |
 
 ***
 
@@ -719,5 +719,5 @@ The `.env` file has placeholder values like `key-<random>`. The `amsha` launcher
 
 ***
 
-*Amsha Agent V0.1.0 · Quarkus 3.27.2 · JDK 25 · mise · Temurin 25 + GraalVM Community 25.0.2*
+*Amsha Agent V0.1.0 · Quarkus 3.27.5.1 · JDK 25 · mise · Temurin 25 + GraalVM Community 25.0.2*
 *One config · All platforms · PowerShell everywhere*
