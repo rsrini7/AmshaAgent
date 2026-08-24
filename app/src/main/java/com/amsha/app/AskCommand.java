@@ -25,7 +25,7 @@ import com.amsha.core.scope.WorkspaceScopeHolder;
  * CLI one-shot mode - runs the agent reasoning loop for a single goal
  * and exits.
  * <p>
- * Usage: {@code amsha ask "Summarize the project" --role coordinator}
+ * Usage: {@code amsha ask "Summarize the project" --role coordinator --verbose}
  * <p>
  * <strong>CDI context:</strong> {@code @ActivateRequestContext} on
  * {@code run()} ensures CDI scopes are available on the picocli thread.
@@ -45,6 +45,9 @@ public class AskCommand implements Runnable {
             description = "Explicit agent role. Omit to use shared intent and skill routing.")
     String role;
 
+    @Option(names = "--verbose", description = "Print token usage and agent actions while running.")
+    boolean verbose;
+
     @Inject
     TurnDispatchService turnDispatchService;
 
@@ -57,7 +60,7 @@ public class AskCommand implements Runnable {
         String sessionId = UUID.randomUUID().toString();
         try {
             WorkspaceScopeHolder.run(sessionId, () -> {
-                ScopedValue.where(CliAgentObserver.ENABLED, true).run(() -> {
+                ScopedValue.where(CliAgentObserver.VERBOSE, verbose).run(() -> {
                     // Dev DX: seed host OS tokens into vault (no-op in prod - bean absent)
                     // Dev seeding handled by DevSecretSeederStartup (@IfBuildProfile("dev") - compile-time excluded
                     // from prod builds).

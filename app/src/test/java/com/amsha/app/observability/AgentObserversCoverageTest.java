@@ -87,7 +87,7 @@ class AgentObserversCoverageTest {
         cli.recordLlmCall("session", 1, 2);
         cli.onStepComplete("session", "role", step("tool", true, "ignored"));
         String longObservation = "x".repeat(130);
-        ScopedValue.where(CliAgentObserver.ENABLED, true).run(() -> {
+        ScopedValue.where(CliAgentObserver.VERBOSE, true).run(() -> {
             cli.recordLlmCall("session", 7, 9);
             cli.onStepComplete("session", "role", step("tool", true, longObservation));
         });
