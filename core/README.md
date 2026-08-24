@@ -1,14 +1,16 @@
 # amsha-core
 
 Core engine for Amsha Agent. Contains the agent loop, reasoning engines, model routing,
-reflexes, safety guards, tool interfaces, and built-in LLM providers.
+reflexes, safety guards, and tool interfaces.
 
 ## LLM Providers
 
-`amsha-core` hosts both the agent reasoning SPI (`AgentChatModelProvider`) and routing SPI
-(`RoutingChatModelProvider`) for built-in LLM providers.
+LLM provider SPIs (`AgentChatModelProvider`, `RoutingChatModelProvider`, `ChatModelCreationPort`)
+are defined in `amsha-llm-provider-api`. All 21 concrete provider implementations reside in
+`amsha-llm-providers`. `amsha-core` consumes providers decoupled via `ChatModelCreationPort`
+and CDI `Instance<T>` multi-bean discovery.
 
-### Built-in Providers
+### Supported Providers
 
 | Provider | Provider ID | Default Model | Default Base URL |
 |---|---|---|---|

@@ -10,8 +10,8 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Alternative;
 import jakarta.enterprise.inject.Produces;
 
-import com.amsha.core.agent.reasoning.AgentChatModelProvider;
-import com.amsha.core.agent.reasoning.StructuredOutputMode;
+import com.amsha.llm.api.AgentChatModelProvider;
+import com.amsha.llm.api.StructuredOutputMode;
 
 import io.smallrye.common.annotation.Identifier;
 

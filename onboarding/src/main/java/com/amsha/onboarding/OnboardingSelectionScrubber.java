@@ -11,11 +11,11 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
-import com.amsha.core.routing.provider.ConnectionValidationRequest;
-import com.amsha.core.routing.provider.LlmProviderOnboardingAdapter;
-import com.amsha.core.routing.provider.ProviderValidationResult;
 import com.amsha.core.security.SecretVault;
 import com.amsha.core.security.VaultKey;
+import com.amsha.llm.api.ConnectionValidationRequest;
+import com.amsha.llm.api.LlmProviderOnboardingAdapter;
+import com.amsha.llm.api.ProviderValidationResult;
 import com.amsha.persistence.api.OnboardingDraftDto;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -242,7 +242,6 @@ public class OnboardingSelectionScrubber {
         return modified;
     }
 
-    @SuppressWarnings("unchecked")
     private boolean scrubMcpHeaderMap(Map<String, Object> mcp, String ownerId) {
         Object rawHeaders = mcp.get("headers");
         if (!(rawHeaders instanceof Map<?, ?> headers) || headers.isEmpty()) return false;

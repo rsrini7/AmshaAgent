@@ -49,9 +49,9 @@ class InfiniteLoopProviderTest {
 
     @Test
     void testRecordQualityFailureAndStats() {
-        InfiniteLoopProvider<String, String> provider = new InfiniteLoopProvider<>(
+        InfiniteLoopProvider<String, String> _ = new InfiniteLoopProvider<>(
                 "test-loop",
-                List.of(new InfiniteLoopProvider.Slot<>("slot-1", "model-1")),
+                List.of(new InfiniteLoopProvider.Slot<>("slot-1", "model")),
                 (model, request) -> "ok",
                 1,
                 1,

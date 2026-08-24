@@ -20,10 +20,10 @@ import com.amsha.channel.api.IntentDetector;
 import com.amsha.common.util.LogUtil;
 import com.amsha.core.agent.IntentClassificationService;
 import com.amsha.core.agent.persona.AgentRoleRegistry;
-import com.amsha.core.agent.reasoning.StructuredOutputMode;
 import com.amsha.core.agent.role.AgentRoleEnum;
 import com.amsha.core.security.DestructiveVocabularyFilter;
 import com.amsha.core.util.ClassUtils;
+import com.amsha.llm.api.StructuredOutputMode;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.eclipse.microprofile.context.ManagedExecutor;

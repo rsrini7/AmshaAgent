@@ -10,8 +10,8 @@ import jakarta.ws.rs.core.Response;
 
 import java.util.List;
 
-import com.amsha.core.routing.provider.LlmProviderDescriptor;
-import com.amsha.core.routing.provider.LlmProviderOnboardingAdapter;
+import com.amsha.llm.api.LlmProviderDescriptor;
+import com.amsha.llm.api.LlmProviderOnboardingAdapter;
 
 import org.jboss.logging.Logger;
 

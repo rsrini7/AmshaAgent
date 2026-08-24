@@ -8,10 +8,10 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Optional;
 
-import com.amsha.core.routing.provider.LlmProviderOnboardingAdapter;
-import com.amsha.core.routing.provider.ProviderValidationResult;
 import com.amsha.core.security.SecretVault;
 import com.amsha.core.security.VaultKey;
+import com.amsha.llm.api.LlmProviderOnboardingAdapter;
+import com.amsha.llm.api.ProviderValidationResult;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.junit.jupiter.api.Test;

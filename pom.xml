@@ -14,10 +14,12 @@
 
   <modules>
     <module>channel-api</module>
+    <module>llm-provider-api</module>
     <module>persistence-api</module>
     <module>persistence-common</module>
     <module>common</module>
     <module>core</module>
+    <module>llm-providers</module>
     <module>persistence-sqlite</module>
     <module>persistence-fs</module>
     <module>persistence-postgres</module>
@@ -101,6 +103,16 @@
       <dependency>
         <groupId>com.amsha</groupId>
         <artifactId>amsha-channel-api</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.amsha</groupId>
+        <artifactId>amsha-llm-provider-api</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.amsha</groupId>
+        <artifactId>amsha-llm-providers</artifactId>
         <version>${project.version}</version>
       </dependency>
       <dependency>

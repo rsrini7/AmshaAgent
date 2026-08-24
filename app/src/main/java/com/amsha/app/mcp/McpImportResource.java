@@ -25,7 +25,6 @@ import com.amsha.mcp.transport.McpManagementService;
 import com.amsha.mcp.transport.McpRevisionConflictException;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
-import org.jboss.resteasy.reactive.MultipartForm;
 import org.jboss.resteasy.reactive.RestForm;
 import org.jboss.resteasy.reactive.multipart.FileUpload;
 
@@ -52,11 +51,6 @@ public class McpImportResource {
     @ConfigProperty(name = "amsha.channel.web.require-auth", defaultValue = "false")
     boolean webAuthRequired;
 
-    public static class ImportForm {
-        @RestForm("file")
-        FileUpload file;
-    }
-
     public record ApplyRequest(String operationId, String name, Map<String, String> headers) {
         public Map<String, String> headersOrEmpty() {
             return headers == null ? Map.of() : Map.copyOf(headers);
@@ -66,16 +60,16 @@ public class McpImportResource {
     @POST
     @Path("/preview")
     @Consumes(MediaType.MULTIPART_FORM_DATA)
-    public Response preview(@MultipartForm ImportForm form) {
+    public Response preview(@RestForm("file") FileUpload file) {
         try {
-            if (form == null || form.file == null) return badRequest("MCP config file is required");
-            if (form.file.size() > McpConfigImportService.MAX_UPLOAD_BYTES) {
+            if (file == null) return badRequest("MCP config file is required");
+            if (file.size() > McpConfigImportService.MAX_UPLOAD_BYTES) {
                 return badRequest("MCP config upload exceeds 256 KiB");
             }
-            byte[] content = Files.readAllBytes(form.file.uploadedFile());
-            return Response.ok(importService.preview(resolveUserId(), form.file.fileName(), content))
+            byte[] content = Files.readAllBytes(file.uploadedFile());
+            return Response.ok(importService.preview(resolveUserId(), file.fileName(), content))
                     .build();
-        } catch (IOException exception) {
+        } catch (IOException _) {
             return badRequest("MCP config file could not be read");
         } catch (IllegalArgumentException exception) {
             return badRequest(exception.getMessage());

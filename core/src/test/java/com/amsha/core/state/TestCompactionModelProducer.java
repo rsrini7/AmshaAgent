@@ -9,7 +9,7 @@ import dev.langchain4j.model.chat.ChatModel;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Produces;
 
-import com.amsha.core.agent.reasoning.StructuredOutputMode;
+import com.amsha.llm.api.StructuredOutputMode;
 
 import io.quarkus.test.Mock;
 import io.smallrye.common.annotation.Identifier;

@@ -17,6 +17,8 @@ import java.util.stream.Collectors;
 import com.amsha.common.util.LogUtil;
 import com.amsha.core.routing.InfiniteLoopChatModel;
 import com.amsha.core.routing.MultiModelChatModel;
+import com.amsha.llm.api.AgentChatModelProvider;
+import com.amsha.llm.api.StructuredOutputMode;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;

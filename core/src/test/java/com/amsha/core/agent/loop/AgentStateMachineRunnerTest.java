@@ -32,7 +32,6 @@ import com.amsha.core.agent.IntentClassificationService;
 import com.amsha.core.agent.reasoning.LangChainReasoningEngine;
 import com.amsha.core.agent.reasoning.ReasoningEngine;
 import com.amsha.core.agent.reasoning.ReasoningStep;
-import com.amsha.core.agent.reasoning.StructuredOutputMode;
 import com.amsha.core.agent.result.AgentResult;
 import com.amsha.core.agent.role.AgentRoleEnum;
 import com.amsha.core.agent.role.RoleRegistry;
@@ -56,6 +55,7 @@ import com.amsha.core.tools.AgentTool;
 import com.amsha.core.tools.ToolRegistry;
 import com.amsha.core.tools.ToolResponse;
 import com.amsha.core.util.TextPatternUtils;
+import com.amsha.llm.api.StructuredOutputMode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.junit.jupiter.api.BeforeEach;

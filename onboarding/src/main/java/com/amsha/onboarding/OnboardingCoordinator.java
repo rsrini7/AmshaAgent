@@ -13,7 +13,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 import com.amsha.common.util.LogUtil;
-import com.amsha.core.routing.provider.NetworkProfilePolicy;
+import com.amsha.llm.api.NetworkProfilePolicy;
 import com.amsha.onboarding.spi.OnboardingContext;
 import com.amsha.onboarding.spi.OnboardingExtension;
 import com.amsha.onboarding.spi.OnboardingInput;

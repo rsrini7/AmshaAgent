@@ -27,12 +27,12 @@ import java.util.Map;
 import java.util.Optional;
 
 import com.amsha.common.util.LogUtil;
-import com.amsha.core.routing.provider.NetworkProfilePolicy;
 import com.amsha.core.security.OutboundHttpPolicyService;
 import com.amsha.core.security.OutboundPolicyDecision;
 import com.amsha.core.security.OutboundPurpose;
 import com.amsha.core.security.SecretVault;
 import com.amsha.core.security.VaultKey;
+import com.amsha.llm.api.NetworkProfilePolicy;
 import com.amsha.persistence.api.LlmConnectionDto;
 
 import org.jboss.logging.Logger;

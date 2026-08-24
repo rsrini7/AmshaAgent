@@ -21,6 +21,7 @@ import java.util.concurrent.Executor;
 import com.amsha.core.llm.LlmValidationException;
 import com.amsha.core.security.SecretVault;
 import com.amsha.core.security.VaultConstants;
+import com.amsha.llm.api.ModelDefaults;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;

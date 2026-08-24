@@ -47,6 +47,12 @@ quarkus:
     amsha-mcp:
       group-id: com.amsha
       artifact-id: amsha-mcp
+    amsha-llm-provider-api:
+      group-id: com.amsha
+      artifact-id: amsha-llm-provider-api
+    amsha-llm-providers:
+      group-id: com.amsha
+      artifact-id: amsha-llm-providers
 
   devservices:
     enabled: false

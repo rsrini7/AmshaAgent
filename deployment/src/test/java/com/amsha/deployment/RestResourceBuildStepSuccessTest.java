@@ -13,7 +13,7 @@ import jakarta.ws.rs.Path;
 
 import com.amsha.channel.api.ChannelAllowlist;
 import com.amsha.channel.api.IntentDetector;
-import com.amsha.core.agent.reasoning.StructuredOutputMode;
+import com.amsha.llm.api.StructuredOutputMode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.jboss.shrinkwrap.api.ShrinkWrap;

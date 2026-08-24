@@ -7,7 +7,7 @@ import jakarta.enterprise.inject.Produces;
 
 import java.util.Locale;
 
-import com.amsha.core.agent.reasoning.StructuredOutputMode;
+import com.amsha.llm.api.StructuredOutputMode;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;

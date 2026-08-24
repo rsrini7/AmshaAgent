@@ -6,9 +6,9 @@ import java.util.List;
 
 import com.amsha.core.agent.loop.AgentExecutionContext;
 import com.amsha.core.agent.reasoning.ReasoningStep;
-import com.amsha.core.agent.reasoning.StructuredOutputMode;
 import com.amsha.core.api.dto.RunAgentRequest;
 import com.amsha.core.security.AutonomyLevel;
+import com.amsha.llm.api.StructuredOutputMode;
 
 import org.junit.jupiter.api.Test;
 

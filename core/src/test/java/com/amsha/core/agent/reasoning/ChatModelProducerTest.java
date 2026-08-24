@@ -13,7 +13,8 @@ import java.lang.reflect.Proxy;
 import java.util.Collections;
 import java.util.Map;
 
-import com.amsha.core.routing.ModelDefaults;
+import com.amsha.llm.api.AgentChatModelProvider;
+import com.amsha.llm.api.ModelDefaults;
 
 import org.junit.jupiter.api.Test;
 

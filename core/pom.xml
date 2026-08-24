@@ -22,6 +22,10 @@
       <groupId>com.amsha</groupId>
       <artifactId>amsha-channel-api</artifactId>
     </dependency>
+    <dependency>
+      <groupId>com.amsha</groupId>
+      <artifactId>amsha-llm-provider-api</artifactId>
+    </dependency>
 
     <!-- Quarkus Arc CDI -->
     <dependency>
@@ -89,59 +93,10 @@
       <scope>test</scope>
     </dependency>
 
-    <!-- LangChain4J (Quarkiverse extensions - they manage langchain4j core transitively) -->
+    <!-- LangChain4J Core (common abstractions) -->
     <dependency>
       <groupId>io.quarkiverse.langchain4j</groupId>
       <artifactId>quarkus-langchain4j-core</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>io.quarkiverse.langchain4j</groupId>
-      <artifactId>quarkus-langchain4j-ollama</artifactId>
-      <exclusions>
-        <exclusion>
-          <groupId>dev.langchain4j</groupId>
-          <artifactId>langchain4j-http-client-jdk</artifactId>
-        </exclusion>
-      </exclusions>
-    </dependency>
-    <dependency>
-      <groupId>io.quarkiverse.langchain4j</groupId>
-      <artifactId>quarkus-langchain4j-openai</artifactId>
-      <exclusions>
-        <exclusion>
-          <groupId>dev.langchain4j</groupId>
-          <artifactId>langchain4j-http-client-jdk</artifactId>
-        </exclusion>
-        <exclusion>
-          <groupId>io.quarkus</groupId>
-          <artifactId>quarkus-hibernate-orm</artifactId>
-        </exclusion>
-        <exclusion>
-          <groupId>io.quarkus</groupId>
-          <artifactId>quarkus-hibernate-orm-panache</artifactId>
-        </exclusion>
-      </exclusions>
-    </dependency>
-    <dependency>
-      <groupId>io.quarkiverse.langchain4j</groupId>
-      <artifactId>quarkus-langchain4j-anthropic</artifactId>
-      <exclusions>
-        <exclusion>
-          <groupId>dev.langchain4j</groupId>
-          <artifactId>langchain4j-http-client-jdk</artifactId>
-        </exclusion>
-      </exclusions>
-    </dependency>
-
-    <dependency>
-      <groupId>io.quarkiverse.langchain4j</groupId>
-      <artifactId>quarkus-langchain4j-ai-gemini</artifactId>
-      <exclusions>
-        <exclusion>
-          <groupId>dev.langchain4j</groupId>
-          <artifactId>langchain4j-http-client-jdk</artifactId>
-        </exclusion>
-      </exclusions>
     </dependency>
 
     <!-- BouncyCastle - Argon2id + AES-GCM-SIV (use ONLY bcprov-jdk18on) -->
@@ -215,10 +170,6 @@
     <dependency>
       <groupId>com.arize</groupId>
       <artifactId>openinference-instrumentation-langchain4j</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>io.opentelemetry</groupId>
-      <artifactId>opentelemetry-exporter-otlp</artifactId>
     </dependency>
 
 

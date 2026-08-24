@@ -9,6 +9,9 @@ import jakarta.enterprise.inject.Instance;
 
 import java.util.List;
 
+import com.amsha.llm.api.AgentChatModelProvider;
+import com.amsha.llm.api.StructuredOutputMode;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;

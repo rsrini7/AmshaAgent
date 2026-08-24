@@ -13,12 +13,13 @@ import java.util.Locale;
 import java.util.Optional;
 
 import com.amsha.core.agent.loop.TaskClassifierService;
-import com.amsha.core.agent.reasoning.AgentChatModelProvider;
-import com.amsha.core.agent.reasoning.AgentLlmConfig;
 import com.amsha.core.agent.role.AgentGroupRegistry;
 import com.amsha.core.agent.role.AgentPersona;
 import com.amsha.core.scope.WorkspaceContext;
 import com.amsha.core.util.MdcKeys;
+import com.amsha.llm.api.AgentChatModelProvider;
+import com.amsha.llm.api.AgentLlmConfig;
+import com.amsha.llm.api.ChatModelCreationPort;
 import com.amsha.persistence.api.LlmConnectionDto;
 import com.amsha.persistence.api.LlmProfileStorePort;
 
@@ -72,6 +73,21 @@ public class ModelRouter {
 
     @Inject
     AgentLlmConfig agentConfig;
+
+    @Inject
+    @Any
+    Instance<ChatModelCreationPort> chatModelCreationPort;
+
+    private Optional<ChatModelCreationPort> findCreationPort() {
+        return chatModelCreationPort != null ? chatModelCreationPort.stream().findFirst() : Optional.empty();
+    }
+
+    private ChatModelCreationPort creationPort() {
+        return findCreationPort()
+                .orElseThrow(
+                        () -> new IllegalStateException(
+                                "No ChatModelCreationPort bean found on classpath. Ensure amsha-llm-providers is included in the application."));
+    }
 
     @ConfigProperty(name = "amsha.llm.profile-routing.enabled", defaultValue = "false")
     boolean profileRoutingEnabled;
@@ -135,8 +151,9 @@ public class ModelRouter {
                         p.profileRevision(),
                         p.providerAdapterId(),
                         p.modelId(),
-                        () -> ChatModelFactory.createForAdapter(
-                                p.providerAdapterId(), c.baseUrl(), c.apiKey(), p.modelId(), agentConfig));
+                        () -> creationPort()
+                                .createForAdapter(
+                                        p.providerAdapterId(), c.baseUrl(), c.apiKey(), p.modelId(), agentConfig));
                 entries.add(new OrderedFailoverChatModel.Entry(p.profileId(), model));
             }
         }

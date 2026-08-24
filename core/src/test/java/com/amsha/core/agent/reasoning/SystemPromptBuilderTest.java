@@ -28,6 +28,7 @@ import com.amsha.core.security.AutonomyLevel;
 import com.amsha.core.skill.SkillRegistry;
 import com.amsha.core.tools.AgentTool;
 import com.amsha.core.tools.ToolRegistry;
+import com.amsha.llm.api.StructuredOutputMode;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
