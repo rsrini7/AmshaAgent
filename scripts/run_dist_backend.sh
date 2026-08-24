@@ -20,6 +20,7 @@ Options:
   --validate, -v        Run the REST validation suite
   --fast                Run the fast validation suite
   --full                Run the full validation suite (default for --validate)
+  --clean, --reset-db   Reset backend database/data directory before running
   --onnx                Enable and validate the local ONNX bundle
   --dry-run             Print the resolved execution plan without side effects
   --help, -h            Show this help
@@ -75,6 +76,7 @@ VALIDATION_SCRIPT="${AMSHA_VALIDATION_SCRIPT:-$PROJECT_ROOT/rest-http/scripts/ru
 AUTO_BUILD=false
 VALIDATE_MODE=false
 FAST_MODE=false
+CLEAN_REQUESTED=false
 ONNX_REQUESTED=false
 DRY_RUN=false
 COMMAND="serve"
@@ -99,6 +101,9 @@ while [[ $# -gt 0 ]]; do
     --full|--validate-full)
       VALIDATE_MODE=true
       FAST_MODE=false
+      ;;
+    --clean|--reset-db)
+      CLEAN_REQUESTED=true
       ;;
     --onnx)
       ONNX_REQUESTED=true
@@ -143,9 +148,10 @@ else
 fi
 
 PROCESS_ENV_KEYS_TEXT=$'\n'
-while IFS= read -r env_key; do
+while IFS='=' read -r env_key _; do
+  [[ -n "$env_key" ]] || continue
   PROCESS_ENV_KEYS_TEXT="${PROCESS_ENV_KEYS_TEXT}${env_key}"$'\n'
-done < <(compgen -e)
+done < <(env)
 
 is_process_env_key() {
   case "$PROCESS_ENV_KEYS_TEXT" in
@@ -224,6 +230,8 @@ export AMSHA_DATA_DIR
 # A wrapper invocation must never silently run a different persistence
 # backend because a shared .env file happened to contain another value.
 export AMSHA_PERSISTENCE_BACKEND="$PERSISTENCE_BACKEND"
+export AMSHA_MEMORY_TIERED_BACKEND="$PERSISTENCE_BACKEND"
+export AMSHA_SELF_EVOLVE_BACKEND="$PERSISTENCE_BACKEND"
 export QUARKUS_PROFILE="$BACKEND_PROFILE"
 export AMSHA_TEST_DATA_COLLECTION_ENABLED="${AMSHA_TEST_DATA_COLLECTION_ENABLED:-true}"
 
@@ -296,6 +304,66 @@ build_native() {
   chmod +x "$BINARY"
 }
 
+clean_backend_state() {
+  local force="${1:-false}"
+  if [[ "$BACKEND" == postgres ]]; then
+    local pg_db="${AMSHA_PG_DB:-amsha}"
+    local pg_host="${AMSHA_PG_HOST:-localhost}"
+    local pg_port="${AMSHA_PG_PORT:-5432}"
+    local pg_user="${AMSHA_PG_USER:-amsha}"
+    local pg_pass="${AMSHA_PG_PASSWORD:-changeme}"
+
+    if [[ "$force" != true && -t 0 && "$VALIDATE_MODE" != true ]]; then
+      printf '⚠️  WARNING: This will permanently delete all PostgreSQL data in database "%s".\n' "$pg_db"
+      read -rp "Reset database '$pg_db'? [y/N]: " confirm
+      if [[ "$confirm" != [yY] && "$confirm" != [yY][eE][sS] ]]; then
+        printf 'Aborted.\n'
+        exit 0
+      fi
+    fi
+
+    printf '🧹 Resetting PostgreSQL database "%s"...\n' "$pg_db"
+    local reset_done=false
+    if command -v podman >/dev/null 2>&1 && podman ps --no-trunc 2>&1 | grep -q 'amsha-pg'; then
+      if podman exec amsha-pg psql -U "$pg_user" -d postgres -c "DROP DATABASE IF EXISTS $pg_db WITH (FORCE);" >/dev/null 2>&1 \
+        && podman exec amsha-pg psql -U "$pg_user" -d postgres -c "CREATE DATABASE $pg_db;" >/dev/null 2>&1; then
+        reset_done=true
+      fi
+    elif command -v docker >/dev/null 2>&1 && docker ps --no-trunc 2>&1 | grep -q 'amsha-pg'; then
+      if docker exec amsha-pg psql -U "$pg_user" -d postgres -c "DROP DATABASE IF EXISTS $pg_db WITH (FORCE);" >/dev/null 2>&1 \
+        && docker exec amsha-pg psql -U "$pg_user" -d postgres -c "CREATE DATABASE $pg_db;" >/dev/null 2>&1; then
+        reset_done=true
+      fi
+    fi
+
+    if [[ "$reset_done" == false ]] && command -v psql >/dev/null 2>&1; then
+      if PGPASSWORD="$pg_pass" psql -h "$pg_host" -p "$pg_port" -U "$pg_user" -d postgres -c "DROP DATABASE IF EXISTS $pg_db WITH (FORCE); CREATE DATABASE $pg_db;" >/dev/null 2>&1; then
+        reset_done=true
+      fi
+    fi
+
+    if [[ "$reset_done" == false ]]; then
+      printf '⚠️  Could not automatically reset PostgreSQL database via podman/docker/psql.\n'
+      printf '   Run "mise run db:pg:reset" or manually recreate database "%s".\n' "$pg_db"
+    else
+      printf '✅ PostgreSQL database "%s" reset cleanly.\n' "$pg_db"
+    fi
+
+    rm -rf "$AMSHA_DATA_DIR" 2>/dev/null || true
+  elif [[ "$BACKEND" == sqlite || "$BACKEND" == fs ]]; then
+    if [[ "$force" != true && -t 0 && "$VALIDATE_MODE" != true ]]; then
+      printf '⚠️  WARNING: This will permanently delete data directory "%s".\n' "$AMSHA_DATA_DIR"
+      read -rp "Delete directory '$AMSHA_DATA_DIR'? [y/N]: " confirm
+      if [[ "$confirm" != [yY] && "$confirm" != [yY][eE][sS] ]]; then
+        printf 'Aborted.\n'
+        exit 0
+      fi
+    fi
+    printf '🧹 Cleaning %s data directory: %s\n' "$BACKEND" "$AMSHA_DATA_DIR"
+    rm -rf "$AMSHA_DATA_DIR" 2>/dev/null || true
+  fi
+}
+
 print_plan() {
   local validation_args=""
   if [[ ${#VALIDATE_ARGS[@]} -gt 0 ]]; then
@@ -311,6 +379,7 @@ print_plan() {
   printf 'validation_args=%s\n' "$validation_args"
   printf 'validation_base=%s\n' "${TEST_BASE:-http://127.0.0.1:${AMSHA_VALIDATION_PORT:-8080}}"
   printf 'build=%s\n' "$AUTO_BUILD"
+  printf 'clean=%s\n' "$CLEAN_REQUESTED"
   printf 'onnx=%s\n' "$ONNX_REQUESTED"
   printf 'embedding_providers=%s\n' "${AMSHA_INFINITE_LOOP_EMBEDDING_PROVIDERS:-}"
   if [[ "$BACKEND" == fs ]]; then
@@ -322,6 +391,10 @@ print_plan() {
 if [[ "$DRY_RUN" == true ]]; then
   print_plan
   exit 0
+fi
+
+if [[ "$CLEAN_REQUESTED" == true ]]; then
+  clean_backend_state true
 fi
 
 if [[ "$ONNX_REQUESTED" == true ]]; then
@@ -391,6 +464,11 @@ if [[ "$VALIDATE_MODE" == true ]]; then
       break
     fi
     if ! kill -0 "$server_pid" 2>/dev/null; then
+      if [[ "$BACKEND" == postgres ]] && [[ -f "$PROJECT_ROOT/amsha-pg.log" ]] \
+        && grep -q "FlywayValidateException" "$PROJECT_ROOT/amsha-pg.log" 2>/dev/null; then
+        printf '⚠️  PostgreSQL Flyway validation failed due to schema checksum mismatch.\n' >&2
+        printf '💡 Pass --clean to reset the database, or run: mise run db:pg:reset\n' >&2
+      fi
       die "Validation server exited before becoming ready; inspect $log_file."
     fi
     sleep 1

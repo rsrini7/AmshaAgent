@@ -92,6 +92,14 @@ class DistributionWrapperContractTest(unittest.TestCase):
         plan = self.parse_plan(self.run_wrapper("sqlite", "--dry-run", "--build"))
         self.assertEqual(plan["command"], "serve")
 
+    def test_clean_flag_is_reflected_in_plan(self) -> None:
+        for backend in WRAPPERS:
+            with self.subTest(backend=backend):
+                plan = self.parse_plan(
+                    self.run_wrapper(backend, "--dry-run", "--clean")
+                )
+                self.assertEqual(plan["clean"], "true")
+
     def test_safe_env_loader_does_not_execute_values(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             marker = Path(directory) / "should-not-exist"
