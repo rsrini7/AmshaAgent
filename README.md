@@ -4,7 +4,7 @@
 
   ![JDK 25](https://img.shields.io/badge/JDK-25-red.svg?style=flat&logo=java)
   ![Quarkus](https://img.shields.io/badge/Quarkus-3.33.3.1-blue.svg?style=flat&logo=quarkus)
-  ![LangChain4J](https://img.shields.io/badge/LangChain4j-1.x-FC4C02?style=flat&logo=langchain)
+  ![LangChain4J](https://img.shields.io/badge/LangChain4j-1.11.10-FC4C02?style=flat&logo=langchain)
   ![Native Image Ready](https://img.shields.io/badge/Native_Image-Ready-orange.svg?style=flat&logo=graalvm)
   ![OpenTelemetry](https://img.shields.io/badge/OpenTelemetry-Tracing-blueviolet.svg?style=flat&logo=opentelemetry)
   ![Podman](https://img.shields.io/badge/Isolation-Rootless_Podman-purple.svg?style=flat&logo=podman)
@@ -18,7 +18,7 @@
 
 > **A self-hosted, production-grade agentic AI platform** — ReAct agent loop, 12 specialist personas, HITL governance, Podman sandbox, hexagonal persistence (SQLite / PostgreSQL / FS). Runs as a single ~400 MB binary.
 
-**Stack**: JDK 25 · Quarkus 3.33.3.1 · LangChain4J 1.x · SQLite (WAL + FTS5 + sqlite-vec) · Podman · Apache Camel · BouncyCastle
+**Stack**: JDK 25 · Quarkus 3.33.3.1 · LangChain4J 1.11.10 · SQLite (WAL + FTS5 + sqlite-vec) · Podman · Apache Camel · BouncyCastle
 
 ### Native binary size
 

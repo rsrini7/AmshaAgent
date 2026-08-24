@@ -1,6 +1,6 @@
 # Amsha Agent - Manual Setup Guide
 
-> **Stack**: JDK 25 · Quarkus 3.33.3.1 · LangChain4J 1.x · SQLite (WAL + FTS5 + sqlite-vec) · Podman (rootless) · Groq Cloud
+> **Stack**: JDK 25 · Quarkus 3.33.3.1 · LangChain4J 1.11.10 · SQLite (WAL + FTS5 + sqlite-vec) · Podman (rootless) · Groq Cloud
 >
 > This guide covers **manual setup without mise** on **macOS**, **WSL2 (Ubuntu)**, and **Windows**. All commands are direct - no wrapper scripts.
 > If you prefer automated setup, see [`MISE_SETUP.md`](./MISE_SETUP.md).

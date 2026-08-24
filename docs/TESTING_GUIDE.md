@@ -1,6 +1,6 @@
 # Amsha Agent - Testing Guide
 
-> **Stack**: JDK 25 · Quarkus 3.33.3.1 · LangChain4J 1.x · SQLite (WAL + FTS5 + sqlite-vec) · Podman (rootless) · Groq Cloud
+> **Stack**: JDK 25 · Quarkus 3.33.3.1 · LangChain4J 1.11.10 · SQLite (WAL + FTS5 + sqlite-vec) · Podman (rootless) · Groq Cloud
 >
 > This guide covers the automated test suite and the complete REST API surface. Use alongside [TELEGRAM_TESTING.md](./TELEGRAM_TESTING.md) for full end-to-end coverage, and [rest-http/README.md](../rest-http/README.md) for the `.http` file reference.
 

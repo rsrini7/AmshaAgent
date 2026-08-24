@@ -1,6 +1,6 @@
 # Amsha Agent - mise Task Runner Guide
 
-> **Stack**: JDK 25 · Quarkus 3.33.3.1 · LangChain4J 1.x · SQLite · Podman (rootless) · Groq Cloud
+> **Stack**: JDK 25 · Quarkus 3.33.3.1 · LangChain4J 1.11.10 · SQLite · Podman (rootless) · Groq Cloud
 >
 > **This guide** covers `mise` as the unified task runner for **Windows (pwsh)**, **macOS**, **WSL2 (Ubuntu)**, and **Linux**.
 > One config file - `mise.toml` - runs on all platforms via PowerShell (pwsh), which mise installs automatically.
