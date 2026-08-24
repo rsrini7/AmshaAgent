@@ -569,6 +569,36 @@ Primary sources for this finding:
 - [Moderne CLI license](https://docs.moderne.io/user-documentation/moderne-cli/getting-started/moderne-cli-license)
 - [Quarkus update guide](https://quarkus.io/guides/update-quarkus)
 
+### Tooling evaluation: Moderne CLI vs direct Maven rewrite plugin
+
+Both routes were evaluated live against this reactor (2026-08-24) for the two
+migration recipes the Quarkus updater does not auto-apply:
+`JUnit5to6Migration` and `Testcontainers2Migration`
+(`org.openrewrite.recipe:rewrite-testing-frameworks`).
+
+- **Moderne CLI (`mod` 4.6.4)**: tenant connection, marketplace install, and
+  LST build all work locally (~2 minutes for the reactor). Execution is gated,
+  however: these recipes carry the Moderne Source Available License, and the
+  CLI enforces it per repository — private repositories require a license key
+  (`mod config license edit`). Without one, `mod run` fails with
+  "A valid license is required." Also note `mod build` identifies repositories
+  by their git `origin`; a local copy without a remote discovers as 0 repos.
+- **Direct Maven rewrite plugin (`org.openrewrite.maven:rewrite-maven-plugin`,
+  6.46.1)**: runs the identical recipes with **no license or authentication**.
+  The artifact is freely resolvable from Maven Central, and OpenRewrite's
+  runtime enforces nothing. Verified end-to-end with
+  `dryRun` + `-Drewrite.recipeArtifactCoordinates=org.openrewrite.recipe:rewrite-testing-frameworks:3.44.0`
+  + `-Drewrite.activeRecipes=...Testcontainers2Migration`: produced exactly the
+  expected changes (TC2 artifact rename plus package-relocated imports), with
+  one review item — the recipe adds an explicit `<version>` the platform BOM
+  already manages.
+
+Decision: keep the Quarkus updater as orchestrator for platform moves, and use
+the direct Maven plugin (goal `dryRun`, then human-reviewed `apply`) for the
+source-available testing recipes during Issue 04. The Moderne CLI remains
+parked until there is a fleet-scale or recurring-refactor justification that
+justifies a license.
+
 ### Automation limits
 
 The official Quarkus guide gives two explicit reasons expected changes can be
