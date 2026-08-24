@@ -566,6 +566,26 @@ Framework updates are not merged by a dependency bot without these gates.
 | OpenRewrite overreach | Generated patch removes pins and rewrites build configuration | Review every deletion and manually restore intentional aliases/pins |
 | Non-LTS maintenance | 3.38 is a regular stream | Accept an explicit rapid-update cadence or stop at 3.33 LTS |
 
+## 7.5 Execution lessons (Issues 01–04, Phase 1 + first half of Phase 2)
+
+Full detail in `.scratch/quarkus-upgrade/lessons-learnt.md` (gitignored).
+These are the durable takeaways that apply to every future checkpoint:
+
+| Lesson | Impact | Rule going forward |
+| --- | --- | --- |
+| Root pins outrank imported BOMs | Two pins (`jboss-logmanager`, `bouncycastle`) were live defects below platform values before any bump started | Align every pin to the checkpoint's BOM value or justify (§4 rule 5) |
+| Updater patches need hunk-level triage | Alias rewrite, out-of-scope jandex/pin removals, TC2 version injection — all observed in real dry runs | Never apply raw; review every hunk against the effective POM |
+| Run updater from `app/pom.xml` | Aggregator root reports zero extensions | Always `-f app/pom.xml -DplatformVersion=X.Y.Z.W` |
+| mise strips exported env vars | Smoke runner silently fell back to `.env` while child held a different key → deterministic 401 | Deliver keys via `.env` only; never trust shell exports through mise |
+| Native smoke children have console logging off | Failures look silent without file-log injection | Set `QUARKUS_LOG_FILE_ENABLE=true` + `QUARKUS_LOG_FILE_PATH` for any debug run |
+| QLC codec mixins stripped by native DCE | Chat-memory JSON written type-less, rejected on read (InvalidTypeIdException) | Register LC4J message types + mixin classes in `CoreReflectionConfig`; guarded by `ChatMessageJsonRoundTripTest` |
+| TC2 `PostgreSQLContainer` is non-generic | Compile break on migration to TC2 | Drop `<?>` and diamond at adoption time |
+| Camel test artifact removed in CQ 3.34 | `camel-quarkus-junit5` dead once member BOM brings CQ ≥ 3.34 | Rename to `camel-quarkus-junit`; migrate imports to `junit6.*` |
+| ArchUnit needs `archunit-junit6` module | `archunit-junit5` targets JUnit Platform 1.x | Switch artifact at JUnit-6 checkpoints |
+| Orphaned temp daemons squat ephemeral ports | Zonky embedded-PG hang class (blocked in `verifyReady`) | `lsof -nP -iTCP:<port>` before assuming a code bug; sweep `/tmp/amsha-*` orphans |
+| Moderne CLI license-gated for private repos | Source-available testing recipes unusable without a license | Use direct Maven rewrite plugin + Central jars instead |
+| Soak tooling required | Smokes prove instantiation, not sustainability | `scripts/local_soak.py` watches health/auth/log-delta/RSS/deep probes over duration |
+
 ## 8. Verification matrix
 
 Every command runs from the repository root unless noted. Commands requiring

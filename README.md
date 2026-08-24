@@ -3,7 +3,7 @@
   <p><strong>A secure, stateful, and financially governed multi-agent AI kernel designed for enterprise deployment.</strong></p>
 
   ![JDK 25](https://img.shields.io/badge/JDK-25-red.svg?style=flat&logo=java)
-  ![Quarkus](https://img.shields.io/badge/Quarkus-3.27.5.1-blue.svg?style=flat&logo=quarkus)
+  ![Quarkus](https://img.shields.io/badge/Quarkus-3.33.3.1-blue.svg?style=flat&logo=quarkus)
   ![LangChain4J](https://img.shields.io/badge/LangChain4j-1.x-FC4C02?style=flat&logo=langchain)
   ![Native Image Ready](https://img.shields.io/badge/Native_Image-Ready-orange.svg?style=flat&logo=graalvm)
   ![OpenTelemetry](https://img.shields.io/badge/OpenTelemetry-Tracing-blueviolet.svg?style=flat&logo=opentelemetry)
@@ -18,7 +18,7 @@
 
 > **A self-hosted, production-grade agentic AI platform** — ReAct agent loop, 12 specialist personas, HITL governance, Podman sandbox, hexagonal persistence (SQLite / PostgreSQL / FS). Runs as a single ~400 MB binary.
 
-**Stack**: JDK 25 · Quarkus 3.27.5.1 · LangChain4J 1.x · SQLite (WAL + FTS5 + sqlite-vec) · Podman · Apache Camel · BouncyCastle
+**Stack**: JDK 25 · Quarkus 3.33.3.1 · LangChain4J 1.x · SQLite (WAL + FTS5 + sqlite-vec) · Podman · Apache Camel · BouncyCastle
 
 ### Native binary size
 
@@ -152,7 +152,7 @@ All roles have `garuda` for delegation. Tool schemas assembled dynamically at ru
 ## Module Reference
 
 ```
-amsha-parent/               ← Root POM: Java 25, Quarkus 3.27.5.1
+amsha-parent/               ← Root POM: Java 25, Quarkus 3.33.3.1
 │
 app/                  ← Main deployable: CLI, REST, scheduler, security wiring
 core/                 ← Agent loop, state machine, reflexes, routing, governance
@@ -271,4 +271,4 @@ Use `--module app`, `--top 10`, `--badge`, or `--json` to narrow or automate rep
 
 ---
 
-> **Last updated**: Amsha Agent V0.1.0 · Quarkus 3.27.5.1 · JDK 25 · 19 modules · 21 tools · 20 reflexes · 18 LLM providers
+> **Last updated**: Amsha Agent V0.1.0 · Quarkus 3.33.3.1 · JDK 25 · 19 modules · 21 tools · 20 reflexes · 18 LLM providers
