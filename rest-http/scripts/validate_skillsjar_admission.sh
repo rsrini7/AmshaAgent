@@ -78,7 +78,7 @@ assert_json "every quarantine entry has name, source, and nonempty reasons" \
 
 printf "\n### SKILLSJAR-ADMISSION-5 refresh preserves admission contract\n"
 CODE="$(curl -s -m 20 -o "$RESPONSE_FILE" -w "%{http_code}" \
-  -H "X-Amsha-API-Key: $KEY" \
+  -H "X-Amsha-API-Key: $VALID_KEY" \
   -H "Accept: application/json" \
   "$REFRESH_URL")"
 if [ "$CODE" = "200" ]; then

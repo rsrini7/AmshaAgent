@@ -25,6 +25,8 @@ import com.amsha.core.agent.reasoning.ReasoningStep;
 import com.amsha.core.agent.reasoning.ReasoningStepDeserializer;
 import com.amsha.core.agent.reasoning.ReasoningStepSerializer;
 import com.amsha.core.agent.result.AgentResult;
+import com.amsha.core.agent.sse.AgentSseService;
+import com.amsha.core.agent.sse.HitlEventType;
 import com.amsha.core.api.AgentResponseMapper;
 import com.amsha.core.api.dto.AmshaErrorResponse;
 import com.amsha.core.api.dto.AuditEventResponse;
@@ -143,7 +145,12 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             VideoContent.class,
             PdfFileContent.class,
             OutboundHttpPolicyService.class,
-            ExternalIdentityProvider.class
+            ExternalIdentityProvider.class,
+            AgentSseService.HeartbeatEvent.class,
+            AgentSseService.HitlEvent.class,
+            AgentSseService.AgentStatusEvent.class,
+            AgentSseService.SseEvent.class,
+            HitlEventType.class
         },
         classNames = {
             "com.github.benmanes.caffeine.cache.SSLMSA",
