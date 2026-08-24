@@ -19,7 +19,7 @@ ok() {
 }
 
 fail() {
-  printf "❌ %s — %s\n" "$1" "$(head -c 240 "$RESPONSE_FILE")"
+  printf "❌ %s\n" "$1"
   FAIL=$((FAIL + 1))
 }
 

@@ -36,7 +36,7 @@ trap 'rm -f "$COOKIE_JAR" "$HEADERS_FILE" /tmp/resp' EXIT
 
 info()  { printf "%-4s %-62s " "" "$1"; }
 ok()    { printf "✅ HTTP %s\n" "$1"; PASS=$((PASS+1)); }
-fail()  { printf "❌ HTTP %s — %s\n" "$1" "$(head -c 140 /tmp/resp)"; FAIL=$((FAIL+1)); }
+fail()  { printf "❌ HTTP %s\n" "$(format_http_code "$1")"; FAIL=$((FAIL+1)); }
 exp()   { if [ "$1" = "$2" ]; then ok "$1"; else fail "$1 (expected $2)"; fi }
 # accept the response code if it is one of the accepted (space separated) codes
 code_in() {

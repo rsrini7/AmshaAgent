@@ -38,6 +38,87 @@ GITHUB_TOKEN=ghp_...    # required for GithubTool tests in 04, 05, 09, 12
 
 ---
 
+## Native distribution wrappers
+
+The backend wrappers provide one consistent entry point for native
+distribution builds, serving, and REST validation. They use isolated data
+directories by default and do not require a native binary for `--dry-run` or
+validation against an existing `TEST_BASE` runtime.
+
+| Backend | Wrapper | Default data directory | Serve task | Fast validation task |
+|---|---|---|---|---|
+| SQLite | `scripts/run_dist_sqlite.sh` | `dist/data-sqlite` | `mise run dist:serve-sqlite` | `mise run dist:validate-sqlite` |
+| PostgreSQL | `scripts/run_dist_pg.sh` | `dist/data-postgres` | `mise run dist:serve-pg` | `mise run dist:validate-pg` |
+| Filesystem | `scripts/run_dist_fs.sh` | `dist/data-fs` | `mise run dist:serve-fs` | `mise run dist:validate-fs` |
+
+Run the wrapper contract tests before a migration or backend switch:
+
+```bash
+python3 scripts/test_dist_wrappers.py
+```
+
+Inspect a resolved plan without building, starting a server, downloading a
+model, or creating data directories:
+
+```bash
+./scripts/run_dist_sqlite.sh --dry-run
+./scripts/run_dist_pg.sh --dry-run
+./scripts/run_dist_fs.sh --dry-run
+```
+
+Serve a backend in the foreground. Add `--build` to rebuild its native binary
+first; without a command, `serve` is used:
+
+```bash
+./scripts/run_dist_sqlite.sh --build
+./scripts/run_dist_pg.sh --build
+./scripts/run_dist_fs.sh --build
+```
+
+Run fast or full REST validation. Fast validation forwards `--fast` to the
+master validator; `--validate` without `--fast` runs the full suite:
+
+```bash
+./scripts/run_dist_sqlite.sh --validate --fast
+./scripts/run_dist_sqlite.sh --validate --full
+
+# Equivalent mise shortcuts (fast validation)
+mise run dist:validate-sqlite
+mise run dist:validate-pg
+mise run dist:validate-fs
+```
+
+To validate a server that is already running, set `TEST_BASE`. The wrapper
+will not start or stop another server, and a local native binary is not needed
+unless `--build` is also supplied:
+
+```bash
+TEST_BASE=http://127.0.0.1:8081 \
+  ./scripts/run_dist_sqlite.sh --validate --fast
+```
+
+When the wrapper owns the validation server, it uses port `8080` by default.
+Choose another free port with `AMSHA_VALIDATION_PORT`; an occupied port is
+reported rather than terminating an unrelated process:
+
+```bash
+AMSHA_VALIDATION_PORT=18081 \
+  ./scripts/run_dist_sqlite.sh --validate --fast
+```
+
+ONNX installation and validation are opt-in. Use `--onnx` only when the local
+bundle is required:
+
+```bash
+./scripts/run_dist_sqlite.sh --validate --fast --onnx
+```
+
+The wrapper safely reads `.env`, `dist/.env`, and an optional file named by
+`AMSHA_ENV_FILE`; shell expressions in values are treated as literal text and
+process environment variables take precedence.
+
+---
+
 ## API Keys Used in These Files
 
 | Variable | Value | Used in |

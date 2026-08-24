@@ -18,7 +18,7 @@ RL_WAIT=62
 
 info() { printf "%-4s %-58s " "" "$1"; }
 ok() { printf "✅ HTTP %s\n" "$1"; PASS=$((PASS+1)); }
-fail() { printf "❌ HTTP %s — %s\n" "$1" "$(head -c 120 /tmp/resp)"; FAIL=$((FAIL+1)); }
+fail() { printf "❌ HTTP %s\n" "$1"; FAIL=$((FAIL+1)); }
 mute() { curl -s -m 180 -o /tmp/resp -w "%{http_code}" "$@"; }
 sid() { python3 -c "import json; print(json.load(open('/tmp/resp')).get('sessionId',''))" 2>/dev/null; }
 create_session() {

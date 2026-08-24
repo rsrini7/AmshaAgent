@@ -26,7 +26,7 @@ trap 'rm -f "$RESP_FILE" "$HEADERS_FILE"' EXIT
 
 info()  { printf "%-4s %-62s " "" "$1"; }
 ok()    { printf "✅ HTTP %s\n" "$1"; PASS=$((PASS+1)); }
-fail()  { printf "❌ HTTP %s — %s\n" "$1" "$(head -c 140 "$RESP_FILE")"; FAIL=$((FAIL+1)); }
+fail()  { printf "❌ HTTP %s\n" "$(format_http_code "$1")"; FAIL=$((FAIL+1)); }
 exp() { # exp GOT EXPECTED LABEL
   if [ "$1" = "$2" ]; then ok "$1"; else fail "$1 (expected $2)"; fi
 }
@@ -72,8 +72,8 @@ if [ "$CODE" = "200" ] && [ "$ST" = "UNCLAIMED" ]; then
   ok "$CODE ($ST)"
 else
   if [ "${EXPECT_SKIP_IDENTITY:-false}" = "true" ] && [ "$CODE" = "200" ] && [ "$ST" = "CLAIMED" ]; then
-    printf "⚠️  HTTP %s (%s; skipped because bootstrap tests require a fresh database)\n" "$CODE" "$ST"
-    echo "Identity validation skipped without modifying the claimed database."
+    printf "ℹ️  HTTP %s (%s — database already claimed; [EXPECTED] skipping destructive bootstrap tests)\n" "$CODE" "$ST"
+    echo "Identity bootstrap tests skipped to safely preserve existing owner credentials on claimed database."
     exit 0
   fi
   fail "$CODE ($ST; requires a fresh UNCLAIMED database)"

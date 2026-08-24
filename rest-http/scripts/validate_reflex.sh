@@ -17,7 +17,7 @@ trap 'rm -f "$RESP_FILE"' EXIT
 info()  { printf "%-4s %-22s " "" "$1"; }
 ok()    { printf "✅ HTTP %s\n" "$1"; PASS=$((PASS+1)); }
 warn()  { printf "⚠️  HTTP %s (known issue)\n" "$1"; PASS=$((PASS+1)); }
-fail()  { printf "❌ HTTP %s — %s\n" "$1" "$(head -c 80 "$RESP_FILE")"; FAIL=$((FAIL+1)); }
+fail()  { printf "❌ HTTP %s\n" "$1"; FAIL=$((FAIL+1)); }
 mute()  { : > "$RESP_FILE"; curl -s -m 15 -o "$RESP_FILE" -w "%{http_code}" "$@"; }
 sid()   { python3 -c "import json,sys; print(json.load(open(sys.argv[1])).get('sessionId',''))" "$RESP_FILE" 2>/dev/null; }
 
@@ -56,7 +56,7 @@ if [ "$MK" = "429" ]; then echo "⏳ rate limited creating session, waiting ${RL
   MK=$(mute -H "X-Amsha-API-Key: $KEY" -H "Content-Type: application/json" \
     -X POST "$B/api/v1/sessions" -d '{"autonomyLevel":"SUPERVISED"}'); fi
 S=$(sid)
-if [ -z "$S" ]; then echo "❌ Could not create session (HTTP $MK) — $(head -c 120 "$RESP_FILE")"; exit 1; fi
+if [ -z "$S" ]; then echo "❌ Could not create session (HTTP $MK)"; exit 1; fi
 echo "   session: $S"
 echo ""
 

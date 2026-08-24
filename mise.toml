@@ -240,8 +240,14 @@ run = ["mise tasks"]
 # DIST - assemble a ready-to-run distribution folder
 # =============================================================================
 # Tasks are defined as .ps1 scripts for cross-platform compatibility
-# - dist/dist.ps1     (.mise/tasks/dist/)      - Assemble dist/ folder: native exe (SQLite only)
-# - dist/all.ps1      (.mise/tasks/dist/)      - Assemble dist/ folder: all 3 backend variants
+# - dist/dist.ps1         (.mise/tasks/dist/)      - Assemble dist/ folder: native exe (SQLite only)
+# - dist/serve.ps1            (.mise/tasks/dist/)      - Run dist/amsha-sqlite (SQLite) with preconfigured environment
+# - dist/serve-pg.ps1         (.mise/tasks/dist/)      - Run dist/amsha-pg (PostgreSQL) with preconfigured environment
+# - dist/serve-fs.ps1         (.mise/tasks/dist/)      - Run dist/amsha-fs (Filesystem) with preconfigured environment
+# - dist/validate-sqlite.ps1  (.mise/tasks/dist/)      - Start SQLite in bg, run fast validation in fg, and stop
+# - dist/validate-pg.ps1      (.mise/tasks/dist/)      - Start PostgreSQL in bg, run fast validation in fg, and stop
+# - dist/validate-fs.ps1      (.mise/tasks/dist/)      - Start Filesystem in bg, run fast validation in fg, and stop
+# - dist/all.ps1              (.mise/tasks/dist/)      - Assemble dist/ folder: all 3 backend variants
 # - dist/pack.ps1     (.mise/tasks/dist/)      - Create OS-specific release archives from dist/
 
 # utils:7z-source - Generate encrypted source archive (7z)

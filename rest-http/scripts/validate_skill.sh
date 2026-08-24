@@ -5,9 +5,9 @@ source "$SCRIPT_DIR/common_env.sh"
 KEY="${ADMIN_KEY:-$VALID_KEY}"
 SK=$B/api/v1/skills
 hdr(){ printf "\n### %s\n" "$1"; }
-code(){ curl -s -m 20 -o /tmp/b -w "HTTP %{http_code}" "$@"; printf "  "; head -c 300 /tmp/b; echo; }
+code(){ curl -s -m 20 -o /tmp/b -w "HTTP %{http_code}" "$@"; printf "\n"; }
 mut(){ # mutation with spacing
-  curl -s -m 20 -o /tmp/b -w "HTTP %{http_code}" "$@"; printf "  "; head -c 260 /tmp/b; echo; sleep 7; }
+  curl -s -m 20 -o /tmp/b -w "HTTP %{http_code}" "$@"; printf "\n"; sleep 7; }
 
 hdr "SKILL-1 list (before)"
 code -H "X-Amsha-API-Key: $KEY" -H "Accept: application/json" $SK
