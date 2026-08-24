@@ -204,11 +204,12 @@ resolve_env_file_path() {
   printf '%s' "$env_file"
 }
 
-# Load the generic defaults first, then backend-specific and explicit files.
-# The process environment was snapshotted above, so it remains authoritative.
-load_env_file "$PROJECT_ROOT/.env" false
-load_env_file "$PROJECT_ROOT/dist/.env" false
+# Match the existing distribution precedence: backend-specific defaults, the
+# distribution defaults, then the repository .env. The process environment was
+# snapshotted above, so it remains authoritative over every file.
 load_env_file "$PROJECT_ROOT/dist/.env.$BACKEND"
+load_env_file "$PROJECT_ROOT/dist/.env" false
+load_env_file "$PROJECT_ROOT/.env" false
 if [[ -n "${AMSHA_ENV_FILE:-}" ]]; then
   load_env_file "$(resolve_env_file_path "$AMSHA_ENV_FILE")"
 fi
@@ -225,6 +226,25 @@ export AMSHA_DATA_DIR
 export AMSHA_PERSISTENCE_BACKEND="$PERSISTENCE_BACKEND"
 export QUARKUS_PROFILE="$BACKEND_PROFILE"
 export AMSHA_TEST_DATA_COLLECTION_ENABLED="${AMSHA_TEST_DATA_COLLECTION_ENABLED:-true}"
+
+if [[ "$VALIDATE_MODE" == true ]]; then
+  # Validation launches the server with stdin closed; never enter the
+  # interactive first-run setup in that mode.
+  export AMSHA_UI_SKIP_ONBOARDING=true
+fi
+if [[ "$ONNX_REQUESTED" == false ]] && ! is_process_env_key "AMSHA_ONNX_ENABLED"; then
+  # A file-level ONNX opt-in must not make ordinary validation download or
+  # initialize a model. The caller can still explicitly opt in with --onnx.
+  export AMSHA_ONNX_ENABLED=false
+fi
+if [[ "$VALIDATE_MODE" == true ]] && [[ "$ONNX_REQUESTED" == false ]] \
+  && ! is_process_env_key "AMSHA_INFINITE_LOOP_EMBEDDING_PROVIDERS"; then
+  # Keep fast validation independent of a file-level ONNX embedding choice.
+  # Jina uses the native-compatible OpenAI adapter and is only constructed at
+  # startup; validation does not make an embedding request unless a suite
+  # explicitly exercises embedding inference.
+  export AMSHA_INFINITE_LOOP_EMBEDDING_PROVIDERS=jina
+fi
 
 if [[ "$BACKEND" == fs ]]; then
   export QUARKUS_FLYWAY_ENABLED="${QUARKUS_FLYWAY_ENABLED:-false}"
@@ -292,6 +312,7 @@ print_plan() {
   printf 'validation_base=%s\n' "${TEST_BASE:-http://127.0.0.1:${AMSHA_VALIDATION_PORT:-8080}}"
   printf 'build=%s\n' "$AUTO_BUILD"
   printf 'onnx=%s\n' "$ONNX_REQUESTED"
+  printf 'embedding_providers=%s\n' "${AMSHA_INFINITE_LOOP_EMBEDDING_PROVIDERS:-}"
   if [[ "$BACKEND" == fs ]]; then
     printf 'fs_data_dir=%s\n' "$AMSHA_FS_DATA_DIR"
     printf 'fs_lucene_index_dir=%s\n' "$AMSHA_FS_LUCENE_INDEX_DIR"
@@ -344,6 +365,7 @@ if [[ "$VALIDATE_MODE" == true ]]; then
   fi
 
   validation_base="http://127.0.0.1:$validation_port"
+  export QUARKUS_HTTP_PORT="$validation_port"
   log_file="${AMSHA_VALIDATION_LOG_FILE:-${TMPDIR:-/tmp}/amsha-${BACKEND}-validation.$$.log}"
   printf '🚀 Starting %s validation server on %s.\n' "$BACKEND" "$validation_base"
   printf '📄 Server logs: %s\n' "$log_file"

@@ -32,6 +32,8 @@ class DistributionWrapperContractTest(unittest.TestCase):
         environment = os.environ.copy()
         environment.pop("AMSHA_DATA_DIR", None)
         environment.pop("AMSHA_ONNX_MODEL_ROOT", None)
+        environment.pop("AMSHA_ONNX_ENABLED", None)
+        environment.pop("AMSHA_INFINITE_LOOP_EMBEDDING_PROVIDERS", None)
         environment.pop("AMSHA_PERSISTENCE_BACKEND", None)
         if extra_env:
             environment.update(extra_env)
@@ -62,6 +64,7 @@ class DistributionWrapperContractTest(unittest.TestCase):
                 )
                 self.assertEqual(plan["validation_mode"], "fast")
                 self.assertEqual(plan["validation_args"], "--fast")
+                self.assertEqual(plan["embedding_providers"], "jina")
 
     def test_full_validation_is_distinct_from_fast_validation(self) -> None:
         plan = self.parse_plan(
@@ -184,6 +187,7 @@ class DistributionWrapperContractTest(unittest.TestCase):
             directory_path = Path(directory)
             binary = directory_path / "fake-amsha"
             fake_pid_file = directory_path / "fake-pid"
+            fake_env_file = directory_path / "runtime-env"
             fake_bin_dir = directory_path / "bin"
             fake_bin_dir.mkdir()
             args_file = directory_path / "validation-args"
@@ -198,6 +202,7 @@ class DistributionWrapperContractTest(unittest.TestCase):
                 "#!/usr/bin/env bash\n"
                 "if [[ \"$1\" == serve ]]; then\n"
                 "  echo $$ > \"$AMSHA_FAKE_PID_FILE\"\n"
+                "  printf '%s\\n' \"$AMSHA_UI_SKIP_ONBOARDING\" \"$AMSHA_ONNX_ENABLED\" \"$AMSHA_INFINITE_LOOP_EMBEDDING_PROVIDERS\" \"$QUARKUS_HTTP_PORT\" > \"$AMSHA_FAKE_ENV_FILE\"\n"
                 "  trap 'exit 0' TERM INT\n"
                 "  while true; do sleep 1; done\n"
                 "fi\n"
@@ -219,6 +224,7 @@ class DistributionWrapperContractTest(unittest.TestCase):
                 extra_env={
                     "AMSHA_DIST_BINARY": str(binary),
                     "AMSHA_FAKE_PID_FILE": str(fake_pid_file),
+                    "AMSHA_FAKE_ENV_FILE": str(fake_env_file),
                     "AMSHA_VALIDATION_PORT": "18765",
                     "AMSHA_VALIDATION_SCRIPT": str(validator),
                     "AMSHA_TEST_ARGS_FILE": str(args_file),
@@ -227,6 +233,10 @@ class DistributionWrapperContractTest(unittest.TestCase):
             )
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertEqual(args_file.read_text(encoding="utf-8").splitlines(), ["--fast"])
+            self.assertEqual(
+                fake_env_file.read_text(encoding="utf-8").splitlines(),
+                ["true", "false", "jina", "18765"],
+            )
             fake_pid = int(fake_pid_file.read_text(encoding="utf-8"))
             with self.assertRaises(ProcessLookupError):
                 os.kill(fake_pid, 0)

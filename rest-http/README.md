@@ -113,6 +113,11 @@ bundle is required:
 ./scripts/run_dist_sqlite.sh --validate --fast --onnx
 ```
 
+Without `--onnx`, a validation-owned native server uses the native-compatible
+Jina embedding adapter instead of a file-level ONNX provider setting. The
+provider is constructed at startup but no embedding request is made by the
+fast validation profile.
+
 The wrapper safely reads `.env`, `dist/.env`, and an optional file named by
 `AMSHA_ENV_FILE`; shell expressions in values are treated as literal text and
 process environment variables take precedence.

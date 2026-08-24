@@ -25,10 +25,12 @@ import com.amsha.rag.EmbeddingSpaceDescriptor;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 
+import io.quarkus.arc.Unremovable;
 import io.vertx.core.Context;
 
 /** Opt-in RAG embedding provider backed exclusively by verified local ONNX bundles. */
 @ApplicationScoped
+@Unremovable
 public class OnnxEmbeddingProviderFactory implements EmbeddingProviderFactory {
 
     private final OnnxModelBundleRegistry bundleRegistry;
