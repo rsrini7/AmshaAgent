@@ -9,11 +9,14 @@ import com.amsha.llm.api.ModelDefaults;
 
 import org.jboss.logging.Logger;
 
+import io.quarkus.arc.Unremovable;
+
 /**
  * Jina AI implementation of the EmbeddingProvider SPI.
  * Uses OpenAiEmbeddingModel under the hood as Jina is OpenAI-compatible.
  */
 @ApplicationScoped
+@Unremovable
 public class JinaEmbeddingProviderFactory implements EmbeddingProviderFactory {
 
     private static final Logger log = Logger.getLogger(JinaEmbeddingProviderFactory.class);

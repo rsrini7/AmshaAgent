@@ -7,10 +7,13 @@ import jakarta.enterprise.context.ApplicationScoped;
 
 import org.jboss.logging.Logger;
 
+import io.quarkus.arc.Unremovable;
+
 /**
  * local Ollama implementation of the EmbeddingProvider SPI.
  */
 @ApplicationScoped
+@Unremovable
 public class OllamaEmbeddingProviderFactory implements EmbeddingProviderFactory {
 
     private static final Logger log = Logger.getLogger(OllamaEmbeddingProviderFactory.class);

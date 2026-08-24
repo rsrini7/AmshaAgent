@@ -209,7 +209,7 @@ role_requested() {
 
 role_requires_approval() {
     case "$1" in
-        architect|coordinator|researcher|coder|synthesizer|healer|protector|purifier|nurturer)
+        architect|coordinator|researcher|coder|debugger|synthesizer|optimizer|sentinel|healer|protector|purifier|nurturer)
             return 0
             ;;
         *)

@@ -17,7 +17,7 @@ info()  { printf "%-4s %-35s " "" "$1"; }
 ok()    { printf "✅ HTTP %s\n" "$1"; PASS=$((PASS+1)); }
 okh()   { printf "✅ HTTP %s (HITL→approved)\n" "$1"; PASS=$((PASS+1)); }
 warn()  { printf "⚠️  HTTP %s (%s)\n" "$1" "$2"; PASS=$((PASS+1)); }
-fail()  { printf "❌ HTTP %s — %s\n" "$1" "$(head -c 80 /tmp/resp)"; FAIL=$((FAIL+1)); }
+fail()  { printf "❌ HTTP %s\n" "$1"; FAIL=$((FAIL+1)); }
 mute()  { curl -s -m 60 -o /tmp/resp -w "%{http_code}" "$@"; }
 sid_from_response() { python3 -c "import json; print(json.load(open('/tmp/resp')).get('sessionId',''))" 2>/dev/null; }
 

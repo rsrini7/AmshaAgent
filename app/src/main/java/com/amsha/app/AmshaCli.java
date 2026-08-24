@@ -110,6 +110,7 @@ public class AmshaCli implements Runnable, QuarkusApplication {
         System.out.println();
         System.out.println("  OPTIONS (append to any command)");
         System.out.println("    --role coordinator|researcher|architect|synthesizer|debugger");
+        System.out.println("    --verbose Show token usage and agent actions");
         System.out.println();
     }
 

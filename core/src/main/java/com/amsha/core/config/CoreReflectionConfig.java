@@ -1,5 +1,21 @@
 package com.amsha.core.config;
 
+import dev.langchain4j.agent.tool.ToolExecutionRequest;
+import dev.langchain4j.data.message.AiMessage;
+import dev.langchain4j.data.message.AudioContent;
+import dev.langchain4j.data.message.ChatMessage;
+import dev.langchain4j.data.message.ChatMessageType;
+import dev.langchain4j.data.message.Content;
+import dev.langchain4j.data.message.ContentType;
+import dev.langchain4j.data.message.CustomMessage;
+import dev.langchain4j.data.message.ImageContent;
+import dev.langchain4j.data.message.PdfFileContent;
+import dev.langchain4j.data.message.SystemMessage;
+import dev.langchain4j.data.message.TextContent;
+import dev.langchain4j.data.message.ToolExecutionResultMessage;
+import dev.langchain4j.data.message.UserMessage;
+import dev.langchain4j.data.message.VideoContent;
+
 import com.amsha.core.agent.loop.GroupAnalyticsService;
 import com.amsha.core.agent.loop.GroupConsultationEngine;
 import com.amsha.core.agent.loop.GroupConsultationService;
@@ -9,6 +25,8 @@ import com.amsha.core.agent.reasoning.ReasoningStep;
 import com.amsha.core.agent.reasoning.ReasoningStepDeserializer;
 import com.amsha.core.agent.reasoning.ReasoningStepSerializer;
 import com.amsha.core.agent.result.AgentResult;
+import com.amsha.core.agent.sse.AgentSseService;
+import com.amsha.core.agent.sse.HitlEventType;
 import com.amsha.core.api.AgentResponseMapper;
 import com.amsha.core.api.dto.AmshaErrorResponse;
 import com.amsha.core.api.dto.AuditEventResponse;
@@ -111,13 +129,44 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             GroupAnalyticsService.DomainComboStats.class,
             TaskClassifierService.TaskDomain.class,
             SessionCatalogEntry.class,
+            ChatMessage.class,
+            UserMessage.class,
+            AiMessage.class,
+            SystemMessage.class,
+            ToolExecutionResultMessage.class,
+            CustomMessage.class,
+            ChatMessageType.class,
+            ToolExecutionRequest.class,
+            Content.class,
+            ContentType.class,
+            TextContent.class,
+            ImageContent.class,
+            AudioContent.class,
+            VideoContent.class,
+            PdfFileContent.class,
             OutboundHttpPolicyService.class,
-            ExternalIdentityProvider.class
+            ExternalIdentityProvider.class,
+            AgentSseService.HeartbeatEvent.class,
+            AgentSseService.HitlEvent.class,
+            AgentSseService.AgentStatusEvent.class,
+            AgentSseService.SseEvent.class,
+            HitlEventType.class
         },
         classNames = {
             "com.github.benmanes.caffeine.cache.SSLMSA",
             "com.github.benmanes.caffeine.cache.SSLMS",
             "com.github.benmanes.caffeine.cache.SSMS",
-            "com.github.benmanes.caffeine.cache.SSMSA"
+            "com.github.benmanes.caffeine.cache.SSMSA",
+            // Quarkus LangChain4j's native ChatMessageSerializer substitution
+            // uses these package-private Jackson mixins. In particular,
+            // ChatMessageMixin carries the @JsonTypeInfo/@JsonProperty
+            // metadata that emits the persisted message-level "type" field.
+            "io.quarkiverse.langchain4j.QuarkusJsonCodecFactory$ChatMessageMixin",
+            "io.quarkiverse.langchain4j.QuarkusJsonCodecFactory$AiMessageMixin",
+            "io.quarkiverse.langchain4j.QuarkusJsonCodecFactory$UserMessageMixin",
+            "io.quarkiverse.langchain4j.QuarkusJsonCodecFactory$SystemMessageMixin",
+            "io.quarkiverse.langchain4j.QuarkusJsonCodecFactory$ToolExecutionResultMessageMixin",
+            "io.quarkiverse.langchain4j.QuarkusJsonCodecFactory$CustomMessageMixin",
+            "io.quarkiverse.langchain4j.QuarkusJsonCodecFactory$ToolExecutionRequestMixin"
         })
 public class CoreReflectionConfig {}

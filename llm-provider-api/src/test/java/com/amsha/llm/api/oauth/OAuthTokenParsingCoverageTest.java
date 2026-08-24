@@ -6,18 +6,13 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Optional;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-
 import org.junit.jupiter.api.Test;
 
 class OAuthTokenParsingCoverageTest {
 
-    private final ObjectMapper mapper = new ObjectMapper();
-
     @Test
     void testAgyExtractorJsonVariants() throws Exception {
         AgyOAuthTokenExtractor extractor = new AgyOAuthTokenExtractor();
-        extractor.objectMapper = mapper;
         Path tempDir = Files.createTempDirectory("agy-oauth-test");
 
         // Format 1: top level apiKey
@@ -42,7 +37,6 @@ class OAuthTokenParsingCoverageTest {
     @Test
     void testClaudeCodeExtractorJsonVariants() throws Exception {
         ClaudeCodeOAuthTokenExtractor extractor = new ClaudeCodeOAuthTokenExtractor();
-        extractor.objectMapper = mapper;
         Path tempDir = Files.createTempDirectory("claude-oauth-test");
 
         Path f1 = tempDir.resolve("claude1.json");
@@ -57,7 +51,6 @@ class OAuthTokenParsingCoverageTest {
     @Test
     void testKimchiExtractorJsonVariants() throws Exception {
         KimchiOAuthTokenExtractor extractor = new KimchiOAuthTokenExtractor();
-        extractor.objectMapper = mapper;
         Path tempDir = Files.createTempDirectory("kimchi-oauth-test");
 
         Path f1 = tempDir.resolve("kimchi1.json");

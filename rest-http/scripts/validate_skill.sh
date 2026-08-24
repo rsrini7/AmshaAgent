@@ -2,11 +2,12 @@
 set +e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/common_env.sh"
+KEY="${ADMIN_KEY:-$VALID_KEY}"
 SK=$B/api/v1/skills
 hdr(){ printf "\n### %s\n" "$1"; }
-code(){ curl -s -m 20 -o /tmp/b -w "HTTP %{http_code}" "$@"; printf "  "; head -c 300 /tmp/b; echo; }
+code(){ curl -s -m 20 -o /tmp/b -w "HTTP %{http_code}" "$@"; printf "\n"; }
 mut(){ # mutation with spacing
-  curl -s -m 20 -o /tmp/b -w "HTTP %{http_code}" "$@"; printf "  "; head -c 260 /tmp/b; echo; sleep 7; }
+  curl -s -m 20 -o /tmp/b -w "HTTP %{http_code}" "$@"; printf "\n"; sleep 7; }
 
 hdr "SKILL-1 list (before)"
 code -H "X-Amsha-API-Key: $KEY" -H "Accept: application/json" $SK
@@ -134,6 +135,17 @@ YAML
 
 hdr "SKILL-ERR-6 GET no key"
 code -H "Accept: application/json" $SK
+
+hdr "SKILL-ERR-7 POST non-internal key (403 forbidden)"
+code -H "X-Amsha-API-Key: $CI_KEY" -H "Content-Type: text/plain" -X POST $SK --data-binary @- <<'YAML'
+---
+name: non-internal-skill
+description: Should be rejected because CI key is not internal
+trigger-patterns:
+  - "forbidden.*"
+---
+This skill must be rejected with 403.
+YAML
 
 hdr "CLEANUP"
 mut -H "X-Amsha-API-Key: $KEY" -H "Accept: application/json" -X DELETE $SK/code-reviewer

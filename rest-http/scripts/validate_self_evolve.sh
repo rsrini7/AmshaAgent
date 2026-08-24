@@ -22,7 +22,7 @@ FAIL=0; PASS=0
 
 info()  { printf "%-4s %-58s " "" "$1"; }
 ok()    { printf "✅ HTTP %s\n" "$1"; PASS=$((PASS+1)); }
-fail()  { printf "❌ HTTP %s — %s\n" "$1" "$(head -c 120 /tmp/resp)"; FAIL=$((FAIL+1)); }
+fail()  { printf "❌ HTTP %s\n" "$(format_http_code "$1")"; FAIL=$((FAIL+1)); }
 mute()  { curl -s -m 90 -o /tmp/resp -w "%{http_code}" "$@"; }
 
 run_req() {
@@ -71,6 +71,11 @@ DB=""
 if [ -n "$DATA_DIR" ] && [ -f "$DATA_DIR/amsha-meta.db" ]; then
   DB="$DATA_DIR/amsha-meta.db"
 fi
+# A PostgreSQL or filesystem runtime must never seed a neighboring SQLite
+# database merely because the validator inherited a shared data directory.
+if [ "${AMSHA_PERSISTENCE_BACKEND:-sqlite}" != "sqlite" ]; then
+  DB=""
+fi
 SEED="$SCRIPT_DIR/data/seed_self_evolve.sql"
 
 # Seeding only makes sense for a discoverable sqlite DB. For postgres/fs backends
@@ -78,18 +83,16 @@ SEED="$SCRIPT_DIR/data/seed_self_evolve.sql"
 # whatever data already exists — the HTTP checks remain valid either way.
 if [ -n "$DB" ] && command -v sqlite3 >/dev/null 2>&1 && [ -f "$SEED" ]; then
   OWNER=$(sqlite3 "$DB" "SELECT owner_id FROM bootstrap_state WHERE owner_id IS NOT NULL AND owner_id <> '' LIMIT 1;" 2>/dev/null)
-  if [ -n "$OWNER" ]; then
-    echo "  Seeding extracted_memories + SHADOW directives for user: $OWNER (sqlite: $DB)"
-    SED_TMP=$(mktemp)
-    sed "s/INTERNAL_USER_PLACEHOLDER/$OWNER/g" "$SEED" > "$SED_TMP"
-    sqlite3 "$DB" ".timeout 15000" ".read $SED_TMP" 2>&1 | grep -v '^10000$' || true
-    rm -f "$SED_TMP"
-  else
-    echo "  ⚠️  No bootstrapped owner_id found in bootstrap_state — skipping seed"
+  if [ -z "$OWNER" ]; then
+    OWNER="internal"
   fi
+  echo "  Seeding extracted_memories + SHADOW directives for user: $OWNER (sqlite: $DB)"
+  SED_TMP=$(mktemp)
+  sed "s/INTERNAL_USER_PLACEHOLDER/$OWNER/g" "$SEED" > "$SED_TMP"
+  sqlite3 "$DB" ".timeout 15000" ".read $SED_TMP" 2>&1 | grep -v '^10000$' || true
+  rm -f "$SED_TMP"
 else
-  echo "  ℹ️  No sqlite DB at \$AMSHA_DATA_DIR/amsha-meta.db — skipping seed; running HTTP checks only."
-  echo "      To enable lifecycle seeding, set AMSHA_DATA_DIR=/path/to/data (or pass --data-dir)."
+  echo "  ℹ️  [OPTIONAL] No sqlite DB found — skipping offline seed; running HTTP checks only."
 fi
 echo ""
 
@@ -127,7 +130,8 @@ if [ "$CODE" = "200" ] && ! grep -q '"id"' /tmp/resp; then
 fi
 [ "$CODE" = "200" ] && ok "$CODE" || fail "$CODE"
 
-# Capture a directive ID from the synthesize response for per-directive checks
+# Only mutate a directive returned by this validator's synthesize request.
+# Selecting an arbitrary existing directive could disable/delete user data.
 DIR_ID=$(grep -o '"id":"[^"]*"' /tmp/resp | head -n 1 | sed 's/"id":"//;s/"//')
 
 info "SE-8: Reconcile (unauthorized CI key)"
@@ -160,7 +164,7 @@ if [ -n "$DIR_ID" ]; then
   CODE=$(run_req DELETE "$VALID_KEY" "$DIR_BASE/$DIR_ID")
   [ "$CODE" = "204" ] && ok "$CODE" || fail "$CODE"
 else
-  echo "  ⚠️  SE-11/SE-12/SE-13 skipped — no directive ID captured from synthesize"
+  echo "  ℹ️  [EXPECTED] SE-11/SE-12/SE-13 skipped — synthesize returned no directive ID"
 fi
 
 echo "───────────────────────────────────────────"

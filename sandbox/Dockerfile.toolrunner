@@ -2,6 +2,7 @@
 # Amsha Agent secure tool-runner sandbox image.
 # Build: podman build --no-cache -t amsha-tool-runner -f ./sandbox/Dockerfile.toolrunner .
 FROM alpine:3.21
+LABEL io.amsha.image.name="amsha-tool-runner"
 
 # ── System base - tiny, never changes ────────────────────────────────────────
 RUN apk add --no-cache \

@@ -229,6 +229,24 @@ Issues are tracked as local Markdown files under
 to scaffold or update ADRs, `spec.md`, and ordered iteration issues. See
 `docs/agents/issue-tracker.md`.
 
+### Quarkus update skill
+
+The `quarkus-update` agent skill (from
+[quarkusio/skills](https://github.com/quarkusio/skills)) is installed at
+`~/.agents/skills/quarkus-update` (symlinked into `~/.pi/agent/skills/`).
+Install or refresh it with:
+
+```bash
+npx skills add quarkusio/skills --skill quarkus-update
+```
+
+It compares the project's build files against reference generated projects from
+[code-with-quarkus-compare](https://github.com/quarkusio/code-with-quarkus-compare)
+and drives the Quarkus updater dry-run. Use it when checking whether build files
+are up to date or when executing a Quarkus platform checkpoint; pair its output
+with the verification matrix in the [Quarkus upgrade ADR](Ideas-Pending/Architecture/ADR-Quarkus-Upgrade-Strategy.md).
+Evidence from its runs lives under `.scratch/quarkus-upgrade/evidence/`.
+
 ### Triage labels
 
 The default five-role triage vocabulary is used. See

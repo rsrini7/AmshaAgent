@@ -262,6 +262,13 @@ Use the Quarkus updater to generate the composite recipe because it combines:
 - extension-specific recipes, including Camel recipes; and
 - the official `io.quarkus:quarkus-update-recipes` artifact.
 
+The `quarkus-update` agent skill (installed via
+`npx skills add quarkusio/skills --skill quarkus-update`) is used as the
+pre-flight companion to this updater: it diffs the project's build files against
+the matching `code-with-quarkus-compare` reference tag and records structural
+drift as evidence before any recipe runs (see
+`.scratch/quarkus-upgrade/evidence/04-phase2/skill-report.md`).
+
 For each target, perform analysis and dry run from the application module:
 
 ```bash
@@ -562,8 +569,29 @@ Framework updates are not merged by a dependency bot without these gates.
 | Agroal pool explosion | Default pool max-size rose from 20 to 50 in 3.31; pool implementation crosses a major line (`2.8` -> `3.2.1`) | Retain explicit `max-size: 3` (SQLite) and `max-size: 10` (Postgres) in `application.yaml`; re-prove pool limits |
 | Persistence parity | SQLite is default, with PostgreSQL and filesystem peers | Compile, test, package, and smoke every backend; do not change schema in this migration |
 | Native reachability | Reflection configs, SkillsJar resources, SQLite vec, and ONNX are release-critical | Build all variants and run native runtime/release-evidence gates |
+| LC4J chat-memory JSON in native | QLC codec mixins (`$ChatMessageMixin` etc.) are package-private; native strips them without reflection registration → type-less writes rejected on read | Register LC4J message types + QLC mixin classes in `CoreReflectionConfig`; guarded by `ChatMessageJsonRoundTripTest` |
 | OpenRewrite overreach | Generated patch removes pins and rewrites build configuration | Review every deletion and manually restore intentional aliases/pins |
 | Non-LTS maintenance | 3.38 is a regular stream | Accept an explicit rapid-update cadence or stop at 3.33 LTS |
+
+## 7.5 Execution lessons (Issues 01–04, Phase 1 + first half of Phase 2)
+
+Full detail in `.scratch/quarkus-upgrade/lessons-learnt.md` (gitignored).
+These are the durable takeaways that apply to every future checkpoint:
+
+| Lesson | Impact | Rule going forward |
+| --- | --- | --- |
+| Root pins outrank imported BOMs | Two pins (`jboss-logmanager`, `bouncycastle`) were live defects below platform values before any bump started | Align every pin to the checkpoint's BOM value or justify (§4 rule 5) |
+| Updater patches need hunk-level triage | Alias rewrite, out-of-scope jandex/pin removals, TC2 version injection — all observed in real dry runs | Never apply raw; review every hunk against the effective POM |
+| Run updater from `app/pom.xml` | Aggregator root reports zero extensions | Always `-f app/pom.xml -DplatformVersion=X.Y.Z.W` |
+| mise strips exported env vars | Smoke runner silently fell back to `.env` while child held a different key → deterministic 401 | Deliver keys via `.env` only; never trust shell exports through mise |
+| Native smoke children have console logging off | Failures look silent without file-log injection | Set `QUARKUS_LOG_FILE_ENABLE=true` + `QUARKUS_LOG_FILE_PATH` for any debug run |
+| QLC codec mixins stripped by native DCE | Chat-memory JSON written type-less, rejected on read (InvalidTypeIdException) | Register LC4J message types + mixin classes in `CoreReflectionConfig`; guarded by `ChatMessageJsonRoundTripTest` |
+| TC2 `PostgreSQLContainer` is non-generic | Compile break on migration to TC2 | Drop `<?>` and diamond at adoption time |
+| Camel test artifact removed in CQ 3.34 | `camel-quarkus-junit5` dead once member BOM brings CQ ≥ 3.34 | Rename to `camel-quarkus-junit`; migrate imports to `junit6.*` |
+| ArchUnit needs `archunit-junit6` module | `archunit-junit5` targets JUnit Platform 1.x | Switch artifact at JUnit-6 checkpoints |
+| Orphaned temp daemons squat ephemeral ports | Zonky embedded-PG hang class (blocked in `verifyReady`) | `lsof -nP -iTCP:<port>` before assuming a code bug; sweep `/tmp/amsha-*` orphans |
+| Moderne CLI license-gated for private repos | Source-available testing recipes unusable without a license | Use direct Maven rewrite plugin + Central jars instead |
+| Soak tooling required | Smokes prove instantiation, not sustainability | `scripts/local_soak.py` watches health/auth/log-delta/RSS/deep probes over duration |
 
 ## 8. Verification matrix
 
@@ -810,6 +838,8 @@ Costs and trade-offs:
 - [Quarkus community security support](https://quarkus.io/security/)
 - [Quarkus LTS policy](https://quarkus.io/blog/lts-releases/)
 - [Quarkus update recipes](https://github.com/quarkusio/quarkus-updates)
+- [quarkusio/skills (`quarkus-update` agent skill)](https://github.com/quarkusio/skills)
+- [code-with-quarkus-compare reference projects](https://github.com/quarkusio/code-with-quarkus-compare)
 - [Quarkus 3.38.3 Maven updater source](https://github.com/quarkusio/quarkus/blob/3.38.3/devtools/maven/src/main/java/io/quarkus/maven/UpdateMojo.java)
 - [Quarkus 3.38.3 updater orchestration](https://github.com/quarkusio/quarkus/blob/3.38.3/independent-projects/tools/devtools-common/src/main/java/io/quarkus/devtools/commands/handlers/UpdateProjectCommandHandler.java)
 - [OpenRewrite recipe runner](https://docs.openrewrite.org/running-recipes/getting-started)

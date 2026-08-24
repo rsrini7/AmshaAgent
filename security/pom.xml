@@ -71,7 +71,6 @@
         <dependency>
             <groupId>org.bouncycastle</groupId>
             <artifactId>bcprov-jdk18on</artifactId>
-            <version>${bouncycastle.version}</version>
             <exclusions>
                 <exclusion><groupId>org.bouncycastle</groupId><artifactId>bc-fips</artifactId></exclusion>
                 <exclusion><groupId>org.bouncycastle</groupId><artifactId>bcprov-ext-jdk18on</artifactId></exclusion>
@@ -86,8 +85,7 @@
         </dependency>
         <dependency>
             <groupId>io.quarkus</groupId>
-            <artifactId>quarkus-junit5-mockito</artifactId>
-            <version>${quarkus.version}</version>
+            <artifactId>quarkus-junit-mockito</artifactId>
             <scope>test</scope>
         </dependency>
         <dependency>

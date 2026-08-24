@@ -242,6 +242,12 @@ smallrye:
   native:
     # Set encoding to UTF-8 for Windows console support (§Cosmetic-Fix)
     additional-build-args: "-Dfile.encoding=UTF-8,-Dstdout.encoding=UTF-8"
+    # QuarkusJsonCodecFactory$ObjectMapperHolder must initialize at RUN time:
+    # its static mapper pulls the container ObjectMapper and registers the
+    # LangChain4j ChatMessage mixins. Build-time init freezes a mixin-less
+    # mapper -> native writes type-less chat-memory JSON that its own reader
+    # then rejects (InvalidTypeIdException, missing 'type').
+    initialize-at-runtime: io.quarkiverse.langchain4j.QuarkusJsonCodecFactory$ObjectMapperHolder
     # native-image-xmx: 4g # require 8GB machine with podman
     resources:
       includes:

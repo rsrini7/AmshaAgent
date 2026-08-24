@@ -176,7 +176,7 @@
     <!-- Test -->
     <dependency>
       <groupId>io.quarkus</groupId>
-      <artifactId>quarkus-junit5</artifactId>
+      <artifactId>quarkus-junit</artifactId>
       <scope>test</scope>
     </dependency>
     <dependency>
@@ -186,13 +186,12 @@
     </dependency>
     <dependency>
       <groupId>io.quarkus</groupId>
-      <artifactId>quarkus-junit5-mockito</artifactId>
-      <version>${quarkus.version}</version>
+      <artifactId>quarkus-junit-mockito</artifactId>
       <scope>test</scope>
     </dependency>
     <dependency>
       <groupId>com.tngtech.archunit</groupId>
-      <artifactId>archunit-junit5</artifactId>
+      <artifactId>archunit-junit6</artifactId>
       <scope>test</scope>
       <exclusions>
         <exclusion>
@@ -234,7 +233,6 @@
       <plugin>
           <groupId>io.smallrye</groupId>
           <artifactId>jandex-maven-plugin</artifactId>
-          <version>3.5.3</version>
           <executions>
               <execution>
                   <id>make-index</id>

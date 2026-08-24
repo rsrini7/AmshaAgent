@@ -9,7 +9,7 @@ FAIL=0; PASS=0; RL_WAIT=62
 
 info()  { printf "%-4s %-58s " "" "$1"; }
 ok()    { printf "✅ HTTP %s\n" "$1"; PASS=$((PASS+1)); }
-fail()  { printf "❌ HTTP %s — %s\n" "$1" "$(head -c 120 /tmp/resp)"; FAIL=$((FAIL+1)); }
+fail()  { printf "❌ HTTP %s\n" "$1"; FAIL=$((FAIL+1)); }
 mute()  { curl -s -m 180 -o /tmp/resp -w "%{http_code}" "$@"; }
 sid()   { python3 -c "import json; print(json.load(open('/tmp/resp')).get('sessionId',''))" 2>/dev/null; }
 is_sandbox_offline() { grep -q "SANDBOX_OFFLINE" /tmp/resp; }
@@ -45,8 +45,9 @@ echo " DATA COLLECTION REST VALIDATOR"
 echo "═══════════════════════════════════════════"
 echo ""
 
-if [ "$AMSHA_TEST_DATA_COLLECTION_ENABLED" != "true" ]; then
-  echo "  Skipped (amsha.test-data-collection.enabled is not true)"
+if [ "${AMSHA_TEST_DATA_COLLECTION_ENABLED:-false}" != "true" ]; then
+  echo "  ℹ️  [OPTIONAL] Skipped: amsha.test-data-collection.enabled is false"
+  echo "      To run classifier data collection, restart server with AMSHA_TEST_DATA_COLLECTION_ENABLED=true."
   exit 0
 fi
 

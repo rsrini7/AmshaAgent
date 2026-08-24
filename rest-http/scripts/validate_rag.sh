@@ -13,7 +13,7 @@ FAIL=0; PASS=0; RL_WAIT=62
 
 info()  { printf "%-4s %-58s " "" "$1"; }
 ok()    { printf "✅ HTTP %s\n" "$1"; PASS=$((PASS+1)); }
-fail()  { printf "❌ HTTP %s — %s\n" "$CODE" "$(head -c 120 /tmp/resp)"; FAIL=$((FAIL+1)); }
+fail()  { printf "❌ HTTP %s\n" "$CODE"; FAIL=$((FAIL+1)); }
 mute()  { curl -s -m 180 -o /tmp/resp -w "%{http_code}" "$@"; }
 sid()   { python3 -c "import json; print(json.load(open('/tmp/resp')).get('sessionId',''))" 2>/dev/null; }
 status_is() {
@@ -96,7 +96,7 @@ if [ -n "${AMSHA_DATA_DIR:-}" ] && command -v sqlite3 >/dev/null 2>&1; then
     echo "  ⚠️  DB not found at $DB — skipping isolation SQL check"
   fi
 else
-  echo "  ℹ️  Set AMSHA_DATA_DIR to verify rag_chunk isolation via sqlite3"
+  echo "  ℹ️  [OPTIONAL] Set AMSHA_DATA_DIR to verify rag_chunk isolation via sqlite3"
 fi
 
 echo "───────────────────────────────────────────"
