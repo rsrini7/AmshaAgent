@@ -1,6 +1,6 @@
 package com.amsha.core.compaction;
 
-import com.amsha.core.exception.AmshaException;
+import com.amsha.common.exception.AmshaException;
 
 public class CompactionAbortedException extends AmshaException {
     public CompactionAbortedException(String msg, Throwable cause) {

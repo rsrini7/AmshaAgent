@@ -8,12 +8,13 @@ import jakarta.inject.Inject;
 import java.util.Locale;
 
 import com.amsha.common.util.LogUtil;
-import com.amsha.core.agent.AgentSentinels;
 import com.amsha.core.agent.loop.GroupConsultationService;
 import com.amsha.core.agent.result.AgentResult;
 import com.amsha.core.agent.role.AgentRoleEnum;
 import com.amsha.core.agent.role.RoleRegistry;
 import com.amsha.core.util.AgentResultFormatter;
+import com.amsha.tool.api.AgentSentinels;
+import com.amsha.tool.api.ToolResponse;
 
 import org.jboss.logging.Logger;
 
@@ -73,6 +74,10 @@ public class DelegationProcessor {
     }
 
     public ToolResponse handleRunSubAgentException(AgentRoleEnum targetRole, Exception e) {
+        return handleRunSubAgentException(targetRole, null, e);
+    }
+
+    public ToolResponse handleRunSubAgentException(AgentRoleEnum targetRole, String requestedPersona, Exception e) {
         if (e instanceof IllegalStateException
                 && e.getMessage() != null
                 && e.getMessage().contains("unbound")) {
@@ -81,20 +86,46 @@ public class DelegationProcessor {
         log.errorf(
                 "[DELEGATE] Failed to delegate to agent %s: %s\n%s",
                 targetRole.toScopedName(), LogUtil.rootMessage(e), LogUtil.trimmedStack(e));
-        return ToolResponse.failure(500, delegationFailed(targetRole.toScopedName(), e.getMessage()));
+        return ToolResponse.failure(500, delegationFailed(displayTarget(requestedPersona, targetRole), e.getMessage()));
+    }
+
+    /**
+     * Display name for user-facing delegation messages: the requested persona when given
+     * and it differs from the canonical role; otherwise the canonical scoped role alone.
+     */
+    static String displayTarget(String requestedPersona, AgentRoleEnum targetRole) {
+        String scoped = targetRole.toScopedName();
+        if (requestedPersona == null || requestedPersona.isBlank()) {
+            return scoped;
+        }
+        String persona = requestedPersona.trim();
+        return persona.equalsIgnoreCase(targetRole.id()) ? scoped : persona + " (" + scoped + ")";
     }
 
     public ToolResponse handleSubAgentResult(AgentResult result, AgentRoleEnum targetRole) {
+        return handleSubAgentResult(result, targetRole, null);
+    }
+
+    /**
+     * F5: user-facing delegation messages prefer the persona name the requester actually
+     * used (e.g. "shiva", "saraswati"), with the canonical role in parentheses when it
+     * differs — "shiva (core:debugger)" instead of a bare "core:debugger".
+     */
+    public ToolResponse handleSubAgentResult(AgentResult result, AgentRoleEnum targetRole, String requestedPersona) {
+        String display = displayTarget(requestedPersona, targetRole);
         if (result instanceof AgentResult.AwaitingApproval aa) {
-            return ToolResponse.failure(
-                    409, delegationPaused(targetRole.toScopedName(), aa.toolName(), aa.sessionId()));
+            // A paused delegation is NOT a failure: the child session stays AWAITING_APPROVAL
+            // and is resumed when the human grants the pending approval. Returning a failure
+            // here used to mark the parent checkpoint FAILED (TOOL_FAILED) while the child
+            // kept waiting — divergent state and a misleading /status. Mirror the depth-limit
+            // precedent: return success with a do-not-retry/FINISH instruction.
+            return ToolResponse.success(delegationPaused(display, aa.toolName()));
         }
         if (result instanceof AgentResult.LoopExceeded) {
             return ToolResponse.failure(
                     500,
                     delegationExceeded(
-                            targetRole.toScopedName(),
-                            Math.max(1, targetRole.definition().maxIterations())));
+                            display, Math.max(1, targetRole.definition().maxIterations())));
         }
 
         if (result instanceof AgentResult.Finished f && f.answer() != null) {

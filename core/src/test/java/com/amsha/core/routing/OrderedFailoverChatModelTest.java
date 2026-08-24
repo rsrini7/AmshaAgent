@@ -13,9 +13,9 @@ import dev.langchain4j.model.chat.response.ChatResponse;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import com.amsha.core.agent.reasoning.error.LlmAuthenticationException;
-import com.amsha.core.agent.reasoning.error.LlmModelExhaustedException;
-import com.amsha.core.agent.reasoning.error.LlmServiceUnavailableException;
+import com.amsha.llm.api.error.LlmAuthenticationException;
+import com.amsha.llm.api.error.LlmModelExhaustedException;
+import com.amsha.llm.api.error.LlmServiceUnavailableException;
 
 import org.junit.jupiter.api.Test;
 

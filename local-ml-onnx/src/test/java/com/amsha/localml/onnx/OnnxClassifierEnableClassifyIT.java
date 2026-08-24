@@ -7,12 +7,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import com.amsha.core.agent.loop.PostPolicyToolContext;
-import com.amsha.core.agent.loop.ToolRiskAction;
-import com.amsha.core.agent.loop.ToolRiskPrediction;
-import com.amsha.core.classifier.ClassifierResult;
-import com.amsha.core.security.AutonomyLevel;
+import com.amsha.classifier.api.ClassifierResult;
+import com.amsha.classifier.api.PostPolicyToolContext;
+import com.amsha.classifier.api.ToolRiskAction;
+import com.amsha.classifier.api.ToolRiskPrediction;
 import com.amsha.localml.onnx.OnnxClassifierRuntimeControl.Classifier;
+import com.amsha.security.api.AutonomyLevel;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.junit.jupiter.api.Test;

@@ -19,8 +19,8 @@ import java.util.Optional;
 import java.util.Set;
 
 import com.amsha.core.api.dto.AmshaErrorResponse;
-import com.amsha.core.memory.tiered.ArchivalMemoryService;
 import com.amsha.core.scope.WorkspaceContext;
+import com.amsha.memory.tiered.ArchivalMemoryService;
 import com.amsha.persistence.api.ArchivalChunkDto;
 import com.amsha.persistence.api.ArchivalSearchQuery;
 

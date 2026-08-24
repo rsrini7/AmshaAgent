@@ -4,13 +4,13 @@ import java.time.Instant;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import com.amsha.core.agent.AgentSentinels;
 import com.amsha.core.audit.AuditService;
 import com.amsha.core.audit.SecurityEventType;
 import com.amsha.mcp.tool.DynamicToolCapability;
 import com.amsha.mcp.tool.DynamicToolCapabilityRegistry;
 import com.amsha.persistence.api.McpConnectionDto;
 import com.amsha.persistence.api.McpConnectionStorePort;
+import com.amsha.tool.api.AgentSentinels;
 
 /** Startup-only reconciliation for durable MCP state and dynamic capabilities. */
 final class McpConnectionStartupSupport {

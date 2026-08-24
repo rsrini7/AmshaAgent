@@ -17,8 +17,8 @@ import java.util.concurrent.locks.LockSupport;
 
 import com.amsha.core.scope.WorkspaceContext;
 import com.amsha.core.tool.DynamicToolCatalog;
-import com.amsha.core.tool.DynamicToolDescriptor;
-import com.amsha.core.tools.AgentTool;
+import com.amsha.tool.api.AgentTool;
+import com.amsha.tool.api.DynamicToolDescriptor;
 
 import io.quarkus.arc.Unremovable;
 

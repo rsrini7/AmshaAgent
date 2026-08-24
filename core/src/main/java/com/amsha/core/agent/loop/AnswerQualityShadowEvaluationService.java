@@ -10,8 +10,11 @@ import java.util.Locale;
 import java.util.Objects;
 import java.util.concurrent.Executor;
 
+import com.amsha.classifier.api.AnswerQualityPrediction;
+import com.amsha.classifier.api.AnswerQualityShadowClassifier;
+import com.amsha.classifier.api.AnswerQualityShadowContext;
+import com.amsha.classifier.api.ClassifierResult;
 import com.amsha.core.api.AgentSessionService;
-import com.amsha.core.classifier.ClassifierResult;
 import com.amsha.core.classifier.ClassifierShadowDispatcher;
 import com.amsha.core.classifier.ClassifierShadowExecutor;
 

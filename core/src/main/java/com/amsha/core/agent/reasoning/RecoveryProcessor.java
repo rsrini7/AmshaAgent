@@ -9,8 +9,8 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import com.amsha.common.util.LogUtil;
-import com.amsha.core.agent.role.ToolCapability;
 import com.amsha.core.util.TextPatternUtils;
+import com.amsha.tool.api.ToolCapability;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 

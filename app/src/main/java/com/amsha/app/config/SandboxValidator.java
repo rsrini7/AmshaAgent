@@ -3,7 +3,8 @@ package com.amsha.app.config;
 import java.nio.file.Path;
 import java.util.concurrent.TimeUnit;
 
-import com.amsha.core.sandbox.SandboxStrategy;
+import com.amsha.sandbox.SandboxImageResolver;
+import com.amsha.sandbox.SandboxStrategy;
 
 /**
  * Validates sandbox availability (Podman) and images.
@@ -19,9 +20,7 @@ public class SandboxValidator {
             if (!podmanReachable) {
                 System.err.println("[Amsha Agent] ⚠️  Podman is not reachable. Code tools will be OFFLINE.");
             } else {
-                String image = System.getProperty(
-                        "AMSHA_SANDBOX_IMAGE",
-                        System.getenv().getOrDefault("AMSHA_SANDBOX_IMAGE", "localhost/amsha-tool-runner:latest"));
+                String image = SandboxImageResolver.resolveImage();
                 if (!canRun("podman", "image", "inspect", image)) {
                     System.err.println("[Amsha Agent] ⚠️  Podman image '" + image + "' missing.");
                 }

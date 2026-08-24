@@ -17,16 +17,10 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 import com.amsha.common.util.LogUtil;
-import com.amsha.core.agent.AgentSentinels;
 import com.amsha.core.audit.AuditService;
 import com.amsha.core.audit.SecurityEventType;
 import com.amsha.core.scope.WorkspaceScopeHolder;
 import com.amsha.core.security.OutboundHttpPolicyService;
-import com.amsha.core.security.OutboundPolicyDecision;
-import com.amsha.core.security.OutboundPurpose;
-import com.amsha.core.security.SecretVault;
-import com.amsha.core.security.VaultConstants;
-import com.amsha.core.tools.ToolCategory;
 import com.amsha.mcp.tool.DynamicToolCapabilityRegistry;
 import com.amsha.mcp.tool.McpTransportType;
 import com.amsha.persistence.api.McpConnectionCleanupFailureDto;
@@ -34,6 +28,12 @@ import com.amsha.persistence.api.McpConnectionDto;
 import com.amsha.persistence.api.McpConnectionHeaderSecretRefDto;
 import com.amsha.persistence.api.McpConnectionStorePort;
 import com.amsha.persistence.api.McpConnectionToolPolicyDto;
+import com.amsha.security.api.OutboundPolicyDecision;
+import com.amsha.security.api.OutboundPurpose;
+import com.amsha.security.api.SecretVault;
+import com.amsha.security.api.VaultConstants;
+import com.amsha.tool.api.AgentSentinels;
+import com.amsha.tool.api.ToolCategory;
 
 import org.jboss.logging.Logger;
 
@@ -511,7 +511,7 @@ public class McpConnectionLifecycleService {
      * Runs vault operations inside an active workspace scope.
      *
      * <p>{@link SecretVault} derives and caches per-user keys through the {@code @WorkspaceScoped}
-     * {@link com.amsha.core.security.VaultKeyCache}. REST/admin entry points and the startup
+     * {@link com.amsha.security.VaultKeyCache}. REST/admin entry points and the startup
      * reconnect path execute outside any workspace context, so the scope must be activated
      * explicitly. The vault key is derived from the stable per-user scope id, keeping secrets
      * decryptable across restarts and requests.

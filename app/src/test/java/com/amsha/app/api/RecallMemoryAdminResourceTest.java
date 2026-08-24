@@ -10,7 +10,7 @@ import java.security.Principal;
 import java.time.Instant;
 import java.util.List;
 
-import com.amsha.core.memory.tiered.RecallMemoryService;
+import com.amsha.memory.tiered.RecallMemoryService;
 import com.amsha.persistence.api.RecallMessageDto;
 import com.amsha.persistence.api.RecallSearchQuery;
 

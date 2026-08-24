@@ -25,8 +25,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import com.amsha.core.agent.loop.AnswerQualityPrediction;
-import com.amsha.core.agent.loop.ToolRiskPrediction;
+import com.amsha.classifier.api.AnswerQualityPrediction;
+import com.amsha.classifier.api.ToolRiskPrediction;
 import com.amsha.core.agent.role.AgentRoleEnum;
 import com.amsha.core.api.AgentResponseMapper;
 import com.amsha.core.api.AgentSessionService;
@@ -277,7 +277,7 @@ public class AgentResource {
                 Response.status(Response.Status.CONFLICT)
                         .entity(new AmshaErrorResponse(result.errorMessage()))
                         .build();
-            case "NO_PENDING_APPROVAL" ->
+            case "NO_PENDING_APPROVAL", "SESSION_BUSY" ->
                 Response.status(Response.Status.CONFLICT)
                         .entity(new AmshaErrorResponse(result.errorMessage()))
                         .build();

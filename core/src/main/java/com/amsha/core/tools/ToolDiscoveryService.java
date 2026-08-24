@@ -1,20 +1,25 @@
 package com.amsha.core.tools;
 
 import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.enterprise.inject.Instance;
+import jakarta.enterprise.context.spi.CreationalContext;
+import jakarta.enterprise.inject.spi.Bean;
+import jakarta.enterprise.inject.spi.BeanManager;
 import jakarta.inject.Inject;
 
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Method;
 import java.util.Collections;
-import java.util.HashMap;
-import java.util.LinkedHashMap;
+import java.util.Comparator;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.TreeMap;
 
 import com.amsha.core.agent.role.Capability;
 import com.amsha.core.agent.role.CapabilityRegistry;
-import com.amsha.core.agent.role.ToolMetadata;
 import com.amsha.core.util.ClassUtils;
+import com.amsha.tool.api.AgentTool;
+import com.amsha.tool.api.ToolMetadata;
 
 import org.jboss.logging.Logger;
 
@@ -22,7 +27,7 @@ import io.quarkus.arc.Unremovable;
 
 /**
  * Handles CDI tool discovery, metadata scanning, and initialization-time
- * capability registration.
+ * capability registration via BeanManager.
  */
 @ApplicationScoped
 @Unremovable
@@ -31,7 +36,7 @@ public class ToolDiscoveryService {
     private static final Logger log = Logger.getLogger(ToolDiscoveryService.class);
 
     @Inject
-    Instance<AgentTool> discoveredTools;
+    BeanManager beanManager;
 
     @Inject
     CapabilityRegistry capabilityRegistry;
@@ -48,34 +53,47 @@ public class ToolDiscoveryService {
 
     public void discover() {
         log.info("ToolDiscoveryService: Discovering and indexing agent tools...");
-        Map<String, AgentTool> mutableToolIndex = new HashMap<>();
-        Map<String, ToolRegistry.ToolDescriptor> mutableDescriptorCache = new LinkedHashMap<>();
-        Map<String, Map<String, String>> mutableSecretsCache = new HashMap<>();
+        Map<String, AgentTool> mutableToolIndex = new TreeMap<>();
+        Map<String, ToolRegistry.ToolDescriptor> mutableDescriptorCache = new TreeMap<>();
+        Map<String, Map<String, String>> mutableSecretsCache = new TreeMap<>();
 
-        for (AgentTool tool : discoveredTools) {
-            if (!tool.isEnabled()) continue;
+        Set<Bean<?>> allBeans = beanManager != null ? beanManager.getBeans(Object.class) : null;
+        if (allBeans != null) {
+            List<Bean<?>> toolBeans = allBeans.stream()
+                    .filter(b -> b != null && b.getBeanClass() != null)
+                    .filter(b -> (b.getTypes() != null && b.getTypes().contains(AgentTool.class))
+                            || AgentTool.class.isAssignableFrom(b.getBeanClass()))
+                    .sorted(Comparator.comparing(b -> b.getBeanClass().getName()))
+                    .toList();
 
-            String name = tool.name();
-            if (mutableToolIndex.containsKey(name)) {
-                throw new IllegalStateException(
-                        "Duplicate tool name registered: " + name + ". Tool beans must have unique names.");
+            for (Bean<?> bean : toolBeans) {
+                CreationalContext<?> ctx = beanManager.createCreationalContext(bean);
+                AgentTool tool = (AgentTool) beanManager.getReference(bean, AgentTool.class, ctx);
+                if (tool == null || !tool.isEnabled()) continue;
+
+                String name = tool.name();
+                if (mutableToolIndex.containsKey(name)) {
+                    throw new IllegalStateException(
+                            "Duplicate tool name registered: " + name + ". Tool beans must have unique names.");
+                }
+
+                mutableToolIndex.put(name, tool);
+
+                // 1. Build secrets cache
+                mutableSecretsCache.put(
+                        name, secretExtractor.extractRequiredSecrets(tool.getClass(), "sandboxCommand"));
+
+                // 2. Build descriptor cache
+                mutableDescriptorCache.put(name, buildDescriptor(tool));
+
+                // 3. Discover metadata-driven capabilities
+                registerCapabilities(tool);
             }
-
-            mutableToolIndex.put(name, tool);
-
-            // 1. Build secrets cache
-            mutableSecretsCache.put(name, secretExtractor.extractRequiredSecrets(tool.getClass(), "sandboxCommand"));
-
-            // 2. Build descriptor cache
-            mutableDescriptorCache.put(name, buildDescriptor(tool));
-
-            // 3. Discover metadata-driven capabilities
-            registerCapabilities(tool);
         }
 
-        this.toolIndex = Map.copyOf(mutableToolIndex);
+        this.toolIndex = Collections.unmodifiableMap(mutableToolIndex);
         this.descriptorCache = Collections.unmodifiableMap(mutableDescriptorCache);
-        this.secretsCache = Map.copyOf(mutableSecretsCache);
+        this.secretsCache = Collections.unmodifiableMap(mutableSecretsCache);
         log.infof("ToolDiscoveryService: Indexing complete. Total tools: %d", toolIndex.size());
     }
 

@@ -21,9 +21,6 @@ import java.util.UUID;
 
 import com.amsha.core.audit.AuditService;
 import com.amsha.core.audit.SecurityEventType;
-import com.amsha.core.security.BootstrapCredentialIssuer;
-import com.amsha.core.security.IssuedCredential;
-import com.amsha.core.security.PreparedBootstrapCredential;
 import com.amsha.core.util.HttpConstants;
 import com.amsha.persistence.api.ApiCredentialStorePort;
 import com.amsha.persistence.api.BootstrapStateDto;
@@ -32,6 +29,9 @@ import com.amsha.persistence.api.IdentityStorePort;
 import com.amsha.persistence.api.IdentityUserDto;
 import com.amsha.persistence.api.IdentityWorkspaceDto;
 import com.amsha.persistence.api.WorkspaceMembershipDto;
+import com.amsha.security.BootstrapCredentialIssuer;
+import com.amsha.security.IssuedCredential;
+import com.amsha.security.PreparedBootstrapCredential;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;

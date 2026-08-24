@@ -24,14 +24,14 @@ import com.amsha.common.util.LogUtil;
 import com.amsha.core.audit.AuditService;
 import com.amsha.core.audit.SecurityEventType;
 import com.amsha.core.scope.WorkspaceContext;
-import com.amsha.core.security.AesGcmSivCipher;
-import com.amsha.core.security.AutonomyLevel;
-import com.amsha.core.security.SecretVaultImpl;
-import com.amsha.core.security.VaultKey;
 import com.amsha.persistence.api.AuditEventDto;
 import com.amsha.persistence.api.AuditEventStorePort;
 import com.amsha.persistence.api.SecretDto;
 import com.amsha.persistence.api.SecretStorePort;
+import com.amsha.security.AesGcmSivCipher;
+import com.amsha.security.SecretVaultImpl;
+import com.amsha.security.api.AutonomyLevel;
+import com.amsha.security.api.VaultKey;
 
 import org.junit.jupiter.api.Test;
 

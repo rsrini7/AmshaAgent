@@ -14,8 +14,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 
-import com.amsha.core.state.CheckpointStatus;
 import com.amsha.persistence.api.CheckpointDto;
+import com.amsha.persistence.api.CheckpointStatus;
 import com.amsha.persistence.api.CheckpointStorePort;
 import com.amsha.persistence.api.CheckpointUpsertResult;
 import com.amsha.persistence.api.ReasoningStepDto;

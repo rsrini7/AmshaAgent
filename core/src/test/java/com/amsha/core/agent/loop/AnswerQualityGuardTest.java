@@ -5,9 +5,9 @@ import static org.mockito.Mockito.*;
 
 import java.util.List;
 
-import com.amsha.core.agent.role.ToolCapability;
 import com.amsha.core.tools.ToolRegistry;
 import com.amsha.core.util.TextPatternUtils;
+import com.amsha.tool.api.ToolCapability;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

@@ -4,25 +4,29 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 import jakarta.ws.rs.core.Response;
+import jakarta.ws.rs.core.SecurityContext;
 
+import java.security.Principal;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
 import com.amsha.core.agent.role.RoleDefinition;
 import com.amsha.core.audit.AuditService;
+import com.amsha.core.audit.SecurityEventType;
 import com.amsha.core.skill.CompiledSkillEntry;
 import com.amsha.core.skill.SkillDefinition;
-import com.amsha.core.skill.SkillDefinitionParser;
-import com.amsha.core.skill.SkillLoader;
 import com.amsha.core.skill.SkillRegistry;
 import com.amsha.persistence.api.SkillDto;
 import com.amsha.persistence.api.SkillStorePort;
+import com.amsha.skills.SkillDefinitionParser;
+import com.amsha.skills.SkillLoader;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
@@ -43,6 +47,9 @@ class SkillResourceTest {
     @Mock
     AuditService auditService;
 
+    @Mock
+    SecurityContext securityContext;
+
     SkillResource resource;
 
     private static final String SKILL_NAME = "code-reviewer";
@@ -55,6 +62,15 @@ class SkillResourceTest {
         setField(resource, "skillLoader", skillLoader);
         setField(resource, "parser", parser);
         setField(resource, "auditService", auditService);
+        setField(resource, "securityContext", securityContext);
+        Mockito.lenient().when(securityContext.isUserInRole("internal")).thenReturn(true);
+        var principal = new Principal() {
+            @Override
+            public String getName() {
+                return "user-1";
+            }
+        };
+        Mockito.lenient().when(securityContext.getUserPrincipal()).thenReturn(principal);
     }
 
     @Test
@@ -156,11 +172,13 @@ class SkillResourceTest {
     }
 
     @Test
-    void refreshReturns200() {
+    void refreshReturns200AndAuditsRefresh() {
         Response resp = resource.refresh();
 
         assertEquals(200, resp.getStatus());
         verify(skillLoader).reloadAll(true);
+        verify(auditService)
+                .recordMandatory("skills", "user-1", "admin", SecurityEventType.SKILL_REFRESHED, "op=refresh");
     }
 
     private CompiledSkillEntry sampleSkillEntry() {

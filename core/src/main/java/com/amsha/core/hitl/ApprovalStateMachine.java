@@ -19,11 +19,12 @@ import com.amsha.core.agent.loop.CheckpointResumeHandler;
 import com.amsha.core.domain.model.AgentCheckpoint;
 import com.amsha.core.event.DomainEventBus;
 import com.amsha.core.event.EventTypeCatalog;
-import com.amsha.core.state.CheckpointStatus;
 import com.amsha.core.state.StatefulAgentStore;
-import com.amsha.core.state.ToolDecision;
 import com.amsha.core.util.BatchDecisionUtil;
+import com.amsha.persistence.api.CheckpointStatus;
+import com.amsha.persistence.api.ToolDecision;
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
@@ -42,6 +43,9 @@ public class ApprovalStateMachine implements ApprovalGateway {
 
     @Inject
     CheckpointResumeHandler resumeHandler;
+
+    @Inject
+    ApprovalLeaseStore approvalLeaseStore;
 
     @Inject
     ObjectMapper objectMapper;
@@ -102,15 +106,21 @@ public class ApprovalStateMachine implements ApprovalGateway {
             log.infof("[ASM] Approving all pending tools for session=%s: %s", sessionId, pendingTools);
             for (String pending : pendingTools) {
                 agentStore.updateBatchToolDecision(sessionId, cp.getAgentRole(), pending, decisionEnum.name());
+                if (decisionEnum == ToolDecision.APPROVED) {
+                    grantLease(sessionId, cp, pending);
+                }
             }
         } else {
             if (!pendingTools.contains(effectiveTool)) {
                 log.infof(
-                        "[ASM] Tool '%s' already decided for session=%s, pendingTools=%s",
+                        "Tool '%s' already decided for session=%s, pendingTools=%s",
                         effectiveTool, sessionId, pendingTools);
                 return ApprovalResult.alreadyDecided(sessionId, effectiveTool);
             }
             agentStore.updateBatchToolDecision(sessionId, cp.getAgentRole(), effectiveTool, decisionEnum.name());
+            if (decisionEnum == ToolDecision.APPROVED) {
+                grantLease(sessionId, cp, effectiveTool);
+            }
         }
 
         // 6. Resolve final outcome — all decided or still pending
@@ -134,6 +144,42 @@ public class ApprovalStateMachine implements ApprovalGateway {
 
     private record OutcomeResult(
             ApprovalOutcome outcome, String channelType, int remaining, List<String> nextPending) {}
+
+    /**
+     * Records an approval lease for the approved call shape (ADR-approval-lease-for-parallel-batches).
+     * The checkpoint's {@code pendingToolParametersJson} holds either a parallel-batch array
+     * ({@code [{toolName, params}, …]}) or a single tool's parameter object. Failures are
+     * non-fatal: a missing lease degrades to re-prompting (the safe direction).
+     */
+    private void grantLease(String sessionId, AgentCheckpoint cp, String toolName) {
+        try {
+            String paramsJson = cp.getPendingToolParametersJson();
+            if (paramsJson == null || paramsJson.isBlank()) {
+                return;
+            }
+            JsonNode root = objectMapper.readTree(paramsJson);
+            Map<String, Object> params = null;
+            if (root.isArray()) {
+                for (JsonNode element : root) {
+                    if (toolName.equals(element.path("toolName").asText(null))) {
+                        @SuppressWarnings("unchecked")
+                        Map<String, Object> extracted = objectMapper.convertValue(element.path("params"), Map.class);
+                        params = extracted;
+                        break;
+                    }
+                }
+            } else if (root.isObject()) {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> extracted = objectMapper.convertValue(root, Map.class);
+                params = extracted;
+            }
+            approvalLeaseStore.grant(sessionId, toolName, params);
+        } catch (Exception e) {
+            log.warnf(
+                    "[ASM] Lease grant skipped for session=%s tool=%s: %s",
+                    sessionId, toolName, LogUtil.rootMessage(e));
+        }
+    }
 
     private OutcomeResult resolveOutcome(
             String sessionId,

@@ -17,12 +17,23 @@
   <dependencies>
     <dependency>
       <groupId>com.amsha</groupId>
+      <artifactId>amsha-common</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.amsha</groupId>
       <artifactId>amsha-core</artifactId>
     </dependency>
     <dependency>
       <groupId>com.amsha</groupId>
+      <artifactId>amsha-security</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.amsha</groupId>
+      <artifactId>amsha-sandbox</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.amsha</groupId>
       <artifactId>amsha-persistence-api</artifactId>
-      <version>${project.version}</version>
     </dependency>
     <dependency>
       <groupId>io.quarkus</groupId>
@@ -76,6 +87,16 @@
         <artifactId>wiremock-standalone</artifactId>
         <scope>test</scope>
     </dependency>
+          <!-- Security vocabulary (vault interface, tool operation, autonomy) -->
+          <dependency>
+              <groupId>com.amsha</groupId>
+              <artifactId>amsha-security-api</artifactId>
+          </dependency>
+          <!-- Tool authoring contracts -->
+          <dependency>
+              <groupId>com.amsha</groupId>
+              <artifactId>amsha-tool-api</artifactId>
+          </dependency>
   </dependencies>
 
   <build>

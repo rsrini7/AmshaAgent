@@ -9,7 +9,6 @@ import java.util.UUID;
 
 import com.amsha.core.audit.AuditOutcome;
 import com.amsha.core.audit.SecurityEventType;
-import com.amsha.core.security.PreparedBootstrapCredential;
 import com.amsha.persistence.api.SecretDto;
 
 import org.junit.jupiter.api.Test;
@@ -83,21 +82,5 @@ class DomainCoverageGapTest {
         assertEquals("other", record.getSessionId());
         assertEquals("other-name", record.getKeyName());
         assertEquals(3, record.getEncryptionKeyVersion());
-    }
-
-    @Test
-    void preparedCredentialZerosBytesExactlyOnce() {
-        byte[] key = {1, 2, 3};
-        PreparedBootstrapCredential credential = new PreparedBootstrapCredential("owner", "raw", key, "digest");
-        assertAll(
-                () -> assertEquals("owner", credential.ownerId()),
-                () -> assertEquals("raw", credential.rawKey()),
-                () -> assertSame(key, credential.rawKeyBytes()),
-                () -> assertEquals("digest", credential.keyDigest()),
-                () -> assertFalse(credential.isClosed()));
-        credential.close();
-        credential.close();
-        assertTrue(credential.isClosed());
-        assertArrayEquals(new byte[3], key);
     }
 }

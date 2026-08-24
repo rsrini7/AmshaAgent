@@ -10,12 +10,12 @@ import jakarta.enterprise.inject.Instance;
 import java.util.Optional;
 
 import com.amsha.core.agent.hitl.CheckpointApprovalService;
-import com.amsha.core.agent.role.ToolCapability;
 import com.amsha.core.agent.sse.AgentSseService;
 import com.amsha.core.domain.model.AgentCheckpoint;
 import com.amsha.core.domain.model.AgentCheckpointRecord;
 import com.amsha.core.persistence.AsyncPersistenceEngine;
 import com.amsha.core.state.StatefulAgentStore;
+import com.amsha.tool.api.ToolCapability;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.junit.jupiter.api.Assertions;

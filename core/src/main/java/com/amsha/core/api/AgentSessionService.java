@@ -16,7 +16,6 @@ import com.amsha.channel.api.ChannelMessage;
 import com.amsha.channel.api.ChannelType;
 import com.amsha.channel.api.ChannelUser;
 import com.amsha.common.util.LogUtil;
-import com.amsha.core.agent.AgentSentinels;
 import com.amsha.core.agent.hitl.CheckpointApprovalService;
 import com.amsha.core.agent.loop.AgentLoop;
 import com.amsha.core.agent.loop.CheckpointResumeHandler;
@@ -41,12 +40,13 @@ import com.amsha.core.pipeline.TurnRequest;
 import com.amsha.core.scope.ActiveWorkspaceContext;
 import com.amsha.core.scope.WorkspaceContext;
 import com.amsha.core.scope.WorkspaceScopeHolder;
-import com.amsha.core.security.AutonomyLevel;
 import com.amsha.core.session.SessionCatalogService;
-import com.amsha.core.state.CheckpointStatus;
 import com.amsha.core.state.StatefulAgentStore;
-import com.amsha.core.state.ToolDecision;
 import com.amsha.core.util.MdcManaged;
+import com.amsha.persistence.api.CheckpointStatus;
+import com.amsha.persistence.api.ToolDecision;
+import com.amsha.security.api.AutonomyLevel;
+import com.amsha.tool.api.AgentSentinels;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
@@ -412,7 +412,13 @@ public class AgentSessionService {
 
         auditService.recordMandatory(sessionId, userId, "system", SecurityEventType.SESSION_TERMINATED, "via=REST");
         sessionTestLabelStore.clearSession(sessionId);
-        workspaceManager.terminateSession(sessionId);
+        try {
+            workspaceManager.terminateSession(sessionId);
+        } catch (IllegalStateException e) {
+            // F12 resume guard: the session is mid batch-resume and must not be torn down now.
+            // Surface as a retryable conflict instead of leaking a 500 through the exception mapper.
+            return ServiceResult.error("SESSION_BUSY", e.getMessage());
+        }
         return ServiceResult.success(null);
     }
 

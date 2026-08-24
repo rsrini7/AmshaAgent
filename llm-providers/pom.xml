@@ -31,6 +31,10 @@
     </dependency>
     <dependency>
       <groupId>com.amsha</groupId>
+      <artifactId>amsha-security</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.amsha</groupId>
       <artifactId>amsha-persistence-api</artifactId>
     </dependency>
 
@@ -163,6 +167,11 @@
       <version>${wiremock.version}</version>
       <scope>test</scope>
     </dependency>
+          <!-- Security vocabulary (vault interface, tool operation, autonomy) -->
+          <dependency>
+              <groupId>com.amsha</groupId>
+              <artifactId>amsha-security-api</artifactId>
+          </dependency>
   </dependencies>
 
   <build>

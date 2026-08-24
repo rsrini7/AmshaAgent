@@ -20,11 +20,11 @@ import java.util.List;
 import java.util.Optional;
 
 import com.amsha.core.audit.AuditService;
-import com.amsha.core.config.TieredMemoryConfig;
 import com.amsha.core.events.CompactionEvent;
 import com.amsha.core.governance.RateLimitTracker;
 import com.amsha.core.governance.SessionBudgetTracker;
-import com.amsha.core.memory.tiered.RecallMemoryService;
+import com.amsha.memory.config.TieredMemoryConfig;
+import com.amsha.memory.tiered.RecallMemoryService;
 import com.amsha.persistence.api.CompactionStorePort;
 import com.amsha.persistence.api.CompactionSummaryDto;
 import com.fasterxml.jackson.databind.ObjectMapper;

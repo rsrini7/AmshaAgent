@@ -10,8 +10,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Map;
 
-import com.amsha.core.security.AutonomyLevel;
+import com.amsha.classifier.api.ToolRiskShadowContext;
 import com.amsha.core.security.InputSanitizer;
+import com.amsha.security.api.AutonomyLevel;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 

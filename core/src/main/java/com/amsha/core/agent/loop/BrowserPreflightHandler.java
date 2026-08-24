@@ -14,12 +14,12 @@ import com.amsha.common.util.LogUtil;
 import com.amsha.core.agent.reasoning.ReasoningStep;
 import com.amsha.core.agent.result.AgentResult;
 import com.amsha.core.agent.role.AgentRoleEnum;
-import com.amsha.core.agent.role.ToolCapability;
 import com.amsha.core.governance.RequiresApprovalException;
 import com.amsha.core.scope.WorkspaceContext;
-import com.amsha.core.tools.AgentTool;
 import com.amsha.core.tools.ToolRegistry;
-import com.amsha.core.tools.ToolResponse;
+import com.amsha.tool.api.AgentTool;
+import com.amsha.tool.api.ToolCapability;
+import com.amsha.tool.api.ToolResponse;
 
 import org.jboss.logging.Logger;
 

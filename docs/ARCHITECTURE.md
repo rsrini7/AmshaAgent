@@ -9,7 +9,17 @@
 | Module | Role |
 |---|---|
 | `amsha-app` | Main deployable: CLI (Picocli), REST endpoints, scheduler wiring, security, channel routing |
-| `amsha-core` | Agent loop, state machine, tools, audit, governance, SSE, skill system, routing, sandbox |
+| `amsha-core` | Agent loop, state machine, reasoning, governance, audit, SSE, prompt building, routing |
+| `amsha-llm-provider-api` | LLM contracts & SPIs — provider-neutral model config, OAuth token extractors (zero-core) |
+| `amsha-llm-providers` | LangChain4j provider adapters implementing the LLM SPIs |
+| `amsha-security-api` | Security contracts — `RiskLevel`, `ToolOperation`, `SecretVault` port, outbound policy decisions (zero-core) |
+| `amsha-security` | Impl: secret vault (AES-GCM-SIV + Argon2id), governed outbound transport, autonomy policy, bootstrap credentials |
+| `amsha-tool-api` | Tool contracts — `AgentTool` SPI, capability/metadata/context/response types (zero-core) |
+| `amsha-tools-builtin` | Built-in `AgentTools` (16 incl. Playwright CLI) + Lucene-backed search |
+| `amsha-classifier-api` | Shadow-classifier SPIs — tool-risk, answer-quality, intent (zero-core; impls in `amsha-local-ml-onnx`) |
+| `amsha-sandbox` | Podman rootless container execution, namespace isolation, image resolution |
+| `amsha-skills` | Skill loading and providers (built-in skills + dynamic SkillsJars) |
+| `amsha-memory` | Tiered memory implementation (Core/Recall/Archival) over `amsha-persistence-api` (strict zero-core) |
 | `amsha-channel-api` | Channel SPI — sealed interfaces and plugin contracts |
 | `amsha-channel-telegram` | Apache Camel–backed Telegram bot with HITL inline keyboards |
 | `amsha-channel-web` | WebSocket channel + Lit TypeScript frontend |
@@ -18,17 +28,16 @@
 | `amsha-persistence-common` | Shared JDBI records/DTOs |
 | `amsha-persistence-sqlite` | SQLite adapter (WAL + FTS5 + vec0) |
 | `amsha-persistence-postgres` | PostgreSQL adapter |
-| `amsha-persistence-fs` | Filesystem-based adapter (Lucene BM25) + tiered memory (Core/Recall/Archival) + self-evolve (Events/Extracted) |
+| `amsha-persistence-fs` | Filesystem-based adapter (Lucene BM25) hosting tiered-memory and self-evolve namespaces |
 | `amsha-rag` | Two-tier vector (vec0) + FTS5 RAG memory |
-| `amsha-local-ml-onnx` | In-process local ML inference (ONNX Runtime Java 1.27.0 + DJL HuggingFace Tokenizers 0.33.0) |
+| `amsha-local-ml-onnx` | In-process local ML inference (ONNX Runtime Java 1.27.0 + DJL HuggingFace Tokenizers 0.33.0); ONNX shadow-classifier implementations |
 | `amsha-mcp` | MCP server bridge + dynamic client tool loading + durable credentialed connections |
 | `amsha-onboarding` | Durable draft/saga onboarding REST API (legacy numbered-step wizard + `/complete` removed in P110) |
-| `amsha-tool-playwright` | Playwright browser automation tool |
 | `amsha-self-evolve` | Self-Evolution trace capture and learning loop |
 | `amsha-common` | Shared utilities (LogUtil, constants) |
 | `ui` | Lit 3.x + TypeScript web frontend |
 
-**Dependency flow:** `amsha-app` → `amsha-core` → `amsha-channel-api` ← `amsha-channel-telegram`, `amsha-channel-web`. `amsha-deployment` is build-time only (not in runtime fat-jar). `amsha-rag`, `amsha-local-ml-onnx`, `amsha-mcp`, `amsha-tool-playwright`, and `amsha-self-evolve` are optional runtime modules discovered via CDI. Persistence follows hexagonal architecture: `amsha-persistence-api` defines ports, `amsha-persistence-common` holds shared entities, three adapters (sqlite, postgres, fs) implement ports.
+**Dependency flow:** `amsha-app` → `amsha-core`; the extracted subsystems (`amsha-tools-builtin`, `amsha-sandbox`, `amsha-security`, `amsha-skills`, `amsha-rag`, `amsha-mcp`, `amsha-self-evolve`, `amsha-llm-providers`) consume core through the zero-core API tier (`amsha-tool-api`, `amsha-security-api`, `amsha-classifier-api`, `amsha-llm-provider-api`, `amsha-channel-api`, `amsha-persistence-api`) instead of core internals. `amsha-memory` implements tiered memory over `amsha-persistence-api` with a strict zero-core rule. Channels: `amsha-channel-api` ← `amsha-channel-telegram`, `amsha-channel-web`. `amsha-deployment` is build-time only (not in runtime fat-jar). `amsha-rag`, `amsha-local-ml-onnx`, `amsha-mcp`, and `amsha-self-evolve` are optional runtime modules discovered via CDI; Playwright browser automation ships inside `amsha-tools-builtin` (disabled by default). Persistence follows hexagonal architecture: `amsha-persistence-api` defines ports, `amsha-persistence-common` holds shared entities, three adapters (sqlite, postgres, fs) implement ports.
 
 ![Module Architecture](./assets/amsha_module_architecture.svg)
 

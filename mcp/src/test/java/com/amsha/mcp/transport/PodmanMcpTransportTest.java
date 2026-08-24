@@ -5,8 +5,8 @@ import static org.mockito.Mockito.*;
 
 import java.lang.reflect.Method;
 
-import com.amsha.core.sandbox.SandboxCircuitBreaker;
 import com.amsha.mcp.tool.DynamicToolCapabilityRegistry;
+import com.amsha.sandbox.SandboxCircuitBreaker;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.junit.jupiter.api.BeforeEach;

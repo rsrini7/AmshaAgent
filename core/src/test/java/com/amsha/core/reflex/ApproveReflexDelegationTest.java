@@ -17,13 +17,13 @@ import com.amsha.channel.api.ChannelType;
 import com.amsha.channel.api.ChannelUser;
 import com.amsha.core.agent.hitl.CheckpointApprovalService;
 import com.amsha.core.agent.loop.CheckpointResumeHandler;
-import com.amsha.core.agent.role.ToolCapability;
 import com.amsha.core.domain.model.AgentCheckpoint;
 import com.amsha.core.domain.model.AgentCheckpointRecord;
 import com.amsha.core.pipeline.MessageContext;
 import com.amsha.core.scope.WorkspaceScopeHolder;
 import com.amsha.core.state.StatefulAgentStore;
 import com.amsha.persistence.api.CronStorePort;
+import com.amsha.tool.api.ToolCapability;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.jboss.logging.Logger;

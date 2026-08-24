@@ -18,20 +18,20 @@ import java.util.Optional;
 import java.util.stream.Collectors;
 
 import com.amsha.common.util.LogUtil;
-import com.amsha.core.agent.AgentSentinels;
 import com.amsha.core.audit.AuditService;
 import com.amsha.core.audit.SecurityEventType;
 import com.amsha.core.compaction.CompactionAbortedException;
-import com.amsha.core.config.TieredMemoryConfig;
 import com.amsha.core.events.CompactionEvent;
 import com.amsha.core.governance.RateLimitTracker;
 import com.amsha.core.governance.SessionBudgetTracker;
-import com.amsha.core.memory.tiered.RecallMemoryService;
-import com.amsha.core.memory.tiered.RecallMessageMapper;
 import com.amsha.llm.api.StructuredOutputMode;
+import com.amsha.memory.config.TieredMemoryConfig;
+import com.amsha.memory.tiered.RecallMemoryService;
+import com.amsha.memory.tiered.RecallMessageMapper;
 import com.amsha.persistence.api.CompactionStorePort;
 import com.amsha.persistence.api.CompactionSummaryDto;
 import com.amsha.persistence.api.RecallMessageDto;
+import com.amsha.tool.api.AgentSentinels;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 

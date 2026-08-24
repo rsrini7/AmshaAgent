@@ -18,10 +18,10 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicReference;
 
 import com.amsha.core.scope.WorkspaceScopeHolder;
-import com.amsha.core.security.SecretVault;
-import com.amsha.core.security.VaultConstants;
-import com.amsha.core.security.VaultKey;
 import com.amsha.mcp.config.McpToolAllowlist;
+import com.amsha.security.api.SecretVault;
+import com.amsha.security.api.VaultConstants;
+import com.amsha.security.api.VaultKey;
 
 /** Short-lived, single-use, user-bound handoff tokens for channel-to-UI MCP setup. */
 @ApplicationScoped

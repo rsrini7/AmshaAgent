@@ -9,13 +9,14 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
-import com.amsha.core.memory.tiered.TieredBackend;
 import com.amsha.persistence.api.CoreMemoryBlockDto;
 import com.amsha.persistence.api.CoreMemoryStorePort;
+import com.amsha.persistence.api.TieredBackend;
 import com.amsha.persistence.api.VersionConflictException;
 
 import org.jboss.logging.Logger;
 
+import io.quarkus.arc.Unremovable;
 import io.quarkus.arc.properties.IfBuildProperty;
 
 /**
@@ -23,6 +24,7 @@ import io.quarkus.arc.properties.IfBuildProperty;
  * Stores blocks as JSON per user in {dataDir}/core-memory/{userId}.json.
  */
 @ApplicationScoped
+@Unremovable
 @TieredBackend("fs")
 @IfBuildProperty(name = "amsha.persistence.backend", stringValue = "fs")
 public class FsCoreMemoryStore implements CoreMemoryStorePort {

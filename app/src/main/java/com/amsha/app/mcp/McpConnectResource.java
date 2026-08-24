@@ -144,10 +144,14 @@ public class McpConnectResource {
             }
             return Response.ok(new DisconnectResponse(name, true, result.toolsRemoved()))
                     .build();
-        } catch (IllegalArgumentException e) {
-            return badRequest(e.getMessage());
         } catch (McpRevisionConflictException e) {
             return conflict(e.getMessage());
+        } catch (McpConnectionException e) {
+            return Response.status(Response.Status.NOT_FOUND)
+                    .entity(new AmshaErrorResponse("No connected server found", "name: " + name))
+                    .build();
+        } catch (IllegalArgumentException e) {
+            return badRequest(e.getMessage());
         }
     }
 

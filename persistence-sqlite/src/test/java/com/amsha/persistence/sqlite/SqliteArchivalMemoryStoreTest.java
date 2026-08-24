@@ -10,9 +10,9 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
-import com.amsha.core.memory.tiered.TieredBackend;
 import com.amsha.persistence.api.ArchivalChunkDto;
 import com.amsha.persistence.api.ArchivalSearchQuery;
+import com.amsha.persistence.api.TieredBackend;
 import com.amsha.persistence.sqlite.testutil.FlywayEnabledTestProfile;
 
 import org.junit.jupiter.api.Test;

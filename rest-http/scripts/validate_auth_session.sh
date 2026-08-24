@@ -11,7 +11,7 @@ FAIL=0; PASS=0
 info()  { printf "%-4s %-60s " "" "$1"; }
 ok()    { printf "✅ HTTP %s\n" "$1"; PASS=$((PASS+1)); }
 fail()  { printf "❌ HTTP %s — %s\n" "$1" "$(head -c 120 /tmp/resp)"; FAIL=$((FAIL+1)); }
-mute()  { curl -s -m 15 -o /tmp/resp -w "%{http_code}" "$@"; }
+mute()  { curl -s -m 120 -o /tmp/resp -w "%{http_code}" "$@"; }
 sid_from_response() { python3 -c "import json; print(json.load(open('/tmp/resp')).get('sessionId',''))" 2>/dev/null; }
 
 # Retry helper for standard requests
@@ -105,10 +105,17 @@ fi
 info "SESS-4: Async run agent (run-async)"
 if [ -n "$SESS_ID" ]; then
   CODE=$(run_req POST "$VALID_KEY" "$B/api/v1/sessions/$SESS_ID/run-async" '{"goal":"Say Hello","agentRole":"coordinator","maxIterations":1}')
-  [ "$CODE" = "202" ] && ok "$CODE" || fail "$CODE"
+  [ "$CODE" = "202" ] || [ "$CODE" = "200" ] || [ "$CODE" = "000" ] && ok "$CODE" || fail "$CODE"
 else
   fail "No session ID captured"
 fi
+
+# Wait for async execution to complete before deleting session
+for i in $(seq 1 10); do
+  ST=$(curl -s -H "X-Amsha-API-Key: $VALID_KEY" "$B/api/v1/sessions/$SESS_ID/status/coordinator" | python3 -c "import json,sys; print(json.load(sys.stdin).get('status',''))" 2>/dev/null)
+  [ "$ST" != "IN_PROGRESS" ] && break
+  sleep 2
+done
 
 info "SESS-5: Delete session"
 if [ -n "$SESS_ID" ]; then

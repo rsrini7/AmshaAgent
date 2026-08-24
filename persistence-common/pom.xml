@@ -19,7 +19,6 @@
         <dependency>
             <groupId>com.amsha</groupId>
             <artifactId>amsha-core</artifactId>
-            <version>${project.version}</version>
         </dependency>
 
         <dependency>

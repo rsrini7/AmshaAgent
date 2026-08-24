@@ -9,8 +9,8 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.*;
 
-import com.amsha.core.memory.tiered.ArchivalMemoryService;
-import com.amsha.core.memory.tiered.RecallMemoryService;
+import com.amsha.memory.tiered.ArchivalMemoryService;
+import com.amsha.memory.tiered.RecallMemoryService;
 import com.amsha.persistence.api.ArchivalChunkDto;
 import com.amsha.persistence.api.ArchivalMemoryStorePort;
 import com.amsha.persistence.api.ArchivalSearchQuery;

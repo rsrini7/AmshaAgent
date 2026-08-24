@@ -1,6 +1,5 @@
 package com.amsha.onboarding.config;
 
-import com.amsha.core.security.PreparedBootstrapCredential;
 import com.amsha.onboarding.BootstrapResource;
 import com.amsha.onboarding.OnboardingCommitSaga;
 import com.amsha.onboarding.OnboardingCoordinator;
@@ -58,7 +57,6 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             OnboardingValidationResult.class,
             PreparedOnboardingStep.class,
             ValidatedOnboardingInput.class,
-            PreparedBootstrapCredential.class,
             OnboardingResource.StepUpdateRequest.class,
             McpOnboardingExtension.class,
             OnboardingCommitReceiptDto.class,

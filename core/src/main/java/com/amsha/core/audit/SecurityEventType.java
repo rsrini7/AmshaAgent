@@ -20,6 +20,7 @@ public enum SecurityEventType {
     // Approval flow
     APPROVAL_GRANTED, // user replied /approve
     APPROVAL_DENIED, // user replied /deny
+    HITL_LEASE_REUSED, // guard satisfied a deterministic HITL pause from an in-session approval lease
 
     // Reflex layer
     PROMPT_INJECTION_BLOCKED, // PromptInjectionReflex matched

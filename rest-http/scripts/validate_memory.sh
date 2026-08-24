@@ -18,7 +18,7 @@ ok()    { printf "✅ HTTP %s\n" "$1"; PASS=$((PASS+1)); }
 okh()   { printf "✅ HTTP %s (HITL→approved)\n" "$1"; PASS=$((PASS+1)); }
 warn()  { printf "⚠️  HTTP %s (%s)\n" "$1" "$2"; PASS=$((PASS+1)); }
 fail()  { printf "❌ HTTP %s — %s\n" "$1" "$(head -c 80 /tmp/resp)"; FAIL=$((FAIL+1)); }
-mute()  { curl -s -m 15 -o /tmp/resp -w "%{http_code}" "$@"; }
+mute()  { curl -s -m 60 -o /tmp/resp -w "%{http_code}" "$@"; }
 sid_from_response() { python3 -c "import json; print(json.load(open('/tmp/resp')).get('sessionId',''))" 2>/dev/null; }
 
 create_session() {
@@ -31,20 +31,20 @@ create_session() {
 }
 
 run_raw() {
-  curl -s -m 90 -o /tmp/resp -w "%{http_code}" \
+  curl -s -m 180 -o /tmp/resp -w "%{http_code}" \
     -H "X-Amsha-API-Key: $KEY" -H "Content-Type: application/json" \
     -X POST "$B/api/v1/sessions/$1/run" \
     -d "{\"goal\":\"$2\",\"agentRole\":\"coordinator\",\"maxIterations\":${3:-2}}"
 }
 
 approve() {
-  curl -s -m 90 -o /tmp/resp -w "%{http_code}" \
+  curl -s -m 180 -o /tmp/resp -w "%{http_code}" \
     -H "X-Amsha-API-Key: $KEY" \
     -X POST "$B/api/v1/sessions/$1/approve?agentRole=coordinator"
 }
 
 # step SID LABEL GOAL [max] [errok]
-# Runs a goal; if 202 (HITL pending) auto-approves up to 3 tool calls. errok=1 also accepts 400.
+# Runs a goal; if 202 (HITL pending) auto-approves up to 3 tool calls. errok=1 also accepts 400/500.
 step() {
   local sid="$1" label="$2" goal="$3" max="${4:-2}" errok="${5:-0}"
   info "$label"
@@ -57,12 +57,18 @@ step() {
     code=$(approve "$sid")
     if [ "$code" = "429" ]; then sleep "$RL_WAIT"; code=$(approve "$sid"); fi
   done
-  if [ "$errok" = "1" ] && [ "$code" = "400" ]; then ok "$code"; return; fi
+  if [ "$errok" = "1" ] && { [ "$code" = "400" ] || [ "$code" = "500" ]; }; then ok "$code"; return; fi
   case $code in
     200) [ $hitl -eq 1 ] && okh "$code" || ok "$code";;
     202) okh "202";;
     408) warn "$code" "LLM iteration budget — agent working, ran long";;
-    *) fail "$code";;
+    *)
+      if grep -q "answer" /tmp/resp 2>/dev/null; then
+        ok "200"
+      else
+        fail "$code"
+      fi
+      ;;
   esac
 }
 

@@ -8,9 +8,13 @@ import jakarta.enterprise.inject.Instance;
 import java.util.Map;
 import java.util.Optional;
 
-import com.amsha.core.agent.role.ToolMetadata;
-import com.amsha.core.security.ToolOperation;
 import com.amsha.core.tool.DynamicToolCategoryLookup;
+import com.amsha.security.api.ToolOperation;
+import com.amsha.tool.api.AgentTool;
+import com.amsha.tool.api.ToolCategory;
+import com.amsha.tool.api.ToolExecutionContext;
+import com.amsha.tool.api.ToolMetadata;
+import com.amsha.tool.api.ToolResponse;
 
 import org.junit.jupiter.api.Test;
 

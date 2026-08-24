@@ -8,10 +8,10 @@ import java.util.Map;
 
 import com.amsha.core.audit.AuditService;
 import com.amsha.core.audit.SecurityEventType;
-import com.amsha.core.security.OutboundPurpose;
-import com.amsha.core.tools.ToolCategory;
 import com.amsha.mcp.tool.DynamicToolCapabilityRegistry;
 import com.amsha.persistence.api.McpConnectionDto;
+import com.amsha.security.api.OutboundPurpose;
+import com.amsha.tool.api.ToolCategory;
 
 /** Shared, user-scoped orchestration for MCP lifecycle surfaces. */
 @ApplicationScoped
@@ -489,7 +489,10 @@ public class McpManagementService extends McpManagementServiceModels {
 
     public DisconnectResult disconnectWithResult(String userId, String name, Long expectedRevision) {
         McpManagementSupport.requireUser(userId);
-        McpConnectionDto connection = support.findConnection(userId, name);
+        var connection = lifecycleService.findByNameAndUserId(name, userId).orElse(null);
+        if (connection == null) {
+            return new DisconnectResult(false, 0);
+        }
         McpManagementSupport.checkRevision(connection, expectedRevision);
         int removedTools = support.clearRegisteredTools(userId, name);
         boolean deleted = lifecycleService.deleteByNameAndUserId(name, userId);

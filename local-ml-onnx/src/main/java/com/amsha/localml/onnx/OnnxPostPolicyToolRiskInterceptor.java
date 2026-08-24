@@ -7,12 +7,12 @@ import jakarta.inject.Inject;
 
 import java.util.Optional;
 
-import com.amsha.core.agent.loop.PostPolicyToolContext;
+import com.amsha.classifier.api.ClassifierResult;
+import com.amsha.classifier.api.PostPolicyToolContext;
+import com.amsha.classifier.api.ToolRiskAction;
+import com.amsha.classifier.api.ToolRiskPrediction;
+import com.amsha.classifier.api.ToolRiskShadowContext;
 import com.amsha.core.agent.loop.PostPolicyToolRiskInterceptor;
-import com.amsha.core.agent.loop.ToolRiskAction;
-import com.amsha.core.agent.loop.ToolRiskPrediction;
-import com.amsha.core.agent.loop.ToolRiskShadowContext;
-import com.amsha.core.classifier.ClassifierResult;
 import com.amsha.localml.onnx.OnnxClassifierRuntimeControl.Classifier;
 import com.amsha.localml.onnx.OnnxClassifierRuntimeControl.Lease;
 import com.amsha.localml.onnx.OnnxClassifierRuntimeControl.Registration;

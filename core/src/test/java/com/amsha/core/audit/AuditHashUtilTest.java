@@ -11,8 +11,8 @@ import java.nio.charset.StandardCharsets;
 import java.util.Optional;
 import java.util.stream.IntStream;
 
-import com.amsha.core.security.SecretVault;
-import com.amsha.core.security.VaultKey;
+import com.amsha.security.api.SecretVault;
+import com.amsha.security.api.VaultKey;
 
 import org.junit.jupiter.api.Test;
 

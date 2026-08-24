@@ -11,7 +11,7 @@ import com.amsha.core.agent.result.AgentResult;
 import com.amsha.core.agent.role.AgentRoleEnum;
 import com.amsha.core.lifecycle.WorkspaceManager;
 import com.amsha.core.skill.CompiledSkillEntry;
-import com.amsha.core.state.CheckpointStatus;
+import com.amsha.persistence.api.CheckpointStatus;
 
 import org.jboss.logging.Logger;
 

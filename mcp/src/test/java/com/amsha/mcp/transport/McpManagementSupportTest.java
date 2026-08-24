@@ -10,10 +10,10 @@ import java.time.Instant;
 
 import com.amsha.core.audit.AuditService;
 import com.amsha.core.scope.WorkspaceScopeHolder;
-import com.amsha.core.security.VaultConstants;
 import com.amsha.mcp.tool.DynamicToolCapabilityRegistry;
 import com.amsha.mcp.tool.McpTransportType;
 import com.amsha.persistence.api.McpConnectionDto;
+import com.amsha.security.api.VaultConstants;
 
 import org.junit.jupiter.api.Test;
 

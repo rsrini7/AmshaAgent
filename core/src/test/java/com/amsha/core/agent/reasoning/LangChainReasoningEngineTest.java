@@ -32,18 +32,18 @@ import java.util.Set;
 
 import com.amsha.core.agent.IntentClassificationService;
 import com.amsha.core.agent.loop.AgentExecutionContext;
-import com.amsha.core.agent.reasoning.error.LlmToolCallException;
 import com.amsha.core.agent.reasoning.port.LlmProviderPort;
 import com.amsha.core.agent.role.RoleRegistry;
-import com.amsha.core.agent.role.ToolCapability;
 import com.amsha.core.governance.BudgetWarningException;
 import com.amsha.core.governance.GovernanceStrategy;
 import com.amsha.core.scope.WorkspaceScopeHolder;
-import com.amsha.core.security.AutonomyLevel;
 import com.amsha.core.skill.SkillRegistry;
-import com.amsha.core.tools.AgentTool;
 import com.amsha.core.tools.ToolRegistry;
 import com.amsha.llm.api.StructuredOutputMode;
+import com.amsha.llm.api.error.LlmToolCallException;
+import com.amsha.security.api.AutonomyLevel;
+import com.amsha.tool.api.AgentTool;
+import com.amsha.tool.api.ToolCapability;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -151,6 +151,40 @@ class LangChainReasoningEngineTest {
         assertEquals("I have finished the task", step.thought());
         assertEquals(100, step.inputTokens());
         assertEquals(100, step.outputTokens());
+    }
+
+    @Test
+    void testArmedEscalationRoutesThroughThreeArgPortOverload() {
+        // Arrange: memory-synthesis escalation armed on the context — the engine must dispatch
+        // through nextStep(request, role, true) instead of the legacy 2-arg shape.
+        ChatResponse escalatedResponse = ChatResponse.builder()
+                .aiMessage(AiMessage.aiMessage("I have finished the task"))
+                .tokenUsage(new TokenUsage(10, 10))
+                .finishReason(FinishReason.STOP)
+                .build();
+        when(llmProviderPort.nextStep(any(ChatRequest.class), any(String.class), eq(Boolean.TRUE)))
+                .thenReturn(escalatedResponse);
+        when(promptBuilder.build(any(), any(), any(), any(), ArgumentMatchers.anyBoolean()))
+                .thenReturn("System Prompt");
+        when(historyAssembler.assemble(any(), any(), any())).thenReturn(List.of());
+        when(stepParser.parse(any(), any(), any()))
+                .thenReturn(ReasoningStep.pending(
+                        "I have finished the task",
+                        ReasoningStep.FINISH,
+                        Map.of("answer", "I have finished the task"),
+                        10,
+                        10));
+        AgentExecutionContext ctx = createCtx("test-session");
+        ctx.requestReasoningEscalation();
+
+        // Act
+        ReasoningStep step = reasoningEngine.nextStep(ctx, "coordinator", "who am i", List.of());
+
+        // Assert
+        assertNotNull(step);
+        verify(llmProviderPort).nextStep(any(ChatRequest.class), any(String.class), eq(Boolean.TRUE));
+        verify(llmProviderPort, never()).nextStep(any(ChatRequest.class), any(String.class));
+        assertFalse(ctx.consumeReasoningEscalation(), "flag must be consumed by the call");
     }
 
     @Test

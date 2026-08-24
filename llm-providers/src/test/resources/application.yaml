@@ -23,6 +23,7 @@ quarkus:
     exclude-types:
       - com.amsha.core.**
       - com.amsha.channel.**
+      - com.amsha.security.**
   langchain4j:
     timeout: 10s
     chat-model:

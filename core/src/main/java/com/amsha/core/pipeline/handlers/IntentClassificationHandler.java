@@ -12,7 +12,6 @@ import java.util.regex.Pattern;
 import com.amsha.channel.api.ChannelMessage;
 import com.amsha.channel.api.ChannelPlugin;
 import com.amsha.common.util.LogUtil;
-import com.amsha.core.agent.AgentSentinels;
 import com.amsha.core.agent.IntentClassificationService;
 import com.amsha.core.agent.loop.AgentRoleCache;
 import com.amsha.core.agent.loop.TestDataCollectionService;
@@ -25,6 +24,7 @@ import com.amsha.core.pipeline.MessageHandler;
 import com.amsha.core.routing.SkillAwareIntentDetector;
 import com.amsha.core.security.DestructiveVocabularyFilter;
 import com.amsha.core.util.AgentErrorMessageUtil;
+import com.amsha.tool.api.AgentSentinels;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;

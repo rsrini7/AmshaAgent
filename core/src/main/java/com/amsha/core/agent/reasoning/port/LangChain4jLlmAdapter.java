@@ -9,10 +9,10 @@ import jakarta.inject.Inject;
 
 import java.util.concurrent.ConcurrentHashMap;
 
-import com.amsha.core.agent.reasoning.error.LlmExceptionClassifier;
-import com.amsha.core.agent.reasoning.error.LlmMalformedResponseException;
-import com.amsha.core.agent.reasoning.error.LlmToolCallException;
+import com.amsha.core.agent.reasoning.error.LlmErrorClassificationService;
 import com.amsha.core.routing.ModelRouter;
+import com.amsha.llm.api.error.LlmMalformedResponseException;
+import com.amsha.llm.api.error.LlmToolCallException;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
@@ -52,7 +52,12 @@ public class LangChain4jLlmAdapter implements LlmProviderPort {
 
     @Override
     public ChatResponse nextStep(ChatRequest request, String agentRole) {
-        ChatModel resolvedModel = resolveModel(agentRole);
+        return nextStep(request, agentRole, false);
+    }
+
+    @Override
+    public ChatResponse nextStep(ChatRequest request, String agentRole, boolean bypassLightweightRouting) {
+        ChatModel resolvedModel = resolveModel(agentRole, bypassLightweightRouting);
 
         if (!cbEnabled) {
             return resolvedModel.chat(request);
@@ -64,12 +69,12 @@ public class LangChain4jLlmAdapter implements LlmProviderPort {
         return cb.execute(request, resolvedModel);
     }
 
-    private ChatModel resolveModel(String agentRole) {
+    private ChatModel resolveModel(String agentRole, boolean bypassLightweightRouting) {
         if (agentRole == null || agentRole.isBlank()) {
             return globalChatModel;
         }
         try {
-            return modelRouter.resolve(agentRole);
+            return modelRouter.resolve(agentRole, bypassLightweightRouting);
         } catch (Exception e) {
             log.warnf(
                     "[LLM-ADAPTER] Model resolution failed for role=%s, falling back to global: %s",
@@ -150,7 +155,7 @@ public class LangChain4jLlmAdapter implements LlmProviderPort {
                 throw e;
             } catch (Exception e) {
                 onFailure();
-                throw LlmExceptionClassifier.classify(e);
+                throw LlmErrorClassificationService.classify(e);
             }
         }
 

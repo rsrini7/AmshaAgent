@@ -11,7 +11,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
-import com.amsha.core.scope.WorkspaceScopeHolder;
 import com.amsha.persistence.api.BackendCapabilities;
 import com.amsha.persistence.api.CompactionStorePort;
 import com.amsha.persistence.api.CompactionSummaryDto;
@@ -19,6 +18,7 @@ import com.amsha.persistence.api.IngestResult;
 import com.amsha.persistence.api.MemoryChunkDto;
 import com.amsha.persistence.api.MemoryEntryDto;
 import com.amsha.persistence.api.MemoryRetrievalPort;
+import com.amsha.persistence.api.PersistenceScopeProbe;
 import com.amsha.persistence.api.VectorIndexMetadataPort;
 import com.amsha.persistence.api.VectorIndexNamespace;
 import com.amsha.persistence.common.SessionKnowledgeBase;
@@ -52,6 +52,9 @@ public class SqliteMemoryRetrievalAdapter implements MemoryRetrievalPort {
     @Inject
     VectorIndexMetadataPort vectorIndexMetadata;
 
+    @Inject
+    PersistenceScopeProbe scopeProbe;
+
     @ConfigProperty(name = "amsha.rag.max-source-chars", defaultValue = "400")
     int maxSourceChars;
 
@@ -76,7 +79,7 @@ public class SqliteMemoryRetrievalAdapter implements MemoryRetrievalPort {
         vectorResults.addAll(globalKb.search(query, topK * 2));
 
         // Session-scoped vector search (if applicable)
-        if (!sessionKb.isUnsatisfied() && WorkspaceScopeHolder.isActive()) {
+        if (!sessionKb.isUnsatisfied() && scopeProbe.workspaceScopeActive()) {
             sessionKb
                     .get()
                     .search(query, topK * 2)

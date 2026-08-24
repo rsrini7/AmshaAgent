@@ -3,6 +3,8 @@ package com.amsha.core.tool;
 import java.util.Collection;
 import java.util.Optional;
 
+import com.amsha.tool.api.DynamicToolDescriptor;
+
 /** Provides the dynamically registered tools visible in the current workspace scope. */
 public interface DynamicToolCatalog {
     Collection<DynamicToolDescriptor> listTools();

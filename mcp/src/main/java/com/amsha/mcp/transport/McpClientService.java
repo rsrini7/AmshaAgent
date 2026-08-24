@@ -32,18 +32,18 @@ import java.util.concurrent.locks.ReentrantLock;
 import com.amsha.common.util.LogUtil;
 import com.amsha.core.scope.WorkspaceContext;
 import com.amsha.core.security.OutboundHttpPolicyService;
-import com.amsha.core.security.OutboundPurpose;
-import com.amsha.core.security.SecretVault;
-import com.amsha.core.security.http.ApprovalReceiptIssuer;
-import com.amsha.core.security.http.GovernedHttpClient;
-import com.amsha.core.security.http.OutboundApprovalReceipt;
-import com.amsha.core.security.http.OutboundHttpException;
-import com.amsha.core.tools.ToolCategory;
 import com.amsha.mcp.tool.DynamicToolCapability;
 import com.amsha.mcp.tool.DynamicToolCapabilityRegistry;
 import com.amsha.mcp.tool.DynamicToolOperationDefaults;
 import com.amsha.mcp.tool.McpTransportType;
 import com.amsha.persistence.api.McpConnectionHeaderSecretRefDto;
+import com.amsha.security.api.OutboundPurpose;
+import com.amsha.security.api.SecretVault;
+import com.amsha.security.http.ApprovalReceiptIssuer;
+import com.amsha.security.http.GovernedHttpClient;
+import com.amsha.security.http.OutboundApprovalReceipt;
+import com.amsha.security.http.OutboundHttpException;
+import com.amsha.tool.api.ToolCategory;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -195,22 +195,6 @@ public class McpClientService {
         connectInternal(serverName, serverName, serverUrl, category, handshakeHeaders, false, currentOwner());
     }
 
-    /**
-     * @deprecated use the selective-registration overload and pass the explicitly enabled tool
-     *     names
-     */
-    @Deprecated(since = "1.0", forRemoval = false)
-    public void connectForUser(
-            String serverName,
-            String userId,
-            String serverUrl,
-            ToolCategory category,
-            Map<String, String> handshakeHeaders,
-            boolean preApproved) {
-        connectForUserWithEnabledTools(
-                serverName, userId, serverUrl, category, handshakeHeaders, preApproved, Set.of());
-    }
-
     /** Performs the handshake and returns tool metadata without registering executable tools. */
     public List<DiscoveredTool> discoverForUser(
             String serverName,
@@ -332,22 +316,6 @@ public class McpClientService {
      * while an invalid/expired/mismatched token fails closed to a non-approved connect. When no token
      * is supplied the caller falls back to the unapproved path and must clear HITL on each request.
      */
-    /**
-     * @deprecated use the selective-registration overload and pass the explicitly enabled tool
-     *     names
-     */
-    @Deprecated(since = "1.0", forRemoval = false)
-    public void connectForUser(
-            String serverName,
-            String userId,
-            String serverUrl,
-            ToolCategory category,
-            Map<String, String> handshakeHeaders,
-            String approvalToken) {
-        connectForUserWithEnabledTools(
-                serverName, userId, serverUrl, category, handshakeHeaders, approvalToken, Set.of());
-    }
-
     private List<DiscoveredTool> connectInternal(
             String serverName,
             String runtimeKey,

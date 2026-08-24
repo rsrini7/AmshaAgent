@@ -1,10 +1,18 @@
 package com.amsha.core.agent.reasoning;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anySet;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import dev.langchain4j.model.chat.ChatModel;
 
 import jakarta.enterprise.inject.Instance;
+import jakarta.enterprise.inject.spi.Bean;
+import jakarta.enterprise.inject.spi.BeanManager;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
@@ -12,8 +20,11 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
 import java.util.Collections;
 import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
 
 import com.amsha.llm.api.AgentChatModelProvider;
+import com.amsha.llm.api.ChatModelCreationPort;
 import com.amsha.llm.api.ModelDefaults;
 
 import org.junit.jupiter.api.Test;
@@ -387,9 +398,54 @@ class ChatModelProducerTest {
         assertTrue(ite.getCause().getMessage().contains("No AgentChatModelProvider found for"));
     }
 
-    // -----------------------------------------------------------------------
-    // Helper methods
-    // -----------------------------------------------------------------------
+    @Test
+    void findCreationPort_whenNoBean_returnsEmpty() throws Exception {
+        ChatModelProducer producer = new ChatModelProducer();
+        BeanManager mockBm = mock(BeanManager.class);
+        when(mockBm.getBeans(Object.class)).thenReturn(Collections.emptySet());
+        setField(producer, "beanManager", mockBm);
+
+        Method m = ChatModelProducer.class.getDeclaredMethod("findCreationPort");
+        m.setAccessible(true);
+        @SuppressWarnings("unchecked")
+        Optional<ChatModelCreationPort> result = (Optional<ChatModelCreationPort>) m.invoke(producer);
+        assertTrue(result.isEmpty());
+    }
+
+    @Test
+    void creationPort_whenNoBean_throwsIllegalStateException() throws Exception {
+        ChatModelProducer producer = new ChatModelProducer();
+        BeanManager mockBm = mock(BeanManager.class);
+        when(mockBm.getBeans(Object.class)).thenReturn(Collections.emptySet());
+        setField(producer, "beanManager", mockBm);
+
+        Method m = ChatModelProducer.class.getDeclaredMethod("creationPort");
+        m.setAccessible(true);
+        InvocationTargetException ite = assertThrows(InvocationTargetException.class, () -> m.invoke(producer));
+        assertTrue(ite.getCause() instanceof IllegalStateException);
+        assertTrue(ite.getCause().getMessage().contains("No ChatModelCreationPort bean found"));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void creationPort_whenBeanPresent_returnsResolvedBean() throws Exception {
+        ChatModelProducer producer = new ChatModelProducer();
+        BeanManager mockBm = mock(BeanManager.class);
+        Bean<ChatModelCreationPort> mockBean = mock(Bean.class);
+        doReturn(ChatModelCreationPort.class).when(mockBean).getBeanClass();
+        doReturn(Set.of(ChatModelCreationPort.class)).when(mockBean).getTypes();
+        when(mockBm.getBeans(Object.class)).thenReturn(Set.of(mockBean));
+        doReturn(mockBean).when(mockBm).resolve(anySet());
+        ChatModelCreationPort mockPort = mock(ChatModelCreationPort.class);
+        when(mockBm.getReference(eq(mockBean), eq(ChatModelCreationPort.class), any()))
+                .thenReturn(mockPort);
+        setField(producer, "beanManager", mockBm);
+
+        Method m = ChatModelProducer.class.getDeclaredMethod("creationPort");
+        m.setAccessible(true);
+        ChatModelCreationPort result = (ChatModelCreationPort) m.invoke(producer);
+        assertSame(mockPort, result);
+    }
 
     private void setField(Object target, String fieldName, Object value) throws Exception {
         Field f = target.getClass().getDeclaredField(fieldName);

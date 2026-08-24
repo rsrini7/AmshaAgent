@@ -6,8 +6,10 @@ import jakarta.inject.Inject;
 import java.util.List;
 
 import com.amsha.core.config.SelfEvolveConfig;
-import com.amsha.core.memory.tiered.DirectiveProvider;
+import com.amsha.memory.tiered.DirectiveProvider;
 import com.amsha.selfevolve.api.DirectiveBundle;
+
+import io.quarkus.arc.Unremovable;
 
 /**
  * CDI implementation of {@link DirectiveProvider} backed by the self-evolve directive store.
@@ -19,6 +21,7 @@ import com.amsha.selfevolve.api.DirectiveBundle;
  * in `AgentLoop.runWithRole`). Do not inject this bean directly into threads/contexts that do not
  * have an active request context (such as Quartz scheduler threads).
  */
+@Unremovable
 @RequestScoped
 public class DirectiveProviderImpl implements DirectiveProvider {
 

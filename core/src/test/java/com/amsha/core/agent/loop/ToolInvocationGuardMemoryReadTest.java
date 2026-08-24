@@ -14,19 +14,23 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Stream;
 
+import com.amsha.core.agent.role.CapabilityRegistry;
 import com.amsha.core.agent.role.RoleRegistry;
-import com.amsha.core.agent.role.ToolCapability;
-import com.amsha.core.security.AutonomyLevel;
-import com.amsha.core.security.ToolOperation;
+import com.amsha.core.hitl.ApprovalLeaseStore;
 import com.amsha.core.tool.DynamicToolAdmissionLookup;
 import com.amsha.core.tool.ToolGuardInterceptor;
-import com.amsha.core.tools.AgentTool;
-import com.amsha.core.tools.IdempotencyMode;
 import com.amsha.core.tools.ToolRegistry;
+import com.amsha.security.api.AutonomyLevel;
+import com.amsha.security.api.ToolOperation;
+import com.amsha.tool.api.AgentTool;
+import com.amsha.tool.api.IdempotencyMode;
+import com.amsha.tool.api.ToolCapability;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentMatchers;
+import org.mockito.Mockito;
 
 class ToolInvocationGuardMemoryReadTest {
 
@@ -51,6 +55,18 @@ class ToolInvocationGuardMemoryReadTest {
         guard.objectMapper = new ObjectMapper();
         guard.toolRegistry = toolRegistry;
         guard.interceptors = interceptors;
+        guard.capabilityRegistry = Mockito.mock(CapabilityRegistry.class);
+        Mockito.when(guard.capabilityRegistry.hasCapability(ArgumentMatchers.anyString(), ArgumentMatchers.anyString()))
+                .thenReturn(true);
+        guard.autonomyPolicy = new com.amsha.core.security.AutonomyPolicy.Standard();
+        guard.approvalLeaseStore = org.mockito.Mockito.mock(ApprovalLeaseStore.class);
+        org.mockito.Mockito.when(guard.approvalLeaseStore.hasActiveLease(
+                        org.mockito.ArgumentMatchers.anyString(),
+                        org.mockito.ArgumentMatchers.anyString(),
+                        org.mockito.ArgumentMatchers.any(),
+                        org.mockito.ArgumentMatchers.anyString(),
+                        org.mockito.ArgumentMatchers.any()))
+                .thenReturn(false);
         guard.dynamicToolAdmissionLookup = dynamicToolAdmissionLookup;
         guard.init();
     }

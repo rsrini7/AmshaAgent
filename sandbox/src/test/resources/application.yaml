@@ -1,0 +1,27 @@
+amsha:
+  skills:
+    hot-reload: false
+  vault:
+    pepper: mock-pepper
+  data-dir: target/data
+  sandbox:
+    podman-image: localhost/amsha-tool-runner:latest
+
+quarkus:
+  langchain4j:
+    openai:
+      timeout: 30s
+  hibernate-orm:
+    enabled: false
+  transaction-manager:
+    enable-recovery: false
+  shutdown:
+    timeout: 5S
+
+quarkiverse:
+  mcp:
+    server:
+      http:
+        enabled: false
+      stdio:
+        enabled: false

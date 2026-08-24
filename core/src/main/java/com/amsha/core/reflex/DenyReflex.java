@@ -5,13 +5,13 @@ import static com.amsha.core.message.UserMessages.*;
 import jakarta.enterprise.context.ApplicationScoped;
 
 import com.amsha.channel.api.ChannelCommand;
-import com.amsha.core.agent.AgentSentinels;
 import com.amsha.core.agent.result.AgentResult;
 import com.amsha.core.audit.SecurityEventType;
 import com.amsha.core.domain.model.AgentCheckpoint;
 import com.amsha.core.domain.model.AgentCron;
 import com.amsha.core.message.UserMessages;
 import com.amsha.core.util.AgentResultFormatter;
+import com.amsha.tool.api.AgentSentinels;
 
 @ApplicationScoped
 @ReflexPriority(200)

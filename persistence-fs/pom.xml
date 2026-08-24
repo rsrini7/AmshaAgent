@@ -19,21 +19,20 @@
         <dependency>
             <groupId>com.amsha</groupId>
             <artifactId>amsha-persistence-api</artifactId>
-            <version>${project.version}</version>
         </dependency>
 
         <!-- Amsha Agent core domain (domain types + CheckpointMapper) -->
-        <dependency>
-            <groupId>com.amsha</groupId>
-            <artifactId>amsha-core</artifactId>
-            <version>${project.version}</version>
-        </dependency>
 
         <!-- Self-Evolve (port interfaces for evolution events + extracted memories) -->
         <dependency>
             <groupId>com.amsha</groupId>
             <artifactId>amsha-self-evolve</artifactId>
-            <version>${project.version}</version>
+        </dependency>
+
+        <!-- Shared utilities — persistence knows only common + persistence-api -->
+        <dependency>
+            <groupId>com.amsha</groupId>
+            <artifactId>amsha-common</artifactId>
         </dependency>
 
         <!-- Quarkus CDI -->
@@ -63,8 +62,8 @@
 
         <!-- LangChain4j core for EmbeddingModel injection (optional — vector search degrades gracefully) -->
         <dependency>
-            <groupId>io.quarkiverse.langchain4j</groupId>
-            <artifactId>quarkus-langchain4j-core</artifactId>
+            <groupId>dev.langchain4j</groupId>
+            <artifactId>langchain4j-core</artifactId>
         </dependency>
 
         <!-- Jackson for JSON serialization -->

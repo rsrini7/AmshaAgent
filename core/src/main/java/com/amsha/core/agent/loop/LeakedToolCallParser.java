@@ -10,8 +10,8 @@ import java.util.stream.Collectors;
 
 import com.amsha.common.util.LogUtil;
 import com.amsha.core.agent.loop.AnswerGuardStrategy.LeakedToolCall;
-import com.amsha.core.agent.reasoning.ToolCallJsonKeys;
 import com.amsha.core.tools.ToolRegistry;
+import com.amsha.llm.api.ToolCallJsonKeys;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -54,6 +54,14 @@ public class LeakedToolCallParser {
     /** XML tool call format with separate tool_name and parameters tags. */
     private static final Pattern XML_TOOL_NAME_PARAMS_PATTERN = Pattern.compile(
             "(?is)<tool_call\\b[^>]*>\\s*<tool_name>([^<]+)</tool_name>\\s*<parameters>(.*?)</parameters>\\s*</tool_call>");
+
+    /**
+     * Ornith/MLX-style uppercase tag with NO underscore: {@code <TOOLCALL>{json}</TOOLCALL>} or
+     * {@code <TOOLCALL>[{json}]</TOOLCALL>}. Case-insensitive and underscore-optional so it also
+     * covers {@code <TOOL_CALL>}, {@code <toolcall>}, and the lowercase forms handled below.
+     */
+    private static final Pattern TOOLCALL_TAG_PATTERN =
+            Pattern.compile("(?is)<tool_?call\\b[^>]*>\\s*(\\{.*?\\}|\\[.*?\\])\\s*</tool_?call>");
 
     private static final Pattern XML_PARAMETER_PATTERN = Pattern.compile(
             "(?is)<parameter(?:\\s+name\\s*=\\s*|\\s*=\\s*)\"?([a-zA-Z_][a-zA-Z0-9_]*)\"?[^>]*>(.*?)</[^>]*parameter>");
@@ -118,6 +126,14 @@ public class LeakedToolCallParser {
             return xmlToolNameParams;
         }
 
+        // Try <TOOLCALL>-style tag (Ornith-1.5 and similar MLX models emit this uppercase,
+        // underscore-free variant with a JSON object or array body)
+        Optional<LeakedToolCall> tag = parseToolcallTagCall(answer);
+        if (tag.isPresent()) {
+            log.infof("Parsed TOOLCALL tag format: tool=%s", tag.get().toolName());
+            return tag;
+        }
+
         // Try JSON formats
         try {
             ObjectMapper mapper = new ObjectMapper();
@@ -152,6 +168,20 @@ public class LeakedToolCallParser {
                 }
 
                 log.debugf("JSON parsed but no known tool name found in keys: %s", parsed.keySet());
+            } else if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
+                // Bare top-level array: [{"name":"tool","arguments":{...}}] — emitted by
+                // Ornith-1.5 and other models that text-encode OpenAI-style tool call arrays
+                List<Map<String, Object>> calls = mapper.readValue(trimmed, new TypeReference<>() {});
+                for (Map<String, Object> callMap : calls) {
+                    Optional<LeakedToolCall> fromCall = parseCallMap(callMap);
+                    if (fromCall.isPresent()) {
+                        log.infof(
+                                "Parsed bare JSON array format: tool=%s",
+                                fromCall.get().toolName());
+                        return fromCall;
+                    }
+                }
+                log.debugf("JSON array parsed but no known tool name found in %d entries", calls.size());
             }
         } catch (Exception e) {
             log.debugf("Not valid JSON for leaked tool call parse: %s", LogUtil.rootMessage(e));
@@ -281,18 +311,58 @@ public class LeakedToolCallParser {
     private Optional<LeakedToolCall> parseToolCallsArray(Map<String, Object> parsed) {
         Object calls = parsed.get("tool_calls");
         if (calls instanceof List<?> list && !list.isEmpty() && list.get(0) instanceof Map<?, ?> callMap) {
-            Object nameObj = callMap.containsKey(ToolCallJsonKeys.NAME)
-                    ? callMap.get(ToolCallJsonKeys.NAME)
-                    : callMap.get(ToolCallJsonKeys.FUNCTION);
-            String callName = nameObj instanceof String s ? s : null;
-            if (callName != null && toolRegistry.listTools().contains(callName)) {
-                Object argsObj = callMap.containsKey(ToolCallJsonKeys.ARGUMENTS)
-                        ? callMap.get(ToolCallJsonKeys.ARGUMENTS)
-                        : callMap.get(ToolCallJsonKeys.PARAMETERS);
-                @SuppressWarnings("unchecked")
-                Map<String, Object> callArgs = argsObj instanceof Map ? (Map<String, Object>) argsObj : Map.of();
-                return Optional.of(new LeakedToolCall(callName, callArgs));
+            return parseCallMap(callMap);
+        }
+        return Optional.empty();
+    }
+
+    /** Shared element parser: one OpenAI-style call map with name/function + arguments/parameters. */
+    private Optional<LeakedToolCall> parseCallMap(Map<?, ?> callMap) {
+        String callName = extractName(callMap);
+        if (callName != null && toolRegistry.listTools().contains(callName)) {
+            Object argsObj = callMap.containsKey(ToolCallJsonKeys.ARGUMENTS)
+                    ? callMap.get(ToolCallJsonKeys.ARGUMENTS)
+                    : callMap.get(ToolCallJsonKeys.PARAMETERS);
+            @SuppressWarnings("unchecked")
+            Map<String, Object> callArgs = argsObj instanceof Map ? (Map<String, Object>) argsObj : Map.of();
+            return Optional.of(new LeakedToolCall(callName, callArgs));
+        }
+        return Optional.empty();
+    }
+
+    private static String extractName(Map<?, ?> callMap) {
+        Object nameObj = callMap.containsKey(ToolCallJsonKeys.NAME)
+                ? callMap.get(ToolCallJsonKeys.NAME)
+                : callMap.get(ToolCallJsonKeys.FUNCTION);
+        return nameObj instanceof String s ? s : null;
+    }
+
+    private Optional<LeakedToolCall> parseToolcallTagCall(String answer) {
+        if (answer == null || answer.isBlank()) return Optional.empty();
+
+        Matcher tag = TOOLCALL_TAG_PATTERN.matcher(answer);
+        if (!tag.find()) {
+            return Optional.empty();
+        }
+
+        String body = tag.group(1).strip();
+        try {
+            ObjectMapper mapper = new ObjectMapper();
+            if (body.startsWith("{")) {
+                Map<String, Object> parsed = mapper.readValue(body, new TypeReference<>() {});
+                return parseJsonObjectFormat(parsed);
             }
+            if (body.startsWith("[")) {
+                List<Map<String, Object>> calls = mapper.readValue(body, new TypeReference<>() {});
+                for (Map<String, Object> callMap : calls) {
+                    Optional<LeakedToolCall> fromCall = parseCallMap(callMap);
+                    if (fromCall.isPresent()) {
+                        return fromCall;
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.debugf("Failed to parse TOOLCALL tag body: %s", LogUtil.rootMessage(e));
         }
         return Optional.empty();
     }

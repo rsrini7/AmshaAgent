@@ -41,9 +41,6 @@ quarkus:
     amsha-rag:
       group-id: com.amsha
       artifact-id: amsha-rag
-    amsha-tool-playwright:
-      group-id: com.amsha
-      artifact-id: amsha-tool-playwright
     amsha-mcp:
       group-id: com.amsha
       artifact-id: amsha-mcp
@@ -53,6 +50,36 @@ quarkus:
     amsha-llm-providers:
       group-id: com.amsha
       artifact-id: amsha-llm-providers
+    amsha-sandbox:
+      group-id: com.amsha
+      artifact-id: amsha-sandbox
+    amsha-security:
+      group-id: com.amsha
+      artifact-id: amsha-security
+    amsha-memory:
+      group-id: com.amsha
+      artifact-id: amsha-memory
+    amsha-skills:
+      group-id: com.amsha
+      artifact-id: amsha-skills
+    amsha-tools-builtin:
+      group-id: com.amsha
+      artifact-id: amsha-tools-builtin
+    amsha-self-evolve:
+      group-id: com.amsha
+      artifact-id: amsha-self-evolve
+    amsha-tool-api:
+      group-id: com.amsha
+      artifact-id: amsha-tool-api
+    amsha-classifier-api:
+      group-id: com.amsha
+      artifact-id: amsha-classifier-api
+    amsha-security-api:
+      group-id: com.amsha
+      artifact-id: amsha-security-api
+    amsha-persistence-api:
+      group-id: com.amsha
+      artifact-id: amsha-persistence-api
 
   devservices:
     enabled: false
@@ -242,7 +269,7 @@ smallrye:
         level: DEBUG
       "com.amsha.core.agent.loop.AgentStateMachineRunner":
         level: WARN       # ← suppress goal logging noise (isInfoEnabled guard handles the rest)
-      "com.amsha.core.sandbox.PodmanContainerExecutor":
+      "com.amsha.sandbox.PodmanContainerExecutor":
         level: WARN       # ← suppress container start/stop/exec noise
       "org.jboss.resteasy.reactive.server.handlers.PublisherResponseHandler":
         level: ERROR
@@ -517,6 +544,13 @@ amsha:
     foundry:
       base-url: "${AMSHA_FOUNDRY_BASE_URL:http://127.0.0.1:8000/v1}"
       model: "${AMSHA_FOUNDRY_MODEL:qwen3-14b}"
+    # Infinite-loop sub-loops (compaction/classifier/embedding) resolve slots through
+    # amsha.llm.<provider>.* — mirror the standard OMLX provider vars so e.g.
+    # AMSHA_INFINITE_LOOP_COMPACTION_PROVIDERS=omlx works out of the box.
+    omlx:
+      base-url: "${AMSHA_OMLX_BASE_URL:http://127.0.0.1:8000/v1}"
+      api-key: "${AMSHA_OMLX_API_KEY:}"
+      model: "${AMSHA_OMLX_MODEL:}"
   infinite-loop:
     llm:
       providers: ${AMSHA_INFINITE_LOOP_LLM_PROVIDERS:omlx,groq,openrouter}
@@ -702,8 +736,8 @@ amsha:
       internal: "${AMSHA_API_KEYS_INTERNAL:key-internal-changeme}"
       ci: "${AMSHA_API_KEYS_CI:key-ci-changeme}"
     rate-limit:
-      requests-per-minute: 60
-      mutation-per-minute: 10
+      requests-per-minute: ${AMSHA_API_RATE_LIMIT_REQUESTS_PER_MINUTE:6000}
+      mutation-per-minute: ${AMSHA_API_RATE_LIMIT_MUTATION_PER_MINUTE:1000}
   
   tools:
     # Per-category thread pool isolation to prevent cross-category starvation.
@@ -751,6 +785,12 @@ amsha:
     pre-executable-tools: ""   # (§75-A1) comma-separated tool names
     delegate-approver-ids: ""  # (§75-B1) comma-separated user IDs
     timeout-hours: 24
+    # Approval lease for parallel batches (ADR-approval-lease-for-parallel-batches).
+    # Session-bound, in-memory, TTL-bounded optimization hints; disabled restores
+    # strict re-prompting.
+    approval-lease:
+      enabled: ${AMSHA_HITL_APPROVAL_LEASE_ENABLED:true}
+      ttl-seconds: ${AMSHA_HITL_APPROVAL_LEASE_TTL_SECONDS:3600}
 
   mcp:
     exposed-tools:
@@ -803,7 +843,7 @@ amsha:
       interval-hours: 24
 
   workspace:
-    root-dir: "${AMSHA_DATA_DIR:./data}/workspaces"
+    root-dir: "${AMSHA_WORKSPACE_ROOT_DIR:${AMSHA_DATA_DIR:./data}/workspaces}"
     session-ttl-minutes: 30
     gc-interval: "5m"
     heartbeat-interval: "60s"
@@ -848,6 +888,7 @@ amsha:
   sandbox:
     enabled: "${AMSHA_SANDBOX_ENABLED:true}"
     strategy: "${AMSHA_SANDBOX_STRATEGY:PODMAN}"
+    image: "${AMSHA_SANDBOX_IMAGE:}"
     podman-path: "${AMSHA_SANDBOX_PODMAN_PATH:podman}"
     podman-image: "${AMSHA_SANDBOX_PODMAN_IMAGE:localhost/amsha-tool-runner:latest}"
     timeout-seconds: "${AMSHA_SANDBOX_TIMEOUT_SECONDS:30}"
@@ -959,7 +1000,14 @@ mp:
         # garuda is exempt because delegation is the coordinator's primary function —
         # blocking it at SUPERVISED level creates a dead-end (coordinator can't delegate,
         # can't code-gen, can only FINISH with no result).
-        hitl-exempt-tools: ${AMSHA_HITL_EXEMPT_TOOLS:schedule_task,manage_schedule}
+        # schedule_task removed per ADR-schedule-task-hitl-under-supervised (cron
+        # creation under supervision requires approval); manage_schedule stays exempt.
+        hitl-exempt-tools: ${AMSHA_HITL_EXEMPT_TOOLS:manage_schedule}
+        # Ops salvaged to a 409 pause-for-approval instead of a hard 403 under SUPERVISED.
+        # SCHEDULE_AUTONOMOUS added per ADR-schedule-task-hitl-under-supervised so a
+        # supervised scheduling denial surfaces as consent UX rather than a dead-end block.
+        supervised-salvage-operations:
+          ${AMSHA_SUPERVISED_SALVAGE_OPERATIONS:NETWORK_OUTBOUND,VAULT_ACCESS,EXECUTE_SHELL,WRITE_MEMORY,DELEGATE_AUTONOMOUS,WRITE_FS,SCHEDULE_AUTONOMOUS}
 
 "%dev":
   quarkus:
@@ -1151,7 +1199,7 @@ mp:
         max-retries-strict: ${AMSHA_AGENT_SCHEMA_CORRECTION_MAX_RETRIES_STRICT:4}
         max-retries-lenient: ${AMSHA_AGENT_SCHEMA_CORRECTION_MAX_RETRIES_LENIENT:6}
     workspace:
-      root-dir: "${AMSHA_DATA_DIR:./data}/workspaces"
+      root-dir: "${AMSHA_WORKSPACE_ROOT_DIR:${AMSHA_DATA_DIR:./data}/workspaces}"
     sandbox:
       strategy: PODMAN
     autonomy:

@@ -8,13 +8,17 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import com.amsha.core.agent.result.AgentResult;
 import com.amsha.core.agent.role.AgentRoleEnum;
 import com.amsha.core.agent.role.RoleDefinition;
 import com.amsha.core.agent.role.RoleRegistry;
-import com.amsha.core.security.ToolOperation;
+import com.amsha.core.governance.ApprovalFrame;
+import com.amsha.core.message.UserMessages;
+import com.amsha.security.api.RiskLevel;
+import com.amsha.security.api.ToolOperation;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -256,6 +260,37 @@ class DelegateToAgentToolDeepTest {
         var response = processor.handleSubAgentResult(result, AgentRoleEnum.RESEARCHER);
         assertTrue(response.success());
         assertNotNull(response.output());
+    }
+
+    @Test
+    void testHandleSubAgentResult_paused_showsPersonaAliasWithRole() {
+        // F5 regression: the user asked for "saraswati" — the message must lead with the
+        // persona and include the canonical role, not show a bare scoped role name.
+        var result = new AgentResult.AwaitingApproval(
+                new ApprovalFrame("parallel|batch", Map.of(), RiskLevel.MEDIUM),
+                "sess-1:delegate:saraswati:1",
+                Collections.emptyList(),
+                100,
+                50);
+        var response = processor.handleSubAgentResult(result, AgentRoleEnum.RESEARCHER, "saraswati");
+        assertTrue(response.success());
+        assertTrue(response.output().contains("saraswati"));
+        assertTrue(response.output().contains(AgentRoleEnum.RESEARCHER.toScopedName()));
+        assertTrue(response.output().contains(UserMessages.DELEGATION_PAUSED_MARKER));
+    }
+
+    @Test
+    void testDisplayTarget_personaEqualsRoleId_staysBare() {
+        assertEquals(
+                AgentRoleEnum.DEBUGGER.toScopedName(),
+                DelegationProcessor.displayTarget("debugger", AgentRoleEnum.DEBUGGER));
+        assertEquals(
+                "Shiva (" + AgentRoleEnum.DEBUGGER.toScopedName() + ")",
+                DelegationProcessor.displayTarget("Shiva", AgentRoleEnum.DEBUGGER));
+        assertEquals(
+                AgentRoleEnum.DEBUGGER.toScopedName(), DelegationProcessor.displayTarget(null, AgentRoleEnum.DEBUGGER));
+        assertEquals(
+                AgentRoleEnum.DEBUGGER.toScopedName(), DelegationProcessor.displayTarget("  ", AgentRoleEnum.DEBUGGER));
     }
 
     @Test

@@ -15,16 +15,17 @@ import java.util.Optional;
 import java.util.Set;
 
 import com.amsha.core.agent.reasoning.ReasoningStep;
+import com.amsha.core.agent.role.CapabilityRegistry;
 import com.amsha.core.agent.role.RoleRegistry;
-import com.amsha.core.security.AutonomyLevel;
-import com.amsha.core.security.ToolOperation;
 import com.amsha.core.skill.CompiledSkillEntry;
 import com.amsha.core.tool.DynamicToolAdmissionLookup;
 import com.amsha.core.tool.InterceptorPriority;
 import com.amsha.core.tool.ToolGuardInterceptor;
-import com.amsha.core.tools.AgentTool;
-import com.amsha.core.tools.IdempotencyMode;
 import com.amsha.core.tools.ToolRegistry;
+import com.amsha.security.api.AutonomyLevel;
+import com.amsha.security.api.ToolOperation;
+import com.amsha.tool.api.AgentTool;
+import com.amsha.tool.api.IdempotencyMode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.junit.jupiter.api.Test;
@@ -76,6 +77,8 @@ class ToolGuardOrderingTest {
         manualGuard.roleRegistry = mock(RoleRegistry.class);
         manualGuard.objectMapper = new ObjectMapper();
         manualGuard.toolRegistry = mock(ToolRegistry.class);
+        manualGuard.capabilityRegistry = mock(CapabilityRegistry.class);
+        when(manualGuard.capabilityRegistry.hasCapability(any(), any())).thenReturn(true);
         AgentTool tool = mock(AgentTool.class);
         when(tool.idempotencyMode()).thenReturn(IdempotencyMode.NON_IDEMPOTENT);
         when(tool.requiredOperation()).thenReturn(ToolOperation.WRITE_MEMORY);

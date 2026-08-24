@@ -11,7 +11,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-import com.amsha.core.security.ToolOperation;
+import com.amsha.security.api.ToolOperation;
+import com.amsha.tool.api.AgentTool;
+import com.amsha.tool.api.ToolExecutionContext;
+import com.amsha.tool.api.ToolResponse;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.junit.jupiter.api.Test;

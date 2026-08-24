@@ -1,5 +1,7 @@
 package com.amsha.core.tools;
 
+import com.amsha.tool.api.ToolExecutionContext;
+
 public interface VerificationGate {
 
     /**

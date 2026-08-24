@@ -15,6 +15,10 @@
   <dependencies>
     <dependency>
       <groupId>com.amsha</groupId>
+      <artifactId>amsha-classifier-api</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.amsha</groupId>
       <artifactId>amsha-core</artifactId>
     </dependency>
     <dependency>
@@ -40,6 +44,11 @@
     <dependency>
       <groupId>com.microsoft.onnxruntime</groupId>
       <artifactId>onnxruntime</artifactId>
+    </dependency>
+    <!-- Security vocabulary (vault interface, tool operation, autonomy) -->
+    <dependency>
+      <groupId>com.amsha</groupId>
+      <artifactId>amsha-security-api</artifactId>
     </dependency>
 
     <!-- Test -->

@@ -2,8 +2,8 @@ package com.amsha.core.tool;
 
 import java.util.Map;
 
-import com.amsha.core.tools.ToolExecutionContext;
-import com.amsha.core.tools.ToolResponse;
+import com.amsha.tool.api.ToolExecutionContext;
+import com.amsha.tool.api.ToolResponse;
 
 /** Executes a dynamically registered tool after the agent loop has admitted it. */
 public interface DynamicToolInvoker extends DynamicToolCatalog {

@@ -9,10 +9,10 @@ import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import com.amsha.core.agent.AgentSentinels;
 import com.amsha.core.message.UserMessages;
 import com.amsha.core.pipeline.MessageContext;
 import com.amsha.core.security.InputSanitizer;
+import com.amsha.tool.api.AgentSentinels;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;

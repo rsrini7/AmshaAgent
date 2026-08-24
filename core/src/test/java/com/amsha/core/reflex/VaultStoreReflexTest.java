@@ -17,8 +17,8 @@ import com.amsha.channel.api.ChannelMessage;
 import com.amsha.channel.api.ChannelType;
 import com.amsha.channel.api.ChannelUser;
 import com.amsha.core.pipeline.MessageContext;
-import com.amsha.core.security.SecretVault;
-import com.amsha.core.security.VaultKey;
+import com.amsha.security.api.SecretVault;
+import com.amsha.security.api.VaultKey;
 
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentMatchers;

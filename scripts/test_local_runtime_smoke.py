@@ -228,6 +228,48 @@ class LocalRuntimeSmokeTest(unittest.TestCase):
             smoke.verify_bundle(model_root, smoke.DEFAULT_BUNDLE, messages.append)
         self.assertEqual([f"{smoke.PASS_PREFIX}pinned ONNX bundle sizes and SHA-256 digests"], messages)
 
+    def test_bundle_verification_auto_download(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            project_root = Path(directory)
+            model_root = project_root / "data" / "models"
+            installer_dir = project_root / ".mise" / "tasks" / "models"
+            installer_dir.mkdir(parents=True)
+            installer = installer_dir / "install-mpnet.py"
+
+            # Create a mock installer that writes a valid bundle
+            installer_code = f"""
+import hashlib, json, os, sys
+from pathlib import Path
+
+model_root = Path(os.environ.get("AMSHA_ONNX_MODEL_ROOT", "data/models"))
+bundle = model_root / "{smoke.DEFAULT_BUNDLE}"
+bundle.mkdir(parents=True, exist_ok=True)
+model = b"model"
+tokenizer = b"tokenizer"
+(bundle / "model.onnx").write_bytes(model)
+(bundle / "tokenizer.json").write_bytes(tokenizer)
+manifest = {{
+    "modelFile": "model.onnx",
+    "modelBytes": len(model),
+    "modelSha256": hashlib.sha256(model).hexdigest(),
+    "tokenizerFile": "tokenizer.json",
+    "tokenizerBytes": len(tokenizer),
+    "tokenizerSha256": hashlib.sha256(tokenizer).hexdigest(),
+    "source": {{
+        "repository": "https://example.test/model",
+        "revision": "revision-1",
+        "modelPath": "model.onnx",
+        "tokenizerPath": "tokenizer.json",
+        "license": "Apache-2.0",
+    }},
+}}
+(bundle / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+"""
+            installer.write_text(installer_code, encoding="utf-8")
+            messages: list[str] = []
+            smoke.verify_bundle(model_root, smoke.DEFAULT_BUNDLE, messages.append, project_root=project_root)
+        self.assertIn(f"{smoke.PASS_PREFIX}pinned ONNX bundle sizes and SHA-256 digests", messages)
+
     def test_native_environment_forces_generic_openai_and_onnx(self) -> None:
         config = smoke.OmlxConfig("provider-key", "http://127.0.0.1:8000/v1", "model")
         environment = smoke.native_environment(

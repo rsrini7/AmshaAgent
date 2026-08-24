@@ -13,7 +13,7 @@ import java.util.stream.Collectors;
 
 import com.amsha.core.agent.role.AgentRoleEnum;
 import com.amsha.core.agent.role.CapabilityRegistry;
-import com.amsha.core.agent.role.ToolCapability;
+import com.amsha.tool.api.ToolCapability;
 
 /**
  * Resolves the persona that should execute a tool when the current persona is

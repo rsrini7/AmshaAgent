@@ -15,10 +15,10 @@ import java.util.HexFormat;
 
 import com.amsha.common.util.LogUtil;
 import com.amsha.core.domain.model.AuditEvent;
-import com.amsha.core.security.CryptoConstants;
-import com.amsha.core.security.SecretVault;
-import com.amsha.core.security.VaultConstants;
-import com.amsha.core.security.VaultKey;
+import com.amsha.security.api.CryptoConstants;
+import com.amsha.security.api.SecretVault;
+import com.amsha.security.api.VaultConstants;
+import com.amsha.security.api.VaultKey;
 
 import org.jboss.logging.Logger;
 

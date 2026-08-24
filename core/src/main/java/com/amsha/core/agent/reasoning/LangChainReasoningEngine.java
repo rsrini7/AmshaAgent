@@ -12,19 +12,19 @@ import java.util.Set;
 
 import com.amsha.core.agent.IntentClassificationService;
 import com.amsha.core.agent.loop.AgentExecutionContext;
-import com.amsha.core.agent.reasoning.error.LlmMalformedResponseException;
-import com.amsha.core.agent.reasoning.error.LlmRateLimitException;
-import com.amsha.core.agent.reasoning.error.LlmToolCallException;
 import com.amsha.core.agent.reasoning.port.LlmProviderPort;
 import com.amsha.core.agent.role.AgentRoleEnum;
 import com.amsha.core.agent.role.RoleRegistry;
-import com.amsha.core.agent.role.ToolCapability;
 import com.amsha.core.governance.RateLimitTracker;
 import com.amsha.core.guardrail.GuardrailCoordinator;
 import com.amsha.core.observability.AgentOTelConstants;
 import com.amsha.core.observability.AgentOtelContext;
 import com.amsha.core.scope.WorkspaceContext;
 import com.amsha.core.util.TextPatternUtils;
+import com.amsha.llm.api.error.LlmMalformedResponseException;
+import com.amsha.llm.api.error.LlmRateLimitException;
+import com.amsha.llm.api.error.LlmToolCallException;
+import com.amsha.tool.api.ToolCapability;
 
 import org.jboss.logging.Logger;
 
@@ -319,9 +319,15 @@ public class LangChainReasoningEngine implements ReasoningEngine {
                     configCompact,
                     isSimpleChitchat,
                     context.isForceFinishRetry());
+            // Consume once per call; normal calls keep the legacy 2-arg port shape so existing
+            // port implementations and stubs are unaffected. Only an armed memory-synthesis
+            // escalation takes the bypass-lightweight-routing overload.
+            boolean escalateThisCall = context.consumeReasoningEscalation();
             ChatResponse response = ScopedValue.where(WorkspaceContext.IS_WRITE_INTENT, isWriteIntent)
                     .where(WorkspaceContext.IS_COMPACT, isCompact)
-                    .call(() -> llmProviderPort.nextStep(request, agentRole));
+                    .call(() -> escalateThisCall
+                            ? llmProviderPort.nextStep(request, agentRole, true)
+                            : llmProviderPort.nextStep(request, agentRole));
             if (span != null) {
                 if (response.tokenUsage() != null) {
                     span.setAttribute(AgentOTelConstants.ATTR_LLM_INPUT_TOKENS, (long)

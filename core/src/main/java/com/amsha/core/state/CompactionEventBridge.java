@@ -11,6 +11,7 @@ import java.util.concurrent.TimeUnit;
 import com.amsha.common.util.LogUtil;
 import com.amsha.core.compaction.CompactionInFlightFlag;
 import com.amsha.core.compaction.CompactionRequest;
+import com.amsha.persistence.api.CheckpointStatus;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;

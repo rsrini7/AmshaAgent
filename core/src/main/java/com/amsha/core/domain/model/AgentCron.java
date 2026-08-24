@@ -2,7 +2,7 @@ package com.amsha.core.domain.model;
 
 import java.time.Instant;
 
-import com.amsha.core.state.CronStatus;
+import com.amsha.persistence.api.CronStatus;
 
 public interface AgentCron {
 

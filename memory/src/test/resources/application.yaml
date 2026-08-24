@@ -1,0 +1,17 @@
+amsha:
+  memory:
+    dummy: true
+
+quarkus:
+  transaction-manager:
+    enable-recovery: false
+  shutdown:
+    timeout: 5S
+
+quarkiverse:
+  mcp:
+    server:
+      http:
+        enabled: false
+      stdio:
+        enabled: false

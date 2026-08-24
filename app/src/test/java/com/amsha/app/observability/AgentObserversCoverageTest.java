@@ -18,7 +18,7 @@ import com.amsha.app.ui.dto.AgentEvent;
 import com.amsha.core.agent.event.AgentStateChangedEvent;
 import com.amsha.core.agent.reasoning.ReasoningStep;
 import com.amsha.core.agent.result.AgentResult;
-import com.amsha.core.agent.role.ToolCapability;
+import com.amsha.tool.api.ToolCapability;
 
 import org.jboss.logging.Logger;
 import org.junit.jupiter.api.Test;

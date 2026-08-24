@@ -6,8 +6,9 @@ import java.util.Map;
 
 import com.amsha.core.agent.reasoning.ReasoningStep;
 import com.amsha.core.agent.result.AgentResult;
-import com.amsha.core.agent.role.ToolCapability;
-import com.amsha.core.tools.ToolResponse;
+import com.amsha.core.message.UserMessages;
+import com.amsha.tool.api.ToolCapability;
+import com.amsha.tool.api.ToolResponse;
 
 import org.jboss.logging.Logger;
 
@@ -115,7 +116,7 @@ public class ToolResultProcessor {
     private StepDecision handleScheduleTaskOutcome(
             AgentExecutionContext ctx, ToolResponse res, String obs, List<ReasoningStep> history) {
         if (res != null && res.success()) {
-            String cleanOutput = obs.split("\n\nCRITICAL DIRECTIVE:", 2)[0];
+            String cleanOutput = obs.split(UserMessages.CRITICAL_DIRECTIVE_SEPARATOR, 2)[0];
             String finalAnswer = "✅ " + cleanOutput;
             writer.saveAnswer(ctx.sessionId(), finalAnswer);
             return StepDecision.terminal(AgentResult.finished(finalAnswer, List.copyOf(history)));
@@ -144,6 +145,17 @@ public class ToolResultProcessor {
 
     private StepDecision handleDelegateOutcome(
             AgentExecutionContext ctx, ToolResponse res, String obs, List<ReasoningStep> history) {
+        // Delegation paused for human approval — deterministic terminal with a user-safe
+        // message, no retry and no reliance on the model choosing FINISH. The delegate
+        // checkpoint is AWAITING_APPROVAL with channel info so the user can approve the
+        // inner session directly. Matches BOTH shapes: success-shaped (F1 fix) and legacy
+        // failure(409). The LLM-directive tail after CRITICAL_DIRECTIVE_SEPARATOR stays in
+        // the model's history but never reaches the chat channel.
+        if (res != null && obs.contains(UserMessages.DELEGATION_PAUSED_MARKER)) {
+            String msg = "⏳ " + UserMessages.userSafePortion(obs);
+            writer.saveAnswer(ctx.sessionId(), msg);
+            return StepDecision.terminal(AgentResult.finished(msg, List.copyOf(history)));
+        }
         if (res != null
                 && res.success()
                 && !obs.startsWith("⚠️")
@@ -153,11 +165,8 @@ public class ToolResultProcessor {
             // The LLM will decide whether to delegate again, write code, or finish.
             return null;
         }
-        // Delegation paused for human approval — terminal with message, don't retry.
-        // The delegate checkpoint is AWAITING_APPROVAL with channel info so the user
-        // can approve the inner session directly.
         if (res != null && !res.success() && obs.contains("paused for human approval")) {
-            String msg = "⏳ " + obs;
+            String msg = "⏳ " + UserMessages.userSafePortion(obs);
             writer.saveAnswer(ctx.sessionId(), msg);
             return StepDecision.terminal(AgentResult.finished(msg, List.copyOf(history)));
         }

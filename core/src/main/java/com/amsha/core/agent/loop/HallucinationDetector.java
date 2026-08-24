@@ -5,10 +5,10 @@ import java.util.Locale;
 import java.util.regex.Pattern;
 
 import com.amsha.common.util.LogUtil;
-import com.amsha.core.agent.AgentSentinels;
 import com.amsha.core.agent.reasoning.ParallelToolCall;
 import com.amsha.core.agent.reasoning.ReasoningStep;
-import com.amsha.core.agent.role.ToolCapability;
+import com.amsha.tool.api.AgentSentinels;
+import com.amsha.tool.api.ToolCapability;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -106,13 +106,14 @@ class HallucinationDetector {
                         + "Memory search returned results but answer disclaims knowledge.",
                 sessionId);
         ReasoningStep cleanStep = step.withObservation("Detected memory search synthesis failure");
-        String hint = "System: STOP. You just searched your memory and found information about this user. "
-                + "Your memory search tool returned these results:\n---\n"
+        String hint = "System: STOP. Your memory search ALREADY returned the user's information — quoted below. "
+                + "Do NOT apologize. Do NOT say you lack information or have no data. "
+                + "Reply to the user NOW in exactly this form:\n"
+                + "\"Based on my memory of you: <restate each fact from the results in one short sentence>\"\n"
+                + "Memory results:\n---\n"
                 + memoryResult
-                + "\n---\n" + "You MUST synthesize these results into a natural, conversational answer. "
-                + "Do NOT say 'I don't have information' when your memory search just returned it. "
-                + "Read the tool results above and answer the user directly.";
-        return new FinishActionHandler.FinishOutcome.Correction(cleanStep, hint);
+                + "\n---";
+        return new FinishActionHandler.FinishOutcome.SynthesisCorrection(cleanStep, hint, memoryResult);
     }
 
     boolean historyContainsSuccessfulSchedule(List<ReasoningStep> history) {

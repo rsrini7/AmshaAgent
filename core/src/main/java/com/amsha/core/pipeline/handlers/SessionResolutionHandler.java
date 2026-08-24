@@ -11,10 +11,10 @@ import com.amsha.core.pipeline.MessageContext;
 import com.amsha.core.pipeline.MessageHandler;
 import com.amsha.core.pipeline.SessionContext;
 import com.amsha.core.pipeline.SessionIdResolver;
-import com.amsha.core.security.AutonomyLevel;
 import com.amsha.core.security.InputSanitizer;
 import com.amsha.core.session.SessionCatalogService;
 import com.amsha.core.state.StatefulAgentStore;
+import com.amsha.security.api.AutonomyLevel;
 
 import org.jboss.logging.Logger;
 

@@ -66,7 +66,7 @@ is_excluded_path() {
 transform_path() {
     # ArcClawInternal (repo root dir) is preserved per project decision.
     printf '%s' "$1" | perl -pe '
-        $modules = qr/(?:app|channel-api|channel-telegram|channel-web|common|core|deployment|mcp|onboarding|persistence-api|persistence-common|persistence-fs|persistence-postgres|persistence-sqlite|rag|tool-playwright|ui)/;
+        $modules = qr/(?:app|channel-api|channel-telegram|channel-web|classifier-api|common|core|deployment|llm-provider-api|llm-providers|local-ml-onnx|mcp|memory|onboarding|persistence-api|persistence-common|persistence-fs|persistence-postgres|persistence-sqlite|rag|sandbox|security-api|security|self-evolve|skills|tool-api|tools-builtin|ui)/;
         s{\Aarcclaw-($modules)(?=/)}{$1}g;
         s{com/arcclaw}{com/amsha}g;
         s/com\.arcclaw/com.amsha/g;
@@ -102,7 +102,7 @@ replace_content() {
     # Filesystem module paths become plain, while Maven artifact IDs retain an
     # amsha- prefix. Java packages and configuration use the concise Amsha stem.
     perl -pi -e '
-        $modules = qr/(?:app|channel-api|channel-telegram|channel-web|common|core|deployment|mcp|onboarding|persistence-api|persistence-common|persistence-fs|persistence-postgres|persistence-sqlite|rag|tool-playwright|ui)/;
+        $modules = qr/(?:app|channel-api|channel-telegram|channel-web|classifier-api|common|core|deployment|llm-provider-api|llm-providers|local-ml-onnx|mcp|memory|onboarding|persistence-api|persistence-common|persistence-fs|persistence-postgres|persistence-sqlite|rag|sandbox|security-api|security|self-evolve|skills|tool-api|tools-builtin|ui)/;
         # ArcClawInternal is intentionally preserved: it is the repo root
         # directory name and appears in absolute paths (.openclaude, .kimchi).
         # Renaming it would break those paths while the folder stays unchanged.

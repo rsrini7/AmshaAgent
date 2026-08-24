@@ -1,6 +1,8 @@
 package com.amsha.core.agent.loop;
 
-import com.amsha.core.classifier.ClassifierResult;
+import com.amsha.classifier.api.ClassifierResult;
+import com.amsha.classifier.api.PostPolicyToolContext;
+import com.amsha.classifier.api.ToolRiskAction;
 
 /**
  * Optional tool-risk SPI evaluated only after every deterministic guard allows a tool.

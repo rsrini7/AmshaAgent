@@ -24,8 +24,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
 
-import com.amsha.core.security.SecretVault;
-import com.amsha.core.security.VaultConstants;
 import com.amsha.llm.api.AgentLlmConfig;
 import com.amsha.llm.api.LlmModelConfig;
 import com.amsha.llm.api.ModelDefaults;
@@ -34,6 +32,8 @@ import com.amsha.llm.api.oauth.KimchiOAuthTokenExtractor;
 import com.amsha.llm.providers.ChatModelFactory;
 import com.amsha.llm.providers.helper.KimchiTokenResolver;
 import com.amsha.llm.providers.reasoning.KimchiProviderFactory;
+import com.amsha.security.api.SecretVault;
+import com.amsha.security.api.VaultConstants;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;

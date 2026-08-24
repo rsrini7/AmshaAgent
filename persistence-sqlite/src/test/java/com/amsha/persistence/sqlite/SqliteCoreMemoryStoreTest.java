@@ -8,8 +8,8 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
-import com.amsha.core.memory.tiered.TieredBackend;
 import com.amsha.persistence.api.CoreMemoryBlockDto;
+import com.amsha.persistence.api.TieredBackend;
 import com.amsha.persistence.api.VersionConflictException;
 import com.amsha.persistence.sqlite.testutil.FlywayEnabledTestProfile;
 

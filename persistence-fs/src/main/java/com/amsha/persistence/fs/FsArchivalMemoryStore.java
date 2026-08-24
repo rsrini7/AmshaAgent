@@ -9,13 +9,14 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 
-import com.amsha.core.memory.tiered.TieredBackend;
 import com.amsha.persistence.api.ArchivalChunkDto;
 import com.amsha.persistence.api.ArchivalMemoryStorePort;
 import com.amsha.persistence.api.ArchivalSearchQuery;
+import com.amsha.persistence.api.TieredBackend;
 
 import org.jboss.logging.Logger;
 
+import io.quarkus.arc.Unremovable;
 import io.quarkus.arc.properties.IfBuildProperty;
 
 /**
@@ -24,6 +25,7 @@ import io.quarkus.arc.properties.IfBuildProperty;
  * Search uses case-insensitive substring matching (no Lucene vector — FS backend is BM25-free for tiered memory).
  */
 @ApplicationScoped
+@Unremovable
 @TieredBackend("fs")
 @IfBuildProperty(name = "amsha.persistence.backend", stringValue = "fs")
 public class FsArchivalMemoryStore implements ArchivalMemoryStorePort {

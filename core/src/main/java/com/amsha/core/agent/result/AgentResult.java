@@ -8,6 +8,7 @@ import com.amsha.common.util.LogUtil;
 import com.amsha.core.agent.loop.AgentLoop;
 import com.amsha.core.agent.reasoning.ReasoningStep;
 import com.amsha.core.governance.ApprovalFrame;
+import com.amsha.security.api.RiskLevel;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -119,7 +120,7 @@ public sealed interface AgentResult
         } catch (Exception e) {
             log.debugf("Serialization fallback (non-fatal): %s", LogUtil.rootMessage(e));
         }
-        return awaitingApproval(new ApprovalFrame(toolName, params, ApprovalFrame.RiskLevel.MEDIUM), sessionId, steps);
+        return awaitingApproval(new ApprovalFrame(toolName, params, RiskLevel.MEDIUM), sessionId, steps);
     }
 
     static AgentResult awaitingApproval(ApprovalFrame frame, String sessionId, List<ReasoningStep> steps) {

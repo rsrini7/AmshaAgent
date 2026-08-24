@@ -14,14 +14,15 @@ import java.nio.file.attribute.BasicFileAttributes;
 import java.util.concurrent.ConcurrentHashMap;
 
 import com.amsha.common.util.LogUtil;
+import com.amsha.common.util.PathSanitizer;
 import com.amsha.core.agent.loop.CliResultBridge;
 import com.amsha.core.agent.loop.ToolInvocationGuard;
 import com.amsha.core.audit.AuditObserver;
 import com.amsha.core.governance.GovernanceStrategy;
+import com.amsha.core.hitl.ApprovalLeaseStore;
 import com.amsha.core.scope.WorkspaceScopeContext;
 import com.amsha.core.scope.WorkspaceScoped;
 import com.amsha.core.state.StatefulAgentStore;
-import com.amsha.core.util.PathSanitizer;
 import com.amsha.persistence.api.CheckpointStorePort;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
@@ -112,6 +113,9 @@ public class WorkspaceManager {
     ToolInvocationGuard toolInvocationGuard;
 
     @Inject
+    ApprovalLeaseStore approvalLeaseStore;
+
+    @Inject
     SessionTestLabelStore sessionTestLabelStore;
 
     @ConfigProperty(name = "amsha.workspace.root-dir", defaultValue = "./data/workspaces")
@@ -146,6 +150,7 @@ public class WorkspaceManager {
         // 1a. Clear budget and dedup memory
         governanceLayer.clearSession(sessionId);
         toolInvocationGuard.clearSession(sessionId);
+        approvalLeaseStore.clearSession(sessionId);
         sessionTestLabelStore.clearSession(sessionId);
 
         // 1b. Cleanup audit observer

@@ -5,8 +5,8 @@ import java.util.Map;
 
 import com.amsha.core.agent.reasoning.ReasoningStep;
 import com.amsha.core.agent.result.AgentResult;
-import com.amsha.core.agent.role.ToolCapability;
 import com.amsha.core.structured.StructuredOutputException;
+import com.amsha.tool.api.ToolCapability;
 
 public class ThinkingState implements RunnerState {
 

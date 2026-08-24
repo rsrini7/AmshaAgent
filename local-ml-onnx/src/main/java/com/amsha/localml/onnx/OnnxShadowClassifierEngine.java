@@ -17,8 +17,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Function;
 
-import com.amsha.core.classifier.ClassifierResult;
-import com.amsha.core.classifier.ClassifierResult.NoOpinionReason;
+import com.amsha.classifier.api.ClassifierResult;
+import com.amsha.classifier.api.ClassifierResult.NoOpinionReason;
 
 /** Shared verified-bundle execution, lifecycle, deadline, and breaker path for shadow classifiers. */
 final class OnnxShadowClassifierEngine<T> {

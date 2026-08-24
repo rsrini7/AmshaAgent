@@ -12,7 +12,6 @@ import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 
 import io.quarkus.qute.TemplateData;
-import io.quarkus.runtime.annotations.RegisterForReflection;
 
 /**
  * A single step in the agent's reasoning process.
@@ -26,7 +25,6 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
  * </ul>
  */
 @TemplateData
-@RegisterForReflection
 @JsonSerialize(using = ReasoningStepSerializer.class)
 @JsonDeserialize(using = ReasoningStepDeserializer.class)
 public sealed interface ReasoningStep

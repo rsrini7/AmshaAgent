@@ -13,10 +13,10 @@ import com.amsha.core.agent.reasoning.prompt.PromptConstants;
 import com.amsha.core.agent.reasoning.prompt.PromptRegistry;
 import com.amsha.core.agent.role.AgentRoleEnum;
 import com.amsha.core.agent.role.RoleRegistry;
-import com.amsha.core.agent.role.ToolCapability;
-import com.amsha.core.security.AutonomyLevel;
-import com.amsha.core.tools.AgentTool;
 import com.amsha.core.tools.ToolRegistry;
+import com.amsha.security.api.AutonomyLevel;
+import com.amsha.tool.api.AgentTool;
+import com.amsha.tool.api.ToolCapability;
 
 import org.jboss.logging.Logger;
 

@@ -7,10 +7,10 @@ import java.util.List;
 import java.util.Map;
 
 import com.amsha.core.agent.loop.AgentExecutionContext;
-import com.amsha.core.agent.reasoning.error.LlmToolCallException;
 import com.amsha.core.agent.role.AgentRoleEnum;
-import com.amsha.core.agent.role.ToolCapability;
 import com.amsha.core.util.TextPatternUtils;
+import com.amsha.llm.api.error.LlmToolCallException;
+import com.amsha.tool.api.ToolCapability;
 
 import org.jboss.logging.Logger;
 

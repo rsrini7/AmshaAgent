@@ -8,17 +8,19 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
-import com.amsha.core.memory.tiered.TieredBackend;
 import com.amsha.persistence.api.CoreMemoryBlockDto;
 import com.amsha.persistence.api.CoreMemoryStorePort;
+import com.amsha.persistence.api.TieredBackend;
 import com.amsha.persistence.api.VersionConflictException;
 import com.amsha.persistence.sqlite.jdbi.CoreMemoryJdbiDao;
 
 import org.jdbi.v3.core.Jdbi;
 
+import io.quarkus.arc.Unremovable;
 import io.quarkus.arc.properties.IfBuildProperty;
 
 @ApplicationScoped
+@Unremovable
 @TieredBackend("sqlite")
 @IfBuildProperty(name = "amsha.persistence.backend", stringValue = "sqlite", enableIfMissing = true)
 public class SqliteCoreMemoryStore implements CoreMemoryStorePort {

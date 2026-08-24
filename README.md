@@ -8,8 +8,8 @@
   ![Native Image Ready](https://img.shields.io/badge/Native_Image-Ready-orange.svg?style=flat&logo=graalvm)
   ![OpenTelemetry](https://img.shields.io/badge/OpenTelemetry-Tracing-blueviolet.svg?style=flat&logo=opentelemetry)
   ![Podman](https://img.shields.io/badge/Isolation-Rootless_Podman-purple.svg?style=flat&logo=podman)
-  ![Tests](https://img.shields.io/badge/Tests-4384_passing-brightgreen.svg?style=flat)
-  ![Coverage](https://img.shields.io/badge/Coverage-70.06%25-brightgreen.svg?style=flat)
+  ![Tests](https://img.shields.io/badge/Tests-4726_passing-brightgreen.svg?style=flat)
+  ![Coverage](https://img.shields.io/badge/Coverage-70.29%25-brightgreen.svg?style=flat)
   [![Built with Devbox](https://img.shields.io/badge/built_with-devbox-green.svg?style=flat)](https://www.jetify.com/devbox/)
   [![Built with mise](https://img.shields.io/badge/built_with-mise-blue.svg?style=flat)](https://jdx.dev)
 </div>
@@ -115,11 +115,15 @@ links, reconfiguration, import, and testing. Module/API details are in [`mcp/REA
 | `docs/` | All documentation — architecture, setup, config, security, testing, extension guides |
 | `docs/assets/` | Architecture diagrams (SVG) — referenced from README + ARCHITECTURE.md |
 | `app/` | Main deployable: CLI, REST, security, wiring |
-| `core/` | Agent loop, tools, audit, governance, sandbox, reflexes |
+| `core/` | Agent loop, state machine, audit, governance, reflexes |
+| `*-api/` | Pure contract jars: channel, llm-provider, security, tool, classifier, persistence |
+| `security/` | Vault, Argon2id/AES-GCM-SIV crypto, governed HTTP |
+| `memory/` | Tiered core/recall/archival memory services (zero-core impl) |
+| `skills/` | Skill loading machinery: providers, admission, file watcher |
 | `persistence-*/` | Hexagonal persistence: API ports + SQLite / PostgreSQL / FS adapters |
 | `channel-*/` | Channel adapters: Telegram, WebSocket |
 | `ui/` | Lit 3.x + TypeScript web frontend |
-| `mcp/`, `rag/`, `local-ml-onnx/`, `tool-playwright/`, `self-evolve/` | Optional runtime modules for MCP, retrieval, verified local ML, browser automation, and self-evolution |
+| `mcp/`, `rag/`, `local-ml-onnx/`, `self-evolve/` | Optional runtime modules for MCP, retrieval, verified local ML, and self-evolution |
 | `onboarding/` | Guided provider, credential, prompt, and MCP setup wizard |
 
 ---
@@ -148,27 +152,36 @@ All roles have `garuda` for delegation. Tool schemas assembled dynamically at ru
 ## Module Reference
 
 ```
-amsha-parent/               ← Root POM: Java 25, Quarkus 3.27.2, BouncyCastle
+amsha-parent/               ← Root POM: Java 25, Quarkus 3.27.2
 │
-app/                  ← Main deployable: CLI, REST, scheduler, security
-core/                 ← Agent loop, state machine, tools, audit, governance
-common/               ← Shared utilities (LogUtil, constants)
+app/                  ← Main deployable: CLI, REST, scheduler, security wiring
+core/                 ← Agent loop, state machine, reflexes, routing, governance
+common/               ← Shared utilities (LogUtil, TemporalUtils, constants)
 │
 channel-api/          ← Channel SPI: sealed interfaces and plugin contracts
+llm-provider-api/     ← LLM SPIs: ChatModelCreationPort, exception taxonomy
+security-api/         ← Security vocabulary: SecretVault, ToolOperation/RiskLevel
+tool-api/             ← AgentTool contract surface (ToolResponse, execution context)
+classifier-api/       ← Shadow-classifier contracts
+persistence-api/      ← Hexagonal port interfaces (stores, tiered memory ports)
+│
+security/             ← Vault, Argon2id + AES-GCM-SIV crypto, governed HTTP
+memory/               ← Tiered memory services (strict zero-core impl)
+skills/               ← Skill loading: providers, admission, file watcher
+│
 channel-telegram/     ← Apache Camel Telegram bot + HITL inline keyboards
 channel-web/          ← WebSocket channel + Lit TypeScript frontend
-│
-persistence-api/      ← Hexagonal port interfaces (stores, ports)
 persistence-common/   ← Shared JDBI records/DTOs
 persistence-sqlite/   ← SQLite adapter (WAL + FTS5 + vec0)
 persistence-postgres/ ← PostgreSQL adapter
-persistence-fs/       ← Filesystem adapter (Lucene BM25)
-│
+persistence-fs/       ← Filesystem adapter (JSON store)
+llm-providers/        ← 21 concrete provider factories + SDKs
+sandbox/              ← Process & Podman isolation
+tools-builtin/        ← Built-in AgentTool implementations + Lucene tool search + Playwright CLI automation
 rag/                  ← Two-tier vector (vec0) + FTS5 RAG memory
 local-ml-onnx/        ← Verified local ONNX embeddings + shadow classifiers
 mcp/                  ← MCP server bridge + dynamic client tool loading
 onboarding/           ← 6-step setup wizard REST API
-tool-playwright/      ← Playwright browser automation tool
 self-evolve/          ← Trace capture and self-evolution learning loop
 deployment/           ← Build-time: custom CDI scope, MCP reflection
 │

@@ -15,10 +15,10 @@ import java.util.Optional;
 import com.amsha.core.agent.loop.ToolInvocationGuard;
 import com.amsha.core.domain.model.AgentCheckpoint;
 import com.amsha.core.domain.model.AgentCheckpointRecord;
-import com.amsha.core.security.AutonomyLevel;
-import com.amsha.core.state.CheckpointStatus;
 import com.amsha.core.state.StatefulAgentStore;
-import com.amsha.core.tools.GithubTool;
+import com.amsha.persistence.api.CheckpointStatus;
+import com.amsha.security.api.AutonomyLevel;
+import com.amsha.tool.api.ToolCapability;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -52,7 +52,7 @@ class GithubToolGuardInterceptorTest {
                 "s1",
                 "coordinator",
                 AutonomyLevel.SUPERVISED,
-                GithubTool.TOOL_NAME,
+                ToolCapability.GITHUB.toolName(),
                 Map.of(),
                 List.of(),
                 "abc def",
@@ -69,14 +69,14 @@ class GithubToolGuardInterceptorTest {
     void testGithubPreApprovedReturnsEmpty() {
         AgentCheckpoint cp = new AgentCheckpointRecord();
         cp.setStatus(CheckpointStatus.AWAITING_APPROVAL);
-        cp.setPendingToolName(GithubTool.TOOL_NAME);
+        cp.setPendingToolName(ToolCapability.GITHUB.toolName());
         when(agentStore.load(anyString(), anyString())).thenReturn(Optional.of(cp));
 
         Optional<ToolInvocationGuard.GuardDecision> result = interceptor.evaluate(
                 "s1",
                 "coordinator",
                 AutonomyLevel.SUPERVISED,
-                GithubTool.TOOL_NAME,
+                ToolCapability.GITHUB.toolName(),
                 Map.of(),
                 List.of(),
                 "how are you?",

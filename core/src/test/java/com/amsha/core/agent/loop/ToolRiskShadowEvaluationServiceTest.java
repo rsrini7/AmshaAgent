@@ -8,8 +8,10 @@ import java.util.Map;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.atomic.AtomicReference;
 
-import com.amsha.core.classifier.ClassifierResult;
-import com.amsha.core.security.AutonomyLevel;
+import com.amsha.classifier.api.ClassifierResult;
+import com.amsha.classifier.api.ToolRiskPrediction;
+import com.amsha.classifier.api.ToolRiskShadowContext;
+import com.amsha.security.api.AutonomyLevel;
 
 import org.junit.jupiter.api.Test;
 

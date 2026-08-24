@@ -29,7 +29,6 @@
     <dependency>
       <groupId>com.amsha</groupId>
       <artifactId>amsha-channel-api</artifactId>
-      <version>${project.version}</version>
       <scope>compile</scope>
     </dependency>
     

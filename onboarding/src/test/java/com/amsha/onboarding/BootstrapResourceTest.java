@@ -8,12 +8,12 @@ import jakarta.inject.Inject;
 
 import java.time.Instant;
 
-import com.amsha.core.security.BootstrapCredentialIssuer;
-import com.amsha.core.security.IssuedCredential;
-import com.amsha.core.security.PreparedBootstrapCredential;
 import com.amsha.onboarding.testutil.FlywayEnabledTestProfile;
 import com.amsha.persistence.api.BootstrapStateDto;
 import com.amsha.persistence.api.BootstrapStateStorePort;
+import com.amsha.security.BootstrapCredentialIssuer;
+import com.amsha.security.IssuedCredential;
+import com.amsha.security.PreparedBootstrapCredential;
 
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
@@ -134,9 +134,9 @@ class BootstrapResourceTest {
                 .post("/onboarding/bootstrap/local-recovery")
                 .then()
                 .statusCode(200)
-                .body("ownerId", not(isEmptyOrNullString()))
-                .body("apiKey", not(isEmptyOrNullString()))
-                .cookie("AMSHA_API_KEY", not(isEmptyOrNullString()));
+                .body("ownerId", not(emptyOrNullString()))
+                .body("apiKey", not(emptyOrNullString()))
+                .cookie("AMSHA_API_KEY", not(emptyOrNullString()));
     }
 
     @ApplicationScoped

@@ -3,116 +3,126 @@ package com.amsha.core.tools;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
-import jakarta.enterprise.inject.Instance;
+import jakarta.enterprise.event.Event;
+import jakarta.enterprise.inject.spi.BeanManager;
 
-import java.util.List;
+import java.util.Collections;
 import java.util.Map;
-import java.util.Optional;
 
 import com.amsha.core.audit.AuditService;
-import com.amsha.core.sandbox.ProcessIsolationExecutor;
-import com.amsha.core.security.ToolOperation;
-import com.amsha.core.skill.SkillRegistry;
-import com.amsha.core.tool.DynamicToolDescriptor;
-import com.amsha.core.tool.DynamicToolInvoker;
+import com.amsha.security.api.ToolOperation;
+import com.amsha.tool.api.AgentTool;
+import com.amsha.tool.api.ToolResponse;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
 
-@ExtendWith(MockitoExtension.class)
 class ToolRegistryUnitTest {
 
-    @Mock
-    ToolDiscoveryService discoveryService;
-
-    @Mock
-    ToolGovernanceGuard governanceGuard;
-
-    @Mock
-    ToolSecretExtractor secretExtractor;
-
-    @Mock
-    ProcessIsolationExecutor isolationExecutor;
-
-    @Mock
-    ObjectMapper objectMapper;
-
-    @Mock
-    AuditService auditService;
-
-    @Mock
-    SkillRegistry skillRegistry;
-
-    @Mock
-    Instance<DynamicToolInvoker> dynamicToolInvokers;
-
-    @Mock
-    DynamicToolInvoker dynamicToolInvoker;
-
-    @InjectMocks
-    ToolRegistry registry;
+    private ToolRegistry registry;
+    private ToolDiscoveryService discoveryService;
+    private ToolGovernanceGuard governanceGuard;
+    private ToolSecretExtractor secretExtractor;
+    private AuditService auditService;
+    private Event<ToolDiscoveryCompleted> toolDiscoveryCompleted;
 
     @BeforeEach
-    void setUp() {
-        registry.workspaceRootDir = "./target/test-workspaces";
-    }
+    @SuppressWarnings("unchecked")
+    void setup() {
+        registry = new ToolRegistry();
+        discoveryService = mock(ToolDiscoveryService.class);
+        governanceGuard = mock(ToolGovernanceGuard.class);
+        secretExtractor = mock(ToolSecretExtractor.class);
+        auditService = mock(AuditService.class);
+        toolDiscoveryCompleted = mock(Event.class);
 
-    @Test
-    void testInitialize() {
-        registry.initialize();
-        verify(discoveryService).discover();
-    }
-
-    @Test
-    void testFindToolUnknown() {
-        when(discoveryService.getToolIndex()).thenReturn(Map.of());
-        assertTrue(registry.findTool("unknown").isEmpty());
-    }
-
-    @Test
-    void testFindToolFound() {
-        AgentTool tool = mock(AgentTool.class);
-        when(discoveryService.getToolIndex()).thenReturn(Map.of("sandbox_exec", tool));
-        assertEquals(tool, registry.findTool("sandbox_exec").orElse(null));
-    }
-
-    @Test
-    void testListTools() {
-        AgentTool t1 = mock(AgentTool.class);
-        when(discoveryService.getToolIndex()).thenReturn(Map.of("t1", t1));
-
-        List<String> tools = registry.listTools();
-        assertEquals(1, tools.size());
-        assertEquals("t1", tools.get(0));
-        assertEquals("t1", registry.registeredToolNames());
-    }
-
-    @Test
-    void invokesDynamicToolThroughTheRegistry() {
-        ToolResponse expected = ToolResponse.success("mcp-result");
-        DynamicToolDescriptor descriptor = new DynamicToolDescriptor(
-                "mcp_tool", "MCP tool", "{}", ToolCategory.NETWORK, false, ToolOperation.NETWORK_OUTBOUND);
-        when(discoveryService.getToolIndex()).thenReturn(Map.of());
-        when(dynamicToolInvokers.isUnsatisfied()).thenReturn(false);
-        when(dynamicToolInvokers.iterator())
-                .thenReturn(List.of(dynamicToolInvoker).iterator());
-        when(dynamicToolInvoker.findTool("mcp_tool")).thenReturn(Optional.of(descriptor));
-        when(dynamicToolInvoker.invoke(eq("mcp_tool"), eq(Map.of("value", "x")), any()))
-                .thenReturn(expected);
-
-        ToolResponse actual = registry.invokeTool("mcp_tool", Map.of("value", "x"));
-
-        assertSame(expected, actual);
-        verify(dynamicToolInvoker).invoke(eq("mcp_tool"), eq(Map.of("value", "x")), any());
+        registry.discoveryService = discoveryService;
+        registry.governanceGuard = governanceGuard;
+        registry.secretExtractor = secretExtractor;
+        registry.auditService = auditService;
+        registry.toolDiscoveryCompleted = toolDiscoveryCompleted;
+        registry.objectMapper = new ObjectMapper();
+        registry.workspaceRootDir = "./data/workspaces";
     }
 
     @Test
     void testToSafeDirName() {
-        assertEquals("session_1", ToolRegistry.toSafeDirName("session:1"));
+        assertEquals("session_123", ToolRegistry.toSafeDirName("session:123"));
+        assertEquals("safe-session", ToolRegistry.toSafeDirName("safe-session"));
+    }
+
+    @Test
+    void testListToolsAndFindTool() {
+        AgentTool mockTool = mock(AgentTool.class);
+        when(mockTool.name()).thenReturn("my_tool");
+        when(discoveryService.getToolIndex()).thenReturn(Map.of("my_tool", mockTool));
+
+        assertEquals(1, registry.listTools().size());
+        assertEquals("my_tool", registry.listTools().get(0));
+        assertEquals("my_tool", registry.registeredToolNames());
+        assertTrue(registry.findTool("my_tool").isPresent());
+        assertFalse(registry.findTool("unknown").isPresent());
+    }
+
+    @Test
+    void testHeadroomToolCallIntercepted() {
+        ToolResponse resp1 = registry.invokeTool("headroom_search", Map.of());
+        assertNotNull(resp1);
+        assertTrue(resp1.success());
+
+        ToolResponse resp2 = registry.invokeTool("headroom", Map.of());
+        assertNotNull(resp2);
+        assertTrue(resp2.success());
+    }
+
+    @Test
+    void testInvokeUnknownToolThrows() {
+        when(discoveryService.getToolIndex()).thenReturn(Map.of());
+        assertThrows(IllegalArgumentException.class, () -> registry.invokeTool("unknown_tool", Map.of()));
+    }
+
+    @Test
+    void testInvokeKnownToolSuccess() {
+        AgentTool mockTool = mock(AgentTool.class);
+        when(mockTool.name()).thenReturn("simple_tool");
+        when(mockTool.requiresSandbox()).thenReturn(false);
+        when(mockTool.requiredOperation()).thenReturn(ToolOperation.READ_FS);
+        when(mockTool.execute(any(), any())).thenReturn(ToolResponse.success("ok"));
+
+        when(discoveryService.getToolIndex()).thenReturn(Map.of("simple_tool", mockTool));
+
+        ToolResponse resp = registry.invokeTool("simple_tool", Map.of("p", "v"));
+        assertNotNull(resp);
+        assertTrue(resp.success());
+        assertEquals("ok", resp.output());
+    }
+
+    @Test
+    void testInitializeFiresEvent() {
+        when(discoveryService.getToolIndex()).thenReturn(Map.of("t1", mock(AgentTool.class)));
+        registry.initialize();
+        verify(discoveryService).discover();
+        verify(toolDiscoveryCompleted).fire(any());
+    }
+
+    @Test
+    void testInvokeSandboxedSanitizedInfraFailure() {
+        AgentTool mockTool = mock(AgentTool.class);
+        when(mockTool.name()).thenReturn("sandboxed_tool");
+        when(mockTool.requiresSandbox()).thenReturn(true);
+        when(mockTool.requiredOperation()).thenReturn(ToolOperation.EXECUTE_SHELL);
+
+        when(discoveryService.getToolIndex()).thenReturn(Map.of("sandboxed_tool", mockTool));
+        when(secretExtractor.extractRequiredSecrets(any(), any())).thenReturn(Map.of());
+
+        // Without sandbox port
+        registry.beanManager = mock(BeanManager.class);
+        when(registry.beanManager.getBeans(Object.class)).thenReturn(Collections.emptySet());
+
+        ToolResponse resp = registry.invokeTool("sandboxed_tool", Map.of());
+        assertNotNull(resp);
+        assertFalse(resp.success());
+        assertEquals("Sandbox execution environment is currently unavailable.", resp.output());
     }
 }

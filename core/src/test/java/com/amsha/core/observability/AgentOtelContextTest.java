@@ -8,7 +8,7 @@ import static org.mockito.Mockito.*;
 
 import jakarta.inject.Inject;
 
-import com.amsha.core.agent.role.ToolCapability;
+import com.amsha.tool.api.ToolCapability;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

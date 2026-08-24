@@ -11,7 +11,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
-import com.amsha.core.memory.tiered.ArchivalMemoryService;
+import com.amsha.memory.tiered.ArchivalMemoryService;
 import com.amsha.persistence.api.ArchivalChunkDto;
 import com.amsha.persistence.api.ArchivalSearchQuery;
 

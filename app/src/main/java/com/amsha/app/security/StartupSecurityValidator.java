@@ -9,8 +9,8 @@ import java.security.Security;
 import java.util.List;
 import java.util.Optional;
 
-import com.amsha.core.security.SecretVault;
-import com.amsha.core.security.VaultConstants;
+import com.amsha.security.api.SecretVault;
+import com.amsha.security.api.VaultConstants;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 

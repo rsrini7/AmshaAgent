@@ -13,11 +13,11 @@ import java.util.Set;
 import java.util.function.BooleanSupplier;
 import java.util.function.Function;
 
-import com.amsha.core.agent.loop.AnswerQualityPrediction;
-import com.amsha.core.agent.loop.AnswerQualityShadowClassifier;
-import com.amsha.core.agent.loop.AnswerQualityShadowContext;
-import com.amsha.core.classifier.ClassifierResult;
-import com.amsha.core.classifier.ClassifierResult.NoOpinionReason;
+import com.amsha.classifier.api.AnswerQualityPrediction;
+import com.amsha.classifier.api.AnswerQualityShadowClassifier;
+import com.amsha.classifier.api.AnswerQualityShadowContext;
+import com.amsha.classifier.api.ClassifierResult;
+import com.amsha.classifier.api.ClassifierResult.NoOpinionReason;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 

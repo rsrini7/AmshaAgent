@@ -106,7 +106,7 @@ public class CodeLanguageDetector {
     }
 
     private static String resolveExecutable(String command, Optional<String> config) {
-        if (config.isPresent() && !config.get().isBlank()) return config.get();
+        if (config != null && config.isPresent() && !config.get().isBlank()) return config.get();
         return command;
     }
 }

@@ -11,7 +11,7 @@ import com.amsha.channel.api.ChannelMessage;
 import com.amsha.channel.api.ChannelType;
 import com.amsha.channel.api.ChannelUser;
 import com.amsha.core.pipeline.handlers.AgentDispatchHandler;
-import com.amsha.core.security.AutonomyLevel;
+import com.amsha.security.api.AutonomyLevel;
 
 import org.junit.jupiter.api.Test;
 

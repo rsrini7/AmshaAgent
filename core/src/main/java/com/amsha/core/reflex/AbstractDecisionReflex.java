@@ -10,7 +10,6 @@ import java.util.stream.Collectors;
 import com.amsha.channel.api.ChannelCommand;
 import com.amsha.channel.api.ChannelType;
 import com.amsha.common.util.LogUtil;
-import com.amsha.core.agent.AgentSentinels;
 import com.amsha.core.agent.hitl.CheckpointApprovalService;
 import com.amsha.core.agent.loop.CheckpointResolutionException;
 import com.amsha.core.agent.loop.CheckpointResumeHandler;
@@ -25,6 +24,7 @@ import com.amsha.core.scope.WorkspaceScopeHolder;
 import com.amsha.core.state.StatefulAgentStore;
 import com.amsha.core.util.BatchDecisionUtil;
 import com.amsha.persistence.api.CronStorePort;
+import com.amsha.tool.api.AgentSentinels;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.jboss.logging.Logger;

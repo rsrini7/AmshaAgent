@@ -2,20 +2,10 @@ package com.amsha.core.governance;
 
 import java.util.Map;
 
-import io.quarkus.runtime.annotations.RegisterForReflection;
+import com.amsha.security.api.RiskLevel;
 
 /**
  * Typed frame for Human-In-The-Loop (HITL) approval requests.
+ * Registered for native reflection centrally via {@code CoreReflectionConfig}.
  */
-@RegisterForReflection
-public record ApprovalFrame(String tool, Map<String, Object> params, RiskLevel riskLevel) {
-    /**
-     * Categorized risk level for the requested tool execution.
-     */
-    public enum RiskLevel {
-        LOW,
-        MEDIUM,
-        HIGH,
-        CRITICAL
-    }
-}
+public record ApprovalFrame(String tool, Map<String, Object> params, RiskLevel riskLevel) {}

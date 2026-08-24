@@ -15,10 +15,18 @@
   <modules>
     <module>channel-api</module>
     <module>llm-provider-api</module>
+    <module>security-api</module>
+    <module>tool-api</module>
+    <module>classifier-api</module>
     <module>persistence-api</module>
     <module>persistence-common</module>
     <module>common</module>
+    <module>memory</module>
+    <module>skills</module>
     <module>core</module>
+    <module>security</module>
+    <module>sandbox</module>
+    <module>tools-builtin</module>
     <module>llm-providers</module>
     <module>persistence-sqlite</module>
     <module>persistence-fs</module>
@@ -29,7 +37,6 @@
     <module>onboarding</module>
     <module>channel-web</module>
     <module>channel-telegram</module>
-    <module>tool-playwright</module>
     <module>self-evolve</module>
     <module>deployment</module>
     <module>ui</module>
@@ -57,7 +64,6 @@
     <!-- Baked into build-info.properties. "default" = JVM mode (BackendValidator skips).
          Native builds explicitly pass -Damsha.build.backend=sqlite|postgres|fs. -->
     <amsha.build.backend>default</amsha.build.backend>
-    <commonmark.version>0.24.0</commonmark.version>
     <commons-lang3.version>3.18.0</commons-lang3.version>
     <commons-text.version>1.15.0</commons-text.version>
     <cron-utils.version>9.2.1</cron-utils.version>
@@ -112,6 +118,21 @@
       </dependency>
       <dependency>
         <groupId>com.amsha</groupId>
+        <artifactId>amsha-security-api</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.amsha</groupId>
+        <artifactId>amsha-tool-api</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.amsha</groupId>
+        <artifactId>amsha-classifier-api</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.amsha</groupId>
         <artifactId>amsha-llm-providers</artifactId>
         <version>${project.version}</version>
       </dependency>
@@ -127,7 +148,32 @@
       </dependency>
       <dependency>
         <groupId>com.amsha</groupId>
+        <artifactId>amsha-tools-builtin</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.amsha</groupId>
+        <artifactId>amsha-sandbox</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.amsha</groupId>
+        <artifactId>amsha-security</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.amsha</groupId>
         <artifactId>amsha-core</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.amsha</groupId>
+        <artifactId>amsha-memory</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.amsha</groupId>
+        <artifactId>amsha-skills</artifactId>
         <version>${project.version}</version>
       </dependency>
       <dependency>
@@ -226,16 +272,6 @@
         <groupId>org.apache.lucene</groupId>
         <artifactId>lucene-analysis-common</artifactId>
         <version>${lucene.version}</version>
-      </dependency>
-      <dependency>
-        <groupId>org.commonmark</groupId>
-        <artifactId>commonmark</artifactId>
-        <version>${commonmark.version}</version>
-      </dependency>
-      <dependency>
-        <groupId>org.commonmark</groupId>
-        <artifactId>commonmark-ext-gfm-tables</artifactId>
-        <version>${commonmark.version}</version>
       </dependency>
       <dependency>
         <groupId>org.apache.commons</groupId>
@@ -424,6 +460,11 @@
           <groupId>org.jacoco</groupId>
           <artifactId>jacoco-maven-plugin</artifactId>
           <version>${jacoco.version}</version>
+        </plugin>
+        <plugin>
+          <groupId>io.smallrye</groupId>
+          <artifactId>jandex-maven-plugin</artifactId>
+          <version>3.6.0</version>
         </plugin>
       </plugins>
     </pluginManagement>

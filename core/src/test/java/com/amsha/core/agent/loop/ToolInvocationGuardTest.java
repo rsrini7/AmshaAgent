@@ -20,18 +20,24 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Stream;
 
+import com.amsha.classifier.api.ClassifierResult;
+import com.amsha.classifier.api.ClassifierResult.NoOpinionReason;
+import com.amsha.classifier.api.PostPolicyToolContext;
+import com.amsha.classifier.api.ToolRiskAction;
+import com.amsha.classifier.api.ToolRiskShadowContext;
 import com.amsha.core.agent.reasoning.ReasoningStep;
+import com.amsha.core.agent.role.CapabilityRegistry;
 import com.amsha.core.agent.role.RoleRegistry;
-import com.amsha.core.classifier.ClassifierResult;
-import com.amsha.core.classifier.ClassifierResult.NoOpinionReason;
-import com.amsha.core.governance.ApprovalFrame;
+import com.amsha.core.hitl.ApprovalLeaseStore;
 import com.amsha.core.scope.WorkspaceContext;
-import com.amsha.core.security.AutonomyLevel;
-import com.amsha.core.security.ToolOperation;
+import com.amsha.core.security.AutonomyPolicy;
 import com.amsha.core.tool.ToolGuardInterceptor;
-import com.amsha.core.tools.AgentTool;
-import com.amsha.core.tools.IdempotencyMode;
 import com.amsha.core.tools.ToolRegistry;
+import com.amsha.security.api.AutonomyLevel;
+import com.amsha.security.api.RiskLevel;
+import com.amsha.security.api.ToolOperation;
+import com.amsha.tool.api.AgentTool;
+import com.amsha.tool.api.IdempotencyMode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -46,6 +52,7 @@ class ToolInvocationGuardTest {
     private Instance<ToolGuardInterceptor> mockInterceptors;
     private ToolRiskShadowEvaluationService toolRiskShadowEvaluation;
     private PostPolicyToolRiskDispatcher postPolicyToolRiskDispatcher;
+    private CapabilityRegistry capabilityRegistry;
 
     @BeforeEach
     @SuppressWarnings("unchecked")
@@ -57,12 +64,20 @@ class ToolInvocationGuardTest {
         mockInterceptors = mock(Instance.class);
         toolRiskShadowEvaluation = mock(ToolRiskShadowEvaluationService.class);
         postPolicyToolRiskDispatcher = mock(PostPolicyToolRiskDispatcher.class);
+        CapabilityRegistry capabilityRegistry = mock(CapabilityRegistry.class);
+        when(capabilityRegistry.hasCapability(anyString(), anyString())).thenReturn(true);
+        this.capabilityRegistry = capabilityRegistry;
+        guard.autonomyPolicy = new AutonomyPolicy.Standard();
+        guard.approvalLeaseStore = mock(ApprovalLeaseStore.class);
+        when(guard.approvalLeaseStore.hasActiveLease(anyString(), anyString(), any(), anyString(), any()))
+                .thenReturn(false);
         when(mockInterceptors.iterator()).thenReturn(Collections.emptyIterator());
         when(mockInterceptors.stream()).thenReturn(Stream.empty());
 
         guard.roleRegistry = roleRegistry;
         guard.objectMapper = objectMapper;
         guard.toolRegistry = mockToolRegistry;
+        guard.capabilityRegistry = capabilityRegistry;
         guard.interceptors = mockInterceptors;
         guard.toolRiskShadowEvaluation = toolRiskShadowEvaluation;
         guard.postPolicyToolRiskDispatcher = postPolicyToolRiskDispatcher;
@@ -159,7 +174,7 @@ class ToolInvocationGuardTest {
                 assertInstanceOf(ToolInvocationGuard.GuardDecision.PauseForApproval.class, result);
         assertEquals("tool", approval.frame().tool());
         assertEquals(parameters, approval.frame().params());
-        assertEquals(ApprovalFrame.RiskLevel.LOW, approval.frame().riskLevel());
+        assertEquals(RiskLevel.LOW, approval.frame().riskLevel());
         verify(toolRiskShadowEvaluation, never())
                 .observeProvisionalAllow(anyString(), any(ToolRiskShadowContext.class));
     }
@@ -347,5 +362,132 @@ class ToolInvocationGuardTest {
 
     private void workspaceRun(String sessionId, AutonomyLevel level, Runnable runnable) {
         WorkspaceContext.run(sessionId, "user", "chat", level, "coordinator", runnable);
+    }
+
+    @Test
+    void unauthorizedRoleBlockedBeforeHitlPauseEvenForAlwaysHitlOperation() {
+        // F2 regression: a role without the capability grant must be Blocked up front.
+        // Requesting HITL approval for an action policy forbids anyway wastes a human
+        // approval cycle (dist incident: researcher + host_exec).
+        when(capabilityRegistry.hasCapability("researcher", "host_exec")).thenReturn(false);
+        var shellTool = mock(AgentTool.class);
+        when(shellTool.idempotencyMode()).thenReturn(IdempotencyMode.NON_IDEMPOTENT);
+        when(shellTool.requiredOperation()).thenReturn(ToolOperation.EXECUTE_SHELL);
+        when(mockToolRegistry.findTool("host_exec")).thenReturn(Optional.of(shellTool));
+
+        ToolInvocationGuard.GuardDecision decision = guard.evaluate(
+                "s1",
+                "researcher",
+                AutonomyLevel.SUPERVISED,
+                "host_exec",
+                Map.of("command", "ls"),
+                List.of(),
+                "goal",
+                List.of());
+
+        assertInstanceOf(ToolInvocationGuard.GuardDecision.Blocked.class, decision);
+        assertTrue(((ToolInvocationGuard.GuardDecision.Blocked) decision)
+                .observation()
+                .contains("not permitted for role 'researcher'"));
+    }
+
+    @Test
+    void activeLeaseSatisfiesDeterministicHitlPauseAndFallsThroughToClassifier() {
+        // ADR-approval-lease-for-parallel-batches: the lease substitutes only for the
+        // human prompt; the post-policy classifier below still runs.
+        var shellTool = mock(AgentTool.class);
+        when(shellTool.idempotencyMode()).thenReturn(IdempotencyMode.NON_IDEMPOTENT);
+        when(shellTool.requiredOperation()).thenReturn(ToolOperation.EXECUTE_SHELL);
+        when(mockToolRegistry.findTool("host_exec")).thenReturn(Optional.of(shellTool));
+        Map<String, Object> params = Map.of("command", "ls");
+        when(guard.approvalLeaseStore.hasActiveLease("s1", "coder", null, "host_exec", params))
+                .thenReturn(true);
+
+        ToolInvocationGuard.GuardDecision decision = guard.evaluate(
+                "s1", "coder", AutonomyLevel.SUPERVISED, "host_exec", params, List.of(), "goal", List.of());
+
+        assertInstanceOf(ToolInvocationGuard.GuardDecision.Allow.class, decision);
+    }
+
+    @Test
+    void withoutLeaseAlwaysHitlOperationStillPauses() {
+        var shellTool = mock(AgentTool.class);
+        when(shellTool.idempotencyMode()).thenReturn(IdempotencyMode.NON_IDEMPOTENT);
+        when(shellTool.requiredOperation()).thenReturn(ToolOperation.EXECUTE_SHELL);
+        when(mockToolRegistry.findTool("host_exec")).thenReturn(Optional.of(shellTool));
+
+        ToolInvocationGuard.GuardDecision decision = guard.evaluate(
+                "s1",
+                "coder",
+                AutonomyLevel.SUPERVISED,
+                "host_exec",
+                Map.of("command", "ls"),
+                List.of(),
+                "goal",
+                List.of());
+
+        assertInstanceOf(ToolInvocationGuard.GuardDecision.PauseForApproval.class, decision);
+    }
+
+    @Test
+    void blockedCapabilityBeatsActiveLease() {
+        // Bound 2: every Blocked return precedes lease consultation.
+        when(capabilityRegistry.hasCapability("researcher", "host_exec")).thenReturn(false);
+        var shellTool = mock(AgentTool.class);
+        when(shellTool.idempotencyMode()).thenReturn(IdempotencyMode.NON_IDEMPOTENT);
+        when(shellTool.requiredOperation()).thenReturn(ToolOperation.EXECUTE_SHELL);
+        when(mockToolRegistry.findTool("host_exec")).thenReturn(Optional.of(shellTool));
+        Map<String, Object> params = Map.of("command", "ls");
+        when(guard.approvalLeaseStore.hasActiveLease("s1", "researcher", null, "host_exec", params))
+                .thenReturn(true);
+
+        ToolInvocationGuard.GuardDecision decision = guard.evaluate(
+                "s1", "researcher", AutonomyLevel.SUPERVISED, "host_exec", params, List.of(), "g", List.of());
+
+        assertInstanceOf(ToolInvocationGuard.GuardDecision.Blocked.class, decision);
+    }
+
+    @Test
+    void scheduleTaskUnderSupervisedPausesBeforeExecutionForApprovalRequiringRoles() {
+        // ADR-schedule-task-hitl-under-supervised: cron creation is operator-consented.
+        var scheduleTool = mock(AgentTool.class);
+        when(scheduleTool.idempotencyMode()).thenReturn(IdempotencyMode.NON_IDEMPOTENT);
+        when(scheduleTool.requiredOperation()).thenReturn(ToolOperation.SCHEDULE_AUTONOMOUS);
+        when(mockToolRegistry.findTool("schedule_task")).thenReturn(Optional.of(scheduleTool));
+        when(roleRegistry.requiresApprovalForTools("coordinator")).thenReturn(true);
+
+        ToolInvocationGuard.GuardDecision decision = guard.evaluate(
+                "s1", "coordinator", AutonomyLevel.SUPERVISED, "schedule_task", Map.of(), List.of(), "g", List.of());
+
+        assertInstanceOf(ToolInvocationGuard.GuardDecision.PauseForApproval.class, decision);
+    }
+
+    @Test
+    void manageScheduleStaysExemptUnderSupervised() {
+        var manageTool = mock(AgentTool.class);
+        when(manageTool.idempotencyMode()).thenReturn(IdempotencyMode.NON_IDEMPOTENT);
+        when(manageTool.requiredOperation()).thenReturn(ToolOperation.READ_FS);
+        when(mockToolRegistry.findTool("manage_schedule")).thenReturn(Optional.of(manageTool));
+        when(roleRegistry.requiresApprovalForTools("coordinator")).thenReturn(true);
+
+        ToolInvocationGuard.GuardDecision decision = guard.evaluate(
+                "s1", "coordinator", AutonomyLevel.SUPERVISED, "manage_schedule", Map.of(), List.of(), "g", List.of());
+
+        assertInstanceOf(ToolInvocationGuard.GuardDecision.Allow.class, decision);
+    }
+
+    @Test
+    void fullAutonomyStillExecutesScheduleTaskWithoutPause() {
+        // Deliberately unchanged: FULL executes scheduling without approval.
+        var scheduleTool = mock(AgentTool.class);
+        when(scheduleTool.idempotencyMode()).thenReturn(IdempotencyMode.NON_IDEMPOTENT);
+        when(scheduleTool.requiredOperation()).thenReturn(ToolOperation.SCHEDULE_AUTONOMOUS);
+        when(mockToolRegistry.findTool("schedule_task")).thenReturn(Optional.of(scheduleTool));
+        when(roleRegistry.requiresApprovalForTools("coordinator")).thenReturn(true);
+
+        ToolInvocationGuard.GuardDecision decision = guard.evaluate(
+                "s1", "coordinator", AutonomyLevel.FULL, "schedule_task", Map.of(), List.of(), "g", List.of());
+
+        assertInstanceOf(ToolInvocationGuard.GuardDecision.Allow.class, decision);
     }
 }

@@ -214,6 +214,13 @@ class McpConnectResourceTest {
     }
 
     @Test
+    void disconnectMissingConnectionReturns404() {
+        when(managementService.disconnectWithResult("user-1", "missing-server"))
+                .thenReturn(new McpManagementService.DisconnectResult(false, 0));
+        assertEquals(404, resource.disconnect("missing-server").getStatus());
+    }
+
+    @Test
     void listUsesDurableManagementSnapshots() {
         when(managementService.list("user-1")).thenReturn(List.of());
         assertEquals(200, resource.listConnected().getStatus());

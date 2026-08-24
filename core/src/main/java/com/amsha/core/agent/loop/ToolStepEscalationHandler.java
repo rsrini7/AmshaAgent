@@ -5,7 +5,7 @@ import jakarta.inject.Inject;
 
 import java.util.Map;
 
-import com.amsha.core.tools.ToolResponse;
+import com.amsha.tool.api.ToolResponse;
 
 import org.jboss.logging.Logger;
 

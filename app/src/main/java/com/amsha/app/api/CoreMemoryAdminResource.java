@@ -16,8 +16,8 @@ import jakarta.ws.rs.core.SecurityContext;
 import java.util.List;
 
 import com.amsha.core.api.dto.AmshaErrorResponse;
-import com.amsha.core.memory.tiered.CoreMemoryService;
 import com.amsha.core.scope.WorkspaceContext;
+import com.amsha.memory.tiered.CoreMemoryService;
 import com.amsha.persistence.api.CoreMemoryBlockDto;
 
 import io.smallrye.common.annotation.RunOnVirtualThread;

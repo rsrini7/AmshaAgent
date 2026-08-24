@@ -1,6 +1,8 @@
 package com.amsha.core.hitl;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -19,18 +21,20 @@ import com.amsha.channel.api.hitl.ApprovalDecisionEvent;
 import com.amsha.channel.api.hitl.ApprovalOutcome;
 import com.amsha.channel.api.hitl.ApprovalResult;
 import com.amsha.core.agent.loop.CheckpointResumeHandler;
+import com.amsha.core.audit.AuditService;
 import com.amsha.core.domain.model.AgentCheckpoint;
 import com.amsha.core.domain.model.AgentCheckpointRecord;
 import com.amsha.core.event.DomainEventBus;
 import com.amsha.core.event.EventTypeCatalog;
-import com.amsha.core.state.CheckpointStatus;
 import com.amsha.core.state.StatefulAgentStore;
-import com.amsha.core.state.ToolDecision;
+import com.amsha.persistence.api.CheckpointStatus;
+import com.amsha.persistence.api.ToolDecision;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 
 class ApprovalStateMachineTest {
 
@@ -200,5 +204,66 @@ class ApprovalStateMachineTest {
         verify(agentStore, times(2))
                 .updateBatchToolDecision(eq("session-123"), eq("coder"), anyString(), eq(ToolDecision.APPROVED.name()));
         verify(resumeHandler).resumeAfterBatchDecision(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void approvalGrantsLeaseForSingleToolCheckpointShape() {
+        // ADR-approval-lease-for-parallel-batches: an approved single call records a lease.
+        mockTools(List.of("github:read"), List.of("github:read"));
+        when(agentStore.isAllBatchToolsDecided("session-123", "coder")).thenReturn(true);
+        cp.setPendingToolParametersJson("{\"owner\":\"octocat\",\"repo\":\"amsha\"}");
+        stateMachine.approvalLeaseStore = new ApprovalLeaseStore();
+        stateMachine.approvalLeaseStore.objectMapper = objectMapper;
+        stateMachine.approvalLeaseStore.auditService = Mockito.mock(AuditService.class);
+        stateMachine.approvalLeaseStore.enabled = true;
+        stateMachine.approvalLeaseStore.ttlSeconds = 3600;
+        stateMachine.approvalLeaseStore.init();
+
+        stateMachine.decide("session-123", "github:read", ApprovalDecision.APPROVE, "test");
+
+        assertTrue(stateMachine.approvalLeaseStore.hasActiveLease(
+                "session-123", "coder", null, "github:read", Map.of("owner", "octocat", "repo", "amsha")));
+    }
+
+    @Test
+    void batchApprovalGrantsLeaseOnlyForTheApprovedToolParams() {
+        // Batch checkpoint params are a JSON array of {toolName, params} entries; the
+        // lease must bind to the approved tool's exact params only.
+        mockTools(List.of("host_exec"), List.of("host_exec"));
+        when(agentStore.isAllBatchToolsDecided("session-123", "coder")).thenReturn(true);
+        cp.setPendingToolParametersJson(
+                "[{\"callId\":\"call_0\",\"toolName\":\"recall_memory_search\",\"params\":{\"query\":\"x\"}},"
+                        + "{\"callId\":\"call_1\",\"toolName\":\"host_exec\",\"params\":{\"command\":\"ls\"}}]");
+        stateMachine.approvalLeaseStore = new ApprovalLeaseStore();
+        stateMachine.approvalLeaseStore.objectMapper = objectMapper;
+        stateMachine.approvalLeaseStore.auditService = Mockito.mock(AuditService.class);
+        stateMachine.approvalLeaseStore.enabled = true;
+        stateMachine.approvalLeaseStore.ttlSeconds = 3600;
+        stateMachine.approvalLeaseStore.init();
+
+        stateMachine.decide("session-123", "host_exec", ApprovalDecision.APPROVE, "test");
+
+        assertTrue(stateMachine.approvalLeaseStore.hasActiveLease(
+                "session-123", "coder", null, "host_exec", Map.of("command", "ls")));
+        assertFalse(stateMachine.approvalLeaseStore.hasActiveLease(
+                "session-123", "coder", null, "recall_memory_search", Map.of("query", "x")));
+    }
+
+    @Test
+    void denialDoesNotGrantAnyLease() {
+        mockTools(List.of("host_exec"), List.of("host_exec"));
+        cp.setPendingToolParametersJson("{\"command\":\"ls\"}");
+        stateMachine.approvalLeaseStore = new ApprovalLeaseStore();
+        stateMachine.approvalLeaseStore.objectMapper = objectMapper;
+        stateMachine.approvalLeaseStore.auditService = Mockito.mock(AuditService.class);
+        stateMachine.approvalLeaseStore.enabled = true;
+        stateMachine.approvalLeaseStore.ttlSeconds = 3600;
+        stateMachine.approvalLeaseStore.init();
+
+        stateMachine.decide("session-123", "host_exec", ApprovalDecision.REJECT, "test");
+
+        assertFalse(stateMachine.approvalLeaseStore.hasActiveLease(
+                "session-123", "coder", null, "host_exec", Map.of("command", "ls")));
+        assertEquals(0, stateMachine.approvalLeaseStore.size());
     }
 }

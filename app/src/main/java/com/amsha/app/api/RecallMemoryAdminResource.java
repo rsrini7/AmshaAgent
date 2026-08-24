@@ -16,8 +16,8 @@ import java.util.List;
 import java.util.Set;
 
 import com.amsha.core.api.dto.AmshaErrorResponse;
-import com.amsha.core.memory.tiered.RecallMemoryService;
 import com.amsha.core.scope.WorkspaceContext;
+import com.amsha.memory.tiered.RecallMemoryService;
 import com.amsha.persistence.api.RecallMessageDto;
 import com.amsha.persistence.api.RecallSearchQuery;
 

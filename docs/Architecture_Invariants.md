@@ -55,6 +55,33 @@ Refer to the [Module Architecture Diagram](assets/amsha_module_architecture.svg)
 ### 1.5 Channel type policy
 - POLICY: WorkspaceContext.channelType() returns Optional<String>. Use requireChannelType() only at call sites where a missing channelType is a fatal invariant violation. Use channelType().orElse("UNKNOWN") at call sites where a fallback is acceptable (e.g., audit logging only).
 
+### 1.6 Sandbox module (`amsha-sandbox`)
+- `amsha-sandbox` owns process isolation, Podman container execution, namespace execution, safety scanners, and circuit breakers.
+- `amsha-core` MUST NOT depend on `amsha-sandbox`; interaction flows strictly through the `SandboxExecutionPort` SPI in `amsha-core`. (Enforced by ArchUnit Rule 14 in `ArchitectureBoundaryTest`).
+
+### 1.7 Built-in tools module (`amsha-tools-builtin`)
+- `amsha-tools-builtin` owns 16 concrete `AgentTool` implementations — the 15 standard built-ins plus Playwright CLI automation absorbed from the former `amsha-tool-playwright` module — plus the Lucene dynamic tool search index, memory management tools, and host execution wrappers.
+- `amsha-core` MUST NOT depend on `amsha-tools-builtin`; interaction flows strictly through the `ToolSearchPort` SPI in `amsha-core` and standard CDI `Instance<AgentTool>` discovery. (Enforced by ArchUnit Rule 15 in `ArchitectureBoundaryTest`).
+
+### 1.8 Two-tier module boundary policy (extract-core-subsystems)
+
+Modules are split into an **API tier** (pure contract jars) and an **impl tier** (consumers of core services):
+
+- **API tier** — `llm-provider-api`, `security-api`, `tool-api`, `classifier-api`, `persistence-api`,
+  `channel-api`: MUST NOT import `com.amsha.core.*`. (Enforced by ArchUnit Rules 11 and 16.)
+- **Impl tier** — `sandbox`, `tools-builtin`, `security`, `skills`: MAY depend on core when consuming core
+  services, but `amsha-core` MUST NOT depend on any impl module. Core → security-impl is forbidden
+  (Rule 17); core → skills machinery is forbidden (Rule 18); persistence store implementations are zero-core
+  (Rule 19).
+- **`amsha-memory`** is the one strict zero-core impl module: the legal direction is core → memory (memory
+  services consumed by core tools), never memory → core (Rule 20). Skills must not import core reflexes
+  (Rule 21) — skill machinery consumes core contracts via `core.skill` only.
+- Beans resolved through dynamic discovery (`Instance<...>.select(...)`, `BeanManager.getBeans`) MUST carry
+  `@Unremovable` for native retention — including all nine tiered-memory store-port implementations selected
+  via `TieredBackendLiteral`.
+- Reflection registration follows the per-module `*ReflectionConfig` convention; moved types appear exactly
+  once, in their owning module's config.
+
 ---
 
 ## 2. Context and session binding
@@ -145,6 +172,11 @@ three-tuple `(channelType, channelId, userId)`.
 ### 3.3 Tool observation sanitization
 - Every tool response MUST be sanitized before history append.
 - No tool type is exempt, including GitHub, MCP, sandbox, or internal tools.
+
+### 3.3.1 Sandbox execution error logging and sanitization
+- Sandbox infrastructure failures (in `ProcessIsolationExecutor`, `SandboxExecTool`, and `ToolRegistry`) MUST expose exception types only (`e.getClass().getSimpleName()`) in logs.
+- This is a justified, security-mandated exception to the general `LogUtil.rootMessage(e)` convention: because compiler stderr, Podman diagnostics, container errors, and arbitrary command lines may ride inside raw exception messages, logging raw exception messages in sandbox execution paths introduces severe leakage risk.
+- Responses to the agent/LLM must map all unexpected infrastructure failures strictly to `SandboxFailureMessages.SANDBOX_OFFLINE_MESSAGE` and execution failures strictly to `SandboxFailureMessages.SANDBOX_EXECUTION_FAILED_MESSAGE`. Raw provider reasons, diagnostics, and stack traces must never reach caller or LLM tool responses.
 
 ### 3.4 Approval handling
 - Approval-required executions MUST persist checkpoint state before exiting the loop.

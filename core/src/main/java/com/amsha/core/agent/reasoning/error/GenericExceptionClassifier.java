@@ -1,10 +1,34 @@
 package com.amsha.core.agent.reasoning.error;
 
+import jakarta.enterprise.context.ApplicationScoped;
+
 import java.util.Locale;
 
 import com.amsha.core.util.AgentErrorMessageUtil;
+import com.amsha.llm.api.error.LlmAuthenticationException;
+import com.amsha.llm.api.error.LlmExceptionClassifierChain;
+import com.amsha.llm.api.error.LlmProviderException;
+import com.amsha.llm.api.error.LlmRateLimitException;
+import com.amsha.llm.api.error.LlmServiceUnavailableException;
+import com.amsha.llm.api.error.LlmToolCallException;
 
+import io.quarkus.arc.Unremovable;
+
+/**
+ * Terminal fallback classifier (runs last in the chain). Stays in core because it
+ * reuses {@link AgentErrorMessageUtil}; not SDK-coupled (decision recorded in
+ * Issue 03 Comments).
+ */
+@ApplicationScoped
+@Unremovable
 public class GenericExceptionClassifier extends LlmExceptionClassifierChain {
+
+    public static final int ORDER = 1000;
+
+    @Override
+    public int order() {
+        return ORDER;
+    }
 
     @Override
     public LlmProviderException classify(Throwable t) {

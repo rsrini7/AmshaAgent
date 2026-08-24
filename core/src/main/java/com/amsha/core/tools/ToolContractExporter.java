@@ -13,7 +13,7 @@ import java.util.List;
 import java.util.Map;
 
 import com.amsha.common.util.LogUtil;
-import com.amsha.core.agent.role.ToolMetadata;
+import com.amsha.tool.api.ToolMetadata;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 

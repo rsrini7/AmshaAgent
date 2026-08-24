@@ -10,8 +10,8 @@ import java.time.Duration;
 import java.util.Optional;
 import java.util.Set;
 
-import com.amsha.core.classifier.ClassifierResult;
-import com.amsha.core.classifier.ClassifierResult.NoOpinionReason;
+import com.amsha.classifier.api.ClassifierResult;
+import com.amsha.classifier.api.ClassifierResult.NoOpinionReason;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.junit.jupiter.api.Test;

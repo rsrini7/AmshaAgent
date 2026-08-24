@@ -12,8 +12,8 @@ import java.util.Map;
 import java.util.Optional;
 
 import com.amsha.app.security.ApiKeyRegistry;
-import com.amsha.core.tools.AgentTool;
 import com.amsha.core.tools.ToolRegistry;
+import com.amsha.tool.api.AgentTool;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

@@ -36,7 +36,11 @@ class SkillApiTest {
 
     @BeforeEach
     void setup() {
-        apiKeyRegistry.register("test-key", "key-internal-changeme");
+        // The internal role check on mutating skill endpoints resolves through the registry;
+        // register the test key explicitly (AgentStatusResourceTest precedent).
+        // Single registration under the role name the mutating endpoints authorize against
+        // (same raw key registered twice would overwrite: last name wins in the hmac map).
+        apiKeyRegistry.register("internal", "key-internal-changeme");
         // Retry deleteAll on SQLITE_BUSY — SQLite's single-writer constraint can
         // cause transient lock contention when background beans flush at startup.
         deleteAllWithRetry(3);

@@ -11,18 +11,20 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
-import com.amsha.core.memory.tiered.TieredBackend;
 import com.amsha.persistence.api.ArchivalChunkDto;
 import com.amsha.persistence.api.ArchivalMemoryStorePort;
 import com.amsha.persistence.api.ArchivalSearchQuery;
+import com.amsha.persistence.api.TieredBackend;
 import com.amsha.persistence.sqlite.jdbi.ArchivalMemoryJdbiDao;
 
 import org.jboss.logging.Logger;
 import org.jdbi.v3.core.Jdbi;
 
+import io.quarkus.arc.Unremovable;
 import io.quarkus.arc.properties.IfBuildProperty;
 
 @ApplicationScoped
+@Unremovable
 @TieredBackend("sqlite")
 @IfBuildProperty(name = "amsha.persistence.backend", stringValue = "sqlite", enableIfMissing = true)
 public class SqliteArchivalMemoryStore implements ArchivalMemoryStorePort {

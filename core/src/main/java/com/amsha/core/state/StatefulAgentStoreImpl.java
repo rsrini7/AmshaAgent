@@ -15,11 +15,13 @@ import com.amsha.core.domain.model.AgentCheckpoint;
 import com.amsha.core.domain.model.CheckpointRecord;
 import com.amsha.core.persistence.CheckpointMapper;
 import com.amsha.core.scope.WorkspaceContext;
-import com.amsha.core.security.AutonomyLevel;
 import com.amsha.persistence.api.CheckpointDto;
+import com.amsha.persistence.api.CheckpointStatus;
 import com.amsha.persistence.api.CheckpointStorePort;
 import com.amsha.persistence.api.CheckpointUpsertResult;
 import com.amsha.persistence.api.ReasoningStepDto;
+import com.amsha.persistence.api.ToolDecision;
+import com.amsha.security.api.AutonomyLevel;
 import com.fasterxml.jackson.core.type.TypeReference;
 
 import org.jboss.logging.Logger;

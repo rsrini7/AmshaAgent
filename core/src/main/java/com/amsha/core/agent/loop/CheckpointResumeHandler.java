@@ -17,7 +17,6 @@ import com.amsha.channel.api.ChannelType;
 import com.amsha.channel.api.ChannelUser;
 import com.amsha.channel.api.ContentNode;
 import com.amsha.common.util.LogUtil;
-import com.amsha.core.agent.AgentSentinels;
 import com.amsha.core.agent.reasoning.ReasoningEngine;
 import com.amsha.core.agent.reasoning.ReasoningStep;
 import com.amsha.core.agent.result.AgentResult;
@@ -26,14 +25,16 @@ import com.amsha.core.domain.model.AgentCheckpoint;
 import com.amsha.core.domain.model.AgentCronRecord;
 import com.amsha.core.pipeline.MessageContext;
 import com.amsha.core.scope.WorkspaceContext;
-import com.amsha.core.state.CheckpointStatus;
 import com.amsha.core.state.StatefulAgentStore;
 import com.amsha.core.tools.ToolRegistry;
 import com.amsha.core.util.AgentErrorMessageUtil;
 import com.amsha.core.util.AgentGuards;
 import com.amsha.core.util.AgentResultFormatter;
 import com.amsha.core.util.CronScheduleUtil;
+import com.amsha.persistence.api.CheckpointStatus;
 import com.amsha.persistence.api.CronStorePort;
+import com.amsha.security.api.AutonomyLevel;
+import com.amsha.tool.api.AgentSentinels;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -221,10 +222,16 @@ public class CheckpointResumeHandler {
             int budget = calculateResumeBudget(cp);
             log.infof("Resuming session=%s budget=%d", cp.getSessionId(), budget);
 
-            return WorkspaceContext.runWithFullAutonomy(
+            // §F9 fix: resume with the checkpoint's OWN autonomy level — NOT FULL.
+            // Wrapping the whole resumed loop in runWithFullAutonomy let a single approval
+            // elevate every subsequent tool call in the session (HITL silently disabled).
+            // The one approved tool still gets its elevation via the tightly-scoped
+            // runWithFullAutonomy inside PendingToolResumeExecutor/ParallelBatchResumeHandler.
+            return WorkspaceContext.run(
                     cp.getSessionId(),
                     context.getUser().platformId(),
                     context.getChatId(),
+                    resumeAutonomy(cp),
                     cp.getAgentRole(),
                     context.getUser().channel().id(),
                     context.getUser().platformId(),
@@ -240,6 +247,11 @@ public class CheckpointResumeHandler {
             handleResumeFailure(cp.getSessionId(), context, e);
             throw new RuntimeException("Failed to resume session", e);
         }
+    }
+
+    /** Autonomy for a resumed loop: the checkpoint's own level, SUPERVISED as safe fallback. */
+    static AutonomyLevel resumeAutonomy(AgentCheckpoint cp) {
+        return cp.getAutonomyLevel() != null ? cp.getAutonomyLevel() : AutonomyLevel.SUPERVISED;
     }
 
     private int calculateResumeBudget(AgentCheckpoint cp) {
@@ -479,10 +491,12 @@ public class CheckpointResumeHandler {
 
             log.infof("Synchronously resuming session=%s budget=%d", sessionId, budget);
 
-            return WorkspaceContext.runWithFullAutonomy(
+            // §F9 fix: same rule as runResumeLoop — resume at the checkpoint's own autonomy.
+            return WorkspaceContext.run(
                     sessionId,
                     userId,
                     chatId,
+                    resumeAutonomy(checkpoint),
                     agentRole,
                     cType.id(),
                     userId,

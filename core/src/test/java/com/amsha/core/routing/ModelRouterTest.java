@@ -6,14 +6,17 @@ import static org.mockito.Mockito.*;
 import dev.langchain4j.model.chat.ChatModel;
 
 import jakarta.enterprise.inject.Instance;
+import jakarta.enterprise.inject.spi.Bean;
+import jakarta.enterprise.inject.spi.BeanManager;
 
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.function.Supplier;
-import java.util.stream.Stream;
 
 import com.amsha.core.agent.role.AgentGroupRegistry;
+import com.amsha.core.scope.WorkspaceContext;
 import com.amsha.llm.api.AgentChatModelProvider;
 import com.amsha.llm.api.AgentLlmConfig;
 import com.amsha.llm.api.ChatModelCreationPort;
@@ -77,11 +80,16 @@ class ModelRouterTest {
         router.profileResolver = profileResolver;
         router.credentialResolver = credentialResolver;
         router.profileStore = profileStore;
-        router.agentConfig = agentConfig;
+        BeanManager mockBeanManager = mock(BeanManager.class);
         @SuppressWarnings("unchecked")
-        Instance<ChatModelCreationPort> creationPortInstance = mock(Instance.class);
-        when(creationPortInstance.stream()).thenAnswer(inv -> Stream.of(chatModelCreationPort));
-        router.chatModelCreationPort = creationPortInstance;
+        Bean<ChatModelCreationPort> mockBean = mock(Bean.class);
+        when(mockBean.getBeanClass()).thenReturn((Class) ChatModelCreationPort.class);
+        when(mockBean.getTypes()).thenReturn(Set.of(ChatModelCreationPort.class));
+        when(mockBeanManager.getBeans(Object.class)).thenReturn(Set.of(mockBean));
+        when(mockBeanManager.resolve(any())).thenAnswer(inv -> mockBean);
+        when(mockBeanManager.getReference(eq(mockBean), eq(ChatModelCreationPort.class), any()))
+                .thenReturn(chatModelCreationPort);
+        router.beanManager = mockBeanManager;
         router.profileRoutingEnabled = false;
 
         // Mock providers Instance
@@ -244,5 +252,42 @@ class ModelRouterTest {
         ChatModel result = router.resolve("coder");
 
         assertSame(groqModel, result);
+    }
+
+    @Test
+    void lightweightGoal_downgradesToGlobalProviderConfig() throws Exception {
+        List<ModelRouter.ModelConfig> configs =
+                ScopedValue.where(WorkspaceContext.RAW_USER_GOAL, "hi").call(() -> router.resolveConfigs("coder"));
+
+        assertEquals(1, configs.size());
+        assertEquals(new ModelRouter.ModelConfig("groq", "llama-3.3-70b"), configs.get(0));
+    }
+
+    @Test
+    void resolveConfigs_bypassLightweightDowngrade_skipsDowngradeBranch() throws Exception {
+        // No persona/group configs exist in this harness: bypass must skip the lightweight
+        // downgrade branch and land on the persona→group→global path (same global fallback here).
+        List<ModelRouter.ModelConfig> configs = ScopedValue.where(WorkspaceContext.RAW_USER_GOAL, "hi")
+                .call(() -> router.resolveConfigs("coder", true));
+
+        assertEquals(1, configs.size());
+        assertEquals(new ModelRouter.ModelConfig("groq", "llama-3.3-70b"), configs.get(0));
+    }
+
+    @Test
+    void hasDistinctEscalationTier_singleTierDeployment_returnsFalse() throws Exception {
+        boolean distinct = ScopedValue.where(WorkspaceContext.RAW_USER_GOAL, "hi")
+                .call(() -> router.hasDistinctEscalationTier("coder"));
+
+        assertFalse(distinct, "single-tier deployment has nothing to escalate to");
+    }
+
+    @Test
+    void hasDistinctEscalationTier_resolutionFailure_returnsFalse() {
+        when(groupRegistry.findByMember(anyString())).thenThrow(new RuntimeException("registry down"));
+
+        boolean distinct = router.hasDistinctEscalationTier("coder");
+
+        assertFalse(distinct, "routing-metadata failures must read as 'no escalation tier'");
     }
 }

@@ -18,17 +18,20 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import com.amsha.classifier.api.AnswerQualityAction;
+import com.amsha.classifier.api.AnswerQualityShadowContext;
+import com.amsha.classifier.api.ClassifierResult;
+import com.amsha.classifier.api.ClassifierResult.NoOpinionReason;
 import com.amsha.core.agent.reasoning.ReasoningStep;
 import com.amsha.core.agent.role.RoleRegistry;
-import com.amsha.core.agent.role.ToolCapability;
-import com.amsha.core.classifier.ClassifierResult;
-import com.amsha.core.classifier.ClassifierResult.NoOpinionReason;
 import com.amsha.core.governance.RateLimitTracker;
 import com.amsha.core.observability.AgentObserver;
-import com.amsha.core.security.AutonomyLevel;
+import com.amsha.core.routing.ModelRouter;
 import com.amsha.core.tools.ToolRegistry;
 import com.amsha.core.util.TextPatternUtils;
 import com.amsha.llm.api.StructuredOutputMode;
+import com.amsha.security.api.AutonomyLevel;
+import com.amsha.tool.api.ToolCapability;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -99,6 +102,48 @@ class FinishActionHandlerTest {
                 .thenAnswer(invocation ->
                         new AnswerGuardStrategy.AnswerGuardResult(invocation.getArgument(0), false, null));
         when(textPatternUtils.looksLikeJson(anyString())).thenReturn(false);
+    }
+
+    @Test
+    void finishAfterPermissionDenialWithoutSuccessfulToolIsReplacedWithHonestExit() {
+        // F4 regression (dist incident): after a permission-boundary denial with zero
+        // successful executions, a narrative claiming performed work is fabrication and
+        // must be replaced by the deterministic disclosure.
+        AgentExecutionContext ctx = mock(AgentExecutionContext.class);
+        when(ctx.sessionId()).thenReturn("s9");
+        when(ctx.agentRole()).thenReturn("researcher");
+        when(ctx.goal()).thenReturn("create a skill dynamically");
+        ReasoningStep denied = ReasoningStep.pending("t", "host_exec", Map.of("command", "find"), 0, 0)
+                .withObservation(
+                        "Tool execution failed: Agent role 'researcher' is not permitted to use tool 'host_exec'",
+                        false);
+        ReasoningStep finish = ReasoningStep.pending(
+                "FINISH: I searched the filesystem and found no skill files.", ReasoningStep.FINISH, Map.of(), 0, 0);
+
+        FinishActionHandler.FinishOutcome outcome = handler.handle(ctx, List.of(denied), finish, 0);
+
+        String answer = ((FinishActionHandler.FinishOutcome.Completed) outcome).answer();
+        assertTrue(answer.contains("permission boundary"));
+        assertTrue(answer.contains("host_exec"));
+        assertFalse(answer.contains("I searched"));
+    }
+
+    @Test
+    void successfulRealToolExecutionPreventsHonestExitOverride() {
+        AgentExecutionContext ctx = mock(AgentExecutionContext.class);
+        when(ctx.sessionId()).thenReturn("s9");
+        when(ctx.agentRole()).thenReturn("researcher");
+        when(ctx.goal()).thenReturn("summarize the result");
+        ReasoningStep denied = ReasoningStep.pending("t", "host_exec", Map.of(), 0, 0)
+                .withObservation("Tool execution failed: not permitted to use tool 'host_exec'", false);
+        ReasoningStep succeeded = ReasoningStep.pending("t", "recall_memory_search", Map.of(), 0, 0)
+                .withObservation("found it", true);
+        ReasoningStep finish =
+                ReasoningStep.pending("FINISH: Here is the accepted summary.", ReasoningStep.FINISH, Map.of(), 0, 0);
+
+        FinishActionHandler.FinishOutcome outcome = handler.handle(ctx, List.of(denied, succeeded), finish, 0);
+
+        assertEquals("Here is the accepted summary.", ((FinishActionHandler.FinishOutcome.Completed) outcome).answer());
     }
 
     @Test
@@ -572,5 +617,93 @@ class FinishActionHandlerTest {
                 null,
                 null,
                 Map.of());
+    }
+
+    private static ReasoningStep memorySearchStep() {
+        return new ReasoningStep.ToolCallStep(
+                "t",
+                "recall_memory_search",
+                Map.of("query", "user name"),
+                "Name: Alice",
+                0,
+                0,
+                true,
+                null,
+                null,
+                null,
+                false,
+                false);
+    }
+
+    private static ReasoningStep disclaimerFinishStep() {
+        return new ReasoningStep.FinishStep(
+                "t",
+                Map.of(ReasoningStep.ACTION_INPUT_ANSWER_KEY, "I do not have any information about your name"),
+                0,
+                0,
+                false);
+    }
+
+    @Test
+    void memorySynthesisFirstBlockReturnsTemplateCorrection() {
+        AgentExecutionContext ctx = context("coordinator", "who am i");
+
+        FinishActionHandler.FinishOutcome outcome =
+                handler.handle(ctx, List.of(memorySearchStep()), disclaimerFinishStep(), 0);
+
+        assertTrue(
+                outcome instanceof FinishActionHandler.FinishOutcome.Correction, "first block must correct, not exit");
+        String hint = ((FinishActionHandler.FinishOutcome.Correction) outcome).correctionHint();
+        assertTrue(hint.contains("Based on my memory of you"), "hint must be a fill-in template");
+        assertTrue(hint.contains("Name: Alice"), "hint must quote the memory result verbatim");
+        assertTrue(ctx.isForceFinishRetry());
+    }
+
+    @Test
+    void memorySynthesisSecondBlockExitsWithVerbatimMemoryWhenNoEscalationTier() {
+        AgentExecutionContext ctx = context("coordinator", "who am i");
+
+        handler.handle(ctx, List.of(memorySearchStep()), disclaimerFinishStep(), 0); // attempt 1: corrected
+        FinishActionHandler.FinishOutcome outcome =
+                handler.handle(ctx, List.of(memorySearchStep()), disclaimerFinishStep(), 0); // attempt 2
+
+        assertTrue(outcome instanceof FinishActionHandler.FinishOutcome.Completed, "no tier → deterministic exit");
+        String answer = ((FinishActionHandler.FinishOutcome.Completed) outcome).answer();
+        assertTrue(answer.contains("Here's what my memory of you contains"));
+        assertTrue(answer.contains("Name: Alice"), "fallback must quote stored facts verbatim");
+        assertFalse(answer.contains("I do not have any information"), "false disclaimer must not survive");
+    }
+
+    @Test
+    void memorySynthesisSecondBlockEscalatesWhenDistinctTierExists() {
+        handler.modelRouter = mock(ModelRouter.class);
+        when(handler.modelRouter.hasDistinctEscalationTier(anyString())).thenReturn(true);
+        AgentExecutionContext ctx = context("coordinator", "who am i");
+
+        handler.handle(ctx, List.of(memorySearchStep()), disclaimerFinishStep(), 0); // attempt 1: corrected
+        FinishActionHandler.FinishOutcome outcome =
+                handler.handle(ctx, List.of(memorySearchStep()), disclaimerFinishStep(), 0); // attempt 2
+
+        assertTrue(
+                outcome instanceof FinishActionHandler.FinishOutcome.Correction, "tier exists → one escalated retry");
+        assertTrue(ctx.consumeReasoningEscalation(), "escalation flag must be armed for the next call");
+        assertFalse(ctx.consumeReasoningEscalation(), "flag is one-shot");
+    }
+
+    @Test
+    void memorySynthesisThirdBlock_exitsWithVerbatimMemoryEvenWhenTierExists() {
+        handler.modelRouter = mock(ModelRouter.class);
+        when(handler.modelRouter.hasDistinctEscalationTier(anyString())).thenReturn(true);
+        AgentExecutionContext ctx = context("coordinator", "who am i");
+
+        handler.handle(ctx, List.of(memorySearchStep()), disclaimerFinishStep(), 0); // attempt 1: corrected
+        handler.handle(ctx, List.of(memorySearchStep()), disclaimerFinishStep(), 0); // attempt 2: escalated retry
+        FinishActionHandler.FinishOutcome outcome =
+                handler.handle(ctx, List.of(memorySearchStep()), disclaimerFinishStep(), 0); // attempt 3: exhausted
+
+        assertTrue(
+                outcome instanceof FinishActionHandler.FinishOutcome.Completed, "ladder must terminate at attempt 3");
+        String answer = ((FinishActionHandler.FinishOutcome.Completed) outcome).answer();
+        assertTrue(answer.contains("Name: Alice"), "fallback must quote stored facts verbatim");
     }
 }

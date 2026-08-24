@@ -10,16 +10,16 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
-import com.amsha.core.agent.reasoning.error.LlmAuthenticationException;
-import com.amsha.core.agent.reasoning.error.LlmContentFilterException;
-import com.amsha.core.agent.reasoning.error.LlmExceptionClassifier;
-import com.amsha.core.agent.reasoning.error.LlmMalformedResponseException;
-import com.amsha.core.agent.reasoning.error.LlmProviderException;
-import com.amsha.core.agent.reasoning.error.LlmRateLimitException;
-import com.amsha.core.agent.reasoning.error.LlmServiceUnavailableException;
-import com.amsha.core.agent.reasoning.error.LlmToolCallException;
+import com.amsha.core.agent.reasoning.error.LlmErrorClassificationService;
 import com.amsha.core.lifecycle.WorkspaceManager;
 import com.amsha.core.scope.WorkspaceContext;
+import com.amsha.llm.api.error.LlmAuthenticationException;
+import com.amsha.llm.api.error.LlmContentFilterException;
+import com.amsha.llm.api.error.LlmMalformedResponseException;
+import com.amsha.llm.api.error.LlmProviderException;
+import com.amsha.llm.api.error.LlmRateLimitException;
+import com.amsha.llm.api.error.LlmServiceUnavailableException;
+import com.amsha.llm.api.error.LlmToolCallException;
 
 import org.jboss.logging.Logger;
 
@@ -271,7 +271,7 @@ public class InfiniteLoopProvider<T, R> {
     }
 
     private void classifyAndHandle(String slotName, SlotHealth h, Throwable t) {
-        LlmProviderException classified = LlmExceptionClassifier.classify(t);
+        LlmProviderException classified = LlmErrorClassificationService.classify(t);
         switch (classified) {
             case LlmRateLimitException r -> handleRateLimit(slotName, h, r);
             case LlmAuthenticationException a -> {

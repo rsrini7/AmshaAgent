@@ -86,4 +86,57 @@ class LeakedToolCallParserUnitTest {
         assertTrue(call.isPresent());
         assertEquals("execute_shell", call.get().toolName());
     }
+
+    // ── Ornith-1.5 / MLX-style shapes (regression: these were previously sanitized away
+    //    by AgentResultFormatter into the MALFORMED marker instead of being executed) ──
+
+    @Test
+    void testUppercaseToolcallTagWithObject() {
+        String answer = "<TOOLCALL>{\"name\":\"web_fetch\",\"arguments\":{\"url\":\"http://example.com\"}}</TOOLCALL>";
+        Optional<LeakedToolCall> call = parser.extractLeakedToolCall(answer);
+        assertTrue(call.isPresent());
+        assertEquals("web_fetch", call.get().toolName());
+        assertEquals("http://example.com", call.get().arguments().get("url"));
+    }
+
+    @Test
+    void testUppercaseToolcallTagWithArray() {
+        String answer = "<TOOLCALL>[{\"name\":\"execute_shell\",\"arguments\":{\"command\":\"ls -l\"}}]</TOOLCALL>";
+        Optional<LeakedToolCall> call = parser.extractLeakedToolCall(answer);
+        assertTrue(call.isPresent());
+        assertEquals("execute_shell", call.get().toolName());
+        assertEquals("ls -l", call.get().arguments().get("command"));
+    }
+
+    @Test
+    void testLowercaseNoUnderscoreTagVariant() {
+        String answer = "<toolcall>{\"name\":\"web_fetch\",\"parameters\":{\"url\":\"http://example.com\"}}</toolcall>";
+        Optional<LeakedToolCall> call = parser.extractLeakedToolCall(answer);
+        assertTrue(call.isPresent());
+        assertEquals("web_fetch", call.get().toolName());
+    }
+
+    @Test
+    void testBareTopLevelJsonArray() {
+        String answer = "[{\"name\":\"browser_navigate\",\"arguments\":{\"url\":\"http://example.com\"}}]";
+        Optional<LeakedToolCall> call = parser.extractLeakedToolCall(answer);
+        assertTrue(call.isPresent());
+        assertEquals("browser_navigate", call.get().toolName());
+        assertEquals("http://example.com", call.get().arguments().get("url"));
+    }
+
+    @Test
+    void testToolcallTagWithUnknownToolIsEmpty() {
+        String answer = "<TOOLCALL>{\"name\":\"not_a_real_tool\",\"arguments\":{}}</TOOLCALL>";
+        assertTrue(parser.extractLeakedToolCall(answer).isEmpty());
+    }
+
+    @Test
+    void testLegacyLowercaseUnderscoreTagStillParsed() {
+        String answer =
+                "<tool_call>{\"name\":\"web_fetch\",\"arguments\":{\"url\":\"http://example.com\"}}</tool_call>";
+        Optional<LeakedToolCall> call = parser.extractLeakedToolCall(answer);
+        assertTrue(call.isPresent());
+        assertEquals("web_fetch", call.get().toolName());
+    }
 }

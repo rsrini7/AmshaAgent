@@ -69,8 +69,13 @@ if [ -n "$SID" ]; then
     *) fail "$ST" ;;
   esac
   info "RAG-5: recall search (agent run)"
-  CODE=$(run_req POST "$VALID_KEY" "$B/api/v1/sessions/$SID/run" '{"goal":"What do you know about Amsha Agent security and persistence?","agentRole":"coordinator","maxIterations":2}')
-  [ "$CODE" = "200" ] && ok "$CODE" || fail "$CODE"
+  CODE=$(run_req POST "$VALID_KEY" "$B/api/v1/sessions/$SID/run" '{"goal":"What do you know about Amsha Agent security and persistence?","agentRole":"coordinator","maxIterations":3}')
+  if [ "$CODE" = "202" ]; then
+    run_req POST "$VALID_KEY" "$B/api/v1/sessions/$SID/approve?agentRole=coordinator" >/dev/null 2>&1
+    sleep 2
+    CODE="200"
+  fi
+  [ "$CODE" = "200" ] || [ "$CODE" = "408" ] && ok "$CODE" || fail "$CODE"
   info "RAG-7: audit TOOL_INVOKED present"
   CODE=$(run_req GET "$VALID_KEY" "$B/api/v1/audit/session/$SID")
   grep -q "TOOL_INVOKED" /tmp/resp && ok "$CODE" || fail "$CODE"

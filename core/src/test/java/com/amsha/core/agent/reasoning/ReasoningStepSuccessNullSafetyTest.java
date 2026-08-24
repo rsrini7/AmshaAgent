@@ -43,6 +43,8 @@ class ReasoningStepSuccessNullSafetyTest {
             // Uses Boolean.TRUE.equals() — null-safe
             "com.amsha.core.agent.loop.FinishActionHandler",
             // Uses Boolean.TRUE.equals() — null-safe
+            "com.amsha.core.agent.loop.FinishToolInjectionPolicy",
+            // Uses Boolean.TRUE.equals() — null-safe
             "com.amsha.core.agent.loop.FinishOutcomeProcessor",
             // Uses Boolean.TRUE.equals() — null-safe
             "com.amsha.core.agent.loop.EngineStepHandler",

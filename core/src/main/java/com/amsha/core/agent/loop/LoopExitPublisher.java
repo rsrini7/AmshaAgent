@@ -4,11 +4,11 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
 import com.amsha.channel.api.ChannelType;
-import com.amsha.core.agent.AgentSentinels;
 import com.amsha.core.agent.event.AgentStateChangedEvent;
 import com.amsha.core.agent.result.AgentResult;
 import com.amsha.core.event.DomainEventBus;
 import com.amsha.core.event.EventTypeCatalog;
+import com.amsha.tool.api.AgentSentinels;
 
 import org.jboss.logging.Logger;
 

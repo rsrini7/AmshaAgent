@@ -7,12 +7,12 @@ import jakarta.inject.Inject;
 
 import java.util.Optional;
 
-import com.amsha.core.agent.loop.AnswerQualityAction;
-import com.amsha.core.agent.loop.AnswerQualityContext;
+import com.amsha.classifier.api.AnswerQualityAction;
+import com.amsha.classifier.api.AnswerQualityContext;
+import com.amsha.classifier.api.AnswerQualityPrediction;
+import com.amsha.classifier.api.AnswerQualityShadowContext;
+import com.amsha.classifier.api.ClassifierResult;
 import com.amsha.core.agent.loop.AnswerQualityInterceptor;
-import com.amsha.core.agent.loop.AnswerQualityPrediction;
-import com.amsha.core.agent.loop.AnswerQualityShadowContext;
-import com.amsha.core.classifier.ClassifierResult;
 import com.amsha.localml.onnx.OnnxClassifierRuntimeControl.Classifier;
 import com.amsha.localml.onnx.OnnxClassifierRuntimeControl.Lease;
 import com.amsha.localml.onnx.OnnxClassifierRuntimeControl.Registration;

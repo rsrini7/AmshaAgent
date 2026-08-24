@@ -12,8 +12,8 @@ import com.amsha.channel.api.ChannelUser;
 import com.amsha.core.agent.loop.CheckpointResumeCoordinator;
 import com.amsha.core.domain.model.AgentCheckpoint;
 import com.amsha.core.pipeline.MessageContext;
-import com.amsha.core.state.CheckpointStatus;
 import com.amsha.core.state.StatefulAgentStore;
+import com.amsha.persistence.api.CheckpointStatus;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;

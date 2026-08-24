@@ -19,11 +19,11 @@ import com.amsha.core.agent.result.AgentResult;
 import com.amsha.core.channel.ChannelPluginRegistry;
 import com.amsha.core.domain.model.AgentCheckpoint;
 import com.amsha.core.pipeline.MessageContext;
-import com.amsha.core.state.CheckpointStatus;
-import com.amsha.core.state.CronStatus;
 import com.amsha.core.state.StatefulAgentStore;
 import com.amsha.core.tools.ToolRegistry;
 import com.amsha.persistence.api.AgentCronDto;
+import com.amsha.persistence.api.CheckpointStatus;
+import com.amsha.persistence.api.CronStatus;
 import com.amsha.persistence.api.CronStorePort;
 import com.fasterxml.jackson.databind.ObjectMapper;
 

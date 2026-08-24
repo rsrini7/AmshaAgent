@@ -3,9 +3,9 @@ package com.amsha.app.scheduler;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
-import com.amsha.core.config.TieredMemoryConfig;
-import com.amsha.core.memory.tiered.ArchivalMemoryService;
-import com.amsha.core.memory.tiered.RecallMemoryService;
+import com.amsha.memory.config.TieredMemoryConfig;
+import com.amsha.memory.tiered.ArchivalMemoryService;
+import com.amsha.memory.tiered.RecallMemoryService;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;

@@ -18,6 +18,11 @@
       <groupId>com.amsha</groupId>
       <artifactId>amsha-common</artifactId>
     </dependency>
+    <!-- Tiered memory services (legal core -> memory direction; memory is zero-core) -->
+    <dependency>
+      <groupId>com.amsha</groupId>
+      <artifactId>amsha-memory</artifactId>
+    </dependency>
     <dependency>
       <groupId>com.amsha</groupId>
       <artifactId>amsha-channel-api</artifactId>
@@ -37,7 +42,6 @@
     <dependency>
       <groupId>com.amsha</groupId>
       <artifactId>amsha-persistence-api</artifactId>
-      <version>${project.version}</version>
     </dependency>
 
 
@@ -93,57 +97,21 @@
       <scope>test</scope>
     </dependency>
 
+    <dependency>
+      <groupId>com.cronutils</groupId>
+      <artifactId>cron-utils</artifactId>
+    </dependency>
+
     <!-- LangChain4J Core (common abstractions) -->
     <dependency>
       <groupId>io.quarkiverse.langchain4j</groupId>
       <artifactId>quarkus-langchain4j-core</artifactId>
     </dependency>
 
-    <!-- BouncyCastle - Argon2id + AES-GCM-SIV (use ONLY bcprov-jdk18on) -->
-    <dependency>
-      <groupId>org.bouncycastle</groupId>
-      <artifactId>bcprov-jdk18on</artifactId>
-      <version>${bouncycastle.version}</version>
-      <exclusions>
-        <exclusion><groupId>org.bouncycastle</groupId><artifactId>bc-fips</artifactId></exclusion>
-        <exclusion><groupId>org.bouncycastle</groupId><artifactId>bcprov-ext-jdk18on</artifactId></exclusion>
-      </exclusions>
-    </dependency>
-
-    <!-- Scheduler / Cron -->
-    <dependency>
-      <groupId>com.cronutils</groupId>
-      <artifactId>cron-utils</artifactId>
-    </dependency>
-
     <!-- HTML Escape -->
     <dependency>
       <groupId>org.apache.commons</groupId>
       <artifactId>commons-text</artifactId>
-    </dependency>
-
-    <!-- Server-side Markdown (CommonMark) -->
-    <dependency>
-      <groupId>org.commonmark</groupId>
-      <artifactId>commonmark</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>org.commonmark</groupId>
-      <artifactId>commonmark-ext-gfm-tables</artifactId>
-    </dependency>
-
-    <!-- Lucene — dynamic tool search index -->
-    <dependency>
-      <groupId>org.apache.lucene</groupId>
-      <artifactId>lucene-core</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.lucene</groupId>
-      <artifactId>lucene-queryparser</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.lucene</groupId>
-      <artifactId>lucene-analysis-common</artifactId>
     </dependency>
 
     <!-- Caffeine cache for ProcessingLockManager -->
@@ -240,6 +208,22 @@
       <artifactId>quarkus-jacoco</artifactId>
       <scope>test</scope>
     </dependency>
+      <!-- Security vocabulary (vault interface, tool operation, autonomy) -->
+      <dependency>
+        <groupId>com.amsha</groupId>
+        <artifactId>amsha-security-api</artifactId>
+      </dependency>
+      <!-- Tool authoring contracts -->
+      <dependency>
+        <groupId>com.amsha</groupId>
+        <artifactId>amsha-tool-api</artifactId>
+      </dependency>
+      <!-- Shadow-classifier contracts (extract-core-subsystems S6) -->
+      <dependency>
+        <groupId>com.amsha</groupId>
+        <artifactId>amsha-classifier-api</artifactId>
+      </dependency>
+
   </dependencies>
 
   <build>

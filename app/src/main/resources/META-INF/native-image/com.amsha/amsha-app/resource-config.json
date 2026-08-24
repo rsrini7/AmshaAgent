@@ -6,6 +6,9 @@
       },
       {
         "pattern": "META-INF/skills/.*/SKILL\\.md"
+      },
+      {
+        "pattern": "META-INF/services/org\\.apache\\.lucene\\..*"
       }
     ]
   }

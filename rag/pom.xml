@@ -23,7 +23,6 @@
     <dependency>
       <groupId>com.amsha</groupId>
       <artifactId>amsha-persistence-api</artifactId>
-      <version>${project.version}</version>
     </dependency>
 
     <dependency>
@@ -65,6 +64,16 @@
       <version>${quarkus.version}</version>
       <scope>test</scope>
     </dependency>
+          <!-- Security vocabulary (vault interface, tool operation, autonomy) -->
+          <dependency>
+              <groupId>com.amsha</groupId>
+              <artifactId>amsha-security-api</artifactId>
+          </dependency>
+          <!-- Tool authoring contracts -->
+          <dependency>
+              <groupId>com.amsha</groupId>
+              <artifactId>amsha-tool-api</artifactId>
+          </dependency>
   </dependencies>
 
   <build>

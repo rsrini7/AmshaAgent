@@ -9,9 +9,9 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 
-import com.amsha.core.state.CheckpointStatus;
 import com.amsha.persistence.api.CheckpointDto;
 import com.amsha.persistence.api.CheckpointDtoHelper;
+import com.amsha.persistence.api.CheckpointStatus;
 import com.amsha.persistence.api.CheckpointStorePort;
 import com.amsha.persistence.api.CheckpointUpsertResult;
 import com.amsha.persistence.api.ReasoningStepDto;

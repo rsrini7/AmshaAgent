@@ -15,14 +15,14 @@ import java.util.Set;
 import java.util.regex.Pattern;
 
 import com.amsha.common.util.LogUtil;
-import com.amsha.core.agent.AgentSentinels;
 import com.amsha.core.agent.loop.ToolInvocationGuard;
 import com.amsha.core.agent.reasoning.ReasoningStep;
-import com.amsha.core.security.AutonomyLevel;
 import com.amsha.core.skill.CompiledSkillEntry;
-import com.amsha.core.state.CheckpointStatus;
 import com.amsha.core.state.StatefulAgentStore;
-import com.amsha.core.tools.GithubTool;
+import com.amsha.persistence.api.CheckpointStatus;
+import com.amsha.security.api.AutonomyLevel;
+import com.amsha.tool.api.AgentSentinels;
+import com.amsha.tool.api.ToolCapability;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.jboss.logging.Logger;
@@ -49,7 +49,7 @@ public class GithubToolGuardInterceptor implements ToolGuardInterceptor {
 
     @Override
     public Set<String> handledToolNames() {
-        return Set.of(GithubTool.TOOL_NAME);
+        return Set.of(ToolCapability.GITHUB.toolName());
     }
 
     @Override
@@ -93,7 +93,7 @@ public class GithubToolGuardInterceptor implements ToolGuardInterceptor {
                 AgentSentinels.GOAL_TOOL_APPROVED.equals(goal) || AgentSentinels.GOAL_RESUME_APPROVED.equals(goal);
 
         boolean hasRecentGithubContext = history.stream()
-                .anyMatch(s -> GithubTool.TOOL_NAME.equals(s.action())
+                .anyMatch(s -> ToolCapability.GITHUB.toolName().equals(s.action())
                         && s.observation() != null
                         && !s.observation().isBlank());
 
@@ -103,7 +103,7 @@ public class GithubToolGuardInterceptor implements ToolGuardInterceptor {
                 if (memory != null) {
                     hasRecentGithubContext = memory.stream()
                             .anyMatch(msg -> msg instanceof ToolExecutionResultMessage term
-                                            && GithubTool.TOOL_NAME.equals(term.toolName())
+                                            && ToolCapability.GITHUB.toolName().equals(term.toolName())
                                     || msg instanceof AiMessage ai
                                             && ai.text() != null
                                             && GITHUB_TRIGGER_PATTERN

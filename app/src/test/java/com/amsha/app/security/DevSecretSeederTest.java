@@ -6,7 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import jakarta.inject.Inject;
 
 import com.amsha.core.audit.AuditService;
-import com.amsha.core.security.SecretVault;
+import com.amsha.security.api.SecretVault;
 
 import org.junit.jupiter.api.Test;
 

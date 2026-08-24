@@ -9,15 +9,15 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
-import com.amsha.core.agent.reasoning.error.LlmAuthenticationException;
-import com.amsha.core.agent.reasoning.error.LlmContentFilterException;
-import com.amsha.core.agent.reasoning.error.LlmExceptionClassifier;
-import com.amsha.core.agent.reasoning.error.LlmMalformedResponseException;
-import com.amsha.core.agent.reasoning.error.LlmModelExhaustedException;
-import com.amsha.core.agent.reasoning.error.LlmProviderException;
-import com.amsha.core.agent.reasoning.error.LlmRateLimitException;
-import com.amsha.core.agent.reasoning.error.LlmServiceUnavailableException;
-import com.amsha.core.agent.reasoning.error.LlmToolCallException;
+import com.amsha.core.agent.reasoning.error.LlmErrorClassificationService;
+import com.amsha.llm.api.error.LlmAuthenticationException;
+import com.amsha.llm.api.error.LlmContentFilterException;
+import com.amsha.llm.api.error.LlmMalformedResponseException;
+import com.amsha.llm.api.error.LlmModelExhaustedException;
+import com.amsha.llm.api.error.LlmProviderException;
+import com.amsha.llm.api.error.LlmRateLimitException;
+import com.amsha.llm.api.error.LlmServiceUnavailableException;
+import com.amsha.llm.api.error.LlmToolCallException;
 
 import org.jboss.logging.Logger;
 
@@ -102,7 +102,7 @@ public class OrderedFailoverChatModel implements ChatModel {
     }
 
     private void classifyAndHandle(String label, Health h, Throwable t) {
-        LlmProviderException classified = LlmExceptionClassifier.classify(t);
+        LlmProviderException classified = LlmErrorClassificationService.classify(t);
         switch (classified) {
             case LlmRateLimitException r -> handleRateLimit(label, h, r);
             case LlmAuthenticationException a -> {

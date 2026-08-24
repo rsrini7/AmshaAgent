@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import base64
 import hashlib
 import json
 import math
@@ -11,6 +12,7 @@ import os
 import re
 import secrets
 import shutil
+import signal
 import socket
 import subprocess
 import sys
@@ -356,9 +358,31 @@ def verify_digest(path: Path, expected_bytes: object, expected_digest: object, l
         raise SmokeFailure(f"Bundle {label} digest did not match its manifest")
 
 
-def verify_bundle(model_root: Path, bundle_id: str, emit: Emitter = print) -> None:
+def verify_bundle(
+    model_root: Path,
+    bundle_id: str,
+    emit: Emitter = print,
+    project_root: Path | None = None,
+) -> None:
     bundle_directory = model_root.expanduser().resolve() / bundle_id
     manifest_path = bundle_directory / "manifest.json"
+    if not manifest_path.is_file() and project_root is not None:
+        installer = project_root / ".mise" / "tasks" / "models" / "install-mpnet.py"
+        if bundle_id == DEFAULT_BUNDLE and installer.is_file():
+            emit(f"INFO Pinned ONNX bundle '{bundle_id}' missing at {model_root}. Downloading via installer...")
+            env = dict(os.environ)
+            env["AMSHA_ONNX_MODEL_ROOT"] = str(model_root.expanduser().resolve())
+            result = subprocess.run(
+                [sys.executable, str(installer)],
+                cwd=project_root,
+                env=env,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if result.returncode != 0:
+                error_detail = result.stderr.strip() or result.stdout.strip()
+                raise SmokeFailure(f"Failed to auto-download model bundle: {error_detail}")
     try:
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     except FileNotFoundError:
@@ -400,10 +424,15 @@ def require_onnx_health(health: Mapping[str, object]) -> None:
     runtime = health_check(health, "Local ONNX Runtime")
     runtime_data = runtime.get("data")
     if runtime.get("status") != "UP" or not isinstance(runtime_data, dict) or runtime_data.get("status") != "ready":
-        raise SmokeFailure("Local ONNX Runtime health is not ready")
+        raise SmokeFailure("Local ONNX Runtime health is not ready (ensure AMSHA_ONNX_ENABLED=true in environment or .env)")
     indexes = health_check(health, "Vector Index Compatibility")
     index_data = indexes.get("data")
-    if indexes.get("status") != "UP" or not isinstance(index_data, dict) or index_data.get("vectorStatus") != "READY":
+    vector_status = index_data.get("vectorStatus") if isinstance(index_data, dict) else None
+    if indexes.get("status") != "UP" or not isinstance(index_data, dict) or vector_status != "READY":
+        if vector_status == "DEGRADED":
+            raise SmokeFailure("ONNX vector index compatibility is DEGRADED (model mismatch with existing DB rows; reset dev data directory)")
+        if vector_status == "NOT_ACTIVE":
+            raise SmokeFailure("ONNX vector index compatibility is NOT_ACTIVE (ensure 'onnx' is in AMSHA_INFINITE_LOOP_EMBEDDING_PROVIDERS and AMSHA_ONNX_ENABLED=true)")
         raise SmokeFailure("ONNX vector index compatibility is not READY")
 
 
@@ -587,7 +616,7 @@ def native_environment(
 
 def wait_for_health(base_url: str, process: subprocess.Popen[bytes], startup_timeout: float) -> None:
     start_time = time.monotonic()
-    while time.monotonic() - start_time < 150:
+    while time.monotonic() - start_time < startup_timeout:
         if process.poll() is not None:
             raise SmokeFailure("Native process exited before health became available")
         try:
@@ -632,7 +661,7 @@ def run_native(args: argparse.Namespace, project_root: Path, config: OmlxConfig,
     if not available_port(args.port):
         raise SmokeFailure("Requested native smoke port is already in use")
 
-    verify_bundle(model_root, args.bundle, emit)
+    verify_bundle(model_root, args.bundle, emit, project_root)
     run_omlx_checks(config, args.request_timeout, emit)
 
     smoke_root = project_root / "data" / "smoke"
@@ -641,7 +670,9 @@ def run_native(args: argparse.Namespace, project_root: Path, config: OmlxConfig,
     data_directory = run_directory / "data"
     data_directory.mkdir()
     log_path = run_directory / "native.log"
-    internal_api_key = secrets.token_urlsafe(32)
+    # Standard Base64 (not urlsafe): EnvConfigInitializer.validateSecurityKeys decodes
+    # AMSHA_API_KEYS_INTERNAL with the standard decoder and warns on '-'/'_' characters.
+    internal_api_key = base64.b64encode(secrets.token_bytes(32)).decode()
     environment = native_environment(
         os.environ,
         config,
@@ -750,7 +781,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             internal_api_key = require_setting(settings, INTERNAL_API_KEY)
             base_url = normalized_base_url(args.amsha_base_url, "Amsha base URL")
             run_omlx_checks(config, args.request_timeout)
-            verify_bundle(model_root, args.bundle)
+            verify_bundle(model_root, args.bundle, project_root=project_root)
             run_amsha_checks(base_url, internal_api_key, args.request_timeout, args.dimensions)
             internal_api_key = ""
         elif args.command == "native":

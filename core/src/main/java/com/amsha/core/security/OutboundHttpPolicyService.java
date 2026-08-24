@@ -10,6 +10,8 @@ import com.amsha.core.audit.AuditService;
 import com.amsha.core.audit.SecurityEventType;
 import com.amsha.llm.api.NetworkProfilePolicy;
 import com.amsha.persistence.api.LlmConnectionDto;
+import com.amsha.security.api.OutboundPolicyDecision;
+import com.amsha.security.api.OutboundPurpose;
 
 import org.jboss.logging.Logger;
 

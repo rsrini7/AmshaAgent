@@ -1,5 +1,6 @@
 # Maven
 target/
+target_test-classes/
 pom.xml.tag
 pom.xml.releaseBackup
 pom.xml.versionsBackup
@@ -41,7 +42,7 @@ Thumbs.db
 test-output.log
 api-surface*.txt
 workspaces/
-data/
+data*/
 !**/scripts/data/
 lib/
 

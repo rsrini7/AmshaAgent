@@ -10,10 +10,12 @@ import java.util.Map;
 
 import com.amsha.core.audit.AuditService;
 import com.amsha.core.audit.SecurityEventType;
-import com.amsha.core.security.AutonomyLevel;
 import com.amsha.core.task.TaskFile;
 import com.amsha.core.task.TaskManager;
 import com.amsha.core.task.TaskState;
+import com.amsha.security.api.AutonomyLevel;
+import com.amsha.tool.api.ToolExecutionContext;
+import com.amsha.tool.api.ToolResponse;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;

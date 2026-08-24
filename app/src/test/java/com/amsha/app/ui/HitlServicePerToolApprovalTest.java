@@ -6,12 +6,12 @@ import static org.mockito.Mockito.*;
 import java.util.Optional;
 
 import com.amsha.core.agent.hitl.CheckpointApprovalService;
-import com.amsha.core.agent.role.ToolCapability;
 import com.amsha.core.lifecycle.SessionHeartbeatTracker;
 import com.amsha.core.observability.AgentOtelContext;
-import com.amsha.core.state.CheckpointStatus;
 import com.amsha.persistence.api.CheckpointDto;
+import com.amsha.persistence.api.CheckpointStatus;
 import com.amsha.persistence.api.CheckpointStorePort;
+import com.amsha.tool.api.ToolCapability;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.junit.jupiter.api.BeforeEach;

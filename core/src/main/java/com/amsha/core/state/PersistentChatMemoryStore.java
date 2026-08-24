@@ -22,10 +22,10 @@ import java.util.stream.Collectors;
 
 import com.amsha.common.util.LogUtil;
 import com.amsha.core.agent.reasoning.MessageTag;
-import com.amsha.core.config.TieredMemoryConfig;
-import com.amsha.core.memory.tiered.RecallMemoryService;
-import com.amsha.core.memory.tiered.RecallMessageMapper;
 import com.amsha.core.scope.WorkspaceContext;
+import com.amsha.memory.config.TieredMemoryConfig;
+import com.amsha.memory.tiered.RecallMemoryService;
+import com.amsha.memory.tiered.RecallMessageMapper;
 import com.amsha.persistence.api.ChatMemoryDto;
 import com.amsha.persistence.api.ChatMemoryStorePort;
 import com.amsha.persistence.api.RecallMessageDto;

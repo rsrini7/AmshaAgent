@@ -6,8 +6,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
 
-import com.amsha.core.agent.role.ToolCapability;
 import com.amsha.core.security.InputSanitizer;
+import com.amsha.tool.api.ToolCapability;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

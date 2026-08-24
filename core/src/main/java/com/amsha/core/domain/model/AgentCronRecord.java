@@ -3,9 +3,9 @@ package com.amsha.core.domain.model;
 import java.time.Instant;
 import java.util.Locale;
 
-import com.amsha.core.state.CronStatus;
-import com.amsha.core.util.TemporalUtils;
+import com.amsha.common.util.TemporalUtils;
 import com.amsha.persistence.api.AgentCronDto;
+import com.amsha.persistence.api.CronStatus;
 
 public final class AgentCronRecord implements AgentCron {
 

@@ -260,6 +260,22 @@ class AgentResourceDeepTest {
 
             assertEquals(404, response.getStatus());
         }
+
+        @Test
+        void terminateSession_sessionBusy_returns409Conflict() {
+            // F12 resume guard surfaces as a retryable conflict, not a 500
+            Principal principal = mock(Principal.class);
+            when(principal.getName()).thenReturn("user1");
+            when(securityContext.getUserPrincipal()).thenReturn(principal);
+
+            ServiceResult<Object> result = ServiceResult.error(
+                    "SESSION_BUSY", "Cannot terminate session while it is actively resuming its batch");
+            when(sessionService.terminateSession("s1", "user1")).thenReturn(result);
+
+            Response response = resource.terminateSession("s1");
+
+            assertEquals(409, response.getStatus());
+        }
     }
 
     // ── approve / deny ───────────────────────────────────────────────────

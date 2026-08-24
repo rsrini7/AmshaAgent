@@ -1,6 +1,6 @@
 package com.amsha.core.agent.loop;
 
-import com.amsha.core.exception.AmshaException;
+import com.amsha.common.exception.AmshaException;
 
 /**
  * Thrown when a HITL checkpoint resolution (approve/deny) fails due to

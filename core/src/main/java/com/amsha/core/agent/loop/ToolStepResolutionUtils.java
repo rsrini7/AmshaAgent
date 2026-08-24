@@ -8,9 +8,9 @@ import java.util.Map;
 import java.util.Set;
 
 import com.amsha.core.agent.reasoning.ReasoningStep;
-import com.amsha.core.agent.role.ToolCapability;
 import com.amsha.core.tool.DynamicToolLookup;
 import com.amsha.core.tools.ToolRegistry;
+import com.amsha.tool.api.ToolCapability;
 
 import org.jboss.logging.Logger;
 

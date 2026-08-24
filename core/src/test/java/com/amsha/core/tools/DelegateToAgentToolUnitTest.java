@@ -10,7 +10,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-import com.amsha.core.agent.AgentSentinels;
 import com.amsha.core.agent.loop.AgentLoop;
 import com.amsha.core.agent.loop.GroupAnalyticsService;
 import com.amsha.core.agent.loop.GroupConsultationEngine;
@@ -22,9 +21,12 @@ import com.amsha.core.agent.role.RoleDefinition;
 import com.amsha.core.agent.role.RoleRegistry;
 import com.amsha.core.audit.AuditService;
 import com.amsha.core.observability.AgentOtelContext;
-import com.amsha.core.security.AutonomyLevel;
-import com.amsha.core.security.ToolOperation;
 import com.amsha.persistence.api.CheckpointCrudPort;
+import com.amsha.security.api.AutonomyLevel;
+import com.amsha.security.api.ToolOperation;
+import com.amsha.tool.api.AgentSentinels;
+import com.amsha.tool.api.ToolExecutionContext;
+import com.amsha.tool.api.ToolResponse;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -76,7 +78,7 @@ class DelegateToAgentToolUnitTest {
     RoleRegistry roleRegistry;
 
     @Mock
-    VerificationGate verificationGate;
+    Instance<VerificationGate> verificationGate;
 
     @InjectMocks
     DelegateToAgentTool tool;
@@ -86,6 +88,7 @@ class DelegateToAgentToolUnitTest {
         when(agentLoop.get()).thenReturn(mockAgentLoop);
         lenient().when(delegationProcessor.getDelegatableAgentList()).thenReturn("shiva, brahma");
         lenient().when(checkpointCrud.findBySessionAndRole(any(), any())).thenReturn(Optional.empty());
+        lenient().when(verificationGate.isResolvable()).thenReturn(false);
     }
 
     @Test
@@ -164,7 +167,7 @@ class DelegateToAgentToolUnitTest {
         AgentResult finished = AgentResult.finished("Code debugged successfully", List.of());
         when(mockAgentLoop.run(anyString(), anyString(), anyString(), any(), anyInt()))
                 .thenReturn(finished);
-        when(delegationProcessor.handleSubAgentResult(any(), any()))
+        when(delegationProcessor.handleSubAgentResult(any(), any(), any()))
                 .thenReturn(ToolResponse.success("Code debugged successfully"));
 
         ToolResponse res = tool.execute(ctx, Map.of("agent", "shiva", "goal", "debug code"));

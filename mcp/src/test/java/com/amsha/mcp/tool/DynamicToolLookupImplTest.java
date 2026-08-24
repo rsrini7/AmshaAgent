@@ -2,8 +2,8 @@ package com.amsha.mcp.tool;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-import com.amsha.core.agent.role.ToolCapability;
 import com.amsha.core.tool.DynamicToolAdmission;
+import com.amsha.tool.api.ToolCapability;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

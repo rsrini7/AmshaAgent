@@ -4,8 +4,8 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import java.time.Instant;
 
-import com.amsha.core.state.CronStatus;
 import com.amsha.persistence.api.AgentCronDto;
+import com.amsha.persistence.api.CronStatus;
 
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;

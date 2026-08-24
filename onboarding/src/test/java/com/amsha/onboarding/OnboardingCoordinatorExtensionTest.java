@@ -14,9 +14,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-import com.amsha.core.security.SecretVault;
-import com.amsha.core.security.VaultConstants;
-import com.amsha.core.tools.ToolCategory;
 import com.amsha.mcp.transport.McpConnectionLifecycleService;
 import com.amsha.onboarding.extension.McpOnboardingExtension;
 import com.amsha.onboarding.spi.OnboardingExtension;
@@ -30,6 +27,9 @@ import com.amsha.persistence.api.OnboardingDraftDto;
 import com.amsha.persistence.api.OnboardingDraftPurpose;
 import com.amsha.persistence.api.OnboardingDraftState;
 import com.amsha.persistence.api.OnboardingDraftStorePort;
+import com.amsha.security.api.SecretVault;
+import com.amsha.security.api.VaultConstants;
+import com.amsha.tool.api.ToolCategory;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.junit.jupiter.api.BeforeEach;

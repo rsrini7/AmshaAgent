@@ -5,6 +5,8 @@ import static org.junit.jupiter.api.Assertions.*;
 import java.util.HashSet;
 import java.util.Set;
 
+import com.amsha.tool.api.ToolCapability;
+
 import org.junit.jupiter.api.Test;
 
 public class RoleDefinitionTest {

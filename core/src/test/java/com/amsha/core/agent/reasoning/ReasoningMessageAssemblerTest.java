@@ -14,6 +14,8 @@ import dev.langchain4j.data.message.ToolExecutionResultMessage;
 import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
 
+import jakarta.enterprise.inject.spi.BeanManager;
+
 import java.lang.reflect.Field;
 import java.util.Collections;
 import java.util.List;
@@ -24,15 +26,14 @@ import java.util.Set;
 import com.amsha.core.agent.loop.AgentExecutionContext;
 import com.amsha.core.agent.loop.CodeGenerationPolicy;
 import com.amsha.core.agent.loop.LoopStuckDetector;
-import com.amsha.core.agent.role.ToolCapability;
-import com.amsha.core.security.AutonomyLevel;
 import com.amsha.core.skill.SkillAdaptationManager;
 import com.amsha.core.skill.SkillRegistry;
-import com.amsha.core.tools.AgentTool;
 import com.amsha.core.tools.ToolRegistry;
-import com.amsha.core.tools.search.ToolSearchIndex;
 import com.amsha.core.util.TextPatternUtils;
 import com.amsha.llm.api.StructuredOutputMode;
+import com.amsha.security.api.AutonomyLevel;
+import com.amsha.tool.api.AgentTool;
+import com.amsha.tool.api.ToolCapability;
 
 import org.junit.jupiter.api.Test;
 
@@ -236,7 +237,9 @@ class ReasoningMessageAssemblerTest {
         ReasoningMessageAssembler assembler =
                 new ReasoningMessageAssembler(historyAssembler, toolRegistry, new LoopStuckDetector());
 
-        injectField(assembler, "toolSearchIndex", mock(ToolSearchIndex.class));
+        BeanManager bm = mock(BeanManager.class);
+        when(bm.getBeans(Object.class)).thenReturn(Collections.emptySet());
+        injectField(assembler, "beanManager", bm);
         injectField(assembler, "skillRegistry", mock(SkillRegistry.class));
         injectField(assembler, "adaptationManager", mock(SkillAdaptationManager.class));
         injectField(assembler, "textPatternUtils", new TextPatternUtils());

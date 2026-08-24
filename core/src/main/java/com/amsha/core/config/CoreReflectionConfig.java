@@ -8,7 +8,6 @@ import com.amsha.core.agent.reasoning.ParallelToolCall;
 import com.amsha.core.agent.reasoning.ReasoningStep;
 import com.amsha.core.agent.reasoning.ReasoningStepDeserializer;
 import com.amsha.core.agent.reasoning.ReasoningStepSerializer;
-import com.amsha.core.agent.reasoning.error.LlmModelExhaustedException;
 import com.amsha.core.agent.result.AgentResult;
 import com.amsha.core.api.AgentResponseMapper;
 import com.amsha.core.api.dto.AmshaErrorResponse;
@@ -22,6 +21,7 @@ import com.amsha.core.audit.AuditVerifier;
 import com.amsha.core.audit.SecurityEventType;
 import com.amsha.core.cron.AgentJobCompleted;
 import com.amsha.core.cron.CronTaskScheduled;
+import com.amsha.core.governance.ApprovalFrame;
 import com.amsha.core.routing.ModelCacheInvalidator;
 import com.amsha.core.routing.ModelProfileCredentialResolver;
 import com.amsha.core.routing.ModelProfileResolverImpl;
@@ -36,25 +36,16 @@ import com.amsha.core.routing.provider.NetworkPolicyEnforcer;
 import com.amsha.core.sandbox.SandboxResult;
 import com.amsha.core.security.ExternalIdentityProvider;
 import com.amsha.core.security.OutboundHttpPolicyService;
-import com.amsha.core.security.OutboundPolicyDecision;
-import com.amsha.core.security.OutboundPurpose;
-import com.amsha.core.security.http.ApprovalReceiptIssuer;
-import com.amsha.core.security.http.GovernedHttpClient;
-import com.amsha.core.security.http.GovernedTransportService;
-import com.amsha.core.security.http.OutboundApprovalReceipt;
-import com.amsha.core.security.http.OutboundHttpException;
 import com.amsha.core.skill.CompiledSkillEntry;
-import com.amsha.core.skill.SkillAdmissionEvaluator;
 import com.amsha.core.skill.SkillDefinition;
 import com.amsha.core.skill.SkillFrontmatter;
-import com.amsha.core.skill.SkillLoader;
 import com.amsha.core.skill.SkillPromptParams;
-import com.amsha.core.tools.GithubTool;
-import com.amsha.core.tools.ManageScheduleTool;
-import com.amsha.core.tools.SandboxExecTool;
-import com.amsha.core.tools.ScheduleTaskTool;
+import com.amsha.core.tools.CheckList;
+import com.amsha.core.tools.CheckListEvent;
+import com.amsha.core.tools.CheckListItem;
+import com.amsha.core.tools.CheckListStatus;
+import com.amsha.core.tools.ToolDiscoveryCompleted;
 import com.amsha.core.tools.ToolRegistry;
-import com.amsha.core.tools.ToolResponse;
 import com.amsha.persistence.api.SessionCatalogEntry;
 
 import io.quarkus.runtime.annotations.RegisterForReflection;
@@ -88,25 +79,21 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             ToolRegistry.ToolDescriptor.class,
             AuditOutcome.class,
             SecurityEventType.class,
-            GithubTool.class,
-            SandboxExecTool.class,
-            ScheduleTaskTool.class,
-            ManageScheduleTool.class,
+            ApprovalFrame.class,
             SkillDefinition.class,
-            SkillAdmissionEvaluator.AdmissionDecision.class,
-            SkillLoader.QuarantinedSkill.class,
             SkillFrontmatter.class,
             CompiledSkillEntry.class,
             SkillPromptParams.class,
             SandboxResult.class,
             AgentJobCompleted.class,
             CronTaskScheduled.class,
-            ToolResponse.class,
-            ToolResponse.ToolSuccess.class,
-            ToolResponse.ToolFailure.class,
-            ToolResponse.ToolPending.class,
             ReasoningStepDeserializer.class,
             ReasoningStepSerializer.class,
+            CheckList.class,
+            CheckListItem.class,
+            CheckListStatus.class,
+            CheckListEvent.class,
+            ToolDiscoveryCompleted.class,
             ModelRouter.ModelConfig.class,
             OrderedFailoverChatModel.class,
             OrderedFailoverChatModel.Entry.class,
@@ -119,20 +106,12 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             SystemProfileMigration.class,
             ModelCacheInvalidator.class,
             NetworkPolicyEnforcer.class,
-            LlmModelExhaustedException.class,
             GroupConsultationEngine.GroupConsultationResult.class,
             GroupConsultationService.TriageResult.class,
             GroupAnalyticsService.DomainComboStats.class,
             TaskClassifierService.TaskDomain.class,
             SessionCatalogEntry.class,
             OutboundHttpPolicyService.class,
-            OutboundPolicyDecision.class,
-            OutboundPurpose.class,
-            ApprovalReceiptIssuer.class,
-            OutboundApprovalReceipt.class,
-            GovernedHttpClient.class,
-            GovernedTransportService.class,
-            OutboundHttpException.class,
             ExternalIdentityProvider.class
         },
         classNames = {

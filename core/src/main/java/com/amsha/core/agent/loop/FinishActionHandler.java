@@ -4,25 +4,27 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
-import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
-import com.amsha.core.agent.AgentSentinels;
+import com.amsha.classifier.api.AnswerQualityAction;
+import com.amsha.classifier.api.AnswerQualityContext;
+import com.amsha.classifier.api.AnswerQualityShadowContext;
+import com.amsha.classifier.api.ClassifierResult;
 import com.amsha.core.agent.IntentClassificationService;
 import com.amsha.core.agent.reasoning.ReasoningStep;
 import com.amsha.core.agent.reasoning.ReasoningStepSupport;
 import com.amsha.core.agent.result.AgentResult;
 import com.amsha.core.agent.role.RoleRegistry;
-import com.amsha.core.agent.role.ToolCapability;
-import com.amsha.core.classifier.ClassifierResult;
 import com.amsha.core.governance.RateLimitTracker;
+import com.amsha.core.message.UserMessages;
 import com.amsha.core.observability.AgentObserver;
-import com.amsha.core.tools.CodeLanguageDetector;
+import com.amsha.core.routing.ModelRouter;
 import com.amsha.core.tools.ToolRegistry;
 import com.amsha.core.util.AgentErrorMessageUtil;
 import com.amsha.core.util.TextPatternUtils;
+import com.amsha.tool.api.AgentSentinels;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.jboss.logging.Logger;
@@ -61,15 +63,22 @@ public class FinishActionHandler {
     private final AnswerGuardStrategy qualityGuard;
     private final Instance<AgentObserver> observers;
     private final FinishOutcomeProcessor resultProcessor;
-    private final ToolRegistry toolRegistry;
-    private final RoleRegistry roleRegistry;
     private final IntentClassificationService intentClassifier;
+    private final FinishToolInjectionPolicy toolInjectionPolicy;
 
     @Inject
     AnswerQualityShadowEvaluationService answerQualityShadowEvaluation;
 
     @Inject
     AnswerQualityDispatcher answerQualityDispatcher;
+
+    /**
+     * Optional escalation-tier probe for memory-synthesis corrections. Null in
+     * manually-constructed test harnesses; absence means "no higher tier" and the
+     * deterministic verbatim-memory fallback fires one attempt earlier.
+     */
+    @Inject
+    ModelRouter modelRouter;
 
     @Inject
     public FinishActionHandler(
@@ -85,8 +94,6 @@ public class FinishActionHandler {
             IntentClassificationService intentClassifier) {
         this.qualityGuard = qualityGuard;
         this.observers = observers;
-        this.toolRegistry = toolRegistry;
-        this.roleRegistry = roleRegistry;
         this.intentClassifier = intentClassifier;
         this.resultProcessor = new FinishOutcomeProcessor(
                 qualityGuard,
@@ -97,6 +104,8 @@ public class FinishActionHandler {
                 toolRegistry,
                 new HallucinationDetector(objectMapper),
                 intentClassifier);
+        this.toolInjectionPolicy =
+                new FinishToolInjectionPolicy(intentClassifier, toolRegistry, roleRegistry, resultProcessor);
     }
 
     public FinishActionHandler(
@@ -130,6 +139,7 @@ public class FinishActionHandler {
             permits FinishOutcome.Completed,
                     FinishOutcome.RetryLeak,
                     FinishOutcome.Correction,
+                    FinishOutcome.SynthesisCorrection,
                     FinishOutcome.SalvageFailed,
                     FinishOutcome.ExecuteLeakedTool,
                     FinishOutcome.InjectToolCall {
@@ -149,6 +159,14 @@ public class FinishActionHandler {
          * A hallucination or policy violation was detected that requires a corrective turn.
          */
         record Correction(ReasoningStep correctedStep, String correctionHint) implements FinishOutcome {}
+
+        /**
+         * Memory-search results exist but the answer disclaims knowledge. Carries the verbatim
+         * memory result so the handler can budget the correction and fall back to quoting the
+         * stored facts when the model cannot synthesize them.
+         */
+        record SynthesisCorrection(ReasoningStep correctedStep, String correctionHint, String memoryResult)
+                implements FinishOutcome {}
 
         /**
          * The schema self-correction budget was exhausted and no salvageable
@@ -265,8 +283,20 @@ public class FinishActionHandler {
 
         // --- Hallucination detection ---
         FinishOutcome hallucinationCheck = resultProcessor.checkHallucination(sessionId, history, step, answer);
+        if (hallucinationCheck instanceof FinishOutcome.SynthesisCorrection synthesis) {
+            return handleSynthesisCorrection(context, history, synthesis);
+        }
         if (hallucinationCheck != null) {
             return hallucinationCheck;
+        }
+
+        // --- Unfulfilled-work honest exit ---
+        // When a tool was denied at a permission boundary and NO real tool execution
+        // succeeded in this run, any narrative claiming performed work is fabrication.
+        // Replace the model's answer with a deterministic, factual disclosure.
+        FinishOutcome honestExit = unfulfilledPermissionDeniedWork(sessionId, agentRole, history);
+        if (honestExit != null) {
+            return honestExit;
         }
 
         // --- Code-generation policy ---
@@ -310,7 +340,7 @@ public class FinishActionHandler {
         }
 
         // --- Tool injection: if agent finished without calling tools, inject the appropriate one ---
-        FinishOutcome injected = tryInjectToolCall(context, history, step, answer, sessionId);
+        FinishOutcome injected = toolInjectionPolicy.tryInjectToolCall(context, history, step, answer, sessionId);
         if (injected != null) {
             if (injected instanceof FinishOutcome.Correction) {
                 context.setForceFinishRetry(true);
@@ -356,6 +386,52 @@ public class FinishActionHandler {
         return null;
     }
 
+    /**
+     * Bounded economics ladder for repeated memory-synthesis failures. The memory tools
+     * returned results but the model keeps disclaiming knowledge, so blind retries against
+     * the same cheap slot deterministically burn the iteration budget (observed on native
+     * runs: recall → archival → core read, then two identical blocked FINISHes = 5/5 steps).
+     *
+     * <p>Ladder: attempt 1 gets the fill-in-template correction hint; attempt 2 is escalated
+     * to a non-lightweight model tier when one is configured, otherwise it exits immediately
+     * with the verbatim memory content; attempt 3+ always exits with the verbatim content.
+     * Termination is guaranteed within maxIterations and the user always receives the stored
+     * facts rather than a false disclaimer.
+     */
+    private FinishOutcome handleSynthesisCorrection(
+            AgentExecutionContext context, List<ReasoningStep> history, FinishOutcome.SynthesisCorrection synthesis) {
+        int attempt = context.bumpMemorySynthesisCorrections();
+        String sessionId = context.sessionId();
+        boolean escalationTierAvailable = modelRouter != null
+                && context.agentRole() != null
+                && modelRouter.hasDistinctEscalationTier(context.agentRole());
+
+        if (attempt == 1) {
+            context.setForceFinishRetry(true);
+            log.infof(
+                    "FINISH-HANDLER: memory-synthesis correction 1/2 for session %s — template hint, same tier",
+                    sessionId);
+            return new FinishOutcome.Correction(synthesis.correctedStep(), synthesis.correctionHint());
+        }
+        if (attempt == 2 && escalationTierAvailable) {
+            context.requestReasoningEscalation();
+            context.setForceFinishRetry(true);
+            log.infof(
+                    "FINISH-HANDLER: memory-synthesis correction 2 for session %s — escalating next reasoning call to non-lightweight tier",
+                    sessionId);
+            return new FinishOutcome.Correction(synthesis.correctedStep(), synthesis.correctionHint());
+        }
+
+        // Budget exhausted or nothing better to escalate to: exit honestly with the stored facts.
+        String fallback = "Here's what my memory of you contains:\n"
+                + synthesis.memoryResult()
+                + "\n\n(Quoted directly from your stored memory — I couldn't summarize it reliably just now.)";
+        log.warnf(
+                "FINISH-HANDLER: memory-synthesis correction budget exhausted after %d attempt(s) for session %s — exiting with verbatim memory content",
+                attempt, sessionId);
+        return new FinishOutcome.Completed(AgentResult.finished(fallback, List.copyOf(history)), fallback);
+    }
+
     private void observeAcceptedAnswer(AgentExecutionContext context, String answer, boolean toolInvokedInTurn) {
         try {
             if (answerQualityShadowEvaluation != null) {
@@ -369,109 +445,49 @@ public class FinishActionHandler {
     }
 
     /**
-     * If the agent finished without using the right tool, inject it.
-     * Handles two cases:
-     * 1. Refusal + research goal → inject search tool
-     * 2. Execution goal + no code in answer + sandbox available → inject sandbox_exec
+     * Observation fragments produced by permission-boundary denials across the guard,
+     * governance, and resume paths. A finish that follows such a denial without any
+     * successful real tool execution must not narrate performed work.
      */
-    private FinishOutcome tryInjectToolCall(
-            AgentExecutionContext context,
-            List<ReasoningStep> history,
-            ReasoningStep.FinishStep step,
-            String answer,
-            String sessionId) {
-        String goal = context.goal();
-        if (goal == null || goal.isBlank()) return null;
-        if (intentClassifier != null && intentClassifier.isSimpleConversational(goal)) {
+    private static final List<String> PERMISSION_DENIAL_MARKERS =
+            List.of("not permitted to use tool", "blocked by safety guard", "not recognized or permitted");
+
+    /**
+     * Returns a deterministic honest-exit outcome when the history shows a
+     * permission-denied tool attempt and zero successful real tool executions;
+     * {@code null} when the answer may proceed through normal processing.
+     */
+    private FinishOutcome unfulfilledPermissionDeniedWork(
+            String sessionId, String agentRole, List<ReasoningStep> history) {
+        String deniedToolName = null;
+        boolean hasSuccessfulRealTool = false;
+        for (ReasoningStep s : history) {
+            if (!ReasoningStepSupport.isToolCallStep(s)) {
+                continue;
+            }
+            // Escalation-synthesis markers are recorded as tool-call steps but are not
+            // real executions; they must not mask the denial.
+            if (s.action() != null && s.action().startsWith("escalation:")) {
+                continue;
+            }
+            if (Boolean.TRUE.equals(s.success())) {
+                hasSuccessfulRealTool = true;
+            } else if (deniedToolName == null && s.observation() != null && isPermissionDenial(s.observation())) {
+                deniedToolName = s.action();
+            }
+        }
+        if (deniedToolName == null || hasSuccessfulRealTool) {
             return null;
         }
-
-        String availableTools = String.join(",", toolRegistry.listTools());
-        boolean isRefusal = AgentSentinels.REFUSAL_PATTERN.matcher(answer).find();
-
-        // Case 1: Refusal + research goal → inject search
-        if (isRefusal && AgentSentinels.RESEARCH_KEYWORDS.matcher(goal).find()) {
-            String searchTool = findSearchTool(availableTools);
-            if (searchTool != null && isToolPermitted(context.agentRole(), searchTool)) {
-                log.infof(
-                        "TOOL-INJECT session %s: agent finished without searching, injecting %s",
-                        sessionId, searchTool);
-                Map<String, Object> args = new HashMap<>();
-                args.put(
-                        "query",
-                        goal.replaceAll("(?i)^(do )?research (on )?(use )?", "").trim());
-                args.put("count", 5);
-                return new FinishOutcome.InjectToolCall(
-                        searchTool, args, step.withObservation("Injecting search tool call that was missed"));
-            }
-        }
-
-        // Case 2: Execution goal + no code in answer + sandbox available → retry with correction
-        // Skip correction if sandbox_exec was already called successfully — the answer
-        // describes execution output, not source code, so code fence check would fail spuriously.
-        if (AgentSentinels.EXECUTION_KEYWORDS.matcher(goal).find()
-                && isToolPermitted(context.agentRole(), ToolCapability.SANDBOX_EXEC.toolName())
-                && !answer.contains("```")
-                && !historyContainsSuccess(ToolCapability.SANDBOX_EXEC.toolName(), history)) {
-            log.infof("TOOL-INJECT session %s: execution goal but no code in answer, forcing correction", sessionId);
-            return new FinishOutcome.Correction(
-                    step.withObservation("Agent finished without writing code for an execution goal"),
-                    "STOP. You MUST write a complete program and call sandbox_exec to execute it. "
-                            + "The sandbox_exec tool requires 'language' (e.g. "
-                            + CodeLanguageDetector.SUPPORTED_LANGUAGES_HINT
-                            + ") and 'code' parameters. "
-                            + "Do NOT explain. Do NOT research. Write the code NOW and call sandbox_exec immediately.");
-        }
-
-        // Case 3: Scheduling goal + not scheduled + schedule_task permitted -> force scheduling correction
-        // BUT skip if the goal is about SEARCHING for scheduled tasks (e.g., "search memory for cron tasks we
-        // scheduled")
-        boolean isSchedulingGoal =
-                AgentSentinels.SCHEDULING_KEYWORDS.matcher(goal).find();
-        boolean isSearchGoal = AgentSentinels.RESEARCH_KEYWORDS.matcher(goal).find()
-                || goal.toLowerCase(Locale.ROOT).contains("memory")
-                || goal.toLowerCase(Locale.ROOT).contains("recall")
-                || goal.toLowerCase(Locale.ROOT).contains("find");
-        if (isSchedulingGoal
-                && !isSearchGoal
-                && isToolPermitted(context.agentRole(), ToolCapability.SCHEDULE_TASK.toolName())) {
-            boolean actuallyScheduled = resultProcessor.historyContainsSuccessfulSchedule(history);
-            if (!actuallyScheduled) {
-                log.infof(
-                        "TOOL-INJECT session %s: scheduling goal but no schedule_task call found, forcing correction",
-                        sessionId);
-                return new FinishOutcome.Correction(
-                        step.withObservation("Agent finished without calling schedule_task for a scheduling goal"),
-                        "System: STOP. The user requested a future/scheduled action, but you did NOT call "
-                                + "the schedule_task tool. You MUST compute the correct cron expression (based on current system time "
-                                + "and timezone conversions if any) and call the schedule_task tool now before finishing.");
-            }
-        }
-
-        return null;
+        log.warnf(
+                "FINISH-HANDLER: suppressing unfulfilled-work narrative after permission denial of '%s' in session %s",
+                deniedToolName, sessionId);
+        String honestAnswer = UserMessages.PERMISSION_DENIED_NO_WORK_FORMAT.formatted(deniedToolName, agentRole);
+        return new FinishOutcome.Completed(AgentResult.finished(honestAnswer, List.copyOf(history)), honestAnswer);
     }
 
-    private static final List<String> SEARCH_TOOL_NAMES = List.of(
-            ToolCapability.WEB_SEARCH_SERPER.toolName(),
-            ToolCapability.WEB_SEARCH_BRAVE.toolName(),
-            "web_search",
-            "search");
-
-    private String findSearchTool(String availableTools) {
-        for (String name : SEARCH_TOOL_NAMES) {
-            if (availableTools.contains(name)) return name;
-        }
-        return null;
-    }
-
-    private boolean isToolPermitted(String agentRole, String toolName) {
-        return roleRegistry.resolvePermittedTools(agentRole).contains(toolName);
-    }
-
-    private static boolean historyContainsSuccess(String toolName, List<ReasoningStep> history) {
-        return history.stream()
-                .anyMatch(s -> s instanceof ReasoningStep.ToolCallStep tc
-                        && toolName.equals(tc.action())
-                        && Boolean.TRUE.equals(tc.success()));
+    private static boolean isPermissionDenial(String observation) {
+        String lower = observation.toLowerCase(Locale.ROOT);
+        return PERMISSION_DENIAL_MARKERS.stream().anyMatch(lower::contains);
     }
 }

@@ -3,8 +3,8 @@ package com.amsha.core.domain.model;
 import java.time.Instant;
 import java.util.List;
 
-import com.amsha.core.security.AutonomyLevel;
-import com.amsha.core.state.CheckpointStatus;
+import com.amsha.persistence.api.CheckpointStatus;
+import com.amsha.security.api.AutonomyLevel;
 
 public interface AgentCheckpoint {
 

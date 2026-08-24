@@ -5,7 +5,7 @@ import java.util.List;
 import java.util.Set;
 
 import com.amsha.core.agent.reasoning.ParallelToolCall;
-import com.amsha.core.security.AutonomyLevel;
+import com.amsha.security.api.AutonomyLevel;
 
 /**
  * Classifies tools in a parallel batch as pre-executable or HITL-pending.

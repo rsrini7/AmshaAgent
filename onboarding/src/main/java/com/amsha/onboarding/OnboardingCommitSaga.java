@@ -14,9 +14,6 @@ import java.util.Optional;
 import java.util.UUID;
 
 import com.amsha.common.util.LogUtil;
-import com.amsha.core.security.SecretVault;
-import com.amsha.core.security.VaultConstants;
-import com.amsha.core.security.VaultKey;
 import com.amsha.onboarding.spi.CompensatableOnboardingCommit;
 import com.amsha.onboarding.spi.OnboardingContext;
 import com.amsha.onboarding.spi.OnboardingExtension;
@@ -29,6 +26,9 @@ import com.amsha.persistence.api.OnboardingCommitReceiptStorePort;
 import com.amsha.persistence.api.OnboardingDraftDto;
 import com.amsha.persistence.api.OnboardingDraftState;
 import com.amsha.persistence.api.OnboardingDraftStorePort;
+import com.amsha.security.api.SecretVault;
+import com.amsha.security.api.VaultConstants;
+import com.amsha.security.api.VaultKey;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;

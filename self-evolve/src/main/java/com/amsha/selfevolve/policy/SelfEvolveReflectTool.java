@@ -8,19 +8,21 @@ import jakarta.inject.Inject;
 import java.util.List;
 import java.util.Map;
 
-import com.amsha.core.agent.role.ToolCapability;
-import com.amsha.core.agent.role.ToolMetadata;
 import com.amsha.core.scope.WorkspaceContext;
-import com.amsha.core.security.ToolOperation;
-import com.amsha.core.tools.AgentTool;
-import com.amsha.core.tools.IdempotencyMode;
-import com.amsha.core.tools.ToolExecutionContext;
-import com.amsha.core.tools.ToolResponse;
+import com.amsha.security.api.ToolOperation;
 import com.amsha.selfevolve.api.DirectiveState;
 import com.amsha.selfevolve.api.SynthesizedDirective;
 import com.amsha.selfevolve.store.DirectiveStorePort;
+import com.amsha.tool.api.AgentTool;
+import com.amsha.tool.api.IdempotencyMode;
+import com.amsha.tool.api.ToolCapability;
+import com.amsha.tool.api.ToolExecutionContext;
+import com.amsha.tool.api.ToolMetadata;
+import com.amsha.tool.api.ToolResponse;
 
 import org.jboss.logging.Logger;
+
+import io.quarkus.arc.Unremovable;
 
 /**
  * Agent tool that triggers self-evolution directive synthesis on-demand.
@@ -29,6 +31,7 @@ import org.jboss.logging.Logger;
  * and creates them in SHADOW mode for safe evaluation.
  * Also performs lifecycle reconciliation on existing SHADOW directives.
  */
+@Unremovable
 @ApplicationScoped
 @ToolMetadata(
         capabilityId = "self_evolve_reflect",

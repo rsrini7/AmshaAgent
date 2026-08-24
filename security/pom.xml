@@ -1,0 +1,122 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+                             https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.amsha</groupId>
+        <artifactId>amsha-parent</artifactId>
+        <version>0.1.0-SNAPSHOT</version>
+        <relativePath>../pom.xml</relativePath>
+    </parent>
+
+    <artifactId>amsha-security</artifactId>
+    <name>amsha-security</name>
+    <description>Security implementation: vault + Argon2id/AES-GCM-SIV crypto, bootstrap credential issuance, governed outbound HTTP with approval receipts, and the standard autonomy policy (tier-2 impl; core must never import this module)</description>
+
+    <dependencies>
+        <!-- Vocabulary + SecretVault interface contract -->
+        <dependency>
+            <groupId>com.amsha</groupId>
+            <artifactId>amsha-security-api</artifactId>
+        </dependency>
+
+        <!-- Tier-2 impl: cross-cutting core services (audit, scope, state store) -->
+        <dependency>
+            <groupId>com.amsha</groupId>
+            <artifactId>amsha-core</artifactId>
+        </dependency>
+
+        <!-- Direct internal APIs used by moved sources (no transitive masking via core) -->
+        <dependency>
+            <groupId>com.amsha</groupId>
+            <artifactId>amsha-common</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.amsha</groupId>
+            <artifactId>amsha-persistence-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.amsha</groupId>
+            <artifactId>amsha-tool-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.amsha</groupId>
+            <artifactId>amsha-llm-provider-api</artifactId>
+        </dependency>
+
+        <!-- Quarkus Arc CDI -->
+        <dependency>
+            <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-arc</artifactId>
+        </dependency>
+
+        <!-- Config + logging + tracing used directly by vault and seeder -->
+        <dependency>
+            <groupId>org.eclipse.microprofile.config</groupId>
+            <artifactId>microprofile-config-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.jboss.logging</groupId>
+            <artifactId>jboss-logging</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.opentelemetry</groupId>
+            <artifactId>opentelemetry-api</artifactId>
+        </dependency>
+
+        <!-- BouncyCastle - Argon2id + AES-GCM-SIV (use ONLY bcprov-jdk18on) -->
+        <dependency>
+            <groupId>org.bouncycastle</groupId>
+            <artifactId>bcprov-jdk18on</artifactId>
+            <version>${bouncycastle.version}</version>
+            <exclusions>
+                <exclusion><groupId>org.bouncycastle</groupId><artifactId>bc-fips</artifactId></exclusion>
+                <exclusion><groupId>org.bouncycastle</groupId><artifactId>bcprov-ext-jdk18on</artifactId></exclusion>
+            </exclusions>
+        </dependency>
+
+        <!-- Test -->
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-junit5-mockito</artifactId>
+            <version>${quarkus.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-jacoco</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <source>25</source>
+                    <target>25</target>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>io.smallrye</groupId>
+                <artifactId>jandex-maven-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>make-index</id>
+                        <goals><goal>jandex</goal></goals>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+</project>

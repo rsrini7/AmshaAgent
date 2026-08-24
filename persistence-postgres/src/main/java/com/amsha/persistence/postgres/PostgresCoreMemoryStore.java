@@ -8,17 +8,19 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
-import com.amsha.core.memory.tiered.TieredBackend;
 import com.amsha.persistence.api.CoreMemoryBlockDto;
 import com.amsha.persistence.api.CoreMemoryStorePort;
+import com.amsha.persistence.api.TieredBackend;
 import com.amsha.persistence.api.VersionConflictException;
 import com.amsha.persistence.postgres.jdbi.CoreMemoryJdbiDao;
 
 import org.jdbi.v3.core.Jdbi;
 
+import io.quarkus.arc.Unremovable;
 import io.quarkus.arc.properties.IfBuildProperty;
 
 @ApplicationScoped
+@Unremovable
 @TieredBackend("postgres")
 @IfBuildProperty(name = "amsha.persistence.backend", stringValue = "postgres")
 public class PostgresCoreMemoryStore implements CoreMemoryStorePort {

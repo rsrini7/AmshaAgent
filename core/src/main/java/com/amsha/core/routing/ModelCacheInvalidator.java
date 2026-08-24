@@ -3,6 +3,8 @@ package com.amsha.core.routing;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
+import com.amsha.persistence.api.ModelCacheInvalidationPort;
+
 /**
  * Bridges durable LLM-profile mutations to the {@link ChatModelPool} so that a changed, rotated,
  * or deactivated connection/profile/route does not serve a stale pooled client. Adapters call
@@ -11,7 +13,7 @@ import jakarta.inject.Inject;
  * indexed by connection/profile, so they are never disturbed).
  */
 @ApplicationScoped
-public class ModelCacheInvalidator {
+public class ModelCacheInvalidator implements ModelCacheInvalidationPort {
 
     private final ChatModelPool pool;
 

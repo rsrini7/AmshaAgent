@@ -9,9 +9,10 @@ import java.util.Map;
 
 import com.amsha.core.agent.reasoning.ReasoningStep;
 import com.amsha.core.agent.result.AgentResult;
-import com.amsha.core.agent.role.ToolCapability;
-import com.amsha.core.security.AutonomyLevel;
-import com.amsha.core.tools.ToolResponse;
+import com.amsha.core.message.UserMessages;
+import com.amsha.security.api.AutonomyLevel;
+import com.amsha.tool.api.ToolCapability;
+import com.amsha.tool.api.ToolResponse;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -205,6 +206,40 @@ class ToolResultProcessorTest {
         StepDecision decision = processor.resolveOutcome(
                 ctx, ToolCapability.DELEGATE_TO_AGENT.toolName(), Map.of(), res, obs, step, List.of(), 0);
         assertEquals(DecisionType.PROCEED, decision.type());
+    }
+
+    @Test
+    void resolveOutcome_DelegatePausedSuccessShape_TriggersDeterministicTerminal() {
+        // F1 regression: the delegate tool reports a paused delegation as SUCCESS.
+        // The terminal guard must still fire deterministically (not rely on the LLM FINISHing).
+        var ctx = ctx();
+        var step = ReasoningStep.pending("", ToolCapability.DELEGATE_TO_AGENT.toolName(), Map.of());
+        String pausedMsg = UserMessages.delegationPaused("core:researcher", "parallel|batch");
+        assertTrue(pausedMsg.contains(UserMessages.DELEGATION_PAUSED_MARKER));
+        var res = ToolResponse.success(pausedMsg);
+
+        StepDecision decision = processor.resolveOutcome(
+                ctx, ToolCapability.DELEGATE_TO_AGENT.toolName(), Map.of(), res, pausedMsg, step, List.of(), 0);
+        assertEquals(DecisionType.TERMINAL, decision.type());
+        String userSafe = "⏳ " + UserMessages.userSafePortion(pausedMsg);
+        verify(writer).saveAnswer("sess-1", userSafe);
+        // Directive tail must never reach the chat channel.
+        assertFalse(userSafe.contains("CRITICAL DIRECTIVE"));
+        assertFalse(userSafe.contains("FINISH"));
+    }
+
+    @Test
+    void resolveOutcome_DelegatePausedLegacyFailureShape_TriggersTerminal() {
+        // Legacy failure(409) shape must keep terminating as well.
+        var ctx = ctx();
+        var step = ReasoningStep.pending("", ToolCapability.DELEGATE_TO_AGENT.toolName(), Map.of());
+        var res = ToolResponse.failure(409, "Delegation to 'core:researcher' paused for human approval (session: s)");
+        var obs = processor.buildObservation(res);
+
+        StepDecision decision = processor.resolveOutcome(
+                ctx, ToolCapability.DELEGATE_TO_AGENT.toolName(), Map.of(), res, obs, step, List.of(), 0);
+        assertEquals(DecisionType.TERMINAL, decision.type());
+        verify(writer).saveAnswer("sess-1", "⏳ " + UserMessages.userSafePortion(obs));
     }
 
     @Test

@@ -929,10 +929,13 @@ Code location matters for module boundary correctness:
 
 | Concern | Correct module |
 |---|---|
-| New `AgentTool`, `AgentReflex`, `MessageHandler`, `ContextEnricher`, `IntentRoutingProvider`, `GovernanceStrategy` | `amsha-core` |
+| New `AgentTool` implementation | `amsha-tools-builtin`, `mcp`, or a module-specific tools package (contracts in `amsha-tool-api`) |
+| New `AgentReflex`, `MessageHandler`, `ContextEnricher`, `IntentRoutingProvider`, `GovernanceStrategy` | `amsha-core` |
 | New `AgentChatModelProvider` or `RoutingChatModelProvider` | `amsha-llm-providers` (contracts in `amsha-llm-provider-api`) |
 | New `EmbeddingProviderFactory` | `amsha-rag` |
-| New `SkillProvider` | `amsha-core` (or new module) |
+| New `SkillProvider` implementation | `amsha-skills` (registry + entry contracts stay in `core.skill`; skills → core only, never the reverse) |
+| New tiered memory service | `amsha-memory` — strict zero-core; store ports come from `amsha-persistence-api` |
+| Vault / crypto / governed HTTP | `amsha-security` (vocabulary contracts in `amsha-security-api`) |
 | New persistence port implementation | New module (see `amsha-persistence-sqlite` as reference) |
 | New channel implementation | New module or `amsha-channel-telegram` as reference |
 | REST endpoint or startup bootstrap | `amsha-app` |
@@ -940,7 +943,7 @@ Code location matters for module boundary correctness:
 
 ### Reflection registration for native image
 
-If your new class is used reflectively at runtime (e.g., Jackson deserialization, Qute template data), register it with `@RegisterForReflection` or add it to the relevant `*ReflectionConfig.java` in the appropriate module. JVM success does **not** prove native image safety (Architecture Invariant §6.1).
+If your new class is used reflectively at runtime (e.g., Jackson deserialization, Qute template data), register it in the owning module's dedicated `*ReflectionConfig.java` — accessible application types via `targets`, private/nested/dependency types via `classNames` binary names. Do not place type-level `@RegisterForReflection` on individual application classes, and do not register a moved type in two modules. JVM success does **not** prove native image safety (Architecture Invariant §6.1).
 
 ### Testing conventions
 

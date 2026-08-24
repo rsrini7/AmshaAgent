@@ -1,6 +1,8 @@
 package com.amsha.core.agent.loop;
 
-import com.amsha.core.classifier.ClassifierResult;
+import com.amsha.classifier.api.AnswerQualityAction;
+import com.amsha.classifier.api.AnswerQualityContext;
+import com.amsha.classifier.api.ClassifierResult;
 
 /**
  * Optional ordered SPI evaluated only after authoritative answer acceptance.

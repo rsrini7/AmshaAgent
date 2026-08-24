@@ -4,6 +4,8 @@ import jakarta.enterprise.context.ApplicationScoped;
 
 import java.util.regex.Pattern;
 
+import com.amsha.tool.api.AgentSentinels;
+
 /**
  * Shared service for detecting intent patterns within user goals.
  * Centralizes regex logic used by the state machine and reasoning engine.

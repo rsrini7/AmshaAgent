@@ -32,9 +32,9 @@ import com.amsha.core.domain.model.AgentCheckpoint;
 import com.amsha.core.lifecycle.SessionHeartbeatTracker;
 import com.amsha.core.lifecycle.WorkspaceManager;
 import com.amsha.core.pipeline.TurnDispatchService;
-import com.amsha.core.security.AutonomyLevel;
-import com.amsha.core.state.CheckpointStatus;
 import com.amsha.core.state.StatefulAgentStore;
+import com.amsha.persistence.api.CheckpointStatus;
+import com.amsha.security.api.AutonomyLevel;
 
 import org.jboss.logging.Logger;
 import org.junit.jupiter.api.BeforeEach;

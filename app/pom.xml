@@ -23,6 +23,14 @@
       <groupId>com.amsha</groupId>
       <artifactId>amsha-mcp</artifactId>
     </dependency>
+    <dependency>
+      <groupId>com.amsha</groupId>
+      <artifactId>amsha-sandbox</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.amsha</groupId>
+      <artifactId>amsha-tools-builtin</artifactId>
+    </dependency>
 
     <!-- Runtime module only - NOT deployment -->
     <dependency>
@@ -65,7 +73,6 @@
     <dependency>
       <groupId>com.amsha</groupId>
       <artifactId>amsha-persistence-fs</artifactId>
-      <version>${project.version}</version>
     </dependency>
 
     <!-- PostgreSQL adapter (persistence backend) -->
@@ -128,13 +135,6 @@
       <groupId>com.tngtech.archunit</groupId>
       <artifactId>archunit-junit5</artifactId>
       <scope>test</scope>
-    </dependency>
-
-    <!-- Playwright Browser Tool -->
-    <dependency>
-      <groupId>com.amsha</groupId>
-      <artifactId>amsha-tool-playwright</artifactId>
-      <version>${project.version}</version>
     </dependency>
 
     <!-- Explicitly add quarkus-rest for HTTP endpoints -->
@@ -333,6 +333,37 @@
     <dependency>
       <groupId>io.quarkus</groupId>
       <artifactId>quarkus-micrometer-registry-prometheus</artifactId>
+    </dependency>
+
+    <!-- Security vocabulary (vault interface, tool operation, autonomy) -->
+    <dependency>
+      <groupId>com.amsha</groupId>
+      <artifactId>amsha-security-api</artifactId>
+    </dependency>
+    <!-- Tool authoring contracts -->
+    <dependency>
+      <groupId>com.amsha</groupId>
+      <artifactId>amsha-tool-api</artifactId>
+    </dependency>
+    <!-- Shadow-classifier contracts (AgentResource exposes prediction enums) -->
+    <dependency>
+      <groupId>com.amsha</groupId>
+      <artifactId>amsha-classifier-api</artifactId>
+    </dependency>
+    <!-- Security implementation wiring (bootstrap issuer, dev seeder) -->
+    <dependency>
+      <groupId>com.amsha</groupId>
+      <artifactId>amsha-security</artifactId>
+    </dependency>
+    <!-- Tiered memory services (admin resources, retention scheduler) -->
+    <dependency>
+      <groupId>com.amsha</groupId>
+      <artifactId>amsha-memory</artifactId>
+    </dependency>
+    <!-- Skill loading machinery (SkillResource admin endpoints) -->
+    <dependency>
+      <groupId>com.amsha</groupId>
+      <artifactId>amsha-skills</artifactId>
     </dependency>
   </dependencies>
 
@@ -554,6 +585,7 @@ paths: {}</echo>
           prompts/**,
           skills/**,
           META-INF/skills/**,
+          META-INF/services/**,
           provider-catalog.json
         </quarkus.native.resources.includes>
       </properties>

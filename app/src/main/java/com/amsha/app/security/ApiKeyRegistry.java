@@ -17,10 +17,10 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 
-import com.amsha.core.security.CryptoConstants;
 import com.amsha.persistence.api.ApiCredentialDto;
 import com.amsha.persistence.api.ApiCredentialStorePort;
 import com.amsha.persistence.api.BootstrapStateStorePort;
+import com.amsha.security.api.CryptoConstants;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 
@@ -40,10 +40,10 @@ public class ApiKeyRegistry {
     @ConfigProperty(name = "amsha.auth.hmac-key")
     String hmacSecret;
 
-    @ConfigProperty(name = "amsha.api.rate-limit.requests-per-minute", defaultValue = "20")
+    @ConfigProperty(name = "amsha.api.rate-limit.requests-per-minute", defaultValue = "6000")
     int requestsPerMinute;
 
-    @ConfigProperty(name = "amsha.api.rate-limit.mutation-per-minute", defaultValue = "10")
+    @ConfigProperty(name = "amsha.api.rate-limit.mutation-per-minute", defaultValue = "1000")
     int mutationPerMinute;
 
     @ConfigProperty(name = "amsha.auth.session.rotation-grace-seconds", defaultValue = "30")

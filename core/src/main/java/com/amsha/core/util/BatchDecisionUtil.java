@@ -4,7 +4,7 @@ import java.util.List;
 import java.util.Map;
 
 import com.amsha.core.domain.model.AgentCheckpoint;
-import com.amsha.core.state.ToolDecision;
+import com.amsha.persistence.api.ToolDecision;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 

@@ -15,17 +15,18 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Stream;
 
+import com.amsha.classifier.api.ClassifierResult;
+import com.amsha.classifier.api.ClassifierResult.NoOpinionReason;
+import com.amsha.classifier.api.ToolRiskAction;
 import com.amsha.core.agent.role.RoleRegistry;
-import com.amsha.core.classifier.ClassifierResult;
-import com.amsha.core.classifier.ClassifierResult.NoOpinionReason;
-import com.amsha.core.governance.ApprovalFrame;
-import com.amsha.core.security.AutonomyLevel;
-import com.amsha.core.security.ToolOperation;
 import com.amsha.core.tool.DynamicToolAdmission;
 import com.amsha.core.tool.DynamicToolAdmissionLookup;
 import com.amsha.core.tool.ToolGuardInterceptor;
-import com.amsha.core.tools.ToolCategory;
 import com.amsha.core.tools.ToolRegistry;
+import com.amsha.security.api.AutonomyLevel;
+import com.amsha.security.api.RiskLevel;
+import com.amsha.security.api.ToolOperation;
+import com.amsha.tool.api.ToolCategory;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -119,7 +120,7 @@ class ToolInvocationGuardDynamicTest {
         ToolInvocationGuard.GuardDecision decision = evaluate("external_search", AutonomyLevel.FULL, false);
 
         var pause = assertInstanceOf(ToolInvocationGuard.GuardDecision.PauseForApproval.class, decision);
-        assertEquals(ApprovalFrame.RiskLevel.MEDIUM, pause.frame().riskLevel());
+        assertEquals(RiskLevel.MEDIUM, pause.frame().riskLevel());
     }
 
     @Test

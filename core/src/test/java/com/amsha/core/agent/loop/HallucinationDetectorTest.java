@@ -108,6 +108,7 @@ class HallucinationDetectorTest {
 
         var outcome = detector.checkHallucination("sess-1", List.of(recallStep), step, answer);
         assertNotNull(outcome);
-        assertTrue(outcome instanceof FinishActionHandler.FinishOutcome.Correction);
+        assertTrue(outcome instanceof FinishActionHandler.FinishOutcome.SynthesisCorrection);
+        assertEquals("Name: Alice", ((FinishActionHandler.FinishOutcome.SynthesisCorrection) outcome).memoryResult());
     }
 }

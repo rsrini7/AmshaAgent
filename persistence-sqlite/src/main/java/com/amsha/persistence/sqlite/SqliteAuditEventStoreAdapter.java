@@ -8,7 +8,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
-import com.amsha.core.util.TemporalUtils;
+import com.amsha.common.util.TemporalUtils;
 import com.amsha.persistence.api.AuditEventDto;
 import com.amsha.persistence.api.AuditEventStorePort;
 import com.amsha.persistence.sqlite.jdbi.AuditJdbiDao;

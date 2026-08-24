@@ -10,20 +10,27 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-import com.amsha.core.agent.role.ToolCapability;
-import com.amsha.core.agent.role.ToolMetadata;
 import com.amsha.core.audit.AuditService;
 import com.amsha.core.audit.SecurityEventType;
-import com.amsha.core.security.ToolOperation;
 import com.amsha.core.task.TaskFile;
 import com.amsha.core.task.TaskManager;
 import com.amsha.core.task.TaskState;
+import com.amsha.security.api.ToolOperation;
+import com.amsha.tool.api.AgentTool;
+import com.amsha.tool.api.IdempotencyMode;
+import com.amsha.tool.api.ToolCapability;
+import com.amsha.tool.api.ToolExecutionContext;
+import com.amsha.tool.api.ToolMetadata;
+import com.amsha.tool.api.ToolResponse;
+
+import io.quarkus.arc.Unremovable;
 
 /**
  * Agent-callable tool for creating, querying, and managing markdown-based task files.
  * <p>
  * Tasks are plain Markdown files with YAML frontmatter in the workspace — no database required.
  */
+@Unremovable
 @ApplicationScoped
 @ToolMetadata(
         capabilityId = "agent_task",

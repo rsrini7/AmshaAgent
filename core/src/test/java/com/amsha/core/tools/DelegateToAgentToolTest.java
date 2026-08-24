@@ -11,7 +11,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-import com.amsha.core.agent.AgentSentinels;
 import com.amsha.core.agent.loop.AgentLoop;
 import com.amsha.core.agent.loop.GroupConsultationEngine;
 import com.amsha.core.agent.loop.GroupConsultationService;
@@ -21,10 +20,13 @@ import com.amsha.core.agent.role.AgentRoleEnum;
 import com.amsha.core.agent.role.RoleRegistry;
 import com.amsha.core.audit.AuditService;
 import com.amsha.core.observability.AgentOtelContext;
-import com.amsha.core.security.AutonomyLevel;
-import com.amsha.core.security.ToolOperation;
 import com.amsha.persistence.api.CheckpointCrudPort;
 import com.amsha.persistence.api.CheckpointDto;
+import com.amsha.security.api.AutonomyLevel;
+import com.amsha.security.api.ToolOperation;
+import com.amsha.tool.api.AgentSentinels;
+import com.amsha.tool.api.ToolExecutionContext;
+import com.amsha.tool.api.ToolResponse;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -67,6 +69,9 @@ class DelegateToAgentToolTest {
     RoleRegistry roleRegistry;
 
     @Mock
+    Instance<VerificationGate> verificationGateInstance;
+
+    @Mock
     VerificationGate verificationGate;
 
     @InjectMocks
@@ -83,7 +88,9 @@ class DelegateToAgentToolTest {
         tool.delegationProcessor = dp;
         tool.groupConsultationService = groupConsultationService;
         tool.groupConsultationEngine = groupConsultationEngine;
-        tool.verificationGate = verificationGate;
+        Mockito.lenient().when(verificationGateInstance.isResolvable()).thenReturn(true);
+        Mockito.lenient().when(verificationGateInstance.get()).thenReturn(verificationGate);
+        tool.verificationGate = verificationGateInstance;
 
         Mockito.lenient().when(agentLoopInstance.get()).thenReturn(agentLoop);
         Mockito.lenient()
