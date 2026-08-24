@@ -262,6 +262,13 @@ Use the Quarkus updater to generate the composite recipe because it combines:
 - extension-specific recipes, including Camel recipes; and
 - the official `io.quarkus:quarkus-update-recipes` artifact.
 
+The `quarkus-update` agent skill (installed via
+`npx skills add quarkusio/skills --skill quarkus-update`) is used as the
+pre-flight companion to this updater: it diffs the project's build files against
+the matching `code-with-quarkus-compare` reference tag and records structural
+drift as evidence before any recipe runs (see
+`.scratch/quarkus-upgrade/evidence/04-phase2/skill-report.md`).
+
 For each target, perform analysis and dry run from the application module:
 
 ```bash
@@ -831,6 +838,8 @@ Costs and trade-offs:
 - [Quarkus community security support](https://quarkus.io/security/)
 - [Quarkus LTS policy](https://quarkus.io/blog/lts-releases/)
 - [Quarkus update recipes](https://github.com/quarkusio/quarkus-updates)
+- [quarkusio/skills (`quarkus-update` agent skill)](https://github.com/quarkusio/skills)
+- [code-with-quarkus-compare reference projects](https://github.com/quarkusio/code-with-quarkus-compare)
 - [Quarkus 3.38.3 Maven updater source](https://github.com/quarkusio/quarkus/blob/3.38.3/devtools/maven/src/main/java/io/quarkus/maven/UpdateMojo.java)
 - [Quarkus 3.38.3 updater orchestration](https://github.com/quarkusio/quarkus/blob/3.38.3/independent-projects/tools/devtools-common/src/main/java/io/quarkus/devtools/commands/handlers/UpdateProjectCommandHandler.java)
 - [OpenRewrite recipe runner](https://docs.openrewrite.org/running-recipes/getting-started)
