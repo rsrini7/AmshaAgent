@@ -98,8 +98,8 @@ retaining old versions while bumping Quarkus is exactly the skew this decision
 forbids.
 
 This is not a normal single-module application upgrade. The reactor contains
-29 Maven projects in the observed dry run, including a custom Quarkus
-`deployment` module. That module consumes augmentation APIs such as
+28 Maven modules plus the root aggregator — 29 projects in the observed dry
+run — including a custom Quarkus `deployment` module. That module consumes augmentation APIs such as
 `ContextRegistrationPhaseBuildItem`, `CustomScopeBuildItem`,
 `UnremovableBeanBuildItem`, `ReflectiveClassBuildItem`, and
 `NativeImageResourceBuildItem`. Core code also references the Arc
@@ -244,6 +244,11 @@ The following rules apply to all checkpoints:
 10. The Mandrel/GraalVM builder image and its resolved digest are recorded with
     each native artifact. A floating `jdk-25` tag is not sufficient release
     evidence by itself.
+11. Align every explicit `jandex-maven-plugin` version pin with the
+    parent-managed `3.6.0` so extension indexing matches the platform's Jandex
+    runtime line. Verified on this reactor: 20 modules pin `3.5.3` and
+    `persistence-postgres` pins the older `3.1.2`; only the root POM uses the
+    parent-managed version.
 
 ## 5. OpenRewrite decision
 
@@ -420,10 +425,13 @@ and [Moderne CLI license details](https://docs.moderne.io/user-documentation/mod
    - `io.quarkus:quarkus-junit5-component` -> `io.quarkus:quarkus-junit-component`
      (used by `channel-telegram`)
    - `io.quarkus:quarkus-junit5-internal` -> `io.quarkus:quarkus-junit-internal`
-   - `org.apache.camel.quarkus:camel-quarkus-junit5` -> `org.apache.camel.quarkus:camel-quarkus-junit`,
-     and test imports from `org.apache.camel.test.junit5.*` to
-     `org.apache.camel.test.junit6.*`; the old Camel artifact is removed in
-     CQ 3.34, so this rename is mandatory once the member BOM brings CQ 3.38.
+   - `org.apache.camel.quarkus:camel-quarkus-junit5` -> `org.apache.camel.quarkus:camel-quarkus-junit`
+     (declared by both `app` and `channel-telegram`), with test imports moved
+     from `org.apache.camel.test.junit5.*` to `org.apache.camel.test.junit6.*`.
+     Renaming here pairs proactively with this checkpoint's JUnit 6 engine
+     move; the old artifact still resolves on this checkpoint's CQ line but is
+     removed upstream in CQ 3.34, making completion mandatory once Phase 3's
+     member BOM brings CQ 3.38.
    Run the custom deployment-module tests before broad application tests.
 8. Complete the JUnit 6 and test-stack moves:
    - bump `archunit.version` to `1.5.0` and switch the managed/test dependency
@@ -544,6 +552,7 @@ Framework updates are not merged by a dependency bot without these gates.
 | Flyway major bump | Platform moves Flyway `11.11.2` -> `12.0.0` under both backends | Prove startup migration, checksum stability, and schema-history compatibility on SQLite and PostgreSQL |
 | Lucene codec reflection pinning | Native vector search relies on exact `Lucene104Codec` in `reflect-config.json` | Pin Lucene at `10.4.0` unless native reflection configs are updated in lockstep |
 | Quarkus deployment APIs | Amsha owns a custom `deployment` module and build steps | Compile and test augmentation first at every checkpoint; preserve `MultiBuildItem` read-only usage |
+| Jandex plugin/index skew | Seven modules pin `jandex-maven-plugin` `3.5.3` under a parent managing `3.6.0`, while the platform's Jandex runtime moves `3.4.0` -> `3.6.0` | Align the pins to the parent value at Phase 2 and re-prove index-dependent augmentation and native tests |
 | Arc implementation coupling | Core references `io.quarkus.arc.Subclass` | Standardize proxy unwrapping in `ClassUtils` or defensive type hierarchy traversal |
 | Agent argument composition | JaCoCo, Byte Buddy, module opens, and native access share `argLine` | Use late evaluation syntax `@{argLine}`; verify all agents compose in effective Surefire command |
 | REST thread semantics | Safety invariants depend on the actual executing thread | Enforce `@RunOnVirtualThread` via `RestResourceBuildStep`; re-run event-loop guard tests |

@@ -66,7 +66,8 @@ cross-stream migration.
 
 ## Comprehensive repository baseline and library inventory
 
-The root build compiles with Java 25 and coordinates 28 Maven modules. The table
+The root build compiles with Java 25 and coordinates 28 Maven modules (29
+reactor projects counting the root aggregator). The table
 below summarizes the baseline version controls against the proposed target platform:
 
 | Library / Family | Current control in root POM | Current version | Target in 3.38.3 platform | Disposition |
@@ -136,7 +137,7 @@ at every checkpoint.
 | SmallRye Health | `4.2.0` | `4.3.0` | Health endpoints |
 | SmallRye Fault Tolerance | `6.9.3` | `6.11.2` | `@Retry`/circuit breakers in `core`/`mcp` |
 | SmallRye Context Propagation | `2.2.1` | `2.3.0` | Workspace context propagation |
-| Jandex runtime | `3.4.0` | `3.6.0` | Extension indexing; app pins plugin `3.5.3` vs parent `3.6.0` |
+| Jandex runtime | `3.4.0` | `3.6.0` | Extension indexing; seven modules pin plugin `3.5.3` vs parent `3.6.0`; align at Phase 2 |
 | SnakeYAML | `2.4` | `2.6` | `quarkus-config-yaml` profiles |
 | Caffeine | `3.2.3` | `3.2.4` | `quarkus-caffeine` caches |
 | picocli | `4.7.7` | `4.7.7` (unchanged) | CLI dual-mode |
@@ -270,8 +271,11 @@ tests alone cannot close this migration.
   `camel-quarkus-junit5` was renamed to `camel-quarkus-junit`, test imports moved from
   `org.apache.camel.test.junit5` to `org.apache.camel.test.junit6`, and the old artifact
   is **removed in Camel Quarkus 3.34**. Because the 3.38.3 member BOM brings CQ
-  `3.38.0`, keeping `camel-quarkus-junit5` (used by `app`) would resolve a dead
-  coordinate; this rename plus import updates is required work at Phase 2.
+  `3.38.0`, keeping `camel-quarkus-junit5` (declared by both `app` and
+  `channel-telegram`) would resolve dead coordinates once that member BOM
+  lands in Phase 3. Renaming proactively at Phase 2 pairs the switch with the
+  JUnit 6 engine move while the old artifact still resolves on the CQ line of
+  this checkpoint; completion becomes mandatory at Phase 3.
 - **Quarkiverse MCP Server `1.13.1`**:
   Managed via `io.quarkus.platform:quarkus-mcp-server-bom`; the published
   [3.38.3 member BOM](https://repo1.maven.org/maven2/io/quarkus/platform/quarkus-mcp-server-bom/3.38.3/quarkus-mcp-server-bom-3.38.3.pom)
@@ -619,9 +623,8 @@ Source: [Quarkus native-image guide](https://quarkus.io/guides/building-native-i
 ## Extension compatibility
 
 Extension alignment is a release gate, not a cleanup item after compilation.
-There are at least five version authorities today: Quarkus platform,
-Quarkus LangChain4j, Camel Quarkus, JDBI, MCP, and SQLite (six when each
-independent control is counted). A coherent target must be written down before
+There are six version authorities today: Quarkus platform,
+Quarkus LangChain4j, Camel Quarkus, JDBI, MCP, and SQLite. A coherent target must be written down before
 applying recipes.
 
 At the latest-target checkpoint:
