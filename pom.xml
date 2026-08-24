@@ -48,18 +48,15 @@
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <quarkus.platform.artifact-id>quarkus-bom</quarkus.platform.artifact-id>
     <quarkus.platform.group-id>io.quarkus.platform</quarkus.platform.group-id>
-    <quarkus.platform.version>3.27.5.1</quarkus.platform.version>
+    <quarkus.platform.version>3.33.3.1</quarkus.platform.version>
     <quarkus.version>${quarkus.platform.version}</quarkus.version>
-    <langchain4j.version>1.0.0-beta1</langchain4j.version>
     <!-- Aligned to quarkus-bom 3.27.2 managed value (Issue 02): the previous
-         1.78.1 pin silently downgraded the platform's Bouncy Castle. Re-check at
-         each checkpoint per ADR rule 5 (3.38.3 manages 1.84). -->
-    <bouncycastle.version>1.82</bouncycastle.version>
-    <archunit.version>1.4.1</archunit.version>
+         1.78.1 pin silently downgraded the platform's Bouncy Castle. Re-checked per
+         ADR rule 5 at each checkpoint (aligned to 1.84 for the 3.33.3.1 checkpoint). -->
+    <bouncycastle.version>1.84</bouncycastle.version>
+    <archunit.version>1.5.0</archunit.version>
     <errorprone.version>2.49.0</errorprone.version>
-    <camel.quarkus.version>3.27.3</camel.quarkus.version>
     <quarkus-jdbi.version>1.9.0</quarkus-jdbi.version>
-    <quarkus-mcp.version>1.10.3</quarkus-mcp.version>
     <quarkus-jdbc-sqlite.version>3.0.11</quarkus-jdbc-sqlite.version>
     <lucene.version>10.4.0</lucene.version>
     <djl.version>0.33.0</djl.version>
@@ -67,7 +64,7 @@
     <!-- Baked into build-info.properties. "default" = JVM mode (BackendValidator skips).
          Native builds explicitly pass -Damsha.build.backend=sqlite|postgres|fs. -->
     <amsha.build.backend>default</amsha.build.backend>
-    <commons-lang3.version>3.18.0</commons-lang3.version>
+    <commons-lang3.version>3.20.0</commons-lang3.version>
     <commons-text.version>1.15.0</commons-text.version>
     <cron-utils.version>9.2.1</cron-utils.version>
     <owasp-sanitizer.version>20260313.1</owasp-sanitizer.version>
@@ -75,12 +72,12 @@
     <embedded-postgres.version>2.2.2</embedded-postgres.version>
     <bucket4j.version>8.16.1</bucket4j.version>
     <wiremock.version>3.9.2</wiremock.version>
-    <jboss-logmanager.version>3.1.2.Final</jboss-logmanager.version>
+    <jboss-logmanager.version>3.2.1.Final</jboss-logmanager.version>
     <jline.version>3.30.11</jline.version>
     <jansi.version>2.4.3</jansi.version>
     <jacoco.version>0.8.14</jacoco.version>
     <jacoco.minimum.line.coverage>0.70</jacoco.minimum.line.coverage>
-    <bytebuddy.version>1.17.6</bytebuddy.version>
+    <bytebuddy.version>1.17.8</bytebuddy.version>
     <maven.surefire.argLine>-javaagent:${settings.localRepository}/net/bytebuddy/byte-buddy-agent/${bytebuddy.version}/byte-buddy-agent-${bytebuddy.version}.jar --add-opens java.base/java.lang=ALL-UNNAMED --add-opens java.base/java.nio=ALL-UNNAMED --add-opens java.base/sun.nio.ch=ALL-UNNAMED --add-opens java.base/jdk.internal.misc=ALL-UNNAMED -Dnet.bytebuddy.experimental=true --enable-native-access=ALL-UNNAMED -XX:+EnableDynamicAgentLoading -Djdk.attach.allowAttachSelf=true -XX:+StartAttachListener</maven.surefire.argLine>
   </properties>
  
@@ -101,9 +98,16 @@
         <scope>import</scope>
       </dependency>
       <dependency>
-        <groupId>org.apache.camel.quarkus</groupId>
-        <artifactId>camel-quarkus-bom</artifactId>
-        <version>${camel.quarkus.version}</version>
+        <groupId>io.quarkus.platform</groupId>
+        <artifactId>quarkus-camel-bom</artifactId>
+        <version>${quarkus.platform.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+      <dependency>
+        <groupId>io.quarkus.platform</groupId>
+        <artifactId>quarkus-mcp-server-bom</artifactId>
+        <version>${quarkus.platform.version}</version>
         <type>pom</type>
         <scope>import</scope>
       </dependency>
@@ -238,23 +242,13 @@
       </dependency>
       <dependency>
         <groupId>com.tngtech.archunit</groupId>
-        <artifactId>archunit-junit5</artifactId>
+        <artifactId>archunit-junit6</artifactId>
         <version>${archunit.version}</version>
       </dependency>
       <dependency>
         <groupId>io.quarkiverse.jdbi</groupId>
         <artifactId>quarkus-jdbi</artifactId>
         <version>${quarkus-jdbi.version}</version>
-      </dependency>
-      <dependency>
-        <groupId>io.quarkiverse.mcp</groupId>
-        <artifactId>quarkus-mcp-server-stdio</artifactId>
-        <version>${quarkus-mcp.version}</version>
-      </dependency>
-      <dependency>
-        <groupId>io.quarkiverse.mcp</groupId>
-        <artifactId>quarkus-mcp-server-http</artifactId>
-        <version>${quarkus-mcp.version}</version>
       </dependency>
       <dependency>
         <groupId>io.quarkiverse.jdbc</groupId>
@@ -349,7 +343,6 @@
     <dependency>
       <groupId>net.bytebuddy</groupId>
       <artifactId>byte-buddy-agent</artifactId>
-      <version>${bytebuddy.version}</version>
       <scope>test</scope>
     </dependency>
     <dependency>
@@ -393,6 +386,7 @@
           <groupId>io.quarkus.platform</groupId>
           <artifactId>quarkus-maven-plugin</artifactId>
           <version>${quarkus.platform.version}</version>
+          <extensions>true</extensions>
           <executions>
             <execution>
               <goals>
@@ -430,7 +424,7 @@
           <artifactId>maven-surefire-plugin</artifactId>
           <version>3.5.0</version>
             <configuration>
-            <argLine>${argLine} ${maven.surefire.argLine}</argLine>
+            <argLine>@{argLine} ${maven.surefire.argLine}</argLine>
             <systemPropertyVariables>
               <java.util.logging.manager>org.jboss.logmanager.LogManager</java.util.logging.manager>
               <maven.home>${maven.home}</maven.home>
@@ -443,7 +437,7 @@
           <artifactId>maven-failsafe-plugin</artifactId>
           <version>3.5.0</version>
           <configuration>
-            <argLine>${maven.surefire.argLine}</argLine>
+            <argLine>@{argLine} ${maven.surefire.argLine}</argLine>
           </configuration>
           <executions>
             <execution>

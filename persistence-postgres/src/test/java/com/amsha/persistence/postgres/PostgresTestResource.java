@@ -7,8 +7,8 @@ import java.util.Map;
 import com.github.dockerjava.api.DockerClient;
 
 import org.testcontainers.DockerClientFactory;
-import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.containers.wait.strategy.Wait;
+import org.testcontainers.postgresql.PostgreSQLContainer;
 
 import io.quarkus.test.common.QuarkusTestResourceLifecycleManager;
 import io.zonky.test.db.postgres.embedded.EmbeddedPostgres;
@@ -16,7 +16,7 @@ import io.zonky.test.db.postgres.embedded.EmbeddedPostgres;
 @SuppressWarnings("resource")
 public class PostgresTestResource implements QuarkusTestResourceLifecycleManager {
 
-    private PostgreSQLContainer<?> postgres;
+    private PostgreSQLContainer postgres;
     private EmbeddedPostgres embeddedDb;
 
     @Override
@@ -24,7 +24,7 @@ public class PostgresTestResource implements QuarkusTestResourceLifecycleManager
         Map<String, String> props = new HashMap<>();
 
         if (isDockerAvailable()) {
-            postgres = new PostgreSQLContainer<>("postgres:16-alpine")
+            postgres = new PostgreSQLContainer("postgres:16-alpine")
                     .withDatabaseName("test")
                     .withUsername("test")
                     .withPassword("test")

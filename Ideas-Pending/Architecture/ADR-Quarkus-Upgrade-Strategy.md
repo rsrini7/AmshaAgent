@@ -562,6 +562,7 @@ Framework updates are not merged by a dependency bot without these gates.
 | Agroal pool explosion | Default pool max-size rose from 20 to 50 in 3.31; pool implementation crosses a major line (`2.8` -> `3.2.1`) | Retain explicit `max-size: 3` (SQLite) and `max-size: 10` (Postgres) in `application.yaml`; re-prove pool limits |
 | Persistence parity | SQLite is default, with PostgreSQL and filesystem peers | Compile, test, package, and smoke every backend; do not change schema in this migration |
 | Native reachability | Reflection configs, SkillsJar resources, SQLite vec, and ONNX are release-critical | Build all variants and run native runtime/release-evidence gates |
+| LC4J chat-memory JSON in native | QLC codec mixins (`$ChatMessageMixin` etc.) are package-private; native strips them without reflection registration → type-less writes rejected on read | Register LC4J message types + QLC mixin classes in `CoreReflectionConfig`; guarded by `ChatMessageJsonRoundTripTest` |
 | OpenRewrite overreach | Generated patch removes pins and rewrites build configuration | Review every deletion and manually restore intentional aliases/pins |
 | Non-LTS maintenance | 3.38 is a regular stream | Accept an explicit rapid-update cadence or stop at 3.33 LTS |
 

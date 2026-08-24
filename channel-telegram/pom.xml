@@ -41,17 +41,17 @@
     </dependency>
     <dependency>
       <groupId>io.quarkus</groupId>
-      <artifactId>quarkus-junit5</artifactId>
+      <artifactId>quarkus-junit</artifactId>
       <scope>test</scope>
     </dependency>
     <dependency>
       <groupId>org.apache.camel.quarkus</groupId>
-      <artifactId>camel-quarkus-junit5</artifactId>
+      <artifactId>camel-quarkus-junit</artifactId>
       <scope>test</scope>
     </dependency>
     <dependency>
       <groupId>com.tngtech.archunit</groupId>
-      <artifactId>archunit-junit5</artifactId>
+      <artifactId>archunit-junit6</artifactId>
       <scope>test</scope>
     </dependency>
     <dependency>
@@ -61,7 +61,7 @@
     </dependency>
     <dependency>
       <groupId>io.quarkus</groupId>
-      <artifactId>quarkus-junit5-mockito</artifactId>
+      <artifactId>quarkus-junit-mockito</artifactId>
       <scope>test</scope>
     </dependency>
     <dependency>
@@ -94,7 +94,7 @@
 
     <dependency>
       <groupId>io.quarkus</groupId>
-      <artifactId>quarkus-junit5-component</artifactId>
+      <artifactId>quarkus-junit-component</artifactId>
       <scope>test</scope>
     </dependency>
     <dependency>
@@ -116,7 +116,6 @@
       <plugin>
         <groupId>io.smallrye</groupId>
         <artifactId>jandex-maven-plugin</artifactId>
-        <version>3.5.3</version>
         <executions>
           <execution>
             <id>make-index</id>
