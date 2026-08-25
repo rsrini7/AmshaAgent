@@ -24,7 +24,77 @@
     "reason": "Lucene TestSecrets.<clinit> — same lambda references FilterIndexInput.class constant"
   },
   {
+    "name": "org.apache.lucene.codecs.PostingsFormat",
+    "allDeclaredConstructors": true,
+    "allPublicMethods": true
+  },
+  {
+    "name": "org.apache.lucene.codecs.PostingsFormat$Holder",
+    "allDeclaredConstructors": true,
+    "allPublicMethods": true
+  },
+  {
+    "name": "org.apache.lucene.codecs.Codec",
+    "allDeclaredConstructors": true,
+    "allPublicMethods": true
+  },
+  {
+    "name": "org.apache.lucene.codecs.Codec$Holder",
+    "allDeclaredConstructors": true,
+    "allPublicMethods": true
+  },
+  {
+    "name": "org.apache.lucene.codecs.DocValuesFormat",
+    "allDeclaredConstructors": true,
+    "allPublicMethods": true
+  },
+  {
+    "name": "org.apache.lucene.codecs.DocValuesFormat$Holder",
+    "allDeclaredConstructors": true,
+    "allPublicMethods": true
+  },
+  {
+    "name": "org.apache.lucene.codecs.KnnVectorsFormat",
+    "allDeclaredConstructors": true,
+    "allPublicMethods": true
+  },
+  {
+    "name": "org.apache.lucene.codecs.KnnVectorsFormat$Holder",
+    "allDeclaredConstructors": true,
+    "allPublicMethods": true
+  },
+  {
+    "name": "org.apache.lucene.codecs.perfield.PerFieldPostingsFormat",
+    "allDeclaredConstructors": true,
+    "allPublicMethods": true
+  },
+  {
+    "name": "org.apache.lucene.codecs.perfield.PerFieldDocValuesFormat",
+    "allDeclaredConstructors": true,
+    "allPublicMethods": true
+  },
+  {
+    "name": "org.apache.lucene.codecs.perfield.PerFieldKnnVectorsFormat",
+    "allDeclaredConstructors": true,
+    "allPublicMethods": true
+  },
+  {
     "name": "org.apache.lucene.codecs.lucene104.Lucene104Codec",
+    "allDeclaredConstructors": true,
+    "allPublicMethods": true
+  },
+  {
+    "name": "org.apache.lucene.codecs.lucene104.Lucene104Codec$1",
+    "allDeclaredConstructors": true,
+    "allPublicMethods": true
+  },
+  {
+    "name": "org.apache.lucene.codecs.lucene104.Lucene104Codec$2",
+    "allDeclaredConstructors": true,
+    "allPublicMethods": true
+  },
+  {
+    "name": "org.apache.lucene.codecs.lucene104.Lucene104Codec$3",
     "allDeclaredConstructors": true,
     "allPublicMethods": true
   },
@@ -50,6 +120,126 @@
   },
   {
     "name": "org.apache.lucene.codecs.lucene104.Lucene104HnswScalarQuantizedVectorsFormat",
+    "allDeclaredConstructors": true,
+    "allPublicMethods": true
+  },
+  {
+    "name": "org.apache.lucene.codecs.lucene90.Lucene90CompoundFormat",
+    "allDeclaredConstructors": true,
+    "allPublicMethods": true
+  },
+  {
+    "name": "org.apache.lucene.codecs.lucene90.Lucene90LiveDocsFormat",
+    "allDeclaredConstructors": true,
+    "allPublicMethods": true
+  },
+  {
+    "name": "org.apache.lucene.codecs.lucene90.Lucene90NormsFormat",
+    "allDeclaredConstructors": true,
+    "allPublicMethods": true
+  },
+  {
+    "name": "org.apache.lucene.codecs.lucene90.Lucene90PointsFormat",
+    "allDeclaredConstructors": true,
+    "allPublicMethods": true
+  },
+  {
+    "name": "org.apache.lucene.codecs.lucene90.Lucene90StoredFieldsFormat",
+    "allDeclaredConstructors": true,
+    "allPublicMethods": true
+  },
+  {
+    "name": "org.apache.lucene.codecs.lucene90.Lucene90StoredFieldsFormat$Mode",
+    "allDeclaredConstructors": true,
+    "allPublicMethods": true
+  },
+  {
+    "name": "org.apache.lucene.codecs.lucene90.Lucene90TermVectorsFormat",
+    "allDeclaredConstructors": true,
+    "allPublicMethods": true
+  },
+  {
+    "name": "org.apache.lucene.codecs.lucene90.Lucene90FieldInfosFormat",
+    "allDeclaredConstructors": true,
+    "allPublicMethods": true
+  },
+  {
+    "name": "org.apache.lucene.codecs.lucene90.Lucene90SegmentInfoFormat",
+    "allDeclaredConstructors": true,
+    "allPublicMethods": true
+  },
+  {
+    "name": "org.apache.lucene.analysis.TokenizerFactory",
+    "allDeclaredConstructors": true,
+    "allPublicMethods": true
+  },
+  {
+    "name": "org.apache.lucene.analysis.TokenizerFactory$Holder",
+    "allDeclaredConstructors": true,
+    "allPublicMethods": true
+  },
+  {
+    "name": "org.apache.lucene.analysis.CharFilterFactory",
+    "allDeclaredConstructors": true,
+    "allPublicMethods": true
+  },
+  {
+    "name": "org.apache.lucene.analysis.CharFilterFactory$Holder",
+    "allDeclaredConstructors": true,
+    "allPublicMethods": true
+  },
+  {
+    "name": "org.apache.lucene.analysis.TokenFilterFactory",
+    "allDeclaredConstructors": true,
+    "allPublicMethods": true
+  },
+  {
+    "name": "org.apache.lucene.analysis.TokenFilterFactory$Holder",
+    "allDeclaredConstructors": true,
+    "allPublicMethods": true
+  },
+  {
+    "name": "org.apache.lucene.analysis.standard.StandardTokenizerFactory",
+    "allDeclaredConstructors": true,
+    "allPublicMethods": true
+  },
+  {
+    "name": "org.apache.lucene.index.SortFieldProvider",
+    "allDeclaredConstructors": true,
+    "allPublicMethods": true
+  },
+  {
+    "name": "org.apache.lucene.index.SortFieldProvider$Holder",
+    "allDeclaredConstructors": true,
+    "allPublicMethods": true
+  },
+  {
+    "name": "org.apache.lucene.search.SortField$Provider",
+    "allDeclaredConstructors": true,
+    "allPublicMethods": true
+  },
+  {
+    "name": "org.apache.lucene.search.SortedNumericSortField$Provider",
+    "allDeclaredConstructors": true,
+    "allPublicMethods": true
+  },
+  {
+    "name": "org.apache.lucene.search.SortedSetSortField$Provider",
+    "allDeclaredConstructors": true,
+    "allPublicMethods": true
+  },
+  {
+    "name": "org.apache.lucene.util.NamedSPILoader",
+    "allDeclaredConstructors": true,
+    "allPublicMethods": true
+  },
+  {
+    "name": "org.apache.lucene.util.NamedSPILoader$NamedSPI",
+    "allDeclaredConstructors": true,
+    "allPublicMethods": true
+  },
+  {
+    "name": "org.apache.lucene.util.ClassLoaderUtils",
     "allDeclaredConstructors": true,
     "allPublicMethods": true
   }
