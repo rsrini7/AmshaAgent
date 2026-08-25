@@ -25,6 +25,11 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             CoreMemoryStorePort.class,
             RecallMemoryStorePort.class,
             ArchivalMemoryStorePort.class,
+            MemoryRetrievalPort.class,
+            MemoryEntryDto.class,
+            MemoryChunkDto.class,
+            IngestResult.class,
+            BackendCapabilities.class,
             VersionConflictException.class
         })
 public class TieredMemoryReflectionConfig {}

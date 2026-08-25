@@ -3,6 +3,7 @@ package com.amsha.llm.providers;
 import dev.langchain4j.model.anthropic.AnthropicChatModel;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.request.ResponseFormat;
+import dev.langchain4j.model.googleai.GoogleAiGeminiChatModel;
 import dev.langchain4j.model.ollama.OllamaChatModel;
 import dev.langchain4j.model.openai.OpenAiChatModel;
 import dev.langchain4j.model.openai.OpenAiChatRequestParameters;
@@ -16,7 +17,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.function.BiFunction;
 import java.util.regex.Pattern;
@@ -39,7 +39,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.jboss.logging.Logger;
 
-import io.quarkiverse.langchain4j.ai.runtime.gemini.AiGeminiChatLanguageModel;
 import io.quarkus.arc.Arc;
 import io.quarkus.arc.ArcContainer;
 import io.quarkus.arc.InstanceHandle;
@@ -429,16 +428,16 @@ public class ChatModelFactory implements ChatModelCreationPort {
     /** Builds a Gemini ChatModel from a resolved credential. */
     public static ChatModel createGemini(String baseUrl, String apiKey, String model, AgentLlmConfig config) {
         String modelName = (model == null || model.isBlank()) ? ModelDefaults.DEFAULT_GEMINI_MODEL : model;
-        AiGeminiChatLanguageModel.Builder builder = AiGeminiChatLanguageModel.builder()
-                .key(apiKey)
-                .modelId(modelName)
+        GoogleAiGeminiChatModel.GoogleAiGeminiChatModelBuilder builder = GoogleAiGeminiChatModel.builder()
+                .apiKey(apiKey)
+                .modelName(modelName)
                 .temperature(config.temperature())
                 .maxOutputTokens(config.maxTokens())
                 .timeout(config.timeout())
                 .logRequests(config.logHttp())
                 .logResponses(config.logHttp());
         if (baseUrl != null && !baseUrl.isBlank()) {
-            builder.baseUrl(Optional.of(baseUrl));
+            builder.baseUrl(baseUrl);
         }
         return builder.build();
     }

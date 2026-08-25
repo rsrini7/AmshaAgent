@@ -1,6 +1,7 @@
 package com.amsha.llm.providers.reasoning;
 
 import dev.langchain4j.model.chat.ChatModel;
+import dev.langchain4j.model.googleai.GoogleAiGeminiChatModel;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -14,7 +15,6 @@ import com.amsha.llm.api.StructuredOutputMode;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 
-import io.quarkiverse.langchain4j.ai.runtime.gemini.AiGeminiChatLanguageModel;
 import io.quarkus.arc.Unremovable;
 
 @ApplicationScoped
@@ -59,9 +59,9 @@ public class GeminiProviderFactory implements AgentChatModelProvider {
     private ChatModel doCreate(String overrideModel) {
         String key = apiKey.orElseThrow(() -> new IllegalStateException("Gemini requires AMSHA_GEMINI_API_KEY"));
 
-        return AiGeminiChatLanguageModel.builder()
-                .key(key)
-                .modelId(overrideModel != null ? overrideModel : modelName)
+        return GoogleAiGeminiChatModel.builder()
+                .apiKey(key)
+                .modelName(overrideModel != null ? overrideModel : modelName)
                 .temperature(agentConfig.temperature())
                 .maxOutputTokens(agentConfig.maxTokens())
                 .timeout(agentConfig.timeout())

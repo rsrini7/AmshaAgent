@@ -1,7 +1,9 @@
 package com.amsha.persistence.fs;
 
 import com.amsha.persistence.api.ApiCredentialDto;
+import com.amsha.persistence.api.ArchivalChunkDto;
 import com.amsha.persistence.api.BootstrapStateDto;
+import com.amsha.persistence.api.CoreMemoryBlockDto;
 import com.amsha.persistence.api.ExternalIdentityDto;
 import com.amsha.persistence.api.IdentityInvitationDto;
 import com.amsha.persistence.api.IdentityUserDto;
@@ -19,9 +21,16 @@ import com.amsha.persistence.api.OnboardingDraftDto;
 import com.amsha.persistence.api.OnboardingDraftPurpose;
 import com.amsha.persistence.api.OnboardingDraftState;
 import com.amsha.persistence.api.OnboardingExtensionStateDto;
+import com.amsha.persistence.api.RecallMessageDto;
 import com.amsha.persistence.api.WebSessionDto;
 import com.amsha.persistence.api.WorkspaceConnectionGrantDto;
 import com.amsha.persistence.api.WorkspaceMembershipDto;
+import com.amsha.persistence.fs.lucene.LuceneIndexManager;
+import com.amsha.selfevolve.api.DirectiveState;
+import com.amsha.selfevolve.api.EvolutionEvent;
+import com.amsha.selfevolve.api.ExtractedMemory;
+import com.amsha.selfevolve.api.MemoryRecordType;
+import com.amsha.selfevolve.api.SynthesizedDirective;
 
 import io.quarkus.runtime.annotations.RegisterForReflection;
 
@@ -79,13 +88,31 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             LlmConnectionSecretRefDto.class,
             ModelProfileDto.class,
             ModelRouteAssignmentDto.class,
-            WorkspaceConnectionGrantDto.class
+            WorkspaceConnectionGrantDto.class,
+            ArchivalChunkDto.class,
+            RecallMessageDto.class,
+            CoreMemoryBlockDto.class,
+            EvolutionEvent.class,
+            ExtractedMemory.class,
+            SynthesizedDirective.class,
+            DirectiveState.class,
+            MemoryRecordType.class,
+            LuceneIndexManager.ScoredResult.class
         },
         classNames = {
             "org.apache.lucene.search.BoostAttribute",
             "org.apache.lucene.search.BoostAttributeImpl",
             "org.apache.lucene.search.MaxNonCompetitiveBoostAttribute",
             "org.apache.lucene.search.MaxNonCompetitiveBoostAttributeImpl",
-            "com.amsha.persistence.fs.FsVectorIndexMetadataAdapter$IndexDescriptorManifest"
+            "com.amsha.persistence.fs.FsVectorIndexMetadataAdapter$IndexDescriptorManifest",
+            "com.amsha.persistence.fs.FsArchivalMemoryStore$ChunkList",
+            "com.amsha.persistence.fs.FsRecallMemoryStore$MessageList",
+            "com.amsha.persistence.fs.FsCoreMemoryStore$BlockMap",
+            "com.amsha.persistence.fs.FsExtractedMemoryStore$MemoryBatch",
+            "com.amsha.persistence.fs.FsDirectiveStore$DirectiveBatch",
+            "com.amsha.persistence.fs.FsEvolutionEventStore$EventBatch",
+            "com.amsha.persistence.fs.FsSecretStoreAdapter$SecretRecord",
+            "com.amsha.persistence.fs.FsAuditEventStoreAdapter$IndexEntry",
+            "com.amsha.persistence.fs.FsMemoryRetrievalAdapter$IndexEntry"
         })
 public class FsReflectionConfig {}

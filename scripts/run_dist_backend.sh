@@ -450,6 +450,15 @@ if [[ "$VALIDATE_MODE" == true ]]; then
     trap - EXIT INT TERM
     if kill -0 "$server_pid" 2>/dev/null; then
       kill -TERM "$server_pid" 2>/dev/null || true
+      for _ in $(seq 1 10); do
+        if ! kill -0 "$server_pid" 2>/dev/null; then
+          break
+        fi
+        sleep 0.5
+      done
+      if kill -0 "$server_pid" 2>/dev/null; then
+        kill -9 "$server_pid" 2>/dev/null || true
+      fi
       wait "$server_pid" 2>/dev/null || true
     fi
     exit "$exit_code"

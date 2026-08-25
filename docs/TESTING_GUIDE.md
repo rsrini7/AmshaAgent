@@ -1,6 +1,6 @@
 # Amsha Agent - Testing Guide
 
-> **Stack**: JDK 25 · Quarkus 3.33.3.1 · LangChain4J 1.11.10 · SQLite (WAL + FTS5 + sqlite-vec) · Podman (rootless) · Groq Cloud
+> **Stack**: JDK 25 · Quarkus 3.38.3 · LangChain4J 1.17.2 · SQLite (WAL + FTS5 + sqlite-vec) · Podman (rootless) · Groq Cloud
 >
 > This guide covers the automated test suite and the complete REST API surface. Use alongside [TELEGRAM_TESTING.md](./TELEGRAM_TESTING.md) for full end-to-end coverage, and [rest-http/README.md](../rest-http/README.md) for the `.http` file reference.
 
@@ -2512,4 +2512,4 @@ For `AMSHA_VAULT_PEPPER` and `AMSHA_AUDIT_HMAC_KEY`, use stable 32+ character va
 
 ---
 
-*Last updated: Amsha Agent V0.1.0 · Quarkus 3.33.3.1 · JDK 25 · 1664 tests · 18 modules · 21 tools · 18 LLM providers · Tiered Memory · Answer Quality Guard*
+*Last updated: Amsha Agent V0.1.0 · Quarkus 3.38.3 · JDK 25 · 1664 tests · 18 modules · 21 tools · 18 LLM providers · Tiered Memory · Answer Quality Guard*
