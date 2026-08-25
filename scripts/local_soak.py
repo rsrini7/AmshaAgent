@@ -158,6 +158,25 @@ def run_deep_probe(command: str, base_url: str, cwd: Path) -> tuple[bool, str]:
     return completed.returncode == 0, tail[:200]
 
 
+def probe_podman_preflight() -> None:
+    """Pre-flight check for Podman daemon and sandbox runner image."""
+    podman = shutil.which("podman")
+    if not podman:
+        return
+    try:
+        proc = subprocess.run([podman, "info"], capture_output=True, text=True, timeout=5)
+        if proc.returncode != 0:
+            log("NOTICE: Podman daemon unreachable. If health probe /q/health returns 503, restart podman: podman machine stop && podman machine start")
+            return
+        img_check = subprocess.run([podman, "image", "exists", "localhost/amsha-tool-runner:latest"], capture_output=True, timeout=5)
+        if img_check.returncode != 0:
+            img_short = subprocess.run([podman, "image", "exists", "amsha-tool-runner"], capture_output=True, timeout=5)
+            if img_short.returncode != 0:
+                log("NOTICE: Sandbox image 'localhost/amsha-tool-runner:latest' not found. If sandbox checks fail, run: mise run podman:sandbox-build")
+    except Exception:
+        pass
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Amsha local soak test")
     parser.add_argument("--binary", help="Artifact to launch (mutually exclusive with --base-url)")
@@ -169,16 +188,18 @@ def main() -> int:
     parser.add_argument("--deep-cmd", default="",
                         help="Shell command for deep probes; {BASE} is substituted; "
                              "e.g. 'TEST_BASE={BASE} bash rest-http/scripts/validate_onnx.sh'")
-    parser.add_argument("--rss-grow-limit-mb", type=int, default=256)
+    parser.add_argument("--rss-grow-limit-mb", type=int, default=128)
     parser.add_argument("--warmup-cycles", type=int, default=2,
                         help="Cycles excluded from the RSS growth baseline")
     parser.add_argument("--port", type=int, default=8491)
-    parser.add_argument("--data-dir", default="./data-soak")
+    parser.add_argument("--data-dir", default="data-soak")
     parser.add_argument("--env-file", default=".env")
     args = parser.parse_args()
 
     if bool(args.binary) == bool(args.base_url):
         parser.error("exactly one of --binary or --base-url is required")
+
+    probe_podman_preflight()
 
     repo_root = Path(__file__).resolve().parent.parent
     scratch = Path(args.data_dir).resolve()

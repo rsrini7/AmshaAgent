@@ -48,7 +48,7 @@
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <quarkus.platform.artifact-id>quarkus-bom</quarkus.platform.artifact-id>
     <quarkus.platform.group-id>io.quarkus.platform</quarkus.platform.group-id>
-    <quarkus.platform.version>3.33.3.1</quarkus.platform.version>
+    <quarkus.platform.version>3.38.3</quarkus.platform.version>
     <quarkus.version>${quarkus.platform.version}</quarkus.version>
     <!-- Aligned to quarkus-bom 3.27.2 managed value (Issue 02): the previous
          1.78.1 pin silently downgraded the platform's Bouncy Castle. Re-checked per
@@ -56,7 +56,7 @@
     <bouncycastle.version>1.84</bouncycastle.version>
     <archunit.version>1.5.0</archunit.version>
     <errorprone.version>2.49.0</errorprone.version>
-    <quarkus-jdbi.version>1.9.0</quarkus-jdbi.version>
+    <quarkus-jdbi.version>1.10.1</quarkus-jdbi.version>
     <quarkus-jdbc-sqlite.version>3.0.11</quarkus-jdbc-sqlite.version>
     <lucene.version>10.4.0</lucene.version>
     <djl.version>0.33.0</djl.version>
@@ -71,13 +71,13 @@
     <openinference-langchain4j.version>0.1.8</openinference-langchain4j.version>
     <embedded-postgres.version>2.2.2</embedded-postgres.version>
     <bucket4j.version>8.16.1</bucket4j.version>
-    <wiremock.version>3.9.2</wiremock.version>
-    <jboss-logmanager.version>3.2.1.Final</jboss-logmanager.version>
-    <jline.version>3.30.11</jline.version>
+    <wiremock.version>3.13.2</wiremock.version>
+    <jboss-logmanager.version>3.2.2.Final</jboss-logmanager.version>
+    <jline.version>3.30.16</jline.version>
     <jansi.version>2.4.3</jansi.version>
-    <jacoco.version>0.8.14</jacoco.version>
+    <jacoco.version>0.8.15</jacoco.version>
     <jacoco.minimum.line.coverage>0.70</jacoco.minimum.line.coverage>
-    <bytebuddy.version>1.17.8</bytebuddy.version>
+    <bytebuddy.version>1.18.8</bytebuddy.version>
     <maven.surefire.argLine>-javaagent:${settings.localRepository}/net/bytebuddy/byte-buddy-agent/${bytebuddy.version}/byte-buddy-agent-${bytebuddy.version}.jar --add-opens java.base/java.lang=ALL-UNNAMED --add-opens java.base/java.nio=ALL-UNNAMED --add-opens java.base/sun.nio.ch=ALL-UNNAMED --add-opens java.base/jdk.internal.misc=ALL-UNNAMED -Dnet.bytebuddy.experimental=true --enable-native-access=ALL-UNNAMED -XX:+EnableDynamicAgentLoading -Djdk.attach.allowAttachSelf=true -XX:+StartAttachListener</maven.surefire.argLine>
   </properties>
  
@@ -489,7 +489,7 @@
       <plugin>
         <groupId>com.diffplug.spotless</groupId>
         <artifactId>spotless-maven-plugin</artifactId>
-        <version>3.5.1</version>
+        <version>3.10.0</version>
         <configuration>
           <java>
             <palantirJavaFormat>
@@ -531,7 +531,7 @@
       <plugin>
         <groupId>org.codehaus.mojo</groupId>
         <artifactId>exec-maven-plugin</artifactId>
-        <version>3.5.0</version>
+        <version>3.6.3</version>
         <executions>
           <execution>
             <id>verify-skillsjar-index</id>

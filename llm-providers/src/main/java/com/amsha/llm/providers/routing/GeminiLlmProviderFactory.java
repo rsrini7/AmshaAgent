@@ -1,6 +1,7 @@
 package com.amsha.llm.providers.routing;
 
 import dev.langchain4j.model.chat.ChatModel;
+import dev.langchain4j.model.googleai.GoogleAiGeminiChatModel;
 
 import jakarta.enterprise.context.ApplicationScoped;
 
@@ -10,7 +11,6 @@ import com.amsha.llm.api.LlmModelConfig;
 import com.amsha.llm.api.ModelDefaults;
 import com.amsha.llm.api.RoutingChatModelProvider;
 
-import io.quarkiverse.langchain4j.ai.runtime.gemini.AiGeminiChatLanguageModel;
 import io.quarkus.arc.Unremovable;
 
 /**
@@ -34,9 +34,9 @@ public class GeminiLlmProviderFactory implements RoutingChatModelProvider {
         // Hardening: Strip quotes and whitespace
         key = key.replaceAll("[\\p{Cntrl}\\s\"']", "").trim();
 
-        return AiGeminiChatLanguageModel.builder()
-                .key(key)
-                .modelId(config.modelName())
+        return GoogleAiGeminiChatModel.builder()
+                .apiKey(key)
+                .modelName(config.modelName())
                 .temperature(0.0)
                 // .includeThoughts(false)
                 // .thinkingBudget(0L)

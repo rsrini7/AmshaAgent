@@ -60,7 +60,8 @@ The matrix covers all 12 built-in personas:
 | `TEST_BASE` | `http://localhost:8080` | REST runtime base URL |
 | `DELEGATION_ROLES` | all 12 | Comma-separated role subset |
 | `DELEGATION_TIMEOUT_SECONDS` | `180` | Maximum `run-async` request time |
-| `DELEGATION_AUDIT_WAIT_SECONDS` | `90` | Total dispatch-audit observation window |
+| `DELEGATION_MAX_ITERATIONS` | `2` | Outer agent turns allowed for the dispatch probe |
+| `DELEGATION_AUDIT_WAIT_SECONDS` | `180` | Total dispatch-audit observation window |
 | `DELEGATION_AUDIT_POLL_SECONDS` | `2` | Delay between audit polls |
 | `DELEGATION_AUDIT_REQUEST_TIMEOUT_SECONDS` | `5` | Timeout for one audit-list request |
 | `DELEGATION_APPROVAL_REQUEST_TIMEOUT_SECONDS` | `5` | Timeout for one approval request |

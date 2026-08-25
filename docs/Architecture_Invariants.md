@@ -2045,6 +2045,14 @@ Always call `this._ws.disconnect()` before nullifying the old connection in `rec
 
 ---
 
+## Dependency upgrade and platform policy
+
+Dependency changes MUST follow the [Dependency Upgrade Policy](DEPENDENCY_UPGRADE_POLICY.md).
+Routine updates are limited to explicitly versioned independent components;
+Quarkus and BOM-managed transitive dependencies move only with the selected
+Quarkus LTS platform. Native-sensitive versions require the focused evidence
+listed by that policy.
+
 ## 24. Threading & Concurrency Invariants
 
 ### 24.1 Virtual Threads + `synchronized` on JDK 25

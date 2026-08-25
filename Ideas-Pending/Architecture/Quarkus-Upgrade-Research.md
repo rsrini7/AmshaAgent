@@ -2,7 +2,7 @@
 
 Research date: 2026-08-23 (Asia/Kolkata)
 
-Status: research input for an architecture decision; no migration has been applied.
+Status: historical research input for the architecture decision. The repository now targets Quarkus `3.38.3`; the 3.27.2 and 3.33.3.1 references below are baseline and checkpoint comparisons.
 
 ## Executive finding
 
