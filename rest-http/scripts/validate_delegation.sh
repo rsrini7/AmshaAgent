@@ -20,6 +20,7 @@ B="${TEST_BASE:-$B}"
 API_BASE="${B%/}/api/v1"
 TIMEOUT_SECONDS="${DELEGATION_TIMEOUT_SECONDS:-180}"
 PACE_SECONDS="${DELEGATION_PACE_SECONDS:-1}"
+MAX_ITERATIONS="${DELEGATION_MAX_ITERATIONS:-2}"
 AUDIT_WAIT_SECONDS="${DELEGATION_AUDIT_WAIT_SECONDS:-180}"
 AUDIT_POLL_SECONDS="${DELEGATION_AUDIT_POLL_SECONDS:-2}"
 AUDIT_POLL_COUNT=$(( (AUDIT_WAIT_SECONDS + AUDIT_POLL_SECONDS - 1) / AUDIT_POLL_SECONDS ))
@@ -240,9 +241,9 @@ for entry in "${ROLE_MATRIX[@]}"; do
         continue
     fi
     goal="Call garuda now and delegate to $target. $task Do not answer directly before the specialist returns."
-    # One outer iteration is enough to verify the delegation boundary and
-    # avoids making this capability probe wait for the specialist's answer.
-    payload="{\"goal\":\"$goal\",\"agentRole\":\"$role\",\"maxIterations\":1}"
+    # Allow one follow-up turn for heavier personas to dispatch after their
+    # first reasoning/tool step, while the audit event remains the assertion.
+    payload="{\"goal\":\"$goal\",\"agentRole\":\"$role\",\"maxIterations\":$MAX_ITERATIONS}"
     start_async_run "$API_BASE/sessions/$SESSION_ID/run-async" "$payload"
 
     dispatched=false

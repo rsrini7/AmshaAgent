@@ -456,9 +456,9 @@ if [[ "$VALIDATE_MODE" == true ]]; then
         fi
         sleep 0.5
       done
-      if kill -0 "$server_pid" 2>/dev/null; then
-        kill -9 "$server_pid" 2>/dev/null || true
-      fi
+        if kill -0 "$server_pid" 2>/dev/null; then
+            printf '⚠️ Validation server did not exit after SIGTERM (pid %s).\n' "$server_pid" >&2
+        fi
       wait "$server_pid" 2>/dev/null || true
     fi
     exit "$exit_code"
