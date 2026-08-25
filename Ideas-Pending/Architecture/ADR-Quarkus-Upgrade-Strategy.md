@@ -1,7 +1,7 @@
 # ADR: Stage the Quarkus 3.27 to 3.38 Upgrade Through Supported Checkpoints
 
-- **Status**: Accepted — the migration strategy selected the 3.38.3 latest stream; final native/release evidence remains tracked by the upgrade issue files.
-- **Date**: 2026-08-23
+- **Status**: Accepted and Implemented — Quarkus 3.38.3 Latest Stream upgrade completed across all 29 modules and 3 persistence backends (SQLite, PostgreSQL, Filesystem); full release evidence and soak verification recorded.
+- **Date**: 2026-08-23 (Updated 2026-08-25)
 - **Decision owners**: Amsha Agent maintainers
 - **Baseline platform**: Quarkus `3.27.2`
 - **Current platform**: Quarkus `3.38.3`

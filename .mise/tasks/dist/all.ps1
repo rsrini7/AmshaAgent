@@ -49,7 +49,7 @@ $envFs = @"
 QUARKUS_PROFILE=prod,filesystem
 "@
 Set-Content -Path "$distDir/.env.fs" -Value $envFs -NoNewline
-Write-Host "✅  Created .env.fs (source before running arcclaw-fs)"
+Write-Host "✅  Created .env.fs (source before running amsha-fs)"
 
 Write-Host ''
 Write-Host "✅  dist assembled - all 3 backend variants ready."
