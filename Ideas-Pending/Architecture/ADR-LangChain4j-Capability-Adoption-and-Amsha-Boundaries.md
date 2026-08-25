@@ -16,7 +16,14 @@ Amsha already uses LangChain4j as the common chat and embedding protocol, but th
 - The current `dev.langchain4j` `1.17.2` ceiling is an explicit compatibility boundary. A capability whose required API or implementation is newer than that ceiling waits for the next Quarkus/member-BOM checkpoint. Any interim `dependencyManagement` override is outside this ADR and requires a separate recorded decision with build, native-image, and compatibility evidence.
 - `LlmProviderPort` deliberately uses LangChain4j `ChatRequest` and `ChatResponse`, and `LangChain4jLlmAdapter` preserves persona/group/global model routing. This is an intentional compatibility seam, not evidence that provider-specific SDKs should leak into the agent domain.
 - `StructuredOutputMode` and schema retry machinery already exist. The shared OpenAI-compatible builder path applies `ResponseFormat.JSON` in eligible toolless model configurations; the Ollama, Anthropic, and Gemini-specific factory paths do not. `StructuredOutputEngine` and intent classification do not attach an operation-specific JSON Schema through request parameters. `NATIVE` is already the default in `AgentChatModelProvider` and `AgentLlmConfig`, so production is already routed onto this gap even when only generic JSON mode is available. The `llm-provider-api` README also has stale structured-output enum values and must be reconciled during the first implementation slice.
-- No LangChain4j `ChatModelListener` or `ToolExecutionListener` is registered. Amsha currently owns OTel spans, token metrics, `AgentObserver` callbacks, and Phoenix/OpenInference wiring. Listener adoption could reduce duplication, but it is not a drop-in replacement until trace, metric, context, native-image, and failure semantics are proven equivalent.
+- No LangChain4j `ChatModelListener` is registered. (`1.17.2` exposes no
+  `ToolExecutionListener`; its AiServices-level tool-event listeners such as
+  `ToolExecutedEventListener` bind to AiService pipelines Amsha does not run —
+  tool execution is observed today through Amsha's own `AgentObserver`.)
+  Amsha currently owns OTel spans, token metrics, `AgentObserver` callbacks,
+  and Phoenix/OpenInference wiring. Listener adoption could reduce duplication,
+  but it is not a drop-in replacement until trace, metric, context,
+  native-image, and failure semantics are proven equivalent.
 - The `mcp` module is an Amsha-owned bridge. It includes outbound client/lifecycle services, approval and credential handling, Podman and stdio transport, NDJSON handling, dynamic capability admission, and the `ExternalMcpToolAdapter`. The project uses Quarkus MCP server artifacts for its server surface, but has no `langchain4j-mcp` dependency. Replacing the bridge would risk bypassing `ToolInvocationGuard`, audit, category routing, and HITL.
 - RAG currently performs persistence-backed hybrid retrieval and RRF ordering through `TwoTierMemoryService` and `ScoredChunk`. LangChain4j `ScoringModel` is available in `1.17.2`, but no reranker stage exists. `ScoredChunk.score` is a synthetic fusion score and is not a raw relevance threshold, so a cross-encoder score cannot be substituted into that field without changing retrieval semantics.
 - `AudioContent`, `ImageContent`, and `PdfFileContent` are registered for native reflection, but the channel contract and inbound handlers are still text-oriented. Multimodal support is therefore an ingestion and routing feature, not an already-adopted model capability.
@@ -31,15 +38,25 @@ The first implementation slice will make `StructuredOutputMode.NATIVE` meaningfu
 
 Capability detection must be data- or factory-driven rather than a hardcoded provider-name list. It must account for model routing, toolless versus tool-call requests, proxy limitations such as Headroom, and provider-specific schema restrictions. No provider may claim strict support merely because it accepts generic JSON mode.
 
+For composite/failover model wrappers, the safe capability intersection remains
+the advertised contract. If runtime behavior still exposes a candidate that
+rejects an attached native response format, the request-composition layer owns
+rebuilding the request without that parameter before bounded prompt-directed
+self-correction; failover must not replay a schema-bearing request verbatim.
+
 ### RAG reranking
 
 Reranking is the next product-facing priority after structured-output completion. RAG will define one Amsha reranker port and may adapt LangChain4j `ScoringModel` behind it. Candidate generation remains the existing FTS5/BM25, vector, and RRF path. A reranker may reorder a bounded candidate set, but it must not make retrieval destructive or silently change the meaning of the existing fusion score.
 
 The normative score contract is to preserve `ScoredChunk.score` as the existing RRF fusion score and carry model output as a separate `rerankScore` value in a non-breaking reranked-result contract. Rerank ordering may use `rerankScore`; existing fusion thresholds and consumers must not receive the raw cross-encoder score. A missing reranker, model-load failure, or embedding descriptor mismatch falls back to the current hybrid ordering and keyword retrieval. The preferred local implementation belongs in `local-ml-onnx`, subject to the existing ONNX bundle provenance, reflection, scheduling, and native-smoke rules. Optional cloud providers are later adapters, not a prerequisite for the local path.
 
+`rerankScore` is an ordering-only, model-local score rather than a calibrated
+probability or cross-model threshold. Any future calibration or blending
+requirement needs a separately versioned contract.
+
 ### Observability listeners
 
-Listener-based observability is a migration pilot, not an immediate deletion of Amsha instrumentation. A future `ChatModelListener` adapter may capture provider request, response, error, latency, and token events, but existing spans and metrics remain authoritative until parity is demonstrated without duplicate spans, duplicate token counts, lost `WorkspaceContext`, changed redaction, or native-image regressions. `ToolExecutionListener` may observe an already admitted execution only; it must never discover, authorize, execute, or resume a tool outside Amsha’s normal path.
+Listener-based observability is a migration pilot, not an immediate deletion of Amsha instrumentation. A future `ChatModelListener` adapter may capture provider request, response, error, latency, and token events, but existing spans and metrics remain authoritative until parity is demonstrated without duplicate spans, duplicate token counts, lost `WorkspaceContext`, changed redaction, or native-image regressions. Tool-execution observation remains Amsha-owned via `AgentObserver`; upstream AiServices tool-event listeners are out of scope while Amsha executes tools through its own guard path, and any future adoption re-enters through this same boundary: observe an already admitted execution only, never discover, authorize, execute, or resume a tool outside Amsha’s normal path.
 
 The P3 placement is intentional: product-facing retrieval quality is prioritized ahead of internal instrumentation cleanup. This knowingly prolongs the current hand-rolled OTel/Micrometer path until the listener pilot proves parity; it is not an accidental omission or a reversal of the observability goal.
 
