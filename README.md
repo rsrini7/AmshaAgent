@@ -271,4 +271,4 @@ Use `--module app`, `--top 10`, `--badge`, or `--json` to narrow or automate rep
 
 ---
 
-> **Last updated**: Amsha Agent V0.1.0 · Quarkus 3.38.3 · JDK 25 · 19 modules · 21 tools · 20 reflexes · 18 LLM providers
+> **Last updated**: Amsha Agent V0.1.0 · Quarkus 3.38.3 · JDK 25 · 28 Maven modules · 21 tools · 20 reflexes · 18 LLM providers

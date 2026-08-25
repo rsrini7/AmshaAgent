@@ -28,7 +28,7 @@
 
 ### Q: Why is Amsha Agent structured as a multi-module Maven reactor instead of a single application?
 
-The reactor enforces strict architectural separation that prevents accidental dependency creep. The 18 modules are:
+The reactor enforces strict architectural separation that prevents accidental dependency creep. It contains 28 Maven modules (29 projects including the root aggregator); the 18 primary runtime modules are:
 
 - **`amsha-channel-api`** - Channel SPI contracts (6 interfaces: `ChannelPlugin`, `ChannelSender`, `ReplyRenderer`, `ChannelAllowlist`, `ChannelJobNotifier`, `ChannelDaemon`) plus structured output types. Zero implementation — allows `amsha-core` to reference channel concepts without coupling to any specific adapter.
 - **`amsha-common`** - Shared utilities and cross-module constants.

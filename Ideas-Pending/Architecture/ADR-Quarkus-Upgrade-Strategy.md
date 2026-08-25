@@ -1,9 +1,10 @@
 # ADR: Stage the Quarkus 3.27 to 3.38 Upgrade Through Supported Checkpoints
 
-- **Status**: Proposed
+- **Status**: Accepted — the migration strategy selected the 3.38.3 latest stream; final native/release evidence remains tracked by the upgrade issue files.
 - **Date**: 2026-08-23
 - **Decision owners**: Amsha Agent maintainers
-- **Current platform**: Quarkus `3.27.2`
+- **Baseline platform**: Quarkus `3.27.2`
+- **Current platform**: Quarkus `3.38.3`
 - **Latest stable at review time**: Quarkus `3.38.3`
 - **Checkpoint releases**: Quarkus `3.27.5.1` and `3.33.3.1` LTS
 - **Research**: [Quarkus 3.38 Upgrade Research](Quarkus-Upgrade-Research.md)
@@ -11,7 +12,7 @@
 
 ## 1. Decision summary
 
-Amsha will migrate from Quarkus `3.27.2` to the latest stable Quarkus release
+This decision records Amsha's migration from Quarkus `3.27.2` to the latest stable Quarkus release
 using three independently validated checkpoints:
 
 1. `3.27.2` to `3.27.5.1`, the latest patch in the current LTS stream;

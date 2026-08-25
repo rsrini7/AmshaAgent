@@ -249,7 +249,7 @@ X-Amsha-API-Key: {{validKey}}
 |---|---|
 | `200` | Success (also used for JSON-RPC errors per spec) |
 | `201` | Session or skill created |
-| `202` | `run-async` accepted, or `AWAITING_APPROVAL` checkpoint |
+| `202` | Asynchronous run result: completed, `AWAITING_APPROVAL`, or `AWAITING_RETRY`; inspect the response body and audit state |
 | `400` | Bad request (invalid role, missing goal, bad YAML) |
 | `401` | Missing or invalid API key |
 | `404` | Session/resource not found |
