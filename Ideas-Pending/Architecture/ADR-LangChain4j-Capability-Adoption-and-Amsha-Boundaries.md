@@ -3,6 +3,8 @@
 - **Status**: Proposed
 - **Date**: 2026-08-25
 - **Decision owners**: Amsha Agent maintainers
+- **Feature Slug**: `lc4j-capability-adoption`
+- **Issue Tracker**: `.scratch/lc4j-capability-adoption/`
 - **Initiative priority**: P1 strategic modernization; the first implementation slice is P1 structured-output completion
 - **Related**: [Quarkus upgrade strategy](ADR-Quarkus-Upgrade-Strategy.md), [ONNX local inference](../ADR-ONNX-In-Process-Local-ML-Inference.md), [MCP management and channel control](../ADR-MCP-Management-UI-and-Channel-Control.md), [Architecture Invariants](../../docs/Architecture_Invariants.md)
 
