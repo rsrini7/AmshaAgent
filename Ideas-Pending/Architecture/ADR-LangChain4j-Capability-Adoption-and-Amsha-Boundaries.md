@@ -1,6 +1,6 @@
 # ADR: Adopt LangChain4j Capabilities Behind Amsha-Owned Boundaries
 
-- **Status**: Proposed
+- **Status**: Accepted (2026-08-25, maintainer review); Iteration 0 baseline-evidence capture authorized
 - **Date**: 2026-08-25
 - **Decision owners**: Amsha Agent maintainers
 - **Feature Slug**: `lc4j-capability-adoption`

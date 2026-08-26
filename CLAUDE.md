@@ -24,8 +24,3 @@ Read [AGENTS.md](AGENTS.md) before making changes; it is the canonical guide.
   belong only in the ignored `.env` or process environment; never print or pass them
   on the command line. This smoke path must use OMLX through `generic-openai`, never
   Ollama, and must not be represented as formal cross-platform release evidence.
-
-## Babysitter
-
-For complex workflows, use `/skill:babysit`. This project uses semi-autonomous,
-evolutionary, spec-driven refinement; see `.a5c/project-profile.json` and `.a5c/`.

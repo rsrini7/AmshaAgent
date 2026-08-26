@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.Duration;
 import java.util.Optional;
@@ -87,5 +88,39 @@ class LlmModelConfigTest {
                         Optional.empty(),
                         null,
                         false));
+    }
+
+    @Test
+    void legacyConstructor_defaultsStrictSchemaAdvertisementToFalse_failClosed() {
+        LlmModelConfig config = new LlmModelConfig(
+                "groq",
+                "llama3-8b",
+                "https://api.groq.com/openai/v1",
+                Optional.of("key"),
+                Optional.empty(),
+                Optional.empty(),
+                Optional.empty(),
+                StructuredOutputMode.NATIVE,
+                true);
+        assertFalse(config.strictJsonSchemaAdvertised());
+        assertTrue(config.toolless());
+    }
+
+    @Test
+    void canonicalConstructor_carriesAdvertisement() {
+        var config = new LlmModelConfig(
+                "openai",
+                "gpt-4o",
+                "https://api.openai.com/v1",
+                Optional.of("key"),
+                Optional.<Integer>empty(),
+                Optional.<Duration>empty(),
+                Optional.<Integer>empty(),
+                StructuredOutputMode.NATIVE,
+                true,
+                true);
+        assertTrue(config.strictJsonSchemaAdvertised());
+        assertEquals(StructuredOutputMode.NATIVE, config.structuredOutputMode());
+        assertEquals("openai", config.provider());
     }
 }

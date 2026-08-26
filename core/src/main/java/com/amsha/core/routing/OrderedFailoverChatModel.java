@@ -1,5 +1,6 @@
 package com.amsha.core.routing;
 
+import dev.langchain4j.model.chat.Capability;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.request.ChatRequest;
 import dev.langchain4j.model.chat.response.ChatResponse;
@@ -7,9 +8,11 @@ import dev.langchain4j.model.chat.response.ChatResponse;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 import com.amsha.core.agent.reasoning.error.LlmErrorClassificationService;
+import com.amsha.llm.api.StructuredOutputCapabilities;
 import com.amsha.llm.api.error.LlmAuthenticationException;
 import com.amsha.llm.api.error.LlmContentFilterException;
 import com.amsha.llm.api.error.LlmMalformedResponseException;
@@ -44,6 +47,7 @@ public class OrderedFailoverChatModel implements ChatModel {
 
     private final String routeKey;
     private final List<Entry> entries;
+    private final Set<Capability> compositeCapabilities;
     private final Map<String, Health> health;
     private final int cooldownBaseSeconds;
     private final int cooldownMaxSeconds;
@@ -60,6 +64,8 @@ public class OrderedFailoverChatModel implements ChatModel {
         }
         this.routeKey = routeKey;
         this.entries = List.copyOf(entries);
+        this.compositeCapabilities = StructuredOutputCapabilities.intersectionOf(
+                this.entries.stream().map(Entry::model).toList());
         this.health = new ConcurrentHashMap<>();
         for (Entry e : entries) {
             health.put(e.label(), new Health());
@@ -71,6 +77,17 @@ public class OrderedFailoverChatModel implements ChatModel {
 
     public OrderedFailoverChatModel(String routeKey, List<Entry> entries, int cooldownTransientSeconds) {
         this(routeKey, entries, 10, 60, cooldownTransientSeconds);
+    }
+
+    /**
+     * Safe intersection of all candidates' capabilities, computed once at
+     * composition time. Never upgraded mid-request when failover advances to
+     * another candidate; health, cooldown, and permanent-disable states never
+     * change the reported set.
+     */
+    @Override
+    public Set<Capability> supportedCapabilities() {
+        return compositeCapabilities;
     }
 
     @Override

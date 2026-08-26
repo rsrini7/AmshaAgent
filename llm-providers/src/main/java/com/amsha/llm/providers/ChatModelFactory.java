@@ -19,7 +19,6 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.BiFunction;
-import java.util.regex.Pattern;
 
 import com.amsha.common.util.LogUtil;
 import com.amsha.core.routing.MultiModelChatModel;
@@ -27,6 +26,7 @@ import com.amsha.llm.api.AgentLlmConfig;
 import com.amsha.llm.api.ChatModelCreationPort;
 import com.amsha.llm.api.LlmModelConfig;
 import com.amsha.llm.api.ModelDefaults;
+import com.amsha.llm.api.StructuredOutputCapabilities;
 import com.amsha.llm.api.StructuredOutputMode;
 import com.amsha.llm.providers.wrapper.AgyResponsesChatModel;
 import com.amsha.llm.providers.wrapper.ClaudeCodeResponsesChatModel;
@@ -53,7 +53,6 @@ import io.quarkus.arc.Unremovable;
 public class ChatModelFactory implements ChatModelCreationPort {
 
     private static final Logger LOG = Logger.getLogger(ChatModelFactory.class);
-    private static final Pattern HEADROOM_PORT_PATTERN = Pattern.compile(":87[89]\\d");
     private static final ObjectMapper EXTRA_BODY_MAPPER = new ObjectMapper();
 
     public ChatModelFactory() {}
@@ -94,19 +93,12 @@ public class ChatModelFactory implements ChatModelCreationPort {
             boolean toolless,
             String baseUrl) {
         if (mode == StructuredOutputMode.NATIVE && toolless) {
-            if (isHeadroomProxyUrl(baseUrl)) {
+            if (StructuredOutputCapabilities.isHeadroomProxyUrl(baseUrl)) {
                 LOG.info("Bypassing native JSON response format due to Headroom proxy routing: " + baseUrl);
                 return;
             }
             builder.responseFormat(ResponseFormat.JSON);
         }
-    }
-
-    private static boolean isHeadroomProxyUrl(String url) {
-        if (url == null) return false;
-        String lower = url.toLowerCase();
-        return lower.contains("headroom")
-                || HEADROOM_PORT_PATTERN.matcher(lower).find();
     }
 
     /** Convenience: builds an OpenAI-compatible ChatModel from an {@link LlmModelConfig}. */

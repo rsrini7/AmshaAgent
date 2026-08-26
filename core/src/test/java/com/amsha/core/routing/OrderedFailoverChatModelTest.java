@@ -1,16 +1,20 @@
 package com.amsha.core.routing;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.UserMessage;
+import dev.langchain4j.model.chat.Capability;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.request.ChatRequest;
 import dev.langchain4j.model.chat.response.ChatResponse;
 
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import com.amsha.llm.api.error.LlmAuthenticationException;
@@ -54,6 +58,147 @@ class OrderedFailoverChatModelTest {
             calls.incrementAndGet();
             return response();
         }
+    }
+
+    /** ChatModel with fixed capabilities; optionally fails every call with the given exception. */
+    static final class CapableModel implements ChatModel {
+        private final Set<Capability> capabilities;
+        private final RuntimeException failure;
+
+        CapableModel(Capability... capabilities) {
+            this(null, capabilities);
+        }
+
+        CapableModel(RuntimeException failure, Capability... capabilities) {
+            this.capabilities = Set.of(capabilities);
+            this.failure = failure;
+        }
+
+        @Override
+        public ChatResponse chat(ChatRequest request) {
+            if (failure != null) {
+                throw failure;
+            }
+            return response();
+        }
+
+        @Override
+        public Set<Capability> supportedCapabilities() {
+            return capabilities;
+        }
+    }
+
+    @Test
+    void capabilities_safeIntersectionOfCandidates() {
+        var both = new OrderedFailoverChatModel(
+                "route",
+                List.of(
+                        new OrderedFailoverChatModel.Entry(
+                                "a", new CapableModel(Capability.RESPONSE_FORMAT_JSON_SCHEMA)),
+                        new OrderedFailoverChatModel.Entry(
+                                "b", new CapableModel(Capability.RESPONSE_FORMAT_JSON_SCHEMA))),
+                5);
+        assertTrue(both.supportedCapabilities().contains(Capability.RESPONSE_FORMAT_JSON_SCHEMA));
+
+        var mixed = new OrderedFailoverChatModel(
+                "route",
+                List.of(
+                        new OrderedFailoverChatModel.Entry(
+                                "a", new CapableModel(Capability.RESPONSE_FORMAT_JSON_SCHEMA)),
+                        new OrderedFailoverChatModel.Entry("b", new CapableModel())),
+                5);
+        assertFalse(
+                mixed.supportedCapabilities().contains(Capability.RESPONSE_FORMAT_JSON_SCHEMA),
+                "one non-capable candidate must shrink the whole wrapper to non-native");
+    }
+
+    @Test
+    void capabilities_neverUpgradedWhenFailoverAdvances() {
+        var wrapper = new OrderedFailoverChatModel(
+                "route",
+                List.of(
+                        new OrderedFailoverChatModel.Entry(
+                                "primary",
+                                new CapableModel(
+                                        new LlmServiceUnavailableException("down", new RuntimeException()),
+                                        Capability.RESPONSE_FORMAT_JSON_SCHEMA)),
+                        new OrderedFailoverChatModel.Entry(
+                                "secondary", new CapableModel(Capability.RESPONSE_FORMAT_JSON_SCHEMA))),
+                5);
+
+        Set<Capability> before = wrapper.supportedCapabilities();
+        assertTrue(before.contains(Capability.RESPONSE_FORMAT_JSON_SCHEMA));
+
+        // Force failover to the secondary candidate.
+        wrapper.chat(request());
+
+        assertSame(
+                before,
+                wrapper.supportedCapabilities(),
+                "capability set instance must survive failover advance unchanged");
+        assertTrue(
+                before.contains(Capability.RESPONSE_FORMAT_JSON_SCHEMA),
+                "capability must be the composition-time intersection, never upgraded mid-request");
+    }
+
+    /** Candidate whose declared capability set changes after its first read. */
+    static final class MutatingCapabilityModel implements ChatModel {
+        private final AtomicInteger reads = new AtomicInteger();
+
+        @Override
+        public ChatResponse chat(ChatRequest request) {
+            return response();
+        }
+
+        @Override
+        public Set<Capability> supportedCapabilities() {
+            return reads.incrementAndGet() == 1 ? Set.of(Capability.RESPONSE_FORMAT_JSON_SCHEMA) : Set.of();
+        }
+    }
+
+    @Test
+    void capabilities_nonCapablePrimary_capableSecondary_snapshotStaysEmpty() {
+        var wrapper = new OrderedFailoverChatModel(
+                "route",
+                List.of(
+                        new OrderedFailoverChatModel.Entry("primary", new CapableModel()),
+                        new OrderedFailoverChatModel.Entry(
+                                "secondary", new CapableModel(Capability.RESPONSE_FORMAT_JSON_SCHEMA))),
+                5);
+
+        Set<Capability> atComposition = wrapper.supportedCapabilities();
+        assertTrue(atComposition.isEmpty(), "non-capable primary must shrink the whole wrapper to non-native");
+
+        // Failover advances to the capable secondary; the snapshot must not upgrade.
+        wrapper.chat(request());
+
+        assertSame(atComposition, wrapper.supportedCapabilities());
+        assertTrue(atComposition.isEmpty(), "snapshot must stay empty even after reaching the capable candidate");
+    }
+
+    @Test
+    void capabilities_snapshotNeverReReadFromCandidates() {
+        var wrapper = new OrderedFailoverChatModel(
+                "route",
+                List.of(
+                        new OrderedFailoverChatModel.Entry(
+                                "primary", new CapableModel(Capability.RESPONSE_FORMAT_JSON_SCHEMA)),
+                        new OrderedFailoverChatModel.Entry("secondary", new MutatingCapabilityModel())),
+                5);
+
+        Set<Capability> atComposition = wrapper.supportedCapabilities();
+        assertTrue(
+                atComposition.contains(Capability.RESPONSE_FORMAT_JSON_SCHEMA),
+                "composition-time read sees both candidates declaring");
+
+        // secondary's declared set is now empty; a lazy per-call recomputation would shrink the set.
+        wrapper.chat(request());
+        wrapper.chat(request());
+
+        assertSame(
+                atComposition,
+                wrapper.supportedCapabilities(),
+                "wrapper must serve the composition-time snapshot, never re-read candidates");
     }
 
     @Test

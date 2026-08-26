@@ -1,5 +1,6 @@
 package com.amsha.core.routing;
 
+import dev.langchain4j.model.chat.Capability;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.request.ChatRequest;
 import dev.langchain4j.model.chat.response.ChatResponse;
@@ -7,12 +8,14 @@ import dev.langchain4j.model.chat.response.ChatResponse;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import com.amsha.core.agent.reasoning.error.LlmErrorClassificationService;
 import com.amsha.core.lifecycle.WorkspaceManager;
 import com.amsha.core.scope.WorkspaceContext;
+import com.amsha.llm.api.StructuredOutputCapabilities;
 import com.amsha.llm.api.error.LlmAuthenticationException;
 import com.amsha.llm.api.error.LlmContentFilterException;
 import com.amsha.llm.api.error.LlmMalformedResponseException;
@@ -41,6 +44,7 @@ public class MultiModelChatModel implements ChatModel {
 
     private final String providerName;
     private final List<ModelEntry> entries;
+    private final Set<Capability> compositeCapabilities;
     private final Map<String, ModelHealth> health;
     private final AtomicInteger currentIndex;
     private final int cooldownBaseSeconds;
@@ -58,6 +62,8 @@ public class MultiModelChatModel implements ChatModel {
         }
         this.providerName = providerName;
         this.entries = List.copyOf(entries);
+        this.compositeCapabilities = StructuredOutputCapabilities.intersectionOf(
+                this.entries.stream().map(ModelEntry::model).toList());
         this.health = new ConcurrentHashMap<>();
         for (ModelEntry e : entries) {
             health.put(e.label(), new ModelHealth());
@@ -79,6 +85,17 @@ public class MultiModelChatModel implements ChatModel {
                         .map(ModelEntry::label)
                         .reduce((a, b) -> a + ", " + b)
                         .orElse("none") + "]";
+    }
+
+    /**
+     * Safe intersection of all candidates' capabilities, computed once at
+     * composition time. Never upgraded mid-request when rotation advances to
+     * another candidate; health, cooldown, and permanent-disable states never
+     * change the reported set.
+     */
+    @Override
+    public Set<Capability> supportedCapabilities() {
+        return compositeCapabilities;
     }
 
     @Override
