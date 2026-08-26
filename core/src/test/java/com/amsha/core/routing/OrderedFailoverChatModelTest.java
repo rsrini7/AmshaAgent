@@ -17,7 +17,9 @@ import java.util.List;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import com.amsha.llm.api.StructuredSchemaRequests;
 import com.amsha.llm.api.error.LlmAuthenticationException;
+import com.amsha.llm.api.error.LlmMalformedResponseException;
 import com.amsha.llm.api.error.LlmModelExhaustedException;
 import com.amsha.llm.api.error.LlmServiceUnavailableException;
 
@@ -52,10 +54,12 @@ class OrderedFailoverChatModelTest {
     /** ChatModel that succeeds on every call, counting invocations. */
     static final class OkModel implements ChatModel {
         final AtomicInteger calls = new AtomicInteger();
+        ChatRequest last;
 
         @Override
         public ChatResponse chat(ChatRequest request) {
             calls.incrementAndGet();
+            last = request;
             return response();
         }
     }
@@ -104,12 +108,13 @@ class OrderedFailoverChatModelTest {
                 "route",
                 List.of(
                         new OrderedFailoverChatModel.Entry(
-                                "a", new CapableModel(Capability.RESPONSE_FORMAT_JSON_SCHEMA)),
-                        new OrderedFailoverChatModel.Entry("b", new CapableModel())),
+                                "a", new CapableModel(Capability.RESPONSE_FORMAT_JSON_SCHEMA), true),
+                        new OrderedFailoverChatModel.Entry("b", new CapableModel(), false)),
                 5);
         assertFalse(
                 mixed.supportedCapabilities().contains(Capability.RESPONSE_FORMAT_JSON_SCHEMA),
                 "one non-capable candidate must shrink the whole wrapper to non-native");
+        assertFalse(mixed.supportsStrictJsonSchema(), "wrapper admission must use the safe intersection");
     }
 
     @Test
@@ -199,6 +204,90 @@ class OrderedFailoverChatModelTest {
                 atComposition,
                 wrapper.supportedCapabilities(),
                 "wrapper must serve the composition-time snapshot, never re-read candidates");
+    }
+
+    @Test
+    void schemaBearingRequest_strippedForNonCapableCandidate() {
+        // Entry without advertisement flag and a non-declaring model: the wrapper
+        // must rebuild the request without the native parameter before forwarding.
+        var wrapper = new OrderedFailoverChatModel(
+                "route", List.of(new OrderedFailoverChatModel.Entry("plain", new OkModel())), 5);
+
+        ChatRequest schemaRequest = StructuredSchemaRequests.withNativeJsonSchema(
+                request(), "op", "{\"type\":\"object\",\"properties\":{\"a\":{\"type\":\"string\"}}}");
+
+        // The candidate records what it actually received.
+        var recording = new OkModel();
+        var recordingWrapper = new OrderedFailoverChatModel(
+                "route2", List.of(new OrderedFailoverChatModel.Entry("plain", recording)), 5);
+
+        wrapper.chat(schemaRequest);
+        recordingWrapper.chat(schemaRequest);
+
+        assertFalse(
+                StructuredSchemaRequests.hasNativeJsonSchema(recording.last),
+                "non-capable candidate must receive the rebuilt request without the native parameter");
+    }
+
+    @Test
+    void schemaRejectedByPrimary_downgradedForSecondary() {
+        // Advertised primary fails with a runtime schema rejection (503); the
+        // advertised secondary must receive the stripped request, never a verbatim
+        // replay of the failed schema request.
+        var recording = new OkModel();
+        var wrapper = new OrderedFailoverChatModel(
+                "route",
+                List.of(
+                        new OrderedFailoverChatModel.Entry(
+                                "primary",
+                                new ThrowingModel(new LlmServiceUnavailableException("down", new RuntimeException())),
+                                true),
+                        new OrderedFailoverChatModel.Entry("secondary", recording, true)),
+                5);
+
+        ChatRequest schemaRequest = StructuredSchemaRequests.withNativeJsonSchema(
+                request(), "op", "{\"type\":\"object\",\"properties\":{\"a\":{\"type\":\"string\"}}}");
+
+        wrapper.chat(schemaRequest);
+
+        assertFalse(
+                StructuredSchemaRequests.hasNativeJsonSchema(recording.last),
+                "after a candidate failure, the next candidate must receive the stripped request");
+    }
+
+    @Test
+    void nonCapableFailure_doesNotSuppressNativeSchemaForLaterCapableCandidate() {
+        var recording = new OkModel();
+        var wrapper = new OrderedFailoverChatModel(
+                "route",
+                List.of(
+                        new OrderedFailoverChatModel.Entry(
+                                "plain", new ThrowingModel(new LlmServiceUnavailableException("down", null)), false),
+                        new OrderedFailoverChatModel.Entry("capable", recording, true)),
+                5);
+
+        wrapper.chat(StructuredSchemaRequests.withNativeJsonSchema(
+                request(), "op", "{\"type\":\"object\",\"properties\":{\"a\":{\"type\":\"string\"}}}"));
+
+        assertTrue(
+                StructuredSchemaRequests.hasNativeJsonSchema(recording.last),
+                "a non-capable candidate must not consume native-schema eligibility for the next candidate");
+    }
+
+    @Test
+    void allCapableCandidatesRejectingSchema_propagatesMalformedSchemaFailure() {
+        var rejection = new LlmMalformedResponseException("schema rejected", null);
+        var wrapper = new OrderedFailoverChatModel(
+                "route",
+                List.of(
+                        new OrderedFailoverChatModel.Entry("one", new ThrowingModel(rejection), true),
+                        new OrderedFailoverChatModel.Entry("two", new ThrowingModel(rejection), true)),
+                5);
+
+        assertThrows(
+                LlmMalformedResponseException.class,
+                () -> wrapper.chat(StructuredSchemaRequests.withNativeJsonSchema(
+                        request(), "op", "{\"type\":\"object\",\"properties\":{\"a\":{\"type\":\"string\"}}}")));
     }
 
     @Test
@@ -313,5 +402,18 @@ class OrderedFailoverChatModelTest {
         assertEquals(1, secondaryA.calls.get());
         assertEquals(1, primaryB.calls.get(), "account B primary independent of A's disable");
         assertEquals(1, secondaryB.calls.get());
+    }
+
+    @Test
+    void stickyFailover_exhaustsAllModels_throwsModelExhausted() {
+        ChatModel m1 = new ThrowingModel(new LlmServiceUnavailableException("down", new RuntimeException()));
+        ChatModel m2 = new ThrowingModel(new LlmAuthenticationException("invalid key", new RuntimeException()));
+
+        OrderedFailoverChatModel failover = new OrderedFailoverChatModel(
+                "route-exhausted",
+                List.of(new OrderedFailoverChatModel.Entry("m1", m1), new OrderedFailoverChatModel.Entry("m2", m2)),
+                5);
+
+        assertThrows(LlmModelExhaustedException.class, () -> failover.chat(request()));
     }
 }

@@ -11,6 +11,8 @@ import java.util.concurrent.ConcurrentHashMap;
 
 import com.amsha.core.agent.reasoning.error.LlmErrorClassificationService;
 import com.amsha.core.routing.ModelRouter;
+import com.amsha.llm.api.StrictJsonSchemaCapable;
+import com.amsha.llm.api.StructuredSchemaRequests;
 import com.amsha.llm.api.error.LlmMalformedResponseException;
 import com.amsha.llm.api.error.LlmToolCallException;
 
@@ -56,8 +58,27 @@ public class LangChain4jLlmAdapter implements LlmProviderPort {
     }
 
     @Override
+    public ChatResponse nextStep(ChatRequest request, String agentRole, String schemaJson) {
+        ChatModel resolvedModel = resolveModel(agentRole, false);
+        ChatRequest outbound = withNativeSchemaIfCapable(request, resolvedModel, schemaJson);
+        try {
+            return execute(outbound, resolvedModel);
+        } catch (LlmMalformedResponseException e) {
+            if (!StructuredSchemaRequests.hasNativeJsonSchema(outbound)) {
+                throw e;
+            }
+            log.debug("Native schema rejected; retrying the same routed model with prompt-only structured output");
+            return execute(StructuredSchemaRequests.withoutNativeJsonSchema(outbound), resolvedModel);
+        }
+    }
+
+    @Override
     public ChatResponse nextStep(ChatRequest request, String agentRole, boolean bypassLightweightRouting) {
         ChatModel resolvedModel = resolveModel(agentRole, bypassLightweightRouting);
+        return execute(request, resolvedModel);
+    }
+
+    private ChatResponse execute(ChatRequest request, ChatModel resolvedModel) {
 
         if (!cbEnabled) {
             return resolvedModel.chat(request);
@@ -67,6 +88,21 @@ public class LangChain4jLlmAdapter implements LlmProviderPort {
         String poolKey = derivePoolKey(resolvedModel);
         PerModelCircuitBreaker cb = circuitBreakers.computeIfAbsent(poolKey, k -> new PerModelCircuitBreaker(poolKey));
         return cb.execute(request, resolvedModel);
+    }
+
+    private ChatRequest withNativeSchemaIfCapable(ChatRequest request, ChatModel model, String schemaJson) {
+        if (schemaJson == null
+                || schemaJson.isBlank()
+                || !(model instanceof StrictJsonSchemaCapable capable)
+                || !capable.supportsStrictJsonSchema()) {
+            return request;
+        }
+        try {
+            return StructuredSchemaRequests.withNativeJsonSchema(request, "structured-output", schemaJson);
+        } catch (IllegalArgumentException e) {
+            log.debugf("Native schema attachment skipped; using prompt-only structured output: %s", e.getMessage());
+            return request;
+        }
     }
 
     private ChatModel resolveModel(String agentRole, boolean bypassLightweightRouting) {

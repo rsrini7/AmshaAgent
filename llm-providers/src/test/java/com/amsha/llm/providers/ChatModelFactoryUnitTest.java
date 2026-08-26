@@ -3,6 +3,8 @@ package com.amsha.llm.providers;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
+import dev.langchain4j.model.openai.OpenAiChatModel;
+
 import java.time.Duration;
 import java.util.Map;
 
@@ -62,5 +64,44 @@ class ChatModelFactoryUnitTest {
         when(config.structuredOutputMode()).thenReturn(StructuredOutputMode.NATIVE);
 
         assertNotNull(ChatModelFactory.createOllama("http://localhost:11434", "llama3", config));
+    }
+
+    @Test
+    void testSupportsAdapter() {
+        ChatModelFactory factory = new ChatModelFactory();
+        assertTrue(factory.supportsAdapter("openai"));
+        assertTrue(factory.supportsAdapter("OPENAI"));
+        assertTrue(factory.supportsAdapter("gemini"));
+        assertTrue(factory.supportsAdapter("claude"));
+        assertTrue(factory.supportsAdapter("claude-code"));
+        assertTrue(factory.supportsAdapter("agy"));
+        assertTrue(factory.supportsAdapter("antigravity"));
+        assertTrue(factory.supportsAdapter("kimchi"));
+        assertTrue(factory.supportsAdapter("foundry"));
+        assertTrue(factory.supportsAdapter("foundrylocal"));
+        assertTrue(factory.supportsAdapter("ollama"));
+        assertTrue(factory.supportsAdapter("codex"));
+        assertTrue(factory.supportsAdapter("groq"));
+        assertTrue(factory.supportsAdapter("cerebras"));
+        assertTrue(factory.supportsAdapter("sarvam"));
+        assertTrue(factory.supportsAdapter("opencode"));
+        assertTrue(factory.supportsAdapter("huggingface"));
+        assertTrue(factory.supportsAdapter("mistral"));
+        assertTrue(factory.supportsAdapter("cloudflare"));
+        assertTrue(factory.supportsAdapter("cohere"));
+        assertTrue(factory.supportsAdapter("nvidia"));
+        assertTrue(factory.supportsAdapter("omlx"));
+        assertTrue(factory.supportsAdapter("llamacpp"));
+        assertTrue(factory.supportsAdapter("openrouter"));
+        assertTrue(factory.supportsAdapter("generic-openai"));
+        assertFalse(factory.supportsAdapter("unknown-adapter"));
+        assertFalse(factory.supportsAdapter(null));
+    }
+
+    @Test
+    void testWithOpenRouterHeaders() {
+        var builder = OpenAiChatModel.builder().apiKey("test");
+        var updated = ChatModelFactory.withOpenRouterHeaders(builder, "https://amsha.ai", "Amsha");
+        assertNotNull(updated);
     }
 }

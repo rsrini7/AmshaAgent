@@ -133,6 +133,11 @@ public class LangChainReasoningEngine implements ReasoningEngine {
     }
 
     @Override
+    public String chatForStructuredOutput(String sessionId, String agentRole, String schemaPrompt, String schemaJson) {
+        return structuredOutputProcessor.chatForStructuredOutput(sessionId, agentRole, schemaPrompt, schemaJson);
+    }
+
+    @Override
     public ReasoningStep nextStep(
             AgentExecutionContext context, String agentRole, String goal, List<ReasoningStep> history) {
         String sessionId = context.sessionId();

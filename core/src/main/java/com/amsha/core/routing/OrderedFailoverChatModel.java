@@ -12,7 +12,9 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 import com.amsha.core.agent.reasoning.error.LlmErrorClassificationService;
+import com.amsha.llm.api.StrictJsonSchemaCapable;
 import com.amsha.llm.api.StructuredOutputCapabilities;
+import com.amsha.llm.api.StructuredSchemaRequests;
 import com.amsha.llm.api.error.LlmAuthenticationException;
 import com.amsha.llm.api.error.LlmContentFilterException;
 import com.amsha.llm.api.error.LlmMalformedResponseException;
@@ -38,12 +40,17 @@ import org.jboss.logging.Logger;
  * <p>Health is keyed by route + profile revision so credential rotation or profile correction
  * clears stale permanent-disable state.</p>
  */
-public class OrderedFailoverChatModel implements ChatModel {
+public class OrderedFailoverChatModel implements ChatModel, StrictJsonSchemaCapable {
 
     private static final Logger log = Logger.getLogger(OrderedFailoverChatModel.class);
     private static final int MAX_CONSECUTIVE_FAILURES = 3;
 
-    public record Entry(String label, ChatModel model) {}
+    public record Entry(String label, ChatModel model, boolean advertisesStrictSchema) {
+
+        public Entry(String label, ChatModel model) {
+            this(label, model, false);
+        }
+    }
 
     private final String routeKey;
     private final List<Entry> entries;
@@ -91,8 +98,24 @@ public class OrderedFailoverChatModel implements ChatModel {
     }
 
     @Override
+    public boolean supportsStrictJsonSchema() {
+        return entries.stream().allMatch(OrderedFailoverChatModel::candidateSupportsStrictSchema);
+    }
+
+    private static boolean candidateSupportsStrictSchema(Entry entry) {
+        return entry.advertisesStrictSchema()
+                || (entry.model() instanceof StrictJsonSchemaCapable capable && capable.supportsStrictJsonSchema());
+    }
+
+    @Override
     public ChatResponse chat(ChatRequest request) {
         int n = entries.size();
+        // Replay invariant: once a candidate fails while serving a schema-bearing
+        // request, every later candidate receives the downgraded (schema-less)
+        // request — recomputed per candidate via withoutNativeJsonSchema, never a
+        // verbatim replay of an already-failed schema request.
+        boolean schemaRejected = false;
+        LlmMalformedResponseException schemaRejection = null;
         for (int offset = 0; offset < n; offset++) {
             Entry entry = entries.get(offset);
             Health h = health.get(entry.label());
@@ -104,16 +127,35 @@ public class OrderedFailoverChatModel implements ChatModel {
                 log.debugf("OrderedFailover[%s] %s in cooldown, skipping.", routeKey, entry.label());
                 continue;
             }
+            ChatRequest outbound = schemaRejected
+                    ? StructuredSchemaRequests.withoutNativeJsonSchema(request)
+                    : StructuredSchemaRequests.forCandidate(request, candidateSupportsStrictSchema(entry));
+            boolean schemaAttached = StructuredSchemaRequests.hasNativeJsonSchema(outbound);
             try {
-                ChatResponse response = entry.model().chat(request);
+                ChatResponse response = entry.model().chat(outbound);
                 h.recordSuccess();
                 return response;
             } catch (Throwable t) {
-                classifyAndHandle(entry.label(), h, t);
-                if (h.isPermanentlyDisabled()) {
-                    continue;
+                if (schemaAttached) {
+                    // A schema-bearing failure must advance (downgraded), never abort
+                    // the chain: the next candidate gets the stripped request.
+                    schemaRejected = true;
+                }
+                try {
+                    classifyAndHandle(entry.label(), h, t);
+                } catch (LlmMalformedResponseException mre) {
+                    if (!schemaAttached) {
+                        throw mre;
+                    }
+                    schemaRejection = mre;
+                    log.debugf(
+                            "OrderedFailover[%s] %s rejected native schema; continuing without it.",
+                            routeKey, entry.label());
                 }
             }
+        }
+        if (schemaRejection != null) {
+            throw schemaRejection;
         }
         throw new LlmModelExhaustedException("OrderedFailover[" + routeKey + "] all profiles exhausted or disabled");
     }

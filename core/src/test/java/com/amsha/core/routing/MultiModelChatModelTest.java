@@ -14,11 +14,14 @@ import java.util.List;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import com.amsha.llm.api.StructuredSchemaRequests;
 import com.amsha.llm.api.error.LlmAuthenticationException;
+import com.amsha.llm.api.error.LlmContextOverflowException;
 import com.amsha.llm.api.error.LlmRateLimitException;
 import com.amsha.llm.api.error.LlmServiceUnavailableException;
 
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
 class MultiModelChatModelTest {
 
@@ -63,11 +66,16 @@ class MultiModelChatModelTest {
         var both = new MultiModelChatModel("test", List.of(entry("m1", capable(true)), entry("m2", capable(true))), 5);
         assertTrue(both.supportedCapabilities().contains(Capability.RESPONSE_FORMAT_JSON_SCHEMA));
 
-        var mixed =
-                new MultiModelChatModel("test", List.of(entry("m1", capable(true)), entry("m2", capable(false))), 5);
+        var mixed = new MultiModelChatModel(
+                "test",
+                List.of(
+                        new MultiModelChatModel.ModelEntry("m1", capable(true), true),
+                        new MultiModelChatModel.ModelEntry("m2", capable(false), false)),
+                5);
         assertFalse(
                 mixed.supportedCapabilities().contains(Capability.RESPONSE_FORMAT_JSON_SCHEMA),
                 "one non-capable candidate must shrink the whole wrapper to non-native");
+        assertFalse(mixed.supportsStrictJsonSchema(), "wrapper admission must use the safe intersection");
     }
 
     @Test
@@ -138,6 +146,70 @@ class MultiModelChatModelTest {
         assertTrue(
                 atComposition.contains(Capability.RESPONSE_FORMAT_JSON_SCHEMA),
                 "snapshot content unchanged despite candidate mutation after composition");
+    }
+
+    private static ChatRequest schemaBearing() {
+        return StructuredSchemaRequests.withNativeJsonSchema(
+                request(), "op", "{\"type\":\"object\",\"properties\":{\"a\":{\"type\":\"string\"}}}");
+    }
+
+    @Test
+    void schemaBearingRequest_forwardedToAdvertisedCandidate_strippedForOther() {
+        ChatRequest schemaRequest = schemaBearing();
+        assertTrue(StructuredSchemaRequests.hasNativeJsonSchema(schemaRequest));
+
+        ChatModel flagged = mock(ChatModel.class);
+        when(flagged.chat(any(ChatRequest.class))).thenReturn(response());
+        ChatModel unflagged = mock(ChatModel.class);
+        when(unflagged.chat(any(ChatRequest.class))).thenReturn(response());
+
+        var wrapper = new MultiModelChatModel(
+                "test",
+                List.of(new MultiModelChatModel.ModelEntry("adv", flagged, true), entry("plain", unflagged)),
+                5);
+
+        wrapper.chat(schemaRequest);
+        wrapper.chat(schemaRequest);
+
+        ArgumentCaptor<ChatRequest> captor = ArgumentCaptor.forClass(ChatRequest.class);
+        verify(flagged).chat(captor.capture());
+        assertTrue(
+                StructuredSchemaRequests.hasNativeJsonSchema(captor.getValue()),
+                "advertised candidate receives the schema verbatim");
+
+        verify(unflagged).chat(captor.capture());
+        assertFalse(
+                StructuredSchemaRequests.hasNativeJsonSchema(captor.getValue()),
+                "unflagged candidate receives the rebuilt request without the native parameter");
+    }
+
+    @Test
+    void schemaRejectedByFirstCandidate_downgradedForNext() {
+        // Round-robin serves entries[1] first: the advertised primary fails with a
+        // 503; the advertised secondary must receive the downgraded request, never
+        // a verbatim replay of the failed schema request.
+        ChatRequest schemaRequest = schemaBearing();
+
+        ChatModel failingPrimary = mock(ChatModel.class);
+        when(failingPrimary.chat(any(ChatRequest.class)))
+                .thenThrow(new LlmServiceUnavailableException("down", new RuntimeException()));
+        ChatModel secondary = mock(ChatModel.class);
+        when(secondary.chat(any(ChatRequest.class))).thenReturn(response());
+
+        var wrapper = new MultiModelChatModel(
+                "test",
+                List.of(
+                        new MultiModelChatModel.ModelEntry("sec", secondary, true),
+                        new MultiModelChatModel.ModelEntry("pri", failingPrimary, true)),
+                5);
+
+        wrapper.chat(schemaRequest);
+
+        ArgumentCaptor<ChatRequest> captor = ArgumentCaptor.forClass(ChatRequest.class);
+        verify(secondary).chat(captor.capture());
+        assertFalse(
+                StructuredSchemaRequests.hasNativeJsonSchema(captor.getValue()),
+                "after a candidate failure, the next candidate must receive the stripped request");
     }
 
     private static ChatModel capableStable() {
@@ -258,5 +330,58 @@ class MultiModelChatModelTest {
     @Test
     void constructor_nullEntries_throws() {
         assertThrows(IllegalArgumentException.class, () -> new MultiModelChatModel("test", null, 5));
+    }
+
+    @Test
+    void rateLimited_dailyQuotaExhausted_disablesPermanently() {
+        ChatModel m = mock(ChatModel.class);
+        when(m.chat(any(ChatRequest.class)))
+                .thenThrow(new LlmRateLimitException("You have reached your limit per day.", new RuntimeException()));
+        MultiModelChatModel multi =
+                new MultiModelChatModel("test", List.of(new MultiModelChatModel.ModelEntry("m", m)), 5);
+
+        assertThrows(RuntimeException.class, () -> multi.chat(request()));
+        assertThrows(RuntimeException.class, () -> multi.chat(request()));
+    }
+
+    @Test
+    void rateLimited_requestTooLarge_marksTpmBlocked() {
+        ChatModel m1 = mock(ChatModel.class);
+        when(m1.chat(any(ChatRequest.class)))
+                .thenThrow(new LlmRateLimitException("Request too large for model limits", new RuntimeException()));
+        MultiModelChatModel multi =
+                new MultiModelChatModel("test", List.of(new MultiModelChatModel.ModelEntry("m1", m1)), 5);
+
+        RuntimeException e = assertThrows(RuntimeException.class, () -> multi.chat(request()));
+        assertTrue(e.getMessage().contains("all models blocked — request too large for TPM limits"));
+    }
+
+    @Test
+    void serviceUnavailable_toolUseFailed_disablesPermanently() {
+        ChatModel m = mock(ChatModel.class);
+        when(m.chat(any(ChatRequest.class)))
+                .thenThrow(new LlmServiceUnavailableException("tool_use_failed", new RuntimeException()));
+        MultiModelChatModel multi =
+                new MultiModelChatModel("test", List.of(new MultiModelChatModel.ModelEntry("m", m)), 5);
+
+        assertThrows(RuntimeException.class, () -> multi.chat(request()));
+    }
+
+    @Test
+    void unknownFailure_coolsDownAndRotates() {
+        ChatModel m1 = mock(ChatModel.class);
+        when(m1.chat(any(ChatRequest.class))).thenReturn(response());
+        ChatModel m2 = mock(ChatModel.class);
+        when(m2.chat(any(ChatRequest.class)))
+                .thenThrow(new LlmContextOverflowException("unexpected overflow error", new RuntimeException()));
+
+        MultiModelChatModel multi = new MultiModelChatModel(
+                "test",
+                List.of(new MultiModelChatModel.ModelEntry("m1", m1), new MultiModelChatModel.ModelEntry("m2", m2)),
+                5);
+
+        assertNotNull(multi.chat(request()));
+        verify(m2).chat(any(ChatRequest.class));
+        verify(m1).chat(any(ChatRequest.class));
     }
 }

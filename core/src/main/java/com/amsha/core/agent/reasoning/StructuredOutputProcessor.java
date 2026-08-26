@@ -58,6 +58,19 @@ public class StructuredOutputProcessor {
     }
 
     public String chatForStructuredOutput(String sessionId, String agentRole, String schemaPrompt) {
+        return chatForStructuredOutput(sessionId, agentRole, schemaPrompt, null);
+    }
+
+    /**
+     * Structured call carrying the operation's raw JSON schema. When the resolved
+     * provider deliberately advertises strict-schema support (and every fail-closed
+     * gate passes), the schema is attached to the request as a native JSON-Schema
+     * response format; otherwise the prompt-only path is used. Schema parse or
+     * attach failures degrade to the prompt path and the bounded self-correction
+     * loop above remains authoritative — a detection error never hard-fails the
+     * turn.
+     */
+    public String chatForStructuredOutput(String sessionId, String agentRole, String schemaPrompt, String schemaJson) {
         Span span = otelContext.childSpan(sessionId, AgentOTelConstants.SPAN_STRUCTURED_OUTPUT);
         try {
             String systemPrompt = promptBuilder.build(null, agentRole, sessionId, "", false);
@@ -67,8 +80,7 @@ public class StructuredOutputProcessor {
             messages.add(UserMessage.userMessage(schemaPrompt));
 
             ChatRequest request = ChatRequest.builder().messages(messages).build();
-
-            ChatResponse response = llmProviderPort.nextStep(request, agentRole);
+            ChatResponse response = llmProviderPort.nextStep(request, agentRole, schemaJson);
 
             TokenUsage usage = response.tokenUsage();
             if (usage != null) {
