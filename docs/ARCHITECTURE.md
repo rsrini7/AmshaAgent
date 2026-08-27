@@ -29,8 +29,8 @@
 | `amsha-persistence-sqlite` | SQLite adapter (WAL + FTS5 + vec0) |
 | `amsha-persistence-postgres` | PostgreSQL adapter |
 | `amsha-persistence-fs` | Filesystem-based adapter (Lucene BM25) hosting tiered-memory and self-evolve namespaces |
-| `amsha-rag` | Two-tier vector (vec0) + FTS5 RAG memory |
-| `amsha-local-ml-onnx` | In-process local ML inference (ONNX Runtime Java 1.27.0 + DJL HuggingFace Tokenizers 0.33.0); ONNX shadow-classifier implementations |
+| `amsha-rag` | Two-tier vector (vec0) + FTS5 RAG memory with pluggable `RerankerPort` and deterministic `RerankingService` fallback |
+| `amsha-local-ml-onnx` | In-process local ML inference (ONNX Runtime Java 1.27.0 + DJL HuggingFace Tokenizers 0.33.0); ONNX embeddings, shadow classifiers, and optional cross-encoder reranking (`LocalOnnxScoringAdapter`) |
 | `amsha-mcp` | MCP server bridge + dynamic client tool loading + durable credentialed connections |
 | `amsha-onboarding` | Durable draft/saga onboarding REST API (legacy numbered-step wizard + `/complete` removed in P110) |
 | `amsha-self-evolve` | Self-Evolution trace capture and learning loop |
@@ -386,6 +386,17 @@ Amsha uses a multi-tier memory system designed for distinct scopes, access patte
 
 #### O(1) Synchronous Retrieval (ArchivalContextCache)
 To guarantee high-latency remote searches (vector retrieval or database scans) do not block the active execution loop, the `ArchivalContextCache` pre-caches context asynchronously. The live agent loop retrieves memory chunks in O(1) synchronous time directly from this memory cache.
+
+#### RAG Retrieval & Cross-Encoder Reranking
+
+`RagContextEnricher` (a `ContextEnricher`) builds the `## Retrieved Rag Context` prompt block:
+
+1. `TwoTierMemoryService.search()` retrieves candidates via `MemoryRetrievalPort` (FTS5 keyword + sqlite-vec vector, fused with Reciprocal Rank Fusion).
+2. `TwoTierMemoryService.searchReranked()` optionally reranks those candidates through `RerankingService`.
+3. `RerankingService.rerank()` delegates to the discovered `RerankerPort`; when the port is unavailable, vetoed by the embedding descriptor fingerprint, or returns corrupt/duplicate results, the service falls back deterministically to the original RRF order and increments `amsha.rag.rerank.fallback{reason=...}` (`no_provider`, `descriptor_mismatch`, `execution_error`, `cardinality_mismatch`, `identity_mismatch`, `order_invalid`, `empty_result`). In every fallback, `ScoredChunk.score()` (the synthetic fusion value) is preserved byte-for-byte and `rerankScore` is ignored.
+4. `LocalOnnxScoringAdapter` (in `amsha-local-ml-onnx`, `@Unremovable`) is the optional local `RerankerPort`. It validates UTF-8 byte limits, enforces text-pair truncation bounded to the manifest `maxSequenceLength` (384) via `OnnxTextInputSupport`, executes one cross-encoder batch under `OnnxInferenceScheduler` with an absolute deadline and `Context.isOnEventLoopThread()` guard, and returns `RerankedChunk` sorted by `rerankScore`. It preserves `ScoredChunk.score()` and reports `amsha.localml.onnx.truncation{component=cross_encoder}` when truncation occurs. `RagContextEnricher` then consumes `RerankedChunk.chunk` so the adaptive RRF-threshold logic still operates on preserved fusion scores while the final injection order reflects the rerank.
+
+See [ONNX Local ML Guide](./ONNX_LOCAL_ML_GUIDE.md#51-cross-encoder-reranking-configuration) for the scoring bundle manifest, install command (`mise run models:install-bge-reranker`), and the `scripts/evaluate_reranker_benchmark.py` acceptance gate.
 
 #### Prompt Budget Manager
 To prevent context window overflow, prompt assembly uses a hierarchical budget allocation system. Limits are evaluated in two passes (top-down):

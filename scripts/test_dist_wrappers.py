@@ -173,6 +173,51 @@ class DistributionWrapperContractTest(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertFalse(marker.exists())
 
+    def test_onnx_flag_installs_both_embedding_and_reranker_bundles_when_missing(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            directory_path = Path(directory)
+            calls_file = directory_path / "mise-calls.log"
+            fake_models_dir = directory_path / "models"
+            fake_models_dir.mkdir()
+            fake_bin_dir = directory_path / "bin"
+            fake_bin_dir.mkdir()
+            (fake_bin_dir / "mise").write_text(
+                "#!/usr/bin/env bash\n"
+                "printf '%s\\n' \"$*\" >> \"$AMSHA_MISE_CALLS_FILE\"\n"
+                "if [[ \"$*\" == *\"models:install-mpnet\"* ]]; then\n"
+                "  mkdir -p \"$AMSHA_ONNX_MODEL_ROOT/all-mpnet-base-v2-e8c3b32\"\n"
+                "  touch \"$AMSHA_ONNX_MODEL_ROOT/all-mpnet-base-v2-e8c3b32/model.onnx\"\n"
+                "fi\n"
+                "if [[ \"$*\" == *\"models:install-bge-reranker\"* ]]; then\n"
+                "  mkdir -p \"$AMSHA_ONNX_MODEL_ROOT/bge-reranker-v1\"\n"
+                "  touch \"$AMSHA_ONNX_MODEL_ROOT/bge-reranker-v1/model.onnx\"\n"
+                "fi\n",
+                encoding="utf-8",
+            )
+            (fake_bin_dir / "mise").chmod(0o755)
+            validator = directory_path / "validator.sh"
+            validator.write_text("#!/usr/bin/env bash\nexit 0\n", encoding="utf-8")
+            validator.chmod(0o755)
+
+            result = self.run_wrapper(
+                "sqlite",
+                "--validate",
+                "--fast",
+                "--onnx",
+                extra_env={
+                    "TEST_BASE": "http://127.0.0.1:19999",
+                    "AMSHA_VALIDATION_SCRIPT": str(validator),
+                    "AMSHA_ONNX_MODEL_ROOT": str(fake_models_dir),
+                    "AMSHA_MISE_CALLS_FILE": str(calls_file),
+                    "PATH": f"{fake_bin_dir}:{os.environ['PATH']}",
+                },
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertTrue(calls_file.exists())
+            calls = calls_file.read_text(encoding="utf-8").splitlines()
+            self.assertIn("run models:install-mpnet", calls)
+            self.assertIn("run models:install-bge-reranker", calls)
+
     def test_runner_and_validators_do_not_execute_or_echo_untrusted_data(self) -> None:
         runner = ROOT / "scripts" / "run_dist_backend.sh"
         self.assertNotIn("source ", runner.read_text(encoding="utf-8"))

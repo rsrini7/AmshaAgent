@@ -82,8 +82,11 @@ public class RagContextEnricher implements ContextEnricher {
             String ftsQuery = Fts5QueryUtil.toFts5Phrase(goal);
 
             // Fetch more candidates than needed to compute a meaningful distribution (§ recommendation)
-            List<ScoredChunk> chunks = memoryService.search(ftsQuery, userId, contextChunks * 3);
-            if (chunks.isEmpty()) return basePrompt;
+            List<RerankedChunk> reranked = memoryService.searchReranked(ftsQuery, userId, contextChunks * 3);
+            if (reranked.isEmpty()) return basePrompt;
+
+            List<ScoredChunk> chunks =
+                    reranked.stream().map(RerankedChunk::chunk).toList();
 
             double computedThreshold = minScore;
 

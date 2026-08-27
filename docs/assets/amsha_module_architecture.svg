@@ -35,7 +35,7 @@
     <!-- local-ml-onnx -->
     <rect x="20" y="308" width="200" height="48" rx="8" fill="#085041" stroke="#5dcaa5" stroke-width="0.5"/>
     <text x="120" y="327" text-anchor="middle" dominant-baseline="central" font-size="13" font-weight="600" fill="#9fe1cb">amsha-local-ml-onnx</text>
-    <text x="120" y="344" text-anchor="middle" dominant-baseline="central" font-size="10" fill="#5dcaa5">ONNX Runtime · Vector embeddings</text>
+    <text x="120" y="344" text-anchor="middle" dominant-baseline="central" font-size="10" fill="#5dcaa5">ONNX · Embeddings · Cross-encoder rerank</text>
   </g>
 
   <!-- Column 2 (Center): app → core → API tier stack -->
@@ -108,7 +108,7 @@
     <!-- amsha-rag -->
     <rect x="680" y="208" width="260" height="42" rx="8" fill="#0c447c" stroke="#85b7eb" stroke-width="0.5"/>
     <text x="810" y="224" text-anchor="middle" dominant-baseline="central" font-size="13" font-weight="600" fill="#b5d4f4">amsha-rag</text>
-    <text x="810" y="239" text-anchor="middle" dominant-baseline="central" font-size="10" fill="#85b7eb">FTS5 + sqlite-vec embeddings</text>
+    <text x="810" y="239" text-anchor="middle" dominant-baseline="central" font-size="10" fill="#85b7eb">FTS5 + sqlite-vec + reranking</text>
 
     <!-- channel-web -->
     <rect x="680" y="256" width="260" height="42" rx="8" fill="#712b13" stroke="#f0997b" stroke-width="0.5"/>
@@ -191,8 +191,10 @@
   <path d="M680 425 L641 391" fill="none" stroke="#9c9a92" stroke-width="1" stroke-dasharray="4 3" marker-end="url(#arrow)"/>
   <!-- amsha-tools-builtin → tool-api (implements the AgentTool contracts) -->
   <path d="M680 85 L641 262" fill="none" stroke="#9c9a92" stroke-width="1.5" marker-end="url(#arrow)"/>
-  <!-- amsha-local-ml-onnx → classifier-api (ONNX shadow-classifier implementations) -->
-  <path d="M220 332 L260 312" fill="none" stroke="#9c9a92" stroke-width="1" stroke-dasharray="4 3" marker-end="url(#arrow)"/>
+    <!-- amsha-local-ml-onnx → classifier-api (ONNX shadow-classifier + reranking implementations) -->
+    <path d="M220 332 L260 312" fill="none" stroke="#9c9a92" stroke-width="1" stroke-dasharray="4 3" marker-end="url(#arrow)"/>
+    <!-- amsha-rag → local-ml-onnx (optional reranking; CDI Instance<RerankerPort> + @Unremovable) -->
+    <path d="M680 229 L460 324" fill="none" stroke="#9c9a92" stroke-width="1" stroke-dasharray="4 3" marker-end="url(#arrow)"/>
 
   <!-- Legend -->
   <g font-family="'Segoe UI', system-ui, sans-serif" font-size="11" fill="#c2c0b6">
@@ -201,6 +203,6 @@
     <text x="90" y="636" fill="#c2c0b6">compile dependency</text>
     <line x1="250" y1="632" x2="290" y2="632" stroke="#9c9a92" stroke-width="1.5" stroke-dasharray="4 3" marker-end="url(#arrow)"/>
     <text x="300" y="636" fill="#c2c0b6">optional / build-time / CDI-discovered</text>
-    <text x="40" y="658" fill="#888">28 modules · JDK 25 · Quarkus 3.27.2 · SQLite WAL + FTS5 + vec0 · Multi-provider LLM SPIs · Extracted Security · Memory · Skills · Tool/Classifier APIs</text>
+    <text x="40" y="658" fill="#888">28 modules · JDK 25 · Quarkus 3.38.3 · SQLite WAL + FTS5 + vec0 · Multi-provider LLM SPIs · Extracted Security · Memory · Skills · Tool/Classifier/Rerank APIs</text>
   </g>
 </svg>

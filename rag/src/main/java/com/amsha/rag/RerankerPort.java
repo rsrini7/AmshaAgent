@@ -19,4 +19,12 @@ public interface RerankerPort {
      * @return the reranked chunks sorted by model-local rerank score descending
      */
     List<RerankedChunk> rerank(String query, List<ScoredChunk> candidates);
+
+    /**
+     * Indicates whether this reranker provider is currently available and enabled.
+     * When unavailable, callers fall back to no_provider ordering.
+     */
+    default boolean isAvailable() {
+        return true;
+    }
 }

@@ -192,6 +192,50 @@ else
   FAIL=$((FAIL+1))
 fi
 
+RERANKER_BUNDLE_PATH="$MODEL_ROOT/bge-reranker-v1"
+if [ -d "$RERANKER_BUNDLE_PATH" ]; then
+  info "ONNX-3b: Verify pinned reranker bundle manifest and SHA-256 digests"
+  if python3 - "$RERANKER_BUNDLE_PATH" <<'PY'
+import hashlib
+import json
+import pathlib
+import sys
+
+bundle = pathlib.Path(sys.argv[1])
+manifest = json.loads((bundle / "manifest.json").read_text())
+scoring = manifest.get("scoring")
+source = manifest.get("source")
+required_source = {"repository", "revision", "modelPath", "tokenizerPath", "license"}
+if (
+    not isinstance(scoring, dict)
+    or scoring.get("inputType") != "text-pair"
+    or scoring.get("maxSequenceLength") != 384
+    or scoring.get("expectedOutputShape") != "BATCH_BY_ONE"
+    or scoring.get("scoreDirection") != "HIGHER_IS_BETTER"
+    or not isinstance(source, dict)
+    or not required_source.issubset(source)
+    or not isinstance(source.get("repository"), str)
+    or not source["repository"].startswith("https://")
+    or source.get("license") not in {"Apache-2.0", "MIT", "BSD-2-Clause", "BSD-3-Clause", "ISC", "0BSD"}
+):
+    raise SystemExit(1)
+for file_key, digest_key, bytes_key in (("modelFile", "modelSha256", "modelBytes"), ("tokenizerFile", "tokenizerSha256", "tokenizerBytes")):
+    path = bundle / manifest[file_key]
+    if not path.is_file() or path.stat().st_size != manifest[bytes_key]:
+        raise SystemExit(1)
+    digest = hashlib.file_digest(path.open("rb"), "sha256").hexdigest()
+    if digest != manifest[digest_key]:
+        raise SystemExit(1)
+PY
+  then
+    printf "✅ VERIFIED %s\n" "$RERANKER_BUNDLE_PATH/manifest.json"
+    PASS=$((PASS+1))
+  else
+    printf "❌ INVALID OR MISSING %s/manifest.json\n" "$RERANKER_BUNDLE_PATH"
+    FAIL=$((FAIL+1))
+  fi
+fi
+
 # ── ONNX-4: Vector Index Compatibility Health Check ──
 info "ONNX-4: Vector Index Compatibility check (/q/health)"
 for attempts in {1..15}; do

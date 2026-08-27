@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -69,6 +70,7 @@ class RerankingServiceTest {
 
         lenient().when(vectorMetadataPortInstance.isUnsatisfied()).thenReturn(false);
         lenient().when(vectorMetadataPortInstance.get()).thenReturn(vectorMetadataPort);
+        lenient().when(rerankerPort.isAvailable()).thenReturn(true);
         lenient()
                 .when(vectorMetadataPort.compatibilitySnapshot())
                 .thenReturn(Map.of(
@@ -132,6 +134,27 @@ class RerankingServiceTest {
 
         verify(meterRegistry).counter(RerankingService.FALLBACK_METRIC_NAME, "reason", "no_provider");
         verify(fallbackCounter).increment();
+    }
+
+    @Test
+    void unavailableProviderFallback_returnsOriginalRrfOrdering_andIncrementsNoProviderMetric() {
+        ScoredChunk chunk1 = new ScoredChunk("c1", "Doc 1", 0.016);
+        ScoredChunk chunk2 = new ScoredChunk("c2", "Doc 2", 0.008);
+        List<ScoredChunk> candidates = List.of(chunk1, chunk2);
+
+        when(rerankerInstance.isUnsatisfied()).thenReturn(false);
+        when(rerankerInstance.get()).thenReturn(rerankerPort);
+        when(rerankerPort.isAvailable()).thenReturn(false);
+
+        List<RerankedChunk> results = service.rerank("query", candidates);
+
+        assertEquals(2, results.size());
+        assertEquals("c1", results.get(0).chunkId());
+        assertEquals("c2", results.get(1).chunkId());
+
+        verify(meterRegistry).counter(RerankingService.FALLBACK_METRIC_NAME, "reason", "no_provider");
+        verify(fallbackCounter).increment();
+        verify(rerankerPort, never()).rerank(anyString(), any());
     }
 
     @Test

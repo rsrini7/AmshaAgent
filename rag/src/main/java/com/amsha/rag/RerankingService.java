@@ -76,6 +76,10 @@ public class RerankingService {
 
         try {
             RerankerPort port = rerankerInstance.get();
+            if (!port.isAvailable()) {
+                recordFallback("no_provider");
+                return toFallbackRerankedList(candidates);
+            }
             List<RerankedChunk> reranked = port.rerank(query, candidates);
             return validateAndReconstitute(candidates, reranked);
         } catch (Exception e) {

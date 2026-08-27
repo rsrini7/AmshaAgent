@@ -38,6 +38,11 @@ Optional in-process ONNX Runtime integration for Amsha Agent.
 | amsha.embedding.onnx.timeout-seconds | AMSHA_EMBEDDING_ONNX_TIMEOUT_SECONDS | 5 | Maximum synchronous wait for one ONNX embedding request. |
 | amsha.embedding.onnx.space-id | AMSHA_EMBEDDING_ONNX_SPACE_ID | _(manifest)_ | Optional assertion that must match the verified bundle embedding space. |
 | amsha.embedding.onnx.space-revision | AMSHA_EMBEDDING_ONNX_SPACE_REVISION | _(manifest)_ | Optional assertion that must match the verified bundle embedding-space revision. |
+| amsha.rag.reranker.enabled | AMSHA_RAG_RERANKER_ENABLED | false | Enables local ONNX cross-encoder reranking under RerankerPort. |
+| amsha.rag.reranker.bundle-id | AMSHA_RAG_RERANKER_BUNDLE_ID | bge-reranker-v1 | Explicit verified local cross-encoder model bundle ID. |
+| amsha.rag.reranker.timeout | AMSHA_RAG_RERANKER_TIMEOUT | PT5S | Total deadline for one cross-encoder scoring request. |
+| amsha.rag.reranker.max-candidates | AMSHA_RAG_RERANKER_MAX_CANDIDATES | 50 | Maximum number of retrieved candidate chunks scored. |
+| amsha.rag.reranker.max-input-bytes | AMSHA_RAG_RERANKER_MAX_INPUT_BYTES | 262144 | UTF-8 byte limit for query or candidate text before scoring. |
 
 `OnnxModelBundleRegistry` loads only an explicitly selected bundle ID below the
 configured root. It never downloads assets; each bundle must contain a regular

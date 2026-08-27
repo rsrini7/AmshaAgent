@@ -21,6 +21,7 @@ public record OnnxModelBundleManifest(
         long estimatedResidentBytes,
         OnnxEmbeddingBundleSpec embedding,
         OnnxClassifierBundleSpec classifier,
+        OnnxScoringBundleSpec scoring,
         OnnxModelBundleSource source) {
 
     private static final Set<String> ALLOWED_SOURCE_LICENSES =
@@ -48,8 +49,13 @@ public record OnnxModelBundleManifest(
         if (estimatedResidentBytes < verifiedBundleBytes) {
             throw new IllegalArgumentException("estimatedResidentBytes must cover all verified bundle files");
         }
-        if (embedding != null && classifier != null) {
-            throw new IllegalArgumentException("A model bundle cannot declare both embedding and classifier contracts");
+        int declaredContracts = 0;
+        if (embedding != null) declaredContracts++;
+        if (classifier != null) declaredContracts++;
+        if (scoring != null) declaredContracts++;
+        if (declaredContracts > 1) {
+            throw new IllegalArgumentException(
+                    "A model bundle can declare at most one of embedding, classifier, or scoring contracts");
         }
     }
 
@@ -76,6 +82,36 @@ public record OnnxModelBundleManifest(
         return Optional.of(source);
     }
 
+    /** Compatibility constructor for manifests created before scoring contracts were added. */
+    public OnnxModelBundleManifest(
+            String bundleId,
+            String revision,
+            String modelFile,
+            String modelSha256,
+            long modelBytes,
+            String tokenizerFile,
+            String tokenizerSha256,
+            long tokenizerBytes,
+            long estimatedResidentBytes,
+            OnnxEmbeddingBundleSpec embedding,
+            OnnxClassifierBundleSpec classifier,
+            OnnxModelBundleSource source) {
+        this(
+                bundleId,
+                revision,
+                modelFile,
+                modelSha256,
+                modelBytes,
+                tokenizerFile,
+                tokenizerSha256,
+                tokenizerBytes,
+                estimatedResidentBytes,
+                embedding,
+                classifier,
+                null,
+                source);
+    }
+
     /** Compatibility constructor for manifests created before classifier contracts were added. */
     public OnnxModelBundleManifest(
             String bundleId,
@@ -100,6 +136,7 @@ public record OnnxModelBundleManifest(
                 0,
                 embedding,
                 null,
+                null,
                 source);
     }
 
@@ -111,6 +148,11 @@ public record OnnxModelBundleManifest(
     /** Returns the classifier contract when this bundle is explicitly declared for classification. */
     public Optional<OnnxClassifierBundleSpec> classifierSpec() {
         return Optional.ofNullable(classifier);
+    }
+
+    /** Returns the scoring contract when this bundle is explicitly declared for cross-encoder reranking. */
+    public Optional<OnnxScoringBundleSpec> scoringSpec() {
+        return Optional.ofNullable(scoring);
     }
 
     private static String requireIdentifier(String value, String name) {
