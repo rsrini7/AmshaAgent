@@ -80,7 +80,8 @@ public class StructuredOutputProcessor {
             messages.add(UserMessage.userMessage(schemaPrompt));
 
             ChatRequest request = ChatRequest.builder().messages(messages).build();
-            ChatResponse response = llmProviderPort.nextStep(request, agentRole, schemaJson);
+            ChatResponse response = ScopedValue.where(AgentOTelConstants.MANUAL_LLM_INSTRUMENTATION, true)
+                    .call(() -> llmProviderPort.nextStep(request, agentRole, schemaJson));
 
             TokenUsage usage = response.tokenUsage();
             if (usage != null) {

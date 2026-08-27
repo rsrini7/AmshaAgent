@@ -328,7 +328,8 @@ public class LangChainReasoningEngine implements ReasoningEngine {
             // port implementations and stubs are unaffected. Only an armed memory-synthesis
             // escalation takes the bypass-lightweight-routing overload.
             boolean escalateThisCall = context.consumeReasoningEscalation();
-            ChatResponse response = ScopedValue.where(WorkspaceContext.IS_WRITE_INTENT, isWriteIntent)
+            ChatResponse response = ScopedValue.where(AgentOTelConstants.MANUAL_LLM_INSTRUMENTATION, true)
+                    .where(WorkspaceContext.IS_WRITE_INTENT, isWriteIntent)
                     .where(WorkspaceContext.IS_COMPACT, isCompact)
                     .call(() -> escalateThisCall
                             ? llmProviderPort.nextStep(request, agentRole, true)

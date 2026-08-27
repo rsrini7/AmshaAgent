@@ -91,4 +91,8 @@ public final class AgentOTelConstants {
     // ── Backward-compatible token attribute keys ────────────────────────
     public static final AttributeKey<Long> ATTR_INPUT_TOKENS = AttributeKey.longKey("llm.usage.prompt_tokens");
     public static final AttributeKey<Long> ATTR_OUTPUT_TOKENS = AttributeKey.longKey("llm.usage.completion_tokens");
+    public static final AttributeKey<String> ATTR_ERROR_TYPE = AttributeKey.stringKey("error.type");
+
+    /** Marks a manually instrumented provider call so the listener pilot cannot double-count it. */
+    public static final ScopedValue<Boolean> MANUAL_LLM_INSTRUMENTATION = ScopedValue.newInstance();
 }

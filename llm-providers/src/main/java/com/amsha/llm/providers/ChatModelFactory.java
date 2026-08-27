@@ -2,6 +2,7 @@ package com.amsha.llm.providers;
 
 import dev.langchain4j.model.anthropic.AnthropicChatModel;
 import dev.langchain4j.model.chat.ChatModel;
+import dev.langchain4j.model.chat.listener.ChatModelListener;
 import dev.langchain4j.model.chat.request.ResponseFormat;
 import dev.langchain4j.model.googleai.GoogleAiGeminiChatModel;
 import dev.langchain4j.model.ollama.OllamaChatModel;
@@ -9,6 +10,7 @@ import dev.langchain4j.model.openai.OpenAiChatModel;
 import dev.langchain4j.model.openai.OpenAiChatRequestParameters;
 
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.inject.spi.CDI;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -17,10 +19,12 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.function.BiFunction;
 
 import com.amsha.common.util.LogUtil;
+import com.amsha.core.config.CoreSpiResolutionValidator;
 import com.amsha.core.routing.CapabilityAwareChatModel;
 import com.amsha.core.routing.MultiModelChatModel;
 import com.amsha.llm.api.AgentLlmConfig;
@@ -69,7 +73,7 @@ public class ChatModelFactory implements ChatModelCreationPort {
             double temperature,
             boolean logRequests,
             boolean logResponses) {
-        return OpenAiChatModel.builder()
+        var builder = OpenAiChatModel.builder()
                 .baseUrl(baseUrl)
                 .apiKey(apiKey)
                 .modelName(modelName)
@@ -79,6 +83,20 @@ public class ChatModelFactory implements ChatModelCreationPort {
                 .temperature(temperature)
                 .logRequests(logRequests)
                 .logResponses(logResponses);
+        resolveChatModelListener().ifPresent(listener -> builder.listeners(List.of(listener)));
+        return builder;
+    }
+
+    /** Resolves the optional listener through the repository's canonical CDI SPI algorithm. */
+    private static Optional<ChatModelListener> resolveChatModelListener() {
+        try {
+            return CoreSpiResolutionValidator.resolveOptional(CDI.current().getBeanManager(), ChatModelListener.class);
+        } catch (RuntimeException e) {
+            // Static/unit-test construction may happen without an active CDI container. The
+            // listener is optional and must never make the provider builder unusable.
+            LOG.debugf("ChatModelListener resolution skipped (%s)", e.getClass().getSimpleName());
+            return Optional.empty();
+        }
     }
 
     /** Applies JSON format when model supports native structured output and toolless mode is active. */

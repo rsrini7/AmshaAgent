@@ -561,6 +561,7 @@ the request before authentication or resource handling.
 
 | Variable | Default | Description |
 |---|---|---|
+| `AMSHA_OBSERVABILITY_CHAT_LISTENER_MODE` | `off` | LangChain4j `ChatModelListener` pilot mode (`off` = no-op, `shadow` = shadow metrics/timers with zero payload, `active` = `amsha.llm.listener_call` spans + active metrics for calls not already manually instrumented). `ChatModelListenerRuntimeControl` fail-closed: enables to `shadow`/`active` only when a ready `AmshaChatModelListener` CDI implementation is registered; disabling drains in-flight leases. |
 | `AMSHA_PHOENIX_ENABLED` | `true` | Enable OTel trace export to Arize Phoenix |
 | `AMSHA_PHOENIX_ENDPOINT` | `http://localhost:4318/v1/traces` | Phoenix OTLP HTTP endpoint |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | `http://localhost:4317` | OpenTelemetry collector endpoint |

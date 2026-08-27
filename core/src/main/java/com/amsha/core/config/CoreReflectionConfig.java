@@ -40,6 +40,9 @@ import com.amsha.core.audit.SecurityEventType;
 import com.amsha.core.cron.AgentJobCompleted;
 import com.amsha.core.cron.CronTaskScheduled;
 import com.amsha.core.governance.ApprovalFrame;
+import com.amsha.core.observability.AmshaChatModelListener;
+import com.amsha.core.observability.ChatModelListenerMode;
+import com.amsha.core.observability.ChatModelListenerRuntimeControl;
 import com.amsha.core.routing.CapabilityAwareChatModel;
 import com.amsha.core.routing.InfiniteLoopChatModel;
 import com.amsha.core.routing.ModelCacheInvalidator;
@@ -158,9 +161,18 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             AgentSseService.HitlEvent.class,
             AgentSseService.AgentStatusEvent.class,
             AgentSseService.SseEvent.class,
-            HitlEventType.class
+            HitlEventType.class,
+            ChatModelListenerMode.class,
+            ChatModelListenerRuntimeControl.class,
+            ChatModelListenerRuntimeControl.Snapshot.class,
+            ChatModelListenerRuntimeControl.ToggleResult.class,
+            AmshaChatModelListener.class
         },
         classNames = {
+            "dev.langchain4j.model.chat.listener.ChatModelListener",
+            "dev.langchain4j.model.chat.listener.ChatModelRequestContext",
+            "dev.langchain4j.model.chat.listener.ChatModelResponseContext",
+            "dev.langchain4j.model.chat.listener.ChatModelErrorContext",
             "com.github.benmanes.caffeine.cache.SSLMSA",
             "com.github.benmanes.caffeine.cache.SSLMS",
             "com.github.benmanes.caffeine.cache.SSMS",

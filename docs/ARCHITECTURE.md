@@ -1096,6 +1096,14 @@ Exported to Jaeger via OTLP at `http://localhost:4317`.
 
 `MetricsAgentObserver.onStepComplete()` records per-step counters. Exposed at `/q/metrics`.
 
+`AmshaChatModelListener` (LangChain4j `ChatModelListener` pilot, `core/observability/`, `@Startup @Unremovable`) is the opt-in LLM observability adapter for OpenAI-compatible `OpenAiChatModel` instances built via `ChatModelFactory.openAiBuilder()`. It is guarded by `ChatModelListenerRuntimeControl` (`amsha.observability.chat-listener.mode`, default `off`) and captures/restores the identity carried by `WorkspaceContext` across callback thread transitions:
+
+* `off` — `tryAcquire()` rejected, no listener telemetry is emitted.
+* `shadow` — records `amsha.observability.listener.shadow.*` (tokens by `type=input|output`, `calls{outcome=success|error}`, `duration` timer) — **no prompt/completion payload or retained sample queue**.
+* `active` — emits `amsha.llm.listener_call` OTel child spans (attrs `llm.model_name`, `session.id`, `llm.input_tokens`, `llm.output_tokens`) plus `amsha.observability.listener.active.*` metrics only for calls not already covered by manual instrumentation; existing Amsha instrumentation remains authoritative.
+
+Lifecycle: `@PostConstruct` registers a ready implementation (`effective=requested`), the internal mode transition is fail-closed when no implementation, and non-`OFF`→`OFF` drains `inFlight` leases. `ChatModelFactory` resolves the optional listener through the canonical BeanManager SPI algorithm; absent CDI returns a clean builder. Event-loop callbacks fail closed without telemetry work. Other providers (`Gemini`, `Anthropic`, `Ollama`) remain `AgentObserver`-only for this pilot. See `core/README.md` Observability & `llm-providers/README.md` pilot section.
+
 ### SSE Real-Time UI Events
 
 `AgentSseService` publishes typed events for the Lit web frontend:

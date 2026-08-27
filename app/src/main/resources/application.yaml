@@ -901,6 +901,8 @@ amsha:
     rate-limit-backoff-seconds: 30
 
   observability:
+    chat-listener:
+      mode: "${AMSHA_OBSERVABILITY_CHAT_LISTENER_MODE:off}"
     phoenix:
       enabled: "${AMSHA_PHOENIX_ENABLED:true}"
       endpoint: "${AMSHA_PHOENIX_ENDPOINT:http://localhost:4318/v1/traces}"
