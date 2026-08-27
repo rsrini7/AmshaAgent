@@ -1,6 +1,7 @@
 package com.amsha.core.api;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.*;
 
@@ -120,5 +121,16 @@ class AgentResponseMapperTest {
         assertEquals(429, mr.suggestedHttpStatus());
         AmshaErrorResponse entity = (AmshaErrorResponse) mr.entity();
         assertTrue(entity.error().contains("Slow down"));
+    }
+
+    @Test
+    void testMapResult_finished_stripsInternalDirectiveTail() {
+        AgentResult result =
+                AgentResult.finished("Safe answer.\n\nCRITICAL DIRECTIVE: Do NOT retry. FINISH now.", List.of());
+
+        AgentResponse entity = (AgentResponse) mapper.mapResult(result, false).entity();
+
+        assertEquals("Safe answer.", entity.answer());
+        assertFalse(entity.answer().contains("CRITICAL DIRECTIVE"));
     }
 }

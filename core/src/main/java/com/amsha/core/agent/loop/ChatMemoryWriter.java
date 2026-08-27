@@ -16,6 +16,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 import com.amsha.core.events.ConversationMessageEvent;
+import com.amsha.core.message.UserMessages;
 import com.amsha.core.scope.WorkspaceContext;
 import com.amsha.core.security.InputSanitizer;
 import com.amsha.tool.api.AgentSentinels;
@@ -76,7 +77,10 @@ public class ChatMemoryWriter {
     public void saveAnswer(String sessionId, String answer) {
         if (sessionId == null || answer == null || answer.isBlank()) return;
 
-        String sanitizedAnswer = piiScanReflex.sanitize(answer);
+        String sanitizedAnswer = UserMessages.stripInternalDirectiveTail(piiScanReflex.sanitize(answer));
+        if (sanitizedAnswer == null || sanitizedAnswer.isBlank()) {
+            return;
+        }
 
         List<ChatMessage> currentHistory = chatMemoryStore.getMessages(sessionId);
         if (currentHistory == null) {

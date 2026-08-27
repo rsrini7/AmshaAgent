@@ -8,6 +8,7 @@ import java.util.regex.Pattern;
 import com.amsha.common.util.HtmlArtifactUtil;
 import com.amsha.core.agent.reasoning.ReasoningStep;
 import com.amsha.core.agent.result.AgentResult;
+import com.amsha.core.message.UserMessages;
 import com.amsha.tool.api.AgentSentinels;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -87,21 +88,23 @@ public class AgentResultFormatter {
                         "⏳ Rate limit hit. Automatically retrying in " + (r.retryAfterMs() / 1000) + "s...";
                     case AgentResult.Failed f -> {
                         String msg = AgentErrorMessageUtil.sanitizeErrorMessage(f.reason());
+                        msg = UserMessages.stripInternalDirectiveTail(msg);
                         yield (f.category() == AgentResult.FailureCategory.RATE_LIMIT || msg.startsWith("⏳"))
                                 ? msg
                                 : "❌ " + msg;
                     }
                 };
 
-        if (reply == null || reply.isBlank()) {
-            reply = "✅ Done.";
-        }
-        return reply;
+        String safeReply = UserMessages.stripInternalDirectiveTail(reply);
+        return safeReply == null || safeReply.isBlank() ? "✅ Done." : safeReply;
     }
 
     private static String recoverMalformedToolOutput(String formattedAnswer, List<ReasoningStep> steps) {
-        if (!MALFORMED_TOOL_OUTPUT.equals(formattedAnswer) || steps == null || steps.isEmpty()) {
+        if (!MALFORMED_TOOL_OUTPUT.equals(formattedAnswer)) {
             return formattedAnswer;
+        }
+        if (steps == null || steps.isEmpty()) {
+            return UserMessages.AI_UNEXPECTED_RESPONSE;
         }
 
         return steps.reversed().stream()
@@ -112,11 +115,12 @@ public class AgentResultFormatter {
                 .filter(obs -> obs != null && !obs.isBlank())
                 .findFirst()
                 .map(AgentResultFormatter::formatRecoveredObservation)
-                .orElse(formattedAnswer);
+                .orElse(UserMessages.AI_UNEXPECTED_RESPONSE);
     }
 
     private static String formatRecoveredObservation(String observation) {
-        String trimmed = observation.strip();
+        String safeObservation = UserMessages.stripInternalDirectiveTail(observation);
+        String trimmed = safeObservation == null ? "" : safeObservation.strip();
         String jsonSummary = summarizeJsonObservation(trimmed);
         if (jsonSummary != null && !jsonSummary.isBlank()) {
             return jsonSummary;
@@ -260,6 +264,11 @@ public class AgentResultFormatter {
         // 5. Full HTML artifact: collapse to a short browser-preview notice so
         // Telegram does not dump the generated page body as chat text.
         cleaned = HtmlArtifactUtil.collapseHtmlArtifact(cleaned);
+
+        // Delegation and orchestration adapters may append coordinator-only
+        // instructions after producing an otherwise valid answer. They are
+        // model-facing control data and must never cross a user-facing path.
+        cleaned = UserMessages.stripInternalDirectiveTail(cleaned);
 
         return cleaned.isBlank() ? MALFORMED_TOOL_OUTPUT : cleaned;
     }

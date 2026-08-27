@@ -1,5 +1,7 @@
 package com.amsha.core.pipeline.handlers;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
@@ -10,16 +12,19 @@ import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.lang.reflect.Method;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.Callable;
 
+import com.amsha.channel.api.ApprovalPrompt;
 import com.amsha.channel.api.ChannelMessage;
 import com.amsha.channel.api.ChannelPlugin;
 import com.amsha.channel.api.ChannelSender;
 import com.amsha.channel.api.ChannelType;
 import com.amsha.channel.api.ChannelUser;
+import com.amsha.channel.api.ReplyNode;
 import com.amsha.core.agent.IntentClassificationService;
 import com.amsha.core.agent.loop.AgentLoop;
 import com.amsha.core.agent.reasoning.ReasoningEngine;
@@ -39,6 +44,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.MockedStatic;
@@ -283,6 +289,26 @@ class AgentDispatchHandlerTest {
             mockedTimeInjector.verify(() ->
                     TimeContextInjector.inject(eq(context), eq("schedule a search every minute"), eq("Asia/Kolkata")));
         }
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void testAwaitingApprovalRendersSingleApprovalInteraction() throws Exception {
+        MessageContext context = createTestContext(AutonomyLevel.FULL);
+        ChannelSender sender = Mockito.mock(ChannelSender.class);
+        ChannelPlugin plugin = Mockito.mock(ChannelPlugin.class);
+        when(plugin.sender()).thenReturn(sender);
+        when(channelPluginRegistry.find(ChannelType.REST_API)).thenReturn(Optional.of(plugin));
+
+        Method method = AgentDispatchHandler.class.getDeclaredMethod(
+                "formatAndSendReply", MessageContext.class, AgentResult.class, String.class);
+        method.setAccessible(true);
+        method.invoke(handler, context, AgentResult.awaitingApproval("garuda", "{}", "sess123", List.of()), "sess123");
+
+        ArgumentCaptor<List<ReplyNode>> captor = ArgumentCaptor.forClass(List.class);
+        verify(sender).send(eq(context.getUser()), captor.capture());
+        assertEquals(1, captor.getValue().size());
+        assertInstanceOf(ApprovalPrompt.class, captor.getValue().getFirst());
     }
 
     private MessageContext createTestContext(AutonomyLevel level) {

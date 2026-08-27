@@ -9,6 +9,7 @@ import com.amsha.core.agent.reasoning.ReasoningStep;
 import com.amsha.core.agent.result.AgentResult;
 import com.amsha.core.domain.model.AgentCheckpoint;
 import com.amsha.core.lifecycle.WorkspaceManager;
+import com.amsha.core.message.UserMessages;
 import com.amsha.core.scope.WorkspaceContext;
 import com.amsha.core.state.StatefulAgentStore;
 import com.amsha.core.tools.ToolRegistry;
@@ -178,7 +179,8 @@ final class PendingToolResumeExecutor {
         }
         if (response instanceof ToolResponse.ToolSuccess success) {
             if (ToolCapability.DELEGATE_TO_AGENT.toolName().equals(request.toolName())) {
-                return AgentResult.finished(success.output(), List.copyOf(request.history()));
+                String safeOutput = UserMessages.stripInternalDirectiveTail(success.output());
+                return AgentResult.finished(safeOutput, List.copyOf(request.history()));
             }
             completeInProgressCheckpoint(request.checkpoint());
             return request.stateMachineRunner().runFinishPass(request.context(), reasoningEngine, request.history());

@@ -116,7 +116,7 @@ public class ToolResultProcessor {
     private StepDecision handleScheduleTaskOutcome(
             AgentExecutionContext ctx, ToolResponse res, String obs, List<ReasoningStep> history) {
         if (res != null && res.success()) {
-            String cleanOutput = obs.split(UserMessages.CRITICAL_DIRECTIVE_SEPARATOR, 2)[0];
+            String cleanOutput = UserMessages.stripInternalDirectiveTail(obs);
             String finalAnswer = "✅ " + cleanOutput;
             writer.saveAnswer(ctx.sessionId(), finalAnswer);
             return StepDecision.terminal(AgentResult.finished(finalAnswer, List.copyOf(history)));

@@ -281,6 +281,8 @@ public class DelegateToAgentTool implements AgentTool {
 
         String channelType = ctx.channelType();
         String platformId = ctx.channelPlatformId();
+        var childContext = DelegatedMessageContextFactory.create(
+                innerSessionId, userId, chatId, channelType, goal, targetRole.toScopedName(), innerLevel);
         AgentResult result = WorkspaceContext.run(
                 innerSessionId,
                 userId,
@@ -291,7 +293,13 @@ public class DelegateToAgentTool implements AgentTool {
                 platformId,
                 () -> agentLoop
                         .get()
-                        .run(innerSessionId, targetRole.toScopedName(), goal, reasoningEngine, maxIterations));
+                        .run(
+                                innerSessionId,
+                                targetRole.toScopedName(),
+                                goal,
+                                reasoningEngine,
+                                maxIterations,
+                                childContext));
 
         // Link sub-agent checkpoint to parent
         checkpointCrud.findBySessionAndRole(outerSessionId, ctx.agentRole()).ifPresent(parent -> {
@@ -331,10 +339,6 @@ public class DelegateToAgentTool implements AgentTool {
         });
 
         return result;
-    }
-
-    private ToolResponse handleRunSubAgentException(AgentRoleEnum targetRole, String requestedPersona, Exception e) {
-        return delegationProcessor.handleRunSubAgentException(targetRole, requestedPersona, e);
     }
 
     private ToolResponse handleSubAgentResult(
@@ -413,7 +417,20 @@ public class DelegateToAgentTool implements AgentTool {
                     ctx.channelPlatformId(),
                     () -> agentLoop
                             .get()
-                            .run(memberSession, memberRole.toScopedName(), memberGoal, reasoningEngine, maxIter));
+                            .run(
+                                    memberSession,
+                                    memberRole.toScopedName(),
+                                    memberGoal,
+                                    reasoningEngine,
+                                    maxIter,
+                                    DelegatedMessageContextFactory.create(
+                                            memberSession,
+                                            userId,
+                                            chatId,
+                                            ctx.channelType(),
+                                            memberGoal,
+                                            memberRole.toScopedName(),
+                                            ctx.autonomyLevel())));
 
             return switch (result) {
                 case AgentResult.Finished f -> f.answer();
@@ -494,7 +511,7 @@ public class DelegateToAgentTool implements AgentTool {
                 delegationSpan.recordException(e);
                 delegationSpan.end();
             }
-            return handleRunSubAgentException(targetRole, requestedPersona, e);
+            return delegationProcessor.handleRunSubAgentException(targetRole, requestedPersona, e);
         } finally {
             if (delegationSpan != null) delegationSpan.end();
         }

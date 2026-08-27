@@ -165,7 +165,7 @@ class DelegateToAgentToolUnitTest {
         when(roleRegistry.resolveRoleDefinition(anyString())).thenReturn(shivaDef);
 
         AgentResult finished = AgentResult.finished("Code debugged successfully", List.of());
-        when(mockAgentLoop.run(anyString(), anyString(), anyString(), any(), anyInt()))
+        when(mockAgentLoop.run(anyString(), anyString(), anyString(), any(), anyInt(), any()))
                 .thenReturn(finished);
         when(delegationProcessor.handleSubAgentResult(any(), any(), any()))
                 .thenReturn(ToolResponse.success("Code debugged successfully"));

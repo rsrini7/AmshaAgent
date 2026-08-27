@@ -15,7 +15,6 @@ import com.amsha.channel.api.ChannelPlugin;
 import com.amsha.channel.api.ChannelSender;
 import com.amsha.channel.api.ChannelType;
 import com.amsha.channel.api.ChannelUser;
-import com.amsha.channel.api.ContentNode;
 import com.amsha.common.util.LogUtil;
 import com.amsha.core.agent.reasoning.ReasoningEngine;
 import com.amsha.core.agent.reasoning.ReasoningStep;
@@ -322,11 +321,7 @@ public class CheckpointResumeHandler {
             ChannelType _cType) {
         if (result instanceof AgentResult.AwaitingApproval aa
                 && aa.toolName().startsWith(ReasoningStep.PARALLEL_SENTINEL_PIPE_PREFIX)) {
-            s.send(
-                    user,
-                    List.of(
-                            new ContentNode.Text(output),
-                            new ApprovalPrompt(aa.toolName(), aa.paramsJson(), sessionId)));
+            s.send(user, List.of(new ApprovalPrompt(aa.toolName(), aa.paramsJson(), sessionId)));
         } else {
             // CLI, WebSocket, and unknown channel types all use raw text delivery
             s.sendRaw(user, output);
