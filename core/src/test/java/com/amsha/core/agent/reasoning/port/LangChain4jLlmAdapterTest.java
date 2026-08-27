@@ -22,6 +22,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+
 /**
  * Tests for {@link LangChain4jLlmAdapter} per-model circuit breaker isolation
  * and {@link LangChain4jLlmAdapter.PerModelCircuitBreaker} behavior.
@@ -31,12 +33,14 @@ class LangChain4jLlmAdapterTest {
     private ChatModel globalModel;
     private ModelRouter modelRouter;
     private LangChain4jLlmAdapter adapter;
+    private SimpleMeterRegistry meterRegistry;
 
     @BeforeEach
     void setUp() {
         globalModel = mock(ChatModel.class);
         modelRouter = mock(ModelRouter.class);
-        adapter = new LangChain4jLlmAdapter(globalModel, modelRouter);
+        meterRegistry = new SimpleMeterRegistry();
+        adapter = new LangChain4jLlmAdapter(globalModel, modelRouter, meterRegistry);
         adapter.cbEnabled = true;
     }
 
@@ -307,6 +311,26 @@ class LangChain4jLlmAdapterTest {
                 .thenThrow(new LlmMalformedResponseException("syntax error", null));
 
         assertThrows(LlmMalformedResponseException.class, () -> adapter.nextStep(request(), null, (String) null));
+    }
+
+    @Test
+    void schemaRejectionRecordsPayloadFreeMetric() {
+        ChatModel delegate = mock(ChatModel.class);
+        ChatModel capableModel = new CapabilityAwareChatModel(delegate);
+        when(modelRouter.resolve("coder", false)).thenReturn(capableModel);
+        when(delegate.chat(any(ChatRequest.class)))
+                .thenThrow(new LlmMalformedResponseException("schema rejected", null))
+                .thenReturn(response());
+
+        adapter.nextStep(request(), "coder", SCHEMA);
+
+        assertEquals(
+                1.0,
+                meterRegistry
+                        .get("amsha.llm.structured.schema.rejection")
+                        .tag("operation", "agent")
+                        .counter()
+                        .count());
     }
 
     private static final String SCHEMA = "{\"type\":\"object\",\"properties\":{\"answer\":{\"type\":\"string\"}}}";

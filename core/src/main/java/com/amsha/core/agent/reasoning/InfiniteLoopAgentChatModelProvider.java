@@ -23,6 +23,7 @@ import com.amsha.llm.api.StructuredOutputMode;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
+import io.micrometer.core.instrument.MeterRegistry;
 import io.quarkus.runtime.LaunchMode;
 
 @ApplicationScoped
@@ -48,6 +49,9 @@ public class InfiniteLoopAgentChatModelProvider implements AgentChatModelProvide
     @Inject
     @Any
     Instance<AgentChatModelProvider> allProviders;
+
+    @Inject
+    MeterRegistry meterRegistry;
 
     @Override
     public String providerName() {
@@ -104,7 +108,8 @@ public class InfiniteLoopAgentChatModelProvider implements AgentChatModelProvide
                         cooldownBaseSeconds,
                         cooldownMaxSeconds,
                         cooldownTransientSeconds,
-                        maxLatencyMs);
+                        maxLatencyMs,
+                        meterRegistry);
             }
             throw new IllegalStateException(
                     "InfiniteLoop: No slots could be initialized. Check AMSHA_INFINITE_LOOP_LLM_PROVIDERS="
@@ -150,7 +155,13 @@ public class InfiniteLoopAgentChatModelProvider implements AgentChatModelProvide
                 + "'model not found' or 404, check the provider's model list and update AMSHA_*_MODEL.");
 
         return new InfiniteLoopChatModel(
-                "agent-chat", slots, cooldownBaseSeconds, cooldownMaxSeconds, cooldownTransientSeconds, maxLatencyMs);
+                "agent-chat",
+                slots,
+                cooldownBaseSeconds,
+                cooldownMaxSeconds,
+                cooldownTransientSeconds,
+                maxLatencyMs,
+                meterRegistry);
     }
 
     private AgentChatModelProvider findProvider(String name) {

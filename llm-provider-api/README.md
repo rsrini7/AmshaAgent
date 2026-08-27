@@ -14,7 +14,9 @@ Pure API contracts, Service Provider Interfaces (SPIs), Data Transfer Objects (D
 | `LlmProviderOnboardingAdapter` | `com.amsha.llm.api` | Port interface for provider catalog introspection, model discovery, and onboarding validation. |
 | `ModelDefaults` | `com.amsha.llm.api` | Central registry of default provider IDs, model identifiers, base URLs, and timeout constants. |
 | `AgentLlmConfig` / `LlmModelConfig` | `com.amsha.llm.api` | Immutable configuration records for per-provider and per-agent LLM parameters. |
-| `StructuredOutputMode` | `com.amsha.llm.api` | Enum defining structured JSON output handling (`AUTO`, `TOOLS`, `JSON_SCHEMA`, `NONE`). |
+| `StrictJsonSchemaCapable` | `com.amsha.llm.api` | Capability interface implemented by provider models and routing wrappers that advertise verified support for strict JSON Schema response formatting. |
+| `StructuredSchemaRequests` | `com.amsha.llm.api` | Utilities for request-scoped schema attachment, schema conversion to LangChain4j ResponseFormat, schema removal, and candidate rewrite dispatch. |
+| `StructuredOutputMode` | `com.amsha.llm.api` | Enum defining structured JSON output handling (`NATIVE`, `PROMPT_DIRECTIVE`, `LENIENT`). |
 | `NetworkProfilePolicy` | `com.amsha.llm.api` | Outbound network governance, proxy settings, and TLS trust mode policies for LLM traffic. |
 
 ## OAuth Token Extractors

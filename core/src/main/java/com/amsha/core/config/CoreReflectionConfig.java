@@ -40,11 +40,14 @@ import com.amsha.core.audit.SecurityEventType;
 import com.amsha.core.cron.AgentJobCompleted;
 import com.amsha.core.cron.CronTaskScheduled;
 import com.amsha.core.governance.ApprovalFrame;
+import com.amsha.core.routing.CapabilityAwareChatModel;
+import com.amsha.core.routing.InfiniteLoopChatModel;
 import com.amsha.core.routing.ModelCacheInvalidator;
 import com.amsha.core.routing.ModelProfileCredentialResolver;
 import com.amsha.core.routing.ModelProfileResolverImpl;
 import com.amsha.core.routing.ModelRouter;
 import com.amsha.core.routing.ModelRoutingException;
+import com.amsha.core.routing.MultiModelChatModel;
 import com.amsha.core.routing.OrderedFailoverChatModel;
 import com.amsha.core.routing.ResolvedCredential;
 import com.amsha.core.routing.ResolvedProfile;
@@ -115,6 +118,11 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             ModelRouter.ModelConfig.class,
             OrderedFailoverChatModel.class,
             OrderedFailoverChatModel.Entry.class,
+            CapabilityAwareChatModel.class,
+            MultiModelChatModel.class,
+            MultiModelChatModel.ModelEntry.class,
+            InfiniteLoopChatModel.class,
+            InfiniteLoopChatModel.Slot.class,
             ResolvedProfile.class,
             RouteResolution.class,
             ResolvedCredential.class,

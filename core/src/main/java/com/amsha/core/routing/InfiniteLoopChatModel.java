@@ -6,12 +6,25 @@ import dev.langchain4j.model.chat.response.ChatResponse;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicBoolean;
+
+import com.amsha.core.structured.StructuredOutputMetrics;
+import com.amsha.llm.api.StrictJsonSchemaCapable;
+import com.amsha.llm.api.StructuredSchemaRequests;
+import com.amsha.llm.api.error.LlmMalformedResponseException;
+
+import org.jboss.logging.Logger;
+
+import io.micrometer.core.instrument.MeterRegistry;
 
 /**
  * {@link ChatModel} backed by an {@link InfiniteLoopProvider} for slot rotation,
  * health tracking, and automatic failover across multiple LLM providers.
  */
-public class InfiniteLoopChatModel implements ChatModel {
+public class InfiniteLoopChatModel implements ChatModel, StrictJsonSchemaCapable {
+
+    private static final Logger log = Logger.getLogger(InfiniteLoopChatModel.class);
+    private static final ScopedValue<AtomicBoolean> SCHEMA_REJECTED = ScopedValue.newInstance();
 
     public record Slot(String name, ChatModel model, String baseUrl) {
         public Slot(String name, ChatModel model) {
@@ -29,6 +42,17 @@ public class InfiniteLoopChatModel implements ChatModel {
             int cooldownMaxSeconds,
             int cooldownTransientSeconds,
             long maxLatencyMs) {
+        this(loopId, slots, cooldownBaseSeconds, cooldownMaxSeconds, cooldownTransientSeconds, maxLatencyMs, null);
+    }
+
+    public InfiniteLoopChatModel(
+            String loopId,
+            List<Slot> slots,
+            int cooldownBaseSeconds,
+            int cooldownMaxSeconds,
+            int cooldownTransientSeconds,
+            long maxLatencyMs,
+            MeterRegistry meterRegistry) {
         if (slots == null || slots.isEmpty()) {
             throw new IllegalArgumentException("InfiniteLoopChatModel requires at least one slot");
         }
@@ -39,7 +63,35 @@ public class InfiniteLoopChatModel implements ChatModel {
         this.provider = new InfiniteLoopProvider<>(
                 loopId,
                 providerSlots,
-                (model, request) -> model.chat((ChatRequest) request),
+                (model, request) -> {
+                    ChatRequest req = (ChatRequest) request;
+                    boolean schemaRejected =
+                            SCHEMA_REJECTED.isBound() && SCHEMA_REJECTED.get().get();
+                    boolean candidateStrict = !schemaRejected
+                            && model instanceof StrictJsonSchemaCapable capable
+                            && capable.supportsStrictJsonSchema();
+                    ChatRequest outbound = StructuredSchemaRequests.forCandidate(req, candidateStrict);
+                    boolean schemaAttached = StructuredSchemaRequests.hasNativeJsonSchema(outbound);
+                    try {
+                        return model.chat(outbound);
+                    } catch (LlmMalformedResponseException mre) {
+                        if (schemaAttached) {
+                            StructuredOutputMetrics.recordSchemaRejection(meterRegistry, "infinite-loop");
+                            if (SCHEMA_REJECTED.isBound()) {
+                                SCHEMA_REJECTED.get().set(true);
+                            }
+                            log.debug(
+                                    "InfiniteLoopChatModel: native schema rejected by candidate; downgrading to prompt directive");
+                            return model.chat(StructuredSchemaRequests.withoutNativeJsonSchema(req));
+                        }
+                        throw mre;
+                    } catch (Throwable t) {
+                        if (schemaAttached && SCHEMA_REJECTED.isBound()) {
+                            SCHEMA_REJECTED.get().set(true);
+                        }
+                        throw t;
+                    }
+                },
                 cooldownBaseSeconds,
                 cooldownMaxSeconds,
                 cooldownTransientSeconds,
@@ -53,6 +105,16 @@ public class InfiniteLoopChatModel implements ChatModel {
             int cooldownMaxSeconds,
             int cooldownTransientSeconds) {
         this(loopId, slots, cooldownBaseSeconds, cooldownMaxSeconds, cooldownTransientSeconds, 60_000L);
+    }
+
+    public InfiniteLoopChatModel(
+            String loopId,
+            List<Slot> slots,
+            int cooldownBaseSeconds,
+            int cooldownMaxSeconds,
+            int cooldownTransientSeconds,
+            MeterRegistry meterRegistry) {
+        this(loopId, slots, cooldownBaseSeconds, cooldownMaxSeconds, cooldownTransientSeconds, 60_000L, meterRegistry);
     }
 
     public InfiniteLoopChatModel(
@@ -71,7 +133,14 @@ public class InfiniteLoopChatModel implements ChatModel {
 
     @Override
     public ChatResponse chat(ChatRequest request) {
-        return provider.invoke(request);
+        AtomicBoolean rejected = new AtomicBoolean(false);
+        try {
+            return ScopedValue.where(SCHEMA_REJECTED, rejected).call(() -> provider.invoke(request));
+        } catch (RuntimeException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
     }
 
     /** Returns the slot name that served the most recent chat() call in this scope. */
@@ -87,6 +156,14 @@ public class InfiniteLoopChatModel implements ChatModel {
     /** Returns a summary of slot health for debugging. */
     public static String getSlotStats() {
         return InfiniteLoopProvider.getSlotStats();
+    }
+
+    @Override
+    public boolean supportsStrictJsonSchema() {
+        return !slots.isEmpty()
+                && slots.stream()
+                        .allMatch(s -> s.model() instanceof StrictJsonSchemaCapable capable
+                                && capable.supportsStrictJsonSchema());
     }
 
     public List<Slot> slots() {

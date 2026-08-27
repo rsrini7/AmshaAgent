@@ -22,6 +22,9 @@ public class TwoTierMemoryService {
     @Inject
     MemoryRetrievalPort memoryPort;
 
+    @Inject
+    RerankingService rerankingService;
+
     /**
      * Search across keyword and vector tiers.
      *
@@ -34,5 +37,18 @@ public class TwoTierMemoryService {
         return results.stream()
                 .map(dto -> new ScoredChunk(dto.chunkId(), dto.text(), dto.score()))
                 .toList();
+    }
+
+    /**
+     * Search across keyword and vector tiers, then reranks candidates using {@link RerankingService}.
+     *
+     * @param query   search query
+     * @param userId  tenant-scoped identifier
+     * @param topK    max candidate results to retrieve and rerank
+     * @return reranked chunks sorted by rerank score descending
+     */
+    public List<RerankedChunk> searchReranked(String query, String userId, int topK) {
+        List<ScoredChunk> candidates = search(query, userId, topK);
+        return rerankingService.rerank(query, candidates);
     }
 }

@@ -10,6 +10,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
+import com.amsha.common.util.LogUtil;
 import com.amsha.core.agent.reasoning.error.LlmErrorClassificationService;
 import com.amsha.core.lifecycle.WorkspaceManager;
 import com.amsha.core.scope.WorkspaceContext;
@@ -197,6 +198,7 @@ public class InfiniteLoopProvider<T, R> {
         int n = slots.size();
 
         while (true) {
+            LlmMalformedResponseException malformedResponse = null;
             int start = currentIndex.updateAndGet(i -> (i + 1) % n);
 
             for (int offset = 0; offset < n; offset++) {
@@ -238,8 +240,15 @@ public class InfiniteLoopProvider<T, R> {
                             slot.name(), elapsedMs, slot.baseUrl());
                     return response;
                 } catch (Throwable t) {
-                    classifyAndHandle(slot.name(), h, t);
+                    LlmMalformedResponseException candidateMalformedResponse = classifyAndHandle(slot.name(), h, t);
+                    if (candidateMalformedResponse != null) {
+                        malformedResponse = candidateMalformedResponse;
+                    }
                 }
+            }
+
+            if (malformedResponse != null) {
+                throw malformedResponse;
             }
 
             if (health.values().stream().allMatch(SlotHealth::isPermanentlyDisabled)) {
@@ -270,7 +279,7 @@ public class InfiniteLoopProvider<T, R> {
         }
     }
 
-    private void classifyAndHandle(String slotName, SlotHealth h, Throwable t) {
+    private LlmMalformedResponseException classifyAndHandle(String slotName, SlotHealth h, Throwable t) {
         LlmProviderException classified = LlmErrorClassificationService.classify(t);
         switch (classified) {
             case LlmRateLimitException r -> handleRateLimit(slotName, h, r);
@@ -281,9 +290,16 @@ public class InfiniteLoopProvider<T, R> {
             case LlmServiceUnavailableException u -> handleServiceUnavailable(slotName, h, u);
             case LlmContentFilterException c -> throw c;
             case LlmToolCallException tc -> throw tc;
-            case LlmMalformedResponseException mr -> throw mr;
+            case LlmMalformedResponseException mr -> {
+                h.recordTransientFailure(cooldownTransientSeconds, cooldownBaseSeconds, cooldownMaxSeconds);
+                log.warnf(
+                        "InfiniteLoop: Slot [%s] malformed response or schema rejected (%s), trying next slot.",
+                        slotName, LogUtil.rootMessage(mr));
+                return mr;
+            }
             default -> handleUnknownError(slotName, h, classified);
         }
+        return null;
     }
 
     private void handleRateLimit(String slotName, SlotHealth h, LlmRateLimitException e) {
