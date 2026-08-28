@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -109,6 +110,11 @@ public class ApproveReflexDelegationTest {
         cp.setBatchToolDecisions("{\"github\":\"PENDING\", \"serper\":\"PENDING\"}");
 
         when(statefulAgentStore.findLatestAwaitingApproval("s1")).thenReturn(Optional.of(cp));
+        AgentCheckpoint resolved = new AgentCheckpointRecord();
+        resolved.setSessionId("s1");
+        resolved.setAgentRole("coordinator");
+        resolved.setBatchToolDecisions("{\"github\":\"APPROVED\", \"serper\":\"APPROVED\"}");
+        when(checkpointApprovalService.approveAll("s1", "CLI approve")).thenReturn(resolved);
 
         MessageContext context = mock(MessageContext.class);
         ChannelUser user = new ChannelUser("u1", "u1", "u1", ChannelType.TELEGRAM);
@@ -119,6 +125,64 @@ public class ApproveReflexDelegationTest {
         verify(checkpointApprovalService).approveAll("s1", "CLI approve");
         assertNotNull(result);
         assertEquals("", result.commandResponse().orElse(null));
+    }
+
+    @Test
+    void test_delegatedApprove_doesNotResumeWhenDecisionIsNotTerminal() {
+        AgentCheckpoint pending = new AgentCheckpointRecord();
+        pending.setSessionId("remote-session");
+        pending.setAgentRole("coordinator");
+        pending.setBatchToolDecisions("{\"github\":\"PENDING\", \"serper\":\"PENDING\"}");
+
+        AgentCheckpoint partiallyResolved = new AgentCheckpointRecord();
+        partiallyResolved.setSessionId("remote-session");
+        partiallyResolved.setAgentRole("coordinator");
+        partiallyResolved.setBatchToolDecisions("{\"github\":\"APPROVED\", \"serper\":\"PENDING\"}");
+
+        when(statefulAgentStore.findLatestAwaitingApproval("remote-session")).thenReturn(Optional.of(pending));
+        when(delegateGuard.isDelegate("u1")).thenReturn(true);
+        when(checkpointApprovalService.approveAll("remote-session", "CLI approve"))
+                .thenReturn(partiallyResolved);
+
+        MessageContext context = mock(MessageContext.class);
+        ChannelUser user = new ChannelUser("u1", "u1", "u1", ChannelType.TELEGRAM);
+        when(context.getUser()).thenReturn(user);
+
+        ReflexResult result = approveReflex.execute("s1", "u1", "c1", "/approve remote-session", context);
+
+        verify(checkpointApprovalService).approveAll("remote-session", "CLI approve");
+        verify(checkpointResumeHandler, never())
+                .resumeAfterBatchDecision(anyString(), anyString(), anyString(), anyString(), anyString());
+        assertNotNull(result);
+    }
+
+    @Test
+    void test_delegatedApprove_doesNotResumeWhenDecisionJsonIsMalformed() {
+        AgentCheckpoint pending = new AgentCheckpointRecord();
+        pending.setSessionId("remote-session");
+        pending.setAgentRole("coordinator");
+        pending.setBatchToolDecisions("{\"github\":\"PENDING\", \"serper\":\"PENDING\"}");
+
+        AgentCheckpoint malformed = new AgentCheckpointRecord();
+        malformed.setSessionId("remote-session");
+        malformed.setAgentRole("coordinator");
+        malformed.setBatchToolDecisions("{\"github\":\"APPROVED\"");
+
+        when(statefulAgentStore.findLatestAwaitingApproval("remote-session")).thenReturn(Optional.of(pending));
+        when(delegateGuard.isDelegate("u1")).thenReturn(true);
+        when(checkpointApprovalService.approveAll("remote-session", "CLI approve"))
+                .thenReturn(malformed);
+
+        MessageContext context = mock(MessageContext.class);
+        ChannelUser user = new ChannelUser("u1", "u1", "u1", ChannelType.TELEGRAM);
+        when(context.getUser()).thenReturn(user);
+
+        ReflexResult result = approveReflex.execute("s1", "u1", "c1", "/approve remote-session", context);
+
+        verify(checkpointApprovalService).approveAll("remote-session", "CLI approve");
+        verify(checkpointResumeHandler, never())
+                .resumeAfterBatchDecision(anyString(), anyString(), anyString(), anyString(), anyString());
+        assertNotNull(result);
     }
 
     @Test
@@ -151,6 +215,12 @@ public class ApproveReflexDelegationTest {
         when(statefulAgentStore.findLatestAwaitingApproval("s1")).thenReturn(Optional.empty());
         when(statefulAgentStore.findLatestAwaitingApprovalBySessionContaining("s1"))
                 .thenReturn(Optional.of(childCp));
+        AgentCheckpoint resolved = new AgentCheckpointRecord();
+        resolved.setSessionId(childSessionId);
+        resolved.setAgentRole("coder");
+        resolved.setBatchToolDecisions("{\"sandbox_exec\":\"APPROVED\"}");
+        when(checkpointApprovalService.approveAll(childSessionId, "CLI approve"))
+                .thenReturn(resolved);
 
         MessageContext context = mock(MessageContext.class);
         ChannelUser user = new ChannelUser("u1", "u1", "u1", ChannelType.CLI);
@@ -174,6 +244,12 @@ public class ApproveReflexDelegationTest {
         childCp.setPendingToolName("sandbox_exec");
 
         when(statefulAgentStore.findLatestAwaitingApproval(childSessionId)).thenReturn(Optional.of(childCp));
+        AgentCheckpoint resolved = new AgentCheckpointRecord();
+        resolved.setSessionId(childSessionId);
+        resolved.setAgentRole("coder");
+        resolved.setBatchToolDecisions("{\"sandbox_exec\":\"APPROVED\"}");
+        when(checkpointApprovalService.approveAll(childSessionId, "CLI approve"))
+                .thenReturn(resolved);
 
         MessageContext context = mock(MessageContext.class);
         ChannelUser user = new ChannelUser("u1", "u1", "u1", ChannelType.CLI);

@@ -45,7 +45,7 @@ class FsCheckpointStoreAdapterTest {
                 null,
                 null,
                 null,
-                null,
+                "{\"tool\":\"PENDING\"}",
                 null,
                 null,
                 10,

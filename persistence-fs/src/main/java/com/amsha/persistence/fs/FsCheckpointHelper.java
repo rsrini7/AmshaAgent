@@ -87,19 +87,17 @@ public class FsCheckpointHelper {
         return role.replaceAll("[\\\\/:*?\"<>|]", "_");
     }
 
-    static String updateJsonMap(String json, String key, String value) {
+    static Optional<String> updateJsonMapIfPending(String json, String key, String value) {
         try {
             ObjectMapper mapper = new ObjectMapper();
-            Map<String, String> map;
-            if (json == null || json.isBlank() || json.equals("{}")) {
-                map = new LinkedHashMap<>();
-            } else {
-                map = mapper.readValue(json, new TypeReference<Map<String, String>>() {});
-            }
+            Map<String, String> map = json == null || json.isBlank() || json.equals("{}")
+                    ? new LinkedHashMap<>()
+                    : mapper.readValue(json, new TypeReference<Map<String, String>>() {});
+            if (!"PENDING".equals(map.get(key))) return Optional.empty();
             map.put(key, value);
-            return mapper.writeValueAsString(map);
+            return Optional.of(mapper.writeValueAsString(map));
         } catch (Exception e) {
-            return json;
+            return Optional.empty();
         }
     }
 }

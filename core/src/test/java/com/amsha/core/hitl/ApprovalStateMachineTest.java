@@ -116,6 +116,20 @@ class ApprovalStateMachineTest {
     }
 
     @Test
+    void failedAtomicDecision_doesNotPublishOrResume() {
+        mockTools(List.of("host_exec"), List.of("host_exec"));
+        when(agentStore.updateBatchToolDecision("session-123", "coder", "host_exec", ToolDecision.APPROVED.name()))
+                .thenReturn(false);
+
+        ApprovalResult result =
+                stateMachine.decide("session-123", "host_exec", ApprovalDecision.APPROVE, "stale approval");
+
+        assertEquals(ApprovalOutcome.ALREADY_DECIDED, result.outcome());
+        verify(eventBus, Mockito.never()).publish(any(), any());
+        verify(resumeHandler, Mockito.never()).resumeAfterBatchDecision(any(), any(), any(), any(), any());
+    }
+
+    @Test
     void testReject_singleTool_rejected() {
         mockTools(List.of("github:read"), List.of("github:read"));
         when(agentStore.isAllBatchToolsDecided("session-123", "coder")).thenReturn(true);

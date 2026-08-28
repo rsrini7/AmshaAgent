@@ -492,12 +492,15 @@ public class FsCheckpointStoreAdapter implements CheckpointStorePort {
     }
 
     @Override
-    public boolean atomicUpdateBatchToolDecision(String sessionId, String agentRole, String toolName, String decision) {
+    public synchronized boolean atomicUpdateBatchToolDecision(
+            String sessionId, String agentRole, String toolName, String decision) {
         Optional<CheckpointDto> existing = findBySessionAndRole(sessionId, agentRole);
         if (existing.isEmpty()) return false;
         CheckpointDto cp = existing.get();
-        String updatedDecisions = FsCheckpointHelper.updateJsonMap(
-                cp.batchToolDecisions() != null ? cp.batchToolDecisions() : "{}", toolName, decision);
+        Optional<String> updated =
+                FsCheckpointHelper.updateJsonMapIfPending(cp.batchToolDecisions(), toolName, decision);
+        if (updated.isEmpty() || !CheckpointStatus.AWAITING_APPROVAL.name().equals(cp.status())) return false;
+        String updatedDecisions = updated.get();
         save(CheckpointDtoHelper.withBatchDecisions(cp, updatedDecisions));
         return true;
     }

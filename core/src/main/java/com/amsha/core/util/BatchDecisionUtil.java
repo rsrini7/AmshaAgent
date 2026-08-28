@@ -34,6 +34,23 @@ public final class BatchDecisionUtil {
     }
 
     /**
+     * Returns whether a checkpoint still contains an unresolved decision.
+     * Parse failures are treated as unresolved so a corrupt approval record
+     * cannot accidentally reach a resume path.
+     */
+    public static boolean hasPendingToolNames(AgentCheckpoint cp, ObjectMapper objectMapper) {
+        if (cp == null || !cp.hasBatchToolDecisions()) return false;
+        if (objectMapper == null) return true;
+        try {
+            Map<String, ToolDecision> map =
+                    objectMapper.readValue(cp.getBatchToolDecisions(), new TypeReference<>() {});
+            return map == null || map.values().stream().anyMatch(ToolDecision.PENDING::equals);
+        } catch (Exception e) {
+            return true;
+        }
+    }
+
+    /**
      * Returns all tool names regardless of decision status.
      */
     public static List<String> allToolNames(AgentCheckpoint cp, ObjectMapper objectMapper) {

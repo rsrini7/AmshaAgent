@@ -19,6 +19,7 @@ import com.amsha.core.domain.model.AgentCheckpointRecord;
 import com.amsha.core.state.StatefulAgentStore;
 import com.amsha.persistence.api.CheckpointStatus;
 import com.amsha.persistence.api.ToolDecision;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -53,6 +54,8 @@ class CheckpointApprovalServiceDeepTest {
         MockitoAnnotations.openMocks(this);
         objectMapper = new ObjectMapper();
         service = new CheckpointApprovalService(agentStore, agentSseService, objectMapper, resumeHandlerInstance);
+        when(agentStore.updateBatchToolDecision(anyString(), anyString(), anyString(), anyString()))
+                .thenReturn(true);
     }
 
     private AgentCheckpointRecord createCheckpoint(String sessionId, String role) {
@@ -73,6 +76,7 @@ class CheckpointApprovalServiceDeepTest {
         @Test
         void approve_checkpointFound_setsDecisionsAndPublishesEvent() {
             AgentCheckpointRecord cp = createCheckpoint("s1", "coordinator");
+            cp.setBatchToolDecisions("{\"github\":\"PENDING\"}");
             when(agentStore.load("s1", "coordinator")).thenReturn(Optional.of(cp));
 
             Map<String, ToolDecision> decisions = new LinkedHashMap<>();
@@ -80,7 +84,7 @@ class CheckpointApprovalServiceDeepTest {
 
             service.approve("s1", "coordinator", decisions);
 
-            verify(agentStore).save(cp);
+            verify(agentStore, never()).save(any());
             verify(agentSseService).publish(eq("s1"), any(AgentSseService.HitlEvent.class));
             assertNotNull(cp.getBatchToolDecisions());
             assertTrue(cp.getBatchToolDecisions().contains("APPROVED"));
@@ -99,6 +103,7 @@ class CheckpointApprovalServiceDeepTest {
         @Test
         void approve_multipleDecisions_serializesAll() {
             AgentCheckpointRecord cp = createCheckpoint("s1", "coordinator");
+            cp.setBatchToolDecisions("{\"github\":\"PENDING\",\"sandbox_exec\":\"PENDING\"}");
             when(agentStore.load("s1", "coordinator")).thenReturn(Optional.of(cp));
 
             Map<String, ToolDecision> decisions = new LinkedHashMap<>();
@@ -128,7 +133,7 @@ class CheckpointApprovalServiceDeepTest {
             AgentCheckpoint result = service.approveAll("s1", "bulk");
 
             assertNotNull(result);
-            verify(agentStore).save(cp);
+            verify(agentStore, never()).save(any());
             verify(agentSseService).publish(eq("s1"), any(AgentSseService.HitlEvent.class));
             // Verify decisions were changed to APPROVED
             String json = cp.getBatchToolDecisions();
@@ -137,27 +142,27 @@ class CheckpointApprovalServiceDeepTest {
         }
 
         @Test
-        void approveAll_noExistingDecisions_stillSaves() {
+        void approveAll_noExistingDecisions_isRejectedWithoutWrite() {
             AgentCheckpointRecord cp = createCheckpoint("s1", "coordinator");
             cp.setBatchToolDecisions(null);
             when(agentStore.findLatestAwaitingApproval("s1")).thenReturn(Optional.of(cp));
 
-            AgentCheckpoint result = service.approveAll("s1", "bulk");
-
-            assertNotNull(result);
-            verify(agentStore).save(cp);
+            CheckpointResolutionException ex =
+                    assertThrows(CheckpointResolutionException.class, () -> service.approveAll("s1", "bulk"));
+            assertEquals(409, ex.getStatusCode());
+            verify(agentStore, never()).save(any());
         }
 
         @Test
-        void approveAll_blankDecisions_stillSaves() {
+        void approveAll_blankDecisions_isRejectedWithoutWrite() {
             AgentCheckpointRecord cp = createCheckpoint("s1", "coordinator");
             cp.setBatchToolDecisions("  ");
             when(agentStore.findLatestAwaitingApproval("s1")).thenReturn(Optional.of(cp));
 
-            AgentCheckpoint result = service.approveAll("s1", "bulk");
-
-            assertNotNull(result);
-            verify(agentStore).save(cp);
+            CheckpointResolutionException ex =
+                    assertThrows(CheckpointResolutionException.class, () -> service.approveAll("s1", "bulk"));
+            assertEquals(409, ex.getStatusCode());
+            verify(agentStore, never()).save(any());
         }
 
         @Test
@@ -219,7 +224,7 @@ class CheckpointApprovalServiceDeepTest {
             AgentCheckpoint result = service.denyAll("s1", "security concern");
 
             assertNotNull(result);
-            verify(agentStore).save(cp);
+            verify(agentStore, never()).save(any());
             verify(agentSseService).publish(eq("s1"), any(AgentSseService.HitlEvent.class));
             String json = cp.getBatchToolDecisions();
             assertTrue(json.contains("DENIED"));
@@ -227,15 +232,15 @@ class CheckpointApprovalServiceDeepTest {
         }
 
         @Test
-        void denyAll_noDecisions_stillSaves() {
+        void denyAll_noDecisions_isRejectedWithoutWrite() {
             AgentCheckpointRecord cp = createCheckpoint("s1", "coordinator");
             cp.setBatchToolDecisions(null);
             when(agentStore.findLatestAwaitingApproval("s1")).thenReturn(Optional.of(cp));
 
-            AgentCheckpoint result = service.denyAll("s1", "rejected");
-
-            assertNotNull(result);
-            verify(agentStore).save(cp);
+            CheckpointResolutionException ex =
+                    assertThrows(CheckpointResolutionException.class, () -> service.denyAll("s1", "rejected"));
+            assertEquals(409, ex.getStatusCode());
+            verify(agentStore, never()).save(any());
         }
 
         @Test
@@ -252,15 +257,15 @@ class CheckpointApprovalServiceDeepTest {
     class ApproveToolTests {
 
         @Test
-        void approveTool_noExistingDecisions_createsNewDecisionMap() {
+        void approveTool_updatesExistingPendingDecision() {
             AgentCheckpointRecord cp = createCheckpoint("s1", "coordinator");
-            cp.setBatchToolDecisions(null);
+            cp.setBatchToolDecisions("{\"github\":\"PENDING\"}");
             when(agentStore.findLatestAwaitingApproval("s1")).thenReturn(Optional.of(cp));
 
             AgentCheckpoint result = service.approveTool("s1", "github", "ok");
 
             assertNotNull(result);
-            verify(agentStore).save(cp);
+            verify(agentStore, never()).save(any());
             String json = cp.getBatchToolDecisions();
             assertNotNull(json);
             assertTrue(json.contains("github"));
@@ -270,7 +275,7 @@ class CheckpointApprovalServiceDeepTest {
         @Test
         void approveTool_existingDecisions_addsToMap() {
             AgentCheckpointRecord cp = createCheckpoint("s1", "coordinator");
-            cp.setBatchToolDecisions("{\"sandbox_exec\":\"PENDING\"}");
+            cp.setBatchToolDecisions("{\"github\":\"PENDING\",\"sandbox_exec\":\"PENDING\"}");
             when(agentStore.findLatestAwaitingApproval("s1")).thenReturn(Optional.of(cp));
 
             service.approveTool("s1", "github", "ok");
@@ -290,6 +295,7 @@ class CheckpointApprovalServiceDeepTest {
         @Test
         void approveTool_publishesApprovedEvent() {
             AgentCheckpointRecord cp = createCheckpoint("s1", "coordinator");
+            cp.setBatchToolDecisions("{\"github\":\"PENDING\"}");
             when(agentStore.findLatestAwaitingApproval("s1")).thenReturn(Optional.of(cp));
 
             service.approveTool("s1", "github", "ok");
@@ -298,15 +304,12 @@ class CheckpointApprovalServiceDeepTest {
         }
 
         @Test
-        void approveTool_blankExistingDecisions_createsNewMap() {
+        void approveTool_blankExistingDecisions_isRejectedWithoutWrite() {
             AgentCheckpointRecord cp = createCheckpoint("s1", "coordinator");
             cp.setBatchToolDecisions("   ");
             when(agentStore.findLatestAwaitingApproval("s1")).thenReturn(Optional.of(cp));
 
-            service.approveTool("s1", "github", "ok");
-
-            String json = cp.getBatchToolDecisions();
-            assertTrue(json.contains("APPROVED"));
+            assertThrows(CheckpointResolutionException.class, () -> service.approveTool("s1", "github", "ok"));
         }
     }
 
@@ -316,15 +319,30 @@ class CheckpointApprovalServiceDeepTest {
     class DenyToolTests {
 
         @Test
+        void denyThenApprove_doesNotOverwriteDeniedDecision() throws Exception {
+            AgentCheckpointRecord cp = createCheckpoint("s1", "coordinator");
+            cp.setBatchToolDecisions("{\"host_exec\":\"PENDING\"}");
+            when(agentStore.findLatestAwaitingApproval("s1")).thenReturn(Optional.of(cp));
+
+            service.denyTool("s1", "host_exec", "operator rejected");
+            assertThrows(
+                    CheckpointResolutionException.class, () -> service.approveTool("s1", "host_exec", "late approval"));
+
+            Map<String, ToolDecision> decisions = objectMapper.readValue(
+                    cp.getBatchToolDecisions(), new TypeReference<Map<String, ToolDecision>>() {});
+            assertEquals(ToolDecision.DENIED, decisions.get("host_exec"));
+        }
+
+        @Test
         void denyTool_noExistingDecisions_createsNewDecisionMap() {
             AgentCheckpointRecord cp = createCheckpoint("s1", "coordinator");
-            cp.setBatchToolDecisions(null);
+            cp.setBatchToolDecisions("{\"github\":\"PENDING\"}");
             when(agentStore.findLatestAwaitingApproval("s1")).thenReturn(Optional.of(cp));
 
             AgentCheckpoint result = service.denyTool("s1", "github", "blocked");
 
             assertNotNull(result);
-            verify(agentStore).save(cp);
+            verify(agentStore, never()).save(any());
             String json = cp.getBatchToolDecisions();
             assertTrue(json.contains("DENIED"));
         }
@@ -332,7 +350,7 @@ class CheckpointApprovalServiceDeepTest {
         @Test
         void denyTool_existingDecisions_addsDenialToMap() {
             AgentCheckpointRecord cp = createCheckpoint("s1", "coordinator");
-            cp.setBatchToolDecisions("{\"sandbox_exec\":\"PENDING\"}");
+            cp.setBatchToolDecisions("{\"github\":\"PENDING\",\"sandbox_exec\":\"PENDING\"}");
             when(agentStore.findLatestAwaitingApproval("s1")).thenReturn(Optional.of(cp));
 
             service.denyTool("s1", "github", "blocked");
@@ -353,6 +371,7 @@ class CheckpointApprovalServiceDeepTest {
         @Test
         void denyTool_publishesDeniedEvent() {
             AgentCheckpointRecord cp = createCheckpoint("s1", "coordinator");
+            cp.setBatchToolDecisions("{\"github\":\"PENDING\"}");
             when(agentStore.findLatestAwaitingApproval("s1")).thenReturn(Optional.of(cp));
 
             service.denyTool("s1", "github", "blocked");
@@ -399,6 +418,17 @@ class CheckpointApprovalServiceDeepTest {
             service.triggerResume(cp);
 
             verify(resumeHandler, never()).resumeAfterBatchDecision(any(), any(), any(), any(), any());
+        }
+
+        @Test
+        void triggerResume_malformedDecisions_skipsResume() {
+            AgentCheckpointRecord cp = createCheckpoint("s1", "coordinator");
+            cp.setBatchToolDecisions("not-json");
+
+            service.triggerResume(cp);
+
+            verify(resumeHandler, never()).resumeAfterBatchDecision(any(), any(), any(), any(), any());
+            verify(agentSseService, never()).publish(any(), any());
         }
 
         @Test
