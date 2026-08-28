@@ -1,11 +1,15 @@
 package com.amsha.channel.api;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
@@ -35,6 +39,7 @@ class AbstractInboundMessagePipelineTest {
 
     static class SimpleChannelServices implements ChannelServices {
         CompletableFuture<Void> future = CompletableFuture.completedFuture(null);
+        ChannelMessage lastProcessedMessage;
 
         @Override
         public String resolveOrCreateSession(String channelType, String channelId, String userId) {
@@ -43,6 +48,7 @@ class AbstractInboundMessagePipelineTest {
 
         @Override
         public CompletableFuture<Void> processAsync(ChannelMessage message) {
+            this.lastProcessedMessage = message;
             return future;
         }
 
@@ -110,6 +116,8 @@ class AbstractInboundMessagePipelineTest {
 
         assertTrue(pipeline.replies.contains("⏳"));
         assertFalse(pipeline.isProcessing("chat1"));
+        assertNotNull(channelServices.lastProcessedMessage);
+        assertEquals("hello", channelServices.lastProcessedMessage.text());
     }
 
     @Test
@@ -120,12 +128,34 @@ class AbstractInboundMessagePipelineTest {
         pipeline.processInboundMessage("chat1", "/help", user, msg);
 
         assertFalse(pipeline.replies.contains("⏳"));
+        assertEquals("/help", channelServices.lastProcessedMessage.text());
     }
 
     @Test
     void testProcessInboundMessageNullText() {
         ChannelUser user = new ChannelUser("u1", "chat1", "alice", ChannelType.CLI);
-        pipeline.processInboundMessage("chat1", null, user, null);
+        ChannelMessage msg = new ChannelMessage.CliMessage(user, null, "sess1", Instant.now());
+        pipeline.processInboundMessage("chat1", null, user, msg);
+
+        assertTrue(pipeline.replies.stream().anyMatch(r -> r.contains("only process text")));
+    }
+
+    @Test
+    void testProcessInboundMessageNullChannelContextRejectedExplicitly() {
+        ChannelUser user = new ChannelUser("u1", "chat1", "alice", ChannelType.CLI);
+
+        pipeline.processInboundMessage("chat1", "hello", user, null);
+
+        assertTrue(pipeline.replies.stream().anyMatch(r -> r.contains("channel context is missing")));
+        assertTrue(pipeline.logs.stream().anyMatch(log -> log.contains("null channel context")));
+        assertTrue(channelServices.lastProcessedMessage == null);
+    }
+
+    @Test
+    void testProcessInboundMessageBlankTextWithoutMediaRejected() {
+        ChannelUser user = new ChannelUser("u1", "chat1", "alice", ChannelType.CLI);
+        ChannelMessage msg = new ChannelMessage.CliMessage(user, "   ", "sess1", Instant.now());
+        pipeline.processInboundMessage("chat1", "   ", user, msg);
 
         assertTrue(pipeline.replies.stream().anyMatch(r -> r.contains("only process text")));
     }
@@ -172,5 +202,55 @@ class AbstractInboundMessagePipelineTest {
         pipeline.processInboundMessage("chat1", "hello", user, msg);
 
         assertTrue(pipeline.replies.stream().anyMatch(r -> r.contains("internal error")));
+    }
+
+    @Test
+    void testProcessInboundMessageMultimodalWithoutTextAdmitted_PopulatesDefaultPrompt() {
+        ChannelUser user = new ChannelUser("u1", "chat1", "alice", ChannelType.CLI);
+        MediaAttachment attachment = MediaAttachment.ofInline(
+                "att-1", AttachmentType.IMAGE, "image/png", "sample.png", new byte[] {0x1}, Map.of());
+        ChannelMessage msg = new ChannelMessage.GenericChannelMessage(
+                user, null, "chat1", Instant.now(), ChannelType.CLI, List.of(attachment));
+
+        pipeline.processInboundMessage("chat1", null, user, msg);
+
+        assertTrue(pipeline.replies.contains("⏳"));
+        assertFalse(pipeline.isProcessing("chat1"));
+        assertNotNull(channelServices.lastProcessedMessage);
+        assertEquals(AbstractInboundMessagePipeline.DEFAULT_MEDIA_PROMPT, channelServices.lastProcessedMessage.text());
+        assertEquals(1, channelServices.lastProcessedMessage.attachments().size());
+    }
+
+    @Test
+    void testProcessInboundMessageMultimodalWithCaptionAdmitted_PopulatesCaptionText() {
+        ChannelUser user = new ChannelUser("u1", "chat1", "alice", ChannelType.TELEGRAM);
+        MediaAttachment attachment = MediaAttachment.ofInline(
+                "att-2", AttachmentType.IMAGE, "image/png", "sample.png", new byte[] {0x1}, Map.of());
+        ChannelMessage.TelegramMessage msg = new ChannelMessage.TelegramMessage(
+                user, null, "chat1", Instant.now(), List.of(attachment), "A photo caption");
+
+        pipeline.processInboundMessage("chat1", null, user, msg);
+
+        assertTrue(pipeline.replies.contains("⏳"));
+        assertNotNull(channelServices.lastProcessedMessage);
+        assertEquals("A photo caption", channelServices.lastProcessedMessage.text());
+        assertEquals(1, channelServices.lastProcessedMessage.attachments().size());
+    }
+
+    @Test
+    void testProcessInboundMessageExplicitTextTakesPrecedenceOverCaption() {
+        ChannelUser user = new ChannelUser("u1", "chat1", "alice", ChannelType.TELEGRAM);
+        MediaAttachment attachment = MediaAttachment.ofInline(
+                "att-3", AttachmentType.IMAGE, "image/png", "sample.png", new byte[] {0x1}, Map.of());
+        ChannelMessage.TelegramMessage msg = new ChannelMessage.TelegramMessage(
+                user, "Original message text", "chat1", Instant.now(), List.of(attachment), "Photo caption");
+
+        pipeline.processInboundMessage("chat1", "Explicit user text", user, msg);
+
+        assertNotNull(channelServices.lastProcessedMessage);
+        assertEquals("Explicit user text", channelServices.lastProcessedMessage.text());
+        assertEquals(
+                "Photo caption", channelServices.lastProcessedMessage.caption().orElse(""));
+        assertEquals(1, channelServices.lastProcessedMessage.attachments().size());
     }
 }

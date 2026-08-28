@@ -8,6 +8,10 @@ import java.util.Objects;
  */
 public abstract class AbstractInboundMessagePipeline {
 
+    public static final String DEFAULT_MEDIA_PROMPT = "Please analyze the attached media.";
+    private static final String INVALID_CHANNEL_MESSAGE_REPLY =
+            "⚠️ Unable to process this message because its channel context is missing.";
+
     protected final ChannelServices channelServices;
     protected final ChannelType channelType;
     private final ProcessingLockManager lockManager;
@@ -38,7 +42,7 @@ public abstract class AbstractInboundMessagePipeline {
     protected abstract void logError(String format, Throwable t);
 
     /**
-     * Executes the pipeline flow for a validated text message.
+     * Executes the pipeline flow for a validated message (text or multimodal attachment).
      */
     public void processInboundMessage(String chatId, String text, ChannelUser user, ChannelMessage channelMessage) {
         if (chatId == null || chatId.strip().isEmpty()) {
@@ -46,10 +50,27 @@ public abstract class AbstractInboundMessagePipeline {
             return;
         }
 
-        if (text == null) {
-            logWarn("Received null text message from chat %s - notifying user", chatId);
+        if (channelMessage == null) {
+            logWarn("Dropped message with null channel context for chat %s", chatId);
             if (user != null) {
-                sendRawReply(user, "⚠️ I can only process text messages.");
+                sendRawReply(user, INVALID_CHANNEL_MESSAGE_REPLY);
+            }
+            return;
+        }
+
+        boolean hasMedia = !channelMessage.attachments().isEmpty();
+        String rawText = text != null && !text.isBlank() ? text.trim() : null;
+        String caption = channelMessage.caption().orElse(null);
+        String captionText = (caption != null && !caption.isBlank()) ? caption.trim() : null;
+
+        String effectiveText = rawText != null
+                ? rawText
+                : (captionText != null ? captionText : (hasMedia ? DEFAULT_MEDIA_PROMPT : null));
+
+        if (effectiveText == null) {
+            logWarn("Received null or blank text message without attachments from chat %s - notifying user", chatId);
+            if (user != null) {
+                sendRawReply(user, "⚠️ I can only process text messages or media attachments.");
             }
             return;
         }
@@ -59,12 +80,12 @@ public abstract class AbstractInboundMessagePipeline {
             return;
         }
 
-        if (channelMessage == null) {
-            return;
-        }
+        ChannelMessage messageToSend = !Objects.equals(channelMessage.text(), effectiveText)
+                ? channelMessage.withText(effectiveText)
+                : channelMessage;
 
         // Bypassing locks for reflex/slash commands
-        boolean isReflex = text.trim().startsWith("/") || text.trim().startsWith("@");
+        boolean isReflex = effectiveText.startsWith("/") || effectiveText.startsWith("@");
         boolean acquiredLock = false;
 
         if (!isReflex) {
@@ -79,7 +100,7 @@ public abstract class AbstractInboundMessagePipeline {
         logInfo("Message received for chat %s, delegating to SPI", chatId);
         final boolean finalAcquiredLock = acquiredLock;
 
-        var _ = channelServices.processAsync(channelMessage).handle((res, ex) -> {
+        var _ = channelServices.processAsync(messageToSend).handle((res, ex) -> {
             if (ex != null) {
                 logError("Uncaught exception in message processing for chat " + chatId, ex);
                 sendRawReply(user, "Sorry, an internal error occurred while processing your message.");
