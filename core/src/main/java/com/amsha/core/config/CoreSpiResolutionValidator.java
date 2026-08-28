@@ -18,6 +18,7 @@ import com.amsha.core.tools.search.ToolSearchPort;
 import com.amsha.llm.api.ChatModelCreationPort;
 import com.amsha.memory.tiered.DirectiveFeedbackPort;
 import com.amsha.memory.tiered.DirectiveProvider;
+import com.amsha.security.api.MediaDownloadPort;
 import com.amsha.security.api.SecretVault;
 
 import org.jboss.logging.Logger;
@@ -44,6 +45,7 @@ public class CoreSpiResolutionValidator {
         validateCardinality(ToolSearchPort.class);
         validateCardinality(ChatModelCreationPort.class);
         validateCardinality(SecretVault.class);
+        validateCardinality(MediaDownloadPort.class);
         validateCardinality(DirectiveProvider.class);
         validateCardinality(DirectiveFeedbackPort.class);
         LOG.info("CoreSpiResolutionValidator: SPI resolution validation completed successfully.");

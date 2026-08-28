@@ -7,10 +7,13 @@ import dev.langchain4j.model.openai.OpenAiChatModel;
 
 import java.time.Duration;
 import java.util.Map;
+import java.util.Optional;
 
 import com.amsha.llm.api.AgentLlmConfig;
+import com.amsha.llm.api.LlmModelConfig;
 import com.amsha.llm.api.StructuredOutputMode;
 
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 class ChatModelFactoryUnitTest {
@@ -103,5 +106,38 @@ class ChatModelFactoryUnitTest {
         var builder = OpenAiChatModel.builder().apiKey("test");
         var updated = ChatModelFactory.withOpenRouterHeaders(builder, "https://amsha.ai", "Amsha");
         assertNotNull(updated);
+    }
+
+    @Test
+    @DisplayName("applyJsonResponseFormat applies JSON response format only when toolless and native")
+    void testApplyJsonResponseFormat() {
+        var builder1 = OpenAiChatModel.builder().apiKey("test");
+        ChatModelFactory.applyJsonResponseFormat(builder1, StructuredOutputMode.NATIVE, true);
+
+        var builder2 = OpenAiChatModel.builder().apiKey("test");
+        ChatModelFactory.applyJsonResponseFormat(builder2, StructuredOutputMode.NATIVE, false);
+
+        var builder3 = OpenAiChatModel.builder().apiKey("test");
+        ChatModelFactory.applyJsonResponseFormat(
+                builder3, StructuredOutputMode.NATIVE, true, "https://headroom.example.com/v1");
+        assertNotNull(builder3);
+    }
+
+    @Test
+    @DisplayName("createFromConfig enforces API key presence")
+    void testCreateFromConfig_missingApiKey() {
+        LlmModelConfig missingKey = new LlmModelConfig(
+                "openai",
+                "gpt-4o",
+                "https://api.openai.com/v1",
+                Optional.empty(),
+                Optional.of(4096),
+                Optional.of(Duration.ofSeconds(30)),
+                Optional.of(3),
+                StructuredOutputMode.NATIVE,
+                true,
+                true);
+
+        assertThrows(IllegalStateException.class, () -> ChatModelFactory.createFromConfig(missingKey));
     }
 }

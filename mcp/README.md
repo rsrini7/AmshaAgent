@@ -116,3 +116,26 @@ Amsha also exposes an inbound MCP server at `/mcp` and `/mcp/sse`. The exposed i
 - `McpReflex` — channel-neutral `/mcp ...` command surface.
 
 Persistence has SQLite, PostgreSQL, and filesystem adapters. See [Architecture Invariants](../docs/Architecture_Invariants.md) for persistence, transaction, native-image, and secret-handling rules.
+
+## P4 — Safety-Gated MCP Protocol-Adapter Evaluation (2026-08-28) — Retain Native Bridge
+
+**Decision: RETAIN CURRENT AMSHA NATIVE MCP BRIDGE — DEFER ADOPTION** (`P4-MCP-01`, LangChain4j `1.17.2` / Quarkus `3.38.3` / Quarkiverse `1.12.2`, `dev.langchain4j:langchain4j-mcp:1.17.2-beta27` managed but not on classpath, `amsha-mcp` 193 tests passing). Authority: [ADR-LangChain4j-Capability-Adoption](../Ideas-Pending/Architecture/ADR-LangChain4j-Capability-Adoption-and-Amsha-Boundaries.md#mcp) §MCP + [Issue 07](../.scratch/lc4j-capability-adoption/issues/07-p4-mcp-protocol-adapter-gate.md) — *“No proof means retain.”* Evidence: [`.scratch/lc4j-capability-adoption/evidence/06-mcp-evaluation/README.md`](../.scratch/lc4j-capability-adoption/evidence/06-mcp-evaluation/README.md).
+
+**Why retain — verification against Amsha invariants:**
+
+* `langchain4j-mcp` `1.17.2` is tightly coupled to `McpToolProvider`/`ToolSpecification`/`ToolExecutor` for `AiServices` direct execution; no standalone transport/DTO layer decouplable beneath `McpClientService`. Adding a beta `beta27` live adapter would require an unverified beta artifact — prohibited as ad-hoc pin by ADR §Non-goals / version ceiling check.
+* Using upstream `ToolExecutor`/`AiServices` would bypass mandatory `ToolInvocationGuard`/`PreflightState`/`LoopStuckDetector`, sensitive `NETWORK_OUTBOUND`/`EXECUTE_SHELL` gating, `HostExecSkillGrant`, HITL `MCP_CONNECT`/`MCP_TOOL_ENABLE` approvals, `SecretVault` `USER:<userId>` zeroed credential hygiene, user-scoped multi-tenant isolation, and `FINISH` terminal invariant.
+* Native-image: `amsha-mcp` verified with `McpReflectionConfig`, no dynamic proxies. LangChain4j MCP path unproven without proxy overrides.
+
+**Evaluation matrix (Amsha native vs LangChain4j 1.17.2 MCP):**
+
+| Dimension | Amsha Native MCP Bridge | LangChain4j 1.17.2 MCP Client | Outcome |
+|---|---|---|---|
+| **Multi-Tenant User Isolation** | User-scoped (`USER:<userId>`), per-tab continuity | Process-global / single-tenant | **Amsha Superior** |
+| **Security & HITL Pipeline** | Mandatory `ToolInvocationGuard`, approval tasks | Bypassed if using `ToolExecutor` | **Amsha Superior** |
+| **Credential Protection** | `SecretVault` backed, zeroed in `finally` | In-memory configuration | **Amsha Superior** |
+| **Post-Tool Terminal Action** | Enforced `FINISH` coordinator invariant | Unenforced | **Amsha Superior** |
+| **GraalVM Native Image** | Verified 0 errors, no dynamic proxies | Unproven without proxy overrides | **Amsha Superior** |
+| **Transport Protocols** | HTTP/SSE + Governed STDIO + NDJSON | HTTP/SSE + STDIO | **Parity** |
+
+**Disposition:** No ad-hoc version override; native bridge retained as authoritative production MCP implementation; P4 gate closed. Cleared to proceed to **P5 multimodal channel ingestion**. If a future LangChain4j GA release exposes a decoupled transport/serialization DTO layer and the above invariants are proven via governed local-fixture corpus (stdio+HTTP, malformed NDJSON, capability negotiation, audit/workspace/HITL/`FINISH`, `Context.isOnEventLoopThread()` event-loop check, native reflection), re-evaluate as adapter beneath existing `McpClientService`/`ExternalMcpToolAdapter`.

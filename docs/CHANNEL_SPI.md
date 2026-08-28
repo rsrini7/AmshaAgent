@@ -15,6 +15,14 @@ All interfaces live in `amsha-channel-api`. The core and app modules depend on t
 | `ChannelJobNotifier` | Sends cron and approval timeout notifications | Yes |
 | `ChannelDaemon` | Daemon lifecycle: `channelId()`, `isConfigured()`, `start()` | Yes |
 
+## Multimodal Media
+
+`channel-api` now carries optional multimodal payloads for inbound turns:
+
+* `MediaAttachment` (`attachmentType: IMAGE|DOCUMENT_PDF|AUDIO|OTHER`, `sourceUri`/`inlineData`, `mimeType`, `fileName`, `sizeBytes`) attached to `ChannelMessage` via `List<MediaAttachment> attachments()`.
+* Adapters (Telegram, WebSocket) populate `MediaAttachment` but **do not download** — download is deferred to `AbstractInboundMessagePipeline` which resolves `MediaDownloadPort` (`amsha-security`).
+* Governed service: `GovernedMediaDownloadService` streams with `MediaBudgetLimits` (`10/25/50 MiB`), `MediaSecurityValidator` (SSRF IP blocklist + redirect revalidation), and `OutboundPurpose.MEDIA_DOWNLOAD` policy. Results are `DownloadedMedia` (`AutoCloseable` temp files). See [SECURITY.md#governed-media-download](./SECURITY.md#governed-media-download) and `amsha.media.*` in [CONFIGURATION.md](./CONFIGURATION.md#media-ingestion--download-limits).
+
 ## Supporting Types
 
 ### `ChannelType` (record)

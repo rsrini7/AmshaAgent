@@ -119,6 +119,10 @@ ws://host/ws/chat
   → WorkspaceContext.run() → AgentLoop.run() + CRON CONSTRAINT directive
 ```
 
+**Multimodal media (staged `channel-api` attachment):**
+
+Channel adapters produce `ChannelMessage` with optional `List<MediaAttachment>` (type `IMAGE|DOCUMENT_PDF|AUDIO|OTHER`, `sourceUri`/`inlineData`, `mimeType`, `fileName`, `sizeBytes`). Attachments are not fetched in the adapter. Downstream, `AbstractInboundMessagePipeline` resolves `MediaDownloadPort` → `GovernedMediaDownloadService` (`OutboundPurpose.MEDIA_DOWNLOAD`) which enforces `MediaBudgetLimits` + `MediaSecurityValidator` (SSRF, IP blocklist, redirect revalidation), streams to `DownloadedMedia` temp files, and injects governed payloads into the turn context. Total-payload (`50 MiB`) fail-closed across the batch; see [SECURITY.md#governed-media-download](./SECURITY.md#governed-media-download) and `amsha.media.*` in [CONFIGURATION.md](./CONFIGURATION.md#media-ingestion--download-limits).
+
 ![Message Pipeline](./assets/amsha_message_pipeline.svg)
 
 ---
@@ -908,6 +912,10 @@ identity rules are documented in [MCP Management](./MCP_MANAGEMENT.md).
 ### Amsha Agent as MCP Server
 
 `McpAdminResource` (`GET /mcp/tools`) exposes Amsha Agent's internal tools as MCP-compatible descriptors. `AgentFunctionProcessor` (build-time) generates JSON schemas from `@AgentFunction`-annotated SAM interfaces.
+
+### P4 Safety-Gated MCP Adapter Decision (2026-08-28) — Retain Native Bridge
+
+LangChain4j `langchain4j-mcp:1.17.2-beta27` was evaluated as transport/serialization adapter **beneath** existing `McpClientService`/`ExternalMcpToolAdapter` per [ADR-LangChain4j](../Ideas-Pending/Architecture/ADR-LangChain4j-Capability-Adoption-and-Amsha-Boundaries.md#mcp) and [Issue 07](../.scratch/lc4j-capability-adoption/issues/07-p4-mcp-protocol-adapter-gate.md) Issue 07. Decision: **RETAIN** native bridge (`amsha-mcp` 193 tests) — `1.17.2` couples `McpToolProvider`/`ToolSpecification`/`ToolExecutor` to `AiServices` with no standalone transport/DTO layer, and adding the beta would violate the `1.17.2` version ceiling; adopting upstream execution would bypass `ToolInvocationGuard`/`PreflightState`/`LoopStuckDetector`, `NETWORK_OUTBOUND`/`EXECUTE_SHELL` HITL, `HostExecSkillGrant`, `SecretVault` zeroed `USER:<userId>` credential hygiene, user-scoped isolation, `FINISH` invariant, and `McpReflectionConfig` native-image verification. Evaluation matrix (5× Amsha Superior, 1× Parity — isolation, HITL, credentials, `FINISH`, native, transports) and full disposition in [`.scratch/lc4j-capability-adoption/evidence/06-mcp-evaluation/README.md`](../.scratch/lc4j-capability-adoption/evidence/06-mcp-evaluation/README.md); tracker P4 row in [`.scratch/lc4j-capability-adoption/spec.md`](../.scratch/lc4j-capability-adoption/spec.md). If a future GA exposes decoupled transport DTOs, re-evaluate as adapter with governed local-fixture corpus (stdio+HTTP, NDJSON, audit/workspace/HITL/`FINISH`, `Context.isOnEventLoopThread()`).
 
 ### Amsha Agent as MCP Client (Dynamic Tool Loading)
 

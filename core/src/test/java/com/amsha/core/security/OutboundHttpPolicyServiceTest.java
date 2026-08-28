@@ -3,8 +3,10 @@ package com.amsha.core.security;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.verify;
 
 import com.amsha.core.audit.AuditService;
+import com.amsha.core.audit.SecurityEventType;
 import com.amsha.security.api.OutboundPolicyDecision;
 import com.amsha.security.api.OutboundPurpose;
 
@@ -85,6 +87,14 @@ class OutboundHttpPolicyServiceTest {
         assertTrue(d.isAllowed());
     }
 
+    @Test
+    void blocksIpv4MappedIpv6Literal() {
+        OutboundPolicyDecision d =
+                service.evaluate("https://[::ffff:127.0.0.1]/v1", OutboundPurpose.PROVIDER_API_CALL, null, "user-1");
+        assertTrue(d.isDenied());
+        assertEquals("BLOCKED_LITERAL_ADDRESS", d.reason().orElseThrow());
+    }
+
     // ---- TLS enforcement ----
 
     @Test
@@ -139,6 +149,26 @@ class OutboundHttpPolicyServiceTest {
         OutboundPolicyDecision d =
                 service.evaluate("https://api.openai.com/v1/mcp/sse", OutboundPurpose.MCP_CONNECT, null, "user-1");
         assertTrue(d.requiresHitl());
+    }
+
+    @Test
+    void mediaDownload_requiresHitl() {
+        OutboundPolicyDecision d =
+                service.evaluate("https://example.com/image.png", OutboundPurpose.MEDIA_DOWNLOAD, null, "user-1");
+        assertTrue(d.requiresHitl());
+    }
+
+    @Test
+    void mediaDownload_denialsUseMediaAuditClassification() {
+        service.evaluate("not-a-url", OutboundPurpose.MEDIA_DOWNLOAD, null, "user-1");
+
+        verify(auditService)
+                .recordMandatory(
+                        "outbound-policy",
+                        "user-1",
+                        "system",
+                        SecurityEventType.MEDIA_DOWNLOAD_DENIED,
+                        "action=outbound_denied purpose=MEDIA_DOWNLOAD category=MISSING_SCHEME_OR_HOST");
     }
 
     @Test

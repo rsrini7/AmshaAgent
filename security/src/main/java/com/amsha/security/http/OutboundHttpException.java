@@ -72,6 +72,10 @@ public class OutboundHttpException extends RuntimeException {
         return new OutboundHttpException(Category.DNS_FAILURE, message);
     }
 
+    public static OutboundHttpException io(String message) {
+        return new OutboundHttpException(Category.IO, message);
+    }
+
     public static OutboundHttpException io(String message, Throwable cause) {
         return new OutboundHttpException(Category.IO, message, cause);
     }

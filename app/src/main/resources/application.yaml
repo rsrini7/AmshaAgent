@@ -907,6 +907,13 @@ amsha:
       enabled: "${AMSHA_PHOENIX_ENABLED:true}"
       endpoint: "${AMSHA_PHOENIX_ENDPOINT:http://localhost:4318/v1/traces}"
 
+  media:
+    max-image-size-mb: ${AMSHA_MEDIA_MAX_IMAGE_SIZE_MB:10}
+    max-document-size-mb: ${AMSHA_MEDIA_MAX_DOCUMENT_SIZE_MB:25}
+    max-total-payload-mb: ${AMSHA_MEDIA_MAX_TOTAL_PAYLOAD_MB:50}
+    connect-timeout-seconds: ${AMSHA_MEDIA_CONNECT_TIMEOUT_SECONDS:10}
+    read-timeout-seconds: ${AMSHA_MEDIA_READ_TIMEOUT_SECONDS:30}
+
   sandbox:
     enabled: "${AMSHA_SANDBOX_ENABLED:true}"
     strategy: "${AMSHA_SANDBOX_STRATEGY:PODMAN}"

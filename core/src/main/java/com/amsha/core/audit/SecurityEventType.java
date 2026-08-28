@@ -113,7 +113,11 @@ public enum SecurityEventType {
 
     // RAG and Memory writes
     MEMORY_INGESTED, // IngestDocumentTool indexed content
-    MEMORY_WRITE_MUTATED; // CoreMemoryAppend/Replace/ArchivalInsert wrote a block or chunk
+    MEMORY_WRITE_MUTATED, // CoreMemoryAppend/Replace/ArchivalInsert wrote a block or chunk
+
+    // Media ingestion
+    MEDIA_DOWNLOADED, // Governed external media attachment download
+    MEDIA_DOWNLOAD_DENIED; // Governed media download rejected before transport
 
     /**
      * Returns true if a write failure for this event type must HALT the agent
@@ -135,6 +139,7 @@ public enum SecurityEventType {
                     DELEGATE_APPROVAL,
                     UNAUTHORIZED_ACCESS,
                     MEMORY_INGESTED,
+                    MEDIA_DOWNLOADED,
                     AUTH_REJECTED,
                     SESSION_CREATED,
                     SESSION_TERMINATED,
@@ -154,6 +159,7 @@ public enum SecurityEventType {
                     MCP_CONNECTION_REQUESTED,
                     MCP_TOOL_POLICY_ENABLED,
                     MCP_CONNECTION_VALIDATION_FAILED,
+                    MEDIA_DOWNLOAD_DENIED,
                     MCP_CREDENTIAL_CONFIGURED,
                     MCP_CREDENTIAL_ROTATED,
                     MCP_CREDENTIAL_REMOVED,

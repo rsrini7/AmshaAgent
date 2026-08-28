@@ -230,6 +230,14 @@ public final class GovernedHttpClient {
                     throw OutboundHttpException.dnsRebinding(
                             "Resolved address for " + host + " is in shared address space (100.64.0.0/10)");
                 }
+                if (isIpv4MappedAddress(bytes)) {
+                    throw OutboundHttpException.dnsRebinding(
+                            "Resolved address for " + host + " is an IPv4-mapped address");
+                }
+                if (bytes.length == 16 && (bytes[0] & 0xfe) == 0xfc) {
+                    throw OutboundHttpException.dnsRebinding(
+                            "Resolved address for " + host + " is an IPv6 Unique Local Address (fc00::/7)");
+                }
             }
         } catch (OutboundHttpException e) {
             throw e;
@@ -239,6 +247,18 @@ public final class GovernedHttpClient {
     }
 
     /** Builds a per-connection HttpClient honoring the network profile policy. */
+    private static boolean isIpv4MappedAddress(byte[] bytes) {
+        if (bytes.length != 16) {
+            return false;
+        }
+        for (int i = 0; i < 10; i++) {
+            if (bytes[i] != 0) {
+                return false;
+            }
+        }
+        return bytes[10] == (byte) 0xff && bytes[11] == (byte) 0xff;
+    }
+
     private HttpClient buildClient(URI uri) {
         NetworkProfilePolicy policy = connection != null && connection.networkProfileJson() != null
                 ? NetworkProfilePolicy.fromJson(connection.networkProfileJson())

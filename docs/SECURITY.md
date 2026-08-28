@@ -138,6 +138,17 @@ Amsha Agent adopts an **OIDC-first identity model with API-key operator fallback
 
 ---
 
+## Governed Media Download
+
+Multimodal channel messages may carry `MediaAttachment` (image, document, audio) references that are **never** fetched by the channel adapter. Fetching is delegated to the governed `MediaDownloadPort` → `GovernedMediaDownloadService` (`amsha-security`, `OutboundPurpose.MEDIA_DOWNLOAD`):
+
+* **Streaming size enforcement** — `MediaBudgetLimits` defaults (`10 MiB` image, `25 MiB` document, `50 MiB` total per turn) checked incrementally during streaming; oversize fails closed before full buffering. MIME allowlist (`image/*`, `application/pdf`, `text/*`, audio) validated against `Content-Type`.
+* **SSRF / DNS rebinding** — `MediaSecurityValidator` blocks loopback (`127.0.0.0/8`, `::1`), link-local (`169.254.0.0/16`, `fe80::/10`), private (`10/8`, `172.16/12`, `192.168/16`), and metadata (`169.254.169.254`) targets on every hop, including `Location` redirects (max redirects, revalidated per hop). Hostname → IP resolved via `InetAddress` and re-checked.
+* **Deterministic temp files** — `DownloadedMedia` (`AutoCloseable`, `DELETE_ON_CLOSE` semantic) writes to a governed temp file under the workspace temp dir; `close()` deletes and zeroes bookkeeping. No secret bytes are retained.
+* **Governed HTTP** — via `GovernedHttpClient` / `OutboundHttpPolicyService` with `AMSHA_MEDIA_CONNECT_TIMEOUT_SECONDS` (10 s) / `AMSHA_MEDIA_READ_TIMEOUT_SECONDS` (30 s), `OutboundHttpException` on policy rejection, and audit `MEDIA_DOWNLOAD` event.
+
+Port contract: `security-api/MediaDownloadPort.java`, `DownloadedMedia.java`, `MediaBudgetLimits.java`; impl: `security/media/GovernedMediaDownloadService.java`, `MediaSecurityValidator.java`. Config: `amsha.media.*` (`AMSHA_MEDIA_*_MB`, `AMSHA_MEDIA_*_TIMEOUT_SECONDS`) — see [CONFIGURATION.md](./CONFIGURATION.md#media-ingestion--download-limits).
+
 ## Related Docs
 
 | Doc | What it covers |

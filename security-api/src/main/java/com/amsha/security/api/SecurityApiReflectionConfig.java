@@ -20,6 +20,9 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             OutboundPurpose.class,
             OutboundPolicyDecision.class,
             AutonomyLevel.class,
-            RiskLevel.class
+            RiskLevel.class,
+            DownloadedMedia.class,
+            MediaDownloadPort.class,
+            MediaBudgetLimits.class
         })
 public class SecurityApiReflectionConfig {}
