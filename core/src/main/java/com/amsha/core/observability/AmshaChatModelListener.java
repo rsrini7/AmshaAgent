@@ -89,19 +89,25 @@ public class AmshaChatModelListener implements ChatModelListener {
     @PostConstruct
     void init() {
         this.registration = runtimeControl.registerReadyImplementation();
-        if (meterRegistryInstance.isResolvable()) {
-            MeterRegistry registry = meterRegistryInstance.get();
-            registry.counter("amsha.observability.listener.shadow.tokens", "type", "input");
-            registry.counter("amsha.observability.listener.shadow.tokens", "type", "output");
-            registry.counter("amsha.observability.listener.shadow.calls", "outcome", "success");
-            registry.counter("amsha.observability.listener.shadow.calls", "outcome", "error");
-            registry.timer("amsha.observability.listener.shadow.duration");
+        try {
+            if (meterRegistryInstance.isResolvable()) {
+                MeterRegistry registry = meterRegistryInstance.get();
+                registry.counter("amsha.observability.listener.shadow.tokens", "type", "input");
+                registry.counter("amsha.observability.listener.shadow.tokens", "type", "output");
+                registry.counter("amsha.observability.listener.shadow.calls", "outcome", "success");
+                registry.counter("amsha.observability.listener.shadow.calls", "outcome", "error");
+                registry.timer("amsha.observability.listener.shadow.duration");
 
-            registry.counter("amsha.observability.listener.active.tokens", "type", "input");
-            registry.counter("amsha.observability.listener.active.tokens", "type", "output");
-            registry.counter("amsha.observability.listener.active.calls", "outcome", "success");
-            registry.counter("amsha.observability.listener.active.calls", "outcome", "error");
-            registry.timer("amsha.observability.listener.active.duration");
+                registry.counter("amsha.observability.listener.active.tokens", "type", "input");
+                registry.counter("amsha.observability.listener.active.tokens", "type", "output");
+                registry.counter("amsha.observability.listener.active.calls", "outcome", "success");
+                registry.counter("amsha.observability.listener.active.calls", "outcome", "error");
+                registry.timer("amsha.observability.listener.active.duration");
+            }
+        } catch (RuntimeException e) {
+            LOG.warnf(
+                    "AmshaChatModelListener meter registration skipped (%s)",
+                    e.getClass().getSimpleName());
         }
         LOG.debug("AmshaChatModelListener registered with runtime control and pre-registered meters");
     }
