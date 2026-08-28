@@ -8,10 +8,13 @@ import jakarta.inject.Inject;
 import java.util.List;
 import java.util.Optional;
 
+import com.amsha.core.routing.CapabilityAwareChatModel;
 import com.amsha.core.routing.MultiModelChatModel;
 import com.amsha.llm.api.AgentChatModelProvider;
 import com.amsha.llm.api.AgentLlmConfig;
 import com.amsha.llm.api.ModelDefaults;
+import com.amsha.llm.api.MultimodalCapabilities;
+import com.amsha.llm.api.MultimodalCapability;
 import com.amsha.llm.api.StructuredOutputMode;
 import com.amsha.llm.providers.ChatModelFactory;
 
@@ -64,18 +67,20 @@ public class OpenCodeProviderFactory implements AgentChatModelProvider {
     private ChatModel createModel(String model) {
         String key = apiKey.orElseThrow(() -> new IllegalStateException("OpenCode requires AMSHA_OPENCODE_API_KEY"));
         List<MultiModelChatModel.ModelEntry> entries = ChatModelFactory.buildMultiModelEntries(
-                key,
-                model,
-                ModelDefaults.PROVIDER_OPENCODE,
-                (entryKey, entryModel) -> ChatModelFactory.createOpenAi(
-                        baseUrl,
-                        entryKey,
-                        entryModel,
-                        agentConfig.maxTokens(),
-                        agentConfig.timeout(),
-                        agentConfig.maxRetries(),
-                        agentConfig.temperature(),
-                        agentConfig.logHttp()));
+                key, model, ModelDefaults.PROVIDER_OPENCODE, (entryKey, entryModel) -> {
+                    ChatModel raw = ChatModelFactory.createOpenAi(
+                            baseUrl,
+                            entryKey,
+                            entryModel,
+                            agentConfig.maxTokens(),
+                            agentConfig.timeout(),
+                            agentConfig.maxRetries(),
+                            agentConfig.temperature(),
+                            agentConfig.logHttp());
+                    MultimodalCapability cap = MultimodalCapabilities.defaultCapabilityForModel(
+                            ModelDefaults.PROVIDER_OPENCODE, entryModel);
+                    return CapabilityAwareChatModel.withCapabilities(raw, false, cap);
+                });
         if (entries.size() == 1) return entries.getFirst().model();
         return new MultiModelChatModel(ModelDefaults.PROVIDER_OPENCODE, entries, 5);
     }

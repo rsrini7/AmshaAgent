@@ -8,9 +8,12 @@ import jakarta.inject.Inject;
 
 import java.util.Optional;
 
+import com.amsha.core.routing.CapabilityAwareChatModel;
 import com.amsha.llm.api.AgentChatModelProvider;
 import com.amsha.llm.api.AgentLlmConfig;
 import com.amsha.llm.api.ModelDefaults;
+import com.amsha.llm.api.MultimodalCapabilities;
+import com.amsha.llm.api.MultimodalCapability;
 import com.amsha.llm.api.StructuredOutputMode;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
@@ -58,15 +61,18 @@ public class GeminiProviderFactory implements AgentChatModelProvider {
 
     private ChatModel doCreate(String overrideModel) {
         String key = apiKey.orElseThrow(() -> new IllegalStateException("Gemini requires AMSHA_GEMINI_API_KEY"));
+        String effectiveModel = overrideModel != null ? overrideModel : modelName;
 
-        return GoogleAiGeminiChatModel.builder()
+        ChatModel model = GoogleAiGeminiChatModel.builder()
                 .apiKey(key)
-                .modelName(overrideModel != null ? overrideModel : modelName)
+                .modelName(effectiveModel)
                 .temperature(agentConfig.temperature())
                 .maxOutputTokens(agentConfig.maxTokens())
                 .timeout(agentConfig.timeout())
                 .logRequests(logRequests)
                 .logResponses(logResponses)
                 .build();
+        MultimodalCapability multimodalCap = MultimodalCapabilities.defaultCapabilityForModel("gemini", effectiveModel);
+        return CapabilityAwareChatModel.withCapabilities(model, false, multimodalCap);
     }
 }

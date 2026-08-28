@@ -9,6 +9,10 @@ import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import com.amsha.core.structured.StructuredOutputMetrics;
+import com.amsha.llm.api.MultimodalCapabilities;
+import com.amsha.llm.api.MultimodalCapability;
+import com.amsha.llm.api.MultimodalCapable;
+import com.amsha.llm.api.MultimodalRequests;
 import com.amsha.llm.api.StrictJsonSchemaCapable;
 import com.amsha.llm.api.StructuredSchemaRequests;
 import com.amsha.llm.api.error.LlmMalformedResponseException;
@@ -21,19 +25,24 @@ import io.micrometer.core.instrument.MeterRegistry;
  * {@link ChatModel} backed by an {@link InfiniteLoopProvider} for slot rotation,
  * health tracking, and automatic failover across multiple LLM providers.
  */
-public class InfiniteLoopChatModel implements ChatModel, StrictJsonSchemaCapable {
+public class InfiniteLoopChatModel implements ChatModel, StrictJsonSchemaCapable, MultimodalCapable {
 
     private static final Logger log = Logger.getLogger(InfiniteLoopChatModel.class);
     private static final ScopedValue<AtomicBoolean> SCHEMA_REJECTED = ScopedValue.newInstance();
 
-    public record Slot(String name, ChatModel model, String baseUrl) {
+    public record Slot(String name, ChatModel model, String baseUrl, MultimodalCapability multimodalCapability) {
+        public Slot(String name, ChatModel model, String baseUrl) {
+            this(name, model, baseUrl, MultimodalCapabilities.resolveCapability(model));
+        }
+
         public Slot(String name, ChatModel model) {
-            this(name, model, "unknown");
+            this(name, model, "unknown", MultimodalCapabilities.resolveCapability(model));
         }
     }
 
     private final InfiniteLoopProvider<ChatModel, ChatResponse> provider;
     private final List<Slot> slots;
+    private final MultimodalCapability multimodalCapability;
 
     public InfiniteLoopChatModel(
             String loopId,
@@ -57,6 +66,8 @@ public class InfiniteLoopChatModel implements ChatModel, StrictJsonSchemaCapable
             throw new IllegalArgumentException("InfiniteLoopChatModel requires at least one slot");
         }
         this.slots = List.copyOf(slots);
+        this.multimodalCapability = MultimodalCapabilities.intersect(
+                this.slots.stream().map(Slot::multimodalCapability).toList());
         List<InfiniteLoopProvider.Slot<ChatModel>> providerSlots = slots.stream()
                 .map(s -> new InfiniteLoopProvider.Slot<>(s.name(), s.model(), s.baseUrl()))
                 .toList();
@@ -70,7 +81,10 @@ public class InfiniteLoopChatModel implements ChatModel, StrictJsonSchemaCapable
                     boolean candidateStrict = !schemaRejected
                             && model instanceof StrictJsonSchemaCapable capable
                             && capable.supportsStrictJsonSchema();
-                    ChatRequest outbound = StructuredSchemaRequests.forCandidate(req, candidateStrict);
+                    MultimodalCapability candidateCap = capabilityFor(model);
+                    ChatRequest candidateReq = MultimodalRequests.forCandidate(
+                            req, candidateCap, model.getClass().getSimpleName());
+                    ChatRequest outbound = StructuredSchemaRequests.forCandidate(candidateReq, candidateStrict);
                     boolean schemaAttached = StructuredSchemaRequests.hasNativeJsonSchema(outbound);
                     try {
                         return model.chat(outbound);
@@ -82,7 +96,7 @@ public class InfiniteLoopChatModel implements ChatModel, StrictJsonSchemaCapable
                             }
                             log.debug(
                                     "InfiniteLoopChatModel: native schema rejected by candidate; downgrading to prompt directive");
-                            return model.chat(StructuredSchemaRequests.withoutNativeJsonSchema(req));
+                            return model.chat(StructuredSchemaRequests.withoutNativeJsonSchema(candidateReq));
                         }
                         throw mre;
                     } catch (Throwable t) {
@@ -166,7 +180,23 @@ public class InfiniteLoopChatModel implements ChatModel, StrictJsonSchemaCapable
                                 && capable.supportsStrictJsonSchema());
     }
 
+    @Override
+    public MultimodalCapability multimodalCapability() {
+        return multimodalCapability != null ? multimodalCapability : MultimodalCapability.TEXT_ONLY;
+    }
+
     public List<Slot> slots() {
         return slots;
+    }
+
+    private MultimodalCapability capabilityFor(ChatModel model) {
+        for (Slot slot : slots) {
+            if (slot.model() == model) {
+                return slot.multimodalCapability() != null
+                        ? slot.multimodalCapability()
+                        : MultimodalCapabilities.resolveCapability(model);
+            }
+        }
+        return MultimodalCapabilities.resolveCapability(model);
     }
 }

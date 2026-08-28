@@ -3,6 +3,8 @@ package com.amsha.core.agent.reasoning.port;
 import dev.langchain4j.model.chat.request.ChatRequest;
 import dev.langchain4j.model.chat.response.ChatResponse;
 
+import com.amsha.llm.api.MultimodalCapability;
+
 /**
  * Abstraction seam between the reasoning engine and the underlying LLM provider SDK.
  *
@@ -62,5 +64,13 @@ public interface LlmProviderPort {
      */
     default ChatResponse nextStep(ChatRequest request, String agentRole, boolean bypassLightweightRouting) {
         return nextStep(request, agentRole);
+    }
+
+    /**
+     * Resolves the multimodal capability supported by the model for the given agent role.
+     * Defaults to {@link com.amsha.llm.api.MultimodalCapability#TEXT_ONLY}.
+     */
+    default MultimodalCapability multimodalCapability(String agentRole) {
+        return MultimodalCapability.TEXT_ONLY;
     }
 }

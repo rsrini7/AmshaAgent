@@ -14,6 +14,9 @@ import java.util.List;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import com.amsha.channel.api.AttachmentType;
+import com.amsha.llm.api.MultimodalCapabilities;
+import com.amsha.llm.api.MultimodalCapability;
 import com.amsha.llm.api.StructuredSchemaRequests;
 import com.amsha.llm.api.error.LlmAuthenticationException;
 import com.amsha.llm.api.error.LlmContextOverflowException;
@@ -383,5 +386,46 @@ class MultiModelChatModelTest {
         assertNotNull(multi.chat(request()));
         verify(m2).chat(any(ChatRequest.class));
         verify(m1).chat(any(ChatRequest.class));
+    }
+
+    @Test
+    void multimodalCapability_computesSafeIntersection() {
+        ChatModel m1 = mock(ChatModel.class);
+        ChatModel m2 = mock(ChatModel.class);
+
+        MultimodalCapability cap1 = MultimodalCapabilities.defaultCapabilityForModel("gemini", "gemini-1.5-pro");
+        MultimodalCapability cap2 = MultimodalCapabilities.defaultCapabilityForModel("openai", "gpt-4o");
+
+        MultiModelChatModel multi = new MultiModelChatModel(
+                "test",
+                List.of(
+                        new MultiModelChatModel.ModelEntry("m1", m1, false, cap1),
+                        new MultiModelChatModel.ModelEntry("m2", m2, false, cap2)),
+                5);
+
+        MultimodalCapability composite = multi.multimodalCapability();
+        assertTrue(composite.isMultimodal());
+        assertTrue(composite.supportsType(AttachmentType.IMAGE));
+        assertFalse(composite.supportsType(AttachmentType.AUDIO));
+    }
+
+    @Test
+    void multimodalCapability_collapsesToTextOnlyWhenOneCandidateIsTextOnly() {
+        ChatModel m1 = mock(ChatModel.class);
+        ChatModel m2 = mock(ChatModel.class);
+
+        MultimodalCapability visionCap = MultimodalCapabilities.defaultCapabilityForModel("openai", "gpt-4o");
+        MultimodalCapability textOnlyCap = MultimodalCapabilities.defaultCapabilityForModel("openai", "gpt-3.5-turbo");
+
+        MultiModelChatModel multi = new MultiModelChatModel(
+                "openai",
+                List.of(
+                        new MultiModelChatModel.ModelEntry("gpt-4o", m1, true, visionCap),
+                        new MultiModelChatModel.ModelEntry("gpt-3.5-turbo", m2, true, textOnlyCap)),
+                5);
+
+        MultimodalCapability composite = multi.multimodalCapability();
+        assertFalse(composite.isMultimodal());
+        assertEquals(MultimodalCapability.TEXT_ONLY, composite);
     }
 }

@@ -13,6 +13,8 @@ import java.util.List;
 
 import com.amsha.core.routing.CapabilityAwareChatModel;
 import com.amsha.core.routing.ModelRouter;
+import com.amsha.llm.api.MultimodalCapabilities;
+import com.amsha.llm.api.MultimodalCapability;
 import com.amsha.llm.api.StructuredSchemaRequests;
 import com.amsha.llm.api.error.LlmMalformedResponseException;
 import com.amsha.llm.api.error.LlmRateLimitException;
@@ -331,6 +333,50 @@ class LangChain4jLlmAdapterTest {
                         .tag("operation", "agent")
                         .counter()
                         .count());
+    }
+
+    @Test
+    void multimodalCapability_returnsDeclaredCapability_whenModelIsMultimodalCapable() {
+        ChatModel delegate = mock(ChatModel.class);
+        MultimodalCapability cap = MultimodalCapabilities.defaultCapabilityForModel("openai", "gpt-4o");
+        ChatModel capableModel = CapabilityAwareChatModel.withCapabilities(delegate, false, cap);
+        when(modelRouter.resolve("researcher", false)).thenReturn(capableModel);
+
+        MultimodalCapability resolved = adapter.multimodalCapability("researcher");
+
+        assertEquals(cap, resolved);
+        assertTrue(resolved.isMultimodal());
+    }
+
+    @Test
+    void multimodalCapability_returnsTextOnly_whenModelIsNotMultimodalCapable() {
+        ChatModel plainModel = mock(ChatModel.class);
+        when(modelRouter.resolve("coder", false)).thenReturn(plainModel);
+
+        MultimodalCapability resolved = adapter.multimodalCapability("coder");
+
+        assertEquals(MultimodalCapability.TEXT_ONLY, resolved);
+        assertFalse(resolved.isMultimodal());
+    }
+
+    @Test
+    void multimodalCapability_delegatesToGlobalModel_whenRoleIsBlank() {
+        MultimodalCapability cap = MultimodalCapabilities.defaultCapabilityForModel("openai", "gpt-4o");
+        ChatModel globalCapable = CapabilityAwareChatModel.withCapabilities(mock(ChatModel.class), false, cap);
+        LangChain4jLlmAdapter customAdapter = new LangChain4jLlmAdapter(globalCapable, modelRouter, meterRegistry);
+
+        MultimodalCapability resolved = customAdapter.multimodalCapability("  ");
+
+        assertEquals(cap, resolved);
+    }
+
+    @Test
+    void multimodalCapability_handlesResolutionFailureSafely() {
+        when(modelRouter.resolve("faulty", false)).thenThrow(new RuntimeException("resolution failed"));
+
+        MultimodalCapability resolved = adapter.multimodalCapability("faulty");
+
+        assertEquals(MultimodalCapability.TEXT_ONLY, resolved);
     }
 
     private static final String SCHEMA = "{\"type\":\"object\",\"properties\":{\"answer\":{\"type\":\"string\"}}}";

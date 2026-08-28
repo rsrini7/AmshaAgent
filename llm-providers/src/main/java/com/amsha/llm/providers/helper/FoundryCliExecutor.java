@@ -21,6 +21,7 @@ import java.util.concurrent.TimeUnit;
 
 import com.amsha.common.util.LogUtil;
 import com.amsha.llm.api.ModelDefaults;
+import com.amsha.llm.api.MultimodalRequests;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -82,7 +83,9 @@ public final class FoundryCliExecutor {
             if (msg instanceof SystemMessage sys) {
                 sb.append("System Instructions:\n").append(sys.text()).append("\n\n");
             } else if (msg instanceof UserMessage usr) {
-                sb.append("User: ").append(usr.singleText()).append("\n\n");
+                sb.append("User: ")
+                        .append(MultimodalRequests.textOf(usr, "foundry"))
+                        .append("\n\n");
             } else if (msg instanceof AiMessage ai) {
                 if (ai.text() != null && !ai.text().isBlank()) {
                     sb.append("Assistant: ").append(ai.text()).append("\n\n");

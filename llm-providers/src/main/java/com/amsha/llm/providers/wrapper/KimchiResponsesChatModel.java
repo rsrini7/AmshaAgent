@@ -31,6 +31,7 @@ import java.util.Map;
 import com.amsha.common.util.LogUtil;
 import com.amsha.core.tools.ToolSchemaProvider;
 import com.amsha.llm.api.ModelDefaults;
+import com.amsha.llm.api.MultimodalRequests;
 import com.amsha.security.api.OutboundPurpose;
 import com.amsha.security.http.GovernedTransportService;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -192,7 +193,7 @@ public class KimchiResponsesChatModel implements ChatModel {
             if (msg instanceof SystemMessage sm) {
                 out.add(Map.of("role", "system", "content", sm.text()));
             } else if (msg instanceof UserMessage um) {
-                out.add(Map.of("role", "user", "content", um.singleText()));
+                out.add(Map.of("role", "user", "content", MultimodalRequests.textOf(um, model)));
             } else if (msg instanceof AiMessage am) {
                 Map<String, Object> aiMsg = new LinkedHashMap<>();
                 aiMsg.put("role", "assistant");

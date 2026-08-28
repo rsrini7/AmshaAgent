@@ -17,13 +17,19 @@ import dev.langchain4j.model.chat.request.ChatRequest;
 import dev.langchain4j.model.chat.response.ChatResponse;
 
 import java.util.List;
+import java.util.Set;
 
+import com.amsha.channel.api.AttachmentType;
+import com.amsha.llm.api.MultimodalCapabilities;
+import com.amsha.llm.api.MultimodalCapability;
+import com.amsha.llm.api.MultimodalCapable;
 import com.amsha.llm.api.StrictJsonSchemaCapable;
 import com.amsha.llm.api.StructuredSchemaRequests;
 import com.amsha.llm.api.error.LlmMalformedResponseException;
 
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.mockito.Mockito;
 
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 
@@ -179,5 +185,38 @@ class InfiniteLoopChatModelTest {
                         .tag("operation", "infinite-loop")
                         .counter()
                         .count());
+    }
+
+    @Test
+    void multimodalCapability_computesIntersectionAcrossSlots() {
+        MultimodalCapable visionModel =
+                mock(MultimodalCapable.class, Mockito.withSettings().extraInterfaces(ChatModel.class));
+        when(visionModel.multimodalCapability())
+                .thenReturn(new MultimodalCapability(
+                        Set.of(AttachmentType.IMAGE),
+                        MultimodalCapabilities.STANDARD_IMAGE_MIMES,
+                        10_000_000L,
+                        10,
+                        true,
+                        true));
+
+        ChatModel textOnlyModel = mock(ChatModel.class);
+
+        InfiniteLoopChatModel visionLoop = new InfiniteLoopChatModel(
+                "vision-loop", List.of(new InfiniteLoopChatModel.Slot("s1", (ChatModel) visionModel)), 1, 1, 1, 1000L);
+        assertTrue(visionLoop.multimodalCapability().isMultimodal());
+        assertTrue(visionLoop.multimodalCapability().supportsType(AttachmentType.IMAGE));
+
+        InfiniteLoopChatModel mixedLoop = new InfiniteLoopChatModel(
+                "mixed-loop",
+                List.of(
+                        new InfiniteLoopChatModel.Slot("s1", (ChatModel) visionModel),
+                        new InfiniteLoopChatModel.Slot("s2", textOnlyModel)),
+                1,
+                1,
+                1,
+                1000L);
+        assertFalse(mixedLoop.multimodalCapability().isMultimodal());
+        assertEquals(MultimodalCapability.TEXT_ONLY, mixedLoop.multimodalCapability());
     }
 }

@@ -6,6 +6,10 @@ import com.amsha.llm.api.LlmModelConfig;
 import com.amsha.llm.api.LlmProviderDescriptor;
 import com.amsha.llm.api.ModelDefaults;
 import com.amsha.llm.api.ModelEntry;
+import com.amsha.llm.api.MultimodalCapabilities;
+import com.amsha.llm.api.MultimodalCapability;
+import com.amsha.llm.api.MultimodalCapable;
+import com.amsha.llm.api.MultimodalRequests;
 import com.amsha.llm.api.NetworkPolicyViolation;
 import com.amsha.llm.api.NetworkProfilePolicy;
 import com.amsha.llm.api.ProviderValidationResult;
@@ -63,6 +67,10 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             CodexOAuthTokenExtractor.class,
             KimchiOAuthTokenExtractor.class,
             StrictJsonSchemaCapable.class,
-            StructuredSchemaRequests.class
+            StructuredSchemaRequests.class,
+            MultimodalCapability.class,
+            MultimodalCapable.class,
+            MultimodalCapabilities.class,
+            MultimodalRequests.class
         })
 public class LlmProviderApiReflectionConfig {}

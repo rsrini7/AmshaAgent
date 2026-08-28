@@ -13,6 +13,8 @@ import com.amsha.core.routing.MultiModelChatModel;
 import com.amsha.llm.api.AgentChatModelProvider;
 import com.amsha.llm.api.AgentLlmConfig;
 import com.amsha.llm.api.ModelDefaults;
+import com.amsha.llm.api.MultimodalCapabilities;
+import com.amsha.llm.api.MultimodalCapability;
 import com.amsha.llm.api.StructuredOutputCapabilities;
 import com.amsha.llm.api.StructuredOutputMode;
 import com.amsha.llm.providers.ChatModelFactory;
@@ -70,25 +72,21 @@ public class OpenAiProviderFactory implements AgentChatModelProvider {
     private ChatModel doCreate(String overrideModel) {
         String key = apiKey.orElseThrow(() -> new IllegalStateException("OpenAI requires AMSHA_OPENAI_API_KEY"));
         String model = overrideModel;
-        List<MultiModelChatModel.ModelEntry> entries = ChatModelFactory.buildMultiModelEntries(
-                key,
-                model,
-                "openai",
-                (k, m) -> ChatModelFactory.createOpenAi(
-                        baseUrl,
-                        k,
-                        m,
-                        agentConfig.maxTokens(),
-                        agentConfig.timeout(),
-                        agentConfig.maxRetries(),
-                        agentConfig.temperature(),
-                        agentConfig.logHttp()));
-        if (strictSchemaEligible()) {
-            entries = entries.stream()
-                    .map(entry -> new MultiModelChatModel.ModelEntry(
-                            entry.label(), CapabilityAwareChatModel.markStrict(entry.model()), true))
-                    .toList();
-        }
+        boolean strictEligible = strictSchemaEligible();
+        List<MultiModelChatModel.ModelEntry> entries =
+                ChatModelFactory.buildMultiModelEntries(key, model, "openai", (k, m) -> {
+                    ChatModel raw = ChatModelFactory.createOpenAi(
+                            baseUrl,
+                            k,
+                            m,
+                            agentConfig.maxTokens(),
+                            agentConfig.timeout(),
+                            agentConfig.maxRetries(),
+                            agentConfig.temperature(),
+                            agentConfig.logHttp());
+                    MultimodalCapability cap = MultimodalCapabilities.defaultCapabilityForModel("openai", m);
+                    return CapabilityAwareChatModel.withCapabilities(raw, strictEligible, cap);
+                });
         if (entries.size() == 1) return entries.get(0).model();
         return new MultiModelChatModel("openai", entries, 5);
     }

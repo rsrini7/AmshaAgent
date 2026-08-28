@@ -2,18 +2,26 @@ package com.amsha.core.agent.reasoning;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import dev.langchain4j.agent.tool.ToolExecutionRequest;
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.ChatMessage;
+import dev.langchain4j.data.message.ImageContent;
 import dev.langchain4j.data.message.SystemMessage;
+import dev.langchain4j.data.message.TextContent;
 import dev.langchain4j.data.message.ToolExecutionResultMessage;
 import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
 
+import jakarta.enterprise.inject.Instance;
 import jakarta.enterprise.inject.spi.BeanManager;
 
 import java.lang.reflect.Field;
@@ -22,16 +30,23 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
 
+import com.amsha.channel.api.AttachmentType;
+import com.amsha.channel.api.MediaAttachment;
 import com.amsha.core.agent.loop.AgentExecutionContext;
 import com.amsha.core.agent.loop.CodeGenerationPolicy;
 import com.amsha.core.agent.loop.LoopStuckDetector;
+import com.amsha.core.agent.reasoning.port.LlmProviderPort;
 import com.amsha.core.skill.SkillAdaptationManager;
 import com.amsha.core.skill.SkillRegistry;
 import com.amsha.core.tools.ToolRegistry;
 import com.amsha.core.util.TextPatternUtils;
+import com.amsha.llm.api.MultimodalCapabilities;
 import com.amsha.llm.api.StructuredOutputMode;
 import com.amsha.security.api.AutonomyLevel;
+import com.amsha.security.api.DownloadedMedia;
+import com.amsha.security.api.MediaDownloadPort;
 import com.amsha.tool.api.AgentTool;
 import com.amsha.tool.api.ToolCapability;
 
@@ -303,8 +318,83 @@ class ReasoningMessageAssemblerTest {
                 .anyMatch(text -> text.contains(marker));
         boolean inUser = result.messages().stream()
                 .filter(m -> m instanceof UserMessage _)
-                .map(m -> ((UserMessage) m).singleText())
+                .map(m -> {
+                    UserMessage um = (UserMessage) m;
+                    if (um.hasSingleText()) return um.singleText();
+                    return um.contents().stream()
+                            .filter(c -> c instanceof TextContent)
+                            .map(c -> ((TextContent) c).text())
+                            .collect(Collectors.joining(" "));
+                })
                 .anyMatch(text -> text.contains(marker));
         return inSystem || inUser;
+    }
+
+    @Test
+    void testAssembleWithMediaAttachments_assemblesMultimodalUserMessage() throws Exception {
+        ChatHistoryAssembler historyAssembler = mock(ChatHistoryAssembler.class);
+        when(historyAssembler.assemble(eq("sess-1"), eq("what is this"), anyList()))
+                .thenReturn(List.of(UserMessage.userMessage("what is this")));
+
+        ReasoningMessageAssembler assembler = createAssembler(historyAssembler);
+
+        LlmProviderPort mockLlmPort = mock(LlmProviderPort.class);
+        when(mockLlmPort.multimodalCapability(any()))
+                .thenReturn(MultimodalCapabilities.defaultCapabilityForModel("openai", "gpt-4o"));
+
+        Instance<LlmProviderPort> instanceMock = mock(Instance.class);
+        when(instanceMock.isUnsatisfied()).thenReturn(false);
+        when(instanceMock.get()).thenReturn(mockLlmPort);
+        injectField(assembler, "llmProviderPortInstance", instanceMock);
+
+        MediaDownloadPort downloadPort = (attachment, _, _) -> DownloadedMedia.ofInline(
+                attachment.attachmentId(),
+                attachment.type(),
+                attachment.mimeType(),
+                attachment.fileName(),
+                attachment.inlineData());
+        Instance<MediaDownloadPort> mediaInstance = mock(Instance.class);
+        when(mediaInstance.isUnsatisfied()).thenReturn(false);
+        when(mediaInstance.get()).thenReturn(downloadPort);
+        injectField(assembler, "mediaDownloadPortInstance", mediaInstance);
+
+        MediaAttachment att = new MediaAttachment(
+                "att-1", AttachmentType.IMAGE, "image/png", "img.png", 3L, null, new byte[] {1, 2, 3}, Map.of());
+
+        AgentExecutionContext context = new AgentExecutionContext(
+                "sess-1",
+                "user-1",
+                "chat-1",
+                "skill:test",
+                "what is this",
+                AutonomyLevel.FULL,
+                StructuredOutputMode.NATIVE,
+                10,
+                0,
+                "TELEGRAM",
+                "123",
+                null,
+                Map.of(),
+                List.of(att));
+
+        ReasoningMessageAssembler.AssembledMessages result = assembler.assemble(
+                context,
+                "skill:test",
+                "what is this",
+                List.of(),
+                "system prompt",
+                Set.of(ToolCapability.SANDBOX_EXEC.toolName()),
+                false,
+                false,
+                false);
+
+        assertNotNull(result);
+        List<UserMessage> userMessages = result.messages().stream()
+                .filter(m -> m instanceof UserMessage)
+                .map(m -> (UserMessage) m)
+                .toList();
+        assertEquals(1, userMessages.size());
+        assertEquals(2, userMessages.get(0).contents().size());
+        assertInstanceOf(ImageContent.class, userMessages.get(0).contents().get(1));
     }
 }

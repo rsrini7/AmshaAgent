@@ -1,6 +1,8 @@
 package com.amsha.core.config;
 
 import dev.langchain4j.agent.tool.ToolExecutionRequest;
+import dev.langchain4j.data.audio.Audio;
+import dev.langchain4j.data.image.Image;
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.AudioContent;
 import dev.langchain4j.data.message.ChatMessage;
@@ -15,11 +17,13 @@ import dev.langchain4j.data.message.TextContent;
 import dev.langchain4j.data.message.ToolExecutionResultMessage;
 import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.data.message.VideoContent;
+import dev.langchain4j.data.pdf.PdfFile;
 
 import com.amsha.core.agent.loop.GroupAnalyticsService;
 import com.amsha.core.agent.loop.GroupConsultationEngine;
 import com.amsha.core.agent.loop.GroupConsultationService;
 import com.amsha.core.agent.loop.TaskClassifierService;
+import com.amsha.core.agent.reasoning.MultimodalMessageMapper;
 import com.amsha.core.agent.reasoning.ParallelToolCall;
 import com.amsha.core.agent.reasoning.ReasoningStep;
 import com.amsha.core.agent.reasoning.ReasoningStepDeserializer;
@@ -124,6 +128,7 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             CapabilityAwareChatModel.class,
             MultiModelChatModel.class,
             MultiModelChatModel.ModelEntry.class,
+            MultimodalMessageMapper.class,
             InfiniteLoopChatModel.class,
             InfiniteLoopChatModel.Slot.class,
             ResolvedProfile.class,
@@ -155,6 +160,9 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             AudioContent.class,
             VideoContent.class,
             PdfFileContent.class,
+            Image.class,
+            Audio.class,
+            PdfFile.class,
             OutboundHttpPolicyService.class,
             ExternalIdentityProvider.class,
             AgentSseService.HeartbeatEvent.class,

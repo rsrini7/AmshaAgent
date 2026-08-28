@@ -22,6 +22,10 @@ import dev.langchain4j.model.chat.response.ChatResponse;
 import java.util.List;
 import java.util.Set;
 
+import com.amsha.llm.api.MultimodalCapabilities;
+import com.amsha.llm.api.MultimodalCapability;
+
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
 class CapabilityAwareChatModelTest {
@@ -47,6 +51,20 @@ class CapabilityAwareChatModelTest {
 
         assertTrue(result instanceof CapabilityAwareChatModel);
         assertTrue(((CapabilityAwareChatModel) result).supportsStrictJsonSchema());
+    }
+
+    @Test
+    void markStrict_preservesExistingMultimodalCapability() {
+        ChatModel mockModel = mock(ChatModel.class);
+        MultimodalCapability cap = MultimodalCapabilities.defaultCapabilityForModel("gemini", "gemini-1.5-pro");
+        ChatModel existing = CapabilityAwareChatModel.withCapabilities(mockModel, false, cap);
+
+        ChatModel result = CapabilityAwareChatModel.markStrict(existing);
+
+        assertTrue(result instanceof CapabilityAwareChatModel);
+        CapabilityAwareChatModel capable = (CapabilityAwareChatModel) result;
+        assertTrue(capable.supportsStrictJsonSchema());
+        assertEquals(cap, capable.multimodalCapability());
     }
 
     @Test
@@ -125,5 +143,23 @@ class CapabilityAwareChatModelTest {
         when(delegate.supportedCapabilities()).thenReturn(Set.of(Capability.RESPONSE_FORMAT_JSON_SCHEMA));
         Set<Capability> existingCaps = model.supportedCapabilities();
         assertTrue(existingCaps.contains(Capability.RESPONSE_FORMAT_JSON_SCHEMA));
+    }
+
+    @Test
+    void withCapabilities_preservesAndAugmentsCapabilities() {
+        ChatModel delegate = mock(ChatModel.class);
+        MultimodalCapability customCap = MultimodalCapabilities.defaultCapabilityForModel("gemini", "gemini-1.5-pro");
+        ChatModel wrapped = CapabilityAwareChatModel.withCapabilities(delegate, true, customCap);
+
+        assertTrue(wrapped instanceof CapabilityAwareChatModel);
+        CapabilityAwareChatModel model = (CapabilityAwareChatModel) wrapped;
+        assertTrue(model.supportsStrictJsonSchema());
+        assertEquals(customCap, model.multimodalCapability());
+        assertTrue(model.multimodalCapability().isMultimodal());
+    }
+
+    @Test
+    void withCapabilities_returnsNullOnNullModel() {
+        Assertions.assertNull(CapabilityAwareChatModel.withCapabilities(null, true, null));
     }
 }

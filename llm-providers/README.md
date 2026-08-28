@@ -39,6 +39,15 @@ Concrete provider factories are annotated with `@ApplicationScoped` and discover
 - **Token Resolvers & CLI Helpers**: Caching and fallback resolution in `com.amsha.llm.providers.helper`.
 - **Native Reflection**: Registered in `LlmProvidersReflectionConfig`.
 
+## Multimodal Model Capabilities
+
+Provider models declare or dynamically resolve multimodal capabilities via `MultimodalCapability` (contract from `amsha-llm-provider-api`):
+- **OpenAI Vision**: `gpt-4o`, `gpt-4-turbo`, `o1` support `IMAGE` (PNG/JPEG/WEBP/GIF) up to 20 MiB, up to 10 images per request, inline base64 and URLs.
+- **Gemini**: `gemini-1.5-pro`, `gemini-2.0-flash`, etc. support `IMAGE`, `AUDIO`, and `DOCUMENT_PDF` up to 25 MiB, up to 16 media items per request.
+- **Anthropic**: `claude-3-5-sonnet`, `claude-3-haiku` support `IMAGE` and `DOCUMENT_PDF` up to 25 MiB, up to 10 media items per request.
+- **Open-Weight Models**: `llava`, `pixtral`, etc. support `IMAGE` up to 10 MiB, up to 5 images per request.
+- **Text-Only Models & Failover**: Models without vision/audio capabilities default to `MultimodalCapability.TEXT_ONLY`. When a turn contains media attachments, `MultimodalMessageMapper` in `amsha-core` automatically provides structured fallback text placeholders so the turn completes safely.
+
 ## Observability & ChatModelListener Pilot
 
 For this pilot, OpenAI-compatible `OpenAiChatModel` instances built via `ChatModelFactory.openAiBuilder()` attach `AmshaChatModelListener` if discovered in the CDI container (other provider SDKs remain Amsha-observed). The listener operates under `ChatModelListenerRuntimeControl`:

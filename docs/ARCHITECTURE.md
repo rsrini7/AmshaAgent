@@ -119,9 +119,11 @@ ws://host/ws/chat
   → WorkspaceContext.run() → AgentLoop.run() + CRON CONSTRAINT directive
 ```
 
-**Multimodal media (staged `channel-api` attachment):**
+**Multimodal media (staged `channel-api` attachment & provider mapping):**
 
-Channel adapters produce `ChannelMessage` with optional `List<MediaAttachment>` (type `IMAGE|DOCUMENT_PDF|AUDIO|OTHER`, `sourceUri`/`inlineData`, `mimeType`, `fileName`, `sizeBytes`). Attachments are not fetched in the adapter. Downstream, `AbstractInboundMessagePipeline` resolves `MediaDownloadPort` → `GovernedMediaDownloadService` (`OutboundPurpose.MEDIA_DOWNLOAD`) which enforces `MediaBudgetLimits` + `MediaSecurityValidator` (SSRF, IP blocklist, redirect revalidation), streams to `DownloadedMedia` temp files, and injects governed payloads into the turn context. Total-payload (`50 MiB`) fail-closed across the batch; see [SECURITY.md#governed-media-download](./SECURITY.md#governed-media-download) and `amsha.media.*` in [CONFIGURATION.md](./CONFIGURATION.md#media-ingestion--download-limits).
+Channel adapters produce `ChannelMessage` with optional `List<MediaAttachment>` (type `IMAGE|DOCUMENT_PDF|AUDIO|OTHER`, `sourceUri`/`inlineData`, `mimeType`, `fileName`, `sizeBytes`). When media requires downloading, `MediaDownloadPort` (`amsha-security-api`, implemented by `GovernedMediaDownloadService` in `amsha-security` under `OutboundPurpose.MEDIA_DOWNLOAD`) enforces `MediaBudgetLimits` + `MediaSecurityValidator` (SSRF, IP blocklist, DNS revalidation, magic bytes), streams to `DownloadedMedia`, and injects governed payloads into the turn context. Total-payload (`50 MiB`) fail-closed across the batch; see [SECURITY.md#governed-media-download](./SECURITY.md#governed-media-download) and `amsha.media.*` in [CONFIGURATION.md](./CONFIGURATION.md#media-ingestion--download-limits).
+
+When constructing user prompts for LLM reasoning, `MultimodalMessageMapper` (`amsha-core`) maps validated attachments to LangChain4j content items (`ImageContent`, `AudioContent`, `PdfFileContent`) according to the active model's `MultimodalCapability` (resolved via `MultimodalCapabilities.defaultCapabilityForModel` or provider SPI). If a modality is unsupported, file size exceeds model limits, or the batch count is exceeded, `MultimodalMessageMapper` safely falls back to structured text placeholders without crashing or failing the agent turn. Composite routing models (`MultiModelChatModel`, `OrderedFailoverChatModel`) compute the safe capability intersection across candidate models.
 
 ![Message Pipeline](./assets/amsha_message_pipeline.svg)
 

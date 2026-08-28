@@ -31,6 +31,8 @@ import com.amsha.llm.api.AgentLlmConfig;
 import com.amsha.llm.api.ChatModelCreationPort;
 import com.amsha.llm.api.LlmModelConfig;
 import com.amsha.llm.api.ModelDefaults;
+import com.amsha.llm.api.MultimodalCapabilities;
+import com.amsha.llm.api.MultimodalCapability;
 import com.amsha.llm.api.StructuredOutputCapabilities;
 import com.amsha.llm.api.StructuredOutputMode;
 import com.amsha.llm.providers.wrapper.AgyResponsesChatModel;
@@ -140,7 +142,9 @@ public class ChatModelFactory implements ChatModelCreationPort {
                 config.strictJsonSchemaAdvertised(),
                 config.baseUrl(),
                 config.toolless());
-        return eligible ? CapabilityAwareChatModel.markStrict(model) : model;
+        MultimodalCapability multimodalCap =
+                MultimodalCapabilities.defaultCapabilityForModel(config.provider(), config.modelName());
+        return CapabilityAwareChatModel.withCapabilities(model, eligible, multimodalCap);
     }
 
     /** Convenience: builds an OpenAI-compatible ChatModel from direct parameters. */
@@ -317,7 +321,8 @@ public class ChatModelFactory implements ChatModelCreationPort {
         boolean eligible = "openai".equals(adapter)
                 && StructuredOutputCapabilities.resolvesToStrictSchema(
                         config.structuredOutputMode(), true, baseUrl, true);
-        return eligible ? CapabilityAwareChatModel.markStrict(created) : created;
+        MultimodalCapability multimodalCap = MultimodalCapabilities.defaultCapabilityForModel(adapter, model);
+        return CapabilityAwareChatModel.withCapabilities(created, eligible, multimodalCap);
     }
 
     private static GovernedTransportService resolveGovernedTransport() {

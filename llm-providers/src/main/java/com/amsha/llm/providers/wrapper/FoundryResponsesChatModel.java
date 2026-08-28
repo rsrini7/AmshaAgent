@@ -37,6 +37,7 @@ import java.util.Map;
 import com.amsha.common.util.LogUtil;
 import com.amsha.core.tools.ToolSchemaProvider;
 import com.amsha.llm.api.ModelDefaults;
+import com.amsha.llm.api.MultimodalRequests;
 import com.amsha.llm.providers.helper.FoundryCliExecutor;
 import com.amsha.llm.providers.helper.FoundryDiscoveryHelper;
 import com.amsha.security.api.OutboundPurpose;
@@ -223,7 +224,7 @@ public class FoundryResponsesChatModel implements ChatModel {
         return payload;
     }
 
-    private static List<Map<String, Object>> buildMessages(List<ChatMessage> messages) {
+    private List<Map<String, Object>> buildMessages(List<ChatMessage> messages) {
         List<Map<String, Object>> out = new ArrayList<>();
         if (messages == null) return out;
 
@@ -231,7 +232,7 @@ public class FoundryResponsesChatModel implements ChatModel {
             if (msg instanceof SystemMessage sm) {
                 out.add(Map.of("role", "system", "content", sm.text()));
             } else if (msg instanceof UserMessage um) {
-                out.add(Map.of("role", "user", "content", um.singleText()));
+                out.add(Map.of("role", "user", "content", MultimodalRequests.textOf(um, model)));
             } else if (msg instanceof AiMessage am) {
                 out.add(buildAiMessage(am));
             } else if (msg instanceof ToolExecutionResultMessage trm) {

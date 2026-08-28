@@ -28,6 +28,7 @@ import java.util.Map;
 
 import com.amsha.common.util.LogUtil;
 import com.amsha.core.tools.ToolSchemaProvider;
+import com.amsha.llm.api.MultimodalRequests;
 import com.amsha.security.api.OutboundPurpose;
 import com.amsha.security.http.GovernedTransportService;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -181,7 +182,7 @@ public class CodexResponsesChatModel implements ChatModel {
         if (msg instanceof SystemMessage sm) {
             input.add(Map.of("role", "system", "content", sm.text()));
         } else if (msg instanceof UserMessage um) {
-            input.add(Map.of("role", "user", "content", um.singleText()));
+            input.add(Map.of("role", "user", "content", MultimodalRequests.textOf(um, model)));
         } else if (msg instanceof AiMessage am) {
             convertAiMessage(am, input);
         } else if (msg instanceof ToolExecutionResultMessage trm) {

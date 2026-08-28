@@ -8,10 +8,13 @@ import jakarta.inject.Inject;
 import java.util.List;
 import java.util.Optional;
 
+import com.amsha.core.routing.CapabilityAwareChatModel;
 import com.amsha.core.routing.MultiModelChatModel;
 import com.amsha.llm.api.AgentChatModelProvider;
 import com.amsha.llm.api.AgentLlmConfig;
 import com.amsha.llm.api.ModelDefaults;
+import com.amsha.llm.api.MultimodalCapabilities;
+import com.amsha.llm.api.MultimodalCapability;
 import com.amsha.llm.api.StructuredOutputMode;
 import com.amsha.llm.providers.ChatModelFactory;
 
@@ -62,19 +65,20 @@ public class GroqProviderFactory implements AgentChatModelProvider {
 
     private ChatModel createModel(String model) {
         String key = apiKey.orElseThrow(() -> new IllegalStateException("Groq requires AMSHA_GROQ_API_KEY"));
-        List<MultiModelChatModel.ModelEntry> entries = ChatModelFactory.buildMultiModelEntries(
-                key,
-                model,
-                "groq",
-                (k, m) -> ChatModelFactory.createOpenAi(
-                        baseUrl,
-                        k,
-                        m,
-                        agentConfig.maxTokens(),
-                        agentConfig.timeout(),
-                        agentConfig.maxRetries(),
-                        agentConfig.temperature(),
-                        agentConfig.logHttp()));
+        List<MultiModelChatModel.ModelEntry> entries =
+                ChatModelFactory.buildMultiModelEntries(key, model, "groq", (k, m) -> {
+                    ChatModel raw = ChatModelFactory.createOpenAi(
+                            baseUrl,
+                            k,
+                            m,
+                            agentConfig.maxTokens(),
+                            agentConfig.timeout(),
+                            agentConfig.maxRetries(),
+                            agentConfig.temperature(),
+                            agentConfig.logHttp());
+                    MultimodalCapability cap = MultimodalCapabilities.defaultCapabilityForModel("groq", m);
+                    return CapabilityAwareChatModel.withCapabilities(raw, false, cap);
+                });
         if (entries.size() == 1) return entries.get(0).model();
         return new MultiModelChatModel("groq", entries, 5);
     }

@@ -1,9 +1,11 @@
 package com.amsha.core.agent.loop;
 
 import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
+import com.amsha.channel.api.MediaAttachment;
 import com.amsha.core.api.dto.RunAgentRequest;
 import com.amsha.llm.api.StructuredOutputMode;
 import com.amsha.persistence.api.CheckpointStatus;
@@ -33,6 +35,7 @@ public final class AgentExecutionContext {
     private final String channelPlatformId;
     private final String systemNote;
     private final Map<String, Object> data;
+    private final List<MediaAttachment> mediaAttachments;
 
     // Hot-path cache (§7.22 / F22)
     private volatile CheckpointStatus lastCheckpointStatus;
@@ -58,6 +61,38 @@ public final class AgentExecutionContext {
             String channelPlatformId,
             String systemNote,
             Map<String, Object> data) {
+        this(
+                sessionId,
+                userId,
+                chatId,
+                agentRole,
+                goal,
+                autonomyLevel,
+                structuredOutputMode,
+                maxIterations,
+                startingIteration,
+                channelType,
+                channelPlatformId,
+                systemNote,
+                data,
+                List.of());
+    }
+
+    public AgentExecutionContext(
+            String sessionId,
+            String userId,
+            String chatId,
+            String agentRole,
+            String goal,
+            AutonomyLevel autonomyLevel,
+            StructuredOutputMode structuredOutputMode,
+            int maxIterations,
+            int startingIteration,
+            String channelType,
+            String channelPlatformId,
+            String systemNote,
+            Map<String, Object> data,
+            List<MediaAttachment> mediaAttachments) {
         this.sessionId = Objects.requireNonNull(sessionId, "sessionId must not be null");
         this.userId = userId;
         this.chatId = chatId;
@@ -72,6 +107,11 @@ public final class AgentExecutionContext {
         this.channelPlatformId = channelPlatformId;
         this.systemNote = systemNote;
         this.data = data != null ? Collections.unmodifiableMap(data) : Collections.emptyMap();
+        this.mediaAttachments = mediaAttachments != null ? List.copyOf(mediaAttachments) : List.of();
+    }
+
+    public List<MediaAttachment> mediaAttachments() {
+        return mediaAttachments;
     }
 
     public String sessionId() {
@@ -242,7 +282,8 @@ public final class AgentExecutionContext {
                 channelType,
                 channelPlatformId,
                 systemNote,
-                data);
+                data,
+                mediaAttachments);
         // Preserve same-turn budgets/cursors; clear stale finish-retry and checkpoint cache.
         copy.answerQualityRetryCount = this.answerQualityRetryCount;
         copy.truncationRetryCount = this.truncationRetryCount;

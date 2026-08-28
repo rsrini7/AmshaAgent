@@ -26,6 +26,7 @@ import com.amsha.core.agent.IntentClassificationService;
 import com.amsha.core.agent.loop.AgentExecutionContext;
 import com.amsha.core.agent.loop.CodeGenerationPolicy;
 import com.amsha.core.agent.loop.LoopStuckDetector;
+import com.amsha.core.agent.reasoning.port.LlmProviderPort;
 import com.amsha.core.agent.role.AgentRoleEnum;
 import com.amsha.core.config.CoreSpiResolutionValidator;
 import com.amsha.core.skill.SkillAdaptationManager;
@@ -35,7 +36,10 @@ import com.amsha.core.tools.DynamicToolSchemaParser;
 import com.amsha.core.tools.ToolRegistry;
 import com.amsha.core.tools.search.ToolSearchPort;
 import com.amsha.core.util.TextPatternUtils;
+import com.amsha.llm.api.MultimodalCapability;
+import com.amsha.llm.api.MultimodalRequests;
 import com.amsha.security.api.AutonomyLevel;
+import com.amsha.security.api.MediaDownloadPort;
 import com.amsha.tool.api.AgentSentinels;
 import com.amsha.tool.api.AgentTool;
 import com.amsha.tool.api.ToolCapability;
@@ -78,6 +82,12 @@ public class ReasoningMessageAssembler {
 
     @Inject
     CodeGenerationPolicy codePolicy;
+
+    @Inject
+    Instance<LlmProviderPort> llmProviderPortInstance;
+
+    @Inject
+    Instance<MediaDownloadPort> mediaDownloadPortInstance;
 
     @Inject
     public ReasoningMessageAssembler(
@@ -148,10 +158,39 @@ public class ReasoningMessageAssembler {
 
         if (isSimpleChitchat && !isHistoryQuery) {
             messages.addAll(recentConversationContext(historyToInclude, goal));
-            messages.add(UserMessage.userMessage(goal));
+            if (context != null
+                    && context.mediaAttachments() != null
+                    && !context.mediaAttachments().isEmpty()) {
+                MultimodalCapability cap = (llmProviderPortInstance != null && !llmProviderPortInstance.isUnsatisfied())
+                        ? llmProviderPortInstance.get().multimodalCapability(agentRole)
+                        : MultimodalCapability.TEXT_ONLY;
+                messages.add(mapMediaMessage(context, goal, cap, agentRole));
+            } else {
+                messages.add(UserMessage.userMessage(goal));
+            }
         } else {
-            messages.addAll(historyToInclude);
-            if (context.isForceFinishRetry()) {
+            if (context != null
+                    && context.mediaAttachments() != null
+                    && !context.mediaAttachments().isEmpty()) {
+                MultimodalCapability cap = (llmProviderPortInstance != null && !llmProviderPortInstance.isUnsatisfied())
+                        ? llmProviderPortInstance.get().multimodalCapability(agentRole)
+                        : MultimodalCapability.TEXT_ONLY;
+                boolean replaced = false;
+                for (ChatMessage m : historyToInclude) {
+                    if (!replaced && m instanceof UserMessage um && Objects.equals(extractUserText(um), goal)) {
+                        messages.add(mapMediaMessage(context, goal, cap, agentRole));
+                        replaced = true;
+                    } else {
+                        messages.add(m);
+                    }
+                }
+                if (!replaced) {
+                    messages.add(mapMediaMessage(context, goal, cap, agentRole));
+                }
+            } else {
+                messages.addAll(historyToInclude);
+            }
+            if (context != null && context.isForceFinishRetry()) {
                 messages.add(UserMessage.userMessage("Your previous response contained raw JSON or tool-call syntax. "
                         + "Answer in plain prose only. All tools have already returned their results "
                         + "- do NOT call any more tools. Summarize the findings and call FINISH."));
@@ -177,13 +216,27 @@ public class ReasoningMessageAssembler {
         return new AssembledMessages(messages, toolSpecifications);
     }
 
+    private UserMessage mapMediaMessage(
+            AgentExecutionContext context, String goal, MultimodalCapability capability, String agentRole) {
+        MediaDownloadPort downloadPort = resolveMediaDownloadPort();
+        return MultimodalMessageMapper.mapToUserMessage(
+                goal, context.mediaAttachments(), capability, agentRole, downloadPort, context.userId(), false);
+    }
+
+    private MediaDownloadPort resolveMediaDownloadPort() {
+        if (mediaDownloadPortInstance == null || mediaDownloadPortInstance.isUnsatisfied()) {
+            return null;
+        }
+        return mediaDownloadPortInstance.get();
+    }
+
     private List<ChatMessage> recentConversationContext(List<ChatMessage> history, String goal) {
         if (intentClassifier != null && intentClassifier.isGreeting(goal)) {
             return List.of();
         }
         List<ChatMessage> conversation = history.stream()
                 .filter(m -> m instanceof UserMessage || m instanceof AiMessage)
-                .filter(m -> !(m instanceof UserMessage user && Objects.equals(user.singleText(), goal)))
+                .filter(m -> !(m instanceof UserMessage user && Objects.equals(extractUserText(user), goal)))
                 .filter(m -> !containsCodeOrExecution(m))
                 .toList();
         int fromIndex = Math.max(0, conversation.size() - CHITCHAT_CONTEXT_MESSAGES);
@@ -203,7 +256,7 @@ public class ReasoningMessageAssembler {
                     || (codePolicy != null && codePolicy.isGeneratedCodeBlock(text, AgentRoleEnum.CODER.id()));
         }
         if (m instanceof UserMessage user) {
-            String text = user.singleText();
+            String text = extractUserText(user);
             if (text == null || text.isBlank()) return false;
             return text.contains("```")
                     || text.contains("[Tool Output")
@@ -212,6 +265,11 @@ public class ReasoningMessageAssembler {
                             && (textPatternUtils.goalRequestsExecution(text) || textPatternUtils.looksLikeJson(text)));
         }
         return false;
+    }
+
+    private static String extractUserText(UserMessage user) {
+        if (user == null) return null;
+        return MultimodalRequests.textOf(user, "history");
     }
 
     private String resolveSystemPrompt(

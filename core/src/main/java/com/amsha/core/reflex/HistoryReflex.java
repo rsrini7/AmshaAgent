@@ -15,6 +15,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Pattern;
 
 import com.amsha.core.pipeline.MessageContext;
+import com.amsha.llm.api.MultimodalRequests;
 import com.amsha.persistence.api.CompactionStorePort;
 
 @ApplicationScoped
@@ -62,7 +63,7 @@ public class HistoryReflex implements AgentReflex {
         AtomicInteger idx = new AtomicInteger(1);
         for (ChatMessage msg : messages) {
             if (msg instanceof UserMessage um) {
-                String text = um.singleText();
+                String text = MultimodalRequests.textOf(um, "history");
                 sb.append(idx.getAndIncrement())
                         .append(HISTORY_YOU_PREFIX)
                         .append(truncate(text, 200))

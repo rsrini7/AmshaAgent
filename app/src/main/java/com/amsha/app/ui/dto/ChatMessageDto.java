@@ -5,6 +5,8 @@ import dev.langchain4j.data.message.*;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
+import com.amsha.llm.api.MultimodalRequests;
+
 public record ChatMessageDto(
         @NotBlank String role, @NotBlank @Size(max = 100000) String text, Long actionId, Long timestamp) {
 
@@ -14,10 +16,14 @@ public record ChatMessageDto(
 
     public static ChatMessageDto from(ChatMessage msg, Long timestamp) {
         return switch (msg) {
-            case UserMessage u -> new ChatMessageDto("user", u.singleText(), null, timestamp);
+            case UserMessage u -> new ChatMessageDto("user", extractUserText(u), null, timestamp);
             case AiMessage a -> new ChatMessageDto("assistant", a.text(), null, timestamp);
             case SystemMessage s -> new ChatMessageDto("system", s.text(), null, timestamp);
             default -> new ChatMessageDto("system", msg.toString(), null, timestamp);
         };
+    }
+
+    private static String extractUserText(UserMessage u) {
+        return MultimodalRequests.textOf(u, "chat history");
     }
 }

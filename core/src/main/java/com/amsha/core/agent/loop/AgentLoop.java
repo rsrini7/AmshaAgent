@@ -11,6 +11,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
+import com.amsha.channel.api.MediaAttachment;
 import com.amsha.common.util.LogUtil;
 import com.amsha.core.agent.IntentClassificationService;
 import com.amsha.core.agent.reasoning.ReasoningEngine;
@@ -385,6 +386,12 @@ public class AgentLoop {
             }
         }
 
+        List<MediaAttachment> attachments = (context != null
+                        && context.getMessage() != null
+                        && context.getMessage().attachments() != null)
+                ? context.getMessage().attachments()
+                : List.of();
+
         return new AgentExecutionContext(
                 sessionId,
                 capturedUserId,
@@ -398,7 +405,8 @@ public class AgentLoop {
                 channelTypeStr,
                 channelPlatformId,
                 systemNote,
-                mergedData);
+                mergedData,
+                attachments);
     }
 
     private AgentResult executeWithinScopes(

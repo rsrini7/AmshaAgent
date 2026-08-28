@@ -8,10 +8,13 @@ import jakarta.inject.Inject;
 import java.util.List;
 import java.util.Optional;
 
+import com.amsha.core.routing.CapabilityAwareChatModel;
 import com.amsha.core.routing.MultiModelChatModel;
 import com.amsha.llm.api.AgentChatModelProvider;
 import com.amsha.llm.api.AgentLlmConfig;
 import com.amsha.llm.api.ModelDefaults;
+import com.amsha.llm.api.MultimodalCapabilities;
+import com.amsha.llm.api.MultimodalCapability;
 import com.amsha.llm.api.StructuredOutputMode;
 import com.amsha.llm.providers.ChatModelFactory;
 
@@ -70,23 +73,24 @@ public class OpenRouterProviderFactory implements AgentChatModelProvider {
         String key =
                 apiKey.orElseThrow(() -> new IllegalStateException("OpenRouter requires AMSHA_OPENROUTER_API_KEY"));
         List<MultiModelChatModel.ModelEntry> entries = ChatModelFactory.buildMultiModelEntries(
-                key,
-                overrideModel != null ? overrideModel : modelName,
-                "openrouter",
-                (k, m) -> ChatModelFactory.withOpenRouterHeaders(
-                                ChatModelFactory.openAiBuilder(
-                                        baseUrl,
-                                        k,
-                                        m,
-                                        agentConfig.maxTokens(),
-                                        agentConfig.timeout(),
-                                        agentConfig.maxRetries(),
-                                        agentConfig.temperature(),
-                                        agentConfig.logHttp(),
-                                        agentConfig.logHttp()),
-                                siteUrl,
-                                appName)
-                        .build());
+                key, overrideModel != null ? overrideModel : modelName, "openrouter", (k, m) -> {
+                    ChatModel raw = ChatModelFactory.withOpenRouterHeaders(
+                                    ChatModelFactory.openAiBuilder(
+                                            baseUrl,
+                                            k,
+                                            m,
+                                            agentConfig.maxTokens(),
+                                            agentConfig.timeout(),
+                                            agentConfig.maxRetries(),
+                                            agentConfig.temperature(),
+                                            agentConfig.logHttp(),
+                                            agentConfig.logHttp()),
+                                    siteUrl,
+                                    appName)
+                            .build();
+                    MultimodalCapability cap = MultimodalCapabilities.defaultCapabilityForModel("openrouter", m);
+                    return CapabilityAwareChatModel.withCapabilities(raw, false, cap);
+                });
         if (entries.size() == 1) return entries.get(0).model();
         return new MultiModelChatModel("openrouter", entries, 5);
     }

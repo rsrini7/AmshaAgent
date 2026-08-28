@@ -6,9 +6,12 @@ import dev.langchain4j.model.openai.OpenAiChatModel;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
+import com.amsha.core.routing.CapabilityAwareChatModel;
 import com.amsha.llm.api.AgentChatModelProvider;
 import com.amsha.llm.api.AgentLlmConfig;
 import com.amsha.llm.api.ModelDefaults;
+import com.amsha.llm.api.MultimodalCapabilities;
+import com.amsha.llm.api.MultimodalCapability;
 import com.amsha.llm.api.StructuredOutputMode;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
@@ -58,13 +61,17 @@ public class LlamaCppProviderFactory implements AgentChatModelProvider {
     }
 
     private ChatModel doCreate(String overrideModel) {
-        return OpenAiChatModel.builder()
+        String resolvedModel = overrideModel != null ? overrideModel : modelId;
+        ChatModel raw = OpenAiChatModel.builder()
                 .baseUrl(baseUrl)
                 .apiKey("not-needed")
-                .modelName(overrideModel != null ? overrideModel : modelId)
+                .modelName(resolvedModel)
                 .logRequests(agentConfig.logHttp())
                 .logResponses(agentConfig.logHttp())
                 .temperature(0.7)
                 .build();
+        MultimodalCapability cap =
+                MultimodalCapabilities.defaultCapabilityForModel(ModelDefaults.PROVIDER_LLAMACPP, resolvedModel);
+        return CapabilityAwareChatModel.withCapabilities(raw, false, cap);
     }
 }

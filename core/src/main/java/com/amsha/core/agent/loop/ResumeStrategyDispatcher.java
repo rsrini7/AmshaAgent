@@ -138,7 +138,8 @@ class ResumeStrategyDispatcher {
                 context.channelType(),
                 context.channelPlatformId(),
                 context.systemNote(),
-                context.data());
+                context.data(),
+                context.mediaAttachments());
     }
 
     String resolveResumeGoal(String sessionId, String agentRole) {

@@ -16,6 +16,9 @@ Pure API contracts, Service Provider Interfaces (SPIs), Data Transfer Objects (D
 | `AgentLlmConfig` / `LlmModelConfig` | `com.amsha.llm.api` | Immutable configuration records for per-provider and per-agent LLM parameters. |
 | `StrictJsonSchemaCapable` | `com.amsha.llm.api` | Capability interface implemented by provider models and routing wrappers that advertise verified support for strict JSON Schema response formatting. |
 | `StructuredSchemaRequests` | `com.amsha.llm.api` | Utilities for request-scoped schema attachment, schema conversion to LangChain4j ResponseFormat, schema removal, and candidate rewrite dispatch. |
+| `MultimodalCapability` | `com.amsha.llm.api` | Immutable data contract defining supported multimodal attachment types, MIME types, size bounds, and inline/URL capabilities per model. |
+| `MultimodalCapable` | `com.amsha.llm.api` | Capability interface implemented by models advertising explicit model-specific multimodal support. |
+| `MultimodalCapabilities` | `com.amsha.llm.api` | Model-specific capability resolution, fail-closed defaults, and composite wrapper capability intersections. |
 | `StructuredOutputMode` | `com.amsha.llm.api` | Enum defining structured JSON output handling (`NATIVE`, `PROMPT_DIRECTIVE`, `LENIENT`). |
 | `NetworkProfilePolicy` | `com.amsha.llm.api` | Outbound network governance, proxy settings, and TLS trust mode policies for LLM traffic. |
 

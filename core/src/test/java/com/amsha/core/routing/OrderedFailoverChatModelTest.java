@@ -17,6 +17,9 @@ import java.util.List;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import com.amsha.channel.api.AttachmentType;
+import com.amsha.llm.api.MultimodalCapabilities;
+import com.amsha.llm.api.MultimodalCapability;
 import com.amsha.llm.api.StructuredSchemaRequests;
 import com.amsha.llm.api.error.LlmAuthenticationException;
 import com.amsha.llm.api.error.LlmMalformedResponseException;
@@ -415,5 +418,26 @@ class OrderedFailoverChatModelTest {
                 5);
 
         assertThrows(LlmModelExhaustedException.class, () -> failover.chat(request()));
+    }
+
+    @Test
+    void multimodalCapability_computesSafeIntersection() {
+        ChatModel m1 = new OkModel();
+        ChatModel m2 = new OkModel();
+
+        MultimodalCapability cap1 = MultimodalCapabilities.defaultCapabilityForModel("gemini", "gemini-1.5-pro");
+        MultimodalCapability cap2 = MultimodalCapabilities.defaultCapabilityForModel("openai", "gpt-4o");
+
+        OrderedFailoverChatModel failover = new OrderedFailoverChatModel(
+                "route-multi",
+                List.of(
+                        new OrderedFailoverChatModel.Entry("m1", m1, false, cap1),
+                        new OrderedFailoverChatModel.Entry("m2", m2, false, cap2)),
+                5);
+
+        MultimodalCapability composite = failover.multimodalCapability();
+        assertTrue(composite.isMultimodal());
+        assertTrue(composite.supportsType(AttachmentType.IMAGE));
+        assertFalse(composite.supportsType(AttachmentType.AUDIO));
     }
 }

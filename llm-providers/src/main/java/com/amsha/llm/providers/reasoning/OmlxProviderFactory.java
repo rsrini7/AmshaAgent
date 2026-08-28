@@ -9,10 +9,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+import com.amsha.core.routing.CapabilityAwareChatModel;
 import com.amsha.core.routing.MultiModelChatModel;
 import com.amsha.llm.api.AgentChatModelProvider;
 import com.amsha.llm.api.AgentLlmConfig;
 import com.amsha.llm.api.ModelDefaults;
+import com.amsha.llm.api.MultimodalCapabilities;
+import com.amsha.llm.api.MultimodalCapability;
 import com.amsha.llm.api.StructuredOutputMode;
 import com.amsha.llm.providers.ChatModelFactory;
 
@@ -65,20 +68,21 @@ public class OmlxProviderFactory implements AgentChatModelProvider {
         String model = overrideModel;
         // Disable Qwen/DeepSeek thinking mode — puts chain-of-thought in content field
         Map<String, Object> customParams = Map.of("enable_thinking", false);
-        List<MultiModelChatModel.ModelEntry> entries = ChatModelFactory.buildMultiModelEntries(
-                apiKey,
-                model,
-                "omlx",
-                (k, m) -> ChatModelFactory.createOpenAi(
-                        baseUrl,
-                        k,
-                        m,
-                        agentConfig.maxTokens(),
-                        agentConfig.timeout(),
-                        agentConfig.maxRetries(),
-                        agentConfig.temperature(),
-                        agentConfig.logHttp(),
-                        customParams));
+        List<MultiModelChatModel.ModelEntry> entries =
+                ChatModelFactory.buildMultiModelEntries(apiKey, model, "omlx", (k, m) -> {
+                    ChatModel raw = ChatModelFactory.createOpenAi(
+                            baseUrl,
+                            k,
+                            m,
+                            agentConfig.maxTokens(),
+                            agentConfig.timeout(),
+                            agentConfig.maxRetries(),
+                            agentConfig.temperature(),
+                            agentConfig.logHttp(),
+                            customParams);
+                    MultimodalCapability cap = MultimodalCapabilities.defaultCapabilityForModel("omlx", m);
+                    return CapabilityAwareChatModel.withCapabilities(raw, false, cap);
+                });
         if (entries.size() == 1) return entries.get(0).model();
         return new MultiModelChatModel("omlx", entries, 5);
     }

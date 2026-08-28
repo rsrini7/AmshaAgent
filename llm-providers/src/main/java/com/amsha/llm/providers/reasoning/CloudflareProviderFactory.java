@@ -8,10 +8,13 @@ import jakarta.inject.Inject;
 import java.util.List;
 import java.util.Optional;
 
+import com.amsha.core.routing.CapabilityAwareChatModel;
 import com.amsha.core.routing.MultiModelChatModel;
 import com.amsha.llm.api.AgentChatModelProvider;
 import com.amsha.llm.api.AgentLlmConfig;
 import com.amsha.llm.api.ModelDefaults;
+import com.amsha.llm.api.MultimodalCapabilities;
+import com.amsha.llm.api.MultimodalCapability;
 import com.amsha.llm.api.StructuredOutputMode;
 import com.amsha.llm.providers.ChatModelFactory;
 
@@ -137,18 +140,20 @@ public class CloudflareProviderFactory implements AgentChatModelProvider {
                         () -> new IllegalStateException("Cloudflare Workers AI requires AMSHA_CLOUDFLARE_API_KEY"));
         String effectiveUrl = resolveEffectiveBaseUrl();
         List<MultiModelChatModel.ModelEntry> entries = ChatModelFactory.buildMultiModelEntries(
-                key,
-                model,
-                ModelDefaults.PROVIDER_CLOUDFLARE,
-                (entryKey, entryModel) -> ChatModelFactory.createOpenAi(
-                        effectiveUrl,
-                        entryKey,
-                        entryModel,
-                        agentConfig.maxTokens(),
-                        agentConfig.timeout(),
-                        agentConfig.maxRetries(),
-                        agentConfig.temperature(),
-                        agentConfig.logHttp()));
+                key, model, ModelDefaults.PROVIDER_CLOUDFLARE, (entryKey, entryModel) -> {
+                    ChatModel raw = ChatModelFactory.createOpenAi(
+                            effectiveUrl,
+                            entryKey,
+                            entryModel,
+                            agentConfig.maxTokens(),
+                            agentConfig.timeout(),
+                            agentConfig.maxRetries(),
+                            agentConfig.temperature(),
+                            agentConfig.logHttp());
+                    MultimodalCapability cap = MultimodalCapabilities.defaultCapabilityForModel(
+                            ModelDefaults.PROVIDER_CLOUDFLARE, entryModel);
+                    return CapabilityAwareChatModel.withCapabilities(raw, false, cap);
+                });
         if (entries.size() == 1) return entries.getFirst().model();
         return new MultiModelChatModel(ModelDefaults.PROVIDER_CLOUDFLARE, entries, 5);
     }

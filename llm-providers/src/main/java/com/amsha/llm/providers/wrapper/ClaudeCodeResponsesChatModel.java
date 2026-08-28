@@ -29,6 +29,7 @@ import java.util.Map;
 import com.amsha.common.util.LogUtil;
 import com.amsha.core.tools.ToolSchemaProvider;
 import com.amsha.llm.api.ModelDefaults;
+import com.amsha.llm.api.MultimodalRequests;
 import com.amsha.security.api.OutboundPurpose;
 import com.amsha.security.http.GovernedTransportService;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -213,7 +214,7 @@ public class ClaudeCodeResponsesChatModel implements ChatModel {
         if (msg instanceof UserMessage userMsg) {
             Map<String, Object> entry = new LinkedHashMap<>();
             entry.put("role", "user");
-            entry.put("content", userMsg.singleText());
+            entry.put("content", MultimodalRequests.textOf(userMsg, model));
             messages.add(entry);
         } else if (msg instanceof AiMessage aiMsg) {
             Map<String, Object> entry = new LinkedHashMap<>();

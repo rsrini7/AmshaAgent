@@ -234,6 +234,23 @@ Amsha provides zero-payload-leakage observability for LLM invocations with stric
 |---|---|---|---|
 | `amsha.observability.chat-listener.mode` | `AMSHA_OBSERVABILITY_CHAT_LISTENER_MODE` | `off` | Mode for LangChain4j `ChatModelListener` pilot (`off`, `shadow`, `active`) |
 
+## Multimodal Message Mapping & Capability Resolution
+
+When channel messages contain media attachments (`MediaAttachment`), `MultimodalMessageMapper` converts validated attachments into LangChain4j `Content` items:
+- `IMAGE` → `ImageContent.from(Image)`
+- `AUDIO` → `AudioContent.from(Audio)`
+- `DOCUMENT_PDF` → `PdfFileContent.from(PdfFile)`
+
+If the active model (or candidate model in failover routing) does not support a modality, or if an attachment exceeds `maxFileSize`, `maxMediaPerRequest`, or the cumulative turn budget (50 MiB), `MultimodalMessageMapper` automatically falls back to clean, structured text placeholders:
+- `[Attached Document: <filename> - Extracted Text:\n<text>]` (for PDF documents when native PDF is unsupported)
+- `[Attached Media: <filename> (<mime>, <size>) - Model <name> does not support <type> modality]`
+- `[Attached Media: <filename> (<mime>, <size>) - Exceeds model maximum supported size of <formatted_limit>]` (e.g. `10.0 MB`)
+- `[Attached Media: <filename> (<mime>, <size>) - Cumulative turn media payload exceeded limit of 50.0 MB]`
+- `[Attached Media: <filename> (<mime>) - Exceeds maximum batch media limit of <limit> items]`
+- `[Attached Media: <filename> (<mime>) - Extraction and formatting could not be completed]`
+
+Routing wrappers (`MultiModelChatModel`, `OrderedFailoverChatModel`) compute the safe capability intersection across candidate models at composition time, preventing runtime schema or modality mismatch errors.
+
 ## Testing
 
 Run core tests:

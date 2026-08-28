@@ -13,6 +13,8 @@ import com.amsha.common.util.LogUtil;
 import com.amsha.core.agent.reasoning.error.LlmErrorClassificationService;
 import com.amsha.core.routing.ModelRouter;
 import com.amsha.core.structured.StructuredOutputMetrics;
+import com.amsha.llm.api.MultimodalCapabilities;
+import com.amsha.llm.api.MultimodalCapability;
 import com.amsha.llm.api.StrictJsonSchemaCapable;
 import com.amsha.llm.api.StructuredSchemaRequests;
 import com.amsha.llm.api.error.LlmMalformedResponseException;
@@ -87,6 +89,12 @@ public class LangChain4jLlmAdapter implements LlmProviderPort {
     public ChatResponse nextStep(ChatRequest request, String agentRole, boolean bypassLightweightRouting) {
         ChatModel resolvedModel = resolveModel(agentRole, bypassLightweightRouting);
         return execute(request, resolvedModel);
+    }
+
+    @Override
+    public MultimodalCapability multimodalCapability(String agentRole) {
+        ChatModel resolvedModel = resolveModel(agentRole, false);
+        return MultimodalCapabilities.resolveCapability(resolvedModel);
     }
 
     private ChatResponse execute(ChatRequest request, ChatModel resolvedModel) {
