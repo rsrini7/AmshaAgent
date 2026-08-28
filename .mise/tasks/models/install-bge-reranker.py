@@ -14,6 +14,10 @@ import urllib.request
 
 BUNDLE_ID = "bge-reranker-v1"
 REVISION = "a76e9c60e58c8e1a1005a76e9389270e5b9fbb40"
+MODEL_BYTES = 1112459588
+MODEL_SHA256 = "15b9a8c3da82eddf263df571281166e00e9308fe19d077084b642ebfcaf06d2b"
+TOKENIZER_BYTES = 17098079
+TOKENIZER_SHA256 = "48564c5c7d3fa64d85d95e65414a542385f88b0f128fd8d4163fd7a57f2be05c"
 SOURCE_BASE = "https://huggingface.co/Xenova/bge-reranker-base/resolve/main"
 
 
@@ -25,33 +29,48 @@ def sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
-def install_artifact(bundle_directory: Path, name: str, subpath: str) -> tuple[int, str]:
+def verified_artifact(path: Path, expected_bytes: int, expected_sha256: str) -> bool:
+    return (
+        path.is_file()
+        and path.stat().st_size == expected_bytes
+        and sha256_file(path) == expected_sha256
+    )
+
+
+def install_artifact(bundle_directory: Path, name: str, subpath: str, expected_bytes: int, expected_sha256: str) -> None:
     target = bundle_directory / name
+    if verified_artifact(target, expected_bytes, expected_sha256):
+        print(f"Artifact {name} already installed and verified.")
+        return
+
     partial = target.with_name(target.name + ".partial")
     partial.unlink(missing_ok=True)
     url = f"{SOURCE_BASE}/{subpath}"
     print(f"Downloading {name} from {url}...")
     headers = {"User-Agent": "AmshaRerankerInstaller/1.0"}
     req = urllib.request.Request(url, headers=headers)
-    with urllib.request.urlopen(req, timeout=120) as response, partial.open("wb") as output:
-        shutil.copyfileobj(response, output, length=1024 * 1024)
-    os.replace(partial, target)
-    file_bytes = target.stat().st_size
-    file_sha256 = sha256_file(target)
-    print(f"Verified {name}: {file_bytes} bytes, sha256={file_sha256}")
-    return file_bytes, file_sha256
+    try:
+        with urllib.request.urlopen(req, timeout=180) as response, partial.open("wb") as output:
+            shutil.copyfileobj(response, output, length=1024 * 1024)
+        if not verified_artifact(partial, expected_bytes, expected_sha256):
+            raise RuntimeError(f"Downloaded {name} failed byte-count ({expected_bytes}) or SHA-256 verification")
+        os.replace(partial, target)
+        print(f"Verified and installed {name}: {expected_bytes} bytes")
+    except Exception:
+        partial.unlink(missing_ok=True)
+        raise
 
 
-def write_manifest(bundle_directory: Path, model_bytes: int, model_sha256: str, tokenizer_bytes: int, tokenizer_sha256: str) -> None:
+def write_manifest(bundle_directory: Path) -> None:
     manifest = {
         "bundleId": BUNDLE_ID,
         "revision": REVISION,
         "modelFile": "model.onnx",
-        "modelSha256": model_sha256,
-        "modelBytes": model_bytes,
+        "modelSha256": MODEL_SHA256,
+        "modelBytes": MODEL_BYTES,
         "tokenizerFile": "tokenizer.json",
-        "tokenizerSha256": tokenizer_sha256,
-        "tokenizerBytes": tokenizer_bytes,
+        "tokenizerSha256": TOKENIZER_SHA256,
+        "tokenizerBytes": TOKENIZER_BYTES,
         "scoring": {
             "inputType": "text-pair",
             "tokenizerRevision": REVISION,
@@ -86,9 +105,9 @@ def main() -> None:
     model_root = Path(os.environ.get("AMSHA_ONNX_MODEL_ROOT", "data/models"))
     bundle_directory = model_root / BUNDLE_ID
     bundle_directory.mkdir(parents=True, exist_ok=True)
-    model_bytes, model_sha256 = install_artifact(bundle_directory, "model.onnx", "onnx/model.onnx")
-    tokenizer_bytes, tokenizer_sha256 = install_artifact(bundle_directory, "tokenizer.json", "tokenizer.json")
-    write_manifest(bundle_directory, model_bytes, model_sha256, tokenizer_bytes, tokenizer_sha256)
+    install_artifact(bundle_directory, "model.onnx", "onnx/model.onnx", MODEL_BYTES, MODEL_SHA256)
+    install_artifact(bundle_directory, "tokenizer.json", "tokenizer.json", TOKENIZER_BYTES, TOKENIZER_SHA256)
+    write_manifest(bundle_directory)
     print(f"Wrote verified reranker bundle manifest: {bundle_directory / 'manifest.json'}")
     print(
         "Enable with AMSHA_ONNX_ENABLED=true and AMSHA_RAG_RERANKER_ENABLED=true."

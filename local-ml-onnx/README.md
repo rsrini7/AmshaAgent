@@ -117,10 +117,13 @@ The automated promotion path is `classifier:collect`/`classifier:build-dataset`
 `classifier:promote`; promotion remains blocked until a named human approval
 record matches the evidence digest.
 
-For a reproducible development bundle, run `mise run models:install-mpnet`. It
-downloads the Apache-2.0 `sentence-transformers/all-mpnet-base-v2` revision pinned by
-the task, verifies its fixed SHA-256 and sizes, and writes the matching local manifest.
-The resulting files remain under gitignored `data/models/`.
+For reproducible development bundles:
+- `mise run models:install-mpnet`: Installs the Apache-2.0 `sentence-transformers/all-mpnet-base-v2` embedding bundle.
+- `mise run models:install-bge-reranker`: Installs the Apache-2.0 `Xenova/bge-reranker-base` cross-encoder reranking bundle.
+- `mise run models:install-all`: Installs all pinned local ONNX development bundles in one step.
+- `mise run models:list`: Scans and validates manifests of all installed local ONNX models.
+
+All bundles verify fixed SHA-256 digests and byte counts, writing deterministic local manifests under gitignored `data/models/`.
 Run `./mvnw -pl local-ml-onnx -Dtest=OnnxEmbeddingModelSmokeTest test` after
 installation to execute the JVM smoke test against the real bundle.
 
