@@ -1,5 +1,7 @@
 package com.amsha.core.message;
 
+import com.amsha.tool.api.ToolCapability;
+
 /**
  * Centralized catalog for all user-facing emoji-prefixed messages.
  * <p>
@@ -214,6 +216,17 @@ public final class UserMessages {
 
     public static String delegationUnknownAgent(String agent, String list) {
         return String.format(DELEGATION_UNKNOWN_AGENT_FORMAT, agent, list);
+    }
+
+    /**
+     * Explains why a delegated goal cannot carry an unauthorized nested tool
+     * request. The outer delegation approval never grants child capabilities.
+     */
+    public static String delegationCapabilityUnavailable(String agent, String tool) {
+        return "❌ Delegation blocked: agent '" + agent + "' is not permitted to use nested tool '" + tool + "'. "
+                + "Approval of '" + ToolCapability.DELEGATE_TO_AGENT.toolName()
+                + "' cannot authorize a nested tool. "
+                + "Delegate to a role with that capability or handle the request directly.";
     }
 
     public static String delegationRejectedCaps(String target, String unauthorized, String current) {

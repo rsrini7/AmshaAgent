@@ -14,10 +14,6 @@ import java.util.Map;
 import java.util.regex.Pattern;
 
 import com.amsha.core.agent.loop.AgentLoop;
-import com.amsha.core.agent.loop.GroupAnalyticsService;
-import com.amsha.core.agent.loop.GroupConsultationEngine;
-import com.amsha.core.agent.loop.GroupConsultationService;
-import com.amsha.core.agent.loop.TaskClassifierService;
 import com.amsha.core.agent.reasoning.ReasoningEngine;
 import com.amsha.core.agent.result.AgentResult;
 import com.amsha.core.agent.role.AgentRoleEnum;
@@ -89,19 +85,10 @@ public class DelegateToAgentTool implements AgentTool {
     AgentOtelContext otelContext;
 
     @Inject
-    GroupConsultationService groupConsultationService;
-
-    @Inject
-    GroupConsultationEngine groupConsultationEngine;
-
-    @Inject
-    GroupAnalyticsService groupAnalytics;
-
-    @Inject
-    TaskClassifierService taskClassifier;
-
-    @Inject
     DelegationProcessor delegationProcessor;
+
+    @Inject
+    GroupConsultationDelegator groupConsultationDelegator;
 
     @Inject
     RoleRegistry roleRegistry;
@@ -130,6 +117,16 @@ public class DelegateToAgentTool implements AgentTool {
     @Override
     public ToolOperation requiredOperation() {
         return ToolOperation.DELEGATE_AUTONOMOUS;
+    }
+
+    /**
+     * Rejects an explicit nested tool request when the delegated role cannot invoke
+     * that tool. This runs in {@link com.amsha.core.agent.loop.ToolInvocationGuard}
+     * before the outer delegation can reach HITL approval or start a child loop.
+     */
+    @Override
+    public String validateParameters(Map<String, Object> params) {
+        return DelegationCapabilityValidator.validate(params, roleRegistry);
     }
 
     @Override
@@ -233,14 +230,11 @@ public class DelegateToAgentTool implements AgentTool {
         AgentRoleEnum targetRole = AgentRoleEnum.fromString(agentName);
 
         // Group consultation mode: enhance goal with family huddle prompt
-        if (MODE_GROUP_CONSULT.equals(mode)) {
+        if (MODE_GROUP_CONSULT.equals(mode) && groupConsultationDelegator != null) {
             String leadRoleId = targetRole.toScopedName();
-            if (groupConsultationService.isGroupLead(leadRoleId)) {
-                return executeGroupConsultation(
-                        ctx, outerSessionId, leadRoleId, goal, targetRole, userId, chatId, depth, requestedPersona);
+            if (groupConsultationDelegator.isGroupLead(leadRoleId)) {
+                goal = groupConsultationDelegator.prepareGoal(ctx, outerSessionId, leadRoleId, goal);
             }
-            // Not a group lead — fall through to normal delegation
-            log.debugf("[DELEGATE] group_consult mode but %s is not a group lead — delegating normally", leadRoleId);
         }
 
         auditService.record(
@@ -345,133 +339,6 @@ public class DelegateToAgentTool implements AgentTool {
             AgentResult result, AgentRoleEnum targetRole, String outerSessionId, String requestedPersona) {
         log.infof("[DELEGATE] agent=%s completed for session=%s", targetRole.toScopedName(), outerSessionId);
         return delegationProcessor.handleSubAgentResult(result, targetRole, requestedPersona);
-    }
-
-    /**
-     * Executes a group consultation: spawns parallel sub-agents for family members,
-     * collects their analyses, and passes the synthesized result to the group lead
-     * for final synthesis.
-     */
-    private ToolResponse executeGroupConsultation(
-            ToolExecutionContext ctx,
-            String outerSessionId,
-            String leadRoleId,
-            String goal,
-            AgentRoleEnum targetRole,
-            String userId,
-            String chatId,
-            int depth,
-            String requestedPersona) {
-
-        // Guard against unavailable registry. NOTE: must go through proxy-safe methods —
-        // reading groupConsultationEngine.groupRegistry directly always yields null because
-        // field access does not pass through the @ApplicationScoped client proxy.
-        if (!groupConsultationEngine.hasGroupRegistry()) {
-            log.warnf("[GROUP_CONSULT] groupRegistry unavailable — falling back to normal delegation");
-            return executeNormalDelegation(
-                    ctx, outerSessionId, leadRoleId, goal, targetRole, userId, chatId, depth, requestedPersona);
-        }
-
-        var groupOpt = groupConsultationEngine.findGroupById(groupConsultationService
-                .getGroup(leadRoleId)
-                .map(g -> g.groupId())
-                .orElse(""));
-        if (groupOpt.isEmpty()) {
-            log.warnf("[GROUP_CONSULT] No group found for %s — falling back to normal delegation", leadRoleId);
-            goal = delegationProcessor.enhanceGoalWithGroupConsultation(leadRoleId, goal);
-            return executeNormalDelegation(
-                    ctx, outerSessionId, leadRoleId, goal, targetRole, userId, chatId, depth, requestedPersona);
-        }
-
-        var group = groupOpt.get();
-        var subTasks = groupConsultationEngine.buildSubTasks(group, goal);
-
-        if (subTasks.isEmpty()) {
-            log.debugf("[GROUP_CONSULT] %s can self-handle — no family consultation needed", leadRoleId);
-            return executeNormalDelegation(
-                    ctx, outerSessionId, leadRoleId, goal, targetRole, userId, chatId, depth, requestedPersona);
-        }
-
-        log.infof("[GROUP_CONSULT] Spawning %d family members for %s", subTasks.size(), leadRoleId);
-
-        // Build the sub-agent runner that delegates to the actual agent loop
-        GroupConsultationEngine.SubAgentRunner runner = (memberId, memberGoal) -> {
-            AgentRoleEnum memberRole;
-            try {
-                memberRole = AgentRoleEnum.fromString(memberId);
-            } catch (IllegalArgumentException e) {
-                log.warnf("[GROUP_CONSULT] Unknown role ID '%s' — skipping member", memberId);
-                return "[Skipped: unknown role '" + memberId + "']";
-            }
-            int maxIter = Math.max(1, memberRole.definition().maxIterations());
-            String memberSession = outerSessionId + AgentSentinels.DELEGATE_SESSION_SENTINEL + memberId + ":consult:"
-                    + System.currentTimeMillis();
-
-            AgentResult result = WorkspaceContext.run(
-                    memberSession,
-                    userId,
-                    chatId,
-                    ctx.autonomyLevel(),
-                    memberRole.toScopedName(),
-                    ctx.channelType(),
-                    ctx.channelPlatformId(),
-                    () -> agentLoop
-                            .get()
-                            .run(
-                                    memberSession,
-                                    memberRole.toScopedName(),
-                                    memberGoal,
-                                    reasoningEngine,
-                                    maxIter,
-                                    DelegatedMessageContextFactory.create(
-                                            memberSession,
-                                            userId,
-                                            chatId,
-                                            ctx.channelType(),
-                                            memberGoal,
-                                            memberRole.toScopedName(),
-                                            ctx.autonomyLevel())));
-
-            return switch (result) {
-                case AgentResult.Finished f -> f.answer();
-                case AgentResult.Failed fail -> "[Failed: " + fail.reason() + "]";
-                default -> "[No output]";
-            };
-        };
-
-        // Run parallel consultation
-        var consultResult = groupConsultationEngine.consultGroup(group.groupId(), goal, subTasks, runner);
-
-        auditService.record(
-                outerSessionId,
-                userId,
-                ctx.agentRole(),
-                SecurityEventType.DELEGATION_DISPATCHED,
-                String.format(
-                        "group_consult group=%s consulted=%d failed=%d",
-                        consultResult.groupId(), consultResult.membersConsulted(), consultResult.membersFailed()));
-
-        // Record analytics
-        var domains = taskClassifier.classify(goal);
-        groupAnalytics.recordOutcome(
-                consultResult.groupId(),
-                domains.stream().map(d -> d.name().toLowerCase(Locale.ROOT)).toList(),
-                consultResult.membersConsulted(),
-                consultResult.membersFailed(),
-                consultResult.hasUsefulResults());
-
-        if (!consultResult.hasUsefulResults()) {
-            log.warnf("[GROUP_CONSULT] No useful results from family — falling back to lead-only", leadRoleId);
-            return executeNormalDelegation(
-                    ctx, outerSessionId, leadRoleId, goal, targetRole, userId, chatId, depth, requestedPersona);
-        }
-
-        // Enhance the goal with family results and delegate to lead for synthesis
-        String enhancedGoal = goal + "\n\n" + consultResult.toSynthesisPrompt();
-        log.infof("[GROUP_CONSULT] Family consultation complete — delegating to %s for synthesis", leadRoleId);
-
-        return executeNormalDelegation(
-                ctx, outerSessionId, leadRoleId, enhancedGoal, targetRole, userId, chatId, depth, requestedPersona);
     }
 
     /**

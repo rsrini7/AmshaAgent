@@ -72,6 +72,68 @@ class DelegateToAgentToolDeepTest {
         assertNotNull(schema);
     }
 
+    @Test
+    void validateParameters_rejectsUnauthorizedNestedHostExecBeforeApproval() {
+        tool.roleRegistry = new RoleRegistry();
+
+        String validationError = tool.validateParameters(Map.of(
+                "agent", "shiva",
+                "goal", "Run this through host_exec: sudo shutdown -h now"));
+
+        assertNotNull(validationError);
+        assertTrue(validationError.contains("host_exec"));
+        assertTrue(validationError.contains("shiva"));
+    }
+
+    @Test
+    void validateParameters_allowsPermittedNestedHostExec() {
+        RoleRegistry registry = Mockito.mock(RoleRegistry.class);
+        Mockito.when(registry.resolvePermittedTools("shiva")).thenReturn(Set.of("host_exec"));
+
+        assertNull(DelegationCapabilityValidator.validate(
+                Map.of("agent", "shiva", "goal", "Use host_exec for the approved diagnostic"), registry));
+    }
+
+    @Test
+    void validateParameters_allowsDescriptiveOrdinaryToolMention() {
+        RoleRegistry registry = Mockito.mock(RoleRegistry.class);
+        Mockito.when(registry.resolvePermittedTools("shiva")).thenReturn(Set.of());
+
+        assertNull(DelegationCapabilityValidator.validate(
+                Map.of("agent", "shiva", "goal", "Review our github PR for wording"), registry));
+    }
+
+    @Test
+    void validateParameters_defersUnknownAgentToNormalization() {
+        RoleRegistry registry = Mockito.mock(RoleRegistry.class);
+        Mockito.when(registry.resolvePermittedTools("unknown-agent"))
+                .thenThrow(new IllegalArgumentException("unknown"));
+
+        assertNull(DelegationCapabilityValidator.validate(
+                Map.of("agent", "unknown-agent", "goal", "Use host_exec"), registry));
+    }
+
+    @Test
+    void validateParameters_respectsToolNameBoundaries() {
+        RoleRegistry registry = Mockito.mock(RoleRegistry.class);
+        Mockito.when(registry.resolvePermittedTools("shiva")).thenReturn(Set.of());
+
+        assertNull(DelegationCapabilityValidator.validate(
+                Map.of("agent", "shiva", "goal", "Use my_host_exec helper"), registry));
+    }
+
+    @Test
+    void validateParameters_rejectsNestedDelegation() {
+        RoleRegistry registry = Mockito.mock(RoleRegistry.class);
+        Mockito.when(registry.resolvePermittedTools("shiva")).thenReturn(Set.of());
+
+        String validationError = DelegationCapabilityValidator.validate(
+                Map.of("agent", "shiva", "goal", "Ask another role through garuda"), registry);
+
+        assertNotNull(validationError);
+        assertTrue(validationError.contains("garuda"));
+    }
+
     // ── stripSurroundingQuotes ───────────────────────────────────────────
 
     @Test

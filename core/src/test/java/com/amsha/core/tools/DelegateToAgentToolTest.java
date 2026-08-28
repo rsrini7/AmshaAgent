@@ -68,6 +68,9 @@ class DelegateToAgentToolTest {
     GroupConsultationEngine groupConsultationEngine;
 
     @Mock
+    GroupConsultationDelegator groupConsultationDelegator;
+
+    @Mock
     RoleRegistry roleRegistry;
 
     @Mock
@@ -88,8 +91,6 @@ class DelegateToAgentToolTest {
         DelegationProcessor dp = new DelegationProcessor();
         dp.groupConsultationService = groupConsultationService;
         tool.delegationProcessor = dp;
-        tool.groupConsultationService = groupConsultationService;
-        tool.groupConsultationEngine = groupConsultationEngine;
         Mockito.lenient().when(verificationGateInstance.isResolvable()).thenReturn(true);
         Mockito.lenient().when(verificationGateInstance.get()).thenReturn(verificationGate);
         tool.verificationGate = verificationGateInstance;
