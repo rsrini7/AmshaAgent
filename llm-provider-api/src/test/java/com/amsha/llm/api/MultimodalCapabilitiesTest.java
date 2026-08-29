@@ -81,6 +81,15 @@ class MultimodalCapabilitiesTest {
         MultimodalCapability llamaVision =
                 MultimodalCapabilities.defaultCapabilityForModel("ollama", "llama-3.2-11b-vision-instruct");
         assertTrue(llamaVision.isMultimodal());
+
+        assertTrue(MultimodalCapabilities.defaultCapabilityForModel("omlx", "Qwen2-VL-7B-Instruct")
+                .isMultimodal());
+        MultimodalCapability omlxVision = MultimodalCapabilities.defaultCapabilityForModel("omlx", "Qwen3.8-27B-4bit");
+        assertTrue(omlxVision.isMultimodal());
+        assertTrue(omlxVision.supportsType(AttachmentType.IMAGE));
+        assertFalse(omlxVision.supportsType(AttachmentType.AUDIO));
+        assertTrue(MultimodalCapabilities.defaultCapabilityForModel("generic-openai", "qwen2.5-vl-7b-instruct")
+                .isMultimodal());
     }
 
     @Test
@@ -99,6 +108,15 @@ class MultimodalCapabilitiesTest {
         assertEquals(
                 MultimodalCapability.TEXT_ONLY,
                 MultimodalCapabilities.defaultCapabilityForModel("generic-openai", "some-unrelated-vision-text"));
+        assertEquals(
+                MultimodalCapability.TEXT_ONLY,
+                MultimodalCapabilities.defaultCapabilityForModel("omlx", "Ornith-1.5-35B-A3B-MLX-4bit"));
+        assertEquals(
+                MultimodalCapability.TEXT_ONLY,
+                MultimodalCapabilities.defaultCapabilityForModel("omlx", "some-unknown-model"));
+        assertEquals(
+                MultimodalCapability.TEXT_ONLY,
+                MultimodalCapabilities.defaultCapabilityForModel("omlx", "Qwen3-8B-Instruct"));
     }
 
     @Test

@@ -9,6 +9,8 @@ import java.util.Objects;
 public abstract class AbstractInboundMessagePipeline {
 
     public static final String DEFAULT_MEDIA_PROMPT = "Please analyze the attached media.";
+    public static final String DEFAULT_AUDIO_PROMPT =
+            "Please transcribe the attached audio and answer using its spoken content.";
     private static final String INVALID_CHANNEL_MESSAGE_REPLY =
             "⚠️ Unable to process this message because its channel context is missing.";
 
@@ -65,7 +67,7 @@ public abstract class AbstractInboundMessagePipeline {
 
         String effectiveText = rawText != null
                 ? rawText
-                : (captionText != null ? captionText : (hasMedia ? DEFAULT_MEDIA_PROMPT : null));
+                : (captionText != null ? captionText : (hasMedia ? defaultMediaPrompt(channelMessage) : null));
 
         if (effectiveText == null) {
             logWarn("Received null or blank text message without attachments from chat %s - notifying user", chatId);
@@ -117,6 +119,13 @@ public abstract class AbstractInboundMessagePipeline {
      * Exposed for test verification. Production code should use the
      * {@link ProcessingLockManager} directly.
      */
+    private static String defaultMediaPrompt(ChannelMessage channelMessage) {
+        return channelMessage.attachments().stream()
+                        .anyMatch(attachment -> attachment != null && attachment.type() == AttachmentType.AUDIO)
+                ? DEFAULT_AUDIO_PROMPT
+                : DEFAULT_MEDIA_PROMPT;
+    }
+
     public boolean isProcessing(String chatId) {
         return lockManager.isLocked(chatId);
     }

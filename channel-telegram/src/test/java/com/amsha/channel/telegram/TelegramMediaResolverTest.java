@@ -55,9 +55,18 @@ class TelegramMediaResolverTest {
         other.setFileName("data.bin");
         other.setMimeType("application/octet-stream");
 
+        IncomingDocument genericPdf = new IncomingDocument();
+        genericPdf.setFileId("doc_pdf_2");
+        genericPdf.setFileName("generic.pdf");
+        genericPdf.setMimeType("application/octet-stream");
+
         assertEquals(AttachmentType.DOCUMENT_PDF, resolver.resolveDocument(pdf).type());
         assertEquals("application/pdf", resolver.resolveDocument(pdf).mimeType());
         assertEquals(AttachmentType.IMAGE, resolver.resolveDocument(image).type());
+        assertEquals(
+                AttachmentType.DOCUMENT_PDF,
+                resolver.resolveDocument(genericPdf).type());
+        assertEquals("application/pdf", resolver.resolveDocument(genericPdf).mimeType());
         assertEquals(AttachmentType.OTHER, resolver.resolveDocument(other).type());
     }
 
@@ -69,15 +78,23 @@ class TelegramMediaResolverTest {
         audio.setTitle("Song Title");
         audio.setMimeType("audio/mpeg");
 
+        IncomingAudio genericAudio = new IncomingAudio();
+        genericAudio.setFileId("audio_100");
+        genericAudio.setTitle("song.ogg");
+        genericAudio.setMimeType("application/octet-stream");
+
         IncomingVoice voice = new IncomingVoice();
         voice.setFileId("voice_88");
+        voice.setMimeType("application/octet-stream");
 
         MediaAttachment audioAttachment = resolver.resolveAudio(audio);
+        MediaAttachment genericAudioAttachment = resolver.resolveAudio(genericAudio);
         MediaAttachment voiceAttachment = resolver.resolveVoice(voice);
 
         assertEquals(AttachmentType.AUDIO, audioAttachment.type());
         assertEquals("Song Title", audioAttachment.fileName());
         assertEquals(-1L, audioAttachment.sizeBytes());
+        assertEquals("audio/ogg", genericAudioAttachment.mimeType());
         assertEquals("audio/ogg", voiceAttachment.mimeType());
         assertEquals("voice_voice_88.ogg", voiceAttachment.fileName());
     }

@@ -209,7 +209,7 @@ public final class MediaSecurityValidator {
         if (rawContentType == null || rawContentType.isBlank()) {
             throw OutboundHttpException.unsupportedMime("Response missing Content-Type header");
         }
-        String normalized = rawContentType.split(";")[0].trim().toLowerCase(Locale.ROOT);
+        String normalized = normalizeMimeType(rawContentType);
         if (!MediaBudgetLimits.ALLOWED_MIME_TYPES.contains(normalized)) {
             throw OutboundHttpException.unsupportedMime("Unsupported media MIME type: " + normalized + " (allowed: "
                     + MediaBudgetLimits.ALLOWED_MIME_TYPES + ")");
@@ -228,6 +228,30 @@ public final class MediaSecurityValidator {
                     "MIME type " + normalized + " does not match expected attachment type " + expectedType);
         }
         return normalized;
+    }
+
+    /**
+     * Validates a Telegram file response, whose binary endpoint may use the generic
+     * {@code application/octet-stream} transport type for a known media payload.
+     *
+     * <p>The fallback is deliberately limited to the adapter-declared MIME type. The
+     * caller must already have validated the canonical Telegram reference, and the
+     * downloaded bytes must still pass {@link #validateMagicBytes(byte[], String)}.</p>
+     */
+    static String validateTelegramResponseMimeType(
+            String rawContentType, String declaredMimeType, AttachmentType expectedType) {
+        if ("application/octet-stream".equals(normalizeMimeType(rawContentType))
+                && expectedType != null
+                && expectedType != AttachmentType.OTHER) {
+            return validateMimeType(declaredMimeType, expectedType);
+        }
+        return validateMimeType(rawContentType, expectedType);
+    }
+
+    private static String normalizeMimeType(String rawContentType) {
+        return rawContentType == null
+                ? ""
+                : rawContentType.split(";", 2)[0].trim().toLowerCase(Locale.ROOT);
     }
 
     /**

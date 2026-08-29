@@ -74,7 +74,7 @@ public class TelegramMediaResolver {
             return null;
         }
         String fileName = safeFileName(audio.getTitle(), "audio_" + fileId + ".mp3");
-        String mimeType = normalizeMimeType(audio.getMimeType(), "audio/mpeg");
+        String mimeType = normalizeMimeType(audio.getMimeType(), fallbackAudioMimeType(fileName));
         return resolveMedia(fileId, AttachmentType.AUDIO, mimeType, fileName, knownSize(audio.getFileSize()));
     }
 
@@ -155,7 +155,15 @@ public class TelegramMediaResolver {
         if (mimeType == null || mimeType.isBlank()) {
             return fallback;
         }
-        return mimeType.split(";", 2)[0].trim().toLowerCase(Locale.ROOT);
+        String normalized = mimeType.split(";", 2)[0].trim().toLowerCase(Locale.ROOT);
+        return "application/octet-stream".equals(normalized) && !"application/octet-stream".equals(fallback)
+                ? fallback
+                : normalized;
+    }
+
+    private static String fallbackAudioMimeType(String fileName) {
+        String detected = detectMimeType(fileName);
+        return detected.startsWith("audio/") ? detected : "audio/mpeg";
     }
 
     private static String safeFileName(String fileName, String fallback) {

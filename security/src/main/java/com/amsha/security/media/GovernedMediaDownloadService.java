@@ -325,7 +325,7 @@ public class GovernedMediaDownloadService implements MediaDownloadPort {
         try {
             String rawContentType =
                     response.headers().firstValue("content-type").orElse(null);
-            String validMime = MediaSecurityValidator.validateMimeType(rawContentType, attachment.type());
+            String validMime = resolveResponseMimeType(rawContentType, attachment);
             long limitBytes = MediaBudgetLimits.resolveLimitForType(
                     attachment.type(), maxImageSizeMb * 1024L * 1024L, maxDocSizeMb * 1024L * 1024L);
             limitBytes = Math.min(limitBytes, maximumBytes);
@@ -334,6 +334,18 @@ public class GovernedMediaDownloadService implements MediaDownloadPort {
             closeQuietly(responseBody);
             throw e;
         }
+    }
+
+    static String resolveResponseMimeType(String rawContentType, MediaAttachment attachment) {
+        Objects.requireNonNull(attachment, "attachment must not be null");
+        URI sourceUri = attachment.sourceUri();
+        if (sourceUri != null && "telegram".equalsIgnoreCase(sourceUri.getScheme())) {
+            // GovernedTelegramMediaResolver validates the canonical Telegram reference before
+            // this package-private download method is reached.
+            return MediaSecurityValidator.validateTelegramResponseMimeType(
+                    rawContentType, attachment.mimeType(), attachment.type());
+        }
+        return MediaSecurityValidator.validateMimeType(rawContentType, attachment.type());
     }
 
     DownloadedMedia streamResponseBody(

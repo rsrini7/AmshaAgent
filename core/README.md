@@ -241,6 +241,8 @@ When channel messages contain media attachments (`MediaAttachment`), `Multimodal
 - `AUDIO` → `AudioContent.from(Audio)`
 - `DOCUMENT_PDF` → `PdfFileContent.from(PdfFile)`
 
+OMLX's recognized local Qwen vision models are image-only. Audio transcription requires an audio-capable model such as Gemini: use `AMSHA_LLM_PROVIDER=gemini` with `AMSHA_GEMINI_API_KEY`, or set `AMSHA_INFINITE_LOOP_LLM_PROVIDERS=gemini` when using the infinite-loop provider. A composite containing OMLX safely intersects away `AUDIO`.
+
 If the active model (or candidate model in failover routing) does not support a modality, or if an attachment exceeds `maxFileSize`, `maxMediaPerRequest`, or the configured cumulative turn budget (50 MiB by default), `MultimodalMessageMapper` automatically falls back to clean, structured text placeholders:
 - `[Attached Document: <filename> - Extracted Text:\n<text>]` (for PDF documents when native PDF is unsupported)
 - `[Attached Media: <filename> (<mime>, <size>) - Model <name> does not support <type> modality]`

@@ -196,6 +196,43 @@ class MediaSecurityValidatorTest {
     }
 
     @Test
+    @DisplayName("Telegram octet-stream responses use the declared allowlisted image or audio MIME")
+    void validateTelegramResponseMimeType_acceptsKnownImageAndAudio() {
+        assertEquals(
+                "image/jpeg",
+                MediaSecurityValidator.validateTelegramResponseMimeType(
+                        "application/octet-stream; charset=binary", "image/jpeg", AttachmentType.IMAGE));
+        assertEquals(
+                "audio/mpeg",
+                MediaSecurityValidator.validateTelegramResponseMimeType(
+                        "application/octet-stream", "audio/mpeg", AttachmentType.AUDIO));
+        assertEquals(
+                "audio/ogg",
+                MediaSecurityValidator.validateTelegramResponseMimeType(
+                        "application/octet-stream", "audio/ogg", AttachmentType.AUDIO));
+    }
+
+    @Test
+    @DisplayName("Telegram octet-stream fallback remains fail-closed for unknown or mismatched declarations")
+    void validateTelegramResponseMimeType_rejectsUnknownOrMismatchedDeclaration() {
+        assertThrows(
+                OutboundHttpException.class,
+                () -> MediaSecurityValidator.validateTelegramResponseMimeType(
+                        "application/octet-stream", "application/octet-stream", AttachmentType.IMAGE));
+        assertThrows(
+                OutboundHttpException.class,
+                () -> MediaSecurityValidator.validateTelegramResponseMimeType(
+                        "application/octet-stream", "image/jpeg", AttachmentType.AUDIO));
+        assertThrows(
+                OutboundHttpException.class,
+                () -> MediaSecurityValidator.validateTelegramResponseMimeType(
+                        "application/octet-stream", "image/jpeg", AttachmentType.OTHER));
+        assertThrows(
+                OutboundHttpException.class,
+                () -> MediaSecurityValidator.validateMimeType("application/octet-stream", AttachmentType.IMAGE));
+    }
+
+    @Test
     @DisplayName("validateMagicBytes recognizes valid headers for PNG, JPEG, GIF, PDF, WebP, MPEG, WAV, OGG")
     void validateMagicBytes_validHeaders() {
         byte[] png = new byte[] {(byte) 0x89, 'P', 'N', 'G', 0x0D, 0x0A, 0x1A, 0x0A};

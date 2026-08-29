@@ -22,7 +22,7 @@ public final class MultimodalCapabilities {
     private static final long SIZE_20_MB = 20L * 1024L * 1024L;
     private static final long SIZE_25_MB = 25L * 1024L * 1024L;
     private static final Set<String> OPEN_WEIGHT_PROVIDERS =
-            Set.of("generic-openai", "huggingface", "llamacpp", "mistral", "nvidia", "ollama", "openrouter");
+            Set.of("generic-openai", "huggingface", "llamacpp", "mistral", "nvidia", "ollama", "omlx", "openrouter");
     private static final Set<String> OPENROUTER_GEMINI_VENDORS = Set.of("google", "google-ai");
     private static final Set<String> OPENROUTER_ANTHROPIC_VENDORS = Set.of("anthropic");
     private static final Set<String> OPENROUTER_OPENAI_VENDORS = Set.of("openai");
@@ -167,6 +167,9 @@ public final class MultimodalCapabilities {
                 || family.startsWith("pixtral")
                 || family.startsWith("qwen-vl")
                 || family.startsWith("qwen2-vl")
+                || family.startsWith("qwen2.5-vl")
+                || family.startsWith("qwen3-vl")
+                || family.startsWith("qwen3.8")
                 || family.startsWith("minicpm-v")
                 || family.startsWith("llama-3.2-11b-vision")
                 || family.startsWith("llama-3.2-90b-vision");

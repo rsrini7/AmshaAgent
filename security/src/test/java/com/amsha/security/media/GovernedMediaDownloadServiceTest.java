@@ -253,6 +253,61 @@ class GovernedMediaDownloadServiceTest {
     }
 
     @Test
+    @DisplayName("Telegram generic binary response uses declared image and audio MIME")
+    void resolveResponseMimeType_telegramOctetStreamUsesDeclaredMediaType() {
+        MediaAttachment image = MediaAttachment.ofUri(
+                "att-tg-image",
+                AttachmentType.IMAGE,
+                "image/jpeg",
+                "photo.jpg",
+                -1L,
+                URI.create("telegram://file/photo_123"),
+                Map.of());
+        MediaAttachment mpeg = MediaAttachment.ofUri(
+                "att-tg-mpeg",
+                AttachmentType.AUDIO,
+                "audio/mpeg",
+                "audio.mp3",
+                -1L,
+                URI.create("telegram://file/audio_123"),
+                Map.of());
+        MediaAttachment ogg = MediaAttachment.ofUri(
+                "att-tg-ogg",
+                AttachmentType.AUDIO,
+                "audio/ogg",
+                "voice.ogg",
+                -1L,
+                URI.create("telegram://file/voice_123"),
+                Map.of());
+
+        assertEquals(
+                "image/jpeg",
+                GovernedMediaDownloadService.resolveResponseMimeType(
+                        "application/octet-stream; charset=binary", image));
+        assertEquals(
+                "audio/mpeg", GovernedMediaDownloadService.resolveResponseMimeType("application/octet-stream", mpeg));
+        assertEquals(
+                "audio/ogg", GovernedMediaDownloadService.resolveResponseMimeType("application/octet-stream", ogg));
+    }
+
+    @Test
+    @DisplayName("Generic HTTP octet-stream response remains rejected")
+    void resolveResponseMimeType_genericHttpOctetStreamRemainsRejected() {
+        MediaAttachment external = MediaAttachment.ofUri(
+                "att-external",
+                AttachmentType.IMAGE,
+                "image/jpeg",
+                "photo.jpg",
+                -1L,
+                URI.create("https://example.com/photo.jpg"),
+                Map.of());
+
+        assertThrows(
+                OutboundHttpException.class,
+                () -> GovernedMediaDownloadService.resolveResponseMimeType("application/octet-stream", external));
+    }
+
+    @Test
     @DisplayName("Null attachment is rejected")
     void download_nullAttachment_rejected() {
         assertThrows(NullPointerException.class, () -> service.download(null, "user-1", true));

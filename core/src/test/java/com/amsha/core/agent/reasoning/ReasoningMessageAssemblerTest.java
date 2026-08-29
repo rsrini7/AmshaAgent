@@ -25,6 +25,7 @@ import jakarta.enterprise.inject.Instance;
 import jakarta.enterprise.inject.spi.BeanManager;
 
 import java.lang.reflect.Field;
+import java.net.URI;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -403,5 +404,168 @@ class ReasoningMessageAssemblerTest {
         assertEquals(2, userMessages.get(0).contents().size());
         assertInstanceOf(ImageContent.class, userMessages.get(0).contents().get(1));
         assertFalse(preApproved.get(), "Autonomy level must not masquerade as HITL approval");
+    }
+
+    @Test
+    void telegramUserAttachmentCarriesScopedMediaAuthorization() throws Exception {
+        AtomicBoolean preApproved = new AtomicBoolean(false);
+        ReasoningMessageAssembler assembler = createMediaAssembler(preApproved);
+        AgentExecutionContext context = mediaContext(MediaAttachment.ofUri(
+                "tg-1",
+                AttachmentType.IMAGE,
+                "image/png",
+                "image.png",
+                3L,
+                URI.create("telegram://file/file-1"),
+                Map.of()));
+
+        assembler.assemble(
+                context, "skill:test", "what is this", List.of(), "system prompt", Set.of(), false, false, false);
+
+        assertTrue(preApproved.get(), "Verified Telegram media should carry channel-origin authorization");
+    }
+
+    @Test
+    void nonTelegramMediaDoesNotInheritTelegramAuthorization() throws Exception {
+        AtomicBoolean preApproved = new AtomicBoolean(true);
+        ReasoningMessageAssembler assembler = createMediaAssembler(preApproved);
+        AgentExecutionContext context = mediaContext(MediaAttachment.ofUri(
+                "remote-1",
+                AttachmentType.IMAGE,
+                "image/png",
+                "image.png",
+                3L,
+                URI.create("https://example.com/image.png"),
+                Map.of()));
+
+        assembler.assemble(
+                context, "skill:test", "what is this", List.of(), "system prompt", Set.of(), false, false, false);
+
+        assertFalse(preApproved.get(), "Generic media must remain behind outbound HITL");
+    }
+
+    @Test
+    void nonTelegramChannelDoesNotInheritTelegramAuthorization() throws Exception {
+        AtomicBoolean preApproved = new AtomicBoolean(true);
+        ReasoningMessageAssembler assembler = createMediaAssembler(preApproved);
+        AgentExecutionContext context = mediaContext(
+                "cli",
+                List.of(MediaAttachment.ofUri(
+                        "tg-1",
+                        AttachmentType.IMAGE,
+                        "image/png",
+                        "image.png",
+                        3L,
+                        URI.create("telegram://file/file-1"),
+                        Map.of())));
+
+        assembleMedia(assembler, context);
+
+        assertFalse(preApproved.get(), "Telegram-shaped media on another channel must remain governed");
+    }
+
+    @Test
+    void mixedTelegramAndGenericMediaFailsClosedForAuthorization() throws Exception {
+        AtomicBoolean preApproved = new AtomicBoolean(true);
+        ReasoningMessageAssembler assembler = createMediaAssembler(preApproved);
+        AgentExecutionContext context = mediaContext(
+                "TELEGRAM",
+                List.of(
+                        MediaAttachment.ofUri(
+                                "tg-1",
+                                AttachmentType.IMAGE,
+                                "image/png",
+                                "telegram.png",
+                                3L,
+                                URI.create("telegram://file/file-1"),
+                                Map.of()),
+                        MediaAttachment.ofUri(
+                                "remote-1",
+                                AttachmentType.IMAGE,
+                                "image/png",
+                                "remote.png",
+                                3L,
+                                URI.create("https://example.com/image.png"),
+                                Map.of())));
+
+        assembleMedia(assembler, context);
+
+        assertFalse(preApproved.get(), "Mixed-origin media must not inherit Telegram authorization");
+    }
+
+    @Test
+    void malformedTelegramReferenceFailsClosedForAuthorization() throws Exception {
+        AtomicBoolean preApproved = new AtomicBoolean(true);
+        ReasoningMessageAssembler assembler = createMediaAssembler(preApproved);
+        AgentExecutionContext context = mediaContext(MediaAttachment.ofUri(
+                "tg-1",
+                AttachmentType.IMAGE,
+                "image/png",
+                "image.png",
+                3L,
+                URI.create("telegram://not-file/file-1"),
+                Map.of()));
+
+        assembleMedia(assembler, context);
+
+        assertFalse(preApproved.get(), "Non-canonical Telegram references must remain governed");
+    }
+
+    private static void assembleMedia(ReasoningMessageAssembler assembler, AgentExecutionContext context) {
+        assembler.assemble(
+                context, "skill:test", "what is this", List.of(), "system prompt", Set.of(), false, false, false);
+    }
+
+    private static ReasoningMessageAssembler createMediaAssembler(AtomicBoolean preApproved) throws Exception {
+        ChatHistoryAssembler historyAssembler = mock(ChatHistoryAssembler.class);
+        when(historyAssembler.assemble(eq("sess-1"), eq("what is this"), anyList()))
+                .thenReturn(List.of(UserMessage.userMessage("what is this")));
+        ReasoningMessageAssembler assembler = createAssembler(historyAssembler);
+
+        LlmProviderPort mockLlmPort = mock(LlmProviderPort.class);
+        when(mockLlmPort.multimodalCapability(any()))
+                .thenReturn(MultimodalCapabilities.defaultCapabilityForModel("openai", "gpt-4o"));
+        Instance<LlmProviderPort> llmInstance = mock(Instance.class);
+        when(llmInstance.isUnsatisfied()).thenReturn(false);
+        when(llmInstance.get()).thenReturn(mockLlmPort);
+        injectField(assembler, "llmProviderPortInstance", llmInstance);
+
+        MediaDownloadPort downloadPort = (attachment, _, approved) -> {
+            preApproved.set(approved);
+            return DownloadedMedia.ofInline(
+                    attachment.attachmentId(),
+                    attachment.type(),
+                    attachment.mimeType(),
+                    attachment.fileName(),
+                    new byte[] {(byte) 0x89, 'P', 'N', 'G'});
+        };
+        Instance<MediaDownloadPort> mediaInstance = mock(Instance.class);
+        when(mediaInstance.isResolvable()).thenReturn(true);
+        when(mediaInstance.isUnsatisfied()).thenReturn(false);
+        when(mediaInstance.get()).thenReturn(downloadPort);
+        injectField(assembler, "mediaDownloadPortInstance", mediaInstance);
+        return assembler;
+    }
+
+    private static AgentExecutionContext mediaContext(MediaAttachment attachment) {
+        return mediaContext("TELEGRAM", List.of(attachment));
+    }
+
+    private static AgentExecutionContext mediaContext(String channelType, List<MediaAttachment> attachments) {
+        return new AgentExecutionContext(
+                "sess-1",
+                "user-1",
+                "chat-1",
+                "skill:test",
+                "what is this",
+                AutonomyLevel.FULL,
+                StructuredOutputMode.NATIVE,
+                10,
+                0,
+                channelType,
+                "123",
+                null,
+                Map.of(),
+                attachments);
     }
 }

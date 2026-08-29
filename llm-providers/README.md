@@ -46,6 +46,7 @@ Provider models declare or dynamically resolve multimodal capabilities via `Mult
 - **Gemini**: `gemini-1.5-pro`, `gemini-2.0-flash`, etc. support `IMAGE`, `AUDIO`, and `DOCUMENT_PDF` up to 25 MiB, up to 16 media items per request.
 - **Anthropic**: `claude-3-5-sonnet`, `claude-3-haiku` support `IMAGE` and `DOCUMENT_PDF` up to 25 MiB, up to 10 media items per request.
 - **Open-Weight Models**: `llava`, `pixtral`, etc. support `IMAGE` up to 10 MiB, up to 5 images per request.
+- **OMLX**: Recognized local Qwen vision families are `IMAGE`-only in this contract; audio is not inferred from an arbitrary model name. To transcribe Telegram audio, select an audio-capable Gemini model with `AMSHA_LLM_PROVIDER=gemini` and `AMSHA_GEMINI_API_KEY`, or configure only `gemini` in `AMSHA_INFINITE_LOOP_LLM_PROVIDERS`. Do not combine OMLX with Gemini for this turn because the safe composite intersection removes `AUDIO`.
 - **Text-Only Models & Failover**: Models without vision/audio capabilities default to `MultimodalCapability.TEXT_ONLY`. When a turn contains media attachments, `MultimodalMessageMapper` in `amsha-core` automatically provides structured fallback text placeholders so the turn completes safely.
 
 Provider URL capability declarations do not authorize the mapper to forward source URLs. URI-backed attachments are fetched only through the governed media port and are forwarded as validated inline bytes; URL-only transport currently degrades to a text placeholder.

@@ -205,7 +205,8 @@ class MultimodalMessageMapperTest {
         assertInstanceOf(TextContent.class, contents.getFirst());
         String fallbackText = ((TextContent) contents.getFirst()).text();
         assertTrue(fallbackText.contains("[Attached Media: podcast.mp3 (audio/mpeg,"));
-        assertTrue(fallbackText.contains("does not support AUDIO modality]"));
+        assertTrue(fallbackText.contains("does not support AUDIO modality."));
+        assertTrue(fallbackText.contains("Select an audio-capable model"));
     }
 
     @Test

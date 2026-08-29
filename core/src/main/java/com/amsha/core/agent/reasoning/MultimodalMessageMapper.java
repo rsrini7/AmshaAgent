@@ -391,9 +391,12 @@ public final class MultimodalMessageMapper {
                 return String.format("[Attached Document: %s - Extracted Text:\n%s]", name, extracted);
             }
         }
+        String guidance = attachment.type() == AttachmentType.AUDIO
+                ? ". Select an audio-capable model, such as Gemini, to transcribe it."
+                : "";
         return String.format(
-                "[Attached Media: %s (%s, %s) - Model %s does not support %s modality]",
-                name, attachment.mimeType(), size, modelName, attachment.type());
+                "[Attached Media: %s (%s, %s) - Model %s does not support %s modality%s]",
+                name, attachment.mimeType(), size, modelName, attachment.type(), guidance);
     }
 
     private static String fallbackTransportUnsupported(MediaAttachment attachment, String modelName) {
