@@ -4,11 +4,18 @@ import java.net.InetAddress;
 import java.net.URI;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 import com.amsha.channel.api.AttachmentType;
+import com.amsha.core.scope.ContextAwareExecutorService;
 import com.amsha.security.api.MediaBudgetLimits;
 import com.amsha.security.http.OutboundHttpException;
 
@@ -45,25 +52,60 @@ public final class MediaSecurityValidator {
      * @throws OutboundHttpException if the target violates safety constraints
      */
     public static void validateTarget(URI uri) {
+        validateTarget(uri, Duration.ofSeconds(MediaBudgetLimits.DEFAULT_CONNECT_TIMEOUT_SECONDS));
+    }
+
+    /** Performs target validation with a bounded DNS resolution window. */
+    public static void validateTarget(URI uri, Duration dnsTimeout) {
         Objects.requireNonNull(uri, "uri must not be null");
         String host = validateHttpUri(uri);
-        validateHostDns(host);
+        validateHostDns(host, dnsTimeout);
     }
 
     /**
      * Resolves the host via DNS and validates all returned IP addresses against prohibited ranges.
      */
     public static void validateHostDns(String host) {
+        validateHostDns(host, Duration.ofSeconds(MediaBudgetLimits.DEFAULT_CONNECT_TIMEOUT_SECONDS));
+    }
+
+    /** Resolves and validates a host without allowing DNS resolution to run indefinitely. */
+    public static void validateHostDns(String host, Duration dnsTimeout) {
+        resolveAndValidateHost(host, dnsTimeout);
+    }
+
+    /** Resolves, validates, and returns the JIT address set for the governed transport. */
+    public static InetAddress[] resolveAndValidateHost(String host, Duration dnsTimeout) {
         String normalized = host.startsWith("[") && host.endsWith("]") ? host.substring(1, host.length() - 1) : host;
 
-        try {
-            InetAddress[] addresses = InetAddress.getAllByName(normalized);
+        if (dnsTimeout == null || dnsTimeout.isZero() || dnsTimeout.isNegative()) {
+            throw new IllegalArgumentException("dnsTimeout must be positive");
+        }
+        try (ContextAwareExecutorService resolverExecutor =
+                new ContextAwareExecutorService(Executors.newVirtualThreadPerTaskExecutor())) {
+            Future<InetAddress[]> resolution = resolverExecutor.submit(() -> InetAddress.getAllByName(normalized));
+            InetAddress[] addresses;
+            try {
+                long timeoutMillis = Math.max(1L, dnsTimeout.toMillis());
+                addresses = resolution.get(timeoutMillis, TimeUnit.MILLISECONDS);
+            } catch (TimeoutException _) {
+                resolution.cancel(true);
+                throw OutboundHttpException.timeout("DNS resolution timed out for media target");
+            } catch (InterruptedException e) {
+                resolution.cancel(true);
+                Thread.currentThread().interrupt();
+                throw OutboundHttpException.dns("DNS resolution interrupted for media target");
+            } catch (ExecutionException e) {
+                resolution.cancel(true);
+                throw OutboundHttpException.dns("DNS resolution failed for media target");
+            }
             if (addresses.length == 0) {
                 throw OutboundHttpException.dns("DNS resolution returned no addresses for " + host);
             }
             for (InetAddress addr : addresses) {
                 validateAddress(addr, host);
             }
+            return addresses;
         } catch (OutboundHttpException e) {
             throw e;
         } catch (Exception _) {

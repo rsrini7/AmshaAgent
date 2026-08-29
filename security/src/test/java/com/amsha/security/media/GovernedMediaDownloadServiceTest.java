@@ -29,6 +29,7 @@ import com.amsha.security.api.DownloadedMedia;
 import com.amsha.security.api.OutboundPolicyDecision;
 import com.amsha.security.api.OutboundPurpose;
 import com.amsha.security.http.OutboundHttpException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sun.net.httpserver.HttpServer;
 
 import org.junit.jupiter.api.AfterEach;
@@ -62,6 +63,8 @@ class GovernedMediaDownloadServiceTest {
         service = new GovernedMediaDownloadService();
         service.policyService = policyService;
         service.auditService = auditService;
+        service.telegramResolver = new GovernedTelegramMediaResolver(
+                "mock-telegram-token", "https://api.telegram.org", policyService, new ObjectMapper());
         service.dataDir = "data";
         service.maxImageSizeMb = 10;
         service.maxDocSizeMb = 25;
@@ -236,8 +239,8 @@ class GovernedMediaDownloadServiceTest {
     }
 
     @Test
-    @DisplayName("Telegram URI scheme rejects direct HTTP download and requires channel resolution")
-    void download_telegramUri_requiresChannelResolution() {
+    @DisplayName("Telegram URI scheme fails closed when no valid bot token is configured")
+    void download_telegramUri_failsClosedWithoutBotToken() {
         URI tgUri = URI.create("telegram://file/AgACAgUAAxkBAAIC1");
         MediaAttachment attachment =
                 MediaAttachment.ofUri("att-tg", AttachmentType.IMAGE, "image/jpeg", "tg.jpg", 100L, tgUri, Map.of());
@@ -245,7 +248,7 @@ class GovernedMediaDownloadServiceTest {
         OutboundHttpException ex =
                 assertThrows(OutboundHttpException.class, () -> service.download(attachment, "user-1", true));
         assertEquals(OutboundHttpException.Category.POLICY_DENIED, ex.category());
-        assertTrue(ex.getMessage().contains("Telegram media references"));
+        assertTrue(ex.getMessage().contains("no valid bot token configured"));
     }
 
     @Test

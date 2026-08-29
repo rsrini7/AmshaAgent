@@ -16,6 +16,7 @@ This is an **impl-tier** module: it depends on `amsha-security-api` and on `amsh
 | `StandardAutonomyPolicy` | Default `AutonomyLevel` evaluation |
 | `BootstrapCredentialIssuer` / `DevSecretSeeder` | Bootstrap credentials and optional dev-secret seeding |
 | `GovernedMediaDownloadService` | Implementation of `MediaDownloadPort` with streaming size limits, SSRF, and redirect revalidation |
+| `GovernedTelegramMediaResolver` | Governed resolution of opaque `telegram://file/<file_id>` media references via Bot API with strict path/host validation and token scrubbing |
 | `MediaSecurityValidator` | SSRF/DNS rebinding prevention, IP validation, and MIME allowlist checks |
 
 ## Configuration Properties
@@ -29,6 +30,8 @@ This is an **impl-tier** module: it depends on `amsha-security-api` and on `amsh
 | `amsha.media.max-total-payload-mb` | `50` | Maximum total payload in megabytes across all attachments in a single turn. |
 | `amsha.media.connect-timeout-seconds` | `10` | Governed HTTP connect timeout in seconds for media downloads. |
 | `amsha.media.read-timeout-seconds` | `30` | Governed HTTP read timeout in seconds for media downloads. |
+| `amsha.channel.telegram.bot-token` | `""` | Telegram Bot token for resolving and downloading `telegram://` media. |
+| `amsha.channel.telegram.base-uri` | `https://api.telegram.org` | Telegram Bot API base URI for `getFile` and file downloads. |
 
 ## Downstream Usage
 

@@ -443,6 +443,7 @@ schema) and must match the model used by every active provider.
 | `AMSHA_TELEGRAM_ENABLED` | `false` | Enable Telegram bot |
 | `AMSHA_TELEGRAM_ALLOWED_USER_IDS` | — | Comma-separated numeric Telegram user IDs |
 | `AMSHA_TELEGRAM_ALLOWED_USERS` | `mock-telegram-user` | Comma-separated @usernames |
+| `AMSHA_TELEGRAM_BASE_URI` | `https://api.telegram.org` | Telegram Bot API base URI for getFile and file downloads |
 | `AMSHA_CHANNEL_TELEGRAM_MAX_LENGTH` | `4096` | Max Telegram message length |
 
 ## MCP
@@ -579,7 +580,7 @@ Governed, streaming-validated media downloads for multimodal attachments (`Media
 | `AMSHA_MEDIA_CONNECT_TIMEOUT_SECONDS` | `10` | Governed HTTP connect timeout in seconds (`GovernedHttpClient` via `OutboundHttpPolicyService`). |
 | `AMSHA_MEDIA_READ_TIMEOUT_SECONDS` | `30` | Governed HTTP read timeout in seconds; streaming read loop enforces size incrementally, not after buffering. |
 
-Constants and port live in `amsha-security-api` (`MediaBudgetLimits`, `MediaDownloadPort`, `DownloadedMedia`); implementation and `MediaSecurityValidator` (SSRF/DNS, redirect revalidation, IP blocklist) live in `amsha-security`. Channel media types: `ChannelMessage` → `MediaAttachment` → `DownloadedMedia` → tool context (`OutboundPurpose.MEDIA_DOWNLOAD`). Telegram currently emits opaque `telegram://file/<file_id>` references and safely degrades until a governed source resolver is added. See [SECURITY.md](./SECURITY.md#governed-media-download) and [CHANNEL_SPI.md](./CHANNEL_SPI.md#multimodal-media).
+Constants and port live in `amsha-security-api` (`MediaBudgetLimits`, `MediaDownloadPort`, `DownloadedMedia`); implementation and `MediaSecurityValidator` (SSRF/DNS, redirect revalidation, IP blocklist) live in `amsha-security`. Channel media types: `ChannelMessage` → `MediaAttachment` → `DownloadedMedia` → tool context (`OutboundPurpose.MEDIA_DOWNLOAD`). Telegram emits opaque `telegram://file/<file_id>` references resolved through `GovernedTelegramMediaResolver`. See [SECURITY.md](./SECURITY.md#governed-media-download) and [CHANNEL_SPI.md](./CHANNEL_SPI.md#multimodal-media).
 
 ## Retry
 

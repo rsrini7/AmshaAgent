@@ -30,6 +30,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
 import com.amsha.channel.api.AttachmentType;
@@ -347,12 +348,16 @@ class ReasoningMessageAssemblerTest {
         when(instanceMock.get()).thenReturn(mockLlmPort);
         injectField(assembler, "llmProviderPortInstance", instanceMock);
 
-        MediaDownloadPort downloadPort = (attachment, _, _) -> DownloadedMedia.ofInline(
-                attachment.attachmentId(),
-                attachment.type(),
-                attachment.mimeType(),
-                attachment.fileName(),
-                attachment.inlineData());
+        AtomicBoolean preApproved = new AtomicBoolean(true);
+        MediaDownloadPort downloadPort = (attachment, _, approved) -> {
+            preApproved.set(approved);
+            return DownloadedMedia.ofInline(
+                    attachment.attachmentId(),
+                    attachment.type(),
+                    attachment.mimeType(),
+                    attachment.fileName(),
+                    attachment.inlineData());
+        };
         Instance<MediaDownloadPort> mediaInstance = mock(Instance.class);
         when(mediaInstance.isUnsatisfied()).thenReturn(false);
         when(mediaInstance.get()).thenReturn(downloadPort);
@@ -396,5 +401,6 @@ class ReasoningMessageAssemblerTest {
         assertEquals(1, userMessages.size());
         assertEquals(2, userMessages.get(0).contents().size());
         assertInstanceOf(ImageContent.class, userMessages.get(0).contents().get(1));
+        assertFalse(preApproved.get(), "Autonomy level must not masquerade as HITL approval");
     }
 }

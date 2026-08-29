@@ -92,7 +92,7 @@ Outbound HTTP MCP connections may carry credential headers (API keys, bearer tok
 
 | Autonomy Level | Behavior |
 |---|---|
-| `FULL` | All tools execute without approval |
+| `FULL` | Non-sensitive tools execute without approval; `NETWORK_OUTBOUND`, `EXECUTE_SHELL`, and governed media downloads remain HITL-gated |
 | `SUPERVISED` (default) | Sensitive operations (`NETWORK_OUTBOUND`, `EXECUTE_SHELL`) pause for approval |
 | `READONLY` | Only read operations allowed; all writes blocked |
 
@@ -140,7 +140,7 @@ Amsha Agent adopts an **OIDC-first identity model with API-key operator fallback
 
 ## Governed Media Download
 
-Multimodal channel messages may carry `MediaAttachment` (image, document, audio) references that are **never** fetched by the channel adapter. Fetching is delegated to the governed `MediaDownloadPort` → `GovernedMediaDownloadService` (`amsha-security`, `OutboundPurpose.MEDIA_DOWNLOAD`). Telegram currently emits opaque `telegram://file/<file_id>` references; unresolved provider-specific references safely degrade until a governed Telegram source resolver is added:
+Multimodal channel messages may carry `MediaAttachment` (image, document, audio) references that are **never** fetched by the channel adapter. Fetching is delegated to the governed `MediaDownloadPort` → `GovernedMediaDownloadService` (`amsha-security`, `OutboundPurpose.MEDIA_DOWNLOAD`), which resolves opaque `telegram://file/<file_id>` references through `GovernedTelegramMediaResolver`:
 
 * **Streaming size enforcement** — `MediaBudgetLimits` defaults (`10 MiB` image, `25 MiB` document, `50 MiB` total per turn) checked incrementally during streaming; oversize fails closed before full buffering. MIME allowlist (`image/png`, `image/jpeg`, `image/webp`, `image/gif`, `application/pdf`, `audio/mpeg`, `audio/wav`, `audio/ogg`) is validated against `Content-Type`.
 * **SSRF / DNS rebinding** — `MediaSecurityValidator` blocks loopback (`127.0.0.0/8`, `::1`), link-local (`169.254.0.0/16`, `fe80::/10`), private (`10/8`, `172.16/12`, `192.168/16`), and metadata (`169.254.169.254`) targets on every hop, including `Location` redirects (max redirects, revalidated per hop). Hostname → IP resolved via `InetAddress` and re-checked.

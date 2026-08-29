@@ -839,6 +839,7 @@ amsha:
     telegram:
       enabled: "${AMSHA_TELEGRAM_ENABLED:false}"
       bot-token: ${TELEGRAM_BOT_TOKEN:mock-telegram-token}
+      base-uri: "${AMSHA_TELEGRAM_BASE_URI:https://api.telegram.org}"
       default-autonomy-level: SUPERVISED
       allowed-user-ids: "${AMSHA_TELEGRAM_ALLOWED_USER_IDS:}"
       allowed-users: "${AMSHA_TELEGRAM_ALLOWED_USERS:mock-telegram-user}"

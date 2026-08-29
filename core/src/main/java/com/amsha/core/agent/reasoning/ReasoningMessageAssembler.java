@@ -219,6 +219,8 @@ public class ReasoningMessageAssembler {
     private UserMessage mapMediaMessage(
             AgentExecutionContext context, String goal, MultimodalCapability capability, String agentRole) {
         MediaDownloadPort downloadPort = resolveMediaDownloadPort();
+        // Autonomy is not an operator approval receipt. Keep media downloads behind the governed
+        // HITL policy until an explicit receipt can be carried through AgentExecutionContext.
         return MultimodalMessageMapper.mapToUserMessage(
                 goal, context.mediaAttachments(), capability, agentRole, downloadPort, context.userId(), false);
     }

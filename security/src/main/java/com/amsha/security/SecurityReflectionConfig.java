@@ -30,5 +30,6 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             IssuedCredential.class,
             MediaSecurityValidator.class,
             GovernedMediaDownloadService.class
-        })
+        },
+        classNames = {"com.amsha.security.media.GovernedTelegramMediaResolver"})
 public class SecurityReflectionConfig {}

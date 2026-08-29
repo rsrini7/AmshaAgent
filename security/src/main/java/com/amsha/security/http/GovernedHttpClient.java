@@ -24,9 +24,10 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
+import java.util.function.UnaryOperator;
 
-import com.amsha.common.util.LogUtil;
 import com.amsha.core.security.OutboundHttpPolicyService;
 import com.amsha.llm.api.NetworkProfilePolicy;
 import com.amsha.persistence.api.LlmConnectionDto;
@@ -34,6 +35,7 @@ import com.amsha.security.api.OutboundPolicyDecision;
 import com.amsha.security.api.OutboundPurpose;
 import com.amsha.security.api.SecretVault;
 import com.amsha.security.api.VaultKey;
+import com.amsha.security.media.MediaSecurityValidator;
 
 import org.jboss.logging.Logger;
 
@@ -76,6 +78,8 @@ public final class GovernedHttpClient {
     private final LlmConnectionDto connection;
     private final String actorUserId;
     private final boolean preApproved;
+    private final UnaryOperator<URI> policyUriMapper;
+    private final Duration connectTimeoutOverride;
 
     private GovernedHttpClient(
             OutboundHttpPolicyService policyService,
@@ -83,13 +87,17 @@ public final class GovernedHttpClient {
             OutboundPurpose purpose,
             LlmConnectionDto connection,
             String actorUserId,
-            boolean preApproved) {
+            boolean preApproved,
+            UnaryOperator<URI> policyUriMapper,
+            Duration connectTimeoutOverride) {
         this.policyService = policyService;
         this.vault = vault;
         this.purpose = purpose;
         this.connection = connection;
         this.actorUserId = actorUserId;
         this.preApproved = preApproved;
+        this.policyUriMapper = policyUriMapper;
+        this.connectTimeoutOverride = connectTimeoutOverride;
     }
 
     public static Builder builder(OutboundHttpPolicyService policyService) {
@@ -103,17 +111,18 @@ public final class GovernedHttpClient {
 
     private <T> HttpResponse<T> send(HttpRequest request, HttpResponse.BodyHandler<T> bodyHandler, int depth) {
         request = withDefaultTimeout(request);
+        URI policyUri = policyUri(request.uri());
         OutboundPolicyDecision decision =
-                policyService.evaluate(request.uri().toString(), purpose, connection, actorUserId, preApproved);
+                policyService.evaluate(policyUri.toString(), purpose, connection, actorUserId, preApproved);
         if (decision.isDenied()) {
             log.warnf(
                     "Outbound request denied: %s (reason: %s)",
-                    request.uri(), decision.reason().orElse("policy"));
+                    policyUri, decision.reason().orElse("policy"));
             throw OutboundHttpException.policy(
                     "Outbound request denied: " + decision.reason().orElse("policy"));
         }
         if (decision.requiresHitl()) {
-            log.infof("Outbound request to %s requires HITL approval", request.uri());
+            log.infof("Outbound request to %s requires HITL approval", policyUri);
             throw OutboundHttpException.hitl(decision.reason().orElse("approval required"));
         }
 
@@ -124,18 +133,15 @@ public final class GovernedHttpClient {
         try {
             response = client.send(request, bodyHandler);
         } catch (HttpTimeoutException e) {
-            log.warnf("Request timed out: %s (%s)", request.uri().getHost(), LogUtil.rootMessage(e));
-            throw OutboundHttpException.timeout(
-                    "Request timed out: " + request.uri().getHost());
+            log.warnf("Request timed out: %s", policyUri.getHost());
+            throw OutboundHttpException.timeout("Request timed out: " + policyUri.getHost());
         } catch (IOException e) {
-            log.warnf("Transport I/O failure to %s (%s)", request.uri().getHost(), LogUtil.rootMessage(e));
-            throw OutboundHttpException.io(
-                    "Transport I/O failure to " + request.uri().getHost(), e);
+            log.warnf("Transport I/O failure to %s", policyUri.getHost());
+            throw OutboundHttpException.io("Transport I/O failure to " + policyUri.getHost(), e);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            log.warnf("Interrupted during request to %s (%s)", request.uri().getHost(), LogUtil.rootMessage(e));
-            throw OutboundHttpException.io(
-                    "Interrupted during request to " + request.uri().getHost(), e);
+            log.warnf("Interrupted during request to %s", policyUri.getHost());
+            throw OutboundHttpException.io("Interrupted during request to " + policyUri.getHost(), e);
         }
 
         int status = response.statusCode();
@@ -202,7 +208,8 @@ public final class GovernedHttpClient {
         // For literal IPs the policy service already blocked private ranges; only DNS names need revalidation.
         if (normalized.matches("[0-9a-fA-F:.]+")) return;
         try {
-            InetAddress[] addresses = InetAddress.getAllByName(normalized);
+            InetAddress[] addresses = MediaSecurityValidator.resolveAndValidateHost(
+                    normalized, Duration.ofMillis(effectiveConnectTimeoutMillis()));
             for (InetAddress addr : addresses) {
                 if (addr.isLoopbackAddress()
                         || addr.isLinkLocalAddress()
@@ -246,6 +253,13 @@ public final class GovernedHttpClient {
         }
     }
 
+    private int effectiveConnectTimeoutMillis() {
+        NetworkProfilePolicy policy = connection != null && connection.networkProfileJson() != null
+                ? NetworkProfilePolicy.fromJson(connection.networkProfileJson())
+                : NetworkProfilePolicy.allowAll();
+        return policy.connectTimeoutMs() > 0 ? policy.connectTimeoutMs() : DEFAULT_CONNECT_TIMEOUT_MS;
+    }
+
     /** Builds a per-connection HttpClient honoring the network profile policy. */
     private static boolean isIpv4MappedAddress(byte[] bytes) {
         if (bytes.length != 16) {
@@ -266,8 +280,10 @@ public final class GovernedHttpClient {
 
         HttpClient.Builder builder = HttpClient.newBuilder();
 
-        int connectMs = policy.connectTimeoutMs() > 0 ? policy.connectTimeoutMs() : DEFAULT_CONNECT_TIMEOUT_MS;
-        builder.connectTimeout(Duration.ofMillis(connectMs));
+        Duration connectTimeout = connectTimeoutOverride != null
+                ? connectTimeoutOverride
+                : Duration.ofMillis(effectiveConnectTimeoutMillis());
+        builder.connectTimeout(connectTimeout);
         builder.followRedirects(HttpClient.Redirect.NEVER);
 
         // Proxy: required by policy unless the host is a no-proxy exclusion.
@@ -379,6 +395,17 @@ public final class GovernedHttpClient {
         return normalized.equals("localhost") || normalized.equals("127.0.0.1") || normalized.equals("::1");
     }
 
+    private URI policyUri(URI requestUri) {
+        URI mapped = policyUriMapper.apply(requestUri);
+        if (mapped == null || mapped.getScheme() == null || mapped.getHost() == null) {
+            throw OutboundHttpException.policy("Outbound policy URI mapping produced an invalid target");
+        }
+        if (!sameOrigin(requestUri, mapped)) {
+            throw OutboundHttpException.policy("Outbound policy URI mapping changed the request origin");
+        }
+        return mapped;
+    }
+
     /** Builder for a short-lived governed client. */
     public static final class Builder {
         private final OutboundHttpPolicyService policyService;
@@ -387,6 +414,8 @@ public final class GovernedHttpClient {
         private LlmConnectionDto connection;
         private String actorUserId;
         private boolean preApproved;
+        private UnaryOperator<URI> policyUriMapper = UnaryOperator.identity();
+        private Duration connectTimeoutOverride;
 
         private Builder(OutboundHttpPolicyService policyService) {
             this.policyService = policyService;
@@ -418,8 +447,34 @@ public final class GovernedHttpClient {
             return this;
         }
 
+        /**
+         * Supplies the URI used for policy evaluation and diagnostics while leaving the actual
+         * request URI unchanged. This is intended for requests whose path contains a credential.
+         */
+        public Builder policyUriMapper(UnaryOperator<URI> policyUriMapper) {
+            this.policyUriMapper = Objects.requireNonNull(policyUriMapper, "policyUriMapper must not be null");
+            return this;
+        }
+
+        /** Overrides the connection-derived connect timeout for a bounded transport caller. */
+        public Builder connectTimeout(Duration connectTimeout) {
+            if (connectTimeout == null || connectTimeout.isZero() || connectTimeout.isNegative()) {
+                throw new IllegalArgumentException("connectTimeout must be positive");
+            }
+            this.connectTimeoutOverride = connectTimeout;
+            return this;
+        }
+
         public GovernedHttpClient build() {
-            return new GovernedHttpClient(policyService, vault, purpose, connection, actorUserId, preApproved);
+            return new GovernedHttpClient(
+                    policyService,
+                    vault,
+                    purpose,
+                    connection,
+                    actorUserId,
+                    preApproved,
+                    policyUriMapper,
+                    connectTimeoutOverride);
         }
     }
 }

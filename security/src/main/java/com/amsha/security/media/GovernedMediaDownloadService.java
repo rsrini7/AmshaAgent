@@ -25,6 +25,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.regex.Pattern;
 
 import com.amsha.channel.api.MediaAttachment;
 import com.amsha.common.util.LogUtil;
@@ -58,12 +59,17 @@ public class GovernedMediaDownloadService implements MediaDownloadPort {
     private static final Logger log = Logger.getLogger(GovernedMediaDownloadService.class);
     private static final int IN_MEMORY_THRESHOLD_BYTES = 1024 * 1024; // 1 MB
     private static final int STREAM_BUFFER_SIZE = 8192;
+    private static final Pattern TELEGRAM_BOT_PATH_PATTERN = Pattern.compile("(?i)/bot[^/?#\\s]+");
+    private static final String REDACTED_TELEGRAM_BOT_PATH = "/botREDACTED";
 
     @Inject
     OutboundHttpPolicyService policyService;
 
     @Inject
     AuditService auditService;
+
+    @Inject
+    GovernedTelegramMediaResolver telegramResolver;
 
     @ConfigProperty(name = "amsha.data-dir", defaultValue = "./data")
     String dataDir;
@@ -110,38 +116,34 @@ public class GovernedMediaDownloadService implements MediaDownloadPort {
             if (attachment.inlineData() != null) {
                 result = processInlineMedia(attachment, maximumBytes);
             } else {
-                URI sourceUri = attachment.sourceUri();
-                if (sourceUri == null) {
-                    throw new IllegalArgumentException("MediaAttachment has neither inlineData nor sourceUri");
-                }
-
+                URI sourceUri = Objects.requireNonNull(
+                        attachment.sourceUri(), "MediaAttachment has neither inlineData nor sourceUri");
                 String scheme = sourceUri.getScheme();
                 if ("telegram".equalsIgnoreCase(scheme)) {
-                    throw OutboundHttpException.policy(
-                            "Telegram media references must be resolved by the channel adapter");
-                }
-                if (!"http".equalsIgnoreCase(scheme) && !"https".equalsIgnoreCase(scheme)) {
+                    if (telegramResolver == null) {
+                        throw new IllegalStateException("GovernedTelegramMediaResolver is not available");
+                    }
+                    result = telegramResolver.resolveAndDownload(
+                            attachment, actorUserId, preApproved, maximumBytes, this);
+                } else if (!"http".equalsIgnoreCase(scheme) && !"https".equalsIgnoreCase(scheme)) {
                     throw OutboundHttpException.policy("Unsupported media download scheme: " + scheme);
+                } else {
+                    OutboundPolicyDecision decision = policyService.evaluate(
+                            sourceUri.toString(), OutboundPurpose.MEDIA_DOWNLOAD, null, actorUserId, preApproved);
+                    if (decision.isDenied()) {
+                        log.warnf(
+                                "Media download denied: %s (reason: %s)",
+                                sourceUri.getHost(), decision.reason().orElse("policy"));
+                        throw OutboundHttpException.policy(
+                                "Media download denied: " + decision.reason().orElse("policy"));
+                    }
+                    if (decision.requiresHitl()) {
+                        log.infof("Media download for %s requires HITL approval", sourceUri.getHost());
+                        throw OutboundHttpException.hitl(decision.reason().orElse("approval required"));
+                    }
+                    result = downloadHttpWithRedirects(
+                            sourceUri, attachment, actorUserId, preApproved, sourceUri, maximumBytes, 0);
                 }
-
-                // Evaluate Outbound Policy & HITL before any DNS or transport work.
-                OutboundPolicyDecision decision = policyService.evaluate(
-                        sourceUri.toString(), OutboundPurpose.MEDIA_DOWNLOAD, null, actorUserId, preApproved);
-                if (decision.isDenied()) {
-                    log.warnf(
-                            "Media download denied: %s (reason: %s)",
-                            sourceUri.getHost(), decision.reason().orElse("policy"));
-                    throw OutboundHttpException.policy(
-                            "Media download denied: " + decision.reason().orElse("policy"));
-                }
-                if (decision.requiresHitl()) {
-                    log.infof("Media download for %s requires HITL approval", sourceUri.getHost());
-                    throw OutboundHttpException.hitl(decision.reason().orElse("approval required"));
-                }
-
-                // Stream HTTP download with redirect validation and streaming size bounds.
-                result = downloadHttpWithRedirects(
-                        sourceUri, attachment, actorUserId, preApproved, sourceUri, maximumBytes, 0);
             }
 
             auditService.recordMandatory(
@@ -201,8 +203,8 @@ public class GovernedMediaDownloadService implements MediaDownloadPort {
 
     private DownloadedMedia processInlineMedia(MediaAttachment attachment, long maximumBytes) {
         byte[] data = attachment.inlineData();
-        long limitBytes =
-                MediaBudgetLimits.resolveLimitForType(attachment.type(), maxImageSizeBytes(), maxDocSizeBytes());
+        long limitBytes = MediaBudgetLimits.resolveLimitForType(
+                attachment.type(), maxImageSizeMb * 1024L * 1024L, maxDocSizeMb * 1024L * 1024L);
         limitBytes = Math.min(limitBytes, maximumBytes);
         if (data.length > limitBytes) {
             throw OutboundHttpException.policy("Inline media exceeds maximum size limit of " + limitBytes
@@ -214,7 +216,7 @@ public class GovernedMediaDownloadService implements MediaDownloadPort {
                 attachment.attachmentId(), attachment.type(), validMime, attachment.fileName(), data);
     }
 
-    private DownloadedMedia downloadHttpWithRedirects(
+    DownloadedMedia downloadHttpWithRedirects(
             URI uri,
             MediaAttachment attachment,
             String actorUserId,
@@ -228,7 +230,7 @@ public class GovernedMediaDownloadService implements MediaDownloadPort {
         }
 
         // JIT DNS revalidation immediately before connecting
-        MediaSecurityValidator.validateTarget(uri);
+        MediaSecurityValidator.validateTarget(uri, Duration.ofSeconds(effectiveConnectTimeoutSeconds()));
 
         // Explicitly disable JDK auto-redirects so each redirect hop passes through JIT DNS and policy revalidation
         HttpClient client = HttpClient.newBuilder()
@@ -245,38 +247,32 @@ public class GovernedMediaDownloadService implements MediaDownloadPort {
         try {
             response = client.send(request, HttpResponse.BodyHandlers.ofInputStream());
         } catch (HttpTimeoutException e) {
-            log.warnf("Media download timed out for %s: %s", uri.getHost(), LogUtil.rootMessage(e));
+            log.warnf("Media download timed out for %s: %s", uri.getHost(), safeRootMessage(e));
             throw OutboundHttpException.timeout("Media download timed out: " + uri.getHost());
         } catch (IOException e) {
-            log.warnf("Media download I/O failure for %s: %s", uri.getHost(), LogUtil.rootMessage(e));
+            log.warnf("Media download I/O failure for %s: %s", uri.getHost(), safeRootMessage(e));
             throw OutboundHttpException.io("Media download I/O failure for " + uri.getHost(), e);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            log.warnf("Media download interrupted for %s: %s", uri.getHost(), LogUtil.rootMessage(e));
+            log.warnf("Media download interrupted for %s: %s", uri.getHost(), safeRootMessage(e));
             throw OutboundHttpException.io("Media download interrupted for " + uri.getHost(), e);
         }
 
         int status = response.statusCode();
         if (status >= 300 && status < 400) {
-            // Drain/close redirect response body to prevent connection leaks
-            try (InputStream body = response.body()) {
-                // drain
-            } catch (IOException _) {
-            }
-
+            closeQuietly(response.body());
             String location = response.headers().firstValue("location").orElse(null);
             if (location == null || location.isBlank()) {
                 throw OutboundHttpException.redirectDenied("HTTP " + status + " redirect with no Location header");
             }
             URI nextUri = uri.resolve(location);
-            // Validate syntax and credentials before policy; defer DNS until policy/HITL passes.
             MediaSecurityValidator.validateRedirectReference(nextUri, depth + 1);
 
-            // Re-evaluate policy for the redirect hop target
             boolean sameOrigin = MediaSecurityValidator.sameOrigin(approvalOrigin, nextUri);
             boolean redirectPreApproved = preApproved && sameOrigin;
+            String sanitizedRedirectUrl = sanitizeUrlForPolicy(nextUri.toString());
             OutboundPolicyDecision redirDecision = policyService.evaluate(
-                    nextUri.toString(), OutboundPurpose.MEDIA_DOWNLOAD, null, actorUserId, redirectPreApproved);
+                    sanitizedRedirectUrl, OutboundPurpose.MEDIA_DOWNLOAD, null, actorUserId, redirectPreApproved);
             if (redirDecision.isDenied()) {
                 throw OutboundHttpException.redirectDenied("Redirect target denied by outbound policy: "
                         + redirDecision.reason().orElse("policy"));
@@ -295,10 +291,7 @@ public class GovernedMediaDownloadService implements MediaDownloadPort {
         }
 
         if (status != 200) {
-            try (InputStream body = response.body()) {
-                // drain
-            } catch (IOException _) {
-            }
+            closeQuietly(response.body());
             throw OutboundHttpException.io("Media download failed with HTTP status " + status);
         }
 
@@ -307,11 +300,9 @@ public class GovernedMediaDownloadService implements MediaDownloadPort {
             String rawContentType =
                     response.headers().firstValue("content-type").orElse(null);
             String validMime = MediaSecurityValidator.validateMimeType(rawContentType, attachment.type());
-
-            long limitBytes =
-                    MediaBudgetLimits.resolveLimitForType(attachment.type(), maxImageSizeBytes(), maxDocSizeBytes());
+            long limitBytes = MediaBudgetLimits.resolveLimitForType(
+                    attachment.type(), maxImageSizeMb * 1024L * 1024L, maxDocSizeMb * 1024L * 1024L);
             limitBytes = Math.min(limitBytes, maximumBytes);
-
             return streamResponseBody(responseBody, attachment, validMime, limitBytes);
         } catch (RuntimeException e) {
             closeQuietly(responseBody);
@@ -326,7 +317,7 @@ public class GovernedMediaDownloadService implements MediaDownloadPort {
         }
         Path tempFile = null;
         OutputStream fileOut = null;
-        long deadlineNanos = System.nanoTime() + readTimeoutNanos();
+        long deadlineNanos = System.nanoTime() + TimeUnit.SECONDS.toNanos(effectiveReadTimeoutSeconds());
 
         try (InputStream in = bodyStream;
                 ContextAwareExecutorService readerExecutor =
@@ -426,7 +417,8 @@ public class GovernedMediaDownloadService implements MediaDownloadPort {
             throws IOException {
         long remainingNanos = deadlineNanos - System.nanoTime();
         if (remainingNanos <= 0) {
-            throw mediaReadTimeout();
+            throw OutboundHttpException.timeout(
+                    "Media stream reading exceeded timeout deadline of " + effectiveReadTimeoutSeconds() + " seconds");
         }
 
         Future<Integer> readFuture = readerExecutor.submit(() -> input.read(buffer, 0, length));
@@ -436,7 +428,8 @@ public class GovernedMediaDownloadService implements MediaDownloadPort {
             readFuture.cancel(true);
             closeQuietly(input);
             readerExecutor.shutdownNow();
-            throw mediaReadTimeout();
+            throw OutboundHttpException.timeout(
+                    "Media stream reading exceeded timeout deadline of " + effectiveReadTimeoutSeconds() + " seconds");
         } catch (InterruptedException e) {
             readFuture.cancel(true);
             closeQuietly(input);
@@ -444,25 +437,27 @@ public class GovernedMediaDownloadService implements MediaDownloadPort {
             throw OutboundHttpException.io("Media stream reading was interrupted", e);
         } catch (ExecutionException e) {
             Throwable cause = e.getCause();
-            if (cause instanceof IOException ioException) {
-                throw ioException;
-            }
-            if (cause instanceof RuntimeException runtimeException) {
-                throw runtimeException;
-            }
+            if (cause instanceof IOException ioException) throw ioException;
+            if (cause instanceof RuntimeException runtimeException) throw runtimeException;
             throw new IOException("Media stream read failed", cause);
         }
     }
 
-    private OutboundHttpException mediaReadTimeout() {
-        return OutboundHttpException.timeout(
-                "Media stream reading exceeded timeout deadline of " + effectiveReadTimeoutSeconds() + " seconds");
+    static String sanitizeUrlForPolicy(String url) {
+        if (url == null) return null;
+        return TELEGRAM_BOT_PATH_PATTERN.matcher(url).replaceAll(REDACTED_TELEGRAM_BOT_PATH);
+    }
+
+    private static String safeRootMessage(Throwable error) {
+        return sanitizeUrlForPolicy(LogUtil.rootMessage(error));
     }
 
     private static void closeQuietly(InputStream input) {
-        try {
-            input.close();
-        } catch (IOException _) {
+        if (input != null) {
+            try {
+                input.close();
+            } catch (IOException _) {
+            }
         }
     }
 
@@ -482,29 +477,17 @@ public class GovernedMediaDownloadService implements MediaDownloadPort {
         return Files.createTempFile(tempDir, safePrefix + "_" + UUID.randomUUID() + "_", ".tmp");
     }
 
-    private long maxImageSizeBytes() {
-        return (long) maxImageSizeMb * 1024L * 1024L;
-    }
-
-    private long maxDocSizeBytes() {
-        return (long) maxDocSizeMb * 1024L * 1024L;
-    }
-
     private long configuredMaxTotalPayloadBytes() {
         return maxTotalPayloadMb > 0
                 ? (long) maxTotalPayloadMb * 1024L * 1024L
                 : MediaBudgetLimits.DEFAULT_MAX_TOTAL_PAYLOAD_BYTES;
     }
 
-    private int effectiveConnectTimeoutSeconds() {
+    int effectiveConnectTimeoutSeconds() {
         return connectTimeoutSeconds > 0 ? connectTimeoutSeconds : MediaBudgetLimits.DEFAULT_CONNECT_TIMEOUT_SECONDS;
     }
 
-    private int effectiveReadTimeoutSeconds() {
+    int effectiveReadTimeoutSeconds() {
         return readTimeoutSeconds > 0 ? readTimeoutSeconds : MediaBudgetLimits.DEFAULT_READ_TIMEOUT_SECONDS;
-    }
-
-    private long readTimeoutNanos() {
-        return TimeUnit.SECONDS.toNanos(effectiveReadTimeoutSeconds());
     }
 }
