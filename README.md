@@ -8,8 +8,8 @@
   ![Native Image Ready](https://img.shields.io/badge/Native_Image-Ready-orange.svg?style=flat&logo=graalvm)
   ![OpenTelemetry](https://img.shields.io/badge/OpenTelemetry-Tracing-blueviolet.svg?style=flat&logo=opentelemetry)
   ![Podman](https://img.shields.io/badge/Isolation-Rootless_Podman-purple.svg?style=flat&logo=podman)
-  ![Tests](https://img.shields.io/badge/Tests-5171_passing-brightgreen.svg?style=flat)
-  ![Coverage](https://img.shields.io/badge/Coverage-70.63%25-brightgreen.svg?style=flat)
+  ![Tests](https://img.shields.io/badge/Tests-5239_passing-brightgreen.svg?style=flat)
+  ![Coverage](https://img.shields.io/badge/Coverage-74.03%25-brightgreen.svg?style=flat)
   [![Built with Devbox](https://img.shields.io/badge/built_with-devbox-green.svg?style=flat)](https://www.jetify.com/devbox/)
   [![Built with mise](https://img.shields.io/badge/built_with-mise-blue.svg?style=flat)](https://jdx.dev)
 </div>
@@ -95,7 +95,7 @@ See [docs/QUICK_START.md](./docs/QUICK_START.md) for detailed setup options.
 - **classifier safety gate** — core now provides ordered post-policy tool-risk and answer-quality SPIs with monotonic risk upgrades, existing HITL preservation, and one pre-tool retry budget; no active ONNX implementation is wired, so model evidence remains required before behavioral activation
 - **Non-activating classifier controls** — internal-only, mandatory-audited per-classifier runtime switches distinguish requested from effective state, reject enablement without a ready active implementation, and drain accepted work after disable; no ONNX classifier is behaviorally active
 - **Reusable local ML verification** — one secret-safe mise workflow checks authenticated OMLX through `generic-openai`, bundle digests, ONNX health/index descriptors, real inference metric movement, and isolated native startup/shutdown without selecting Ollama
-- **Document ingestion** — add knowledge to the RAG store for retrieval in future agent turns
+- **Document ingestion** — add knowledge to the RAG store for retrieval in future agent turns via `IngestDocumentTool` (guard/PII/audit-gated); native two-tier hybrid RAG (FTS5 + vector + RRF + optional rerank) retained after safety-gated LangChain4j Easy RAG evaluation (P6 `P6-EASYRAG-01` — 6× Amsha superior on retrieval/governance/native/tenancy/descriptor/rerank, 1× Easy RAG superior on onboarding simplicity, see `rag/README.md` matrix)
 - **Extensible Skills system** — YAML/Markdown custom roles from database, classpath, or SkillsJars with hot reload and optional adaptive execution
 - **Behavioral self-evolution** — opt-in trace capture, pattern extraction, and reviewed directives that improve future interactions
 - **MCP integration** — both inbound MCP server and outbound MCP client for dynamic tool loading; discovered tools default to the network bulkhead and can be categorized at registration; native bridge retained after safety-gated LangChain4j `1.17.2` protocol-adapter evaluation (P4 `P4-MCP-01` — transports at parity, 5× Amsha superior on isolation/HITL/credentials/`FINISH`/native, see `mcp/README.md` matrix)

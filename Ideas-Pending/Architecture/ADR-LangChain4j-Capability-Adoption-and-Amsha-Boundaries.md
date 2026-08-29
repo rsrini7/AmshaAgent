@@ -26,6 +26,7 @@ Amsha already uses LangChain4j as the common chat and embedding protocol, but th
   native-image, and failure semantics are proven equivalent.
 - The `mcp` module is an Amsha-owned bridge. It includes outbound client/lifecycle services, approval and credential handling, Podman and stdio transport, NDJSON handling, dynamic capability admission, and the `ExternalMcpToolAdapter`. The project uses Quarkus MCP server artifacts for its server surface, but has no `langchain4j-mcp` dependency. Replacing the bridge would risk bypassing `ToolInvocationGuard`, audit, category routing, and HITL.
 - RAG currently performs persistence-backed hybrid retrieval and RRF ordering through `TwoTierMemoryService` and `ScoredChunk`. LangChain4j `ScoringModel` is available in `1.17.2`, but no reranker stage exists. `ScoredChunk.score` is a synthetic fusion score and is not a raw relevance threshold, so a cross-encoder score cannot be substituted into that field without changing retrieval semantics.
+- `quarkus-langchain4j-easy-rag` is a member-BOM-managed starter extension (one `path` property, boot-time Tika scan into an in-memory `EmbeddingStore`, auto-wired default `RetrievalAugmentor`, no native-image support). Amsha already owns a production RAG subsystem and uses no LangChain4j `RetrievalAugmentor`/`ContentRetriever`; Easy RAG would bypass `ToolInvocationGuard`, the PII scan reflex, audit, the `EmbeddingIndexDescriptor` gate, and would break the GraalVM native contract. It is a convenience starter, not a like-for-like subsystem.
 - `AudioContent`, `ImageContent`, and `PdfFileContent` are registered for native reflection, but the channel contract and inbound handlers are still text-oriented. Multimodal support is therefore an ingestion and routing feature, not an already-adopted model capability.
 
 ## Decision
@@ -66,6 +67,14 @@ Amsha will not replace its MCP bridge with a general LangChain4j MCP execution p
 
 If that adapter requires a LangChain4j API newer than the current `1.17.2` ceiling, the executable evaluation waits for the next Quarkus/member-BOM checkpoint. This ADR does not authorize an ad-hoc version override.
 
+### Easy RAG
+
+Amsha will not adopt LangChain4j Easy RAG as its retrieval path. Easy RAG is a convention-over-configuration starter: a single `quarkus.langchain4j.easy-rag.path` property, a boot-time Apache Tika scan of a directory into an auto-registered in-memory `EmbeddingStore`, and a default `RetrievalAugmentor` auto-wired into an `@AiService`. It is explicitly not native-image compatible and performs vector-cosine retrieval only.
+
+Amsha's RAG subsystem is a governed, code-driven memory service: ingestion via `IngestDocumentTool` → `MemoryRetrievalPort.index()` (passing `ToolInvocationGuard`, PII scan, and audit), hybrid FTS5/BM25 + vector (sqlite-vec / pgvector) retrieval fused with Reciprocal Rank Fusion, optional `RerankingService` reranking with a deterministic fallback, and `RagContextEnricher` prompt enrichment with write-intent and cron-session exclusions. Retrieval is `userId`/session scoped and protected by an `EmbeddingIndexDescriptor` fingerprint gate that falls back non-destructively to BM25/FTS5 on model mismatch.
+
+Adopting Easy RAG would replace this with an unguarded boot-time folder scan, a single global vector store, no reranking, no descriptor safety, and a broken native build. The P6 evaluation (Issue 09, `evidence/08-easy-rag-evaluation/`) records the retain decision: 6× Amsha Superior, 1× Easy RAG Superior (onboarding simplicity only). No proof of equivalence means retain the current Amsha-owned implementation.
+
 ### Multimodal and deferred work
 
 Multimodal channel ingestion is deferred until a channel-neutral content contract, provider capability matrix, bounded download/extraction path, and safe text-only fallback are specified. Channel modules continue to communicate with core through channel APIs; they do not construct a parallel LangChain4j execution path. Output remains subject to Telegram sanitization and artifact transformation invariants.
@@ -84,6 +93,7 @@ New vector stores, additional embedding providers, and a parallel moderation/RAI
 | P3 | One-model observability listener migration pilot. | OTel/Micrometer parity, payload-safe redaction, context propagation, no duplicate instrumentation, and JVM/native verification pass before any manual code is removed. |
 | P4 — safety gated | Protocol-only MCP adapter evaluation. | A demonstrated protocol gap, compatibility corpus, and proof that discovery, admission, invocation, audit, HITL, and `FINISH` invariants remain intact. If the required API exceeds `1.17.2`, defer to the next member-BOM checkpoint; no proof means retain the current bridge. |
 | P5 — broad surface | Multimodal channel ingestion and provider-aware degradation. | Channel API contract, bounded media handling, capability routing, safe fallback, artifact/output sanitization, Telegram fixture updates when applicable, and channel integration tests pass. |
+| P6 — safety gated | Easy RAG capability evaluation. | Re-checked Easy RAG reference claims and a dimension matrix against Amsha's two-tier RAG (hybrid FTS5+vector+RRF, reranking, descriptor gate, tenant/session scope, native-verified). Explicit "retain Amsha RAG, do not adopt Easy RAG" decision; Easy RAG is a native-incompatible starter that would bypass guard/audit/PII/HITL. |
 
 The sequence is normative for the follow-on specification and issues. A later phase must not be pulled into implementation because an upstream API is convenient; its exit gate and the relevant Amsha invariant remain the controlling boundary. Java implementation issues must use the focused-verification commands and module-scoped PMD requirements in [AGENTS.md](../../AGENTS.md); the detailed command matrix belongs in the later specification.
 
