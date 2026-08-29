@@ -47,7 +47,7 @@ class OnnxIntentShadowClassifierTest {
                 true, input -> new ClassifierResult.Opinion<>("researcher", 0.95f, "rule"));
         ClassifierResult<String> result = classifier.classify("find information");
         assertInstanceOf(ClassifierResult.Opinion.class, result);
-        assertEquals("researcher", ((ClassifierResult.Opinion<String>) result).prediction());
+        assertEquals("researcher", ((ClassifierResult.Opinion<String>) result).value());
     }
 
     private static OnnxIntentShadowClassifier classifier(boolean enabled, String model, int threshold) {

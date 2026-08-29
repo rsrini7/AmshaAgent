@@ -33,6 +33,16 @@ This is an **impl-tier** module: it depends on `amsha-security-api` and on `amsh
 | `amsha.channel.telegram.bot-token` | `""` | Telegram Bot token for resolving and downloading `telegram://` media. |
 | `amsha.channel.telegram.base-uri` | `https://api.telegram.org` | Telegram Bot API base URI for `getFile` and file downloads. |
 
+## Media Download Telemetry & Metrics
+
+The governed media download boundary emits payload-free Micrometer metrics under `amsha.media.download.*` with bounded categorical tags:
+
+| Metric Name | Type | Tags | Description |
+|---|---|---|---|
+| `amsha.media.download.total` | Counter | `source`, `type`, `status` | Total download attempts categorized by status (`success`, `policy_denied`, `hitl_required`, `timeout`, `redirect_denied`, `security_violation`, `oversized`, `unsupported_mime`, `magic_mismatch`, `error`). |
+| `amsha.media.download.duration` | Timer | `source`, `type`, `status` | Latency distribution of media download operations. |
+| `amsha.media.download.bytes` | Counter | `source`, `type` | Cumulative bytes successfully downloaded through the governed boundary. |
+
 ## Downstream Usage
 
 ```xml

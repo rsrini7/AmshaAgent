@@ -14,6 +14,8 @@ import dev.langchain4j.data.message.UserMessage;
 
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -450,5 +452,37 @@ class MultimodalMessageMapperTest {
         assertEquals(3, message.contents().size());
         assertInstanceOf(ImageContent.class, message.contents().get(1));
         assertInstanceOf(ImageContent.class, message.contents().get(2));
+    }
+
+    @Test
+    void mapsRemoteAttachmentWithTempFileToImageContent() throws Exception {
+        Path tempFile = Files.createTempFile("test-img", ".png");
+        byte[] pngData = new byte[] {(byte) 0x89, 'P', 'N', 'G', 1, 2, 3, 4};
+        Files.write(tempFile, pngData);
+
+        MediaDownloadPort tempFilePort = (attachment, _, _) -> DownloadedMedia.ofTempFile(
+                attachment.attachmentId(),
+                attachment.type(),
+                attachment.mimeType(),
+                attachment.fileName(),
+                pngData.length,
+                tempFile);
+
+        MediaAttachment att = MediaAttachment.ofUri(
+                "remote-temp",
+                AttachmentType.IMAGE,
+                "image/png",
+                "temp.png",
+                (long) pngData.length,
+                URI.create("https://example.com/temp.png"),
+                Map.of());
+
+        MultimodalCapability capability = MultimodalCapabilities.defaultCapabilityForModel("openai", "gpt-4o");
+        UserMessage message = MultimodalMessageMapper.mapToUserMessage(
+                "Inspect temp", List.of(att), capability, "gpt-4o", tempFilePort, "user-1", true);
+
+        assertEquals(2, message.contents().size());
+        assertInstanceOf(ImageContent.class, message.contents().get(1));
+        Files.deleteIfExists(tempFile);
     }
 }

@@ -13,7 +13,6 @@ import dev.langchain4j.data.pdf.PdfFile;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayDeque;
@@ -21,7 +20,6 @@ import java.util.ArrayList;
 import java.util.Base64;
 import java.util.IdentityHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 
 import com.amsha.channel.api.AttachmentType;
@@ -33,6 +31,8 @@ import com.amsha.security.api.MediaBudgetLimits;
 import com.amsha.security.api.MediaDownloadPort;
 
 import org.jboss.logging.Logger;
+
+import io.micrometer.core.instrument.MeterRegistry;
 
 /**
  * Maps channel-neutral {@link MediaAttachment} objects into LangChain4j {@link Content} items
@@ -77,13 +77,30 @@ public final class MultimodalMessageMapper {
             MediaDownloadPort downloadPort,
             String actorUserId,
             boolean preApproved) {
+        return mapToUserMessage(
+                textPrompt, attachments, capability, modelName, downloadPort, actorUserId, preApproved, null);
+    }
+
+    /**
+     * Builds a user message carrying supported media attachments through a governed download port
+     * and records payload-free Micrometer metrics.
+     */
+    public static UserMessage mapToUserMessage(
+            String textPrompt,
+            List<MediaAttachment> attachments,
+            MultimodalCapability capability,
+            String modelName,
+            MediaDownloadPort downloadPort,
+            String actorUserId,
+            boolean preApproved,
+            MeterRegistry meterRegistry) {
         String effectivePrompt = textPrompt != null ? textPrompt : "";
         if (attachments == null || attachments.isEmpty()) {
             return UserMessage.from(effectivePrompt);
         }
 
         MultimodalCapability cap = capability != null ? capability : MultimodalCapability.TEXT_ONLY;
-        String model = safeModelName(modelName);
+        String model = MultimodalMetrics.safeModelName(modelName);
         List<Content> contents = new ArrayList<>();
         contents.add(TextContent.from(effectivePrompt));
 
@@ -101,53 +118,68 @@ public final class MultimodalMessageMapper {
             boolean supported = cap.supportsType(attachment.type()) && cap.supportsMimeType(attachment.mimeType());
             if (!supported) {
                 byte[] pdfBytes = attachment.type() == AttachmentType.DOCUMENT_PDF ? batch.resolve(attachment) : null;
-                if (pdfBytes != null) {
-                    long pdfSize = pdfBytes.length;
-                    if (cumulativeBytes > maxCumulativeBytes - pdfSize) {
-                        contents.add(
-                                TextContent.from(fallbackCumulativeExceeded(attachment, pdfSize, maxCumulativeBytes)));
-                        continue;
-                    }
-                    cumulativeBytes += pdfSize;
-                }
-                contents.add(TextContent.from(fallbackUnsupported(attachment, pdfBytes, model)));
+                MultimodalMetrics.recordIngestion(
+                        meterRegistry, attachment.type(), MultimodalMetrics.resolveSource(attachment), "fallback");
+                MultimodalMetrics.recordFallback(meterRegistry, "unsupported_modality", attachment.type());
+                contents.add(TextContent.from(fallbackUnsupported(attachment, pdfBytes, model, meterRegistry)));
                 continue;
             }
 
             // URL-only provider paths cannot safely consume a governed result. Materialize bytes
             // and use base64, or degrade instead of handing the provider an ungoverned URL.
             if (!cap.supportsInlineBase64()) {
+                MultimodalMetrics.recordIngestion(
+                        meterRegistry, attachment.type(), MultimodalMetrics.resolveSource(attachment), "fallback");
+                MultimodalMetrics.recordFallback(meterRegistry, "transport_unsupported", attachment.type());
                 contents.add(TextContent.from(fallbackTransportUnsupported(attachment, model)));
                 continue;
             }
 
             long advisorySize = attachment.sizeBytes() > 0 ? attachment.sizeBytes() : 0L;
             if (cap.maxFileSize() > 0 && advisorySize > cap.maxFileSize()) {
+                MultimodalMetrics.recordIngestion(
+                        meterRegistry, attachment.type(), MultimodalMetrics.resolveSource(attachment), "fallback");
+                MultimodalMetrics.recordFallback(meterRegistry, "oversized", attachment.type());
                 contents.add(TextContent.from(fallbackOversized(attachment, advisorySize, cap.maxFileSize())));
                 continue;
             }
             if (advisorySize > 0 && cumulativeBytes > maxCumulativeBytes - advisorySize) {
+                MultimodalMetrics.recordIngestion(
+                        meterRegistry, attachment.type(), MultimodalMetrics.resolveSource(attachment), "fallback");
+                MultimodalMetrics.recordFallback(meterRegistry, "cumulative_exceeded", attachment.type());
                 contents.add(
                         TextContent.from(fallbackCumulativeExceeded(attachment, advisorySize, maxCumulativeBytes)));
                 continue;
             }
             if (cap.maxMediaPerRequest() > 0 && attachedMediaCount >= cap.maxMediaPerRequest()) {
+                MultimodalMetrics.recordIngestion(
+                        meterRegistry, attachment.type(), MultimodalMetrics.resolveSource(attachment), "fallback");
+                MultimodalMetrics.recordFallback(meterRegistry, "count_exceeded", attachment.type());
                 contents.add(TextContent.from(fallbackCountExceeded(attachment, cap.maxMediaPerRequest())));
                 continue;
             }
 
             byte[] effectiveBytes = batch.resolve(attachment);
             if (effectiveBytes == null) {
+                MultimodalMetrics.recordIngestion(
+                        meterRegistry, attachment.type(), MultimodalMetrics.resolveSource(attachment), "fallback");
+                MultimodalMetrics.recordFallback(meterRegistry, "unavailable", attachment.type());
                 contents.add(TextContent.from(fallbackUnavailable(attachment)));
                 continue;
             }
 
             long actualSize = effectiveBytes.length;
             if (cap.maxFileSize() > 0 && actualSize > cap.maxFileSize()) {
+                MultimodalMetrics.recordIngestion(
+                        meterRegistry, attachment.type(), MultimodalMetrics.resolveSource(attachment), "fallback");
+                MultimodalMetrics.recordFallback(meterRegistry, "oversized", attachment.type());
                 contents.add(TextContent.from(fallbackOversized(attachment, actualSize, cap.maxFileSize())));
                 continue;
             }
             if (cumulativeBytes > maxCumulativeBytes - actualSize) {
+                MultimodalMetrics.recordIngestion(
+                        meterRegistry, attachment.type(), MultimodalMetrics.resolveSource(attachment), "fallback");
+                MultimodalMetrics.recordFallback(meterRegistry, "cumulative_exceeded", attachment.type());
                 contents.add(TextContent.from(fallbackCumulativeExceeded(attachment, actualSize, maxCumulativeBytes)));
                 continue;
             }
@@ -158,6 +190,14 @@ public final class MultimodalMessageMapper {
                 contents.add(mapped);
                 if (!(mapped instanceof TextContent)) {
                     attachedMediaCount++;
+                    MultimodalMetrics.recordIngestion(
+                            meterRegistry, attachment.type(), MultimodalMetrics.resolveSource(attachment), "attached");
+                } else {
+                    MultimodalMetrics.recordIngestion(
+                            meterRegistry, attachment.type(), MultimodalMetrics.resolveSource(attachment), "fallback");
+                    String fallbackReason =
+                            attachment.type() == AttachmentType.OTHER ? "unsupported_modality" : "extraction_error";
+                    MultimodalMetrics.recordFallback(meterRegistry, fallbackReason, attachment.type());
                 }
             }
         }
@@ -316,7 +356,7 @@ public final class MultimodalMessageMapper {
                             .build());
                 case DOCUMENT_PDF ->
                     PdfFileContent.from(PdfFile.builder().base64Data(base64).build());
-                case OTHER -> TextContent.from(fallbackUnsupported(attachment, bytes, modelName));
+                case OTHER -> TextContent.from(fallbackUnsupported(attachment, bytes, modelName, null));
             };
         } catch (Exception e) {
             log.warnf("Failed to map media attachment %s: %s", attachment.attachmentId(), LogUtil.rootMessage(e));
@@ -336,13 +376,18 @@ public final class MultimodalMessageMapper {
         return UserMessage.from(contents);
     }
 
-    private static String fallbackUnsupported(MediaAttachment attachment, byte[] bytes, String modelName) {
-        String name = sanitizeName(attachment.fileName());
+    private static String fallbackUnsupported(
+            MediaAttachment attachment, byte[] bytes, String modelName, MeterRegistry meterRegistry) {
+        String name = MultimodalMetrics.sanitizeName(attachment.fileName());
         long sizeBytes = bytes != null ? bytes.length : attachment.sizeBytes();
-        String size = formatSize(sizeBytes);
+        String size = MultimodalMetrics.formatSize(sizeBytes);
         if (attachment.type() == AttachmentType.DOCUMENT_PDF && bytes != null && bytes.length > 0) {
-            String extracted = extractPdfText(bytes, MAX_EXTRACTED_PDF_CHARS);
-            if (!extracted.isBlank()) {
+            long extractStart = System.nanoTime();
+            String extracted = MultimodalMetrics.extractPdfText(bytes, MAX_EXTRACTED_PDF_CHARS);
+            boolean success = !extracted.isBlank();
+            MultimodalMetrics.recordExtraction(
+                    meterRegistry, System.nanoTime() - extractStart, extracted.length(), success);
+            if (success) {
                 return String.format("[Attached Document: %s - Extracted Text:\n%s]", name, extracted);
             }
         }
@@ -354,146 +399,46 @@ public final class MultimodalMessageMapper {
     private static String fallbackTransportUnsupported(MediaAttachment attachment, String modelName) {
         return String.format(
                 "[Attached Media: %s (%s) - Model %s cannot safely receive governed media bytes]",
-                sanitizeName(attachment.fileName()), attachment.mimeType(), modelName);
+                MultimodalMetrics.sanitizeName(attachment.fileName()), attachment.mimeType(), modelName);
     }
 
     private static String fallbackUnavailable(MediaAttachment attachment) {
         return String.format(
                 "[Attached Media: %s (%s) - Governed media could not be downloaded or validated]",
-                sanitizeName(attachment.fileName()), attachment.mimeType());
+                MultimodalMetrics.sanitizeName(attachment.fileName()), attachment.mimeType());
     }
 
     private static String fallbackOversized(MediaAttachment attachment, long actualSize, long maxSize) {
         return String.format(
                 "[Attached Media: %s (%s, %s) - Exceeds model maximum supported size of %s]",
-                sanitizeName(attachment.fileName()),
+                MultimodalMetrics.sanitizeName(attachment.fileName()),
                 attachment.mimeType(),
-                formatSize(actualSize),
-                formatSize(maxSize));
+                MultimodalMetrics.formatSize(actualSize),
+                MultimodalMetrics.formatSize(maxSize));
     }
 
     private static String fallbackCumulativeExceeded(MediaAttachment attachment, long actualSize, long maxCumulative) {
         return String.format(
                 "[Attached Media: %s (%s, %s) - Cumulative turn media payload exceeded limit of %s]",
-                sanitizeName(attachment.fileName()),
+                MultimodalMetrics.sanitizeName(attachment.fileName()),
                 attachment.mimeType(),
-                formatSize(actualSize),
-                formatSize(maxCumulative));
+                MultimodalMetrics.formatSize(actualSize),
+                MultimodalMetrics.formatSize(maxCumulative));
     }
 
     private static String fallbackCountExceeded(MediaAttachment attachment, int maxCount) {
         return String.format(
                 "[Attached Media: %s (%s) - Exceeds maximum batch media limit of %d items]",
-                sanitizeName(attachment.fileName()), attachment.mimeType(), maxCount);
+                MultimodalMetrics.sanitizeName(attachment.fileName()), attachment.mimeType(), maxCount);
     }
 
     private static String fallbackError(MediaAttachment attachment) {
         return String.format(
                 "[Attached Media: %s (%s) - Extraction and formatting could not be completed]",
-                sanitizeName(attachment.fileName()), attachment.mimeType());
-    }
-
-    private static String sanitizeName(String name) {
-        if (name == null || name.isBlank()) {
-            return "unnamed_media";
-        }
-        String sanitized = name.replaceAll("[\\p{Cntrl}\\r\\n]", "").trim();
-        return sanitized.isBlank() ? "unnamed_media" : sanitized;
-    }
-
-    private static String safeModelName(String modelName) {
-        if (modelName == null || modelName.isBlank()) {
-            return "active model";
-        }
-        String sanitized = modelName.replaceAll("[\\p{Cntrl}\\r\\n]", "").trim();
-        return sanitized.isBlank() ? "active model" : sanitized;
-    }
-
-    private static String formatSize(long bytes) {
-        if (bytes <= 0) {
-            return "unknown size";
-        }
-        if (bytes < 1024) {
-            return bytes + " B";
-        }
-        if (bytes < 1024 * 1024) {
-            return String.format(Locale.ROOT, "%.1f KB", bytes / 1024.0);
-        }
-        return String.format(Locale.ROOT, "%.1f MB", bytes / (1024.0 * 1024.0));
+                MultimodalMetrics.sanitizeName(attachment.fileName()), attachment.mimeType());
     }
 
     static String extractPdfText(byte[] pdfBytes, int maxChars) {
-        if (pdfBytes == null || pdfBytes.length == 0 || maxChars <= 0) {
-            return "";
-        }
-        StringBuilder text = new StringBuilder();
-        String raw = new String(pdfBytes, StandardCharsets.ISO_8859_1);
-        int btIndex = 0;
-        while ((btIndex = raw.indexOf("BT", btIndex)) != -1 && text.length() < maxChars) {
-            int etIndex = raw.indexOf("ET", btIndex + 2);
-            if (etIndex == -1) {
-                break;
-            }
-            extractLiteralStrings(raw.substring(btIndex + 2, etIndex), text, maxChars);
-            btIndex = etIndex + 2;
-        }
-        if (text.isEmpty()) {
-            extractLiteralStrings(raw, text, maxChars);
-        }
-        String result = text.toString().replaceAll("[\\r\\n]+", "\n").trim();
-        return result.length() > maxChars ? result.substring(0, maxChars) + "..." : result;
-    }
-
-    private static void extractLiteralStrings(String block, StringBuilder text, int maxChars) {
-        int index = 0;
-        while (index < block.length() && text.length() < maxChars) {
-            int open = block.indexOf('(', index);
-            if (open == -1) {
-                break;
-            }
-            int close = -1;
-            int depth = 1;
-            for (int i = open + 1; i < block.length(); i++) {
-                char current = block.charAt(i);
-                if (current == '\\') {
-                    i++;
-                    continue;
-                }
-                if (current == '(') {
-                    depth++;
-                } else if (current == ')' && --depth == 0) {
-                    close = i;
-                    break;
-                }
-            }
-            if (close == -1) {
-                break;
-            }
-            String literal = block.substring(open + 1, close)
-                    .replace("\\(", "(")
-                    .replace("\\)", ")")
-                    .replace("\\n", "\n")
-                    .replace("\\r", "\r")
-                    .replace("\\t", "\t")
-                    .replace("\\\\", "\\");
-            if (isReadableAscii(literal)) {
-                text.append(literal).append(' ');
-            }
-            index = close + 1;
-        }
-    }
-
-    private static boolean isReadableAscii(String value) {
-        if (value == null || value.isBlank()) {
-            return false;
-        }
-        int printable = 0;
-        for (int i = 0; i < value.length(); i++) {
-            char current = value.charAt(i);
-            if ((current >= 32 && current <= 126) || Character.isWhitespace(current)) {
-                printable++;
-            }
-        }
-        return (double) printable / value.length() >= 0.7;
+        return MultimodalMetrics.extractPdfText(pdfBytes, maxChars);
     }
 }

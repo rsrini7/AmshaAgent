@@ -24,6 +24,12 @@ public class OutboundHttpException extends RuntimeException {
         TLS_TRUST,
         /** The target host could not be resolved. */
         DNS_FAILURE,
+        /** Media payload exceeded the declared size limits or turn budget. */
+        OVERSIZED_PAYLOAD,
+        /** MIME type is unsupported or does not match the attachment modality. */
+        UNSUPPORTED_MIME,
+        /** Magic bytes do not match declared MIME type. */
+        MAGIC_MISMATCH,
         /** Lower-level I/O failure (connection refused, reset, proxy error). */
         IO
     }
@@ -70,6 +76,18 @@ public class OutboundHttpException extends RuntimeException {
 
     public static OutboundHttpException dns(String message) {
         return new OutboundHttpException(Category.DNS_FAILURE, message);
+    }
+
+    public static OutboundHttpException oversized(String message) {
+        return new OutboundHttpException(Category.OVERSIZED_PAYLOAD, message);
+    }
+
+    public static OutboundHttpException unsupportedMime(String message) {
+        return new OutboundHttpException(Category.UNSUPPORTED_MIME, message);
+    }
+
+    public static OutboundHttpException magicMismatch(String message) {
+        return new OutboundHttpException(Category.MAGIC_MISMATCH, message);
     }
 
     public static OutboundHttpException io(String message) {

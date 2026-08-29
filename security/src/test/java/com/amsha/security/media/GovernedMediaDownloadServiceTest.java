@@ -146,7 +146,7 @@ class GovernedMediaDownloadServiceTest {
 
         OutboundHttpException ex =
                 assertThrows(OutboundHttpException.class, () -> service.download(attachment, "user-1", true));
-        assertEquals(OutboundHttpException.Category.POLICY_DENIED, ex.category());
+        assertEquals(OutboundHttpException.Category.OVERSIZED_PAYLOAD, ex.category());
         assertTrue(ex.getMessage().contains("exceeds maximum size limit"));
     }
 
@@ -187,7 +187,7 @@ class GovernedMediaDownloadServiceTest {
         // 600KB + 600KB = 1.2MB > 1MB limit
         OutboundHttpException ex = assertThrows(
                 OutboundHttpException.class, () -> service.downloadAll(List.of(att1, att2), "user-1", true));
-        assertEquals(OutboundHttpException.Category.POLICY_DENIED, ex.category());
+        assertEquals(OutboundHttpException.Category.OVERSIZED_PAYLOAD, ex.category());
         assertTrue(ex.getMessage().contains("maximum size limit"));
     }
 
@@ -317,7 +317,7 @@ class GovernedMediaDownloadServiceTest {
                 OutboundHttpException.class,
                 () -> service.streamResponseBody(new ByteArrayInputStream(payload), attachment, "audio/ogg", 4));
 
-        assertEquals(OutboundHttpException.Category.POLICY_DENIED, ex.category());
+        assertEquals(OutboundHttpException.Category.OVERSIZED_PAYLOAD, ex.category());
     }
 
     @Test
@@ -331,7 +331,7 @@ class GovernedMediaDownloadServiceTest {
                 () -> service.streamResponseBody(
                         new ByteArrayInputStream(VALID_PNG_BYTES), attachment, "image/png", 0));
 
-        assertEquals(OutboundHttpException.Category.POLICY_DENIED, ex.category());
+        assertEquals(OutboundHttpException.Category.OVERSIZED_PAYLOAD, ex.category());
         assertTrue(ex.getMessage().contains("no remaining payload budget"));
     }
 

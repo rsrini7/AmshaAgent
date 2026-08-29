@@ -1,6 +1,7 @@
 package com.amsha.security.media;
 
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
 import java.io.ByteArrayOutputStream;
@@ -43,6 +44,7 @@ import com.amsha.security.http.OutboundHttpException;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
+import io.micrometer.core.instrument.MeterRegistry;
 import io.quarkus.arc.Unremovable;
 import io.vertx.core.Context;
 
@@ -70,6 +72,9 @@ public class GovernedMediaDownloadService implements MediaDownloadPort {
 
     @Inject
     GovernedTelegramMediaResolver telegramResolver;
+
+    @Inject
+    Instance<MeterRegistry> meterRegistry;
 
     @ConfigProperty(name = "amsha.data-dir", defaultValue = "./data")
     String dataDir;
@@ -103,7 +108,7 @@ public class GovernedMediaDownloadService implements MediaDownloadPort {
             MediaAttachment attachment, String actorUserId, boolean preApproved, long maximumBytes) {
         Objects.requireNonNull(attachment, "attachment must not be null");
         if (maximumBytes <= 0) {
-            throw OutboundHttpException.policy("Media download has no remaining payload budget");
+            throw OutboundHttpException.oversized("Media download has no remaining payload budget");
         }
 
         // Non-blocking event loop safety guard
@@ -112,6 +117,8 @@ public class GovernedMediaDownloadService implements MediaDownloadPort {
         }
 
         DownloadedMedia result = null;
+        long startNanos = System.nanoTime();
+        String status = "success";
         try {
             if (attachment.inlineData() != null) {
                 result = processInlineMedia(attachment, maximumBytes);
@@ -155,11 +162,30 @@ public class GovernedMediaDownloadService implements MediaDownloadPort {
 
             return result;
         } catch (Exception e) {
+            status = MediaDownloadMetrics.mapExceptionToStatus(e);
             // Clean up temp file immediately if download or mandatory audit fails
             if (result != null) {
                 result.close();
             }
             throw e;
+        } finally {
+            MediaDownloadMetrics.recordDownload(
+                    resolveMeterRegistry(),
+                    attachment,
+                    status,
+                    System.nanoTime() - startNanos,
+                    result != null ? result.sizeBytes() : 0L);
+        }
+    }
+
+    private MeterRegistry resolveMeterRegistry() {
+        if (meterRegistry == null || !meterRegistry.isResolvable()) {
+            return null;
+        }
+        try {
+            return meterRegistry.get();
+        } catch (Exception _) {
+            return null;
         }
     }
 
@@ -178,7 +204,7 @@ public class GovernedMediaDownloadService implements MediaDownloadPort {
             for (MediaAttachment attachment : attachments) {
                 long remainingBytes = maxTotalBytes - cumulativeBytes;
                 if (remainingBytes <= 0) {
-                    throw OutboundHttpException.policy(
+                    throw OutboundHttpException.oversized(
                             "Cumulative turn media payload reached limit of " + maxTotalBytes + " bytes");
                 }
                 DownloadedMedia downloaded =
@@ -186,7 +212,7 @@ public class GovernedMediaDownloadService implements MediaDownloadPort {
                 cumulativeBytes += downloaded.sizeBytes();
                 if (cumulativeBytes > maxTotalBytes) {
                     downloaded.close();
-                    throw OutboundHttpException.policy("Cumulative turn media payload exceeded limit of "
+                    throw OutboundHttpException.oversized("Cumulative turn media payload exceeded limit of "
                             + maxTotalBytes + " bytes (actual: " + cumulativeBytes + ")");
                 }
                 downloadedList.add(downloaded);
@@ -207,7 +233,7 @@ public class GovernedMediaDownloadService implements MediaDownloadPort {
                 attachment.type(), maxImageSizeMb * 1024L * 1024L, maxDocSizeMb * 1024L * 1024L);
         limitBytes = Math.min(limitBytes, maximumBytes);
         if (data.length > limitBytes) {
-            throw OutboundHttpException.policy("Inline media exceeds maximum size limit of " + limitBytes
+            throw OutboundHttpException.oversized("Inline media exceeds maximum size limit of " + limitBytes
                     + " bytes (actual: " + data.length + ")");
         }
         String validMime = MediaSecurityValidator.validateMimeType(attachment.mimeType(), attachment.type());
@@ -313,7 +339,7 @@ public class GovernedMediaDownloadService implements MediaDownloadPort {
     DownloadedMedia streamResponseBody(
             InputStream bodyStream, MediaAttachment attachment, String mimeType, long limitBytes) {
         if (limitBytes <= 0) {
-            throw OutboundHttpException.policy("Media download has no remaining payload budget");
+            throw OutboundHttpException.oversized("Media download has no remaining payload budget");
         }
         Path tempFile = null;
         OutputStream fileOut = null;
@@ -339,7 +365,7 @@ public class GovernedMediaDownloadService implements MediaDownloadPort {
                         break;
                     }
                     if (totalRead >= limitBytes) {
-                        throw OutboundHttpException.policy(
+                        throw OutboundHttpException.oversized(
                                 "Media download exceeded maximum size limit of " + limitBytes + " bytes");
                     }
                     totalRead += n;

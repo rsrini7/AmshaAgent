@@ -359,6 +359,7 @@ class ReasoningMessageAssemblerTest {
                     attachment.inlineData());
         };
         Instance<MediaDownloadPort> mediaInstance = mock(Instance.class);
+        when(mediaInstance.isResolvable()).thenReturn(true);
         when(mediaInstance.isUnsatisfied()).thenReturn(false);
         when(mediaInstance.get()).thenReturn(downloadPort);
         injectField(assembler, "mediaDownloadPortInstance", mediaInstance);

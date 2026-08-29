@@ -251,6 +251,19 @@ If the active model (or candidate model in failover routing) does not support a 
 
 Routing wrappers (`MultiModelChatModel`, `OrderedFailoverChatModel`) compute the safe capability intersection across candidate models at composition time, preventing runtime schema or modality mismatch errors.
 
+## Multimodal Telemetry & Metrics
+
+The reasoning pipeline emits payload-free Micrometer metrics under `amsha.media.*` using strictly bounded categorical tag values (`source`, `type`, `status`, `reason`). No filenames, user IDs, URLs, payloads, credentials, or prompts are ever included in metric tags:
+
+| Metric Name | Type | Tags | Description |
+|---|---|---|---|
+| `amsha.media.ingestion.total` | Counter | `type`, `source`, `status` | Tracks media attachment ingestion attempts (`status=attached` or `status=fallback`). |
+| `amsha.media.fallback.total` | Counter | `reason`, `type` | Granular breakdown of fallback reasons when attachments degrade to structured text. |
+| `amsha.media.extraction.duration` | Timer | `type`, `status` | Execution duration for fallback text extraction (e.g. PDF text extraction). |
+| `amsha.media.extraction.chars` | Counter | `type` | Count of characters extracted during successful text fallback extractions. |
+
+> **Dashboard Note on Volume vs Reason**: `amsha.media.ingestion.total{status="fallback"}` tracks the aggregate count of attachments routed to fallback degradation, while `amsha.media.fallback.total{reason="..."}` provides the categorical cause breakdown. To avoid double-counting total media volume, query `amsha.media.ingestion.total` for volume metrics.
+
 ## Testing
 
 Run core tests:

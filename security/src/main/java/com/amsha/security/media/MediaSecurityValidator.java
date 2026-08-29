@@ -207,24 +207,24 @@ public final class MediaSecurityValidator {
      */
     public static String validateMimeType(String rawContentType, AttachmentType expectedType) {
         if (rawContentType == null || rawContentType.isBlank()) {
-            throw OutboundHttpException.policy("Response missing Content-Type header");
+            throw OutboundHttpException.unsupportedMime("Response missing Content-Type header");
         }
         String normalized = rawContentType.split(";")[0].trim().toLowerCase(Locale.ROOT);
         if (!MediaBudgetLimits.ALLOWED_MIME_TYPES.contains(normalized)) {
-            throw OutboundHttpException.policy("Unsupported media MIME type: " + normalized + " (allowed: "
+            throw OutboundHttpException.unsupportedMime("Unsupported media MIME type: " + normalized + " (allowed: "
                     + MediaBudgetLimits.ALLOWED_MIME_TYPES + ")");
         }
 
         if (expectedType == AttachmentType.IMAGE && !normalized.startsWith("image/")) {
-            throw OutboundHttpException.policy(
+            throw OutboundHttpException.unsupportedMime(
                     "MIME type " + normalized + " does not match expected attachment type " + expectedType);
         }
         if (expectedType == AttachmentType.AUDIO && !normalized.startsWith("audio/")) {
-            throw OutboundHttpException.policy(
+            throw OutboundHttpException.unsupportedMime(
                     "MIME type " + normalized + " does not match expected attachment type " + expectedType);
         }
         if (expectedType == AttachmentType.DOCUMENT_PDF && !"application/pdf".equals(normalized)) {
-            throw OutboundHttpException.policy(
+            throw OutboundHttpException.unsupportedMime(
                     "MIME type " + normalized + " does not match expected attachment type " + expectedType);
         }
         return normalized;
@@ -236,11 +236,12 @@ public final class MediaSecurityValidator {
      */
     public static void validateMagicBytes(byte[] header, String mimeType) {
         if (mimeType == null || mimeType.isBlank()) {
-            throw OutboundHttpException.policy("Media payload MIME type is missing");
+            throw OutboundHttpException.unsupportedMime("Media payload MIME type is missing");
         }
         int requiredHeaderLength = requiredMagicHeaderLength(mimeType);
         if (header == null || header.length < requiredHeaderLength) {
-            throw OutboundHttpException.policy("Media payload is empty or too short for valid " + mimeType + " header");
+            throw OutboundHttpException.magicMismatch(
+                    "Media payload is empty or too short for valid " + mimeType + " header");
         }
 
         rejectExecutableHeader(header);
@@ -275,31 +276,31 @@ public final class MediaSecurityValidator {
 
     private static void validatePngHeader(byte[] header) {
         if (!matchesBytes(header, new byte[] {(byte) 0x89, 'P', 'N', 'G', 0x0D, 0x0A, 0x1A, 0x0A})) {
-            throw OutboundHttpException.policy("Image data does not match valid PNG magic header");
+            throw OutboundHttpException.magicMismatch("Image data does not match valid PNG magic header");
         }
     }
 
     private static void validateJpegHeader(byte[] header) {
         if ((header[0] & 0xFF) != 0xFF || (header[1] & 0xFF) != 0xD8 || (header[2] & 0xFF) != 0xFF) {
-            throw OutboundHttpException.policy("Image data does not match valid JPEG magic header");
+            throw OutboundHttpException.magicMismatch("Image data does not match valid JPEG magic header");
         }
     }
 
     private static void validateGifHeader(byte[] header) {
         if (!matchesAscii(header, 0, "GIF8")) {
-            throw OutboundHttpException.policy("Image data does not match valid GIF magic header");
+            throw OutboundHttpException.magicMismatch("Image data does not match valid GIF magic header");
         }
     }
 
     private static void validateWebpHeader(byte[] header) {
         if (!matchesAscii(header, 0, "RIFF") || !matchesAscii(header, 8, "WEBP")) {
-            throw OutboundHttpException.policy("Image data does not match valid WebP magic header");
+            throw OutboundHttpException.magicMismatch("Image data does not match valid WebP magic header");
         }
     }
 
     private static void validatePdfHeader(byte[] header) {
         if (!matchesAscii(header, 0, "%PDF")) {
-            throw OutboundHttpException.policy("Document data does not match valid PDF magic header");
+            throw OutboundHttpException.magicMismatch("Document data does not match valid PDF magic header");
         }
     }
 
@@ -307,19 +308,19 @@ public final class MediaSecurityValidator {
         boolean id3 = matchesAscii(header, 0, "ID3");
         boolean frame = (header[0] & 0xFF) == 0xFF && (header[1] & 0xE0) == 0xE0;
         if (!id3 && !frame) {
-            throw OutboundHttpException.policy("Audio data does not match valid MPEG magic header");
+            throw OutboundHttpException.magicMismatch("Audio data does not match valid MPEG magic header");
         }
     }
 
     private static void validateWavHeader(byte[] header) {
         if (!matchesAscii(header, 0, "RIFF") || !matchesAscii(header, 8, "WAVE")) {
-            throw OutboundHttpException.policy("Audio data does not match valid WAV magic header");
+            throw OutboundHttpException.magicMismatch("Audio data does not match valid WAV magic header");
         }
     }
 
     private static void validateOggHeader(byte[] header) {
         if (!matchesAscii(header, 0, "OggS")) {
-            throw OutboundHttpException.policy("Audio data does not match valid OGG magic header");
+            throw OutboundHttpException.magicMismatch("Audio data does not match valid OGG magic header");
         }
     }
 

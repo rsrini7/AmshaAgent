@@ -47,6 +47,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.jboss.logging.Logger;
 
+import io.micrometer.core.instrument.MeterRegistry;
+
 /**
  * Encapsulates the logic for assembling the LLM message list, applying
  * write-intent overrides, and filtering tool history for simple chitchat.
@@ -88,6 +90,9 @@ public class ReasoningMessageAssembler {
 
     @Inject
     Instance<MediaDownloadPort> mediaDownloadPortInstance;
+
+    @Inject
+    Instance<MeterRegistry> meterRegistryInstance;
 
     @Inject
     public ReasoningMessageAssembler(
@@ -219,17 +224,40 @@ public class ReasoningMessageAssembler {
     private UserMessage mapMediaMessage(
             AgentExecutionContext context, String goal, MultimodalCapability capability, String agentRole) {
         MediaDownloadPort downloadPort = resolveMediaDownloadPort();
+        MeterRegistry meterRegistry = resolveMeterRegistry();
         // Autonomy is not an operator approval receipt. Keep media downloads behind the governed
         // HITL policy until an explicit receipt can be carried through AgentExecutionContext.
         return MultimodalMessageMapper.mapToUserMessage(
-                goal, context.mediaAttachments(), capability, agentRole, downloadPort, context.userId(), false);
+                goal,
+                context.mediaAttachments(),
+                capability,
+                agentRole,
+                downloadPort,
+                context.userId(),
+                false,
+                meterRegistry);
+    }
+
+    private MeterRegistry resolveMeterRegistry() {
+        if (meterRegistryInstance == null || !meterRegistryInstance.isResolvable()) {
+            return null;
+        }
+        try {
+            return meterRegistryInstance.get();
+        } catch (Exception _) {
+            return null;
+        }
     }
 
     private MediaDownloadPort resolveMediaDownloadPort() {
-        if (mediaDownloadPortInstance == null || mediaDownloadPortInstance.isUnsatisfied()) {
+        if (mediaDownloadPortInstance == null || !mediaDownloadPortInstance.isResolvable()) {
             return null;
         }
-        return mediaDownloadPortInstance.get();
+        try {
+            return mediaDownloadPortInstance.get();
+        } catch (Exception _) {
+            return null;
+        }
     }
 
     private List<ChatMessage> recentConversationContext(List<ChatMessage> history, String goal) {

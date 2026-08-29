@@ -45,6 +45,18 @@ class OutboundHttpExceptionTest {
         assertEquals(OutboundHttpException.Category.IO, ioNoCause.category());
         assertEquals("io fail", ioNoCause.getMessage());
 
+        OutboundHttpException oversized = OutboundHttpException.oversized("payload too large");
+        assertEquals(OutboundHttpException.Category.OVERSIZED_PAYLOAD, oversized.category());
+        assertEquals("payload too large", oversized.getMessage());
+
+        OutboundHttpException unsupportedMime = OutboundHttpException.unsupportedMime("bad mime");
+        assertEquals(OutboundHttpException.Category.UNSUPPORTED_MIME, unsupportedMime.category());
+        assertEquals("bad mime", unsupportedMime.getMessage());
+
+        OutboundHttpException magicMismatch = OutboundHttpException.magicMismatch("magic header mismatch");
+        assertEquals(OutboundHttpException.Category.MAGIC_MISMATCH, magicMismatch.category());
+        assertEquals("magic header mismatch", magicMismatch.getMessage());
+
         IOException cause = new IOException("socket reset");
         OutboundHttpException ioWithCause = OutboundHttpException.io("io with cause", cause);
         assertEquals(OutboundHttpException.Category.IO, ioWithCause.category());
