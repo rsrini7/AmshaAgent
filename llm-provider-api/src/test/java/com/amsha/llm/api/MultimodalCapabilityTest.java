@@ -30,7 +30,7 @@ class MultimodalCapabilityTest {
     void constructorNormalizesAndCopiesSets() {
         MultimodalCapability cap = new MultimodalCapability(
                 Set.of(AttachmentType.IMAGE, AttachmentType.AUDIO),
-                Set.of("image/png", "image/jpeg", "audio/mpeg"),
+                Set.of("IMAGE/PNG", "image/jpeg; charset=utf-8", "audio/mpeg"),
                 10_000_000L,
                 5,
                 true,
@@ -43,6 +43,8 @@ class MultimodalCapabilityTest {
         assertFalse(cap.supportsType(AttachmentType.OTHER));
 
         assertTrue(cap.supportsMimeType("image/png"));
+        assertTrue(cap.supportedMimeTypes().contains("image/png"));
+        assertTrue(cap.supportedMimeTypes().contains("image/jpeg"));
         assertTrue(cap.supportsMimeType("image/jpeg; charset=utf-8"));
         assertTrue(cap.supportsMimeType("IMAGE/PNG"));
         assertTrue(cap.supportsMimeType("audio/mpeg"));

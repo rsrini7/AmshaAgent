@@ -85,7 +85,12 @@ public class GovernedMediaDownloadService implements MediaDownloadPort {
 
     @Override
     public DownloadedMedia download(MediaAttachment attachment, String actorUserId, boolean preApproved) {
-        return downloadWithMaximumBytes(attachment, actorUserId, preApproved, maxTotalPayloadBytes());
+        return downloadWithMaximumBytes(attachment, actorUserId, preApproved, configuredMaxTotalPayloadBytes());
+    }
+
+    @Override
+    public long maxTotalPayloadBytes() {
+        return configuredMaxTotalPayloadBytes();
     }
 
     private DownloadedMedia downloadWithMaximumBytes(
@@ -164,7 +169,7 @@ public class GovernedMediaDownloadService implements MediaDownloadPort {
         }
 
         long cumulativeBytes = 0;
-        long maxTotalBytes = maxTotalPayloadBytes();
+        long maxTotalBytes = configuredMaxTotalPayloadBytes();
         List<DownloadedMedia> downloadedList = new ArrayList<>(attachments.size());
 
         try {
@@ -485,7 +490,7 @@ public class GovernedMediaDownloadService implements MediaDownloadPort {
         return (long) maxDocSizeMb * 1024L * 1024L;
     }
 
-    private long maxTotalPayloadBytes() {
+    private long configuredMaxTotalPayloadBytes() {
         return maxTotalPayloadMb > 0
                 ? (long) maxTotalPayloadMb * 1024L * 1024L
                 : MediaBudgetLimits.DEFAULT_MAX_TOTAL_PAYLOAD_BYTES;

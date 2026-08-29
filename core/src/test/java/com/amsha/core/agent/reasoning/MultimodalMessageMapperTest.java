@@ -17,6 +17,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import com.amsha.channel.api.AttachmentType;
 import com.amsha.channel.api.MediaAttachment;
@@ -398,5 +399,56 @@ class MultimodalMessageMapperTest {
         ImageContent imgContent = (ImageContent) contents.get(1);
         assertNotNull(imgContent.image());
         assertNotNull(imgContent.image().base64Data());
+    }
+
+    @Test
+    void batchesUnknownSizedRemoteAttachmentsThroughDownloadAll() {
+        AtomicInteger batchCalls = new AtomicInteger();
+        byte[] downloadedData = new byte[] {(byte) 0x89, 'P', 'N', 'G', 9, 8, 7};
+        MediaDownloadPort batchPort = new MediaDownloadPort() {
+            @Override
+            public DownloadedMedia download(MediaAttachment attachment, String actorUserId, boolean preApproved) {
+                throw new AssertionError("mapper must use the batch download operation");
+            }
+
+            @Override
+            public List<DownloadedMedia> downloadAll(
+                    List<MediaAttachment> attachments, String actorUserId, boolean preApproved) {
+                batchCalls.incrementAndGet();
+                return attachments.stream()
+                        .map(attachment -> DownloadedMedia.ofInline(
+                                attachment.attachmentId(),
+                                attachment.type(),
+                                attachment.mimeType(),
+                                attachment.fileName(),
+                                downloadedData))
+                        .toList();
+            }
+        };
+        MultimodalCapability capability = MultimodalCapabilities.defaultCapabilityForModel("openai", "gpt-4o");
+        MediaAttachment first = MediaAttachment.ofUri(
+                "remote-batch-1",
+                AttachmentType.IMAGE,
+                "image/png",
+                "first.png",
+                0L,
+                URI.create("https://example.com/first.png"),
+                Map.of());
+        MediaAttachment second = MediaAttachment.ofUri(
+                "remote-batch-2",
+                AttachmentType.IMAGE,
+                "image/png",
+                "second.png",
+                0L,
+                URI.create("https://example.com/second.png"),
+                Map.of());
+
+        UserMessage message = MultimodalMessageMapper.mapToUserMessage(
+                "Inspect both", List.of(first, second), capability, "gpt-4o", batchPort, "user-1", true);
+
+        assertEquals(1, batchCalls.get());
+        assertEquals(3, message.contents().size());
+        assertInstanceOf(ImageContent.class, message.contents().get(1));
+        assertInstanceOf(ImageContent.class, message.contents().get(2));
     }
 }

@@ -42,11 +42,13 @@ Concrete provider factories are annotated with `@ApplicationScoped` and discover
 ## Multimodal Model Capabilities
 
 Provider models declare or dynamically resolve multimodal capabilities via `MultimodalCapability` (contract from `amsha-llm-provider-api`):
-- **OpenAI Vision**: `gpt-4o`, `gpt-4-turbo`, `o1` support `IMAGE` (PNG/JPEG/WEBP/GIF) up to 20 MiB, up to 10 images per request, inline base64 and URLs.
+- **OpenAI Vision**: `gpt-4o`, `gpt-4-turbo`, `o1` support `IMAGE` (PNG/JPEG/WEBP/GIF) up to 20 MiB, up to 10 images per request, inline base64 content.
 - **Gemini**: `gemini-1.5-pro`, `gemini-2.0-flash`, etc. support `IMAGE`, `AUDIO`, and `DOCUMENT_PDF` up to 25 MiB, up to 16 media items per request.
 - **Anthropic**: `claude-3-5-sonnet`, `claude-3-haiku` support `IMAGE` and `DOCUMENT_PDF` up to 25 MiB, up to 10 media items per request.
 - **Open-Weight Models**: `llava`, `pixtral`, etc. support `IMAGE` up to 10 MiB, up to 5 images per request.
 - **Text-Only Models & Failover**: Models without vision/audio capabilities default to `MultimodalCapability.TEXT_ONLY`. When a turn contains media attachments, `MultimodalMessageMapper` in `amsha-core` automatically provides structured fallback text placeholders so the turn completes safely.
+
+Provider URL capability declarations do not authorize the mapper to forward source URLs. URI-backed attachments are fetched only through the governed media port and are forwarded as validated inline bytes; URL-only transport currently degrades to a text placeholder.
 
 ## Observability & ChatModelListener Pilot
 

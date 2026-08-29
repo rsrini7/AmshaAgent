@@ -25,6 +25,15 @@ public interface MediaDownloadPort {
     DownloadedMedia download(MediaAttachment attachment, String actorUserId, boolean preApproved);
 
     /**
+     * Returns the effective maximum payload for one turn handled by this port.
+     * Implementations with configurable limits should override this method so callers can
+     * apply the same limit while composing the provider request.
+     */
+    default long maxTotalPayloadBytes() {
+        return MediaBudgetLimits.DEFAULT_MAX_TOTAL_PAYLOAD_BYTES;
+    }
+
+    /**
      * Downloads and validates a list of media attachments within turn-level cumulative budgets.
      *
      * @param attachments list of media attachments to download
@@ -38,17 +47,27 @@ public interface MediaDownloadPort {
             return List.of();
         }
         long cumulativeBytes = 0;
+        long configuredMaxTotalBytes = maxTotalPayloadBytes();
+        long maxTotalBytes = configuredMaxTotalBytes > 0
+                ? configuredMaxTotalBytes
+                : MediaBudgetLimits.DEFAULT_MAX_TOTAL_PAYLOAD_BYTES;
         List<DownloadedMedia> results = new ArrayList<>(attachments.size());
         try {
             for (MediaAttachment attachment : attachments) {
                 DownloadedMedia downloaded = download(attachment, actorUserId, preApproved);
-                cumulativeBytes += downloaded.sizeBytes();
-                if (cumulativeBytes > MediaBudgetLimits.DEFAULT_MAX_TOTAL_PAYLOAD_BYTES) {
+                if (downloaded == null) {
+                    throw new IllegalStateException("Media download returned no result");
+                }
+                long sizeBytes = downloaded.sizeBytes();
+                if (sizeBytes > maxTotalBytes - cumulativeBytes) {
                     downloaded.close();
+                    long actualBytes =
+                            cumulativeBytes > Long.MAX_VALUE - sizeBytes ? Long.MAX_VALUE : cumulativeBytes + sizeBytes;
                     throw new IllegalStateException("Cumulative turn media payload exceeded limit of "
-                            + MediaBudgetLimits.DEFAULT_MAX_TOTAL_PAYLOAD_BYTES + " bytes (actual: " + cumulativeBytes
+                            + maxTotalBytes + " bytes (actual: " + actualBytes
                             + ")");
                 }
+                cumulativeBytes += sizeBytes;
                 results.add(downloaded);
             }
             return List.copyOf(results);

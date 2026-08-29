@@ -16,10 +16,13 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Base64;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 
 import com.amsha.channel.api.AttachmentType;
 import com.amsha.channel.api.MediaAttachment;
@@ -84,6 +87,10 @@ public final class MultimodalMessageMapper {
         List<Content> contents = new ArrayList<>();
         contents.add(TextContent.from(effectivePrompt));
 
+        BatchDownloadScope batch =
+                BatchDownloadScope.open(attachments, cap, downloadPort, actorUserId, preApproved, model);
+        long maxCumulativeBytes = batch.maxTotalPayloadBytes();
+
         int attachedMediaCount = 0;
         long cumulativeBytes = 0;
         for (MediaAttachment attachment : attachments) {
@@ -93,14 +100,12 @@ public final class MultimodalMessageMapper {
 
             boolean supported = cap.supportsType(attachment.type()) && cap.supportsMimeType(attachment.mimeType());
             if (!supported) {
-                byte[] pdfBytes = attachment.type() == AttachmentType.DOCUMENT_PDF
-                        ? resolveBytes(attachment, downloadPort, actorUserId, preApproved)
-                        : null;
+                byte[] pdfBytes = attachment.type() == AttachmentType.DOCUMENT_PDF ? batch.resolve(attachment) : null;
                 if (pdfBytes != null) {
                     long pdfSize = pdfBytes.length;
-                    if (cumulativeBytes > MediaBudgetLimits.DEFAULT_MAX_TOTAL_PAYLOAD_BYTES - pdfSize) {
-                        contents.add(TextContent.from(fallbackCumulativeExceeded(
-                                attachment, pdfSize, MediaBudgetLimits.DEFAULT_MAX_TOTAL_PAYLOAD_BYTES)));
+                    if (cumulativeBytes > maxCumulativeBytes - pdfSize) {
+                        contents.add(
+                                TextContent.from(fallbackCumulativeExceeded(attachment, pdfSize, maxCumulativeBytes)));
                         continue;
                     }
                     cumulativeBytes += pdfSize;
@@ -121,10 +126,9 @@ public final class MultimodalMessageMapper {
                 contents.add(TextContent.from(fallbackOversized(attachment, advisorySize, cap.maxFileSize())));
                 continue;
             }
-            if (advisorySize > 0
-                    && cumulativeBytes > MediaBudgetLimits.DEFAULT_MAX_TOTAL_PAYLOAD_BYTES - advisorySize) {
-                contents.add(TextContent.from(fallbackCumulativeExceeded(
-                        attachment, advisorySize, MediaBudgetLimits.DEFAULT_MAX_TOTAL_PAYLOAD_BYTES)));
+            if (advisorySize > 0 && cumulativeBytes > maxCumulativeBytes - advisorySize) {
+                contents.add(
+                        TextContent.from(fallbackCumulativeExceeded(attachment, advisorySize, maxCumulativeBytes)));
                 continue;
             }
             if (cap.maxMediaPerRequest() > 0 && attachedMediaCount >= cap.maxMediaPerRequest()) {
@@ -132,7 +136,7 @@ public final class MultimodalMessageMapper {
                 continue;
             }
 
-            byte[] effectiveBytes = resolveBytes(attachment, downloadPort, actorUserId, preApproved);
+            byte[] effectiveBytes = batch.resolve(attachment);
             if (effectiveBytes == null) {
                 contents.add(TextContent.from(fallbackUnavailable(attachment)));
                 continue;
@@ -143,9 +147,8 @@ public final class MultimodalMessageMapper {
                 contents.add(TextContent.from(fallbackOversized(attachment, actualSize, cap.maxFileSize())));
                 continue;
             }
-            if (cumulativeBytes > MediaBudgetLimits.DEFAULT_MAX_TOTAL_PAYLOAD_BYTES - actualSize) {
-                contents.add(TextContent.from(fallbackCumulativeExceeded(
-                        attachment, actualSize, MediaBudgetLimits.DEFAULT_MAX_TOTAL_PAYLOAD_BYTES)));
+            if (cumulativeBytes > maxCumulativeBytes - actualSize) {
+                contents.add(TextContent.from(fallbackCumulativeExceeded(attachment, actualSize, maxCumulativeBytes)));
                 continue;
             }
             cumulativeBytes += actualSize;
@@ -162,33 +165,117 @@ public final class MultimodalMessageMapper {
         return canonicalizeTextOnly(contents, effectivePrompt);
     }
 
-    private static byte[] resolveBytes(
-            MediaAttachment attachment, MediaDownloadPort downloadPort, String userId, boolean preApproved) {
-        if (downloadPort == null) {
-            return null;
+    private static final class BatchDownloadScope {
+        private final Map<MediaAttachment, ArrayDeque<byte[]>> bytesByAttachment;
+        private final long maxTotalPayloadBytes;
+
+        private BatchDownloadScope(long maxTotalPayloadBytes) {
+            this.bytesByAttachment = new IdentityHashMap<>();
+            this.maxTotalPayloadBytes = maxTotalPayloadBytes;
         }
-        try (DownloadedMedia downloaded = downloadPort.download(attachment, userId, preApproved)) {
-            if (downloaded == null) {
-                return null;
+
+        private static BatchDownloadScope open(
+                List<MediaAttachment> attachments,
+                MultimodalCapability capability,
+                MediaDownloadPort downloadPort,
+                String actorUserId,
+                boolean preApproved,
+                String modelName) {
+            long configuredLimit = downloadPort != null
+                    ? downloadPort.maxTotalPayloadBytes()
+                    : MediaBudgetLimits.DEFAULT_MAX_TOTAL_PAYLOAD_BYTES;
+            long effectiveLimit =
+                    configuredLimit > 0 ? configuredLimit : MediaBudgetLimits.DEFAULT_MAX_TOTAL_PAYLOAD_BYTES;
+            BatchDownloadScope scope = new BatchDownloadScope(effectiveLimit);
+            if (downloadPort == null) {
+                return scope;
             }
-            return materialize(downloaded);
-        } catch (Exception e) {
-            log.warnf("Governed download failed for %s: %s", attachment.attachmentId(), LogUtil.rootMessage(e));
-            return null;
+
+            List<MediaAttachment> targets = new ArrayList<>();
+            long plannedBytes = 0;
+            for (MediaAttachment attachment : attachments) {
+                if (attachment == null) {
+                    continue;
+                }
+                boolean supported = capability.supportsType(attachment.type())
+                        && capability.supportsMimeType(attachment.mimeType());
+                boolean needsBytes = !supported
+                        ? attachment.type() == AttachmentType.DOCUMENT_PDF
+                        : capability.supportsInlineBase64();
+                if (needsBytes
+                        && (capability.maxFileSize() <= 0
+                                || attachment.sizeBytes() <= 0
+                                || attachment.sizeBytes() <= capability.maxFileSize())) {
+                    long declaredSize = attachment.sizeBytes();
+                    if (declaredSize > 0
+                            && (declaredSize > effectiveLimit || plannedBytes > effectiveLimit - declaredSize)) {
+                        continue;
+                    }
+                    targets.add(attachment);
+                    if (declaredSize > 0) {
+                        plannedBytes += declaredSize;
+                    }
+                }
+            }
+            if (targets.isEmpty()) {
+                return scope;
+            }
+
+            List<DownloadedMedia> downloaded;
+            try {
+                downloaded = downloadPort.downloadAll(targets, actorUserId, preApproved);
+            } catch (Exception e) {
+                log.warnf("Governed media batch download failed for %s: %s", modelName, LogUtil.rootMessage(e));
+                return scope;
+            }
+            if (downloaded == null) {
+                log.warnf("Governed media batch download returned no results for %s", modelName);
+                return scope;
+            }
+            for (int i = 0; i < downloaded.size(); i++) {
+                DownloadedMedia media = downloaded.get(i);
+                if (media == null) {
+                    continue;
+                }
+                try (media) {
+                    if (i < targets.size()) {
+                        scope.add(targets.get(i), materialize(media, effectiveLimit));
+                    }
+                } catch (Exception e) {
+                    String attachmentId = i < targets.size() ? targets.get(i).attachmentId() : "unknown";
+                    log.warnf("Governed media materialization failed %s: %s", attachmentId, LogUtil.rootMessage(e));
+                }
+            }
+            return scope;
+        }
+
+        private void add(MediaAttachment attachment, byte[] bytes) {
+            bytesByAttachment
+                    .computeIfAbsent(attachment, _ -> new ArrayDeque<>())
+                    .add(bytes);
+        }
+
+        private byte[] resolve(MediaAttachment attachment) {
+            ArrayDeque<byte[]> queued = bytesByAttachment.get(attachment);
+            return queued == null || queued.isEmpty() ? null : queued.removeFirst();
+        }
+
+        private long maxTotalPayloadBytes() {
+            return maxTotalPayloadBytes;
         }
     }
 
-    private static byte[] materialize(DownloadedMedia downloaded) throws IOException {
+    private static byte[] materialize(DownloadedMedia downloaded, long maxTotalPayloadBytes) throws IOException {
         byte[] inlineData = downloaded.inlineData();
         if (inlineData != null) {
-            if (inlineData.length > MediaBudgetLimits.DEFAULT_MAX_TOTAL_PAYLOAD_BYTES) {
+            if (inlineData.length > maxTotalPayloadBytes) {
                 throw new IOException("Downloaded inline media exceeds the turn payload limit");
             }
             return inlineData.clone();
         }
 
         Path tempFile = downloaded.tempFilePath();
-        if (tempFile == null || downloaded.sizeBytes() > MediaBudgetLimits.DEFAULT_MAX_TOTAL_PAYLOAD_BYTES) {
+        if (tempFile == null || downloaded.sizeBytes() > maxTotalPayloadBytes) {
             throw new IOException("Downloaded media has no bounded materializable representation");
         }
 
@@ -201,7 +288,7 @@ public final class MultimodalMessageMapper {
         try (InputStream input = Files.newInputStream(tempFile)) {
             int read;
             while ((read = input.read(buffer)) != -1) {
-                if ((long) bytes.size() + read > MediaBudgetLimits.DEFAULT_MAX_TOTAL_PAYLOAD_BYTES) {
+                if ((long) bytes.size() + read > maxTotalPayloadBytes) {
                     throw new IOException("Downloaded media exceeds the turn payload limit");
                 }
                 bytes.write(buffer, 0, read);

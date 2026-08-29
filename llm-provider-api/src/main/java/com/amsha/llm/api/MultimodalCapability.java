@@ -2,6 +2,7 @@ package com.amsha.llm.api;
 
 import java.util.Locale;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import com.amsha.channel.api.AttachmentType;
 
@@ -22,7 +23,13 @@ public record MultimodalCapability(
 
     public MultimodalCapability {
         supportedTypes = supportedTypes != null ? Set.copyOf(supportedTypes) : Set.of();
-        supportedMimeTypes = supportedMimeTypes != null ? Set.copyOf(supportedMimeTypes) : Set.of();
+        supportedMimeTypes = supportedMimeTypes == null
+                ? Set.of()
+                : supportedMimeTypes.stream()
+                        .filter(mime -> mime != null && !mime.isBlank())
+                        .map(mime -> mime.split(";", 2)[0].trim().toLowerCase(Locale.ROOT))
+                        .filter(mime -> !mime.isBlank())
+                        .collect(Collectors.toUnmodifiableSet());
         maxFileSize = Math.max(0L, maxFileSize);
         maxMediaPerRequest = Math.max(0, maxMediaPerRequest);
     }

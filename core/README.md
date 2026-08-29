@@ -241,7 +241,7 @@ When channel messages contain media attachments (`MediaAttachment`), `Multimodal
 - `AUDIO` → `AudioContent.from(Audio)`
 - `DOCUMENT_PDF` → `PdfFileContent.from(PdfFile)`
 
-If the active model (or candidate model in failover routing) does not support a modality, or if an attachment exceeds `maxFileSize`, `maxMediaPerRequest`, or the cumulative turn budget (50 MiB), `MultimodalMessageMapper` automatically falls back to clean, structured text placeholders:
+If the active model (or candidate model in failover routing) does not support a modality, or if an attachment exceeds `maxFileSize`, `maxMediaPerRequest`, or the configured cumulative turn budget (50 MiB by default), `MultimodalMessageMapper` automatically falls back to clean, structured text placeholders:
 - `[Attached Document: <filename> - Extracted Text:\n<text>]` (for PDF documents when native PDF is unsupported)
 - `[Attached Media: <filename> (<mime>, <size>) - Model <name> does not support <type> modality]`
 - `[Attached Media: <filename> (<mime>, <size>) - Exceeds model maximum supported size of <formatted_limit>]` (e.g. `10.0 MB`)

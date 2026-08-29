@@ -85,6 +85,27 @@ class MediaBudgetLimitsTest {
         assertEquals(1, res.size());
         assertEquals("a1", res.get(0).mediaId());
 
+        MediaDownloadPort nullResultPort = (attachment, actorUserId, preApproved) -> null;
+        assertThrows(IllegalStateException.class, () -> nullResultPort.downloadAll(List.of(att), "u1", true));
+
+        MediaDownloadPort configuredLimitPort = new MediaDownloadPort() {
+            @Override
+            public DownloadedMedia download(MediaAttachment attachment, String actorUserId, boolean preApproved) {
+                return DownloadedMedia.ofInline(
+                        attachment.attachmentId(),
+                        attachment.type(),
+                        attachment.mimeType(),
+                        attachment.fileName(),
+                        attachment.inlineData());
+            }
+
+            @Override
+            public long maxTotalPayloadBytes() {
+                return 4L;
+            }
+        };
+        assertThrows(IllegalStateException.class, () -> configuredLimitPort.downloadAll(List.of(att, att), "u1", true));
+
         // Test cumulative limit breach in default port
         byte[] big = new byte[30 * 1024 * 1024]; // 30MB
         MediaAttachment bigAtt1 =
