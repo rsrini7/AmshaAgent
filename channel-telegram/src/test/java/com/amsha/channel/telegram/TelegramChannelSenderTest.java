@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -148,5 +149,56 @@ class TelegramChannelSenderTest {
         String garbled = "???...\nReal Line 1\n.....?????\nReal Line 2";
         String cleaned = TelegramChannelSender.stripGarbledLines(garbled);
         assertEquals("Real Line 1\nReal Line 2", cleaned);
+    }
+
+    @Test
+    void testStripGarbledLinesPreservesMarkdownCodeFence() {
+        String markdown = "```json\n...\n```";
+
+        assertEquals(markdown, TelegramChannelSender.stripGarbledLines(markdown));
+    }
+
+    @Test
+    void testHtmlArtifactCollapsedInSendRaw() {
+        String html = "<!DOCTYPE html><html><head><title>Test</title></head><body><h1>Hello</h1></body></html>";
+        sender.sendRaw(user, html);
+        verify(producerTemplate)
+                .sendBodyAndHeader(
+                        eq("telegram:bots"),
+                        eq("[HTML artifact generated - open the browser preview to view it.]"),
+                        eq(TelegramConstants.TELEGRAM_CHAT_ID),
+                        eq("123"));
+    }
+
+    @Test
+    void nullRecipientIsDroppedWithoutDereferencingText() {
+        assertDoesNotThrow(() -> sender.sendRaw(null, null));
+        verifyNoInteractions(producerTemplate);
+    }
+
+    @Test
+    void nullRecipientWithKeyboardIsDroppedBeforeMarkupHandling() {
+        assertDoesNotThrow(() -> sender.sendWithKeyboard(null, "text", null));
+        verifyNoInteractions(producerTemplate);
+    }
+
+    @Test
+    void nonPositiveConfiguredLengthFallsBackToTelegramDefault() {
+        sender.maxLength = 0;
+        String text = "x".repeat(4097);
+
+        sender.sendRaw(user, text);
+
+        verify(producerTemplate, times(2))
+                .sendBodyAndHeader(eq("telegram:bots"), anyString(), eq(TelegramConstants.TELEGRAM_CHAT_ID), eq("123"));
+    }
+
+    @Test
+    void blankRecipientChannelIsDropped() {
+        ChannelUser blankChannel = mock(ChannelUser.class);
+        when(blankChannel.channelId()).thenReturn("   ");
+
+        assertDoesNotThrow(() -> sender.sendRaw(blankChannel, "text"));
+        verifyNoInteractions(producerTemplate);
     }
 }

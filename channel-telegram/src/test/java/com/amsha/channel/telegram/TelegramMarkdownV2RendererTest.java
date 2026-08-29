@@ -156,4 +156,47 @@ class TelegramMarkdownV2RendererTest {
     void normalTextPassesThrough() {
         assertEquals("hello world", renderer.esc("hello world"));
     }
+
+    @Test
+    void testHtmlArtifactInTextCollapsed() {
+        String html = "<!DOCTYPE html><html><body><h1>Dashboard</h1></body></html>";
+        String output = renderer.render(List.of(new ContentNode.Text(html)));
+        assertTrue(output.contains("HTML artifact generated"), "Generated HTML in text node must be collapsed");
+    }
+
+    @Test
+    void testHtmlArtifactInCodeBlockCollapsed() {
+        String html =
+                "<html><head></head><body><canvas id=\"chart\"></canvas><script>console.log('hi');</script></body></html>";
+        String output = renderer.render(List.of(new ContentNode.CodeBlock(html, "html")));
+        assertTrue(output.contains("HTML artifact generated"), "Generated HTML in code block must be collapsed");
+    }
+
+    @Test
+    void approvalParametersCannotCloseTelegramCodeFence() {
+        String output = renderer.render(List.of(new ApprovalPrompt("tool", "{\"value\":\"```\"}", "session")));
+
+        assertTrue(output.contains("\\`\\`\\`"));
+        assertEquals(
+                2,
+                output.lines()
+                        .filter(line -> line.equals("```json") || line.equals("```".trim()))
+                        .count());
+    }
+
+    @Test
+    void htmlArtifactsInOtherContentNodesAreCollapsed() {
+        String html = "<html><body><script>x()</script><canvas></canvas></body></html>";
+        String output = renderer.render(List.of(
+                new ContentNode.Heading(html, 2),
+                new ContentNode.InlineCode(html),
+                new ContentNode.ErrorMessage(html, "failure"),
+                new ContentNode.KeyValue(html, "value")));
+
+        assertEquals(
+                4,
+                output.lines()
+                        .filter(line -> line.contains("HTML artifact generated"))
+                        .count());
+    }
 }

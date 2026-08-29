@@ -16,7 +16,9 @@ import static org.mockito.Mockito.when;
 
 import jakarta.inject.Inject;
 
+import java.net.URI;
 import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -24,10 +26,13 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
+import com.amsha.channel.api.AbstractInboundMessagePipeline;
+import com.amsha.channel.api.AttachmentType;
 import com.amsha.channel.api.ChannelMessage;
 import com.amsha.channel.api.ChannelServices;
 import com.amsha.channel.api.ChannelType;
 import com.amsha.channel.api.ChannelUser;
+import com.amsha.channel.api.MediaAttachment;
 import com.amsha.channel.api.ProcessingLockManager;
 
 import org.apache.camel.Exchange;
@@ -85,7 +90,7 @@ class TelegramAgentHandlerTest {
         Exchange exchange = createExchange("chat123", "456", "alice", "hello world");
         ChannelMessage.TelegramMessage msg = new ChannelMessage.TelegramMessage(
                 new ChannelUser("456", "456", "alice", ChannelType.TELEGRAM), "hello world", "chat123", Instant.now());
-        when(mapper.map(eq("hello world"), any(), eq("chat123"))).thenReturn(msg);
+        when(mapper.map(any(IncomingMessage.class), any(), eq("chat123"))).thenReturn(msg);
 
         handler.receiveMessage(exchange);
 
@@ -99,14 +104,48 @@ class TelegramAgentHandlerTest {
     }
 
     @Test
-    void testNonTextMessageNotifiesUser() {
+    void testMediaOnlyMessageDelegatesToSPIWithDefaultPrompt() {
         Exchange exchange = createExchange("chat123", "456", "alice", null);
+        MediaAttachment att = MediaAttachment.ofUri(
+                "att-1",
+                AttachmentType.IMAGE,
+                "image/jpeg",
+                "photo.jpg",
+                1024L,
+                URI.create("telegram://file/123"),
+                Map.of());
+        ChannelMessage.TelegramMessage msg = new ChannelMessage.TelegramMessage(
+                new ChannelUser("456", "456", "alice", ChannelType.TELEGRAM),
+                null,
+                "chat123",
+                Instant.now(),
+                List.of(att));
+        when(mapper.map(any(IncomingMessage.class), any(), eq("chat123"))).thenReturn(msg);
+
+        handler.receiveMessage(exchange);
+
+        ArgumentCaptor<ChannelMessage> captor = ArgumentCaptor.forClass(ChannelMessage.class);
+        verify(channelServices).processAsync(captor.capture());
+
+        ChannelMessage res = captor.getValue();
+        assertEquals("chat123", res.correlationId());
+        assertEquals(AbstractInboundMessagePipeline.DEFAULT_MEDIA_PROMPT, res.text());
+        assertEquals(1, res.attachments().size());
+        assertEquals(AttachmentType.IMAGE, res.attachments().get(0).type());
+    }
+
+    @Test
+    void testUnsupportedMessageNotifiesUser() {
+        Exchange exchange = createExchange("chat123", "456", "alice", null);
+        when(mapper.map(any(IncomingMessage.class), any(), eq("chat123"))).thenReturn(null);
 
         handler.receiveMessage(exchange);
 
         verify(channelServices, never()).processAsync(any());
         verify(sender)
-                .sendRaw(argThat(user -> "456".equals(user.platformId())), contains("only process text messages"));
+                .sendRaw(
+                        argThat(user -> "456".equals(user.platformId())),
+                        contains("only process text messages or supported media attachments"));
     }
 
     @Test
@@ -127,7 +166,7 @@ class TelegramAgentHandlerTest {
         Exchange exchange = createExchange("chat123", "456", "alice", "hello world");
         ChannelMessage.TelegramMessage msg = new ChannelMessage.TelegramMessage(
                 new ChannelUser("456", "456", "alice", ChannelType.TELEGRAM), "hello world", "chat123", Instant.now());
-        when(mapper.map(eq("hello world"), any(), eq("chat123"))).thenReturn(msg);
+        when(mapper.map(any(IncomingMessage.class), any(), eq("chat123"))).thenReturn(msg);
 
         CompletableFuture<Void> failed = new CompletableFuture<>();
         failed.completeExceptionally(new RuntimeException("SPI error"));
@@ -154,7 +193,7 @@ class TelegramAgentHandlerTest {
         // 1. Stub first message to hang
         ChannelMessage.TelegramMessage msg1 = new ChannelMessage.TelegramMessage(
                 new ChannelUser("123", chatId, "alice", ChannelType.TELEGRAM), "hello", chatId, Instant.now());
-        when(mapper.map(eq("hello"), any(), eq(chatId))).thenReturn(msg1);
+        when(mapper.map(any(IncomingMessage.class), any(), eq(chatId))).thenReturn(msg1);
         when(channelServices.processAsync(msg1)).thenReturn(pending);
 
         handler.receiveMessage(createExchange(chatId, "123", "alice", "hello"));
@@ -163,7 +202,7 @@ class TelegramAgentHandlerTest {
         // 2. Second message while first is pending
         ChannelMessage.TelegramMessage msg2 = new ChannelMessage.TelegramMessage(
                 new ChannelUser("123", chatId, "alice", ChannelType.TELEGRAM), "world", chatId, Instant.now());
-        when(mapper.map(eq("world"), any(), eq(chatId))).thenReturn(msg2);
+        when(mapper.map(any(IncomingMessage.class), any(), eq(chatId))).thenReturn(msg2);
 
         handler.receiveMessage(createExchange(chatId, "123", "alice", "world"));
         verify(sender).sendRaw(any(), contains("Still processing"));

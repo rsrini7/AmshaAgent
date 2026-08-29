@@ -64,14 +64,6 @@ public class TelegramAgentHandler extends AbstractInboundMessagePipeline {
             return;
         }
 
-        if (msg.getText() == null) {
-            log.warnf("Received non-text message from chat %s - notifying user", chatId);
-            String userId = msg.getFrom() != null ? String.valueOf(msg.getFrom().getId()) : "unknown";
-            ChannelUser fallbackUser = new ChannelUser(userId, chatId, null, channelType);
-            sender.sendRaw(fallbackUser, "⚠️ I can only process text messages.");
-            return;
-        }
-
         if (msg.getFrom() == null) {
             log.warnf("Dropped message with null 'from' in chat %s", chatId);
             return;
@@ -79,12 +71,17 @@ public class TelegramAgentHandler extends AbstractInboundMessagePipeline {
 
         String userId = String.valueOf(msg.getFrom().getId());
         String username = msg.getFrom().getUsername();
-        String text = msg.getText();
-
         ChannelUser user = new ChannelUser(userId, chatId, username, channelType);
-        ChannelMessage channelMessage = messageMapper.map(text, user, chatId);
 
-        processInboundMessage(chatId, text, user, channelMessage);
+        ChannelMessage channelMessage = messageMapper.map(msg, user, chatId);
+
+        if (channelMessage == null) {
+            log.warnf("Received unsupported non-text / non-media message from chat %s - notifying user", chatId);
+            sender.sendRaw(user, "⚠️ I can only process text messages or supported media attachments.");
+            return;
+        }
+
+        processInboundMessage(chatId, channelMessage.text(), user, channelMessage);
     }
 
     @Override

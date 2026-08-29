@@ -573,13 +573,13 @@ Governed, streaming-validated media downloads for multimodal attachments (`Media
 
 | Variable | Default | Description |
 |---|---|---|
-| `AMSHA_MEDIA_MAX_IMAGE_SIZE_MB` | `10` | Maximum size in megabytes for a single image attachment (`image/*` allowlist). Streaming fail-closed when exceeded. |
-| `AMSHA_MEDIA_MAX_DOCUMENT_SIZE_MB` | `25` | Maximum size in megabytes for a single document/audio attachment (`application/pdf`, `text/*`, audio allowlist). |
+| `AMSHA_MEDIA_MAX_IMAGE_SIZE_MB` | `10` | Maximum size in megabytes for a single image attachment (`image/png`, `image/jpeg`, `image/webp`, or `image/gif`). Streaming fail-closed when exceeded. |
+| `AMSHA_MEDIA_MAX_DOCUMENT_SIZE_MB` | `25` | Maximum size in megabytes for a single document/audio attachment (`application/pdf`, `audio/mpeg`, `audio/wav`, or `audio/ogg`). |
 | `AMSHA_MEDIA_MAX_TOTAL_PAYLOAD_MB` | `50` | Maximum total megabytes summed across all attachments in a single inbound turn. Multi-attachment batch fail-closed when exceeded. |
 | `AMSHA_MEDIA_CONNECT_TIMEOUT_SECONDS` | `10` | Governed HTTP connect timeout in seconds (`GovernedHttpClient` via `OutboundHttpPolicyService`). |
 | `AMSHA_MEDIA_READ_TIMEOUT_SECONDS` | `30` | Governed HTTP read timeout in seconds; streaming read loop enforces size incrementally, not after buffering. |
 
-Constants and port live in `amsha-security-api` (`MediaBudgetLimits`, `MediaDownloadPort`, `DownloadedMedia`); implementation and `MediaSecurityValidator` (SSRF/DNS, redirect revalidation, IP blocklist) live in `amsha-security`. Channel media types: `ChannelMessage` → `MediaAttachment` → `DownloadedMedia` → tool context (`OutboundPurpose.MEDIA_DOWNLOAD`). See [SECURITY.md](./SECURITY.md#governed-media-download) and [CHANNEL_SPI.md](./CHANNEL_SPI.md#multimodal-media).
+Constants and port live in `amsha-security-api` (`MediaBudgetLimits`, `MediaDownloadPort`, `DownloadedMedia`); implementation and `MediaSecurityValidator` (SSRF/DNS, redirect revalidation, IP blocklist) live in `amsha-security`. Channel media types: `ChannelMessage` → `MediaAttachment` → `DownloadedMedia` → tool context (`OutboundPurpose.MEDIA_DOWNLOAD`). Telegram currently emits opaque `telegram://file/<file_id>` references and safely degrades until a governed source resolver is added. See [SECURITY.md](./SECURITY.md#governed-media-download) and [CHANNEL_SPI.md](./CHANNEL_SPI.md#multimodal-media).
 
 ## Retry
 

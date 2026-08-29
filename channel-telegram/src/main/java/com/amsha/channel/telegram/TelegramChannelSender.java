@@ -6,6 +6,7 @@ import jakarta.inject.Inject;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 
 import com.amsha.channel.api.ApprovalPrompt;
@@ -14,6 +15,7 @@ import com.amsha.channel.api.ChannelType;
 import com.amsha.channel.api.ChannelUser;
 import com.amsha.channel.api.InteractionNode;
 import com.amsha.channel.api.ReplyNode;
+import com.amsha.common.util.HtmlArtifactUtil;
 import com.amsha.common.util.LogUtil;
 
 import org.apache.camel.ProducerTemplate;
@@ -30,6 +32,7 @@ import org.jboss.logging.Logger;
 public class TelegramChannelSender implements ChannelSender {
 
     private static final String TELEGRAM_BOTS_ENDPOINT = "telegram:bots";
+    private static final int DEFAULT_MAX_LENGTH = 4096;
 
     private final ProducerTemplate producerTemplate;
     private final TelegramMarkdownV2Renderer renderer;
@@ -51,7 +54,9 @@ public class TelegramChannelSender implements ChannelSender {
 
     @Override
     public void send(ChannelUser recipient, List<ReplyNode> nodes) {
-        if (recipient == null || recipient.channelId() == null) {
+        if (recipient == null
+                || recipient.channelId() == null
+                || recipient.channelId().isBlank()) {
             log.warn("TELEGRAM-SEND: recipient or channelId is null - dropping");
             return;
         }
@@ -95,14 +100,14 @@ public class TelegramChannelSender implements ChannelSender {
 
     @Override
     public void sendRaw(ChannelUser recipient, String text) {
-        log.infof(
-                "TELEGRAM-SEND to=%s text=[%s]",
-                recipient.channelId(), text.length() > 100 ? text.substring(0, 100) + "..." : text);
-
-        if (recipient == null || recipient.channelId() == null) {
+        if (recipient == null
+                || recipient.channelId() == null
+                || recipient.channelId().isBlank()) {
             log.warn("TELEGRAM-SENDRAW: recipient or channelId is null - dropping");
             return;
         }
+        log.infof("TELEGRAM-SEND to=%s textLength=%d", recipient.channelId(), text != null ? text.length() : 0);
+
         sendRawToChatId(recipient.channelId(), text); // ← was platformId()
     }
 
@@ -111,15 +116,23 @@ public class TelegramChannelSender implements ChannelSender {
      * §7.24
      */
     public void sendWithKeyboard(ChannelUser recipient, String text, InlineKeyboardMarkup markup) {
-        if (markup == null) {
-            sendRawToChatId(recipient.channelId(), text);
-            return;
-        }
-        if (recipient == null || recipient.channelId() == null) {
+        if (recipient == null
+                || recipient.channelId() == null
+                || recipient.channelId().isBlank()) {
             log.warn("TELEGRAM-SEND: recipient or channelId is null - dropping");
             return;
         }
         String chatId = recipient.channelId();
+        if (markup == null) {
+            sendRawToChatId(chatId, text);
+            return;
+        }
+        text = HtmlArtifactUtil.collapseHtmlArtifact(text);
+        text = stripGarbledLines(text);
+        if (text == null || text.isBlank()) {
+            log.warnf("Attempted to send empty or garbled keyboard message to %s - skipping", chatId);
+            return;
+        }
 
         OutgoingTextMessage msg = new OutgoingTextMessage();
         // §7.28: Text is assumed pre-escaped by caller. sendWithKeyboard() is
@@ -132,10 +145,8 @@ public class TelegramChannelSender implements ChannelSender {
             producerTemplate.sendBodyAndHeader(TELEGRAM_BOTS_ENDPOINT, msg, TelegramConstants.TELEGRAM_CHAT_ID, chatId);
         } catch (Exception e) {
             String root = LogUtil.rootMessage(e);
-            if (root != null && root.toLowerCase().contains("can't parse entities")) {
-                log.errorf(
-                        "TELEGRAM-SEND MarkdownV2 parse failed for chat %s; retrying as plain text. Rendered text:\n%s",
-                        chatId, text);
+            if (root != null && root.toLowerCase(Locale.ROOT).contains("can't parse entities")) {
+                log.errorf("TELEGRAM-SEND MarkdownV2 parse failed for chat %s; retrying as plain text", chatId);
                 OutgoingTextMessage fallback = new OutgoingTextMessage();
                 fallback.setText(text);
                 fallback.setReplyMarkup(markup);
@@ -159,11 +170,17 @@ public class TelegramChannelSender implements ChannelSender {
      * @param markup    new inline keyboard, or {@code null} to remove all buttons
      */
     public void editMessage(String chatId, int messageId, String newText, InlineKeyboardMarkup markup) {
+        if (chatId == null || chatId.isBlank()) {
+            log.warn("TELEGRAM-EDIT: chatId is null or blank - dropping");
+            return;
+        }
         try {
+            String sanitizedText = HtmlArtifactUtil.collapseHtmlArtifact(newText != null ? newText : "");
+            sanitizedText = stripGarbledLines(sanitizedText);
             EditMessageTextMessage edit = EditMessageTextMessage.builder()
                     .chatId(chatId)
                     .messageId(messageId)
-                    .text(newText != null ? newText : "")
+                    .text(sanitizedText)
                     .replyMarkup(markup != null ? markup : new InlineKeyboardMarkup())
                     .build();
             producerTemplate.sendBodyAndHeader(
@@ -181,7 +198,18 @@ public class TelegramChannelSender implements ChannelSender {
     static String stripGarbledLines(String text) {
         if (text == null || text.isBlank()) return text;
         StringBuilder result = new StringBuilder();
+        boolean insideCodeFence = false;
         for (String line : text.split("\n", -1)) {
+            String trimmedLine = line.trim();
+            if (trimmedLine.startsWith("```")) {
+                result.append(line).append('\n');
+                insideCodeFence = !insideCodeFence;
+                continue;
+            }
+            if (insideCodeFence) {
+                result.append(line).append('\n');
+                continue;
+            }
             // Count garbled characters: ?, …, ‑, —, em-dash, special punctuation, spaces
             long garbled = line.chars()
                     .filter(c -> c == '?'
@@ -216,16 +244,18 @@ public class TelegramChannelSender implements ChannelSender {
             log.warnf("Attempted to send empty message to %s - skipping", chatId);
             return;
         }
+        text = HtmlArtifactUtil.collapseHtmlArtifact(text);
         text = stripGarbledLines(text);
         if (text.isBlank()) {
             log.warnf("Attempted to send garbled-only message to %s - skipping", chatId);
             return;
         }
-        if (text.length() <= maxLength) {
+        int effectiveMaxLength = maxLength > 0 ? maxLength : DEFAULT_MAX_LENGTH;
+        if (text.length() <= effectiveMaxLength) {
             producerTemplate.sendBodyAndHeader(
                     TELEGRAM_BOTS_ENDPOINT, text, TelegramConstants.TELEGRAM_CHAT_ID, chatId);
         } else {
-            List<String> chunks = splitAtWordBoundary(text, maxLength);
+            List<String> chunks = splitAtWordBoundary(text, effectiveMaxLength);
             log.infof(
                     "TELEGRAM-SEND splitting %d-char response into %d chunks for %s",
                     text.length(), chunks.size(), chatId);
