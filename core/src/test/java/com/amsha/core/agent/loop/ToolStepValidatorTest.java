@@ -162,6 +162,25 @@ public class ToolStepValidatorTest {
         assertTrue(((AgentResult.Finished) decision.result()).answer().contains("repeated errors"));
     }
 
+    @Test
+    public void coordinatorBrowserAndBraveSearchRedirectsToResearcher() {
+        StepDecision braveDecision =
+                validator.validate(context, new ArrayList<>(), toolStep("brave_web_search"), "brave_web_search", 0);
+        assertEquals("researcher", braveDecision.step().actionInput().get("agent"));
+
+        StepDecision browserDecision =
+                validator.validate(context, new ArrayList<>(), toolStep("browser_navigate"), "browser_navigate", 0);
+        assertEquals("researcher", browserDecision.step().actionInput().get("agent"));
+    }
+
+    @Test
+    public void researcherSandboxExecRedirectsToCoder() {
+        AgentExecutionContext researcherCtx = withRole("researcher");
+        StepDecision decision =
+                validator.validate(researcherCtx, new ArrayList<>(), toolStep("sandbox_exec"), "sandbox_exec", 0);
+        assertEquals("coder", decision.step().actionInput().get("agent"));
+    }
+
     private AgentExecutionContext withRole(String role) {
         return new AgentExecutionContext(
                 "sess-1",

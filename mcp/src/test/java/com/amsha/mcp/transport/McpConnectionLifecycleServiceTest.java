@@ -15,11 +15,14 @@ import java.util.stream.Stream;
 
 import com.amsha.core.audit.AuditService;
 import com.amsha.core.audit.SecurityEventType;
+import com.amsha.core.security.OutboundHttpPolicyService;
 import com.amsha.mcp.tool.McpTransportType;
 import com.amsha.persistence.api.McpConnectionCleanupFailureDto;
 import com.amsha.persistence.api.McpConnectionDto;
 import com.amsha.persistence.api.McpConnectionHeaderSecretRefDto;
 import com.amsha.persistence.api.McpConnectionStorePort;
+import com.amsha.security.api.OutboundPolicyDecision;
+import com.amsha.security.api.OutboundPurpose;
 import com.amsha.security.api.SecretVault;
 import com.amsha.tool.api.AgentSentinels;
 import com.amsha.tool.api.ToolCategory;
@@ -243,6 +246,60 @@ class McpConnectionLifecycleServiceTest {
         List<McpConnectionDto> list = service.listByUserId("user-3");
         assertEquals(1, list.size());
         assertEquals("docs-3", list.get(0).name());
+    }
+
+    @Test
+    void testValidateHttpRegistrationOutboundPolicyRejection() {
+        service.outboundHttpPolicyService = mock(OutboundHttpPolicyService.class);
+        when(service.outboundHttpPolicyService.evaluate(
+                        eq("https://blocked.example.com/mcp"), eq(OutboundPurpose.MCP_TOOL_CALL), isNull(), isNull()))
+                .thenReturn(OutboundPolicyDecision.deny("Denied by policy", OutboundPurpose.MCP_TOOL_CALL, "system"));
+
+        IllegalArgumentException ex = assertThrows(
+                IllegalArgumentException.class,
+                () -> service.validateHttpRegistration("https://blocked.example.com/mcp", Map.of()));
+        assertTrue(ex.getMessage().contains("rejected by outbound policy"));
+    }
+
+    @Test
+    void testPersistSuccessfulHttpKeepingHeaders() {
+        McpConnectionDto connection =
+                connection("mcp-keep", "user-k", "keep-serv", McpTransportType.HTTP_SSE.name(), true);
+        when(store.findByNameAndUserId("keep-serv", "user-k")).thenReturn(Optional.of(connection));
+        when(store.listHeaderSecretRefs(connection.id(), "user-k")).thenReturn(List.of());
+
+        var persisted = service.persistSuccessfulHttpKeepingHeaders(
+                "keep-serv", "https://example.com/mcp", ToolCategory.NETWORK, "user-k");
+        assertNotNull(persisted);
+        assertEquals("keep-serv", persisted.connection().name());
+    }
+
+    @Test
+    void testDeleteNonExistentReturnsFalse() {
+        when(store.findByNameAndUserId("missing", "user-x")).thenReturn(Optional.empty());
+        when(store.findByIdAndUserId("missing", "user-x")).thenReturn(Optional.empty());
+
+        assertFalse(service.deleteByNameAndUserId("missing", "user-x"));
+        assertFalse(service.deleteByIdAndUserId("missing", "user-x"));
+    }
+
+    @Test
+    void testDeleteAllByUserIdEdgeCases() {
+        assertEquals(0, service.deleteAllByUserId(null));
+        assertEquals(0, service.deleteAllByUserId(""));
+
+        when(store.listByUserId("user-y")).thenReturn(List.of());
+        assertEquals(0, service.deleteAllByUserId("user-y"));
+    }
+
+    @Test
+    void testClassifyReconnectFailure() throws Exception {
+        var classify = McpConnectionLifecycleService.class.getDeclaredMethod(
+                "classifyReconnectFailure", RuntimeException.class);
+        classify.setAccessible(true);
+
+        assertEquals("HANDSHAKE_FAILED", classify.invoke(null, new McpConnectionException("mcp fail")));
+        assertEquals("MCP_RECONNECT_FAILED", classify.invoke(null, new RuntimeException("generic fail")));
     }
 
     private static McpConnectionDto connection(

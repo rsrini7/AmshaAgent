@@ -195,4 +195,78 @@ class SqliteCheckpointStoreAdapterDirectTest {
 
         assertFalse(adapter.findById(saved.id()).isPresent());
     }
+
+    @Test
+    void testQueriesAndStepsAndBatchOps() {
+        CheckpointDto dto = new CheckpointDto(
+                null,
+                sessionId,
+                "coordinator",
+                CheckpointStatus.AWAITING_APPROVAL.name(),
+                "FULL",
+                "{}",
+                "platform-chat-1",
+                "CLI",
+                "Goal Awaiting",
+                null,
+                null,
+                null,
+                "tool_test",
+                "{\"param\":\"value\"}",
+                "{}",
+                null,
+                10,
+                1,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                0,
+                null,
+                null);
+        CheckpointDto saved = adapter.save(dto);
+
+        assertTrue(adapter.hasPendingApproval(sessionId));
+        assertTrue(adapter.hasPendingApprovalForChat("platform-chat-1"));
+        assertFalse(adapter.hasPendingApprovalForChat("unknown-chat"));
+
+        assertTrue(adapter.findLatestAwaitingApproval(sessionId).isPresent());
+        assertTrue(adapter.findLatestAwaitingApprovalBySessionContaining(sessionId.substring(0, 5))
+                .isPresent());
+        assertTrue(adapter.findLatestBySession(sessionId).isPresent());
+        assertTrue(adapter.findLatestNonArchivedBySession(sessionId).isPresent());
+        assertTrue(adapter.findLatestBySessionAndStatus(sessionId, CheckpointStatus.AWAITING_APPROVAL.name())
+                .isPresent());
+
+        List<CheckpointDto> byStatus = adapter.findByStatus(CheckpointStatus.AWAITING_APPROVAL.name());
+        assertFalse(byStatus.isEmpty());
+
+        List<CheckpointDto> byStatusAndSessions =
+                adapter.findByStatusAndSessionIds(CheckpointStatus.AWAITING_APPROVAL.name(), List.of(sessionId), 10, 0);
+        assertEquals(1, byStatusAndSessions.size());
+
+        long count = adapter.countByStatusAndSessionIds(CheckpointStatus.AWAITING_APPROVAL.name(), List.of(sessionId));
+        assertEquals(1, count);
+
+        List<CheckpointDto> allActive = adapter.findAllActive();
+        assertFalse(allActive.isEmpty());
+
+        // Steps operations
+        ReasoningStepDto step1 = new ReasoningStepDto(
+                "thought", "tool_test", "{\"param\":\"value\"}", "output 1", 10, 20, true, null, null, null);
+        adapter.saveSteps(saved.id(), List.of(step1));
+        List<ReasoningStepDto> steps = adapter.loadSteps(saved.id());
+        assertEquals(1, steps.size());
+        assertEquals("tool_test", steps.get(0).action());
+
+        // Batch tool decisions
+        adapter.atomicUpdateBatchToolDecision(sessionId, "coordinator", "tool_test", "APPROVED");
+
+        // Claim for retry
+        adapter.claimForRetry(saved.id());
+        adapter.releaseResumeClaim(sessionId, "coordinator");
+    }
 }

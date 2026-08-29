@@ -391,4 +391,28 @@ class GovernedHttpClientTest {
                 assertThrows(OutboundHttpException.class, () -> client.send(req, HttpResponse.BodyHandlers.ofString()));
         assertEquals(OutboundHttpException.Category.TLS_TRUST, ex.category());
     }
+
+    @Test
+    void localhostAndIpv4MappedDetection() throws Exception {
+        var localhostMethod = GovernedHttpClient.class.getDeclaredMethod("isLocalhost", String.class);
+        localhostMethod.setAccessible(true);
+
+        assertTrue((Boolean) localhostMethod.invoke(null, "localhost"));
+        assertTrue((Boolean) localhostMethod.invoke(null, "127.0.0.1"));
+        assertTrue((Boolean) localhostMethod.invoke(null, "::1"));
+        assertTrue((Boolean) localhostMethod.invoke(null, "[::1]"));
+        assertFalse((Boolean) localhostMethod.invoke(null, "example.com"));
+        assertFalse((Boolean) localhostMethod.invoke(null, (String) null));
+
+        var mappedMethod = GovernedHttpClient.class.getDeclaredMethod("isIpv4MappedAddress", byte[].class);
+        mappedMethod.setAccessible(true);
+
+        byte[] mapped = new byte[] {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, (byte) 0xff, (byte) 0xff, 10, 0, 0, 1};
+        assertTrue((Boolean) mappedMethod.invoke(null, (Object) mapped));
+
+        byte[] plainV6 = new byte[16];
+        assertFalse((Boolean) mappedMethod.invoke(null, (Object) plainV6));
+        byte[] shortBytes = new byte[4];
+        assertFalse((Boolean) mappedMethod.invoke(null, (Object) shortBytes));
+    }
 }

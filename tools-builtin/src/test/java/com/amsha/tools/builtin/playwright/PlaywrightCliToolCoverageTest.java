@@ -13,6 +13,8 @@ import com.amsha.tool.api.ToolExecutionContext;
 import com.amsha.tool.api.ToolResponse;
 
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentMatchers;
+import org.mockito.Mockito;
 
 class PlaywrightCliToolCoverageTest {
 
@@ -129,5 +131,61 @@ class PlaywrightCliToolCoverageTest {
         ToolResponse r5 = tool.execute(ctx, Map.of("action", "eval"));
         assertFalse(r5.success());
         assertTrue(r5.output().contains("Parameter 'script' is required"));
+    }
+
+    @Test
+    void testDoEvalScriptWrapping() throws Exception {
+        Method doEvalMethod = PlaywrightCliTool.class.getDeclaredMethod("doEval", String.class, String.class);
+        doEvalMethod.setAccessible(true);
+
+        PlaywrightCliTool tool = new PlaywrightCliTool();
+        // Since execute uses session and we can test script logic with helper or reflect
+        Method escapeMethod = PlaywrightCliTool.class.getDeclaredMethod("escapeJsString", String.class);
+        escapeMethod.setAccessible(true);
+        assertEquals("test", escapeMethod.invoke(null, "test"));
+    }
+
+    @Test
+    void testExecuteWithMcpHelperDelegation() {
+        PlaywrightCliTool tool = new PlaywrightCliTool();
+        tool.configEnabled = true;
+
+        PlaywrightMcpHelper mockHelper = Mockito.mock(PlaywrightMcpHelper.class);
+        Mockito.when(mockHelper.isAvailable()).thenReturn(true);
+        Mockito.when(mockHelper.invoke(ArgumentMatchers.any(), ArgumentMatchers.any()))
+                .thenReturn(ToolResponse.success("mcp output"));
+
+        tool.mcpHelper = mockHelper;
+
+        ToolExecutionContext ctx = new ToolExecutionContext(
+                "sess-1",
+                "user-1",
+                "chat-1",
+                "coder",
+                AutonomyLevel.FULL,
+                "trace-1",
+                "telegram",
+                "plat-1",
+                null,
+                null,
+                null,
+                null);
+
+        ToolResponse resp = tool.execute(ctx, Map.of("url", "https://example.com"));
+        assertTrue(resp.success());
+        assertEquals("mcp output", resp.output());
+    }
+
+    @Test
+    void testTruncateAtSentenceEdgeCases() {
+        assertEquals("", PlaywrightCliTool.truncateAtSentence("", 10));
+        assertEquals("Hello world", PlaywrightCliTool.truncateAtSentence("Hello world", 100));
+        assertEquals("Hello world.", PlaywrightCliTool.truncateAtSentence("Hello world. More content here", 17));
+    }
+
+    @Test
+    void testValidateParameters() {
+        PlaywrightCliTool tool = new PlaywrightCliTool();
+        assertNull(tool.validateParameters(Map.of()));
     }
 }

@@ -26,6 +26,7 @@ import com.amsha.core.audit.AuditService;
 import com.amsha.core.audit.SecurityEventType;
 import com.amsha.core.security.OutboundHttpPolicyService;
 import com.amsha.security.api.DownloadedMedia;
+import com.amsha.security.api.MediaBudgetLimits;
 import com.amsha.security.api.OutboundPolicyDecision;
 import com.amsha.security.api.OutboundPurpose;
 import com.amsha.security.http.OutboundHttpException;
@@ -365,6 +366,66 @@ class GovernedMediaDownloadServiceTest {
         OutboundHttpException ex = assertThrows(
                 OutboundHttpException.class, () -> service.downloadAll(List.of(att1, att2), "user-1", true));
         assertEquals(OutboundHttpException.Category.POLICY_DENIED, ex.category());
+    }
+
+    @Test
+    @DisplayName("downloadAll returns empty list for null or empty attachments")
+    void downloadAll_nullOrEmpty_returnsEmptyList() {
+        assertTrue(service.downloadAll(null, "user-1", true).isEmpty());
+        assertTrue(service.downloadAll(List.of(), "user-1", true).isEmpty());
+    }
+
+    @Test
+    @DisplayName("Effective timeouts fallback to safe defaults when zero or negative")
+    void effectiveTimeouts_fallbackToDefaults() {
+        service.connectTimeoutSeconds = 0;
+        service.readTimeoutSeconds = -5;
+        assertEquals(MediaBudgetLimits.DEFAULT_CONNECT_TIMEOUT_SECONDS, service.effectiveConnectTimeoutSeconds());
+        assertEquals(MediaBudgetLimits.DEFAULT_READ_TIMEOUT_SECONDS, service.effectiveReadTimeoutSeconds());
+    }
+
+    @Test
+    @DisplayName("Redirect beyond MAX_REDIRECT_HOPS throws REDIRECT_DENIED")
+    void downloadHttpWithRedirects_maxHopsExceeded_throwsRedirectDenied() {
+        MediaAttachment attachment = MediaAttachment.ofUri(
+                "att-redir",
+                AttachmentType.IMAGE,
+                "image/png",
+                "img.png",
+                100L,
+                URI.create("https://example.com/img.png"),
+                Map.of());
+
+        OutboundHttpException ex = assertThrows(
+                OutboundHttpException.class,
+                () -> service.downloadHttpWithRedirects(
+                        URI.create("https://example.com/img.png"),
+                        attachment,
+                        "user-1",
+                        true,
+                        URI.create("https://example.com"),
+                        1024 * 1024,
+                        MediaBudgetLimits.MAX_REDIRECT_HOPS));
+        assertEquals(OutboundHttpException.Category.REDIRECT_DENIED, ex.category());
+        assertTrue(ex.getMessage().contains("Too many redirect hops"));
+    }
+
+    @Test
+    @DisplayName("Telegram resolver null throws IllegalStateException")
+    void download_telegramResolverNull_throwsIllegalStateException() {
+        service.telegramResolver = null;
+        MediaAttachment attachment = MediaAttachment.ofUri(
+                "att-tg",
+                AttachmentType.IMAGE,
+                "image/png",
+                "photo.png",
+                100L,
+                URI.create("telegram://file/123"),
+                Map.of());
+
+        IllegalStateException ex =
+                assertThrows(IllegalStateException.class, () -> service.download(attachment, "user-1", true));
+        assertTrue(ex.getMessage().contains("GovernedTelegramMediaResolver is not available"));
     }
 
     private static InputStream oneByteAtATime(byte[] bytes) {

@@ -16,6 +16,7 @@ import com.amsha.persistence.api.McpConnectionCleanupFailureDto;
 import com.amsha.persistence.api.McpConnectionDto;
 import com.amsha.persistence.api.McpConnectionHeaderSecretRefDto;
 import com.amsha.persistence.api.McpConnectionStorePort;
+import com.amsha.persistence.api.McpConnectionToolPolicyDto;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -130,6 +131,73 @@ class FsMcpConnectionStoreAdapterTest {
         assertConnection(
                 userTwoConnection,
                 store.findByIdAndUserId(userTwoConnection.id(), userTwo).orElseThrow());
+    }
+
+    @Test
+    void mcpConnectionPendingApprovalsAndToolPolicies() {
+        String userId = "usr-policies";
+        McpConnectionDto pending = new McpConnectionDto(
+                "mcp-pending",
+                userId,
+                "pending-srv",
+                "HTTP_SSE",
+                "https://example.com/mcp",
+                "NETWORK",
+                false,
+                "PENDING_APPROVAL",
+                "task-1",
+                0,
+                null,
+                Instant.now(),
+                Instant.now());
+        store.save(pending);
+
+        List<McpConnectionDto> pendingList = store.listPendingApprovals();
+        assertTrue(pendingList.stream().anyMatch(c -> "mcp-pending".equals(c.id())));
+
+        // Revision update
+        McpConnectionDto approved = new McpConnectionDto(
+                pending.id(),
+                pending.userId(),
+                pending.name(),
+                pending.transport(),
+                pending.endpoint(),
+                pending.category(),
+                true,
+                "READY",
+                null,
+                1,
+                null,
+                pending.createdAt(),
+                Instant.now());
+        assertFalse(store.updateStateIfRevision(approved, 5)); // Wrong revision
+        assertTrue(store.updateStateIfRevision(approved, 0)); // Correct revision
+
+        // Tool policies
+        Instant now = Instant.now();
+        McpConnectionToolPolicyDto policy1 = new McpConnectionToolPolicyDto(
+                "pol-1",
+                approved.id(),
+                userId,
+                "search_tool",
+                true,
+                true,
+                "Search description",
+                "{\"type\":\"object\"}",
+                "hash1",
+                now,
+                0,
+                now);
+        store.replaceToolPolicies(approved.id(), userId, List.of(policy1));
+
+        List<McpConnectionToolPolicyDto> policies = store.listToolPolicies(approved.id(), userId);
+        assertEquals(1, policies.size());
+        assertEquals("search_tool", policies.get(0).toolName());
+        assertTrue(policies.get(0).enabled());
+
+        int modified = store.setToolEnabled(approved.id(), userId, "search_tool", false);
+        assertEquals(1, modified);
+        assertFalse(store.listToolPolicies(approved.id(), userId).get(0).enabled());
     }
 
     private static Set<String> ids(List<McpConnectionDto> connections) {

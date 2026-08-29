@@ -3,10 +3,13 @@ package com.amsha.core.tools;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
+import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
+
 import jakarta.enterprise.event.Event;
 import jakarta.enterprise.inject.spi.BeanManager;
 
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Map;
 
 import com.amsha.core.audit.AuditService;
@@ -124,5 +127,74 @@ class ToolRegistryUnitTest {
         assertNotNull(resp);
         assertFalse(resp.success());
         assertEquals("Sandbox execution environment is currently unavailable.", resp.output());
+    }
+
+    @Test
+    void testInvokeToolGovernanceFailures() {
+        AgentTool mockTool = mock(AgentTool.class);
+        when(mockTool.name()).thenReturn("guarded_tool");
+        when(mockTool.requiredOperation()).thenReturn(ToolOperation.EXECUTE_SHELL);
+        when(discoveryService.getToolIndex()).thenReturn(Map.of("guarded_tool", mockTool));
+
+        doThrow(new SecurityException("Role forbidden"))
+                .when(governanceGuard)
+                .verifyRoleCapability(any(), eq("guarded_tool"));
+
+        ToolResponse resp1 = registry.invokeTool("guarded_tool", Map.of());
+        assertFalse(resp1.success());
+        assertTrue(resp1.output().contains("Role forbidden"));
+
+        reset(governanceGuard);
+        doThrow(new IllegalArgumentException("Autonomy policy denied"))
+                .when(governanceGuard)
+                .verifyAutonomy(any(), eq("guarded_tool"), any(), any());
+
+        ToolResponse resp2 = registry.invokeTool("guarded_tool", Map.of());
+        assertFalse(resp2.success());
+        assertTrue(resp2.output().contains("Autonomy policy denied"));
+    }
+
+    @Test
+    void testInvokeToolWithNullStrippingAndSchemaFiltering() {
+        AgentTool mockTool = mock(AgentTool.class);
+        when(mockTool.name()).thenReturn("schema_tool");
+        when(mockTool.requiresSandbox()).thenReturn(false);
+        when(mockTool.shouldStripNullParams()).thenReturn(true);
+        when(mockTool.requiredOperation()).thenReturn(ToolOperation.READ_FS);
+
+        JsonObjectSchema schema =
+                JsonObjectSchema.builder().addStringProperty("allowed").build();
+        when(mockTool.parametersSchema()).thenReturn(schema);
+
+        when(mockTool.execute(any(), any())).thenAnswer(inv -> {
+            Map<String, Object> map = inv.getArgument(1);
+            return ToolResponse.success("keys=" + map.keySet());
+        });
+
+        when(discoveryService.getToolIndex()).thenReturn(Map.of("schema_tool", mockTool));
+
+        Map<String, Object> input = new HashMap<>();
+        input.put("allowed", "val");
+        input.put("hallucinated", "extra");
+        input.put("null_key", null);
+
+        ToolResponse resp = registry.invokeTool("schema_tool", input);
+        assertTrue(resp.success());
+        assertEquals("keys=[allowed]", resp.output());
+    }
+
+    @Test
+    void testInvokeDirectExecutionException() {
+        AgentTool mockTool = mock(AgentTool.class);
+        when(mockTool.name()).thenReturn("failing_tool");
+        when(mockTool.requiresSandbox()).thenReturn(false);
+        when(mockTool.requiredOperation()).thenReturn(ToolOperation.READ_FS);
+        when(mockTool.execute(any(), any())).thenThrow(new RuntimeException("Execution crash"));
+
+        when(discoveryService.getToolIndex()).thenReturn(Map.of("failing_tool", mockTool));
+
+        ToolResponse resp = registry.invokeTool("failing_tool", Map.of());
+        assertNotNull(resp);
+        assertFalse(resp.success());
     }
 }

@@ -41,6 +41,15 @@ class OnnxIntentShadowClassifierTest {
         assertEquals(NoOpinionReason.CIRCUIT_OPEN, ((ClassifierResult.NoOpinion<?>) open).reason());
     }
 
+    @Test
+    void enabledClassifierReturnsOpinion() {
+        OnnxIntentShadowClassifier classifier = new OnnxIntentShadowClassifier(
+                true, input -> new ClassifierResult.Opinion<>("researcher", 0.95f, "rule"));
+        ClassifierResult<String> result = classifier.classify("find information");
+        assertInstanceOf(ClassifierResult.Opinion.class, result);
+        assertEquals("researcher", ((ClassifierResult.Opinion<String>) result).prediction());
+    }
+
     private static OnnxIntentShadowClassifier classifier(boolean enabled, String model, int threshold) {
         OnnxModelBundleRegistry registry = new OnnxModelBundleRegistry(new ObjectMapper(), false, Path.of("models"), 1);
         OnnxSessionLeaseManager leases = new OnnxSessionLeaseManager(

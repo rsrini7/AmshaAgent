@@ -284,6 +284,58 @@ class McpClientServiceTest {
         assertDoesNotThrow(service::cleanup);
     }
 
+    @Test
+    void testDiscoverForUserReturnsToolsWithoutRegistering() {
+        stubFullConnect("session-disc");
+        var tools = service.discoverForUser(
+                "disc-server", "user-d", wireMock.baseUrl(), ToolCategory.NETWORK, Map.of(), true);
+        assertNotNull(tools);
+        assertEquals(1, tools.size());
+        assertEquals("external_search", tools.get(0).name());
+        assertFalse(registry.isRegistered("external_search"));
+    }
+
+    @Test
+    void testHasStdioServerReturnsFalseWhenNoProcess() {
+        assertFalse(service.hasStdioServer("non-existent"));
+    }
+
+    @Test
+    void testConnectForUserWithEnabledToolsFiltersTools() {
+        stubFullConnect("session-filter");
+        var tools = service.connectForUserWithEnabledTools(
+                "filter-server",
+                "user-f",
+                wireMock.baseUrl(),
+                ToolCategory.NETWORK,
+                Map.of(),
+                true,
+                Set.of("non_matching_tool"));
+        assertNotNull(tools);
+        assertFalse(registry.isRegistered("external_search"));
+    }
+
+    @Test
+    void testConfigureHeaderSecretRefsAndStateCleanup() {
+        // Mismatched user throws McpConnectionException
+        var mismatchedRef = headerRef("ref-1", "conn-1", "other-user", "Authorization", "secret-vault-ref");
+        assertThrows(
+                McpConnectionException.class,
+                () -> service.configureHeaderSecretRefs("test-srv", "user-1", List.of(mismatchedRef)));
+
+        // Matching user configures successfully
+        var matchingRef = headerRef("ref-2", "conn-2", "user-1", "Authorization", "secret-vault-ref-2");
+        assertDoesNotThrow(() -> service.configureHeaderSecretRefs("test-srv", "user-1", List.of(matchingRef)));
+
+        // Empty refs cleans up previous headers
+        assertDoesNotThrow(() -> service.configureHeaderSecretRefs("test-srv", "user-1", List.of()));
+
+        // Clear HTTP connection state
+        assertDoesNotThrow(() -> service.clearHttpConnectionState("test-srv"));
+        assertDoesNotThrow(() -> service.clearHttpConnectionState("test-srv", "user-1"));
+        assertFalse(service.httpServerUrl("test-srv").isPresent());
+    }
+
     private static McpConnectionHeaderSecretRefDto headerRef(
             String id, String connectionId, String userId, String headerName, String vaultKeyRef) {
         Instant now = Instant.now();

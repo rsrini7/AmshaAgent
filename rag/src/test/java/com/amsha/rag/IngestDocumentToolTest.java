@@ -16,10 +16,12 @@ import com.amsha.persistence.api.IngestResult;
 import com.amsha.persistence.api.MemoryEntryDto;
 import com.amsha.persistence.api.MemoryRetrievalPort;
 import com.amsha.security.api.AutonomyLevel;
+import com.amsha.tool.api.IdempotencyMode;
 import com.amsha.tool.api.ToolExecutionContext;
 import com.amsha.tool.api.ToolMetadata;
 import com.amsha.tool.api.ToolResponse;
 
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -114,5 +116,45 @@ class IngestDocumentToolTest {
         assertTrue(
                 response.output().contains("text' parameter was missing"),
                 "Expected helpful error message, got: " + response.output());
+    }
+
+    @Test
+    void testExecuteWithGlobalFallback() {
+        Map<String, Object> params = Map.of("text", "Valid document content");
+        when(memoryPort.index(any(MemoryEntryDto.class))).thenReturn(new IngestResult("chunk-fallback", true));
+
+        ToolResponse response = tool.execute(context, params);
+        assertTrue(response.success());
+        assertTrue(response.output().contains("SESSION memory only"));
+    }
+
+    @Test
+    void testExecuteMissingTenantContext() {
+        ToolExecutionContext noUserContext = new ToolExecutionContext(
+                "session-123",
+                "",
+                "chat-789",
+                "coordinator",
+                AutonomyLevel.SUPERVISED,
+                "trace-abc",
+                "telegram",
+                "platform-123",
+                "RAW_USER_GOAL",
+                null,
+                null,
+                null);
+
+        ToolResponse response = tool.execute(noUserContext, Map.of("text", "Some text"));
+        assertEquals(403, response.exitCode());
+        assertTrue(response.output().contains("Security violation"));
+    }
+
+    @Test
+    void testPropertiesAndSchema() {
+        assertEquals("ingest_document", tool.name());
+        assertTrue(tool.requiresManualApproval(Map.of()));
+        Assertions.assertFalse(tool.requiresSandbox());
+        assertEquals(IdempotencyMode.AT_MOST_ONCE, tool.idempotencyMode());
+        Assertions.assertNotNull(tool.parametersSchema());
     }
 }

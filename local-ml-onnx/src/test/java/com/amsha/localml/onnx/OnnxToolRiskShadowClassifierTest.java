@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
 
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -17,6 +18,7 @@ import com.amsha.security.api.AutonomyLevel;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 
 class OnnxToolRiskShadowClassifierTest {
 
@@ -57,6 +59,36 @@ class OnnxToolRiskShadowClassifierTest {
     @Test
     void parsesOnlyDeclaredBoundedLabels() {
         assertEquals(ToolRiskPrediction.REQUIRE_APPROVAL, OnnxToolRiskShadowClassifier.parseLabel("require-approval"));
+        assertEquals(ToolRiskPrediction.LOW_RISK, OnnxToolRiskShadowClassifier.parseLabel("low risk"));
+        assertEquals(ToolRiskPrediction.BLOCK, OnnxToolRiskShadowClassifier.parseLabel("block"));
+    }
+
+    @Test
+    void prepareAndRegisterReflectsReadinessCheck() {
+        OnnxClassifierRuntimeControl control = Mockito.mock(OnnxClassifierRuntimeControl.class);
+        OnnxClassifierRuntimeControl.Registration registration =
+                Mockito.mock(OnnxClassifierRuntimeControl.Registration.class);
+        Mockito.when(control.registerReadyImplementation(any())).thenReturn(registration);
+
+        OnnxToolRiskShadowClassifier readyClassifier =
+                new OnnxToolRiskShadowClassifier(true, new ObjectMapper(), input -> null, () -> true);
+        readyClassifier.prepareAndRegister(control);
+        Mockito.verify(control).registerReadyImplementation(OnnxClassifierRuntimeControl.Classifier.TOOL_RISK);
+
+        OnnxToolRiskShadowClassifier notReadyClassifier =
+                new OnnxToolRiskShadowClassifier(true, new ObjectMapper(), input -> null, () -> false);
+        assertTrue(notReadyClassifier.prepareAndRegister(control).isEmpty());
+    }
+
+    @Test
+    void classifyUnderLeaseHandlesExceptionsGracefully() {
+        OnnxToolRiskShadowClassifier classifier = new OnnxToolRiskShadowClassifier(true, new ObjectMapper(), input -> {
+            throw new RuntimeException("Inference crash");
+        });
+
+        ClassifierResult<?> result = classifier.classifyUnderLease(context());
+        assertInstanceOf(ClassifierResult.NoOpinion.class, result);
+        assertEquals(NoOpinionReason.INFERENCE_ERROR, ((ClassifierResult.NoOpinion<?>) result).reason());
     }
 
     private static ToolRiskShadowContext context() {

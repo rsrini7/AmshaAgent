@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
+import java.net.URI;
 import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -164,5 +165,57 @@ class SkillsJarSkillProviderTest {
 
         assertDoesNotThrow(() -> writeMeta.invoke(provider, tempDir, "test-skill", mockJar));
         assertTrue(Files.exists(tempDir.resolve(".skill-source.json")));
+    }
+
+    @Test
+    void testStripConflictingSections() throws Exception {
+        var stripMethod = provider.getClass().getDeclaredMethod("stripConflictingSections", String.class);
+        stripMethod.setAccessible(true);
+
+        String input =
+                "# Heading\n## Decision Tree\nskip this\n## Valid Section\nkeep this\n## Quick Start\nskip this too\n";
+        String stripped = (String) stripMethod.invoke(provider, input);
+        assertNotNull(stripped);
+        assertTrue(stripped.contains("## Valid Section"));
+        assertTrue(stripped.contains("keep this"));
+        assertFalse(stripped.contains("skip this"));
+        assertFalse(stripped.contains("skip this too"));
+    }
+
+    @Test
+    void testScanUrlWithUnknownProtocol() throws Exception {
+        var scanMethod = provider.getClass().getDeclaredMethod("scanUrl", URL.class, List.class);
+        scanMethod.setAccessible(true);
+
+        List<SkillDefinition> skills = new ArrayList<>();
+        URL customUrl = new URI("http://example.com/skill").toURL();
+        assertDoesNotThrow(() -> scanMethod.invoke(provider, customUrl, skills));
+        assertTrue(skills.isEmpty());
+    }
+
+    @Test
+    void testLoadSkillFromResourceNonExistent() throws Exception {
+        var loadResMethod = provider.getClass().getDeclaredMethod("loadSkillFromResource", String.class, List.class);
+        loadResMethod.setAccessible(true);
+
+        List<SkillDefinition> skills = new ArrayList<>();
+        assertDoesNotThrow(() -> loadResMethod.invoke(provider, "/non/existent/path/SKILL.md", skills));
+        assertTrue(skills.isEmpty());
+    }
+
+    @Test
+    void testMaybeAugmentBrowserPreviewAndTemplateDir() {
+        assertNull(SkillsJarSkillProvider.maybeAugmentBrowserPreview(null, null));
+
+        SkillDefinition noPreview =
+                new SkillDefinition("s1", "skill1", "desc", List.of(), List.of(), 5, "prompt", "/home", false, null);
+        assertSame(noPreview, SkillsJarSkillProvider.maybeAugmentBrowserPreview(noPreview, "/home"));
+
+        SkillDefinition withPreview = new SkillDefinition(
+                "s2", "skill2", "desc", List.of(), List.of(), 5, "prompt", "/home", true, "templates/start");
+        SkillDefinition augmented = SkillsJarSkillProvider.maybeAugmentBrowserPreview(withPreview, "/home");
+        assertNotNull(augmented);
+        assertTrue(augmented.systemPrompt().contains("BROWSER PREVIEW RULES"));
+        assertTrue(augmented.systemPrompt().contains("templates/start"));
     }
 }
