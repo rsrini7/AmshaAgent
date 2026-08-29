@@ -304,9 +304,9 @@ class CliUtilsTest {
     @Test
     void getMissingVarSpecs_telegramDisabled_doesNotRequireTelegramFields() {
         setAllVars();
-        System.clearProperty("TELEGRAM_BOT_TOKEN");
-        System.clearProperty("AMSHA_TELEGRAM_ALLOWED_USER_IDS");
-        System.clearProperty("AMSHA_TELEGRAM_ALLOWED_USERS");
+        System.setProperty("TELEGRAM_BOT_TOKEN", "");
+        System.setProperty("AMSHA_TELEGRAM_ALLOWED_USER_IDS", "");
+        System.setProperty("AMSHA_TELEGRAM_ALLOWED_USERS", "");
         System.setProperty("AMSHA_TELEGRAM_ENABLED", "false");
 
         List<VarSpec> missing = CliUtils.getMissingVarSpecs(new String[] {});
@@ -318,9 +318,9 @@ class CliUtilsTest {
     @Test
     void getMissingVarSpecs_attachModeStillRequiresTelegramFields() {
         setAllVars();
-        System.clearProperty("TELEGRAM_BOT_TOKEN");
-        System.clearProperty("AMSHA_TELEGRAM_ALLOWED_USER_IDS");
-        System.clearProperty("AMSHA_TELEGRAM_ALLOWED_USERS");
+        System.setProperty("TELEGRAM_BOT_TOKEN", "");
+        System.setProperty("AMSHA_TELEGRAM_ALLOWED_USER_IDS", "");
+        System.setProperty("AMSHA_TELEGRAM_ALLOWED_USERS", "");
         System.setProperty("AMSHA_TELEGRAM_ENABLED", "false");
 
         List<VarSpec> missing = CliUtils.getMissingVarSpecs(new String[] {"attach"});
