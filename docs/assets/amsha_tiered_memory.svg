@@ -37,7 +37,7 @@
     <rect x="20" y="300" width="240" height="74" rx="8" fill="#085041" stroke="#5dcaa5" stroke-width="0.5"/>
     <text x="35" y="322" font-size="14" font-weight="600" fill="#9fe1cb">3. Archival Memory</text>
     <text x="35" y="340" font-size="11" fill="#5dcaa5">Long-term knowledge &amp; injected files</text>
-    <text x="35" y="356" font-size="10" fill="#4ea688">Lucene hybrid vector kNN + BM25 · Indefinite</text>
+    <text x="35" y="356" font-size="10" fill="#4ea688">sqlite-vec/pgvector + FTS5 RRF · Lucene on FS · Indefinite</text>
   </g>
 
   <!-- ==================== PROMPT ASSEMBLY & CACHING ==================== -->
@@ -77,7 +77,7 @@
 
   <!-- Archival Memory → ArchivalContextCache (Async Vector Search + optional cross-encoder rerank) -->
   <line x1="260" y1="337" x2="340" y2="337" stroke="#a98fe2" stroke-width="1.5" stroke-dasharray="3 3" marker-end="url(#arrow-async)"/>
-  <text x="300" y="328" text-anchor="middle" font-size="9" fill="#a98fe2" font-family="'Segoe UI', system-ui, sans-serif">Async RAG + rerank</text>
+  <text x="300" y="328" text-anchor="middle" font-size="9" fill="#a98fe2" font-family="'Segoe UI', system-ui, sans-serif">Async RAG: FTS5+vector RRF + rerank</text>
 
   <!-- ArchivalContextCache → Prompt Assembly (Sync cached O(1) read) -->
   <line x1="460" y1="300" x2="460" y2="209" stroke="#9c9a92" stroke-width="1.5" marker-end="url(#arrow)"/>
