@@ -31,7 +31,8 @@ class ModelRouteSelectorTest {
         ModelRoute nemotron = route("nemotron", AttachmentType.AUDIO);
         ModelRoute text = route("text");
 
-        TurnRequirements requirements = new TurnRequirements(Set.of(AttachmentType.IMAGE), Set.of(), 0L, false, false);
+        TurnRequirements requirements =
+                new TurnRequirements(Set.of(AttachmentType.IMAGE), Set.of(), 0L, 0L, 0, false, false);
 
         Optional<ModelRoute> selected =
                 new DefaultModelRouteSelector().select("researcher", requirements, List.of(qwen, nemotron, text));
@@ -46,7 +47,8 @@ class ModelRouteSelectorTest {
         ModelRoute qwen = route("qwen", AttachmentType.IMAGE);
         ModelRoute nemotron = route("nemotron", AttachmentType.AUDIO);
 
-        TurnRequirements requirements = new TurnRequirements(Set.of(AttachmentType.AUDIO), Set.of(), 0L, false, false);
+        TurnRequirements requirements =
+                new TurnRequirements(Set.of(AttachmentType.AUDIO), Set.of(), 0L, 0L, 0, false, false);
 
         Optional<ModelRoute> selected =
                 new DefaultModelRouteSelector().select("researcher", requirements, List.of(qwen, nemotron));
@@ -60,8 +62,8 @@ class ModelRouteSelectorTest {
         ModelRoute qwen = route("qwen", AttachmentType.IMAGE);
         ModelRoute nemotron = route("nemotron", AttachmentType.AUDIO);
 
-        TurnRequirements requirements =
-                new TurnRequirements(Set.of(AttachmentType.IMAGE, AttachmentType.AUDIO), Set.of(), 0L, false, false);
+        TurnRequirements requirements = new TurnRequirements(
+                Set.of(AttachmentType.IMAGE, AttachmentType.AUDIO), Set.of(), 0L, 0L, 0, false, false);
 
         Optional<ModelRoute> selected =
                 new DefaultModelRouteSelector().select("researcher", requirements, List.of(qwen, nemotron));
@@ -85,8 +87,8 @@ class ModelRouteSelectorTest {
         ModelRoute gemini = route("gemini", AttachmentType.IMAGE, AttachmentType.AUDIO, AttachmentType.DOCUMENT_PDF);
         ModelRoute qwen = route("qwen", AttachmentType.IMAGE);
 
-        TurnRequirements requirements =
-                new TurnRequirements(Set.of(AttachmentType.IMAGE, AttachmentType.AUDIO), Set.of(), 0L, false, false);
+        TurnRequirements requirements = new TurnRequirements(
+                Set.of(AttachmentType.IMAGE, AttachmentType.AUDIO), Set.of(), 0L, 0L, 0, false, false);
 
         Optional<ModelRoute> selected =
                 new DefaultModelRouteSelector().select("researcher", requirements, List.of(qwen, gemini));
@@ -112,7 +114,8 @@ class ModelRouteSelectorTest {
         ModelRoute qwenPrimary = route("qwen-primary", AttachmentType.IMAGE);
         ModelRoute geminiFallback = route("gemini-fallback", AttachmentType.IMAGE, AttachmentType.AUDIO);
 
-        TurnRequirements requirements = new TurnRequirements(Set.of(AttachmentType.IMAGE), Set.of(), 0L, false, false);
+        TurnRequirements requirements =
+                new TurnRequirements(Set.of(AttachmentType.IMAGE), Set.of(), 0L, 0L, 0, false, false);
 
         Optional<ModelRoute> selected = new DefaultModelRouteSelector()
                 .select("researcher", requirements, List.of(qwenPrimary, geminiFallback));
@@ -130,7 +133,8 @@ class ModelRouteSelectorTest {
         ModelRoute qwenFallback = route("qwen-fallback", AttachmentType.IMAGE);
         ModelRoute nemotron = route("nemotron", AttachmentType.AUDIO);
 
-        TurnRequirements requirements = new TurnRequirements(Set.of(AttachmentType.IMAGE), Set.of(), 0L, false, false);
+        TurnRequirements requirements =
+                new TurnRequirements(Set.of(AttachmentType.IMAGE), Set.of(), 0L, 0L, 0, false, false);
 
         Optional<ModelRoute> selected = new DefaultModelRouteSelector()
                 .select("researcher", requirements, List.of(qwenPrimary, qwenFallback, nemotron));
@@ -148,7 +152,7 @@ class ModelRouteSelectorTest {
         ModelRoute selected = new DefaultModelRouteSelector()
                 .select(
                         "researcher",
-                        new TurnRequirements(Set.of(AttachmentType.IMAGE), Set.of(), 0L, false, false),
+                        new TurnRequirements(Set.of(AttachmentType.IMAGE), Set.of(), 0L, 0L, 0, false, false),
                         List.of(primary, fallback))
                 .orElseThrow();
 

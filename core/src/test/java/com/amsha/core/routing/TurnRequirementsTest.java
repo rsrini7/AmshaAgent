@@ -33,6 +33,8 @@ class TurnRequirementsTest {
 
         assertEquals(Set.of(AttachmentType.IMAGE, AttachmentType.AUDIO), requirements.requiredModalities());
         assertEquals(30L, requirements.totalPayloadBytes());
+        assertEquals(20L, requirements.maxAttachmentBytes());
+        assertEquals(2, requirements.mediaCount());
         assertFalse(requirements.isTextOnly());
     }
 
@@ -54,7 +56,7 @@ class TurnRequirementsTest {
 
     @Test
     void nullSetsAreNormalizedAndImmutable() {
-        TurnRequirements requirements = new TurnRequirements(null, null, 0L, false, false);
+        TurnRequirements requirements = new TurnRequirements(null, null, 0L, 0L, 0, false, false);
         assertTrue(requirements.isTextOnly());
         assertTrue(requirements.requiredModalities().isEmpty());
         assertThrows(

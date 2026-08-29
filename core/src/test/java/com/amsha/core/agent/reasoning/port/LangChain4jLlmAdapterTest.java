@@ -10,9 +10,17 @@ import dev.langchain4j.model.chat.request.ChatRequest;
 import dev.langchain4j.model.chat.response.ChatResponse;
 
 import java.util.List;
+import java.util.Optional;
+import java.util.Set;
 
+import com.amsha.channel.api.AttachmentType;
 import com.amsha.core.routing.CapabilityAwareChatModel;
+import com.amsha.core.routing.DefaultModelRouteSelector;
+import com.amsha.core.routing.ModelRoute;
+import com.amsha.core.routing.ModelRouteSelector;
 import com.amsha.core.routing.ModelRouter;
+import com.amsha.core.routing.ProfileRouteCandidateBuilder;
+import com.amsha.core.routing.TurnRequirements;
 import com.amsha.llm.api.MultimodalCapabilities;
 import com.amsha.llm.api.MultimodalCapability;
 import com.amsha.llm.api.StructuredSchemaRequests;
@@ -42,7 +50,8 @@ class LangChain4jLlmAdapterTest {
         globalModel = mock(ChatModel.class);
         modelRouter = mock(ModelRouter.class);
         meterRegistry = new SimpleMeterRegistry();
-        adapter = new LangChain4jLlmAdapter(globalModel, modelRouter, meterRegistry);
+        adapter = new LangChain4jLlmAdapter(
+                globalModel, modelRouter, meterRegistry, new DefaultModelRouteSelector(), null);
         adapter.cbEnabled = true;
     }
 
@@ -363,11 +372,137 @@ class LangChain4jLlmAdapterTest {
     void multimodalCapability_delegatesToGlobalModel_whenRoleIsBlank() {
         MultimodalCapability cap = MultimodalCapabilities.defaultCapabilityForModel("openai", "gpt-4o");
         ChatModel globalCapable = CapabilityAwareChatModel.withCapabilities(mock(ChatModel.class), false, cap);
-        LangChain4jLlmAdapter customAdapter = new LangChain4jLlmAdapter(globalCapable, modelRouter, meterRegistry);
+        LangChain4jLlmAdapter customAdapter = new LangChain4jLlmAdapter(
+                globalCapable, modelRouter, meterRegistry, new DefaultModelRouteSelector(), null);
 
         MultimodalCapability resolved = customAdapter.multimodalCapability("  ");
-
         assertEquals(cap, resolved);
+    }
+
+    @Test
+    void resolveRoute_usesSelectorAndBuilder_whenAvailable() {
+        ProfileRouteCandidateBuilder builder = mock(ProfileRouteCandidateBuilder.class);
+        ModelRouteSelector selector = mock(ModelRouteSelector.class);
+        LangChain4jLlmAdapter customAdapter =
+                new LangChain4jLlmAdapter(globalModel, modelRouter, meterRegistry, selector, builder);
+
+        TurnRequirements reqs = TurnRequirements.textOnly();
+        ModelRoute route1 = new ModelRoute(
+                "id-1", "prov", "model", null, mock(ChatModel.class), MultimodalCapability.TEXT_ONLY, List.of(), 1);
+        when(builder.buildCandidates("researcher")).thenReturn(List.of(route1));
+        when(selector.select("researcher", reqs, List.of(route1))).thenReturn(Optional.of(route1));
+
+        ModelRoute resolved = customAdapter.resolveRoute("researcher", reqs);
+        assertEquals("id-1", resolved.routeId());
+    }
+
+    @Test
+    void resolveRoute_selectsByModalityFromMultipleCandidates() {
+        ProfileRouteCandidateBuilder builder = mock(ProfileRouteCandidateBuilder.class);
+        ModelRouteSelector selector = mock(ModelRouteSelector.class);
+        LangChain4jLlmAdapter customAdapter =
+                new LangChain4jLlmAdapter(globalModel, modelRouter, meterRegistry, selector, builder);
+
+        TurnRequirements imageReqs =
+                new TurnRequirements(Set.of(AttachmentType.IMAGE), Set.of("image/png"), 1024L, 1024L, 1, false, false);
+        ModelRoute textRoute = new ModelRoute(
+                "text-route",
+                "prov",
+                "text",
+                null,
+                mock(ChatModel.class),
+                MultimodalCapability.TEXT_ONLY,
+                List.of(),
+                1);
+        ModelRoute visionRoute = new ModelRoute(
+                "vision-route",
+                "prov",
+                "vision",
+                null,
+                mock(ChatModel.class),
+                new MultimodalCapability(Set.of(AttachmentType.IMAGE), Set.of("image/png"), 10_000_000L, 5, true, true),
+                List.of(),
+                1);
+
+        when(builder.buildCandidates("researcher")).thenReturn(List.of(textRoute, visionRoute));
+        when(selector.select("researcher", imageReqs, List.of(textRoute, visionRoute)))
+                .thenReturn(Optional.of(visionRoute));
+
+        ModelRoute resolved = customAdapter.resolveRoute("researcher", imageReqs);
+        assertEquals("vision-route", resolved.routeId());
+        assertTrue(resolved.capability().supportsType(AttachmentType.IMAGE));
+    }
+
+    @Test
+    void resolveRoute_fallsBackToLegacy_whenBuilderEmpty() {
+        ProfileRouteCandidateBuilder builder = mock(ProfileRouteCandidateBuilder.class);
+        ModelRouteSelector selector = mock(ModelRouteSelector.class);
+        LangChain4jLlmAdapter customAdapter =
+                new LangChain4jLlmAdapter(globalModel, modelRouter, meterRegistry, selector, builder);
+
+        when(modelRouter.resolve("researcher", false)).thenReturn(globalModel);
+
+        TurnRequirements reqs = TurnRequirements.textOnly();
+        when(builder.buildCandidates("researcher")).thenReturn(List.of());
+
+        // We expect it to create a legacy route and pass it to selector
+        when(selector.select(eq("researcher"), eq(reqs), any())).thenAnswer(inv -> {
+            List<ModelRoute> candidates = inv.getArgument(2);
+            assertEquals(1, candidates.size());
+            assertEquals("role:researcher", candidates.get(0).routeId());
+            return Optional.of(candidates.get(0));
+        });
+
+        ModelRoute resolved = customAdapter.resolveRoute("researcher", reqs);
+        assertEquals("role:researcher", resolved.routeId());
+    }
+
+    @Test
+    void resolveRoute_fallsBackToLegacy_whenSelectorReturnsEmpty() {
+        ProfileRouteCandidateBuilder builder = mock(ProfileRouteCandidateBuilder.class);
+        ModelRouteSelector selector = mock(ModelRouteSelector.class);
+        LangChain4jLlmAdapter customAdapter =
+                new LangChain4jLlmAdapter(globalModel, modelRouter, meterRegistry, selector, builder);
+
+        when(modelRouter.resolve("researcher", false)).thenReturn(globalModel);
+
+        TurnRequirements reqs = TurnRequirements.textOnly();
+        ModelRoute route1 = new ModelRoute(
+                "id-1", "prov", "model", null, mock(ChatModel.class), MultimodalCapability.TEXT_ONLY, List.of(), 1);
+        when(builder.buildCandidates("researcher")).thenReturn(List.of(route1));
+
+        // Selector rejects the profile candidate
+        when(selector.select("researcher", reqs, List.of(route1))).thenReturn(Optional.empty());
+
+        when(selector.select(eq("researcher"), eq(reqs), any())).thenAnswer(inv -> {
+            List<ModelRoute> candidates = inv.getArgument(2);
+            if (candidates.size() == 1 && candidates.get(0).routeId().equals("role:researcher")) {
+                return Optional.of(candidates.get(0));
+            }
+            return Optional.empty();
+        });
+
+        ModelRoute resolved = customAdapter.resolveRoute("researcher", reqs);
+        assertEquals("role:researcher", resolved.routeId());
+    }
+
+    @Test
+    void resolveRoute_returnsTextFallback_whenLegacyRouteFails() {
+        ProfileRouteCandidateBuilder builder = mock(ProfileRouteCandidateBuilder.class);
+        ModelRouteSelector selector = mock(ModelRouteSelector.class);
+        LangChain4jLlmAdapter customAdapter =
+                new LangChain4jLlmAdapter(globalModel, modelRouter, meterRegistry, selector, builder);
+
+        when(modelRouter.resolve("researcher", false)).thenReturn(globalModel);
+
+        TurnRequirements reqs = TurnRequirements.textOnly();
+        when(builder.buildCandidates("researcher")).thenReturn(List.of());
+
+        // Selector rejects everything
+        when(selector.select(eq("researcher"), eq(reqs), any())).thenReturn(Optional.empty());
+
+        ModelRoute resolved = customAdapter.resolveRoute("researcher", reqs);
+        assertEquals("fallback:text-only", resolved.routeId());
     }
 
     @Test

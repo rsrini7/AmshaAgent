@@ -39,11 +39,14 @@ public record MultimodalCapability(
     }
 
     public boolean supportsMimeType(String mimeType) {
-        if (mimeType == null || supportedMimeTypes.isEmpty()) {
+        if (mimeType == null) {
             return false;
         }
-        String cleanMime = mimeType.split(";", 2)[0].trim().toLowerCase(Locale.ROOT);
-        return supportedMimeTypes.contains(cleanMime);
+        if (!supportedMimeTypes.isEmpty()) {
+            String cleanMime = mimeType.split(";", 2)[0].trim().toLowerCase(Locale.ROOT);
+            return supportedMimeTypes.contains(cleanMime);
+        }
+        return !supportedTypes.isEmpty();
     }
 
     public boolean isMultimodal() {

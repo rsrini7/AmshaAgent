@@ -48,7 +48,9 @@ import com.amsha.core.observability.AmshaChatModelListener;
 import com.amsha.core.observability.ChatModelListenerMode;
 import com.amsha.core.observability.ChatModelListenerRuntimeControl;
 import com.amsha.core.routing.CapabilityAwareChatModel;
+import com.amsha.core.routing.CapabilityJsonParser;
 import com.amsha.core.routing.InfiniteLoopChatModel;
+import com.amsha.core.routing.LazyChatModel;
 import com.amsha.core.routing.ModelCacheInvalidator;
 import com.amsha.core.routing.ModelProfileCredentialResolver;
 import com.amsha.core.routing.ModelProfileResolverImpl;
@@ -57,6 +59,7 @@ import com.amsha.core.routing.ModelRouter;
 import com.amsha.core.routing.ModelRoutingException;
 import com.amsha.core.routing.MultiModelChatModel;
 import com.amsha.core.routing.OrderedFailoverChatModel;
+import com.amsha.core.routing.ProfileRouteCandidateBuilder;
 import com.amsha.core.routing.ResolvedCredential;
 import com.amsha.core.routing.ResolvedProfile;
 import com.amsha.core.routing.RouteResolution;
@@ -137,6 +140,9 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             RouteResolution.class,
             TurnRequirements.class,
             ModelRoute.class,
+            LazyChatModel.class,
+            CapabilityJsonParser.class,
+            ProfileRouteCandidateBuilder.class,
             ResolvedCredential.class,
             ModelProfileResolverImpl.class,
             ModelProfileCredentialResolver.class,

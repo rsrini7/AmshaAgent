@@ -67,4 +67,23 @@ class MultimodalCapabilityTest {
         assertEquals(0, cap.maxMediaPerRequest());
         assertFalse(cap.supportsType(null));
     }
+
+    @Test
+    void typeOnlyCapabilityActsAsMimeWildcard() {
+        MultimodalCapability typeOnly =
+                new MultimodalCapability(Set.of(AttachmentType.IMAGE), Set.of(), 10_000_000L, 5, true, true);
+
+        assertTrue(typeOnly.isMultimodal());
+        assertTrue(typeOnly.supportsType(AttachmentType.IMAGE));
+        assertFalse(typeOnly.supportsType(AttachmentType.AUDIO));
+
+        // Empty MIME list on a multimodal capability acts as wildcard over its modalities
+        assertTrue(typeOnly.supportsMimeType("image/png"));
+        assertTrue(typeOnly.supportsMimeType("image/jpeg"));
+        assertTrue(typeOnly.supportsMimeType("image/webp"));
+        assertFalse(typeOnly.supportsMimeType(null));
+
+        // TEXT_ONLY has empty supportedTypes and still rejects all MIMEs
+        assertFalse(MultimodalCapability.TEXT_ONLY.supportsMimeType("image/png"));
+    }
 }

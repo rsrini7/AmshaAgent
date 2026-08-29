@@ -23,6 +23,8 @@ public record TurnRequirements(
         Set<AttachmentType> requiredModalities,
         Set<String> mimeTypes,
         long totalPayloadBytes,
+        long maxAttachmentBytes,
+        int mediaCount,
         boolean requiresStructuredOutput,
         boolean isChitchat) {
 
@@ -32,7 +34,7 @@ public record TurnRequirements(
     }
 
     public static TurnRequirements textOnly() {
-        return new TurnRequirements(Set.of(), Set.of(), 0L, false, false);
+        return new TurnRequirements(Set.of(), Set.of(), 0L, 0L, 0, false, false);
     }
 
     public static TurnRequirements fromAttachments(Collection<MediaAttachment> attachments) {
@@ -41,7 +43,9 @@ public record TurnRequirements(
         }
         Set<AttachmentType> modalities = new LinkedHashSet<>();
         Set<String> mimes = new LinkedHashSet<>();
-        long total = 0L;
+        long totalBytes = 0L;
+        long maxBytes = 0L;
+        int count = 0;
         for (MediaAttachment attachment : attachments) {
             if (attachment.type() != null) {
                 modalities.add(attachment.type());
@@ -49,9 +53,12 @@ public record TurnRequirements(
             if (attachment.mimeType() != null && !attachment.mimeType().isBlank()) {
                 mimes.add(attachment.mimeType().toLowerCase(Locale.ROOT));
             }
-            total += attachment.sizeBytes();
+            totalBytes += attachment.sizeBytes();
+            maxBytes = Math.max(maxBytes, attachment.sizeBytes());
+            count++;
         }
-        return new TurnRequirements(Set.copyOf(modalities), Set.copyOf(mimes), total, false, false);
+        return new TurnRequirements(
+                Set.copyOf(modalities), Set.copyOf(mimes), totalBytes, maxBytes, count, false, false);
     }
 
     /**
@@ -65,6 +72,8 @@ public record TurnRequirements(
                 base.requiredModalities(),
                 base.mimeTypes(),
                 base.totalPayloadBytes(),
+                base.maxAttachmentBytes(),
+                base.mediaCount(),
                 requiresStructuredOutput(goal),
                 isChitchat(goal));
     }

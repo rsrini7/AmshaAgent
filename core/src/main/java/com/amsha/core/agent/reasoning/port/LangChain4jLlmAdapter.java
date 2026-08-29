@@ -8,12 +8,16 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
 import com.amsha.common.util.LogUtil;
 import com.amsha.core.agent.reasoning.error.LlmErrorClassificationService;
+import com.amsha.core.routing.DefaultModelRouteSelector;
 import com.amsha.core.routing.ModelRoute;
+import com.amsha.core.routing.ModelRouteSelector;
 import com.amsha.core.routing.ModelRouter;
+import com.amsha.core.routing.ProfileRouteCandidateBuilder;
 import com.amsha.core.routing.TurnRequirements;
 import com.amsha.core.structured.StructuredOutputMetrics;
 import com.amsha.llm.api.MultimodalCapabilities;
@@ -44,6 +48,8 @@ public class LangChain4jLlmAdapter implements LlmProviderPort {
     private final ChatModel globalChatModel;
     private final ModelRouter modelRouter;
     private final MeterRegistry meterRegistry;
+    private final ModelRouteSelector modelRouteSelector;
+    private final ProfileRouteCandidateBuilder candidateBuilder;
 
     @ConfigProperty(name = "amsha.llm.circuit-breaker.enabled", defaultValue = "true")
     boolean cbEnabled;
@@ -52,14 +58,21 @@ public class LangChain4jLlmAdapter implements LlmProviderPort {
     private final ConcurrentHashMap<String, PerModelCircuitBreaker> circuitBreakers = new ConcurrentHashMap<>();
 
     @Inject
-    public LangChain4jLlmAdapter(ChatModel globalChatModel, ModelRouter modelRouter, MeterRegistry meterRegistry) {
+    public LangChain4jLlmAdapter(
+            ChatModel globalChatModel,
+            ModelRouter modelRouter,
+            MeterRegistry meterRegistry,
+            ModelRouteSelector modelRouteSelector,
+            ProfileRouteCandidateBuilder candidateBuilder) {
         this.globalChatModel = globalChatModel;
         this.modelRouter = modelRouter;
         this.meterRegistry = meterRegistry;
+        this.modelRouteSelector = modelRouteSelector;
+        this.candidateBuilder = candidateBuilder;
     }
 
     public LangChain4jLlmAdapter(ChatModel globalChatModel, ModelRouter modelRouter) {
-        this(globalChatModel, modelRouter, null);
+        this(globalChatModel, modelRouter, null, new DefaultModelRouteSelector(), null);
     }
 
     @Override
@@ -102,18 +115,52 @@ public class LangChain4jLlmAdapter implements LlmProviderPort {
 
     @Override
     public ModelRoute resolveRoute(String agentRole, TurnRequirements requirements) {
-        // Slab A provisional: TurnRequirements are accepted at the port seam but modality selection
-        // is not yet applied (Slab B wires a ModelRouteSelector). Resolution falls back to the
-        // role-based path, returning a non-turn-aware route for downstream compatibility.
+        // Slab B: Deep resolution — enumerate profile candidates, filter by TurnRequirements,
+        // select via ModelRouteSelector. Falls back to role-based resolution when no profile
+        // candidates exist or when the selector cannot satisfy the requirements.
+        if (candidateBuilder != null) {
+            List<ModelRoute> candidates = candidateBuilder.buildCandidates(agentRole);
+            if (!candidates.isEmpty()) {
+                Optional<ModelRoute> selected = modelRouteSelector.select(agentRole, requirements, candidates);
+                if (selected.isPresent()) {
+                    log.debugf(
+                            "[LLM-ADAPTER] Slab B route selected for role=%s: %s",
+                            agentRole, selected.get().routeId());
+                    return selected.get();
+                }
+                log.debugf(
+                        "[LLM-ADAPTER] Slab B selector returned empty for role=%s with %d candidates; "
+                                + "falling back to role-based route",
+                        agentRole, candidates.size());
+            }
+        }
+        // Fallback: role-based resolution (pre-Slab B path). Build a single-candidate route
+        // from the legacy ModelRouter and pass it through the selector for consistent ordering.
         ChatModel resolvedModel = resolveModel(agentRole, false);
         MultimodalCapability capability = MultimodalCapabilities.resolveCapability(resolvedModel);
-        return new ModelRoute(
+        ModelRoute legacyRoute = new ModelRoute(
                 "role:" + (agentRole == null ? "global" : agentRole),
                 null,
                 null,
                 null,
                 resolvedModel,
                 capability,
+                List.of(),
+                0L);
+        Optional<ModelRoute> selected = modelRouteSelector.select(agentRole, requirements, List.of(legacyRoute));
+        if (selected.isPresent()) {
+            return selected.get();
+        }
+        log.warnf(
+                "[LLM-ADAPTER] Legacy route %s does not cover turn requirements; degrading to text-only fallback",
+                legacyRoute.routeId());
+        return new ModelRoute(
+                "fallback:text-only",
+                legacyRoute.providerName(),
+                legacyRoute.modelName(),
+                null,
+                resolvedModel,
+                MultimodalCapability.TEXT_ONLY,
                 List.of(),
                 0L);
     }
