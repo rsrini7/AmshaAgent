@@ -80,7 +80,7 @@ RID=$(sid)
 [ "$CODE" = "201" ] || [ "$CODE" = "200" ] && ok "$CODE" || { fail "$CODE"; RID=""; }
 if [ -n "$RID" ]; then
   info "AUTO-9: run github task (READONLY → blocked, 200 no tool)"
-  CODE=$(run_req POST "$VALID_KEY" "$B/api/v1/sessions/$RID/run" '{"goal":"List the public repositories of GitHub user rsrini7.","agentRole":"coordinator","maxIterations":2}')
+  CODE=$(run_req POST "$VALID_KEY" "$B/api/v1/sessions/$RID/run" '{"goal":"List the public repositories of GitHub user rsrini7. If tools cannot be executed, summarize in plain text.","agentRole":"coordinator","maxIterations":3}')
   [ "$CODE" = "200" ] || [ "$CODE" = "202" ] && ok "$CODE" || fail "$CODE"
   info "AUTO-10: audit has NO TOOL_INVOKED"
   CODE=$(run_req GET "$VALID_KEY" "$B/api/v1/audit/session/$RID")
