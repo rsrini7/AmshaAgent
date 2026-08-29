@@ -3,6 +3,8 @@ package com.amsha.core.agent.reasoning.port;
 import dev.langchain4j.model.chat.request.ChatRequest;
 import dev.langchain4j.model.chat.response.ChatResponse;
 
+import com.amsha.core.routing.ModelRoute;
+import com.amsha.core.routing.TurnRequirements;
 import com.amsha.llm.api.MultimodalCapability;
 
 /**
@@ -72,5 +74,15 @@ public interface LlmProviderPort {
      */
     default MultimodalCapability multimodalCapability(String agentRole) {
         return MultimodalCapability.TEXT_ONLY;
+    }
+
+    /**
+     * Resolves a turn-aware {@link ModelRoute} for the given role and turn requirements.
+     * Slab A accepts {@link TurnRequirements} at the port seam; modality selection is wired in
+     * Slab B via a {@code ModelRouteSelector}. The default returns {@code null} so non-routing
+     * providers remain unaffected; concrete providers override to route per requirements.
+     */
+    default ModelRoute resolveRoute(String agentRole, TurnRequirements requirements) {
+        return null;
     }
 }

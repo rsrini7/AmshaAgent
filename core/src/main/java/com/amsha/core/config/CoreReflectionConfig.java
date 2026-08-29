@@ -52,6 +52,7 @@ import com.amsha.core.routing.InfiniteLoopChatModel;
 import com.amsha.core.routing.ModelCacheInvalidator;
 import com.amsha.core.routing.ModelProfileCredentialResolver;
 import com.amsha.core.routing.ModelProfileResolverImpl;
+import com.amsha.core.routing.ModelRoute;
 import com.amsha.core.routing.ModelRouter;
 import com.amsha.core.routing.ModelRoutingException;
 import com.amsha.core.routing.MultiModelChatModel;
@@ -60,6 +61,7 @@ import com.amsha.core.routing.ResolvedCredential;
 import com.amsha.core.routing.ResolvedProfile;
 import com.amsha.core.routing.RouteResolution;
 import com.amsha.core.routing.SystemProfileMigration;
+import com.amsha.core.routing.TurnRequirements;
 import com.amsha.core.routing.provider.NetworkPolicyEnforcer;
 import com.amsha.core.sandbox.SandboxResult;
 import com.amsha.core.security.ExternalIdentityProvider;
@@ -133,6 +135,8 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             InfiniteLoopChatModel.Slot.class,
             ResolvedProfile.class,
             RouteResolution.class,
+            TurnRequirements.class,
+            ModelRoute.class,
             ResolvedCredential.class,
             ModelProfileResolverImpl.class,
             ModelProfileCredentialResolver.class,

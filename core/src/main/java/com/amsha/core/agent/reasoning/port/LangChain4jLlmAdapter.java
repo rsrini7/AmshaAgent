@@ -7,11 +7,14 @@ import dev.langchain4j.model.chat.response.ChatResponse;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
+import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 
 import com.amsha.common.util.LogUtil;
 import com.amsha.core.agent.reasoning.error.LlmErrorClassificationService;
+import com.amsha.core.routing.ModelRoute;
 import com.amsha.core.routing.ModelRouter;
+import com.amsha.core.routing.TurnRequirements;
 import com.amsha.core.structured.StructuredOutputMetrics;
 import com.amsha.llm.api.MultimodalCapabilities;
 import com.amsha.llm.api.MultimodalCapability;
@@ -95,6 +98,24 @@ public class LangChain4jLlmAdapter implements LlmProviderPort {
     public MultimodalCapability multimodalCapability(String agentRole) {
         ChatModel resolvedModel = resolveModel(agentRole, false);
         return MultimodalCapabilities.resolveCapability(resolvedModel);
+    }
+
+    @Override
+    public ModelRoute resolveRoute(String agentRole, TurnRequirements requirements) {
+        // Slab A provisional: TurnRequirements are accepted at the port seam but modality selection
+        // is not yet applied (Slab B wires a ModelRouteSelector). Resolution falls back to the
+        // role-based path, returning a non-turn-aware route for downstream compatibility.
+        ChatModel resolvedModel = resolveModel(agentRole, false);
+        MultimodalCapability capability = MultimodalCapabilities.resolveCapability(resolvedModel);
+        return new ModelRoute(
+                "role:" + (agentRole == null ? "global" : agentRole),
+                null,
+                null,
+                null,
+                resolvedModel,
+                capability,
+                List.of(),
+                0L);
     }
 
     private ChatResponse execute(ChatRequest request, ChatModel resolvedModel) {
