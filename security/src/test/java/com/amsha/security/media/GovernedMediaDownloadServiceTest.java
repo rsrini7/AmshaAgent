@@ -288,6 +288,16 @@ class GovernedMediaDownloadServiceTest {
                 "audio/mpeg", GovernedMediaDownloadService.resolveResponseMimeType("application/octet-stream", mpeg));
         assertEquals(
                 "audio/ogg", GovernedMediaDownloadService.resolveResponseMimeType("application/octet-stream", ogg));
+        MediaAttachment wav = MediaAttachment.ofUri(
+                "att-tg-wav",
+                AttachmentType.AUDIO,
+                "audio/x-wav",
+                "audio.wav",
+                -1L,
+                URI.create("telegram://file/audio_wav_123"),
+                Map.of());
+        assertEquals(
+                "audio/wav", GovernedMediaDownloadService.resolveResponseMimeType("application/octet-stream", wav));
     }
 
     @Test

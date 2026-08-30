@@ -171,6 +171,9 @@ class MediaSecurityValidatorTest {
                 "application/pdf",
                 MediaSecurityValidator.validateMimeType("application/pdf", AttachmentType.DOCUMENT_PDF));
         assertEquals("audio/mpeg", MediaSecurityValidator.validateMimeType("audio/mpeg", AttachmentType.AUDIO));
+        assertEquals(
+                "audio/wav",
+                MediaSecurityValidator.validateMimeType("audio/x-wav; charset=binary", AttachmentType.AUDIO));
 
         // Rejects null or blank
         assertThrows(
@@ -210,6 +213,10 @@ class MediaSecurityValidatorTest {
                 "audio/ogg",
                 MediaSecurityValidator.validateTelegramResponseMimeType(
                         "application/octet-stream", "audio/ogg", AttachmentType.AUDIO));
+        assertEquals(
+                "audio/wav",
+                MediaSecurityValidator.validateTelegramResponseMimeType(
+                        "application/octet-stream", "audio/x-wav", AttachmentType.AUDIO));
     }
 
     @Test

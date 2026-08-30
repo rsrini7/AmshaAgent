@@ -249,9 +249,15 @@ public final class MediaSecurityValidator {
     }
 
     private static String normalizeMimeType(String rawContentType) {
-        return rawContentType == null
+        String normalized = rawContentType == null
                 ? ""
                 : rawContentType.split(";", 2)[0].trim().toLowerCase(Locale.ROOT);
+        return switch (normalized) {
+            // Common platform alias for RIFF/WAVE. Keep one canonical value so the
+            // allowlist and WAV magic-byte validation remain strict and consistent.
+            case "audio/x-wav" -> "audio/wav";
+            default -> normalized;
+        };
     }
 
     /**
