@@ -7,6 +7,7 @@ import dev.langchain4j.model.chat.response.ChatResponse;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
@@ -22,6 +23,7 @@ import com.amsha.core.routing.TurnRequirements;
 import com.amsha.core.structured.StructuredOutputMetrics;
 import com.amsha.llm.api.MultimodalCapabilities;
 import com.amsha.llm.api.MultimodalCapability;
+import com.amsha.llm.api.MultimodalRequests;
 import com.amsha.llm.api.StrictJsonSchemaCapable;
 import com.amsha.llm.api.StructuredSchemaRequests;
 import com.amsha.llm.api.error.LlmMalformedResponseException;
@@ -105,6 +107,45 @@ public class LangChain4jLlmAdapter implements LlmProviderPort {
     public ChatResponse nextStep(ChatRequest request, String agentRole, boolean bypassLightweightRouting) {
         ChatModel resolvedModel = resolveModel(agentRole, bypassLightweightRouting);
         return execute(request, resolvedModel);
+    }
+
+    @Override
+    public ChatResponse nextStep(ChatRequest request, String agentRole, ModelRoute route) {
+        if (route == null) {
+            return nextStep(request, agentRole);
+        }
+        List<ModelRoute> candidates = new ArrayList<>();
+        candidates.add(route);
+        candidates.addAll(route.fallbackRoutes());
+        RuntimeException firstFailure = null;
+        for (ModelRoute candidate : candidates) {
+            if (candidate == null || candidate.model() == null) {
+                continue;
+            }
+            try {
+                ChatRequest candidateRequest =
+                        MultimodalRequests.forCandidate(request, candidate.capability(), candidate.modelName());
+                return execute(candidateRequest, candidate.model());
+            } catch (RuntimeException e) {
+                if (firstFailure == null) {
+                    firstFailure = e;
+                }
+                log.warnf(
+                        "[LLM-ADAPTER] Route candidate %s failed; trying next same-modality candidate: %s",
+                        candidate.routeId(), LogUtil.rootMessage(e));
+            }
+        }
+        if (firstFailure != null) {
+            throw firstFailure;
+        }
+        ChatRequest fallbackRequest = MultimodalRequests.forCandidate(request, route.capability(), route.modelName());
+        return nextStep(fallbackRequest, agentRole);
+    }
+
+    @Override
+    public ChatResponse nextStep(
+            ChatRequest request, String agentRole, ModelRoute route, boolean bypassLightweightRouting) {
+        return nextStep(request, agentRole, route);
     }
 
     @Override

@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import com.amsha.common.util.LogUtil;
 import com.amsha.core.agent.IntentClassificationService;
 import com.amsha.core.agent.loop.AgentExecutionContext;
 import com.amsha.core.agent.reasoning.port.LlmProviderPort;
@@ -19,6 +20,8 @@ import com.amsha.core.governance.RateLimitTracker;
 import com.amsha.core.guardrail.GuardrailCoordinator;
 import com.amsha.core.observability.AgentOTelConstants;
 import com.amsha.core.observability.AgentOtelContext;
+import com.amsha.core.routing.ModelRoute;
+import com.amsha.core.routing.TurnRequirements;
 import com.amsha.core.scope.WorkspaceContext;
 import com.amsha.core.util.TextPatternUtils;
 import com.amsha.llm.api.error.LlmMalformedResponseException;
@@ -190,6 +193,19 @@ public class LangChainReasoningEngine implements ReasoningEngine {
             isSimpleChitchat = false;
         }
 
+        TurnRequirements turnRequirements = TurnRequirements.fromContext(context, goal);
+        ModelRoute route = null;
+        try {
+            if (llmProviderPort != null) {
+                route = llmProviderPort.resolveRoute(agentRole, turnRequirements);
+            }
+        } catch (RuntimeException e) {
+            log.warnf(
+                    "[LangChainReasoningEngine] Route resolution failed for role=%s; using text-only fallback: %s",
+                    agentRole, LogUtil.rootMessage(e));
+            route = ModelRoute.textOnlyFallback();
+        }
+
         Set<String> allowedTools = roleRegistry.resolvePermittedTools(agentRole);
         ReasoningMessageAssembler.AssembledMessages assembled = messageAssembler.assemble(
                 context,
@@ -200,7 +216,8 @@ public class LangChainReasoningEngine implements ReasoningEngine {
                 allowedTools,
                 isWriteIntent,
                 isSimpleChitchat,
-                isHistoryQuery);
+                isHistoryQuery,
+                route);
 
         ChatRequest request = assembled.tools().isEmpty()
                 ? ChatRequest.builder().messages(assembled.messages()).build()
@@ -211,7 +228,7 @@ public class LangChainReasoningEngine implements ReasoningEngine {
 
         ChatResponse response;
         try {
-            response = executeLlmStep(isSimpleChitchat, context, isWriteIntent, request, agentRole);
+            response = executeLlmStep(isSimpleChitchat, context, isWriteIntent, request, agentRole, route);
         } catch (Exception e) {
             return handleLlmException(e, history, sessionId, targetLanguage, context, goal, isWriteIntent, agentRole);
         }
@@ -301,7 +318,8 @@ public class LangChainReasoningEngine implements ReasoningEngine {
             AgentExecutionContext context,
             boolean isWriteIntent,
             ChatRequest request,
-            String agentRole) {
+            String agentRole,
+            ModelRoute route) {
         boolean configCompact = promptBuilder.isCompactPromptEnabled();
         boolean isCompact = configCompact || isSimpleChitchat || context.isForceFinishRetry();
         Span span = otelContext.childSpan(context.sessionId(), AgentOTelConstants.SPAN_LLM_PROVIDER_CALL);
@@ -332,8 +350,12 @@ public class LangChainReasoningEngine implements ReasoningEngine {
                     .where(WorkspaceContext.IS_WRITE_INTENT, isWriteIntent)
                     .where(WorkspaceContext.IS_COMPACT, isCompact)
                     .call(() -> escalateThisCall
-                            ? llmProviderPort.nextStep(request, agentRole, true)
-                            : llmProviderPort.nextStep(request, agentRole));
+                            ? (route != null
+                                    ? llmProviderPort.nextStep(request, agentRole, route, true)
+                                    : llmProviderPort.nextStep(request, agentRole, true))
+                            : (route != null
+                                    ? llmProviderPort.nextStep(request, agentRole, route)
+                                    : llmProviderPort.nextStep(request, agentRole)));
             if (span != null) {
                 if (response.tokenUsage() != null) {
                     span.setAttribute(AgentOTelConstants.ATTR_LLM_INPUT_TOKENS, (long)

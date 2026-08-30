@@ -69,7 +69,7 @@ public final class CapabilityJsonParser {
             Set<String> mimes = parseStringSet(json.getJsonArray("supportedMimeTypes"));
             long maxFileSize = json.getLong("maxFileSize", 0L);
             int maxMedia = json.getInteger("maxMediaPerRequest", 0);
-            boolean base64 = json.getBoolean("supportsInlineBase64", false);
+            boolean base64 = json.getBoolean("supportsInlineBase64", !types.isEmpty());
             boolean urls = json.getBoolean("supportsMediaUrls", false);
             return new MultimodalCapability(types, mimes, maxFileSize, maxMedia, base64, urls);
         } catch (RuntimeException e) {

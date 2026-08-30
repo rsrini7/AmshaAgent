@@ -81,6 +81,8 @@ class MultimodalCapabilityTest {
         assertTrue(typeOnly.supportsMimeType("image/png"));
         assertTrue(typeOnly.supportsMimeType("image/jpeg"));
         assertTrue(typeOnly.supportsMimeType("image/webp"));
+        assertFalse(typeOnly.supportsMimeType("audio/wav"));
+        assertFalse(typeOnly.supportsMimeType("application/pdf"));
         assertFalse(typeOnly.supportsMimeType(null));
 
         // TEXT_ONLY has empty supportedTypes and still rejects all MIMEs

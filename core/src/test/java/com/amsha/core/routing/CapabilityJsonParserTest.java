@@ -147,6 +147,7 @@ class CapabilityJsonParserTest {
         assertTrue(cap.supportsType(AttachmentType.IMAGE));
         assertTrue(cap.supportsMimeType("image/png"));
         assertTrue(cap.supportsMimeType("image/jpeg"));
+        assertTrue(cap.supportsInlineBase64());
         assertFalse(cap.supportsType(AttachmentType.AUDIO));
     }
 }

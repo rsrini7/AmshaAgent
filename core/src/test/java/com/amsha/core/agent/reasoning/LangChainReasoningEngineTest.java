@@ -36,9 +36,12 @@ import com.amsha.core.agent.reasoning.port.LlmProviderPort;
 import com.amsha.core.agent.role.RoleRegistry;
 import com.amsha.core.governance.BudgetWarningException;
 import com.amsha.core.governance.GovernanceStrategy;
+import com.amsha.core.routing.ModelRoute;
+import com.amsha.core.routing.TurnRequirements;
 import com.amsha.core.scope.WorkspaceScopeHolder;
 import com.amsha.core.skill.SkillRegistry;
 import com.amsha.core.tools.ToolRegistry;
+import com.amsha.llm.api.MultimodalCapability;
 import com.amsha.llm.api.StructuredOutputMode;
 import com.amsha.llm.api.error.LlmToolCallException;
 import com.amsha.security.api.AutonomyLevel;
@@ -185,6 +188,33 @@ class LangChainReasoningEngineTest {
         verify(llmProviderPort).nextStep(any(ChatRequest.class), any(String.class), eq(Boolean.TRUE));
         verify(llmProviderPort, never()).nextStep(any(ChatRequest.class), any(String.class));
         assertFalse(ctx.consumeReasoningEscalation(), "flag must be consumed by the call");
+    }
+
+    @Test
+    void testArmedEscalationPreservesResolvedRoute() {
+        ModelRoute route = new ModelRoute(
+                "vision-route", "omlx", "vision-model", null, null, MultimodalCapability.TEXT_ONLY, List.of(), 1);
+        when(llmProviderPort.resolveRoute(anyString(), any(TurnRequirements.class)))
+                .thenReturn(route);
+        when(llmProviderPort.nextStep(any(ChatRequest.class), any(String.class), eq(route), eq(true)))
+                .thenReturn(ChatResponse.builder()
+                        .aiMessage(AiMessage.aiMessage("I finished the task"))
+                        .build());
+        when(promptBuilder.build(any(), any(), any(), any(), ArgumentMatchers.anyBoolean()))
+                .thenReturn("System Prompt");
+        when(historyAssembler.assemble(any(), any(), any())).thenReturn(List.of());
+        when(stepParser.parse(any(), any(), any()))
+                .thenReturn(ReasoningStep.pending(
+                        "I finished task", ReasoningStep.FINISH, Map.of("answer", "I finished the task"), 10, 10));
+
+        AgentExecutionContext ctx = createCtx("route-escalation-session");
+        ctx.requestReasoningEscalation();
+
+        ReasoningStep step = reasoningEngine.nextStep(ctx, "coordinator", "who am i", List.of());
+
+        assertNotNull(step);
+        verify(llmProviderPort).nextStep(any(ChatRequest.class), eq("coordinator"), eq(route), eq(true));
+        verify(llmProviderPort, never()).nextStep(any(ChatRequest.class), any(String.class), eq(true));
     }
 
     @Test

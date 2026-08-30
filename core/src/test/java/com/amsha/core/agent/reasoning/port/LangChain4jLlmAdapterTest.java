@@ -514,5 +514,90 @@ class LangChain4jLlmAdapterTest {
         assertEquals(MultimodalCapability.TEXT_ONLY, resolved);
     }
 
+    @Test
+    void nextStep_withModelRoute_executesRouteModelDirectly() {
+        ChatModel routeModel = mock(ChatModel.class);
+        ChatResponse expectedResponse =
+                ChatResponse.builder().aiMessage(AiMessage.from("routed reply")).build();
+        when(routeModel.chat(any(ChatRequest.class))).thenReturn(expectedResponse);
+
+        ModelRoute route = new ModelRoute(
+                "route-1", "prov", "custom-model", null, routeModel, MultimodalCapability.TEXT_ONLY, List.of(), 1);
+
+        ChatResponse result = adapter.nextStep(request(), "researcher", route);
+
+        assertEquals("routed reply", result.aiMessage().text());
+        verify(routeModel).chat(any(ChatRequest.class));
+        verify(modelRouter, never()).resolve(anyString(), anyBoolean());
+    }
+
+    @Test
+    void nextStep_withModelRoute_failsOverToSameModalityFallback() {
+        ChatModel primaryModel = mock(ChatModel.class);
+        ChatModel fallbackModel = mock(ChatModel.class);
+        ChatResponse expectedResponse = ChatResponse.builder()
+                .aiMessage(AiMessage.from("fallback reply"))
+                .build();
+        when(primaryModel.chat(any(ChatRequest.class))).thenThrow(new RuntimeException("primary unavailable"));
+        when(fallbackModel.chat(any(ChatRequest.class))).thenReturn(expectedResponse);
+
+        ModelRoute fallback = new ModelRoute(
+                "route-fallback",
+                "prov",
+                "fallback-model",
+                null,
+                fallbackModel,
+                MultimodalCapability.TEXT_ONLY,
+                List.of(),
+                1);
+        ModelRoute primary = new ModelRoute(
+                "route-primary",
+                "prov",
+                "primary-model",
+                null,
+                primaryModel,
+                MultimodalCapability.TEXT_ONLY,
+                List.of(fallback),
+                1);
+
+        ChatResponse result = adapter.nextStep(request(), "researcher", primary);
+
+        assertEquals("fallback reply", result.aiMessage().text());
+        verify(primaryModel).chat(any(ChatRequest.class));
+        verify(fallbackModel).chat(any(ChatRequest.class));
+        verify(modelRouter, never()).resolve(anyString(), anyBoolean());
+    }
+
+    @Test
+    void nextStep_withNullRoute_fallsBackToRoleResolution() {
+        when(modelRouter.resolve("researcher", false)).thenReturn(globalModel);
+        when(globalModel.chat(any(ChatRequest.class)))
+                .thenReturn(ChatResponse.builder()
+                        .aiMessage(AiMessage.from("global reply"))
+                        .build());
+
+        ChatResponse result = adapter.nextStep(request(), "researcher", (ModelRoute) null);
+
+        assertEquals("global reply", result.aiMessage().text());
+        verify(modelRouter).resolve("researcher", false);
+    }
+
+    @Test
+    void nextStep_withNullRouteModel_fallsBackToRoleResolution() {
+        when(modelRouter.resolve("researcher", false)).thenReturn(globalModel);
+        when(globalModel.chat(any(ChatRequest.class)))
+                .thenReturn(ChatResponse.builder()
+                        .aiMessage(AiMessage.from("global reply"))
+                        .build());
+
+        ModelRoute routeWithoutModel = new ModelRoute(
+                "route-empty", "prov", "custom-model", null, null, MultimodalCapability.TEXT_ONLY, List.of(), 1);
+
+        ChatResponse result = adapter.nextStep(request(), "researcher", routeWithoutModel);
+
+        assertEquals("global reply", result.aiMessage().text());
+        verify(modelRouter).resolve("researcher", false);
+    }
+
     private static final String SCHEMA = "{\"type\":\"object\",\"properties\":{\"answer\":{\"type\":\"string\"}}}";
 }

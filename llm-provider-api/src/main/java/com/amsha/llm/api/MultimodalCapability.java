@@ -39,14 +39,31 @@ public record MultimodalCapability(
     }
 
     public boolean supportsMimeType(String mimeType) {
-        if (mimeType == null) {
+        if (mimeType == null || mimeType.isBlank()) {
             return false;
         }
+        String cleanMime = mimeType.split(";", 2)[0].trim().toLowerCase(Locale.ROOT);
         if (!supportedMimeTypes.isEmpty()) {
-            String cleanMime = mimeType.split(";", 2)[0].trim().toLowerCase(Locale.ROOT);
             return supportedMimeTypes.contains(cleanMime);
         }
-        return !supportedTypes.isEmpty();
+        for (AttachmentType type : supportedTypes) {
+            if (matchesTypePrefix(type, cleanMime)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean matchesTypePrefix(AttachmentType type, String mime) {
+        if (type == null || mime == null) {
+            return false;
+        }
+        return switch (type) {
+            case IMAGE -> mime.startsWith("image/");
+            case AUDIO -> mime.startsWith("audio/");
+            case DOCUMENT_PDF -> "application/pdf".equals(mime);
+            case OTHER -> true;
+        };
     }
 
     public boolean isMultimodal() {

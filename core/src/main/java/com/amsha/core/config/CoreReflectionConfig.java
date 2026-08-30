@@ -23,6 +23,7 @@ import com.amsha.core.agent.loop.GroupAnalyticsService;
 import com.amsha.core.agent.loop.GroupConsultationEngine;
 import com.amsha.core.agent.loop.GroupConsultationService;
 import com.amsha.core.agent.loop.TaskClassifierService;
+import com.amsha.core.agent.reasoning.MultimodalHistoryProjector;
 import com.amsha.core.agent.reasoning.MultimodalMessageMapper;
 import com.amsha.core.agent.reasoning.ParallelToolCall;
 import com.amsha.core.agent.reasoning.ReasoningStep;
@@ -143,6 +144,7 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             LazyChatModel.class,
             CapabilityJsonParser.class,
             ProfileRouteCandidateBuilder.class,
+            MultimodalHistoryProjector.class,
             ResolvedCredential.class,
             ModelProfileResolverImpl.class,
             ModelProfileCredentialResolver.class,

@@ -4,6 +4,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 
 import com.amsha.llm.api.StrictJsonSchemaCapable;
@@ -119,6 +120,15 @@ public class DefaultModelRouteSelector implements ModelRouteSelector {
                     return textCmp;
                 }
             }
+            if (requirements.isChitchat()) {
+                // For chitchat, prefer lightweight / fast tier routes
+                boolean aLight = isLightweightRoute(a);
+                boolean bLight = isLightweightRoute(b);
+                int lightCmp = Boolean.compare(!aLight, !bLight);
+                if (lightCmp != 0) {
+                    return lightCmp;
+                }
+            }
             if (requirements.requiresStructuredOutput()) {
                 boolean aSchema = supportsStructured(a);
                 boolean bSchema = supportsStructured(b);
@@ -130,6 +140,22 @@ public class DefaultModelRouteSelector implements ModelRouteSelector {
             return 0;
         });
         return ordered;
+    }
+
+    private static boolean isLightweightRoute(ModelRoute route) {
+        if (route == null) {
+            return false;
+        }
+        String model = route.modelName() != null ? route.modelName().toLowerCase(Locale.ROOT) : "";
+        String routeId = route.routeId() != null ? route.routeId().toLowerCase(Locale.ROOT) : "";
+        return model.contains("flash")
+                || model.contains("mini")
+                || model.contains("small")
+                || model.contains("lite")
+                || model.contains("fast")
+                || model.contains("chitchat")
+                || routeId.contains("lightweight")
+                || routeId.contains("chitchat");
     }
 
     private static boolean supportsStructured(ModelRoute route) {

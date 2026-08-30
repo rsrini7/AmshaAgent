@@ -306,6 +306,36 @@ class DeepModelRouteSelectorTest {
         assertEquals("text-model", selected.get().routeId());
     }
 
+    @Test
+    void orderForSelectionPrefersLightweightTextModelForChitchat() {
+        ModelRoute heavyText = new ModelRoute(
+                "heavy-text",
+                "prov",
+                "llama-70b",
+                null,
+                Mockito.mock(ChatModel.class),
+                MultimodalCapability.TEXT_ONLY,
+                List.of(),
+                1);
+        ModelRoute lightText = new ModelRoute(
+                "light-text",
+                "prov",
+                "llama-8b-mini",
+                null,
+                Mockito.mock(ChatModel.class),
+                MultimodalCapability.TEXT_ONLY,
+                List.of(),
+                1);
+
+        TurnRequirements chitchat = TurnRequirements.fromContext(null, "how are you?");
+        assertTrue(chitchat.isChitchat());
+
+        Optional<ModelRoute> selected = selector.select("researcher", chitchat, List.of(heavyText, lightText));
+
+        assertTrue(selected.isPresent());
+        assertEquals("light-text", selected.get().routeId());
+    }
+
     // ── 13. Media count limit enforcement ────────────────────────────────
 
     @Test

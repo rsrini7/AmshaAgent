@@ -33,6 +33,15 @@ public record ModelRoute(
         fallbackRoutes = fallbackRoutes == null ? List.of() : List.copyOf(fallbackRoutes);
     }
 
+    /**
+     * Creates an explicit fail-closed route used when capability resolution fails.
+     * The adapter must sanitize the request before falling back to role-based execution.
+     */
+    public static ModelRoute textOnlyFallback() {
+        return new ModelRoute(
+                "fallback:text-only", null, null, null, null, MultimodalCapability.TEXT_ONLY, List.of(), 0L);
+    }
+
     public boolean supports(AttachmentType modality) {
         return capability != null && capability.supportsType(modality);
     }
