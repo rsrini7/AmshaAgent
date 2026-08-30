@@ -148,17 +148,9 @@ public class MultiModelChatModel implements ChatModel, StrictJsonSchemaCapable, 
                 ModelEntry entry = entries.get(idx);
                 ModelHealth h = health.get(entry.label());
 
-                if (h.isPermanentlyDisabled()) {
-                    log.debugf("MultiModel: [%s] %s permanently disabled, skipping.", providerName, entry.label());
+                if (shouldSkipEntry(entry, h, request)) {
                     continue;
                 }
-                if (h.isInCooldown()) {
-                    log.debugf(
-                            "MultiModel: [%s] %s in cooldown (%ds remaining), skipping.",
-                            providerName, entry.label(), h.cooldownRemainingMs() / 1000);
-                    continue;
-                }
-
                 ChatRequest candidateReq =
                         MultimodalRequests.forCandidate(request, entry.multimodalCapability(), entry.label());
                 ChatRequest outbound = schemaRejected
@@ -224,6 +216,24 @@ public class MultiModelChatModel implements ChatModel, StrictJsonSchemaCapable, 
 
             interruptibleSleep(shortestMs);
         }
+    }
+
+    private boolean shouldSkipEntry(ModelEntry entry, ModelHealth health, ChatRequest request) {
+        if (health.isPermanentlyDisabled()) {
+            log.debugf("MultiModel: [%s] %s permanently disabled, skipping.", providerName, entry.label());
+            return true;
+        }
+        if (health.isInCooldown()) {
+            log.debugf(
+                    "MultiModel: [%s] %s in cooldown (%ds remaining), skipping.",
+                    providerName, entry.label(), health.cooldownRemainingMs() / 1000);
+            return true;
+        }
+        if (!MultimodalRequests.supportsAllMultimodalContent(request, entry.multimodalCapability())) {
+            log.debugf("MultiModel: [%s] %s cannot consume request modality, skipping.", providerName, entry.label());
+            return true;
+        }
+        return false;
     }
 
     private void classifyAndHandle(String label, ModelHealth h, Throwable t) {

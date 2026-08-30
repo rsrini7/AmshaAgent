@@ -144,6 +144,11 @@ public class OrderedFailoverChatModel implements ChatModel, StrictJsonSchemaCapa
                 log.debugf("OrderedFailover[%s] %s in cooldown, skipping.", routeKey, entry.label());
                 continue;
             }
+            if (!MultimodalRequests.supportsAllMultimodalContent(request, entry.multimodalCapability())) {
+                log.debugf(
+                        "OrderedFailover[%s] %s cannot consume request modality, skipping.", routeKey, entry.label());
+                continue;
+            }
             ChatRequest candidateReq =
                     MultimodalRequests.forCandidate(request, entry.multimodalCapability(), entry.label());
             ChatRequest outbound = schemaRejected

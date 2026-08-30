@@ -6,13 +6,17 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import dev.langchain4j.data.image.Image;
 import dev.langchain4j.data.message.AiMessage;
+import dev.langchain4j.data.message.ImageContent;
+import dev.langchain4j.data.message.TextContent;
 import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.model.chat.Capability;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.request.ChatRequest;
 import dev.langchain4j.model.chat.response.ChatResponse;
 
+import java.util.Base64;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -93,6 +97,34 @@ class OrderedFailoverChatModelTest {
         public Set<Capability> supportedCapabilities() {
             return capabilities;
         }
+    }
+
+    @Test
+    void multimodalRequestSkipsCandidateWithoutMatchingCapability() {
+        OkModel textModel = new OkModel();
+        OkModel visionModel = new OkModel();
+        MultimodalCapability visionCapability =
+                new MultimodalCapability(Set.of(AttachmentType.IMAGE), Set.of("image/png"), 10, 1, true, false);
+        ChatRequest imageRequest = ChatRequest.builder()
+                .messages(List.of(UserMessage.from(
+                        TextContent.from("describe"),
+                        ImageContent.from(Image.builder()
+                                .mimeType("image/png")
+                                .base64Data(Base64.getEncoder().encodeToString(new byte[] {1, 2, 3}))
+                                .build()))))
+                .build();
+
+        OrderedFailoverChatModel failover = new OrderedFailoverChatModel(
+                "route-image",
+                List.of(
+                        new OrderedFailoverChatModel.Entry("text", textModel),
+                        new OrderedFailoverChatModel.Entry("vision", visionModel, false, visionCapability)),
+                5);
+
+        failover.chat(imageRequest);
+
+        assertEquals(0, textModel.calls.get());
+        assertEquals(1, visionModel.calls.get());
     }
 
     @Test

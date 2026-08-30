@@ -3,7 +3,9 @@ package com.amsha.core.agent.reasoning.port;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
+import dev.langchain4j.data.image.Image;
 import dev.langchain4j.data.message.AiMessage;
+import dev.langchain4j.data.message.ImageContent;
 import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.request.ChatRequest;
@@ -566,6 +568,82 @@ class LangChain4jLlmAdapterTest {
         verify(primaryModel).chat(any(ChatRequest.class));
         verify(fallbackModel).chat(any(ChatRequest.class));
         verify(modelRouter, never()).resolve(anyString(), anyBoolean());
+    }
+
+    @Test
+    void nextStep_withFailedMediaRoute_usesTextFallbackWithoutRawMedia() {
+        ChatModel visionModel = mock(ChatModel.class);
+        ChatModel textModel = mock(ChatModel.class);
+        RuntimeException mediaFailure = new RuntimeException("vision unavailable");
+        when(visionModel.chat(any(ChatRequest.class))).thenThrow(mediaFailure);
+        when(textModel.chat(any(ChatRequest.class))).thenReturn(response());
+        when(modelRouter.resolve("researcher", false)).thenReturn(textModel);
+
+        MultimodalCapability visionCapability = new MultimodalCapability(
+                Set.of(AttachmentType.IMAGE), Set.of("image/png"), 10_000_000L, 4, true, false);
+        ModelRoute visionRoute =
+                new ModelRoute("vision-route", "local", "vision", null, visionModel, visionCapability, List.of(), 1);
+
+        ArgumentCaptor<ChatRequest> requests = ArgumentCaptor.forClass(ChatRequest.class);
+        ChatResponse result = adapter.nextStep(imageRequest(), "researcher", visionRoute);
+
+        assertNotNull(result);
+        verify(visionModel).chat(any(ChatRequest.class));
+        verify(textModel).chat(requests.capture());
+        UserMessage fallbackMessage =
+                (UserMessage) requests.getValue().messages().getFirst();
+        assertTrue(fallbackMessage.hasSingleText());
+        assertTrue(fallbackMessage.singleText().contains("[Attached Media: Image"));
+        assertTrue(fallbackMessage.contents().stream().noneMatch(ImageContent.class::isInstance));
+    }
+
+    @Test
+    void nextStep_skipsIncompatibleMediaCandidateBeforeExecution() {
+        ChatModel textCandidate = mock(ChatModel.class);
+        ChatModel fallbackTextModel = mock(ChatModel.class);
+        when(fallbackTextModel.chat(any(ChatRequest.class))).thenReturn(response());
+        when(modelRouter.resolve("researcher", false)).thenReturn(fallbackTextModel);
+
+        ModelRoute incompatibleRoute = new ModelRoute(
+                "text-route", "local", "text", null, textCandidate, MultimodalCapability.TEXT_ONLY, List.of(), 1);
+
+        ChatResponse result = adapter.nextStep(imageRequest(), "researcher", incompatibleRoute);
+
+        assertNotNull(result);
+        verifyNoInteractions(textCandidate);
+        verify(fallbackTextModel).chat(any(ChatRequest.class));
+    }
+
+    @Test
+    void nextStep_preservesMediaFailureWhenTextFallbackAlsoFails() {
+        ChatModel visionModel = mock(ChatModel.class);
+        ChatModel textModel = mock(ChatModel.class);
+        RuntimeException mediaFailure = new RuntimeException("vision unavailable");
+        when(visionModel.chat(any(ChatRequest.class))).thenThrow(mediaFailure);
+        when(textModel.chat(any(ChatRequest.class))).thenThrow(new RuntimeException("text unavailable"));
+        when(modelRouter.resolve("researcher", false)).thenReturn(textModel);
+
+        MultimodalCapability visionCapability = new MultimodalCapability(
+                Set.of(AttachmentType.IMAGE), Set.of("image/png"), 10_000_000L, 4, true, false);
+        ModelRoute visionRoute =
+                new ModelRoute("vision-route", "local", "vision", null, visionModel, visionCapability, List.of(), 1);
+
+        RuntimeException thrown =
+                assertThrows(RuntimeException.class, () -> adapter.nextStep(imageRequest(), "researcher", visionRoute));
+
+        assertTrue(thrown.getMessage().contains("vision unavailable"));
+        assertFalse(thrown.getMessage().contains("text unavailable"));
+    }
+
+    private ChatRequest imageRequest() {
+        return ChatRequest.builder()
+                .messages(List.of(UserMessage.from(
+                        "describe this",
+                        ImageContent.from(Image.builder()
+                                .mimeType("image/png")
+                                .base64Data("AQI=")
+                                .build()))))
+                .build();
     }
 
     @Test

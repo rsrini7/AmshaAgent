@@ -39,6 +39,25 @@ class MultimodalRequestsTest {
     }
 
     @Test
+    void supportsAllMultimodalContentRejectsIncompatibleCandidate() {
+        UserMessage imageMessage = UserMessage.from(
+                TextContent.from("describe"),
+                ImageContent.from(Image.builder()
+                        .mimeType("image/png")
+                        .base64Data(Base64.getEncoder().encodeToString(new byte[] {1, 2, 3}))
+                        .build()));
+        ChatRequest request =
+                ChatRequest.builder().messages(List.of(imageMessage)).build();
+
+        MultimodalCapability textOnly = MultimodalCapability.TEXT_ONLY;
+        MultimodalCapability image =
+                new MultimodalCapability(Set.of(AttachmentType.IMAGE), Set.of("image/png"), 10, 1, true, false);
+
+        assertFalse(MultimodalRequests.supportsAllMultimodalContent(request, textOnly));
+        assertTrue(MultimodalRequests.supportsAllMultimodalContent(request, image));
+    }
+
+    @Test
     void hasMultimodalContentReturnsTrueWhenMediaContentPresent() {
         UserMessage multiMsg = UserMessage.from(
                 TextContent.from("look at this"),

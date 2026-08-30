@@ -42,6 +42,25 @@ public final class MultimodalRequests {
     }
 
     /**
+     * Returns whether a candidate can consume every non-text content item in the
+     * request without requiring a placeholder rewrite.
+     *
+     * <p>Failover wrappers use this as an admission check. A candidate that cannot
+     * consume the active request is skipped rather than being called with a
+     * degraded request. Text-only requests are compatible with every candidate.</p>
+     *
+     * @param request request to inspect
+     * @param candidateCap candidate capability, or {@link MultimodalCapability#TEXT_ONLY}
+     * @return {@code true} when the candidate can consume the request as-is
+     */
+    public static boolean supportsAllMultimodalContent(ChatRequest request, MultimodalCapability candidateCap) {
+        if (!hasMultimodalContent(request)) {
+            return true;
+        }
+        return !requiresRewrite(request, candidateCap != null ? candidateCap : MultimodalCapability.TEXT_ONLY);
+    }
+
+    /**
      * Returns a text representation safe for text-only provider serializers.
      * Non-text items are represented by bounded placeholders instead of being silently dropped.
      */

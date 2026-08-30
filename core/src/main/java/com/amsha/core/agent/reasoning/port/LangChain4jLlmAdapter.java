@@ -8,8 +8,11 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 import com.amsha.common.util.LogUtil;
@@ -118,8 +121,18 @@ public class LangChain4jLlmAdapter implements LlmProviderPort {
         candidates.add(route);
         candidates.addAll(route.fallbackRoutes());
         RuntimeException firstFailure = null;
+        Set<ChatModel> attemptedModels = Collections.newSetFromMap(new IdentityHashMap<>());
         for (ModelRoute candidate : candidates) {
             if (candidate == null || candidate.model() == null) {
+                continue;
+            }
+            if (!MultimodalRequests.supportsAllMultimodalContent(request, candidate.capability())) {
+                log.debugf(
+                        "[LLM-ADAPTER] Skipping route candidate %s; it cannot consume this turn's media",
+                        candidate.routeId());
+                continue;
+            }
+            if (!attemptedModels.add(candidate.model())) {
                 continue;
             }
             try {
@@ -135,11 +148,48 @@ public class LangChain4jLlmAdapter implements LlmProviderPort {
                         candidate.routeId(), LogUtil.rootMessage(e));
             }
         }
+        if (MultimodalRequests.hasMultimodalContent(request)) {
+            return executeTextFallback(request, agentRole, attemptedModels, firstFailure);
+        }
+        if (firstFailure == null) {
+            ChatRequest fallbackRequest =
+                    MultimodalRequests.forCandidate(request, route.capability(), route.modelName());
+            return nextStep(fallbackRequest, agentRole);
+        }
+        throw firstFailure;
+    }
+
+    private ChatResponse executeTextFallback(
+            ChatRequest request, String agentRole, Set<ChatModel> attemptedModels, RuntimeException firstFailure) {
+        ChatRequest textRequest = MultimodalRequests.withoutMultimodalContent(request, "text-only fallback");
+        ModelRoute textRoute = resolveRoute(agentRole, TurnRequirements.textOnly());
+        List<ModelRoute> textCandidates = new ArrayList<>();
+        if (textRoute != null) {
+            textCandidates.add(textRoute);
+            textCandidates.addAll(textRoute.fallbackRoutes());
+        }
+        RuntimeException textFailure = null;
+        for (ModelRoute candidate : textCandidates) {
+            if (candidate == null || candidate.model() == null || attemptedModels.contains(candidate.model())) {
+                continue;
+            }
+            try {
+                return execute(textRequest, candidate.model());
+            } catch (RuntimeException e) {
+                if (textFailure == null) {
+                    textFailure = e;
+                }
+                log.warnf(
+                        "[LLM-ADAPTER] Text fallback route %s failed: %s", candidate.routeId(), LogUtil.rootMessage(e));
+            }
+        }
         if (firstFailure != null) {
             throw firstFailure;
         }
-        ChatRequest fallbackRequest = MultimodalRequests.forCandidate(request, route.capability(), route.modelName());
-        return nextStep(fallbackRequest, agentRole);
+        if (textFailure != null) {
+            throw textFailure;
+        }
+        throw new IllegalStateException("No compatible text route is available for multimodal request");
     }
 
     @Override
