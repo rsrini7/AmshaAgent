@@ -52,6 +52,7 @@ import com.amsha.core.routing.CapabilityAwareChatModel;
 import com.amsha.core.routing.CapabilityJsonParser;
 import com.amsha.core.routing.InfiniteLoopChatModel;
 import com.amsha.core.routing.LazyChatModel;
+import com.amsha.core.routing.ModalityRouteSeeder;
 import com.amsha.core.routing.ModelCacheInvalidator;
 import com.amsha.core.routing.ModelProfileCredentialResolver;
 import com.amsha.core.routing.ModelProfileResolverImpl;
@@ -150,6 +151,7 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             ModelProfileCredentialResolver.class,
             ModelRoutingException.class,
             SystemProfileMigration.class,
+            ModalityRouteSeeder.class,
             ModelCacheInvalidator.class,
             NetworkPolicyEnforcer.class,
             GroupConsultationEngine.GroupConsultationResult.class,

@@ -266,6 +266,48 @@ The reasoning pipeline emits payload-free Micrometer metrics under `amsha.media.
 
 > **Dashboard Note on Volume vs Reason**: `amsha.media.ingestion.total{status="fallback"}` tracks the aggregate count of attachments routed to fallback degradation, while `amsha.media.fallback.total{reason="..."}` provides the categorical cause breakdown. To avoid double-counting total media volume, query `amsha.media.ingestion.total` for volume metrics.
 
+## Profile Routing & Modality Route Seeder (P7)
+
+| Property | Env Var | Default | Description |
+|---|---|---|---|
+| `amsha.llm.profile-routing.enabled` | `AMSHA_LLM_PROFILE_ROUTING_ENABLED` | `false` | When `true`, O3 profile-scoped routing resolves `USER`/`WORKSPACE`/`SYSTEM` model profiles from `LlmProfileStorePort` before falling back to deployment config. |
+| `amsha.llm.modality-route-seeder.enabled` | `AMSHA_LLM_MODALITY_ROUTE_SEEDER_ENABLED` | `false` | When `true`, P7 test-only seeder converges the persisted routing configuration on one shared OMLX connection (`omlx-modality-shared`) and **two** modality profiles (`text→Ornith-1.5-35B-A3B-MLX-4bit`, `image→Qwen3.8-27B-4bit`) sharing that connection, plus a single `SYSTEM` `DEFAULT` route assignment `orderedProfileIds=[text, image]` (`modality-route-system`). Requires `amsha.llm.profile-routing.enabled=true` and vault `llm.api.key`; both are evaluated **before** any mutation. **Install before remove**: the canonical route is created or repaired first, and only once it is confirmed in place are colliding routes and retired profiles disabled — so a failure in between leaves the pre-existing configuration serving traffic untouched. **Non-destructive**: nothing is ever deleted; colliding `SYSTEM DEFAULT` routes (including a legacy `sys-legacy-route`) are *disabled* in place, retaining the row so legacy routing can be restored by hand. Every write is a compare-and-set through the port's revision-checked update, so a concurrent operator edit wins and the next startup reconverges. Convergent, not insert-only — a non-`ACTIVE` connection is activated through the port, and a disabled or drifted profile/route is repaired. Remains inert when `false` (production default). Keep `false` in production; enable only for local P7 verification. |
+
+> **Convergence counts *enabled* routes, not rows.** Disabling rather than deleting means a machine
+> migrated from legacy routing legitimately keeps a disabled `sys-legacy-route` row alongside the
+> canonical `modality-route-system`. The invariant asserted by
+> `[MODALITY-SEEDER] ACTIVE SYSTEM DEFAULT route` is therefore "exactly one **enabled**
+> `SYSTEM DEFAULT` route", not "exactly one row". A startup that cannot install the canonical
+> route logs `[MODALITY-SEEDER] Canonical route ... could not be installed` and disables nothing.
+
+### No AUDIO chat profile (native audio-chat is BLOCKED)
+
+The seeder deliberately installs **no** `AUDIO` multimodal chat profile. `NemotronLabs-VoiceChat-11B-8bit`
+was seeded by an earlier revision, but OMLX cannot serve it: the model's `config.json` declares
+`"model_type": "nemotron_voicechat"` and OMLX's bundled `mlx_lm` ships no module for that
+architecture, so every request fails with `409 Model type nemotron_voicechat not supported`.
+A profile that is selectable but permanently broken is worse than no profile, so:
+
+* no `AUDIO` profile is created, and `modality-audio-nemotron` is **not** in `orderedProfileIds`;
+* a `modality-audio-nemotron` row left over from an earlier run is disabled on startup
+  (`[MODALITY-SEEDER] Disabled deprecated profile ...`), never deleted;
+* an audio attachment therefore matches no profile and degrades to the structured text
+  placeholder. That is the honest behaviour until the STT path lands — see
+  `.scratch/lc4j-capability-adoption/issues/11-p7-audio-transcription-port.md`.
+
+Audio input is an execution/port concern, not a model-profile concern: Whisper is an STT
+execution port and is **never** registered as an `AUDIO` chat profile. Text-to-speech
+(`Qwen3-TTS-12Hz-1.7B-Base-bf16`) is a separate future output capability and is out of scope for
+the audio-input routing matrix.
+
+On every startup with the seeder enabled it logs the post-condition on `[MODALITY-SEEDER]`:
+
+```text
+[MODALITY-SEEDER] ACTIVE SYSTEM DEFAULT route id=modality-route-system scope=SYSTEM/SYSTEM targetKind=DEFAULT enabled=true orderedProfileIds=[modality-text-ornith, modality-image-qwen] connection=omlx-modality-shared routeIds=[profile:modality-text-ornith, profile:modality-image-qwen] models=[text=Ornith-1.5-35B-A3B-MLX-4bit, image=Qwen3.8-27B-4bit] audioProfile=none (native audio-chat BLOCKED on OMLX)
+```
+
+`[MODALITY-SEEDER] SYSTEM DEFAULT route invariant violated:` instead means the configuration did not converge and routing fell back to the legacy path. Per-turn selection is logged by `LangChain4jLlmAdapter` at `DEBUG` under `com.amsha` as `[LLM-ADAPTER] Slab B route selected for role=...: profile:<profileId>`.
+
 ## Testing
 
 Run core tests:

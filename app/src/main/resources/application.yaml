@@ -503,6 +503,8 @@ amsha:
     provider: ${AMSHA_LLM_PROVIDER:groq}
     profile-routing:
       enabled: ${AMSHA_LLM_PROFILE_ROUTING_ENABLED:false}
+    modality-route-seeder:
+      enabled: ${AMSHA_LLM_MODALITY_ROUTE_SEEDER_ENABLED:false}
     vault-priority: ${AMSHA_LLM_VAULT_PRIORITY:false}
     log-http: ${AMSHA_LLM_LOG_HTTP:false}
     max-retries: ${AMSHA_LLM_MAX_RETRIES:3}
