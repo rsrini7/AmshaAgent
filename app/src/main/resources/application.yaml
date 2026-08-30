@@ -415,6 +415,10 @@ amsha:
     foundry:
       base-url: "${AMSHA_CLASSIFIER_FOUNDRY_BASE_URL:${AMSHA_FOUNDRY_BASE_URL:http://127.0.0.1:8000/v1}}"
       model: "${AMSHA_CLASSIFIER_FOUNDRY_MODEL:qwen3-14b}"
+    omlx:
+      api-key: "${AMSHA_CLASSIFIER_OMLX_API_KEY:${AMSHA_OMLX_API_KEY:}}"
+      base-url: "${AMSHA_CLASSIFIER_OMLX_BASE_URL:${AMSHA_OMLX_BASE_URL:http://127.0.0.1:8000/v1}}"
+      model: "${AMSHA_CLASSIFIER_OMLX_MODEL:${AMSHA_OMLX_MODEL:}}"
   onnx:
     enabled: ${AMSHA_ONNX_ENABLED:false}
     model-root: "${AMSHA_ONNX_MODEL_ROOT:data/models}"
@@ -634,6 +638,10 @@ amsha:
     foundry:
       base-url: "${AMSHA_COMPACTION_FOUNDRY_BASE_URL:${AMSHA_FOUNDRY_BASE_URL:http://127.0.0.1:8000/v1}}"
       model: "${AMSHA_COMPACTION_FOUNDRY_MODEL:qwen3-14b}"
+    omlx:
+      api-key: "${AMSHA_COMPACTION_OMLX_API_KEY:${AMSHA_OMLX_API_KEY:}}"
+      base-url: "${AMSHA_COMPACTION_OMLX_BASE_URL:${AMSHA_OMLX_BASE_URL:http://127.0.0.1:8000/v1}}"
+      model: "${AMSHA_COMPACTION_OMLX_MODEL:${AMSHA_OMLX_MODEL:}}"
   agent:
     default-timezone: "${AMSHA_DEFAULT_TIMEZONE:Asia/Kolkata}"
     rate-limit:
