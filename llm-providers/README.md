@@ -70,3 +70,22 @@ To add a new provider to `amsha-llm-providers`:
 3. Implement `RoutingChatModelProvider` in `llm-providers/src/main/java/com/amsha/llm/providers/routing/<Name>LlmProviderFactory.java`.
 4. Register the new factory classes in `LlmProvidersReflectionConfig.java`.
 5. Add unit coverage in `AgentProviderFactoryCoverageTest` and `RoutingProviderFactoryCoverageTest`.
+
+## Governed Whisper transcription
+
+`OmlxAudioTranscriptionProvider` implements the `AudioTranscriptionPort` execution seam for
+Whisper served by OMLX. It is deliberately not a chat-model capability or a model-route
+profile. When enabled, an unsupported audio attachment is downloaded through the governed
+media port, transcribed locally, and passed as bounded text to the selected text model.
+
+| Property | Environment variable | Default |
+|---|---|---|
+| `amsha.stt.enabled` | `AMSHA_STT_ENABLED` | `false` |
+| `amsha.stt.model` | `AMSHA_STT_MODEL` | `whisper-large-v3-turbo` |
+| `amsha.stt.timeout` | `AMSHA_STT_TIMEOUT` | `PT60S` |
+| `amsha.stt.max-bytes` | `AMSHA_STT_MAX_BYTES` | `26214400` |
+| `amsha.stt.max-transcript-chars` | `AMSHA_STT_MAX_TRANSCRIPT_CHARS` | `12000` |
+
+The OMLX API key and base URL are reused from `AMSHA_OMLX_API_KEY` and
+`AMSHA_OMLX_BASE_URL`. Provision the Whisper processor/tokenizer sidecars before starting
+OMLX; see `scripts/provision_omlx_whisper_stt.sh`.

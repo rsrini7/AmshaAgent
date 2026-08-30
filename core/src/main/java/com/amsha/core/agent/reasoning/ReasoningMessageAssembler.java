@@ -42,6 +42,7 @@ import com.amsha.core.tools.search.ToolSearchPort;
 import com.amsha.core.util.TextPatternUtils;
 import com.amsha.llm.api.MultimodalCapability;
 import com.amsha.llm.api.MultimodalRequests;
+import com.amsha.llm.api.audio.AudioTranscriptionPort;
 import com.amsha.security.api.AutonomyLevel;
 import com.amsha.security.api.MediaDownloadPort;
 import com.amsha.tool.api.AgentSentinels;
@@ -95,6 +96,9 @@ public class ReasoningMessageAssembler {
 
     @Inject
     Instance<MediaDownloadPort> mediaDownloadPortInstance;
+
+    @Inject
+    Instance<AudioTranscriptionPort> audioTranscriptionPortInstance;
 
     @Inject
     Instance<MeterRegistry> meterRegistryInstance;
@@ -280,6 +284,7 @@ public class ReasoningMessageAssembler {
                 downloadPort,
                 context != null ? context.userId() : null,
                 TelegramMediaOriginValidator.hasTrustedTelegramMediaOrigin(context),
+                resolveAudioTranscriptionPort(),
                 meterRegistry);
     }
 
@@ -311,6 +316,17 @@ public class ReasoningMessageAssembler {
         if (mediaDownloadPortInstance == null || !mediaDownloadPortInstance.isResolvable()) return null;
         try {
             return mediaDownloadPortInstance.get();
+        } catch (Exception _) {
+            return null;
+        }
+    }
+
+    private AudioTranscriptionPort resolveAudioTranscriptionPort() {
+        if (audioTranscriptionPortInstance == null || !audioTranscriptionPortInstance.isResolvable()) {
+            return null;
+        }
+        try {
+            return audioTranscriptionPortInstance.get();
         } catch (Exception _) {
             return null;
         }

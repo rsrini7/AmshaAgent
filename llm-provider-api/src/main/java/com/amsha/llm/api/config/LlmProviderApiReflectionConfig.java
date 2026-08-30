@@ -16,6 +16,8 @@ import com.amsha.llm.api.ProviderValidationResult;
 import com.amsha.llm.api.StrictJsonSchemaCapable;
 import com.amsha.llm.api.StructuredOutputMode;
 import com.amsha.llm.api.StructuredSchemaRequests;
+import com.amsha.llm.api.audio.AudioTranscriptionRequest;
+import com.amsha.llm.api.audio.AudioTranscriptionResult;
 import com.amsha.llm.api.error.LlmAuthenticationException;
 import com.amsha.llm.api.error.LlmContentFilterException;
 import com.amsha.llm.api.error.LlmContextOverflowException;
@@ -68,6 +70,8 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             KimchiOAuthTokenExtractor.class,
             StrictJsonSchemaCapable.class,
             StructuredSchemaRequests.class,
+            AudioTranscriptionRequest.class,
+            AudioTranscriptionResult.class,
             MultimodalCapability.class,
             MultimodalCapable.class,
             MultimodalCapabilities.class,

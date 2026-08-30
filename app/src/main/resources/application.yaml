@@ -627,6 +627,12 @@ amsha:
     llama-cpp:
       base-url: "${AMSHA_LLAMACPP_BASE_URL:http://127.0.0.1:9000/v1}"
       model: "${AMSHA_LLAMACPP_MODEL:qwen3}"
+  stt:
+    enabled: ${AMSHA_STT_ENABLED:false}
+    model: ${AMSHA_STT_MODEL:whisper-large-v3-turbo}
+    timeout: ${AMSHA_STT_TIMEOUT:PT60S}
+    max-bytes: ${AMSHA_STT_MAX_BYTES:26214400}
+    max-transcript-chars: ${AMSHA_STT_MAX_TRANSCRIPT_CHARS:12000}
   infinite-loop:
     llm:
       providers: ${AMSHA_INFINITE_LOOP_LLM_PROVIDERS:omlx,groq,openrouter}

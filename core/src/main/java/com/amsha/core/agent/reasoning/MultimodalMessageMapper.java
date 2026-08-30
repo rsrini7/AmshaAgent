@@ -15,6 +15,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Base64;
@@ -26,6 +27,9 @@ import com.amsha.channel.api.AttachmentType;
 import com.amsha.channel.api.MediaAttachment;
 import com.amsha.common.util.LogUtil;
 import com.amsha.llm.api.MultimodalCapability;
+import com.amsha.llm.api.audio.AudioTranscriptionPort;
+import com.amsha.llm.api.audio.AudioTranscriptionRequest;
+import com.amsha.llm.api.audio.AudioTranscriptionResult;
 import com.amsha.security.api.DownloadedMedia;
 import com.amsha.security.api.MediaBudgetLimits;
 import com.amsha.security.api.MediaDownloadPort;
@@ -47,6 +51,8 @@ public final class MultimodalMessageMapper {
     private static final Logger log = Logger.getLogger(MultimodalMessageMapper.class);
     private static final int MAX_EXTRACTED_PDF_CHARS = 4000;
     private static final int STREAM_BUFFER_SIZE = 8192;
+    private static final int MAX_TRANSCRIPT_CHARS = 12000;
+    private static final Duration TRANSCRIPTION_TIMEOUT = Duration.ofSeconds(60);
 
     private MultimodalMessageMapper() {}
 
@@ -94,6 +100,32 @@ public final class MultimodalMessageMapper {
             String actorUserId,
             boolean preApproved,
             MeterRegistry meterRegistry) {
+        return mapToUserMessage(
+                textPrompt,
+                attachments,
+                capability,
+                modelName,
+                downloadPort,
+                actorUserId,
+                preApproved,
+                null,
+                meterRegistry);
+    }
+
+    /**
+     * Builds a governed multimodal message, transcribing unsupported audio into bounded text
+     * when an STT execution port is available.
+     */
+    public static UserMessage mapToUserMessage(
+            String textPrompt,
+            List<MediaAttachment> attachments,
+            MultimodalCapability capability,
+            String modelName,
+            MediaDownloadPort downloadPort,
+            String actorUserId,
+            boolean preApproved,
+            AudioTranscriptionPort transcriptionPort,
+            MeterRegistry meterRegistry) {
         String effectivePrompt = textPrompt != null ? textPrompt : "";
         if (attachments == null || attachments.isEmpty()) {
             return UserMessage.from(effectivePrompt);
@@ -104,8 +136,8 @@ public final class MultimodalMessageMapper {
         List<Content> contents = new ArrayList<>();
         contents.add(TextContent.from(effectivePrompt));
 
-        BatchDownloadScope batch =
-                BatchDownloadScope.open(attachments, cap, downloadPort, actorUserId, preApproved, model);
+        BatchDownloadScope batch = BatchDownloadScope.open(
+                attachments, cap, downloadPort, actorUserId, preApproved, transcriptionPort, model);
         long maxCumulativeBytes = batch.maxTotalPayloadBytes();
 
         int attachedMediaCount = 0;
@@ -117,11 +149,7 @@ public final class MultimodalMessageMapper {
 
             boolean supported = cap.supportsType(attachment.type()) && cap.supportsMimeType(attachment.mimeType());
             if (!supported) {
-                byte[] pdfBytes = attachment.type() == AttachmentType.DOCUMENT_PDF ? batch.resolve(attachment) : null;
-                MultimodalMetrics.recordIngestion(
-                        meterRegistry, attachment.type(), MultimodalMetrics.resolveSource(attachment), "fallback");
-                MultimodalMetrics.recordFallback(meterRegistry, "unsupported_modality", attachment.type());
-                contents.add(TextContent.from(fallbackUnsupported(attachment, pdfBytes, model, meterRegistry)));
+                contents.add(mapUnsupportedAttachment(attachment, batch, transcriptionPort, model, meterRegistry));
                 continue;
             }
 
@@ -205,6 +233,62 @@ public final class MultimodalMessageMapper {
         return canonicalizeTextOnly(contents, effectivePrompt);
     }
 
+    private static TextContent mapUnsupportedAttachment(
+            MediaAttachment attachment,
+            BatchDownloadScope batch,
+            AudioTranscriptionPort transcriptionPort,
+            String model,
+            MeterRegistry meterRegistry) {
+        byte[] mediaBytes = batch.resolve(attachment);
+        if (attachment.type() == AttachmentType.AUDIO) {
+            String transcript = transcribeAudio(attachment, mediaBytes, transcriptionPort, meterRegistry);
+            if (transcript != null) {
+                return TextContent.from(transcript);
+            }
+        }
+        byte[] pdfBytes = attachment.type() == AttachmentType.DOCUMENT_PDF ? mediaBytes : null;
+        MultimodalMetrics.recordIngestion(
+                meterRegistry, attachment.type(), MultimodalMetrics.resolveSource(attachment), "fallback");
+        MultimodalMetrics.recordFallback(meterRegistry, "unsupported_modality", attachment.type());
+        return TextContent.from(fallbackUnsupported(attachment, pdfBytes, model, meterRegistry));
+    }
+
+    private static String transcribeAudio(
+            MediaAttachment attachment,
+            byte[] mediaBytes,
+            AudioTranscriptionPort transcriptionPort,
+            MeterRegistry meterRegistry) {
+        if (transcriptionPort == null || mediaBytes == null) {
+            return null;
+        }
+        AudioTranscriptionResult result;
+        try {
+            if (!transcriptionPort.supports(attachment.mimeType(), mediaBytes.length)) {
+                return null;
+            }
+            AudioTranscriptionRequest request = AudioTranscriptionRequest.ofInline(
+                    attachment.attachmentId(), attachment.mimeType(), mediaBytes, null, TRANSCRIPTION_TIMEOUT);
+            result = transcriptionPort.transcribe(request);
+        } catch (RuntimeException e) {
+            log.debugf("Audio transcription failed for %s: %s", attachment.attachmentId(), LogUtil.rootMessage(e));
+            return null;
+        }
+        if (result == null || result.status() != AudioTranscriptionResult.Status.TRANSCRIBED) {
+            return null;
+        }
+        String transcript = result.transcript();
+        if (transcript == null || transcript.isBlank()) {
+            return null;
+        }
+        String bounded = transcript.strip();
+        if (bounded.length() > MAX_TRANSCRIPT_CHARS) {
+            bounded = bounded.substring(0, MAX_TRANSCRIPT_CHARS).strip();
+        }
+        MultimodalMetrics.recordIngestion(
+                meterRegistry, attachment.type(), MultimodalMetrics.resolveSource(attachment), "success");
+        return "[Audio transcript: " + bounded + "]";
+    }
+
     private static final class BatchDownloadScope {
         private final Map<MediaAttachment, ArrayDeque<byte[]>> bytesByAttachment;
         private final long maxTotalPayloadBytes;
@@ -220,6 +304,7 @@ public final class MultimodalMessageMapper {
                 MediaDownloadPort downloadPort,
                 String actorUserId,
                 boolean preApproved,
+                AudioTranscriptionPort transcriptionPort,
                 String modelName) {
             long configuredLimit = downloadPort != null
                     ? downloadPort.maxTotalPayloadBytes()
@@ -241,6 +326,7 @@ public final class MultimodalMessageMapper {
                         && capability.supportsMimeType(attachment.mimeType());
                 boolean needsBytes = !supported
                         ? attachment.type() == AttachmentType.DOCUMENT_PDF
+                                || (attachment.type() == AttachmentType.AUDIO && transcriptionPort != null)
                         : capability.supportsInlineBase64();
                 if (needsBytes
                         && (capability.maxFileSize() <= 0

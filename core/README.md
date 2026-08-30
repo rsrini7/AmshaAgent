@@ -292,7 +292,8 @@ A profile that is selectable but permanently broken is worse than no profile, so
 * a `modality-audio-nemotron` row left over from an earlier run is disabled on startup
   (`[MODALITY-SEEDER] Disabled deprecated profile ...`), never deleted;
 * an audio attachment therefore matches no profile and degrades to the structured text
-  placeholder. That is the honest behaviour until the STT path lands — see
+  placeholder. When enabled, the governed STT path transcribes unsupported audio to bounded
+  text and routes it to the text profile — see
   `.scratch/lc4j-capability-adoption/issues/11-p7-audio-transcription-port.md`.
 
 Audio input is an execution/port concern, not a model-profile concern: Whisper is an STT
